@@ -7,7 +7,7 @@ ou quebradas.
 
 Uso (na raiz): python exemplos/simular_operacao.py [--dias 45] [--clientes 400]
 Saídas em exemplos/operacao/: trilha.csv, estados.csv, fila_ultimo_dia.csv,
-enriquecimento_ultimo_dia.csv.
+enriquecimento_ultimo_dia.csv e comite/ (KPIs e Real x Previsto em Excel).
 """
 import argparse
 import csv
@@ -146,7 +146,7 @@ def simular(seed=7, dias=45, n_clientes=400, pasta=RAIZ / "exemplos" / "operacao
             if regua.e_contato(linha["canal"], res):
                 contato_no_dia.add(idc)
         # negociação: parte dos contatos com o cliente vira acordo
-        for idc in contato_no_dia:
+        for idc in sorted(contato_no_dia):
             est = estados[idc]
             if est.estado in ("LOC", "CPA", "CPB", "NCP") and rng.random() < 0.3:
                 seq_ac += 1
@@ -165,6 +165,9 @@ def simular(seed=7, dias=45, n_clientes=400, pasta=RAIZ / "exemplos" / "operacao
 
     m = _metricas(regua, clientes, estados, eventos, trilha, parcelas, verdade, execucoes, alertas_dias)
     _relatorio(out, m, trilha, dias)
+    m["dados"] = {"clientes": clientes, "estados": estados, "trilha": trilha, "eventos": eventos,
+                  "parcelas": dict(parcelas), "certs": certs, "regua": regua,
+                  "inicio": INICIO, "fim": INICIO + timedelta(days=dias - 1)}
     return m
 
 
@@ -253,5 +256,12 @@ if __name__ == "__main__":
     ap.add_argument("--dias", type=int, default=45)
     ap.add_argument("--clientes", type=int, default=400)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--sem-relatorio", action="store_true", help="não gera o relatório do comitê")
     a = ap.parse_args()
-    simular(a.seed, a.dias, a.clientes)
+    m = simular(a.seed, a.dias, a.clientes)
+    if not a.sem_relatorio:
+        import relatorio
+        d = m["dados"]
+        print()
+        relatorio.montar(d["clientes"], d["estados"], d["trilha"], d["eventos"], d["parcelas"], d["regua"],
+                         d["inicio"], d["fim"], RAIZ / "exemplos" / "operacao" / "comite", d["certs"])

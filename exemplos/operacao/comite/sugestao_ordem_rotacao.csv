@@ -1,0 +1,6 @@
+canal,volume,contatos,taxa_contato,custo_por_contato,posicao_atual,posicao_sugerida
+whatsapp,586,111,0.1894,1.58,1,1
+rcs,1566,96,0.0613,1.96,2,2
+agente_voz,1851,74,0.04,3.0,3,3
+sms,1217,20,0.0164,4.26,5,4
+discador,1986,62,0.0312,11.21,4,5

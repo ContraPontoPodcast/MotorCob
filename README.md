@@ -13,9 +13,16 @@ python rodar_dia.py --clientes exemplos/clientes.csv --carteira exemplos/carteir
 #   → saida/2026-09-25/fila_do_dia.csv, fila_<canal>.csv, enriquecimento.csv, alertas.txt
 #   → estado/estados.json (TAG atual) e estado/trilha.csv (extrato de cada cliente)
 
-# Operação simulada de 45 dias com verdade conhecida e auditoria das regras
+# Relatório do comitê mensal: KPIs por safra/cluster + Real x Previsto em Excel
+python relatorio.py --clientes exemplos/clientes.csv --carteira exemplos/carteira_contatos.csv \
+    --retornos exemplos/retornos --parcelas exemplos/parcelas.csv --estado estado \
+    --inicio 2026-09-01 --fim 2026-09-24
+
+# Operação simulada de 45 dias com verdade conhecida, auditoria das regras e relatório
 python exemplos/simular_operacao.py
 ```
+
+O Excel do comitê precisa de `pip install openpyxl`; todo o resto roda só com Python 3.11+.
 
 Outras ferramentas:
 

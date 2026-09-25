@@ -92,9 +92,16 @@ de outra pessoa pela certificação e a rotação segue.
 - Campos esperados do fornecedor: contato, flag WhatsApp ativo, data de atualização, score.
 
 **Orçamento e operação**
-- Receita prevista = acordos previstos × ticket médio do acordo × % de parcelas pagas; ROI
-  ≥ 1,5x aprova · 1,0–1,5x aprova com plano · < 1,0x reprova. (Real x Previsto em Excel —
-  próxima entrega.)
+- Recuperação prevista = acordos previstos × ticket médio × % de parcelas pagas. Receita
+  prevista = recuperação × % de remuneração (comissão/honorários; premissa por credor).
+  ROI = receita ÷ orçado: ≥ 1,5x aprova · 1,0–1,5x aprova com plano · < 1,0x reprova.
+  Premissas em `regua.json › orcamento`. O custo é o variável das tentativas (fornecedores);
+  custos fixos não entram, por isso o ROI por ação tende a ser alto.
+- Real x Previsto: cada tentativa é atribuída à régua em que o cliente estava no começo do
+  dia (pela trilha); cada acordo, à régua e ao canal do contato que o originou. Acordo que
+  já existia quando o cliente entrou no motor não conta como nascido de ação.
+- A ordem de rotação sugerida pelo relatório (menor custo por contato) é só sugestão ao
+  comitê; a ordem vigente só muda no `regua.json`.
 - MVP roda 1x/dia de manhã (`rodar_dia.py`). Marcação em até 1h fica para a integração em
   tempo real.
 
@@ -122,6 +129,11 @@ de outra pessoa pela certificação e a rotação segue.
 - `motor/fila.py`: fila do dia, contatos elegíveis por canal, freio do WhatsApp, lista de
   enriquecimento.
 - `motor/acordos.py`: situação do acordo a partir das parcelas e da data de baixa.
+- `motor/kpis.py`: KPIs das 5 frentes por safra/cluster, migração de estados, realizado por
+  ação (régua × canal), benchmarks e sugestão de ordem de rotação.
+- `relatorio.py` + `relatorios/excel_comite.py`: relatório do comitê (CSVs + Excel com
+  fórmulas: Resumo, Premissas, Real x Previsto, KPIs, Migração, Benchmarks). O Excel exige
+  `openpyxl` (única dependência, fora do núcleo).
 - `motor/certificacao.py`: score Beta por contato, status, hit rate, afinidade.
 - `motor/taxonomia.py`: retorno bruto de cada canal → `Nivel` + pesos + restrições.
 - `motor/ingestao.py` + `layouts/*.json`: retornos por layout de fornecedor, base de
@@ -142,9 +154,7 @@ CONTESTADO (< 0,2) · INVALIDO · DESCONHECIDO (sem evento).
 ## Roadmap
 1. **Feito:** certificação, ingestão por layout, ID do cliente, link rastreável, TAG +
    trilha + réguas + acordos + fila do dia + enriquecimento.
-2. **Próximo:** KPIs por safra/cluster (localização por canal, custo por CPC descoberto,
-   migração de estados, tentativas até o contato, % acordo, regularização da quebra) e
-   Real x Previsto em Excel para o comitê.
+2. **Feito:** KPIs por safra/cluster e Real x Previsto em Excel para o comitê.
 3. Acordo pelo operador ligado à ação de origem; webhook/API dos fornecedores.
 4. Camada de agentes: Ingestão (quarentena → de-para), Analista, Estrategista, Validador.
 5. Calibração com dados reais: pesos de evidência, limiares, prior por origem, taxas.
@@ -161,6 +171,8 @@ Comandos:
 - Rotina diária: `python rodar_dia.py --clientes exemplos/clientes.csv --carteira
   exemplos/carteira_contatos.csv --retornos exemplos/retornos --parcelas exemplos/parcelas.csv
   --data 2026-09-25`
-- Operação simulada: `python exemplos/simular_operacao.py`
+- Relatório do comitê: `python relatorio.py --clientes … --carteira … --retornos … --parcelas …
+  --estado estado --inicio 2026-09-01 --fim 2026-09-30`
+- Operação simulada (gera também o relatório): `python exemplos/simular_operacao.py`
 - Exemplos: `python exemplos/gerar_retornos.py` · Demo da certificação: `python demo.py`
 - Testes: `python -m unittest`
