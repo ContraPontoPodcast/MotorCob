@@ -23,6 +23,11 @@
 
 Para atualizar o programa depois: `cd ~/MotorCob && git pull`.
 
+> **Com o site motorcob.online:** depois de instalar, rode `scripts/configurar_nuvem.sh`
+> (veja `docs/NUVEM.md`). Os arquivos de entrada passam a ser enviados pelo site e a fila é
+> baixada no site; a pasta abaixo continua sendo usada pelo motor, mas você não precisa
+> mexer nela.
+
 ## 2. A pasta de dados
 
 Fica fora do repositório porque tem dado pessoal. **Nunca coloque esses arquivos no git.**

@@ -15,7 +15,7 @@ if ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>
   exit 1
 fi
 for obrigatorio in base/clientes.csv base/contatos.csv; do
-  if [ ! -f "$DADOS/$obrigatorio" ]; then
+  if [ ! -f "$DADOS/config/supabase.env" ] && [ ! -f "$DADOS/$obrigatorio" ]; then
     echo "ERRO: falta $DADOS/$obrigatorio" >&2
     exit 1
   fi
@@ -31,6 +31,15 @@ fi
 mkdir -p "$DADOS/retornos" "$DADOS/logs"
 LOG="$DADOS/logs/rodar_dia_$DATA.log"
 cd "$REPO"
+if [ -f "$DADOS/config/supabase.env" ]; then
+  # modo nuvem: baixa o que o site recebeu, roda e publica no site
+  if MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar dia --dados "$DADOS" --data "$DATA" 2>&1 | tee "$LOG"; then
+    echo "Publicado no site. IDs por canal também em: $DADOS/saida/$DATA/ids/" | tee -a "$LOG"
+    exit 0
+  fi
+  echo "ERRO na rotina de $DATA — veja $LOG (o site mostra a execução com erro)" >&2
+  exit 1
+fi
 if "$PY" rodar_dia.py "${ARGS[@]}" 2>&1 | tee "$LOG"; then
   echo "IDs por canal: $DADOS/saida/$DATA/ids/" | tee -a "$LOG"
 else

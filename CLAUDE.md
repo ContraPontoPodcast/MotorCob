@@ -146,6 +146,11 @@ de outra pessoa pela certificação e a rotação segue.
   A saída operacional é `saida/<data>/ids/<canal>.csv`: **só os IDs de cliente por canal**
   (a ferramenta de cada canal monta o mailing pelo ID; não há layout de saída por
   fornecedor). `<canal>_reserva.csv` = só se o canal principal do dia não contatar.
+- `nuvem/`: sincronização com o Supabase (`python -m nuvem.sincronizar dia|comite`). Baixa
+  os envios pendentes do bucket `entradas`, roda o motor e publica estado, trilha (retomável,
+  pelo marcador `estado/nuvem_trilha_enviada.txt`), fila_dia, arquivos em `saidas` e kpis.
+  Falha → execução com status erro e envios continuam pendentes. Chave service_role só em
+  `~/MotorCob-dados/config/supabase.env` (criado por `scripts/configurar_nuvem.sh`).
 - `scripts/` + `docs/PRODUCAO.md`: produção no Mac (instalador, rotina agendada via
   launchd, relatório mensal). Dados reais ficam em `~/MotorCob-dados`, fora do repo.
 - `exemplos/simular_operacao.py`: operação simulada dia a dia com verdade conhecida e

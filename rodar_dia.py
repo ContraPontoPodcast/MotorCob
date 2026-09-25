@@ -148,7 +148,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     for a in alertas:
         out(f"  ALERTA: {a}")
     out(f"  saídas em {saida}/ · estado em {pasta_estado}/")
-    return {"estados": estados, "fila": fila, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha}
+    return {"estados": estados, "fila": fila, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
+            "saida": saida, "relatorios": relatorios, "quarentena": quarentena, "sem_layout": sem_layout,
+            "dias_processados": (hoje - inicio).days if inicio < hoje else 0}
 
 
 def main():

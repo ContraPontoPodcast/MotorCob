@@ -9,8 +9,8 @@ motorcob.online (site)  ──login/leitura/upload──>  Supabase (Postgres + 
 - **Supabase:** banco, login e arquivos. Tabelas e permissões em
   `supabase/migrations/20260925000001_motorcob.sql`.
 - **Site:** só login, envio de arquivos e consulta. Prompt em `docs/PROMPT_SITE.md`.
-- **Rotina do motor:** baixa as entradas do Storage, roda o `rodar_dia.py` e grava
-  estado, trilha, fila e arquivos de volta (próxima entrega: `nuvem/sincronizar.py`).
+- **Rotina do motor** (`nuvem/sincronizar.py`, roda no Mac): baixa as entradas enviadas
+  pelo site, roda o `rodar_dia.py` e publica estado, trilha, fila e arquivos de volta.
 
 ## 1. Criar o projeto no Supabase
 
@@ -64,6 +64,29 @@ Project Settings › API:
 ## 6. Site
 
 Siga `docs/PROMPT_SITE.md`.
+
+## 7. Ligar a rotina do Mac ao site
+
+No Mac, com o MotorCob já instalado (`docs/PRODUCAO.md`):
+```bash
+~/MotorCob/scripts/configurar_nuvem.sh
+```
+Ele pede a URL do projeto e a chave service_role (digitada sem aparecer na tela), grava em
+`~/MotorCob-dados/config/supabase.env` (só o seu usuário lê) e testa a conexão.
+
+A partir daí, o fluxo diário é:
+1. Durante o dia, a equipe de planejamento envia pelo site os arquivos (clientes, contatos,
+   parcelas, retornos dos fornecedores, log do portal).
+2. No horário agendado, o Mac roda `scripts/rodar_dia.sh`, que agora: baixa os envios
+   pendentes → roda o motor → publica TAG, trilha, fila do dia (IDs) e arquivos → marca
+   cada envio como processado (ou erro, com o motivo) e registra a execução com os alertas.
+3. A operação entra no site e baixa os IDs de cada canal.
+
+No fim do mês, `scripts/relatorio_mes.sh 2026-09` publica os KPIs e o Excel do comitê no site.
+
+Se a rotina falhar, a execução aparece com erro na tela inicial do site e os envios
+continuam pendentes para a próxima rodada. O Mac precisa estar ligado no horário (ou roda
+quando acordar).
 
 ## Testar as permissões localmente
 
