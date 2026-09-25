@@ -6,7 +6,7 @@ não conhece, linhas sem ID, reexportação com linhas duplicadas e um fornecedo
 sem layout. Os fornecedores recebem e devolvem só o ID do cliente, nunca o CPF.
 
 Uso (na raiz do repositório): python exemplos/gerar_retornos.py
-Gera exemplos/carteira_contatos.csv e exemplos/retornos/*.csv
+Gera exemplos/carteira_contatos.csv, clientes.csv, parcelas.csv e exemplos/retornos/*.csv
 """
 import csv
 import random
@@ -78,12 +78,20 @@ def main(seed=42, pasta=PASTA, verbose=True):
 
     with open(pasta / "carteira_contatos.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, delimiter=";")
-        w.writerow(["id_cliente", "contato", "tipo", "origem", "cpf"])  # cpf é opcional
+        # cpf, whatsapp_valido e atualizado_em são opcionais
+        w.writerow(["id_cliente", "contato", "tipo", "origem", "cpf", "whatsapp_valido", "atualizado_em"])
         cpf_de = {c["id_cliente"]: c["cpf"] for c in clientes}
+        rng2 = random.Random(seed + 1000)  # dados do playbook num gerador à parte: não muda os demais exemplos
+        entrada = {c["id_cliente"]: demo.HOJE - timedelta(days=8 if c["novo"] else rng2.randint(62, 75))
+                   for c in clientes}
         for c in contatos:
             valor = mascara_tel(c["contato"]) if c["tipo"] == "telefone" and rng.random() < 0.5 else c["contato"]
             cpf = cpf_de[c["id_cliente"]] if rng.random() < 0.7 else ""
-            w.writerow([c["id_cliente"], valor, c["tipo"], rng.choice(["cadastro", "enriquecimento", "bureau"]), cpf])
+            zap = rng2.random() < (0.85 if c["whatsapp"] else 0.10)
+            w.writerow([c["id_cliente"], valor, c["tipo"], rng.choice(["cadastro", "enriquecimento", "bureau"]), cpf,
+                        "1" if zap else "0", entrada[c["id_cliente"]].isoformat()])
+
+    escrever_clientes_e_parcelas(rng2, clientes, entrada, pasta)
 
     for canal, (nome, sep, cab, fmt, depara, cod_novo) in FORNECEDORES.items():
         linhas = []
@@ -110,6 +118,37 @@ def main(seed=42, pasta=PASTA, verbose=True):
         print(f"Arquivos gerados em {retornos}, carteira em {pasta / 'carteira_contatos.csv'}, "
               f"registro de ações em {pasta / 'acoes.csv'} e log do portal em {pasta / 'portal'}")
     return clientes, contatos
+
+
+def escrever_clientes_e_parcelas(rng, clientes, entrada, pasta):
+    """Base de clientes (com um cliente em 2 contratos e bloqueios) e parcelas de acordos."""
+    with open(pasta / "clientes.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(["id_cliente", "id_contrato", "data_entrada", "saldo", "dias_atraso", "bloqueio"])
+        for i, c in enumerate(clientes):
+            faixa = rng.random()
+            saldo = rng.uniform(5000, 30000) if faixa < 0.25 else rng.uniform(1000, 4999) if faixa < 0.65 \
+                else rng.uniform(100, 999)
+            r = rng.random()
+            atraso = rng.randint(1, 90) if r < 0.5 else rng.randint(91, 180) if r < 0.75 else rng.randint(181, 720)
+            bloqueio = rng.choice(["opt-out geral", "óbito", "judicial", "reclamação"]) if rng.random() < 0.01 else ""
+            w.writerow([c["id_cliente"], f"CT{i:06d}", entrada[c["id_cliente"]].isoformat(),
+                        virgula(saldo), atraso, bloqueio])
+            if i % 50 == 0:  # alguns clientes têm um segundo contrato
+                w.writerow([c["id_cliente"], f"CT{i:06d}B", entrada[c["id_cliente"]].isoformat(),
+                            virgula(rng.uniform(100, 3000)), atraso + rng.randint(0, 60), ""])
+    antigos = [c["id_cliente"] for c in clientes if not c["novo"]]
+    with open(pasta / "parcelas.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(["id_cliente", "id_acordo", "parcela", "vencimento", "valor", "pago_em"])
+        for k, idc in enumerate(rng.sample(antigos, 40)):
+            n, inicio, perfil = rng.choice([1, 3, 6]), demo.HOJE - timedelta(days=rng.randint(5, 40)), rng.random()
+            for p in range(n):
+                venc = inicio + timedelta(days=7 + 30 * p)
+                pago = ""
+                if venc < demo.HOJE and perfil < 0.8:
+                    pago = (venc - timedelta(days=rng.randint(0, 2))).isoformat()
+                w.writerow([idc, f"AC{k:04d}", p + 1, venc.isoformat(), virgula(rng.uniform(100, 900)), pago])
 
 
 def simular_campanha_pulverizada(rng, clientes, contatos, pasta):

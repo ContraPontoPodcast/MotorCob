@@ -1,8 +1,23 @@
-# Certificação de Contato para Cobrança
+# MotorCob — Gestão de Contatos para Cobrança
 
-Motor que roda **antes de qualquer disparo em massa** e responde, por cliente (`id_cliente` do sistema de cobrança):
-qual contato é do cliente, em qual canal ele engaja e em que ordem acionar — com o
-funil projetado (acionados → contato → CPC) e o custo.
+Implementa a gestão de contatos do Playbook de Gestão de Cobrança: mantém a **TAG** de
+cada cliente (`S260801-A1-CPB-WA-T2`) e a **trilha** de eventos, gera a **fila do dia** pelas
+réguas (localização, CPC/rotação, giro, preventivo, quebra) e decide **em qual contato**
+acionar em cada canal, com trava de WhatsApp contra banimento. Regras em
+[`CLAUDE.md`](CLAUDE.md) e [`regras/regua.json`](regras/regua.json).
+
+```bash
+# Rotina diária (toda manhã): atualiza TAGs e gera a fila do dia
+python rodar_dia.py --clientes exemplos/clientes.csv --carteira exemplos/carteira_contatos.csv \
+    --retornos exemplos/retornos --parcelas exemplos/parcelas.csv --data 2026-09-25
+#   → saida/2026-09-25/fila_do_dia.csv, fila_<canal>.csv, enriquecimento.csv, alertas.txt
+#   → estado/estados.json (TAG atual) e estado/trilha.csv (extrato de cada cliente)
+
+# Operação simulada de 45 dias com verdade conhecida e auditoria das regras
+python exemplos/simular_operacao.py
+```
+
+Outras ferramentas:
 
 ```bash
 # Pipeline com arquivos de retorno dos fornecedores
@@ -18,8 +33,12 @@ python demo.py          # validação com carteira sintética de verdade conheci
 python -m unittest      # testes
 ```
 
-A carteira é um CSV `id_cliente;contato;tipo;origem;cpf` — `origem` e `cpf` são opcionais;
-o CPF só agrupa IDs da mesma pessoa e não aparece em nenhuma saída.
+Arquivos de entrada (separador `;`):
+- clientes: `id_cliente;data_entrada;saldo;dias_atraso[;bloqueio][;id_contrato]` — vários
+  contratos do mesmo cliente são somados;
+- carteira: `id_cliente;contato;tipo[;origem;cpf;whatsapp_valido;atualizado_em]` — o CPF só
+  agrupa IDs da mesma pessoa e não aparece em nenhuma saída;
+- parcelas: `id_cliente;id_acordo;parcela;vencimento;valor;pago_em`.
 
 Para plugar um fornecedor novo, crie `layouts/<fornecedor>.json` (veja os existentes):
 colunas do arquivo, formato de data e o de-para dos códigos dele para a taxonomia.

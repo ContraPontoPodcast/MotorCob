@@ -12,7 +12,7 @@ import csv
 import json
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -189,6 +189,92 @@ def carregar_carteira(caminho: str | Path) -> tuple[list[dict], dict[str, str], 
             if (id_cliente, contato) in vistos:
                 continue
             vistos.add((id_cliente, contato))
+            try:
+                atualizado = _data(linha.get("atualizado_em"))
+            except ValueError:
+                rejeitados["atualizado_em inválido (ignorado)"] += 1
+                atualizado = None
             contatos.append({"id_cliente": id_cliente, "contato": contato, "tipo": tipo,
-                             "origem": (linha.get("origem") or "").strip() or None})
+                             "origem": (linha.get("origem") or "").strip() or None,
+                             "whatsapp_valido": _sim(linha.get("whatsapp_valido")),
+                             "atualizado_em": atualizado})
     return contatos, pessoa_de, rejeitados
+
+
+def _sim(v) -> bool:
+    return (v or "").strip().lower() in ("1", "s", "sim", "true", "x")
+
+
+def _data(v):
+    v = (v or "").strip()
+    if not v:
+        return None
+    if "/" in v:
+        return datetime.strptime(v, "%d/%m/%Y").date()
+    return date.fromisoformat(v[:10])
+
+
+def _valor(v) -> float:
+    v = (v or "0").strip().replace("R$", "").strip()
+    if "," in v:
+        v = v.replace(".", "").replace(",", ".")
+    return float(v)
+
+
+def carregar_clientes(caminho: str | Path):
+    """Base de clientes: id_cliente;data_entrada;saldo;dias_atraso[;bloqueio][;id_contrato].
+
+    Cliente com vários contratos (várias linhas): ticket = soma dos saldos, atraso = o
+    maior, entrada = a mais antiga, bloqueio se qualquer contrato estiver bloqueado.
+    Retorna ({id_cliente: Cliente}, rejeitados).
+    """
+    from .marcacao import Cliente
+    agg, rejeitados = {}, Counter()
+    with open(caminho, newline="", encoding="utf-8") as f:
+        for linha in csv.DictReader(f, delimiter=";"):
+            idc = norm.id_cliente(linha.get("id_cliente"))
+            try:
+                entrada = _data(linha.get("data_entrada"))
+                saldo = _valor(linha.get("saldo"))
+                atraso = int((linha.get("dias_atraso") or "0").strip())
+            except ValueError:
+                rejeitados["linha com data/saldo/atraso inválido"] += 1
+                continue
+            if idc is None or entrada is None:
+                rejeitados["id_cliente ou data_entrada ausente"] += 1
+                continue
+            bloqueio = (linha.get("bloqueio") or "").strip() or None
+            a = agg.setdefault(idc, {"contratos": [], "saldo": 0.0, "bloqueio": None})
+            a["contratos"].append((entrada, atraso))
+            a["saldo"] += saldo
+            a["bloqueio"] = a["bloqueio"] or bloqueio
+    clientes = {}
+    for idc, a in agg.items():
+        entrada = min(e for e, _ in a["contratos"])
+        # atraso de cada contrato trazido para a data de entrada do cliente; vale o maior
+        atraso = max(max(at - (e - entrada).days, 0) for e, at in a["contratos"])
+        clientes[idc] = Cliente(idc, entrada, round(a["saldo"], 2), atraso, a["bloqueio"])
+    return clientes, rejeitados
+
+
+def carregar_parcelas(caminho: str | Path):
+    """Parcelas do sistema de acordos: id_cliente;id_acordo;parcela;vencimento;valor;pago_em.
+
+    Retorna ({id_cliente: [Parcela]}, rejeitados).
+    """
+    from .acordos import Parcela
+    por, rejeitados = {}, Counter()
+    with open(caminho, newline="", encoding="utf-8") as f:
+        for linha in csv.DictReader(f, delimiter=";"):
+            idc = norm.id_cliente(linha.get("id_cliente"))
+            try:
+                p = Parcela(idc, (linha.get("id_acordo") or "").strip(), int(linha["parcela"]),
+                            _data(linha["vencimento"]), _valor(linha.get("valor")), _data(linha.get("pago_em")))
+            except (ValueError, KeyError, TypeError):
+                rejeitados["parcela inválida"] += 1
+                continue
+            if idc is None or not p.id_acordo or p.vencimento is None:
+                rejeitados["parcela sem cliente, acordo ou vencimento"] += 1
+                continue
+            por.setdefault(idc, []).append(p)
+    return por, rejeitados

@@ -138,3 +138,45 @@ CREATE INDEX ON conversao (acao_origem_id);
 -- LGPD: payload_bruto carrega dado pessoal. Expurgar/mascarar após o prazo de
 -- auditoria definido com o jurídico (ex.: job diário):
 --   UPDATE evento SET payload_bruto = NULL WHERE ocorrido_em < now() - interval '180 days';
+
+-- ===== Playbook: marcação, trilha e acordos =====
+
+-- Foto atual de cada cliente (a TAG). Recalculada pela rotina diária.
+CREATE TABLE estado_cliente (
+    id_cliente        TEXT PRIMARY KEY REFERENCES cliente(id_cliente),
+    safra             DATE NOT NULL,                 -- imutável
+    cluster_origem    CHAR(2) NOT NULL,              -- imutável
+    cluster_atual     CHAR(2) NOT NULL,              -- revisado no fechamento mensal
+    estado            TEXT NOT NULL CHECK (estado IN
+                      ('LOC','CPA','CPB','NCP','PRE','QBR','COL','LIQ','BLQ')),
+    canal             TEXT NOT NULL CHECK (canal IN ('WA','RC','AV','DC','SM','EM','ND')),
+    ciclo             TEXT NOT NULL DEFAULT '',
+    tag               TEXT GENERATED ALWAYS AS (
+                      'S' || to_char(safra, 'YYMMDD') || '-' || cluster_atual || '-' || estado || '-' || canal
+                      || CASE WHEN ciclo = '' THEN '' ELSE '-' || ciclo END) STORED,
+    detalhe           JSONB NOT NULL DEFAULT '{}',   -- tentativas, canais esgotados, localizador...
+    atualizado_em     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ON estado_cliente (estado, canal);
+
+-- A trilha: cada mudança de TAG é um evento. O extrato do cliente é a sequência.
+CREATE TABLE trilha (
+    id            BIGSERIAL PRIMARY KEY,
+    id_cliente    TEXT NOT NULL REFERENCES cliente(id_cliente),
+    data          DATE NOT NULL,
+    tag_anterior  TEXT,
+    tag           TEXT NOT NULL,
+    motivo        TEXT NOT NULL,
+    quem_marcou   TEXT NOT NULL
+);
+CREATE INDEX ON trilha (id_cliente, data);
+
+CREATE TABLE parcela (
+    id_cliente  TEXT NOT NULL REFERENCES cliente(id_cliente),
+    id_acordo   TEXT NOT NULL,
+    numero      SMALLINT NOT NULL,
+    vencimento  DATE NOT NULL,
+    valor       NUMERIC(12,2) NOT NULL,
+    pago_em     DATE,                    -- só com baixa confirmada
+    PRIMARY KEY (id_acordo, numero)
+);

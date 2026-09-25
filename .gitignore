@@ -2,3 +2,4 @@ saida/
 __pycache__/
 *.pyc
 acoes/
+estado/

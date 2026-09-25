@@ -1,0 +1,99 @@
+data,id_cliente,tag,cluster,pacote,motivo
+2026-09-16,C0000013,S260803-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000072,S260803-A2-NCP-ND-RE,A2,completo + novos telefones,3 ciclos de giro sem contato
+2026-09-16,C0000136,S260803-B2-NCP-ND-RE,B2,básico,3 ciclos de giro sem contato
+2026-09-16,C0000208,S260803-A3-NCP-ND-RE,A3,completo + localizador,3 ciclos de giro sem contato
+2026-09-16,C0000343,S260803-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000020,S260804-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000038,S260804-A1-NCP-ND-RE,A1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000139,S260804-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000182,S260804-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000201,S260804-M3-NCP-ND-G1,M3,básico,esgotou os canais
+2026-09-16,C0000348,S260804-A2-COL-AV,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000390,S260804-A2-NCP-ND-RE,A2,completo + novos telefones,3 ciclos de giro sem contato
+2026-09-16,C0000009,S260805-M1-NCP-ND-RE,M1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000084,S260805-M3-NCP-ND-RE,M3,básico,3 ciclos de giro sem contato
+2026-09-16,C0000194,S260805-A2-NCP-ND-RE,A2,completo + novos telefones,3 ciclos de giro sem contato
+2026-09-16,C0000244,S260805-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000285,S260805-B1-NCP-ND-RE,B1,básico,3 ciclos de giro sem contato
+2026-09-16,C0000103,S260806-A2-CPB-RC-T2,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000119,S260806-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000137,S260806-A1-COL-WA,A1,completo,revalidação (30 dias)
+2026-09-16,C0000200,S260806-M1-NCP-ND-RE,M1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000216,S260806-A2-CPB-SM-T3,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000227,S260806-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000234,S260806-A2-CPB-WA-T1,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000287,S260806-B2-NCP-ND-RE,B2,básico,3 ciclos de giro sem contato
+2026-09-16,C0000288,S260806-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000331,S260806-B2-NCP-ND-RE,B2,básico,3 ciclos de giro sem contato
+2026-09-16,C0000333,S260806-A2-CPB-SM-T1,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000350,S260806-B3-NCP-ND-G1,B3,só digital,esgotou os canais
+2026-09-16,C0000092,S260807-A1-NCP-ND-RE,A1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000113,S260807-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000225,S260807-A1-NCP-ND-RE,A1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000239,S260807-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000241,S260807-M3-NCP-ND-RE,M3,básico,3 ciclos de giro sem contato
+2026-09-16,C0000266,S260807-A1-NCP-ND-RE,A1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000357,S260807-M1-NCP-ND-RE,M1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000364,S260807-A1-NCP-ND-RE,A1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000097,S260808-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000101,S260808-B2-NCP-ND-RE,B2,básico,3 ciclos de giro sem contato
+2026-09-16,C0000198,S260808-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000226,S260808-A3-COL-DC,A3,completo + localizador,revalidação (30 dias)
+2026-09-16,C0000249,S260808-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000279,S260808-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000375,S260808-B2-NCP-ND-RE,B2,básico,3 ciclos de giro sem contato
+2026-09-16,C0000178,S260809-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000203,S260809-B1-NCP-ND-RE,B1,básico,3 ciclos de giro sem contato
+2026-09-16,C0000273,S260809-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000289,S260809-B2-NCP-ND-RE,B2,básico,3 ciclos de giro sem contato
+2026-09-16,C0000126,S260810-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000282,S260810-B1-NCP-ND-RE,B1,básico,3 ciclos de giro sem contato
+2026-09-16,C0000382,S260810-M3-NCP-ND-RE,M3,básico,3 ciclos de giro sem contato
+2026-09-16,C0000046,S260811-A1-NCP-ND-RE,A1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000050,S260811-A2-CPB-DC-T2,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000077,S260811-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000098,S260811-M3-NCP-ND-RE,M3,básico,3 ciclos de giro sem contato
+2026-09-16,C0000111,S260811-A1-CPB-DC-T3,A1,completo,revalidação (30 dias)
+2026-09-16,C0000122,S260811-A1-CPB-WA-T2,A1,completo,revalidação (30 dias)
+2026-09-16,C0000147,S260811-B1-NCP-ND-RE,B1,básico,3 ciclos de giro sem contato
+2026-09-16,C0000155,S260811-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000169,S260811-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000184,S260811-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000213,S260811-M3-NCP-ND-RE,M3,básico,3 ciclos de giro sem contato
+2026-09-16,C0000272,S260811-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000338,S260811-B1-NCP-ND-RE,B1,básico,3 ciclos de giro sem contato
+2026-09-16,C0000055,S260812-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000083,S260812-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000112,S260812-A2-CPB-AV-T1,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000123,S260812-A1-COL-DC,A1,completo,revalidação (30 dias)
+2026-09-16,C0000161,S260812-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000264,S260812-A3-NCP-ND-RE,A3,completo + localizador,3 ciclos de giro sem contato
+2026-09-16,C0000286,S260812-A1-NCP-ND-RE,A1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000115,S260813-A3-COL-DC,A3,completo + localizador,revalidação (30 dias)
+2026-09-16,C0000128,S260813-B1-NCP-ND-RE,B1,básico,3 ciclos de giro sem contato
+2026-09-16,C0000145,S260813-A1-CPB-DC-T1,A1,completo,revalidação (30 dias)
+2026-09-16,C0000187,S260813-M1-NCP-ND-RE,M1,completo,3 ciclos de giro sem contato
+2026-09-16,C0000232,S260813-A3-CPB-WA-T3,A3,completo + localizador,revalidação (30 dias)
+2026-09-16,C0000275,S260813-A2-NCP-ND-RE,A2,completo + novos telefones,3 ciclos de giro sem contato
+2026-09-16,C0000302,S260813-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000305,S260813-B3-NCP-ND-RE,B3,só digital,3 ciclos de giro sem contato
+2026-09-16,C0000321,S260813-M3-NCP-ND-RE,M3,básico,3 ciclos de giro sem contato
+2026-09-16,C0000330,S260813-B1-NCP-ND-RE,B1,básico,3 ciclos de giro sem contato
+2026-09-16,C0000356,S260813-B1-NCP-ND-RE,B1,básico,3 ciclos de giro sem contato
+2026-09-16,C0000374,S260813-M3-NCP-ND-RE,M3,básico,3 ciclos de giro sem contato
+2026-09-16,C0000376,S260813-M2-NCP-ND-RE,M2,básico + WhatsApp válido,3 ciclos de giro sem contato
+2026-09-16,C0000081,S260814-A1-CPB-DC-T2,A1,completo,revalidação (30 dias)
+2026-09-16,C0000091,S260814-A1-NCP-ND-G3,A1,completo,revalidação (30 dias)
+2026-09-16,C0000116,S260814-A2-NCP-ND-G3,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000257,S260814-A1-NCP-ND-G3,A1,completo,revalidação (30 dias)
+2026-09-16,C0000317,S260814-A3-NCP-ND-G3,A3,completo + localizador,revalidação (30 dias)
+2026-09-16,C0000034,S260815-A1-NCP-ND-G3,A1,completo,revalidação (30 dias)
+2026-09-16,C0000362,S260815-A2-NCP-ND-G3,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000006,S260817-A2-NCP-ND-G3,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000031,S260817-A2-NCP-ND-G3,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000051,S260817-A3-CPB-EM-T2,A3,completo + localizador,revalidação (30 dias)
+2026-09-16,C0000056,S260817-A1-COL-WA,A1,completo,revalidação (30 dias)
+2026-09-16,C0000058,S260817-A1-NCP-ND-G3,A1,completo,revalidação (30 dias)
+2026-09-16,C0000065,S260817-A2-COL-SM,A2,completo + novos telefones,revalidação (30 dias)
+2026-09-16,C0000211,S260817-A1-COL-RC,A1,completo,revalidação (30 dias)
