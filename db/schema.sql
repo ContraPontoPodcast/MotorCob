@@ -10,28 +10,33 @@ CREATE TABLE carteira (
     limiar_whatsapp       NUMERIC(4,3)  NOT NULL DEFAULT 0.800
 );
 
--- A pessoa existe fora da carteira: um contato certificado vale para todas.
-CREATE TABLE pessoa (
-    cpf        CHAR(11) PRIMARY KEY,
-    criado_em  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
+-- O motor roda pelo ID do cliente do sistema de cobrança (identificador opaco).
+-- O CPF é opcional e serve só para agrupar IDs da mesma pessoa; fornecedores
+-- recebem e devolvem apenas o id_cliente.
 CREATE TABLE cliente (
-    cpf          CHAR(11) NOT NULL REFERENCES pessoa(cpf),
+    id_cliente  TEXT PRIMARY KEY CHECK (length(id_cliente) BETWEEN 1 AND 64),
+    cpf         CHAR(11),             -- opcional; acesso restrito (LGPD)
+    criado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ON cliente (cpf) WHERE cpf IS NOT NULL;
+
+CREATE TABLE cliente_carteira (
+    id_cliente   TEXT NOT NULL REFERENCES cliente(id_cliente),
     carteira_id  INT NOT NULL REFERENCES carteira(id),
     criado_em    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (cpf, carteira_id)
+    PRIMARY KEY (id_cliente, carteira_id)
 );
 
 CREATE TABLE contato (
     id         BIGSERIAL PRIMARY KEY,
-    cpf        CHAR(11) NOT NULL REFERENCES pessoa(cpf),
+    id_cliente TEXT NOT NULL REFERENCES cliente(id_cliente),
     tipo       TEXT NOT NULL CHECK (tipo IN ('telefone', 'email')),
     valor      TEXT NOT NULL,
     origem     TEXT,               -- cadastro, enriquecimento, bureau... (define o prior)
-    UNIQUE (cpf, valor)
+    UNIQUE (id_cliente, valor)
 );
--- O mesmo número em vários CPFs: certificado para um é evidência contra os outros.
+-- O mesmo número em vários clientes: certificado para uma pessoa é evidência
+-- contra as outras e a favor dos outros IDs da mesma pessoa (mesmo CPF).
 CREATE INDEX ON contato (valor);
 
 CREATE TABLE campanha (
@@ -81,12 +86,12 @@ CREATE TABLE certificacao (
 );
 
 CREATE TABLE afinidade_canal (
-    cpf           CHAR(11) NOT NULL REFERENCES pessoa(cpf),
+    id_cliente    TEXT NOT NULL REFERENCES cliente(id_cliente),
     canal         canal NOT NULL,
     prob_engajar  NUMERIC(4,3) NOT NULL,
     prob_cpc      NUMERIC(4,3) NOT NULL,
     atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (cpf, canal)
+    PRIMARY KEY (id_cliente, canal)
 );
 
 -- Compliance aplicado pelo NÚCLEO antes do disparo (não só pelo agente Validador)
@@ -111,13 +116,13 @@ CREATE TABLE politica_contato (
 -- Conversão ligada à ação de origem (fase 3)
 CREATE TABLE conversao (
     id             BIGSERIAL PRIMARY KEY,
-    cpf            CHAR(11) NOT NULL,
+    id_cliente     TEXT NOT NULL,
     carteira_id    INT NOT NULL,
     acao_origem_id BIGINT REFERENCES acao(id),
     via            TEXT NOT NULL CHECK (via IN ('operador', 'portal')),
     valor_acordo   NUMERIC(12,2),
     ocorrido_em    TIMESTAMPTZ NOT NULL,
-    FOREIGN KEY (cpf, carteira_id) REFERENCES cliente(cpf, carteira_id)
+    FOREIGN KEY (id_cliente, carteira_id) REFERENCES cliente_carteira(id_cliente, carteira_id)
 );
 CREATE INDEX ON conversao (acao_origem_id);
 

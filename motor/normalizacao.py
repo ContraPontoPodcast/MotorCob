@@ -1,12 +1,28 @@
-"""Normalização de CPF, telefone e e-mail vindos de arquivos de fornecedor.
+"""Normalização de ID do cliente, CPF, telefone e e-mail vindos de arquivos.
 
 Cada fornecedor formata de um jeito ("(11) 99999-0000", "+5511999990000",
 "000.000.000-00"). O motor só enxerga a forma canônica, senão o mesmo contato
 vira dois e a evidência se divide.
 """
+import hashlib
 import re
 
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def id_cliente(valor: str) -> str | None:
+    """ID do cliente no sistema de cobrança: identificador opaco, só sem espaços nas pontas."""
+    v = (valor or "").strip()
+    return v if 0 < len(v) <= 64 else None
+
+
+def chave_pessoa(cpf_valido: str) -> str:
+    """Chave pseudônima para agrupar IDs da mesma pessoa sem levar o CPF adiante.
+
+    Não é anonimização (CPF tem poucas combinações): só evita que o CPF circule
+    pelo motor. Nunca gravar esta chave em saída.
+    """
+    return "p_" + hashlib.sha256(cpf_valido.encode()).hexdigest()[:16]
 
 
 def _digitos(s: str) -> str:

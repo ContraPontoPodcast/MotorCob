@@ -5,7 +5,7 @@
   "formato_data": "%Y-%m-%d %H:%M:%S",
   "custo_fixo": 0.3,
   "colunas": {
-    "cpf": "customer_doc",
+    "id_cliente": "customer_ref",
     "contato": "wa_number",
     "data": "event_at",
     "resultado": "status",

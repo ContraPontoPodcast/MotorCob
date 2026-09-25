@@ -6,7 +6,7 @@
   "decimal": ",",
   "formato_data": "%d/%m/%Y %H:%M",
   "colunas": {
-    "cpf": "CPF_CLIENTE",
+    "id_cliente": "COD_CLIENTE",
     "contato": "TELEFONE",
     "data": "DT_LIGACAO",
     "resultado": "COD_TABULACAO",

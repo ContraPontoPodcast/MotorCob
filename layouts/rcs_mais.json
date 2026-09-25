@@ -6,7 +6,7 @@
   "delimitador": ";",
   "decimal": ",",
   "colunas": {
-    "cpf": "CPF",
+    "id_cliente": "ID_CLIENTE",
     "contato": "MSISDN",
     "data": "DATA_HORA",
     "resultado": "EVENTO",

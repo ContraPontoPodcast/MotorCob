@@ -4,7 +4,7 @@
   "arquivo": "vozbot_*.csv",
   "formato_data": "%Y-%m-%dT%H:%M:%S",
   "colunas": {
-    "cpf": "document",
+    "id_cliente": "customer_id",
     "contato": "phone",
     "data": "timestamp",
     "resultado": "outcome",

@@ -7,7 +7,7 @@ retorno. Sem tag, não sabem qual contato é do cliente, em qual canal ele engaj
 comunicação funciona — e a operação não é previsível (acionados → contato → CPC → conversão).
 
 ## O que o produto faz
-Uma camada que fica ANTES de qualquer disparo em massa e responde, por CPF:
+Uma camada que fica ANTES de qualquer disparo em massa e responde, por cliente:
 1. **Contato certo**: qual telefone ou e-mail é de fato do cliente (certificação).
 2. **Canal certo**: em qual canal esse cliente engaja (afinidade).
 3. **Comunicação certa**: qual abordagem gerou engajamento ou conversão (fase 3).
@@ -26,24 +26,29 @@ e é priorizado por valor esperado, que já desconta o custo de cada tentativa.
   P(titular) × P(certifica | titular, canal), não P(engaja).
 - **WhatsApp só para contato CERTIFICADO** ou com score ≥ `LIMIAR_WHATSAPP` (banimento).
 - **`sem_conta` no WhatsApp restringe o canal, não invalida o telefone** (e expira em 90 dias).
-- **Contato certificado para um CPF é evidência contra os outros CPFs** que o têm.
+- **O motor roda pelo `id_cliente`** (ID do sistema de cobrança, opaco), nunca pelo CPF.
+  Fornecedores recebem e devolvem só o ID. O CPF é opcional na carteira e serve apenas
+  para agrupar IDs da mesma pessoa: vira chave pseudônima em memória e não vai para
+  nenhuma saída.
+- **Contato certificado para uma pessoa é evidência contra as outras pessoas** que o têm
+  e a favor dos outros IDs da mesma pessoa.
 - **Retorno reimportado não conta duas vezes** (dedup por fornecedor + id_externo).
 - Toda evidência decai no tempo (meia-vida de 90 dias).
 - Resultado que a taxonomia não conhece gera erro (`ResultadoDesconhecido`), nunca é
   classificado por palpite.
 
 ## Estrutura
-- `motor/normalizacao.py`: CPF (com DV), telefone e e-mail na forma canônica — o mesmo
+- `motor/normalizacao.py`: ID do cliente, CPF opcional (com DV), telefone e e-mail na forma canônica — o mesmo
   contato escrito de dois jeitos não pode virar dois contatos.
 - `motor/ingestao.py`: arquivo de retorno + layout → eventos. Código sem de-para vai para
-  a **quarentena** (nunca é classificado por palpite); CPF/contato/data inválidos são
+  a **quarentena** (nunca é classificado por palpite); ID/contato/data inválidos são
   rejeitados com motivo; reexportação é deduplicada; arquivo sem layout não é processado.
 - `layouts/*.json`: um layout declarativo por fornecedor (colunas, formato de data,
   separador decimal, de-para de códigos → taxonomia). Fornecedor novo = JSON novo. O
   layout é validado na carga: de-para para resultado fora da taxonomia é recusado.
 - `rodar.py`: pipeline de produção do MVP (retornos + carteira → plano, funil, quarentena).
 - `exemplos/gerar_retornos.py`: gera arquivos simulados de 6 fornecedores fictícios, com
-  a bagunça real (formatos diferentes, códigos novos, CPF errado, duplicatas).
+  a bagunça real (formatos diferentes, códigos novos, linhas sem ID, duplicatas).
 - `motor/taxonomia.py`: retorno bruto de cada canal → `Nivel` (INVALIDO, SEM_RETORNO,
   ENTREGUE, ENGAJADO, CERTIFICADO) + pesos de evidência + restrições. Fornecedor novo entra aqui.
 - `motor/certificacao.py`: score Beta por contato, status, hit rate por canal e afinidade
@@ -77,7 +82,8 @@ CONTESTADO (< 0,2: evidência de que é de outra pessoa) · INVALIDO · DESCONHE
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
-Nenhum dado pessoal real no repositório: exemplos e testes usam CPFs fictícios.
+Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
+Carteira: `id_cliente;contato;tipo;origem;cpf` (separador `;`, `origem` e `cpf` opcionais).
 - Demo (carteira sintética com verdade conhecida): `python demo.py`
 - Pipeline com arquivos: `python exemplos/gerar_retornos.py` e depois
   `python rodar.py --retornos exemplos/retornos --carteira exemplos/carteira_contatos.csv`

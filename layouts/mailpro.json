@@ -5,7 +5,7 @@
   "formato_data": "%Y-%m-%d",
   "custo_fixo": 0.01,
   "colunas": {
-    "cpf": "doc",
+    "id_cliente": "client_id",
     "contato": "email",
     "data": "date",
     "resultado": "event",

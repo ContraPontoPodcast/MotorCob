@@ -20,7 +20,7 @@ from . import normalizacao as norm
 from .certificacao import Evento
 from .taxonomia import CANAIS_EMAIL, TAXONOMIA
 
-CAMPOS_OBRIGATORIOS = ("cpf", "contato", "data", "resultado", "id_externo")
+CAMPOS_OBRIGATORIOS = ("id_cliente", "contato", "data", "resultado", "id_externo")
 
 
 class LayoutInvalido(ValueError):
@@ -109,9 +109,9 @@ def ler_retorno(caminho: str | Path, layout: Layout, vistos: set | None = None):
                                    "arquivo": caminho.name, "linha": n, "codigo": codigo,
                                    "contato": _mascarar(linha[col["contato"]] or "")})
                 continue
-            cpf = norm.cpf(linha[col["cpf"]])
-            if cpf is None:
-                rel.rejeitadas["cpf inválido"] += 1
+            id_cliente = norm.id_cliente(linha[col["id_cliente"]])
+            if id_cliente is None:
+                rel.rejeitadas["id_cliente inválido"] += 1
                 continue
             contato = norm.contato(linha[col["contato"]], layout.tipo_contato)
             if contato is None:
@@ -135,7 +135,7 @@ def ler_retorno(caminho: str | Path, layout: Layout, vistos: set | None = None):
                 rel.duplicadas += 1
                 continue
             vistos.add((layout.fornecedor, id_externo))
-            eventos.append(Evento(cpf, contato, layout.tipo_contato, layout.canal, resultado,
+            eventos.append(Evento(id_cliente, contato, layout.tipo_contato, layout.canal, resultado,
                                   data, custo, fornecedor=layout.fornecedor, id_externo=id_externo))
             rel.aceitas += 1
     return eventos, rel, quarentena
@@ -159,25 +159,36 @@ def ingerir_pasta(pasta_retornos: str | Path, layouts: list[Layout]):
     return eventos, relatorios, quarentena, sem_layout
 
 
-def carregar_carteira(caminho: str | Path) -> tuple[list[dict], Counter]:
-    """Base de contatos da carteira (cpf;contato;tipo[;origem]), normalizada.
+def carregar_carteira(caminho: str | Path) -> tuple[list[dict], dict[str, str], Counter]:
+    """Base de contatos da carteira (id_cliente;contato;tipo[;origem][;cpf]), normalizada.
 
     Inclui contatos nunca acionados — é o que permite planejar o cold start.
+    O CPF é opcional e serve só para agrupar IDs da mesma pessoa: vira uma chave
+    pseudônima (hash) em memória e não segue para nenhuma saída.
+
+    Retorna (contatos, pessoa_de, rejeitados), com pessoa_de = {id_cliente: chave}.
     """
-    contatos, rejeitados, vistos = [], Counter(), set()
+    contatos, pessoa_de, rejeitados, vistos = [], {}, Counter(), set()
     with open(caminho, newline="", encoding="utf-8") as f:
         for linha in csv.DictReader(f, delimiter=";"):
             tipo = (linha.get("tipo") or "").strip().lower()
             if tipo not in ("telefone", "email"):
                 rejeitados["tipo inválido"] += 1
                 continue
-            cpf, contato = norm.cpf(linha.get("cpf")), norm.contato(linha.get("contato"), tipo)
-            if cpf is None or contato is None:
-                rejeitados["cpf ou contato inválido"] += 1
+            id_cliente = norm.id_cliente(linha.get("id_cliente"))
+            contato = norm.contato(linha.get("contato"), tipo)
+            if id_cliente is None or contato is None:
+                rejeitados["id_cliente ou contato inválido"] += 1
                 continue
-            if (cpf, contato) in vistos:
+            if (linha.get("cpf") or "").strip():
+                cpf = norm.cpf(linha["cpf"])
+                if cpf is None:
+                    rejeitados["cpf inválido (ignorado, linha mantida)"] += 1
+                else:
+                    pessoa_de[id_cliente] = norm.chave_pessoa(cpf)
+            if (id_cliente, contato) in vistos:
                 continue
-            vistos.add((cpf, contato))
-            contatos.append({"cpf": cpf, "contato": contato, "tipo": tipo,
+            vistos.add((id_cliente, contato))
+            contatos.append({"id_cliente": id_cliente, "contato": contato, "tipo": tipo,
                              "origem": (linha.get("origem") or "").strip() or None})
-    return contatos, rejeitados
+    return contatos, pessoa_de, rejeitados

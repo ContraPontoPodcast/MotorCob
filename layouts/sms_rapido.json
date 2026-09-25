@@ -6,7 +6,7 @@
   "decimal": ",",
   "formato_data": "%d/%m/%Y",
   "colunas": {
-    "cpf": "cpf",
+    "id_cliente": "id_cliente",
     "contato": "celular",
     "data": "data_envio",
     "resultado": "status",

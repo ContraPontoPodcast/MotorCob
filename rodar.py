@@ -46,7 +46,7 @@ def rodar(retornos, carteira, layouts="layouts", hoje=None, saida="saida",
     saida = Path(saida)
 
     eventos, relatorios, quarentena, sem_layout = ingerir_pasta(retornos, carregar_layouts(layouts))
-    contatos, rej_carteira = carregar_carteira(carteira)
+    contatos, pessoa_de, rej_carteira = carregar_carteira(carteira)
 
     out("INGESTÃO")
     for r in relatorios:
@@ -59,14 +59,15 @@ def rodar(retornos, carteira, layouts="layouts", hoje=None, saida="saida",
             out(f"  {'':<15}   código sem de-para: '{cod}' ({q}) → precisa de mapeamento no layout")
     for arq in sem_layout:
         out(f"  SEM LAYOUT: {arq} → arquivo não processado")
-    out(f"  carteira: {len(contatos)} contatos válidos"
+    out(f"  carteira: {len(contatos)} contatos válidos | {len({c['id_cliente'] for c in contatos})} clientes"
+        f" | {len(pessoa_de)} clientes com CPF (só para agrupar IDs da mesma pessoa)"
         + (f" | rejeitados: {dict(rej_carteira)}" if rej_carteira else ""))
 
-    certs = certificar_contatos(eventos, hoje, contatos)
+    certs = certificar_contatos(eventos, hoje, contatos, pessoa_de)
     hr = hit_rate_por_canal(eventos)
     custos = custo_medio_por_canal(eventos)
     plano, bloqueios = planejar(certs, afinidade_canal(eventos, hr, certs), custos, valor_contato)
-    funil = funil_projetado(plano, len({c.cpf for c in certs.values()}))
+    funil = funil_projetado(plano, len({c.id_cliente for c in certs.values()}))
 
     out("\nHIT RATE DA CARTEIRA")
     for canal, r in sorted(hr.items(), key=lambda kv: -kv[1]["hit_rate"]):
@@ -91,11 +92,11 @@ def rodar(retornos, carteira, layouts="layouts", hoje=None, saida="saida",
          "motivos": "; ".join(f"{m}={q}" for m, q in r.rejeitadas.items())} for r in relatorios])
     salvar_csv(saida, "quarentena.csv", quarentena)
     salvar_csv(saida, "certificacao_contatos.csv", [
-        {"cpf": c.cpf, "contato": c.contato, "tipo": c.tipo, "status": c.status, "score": c.score,
+        {"id_cliente": c.id_cliente, "contato": c.contato, "tipo": c.tipo, "status": c.status, "score": c.score,
          "tentativas": c.tentativas, "restricoes": ";".join(sorted(c.restricoes))} for c in certs.values()])
     salvar_csv(saida, "hit_rate_carteira.csv", [{"canal": k, **v} for k, v in hr.items()])
     salvar_csv(saida, "plano_acionamento.csv", plano)
-    salvar_csv(saida, "bloqueios.csv", [dict(zip(("cpf", "contato", "canal", "motivo"), b)) for b in bloqueios])
+    salvar_csv(saida, "bloqueios.csv", [dict(zip(("id_cliente", "contato", "canal", "motivo"), b)) for b in bloqueios])
     out(f"\nArquivos gerados em ./{saida}/")
     return {"eventos": eventos, "relatorios": relatorios, "quarentena": quarentena,
             "sem_layout": sem_layout, "certs": certs, "plano": plano, "funil": funil}
@@ -104,7 +105,7 @@ def rodar(retornos, carteira, layouts="layouts", hoje=None, saida="saida",
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--retornos", required=True, help="pasta com os arquivos de retorno dos fornecedores")
-    ap.add_argument("--carteira", required=True, help="CSV (;) com cpf;contato;tipo[;origem]")
+    ap.add_argument("--carteira", required=True, help="CSV (;) com id_cliente;contato;tipo[;origem]")
     ap.add_argument("--layouts", default="layouts", help="pasta com os layouts dos fornecedores")
     ap.add_argument("--hoje", type=date.fromisoformat, help="data de referência (AAAA-MM-DD); padrão: hoje")
     ap.add_argument("--saida", default="saida")

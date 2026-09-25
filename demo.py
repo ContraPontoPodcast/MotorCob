@@ -28,22 +28,23 @@ SAIDA = Path("saida")
 def gerar_carteira(rng, n_historico=500, n_novos=100):
     clientes, contatos = [], []
     for i in range(n_historico + n_novos):
-        cpf = gerar_cpf(100_000_000 + i)  # CPF fictício com DV válido
+        id_cliente = f"C{i:07d}"  # ID do cliente no sistema de cobrança
         pref = {c: min(0.9, p * rng.uniform(0.3, 1.7)) for c, p in PREF_BASE.items()}
         n_tel = rng.randint(1, 4)
         idx_titular = rng.randrange(n_tel) if rng.random() < 0.8 else None
         for t in range(n_tel):
             titular = t == idx_titular
             contatos.append({
-                "cpf": cpf, "contato": f"119{rng.randint(10_000_000, 99_999_999)}", "tipo": "telefone",
+                "id_cliente": id_cliente, "contato": f"119{rng.randint(10_000_000, 99_999_999)}", "tipo": "telefone",
                 "titular": titular, "existe": titular or rng.random() > 0.15,
                 "whatsapp": rng.random() < (0.75 if titular else 0.6),
             })
         for j in range(rng.randint(0, 2)):
             valido = rng.random() < 0.6
-            contatos.append({"cpf": cpf, "contato": f"cliente{i}_{j}@exemplo.com", "tipo": "email",
+            contatos.append({"id_cliente": id_cliente, "contato": f"cliente{i}_{j}@exemplo.com", "tipo": "email",
                              "titular": valido, "existe": valido, "whatsapp": False})
-        clientes.append({"cpf": cpf, "pref": pref, "novo": i >= n_historico})
+        clientes.append({"id_cliente": id_cliente, "cpf": gerar_cpf(100_000_000 + i),  # CPF fictício
+                         "pref": pref, "novo": i >= n_historico})
     return clientes, contatos
 
 
@@ -89,18 +90,18 @@ def simular_resultado(rng, canal, c, pref):
 
 def gerar_historico(rng, clientes, contatos):
     """Histórico 'pulverizado': canal e contato escolhidos sem critério, como hoje."""
-    por_cpf = {}
+    por_cliente = {}
     for c in contatos:
-        por_cpf.setdefault(c["cpf"], []).append(c)
+        por_cliente.setdefault(c["id_cliente"], []).append(c)
     eventos, seq = [], 0
     for cli in clientes:
         if cli["novo"]:
             continue
         for _ in range(rng.randint(3, 15)):
-            c = rng.choice(por_cpf[cli["cpf"]])
+            c = rng.choice(por_cliente[cli["id_cliente"]])
             canal = rng.choice(["discador", "agente_voz", "sms", "whatsapp", "rcs"]) if c["tipo"] == "telefone" else "email"
             seq += 1
-            eventos.append(Evento(cli["cpf"], c["contato"], c["tipo"], canal,
+            eventos.append(Evento(cli["id_cliente"], c["contato"], c["tipo"], canal,
                                   simular_resultado(rng, canal, c, cli["pref"][canal]),
                                   HOJE - timedelta(days=rng.randint(1, 60)), CUSTOS[canal],
                                   fornecedor=f"forn_{canal}", id_externo=str(seq)))
@@ -139,7 +140,7 @@ def main(seed=42, verbose=True):
         out(f"   {canal:<11} tentativas {r['tentativas']:>4} | hit rate {r['hit_rate']:>6.1%} "
             f"| certificação {r['taxa_certificacao']:>5.1%} | custo/engajado {cpe}")
 
-    verdade = {(c["cpf"], c["contato"]): c for c in contatos}
+    verdade = {(c["id_cliente"], c["contato"]): c for c in contatos}
     out("\n2. QUALIDADE DA CERTIFICAÇÃO (vs. verdade simulada)")
     qualidade = {}
     for status in ("CERTIFICADO", "PROVAVEL", "NAO_CONFIRMADO", "CONTESTADO", "INVALIDO", "DESCONHECIDO"):
@@ -152,7 +153,7 @@ def main(seed=42, verbose=True):
     zap = [b for b in bloqueios if b[2] == "whatsapp" and b[3].startswith("risco de banimento")]
     zap_ok = [a for a in plano if a["canal"] == "whatsapp"]
     fora_zap = sum(not verdade[(b[0], b[1])]["titular"] for b in zap) / len(zap) if zap else 0
-    erro_zap = sum(not verdade[(a["cpf"], a["contato"])]["titular"] for a in zap_ok)
+    erro_zap = sum(not verdade[(a["id_cliente"], a["contato"])]["titular"] for a in zap_ok)
     out(f"\n3. TRAVA DO WHATSAPP\n   barrados por risco de banimento: {len(zap)} "
         f"({fora_zap:.0%} de fato NÃO eram do cliente)\n"
         f"   liberados: {len(zap_ok)} | desses, não eram do cliente: {erro_zap}")
@@ -163,10 +164,10 @@ def main(seed=42, verbose=True):
         out(f"   {k}: {v}")
 
     # Executa a 1ª ação de cada cliente contra a verdade e compara com a projeção.
-    prefs = {c["cpf"]: c["pref"] for c in clientes}
+    prefs = {c["id_cliente"]: c["pref"] for c in clientes}
     real = Counter()
     for a in (a for a in plano if a["ordem"] == 1):
-        res = simular_resultado(rng, a["canal"], verdade[(a["cpf"], a["contato"])], prefs[a["cpf"]][a["canal"]])
+        res = simular_resultado(rng, a["canal"], verdade[(a["id_cliente"], a["contato"])], prefs[a["id_cliente"]][a["canal"]])
         nivel = classificar(a["canal"], res).nivel
         real["engajou"] += nivel >= Nivel.ENGAJADO
         real["certificou"] += nivel == Nivel.CERTIFICADO
@@ -176,11 +177,11 @@ def main(seed=42, verbose=True):
         f"| CPC projetado {funil['cpc_esperado']}")
 
     salvar_csv("certificacao_contatos.csv", [
-        {"cpf": c.cpf, "contato": c.contato, "tipo": c.tipo, "status": c.status, "score": c.score,
+        {"id_cliente": c.id_cliente, "contato": c.contato, "tipo": c.tipo, "status": c.status, "score": c.score,
          "tentativas": c.tentativas, "restricoes": ";".join(sorted(c.restricoes))} for c in certs.values()])
     salvar_csv("hit_rate_carteira.csv", [{"canal": k, **v} for k, v in hr.items()])
     salvar_csv("plano_acionamento.csv", plano)
-    salvar_csv("bloqueios.csv", [dict(zip(("cpf", "contato", "canal", "motivo"), b)) for b in bloqueios])
+    salvar_csv("bloqueios.csv", [dict(zip(("id_cliente", "contato", "canal", "motivo"), b)) for b in bloqueios])
     out(f"\nArquivos gerados em ./{SAIDA}/")
     return {"qualidade": qualidade, "funil": funil, "real": real, "whatsapp_erro": erro_zap}
 
