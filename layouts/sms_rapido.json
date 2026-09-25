@@ -1,0 +1,24 @@
+{
+  "fornecedor": "sms_rapido",
+  "canal": "sms",
+  "arquivo": "sms_rapido_*.csv",
+  "delimitador": ";",
+  "decimal": ",",
+  "formato_data": "%d/%m/%Y",
+  "colunas": {
+    "id_cliente": "id_cliente",
+    "contato": "celular",
+    "data": "data_envio",
+    "resultado": "status",
+    "id_externo": "id_msg",
+    "custo": "valor"
+  },
+  "resultados": {
+    "DELIVRD": "entregue",
+    "UNDELIV": "nao_entregue",
+    "CLICK": "clique_link",
+    "MO": "resposta",
+    "STOP": "opt_out",
+    "PORTAL_LOGIN": "acesso_portal_autenticado"
+  }
+}

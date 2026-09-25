@@ -1,0 +1,24 @@
+{
+  "fornecedor": "discadora_alfa",
+  "canal": "discador",
+  "arquivo": "discadora_alfa_*.csv",
+  "delimitador": ";",
+  "decimal": ",",
+  "formato_data": "%d/%m/%Y %H:%M",
+  "colunas": {
+    "id_cliente": "COD_CLIENTE",
+    "contato": "TELEFONE",
+    "data": "DT_LIGACAO",
+    "resultado": "COD_TABULACAO",
+    "id_externo": "ID_CHAMADA",
+    "custo": "CUSTO"
+  },
+  "resultados": {
+    "01": "nao_atendida",
+    "02": "numero_inexistente",
+    "03": "caixa_postal",
+    "10": "cpc",
+    "11": "atendida_sem_cpc",
+    "12": "atendida_terceiro_desconhece"
+  }
+}

@@ -1,0 +1,254 @@
+{
+  "_doc": "Regras operacionais do playbook de gestão de cobrança. Fonte da verdade: CLAUDE.md, seção 'Regras do playbook'. Mudança aqui é decisão de comitê e vira commit.",
+  "canais": {
+    "whatsapp": "WA",
+    "rcs": "RC",
+    "agente_voz": "AV",
+    "discador": "DC",
+    "sms": "SM",
+    "email": "EM"
+  },
+  "ordem_rotacao": [
+    "whatsapp",
+    "rcs",
+    "agente_voz",
+    "discador",
+    "sms"
+  ],
+  "acompanha": {
+    "sms": [
+      "email"
+    ]
+  },
+  "reserva": {
+    "agente_voz": "discador"
+  },
+  "substituto": {
+    "rcs": "sms"
+  },
+  "contato": {
+    "whatsapp": [
+      "resposta",
+      "clique_link",
+      "identidade_confirmada",
+      "acesso_portal_autenticado"
+    ],
+    "rcs": [
+      "interacao",
+      "clique_link",
+      "identidade_confirmada",
+      "acesso_portal_autenticado"
+    ],
+    "agente_voz": [
+      "identidade_confirmada",
+      "cpc"
+    ],
+    "discador": [
+      "cpc"
+    ],
+    "sms": [
+      "clique_link",
+      "resposta",
+      "acesso_portal_autenticado"
+    ],
+    "email": [
+      "clique",
+      "acesso_portal_autenticado"
+    ]
+  },
+  "recencia_horas": 48,
+  "tentativas_por_canal": 3,
+  "spins_discador_dia": 3,
+  "localizacao": {
+    "passos": {
+      "1": [
+        "whatsapp"
+      ],
+      "3": [
+        "rcs"
+      ],
+      "5": [
+        "agente_voz"
+      ],
+      "7": [
+        "sms"
+      ]
+    },
+    "dias_sem_contato_para_ncp": 8,
+    "numeros_digitais": 2
+  },
+  "giro": {
+    "ciclo_dias": 8,
+    "passos": {
+      "1": [
+        "whatsapp"
+      ],
+      "3": [
+        "rcs"
+      ],
+      "5": [
+        "agente_voz"
+      ],
+      "7": [
+        "sms"
+      ]
+    },
+    "max_ciclos": 3
+  },
+  "preventivo": {
+    "passos": {
+      "3": [
+        "rcs"
+      ],
+      "1": [
+        "whatsapp"
+      ],
+      "0": [
+        "whatsapp"
+      ]
+    },
+    "voz_d0_tickets": [
+      "A"
+    ],
+    "voz_d0_canal": "discador"
+  },
+  "quebra": {
+    "passos": {
+      "1": [
+        "whatsapp"
+      ],
+      "3": [
+        "discador"
+      ],
+      "5": [
+        "discador",
+        "sms"
+      ]
+    },
+    "dias_para_estoque": 6
+  },
+  "hierarquia": [
+    "QBR",
+    "PRE",
+    "COL",
+    "CPA",
+    "CPB",
+    "LOC",
+    "NCP"
+  ],
+  "janela": {
+    "seg_sex": [
+      "08:00",
+      "20:00"
+    ],
+    "sabado": [
+      "08:00",
+      "14:00"
+    ],
+    "feriados": [
+      "2026-01-01",
+      "2026-04-03",
+      "2026-04-21",
+      "2026-05-01",
+      "2026-09-07",
+      "2026-10-12",
+      "2026-11-02",
+      "2026-11-15",
+      "2026-11-20",
+      "2026-12-25"
+    ]
+  },
+  "whatsapp": {
+    "limiar_score": 0.8,
+    "numeros_nao_certificados": 1,
+    "exige_whatsapp_valido": true,
+    "limite_taxa_bloqueio": 0.02,
+    "janela_taxa_dias": 7,
+    "minimo_envios_para_freio": 50
+  },
+  "cluster": {
+    "ticket": [
+      [
+        "A",
+        5000
+      ],
+      [
+        "M",
+        1000
+      ],
+      [
+        "B",
+        0
+      ]
+    ],
+    "atraso": [
+      [
+        "1",
+        0
+      ],
+      [
+        "2",
+        91
+      ],
+      [
+        "3",
+        181
+      ]
+    ]
+  },
+  "enriquecimento": {
+    "A1": {
+      "pacote": "completo",
+      "revalida_dias": 30
+    },
+    "A2": {
+      "pacote": "completo + novos telefones",
+      "revalida_dias": 30
+    },
+    "A3": {
+      "pacote": "completo + localizador",
+      "revalida_dias": 30
+    },
+    "M1": {
+      "pacote": "completo",
+      "revalida_dias": 60
+    },
+    "M2": {
+      "pacote": "básico + WhatsApp válido",
+      "revalida_dias": 60
+    },
+    "M3": {
+      "pacote": "básico",
+      "revalida_dias": 90
+    },
+    "B1": {
+      "pacote": "básico",
+      "revalida_dias": 90
+    },
+    "B2": {
+      "pacote": "básico",
+      "revalida_dias": 90
+    },
+    "B3": {
+      "pacote": "só digital",
+      "revalida_dias": 90,
+      "so_digital": true
+    }
+  },
+  "orcamento": {
+    "_doc": "Premissas do Real x Previsto. Taxas de WA, RCS, discador e SMS vêm do playbook; agente virtual, e-mail, % acordo, % pagas e % de remuneração (comissão/honorários sobre o recuperado) são premissas a confirmar.",
+    "taxa_contato_prevista": {
+      "whatsapp": 0.15,
+      "rcs": 0.07,
+      "agente_voz": 0.03,
+      "discador": 0.03,
+      "sms": 0.015,
+      "email": 0.015
+    },
+    "pct_acordo_sobre_contato": 0.25,
+    "pct_parcelas_pagas": 0.8,
+    "roi_aprova": 1.5,
+    "roi_com_plano": 1.0,
+    "pct_remuneracao": 0.15
+  }
+}

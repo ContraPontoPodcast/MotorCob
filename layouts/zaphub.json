@@ -1,0 +1,24 @@
+{
+  "fornecedor": "zaphub",
+  "canal": "whatsapp",
+  "arquivo": "zaphub_*.csv",
+  "formato_data": "%Y-%m-%d %H:%M:%S",
+  "custo_fixo": 0.3,
+  "colunas": {
+    "id_cliente": "customer_ref",
+    "contato": "wa_number",
+    "data": "event_at",
+    "resultado": "status",
+    "id_externo": "message_id"
+  },
+  "resultados": {
+    "delivered": "entregue",
+    "read": "lido",
+    "replied": "resposta",
+    "failed_not_on_whatsapp": "sem_conta",
+    "blocked": "bloqueio",
+    "wrong_person": "desconhece",
+    "identity_verified": "identidade_confirmada",
+    "portal_login": "acesso_portal_autenticado"
+  }
+}

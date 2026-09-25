@@ -23,40 +23,40 @@ def planejar(certs: dict[tuple[str, str], Certificacao], afinidade: Afinidade,
              limiar_whatsapp: float = LIMIAR_WHATSAPP):
     """Retorna (plano, bloqueios).
 
-    plano: lista de dicts ordenada por CPF e prioridade (ordem 1 = primeira ação).
-    bloqueios: lista de (cpf, contato, canal, motivo).
+    plano: lista de dicts ordenada por cliente e prioridade (ordem 1 = primeira ação).
+    bloqueios: lista de (id_cliente, contato, canal, motivo).
     """
     candidatos = defaultdict(list)
     bloqueios = []
     for c in certs.values():
         if c.status in STATUS_FORA:
-            bloqueios.append((c.cpf, c.contato, "*", f"contato {c.status.lower()}"))
+            bloqueios.append((c.id_cliente, c.contato, "*", f"contato {c.status.lower()}"))
             continue
         for canal in CANAIS_TELEFONE if c.tipo == "telefone" else CANAIS_EMAIL:
             restr = sorted(r for r in c.restricoes if r.startswith(canal + ":"))
             if restr:
-                bloqueios.append((c.cpf, c.contato, canal, f"restrição {restr[0]}"))
+                bloqueios.append((c.id_cliente, c.contato, canal, f"restrição {restr[0]}"))
                 continue
             if canal == "whatsapp" and c.status != "CERTIFICADO" and c.score < limiar_whatsapp:
-                bloqueios.append((c.cpf, c.contato, canal,
+                bloqueios.append((c.id_cliente, c.contato, canal,
                                   f"risco de banimento (score {c.score:.2f} < {limiar_whatsapp})"))
                 continue
-            p_engaja = afinidade.prob(c.cpf, canal)
-            p_cpc = c.score * afinidade.prob_cpc(c.cpf, canal)
+            p_engaja = afinidade.prob(c.id_cliente, canal)
+            p_cpc = c.score * afinidade.prob_cpc(c.id_cliente, canal)
             ve = p_cpc * valor_contato - custos[canal]
             if ve <= 0:
-                bloqueios.append((c.cpf, c.contato, canal, f"valor esperado negativo ({ve:.2f})"))
+                bloqueios.append((c.id_cliente, c.contato, canal, f"valor esperado negativo ({ve:.2f})"))
                 continue
-            candidatos[c.cpf].append({
-                "cpf": c.cpf, "contato": c.contato, "tipo": c.tipo, "canal": canal,
+            candidatos[c.id_cliente].append({
+                "id_cliente": c.id_cliente, "contato": c.contato, "tipo": c.tipo, "canal": canal,
                 "status": c.status, "p_titular": c.score, "p_engaja": round(p_engaja, 4),
                 "p_cpc": round(p_cpc, 4), "custo": custos[canal],
                 "valor_esperado": round(ve, 4),
             })
 
     plano = []
-    for cpf in sorted(candidatos):
-        acoes = sorted(candidatos[cpf], key=lambda a: -a["valor_esperado"])
+    for id_cliente in sorted(candidatos):
+        acoes = sorted(candidatos[id_cliente], key=lambda a: -a["valor_esperado"])
         for i, a in enumerate(acoes, 1):
             plano.append({"ordem": i, **a})
     return plano, bloqueios
