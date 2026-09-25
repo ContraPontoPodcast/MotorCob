@@ -151,6 +151,13 @@ de outra pessoa pela certificação e a rotação segue.
 - `exemplos/simular_operacao.py`: operação simulada dia a dia com verdade conhecida e
   auditoria das regras. `exemplos/gerar_retornos.py`: arquivos de exemplo.
 - `db/schema.sql`: modelo alvo em Postgres. `tests/`: testes das regras e princípios.
+- `supabase/migrations/`: banco do site motorcob.online no Supabase (projeto próprio, região
+  São Paulo): perfis por papel (admin, planejamento, operacao, gestao), envios, execuções,
+  estado_cliente, trilha, fila_dia (só IDs), kpis, auditoria de acessos, buckets
+  `entradas`/`saidas` e RLS. **Nenhuma tabela guarda contato ou CPF de devedor.** Só a
+  rotina do motor (chave service_role) escreve resultados. `supabase/testes/testar_rls.py`
+  verifica as permissões por papel num Postgres local. Guias: `docs/NUVEM.md` e
+  `docs/PROMPT_SITE.md` (prompt para gerar o site).
 
 ## Status de certificação
 CERTIFICADO (certificação + score ≥ 0,7) · PROVAVEL (≥ 0,6) · NAO_CONFIRMADO ·

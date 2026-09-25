@@ -25,6 +25,10 @@ python exemplos/simular_operacao.py
 
 O Excel do comitê precisa de `pip install openpyxl`; todo o resto roda só com Python 3.11+.
 
+**Nuvem:** banco no Supabase (`supabase/migrations/`) e site com login em motorcob.online —
+passo a passo em [`docs/NUVEM.md`](docs/NUVEM.md) e prompt do site em
+[`docs/PROMPT_SITE.md`](docs/PROMPT_SITE.md).
+
 **Produção no Mac:** instalação, pasta de dados, rotina agendada e o dia a dia em
 [`docs/PRODUCAO.md`](docs/PRODUCAO.md) (`scripts/instalar_mac.sh 06:30`).
 
