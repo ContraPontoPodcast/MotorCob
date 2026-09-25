@@ -1,0 +1,70 @@
+# Certificação de Contato para Cobrança
+
+## O problema
+Empresas de cobrança disparam de forma pulverizada (discador, agente de voz, SMS, RCS,
+WhatsApp, e-mail), tudo de uma vez e sem identificador, e não conseguem taguear o
+retorno. Sem tag, não sabem qual contato é do cliente, em qual canal ele engaja nem qual
+comunicação funciona — e a operação não é previsível (acionados → contato → CPC → conversão).
+
+## O que o produto faz
+Uma camada que fica ANTES de qualquer disparo em massa e responde, por CPF:
+1. **Contato certo**: qual telefone ou e-mail é de fato do cliente (certificação).
+2. **Canal certo**: em qual canal esse cliente engaja (afinidade).
+3. **Comunicação certa**: qual abordagem gerou engajamento ou conversão (fase 3).
+
+Cliente novo sem histórico (cold start) usa o hit rate da carteira por canal como prior
+e é priorizado por valor esperado, que já desconta o custo de cada tentativa.
+
+## Princípios de arquitetura (não violar)
+- **O núcleo é determinístico e estatístico.** Score, certificação e priorização por
+  registro NUNCA passam por LLM. Motivos: escala (milhões de registros), custo e auditoria.
+- **Agentes atuam na borda:** mapear layouts novos de fornecedor, analisar resultados,
+  montar estratégia/régua e validar compliance. Eles leem as saídas do motor.
+- **Engajamento ≠ titularidade.** "Lido" no WhatsApp prova que alguém leu, não que é o
+  cliente. Só CPC, identidade confirmada ou acesso autenticado ao portal certificam.
+- **Engajamento ≠ contato efetivo no valor esperado.** A priorização usa
+  P(titular) × P(certifica | titular, canal), não P(engaja).
+- **WhatsApp só para contato CERTIFICADO** ou com score ≥ `LIMIAR_WHATSAPP` (banimento).
+- **`sem_conta` no WhatsApp restringe o canal, não invalida o telefone** (e expira em 90 dias).
+- **Contato certificado para um CPF é evidência contra os outros CPFs** que o têm.
+- **Retorno reimportado não conta duas vezes** (dedup por fornecedor + id_externo).
+- Toda evidência decai no tempo (meia-vida de 90 dias).
+- Resultado que a taxonomia não conhece gera erro (`ResultadoDesconhecido`), nunca é
+  classificado por palpite.
+
+## Estrutura
+- `motor/taxonomia.py`: retorno bruto de cada canal → `Nivel` (INVALIDO, SEM_RETORNO,
+  ENTREGUE, ENGAJADO, CERTIFICADO) + pesos de evidência + restrições. Fornecedor novo entra aqui.
+- `motor/certificacao.py`: score Beta por contato, status, hit rate por canal e afinidade
+  (P(engaja) e P(certifica | titular), com correção do viés de seleção).
+- `motor/priorizacao.py`: plano pré-disparo, bloqueios com motivo e funil projetado.
+- `demo.py`: carteira sintética com verdade conhecida; mede acerto da certificação,
+  trava do WhatsApp e projetado x realizado.
+- `db/schema.sql`: modelo alvo em Postgres.
+- `tests/`: testes dos princípios acima.
+
+## Status (CERTIFICADO → DESCONHECIDO)
+CERTIFICADO (certificação + score ≥ 0,7) · PROVAVEL (≥ 0,6) · NAO_CONFIRMADO ·
+CONTESTADO (< 0,2: evidência de que é de outra pessoa) · INVALIDO · DESCONHECIDO (sem evento).
+
+## Roadmap
+1. **MVP (atual):** arquivos exportados → eventos → certificação → plano priorizado + funil.
+2. **Ingestão real:** conectores por fornecedor (arquivo de retorno e depois webhook/API),
+   com ID de campanha e link único rastreável em toda ação (tabela `acao`).
+3. **Conversão:** ligar acordo/pagamento (operador e portal) à ação que o originou;
+   medir conversão por contato, canal e mensagem.
+4. **Camada de agentes:** Ingestão, Analista, Estrategista, Validador (LGPD, horários,
+   opt-out, frequência, risco de ban).
+5. **Calibração:** pesos, limiares e prior com dados reais de carteira.
+
+## Pontos em aberto para calibrar com dados reais
+- Pesos de evidência (`taxonomia.py`) e limiares de status.
+- Prior de titularidade por origem do contato (hoje fixo em 0,4).
+- Valor do contato efetivo por carteira (hoje R$ 8).
+- Funil projetado sai ~10–20% conservador no CPC na carteira simulada.
+
+## Convenções
+Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
+Nenhum dado pessoal real no repositório: exemplos e testes usam CPFs fictícios.
+- Demo: `python demo.py`
+- Testes: `python -m unittest`
