@@ -143,6 +143,11 @@ de outra pessoa pela certificação e a rotação segue.
 - `motor/priorizacao.py` + `rodar.py`: diagnóstico da carteira por valor esperado (base
   para sugerir ao comitê mensal a ordem de rotação por eficiência; não comanda a fila).
 - `rodar_dia.py`: **rotina diária** (estado em `estado/`, fila/enriquecimento em `saida/`).
+  A saída operacional é `saida/<data>/ids/<canal>.csv`: **só os IDs de cliente por canal**
+  (a ferramenta de cada canal monta o mailing pelo ID; não há layout de saída por
+  fornecedor). `<canal>_reserva.csv` = só se o canal principal do dia não contatar.
+- `scripts/` + `docs/PRODUCAO.md`: produção no Mac (instalador, rotina agendada via
+  launchd, relatório mensal). Dados reais ficam em `~/MotorCob-dados`, fora do repo.
 - `exemplos/simular_operacao.py`: operação simulada dia a dia com verdade conhecida e
   auditoria das regras. `exemplos/gerar_retornos.py`: arquivos de exemplo.
 - `db/schema.sql`: modelo alvo em Postgres. `tests/`: testes das regras e princípios.

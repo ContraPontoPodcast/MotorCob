@@ -8,9 +8,13 @@ Uso (toda manhã):
 1. Lê retornos dos fornecedores (layouts/), portal e parcelas.
 2. Processa cada dia pendente até ontem: retornos do dia → TAG, acordos, tempo.
    O estado fica em --estado (estados.json) e a trilha é acrescentada em trilha.csv.
-3. Gera para --data: fila_do_dia.csv (e uma por canal), enriquecimento.csv e alertas.
+3. Gera para --data, em saida/AAAA-MM-DD/:
+   ids/<canal>.csv       só os IDs de cliente a acionar hoje em cada canal
+                         (<canal>_reserva.csv: só se o canal principal do dia não contatar)
+   fila_do_dia.csv       detalhe completo (régua, passo, TAG, contato escolhido)
+   enriquecimento.csv    quem mandar para o bureau · alertas.txt
 
-A fila pode ir direto para o disparar.py (link rastreável):
+Para usar o link rastreável, a fila completa pode ir para o disparar.py:
     python disparar.py --plano saida/2026-09-25/fila_do_dia.csv --ordem todas ...
 """
 import argparse
@@ -37,6 +41,29 @@ def _salvar(caminho: Path, linhas: list[dict], anexar=False):
         if novo:
             w.writeheader()
         w.writerows(linhas)
+
+
+def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]]) -> dict[str, list[str]]:
+    """Um arquivo por canal só com os IDs de cliente a acionar hoje (sem repetição).
+
+    A ferramenta de cada canal monta o mailing a partir do ID, então não há layout
+    de saída por fornecedor. Linhas condicionais (ex.: discador de reserva para quem o
+    agente virtual não contatou no dia) vão para um arquivo à parte.
+    """
+    pasta.mkdir(parents=True, exist_ok=True)
+    for antigo in pasta.glob("*.csv"):  # reprocessar o dia não deixa arquivo velho
+        antigo.unlink()
+    arquivos = {}
+    for canal, linhas in por_canal.items():
+        for condicional in (False, True):
+            ids = sorted({l["id_cliente"] for l in linhas if bool(l["condicao"]) == condicional})
+            if not ids:
+                continue
+            nome = f"{canal}_reserva" if condicional else canal
+            with open(pasta / f"{nome}.csv", "w", newline="", encoding="utf-8") as f:
+                f.write("id_cliente\n" + "".join(i + "\n" for i in ids))
+            arquivos[nome] = ids
+    return arquivos
 
 
 def carregar_estado(pasta: Path):
@@ -98,12 +125,11 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
 
     saida = Path(pasta_saida) / hoje.isoformat()
     saida.mkdir(parents=True, exist_ok=True)
-    _salvar(saida / "fila_do_dia.csv", fila)
+    _salvar(saida / "fila_do_dia.csv", fila)  # completa: régua, passo, contato escolhido etc.
     por_canal = defaultdict(list)
     for l in fila:
         por_canal[l["canal"]].append(l)
-    for canal, linhas in por_canal.items():
-        _salvar(saida / f"fila_{canal}.csv", linhas)
+    exportar_ids(saida / "ids", por_canal)
     _salvar(saida / "enriquecimento.csv", enriq)
     (saida / "alertas.txt").write_text("\n".join(alertas) + ("\n" if alertas else ""), encoding="utf-8")
 

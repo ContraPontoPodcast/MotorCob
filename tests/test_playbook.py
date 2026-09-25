@@ -230,6 +230,19 @@ class TestOperacao(unittest.TestCase):
         self.assertGreaterEqual(m["localizador_correto"], 0.95)
         self.assertGreater(m["localizados"], 0)
 
+    def test_exporta_so_ids_por_canal_com_reserva_separada(self):
+        import rodar_dia
+        linhas = [{"id_cliente": "C2", "condicao": ""}, {"id_cliente": "C1", "condicao": ""},
+                  {"id_cliente": "C1", "condicao": ""}]   # dois números do mesmo cliente
+        reserva = [{"id_cliente": "C3", "condicao": "se agente_voz sem contato no dia"}]
+        with tempfile.TemporaryDirectory() as tmp:
+            pasta = Path(tmp) / "ids"
+            pasta.mkdir()
+            (pasta / "velho.csv").write_text("id_cliente\nX\n")
+            rodar_dia.exportar_ids(pasta, {"whatsapp": linhas, "discador": reserva})
+            self.assertEqual(sorted(p.name for p in pasta.iterdir()), ["discador_reserva.csv", "whatsapp.csv"])
+            self.assertEqual((pasta / "whatsapp.csv").read_text(), "id_cliente\nC1\nC2\n")
+
     def test_rotina_diaria_e_idempotente(self):
         import rodar_dia
         ex = RAIZ / "exemplos"
