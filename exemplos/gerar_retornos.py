@@ -11,16 +11,19 @@ Gera exemplos/carteira_contatos.csv e exemplos/retornos/*.csv
 import csv
 import random
 import sys
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
 import demo  # noqa: E402  (reaproveita a carteira sintética da demo)
+from motor.rastreio import preparar_disparo, salvar_acoes  # noqa: E402
 
 PASTA = RAIZ / "exemplos"
 COMPETENCIA = "2026-09"
+SEGREDO_EXEMPLO = "segredo-so-para-exemplo"  # em produção: variável MOTORCOB_SEGREDO
+BASE_URL = "https://portal.exemplo.com.br/r"
 
 
 def mascara_tel(t):
@@ -102,8 +105,55 @@ def main(seed=42, pasta=PASTA, verbose=True):
     # Fornecedor recém-contratado, ainda sem layout: o motor não deve adivinhar.
     with open(retornos / f"voz_nova_{COMPETENCIA}.csv", "w", newline="", encoding="utf-8") as f:
         f.write("cliente|fone|quando|tab\n")
+    simular_campanha_pulverizada(rng, clientes, contatos, pasta)
     if verbose:
-        print(f"Arquivos gerados em {retornos} e carteira em {pasta / 'carteira_contatos.csv'}")
+        print(f"Arquivos gerados em {retornos}, carteira em {pasta / 'carteira_contatos.csv'}, "
+              f"registro de ações em {pasta / 'acoes.csv'} e log do portal em {pasta / 'portal'}")
+    return clientes, contatos
+
+
+def simular_campanha_pulverizada(rng, clientes, contatos, pasta):
+    """Como o mercado faz hoje com cliente novo: SMS, WhatsApp, RCS e e-mail para
+    TODOS os contatos, ao mesmo tempo. A diferença é que cada ação sai com link único.
+
+    O log do portal é gerado a partir da verdade simulada: só o titular consegue
+    se autenticar; terceiros às vezes clicam, mas não passam do login.
+    """
+    novos = {c["id_cliente"]: c for c in clientes if c["novo"]}
+    plano = [{"ordem": 1, "id_cliente": c["id_cliente"], "contato": c["contato"], "tipo": c["tipo"], "canal": canal}
+             for c in contatos if c["id_cliente"] in novos
+             for canal in (("sms", "whatsapp", "rcs") if c["tipo"] == "telefone" else ("email",))]
+    envio = demo.HOJE - timedelta(days=7)
+    acoes = preparar_disparo(plano, "CAMP-NOVOS-2026-09", "MSG-V1", BASE_URL, SEGREDO_EXEMPLO, envio, ordem=None)
+    (pasta / "acoes.csv").unlink(missing_ok=True)
+    salvar_acoes(pasta / "acoes.csv", acoes)
+
+    verdade = {(c["id_cliente"], c["contato"]): c for c in contatos}
+    log = []
+    for a in acoes:
+        c, pref = verdade[(a.id_cliente, a.contato)], novos[a.id_cliente]["pref"][a.canal]
+        if not c["existe"] or (a.canal == "whatsapp" and not c["whatsapp"]):
+            continue
+        quando = datetime.combine(envio, time(9)) + timedelta(hours=rng.randint(0, 120), minutes=rng.randint(0, 59))
+        if c["titular"] and rng.random() < min(0.9, pref * 1.5):
+            log.append([a.token, "clique", quando.isoformat(), ""])
+            if rng.random() < 0.5:
+                quando += timedelta(minutes=rng.randint(1, 10))
+                log.append([a.token, "login", quando.isoformat(), ""])
+                if rng.random() < 0.35:
+                    quando += timedelta(minutes=rng.randint(2, 20))
+                    log.append([a.token, "acordo", quando.isoformat(), f"{rng.uniform(200, 3000):.2f}"])
+            if rng.random() < 0.2:  # voltou pelo mesmo link depois
+                log.append([a.token, "clique", (quando + timedelta(days=1)).isoformat(), ""])
+        elif not c["titular"] and rng.random() < 0.03:
+            log.append([a.token, "clique", quando.isoformat(), ""])
+    log.append(["tokenadulterado0", "login", datetime.combine(demo.HOJE, time(10)).isoformat(), ""])
+    log.sort(key=lambda l: l[2])
+    (pasta / "portal").mkdir(exist_ok=True)
+    with open(pasta / "portal" / f"acessos_{COMPETENCIA}.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(["token", "evento", "ocorrido_em", "valor_acordo"])
+        w.writerows(log)
 
 
 if __name__ == "__main__":

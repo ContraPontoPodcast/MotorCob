@@ -46,9 +46,19 @@ e é priorizado por valor esperado, que já desconta o custo de cada tentativa.
 - `layouts/*.json`: um layout declarativo por fornecedor (colunas, formato de data,
   separador decimal, de-para de códigos → taxonomia). Fornecedor novo = JSON novo. O
   layout é validado na carga: de-para para resultado fora da taxonomia é recusado.
-- `rodar.py`: pipeline de produção do MVP (retornos + carteira → plano, funil, quarentena).
+- `motor/rastreio.py`: link rastreável por ação. Token = HMAC(segredo, campanha|cliente|
+  contato|canal): sem dado pessoal, não adivinhável, idempotente. O log do portal
+  (token;evento;ocorrido_em;valor_acordo) vira evidência no contato/canal exatos:
+  clique = engajamento, login autenticado = CERTIFICA, acordo = conversão atribuída.
+  Token desconhecido é descartado. Portal certifica, mas não entra no hit rate (não é
+  tentativa de contato).
+- `disparar.py`: plano → mailing por canal com link + registro de ações (`acoes/`,
+  fora do git: tem contato real). Exige `MOTORCOB_SEGREDO`.
+- `rodar.py`: pipeline de produção do MVP (retornos + carteira [+ ações + log do
+  portal] → plano, funil, quarentena, conversões e atribuição por canal).
 - `exemplos/gerar_retornos.py`: gera arquivos simulados de 6 fornecedores fictícios, com
-  a bagunça real (formatos diferentes, códigos novos, linhas sem ID, duplicatas).
+  a bagunça real (formatos diferentes, códigos novos, linhas sem ID, duplicatas), mais
+  uma campanha pulverizada rastreada para os clientes novos e o log do portal.
 - `motor/taxonomia.py`: retorno bruto de cada canal → `Nivel` (INVALIDO, SEM_RETORNO,
   ENTREGUE, ENGAJADO, CERTIFICADO) + pesos de evidência + restrições. Fornecedor novo entra aqui.
 - `motor/certificacao.py`: score Beta por contato, status, hit rate por canal e afinidade
@@ -67,8 +77,10 @@ CONTESTADO (< 0,2: evidência de que é de outra pessoa) · INVALIDO · DESCONHE
 1. **MVP (feito):** arquivos exportados → eventos → certificação → plano priorizado + funil.
 2. **Ingestão real:** (a) arquivos de retorno por layout declarativo — **feito** com
    layouts simulados; falta validar com arquivos reais; (b) webhook/API; (c) ID de
-   campanha e link único rastreável em toda ação (tabela `acao`).
-3. **Conversão:** ligar acordo/pagamento (operador e portal) à ação que o originou;
+   campanha e link único rastreável em toda ação — **feito** (`rastreio.py`); falta o
+   redirecionador do portal gravar o log no formato esperado.
+3. **Conversão:** ligar acordo/pagamento (operador e portal) à ação que o originou —
+   portal **feito** via token; falta o acordo pelo operador;
    medir conversão por contato, canal e mensagem.
 4. **Camada de agentes:** Ingestão, Analista, Estrategista, Validador (LGPD, horários,
    opt-out, frequência, risco de ban).
@@ -86,5 +98,8 @@ Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fict
 Carteira: `id_cliente;contato;tipo;origem;cpf` (separador `;`, `origem` e `cpf` opcionais).
 - Demo (carteira sintética com verdade conhecida): `python demo.py`
 - Pipeline com arquivos: `python exemplos/gerar_retornos.py` e depois
-  `python rodar.py --retornos exemplos/retornos --carteira exemplos/carteira_contatos.csv`
+  `python rodar.py --retornos exemplos/retornos --carteira exemplos/carteira_contatos.csv \
+   --acoes exemplos/acoes.csv --portal exemplos/portal/acessos_2026-09.csv`
+- Disparo: `MOTORCOB_SEGREDO=... python disparar.py --plano saida/plano_acionamento.csv \
+   --campanha X --mensagem Y --base-url https://...`
 - Testes: `python -m unittest`

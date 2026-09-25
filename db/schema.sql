@@ -54,8 +54,17 @@ CREATE TABLE acao (
     id           BIGSERIAL PRIMARY KEY,
     campanha_id  BIGINT NOT NULL REFERENCES campanha(id),
     contato_id   BIGINT NOT NULL REFERENCES contato(id),
-    token_link   TEXT UNIQUE,
+    token_link   TEXT UNIQUE,         -- HMAC da ação (motor/rastreio.py), sem dado pessoal
     enviada_em   TIMESTAMPTZ
+);
+
+-- Acessos ao portal pelo link: clique (engajamento), login (certifica), acordo (conversão)
+CREATE TABLE acesso_portal (
+    id           BIGSERIAL PRIMARY KEY,
+    acao_id      BIGINT NOT NULL REFERENCES acao(id),
+    evento       TEXT NOT NULL CHECK (evento IN ('clique', 'login', 'acordo')),
+    ocorrido_em  TIMESTAMPTZ NOT NULL,
+    UNIQUE (acao_id, evento, ocorrido_em)
 );
 
 -- Evento canônico: todo retorno de todo fornecedor vira uma linha aqui.
