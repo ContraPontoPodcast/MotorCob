@@ -1,0 +1,23 @@
+{
+  "fornecedor": "mailpro",
+  "canal": "email",
+  "arquivo": "mailpro_*.csv",
+  "formato_data": "%Y-%m-%d",
+  "custo_fixo": 0.01,
+  "colunas": {
+    "cpf": "doc",
+    "contato": "email",
+    "data": "date",
+    "resultado": "event",
+    "id_externo": "event_id"
+  },
+  "resultados": {
+    "bounce_hard": "hard_bounce",
+    "bounce_soft": "soft_bounce",
+    "delivered": "entregue",
+    "open": "abertura",
+    "click": "clique",
+    "unsubscribe": "descadastro",
+    "portal_login": "acesso_portal_autenticado"
+  }
+}

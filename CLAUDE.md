@@ -33,6 +33,17 @@ e é priorizado por valor esperado, que já desconta o custo de cada tentativa.
   classificado por palpite.
 
 ## Estrutura
+- `motor/normalizacao.py`: CPF (com DV), telefone e e-mail na forma canônica — o mesmo
+  contato escrito de dois jeitos não pode virar dois contatos.
+- `motor/ingestao.py`: arquivo de retorno + layout → eventos. Código sem de-para vai para
+  a **quarentena** (nunca é classificado por palpite); CPF/contato/data inválidos são
+  rejeitados com motivo; reexportação é deduplicada; arquivo sem layout não é processado.
+- `layouts/*.json`: um layout declarativo por fornecedor (colunas, formato de data,
+  separador decimal, de-para de códigos → taxonomia). Fornecedor novo = JSON novo. O
+  layout é validado na carga: de-para para resultado fora da taxonomia é recusado.
+- `rodar.py`: pipeline de produção do MVP (retornos + carteira → plano, funil, quarentena).
+- `exemplos/gerar_retornos.py`: gera arquivos simulados de 6 fornecedores fictícios, com
+  a bagunça real (formatos diferentes, códigos novos, CPF errado, duplicatas).
 - `motor/taxonomia.py`: retorno bruto de cada canal → `Nivel` (INVALIDO, SEM_RETORNO,
   ENTREGUE, ENGAJADO, CERTIFICADO) + pesos de evidência + restrições. Fornecedor novo entra aqui.
 - `motor/certificacao.py`: score Beta por contato, status, hit rate por canal e afinidade
@@ -48,9 +59,10 @@ CERTIFICADO (certificação + score ≥ 0,7) · PROVAVEL (≥ 0,6) · NAO_CONFIR
 CONTESTADO (< 0,2: evidência de que é de outra pessoa) · INVALIDO · DESCONHECIDO (sem evento).
 
 ## Roadmap
-1. **MVP (atual):** arquivos exportados → eventos → certificação → plano priorizado + funil.
-2. **Ingestão real:** conectores por fornecedor (arquivo de retorno e depois webhook/API),
-   com ID de campanha e link único rastreável em toda ação (tabela `acao`).
+1. **MVP (feito):** arquivos exportados → eventos → certificação → plano priorizado + funil.
+2. **Ingestão real:** (a) arquivos de retorno por layout declarativo — **feito** com
+   layouts simulados; falta validar com arquivos reais; (b) webhook/API; (c) ID de
+   campanha e link único rastreável em toda ação (tabela `acao`).
 3. **Conversão:** ligar acordo/pagamento (operador e portal) à ação que o originou;
    medir conversão por contato, canal e mensagem.
 4. **Camada de agentes:** Ingestão, Analista, Estrategista, Validador (LGPD, horários,
@@ -66,5 +78,7 @@ CONTESTADO (< 0,2: evidência de que é de outra pessoa) · INVALIDO · DESCONHE
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam CPFs fictícios.
-- Demo: `python demo.py`
+- Demo (carteira sintética com verdade conhecida): `python demo.py`
+- Pipeline com arquivos: `python exemplos/gerar_retornos.py` e depois
+  `python rodar.py --retornos exemplos/retornos --carteira exemplos/carteira_contatos.csv`
 - Testes: `python -m unittest`

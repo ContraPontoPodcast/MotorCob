@@ -1,0 +1,23 @@
+{
+  "fornecedor": "vozbot",
+  "canal": "agente_voz",
+  "arquivo": "vozbot_*.csv",
+  "formato_data": "%Y-%m-%dT%H:%M:%S",
+  "colunas": {
+    "cpf": "document",
+    "contato": "phone",
+    "data": "timestamp",
+    "resultado": "outcome",
+    "id_externo": "call_id",
+    "custo": "cost"
+  },
+  "resultados": {
+    "NO_ANSWER": "nao_atendida",
+    "INVALID_NUMBER": "numero_inexistente",
+    "VOICEMAIL": "caixa_postal",
+    "ANSWERED": "atendida_sem_cpc",
+    "WRONG_PERSON": "atendida_terceiro_desconhece",
+    "CPC": "cpc",
+    "IDENTITY_CONFIRMED": "identidade_confirmada"
+  }
+}

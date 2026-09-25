@@ -5,9 +5,17 @@ qual contato é do cliente, em qual canal ele engaja e em que ordem acionar — 
 funil projetado (acionados → contato → CPC) e o custo.
 
 ```bash
-python demo.py          # carteira sintética de ponta a ponta; gera CSVs em ./saida/
+# Pipeline com arquivos de retorno dos fornecedores
+python exemplos/gerar_retornos.py      # gera arquivos simulados de 6 fornecedores
+python rodar.py --retornos exemplos/retornos --carteira exemplos/carteira_contatos.csv
+
+python demo.py          # validação com carteira sintética de verdade conhecida
 python -m unittest      # testes
 ```
+
+Para plugar um fornecedor novo, crie `layouts/<fornecedor>.json` (veja os existentes):
+colunas do arquivo, formato de data e o de-para dos códigos dele para a taxonomia.
+Código que o layout não conhece cai em `saida/quarentena.csv` para mapear.
 
 Sem dependências externas (Python 3.11+). Arquitetura, princípios e roadmap em
 [`CLAUDE.md`](CLAUDE.md); modelo de dados em [`db/schema.sql`](db/schema.sql).
@@ -19,3 +27,5 @@ Sem dependências externas (Python 3.11+). Arquitetura, princípios e roadmap em
 | `hit_rate_carteira.csv` | força de contato e custo por canal (base do cold start) |
 | `plano_acionamento.csv` | ações por CPF em ordem de valor esperado |
 | `bloqueios.csv` | o que não foi disparado e por quê (auditoria) |
+| `relatorio_ingestao.csv` | linhas lidas, aceitas, duplicadas e rejeitadas por arquivo |
+| `quarentena.csv` | códigos de retorno sem de-para (contato mascarado) |

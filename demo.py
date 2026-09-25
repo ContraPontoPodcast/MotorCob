@@ -14,6 +14,7 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
+from motor.normalizacao import gerar_cpf
 from motor.certificacao import Evento, afinidade_canal, certificar_contatos, hit_rate_por_canal
 from motor.priorizacao import funil_projetado, planejar
 from motor.taxonomia import Nivel, classificar
@@ -27,7 +28,7 @@ SAIDA = Path("saida")
 def gerar_carteira(rng, n_historico=500, n_novos=100):
     clientes, contatos = [], []
     for i in range(n_historico + n_novos):
-        cpf = f"{i:011d}"  # CPF fictício
+        cpf = gerar_cpf(100_000_000 + i)  # CPF fictício com DV válido
         pref = {c: min(0.9, p * rng.uniform(0.3, 1.7)) for c, p in PREF_BASE.items()}
         n_tel = rng.randint(1, 4)
         idx_titular = rng.randrange(n_tel) if rng.random() < 0.8 else None
