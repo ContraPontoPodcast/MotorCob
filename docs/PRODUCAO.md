@@ -102,6 +102,20 @@ Gera o Excel do Real x Previsto e os KPIs em `~/MotorCob-dados/saida/comite/2026
   regra que bate; quem não bate fica no padrão ticket × atraso. Regra com erro ou coluna
   que não existe na base aparece nos alertas da rotina (`CLUSTER: ...`) e não para nada.
   Mudar as regras revisa o cluster atual de todos na rotina seguinte; o de origem não muda.
+- **Estratégias:** cada cluster aponta para uma estratégia (página Estratégias do site) que
+  diz, fase por fase (cliente novo, CPC, Não CPC, preventivo, quebra), em que dia, por
+  qual canal e em quais contatos acionar — um blend por dia: "WhatsApp em número com
+  WhatsApp → senão RCS em número que pertence → senão SMS em 2 números + junto e-mail".
+  Cluster sem estratégia segue a padrão da empresa; sem padrão, o playbook
+  (`regras/regua.json`). Estratégia com erro vira alerta e o cluster segue o playbook.
+- **Canais da empresa** (página Canais): ligado/desligado, horário, sábado, capacidade por
+  dia (passou, entram primeiro os de maior prioridade e saldo; o resto aparece em alerta),
+  custo por ação (usado na ocorrência sem custo) e tentativas por dia na voz.
+- **Retorno do enriquecimento:** o arquivo do bureau (tipo "Retorno do enriquecimento" no
+  site) liga pelo CPF/CNPJ, traz números novos e as marcas de WhatsApp, RCS, Não Perturbe,
+  score e ranking. Tudo é relido a cada rotina (vale o arquivo mais recente). Número no
+  Não Perturbe não recebe voz (a empresa pode mudar na página Canais). Cliente parado
+  esperando re-enriquecimento volta ao giro quando chega contato novo.
 - **Base bruta:** cada arquivo recebido fica em `bruto/` e todos são relidos a cada
   rotina; vale o dado mais recente de cada cliente. Com `"base_completa": true`, quem não
   está no arquivo mais recente sai das ações (bloqueio `fora_da_base`).

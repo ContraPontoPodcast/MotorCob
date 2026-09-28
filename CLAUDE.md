@@ -145,6 +145,17 @@ de outra pessoa pela certificação e a rotação segue.
   define pacote, revalidação, só digital, voz no D0 e canais bloqueados
   (`Regua.com_clusters`). Mudou a regra → `cluster_versao` muda → todos revisam o cluster
   atual na rotina seguinte. Regra inválida vira alerta, nunca derruba a rotina.
+- `motor/estrategia.py`: estratégia de acionamento por cluster (tabela `estrategias`,
+  editada no site; `clusters.estrategia_id`; uma pode ser a padrão da empresa). Sobrescreve
+  fases do playbook (`localizacao`, `cpc`, `giro`, `preventivo`, `quebra`,
+  `recencia_horas`); `Regua.para(cluster)` devolve a régua do cliente. Cada passo é um
+  blend de ações `{canal, modo: sempre|senao|junto|reserva, contatos: filtro, numeros}`
+  resolvido por `resolver`; passo só com nomes de canal segue o playbook (substituto,
+  acompanhante, reserva). Filtros de contato: status, whatsapp, rcs, pertence,
+  sem_nao_perturbe, score_bureau_min, origem. Travas fixas: inválido/contestado/"não
+  pertence" nunca recebe, trava e freio do WhatsApp, janela, domingo/feriado.
+  Limites por canal da empresa (`canais_empresa`): ativo, janela, sábado, capacidade/dia,
+  custo, tentativas/dia, Não Perturbe (padrão: voz respeita).
 - `motor/entrada.py` + `empresas/<slug>.json`: arquivos da empresa cliente. Base bruta
   (telefones/e-mails em colunas) → `base/clientes.csv` + `base/contatos.csv`. Ocorrência
   (CPC ou não por tentativa, em geral sem o contato) → eventos: o de-para da empresa leva
@@ -153,6 +164,11 @@ de outra pessoa pela certificação e a rotação segue.
   marcado por nós:** o motor guarda em `estado/escolhas.csv` o que mandou acionar e liga a
   ocorrência a esse contato; com vários números no dia (voz), a ocorrência vale para a TAG
   mas não certifica número (evento com `contato` vazio, ignorado na certificação).
+  Retorno do enriquecimento (seção `enriquecimento` do `<slug>.json`): liga por CPF/CNPJ
+  (`base/pessoas.csv`) ou id_cliente; colunas repetidas (FONE, FONE…) lidas pela posição;
+  grava em `base/contatos.csv` números novos (origem enriquecimento) e as marcas
+  `whatsapp_valido`, `rcs_valido`, `nao_perturbe`, `score_bureau`, `ranking`, `pertence`
+  (pelo score, se configurado). Contato novo reativa o giro parado à espera de enriquecimento.
 - `motor/normalizacao.py`: ID, CPF, telefone e e-mail na forma canônica.
 - `motor/rastreio.py` + `disparar.py`: link rastreável por ação e registro de ações.
 - `motor/priorizacao.py` + `rodar.py`: diagnóstico da carteira por valor esperado (base

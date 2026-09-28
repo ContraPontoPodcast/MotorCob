@@ -117,11 +117,14 @@ def proximo_canal(est: EstadoCliente, regua: Regua, disponiveis: set[str]) -> st
 
 def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente], eventos_dia: list[Evento],
                   parcelas: dict[str, list[Parcela]], dia: date, regua: Regua,
-                  disponiveis: dict[str, set[str]] | None = None, baixas_ate: date | None = None) -> list[dict]:
+                  disponiveis: dict[str, set[str]] | None = None, baixas_ate: date | None = None,
+                  atualizados: dict[str, date] | None = None) -> list[dict]:
     """Atualiza os estados com o que aconteceu em `dia`. Retorna os eventos da trilha.
 
     disponiveis: {id_cliente: canais com contato elegível} — decide a rotação e quando
     o cliente esgotou os canais. baixas_ate: pagamentos refletidos até esta data.
+    atualizados: {id_cliente: data do contato mais recente (enriquecimento)} — reativa o giro
+    de quem estava parado aguardando re-enriquecimento.
     """
     trilha = Trilha()
     disponiveis = disponiveis or {}
@@ -156,16 +159,22 @@ def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente
             est.cluster_atual = regua.cluster_de(c, dia)
             trilha.marcar(dia, est, antes, motivo, "Planejamento")
 
+        rc = regua.para(est.cluster_atual)  # estratégia do cluster do cliente
+        novo = (atualizados or {}).get(idc)
+        if est.estado == "NCP" and est.giro_pausado and est.giro_inicio and novo and novo <= dia:
+            pausa = est.giro_inicio + timedelta(days=rc["giro"]["max_ciclos"] * rc["giro"]["ciclo_dias"])
+            if novo >= pausa:
+                reativar_apos_enriquecimento(est, dia, trilha)
         # Em acordo, a TAG do dia (D-1 → D0…) vem antes dos retornos; nas réguas massivas,
         # o contato do dia vem antes do acordo (respondeu → CPC A → fechou → COL).
         retornos = por_cliente.get(idc, [])
         if est.estado in ESTADOS_ACORDO:
-            _aplicar_acordo(est, parcelas.get(idc, []), dia, baixas_ate, regua, trilha)
-            _aplicar_retornos(est, retornos, dia, regua, disponiveis.get(idc, set()), trilha)
+            _aplicar_acordo(est, parcelas.get(idc, []), dia, baixas_ate, rc, trilha)
+            _aplicar_retornos(est, retornos, dia, rc, disponiveis.get(idc, set()), trilha)
         else:
-            _aplicar_retornos(est, retornos, dia, regua, disponiveis.get(idc, set()), trilha)
-            _aplicar_acordo(est, parcelas.get(idc, []), dia, baixas_ate, regua, trilha)
-        _aplicar_tempo(est, dia, regua, trilha)
+            _aplicar_retornos(est, retornos, dia, rc, disponiveis.get(idc, set()), trilha)
+            _aplicar_acordo(est, parcelas.get(idc, []), dia, baixas_ate, rc, trilha)
+        _aplicar_tempo(est, dia, rc, trilha)
     return trilha.eventos
 
 

@@ -197,8 +197,21 @@ def carregar_carteira(caminho: str | Path) -> tuple[list[dict], dict[str, str], 
             contatos.append({"id_cliente": id_cliente, "contato": contato, "tipo": tipo,
                              "origem": (linha.get("origem") or "").strip() or None,
                              "whatsapp_valido": _sim(linha.get("whatsapp_valido")),
-                             "atualizado_em": atualizado})
+                             "atualizado_em": atualizado,
+                             # marcas do retorno do enriquecimento (opcionais)
+                             "rcs": _sim(linha.get("rcs_valido")),
+                             "nao_perturbe": _sim(linha.get("nao_perturbe")),
+                             "score_bureau": _num_ou_none(linha.get("score_bureau")),
+                             "ranking": _num_ou_none(linha.get("ranking")),
+                             "pertence": (linha.get("pertence") or "").strip().lower()})
     return contatos, pessoa_de, rejeitados
+
+
+def _num_ou_none(v):
+    try:
+        return float(str(v).replace(",", ".")) if (v or "").strip() else None
+    except ValueError:
+        return None
 
 
 def _sim(v) -> bool:

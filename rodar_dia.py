@@ -34,7 +34,9 @@ from pathlib import Path
 
 from motor.certificacao import certificar_contatos
 from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
-from motor.entrada import Entrada, carregar_entrada, converter_base, ingerir_ocorrencias, salvar_escolhas
+from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, converter_base, ingerir_ocorrencias,
+                           salvar_escolhas)
+from motor.estrategia import validar_estrategia
 from motor.fila import gerar_fila, lista_enriquecimento
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
 from motor.marcacao import EstadoCliente, processar_dia
@@ -92,6 +94,25 @@ def preparar_base(entrada, pasta_bruta, pasta_base) -> dict:
     return converter_base(arquivos, ent.base, pasta_base)
 
 
+def preparar_enriquecimento(entrada, pasta_enriq, pasta_base) -> dict | None:
+    """Junta os retornos do bureau (todos os arquivos da pasta) em base/contatos.csv."""
+    from fnmatch import fnmatch
+    ent = entrada if isinstance(entrada, Entrada) else carregar_entrada(entrada)
+    pasta_enriq = Path(pasta_enriq)
+    if not ent.enriquecimento or not pasta_enriq.exists():
+        return None
+    rel = {"arquivos": [], "sem_layout": []}
+    for arq in sorted(p for p in pasta_enriq.glob("*") if p.is_file()):
+        lays = [l for l in ent.enriquecimento if fnmatch(arq.name, l.arquivo)]
+        if len(lays) != 1:
+            rel["sem_layout"].append(arq.name)
+            continue
+        r = aplicar_enriquecimento([arq], lays[0], pasta_base)
+        rel["arquivos"] += [{**a, **{k: r[k] for k in ("sem_cliente", "telefones_novos", "telefones_atualizados",
+                                                         "emails_novos")}} for a in r["arquivos"]]
+    return rel
+
+
 def carregar_estado(pasta: Path):
     arq = pasta / "estados.json"
     if not arq.exists():
@@ -112,16 +133,33 @@ def salvar_estado(pasta: Path, estados, ultimo_dia):
 
 def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts", parcelas_csv=None,
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
-              ocorrencias=None, entrada=None, clusters=None, atributos=None):
+              ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
-    atributos: base/atributos.csv (colunas da base bruta usadas pelas regras)."""
+    atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
+    estrategias: [{id, nome, definicao, padrao}] da tabela `estrategias` (ou .json).
+    canais: [{canal, ativo, janela_inicio, janela_fim, sabado, capacidade_dia, custo, tentativas_dia,
+             respeitar_nao_perturbe}] da tabela `canais_empresa` (ou .json)."""
     regua = carregar_regua(regua_json) if regua_json else carregar_regua()
     avisos_cluster = []
     if clusters:
         linhas = json.loads(Path(clusters).read_text(encoding="utf-8")) if isinstance(clusters, (str, Path)) \
             else clusters
         regras, avisos_cluster = carregar_regras(linhas)
-        regua = regua.com_clusters(regras)
+    else:
+        regras = []
+    est_validas, padrao = {}, None
+    for e in _ler_lista(estrategias):
+        override, erros = validar_estrategia(e.get("definicao") or {}, e.get("nome") or str(e.get("id")))
+        if erros:
+            avisos_cluster.append(f"estratégia '{e.get('nome')}' ignorada (vale o playbook padrão): "
+                                  + "; ".join(erros[:3]))
+            continue
+        est_validas[e.get("id")] = override
+        if e.get("padrao"):
+            padrao = e.get("id")
+    cfg_canais = {c["canal"]: c for c in _ler_lista(canais) if c.get("canal")}
+    if regras or est_validas or cfg_canais:
+        regua = regua.com_clusters(regras, est_validas, padrao, cfg_canais)
     clientes, rej_cli = carregar_clientes(clientes_csv)
     atrib = carregar_atributos(atributos)
     if atrib:
@@ -135,6 +173,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     if ocorrencias:
         ent = entrada if isinstance(entrada, Entrada) else carregar_entrada(entrada)
         ev, rel_ocorrencias, q, sl = ingerir_ocorrencias(ocorrencias, ent, pasta_estado)
+        custos = {c.get("canal"): c.get("custo") for c in _ler_lista(canais) if c.get("custo") is not None}
+        ev = [replace(e, custo=float(custos[e.canal])) if not e.custo and e.canal in custos else e for e in ev]
         eventos += ev
         quarentena += q
         sem_layout += sl
@@ -143,6 +183,13 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     parcelas = carregar_parcelas(parcelas_csv)[0] if parcelas_csv else {}
     flags = {c["contato"]: {"whatsapp_valido": c["whatsapp_valido"], "atualizado_em": c["atualizado_em"]}
              for c in contatos}
+    sinais = {(c["id_cliente"], c["contato"]): {k: c.get(k) for k in ("rcs", "nao_perturbe", "score_bureau",
+                                                                       "ranking", "pertence", "origem")}
+              for c in contatos}
+    atualizados = {}
+    for c in contatos:
+        if c["atualizado_em"] and c["atualizado_em"] > atualizados.get(c["id_cliente"], date.min):
+            atualizados[c["id_cliente"]] = c["atualizado_em"]
     contatos_por = defaultdict(list)
     for c in contatos:
         contatos_por[c["id_cliente"]].append(c["contato"])
@@ -158,9 +205,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     while dia < hoje:
         ev_ate = [e for e in eventos if e.data <= dia]
         certs = certificar_contatos(ev_ate, dia, contatos, pessoa_de)
-        _, disp, _ = gerar_fila(estados, clientes, certs, flags, parcelas, dia, regua, ev_ate)
+        _, disp, _ = gerar_fila(estados, clientes, certs, flags, parcelas, dia, regua, ev_ate, sinais)
         trilha += processar_dia(estados, clientes, por_dia.get(dia, []), parcelas, dia, regua, disp,
-                                baixas_ate=dia)
+                                baixas_ate=dia, atualizados=atualizados)
         dia += timedelta(days=1)
     ultimo = max(ultimo or hoje - timedelta(days=1), hoje - timedelta(days=1))
     salvar_estado(pasta_estado, estados, ultimo)
@@ -168,7 +215,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
 
     ev_ate = [e for e in eventos if e.data < hoje]
     certs = certificar_contatos(ev_ate, hoje, contatos, pessoa_de)
-    fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate)
+    fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais)
     alertas = [f"CLUSTER: {a}" for a in avisos_cluster] + alertas
     enriq = lista_enriquecimento(estados, flags, contatos_por, hoje, regua)
 
@@ -213,6 +260,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "dias_processados": (hoje - inicio).days if inicio < hoje else 0}
 
 
+def _ler_lista(v) -> list[dict]:
+    if not v:
+        return []
+    return json.loads(Path(v).read_text(encoding="utf-8")) if isinstance(v, (str, Path)) else list(v)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--clientes", help="id_cliente;data_entrada;saldo;dias_atraso[;bloqueio]")
@@ -230,6 +283,9 @@ def main():
     ap.add_argument("--saida", default="saida")
     ap.add_argument("--regua", help="arquivo de regras (padrão: regras/regua.json)")
     ap.add_argument("--clusters", help="regras de cluster da empresa (.json, lista como a tabela clusters)")
+    ap.add_argument("--estrategias", help="estratégias da empresa (.json, lista como a tabela estrategias)")
+    ap.add_argument("--canais", help="limites dos canais da empresa (.json, lista como a tabela canais_empresa)")
+    ap.add_argument("--enriquecimento", help="pasta com os retornos do bureau (exige --empresa)")
     a = ap.parse_args()
     if a.portal and not a.acoes:
         ap.error("--portal exige --acoes")
@@ -241,11 +297,15 @@ def main():
         print(f"BASE BRUTA: {rel['clientes']} clientes, {rel['contatos']} contatos → {base}/")
         a.clientes, a.carteira = a.clientes or base / "clientes.csv", a.carteira or base / "contatos.csv"
         a.atributos = base / "atributos.csv"
+        if a.enriquecimento:
+            rel_e = preparar_enriquecimento(a.empresa, a.enriquecimento, base)
+            if rel_e:
+                print(f"ENRIQUECIMENTO: {rel_e}")
     if not a.clientes or not a.carteira:
         ap.error("informe --clientes e --carteira, ou --empresa com --base-bruta")
     rodar_dia(a.clientes, a.carteira, a.retornos, a.data, a.layouts, a.parcelas, a.acoes, a.portal,
               a.estado, a.saida, a.regua, ocorrencias=a.ocorrencias, entrada=a.empresa, clusters=a.clusters,
-              atributos=getattr(a, "atributos", None))
+              atributos=getattr(a, "atributos", None), estrategias=a.estrategias, canais=a.canais)
 
 
 if __name__ == "__main__":
