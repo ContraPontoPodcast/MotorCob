@@ -1,0 +1,54 @@
+{
+  "_doc": "Entrada da empresa cliente 'exemplo' (fictícia). Copie para empresas/<slug>.json e ajuste aos cabeçalhos reais dos arquivos da empresa. Resultados genéricos: cpc, sem_contato, atendida_sem_cpc, terceiro, invalido, opt_out (ou um resultado da taxonomia do canal).",
+  "empresa": "exemplo",
+  "base": {
+    "arquivo": "base_*.csv",
+    "delimitador": ";",
+    "formato_data": "%d/%m/%Y",
+    "decimal": ",",
+    "base_completa": false,
+    "colunas": {
+      "id_cliente": "COD_CLIENTE",
+      "id_contrato": "CONTRATO",
+      "saldo": "SALDO_DEVEDOR",
+      "vencimento": "DT_VENCIMENTO",
+      "cpf": "CPF",
+      "bloqueio": "BLOQUEIO"
+    },
+    "telefones": [
+      {"coluna": "TEL1", "whatsapp": "WHATS_TEL1"},
+      "TEL2",
+      "TEL3"
+    ],
+    "emails": ["EMAIL"]
+  },
+  "ocorrencia": [
+    {
+      "arquivo": "ocorrencia_*.csv",
+      "delimitador": ";",
+      "formato_data": "%d/%m/%Y %H:%M",
+      "colunas": {
+        "id_cliente": "COD_CLIENTE",
+        "data": "DT_ACAO",
+        "canal": "CANAL",
+        "resultado": "OCORRENCIA"
+      },
+      "canais": {
+        "WHATS": "whatsapp",
+        "SMS": "sms",
+        "EMAIL": "email",
+        "URA": "agente_voz",
+        "DISCADOR": "discador",
+        "RCS": "rcs"
+      },
+      "resultados": {
+        "CPC": "cpc",
+        "NAO CPC": "sem_contato",
+        "ATENDEU TERCEIRO": "terceiro",
+        "NUMERO INVALIDO": "invalido",
+        "SEM RETORNO": "sem_contato",
+        "OPT OUT": "opt_out"
+      }
+    }
+  ]
+}

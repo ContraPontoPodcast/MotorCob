@@ -25,8 +25,11 @@ Para atualizar o programa depois: `cd ~/MotorCob && git pull`.
 
 > **Com o site motorcob.online:** depois de instalar, rode `scripts/configurar_nuvem.sh`
 > (veja `docs/NUVEM.md`). Os arquivos de entrada passam a ser enviados pelo site e a fila é
-> baixada no site; a pasta abaixo continua sendo usada pelo motor, mas você não precisa
-> mexer nela.
+> baixada no site. Cada empresa cliente ganha a própria pasta,
+> `~/MotorCob-dados/empresas/<slug>/`, com a mesma estrutura abaixo (mais `bruto/` para a
+> base bruta e `ocorrencias/` para as ocorrências). Você não precisa mexer nela. A rotina
+> diária faz `git pull` antes de rodar, então empresa nova configurada no repositório
+> chega sozinha ao Mac.
 
 ## 2. A pasta de dados
 
@@ -68,8 +71,8 @@ Rodar duas vezes no mesmo dia não duplica nada.
 
 | Arquivo | Para quê |
 |---|---|
-| `ids/whatsapp.csv`, `ids/rcs.csv`, `ids/sms.csv`, `ids/email.csv`, `ids/agente_voz.csv`, `ids/discador.csv` | **IDs de cliente a acionar hoje em cada canal.** Suba na ferramenta do canal, que monta o mailing pelo ID. |
-| `ids/discador_reserva.csv` | IDs para o discador **só se o agente virtual não conseguir contato** hoje. |
+| `ids/whatsapp.csv`, `ids/rcs.csv`, `ids/sms.csv`, `ids/email.csv`, `ids/agente_voz.csv`, `ids/discador.csv` | **ID do cliente + contato a acionar hoje em cada canal** (`id_cliente;contato`). No discador e no agente virtual o cliente pode ter várias linhas, uma por número, na ordem de discagem. Suba na ferramenta do canal. |
+| `ids/discador_reserva.csv` | Mesma coisa, para o discador **só se o agente virtual não conseguir contato** hoje. |
 | `alertas.txt` | Leia todo dia (ex.: freio do WhatsApp por taxa de bloqueio). |
 | `enriquecimento.csv` | Clientes para mandar ao bureau (entrada, revalidação, canais esgotados). |
 | `fila_do_dia.csv` | Detalhe completo: régua, passo, TAG e o contato que o motor escolheu. |
@@ -82,7 +85,26 @@ O log de cada execução fica em `~/MotorCob-dados/logs/rodar_dia_AAAA-MM-DD.log
 ```
 Gera o Excel do Real x Previsto e os KPIs em `~/MotorCob-dados/saida/comite/2026-09/`.
 
-## 4. Fornecedor novo ou código de retorno novo
+## 4. Empresa nova, fornecedor novo ou código novo
+
+- **Empresa cliente nova:** cadastre no site (Empresas) e crie `empresas/<slug>.json` a
+  partir de `empresas/exemplo.json`, com os cabeçalhos reais da base bruta e do arquivo de
+  ocorrências e o de-para das ocorrências da empresa para os resultados genéricos
+  (`cpc`, `sem_contato`, `atendida_sem_cpc`, `terceiro`, `invalido`, `opt_out`).
+- **Ocorrência sem contato:** a empresa não precisa dizer qual telefone foi usado. O motor
+  guarda em `estado/escolhas.csv` o que mandou acionar em cada dia e liga a ocorrência a
+  esse contato (procura até 3 dias antes da data da ocorrência). Quando o canal teve
+  vários números no dia (discador, agente virtual) e a ocorrência não diz qual, ela conta
+  para a TAG do cliente mas não certifica nenhum número. Mande a ocorrência até a manhã
+  seguinte: a TAG de um dia é fechada na rotina do dia seguinte.
+- **Clusters da empresa:** definidos no site (página Clusters), sobre qualquer coluna da
+  base bruta e sobre saldo, dias de atraso e quantidade de contratos. Vale a primeira
+  regra que bate; quem não bate fica no padrão ticket × atraso. Regra com erro ou coluna
+  que não existe na base aparece nos alertas da rotina (`CLUSTER: ...`) e não para nada.
+  Mudar as regras revisa o cluster atual de todos na rotina seguinte; o de origem não muda.
+- **Base bruta:** cada arquivo recebido fica em `bruto/` e todos são relidos a cada
+  rotina; vale o dado mais recente de cada cliente. Com `"base_completa": true`, quem não
+  está no arquivo mais recente sai das ações (bloqueio `fora_da_base`).
 
 - Arquivo de retorno de um fornecedor sem layout aparece no resumo como "arquivos sem
   layout" e não é processado. Crie `layouts/<fornecedor>.json` (veja os existentes).
@@ -94,9 +116,10 @@ Gera o Excel do Real x Previsto e os KPIs em `~/MotorCob-dados/saida/comite/2026
 
 - **Backup diário de `~/MotorCob-dados/estado/`** (Time Machine já resolve). Sem ele, o
   motor recalcula tudo a partir dos arquivos, mas perde a história da trilha.
-- **WhatsApp:** o ID sai na lista de WhatsApp quando o cliente tem um número liberado pelo
-  motor (certificado, ou 1 número com WhatsApp válido). Se a ferramenta do canal mandar
-  para outro número do cliente, a trava contra banimento deixa de valer — o número
-  escolhido está em `fila_do_dia.csv`, coluna `contato`.
+- **WhatsApp:** o cliente sai na lista de WhatsApp quando tem um número liberado pelo
+  motor (certificado, ou 1 número com WhatsApp válido), e a lista já traz esse número. Se
+  a ferramenta do canal mandar para outro número do cliente, a trava contra banimento
+  deixa de valer.
+- **As listas `ids/` têm telefone e e-mail.** Só para a ferramenta do canal; não repasse.
 - Para cancelar o agendamento:
   `launchctl unload ~/Library/LaunchAgents/br.com.contraponto.motorcob.plist`

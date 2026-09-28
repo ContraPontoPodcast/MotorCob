@@ -12,7 +12,8 @@ banimento. Regras aplicadas:
 - giro de 8 dias com os mesmos passos, até 3 ciclos;
 - WhatsApp para contato não certificado: só 1 número, com "WhatsApp válido" do
   enriquecimento, e com freio automático se a taxa de bloqueio passar do limite;
-- cluster B3: só canais digitais; domingo e feriado: sem ações.
+- cluster B3 (ou cluster da empresa marcado "só digital"): sem voz; canais bloqueados
+  pelo cluster da empresa ficam fora; domingo e feriado: sem ações.
 """
 from collections import defaultdict
 from datetime import date, timedelta
@@ -37,13 +38,13 @@ def taxa_bloqueio_whatsapp(eventos: list[Evento], hoje: date, regua: Regua) -> t
 def contatos_elegiveis(est: EstadoCliente, cluster: str, certs: list[Certificacao], flags: dict[str, dict],
                        regua: Regua, freio_whatsapp: bool) -> dict[str, list[str]]:
     """{canal: contatos em ordem de prioridade} para o cliente."""
-    so_digital = regua.enriquecimento(cluster).get("so_digital", False)
+    bloqueados = regua.canais_bloqueados(cluster)
     validos = sorted((c for c in certs if c.status not in FORA), key=lambda c: -c.score)
     loc = est.contato_localizador
     w = regua["whatsapp"]
     saida = {}
     for canal in regua["canais"]:
-        if so_digital and canal in CANAIS_VOZ:
+        if canal in bloqueados:
             continue
         tipo = "email" if canal == "email" else "telefone"
         cands = [c for c in validos if c.tipo == tipo and not any(r.startswith(canal + ":") for r in c.restricoes)]
@@ -157,7 +158,7 @@ def _passo_do_dia(est, cliente, hoje, regua, eleg, parcelas):
     if est.estado == "PRE":
         d = 0 if est.ciclo == "D0" else int(est.ciclo[2:])
         canais = list(regua["preventivo"]["passos"].get(str(d), []))
-        if d == 0 and cliente and est.cluster_atual[0] in regua["preventivo"]["voz_d0_tickets"]:
+        if d == 0 and cliente and regua.voz_d0(est.cluster_atual):
             canais.append(regua["preventivo"]["voz_d0_canal"])
         return ("preventivo", "D0" if d == 0 else f"D-{d}", canais, True) if canais else None
     if not _recencia_ok(est, hoje, regua):

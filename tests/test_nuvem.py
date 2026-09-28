@@ -78,7 +78,7 @@ class SupabaseFalso:
                 continue
             op, _, valor = cond.partition(".")
             assert op == "eq", op
-            linhas = [l for l in linhas if str(l.get(campo)) == valor]
+            linhas = [l for l in linhas if json.dumps(l.get(campo)).strip('"') == valor]
         return linhas
 
     def get(self, h, caminho, q):
@@ -131,71 +131,139 @@ class TestSincronizar(unittest.TestCase):
         self.falso = SupabaseFalso()
         self.sb = Supabase(self.falso.url, CHAVE)
         self.tmp = tempfile.TemporaryDirectory()
-        self.dados = Path(self.tmp.name)
-        # o que o site teria enviado: base + retornos
-        envios = [("clientes", EX / "clientes.csv"), ("contatos", EX / "carteira_contatos.csv"),
-                  ("parcelas", EX / "parcelas.csv")]
-        envios += [("retorno", p) for p in sorted((EX / "retornos").glob("*.csv"))]
-        for i, (tipo, arq) in enumerate(envios):
-            caminho = f"{tipo}/2026-09-24/{i}_{arq.name}"
-            self.falso.objetos[f"entradas/{caminho}"] = arq.read_bytes()
-            self.falso.tabelas.setdefault("envios", []).append(
-                {"id": 1000 + i, "tipo": tipo, "caminho": caminho, "nome_original": arq.name,
-                 "status": "pendente", "enviado_em": f"2026-09-24T10:00:{i:02d}"})
+        self.dados = Path(self.tmp.name) / "dados"
+        # arquivo de entrada da empresa beta (base bruta + ocorrência), fora do repositório
+        self.cfg = Path(self.tmp.name) / "empresas"
+        self.cfg.mkdir()
+        shutil.copy(RAIZ / "empresas" / "exemplo.json", self.cfg / "beta.json")
+        self.falso.tabelas["empresas"] = [{"id": 1, "slug": "alfa", "nome": "Alfa", "ativa": True},
+                                          {"id": 2, "slug": "beta", "nome": "Beta", "ativa": True},
+                                          {"id": 3, "slug": "gama", "nome": "Gama", "ativa": False}]
+        # o que o site teria enviado. alfa: base no formato do motor + retornos de fornecedor
+        envios = [(1, "clientes", EX / "clientes.csv"), (1, "contatos", EX / "carteira_contatos.csv"),
+                  (1, "parcelas", EX / "parcelas.csv")]
+        envios += [(1, "retorno", p) for p in sorted((EX / "retornos").glob("*.csv"))]
+        # beta: base bruta da empresa
+        envios += [(2, "base", p) for p in sorted((EX / "empresa" / "bruto").glob("*.csv"))]
+        for i, (eid, tipo, arq) in enumerate(envios):
+            self._envio(1000 + i, eid, tipo, arq.name, arq.read_bytes())
+
+    def _envio(self, id_, eid, tipo, nome, conteudo, dia="2026-09-01"):
+        slug = {1: "alfa", 2: "beta"}[eid]
+        caminho = f"{slug}/{tipo}/{dia}/{id_}_{nome}"
+        self.falso.objetos[f"entradas/{caminho}"] = conteudo
+        self.falso.tabelas.setdefault("envios", []).append(
+            {"id": id_, "empresa_id": eid, "tipo": tipo, "caminho": caminho, "nome_original": nome,
+             "status": "pendente", "enviado_em": f"{dia}T10:00:{id_ % 60:02d}"})
+
+    def _dia(self, dia, empresa=None):
+        return sincronizar_dia(self.dados, dia, self.sb, out=lambda *a: None, empresa=empresa,
+                               pasta_empresas=self.cfg)
 
     def tearDown(self):
         self.falso.fechar()
         self.tmp.cleanup()
 
     def test_dia_completo_e_idempotente(self):
-        r = sincronizar_dia(self.dados, date(2026, 9, 25), self.sb, out=lambda *a: None)
+        r = self._dia(date(2026, 9, 25))["alfa"]
         t, o = self.falso.tabelas, self.falso.objetos
-        self.assertEqual(t["execucoes"][-1]["status"], "ok")
-        self.assertEqual(len(t["estado_cliente"]), 600)
-        self.assertTrue(t["trilha"])
+        alfa = lambda tab: [l for l in t[tab] if l["empresa_id"] == 1]  # noqa: E731
+        self.assertEqual({e["empresa_id"]: e["status"] for e in t["execucoes"]}, {1: "ok", 2: "ok"})  # gama inativa
+        self.assertEqual(len(alfa("estado_cliente")), 600)
+        self.assertTrue(alfa("trilha"))
         self.assertEqual({l["data"] for l in t["fila_dia"]}, {"2026-09-25"})
-        self.assertIn("saidas/2026-09-25/ids/whatsapp.csv", o)
-        self.assertIn("saidas/2026-09-25/fila_do_dia.csv", o)
+        self.assertIn("saidas/alfa/2026-09-25/ids/whatsapp.csv", o)
+        self.assertIn("saidas/alfa/2026-09-25/fila_do_dia.csv", o)
+        self.assertTrue(o["saidas/alfa/2026-09-25/ids/whatsapp.csv"].startswith(b"id_cliente;contato\n"))
         # nenhum contato ou CPF nas tabelas
         texto = json.dumps({k: t[k] for k in ("estado_cliente", "trilha", "fila_dia")})
         self.assertNotRegex(texto, r"\b119\d{8}\b")
-        self.assertNotIn("@exemplo.com", texto)
+        self.assertNotIn("@exemplo", texto)
         envios = {e["nome_original"]: e for e in t["envios"]}
         self.assertEqual(envios["discadora_alfa_2026-09.csv"]["status"], "processado")
         self.assertIn("aceitas", envios["discadora_alfa_2026-09.csv"]["relatorio"])
         self.assertEqual(envios["voz_nova_2026-09.csv"]["status"], "erro")          # sem layout
         # segunda rodada no mesmo dia: não duplica trilha nem fila
         n_trilha, n_fila = len(t["trilha"]), len(t["fila_dia"])
-        sincronizar_dia(self.dados, date(2026, 9, 25), self.sb, out=lambda *a: None)
+        self._dia(date(2026, 9, 25))
         self.assertEqual((len(t["trilha"]), len(t["fila_dia"])), (n_trilha, n_fila))
-        self.assertEqual(len(t["estado_cliente"]), 600)
+        self.assertEqual(len(alfa("estado_cliente")), 600)
         self.assertEqual(r["resumo"]["clientes"], 600)
 
-    def test_falha_marca_execucao_com_erro_e_mantem_envios_pendentes(self):
+    def test_empresas_ficam_separadas(self):
+        self._dia(date(2026, 9, 25))
+        t = self.falso.tabelas
+        beta = {l["id_cliente"] for l in t["estado_cliente"] if l["empresa_id"] == 2}
+        self.assertEqual(beta, {"X0001", "X0002", "X0003"})
+        self.assertFalse(beta & {l["id_cliente"] for l in t["estado_cliente"] if l["empresa_id"] == 1})
+        self.assertTrue(all(c.split("/")[1] in ("alfa", "beta") for c in self.falso.objetos if c.startswith("saidas/")))
+        self.assertTrue((self.dados / "empresas" / "beta" / "base" / "contatos.csv").exists())
+        envio_base = next(e for e in t["envios"] if e["tipo"] == "base")
+        self.assertEqual((envio_base["status"], envio_base["relatorio"]["clientes_na_base"]), ("processado", 3))
+
+    def test_ocorrencia_da_empresa_liga_cpc_ao_contato_escolhido(self):
+        self._dia(date(2026, 9, 2), empresa="beta")
+        ids = self.falso.objetos["saidas/beta/2026-09-02/ids/whatsapp.csv"].decode()
+        self.assertIn("X0001;11988880001", ids)
+        self._envio(2001, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 10:15;WHATS;CPC\n", "2026-09-02")
+        r = self._dia(date(2026, 9, 3), empresa="beta")["beta"]
+        est = {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"]}
+        self.assertEqual(est["X0001"], "CPA")
+        self.assertEqual(r["resumo"]["ocorrencias"], 1)
+        env = next(e for e in self.falso.tabelas["envios"] if e["id"] == 2001)
+        self.assertEqual((env["status"], env["relatorio"]["contato_identificado"]), ("processado", 1))
+
+    def test_clusters_do_site_e_colunas_da_base(self):
+        self.falso.tabelas["clusters"] = [
+            {"id": 1, "empresa_id": 2, "ordem": 10, "codigo": "VE", "ativo": True,
+             "condicoes": [{"campo": "PRODUTO", "op": "=", "valor": "VEICULO"}], "pacote": "completo"},
+            {"id": 2, "empresa_id": 2, "ordem": 20, "codigo": "IN", "ativo": False, "condicoes": []},
+            {"id": 3, "empresa_id": 1, "ordem": 10, "codigo": "TD", "ativo": True, "condicoes": []}]
+        r = self._dia(date(2026, 9, 2), empresa="beta")["beta"]
+        est = {l["id_cliente"]: l["cluster_atual"] for l in self.falso.tabelas["estado_cliente"]}
+        self.assertEqual(est["X0003"], "VE")                 # regra da beta
+        self.assertNotIn("TD", est.values())                 # regra da alfa não vaza
+        self.assertNotIn("IN", est.values())                 # inativa não vale
+        self.assertEqual(r["resumo"]["clusters"]["VE"], 1)
+        beta = next(e for e in self.falso.tabelas["empresas"] if e["slug"] == "beta")
+        nomes = [c["nome"] for c in beta["colunas_base"]["colunas"]]
+        self.assertIn("PRODUTO", nomes)
+        self.assertFalse({"TEL1", "EMAIL", "CPF", "COD_CLIENTE"} & set(nomes))   # nada pessoal
+
+    def test_falha_de_uma_empresa_nao_para_as_outras(self):
         self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["tipo"] != "clientes"]
-        with self.assertRaises(RuntimeError):
-            sincronizar_dia(self.dados, date(2026, 9, 25), self.sb, out=lambda *a: None)
-        ex = self.falso.tabelas["execucoes"][-1]
-        self.assertEqual(ex["status"], "erro")
-        self.assertIn("clientes.csv", ex["erro"])
-        self.assertTrue(all(e["status"] == "pendente" for e in self.falso.tabelas["envios"]))
+        res = self._dia(date(2026, 9, 25))
+        self.assertIn("base", res["alfa"]["erro"])
+        self.assertNotIn("erro", res["beta"])
+        ex = {e["empresa_id"]: e for e in self.falso.tabelas["execucoes"]}
+        self.assertEqual((ex[1]["status"], ex[2]["status"]), ("erro", "ok"))
+        self.assertTrue(all(e["status"] == "pendente" for e in self.falso.tabelas["envios"] if e["empresa_id"] == 1))
+
+    def test_empresa_sem_arquivo_de_entrada_avisa(self):
+        (self.cfg / "beta.json").unlink()
+        res = self._dia(date(2026, 9, 25), empresa="beta")
+        self.assertIn("empresas/beta.json", res["beta"]["erro"])
 
     def test_trilha_retoma_de_onde_parou(self):
-        sincronizar_dia(self.dados, date(2026, 9, 25), self.sb, out=lambda *a: None)
+        self._dia(date(2026, 9, 25), empresa="alfa")
         total = len(self.falso.tabelas["trilha"])
-        (self.dados / "estado" / "nuvem_trilha_enviada.txt").write_text(str(total - 5))  # "caiu" nos 5 últimos
+        estado = self.dados / "empresas" / "alfa" / "estado"
+        (estado / "nuvem_trilha_enviada.txt").write_text(str(total - 5))  # "caiu" nos 5 últimos
         del self.falso.tabelas["trilha"][-5:]
-        sincronizar_dia(self.dados, date(2026, 9, 25), self.sb, out=lambda *a: None)
+        self._dia(date(2026, 9, 25), empresa="alfa")
         self.assertEqual(len(self.falso.tabelas["trilha"]), total)
 
     def test_comite(self):
-        sincronizar_dia(self.dados, date(2026, 9, 25), self.sb, out=lambda *a: None)
-        sincronizar_comite(self.dados, "2026-09", self.sb, out=lambda *a: None)
+        self._dia(date(2026, 9, 25))
+        comite = lambda: sincronizar_comite(self.dados, "2026-09", self.sb, out=lambda *a: None,  # noqa: E731
+                                            pasta_empresas=self.cfg)
+        comite()
         kpis = self.falso.tabelas["kpis"]
-        self.assertTrue(any(k["safra"] == "TOTAL" for k in kpis))
-        self.assertTrue(any(c.startswith("saidas/comite/2026-09/") for c in self.falso.objetos))
+        self.assertTrue(any(k["safra"] == "TOTAL" and k["empresa_id"] == 1 for k in kpis))
+        self.assertTrue(any(c.startswith("saidas/alfa/comite/2026-09/") for c in self.falso.objetos))
         n = len(kpis)
-        sincronizar_comite(self.dados, "2026-09", self.sb, out=lambda *a: None)   # upsert, não duplica
+        comite()   # upsert, não duplica
         self.assertEqual(len(self.falso.tabelas["kpis"]), n)
 
     def test_chave_errada_falha_alto(self):

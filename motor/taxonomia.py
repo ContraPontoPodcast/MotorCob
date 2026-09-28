@@ -49,6 +49,8 @@ TAXONOMIA: dict[str, dict[str, Classificacao]] = {
         "clique_link": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
         "resposta": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
         "opt_out": C(Nivel.ENGAJADO, restricao="sms:opt_out"),
+        "desconhece": C(Nivel.ENGAJADO, contra_titular=TERCEIRO),
+        "identidade_confirmada": C(Nivel.CERTIFICADO, pro_titular=CERT),  # CPC informado pela empresa
         "acesso_portal_autenticado": C(Nivel.CERTIFICADO, pro_titular=CERT),
     },
     "whatsapp": {
@@ -69,6 +71,7 @@ TAXONOMIA: dict[str, dict[str, Classificacao]] = {
         "lido": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
         "interacao": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
         "clique_link": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
+        "desconhece": C(Nivel.ENGAJADO, contra_titular=TERCEIRO),
         "identidade_confirmada": C(Nivel.CERTIFICADO, pro_titular=CERT),
         "acesso_portal_autenticado": C(Nivel.CERTIFICADO, pro_titular=CERT),
     },
@@ -79,6 +82,8 @@ TAXONOMIA: dict[str, dict[str, Classificacao]] = {
         "abertura": C(Nivel.ENGAJADO, pro_titular=ENGAJ / 2),  # pixel é pouco confiável
         "clique": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
         "descadastro": C(Nivel.ENGAJADO, restricao="email:opt_out"),
+        "desconhece": C(Nivel.ENGAJADO, contra_titular=TERCEIRO),
+        "identidade_confirmada": C(Nivel.CERTIFICADO, pro_titular=CERT),  # CPC informado pela empresa
         "acesso_portal_autenticado": C(Nivel.CERTIFICADO, pro_titular=CERT),
     },
 }

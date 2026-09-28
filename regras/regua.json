@@ -49,10 +49,12 @@
     "sms": [
       "clique_link",
       "resposta",
+      "identidade_confirmada",
       "acesso_portal_autenticado"
     ],
     "email": [
       "clique",
+      "identidade_confirmada",
       "acesso_portal_autenticado"
     ]
   },

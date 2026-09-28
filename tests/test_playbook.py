@@ -230,18 +230,22 @@ class TestOperacao(unittest.TestCase):
         self.assertGreaterEqual(m["localizador_correto"], 0.95)
         self.assertGreater(m["localizados"], 0)
 
-    def test_exporta_so_ids_por_canal_com_reserva_separada(self):
+    def test_exporta_id_e_contato_por_canal_com_reserva_separada(self):
         import rodar_dia
-        linhas = [{"id_cliente": "C2", "condicao": ""}, {"id_cliente": "C1", "condicao": ""},
-                  {"id_cliente": "C1", "condicao": ""}]   # dois números do mesmo cliente
-        reserva = [{"id_cliente": "C3", "condicao": "se agente_voz sem contato no dia"}]
+        linhas = [{"id_cliente": "C2", "contato": "11900000002", "ordem_contato": 1, "condicao": ""},
+                  {"id_cliente": "C1", "contato": "11900000011", "ordem_contato": 2, "condicao": ""},
+                  {"id_cliente": "C1", "contato": "11900000010", "ordem_contato": 1, "condicao": ""}]
+        reserva = [{"id_cliente": "C3", "contato": "11900000003", "ordem_contato": 1,
+                    "condicao": "se agente_voz sem contato no dia"}]
         with tempfile.TemporaryDirectory() as tmp:
             pasta = Path(tmp) / "ids"
             pasta.mkdir()
             (pasta / "velho.csv").write_text("id_cliente\nX\n")
-            rodar_dia.exportar_ids(pasta, {"whatsapp": linhas, "discador": reserva})
-            self.assertEqual(sorted(p.name for p in pasta.iterdir()), ["discador_reserva.csv", "whatsapp.csv"])
-            self.assertEqual((pasta / "whatsapp.csv").read_text(), "id_cliente\nC1\nC2\n")
+            rodar_dia.exportar_ids(pasta, {"discador": linhas, "agente_voz": reserva})
+            self.assertEqual(sorted(p.name for p in pasta.iterdir()), ["agente_voz_reserva.csv", "discador.csv"])
+            # vários números do mesmo cliente: uma linha por número, na ordem de discagem
+            self.assertEqual((pasta / "discador.csv").read_text(),
+                             "id_cliente;contato\nC1;11900000010\nC1;11900000011\nC2;11900000002\n")
 
     def test_rotina_diaria_e_idempotente(self):
         import rodar_dia

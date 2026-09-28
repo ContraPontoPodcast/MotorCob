@@ -253,7 +253,7 @@ def carregar_clientes(caminho: str | Path):
         entrada = min(e for e, _ in a["contratos"])
         # atraso de cada contrato trazido para a data de entrada do cliente; vale o maior
         atraso = max(max(at - (e - entrada).days, 0) for e, at in a["contratos"])
-        clientes[idc] = Cliente(idc, entrada, round(a["saldo"], 2), atraso, a["bloqueio"])
+        clientes[idc] = Cliente(idc, entrada, round(a["saldo"], 2), atraso, a["bloqueio"], len(a["contratos"]))
     return clientes, rejeitados
 
 

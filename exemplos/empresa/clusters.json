@@ -1,0 +1,9 @@
+[
+  {"ordem": 10, "codigo": "VE", "nome": "Veículo", "condicoes": [{"campo": "PRODUTO", "op": "=", "valor": "VEICULO"}],
+   "pacote": "completo + localizador", "revalida_dias": 30, "voz_d0": true},
+  {"ordem": 20, "codigo": "CA", "nome": "Cartão até R$ 2 mil", "condicoes": [
+     {"campo": "PRODUTO", "op": "=", "valor": "CARTAO"}, {"campo": "saldo", "op": "<", "valor": "2000"}],
+   "pacote": "básico + WhatsApp válido", "revalida_dias": 60, "so_digital": true},
+  {"ordem": 30, "codigo": "RJ", "nome": "Rio, sem WhatsApp", "condicoes": [{"campo": "UF", "op": "em", "valor": ["RJ", "ES"]}],
+   "pacote": "básico", "canais_bloqueados": ["whatsapp"]}
+]

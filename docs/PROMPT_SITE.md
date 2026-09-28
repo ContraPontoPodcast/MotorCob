@@ -1,5 +1,8 @@
 # Prompt para construir o site motorcob.online
 
+> **Site já construído?** Para várias empresas clientes, use o prompt de ajuste em
+> `docs/PROMPT_SITE_MULTIEMPRESA.md` (ele muda caminhos, filtros e páginas descritos aqui).
+
 Cole o bloco abaixo inteiro na ferramenta que vai construir o site (Lovable, Bolt, v0 ou
 uma nova sessão do Claude Code). Antes, siga `docs/NUVEM.md` até o passo 4: o banco
 precisa existir e você vai precisar da **URL do projeto** e da **chave anon (pública)**
