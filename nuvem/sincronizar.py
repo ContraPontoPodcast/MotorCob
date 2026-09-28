@@ -121,11 +121,19 @@ def baixar_entradas(sb: Supabase, dados: Path, empresa_id, out=print):
         baixados.append((e, destino))
     out(f"  entradas: {len(baixados)} arquivo(s) baixado(s) do site")
     return baixados
-def _linhas_estado(estados, empresa_id):
+def _linhas_estado(estados, empresa_id, clientes=None, dia=None):
     ts = agora()
+    clientes = clientes or {}
+
+    def extra(k):
+        c = clientes.get(k)
+        if c is None:
+            return {}
+        return {"saldo": round(c.saldo, 2), "dias_atraso": c.atraso_em(dia) if dia else c.dias_atraso}
+
     return [{"empresa_id": empresa_id, "id_cliente": k, "tag": e.tag, "safra": e.safra.isoformat(),
              "cluster_origem": e.cluster_origem, "cluster_atual": e.cluster_atual, "estado": e.estado,
-             "canal": e.canal, "ciclo": e.ciclo, "reenriquecer": e.reenriquecer, "atualizado_em": ts}
+             "canal": e.canal, "ciclo": e.ciclo, "reenriquecer": e.reenriquecer, "atualizado_em": ts, **extra(k)}
             for k, e in estados.items()]
 
 
@@ -270,7 +278,8 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
                                 clusters=clusters, atributos=pasta / "base" / "atributos.csv",
                                 estrategias=estrategias, canais=canais)
 
-        sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid), conflito="empresa_id,id_cliente")
+        sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data),
+                   conflito="empresa_id,id_cliente")
         n_trilha = publicar_trilha(sb, pasta / "estado", eid)
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", "data": f"eq.{data.isoformat()}"})
         fila = _linhas_fila(r["fila"], data, eid)

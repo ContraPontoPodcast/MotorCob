@@ -7,6 +7,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20260928000001_multiempresa.sql
     psql -d sb -f supabase/migrations/20260928000002_clusters.sql
     psql -d sb -f supabase/migrations/20260929000001_estrategias.sql
+    psql -d sb -f supabase/migrations/20260930000001_mapa_esteira.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -153,6 +154,14 @@ checar("operação B não lê canais da A", True, "select count(*) from public.c
 checar("planejamento sobe retorno de enriquecimento", True, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'enriquecimento','alfa/enriquecimento/2026-09-25/e.csv','e.csv')", "authenticated", u["plan"])
 checar("planejamento sobe arquivo em entradas/alfa/enriquecimento", True, "insert into storage.objects (bucket_id,name) values ('entradas','alfa/enriquecimento/2026-09-25/e.csv')", "authenticated", u["plan"])
 checar("apagar estratégia deixa o cluster sem estratégia", True, f"delete from public.estrategias where nome='Digital'; select count(*) from public.clusters where estrategia_id is null and empresa_id={EA}", "authenticated", u["plan"], 1)
+# mapa da esteira
+sql(f"set role service_role; update public.estado_cliente set saldo=1000 where empresa_id={EA} and id_cliente='C1'; update public.estado_cliente set saldo=250.5 where empresa_id={EA} and id_cliente='C2'; update public.estado_cliente set saldo=99 where empresa_id={EB}")
+checar("mapa: operação A vê só a A, com saldo", True, "select string_agg(estado||':'||etapa||':'||clientes||':'||saldo, ',' order by estado) from public.mapa_esteira", "authenticated", u["oper"], "CPA:-:1:1000.00,LOC:L0:1:250.50")  # ciclo vazio nos dados de teste
+checar("mapa: operação B vê só a B", True, "select sum(clientes) from public.mapa_esteira", "authenticated", u["operb"], 1)
+checar("mapa: anon não vê", False, "select * from public.mapa_esteira", "anon")
+sql(f"set role service_role; insert into public.trilha (empresa_id,id_cliente,data,tag_anterior,tag,motivo,quem_marcou) values ({EA},'C2','2026-08-02','','S260801-M1-LOC-ND-L0','entrada','P'),({EA},'C2','2026-08-03','S260801-M1-LOC-ND-L0','S260801-M1-LOC-ND-L1','sem contato','W'),({EA},'C1','2026-08-04','S260801-A1-PRE-WA-D-3','S260801-A1-QBR-WA-D1','quebra','S')")
+checar("fluxo: entradas e mudanças de estado (não de ciclo)", True, "select string_agg(coalesce(de,'∅')||'>'||para||'='||clientes, ',' order by data) from public.fluxo_esteira", "authenticated", u["oper"], "∅>LOC=1,∅>CPA=1,PRE>QBR=1")
+checar("fluxo: B não vê a trilha da A", True, "select count(*) from public.fluxo_esteira", "authenticated", u["operb"], 0)
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
