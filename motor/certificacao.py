@@ -98,6 +98,8 @@ def certificar_contatos(eventos: list[Evento], hoje: date, contatos: list[dict] 
         certs[k] = Certificacao(c["id_cliente"], c["contato"], c["tipo"])
 
     for e in deduplicar(eventos):
+        if not e.contato:  # ocorrência sem contato identificado: vale para a TAG, não certifica número
+            continue
         k = (e.id_cliente, e.contato)
         cert = certs.setdefault(k, Certificacao(e.id_cliente, e.contato, e.tipo))
         cl = classificar(e.canal, e.resultado)

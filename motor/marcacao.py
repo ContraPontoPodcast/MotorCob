@@ -178,7 +178,7 @@ def _aplicar_retornos(est, eventos, dia, regua, disponiveis, trilha):
         est.canal = regua.codigo(e.canal)
         if massivo:
             est.estado, est.ciclo, est.tentativas = "CPA", "T1", 1
-            est.canal_atual, est.contato_localizador = e.canal, e.contato
+            est.canal_atual, est.contato_localizador = e.canal, e.contato or None
             est.canais_esgotados, est.giro_inicio, est.giro_pausado, est.reenriquecer = [], None, False, None
         trilha.marcar(dia, est, antes, f"contato no {QUEM.get(e.canal, e.canal)}"
                       + (" → CPC A" if massivo else ""), QUEM.get(e.canal, e.canal))
