@@ -11,7 +11,7 @@ if ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>
   exit 1
 fi
 echo "Python: $("$PY" --version)"
-mkdir -p "$DADOS"/{base,retornos,logs,estado,saida,acoes}
+mkdir -p "$DADOS"/{base,retornos,logs,estado,saida,acoes,empresas}
 echo "Pasta de dados: $DADOS"
 "$PY" -m pip install --user --quiet openpyxl && echo "openpyxl instalado (Excel do comitê)"
 (cd "$REPO" && "$PY" -m unittest -q) && echo "Testes OK"

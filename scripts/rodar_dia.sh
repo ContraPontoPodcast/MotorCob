@@ -30,18 +30,21 @@ fi
 
 mkdir -p "$DADOS/retornos" "$DADOS/logs"
 LOG="$DADOS/logs/rodar_dia_$DATA.log"
+: > "$LOG"
 cd "$REPO"
 if [ -f "$DADOS/config/supabase.env" ]; then
-  # modo nuvem: baixa o que o site recebeu, roda e publica no site
-  if MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar dia --dados "$DADOS" --data "$DATA" 2>&1 | tee "$LOG"; then
-    echo "Publicado no site. IDs por canal também em: $DADOS/saida/$DATA/ids/" | tee -a "$LOG"
+  # modo nuvem: atualiza o motor (empresas novas chegam por empresas/<slug>.json), baixa o
+  # que o site recebeu de cada empresa, roda e publica no site
+  git -C "$REPO" pull --ff-only -q 2>>"$LOG" || echo "aviso: não consegui atualizar o motor (git pull); sigo com a versão atual" | tee -a "$LOG"
+  if MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar dia --dados "$DADOS" --data "$DATA" 2>&1 | tee -a "$LOG"; then
+    echo "Publicado no site. ID + contato por canal também em: $DADOS/empresas/<empresa>/saida/$DATA/ids/" | tee -a "$LOG"
     exit 0
   fi
   echo "ERRO na rotina de $DATA — veja $LOG (o site mostra a execução com erro)" >&2
   exit 1
 fi
 if "$PY" rodar_dia.py "${ARGS[@]}" 2>&1 | tee "$LOG"; then
-  echo "IDs por canal: $DADOS/saida/$DATA/ids/" | tee -a "$LOG"
+  echo "ID + contato por canal: $DADOS/saida/$DATA/ids/" | tee -a "$LOG"
 else
   echo "ERRO na rotina de $DATA — veja $LOG" >&2
   exit 1

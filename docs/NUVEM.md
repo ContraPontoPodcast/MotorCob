@@ -6,9 +6,13 @@ motorcob.online (site)  ──login/leitura/upload──>  Supabase (Postgres + 
                                           rotina diária do motor (Python)
 ```
 
-- **Supabase:** banco, login e arquivos. Tabelas e permissões em
-  `supabase/migrations/20260925000001_motorcob.sql`.
-- **Site:** só login, envio de arquivos e consulta. Prompt em `docs/PROMPT_SITE.md`.
+- **Supabase:** banco, login e arquivos. Tabelas e permissões em `supabase/migrations/`
+  (aplicar na ordem do nome do arquivo).
+- **Várias empresas clientes no mesmo site:** tabela `empresas`; todo dado tem
+  `empresa_id`; usuário de empresa só vê a própria; a equipe MotorCob (`perfis.equipe`)
+  vê todas. Arquivos no Storage ficam em `entradas/<slug>/...` e `saidas/<slug>/...`.
+- **Site:** só login, envio de arquivos e consulta. Prompt em `docs/PROMPT_SITE.md` e o
+  ajuste para várias empresas em `docs/PROMPT_SITE_MULTIEMPRESA.md`.
 - **Rotina do motor** (`nuvem/sincronizar.py`, roda no Mac): baixa as entradas enviadas
   pelo site, roda o `rodar_dia.py` e publica estado, trilha, fila e arquivos de volta.
 
@@ -23,8 +27,11 @@ motorcob.online (site)  ──login/leitura/upload──>  Supabase (Postgres + 
 
 ## 2. Aplicar o banco
 
-SQL Editor › New query › cole o conteúdo de
-`supabase/migrations/20260925000001_motorcob.sql` › Run. Deve terminar sem erro.
+SQL Editor › New query › cole o conteúdo de cada arquivo de `supabase/migrations/`, na
+ordem, › Run. Cada um deve terminar sem erro:
+1. `20260925000001_motorcob.sql` (banco inicial)
+2. `20260928000001_multiempresa.sql` (várias empresas; quem já era admin vira equipe
+   MotorCob; dado que já existia vai para a empresa `legado`)
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 
@@ -45,14 +52,17 @@ Authentication:
    ```sql
    update public.perfis set papel = 'admin' where email = 'seu-email@dominio.com';
    ```
-3. Os demais usuários: convide pelo painel e defina o papel na tela Usuários do site.
+3. Os demais usuários: crie pelo painel (Add user, Auto Confirm) e, na tela Usuários do
+   site, escolha a empresa e o papel. Sem empresa, o usuário não vê nada.
 
 | Papel | Pode |
 |---|---|
-| admin | tudo, inclusive gerenciar usuários |
-| planejamento | enviar arquivos, baixar todas as saídas (inclusive `fila_do_dia.csv`, que tem contato) |
-| operacao | baixar os IDs por canal, consultar clientes e o painel inicial |
-| gestao | painel, comitê, IDs e auditoria de acessos (sem arquivos com contato) |
+| admin | equipe MotorCob: tudo, inclusive empresas e usuários. De empresa: papel e ativo dos usuários da própria empresa |
+| planejamento | enviar arquivos, baixar todas as saídas da empresa (inclusive `fila_do_dia.csv`) |
+| operacao | baixar as listas por canal (ID + contato), consultar clientes e o painel inicial |
+| gestao | painel, comitê, listas por canal e auditoria de acessos |
+
+Tudo sempre dentro da empresa do usuário (a equipe MotorCob escolhe a empresa no site).
 
 ## 5. Chaves
 
@@ -75,12 +85,16 @@ Ele pede a URL do projeto e a chave service_role (digitada sem aparecer na tela)
 `~/MotorCob-dados/config/supabase.env` (só o seu usuário lê) e testa a conexão.
 
 A partir daí, o fluxo diário é:
-1. Durante o dia, a equipe de planejamento envia pelo site os arquivos (clientes, contatos,
-   parcelas, retornos dos fornecedores, log do portal).
-2. No horário agendado, o Mac roda `scripts/rodar_dia.sh`, que agora: baixa os envios
-   pendentes → roda o motor → publica TAG, trilha, fila do dia (IDs) e arquivos → marca
-   cada envio como processado (ou erro, com o motivo) e registra a execução com os alertas.
-3. A operação entra no site e baixa os IDs de cada canal.
+1. Durante o dia, cada empresa (ou a equipe MotorCob por ela) envia pelo site a **base
+   bruta** e o arquivo de **ocorrências** (CPC ou não por tentativa), além de retornos de
+   fornecedor e parcelas quando houver.
+2. No horário agendado, o Mac roda `scripts/rodar_dia.sh`, que: atualiza o motor
+   (`git pull`) → para cada empresa ativa, baixa os envios pendentes → converte a base
+   bruta pelo `empresas/<slug>.json` → liga cada ocorrência ao contato que o motor mandou
+   acionar → roda o motor → publica TAG, trilha, fila do dia e arquivos → marca cada envio
+   como processado (ou erro, com o motivo) e registra a execução da empresa com os
+   alertas. Uma empresa com erro não impede as outras.
+3. A operação entra no site e baixa a lista de cada canal (ID do cliente + contato).
 
 No fim do mês, `scripts/relatorio_mes.sh 2026-09` publica os KPIs e o Excel do comitê no site.
 
@@ -94,5 +108,6 @@ Com um Postgres 15+ vazio:
 ```bash
 psql -d sb -f supabase/testes/stub_supabase.sql
 psql -d sb -f supabase/migrations/20260925000001_motorcob.sql
-python supabase/testes/testar_rls.py      # 31 verificações por papel
+psql -d sb -f supabase/migrations/20260928000001_multiempresa.sql
+python supabase/testes/testar_rls.py      # 59 verificações por papel e por empresa
 ```

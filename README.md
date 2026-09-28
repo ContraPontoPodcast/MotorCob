@@ -10,9 +10,13 @@ acionar em cada canal, com trava de WhatsApp contra banimento. Regras em
 # Rotina diária (toda manhã): atualiza TAGs e gera a fila do dia
 python rodar_dia.py --clientes exemplos/clientes.csv --carteira exemplos/carteira_contatos.csv \
     --retornos exemplos/retornos --parcelas exemplos/parcelas.csv --data 2026-09-25
-#   → saida/2026-09-25/ids/<canal>.csv (só os IDs de cliente a acionar em cada canal),
+#   → saida/2026-09-25/ids/<canal>.csv (id_cliente;contato a acionar em cada canal),
 #     fila_do_dia.csv (detalhe), enriquecimento.csv, alertas.txt
 #   → estado/estados.json (TAG atual) e estado/trilha.csv (extrato de cada cliente)
+
+# Com os arquivos da empresa cliente: base bruta + ocorrências (CPC ou não por tentativa)
+python rodar_dia.py --empresa empresas/exemplo.json --base-bruta exemplos/empresa/bruto \
+    --ocorrencias exemplos/empresa/ocorrencias --retornos retornos --data 2026-09-02
 
 # Relatório do comitê mensal: KPIs por safra/cluster + Real x Previsto em Excel
 python relatorio.py --clientes exemplos/clientes.csv --carteira exemplos/carteira_contatos.csv \
@@ -26,8 +30,9 @@ python exemplos/simular_operacao.py
 O Excel do comitê precisa de `pip install openpyxl`; todo o resto roda só com Python 3.11+.
 
 **Nuvem:** banco no Supabase (`supabase/migrations/`) e site com login em motorcob.online —
-passo a passo em [`docs/NUVEM.md`](docs/NUVEM.md) e prompt do site em
-[`docs/PROMPT_SITE.md`](docs/PROMPT_SITE.md).
+várias empresas clientes no mesmo site, cada uma vendo só os próprios dados. Passo a passo
+em [`docs/NUVEM.md`](docs/NUVEM.md) e prompt do site em [`docs/PROMPT_SITE.md`](docs/PROMPT_SITE.md)
+(ajuste multiempresa em [`docs/PROMPT_SITE_MULTIEMPRESA.md`](docs/PROMPT_SITE_MULTIEMPRESA.md)).
 
 **Produção no Mac:** instalação, pasta de dados, rotina agendada e o dia a dia em
 [`docs/PRODUCAO.md`](docs/PRODUCAO.md) (`scripts/instalar_mac.sh 06:30`).

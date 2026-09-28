@@ -138,18 +138,30 @@ de outra pessoa pela certificação e a rotação segue.
 - `motor/taxonomia.py`: retorno bruto de cada canal → `Nivel` + pesos + restrições.
 - `motor/ingestao.py` + `layouts/*.json`: retornos por layout de fornecedor, base de
   clientes (agrega contratos), carteira de contatos e parcelas.
+- `motor/entrada.py` + `empresas/<slug>.json`: arquivos da empresa cliente. Base bruta
+  (telefones/e-mails em colunas) → `base/clientes.csv` + `base/contatos.csv`. Ocorrência
+  (CPC ou não por tentativa, em geral sem o contato) → eventos: o de-para da empresa leva
+  o código a um resultado genérico (`cpc`, `sem_contato`, `atendida_sem_cpc`, `terceiro`,
+  `invalido`, `opt_out`) e o genérico ao resultado da taxonomia do canal. **O contato é
+  marcado por nós:** o motor guarda em `estado/escolhas.csv` o que mandou acionar e liga a
+  ocorrência a esse contato; com vários números no dia (voz), a ocorrência vale para a TAG
+  mas não certifica número (evento com `contato` vazio, ignorado na certificação).
 - `motor/normalizacao.py`: ID, CPF, telefone e e-mail na forma canônica.
 - `motor/rastreio.py` + `disparar.py`: link rastreável por ação e registro de ações.
 - `motor/priorizacao.py` + `rodar.py`: diagnóstico da carteira por valor esperado (base
   para sugerir ao comitê mensal a ordem de rotação por eficiência; não comanda a fila).
 - `rodar_dia.py`: **rotina diária** (estado em `estado/`, fila/enriquecimento em `saida/`).
-  A saída operacional é `saida/<data>/ids/<canal>.csv`: **só os IDs de cliente por canal**
-  (a ferramenta de cada canal monta o mailing pelo ID; não há layout de saída por
-  fornecedor). `<canal>_reserva.csv` = só se o canal principal do dia não contatar.
-- `nuvem/`: sincronização com o Supabase (`python -m nuvem.sincronizar dia|comite`). Baixa
-  os envios pendentes do bucket `entradas`, roda o motor e publica estado, trilha (retomável,
-  pelo marcador `estado/nuvem_trilha_enviada.txt`), fila_dia, arquivos em `saidas` e kpis.
-  Falha → execução com status erro e envios continuam pendentes. Chave service_role só em
+  A saída operacional é `saida/<data>/ids/<canal>.csv`: **`id_cliente;contato` por canal**
+  (o contato que o motor escolheu; voz pode ter várias linhas por cliente, na ordem de
+  discagem; não há layout de saída por fornecedor). `<canal>_reserva.csv` = só se o canal
+  principal do dia não contatar.
+- `nuvem/`: sincronização com o Supabase (`python -m nuvem.sincronizar dia|comite
+  [--empresa slug]`). Para cada empresa ativa, com pasta própria
+  `~/MotorCob-dados/empresas/<slug>/`: baixa os envios pendentes da empresa do bucket
+  `entradas`, roda o motor e publica estado, trilha (retomável, pelo marcador
+  `estado/nuvem_trilha_enviada.txt`), fila_dia, arquivos em `saidas/<slug>/` e kpis, tudo
+  com `empresa_id`. Falha → execução da empresa com status erro, envios dela continuam
+  pendentes, e as outras empresas seguem. Chave service_role só em
   `~/MotorCob-dados/config/supabase.env` (criado por `scripts/configurar_nuvem.sh`).
 - `scripts/` + `docs/PRODUCAO.md`: produção no Mac (instalador, rotina agendada via
   launchd, relatório mensal). Dados reais ficam em `~/MotorCob-dados`, fora do repo.
@@ -157,11 +169,13 @@ de outra pessoa pela certificação e a rotação segue.
   auditoria das regras. `exemplos/gerar_retornos.py`: arquivos de exemplo.
 - `db/schema.sql`: modelo alvo em Postgres. `tests/`: testes das regras e princípios.
 - `supabase/migrations/`: banco do site motorcob.online no Supabase (projeto próprio, região
-  São Paulo): perfis por papel (admin, planejamento, operacao, gestao), envios, execuções,
-  estado_cliente, trilha, fila_dia (só IDs), kpis, auditoria de acessos, buckets
-  `entradas`/`saidas` e RLS. **Nenhuma tabela guarda contato ou CPF de devedor.** Só a
-  rotina do motor (chave service_role) escreve resultados. `supabase/testes/testar_rls.py`
-  verifica as permissões por papel num Postgres local. Guias: `docs/NUVEM.md` e
+  São Paulo), multiempresa: empresas, perfis por papel (admin, planejamento, operacao,
+  gestao) com empresa ou equipe MotorCob, envios, execuções, estado_cliente, trilha,
+  fila_dia (só IDs), kpis, auditoria de acessos, buckets `entradas`/`saidas` com pasta por
+  empresa, e RLS que isola cada empresa. **Nenhuma tabela guarda contato ou CPF de
+  devedor**; as listas `ids/` do Storage têm contato (acesso registrado em `acessos`). Só
+  a rotina do motor (chave service_role) escreve resultados. `supabase/testes/testar_rls.py`
+  verifica as permissões por papel e por empresa num Postgres local. Guias: `docs/NUVEM.md` e
   `docs/PROMPT_SITE.md` (prompt para gerar o site).
 
 ## Status de certificação
@@ -183,6 +197,8 @@ Arquivos de entrada (separador `;`):
 - clientes: `id_cliente;data_entrada;saldo;dias_atraso[;bloqueio][;id_contrato]`
 - carteira: `id_cliente;contato;tipo[;origem;cpf;whatsapp_valido;atualizado_em]`
 - parcelas: `id_cliente;id_acordo;parcela;vencimento;valor;pago_em`
+- base bruta e ocorrência da empresa: layout em `empresas/<slug>.json` (exemplo:
+  `empresas/exemplo.json`, arquivos fictícios em `exemplos/empresa/`)
 
 Comandos:
 - Rotina diária: `python rodar_dia.py --clientes exemplos/clientes.csv --carteira

@@ -1,8 +1,10 @@
 """Testa as permissões (RLS) da migração do MotorCob num Postgres local.
 
-Pré-requisito: um banco vazio com a imitação do Supabase e a migração aplicadas:
+Pré-requisito: um banco vazio com a imitação do Supabase e as migrações aplicadas:
     psql -d sb -f supabase/testes/stub_supabase.sql
     psql -d sb -f supabase/migrations/20260925000001_motorcob.sql
+    (opcional, para testar a migração com dado antigo: psql -d sb -f supabase/testes/dados_legado.sql)
+    psql -d sb -f supabase/migrations/20260928000001_multiempresa.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -27,53 +29,93 @@ def checar(nome, esperado_ok, cmd, papel=None, uid=None, valor=None):
     ok_total += passou; falhas += not passou
     print(("PASSOU " if passou else "FALHOU ") + nome + ("" if passou else f"  -> ok={ok} out={out!r} err={err[:120]}"))
 
-# usuários (trigger cria perfil operacao) e papéis definidos pelo "admin do banco"
+# empresas A e B; usuários (trigger cria perfil operacao) e papéis definidos pelo "admin do banco"
+sql("insert into public.empresas (slug,nome) values ('alfa','Alfa'),('beta','Beta')")
+_, EA, _ = sql("select id from public.empresas where slug='alfa'")
+_, EB, _ = sql("select id from public.empresas where slug='beta'")
 ids = {}
-for p in ("admin", "plan", "oper", "gest", "inativo"):
+for p in ("admin", "plan", "oper", "gest", "inativo", "operb", "admina", "semempresa"):
     _, out, _ = sql(f"insert into auth.users (email) values ('{p}@x.com') returning id")
     ids[p] = out
-sql(f"update public.perfis set papel='admin' where id='{ids['admin']}'")
-sql(f"update public.perfis set papel='planejamento' where id='{ids['plan']}'")
-sql(f"update public.perfis set papel='gestao' where id='{ids['gest']}'")
-sql(f"update public.perfis set ativo=false where id='{ids['inativo']}'")
-# dados que a rotina (service_role) grava
-sql("set role service_role; insert into public.estado_cliente (id_cliente,tag,safra,cluster_origem,cluster_atual,estado,canal) values "
-    "('C1','S260801-A1-CPA-WA-T1','2026-08-01','A1','A1','CPA','WA'),('C2','S260801-M1-LOC-ND-L1','2026-08-01','M1','M1','LOC','ND');"
-    "insert into public.fila_dia values ('2026-09-25','whatsapp','C1',false,'cpc','T1','x'),('2026-09-25','discador','C2',true,'localizacao','D+5','y');"
-    "insert into public.trilha (id_cliente,data,tag,motivo,quem_marcou) values ('C1','2026-08-04','S260801-A1-CPA-WA-T1','contato','WhatsApp');"
-    "insert into storage.objects (bucket_id,name) values ('saidas','2026-09-25/ids/whatsapp.csv'),('saidas','2026-09-25/fila_do_dia.csv'),('saidas','comite/2026-09/comite.xlsx')")
-
 u = ids
-checar("trigger criou perfil para cada convidado", True, "select count(*) from public.perfis", valor=5)
+sql(f"update public.perfis set papel='admin', equipe=true where id='{u['admin']}'")
+sql(f"update public.perfis set papel='planejamento', empresa_id={EA} where id='{u['plan']}'")
+sql(f"update public.perfis set empresa_id={EA} where id='{u['oper']}'")
+sql(f"update public.perfis set papel='gestao', empresa_id={EA} where id='{u['gest']}'")
+sql(f"update public.perfis set ativo=false, empresa_id={EA} where id='{u['inativo']}'")
+sql(f"update public.perfis set empresa_id={EB} where id='{u['operb']}'")
+sql(f"update public.perfis set papel='admin', empresa_id={EA} where id='{u['admina']}'")
+# dados que a rotina (service_role) grava, nas duas empresas
+r = sql("set role service_role; insert into public.estado_cliente (empresa_id,id_cliente,tag,safra,cluster_origem,cluster_atual,estado,canal) values "
+    f"({EA},'C1','S260801-A1-CPA-WA-T1','2026-08-01','A1','A1','CPA','WA'),({EA},'C2','S260801-M1-LOC-ND-L1','2026-08-01','M1','M1','LOC','ND'),"
+    f"({EB},'C1','S260801-B3-NCP-ND-L8','2026-08-01','B3','B3','NCP','ND');"
+    "insert into public.fila_dia (empresa_id,data,canal,id_cliente,reserva,regua,passo,tag) values "
+    f"({EA},'2026-09-25','whatsapp','C1',false,'cpc','T1','x'),({EA},'2026-09-25','discador','C2',true,'localizacao','D+5','y'),"
+    f"({EB},'2026-09-25','sms','C1',false,'giro','G1','z');"
+    f"insert into public.trilha (empresa_id,id_cliente,data,tag,motivo,quem_marcou) values ({EA},'C1','2026-08-04','S260801-A1-CPA-WA-T1','contato','WhatsApp');"
+    f"insert into public.execucoes (empresa_id,data_ref,status) values ({EA},'2026-09-25','ok'),({EB},'2026-09-25','ok');"
+    "insert into storage.objects (bucket_id,name) values ('saidas','alfa/2026-09-25/ids/whatsapp.csv'),('saidas','alfa/2026-09-25/fila_do_dia.csv'),"
+    "('saidas','alfa/comite/2026-09/comite.xlsx'),('saidas','beta/2026-09-25/ids/sms.csv')")
+assert r[0], r[2]
+
+checar("trigger criou perfil para cada convidado", True, "select count(*) from public.perfis", valor=8)
 checar("anon não lê estado_cliente", False, "select * from public.estado_cliente", "anon")
 checar("anon não lê fila", False, "select * from public.fila_dia", "anon")
-checar("operação lê fila (2 linhas)", True, "select count(*) from public.fila_dia", "authenticated", u["oper"], 2)
+checar("anon não lê empresas", False, "select * from public.empresas", "anon")
+checar("operação A lê só a fila da A (2 linhas)", True, "select count(*) from public.fila_dia", "authenticated", u["oper"], 2)
+checar("operação B lê só a fila da B (1 linha)", True, "select count(*) from public.fila_dia", "authenticated", u["operb"], 1)
+checar("operação B não vê o C1 da A", True, "select string_agg(estado, ',') from public.estado_cliente", "authenticated", u["operb"], "NCP")
+checar("equipe vê as duas empresas", True, "select count(*) from public.estado_cliente", "authenticated", u["admin"], 3)
+checar("usuário sem empresa não vê nada", True, "select count(*) from public.fila_dia", "authenticated", u["semempresa"], 0)
+checar("operação A vê só a empresa A", True, "select string_agg(slug, ',') from public.empresas", "authenticated", u["oper"], "alfa")
+checar("equipe vê todas as empresas", True, "select count(*) from public.empresas", "authenticated", u["admin"], 2)
 checar("operação lê trilha", True, "select count(*) from public.trilha", "authenticated", u["oper"], 1)
-checar("resumo_estados agrega", True, "select string_agg(estado||'='||clientes, ',' order by estado) from public.resumo_estados", "authenticated", u["oper"], "CPA=1,LOC=1")
+checar("operação B não lê trilha da A", True, "select count(*) from public.trilha", "authenticated", u["operb"], 0)
+checar("resumo_estados agrega por empresa", True, "select string_agg(estado||'='||clientes, ',' order by estado) from public.resumo_estados", "authenticated", u["oper"], "CPA=1,LOC=1")
 checar("resumo_fila separa reserva", True, "select count(*) from public.resumo_fila", "authenticated", u["gest"], 2)
+checar("ultima_execucao: uma por empresa (equipe)", True, "select count(*) from public.ultima_execucao", "authenticated", u["admin"], 2)
+checar("ultima_execucao: só a da própria empresa", True, "select count(*) from public.ultima_execucao", "authenticated", u["operb"], 1)
 checar("inativo não vê nada", True, "select count(*) from public.fila_dia", "authenticated", u["inativo"], 0)
 checar("operação vê só o próprio perfil", True, "select count(*) from public.perfis", "authenticated", u["oper"], 1)
-checar("admin vê todos os perfis", True, "select count(*) from public.perfis", "authenticated", u["admin"], 5)
+checar("admin da equipe vê todos os perfis", True, "select count(*) from public.perfis", "authenticated", u["admin"], 8)
+checar("admin da empresa A vê só perfis da A (5)", True, "select count(*) from public.perfis", "authenticated", u["admina"], 5)
 checar("operação não se promove a admin (0 linhas)", True, f"with x as (update public.perfis set papel='admin' where id='{u['oper']}' returning 1) select count(*) from x", "authenticated", u["oper"], 0)
 checar("papel da operação continua operacao", True, f"select papel from public.perfis where id='{u['oper']}'", valor="operacao")
 checar("operação não altera perfil de outro (0 linhas)", True, f"with x as (update public.perfis set nome='z' where id='{u['plan']}' returning 1) select count(*) from x", "authenticated", u["oper"], 0)
-checar("admin promove operação", True, f"update public.perfis set papel='planejamento' where id='{u['oper']}'; update public.perfis set papel='operacao' where id='{u['oper']}'", "authenticated", u["admin"])
-checar("operação não escreve em estado_cliente", False, "insert into public.estado_cliente values ('C9','t','2026-01-01','A1','A1','LOC','ND','',null,now())", "authenticated", u["oper"])
-checar("operação não cria envio", False, "insert into public.envios (tipo,caminho,nome_original) values ('clientes','clientes/2026-09-25/a.csv','a.csv')", "authenticated", u["oper"])
-checar("planejamento cria envio", True, "insert into public.envios (tipo,caminho,nome_original) values ('clientes','clientes/2026-09-25/a.csv','a.csv')", "authenticated", u["plan"])
-checar("planejamento não cria envio já 'processado'", False, "insert into public.envios (tipo,caminho,nome_original,status) values ('clientes','clientes/2026-09-25/b.csv','b.csv','processado')", "authenticated", u["plan"])
-checar("planejamento não cria envio em nome de outro", False, f"insert into public.envios (tipo,caminho,nome_original,enviado_por) values ('clientes','clientes/2026-09-25/c.csv','c.csv','{u['admin']}')", "authenticated", u["plan"])
-checar("planejamento sobe arquivo em entradas/clientes", True, "insert into storage.objects (bucket_id,name) values ('entradas','clientes/2026-09-25/a.csv')", "authenticated", u["plan"])
-checar("planejamento não sobe em pasta desconhecida", False, "insert into storage.objects (bucket_id,name) values ('entradas','outra/a.csv')", "authenticated", u["plan"])
-checar("operação não sobe arquivo", False, "insert into storage.objects (bucket_id,name) values ('entradas','clientes/2026-09-25/x.csv')", "authenticated", u["oper"])
-checar("operação vê só ids no bucket saidas", True, "select string_agg(name, ',') from storage.objects where bucket_id='saidas'", "authenticated", u["oper"], "2026-09-25/ids/whatsapp.csv")
-checar("gestão vê ids + comitê, não fila_do_dia", True, "select string_agg(name, ',' order by name) from storage.objects where bucket_id='saidas'", "authenticated", u["gest"], "2026-09-25/ids/whatsapp.csv,comite/2026-09/comite.xlsx")
-checar("planejamento vê todas as saídas", True, "select count(*) from storage.objects where bucket_id='saidas'", "authenticated", u["plan"], 3)
+checar("admin da equipe promove operação", True, f"update public.perfis set papel='planejamento' where id='{u['oper']}'; update public.perfis set papel='operacao' where id='{u['oper']}'", "authenticated", u["admin"])
+checar("admin da empresa A promove operação da A", True, f"update public.perfis set papel='gestao' where id='{u['oper']}'; update public.perfis set papel='operacao' where id='{u['oper']}'", "authenticated", u["admina"])
+checar("admin da empresa A não mexe na B (0 linhas)", True, f"with x as (update public.perfis set papel='admin' where id='{u['operb']}' returning 1) select count(*) from x", "authenticated", u["admina"], 0)
+checar("admin da empresa A não troca empresa de ninguém", False, f"update public.perfis set empresa_id={EB} where id='{u['oper']}'", "authenticated", u["admina"])
+checar("admin da empresa A não vira equipe", False, f"update public.perfis set equipe=true where id='{u['admina']}'", "authenticated", u["admina"])
+checar("admin da empresa A não cria empresa", False, "insert into public.empresas (slug,nome) values ('gama','Gama')", "authenticated", u["admina"])
+checar("admin da equipe cria empresa", True, "insert into public.empresas (slug,nome) values ('gama','Gama')", "authenticated", u["admin"])
+checar("slug inválido é recusado", False, "insert into public.empresas (slug,nome) values ('Com Espaço','x')", "authenticated", u["admin"])
+checar("admin da equipe coloca usuário numa empresa", True, f"update public.perfis set empresa_id={EB} where id='{u['semempresa']}'", "authenticated", u["admin"])
+checar("operação não escreve em estado_cliente", False, f"insert into public.estado_cliente (empresa_id,id_cliente,tag,safra,cluster_origem,cluster_atual,estado,canal) values ({EA},'C9','t','2026-01-01','A1','A1','LOC','ND')", "authenticated", u["oper"])
+checar("operação não cria envio", False, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'base','alfa/base/2026-09-25/a.csv','a.csv')", "authenticated", u["oper"])
+checar("planejamento cria envio de base na A", True, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'base','alfa/base/2026-09-25/a.csv','a.csv')", "authenticated", u["plan"])
+checar("planejamento cria envio de ocorrência na A", True, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'ocorrencia','alfa/ocorrencia/2026-09-25/o.csv','o.csv')", "authenticated", u["plan"])
+checar("planejamento A não cria envio na B", False, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EB},'base','beta/base/2026-09-25/a.csv','a.csv')", "authenticated", u["plan"])
+checar("planejamento A não aponta para a pasta da B", False, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'base','beta/base/2026-09-25/z.csv','z.csv')", "authenticated", u["plan"])
+checar("tipo do envio tem que bater com a pasta", False, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'base','alfa/ocorrencia/2026-09-25/y.csv','y.csv')", "authenticated", u["plan"])
+checar("planejamento não cria envio já 'processado'", False, f"insert into public.envios (empresa_id,tipo,caminho,nome_original,status) values ({EA},'base','alfa/base/2026-09-25/b.csv','b.csv','processado')", "authenticated", u["plan"])
+checar("planejamento não cria envio em nome de outro", False, f"insert into public.envios (empresa_id,tipo,caminho,nome_original,enviado_por) values ({EA},'base','alfa/base/2026-09-25/c.csv','c.csv','{u['admin']}')", "authenticated", u["plan"])
+checar("operação B não vê envios da A", True, "select count(*) from public.envios", "authenticated", u["operb"], 0)
+checar("planejamento sobe arquivo em entradas/alfa/base", True, "insert into storage.objects (bucket_id,name) values ('entradas','alfa/base/2026-09-25/a.csv')", "authenticated", u["plan"])
+checar("planejamento A não sobe em entradas/beta", False, "insert into storage.objects (bucket_id,name) values ('entradas','beta/base/2026-09-25/a.csv')", "authenticated", u["plan"])
+checar("planejamento não sobe em pasta desconhecida", False, "insert into storage.objects (bucket_id,name) values ('entradas','alfa/outra/a.csv')", "authenticated", u["plan"])
+checar("operação não sobe arquivo", False, "insert into storage.objects (bucket_id,name) values ('entradas','alfa/base/2026-09-25/x.csv')", "authenticated", u["oper"])
+checar("operação A vê só ids da A no bucket saidas", True, "select string_agg(name, ',') from storage.objects where bucket_id='saidas'", "authenticated", u["oper"], "alfa/2026-09-25/ids/whatsapp.csv")
+checar("operação B vê só ids da B", True, "select string_agg(name, ',') from storage.objects where bucket_id='saidas'", "authenticated", u["operb"], "beta/2026-09-25/ids/sms.csv")
+checar("gestão vê ids + comitê, não fila_do_dia", True, "select string_agg(name, ',' order by name) from storage.objects where bucket_id='saidas'", "authenticated", u["gest"], "alfa/2026-09-25/ids/whatsapp.csv,alfa/comite/2026-09/comite.xlsx")
+checar("planejamento A vê todas as saídas da A", True, "select count(*) from storage.objects where bucket_id='saidas'", "authenticated", u["plan"], 3)
+checar("equipe vê todas as saídas", True, "select count(*) from storage.objects where bucket_id='saidas'", "authenticated", u["admin"], 4)
 checar("operação não lê entradas", True, "select count(*) from storage.objects where bucket_id='entradas'", "authenticated", u["oper"], 0)
-checar("usuário registra o próprio acesso", True, "insert into public.acessos (acao,alvo) values ('download','2026-09-25/ids/whatsapp.csv')", "authenticated", u["oper"])
-checar("usuário não registra acesso em nome de outro", False, f"insert into public.acessos (usuario,acao,alvo) values ('{u['plan']}','download','x')", "authenticated", u["oper"])
+checar("usuário registra o próprio acesso", True, f"insert into public.acessos (empresa_id,acao,alvo) values ({EA},'download','alfa/2026-09-25/ids/whatsapp.csv')", "authenticated", u["oper"])
+checar("usuário não registra acesso em outra empresa", False, f"insert into public.acessos (empresa_id,acao,alvo) values ({EB},'download','x')", "authenticated", u["oper"])
+checar("usuário não registra acesso em nome de outro", False, f"insert into public.acessos (empresa_id,usuario,acao,alvo) values ({EA},'{u['plan']}','download','x')", "authenticated", u["oper"])
 checar("operação não lê auditoria", True, "select count(*) from public.acessos", "authenticated", u["oper"], 0)
-checar("gestão lê auditoria", True, "select count(*) from public.acessos", "authenticated", u["gest"], 1)
+checar("gestão A lê auditoria da A", True, "select count(*) from public.acessos", "authenticated", u["gest"], 1)
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
