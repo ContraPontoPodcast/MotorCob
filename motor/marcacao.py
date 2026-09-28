@@ -34,6 +34,8 @@ class Cliente:
     saldo: float
     dias_atraso: int          # na data de entrada
     bloqueio: str | None = None  # opt-out geral, óbito, judicial, reclamação...
+    qtd_contratos: int = 1
+    atributos: dict | None = field(default=None, compare=False, hash=False)  # colunas da base bruta
 
     def atraso_em(self, dia: date) -> int:
         return self.dias_atraso + max((dia - self.data_entrada).days, 0)
@@ -58,6 +60,7 @@ class EstadoCliente:
     giro_pausado: bool = False
     reenriquecer: str | None = None  # motivo, quando o cliente precisa de novo enriquecimento
     acordos_quebrados: list[str] = field(default_factory=list)
+    cluster_versao: str = ""         # versão das regras de cluster da empresa usada na revisão
 
     @property
     def tag(self) -> str:
@@ -79,8 +82,9 @@ class EstadoCliente:
 
 
 def iniciar(cliente: Cliente, regua: Regua) -> EstadoCliente:
-    cl = regua.cluster(cliente.saldo, cliente.dias_atraso)
-    return EstadoCliente(cliente.id_cliente, cliente.data_entrada, cl, cl, f"{cliente.data_entrada:%Y-%m}")
+    cl = regua.cluster_de(cliente, cliente.data_entrada)
+    return EstadoCliente(cliente.id_cliente, cliente.data_entrada, cl, cl, f"{cliente.data_entrada:%Y-%m}",
+                         cluster_versao=regua.versao_clusters)
 
 
 class Trilha:
@@ -145,10 +149,12 @@ def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente
             continue
 
         mes = f"{dia:%Y-%m}"
-        if mes != est.cluster_revisado:
-            antes, est.cluster_revisado = est.tag, mes
-            est.cluster_atual = regua.cluster(c.saldo, c.atraso_em(dia))
-            trilha.marcar(dia, est, antes, "revisão mensal do cluster", "Planejamento")
+        if mes != est.cluster_revisado or est.cluster_versao != regua.versao_clusters:
+            motivo = ("regras de cluster alteradas" if est.cluster_versao != regua.versao_clusters
+                      else "revisão mensal do cluster")
+            antes, est.cluster_revisado, est.cluster_versao = est.tag, mes, regua.versao_clusters
+            est.cluster_atual = regua.cluster_de(c, dia)
+            trilha.marcar(dia, est, antes, motivo, "Planejamento")
 
         # Em acordo, a TAG do dia (D-1 → D0…) vem antes dos retornos; nas réguas massivas,
         # o contato do dia vem antes do acordo (respondeu → CPC A → fechou → COL).

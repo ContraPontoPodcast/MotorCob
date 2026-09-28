@@ -4,7 +4,7 @@ Uma regra errada (canal inexistente, resultado fora da taxonomia) derrubaria a
 operação inteira em silêncio; por isso a carga falha alto.
 """
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 
@@ -22,6 +22,15 @@ class ReguaInvalida(ValueError):
 @dataclass(frozen=True)
 class Regua:
     dados: dict
+    clusters: tuple = field(default=(), compare=False)   # regras de cluster da empresa (motor/cluster.py)
+    versao_clusters: str = ""
+
+    def com_clusters(self, regras) -> "Regua":
+        from .cluster import versao
+        return replace(self, clusters=tuple(regras), versao_clusters=versao(list(regras)))
+
+    def _regra(self, codigo: str):
+        return next((r for r in self.clusters if r.codigo == codigo), None)
 
     def __getitem__(self, chave):
         return self.dados[chave]
@@ -33,12 +42,33 @@ class Regua:
         return resultado in self.dados["contato"].get(canal, ())
 
     def cluster(self, saldo: float, dias_atraso: int) -> str:
+        """Cluster padrão: ticket (A/M/B) x atraso (1/2/3)."""
         ticket = next(l for l, piso in self.dados["cluster"]["ticket"] if saldo >= piso)
         faixa = [f for f, piso in self.dados["cluster"]["atraso"] if dias_atraso >= piso][-1]
         return ticket + faixa
 
+    def cluster_de(self, cliente, dia: date) -> str:
+        """Primeira regra da empresa que bate; sem regra, o cluster padrão."""
+        from .cluster import classificar
+        r = classificar(list(self.clusters), cliente, dia)
+        return r.codigo if r else self.cluster(cliente.saldo, cliente.atraso_em(dia))
+
     def enriquecimento(self, cluster: str) -> dict:
-        return self.dados["enriquecimento"][cluster]
+        r = self._regra(cluster)
+        if r:
+            return r.enriquecimento()
+        # cluster que saiu das regras da empresa: básico até a próxima revisão
+        return self.dados["enriquecimento"].get(cluster, {"pacote": "básico", "revalida_dias": 90})
+
+    def canais_bloqueados(self, cluster: str) -> set[str]:
+        r = self._regra(cluster)
+        if r:
+            return r.bloqueados
+        return set(CANAIS_VOZ) if self.enriquecimento(cluster).get("so_digital") else set()
+
+    def voz_d0(self, cluster: str) -> bool:
+        r = self._regra(cluster)
+        return r.voz_d0 if r else cluster[:1] in self.dados["preventivo"]["voz_d0_tickets"]
 
     def janela(self, dia: date) -> tuple[str, str] | None:
         """Janela de acionamento do dia, ou None (domingo/feriado)."""

@@ -28,10 +28,12 @@ import argparse
 import csv
 import json
 from collections import defaultdict
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 
 from motor.certificacao import certificar_contatos
+from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import Entrada, carregar_entrada, converter_base, ingerir_ocorrencias, salvar_escolhas
 from motor.fila import gerar_fila, lista_enriquecimento
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
@@ -110,9 +112,23 @@ def salvar_estado(pasta: Path, estados, ultimo_dia):
 
 def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts", parcelas_csv=None,
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
-              ocorrencias=None, entrada=None):
+              ocorrencias=None, entrada=None, clusters=None, atributos=None):
+    """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
+    atributos: base/atributos.csv (colunas da base bruta usadas pelas regras)."""
     regua = carregar_regua(regua_json) if regua_json else carregar_regua()
+    avisos_cluster = []
+    if clusters:
+        linhas = json.loads(Path(clusters).read_text(encoding="utf-8")) if isinstance(clusters, (str, Path)) \
+            else clusters
+        regras, avisos_cluster = carregar_regras(linhas)
+        regua = regua.com_clusters(regras)
     clientes, rej_cli = carregar_clientes(clientes_csv)
+    atrib = carregar_atributos(atributos)
+    if atrib:
+        clientes = {k: replace(c, atributos=atrib.get(k, {})) for k, c in clientes.items()}
+    faltam = sorted(colunas_usadas(list(regua.clusters)) - {k for a in atrib.values() for k in a})
+    if faltam:
+        avisos_cluster.append(f"regras de cluster usam colunas que não estão na base: {faltam}")
     contatos, pessoa_de, _ = carregar_carteira(carteira_csv)
     eventos, relatorios, quarentena, sem_layout = ingerir_pasta(retornos, carregar_layouts(layouts))
     rel_ocorrencias = []
@@ -153,6 +169,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     ev_ate = [e for e in eventos if e.data < hoje]
     certs = certificar_contatos(ev_ate, hoje, contatos, pessoa_de)
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate)
+    alertas = [f"CLUSTER: {a}" for a in avisos_cluster] + alertas
     enriq = lista_enriquecimento(estados, flags, contatos_por, hoje, regua)
 
     saida = Path(pasta_saida) / hoje.isoformat()
@@ -181,6 +198,11 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         out(f"  ocorrência {r.arquivo}: {r.aceitas}/{r.linhas} aceitas, contato identificado em "
             f"{r.contato_identificado}" + (f" · avisos {dict(r.avisos)}" if r.avisos else "")
             + (f" · rejeitadas {dict(r.rejeitadas)}" if r.rejeitadas else ""))
+    if regua.clusters:
+        por_cluster = defaultdict(int)
+        for e in estados.values():
+            por_cluster[e.cluster_atual] += 1
+        out("  clusters: " + " · ".join(f"{k} {v}" for k, v in sorted(por_cluster.items())))
     out(f"  enriquecimento: {len(enriq)} clientes")
     for a in alertas:
         out(f"  ALERTA: {a}")
@@ -207,6 +229,7 @@ def main():
     ap.add_argument("--estado", default="estado")
     ap.add_argument("--saida", default="saida")
     ap.add_argument("--regua", help="arquivo de regras (padrão: regras/regua.json)")
+    ap.add_argument("--clusters", help="regras de cluster da empresa (.json, lista como a tabela clusters)")
     a = ap.parse_args()
     if a.portal and not a.acoes:
         ap.error("--portal exige --acoes")
@@ -217,10 +240,12 @@ def main():
         rel = preparar_base(a.empresa, a.base_bruta, base)
         print(f"BASE BRUTA: {rel['clientes']} clientes, {rel['contatos']} contatos → {base}/")
         a.clientes, a.carteira = a.clientes or base / "clientes.csv", a.carteira or base / "contatos.csv"
+        a.atributos = base / "atributos.csv"
     if not a.clientes or not a.carteira:
         ap.error("informe --clientes e --carteira, ou --empresa com --base-bruta")
     rodar_dia(a.clientes, a.carteira, a.retornos, a.data, a.layouts, a.parcelas, a.acoes, a.portal,
-              a.estado, a.saida, a.regua, ocorrencias=a.ocorrencias, entrada=a.empresa)
+              a.estado, a.saida, a.regua, ocorrencias=a.ocorrencias, entrada=a.empresa, clusters=a.clusters,
+              atributos=getattr(a, "atributos", None))
 
 
 if __name__ == "__main__":

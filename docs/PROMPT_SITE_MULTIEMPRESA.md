@@ -3,9 +3,10 @@
 O site já existe (Hostinger Horizons). Este prompt pede **só as mudanças** para o site
 atender várias empresas clientes, cada uma vendo apenas os próprios dados.
 
-Antes de colar: aplique no Supabase a migração
-`supabase/migrations/20260928000001_multiempresa.sql` (SQL Editor › New query › colar ›
-Run). Sem ela, o site novo não funciona. A chave usada no site continua a mesma
+Antes de colar: aplique no Supabase, nesta ordem, as migrações
+`supabase/migrations/20260928000001_multiempresa.sql` e
+`supabase/migrations/20260928000002_clusters.sql` (SQL Editor › New query › colar ›
+Run, uma de cada vez). Sem elas, o site novo não funciona. A chave usada no site continua a mesma
 (anon/pública). **Nunca** entregue a chave `service_role` para a ferramenta do site.
 
 ---
@@ -101,6 +102,47 @@ todo o resto do site como está (visual, login, páginas), mudando só o que vem
 ## Painel (/painel) e Comitê (/comite)
 - kpis filtrado pela empresa. Comitê lista saidas/{slug}/comite/.
 
+## Clusters (/clusters) — admin e planejamento (os demais papéis só veem)
+O cluster é a segmentação do cliente: a empresa escolhe quais dados da base definem
+cada grupo e o que muda na operação para ele. O código do cluster aparece na TAG.
+- Tabela clusters (id, empresa_id, ordem, codigo, nome, condicoes jsonb, pacote,
+  revalida_dias, so_digital, voz_d0, canais_bloqueados text[], ativo, atualizado_em,
+  atualizado_por), sempre filtrada pela empresa selecionada, ordenada por ordem.
+- Lista em cartões, na ordem, com: código (chip), nome, as condições em frase
+  ("PRODUTO é VEICULO e Saldo ≥ 5.000"), o que muda (pacote, "só digital", "voz no D0",
+  canais bloqueados), switch Ativo e botões Editar, Subir/Descer (troca o valor de ordem
+  com o vizinho) e Excluir (com confirmação).
+- Texto no topo: "Vale o primeiro cluster da lista cujas condições batem todas. Quem não
+  bate em nenhum fica no cluster padrão (ticket × atraso: A1…B3). Mudanças valem a partir
+  da rotina do dia seguinte."
+- Formulário (novo/editar):
+  - Código: 1 a 4 letras maiúsculas ou números (converta para maiúsculas; sem hífen).
+    Nome: texto livre.
+  - Condições (todas precisam bater), lista com "+ condição". Cada linha:
+    Campo (select): primeiro os calculados — "Saldo total" (saldo), "Dias de atraso"
+    (dias_atraso), "Quantidade de contratos" (qtd_contratos) — e depois as colunas da base
+    da empresa, lidas de empresas.colunas_base.colunas (cada item tem nome e tipo
+    'numero' ou 'texto'). Se colunas_base estiver vazio, mostre "Envie a primeira base
+    bruta para liberar as colunas da empresa" e permita digitar o nome da coluna.
+    Operador (select): é igual a (=), é diferente de (!=), maior que (>), maior ou igual
+    (>=), menor que (<), menor ou igual (<=), está entre (em), não está entre (nao_em),
+    contém (contem), está vazio (vazio), está preenchido (preenchido). Para campos do tipo
+    número mostre primeiro os de comparação.
+    Valor: campo de texto; para "em"/"nao_em", campo de etiquetas (vários valores) e
+    grave como lista; para vazio/preenchido, sem valor.
+    Grave condicoes como array JSON: [{"campo": "...", "op": "...", "valor": ...}].
+  - O que muda: Pacote de enriquecimento (texto, sugestões: básico, básico + WhatsApp
+    válido, completo, completo + novos telefones, completo + localizador), Revalidar
+    contatos a cada N dias (número, padrão 90), Só digital (switch: sem agente virtual e
+    discador), Voz no D0 do preventivo (switch), Canais bloqueados (checkboxes: WhatsApp,
+    RCS, Agente virtual, Discador, SMS, E-mail — valores whatsapp, rcs, agente_voz,
+    discador, sms, email).
+  - Ordem: novo cluster entra no fim (maior ordem + 10).
+  - Erros do banco em português: código repetido → "Já existe um cluster com este código";
+    código inválido → "Use 1 a 4 letras ou números, sem hífen".
+- Abaixo da lista, "Clientes por cluster na última rotina": leia ultima_execucao da
+  empresa e mostre resumo.clusters (código → quantidade) em barras.
+
 ## Empresas (/empresas) — só equipe MotorCob com papel admin
 - Tabela: nome, slug, ativa (switch → update empresas set ativa).
 - Botão "Nova empresa": nome e slug (sugira o slug a partir do nome: minúsculas, sem
@@ -116,6 +158,7 @@ todo o resto do site como está (visual, login, páginas), mudando só o que vem
   escolher "Equipe MotorCob" grava empresa_id = null e equipe = true.
 - Admin de empresa (equipe = false): vê só os usuários da própria empresa e altera
   papel e ativo deles; não vê a coluna Empresa.
+- No menu, "Clusters" fica logo abaixo de "Enviar arquivos".
 - Texto de ajuda: "Para criar um acesso: Supabase › Authentication › Users › Add user
   (marque Auto Confirm). O usuário entra sem empresa e sem acesso; escolha a empresa e o
   papel aqui."
@@ -127,6 +170,8 @@ todo o resto do site como está (visual, login, páginas), mudando só o que vem
 
 1. Entre com o seu usuário (equipe MotorCob): o seletor "Empresa" aparece no topo.
 2. Em **Empresas**, crie a primeira empresa cliente.
-3. Crie um usuário de teste dessa empresa (Supabase › Add user) e, em **Usuários**,
+3. Em **Clusters**, crie os clusters da empresa (as colunas da base aparecem depois do
+   primeiro envio de base bruta processado pela rotina).
+4. Crie um usuário de teste dessa empresa (Supabase › Add user) e, em **Usuários**,
    coloque-o na empresa. Entre com ele e confira que não aparece seletor de empresa e
    que ele não vê nada de outra empresa.

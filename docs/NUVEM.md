@@ -32,6 +32,7 @@ ordem, › Run. Cada um deve terminar sem erro:
 1. `20260925000001_motorcob.sql` (banco inicial)
 2. `20260928000001_multiempresa.sql` (várias empresas; quem já era admin vira equipe
    MotorCob; dado que já existia vai para a empresa `legado`)
+3. `20260928000002_clusters.sql` (clusters de cada empresa, definidos no site)
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 
@@ -90,7 +91,8 @@ A partir daí, o fluxo diário é:
    fornecedor e parcelas quando houver.
 2. No horário agendado, o Mac roda `scripts/rodar_dia.sh`, que: atualiza o motor
    (`git pull`) → para cada empresa ativa, baixa os envios pendentes → converte a base
-   bruta pelo `empresas/<slug>.json` → liga cada ocorrência ao contato que o motor mandou
+   bruta pelo `empresas/<slug>.json` → lê os clusters que a empresa definiu no site →
+   liga cada ocorrência ao contato que o motor mandou
    acionar → roda o motor → publica TAG, trilha, fila do dia e arquivos → marca cada envio
    como processado (ou erro, com o motivo) e registra a execução da empresa com os
    alertas. Uma empresa com erro não impede as outras.
@@ -109,5 +111,6 @@ Com um Postgres 15+ vazio:
 psql -d sb -f supabase/testes/stub_supabase.sql
 psql -d sb -f supabase/migrations/20260925000001_motorcob.sql
 psql -d sb -f supabase/migrations/20260928000001_multiempresa.sql
-python supabase/testes/testar_rls.py      # 59 verificações por papel e por empresa
+psql -d sb -f supabase/migrations/20260928000002_clusters.sql
+python supabase/testes/testar_rls.py      # 74 verificações por papel e por empresa
 ```

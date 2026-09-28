@@ -28,6 +28,7 @@ from pathlib import Path
 
 from . import normalizacao as norm
 from .certificacao import Evento
+from .cluster import tipos_das_colunas
 from .ingestao import LayoutInvalido, _mascarar, _sim
 from .taxonomia import CANAIS_EMAIL, TAXONOMIA
 
@@ -172,6 +173,7 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     col = layout.colunas
     arquivos = sorted(arquivos, key=lambda p: (data_do_arquivo(p), p.name))
     rel = {"arquivos": [], "rejeitadas": Counter()}
+    colunas_atrib: list[str] = []   # colunas da base que viram atributos (para as regras de cluster)
     primeira: dict[str, date] = {}
     ultimo: dict[str, tuple[date, list[dict]]] = {}
     contatos: dict[tuple[str, str], dict] = {}
@@ -187,6 +189,10 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
             ausentes = sorted({c for c in usadas if c not in nomes})
             if ausentes:
                 raise LayoutInvalido(f"{arq.name}: colunas ausentes no arquivo {ausentes}")
+            # contato, CPF e ID não viram atributo: só o que descreve o cliente/contrato
+            pessoais = {col["id_cliente"], col.get("cpf")} | {t["coluna"] for t in tel_cols} \
+                | {t.get("whatsapp") for t in tel_cols} | set(layout.emails)
+            colunas_atrib = [c for c in nomes if c and c not in pessoais]
             n = 0
             for linha in leitor:
                 n += 1
@@ -215,7 +221,8 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                 linhas_arq[idc].append({
                     "id_contrato": (linha[col["id_contrato"]] or "").strip() if "id_contrato" in col else "",
                     "saldo": saldo, "atraso": atraso, "entrada": entrada,
-                    "bloqueio": (linha[col["bloqueio"]] or "").strip() if "bloqueio" in col else ""})
+                    "bloqueio": (linha[col["bloqueio"]] or "").strip() if "bloqueio" in col else "",
+                    "atributos": {c: (linha.get(c) or "").strip() for c in colunas_atrib}})
                 for t in tel_cols:
                     tel = norm.telefone(linha[t["coluna"]])
                     if tel:
@@ -254,6 +261,16 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
         for (idc, contato), c in sorted(contatos.items()):
             w.writerow([idc, contato, c["tipo"], layout.origem, c["cpf"] or "", int(c["wa"]),
                         c["atualizado"].isoformat()])
+    # atributos do contrato de maior saldo de cada cliente (arquivo mais recente)
+    todas = sorted({c for _, ls in ultimo.values() for l in ls for c in l["atributos"]},
+                   key=lambda c: (colunas_atrib.index(c) if c in colunas_atrib else len(colunas_atrib), c))
+    repres = {idc: max(ls, key=lambda l: l["saldo"])["atributos"] for idc, (_, ls) in ultimo.items()}
+    with open(pasta / "atributos.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(["id_cliente"] + todas)
+        for idc in sorted(repres):
+            w.writerow([idc] + [repres[idc].get(c, "") for c in todas])
+    rel["colunas"] = tipos_das_colunas(list(repres.values()), todas)
     rel["clientes"] = len(ultimo)
     rel["contatos"] = len(contatos)
     rel["fora_da_base"] = len(set(ultimo) - presentes_ultimo) if layout.base_completa else 0

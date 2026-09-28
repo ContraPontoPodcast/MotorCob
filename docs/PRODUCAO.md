@@ -97,6 +97,11 @@ Gera o Excel do Real x Previsto e os KPIs em `~/MotorCob-dados/saida/comite/2026
   vários números no dia (discador, agente virtual) e a ocorrência não diz qual, ela conta
   para a TAG do cliente mas não certifica nenhum número. Mande a ocorrência até a manhã
   seguinte: a TAG de um dia é fechada na rotina do dia seguinte.
+- **Clusters da empresa:** definidos no site (página Clusters), sobre qualquer coluna da
+  base bruta e sobre saldo, dias de atraso e quantidade de contratos. Vale a primeira
+  regra que bate; quem não bate fica no padrão ticket × atraso. Regra com erro ou coluna
+  que não existe na base aparece nos alertas da rotina (`CLUSTER: ...`) e não para nada.
+  Mudar as regras revisa o cluster atual de todos na rotina seguinte; o de origem não muda.
 - **Base bruta:** cada arquivo recebido fica em `bruto/` e todos são relidos a cada
   rotina; vale o dado mais recente de cada cliente. Com `"base_completa": true`, quem não
   está no arquivo mais recente sai das ações (bloqueio `fora_da_base`).

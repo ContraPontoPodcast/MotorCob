@@ -5,6 +5,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20260925000001_motorcob.sql
     (opcional, para testar a migração com dado antigo: psql -d sb -f supabase/testes/dados_legado.sql)
     psql -d sb -f supabase/migrations/20260928000001_multiempresa.sql
+    psql -d sb -f supabase/migrations/20260928000002_clusters.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -116,6 +117,22 @@ checar("usuário não registra acesso em outra empresa", False, f"insert into pu
 checar("usuário não registra acesso em nome de outro", False, f"insert into public.acessos (empresa_id,usuario,acao,alvo) values ({EA},'{u['plan']}','download','x')", "authenticated", u["oper"])
 checar("operação não lê auditoria", True, "select count(*) from public.acessos", "authenticated", u["oper"], 0)
 checar("gestão A lê auditoria da A", True, "select count(*) from public.acessos", "authenticated", u["gest"], 1)
+# clusters da empresa
+checar("planejamento A cria cluster na A", True, f"insert into public.clusters (empresa_id,ordem,codigo,nome,condicoes,canais_bloqueados) values ({EA},10,'VE','Veículo','[{{\"campo\":\"PRODUTO\",\"op\":\"=\",\"valor\":\"VEICULO\"}}]','{{whatsapp}}')", "authenticated", u["plan"])
+checar("cluster grava quem alterou", True, "select atualizado_por is not null from public.clusters where codigo='VE'", valor="t")
+checar("planejamento A não cria cluster na B", False, f"insert into public.clusters (empresa_id,codigo) values ({EB},'XX')", "authenticated", u["plan"])
+checar("operação não cria cluster", False, f"insert into public.clusters (empresa_id,codigo) values ({EA},'OP')", "authenticated", u["oper"])
+checar("código com hífen é recusado (quebraria a TAG)", False, f"insert into public.clusters (empresa_id,codigo) values ({EA},'A-1')", "authenticated", u["plan"])
+checar("canal desconhecido é recusado", False, f"insert into public.clusters (empresa_id,codigo,canais_bloqueados) values ({EA},'FX','{{fax}}')", "authenticated", u["plan"])
+checar("código repetido na mesma empresa é recusado", False, f"insert into public.clusters (empresa_id,codigo) values ({EA},'VE')", "authenticated", u["plan"])
+checar("mesmo código em outra empresa pode", True, f"insert into public.clusters (empresa_id,codigo) values ({EB},'VE')", "authenticated", u["admin"])
+checar("operação A vê só os clusters da A", True, "select count(*) from public.clusters", "authenticated", u["oper"], 1)
+checar("operação B vê só os clusters da B", True, "select count(*) from public.clusters", "authenticated", u["operb"], 1)
+checar("operação não altera cluster (0 linhas)", True, "with x as (update public.clusters set pacote='x' returning 1) select count(*) from x", "authenticated", u["oper"], 0)
+checar("planejamento A não altera cluster da B (0 linhas)", True, f"with x as (update public.clusters set pacote='x' where empresa_id={EB} returning 1) select count(*) from x", "authenticated", u["plan"], 0)
+checar("planejamento A altera e apaga cluster da A", True, f"update public.clusters set so_digital=true where empresa_id={EA}; delete from public.clusters where empresa_id={EA} and codigo='VE'; insert into public.clusters (empresa_id,codigo) values ({EA},'VE')", "authenticated", u["plan"])
+checar("operação lê colunas_base da própria empresa", True, "select count(*) from public.empresas where colunas_base is null", "authenticated", u["oper"], 1)
+checar("operação não grava colunas_base (0 linhas)", True, "with x as (update public.empresas set colunas_base='[]' returning 1) select count(*) from x", "authenticated", u["oper"], 0)
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

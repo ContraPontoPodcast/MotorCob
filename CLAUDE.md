@@ -138,6 +138,13 @@ de outra pessoa pela certificação e a rotação segue.
 - `motor/taxonomia.py`: retorno bruto de cada canal → `Nivel` + pesos + restrições.
 - `motor/ingestao.py` + `layouts/*.json`: retornos por layout de fornecedor, base de
   clientes (agrega contratos), carteira de contatos e parcelas.
+- `motor/cluster.py`: cluster por regras da empresa (tabela `clusters`, editada no site).
+  Condições sobre colunas da base bruta (`base/atributos.csv`, contrato de maior saldo;
+  sem contato/CPF) e campos calculados (saldo, dias_atraso, qtd_contratos); vale a
+  primeira regra que bate, senão o padrão ticket × atraso de `regua.json`. Cada cluster
+  define pacote, revalidação, só digital, voz no D0 e canais bloqueados
+  (`Regua.com_clusters`). Mudou a regra → `cluster_versao` muda → todos revisam o cluster
+  atual na rotina seguinte. Regra inválida vira alerta, nunca derruba a rotina.
 - `motor/entrada.py` + `empresas/<slug>.json`: arquivos da empresa cliente. Base bruta
   (telefones/e-mails em colunas) → `base/clientes.csv` + `base/contatos.csv`. Ocorrência
   (CPC ou não por tentativa, em geral sem o contato) → eventos: o de-para da empresa leva

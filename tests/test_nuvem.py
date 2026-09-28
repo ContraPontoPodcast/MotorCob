@@ -214,6 +214,23 @@ class TestSincronizar(unittest.TestCase):
         env = next(e for e in self.falso.tabelas["envios"] if e["id"] == 2001)
         self.assertEqual((env["status"], env["relatorio"]["contato_identificado"]), ("processado", 1))
 
+    def test_clusters_do_site_e_colunas_da_base(self):
+        self.falso.tabelas["clusters"] = [
+            {"id": 1, "empresa_id": 2, "ordem": 10, "codigo": "VE", "ativo": True,
+             "condicoes": [{"campo": "PRODUTO", "op": "=", "valor": "VEICULO"}], "pacote": "completo"},
+            {"id": 2, "empresa_id": 2, "ordem": 20, "codigo": "IN", "ativo": False, "condicoes": []},
+            {"id": 3, "empresa_id": 1, "ordem": 10, "codigo": "TD", "ativo": True, "condicoes": []}]
+        r = self._dia(date(2026, 9, 2), empresa="beta")["beta"]
+        est = {l["id_cliente"]: l["cluster_atual"] for l in self.falso.tabelas["estado_cliente"]}
+        self.assertEqual(est["X0003"], "VE")                 # regra da beta
+        self.assertNotIn("TD", est.values())                 # regra da alfa não vaza
+        self.assertNotIn("IN", est.values())                 # inativa não vale
+        self.assertEqual(r["resumo"]["clusters"]["VE"], 1)
+        beta = next(e for e in self.falso.tabelas["empresas"] if e["slug"] == "beta")
+        nomes = [c["nome"] for c in beta["colunas_base"]["colunas"]]
+        self.assertIn("PRODUTO", nomes)
+        self.assertFalse({"TEL1", "EMAIL", "CPF", "COD_CLIENTE"} & set(nomes))   # nada pessoal
+
     def test_falha_de_uma_empresa_nao_para_as_outras(self):
         self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["tipo"] != "clientes"]
         res = self._dia(date(2026, 9, 25))

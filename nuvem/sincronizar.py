@@ -31,6 +31,7 @@ scripts/configurar_nuvem.sh.
 import argparse
 import calendar
 import csv
+import json
 import os
 import re
 import sys
@@ -198,6 +199,16 @@ def _relatorio_envio(e, destino, r, rel_base=None):
                           "quarentena": dict(rel.desconhecidos)}
 
 
+def baixar_clusters(sb: Supabase, pasta: Path, empresa_id) -> list[dict]:
+    """Regras de cluster ativas da empresa; cópia em config/clusters.json (auditoria da rodada)."""
+    regras = sb.selecionar("clusters", {"empresa_id": f"eq.{empresa_id}", "ativo": "eq.true"},
+                           ordem="ordem.asc,codigo.asc") or []
+    (pasta / "config").mkdir(parents=True, exist_ok=True)
+    (pasta / "config" / "clusters.json").write_text(json.dumps(regras, ensure_ascii=False, indent=1),
+                                                    encoding="utf-8")
+    return regras
+
+
 def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, out=print,
                             pasta_empresas: Path = PASTA_EMPRESAS):
     import rodar_dia
@@ -218,6 +229,10 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
         if tem_bruto:
             rel_base = rodar_dia.preparar_base(entrada, pasta / "bruto", pasta / "base")
             out(f"  base bruta: {rel_base['clientes']} clientes, {rel_base['contatos']} contatos")
+            # só nomes e tipos das colunas, para o site montar as regras de cluster
+            sb.atualizar("empresas", {"id": f"eq.{eid}"},
+                         {"colunas_base": {"colunas": rel_base["colunas"], "atualizado_em": agora()}})
+        clusters = baixar_clusters(sb, pasta, eid)
         for obrig in ("base/clientes.csv", "base/contatos.csv"):
             if not (pasta / obrig).exists():
                 raise RuntimeError(f"falta a base da empresa {slug}: envie a base pelo site (Enviar arquivos)")
@@ -229,7 +244,8 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
                                 data, RAIZ / "layouts", parcelas if parcelas.exists() else None,
                                 acoes if tem_portal else None, portal if tem_portal else None,
                                 pasta / "estado", pasta / "saida", out=out,
-                                ocorrencias=pasta / "ocorrencias" if entrada else None, entrada=entrada)
+                                ocorrencias=pasta / "ocorrencias" if entrada else None, entrada=entrada,
+                                clusters=clusters, atributos=pasta / "base" / "atributos.csv")
 
         sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid), conflito="empresa_id,id_cliente")
         n_trilha = publicar_trilha(sb, pasta / "estado", eid)
@@ -244,6 +260,7 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
 
         estados = Counter(e.estado for e in r["estados"].values())
         resumo = {"clientes": len(r["estados"]), "estados": dict(estados),
+                  "clusters": dict(Counter(e.cluster_atual for e in r["estados"].values())),
                   "fila": dict(Counter(l["canal"] for l in fila if not l["reserva"])),
                   "reserva": sum(l["reserva"] for l in fila), "enriquecimento": len(r["enriquecimento"]),
                   "dias_processados": r["dias_processados"], "trilha_enviada": n_trilha,
