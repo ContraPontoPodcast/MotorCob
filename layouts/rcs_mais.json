@@ -1,0 +1,24 @@
+{
+  "fornecedor": "rcs_mais",
+  "canal": "rcs",
+  "arquivo": "rcs_mais_*.csv",
+  "formato_data": "%d/%m/%Y %H:%M",
+  "delimitador": ";",
+  "decimal": ",",
+  "colunas": {
+    "id_cliente": "ID_CLIENTE",
+    "contato": "MSISDN",
+    "data": "DATA_HORA",
+    "resultado": "EVENTO",
+    "id_externo": "ID",
+    "custo": "TARIFA"
+  },
+  "resultados": {
+    "ENTREGUE": "entregue",
+    "FALHA_ENTREGA": "nao_entregue",
+    "LIDO": "lido",
+    "INTERACAO": "interacao",
+    "ID_CONFIRMADA": "identidade_confirmada",
+    "LOGIN_PORTAL": "acesso_portal_autenticado"
+  }
+}
