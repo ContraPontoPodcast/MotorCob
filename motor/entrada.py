@@ -96,16 +96,32 @@ class Entrada:
     empresa: str
     base: LayoutBase
     ocorrencias: list[LayoutOcorrencia]
+    enriquecimento: list = field(default_factory=list)  # [LayoutEnriquecimento]
+
+
+def _sem_doc(d: dict) -> dict:
+    """Chaves que começam com '_' são comentários no arquivo de entrada."""
+    return {k: v for k, v in d.items() if not k.startswith("_")}
 
 
 def validar_entrada(dados: dict) -> Entrada:
     emp = dados.get("empresa") or "?"
     try:
-        base = LayoutBase(**dados["base"])
+        base = LayoutBase(**_sem_doc(dados["base"]))
         ocs = dados.get("ocorrencia") or []
-        ocs = [LayoutOcorrencia(**o) for o in (ocs if isinstance(ocs, list) else [ocs])]
+        ocs = [LayoutOcorrencia(**_sem_doc(o)) for o in (ocs if isinstance(ocs, list) else [ocs])]
+        enr = dados.get("enriquecimento") or []
+        enr = [LayoutEnriquecimento(**_sem_doc(x)) for x in (enr if isinstance(enr, list) else [enr])]
     except (TypeError, KeyError) as e:
         raise LayoutInvalido(f"{emp}: {e}") from None
+    for x in enr:
+        if set(x.chave) - {"cpf", "id_cliente"} or len(x.chave) != 1:
+            raise LayoutInvalido(f"{emp}: enriquecimento {x.arquivo}: chave deve ser cpf ou id_cliente")
+        if not x.telefone.get("numero") and not x.emails:
+            raise LayoutInvalido(f"{emp}: enriquecimento {x.arquivo}: sem telefone.numero nem emails")
+        fora = set(x.telefone) - {"ddd", "numero", "whatsapp", "rcs", "nao_perturbe", "score", "ranking"}
+        if fora:
+            raise LayoutInvalido(f"{emp}: enriquecimento {x.arquivo}: campos de telefone desconhecidos {sorted(fora)}")
     if "id_cliente" not in base.colunas:
         raise LayoutInvalido(f"{emp}: base sem coluna id_cliente")
     if "saldo" not in base.colunas or not ({"dias_atraso", "vencimento"} & set(base.colunas)):
@@ -125,7 +141,7 @@ def validar_entrada(dados: dict) -> Entrada:
         if ruins:
             raise LayoutInvalido(f"{emp}: resultados sem significado {ruins} "
                                  f"(use {sorted(GENERICOS)} ou um resultado da taxonomia)")
-    return Entrada(emp, base, ocs)
+    return Entrada(emp, base, ocs, enr)
 
 
 def carregar_entrada(caminho: str | Path) -> Entrada:
@@ -178,6 +194,7 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     ultimo: dict[str, tuple[date, list[dict]]] = {}
     contatos: dict[tuple[str, str], dict] = {}
     presentes_ultimo: set[str] = set()
+    documentos: dict[str, str] = {}   # id_cliente -> CPF/CNPJ (só dígitos), para ligar o enriquecimento
     for n_arq, arq in enumerate(arquivos):
         dia = data_do_arquivo(arq)
         linhas_arq: dict[str, list[dict]] = defaultdict(list)
@@ -218,6 +235,9 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                     rel["rejeitadas"]["saldo, atraso ou data inválidos"] += 1
                     continue
                 cpf = norm.cpf(linha[col["cpf"]]) if "cpf" in col and (linha[col["cpf"]] or "").strip() else None
+                doc = documento(linha[col["cpf"]]) if "cpf" in col else None
+                if doc:
+                    documentos[idc] = doc
                 linhas_arq[idc].append({
                     "id_contrato": (linha[col["id_contrato"]] or "").strip() if "id_contrato" in col else "",
                     "saldo": saldo, "atraso": atraso, "entrada": entrada,
@@ -255,12 +275,15 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                 w.writerow([idc, l["id_contrato"], entrada.isoformat(), f"{l['saldo']:.2f}",
                             max(l["atraso"] - (dia - entrada).days, 0),
                             "fora_da_base" if fora else l["bloqueio"]])
-    with open(pasta / "contatos.csv", "w", newline="", encoding="utf-8") as f:
+    _gravar_contatos(pasta / "contatos.csv", [
+        {"id_cliente": idc, "contato": contato, "tipo": c["tipo"], "origem": layout.origem, "cpf": c["cpf"] or "",
+         "whatsapp_valido": int(c["wa"]), "atualizado_em": c["atualizado"].isoformat()}
+        for (idc, contato), c in sorted(contatos.items())])
+    with open(pasta / "pessoas.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, delimiter=";")
-        w.writerow(["id_cliente", "contato", "tipo", "origem", "cpf", "whatsapp_valido", "atualizado_em"])
-        for (idc, contato), c in sorted(contatos.items()):
-            w.writerow([idc, contato, c["tipo"], layout.origem, c["cpf"] or "", int(c["wa"]),
-                        c["atualizado"].isoformat()])
+        w.writerow(["id_cliente", "documento"])
+        for idc in sorted(documentos):
+            w.writerow([idc, documentos[idc]])
     # atributos do contrato de maior saldo de cada cliente (arquivo mais recente)
     todas = sorted({c for _, ls in ultimo.values() for l in ls for c in l["atributos"]},
                    key=lambda c: (colunas_atrib.index(c) if c in colunas_atrib else len(colunas_atrib), c))
@@ -276,6 +299,162 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     rel["fora_da_base"] = len(set(ultimo) - presentes_ultimo) if layout.base_completa else 0
     rel["rejeitadas"] = dict(rel["rejeitadas"])
     return rel
+
+
+# ------------------------------------------------------------------ retorno do enriquecimento
+CAMPOS_CONTATO = ("id_cliente", "contato", "tipo", "origem", "cpf", "whatsapp_valido", "atualizado_em",
+                  "rcs_valido", "nao_perturbe", "score_bureau", "ranking", "pertence")
+
+
+def documento(v) -> str | None:
+    """CPF/CNPJ só com dígitos e zeros à esquerda recompostos (planilha costuma comer o zero)."""
+    d = re.sub(r"\D", "", str(v or ""))
+    if not d or len(d) > 14 or set(d) == {"0"}:
+        return None
+    return d.zfill(11) if len(d) <= 11 else d.zfill(14)
+
+
+def _gravar_contatos(caminho: Path, linhas: list[dict]):
+    tmp = caminho.with_suffix(".tmp")
+    with open(tmp, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=CAMPOS_CONTATO, delimiter=";", extrasaction="ignore")
+        w.writeheader()
+        w.writerows(linhas)
+    tmp.replace(caminho)
+
+
+@dataclass(frozen=True)
+class LayoutEnriquecimento:
+    """Arquivo que volta do bureau. Colunas com o mesmo nome repetido (FONE, FONE, ...) são lidas
+    pela posição: o k-ésimo FONE anda com o k-ésimo DDD, POSSUI-WHATSAPP etc."""
+    arquivo: str
+    chave: dict[str, str]                 # {"cpf": "CPF/CNPJ"} ou {"id_cliente": "COD"}
+    telefone: dict[str, str] = field(default_factory=dict)  # ddd, numero, whatsapp, rcs, nao_perturbe, score, ranking
+    emails: list[str] = field(default_factory=list)
+    pertence: dict = field(default_factory=dict)  # {"score_min_sim": 4, "score_max_nao": 1} (opcional)
+    delimitador: str = ";"
+    encoding: str = "utf-8-sig"
+    valores_sim: list[str] = field(default_factory=lambda: ["1", "s", "sim", "true", "x", "y", "yes"])
+    valores_nao: list[str] = field(default_factory=lambda: ["0", "n", "nao", "não", "false", "no"])
+
+
+def _flag(v, lay: LayoutEnriquecimento):
+    t = (v or "").strip().casefold()
+    return True if t in lay.valores_sim else False if t in lay.valores_nao else None
+
+
+def aplicar_enriquecimento(arquivos: list[Path], lay: LayoutEnriquecimento, pasta_base: str | Path) -> dict:
+    """Junta os retornos do bureau em base/contatos.csv (números novos e marcas atualizadas).
+
+    Liga pelo CPF/CNPJ (base/pessoas.csv ou coluna cpf dos contatos) ou pelo id_cliente. O
+    arquivo mais recente vale por último. Nada do arquivo além de contato e marcas é guardado.
+    """
+    pasta = Path(pasta_base)
+    arq_cont = pasta / "contatos.csv"
+    with open(arq_cont, newline="", encoding="utf-8") as f:
+        contatos = {(l["id_cliente"], l["contato"]): dict(l) for l in csv.DictReader(f, delimiter=";")}
+    ids_de = defaultdict(set)
+    if (pasta / "pessoas.csv").exists():
+        with open(pasta / "pessoas.csv", newline="", encoding="utf-8") as f:
+            for l in csv.DictReader(f, delimiter=";"):
+                ids_de[l["documento"]].add(l["id_cliente"])
+    for (idc, _), l in contatos.items():
+        d = documento(l.get("cpf"))
+        if d:
+            ids_de[d].add(idc)
+    rel = {"arquivos": [], "sem_cliente": 0, "telefones_novos": 0, "telefones_atualizados": 0, "emails_novos": 0}
+    tel = lay.telefone
+    for arq in sorted(arquivos, key=lambda p: (data_do_arquivo(p), p.name)):
+        dia = data_do_arquivo(arq).isoformat()
+        n = achados = 0
+        with open(arq, newline="", encoding=lay.encoding) as f:
+            leitor = csv.reader(f, delimiter=lay.delimitador)
+            cab = [c.strip() for c in next(leitor, [])]
+            pos = defaultdict(list)
+            for i, c in enumerate(cab):
+                pos[c].append(i)
+            usadas = list(lay.chave.values()) + [v for v in tel.values() if v] + list(lay.emails)
+            ausentes = sorted({c for c in usadas if c not in pos})
+            if ausentes:
+                raise LayoutInvalido(f"{arq.name}: colunas ausentes no arquivo {ausentes}")
+            grupos = len(pos[tel["numero"]]) if tel.get("numero") else 0
+
+            def val(linha, campo, k=0):
+                nome = tel.get(campo) if campo in tel else campo
+                idx = pos.get(nome) or []
+                i = idx[k] if k < len(idx) else (idx[0] if len(idx) == 1 else None)
+                return linha[i].strip() if i is not None and i < len(linha) else ""
+
+            for linha in leitor:
+                n += 1
+                if "cpf" in lay.chave:
+                    ids = ids_de.get(documento(val(linha, lay.chave["cpf"])) or "", set())
+                else:
+                    ids = {x for x in [norm.id_cliente(val(linha, lay.chave["id_cliente"]))] if x}
+                if not ids:
+                    rel["sem_cliente"] += 1
+                    continue
+                achados += 1
+                for k in range(grupos):
+                    bruto = re.sub(r"\D", "", val(linha, "numero", k))
+                    # alguns bureaus já mandam o DDD dentro do número; só junta se faltar
+                    numero = norm.telefone(bruto) if len(bruto) >= 10 or not tel.get("ddd") \
+                        else norm.telefone(val(linha, "ddd", k) + bruto)
+                    if not numero:
+                        continue
+                    wa, rcs, np = (_flag(val(linha, c, k), lay) for c in ("whatsapp", "rcs", "nao_perturbe"))
+                    score = numero_ou_none(val(linha, "score", k)) if tel.get("score") else None
+                    ranking = numero_ou_none(val(linha, "ranking", k)) if tel.get("ranking") else None
+                    pert = ""
+                    if score is not None and lay.pertence.get("score_min_sim") is not None \
+                            and score >= lay.pertence["score_min_sim"]:
+                        pert = "sim"
+                    if score is not None and lay.pertence.get("score_max_nao") is not None \
+                            and score <= lay.pertence["score_max_nao"]:
+                        pert = "nao"
+                    for idc in ids:
+                        c = contatos.get((idc, numero))
+                        if c is None:
+                            c = contatos[(idc, numero)] = {"id_cliente": idc, "contato": numero, "tipo": "telefone",
+                                                           "origem": "enriquecimento", "cpf": "",
+                                                           "whatsapp_valido": 0}
+                            rel["telefones_novos"] += 1
+                        else:
+                            rel["telefones_atualizados"] += 1
+                        if wa is not None:
+                            c["whatsapp_valido"] = int(wa)
+                        if rcs is not None:
+                            c["rcs_valido"] = int(rcs)
+                        if np is not None:
+                            c["nao_perturbe"] = int(np)
+                        if score is not None:
+                            c["score_bureau"] = f"{score:g}"
+                        if ranking is not None:
+                            c["ranking"] = f"{ranking:g}"
+                        if pert:
+                            c["pertence"] = pert
+                        c["atualizado_em"] = dia
+                for ce in lay.emails:
+                    for k in range(len(pos[ce])):
+                        em = norm.email(linha[pos[ce][k]]) if pos[ce][k] < len(linha) else None
+                        if not em:
+                            continue
+                        for idc in ids:
+                            if (idc, em) not in contatos:
+                                contatos[(idc, em)] = {"id_cliente": idc, "contato": em, "tipo": "email",
+                                                       "origem": "enriquecimento", "cpf": "", "whatsapp_valido": 0}
+                                rel["emails_novos"] += 1
+                            contatos[(idc, em)]["atualizado_em"] = dia
+        rel["arquivos"].append({"arquivo": arq.name, "data": dia, "linhas": n, "clientes_encontrados": achados})
+    _gravar_contatos(arq_cont, [contatos[k] for k in sorted(contatos)])
+    return rel
+
+
+def numero_ou_none(v) -> float | None:
+    try:
+        return float(str(v).replace(",", ".")) if str(v).strip() else None
+    except ValueError:
+        return None
 
 
 # ------------------------------------------------------------------ escolhas do motor

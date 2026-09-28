@@ -38,6 +38,7 @@ class RegraCluster:
     so_digital: bool = False
     voz_d0: bool = False
     canais_bloqueados: tuple[str, ...] = ()
+    estrategia_id: int | None = None
 
     @property
     def bloqueados(self) -> set[str]:
@@ -103,7 +104,8 @@ def carregar_regras(linhas: list[dict]) -> tuple[list[RegraCluster], list[str]]:
         regras.append(RegraCluster(
             cod, str(l.get("nome") or ""), tuple(conds), str(l.get("pacote") or "básico"),
             int(l.get("revalida_dias") or 90), bool(l.get("so_digital")), bool(l.get("voz_d0")),
-            tuple(c for c in (l.get("canais_bloqueados") or []) if c in CANAIS)))
+            tuple(c for c in (l.get("canais_bloqueados") or []) if c in CANAIS),
+            l.get("estrategia_id")))
     return regras, avisos
 
 

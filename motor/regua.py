@@ -24,10 +24,39 @@ class Regua:
     dados: dict
     clusters: tuple = field(default=(), compare=False)   # regras de cluster da empresa (motor/cluster.py)
     versao_clusters: str = ""
+    estrategias: dict = field(default_factory=dict, compare=False)  # id -> partes do playbook (estrategia.py)
+    estrategia_padrao: int | None = None                           # da empresa, p/ quem não tem estratégia
+    canais_cfg: dict = field(default_factory=dict, compare=False)   # canal -> limites da empresa
+    _cache: dict = field(default_factory=dict, compare=False, repr=False)
 
-    def com_clusters(self, regras) -> "Regua":
+    def com_clusters(self, regras, estrategias: dict | None = None, padrao: int | None = None,
+                     canais: dict | None = None) -> "Regua":
         from .cluster import versao
-        return replace(self, clusters=tuple(regras), versao_clusters=versao(list(regras)))
+        return replace(self, clusters=tuple(regras), versao_clusters=versao(list(regras)),
+                       estrategias=dict(estrategias or {}), estrategia_padrao=padrao,
+                       canais_cfg=dict(canais or {}), _cache={})
+
+    def estrategia_de(self, cluster: str) -> int | None:
+        r = self._regra(cluster)
+        eid = r.estrategia_id if r and r.estrategia_id in self.estrategias else None
+        if eid is None and self.estrategia_padrao in self.estrategias:
+            eid = self.estrategia_padrao
+        return eid
+
+    def para(self, cluster: str) -> "Regua":
+        """Regras que valem para um cliente do cluster: playbook + estratégia do cluster."""
+        eid = self.estrategia_de(cluster)
+        if eid is None:
+            return self
+        if eid not in self._cache:
+            from .estrategia import aplicar
+            # a cópia não reaplica estratégia: para() sempre é chamado na régua da empresa
+            self._cache[eid] = replace(self, dados=aplicar(self.dados, self.estrategias[eid]), _cache={},
+                                       estrategias={}, estrategia_padrao=None)
+        return self._cache[eid]
+
+    def canal_cfg(self, canal: str) -> dict:
+        return self.canais_cfg.get(canal) or {}
 
     def _regra(self, codigo: str):
         return next((r for r in self.clusters if r.codigo == codigo), None)

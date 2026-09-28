@@ -16,11 +16,16 @@
       "bloqueio": "BLOQUEIO"
     },
     "telefones": [
-      {"coluna": "TEL1", "whatsapp": "WHATS_TEL1"},
+      {
+        "coluna": "TEL1",
+        "whatsapp": "WHATS_TEL1"
+      },
       "TEL2",
       "TEL3"
     ],
-    "emails": ["EMAIL"]
+    "emails": [
+      "EMAIL"
+    ]
   },
   "ocorrencia": [
     {
@@ -49,6 +54,32 @@
         "SEM RETORNO": "sem_contato",
         "OPT OUT": "opt_out"
       }
+    }
+  ],
+  "enriquecimento": [
+    {
+      "_doc": "Retorno do bureau: uma linha por CPF/CNPJ, até 8 telefones em colunas repetidas (DDD, FONE, ... lidas pela posição) e até 3 e-mails.",
+      "arquivo": "*-output*.csv",
+      "delimitador": ";",
+      "encoding": "utf-8-sig",
+      "chave": {
+        "cpf": "CPF/CNPJ"
+      },
+      "telefone": {
+        "ddd": "DDD",
+        "numero": "FONE",
+        "whatsapp": "POSSUI-WHATSAPP",
+        "rcs": "POSSUI-RCS",
+        "nao_perturbe": "NAO-PERTURBE",
+        "score": "SCORE",
+        "ranking": "RANKING"
+      },
+      "emails": [
+        "EMAIL-1",
+        "EMAIL-2",
+        "EMAIL-3"
+      ],
+      "pertence": {}
     }
   ]
 }

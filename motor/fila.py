@@ -20,6 +20,7 @@ from datetime import date, timedelta
 
 from .certificacao import Certificacao, Evento
 from .marcacao import Cliente, EstadoCliente, proximo_canal
+from .estrategia import normalizar, passa, resolver
 from .regua import CANAIS_VOZ, Regua
 
 FORA = {"INVALIDO", "CONTESTADO"}
@@ -35,19 +36,30 @@ def taxa_bloqueio_whatsapp(eventos: list[Evento], hoje: date, regua: Regua) -> t
     return (ruins / len(envios) if envios else 0.0), len(envios)
 
 
-def contatos_elegiveis(est: EstadoCliente, cluster: str, certs: list[Certificacao], flags: dict[str, dict],
-                       regua: Regua, freio_whatsapp: bool) -> dict[str, list[str]]:
-    """{canal: contatos em ordem de prioridade} para o cliente."""
+def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flags: dict[str, dict],
+               regua: Regua, freio_whatsapp: bool, sinais: dict[str, dict] | None = None) -> dict[str, list]:
+    """{canal: Certificacoes que podem receber, em ordem de prioridade}, antes do filtro da ação.
+
+    Aplica as travas que nenhuma estratégia desliga: contato inválido/contestado/"não pertence",
+    restrição do canal (opt-out, sem conta…), canal bloqueado pelo cluster ou desligado na
+    empresa, Não Perturbe na voz (se a empresa respeitar) e a trava do WhatsApp.
+    """
+    sinais = sinais or {}
     bloqueados = regua.canais_bloqueados(cluster)
-    validos = sorted((c for c in certs if c.status not in FORA), key=lambda c: -c.score)
+    validos = [c for c in certs if c.status not in FORA and sinais.get(c.contato, {}).get("pertence") != "nao"]
+    validos.sort(key=lambda c: (-c.score, sinais.get(c.contato, {}).get("ranking") or 99))  # estável
     loc = est.contato_localizador
     w = regua["whatsapp"]
     saida = {}
     for canal in regua["canais"]:
-        if canal in bloqueados:
+        cfg = regua.canal_cfg(canal)
+        if canal in bloqueados or cfg.get("ativo") is False:
             continue
         tipo = "email" if canal == "email" else "telefone"
         cands = [c for c in validos if c.tipo == tipo and not any(r.startswith(canal + ":") for r in c.restricoes)]
+        respeitar = cfg.get("respeitar_nao_perturbe")
+        if canal in CANAIS_VOZ if respeitar is None else respeitar:
+            cands = [c for c in cands if not sinais.get(c.contato, {}).get("nao_perturbe")]
         if canal == "whatsapp":
             ok = []
             for c in cands:
@@ -60,50 +72,64 @@ def contatos_elegiveis(est: EstadoCliente, cluster: str, certs: list[Certificaca
                                                   or x.contato == loc)) < w["numeros_nao_certificados"]:
                     ok.append(c)
             cands = ok
-        contatos = [c.contato for c in cands]
-        if loc in contatos:  # o contato que localizou o cliente vem primeiro
-            contatos.remove(loc)
-            contatos.insert(0, loc)
-        if canal in CANAIS_VOZ:
-            pass  # discador/agente: todos os números válidos, em ordem de score
-        elif est.estado in ("CPA", "CPB", "PRE", "QBR"):
-            contatos = contatos[:1]
-        else:
-            contatos = contatos[:1 if canal == "whatsapp" else regua["localizacao"]["numeros_digitais"]]
-        if contatos:
-            saida[canal] = contatos
+        primeiro = [c for c in cands if c.contato == loc]  # o contato que localizou o cliente vem primeiro
+        cands = primeiro + [c for c in cands if c.contato != loc]
+        if cands:
+            saida[canal] = cands
     return saida
 
 
-def _canais_do_passo(canais: list[str], eleg: dict, regua: Regua) -> list[tuple[str, str]]:
-    """Expande um passo da régua: substitutos, acompanhantes e reserva. [(canal, condição)]"""
-    out = []
-    for canal in canais:
-        if canal not in eleg and canal in regua["substituto"]:
-            canal = regua["substituto"][canal]
-        if canal in eleg:
-            out.append((canal, ""))
-        elif canal in regua["reserva"] and regua["reserva"][canal] in eleg:
-            out.append((regua["reserva"][canal], ""))
-            continue
-        else:
-            continue
-        for extra in regua["acompanha"].get(canal, []):
-            if extra in eleg:
-                out.append((extra, ""))
-        if canal in regua["reserva"] and regua["reserva"][canal] in eleg:
-            out.append((regua["reserva"][canal], f"se {canal} sem contato no dia"))
-    return out
+def _limite_padrao(canal: str, est: EstadoCliente, regua: Regua) -> int | None:
+    if canal in CANAIS_VOZ:
+        return None  # discador/agente: todos os números válidos, em ordem de score
+    if est.estado in ("CPA", "CPB", "PRE", "QBR"):
+        return 1
+    return 1 if canal == "whatsapp" else regua["localizacao"]["numeros_digitais"]
+
+
+def contatos_da_acao(acao: dict, cands: dict[str, list], est: EstadoCliente, flags: dict[str, dict],
+                     sinais: dict[str, dict], regua: Regua) -> list[str]:
+    """Contatos que recebem a ação: candidatos do canal que passam no filtro, até o limite."""
+    lista = [c.contato for c in cands.get(acao["canal"], [])
+             if passa(acao.get("contatos") or {}, c, sinais.get(c.contato, {}), flags.get(c.contato, {}))]
+    limite = acao.get("numeros") or _limite_padrao(acao["canal"], est, regua)
+    return lista[:limite] if limite else lista
+
+
+def contatos_elegiveis(est: EstadoCliente, cluster: str, certs: list[Certificacao], flags: dict[str, dict],
+                       regua: Regua, freio_whatsapp: bool, sinais: dict[str, dict] | None = None
+                       ) -> dict[str, list[str]]:
+    """{canal: contatos em ordem de prioridade} para o cliente, com o limite padrão de cada canal."""
+    cands = candidatos(est, cluster, certs, flags, regua, freio_whatsapp, sinais)
+    saida = {}
+    for canal in cands:
+        cs = contatos_da_acao({"canal": canal, "contatos": {}}, cands, est, flags, sinais or {}, regua)
+        if cs:
+            saida[canal] = cs
+    return saida
+
+
+def _disponiveis_cpc(cands, est, flags, sinais, regua) -> set[str]:
+    """Canais em que o cliente tem contato para a régua de CPC (com o filtro da estratégia)."""
+    acoes = regua.dados.get("cpc_acoes") or {}
+    if acoes:  # a estratégia define a ordem de CPC: só esses canais contam
+        cands = {c: v for c, v in cands.items() if c in acoes}
+    return {c for c in cands
+            if contatos_da_acao(acoes.get(c) or {"canal": c, "contatos": {}}, cands, est, flags, sinais, regua)}
 
 
 def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                certs: dict[tuple[str, str], Certificacao], flags: dict[str, dict],
-               parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None):
+               parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None,
+               sinais: dict[tuple[str, str], dict] | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
     disponiveis: {id_cliente: canais com contato elegível} (usado na rotação).
     flags: {contato: {"whatsapp_valido": bool, "atualizado_em": date|None}} do enriquecimento.
+    sinais: {(id_cliente, contato): {"pertence", "rcs", "nao_perturbe", "score_bureau", "ranking",
+             "origem"}} da base e do retorno do enriquecimento.
+    Cada cliente segue a estratégia do cluster dele (regua.para).
     """
     alertas = []
     taxa, envios = taxa_bloqueio_whatsapp(eventos or [], hoje, regua)
@@ -119,69 +145,110 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     certs_por = defaultdict(list)
     for (idc, _), c in certs.items():
         certs_por[idc].append(c)
+    sinais_por = defaultdict(dict)
+    for (idc, contato), s in (sinais or {}).items():
+        sinais_por[idc][contato] = s
 
     fila, disponiveis = [], {}
     prioridade = {e: i + 1 for i, e in enumerate(regua["hierarquia"])}
     for idc, est in estados.items():
-        eleg = contatos_elegiveis(est, est.cluster_atual, certs_por.get(idc, []), flags, regua, freio)
-        disponiveis[idc] = set(eleg)
+        rc = regua.para(est.cluster_atual)
+        sin = sinais_por.get(idc, {})
+        cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio, sin)
+        disp = _disponiveis_cpc(cands, est, flags, sin, rc)
+        disponiveis[idc] = disp
         if janela is None or est.estado in ("BLQ", "LIQ", "COL"):
             continue
-        passo = _passo_do_dia(est, clientes.get(idc), hoje, regua, eleg, parcelas.get(idc, []))
+        passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp)
         if passo is None:
             continue
-        nome_regua, rotulo, canais, data_fixa = passo
-        for canal, condicao in _canais_do_passo(canais, eleg, regua):
-            for ordem, contato in enumerate(eleg[canal], 1):
+        nome_regua, rotulo, acoes, data_fixa = passo
+        blend = resolver(acoes, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
+        for canal, condicao, contatos in blend:
+            cfg = rc.canal_cfg(canal)
+            if hoje.weekday() == 5 and cfg.get("sabado") is False:
+                continue
+            jan = janela
+            if cfg.get("janela_inicio") and cfg.get("janela_fim"):  # nunca amplia a janela geral
+                jan = (max(janela[0], cfg["janela_inicio"]), min(janela[1], cfg["janela_fim"]))
+            for ordem, contato in enumerate(contatos, 1):
                 fila.append({
                     "data": hoje.isoformat(), "id_cliente": idc, "tag": est.tag, "estado": est.estado,
                     "prioridade": prioridade.get(est.estado, 9), "regua": nome_regua, "passo": rotulo,
                     "canal": canal, "contato": contato, "ordem_contato": ordem,
                     "condicao": condicao, "data_fixa": data_fixa,
-                    "spins_max": regua["spins_discador_dia"] if canal == "discador" else "",
-                    "janela": f"{janela[0]}-{janela[1]}",
+                    "spins_max": cfg.get("tentativas_dia") or (rc["spins_discador_dia"] if canal == "discador" else ""),
+                    "janela": f"{jan[0]}-{jan[1]}",
                 })
     fila.sort(key=lambda l: (l["prioridade"], l["id_cliente"], l["ordem_contato"]))
+    fila = _aplicar_capacidade(fila, clientes, regua, alertas)
     return fila, disponiveis, alertas
+
+
+def _aplicar_capacidade(fila, clientes, regua, alertas):
+    """Capacidade diária do canal: entram primeiro os de maior prioridade e, empatados, maior saldo."""
+    limites = {c: cfg.get("capacidade_dia") for c, cfg in regua.canais_cfg.items() if cfg.get("capacidade_dia")}
+    if not limites:
+        return fila
+    ordem = {}
+    for l in fila:
+        c = clientes.get(l["id_cliente"])
+        ordem.setdefault((l["canal"], l["id_cliente"]), (l["prioridade"], -(c.saldo if c else 0), l["id_cliente"]))
+    manter = set()
+    for canal, limite in limites.items():
+        ids = sorted({i for (c, i) in ordem if c == canal}, key=lambda i: ordem[(canal, i)])
+        manter |= {(canal, i) for i in ids[:limite]}
+        if len(ids) > limite:
+            alertas.append(f"CAPACIDADE {canal}: {len(ids) - limite} clientes ficaram fora hoje (limite {limite})")
+    return [l for l in fila if l["canal"] not in limites or (l["canal"], l["id_cliente"]) in manter]
 
 
 def _recencia_ok(est: EstadoCliente, hoje: date, regua: Regua) -> bool:
     return est.ultima_massiva is None or (hoje - est.ultima_massiva).days * 24 >= regua["recencia_horas"]
 
 
-def _passo_do_dia(est, cliente, hoje, regua, eleg, parcelas):
-    """(régua, rótulo do passo, canais, data_fixa) ou None."""
+def _passo_do_dia(est, cliente, hoje, regua, disp):
+    """(régua, rótulo do passo, ações, data_fixa) ou None. regua já é a do cluster (estratégia)."""
+    def acoes(passo):
+        return normalizar(passo, regua)
+
     if est.estado == "QBR":
         d = int(est.ciclo[1:]) if est.ciclo.startswith("D") else -1
-        canais = regua["quebra"]["passos"].get(str(d))
-        return ("quebra", f"D+{d}", canais, True) if canais else None
+        passo = regua["quebra"]["passos"].get(str(d))
+        return ("quebra", f"D+{d}", acoes(passo), True) if passo else None
     if est.estado == "PRE":
         d = 0 if est.ciclo == "D0" else int(est.ciclo[2:])
-        canais = list(regua["preventivo"]["passos"].get(str(d), []))
+        passo = list(regua["preventivo"]["passos"].get(str(d), []))
         if d == 0 and cliente and regua.voz_d0(est.cluster_atual):
-            canais.append(regua["preventivo"]["voz_d0_canal"])
-        return ("preventivo", "D0" if d == 0 else f"D-{d}", canais, True) if canais else None
+            passo.append(regua["preventivo"]["voz_d0_canal"])
+        return ("preventivo", "D0" if d == 0 else f"D-{d}", acoes(passo), True) if passo else None
     if not _recencia_ok(est, hoje, regua):
         return None
     if est.estado == "LOC":
         d = (hoje - est.safra).days
-        canais = regua["localizacao"]["passos"].get(str(d))
-        return ("localizacao", f"D+{d}", canais, False) if canais else None
+        passo = regua["localizacao"]["passos"].get(str(d))
+        return ("localizacao", f"D+{d}", acoes(passo), False) if passo else None
     if est.estado == "NCP":
         if est.giro_pausado or not est.giro_inicio or hoje < est.giro_inicio:
             return None
         dias = (hoje - est.giro_inicio).days
         n, dia_ciclo = dias // regua["giro"]["ciclo_dias"] + 1, dias % regua["giro"]["ciclo_dias"] + 1
-        canais = regua["giro"]["passos"].get(str(dia_ciclo))
-        return ("giro", f"G{n}-dia{dia_ciclo}", canais, False) if canais else None
-    if est.estado == "CPA":
-        canal = est.canal_atual if est.canal_atual in eleg else proximo_canal(est, regua, set(eleg))
-        return ("cpc", "CPC A · negociação", [canal], False) if canal else None
-    if est.estado == "CPB":
-        if est.tentativas < regua["tentativas_por_canal"] and est.canal_atual in eleg:
-            return ("cpc", f"CPC B · T{est.tentativas + 1}", [est.canal_atual], False)
-        canal = proximo_canal(est, regua, set(eleg))
-        return ("cpc", f"rotação → {canal}", [canal], False) if canal else None
+        passo = regua["giro"]["passos"].get(str(dia_ciclo))
+        return ("giro", f"G{n}-dia{dia_ciclo}", acoes(passo), False) if passo else None
+    if est.estado in ("CPA", "CPB"):
+        if est.estado == "CPA":
+            canal = est.canal_atual if est.canal_atual in disp else proximo_canal(est, regua, disp)
+            rotulo = "CPC A · negociação"
+        elif est.tentativas < regua["tentativas_por_canal"] and est.canal_atual in disp:
+            canal, rotulo = est.canal_atual, f"CPC B · T{est.tentativas + 1}"
+        else:
+            canal = proximo_canal(est, regua, disp)
+            rotulo = f"rotação → {canal}"
+        if not canal:
+            return None
+        acao = (regua.dados.get("cpc_acoes") or {}).get(canal)
+        passo = ([acao] if acao else acoes([canal])) + list(regua.dados.get("cpc_junto") or [])
+        return ("cpc", rotulo, passo, False)
     return None
 
 

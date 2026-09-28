@@ -6,6 +6,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     (opcional, para testar a migração com dado antigo: psql -d sb -f supabase/testes/dados_legado.sql)
     psql -d sb -f supabase/migrations/20260928000001_multiempresa.sql
     psql -d sb -f supabase/migrations/20260928000002_clusters.sql
+    psql -d sb -f supabase/migrations/20260929000001_estrategias.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -133,6 +134,25 @@ checar("planejamento A não altera cluster da B (0 linhas)", True, f"with x as (
 checar("planejamento A altera e apaga cluster da A", True, f"update public.clusters set so_digital=true where empresa_id={EA}; delete from public.clusters where empresa_id={EA} and codigo='VE'; insert into public.clusters (empresa_id,codigo) values ({EA},'VE')", "authenticated", u["plan"])
 checar("operação lê colunas_base da própria empresa", True, "select count(*) from public.empresas where colunas_base is null", "authenticated", u["oper"], 1)
 checar("operação não grava colunas_base (0 linhas)", True, "with x as (update public.empresas set colunas_base='[]' returning 1) select count(*) from x", "authenticated", u["oper"], 0)
+# estratégias e canais da empresa
+checar("planejamento A cria estratégia na A", True, f"insert into public.estrategias (empresa_id,nome,definicao,padrao) values ({EA},'Digital','{{\"localizacao\":{{}}}}',true)", "authenticated", u["plan"])
+checar("só uma estratégia padrão por empresa", False, f"insert into public.estrategias (empresa_id,nome,padrao) values ({EA},'Outra',true)", "authenticated", u["plan"])
+checar("definição precisa ser objeto", False, f"insert into public.estrategias (empresa_id,nome,definicao) values ({EA},'Lista','[]')", "authenticated", u["plan"])
+checar("planejamento A não cria estratégia na B", False, f"insert into public.estrategias (empresa_id,nome) values ({EB},'X')", "authenticated", u["plan"])
+checar("operação não cria estratégia", False, f"insert into public.estrategias (empresa_id,nome) values ({EA},'Y')", "authenticated", u["oper"])
+sql(f"insert into public.estrategias (empresa_id,nome) values ({EB},'Da B')")
+checar("cluster da A usa estratégia da A", True, f"update public.clusters set estrategia_id=(select id from public.estrategias where nome='Digital') where empresa_id={EA} and codigo='VE'", "authenticated", u["plan"])
+checar("cluster da A não usa estratégia da B", False, f"update public.clusters set estrategia_id=(select id from public.estrategias where nome='Da B') where empresa_id={EA} and codigo='VE'", "service_role")
+checar("operação B não vê estratégias da A", True, "select count(*) from public.estrategias", "authenticated", u["operb"], 1)
+checar("planejamento A configura canal da A", True, f"insert into public.canais_empresa (empresa_id,canal,janela_inicio,janela_fim,capacidade_dia,custo) values ({EA},'discador','09:00','18:00',5000,0.12)", "authenticated", u["plan"])
+checar("horário inválido é recusado", False, f"insert into public.canais_empresa (empresa_id,canal,janela_inicio) values ({EA},'sms','25:00')", "authenticated", u["plan"])
+checar("canal desconhecido é recusado", False, f"insert into public.canais_empresa (empresa_id,canal) values ({EA},'fax')", "authenticated", u["plan"])
+checar("planejamento A não configura canal da B", False, f"insert into public.canais_empresa (empresa_id,canal) values ({EB},'sms')", "authenticated", u["plan"])
+checar("operação lê canais da própria empresa", True, "select count(*) from public.canais_empresa", "authenticated", u["oper"], 1)
+checar("operação B não lê canais da A", True, "select count(*) from public.canais_empresa", "authenticated", u["operb"], 0)
+checar("planejamento sobe retorno de enriquecimento", True, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'enriquecimento','alfa/enriquecimento/2026-09-25/e.csv','e.csv')", "authenticated", u["plan"])
+checar("planejamento sobe arquivo em entradas/alfa/enriquecimento", True, "insert into storage.objects (bucket_id,name) values ('entradas','alfa/enriquecimento/2026-09-25/e.csv')", "authenticated", u["plan"])
+checar("apagar estratégia deixa o cluster sem estratégia", True, f"delete from public.estrategias where nome='Digital'; select count(*) from public.clusters where estrategia_id is null and empresa_id={EA}", "authenticated", u["plan"], 1)
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

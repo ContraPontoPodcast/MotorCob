@@ -231,6 +231,27 @@ class TestSincronizar(unittest.TestCase):
         self.assertIn("PRODUTO", nomes)
         self.assertFalse({"TEL1", "EMAIL", "CPF", "COD_CLIENTE"} & set(nomes))   # nada pessoal
 
+    def test_estrategia_canais_e_enriquecimento_do_site(self):
+        self.falso.tabelas["estrategias"] = [
+            {"id": 5, "empresa_id": 2, "nome": "Só SMS", "padrao": True,
+             "definicao": {"localizacao": {"passos": {"1": [{"canal": "sms", "numeros": 1}]}}}},
+            {"id": 6, "empresa_id": 1, "nome": "Da alfa", "padrao": True,
+             "definicao": {"localizacao": {"passos": {"1": [{"canal": "email"}]}}}}]
+        self.falso.tabelas["canais_empresa"] = [{"empresa_id": 2, "canal": "sms", "custo": "0.05",
+                                                 "janela_inicio": "10:00", "janela_fim": "18:00"}]
+        enr = next((EX / "empresa" / "enriquecimento").glob("*.csv"))
+        self._envio(3001, 2, "enriquecimento", enr.name, enr.read_bytes())
+        self._dia(date(2026, 9, 2), empresa="beta")
+        ids = self.falso.objetos["saidas/beta/2026-09-02/ids/sms.csv"].decode()
+        self.assertIn("X0001;", ids)
+        self.assertNotIn("saidas/beta/2026-09-02/ids/whatsapp.csv", self.falso.objetos)   # estratégia da beta
+        fila = self.falso.objetos["saidas/beta/2026-09-02/fila_do_dia.csv"].decode()
+        self.assertIn("10:00-18:00", fila)
+        env = next(e for e in self.falso.tabelas["envios"] if e["id"] == 3001)
+        self.assertEqual((env["status"], env["relatorio"]["telefones_novos"]), ("processado", 2))
+        cont = (self.dados / "empresas" / "beta" / "base" / "contatos.csv").read_text()
+        self.assertIn("11977770009;telefone;enriquecimento", cont)
+
     def test_falha_de_uma_empresa_nao_para_as_outras(self):
         self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["tipo"] != "clientes"]
         res = self._dia(date(2026, 9, 25))

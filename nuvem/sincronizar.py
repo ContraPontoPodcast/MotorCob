@@ -47,7 +47,8 @@ from nuvem.supabase_api import Supabase  # noqa: E402
 
 DESTINO_BASE = {"clientes": "base/clientes.csv", "contatos": "base/contatos.csv",
                 "parcelas": "base/parcelas.csv", "portal": "logs/portal.csv"}
-PASTA_DO_TIPO = {"retorno": "retornos", "base": "bruto", "ocorrencia": "ocorrencias"}
+PASTA_DO_TIPO = {"retorno": "retornos", "base": "bruto", "ocorrencia": "ocorrencias",
+                 "enriquecimento": "enriquecimento"}
 MARCADOR_TRILHA = "nuvem_trilha_enviada.txt"
 PASTA_EMPRESAS = RAIZ / "empresas"
 
@@ -169,8 +170,15 @@ def publicar_arquivos(sb: Supabase, pasta: Path, prefixo: str) -> int:
     return n
 
 
-def _relatorio_envio(e, destino, r, rel_base=None):
+def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
     nome = destino.name
+    if e["tipo"] == "enriquecimento":
+        if rel_enriq is None:
+            return "erro", {"erro": "retorno de enriquecimento sem base da empresa ou sem layout em empresas/<slug>.json"}
+        if nome in rel_enriq["sem_layout"]:
+            return "erro", {"erro": "arquivo não reconhecido como retorno de enriquecimento: confira o nome"}
+        arq = next((a for a in rel_enriq["arquivos"] if a["arquivo"] == nome), None)
+        return ("processado", arq) if arq else ("processado", {"observacao": "arquivo recebido"})
     if e["tipo"] == "base":
         arq = next((a for a in (rel_base or {}).get("arquivos", []) if a["arquivo"] == nome), None)
         if arq is None:
@@ -199,6 +207,14 @@ def _relatorio_envio(e, destino, r, rel_base=None):
                           "quarentena": dict(rel.desconhecidos)}
 
 
+def _baixar(sb: Supabase, pasta: Path, tabela: str, empresa_id, ordem: str) -> list[dict]:
+    linhas = sb.selecionar(tabela, {"empresa_id": f"eq.{empresa_id}"}, ordem=ordem) or []
+    (pasta / "config").mkdir(parents=True, exist_ok=True)
+    (pasta / "config" / f"{tabela}.json").write_text(json.dumps(linhas, ensure_ascii=False, indent=1),
+                                                     encoding="utf-8")
+    return linhas
+
+
 def baixar_clusters(sb: Supabase, pasta: Path, empresa_id) -> list[dict]:
     """Regras de cluster ativas da empresa; cópia em config/clusters.json (auditoria da rodada)."""
     regras = sb.selecionar("clusters", {"empresa_id": f"eq.{empresa_id}", "ativo": "eq.true"},
@@ -223,7 +239,8 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
         rel_base = None
         tem_bruto = (pasta / "bruto").exists() and any(p.is_file() for p in (pasta / "bruto").iterdir())
         tem_ocorrencia = (pasta / "ocorrencias").exists() and any((pasta / "ocorrencias").iterdir())
-        if (tem_bruto or tem_ocorrencia) and entrada is None:
+        tem_enriq = (pasta / "enriquecimento").exists() and any((pasta / "enriquecimento").iterdir())
+        if (tem_bruto or tem_ocorrencia or tem_enriq) and entrada is None:
             raise RuntimeError(f"a empresa {slug} ainda não tem arquivo de entrada (empresas/{slug}.json): "
                                "mande o cabeçalho da base e da ocorrência para configurar")
         if tem_bruto:
@@ -232,7 +249,12 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
             # só nomes e tipos das colunas, para o site montar as regras de cluster
             sb.atualizar("empresas", {"id": f"eq.{eid}"},
                          {"colunas_base": {"colunas": rel_base["colunas"], "atualizado_em": agora()}})
+        rel_enriq = None
+        if tem_enriq and (pasta / "base" / "contatos.csv").exists():
+            rel_enriq = rodar_dia.preparar_enriquecimento(entrada, pasta / "enriquecimento", pasta / "base")
         clusters = baixar_clusters(sb, pasta, eid)
+        estrategias = _baixar(sb, pasta, "estrategias", eid, "id.asc")
+        canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
         for obrig in ("base/clientes.csv", "base/contatos.csv"):
             if not (pasta / obrig).exists():
                 raise RuntimeError(f"falta a base da empresa {slug}: envie a base pelo site (Enviar arquivos)")
@@ -245,7 +267,8 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
                                 acoes if tem_portal else None, portal if tem_portal else None,
                                 pasta / "estado", pasta / "saida", out=out,
                                 ocorrencias=pasta / "ocorrencias" if entrada else None, entrada=entrada,
-                                clusters=clusters, atributos=pasta / "base" / "atributos.csv")
+                                clusters=clusters, atributos=pasta / "base" / "atributos.csv",
+                                estrategias=estrategias, canais=canais)
 
         sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid), conflito="empresa_id,id_cliente")
         n_trilha = publicar_trilha(sb, pasta / "estado", eid)
@@ -255,7 +278,7 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
             sb.inserir("fila_dia", fila)
         n_arq = publicar_arquivos(sb, r["saida"], f"{slug}/{data.isoformat()}")
         for e, destino in baixados:
-            status, rel = _relatorio_envio(e, destino, r, rel_base)
+            status, rel = _relatorio_envio(e, destino, r, rel_base, rel_enriq)
             sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": status, "relatorio": rel})
 
         estados = Counter(e.estado for e in r["estados"].values())

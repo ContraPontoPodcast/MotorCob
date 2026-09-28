@@ -12,7 +12,8 @@ motorcob.online (site)  ──login/leitura/upload──>  Supabase (Postgres + 
   `empresa_id`; usuário de empresa só vê a própria; a equipe MotorCob (`perfis.equipe`)
   vê todas. Arquivos no Storage ficam em `entradas/<slug>/...` e `saidas/<slug>/...`.
 - **Site:** só login, envio de arquivos e consulta. Prompt em `docs/PROMPT_SITE.md` e o
-  ajuste para várias empresas em `docs/PROMPT_SITE_MULTIEMPRESA.md`.
+  ajustes em `docs/PROMPT_SITE_MULTIEMPRESA.md` (várias empresas e clusters) e
+  `docs/PROMPT_SITE_ESTRATEGIAS.md` (estratégias, canais e retorno do enriquecimento).
 - **Rotina do motor** (`nuvem/sincronizar.py`, roda no Mac): baixa as entradas enviadas
   pelo site, roda o `rodar_dia.py` e publica estado, trilha, fila e arquivos de volta.
 
@@ -33,6 +34,8 @@ ordem, › Run. Cada um deve terminar sem erro:
 2. `20260928000001_multiempresa.sql` (várias empresas; quem já era admin vira equipe
    MotorCob; dado que já existia vai para a empresa `legado`)
 3. `20260928000002_clusters.sql` (clusters de cada empresa, definidos no site)
+4. `20260929000001_estrategias.sql` (estratégias por cluster, canais da empresa e retorno do
+   enriquecimento)
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 
@@ -91,7 +94,8 @@ A partir daí, o fluxo diário é:
    fornecedor e parcelas quando houver.
 2. No horário agendado, o Mac roda `scripts/rodar_dia.sh`, que: atualiza o motor
    (`git pull`) → para cada empresa ativa, baixa os envios pendentes → converte a base
-   bruta pelo `empresas/<slug>.json` → lê os clusters que a empresa definiu no site →
+   bruta pelo `empresas/<slug>.json` → junta o retorno do enriquecimento → lê clusters,
+   estratégias e canais que a empresa definiu no site →
    liga cada ocorrência ao contato que o motor mandou
    acionar → roda o motor → publica TAG, trilha, fila do dia e arquivos → marca cada envio
    como processado (ou erro, com o motivo) e registra a execução da empresa com os
@@ -112,5 +116,6 @@ psql -d sb -f supabase/testes/stub_supabase.sql
 psql -d sb -f supabase/migrations/20260925000001_motorcob.sql
 psql -d sb -f supabase/migrations/20260928000001_multiempresa.sql
 psql -d sb -f supabase/migrations/20260928000002_clusters.sql
-python supabase/testes/testar_rls.py      # 74 verificações por papel e por empresa
+psql -d sb -f supabase/migrations/20260929000001_estrategias.sql
+python supabase/testes/testar_rls.py      # 91 verificações por papel e por empresa
 ```
