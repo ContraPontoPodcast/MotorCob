@@ -2,7 +2,8 @@
 --
 -- * estado_cliente ganha saldo e dias_atraso (gravados pela rotina; não são dado pessoal)
 --   para mostrar a concentração em R$ além da quantidade.
--- * mapa_esteira: clientes e saldo por empresa × estado × etapa (ciclo) × canal × cluster.
+-- * mapa_esteira: clientes e saldo por empresa × estado × etapa (ciclo) × canal × cluster × safra.
+-- * acoes_hoje: clientes por régua × passo × canal na fila de cada dia.
 -- * fluxo_esteira: quantos clientes passaram de um estado para outro, por dia (trilha).
 -- As duas views respeitam o RLS das tabelas (security_invoker): cada empresa vê só a sua.
 
@@ -20,11 +21,18 @@ create view public.mapa_esteira with (security_invoker = true) as
            end as etapa,
            canal,
            cluster_atual as cluster,
+           to_char(safra, 'YYYY-MM') as safra,
            count(*)::int as clientes,
            coalesce(sum(saldo), 0)::numeric(16, 2) as saldo
     from public.estado_cliente
-    group by 1, 2, 3, 4, 5;
-comment on view public.mapa_esteira is 'Clientes e saldo por estado, etapa (ciclo), canal e cluster.';
+    group by 1, 2, 3, 4, 5, 6;
+comment on view public.mapa_esteira is 'Clientes e saldo por estado, etapa (ciclo), canal, cluster e safra (mês de entrada).';
+
+create view public.acoes_hoje with (security_invoker = true) as
+    select empresa_id, data, regua, passo, canal, reserva, count(*)::int as clientes
+    from public.fila_dia
+    group by 1, 2, 3, 4, 5, 6;
+comment on view public.acoes_hoje is 'Clientes por régua, passo e canal na fila do dia.';
 
 create view public.fluxo_esteira with (security_invoker = true) as
     select empresa_id,

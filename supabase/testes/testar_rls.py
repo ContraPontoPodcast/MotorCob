@@ -159,6 +159,9 @@ sql(f"set role service_role; update public.estado_cliente set saldo=1000 where e
 checar("mapa: operação A vê só a A, com saldo", True, "select string_agg(estado||':'||etapa||':'||clientes||':'||saldo, ',' order by estado) from public.mapa_esteira", "authenticated", u["oper"], "CPA:-:1:1000.00,LOC:L0:1:250.50")  # ciclo vazio nos dados de teste
 checar("mapa: operação B vê só a B", True, "select sum(clientes) from public.mapa_esteira", "authenticated", u["operb"], 1)
 checar("mapa: anon não vê", False, "select * from public.mapa_esteira", "anon")
+checar("mapa: safra (mês de entrada)", True, "select string_agg(distinct safra, ',') from public.mapa_esteira", "authenticated", u["oper"], "2026-08")
+checar("ações de hoje: régua × passo × canal da própria empresa", True, "select string_agg(regua||'/'||passo||'/'||canal||'='||clientes, ',' order by regua) from public.acoes_hoje", "authenticated", u["oper"], "cpc/T1/whatsapp=1,localizacao/D+5/discador=1")
+checar("ações de hoje: B vê só a B", True, "select sum(clientes) from public.acoes_hoje", "authenticated", u["operb"], 1)
 sql(f"set role service_role; insert into public.trilha (empresa_id,id_cliente,data,tag_anterior,tag,motivo,quem_marcou) values ({EA},'C2','2026-08-02','','S260801-M1-LOC-ND-L0','entrada','P'),({EA},'C2','2026-08-03','S260801-M1-LOC-ND-L0','S260801-M1-LOC-ND-L1','sem contato','W'),({EA},'C1','2026-08-04','S260801-A1-PRE-WA-D-3','S260801-A1-QBR-WA-D1','quebra','S')")
 checar("fluxo: entradas e mudanças de estado (não de ciclo)", True, "select string_agg(coalesce(de,'∅')||'>'||para||'='||clientes, ',' order by data) from public.fluxo_esteira", "authenticated", u["oper"], "∅>LOC=1,∅>CPA=1,PRE>QBR=1")
 checar("fluxo: B não vê a trilha da A", True, "select count(*) from public.fluxo_esteira", "authenticated", u["operb"], 0)

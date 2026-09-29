@@ -14,9 +14,11 @@ Todos os papéis veem. Tudo filtrado pela empresa selecionada (.eq('empresa_id',
 No menu, logo abaixo de "Início".
 
 ## Dados
-- view mapa_esteira (empresa_id, estado, etapa, canal, cluster, clientes, saldo):
-  clientes e saldo por estado × etapa × canal × cluster. Some no navegador conforme os
-  filtros.
+- view mapa_esteira (empresa_id, estado, etapa, canal, cluster, safra, clientes, saldo):
+  clientes e saldo por estado × etapa × canal × cluster × safra (AAAA-MM de entrada).
+  Leia uma vez por empresa e some no navegador conforme o mapa e os filtros.
+- view acoes_hoje (empresa_id, data, regua, passo, canal, reserva, clientes): a fila do
+  dia agregada por régua × passo × canal.
 - view fluxo_esteira (empresa_id, data, de, para, clientes): mudanças de estado por dia;
   de = null é entrada na esteira. Filtre data >= hoje − N dias e some por (de, para).
 - view resumo_fila (empresa_id, data, canal, reserva, clientes) com data = hoje, e
@@ -27,11 +29,21 @@ No menu, logo abaixo de "Início".
 ## Topo
 Título "Mapa da Esteira" e a frase "Onde está a base hoje em cada etapa dos acionamentos,
 e quem se moveu entre elas." Controles:
+- Mapa (o primeiro controle, em destaque): escolhe a visão —
+  "Esteira · etapas e movimento" (padrão), "Clusters × etapas", "Canais × etapas",
+  "Safras × etapas", "Ações de hoje · régua × canal".
 - Medir por: Clientes | Saldo (botões segmentados).
 - Cluster: Todos + os valores distintos de cluster em mapa_esteira (mostre o nome do
   cluster da tabela clusters quando existir: "VE · Veículo"; os códigos A1…B3 aparecem
   como "Padrão").
+- Canal: Todos, WhatsApp (WA), RCS (RC), Agente virtual (AV), Discador (DC), SMS (SM),
+  E-mail (EM), Nenhum (ND = ainda sem canal).
+- Safra: Todas + os meses distintos de safra (mostre "set/26").
 - Movimento: últimos 7 dias | últimos 30 dias.
+Os filtros valem para todos os mapas e se combinam. Abaixo dos controles, chips com os
+filtros ativos ("Cluster: VE ✕", "Canal: WhatsApp ✕", "Limpar filtros") ou "Sem filtros:
+base inteira.". Guarde mapa e filtros na URL (?mapa=cluster&cluster=VE…) para poder
+compartilhar a visão.
 Linha de totais: clientes na esteira (todos menos LIQ), saldo, com ação hoje, data da
 rotina.
 
@@ -53,6 +65,21 @@ proporcional à quantidade e o número no meio da seta (mostre o número nas set
 grossas e em todas as setas ligadas à caixa selecionada). Tooltip: "Localização → CPC A:
 210 clientes".
 Clique numa caixa seleciona (borda âmbar #E9A23B) e destaca as setas dela.
+
+## Mapas em tabela (Clusters, Canais, Safras × etapas)
+Tabela-mapa de calor: linhas = clusters / canais / safras; colunas = Localização, Não CPC,
+CPC A, CPC B, Preventivo, Colchão, Quebra, Bloqueado, Liquidado, Total. Cada célula mostra
+clientes ou saldo e tem fundo do claro ao azul-petróleo conforme o valor (texto branco
+nas escuras; célula zerada mostra "·"). Legenda curta acima da tabela explicando a
+visão. Clicar no nome da linha aplica (ou tira) aquele filtro. Clicar numa célula aplica
+o filtro da linha e seleciona a etapa da coluna, abrindo o painel abaixo (borda âmbar
+na célula selecionada). Tabela com rolagem horizontal no celular.
+
+## Ações de hoje
+Tabela-mapa de calor com linhas = régua · passo (ex.: "Localização · D+1", "CPC B · T2")
+e colunas = canais (a reserva aparece como "Discador (reserva)"), com total por linha.
+Respeita os filtros de cluster/canal/safra só quando der para cruzar com fila_dia (se não
+der, mostre a nota "Ações de hoje não usa os filtros de cluster e safra").
 
 ## Painel da caixa selecionada (cartões abaixo do mapa)
 1. "Por etapa": barras horizontais por etapa, na ordem natural (LOC: L0, L1…; NCP: G1,
