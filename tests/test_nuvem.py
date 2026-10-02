@@ -270,6 +270,29 @@ class TestSincronizar(unittest.TestCase):
         cont = (self.dados / "empresas" / "beta" / "base" / "contatos.csv").read_text()
         self.assertIn("11977770009;telefone;enriquecimento", cont)
 
+    def test_vigia_roda_so_quem_subiu_carga(self):
+        from nuvem.sincronizar import empresas_com_carga_nova, vigiar
+        vig = lambda: vigiar(self.dados, date(2026, 9, 2), self.sb, out=lambda *a: None,  # noqa: E731
+                             pasta_empresas=self.cfg)
+        self.assertEqual([e["slug"] for e in empresas_com_carga_nova(self.dados, self.sb)], ["beta"])
+        r = vig()
+        self.assertEqual(list(r), ["beta"])                      # alfa não subiu carga do credor
+        self.assertIn("saidas/beta/2026-09-02/fila_do_dia.csv", self.falso.objetos)
+        self.assertEqual({e["empresa_id"] for e in self.falso.tabelas["execucoes"]}, {2})
+        self.assertEqual(vig(), {})                              # sem carga nova: nada a fazer
+        # carga que dá erro: tenta uma vez e só de novo quando chegar outra carga
+        self._envio(4001, 2, "base", "ruim.csv", b"SEM;COLUNAS\n1;2\n")
+        self.assertIn("carga do credor rejeitada", vig()["beta"]["erro"])
+        env = next(e for e in self.falso.tabelas["envios"] if e["id"] == 4001)
+        self.assertEqual(env["status"], "erro")                 # o site mostra o motivo
+        self.assertIn("SALDO_DEVEDOR", env["relatorio"]["erro"])
+        self.assertEqual(vig(), {})
+        nova = next((EX / "empresa" / "bruto").glob("*.csv"))
+        self._envio(4002, 2, "base", nova.name, nova.read_bytes())
+        r = vig()
+        self.assertEqual(list(r), ["beta"])
+        self.assertNotIn("erro", r["beta"], r["beta"].get("erro"))
+
     def test_sugestao_aprovada_vira_segmento_com_estrategia(self):
         dados = {"persona": "RJ", "nome": "UF RJ", "condicoes": [{"campo": "UF", "valor": "RJ"}],
                  "estrategia_base": None, "fase": "localizacao", "dia": 1, "de": "whatsapp", "para": "sms"}

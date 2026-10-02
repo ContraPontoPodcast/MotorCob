@@ -179,6 +179,33 @@ def _num(v: str, decimal: str) -> float:
     return float(v)
 
 
+def _colunas_base(nomes: list[str], layout: LayoutBase):
+    """Obrigatórias: ID, saldo e atraso (ou vencimento) e ao menos um contato. As demais
+    colunas do cadastro que não vierem no arquivo do dia ficam vazias.
+    Retorna (ausentes, colunas presentes, colunas de telefone, colunas de e-mail)."""
+    obrig = [layout.colunas["id_cliente"], layout.colunas["saldo"],
+             layout.colunas.get("dias_atraso") or layout.colunas.get("vencimento")]
+    ausentes = sorted(c for c in obrig if c not in nomes)
+    col = {k: v for k, v in layout.colunas.items() if v in nomes}
+    tel_cols = [{k: v for k, v in (t if isinstance(t, dict) else {"coluna": t}).items() if v in nomes}
+                for t in layout.telefones]
+    tel_cols = [t for t in tel_cols if t.get("coluna")]
+    emails = [e for e in layout.emails if e in nomes]
+    if not tel_cols and not emails:
+        ausentes.append("nenhuma coluna de telefone ou e-mail do cadastro")
+    return ausentes, col, tel_cols, emails
+
+
+def checar_base(arq: str | Path, layout: LayoutBase) -> list[str]:
+    """Só o cabeçalho: as colunas obrigatórias que faltam na carga (vazio = arquivo serve)."""
+    try:
+        with open(arq, newline="", encoding=layout.encoding) as f:
+            nomes = csv.DictReader(f, delimiter=layout.delimitador).fieldnames or []
+    except (UnicodeDecodeError, csv.Error) as ex:
+        return [f"arquivo ilegível ({ex.__class__.__name__})"]
+    return _colunas_base(nomes, layout)[0]
+
+
 def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | Path) -> dict:
     """Base bruta (um ou vários arquivos) -> base/clientes.csv e base/contatos.csv.
 
@@ -208,18 +235,7 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
         with open(arq, newline="", encoding=layout.encoding) as f:
             leitor = csv.DictReader(f, delimiter=layout.delimitador)
             nomes = leitor.fieldnames or []
-            # Obrigatórias: ID, saldo e atraso (ou vencimento) e ao menos um contato. As demais
-            # colunas do cadastro que não vierem no arquivo do dia ficam vazias.
-            obrig = [layout.colunas["id_cliente"], layout.colunas["saldo"],
-                     layout.colunas.get("dias_atraso") or layout.colunas.get("vencimento")]
-            ausentes = sorted(c for c in obrig if c not in nomes)
-            col = {k: v for k, v in layout.colunas.items() if v in nomes}
-            tel_cols = [{k: v for k, v in (t if isinstance(t, dict) else {"coluna": t}).items() if v in nomes}
-                        for t in layout.telefones]
-            tel_cols = [t for t in tel_cols if t.get("coluna")]
-            emails = [e for e in layout.emails if e in nomes]
-            if not tel_cols and not emails:
-                ausentes.append("nenhuma coluna de telefone ou e-mail do cadastro")
+            ausentes, col, tel_cols, emails = _colunas_base(nomes, layout)
             if ausentes:
                 raise LayoutInvalido(f"{arq.name}: colunas obrigatórias ausentes no arquivo {ausentes}")
             # contato, CPF e ID não viram atributo: só o que descreve o cliente/contrato

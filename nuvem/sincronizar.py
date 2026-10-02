@@ -2,6 +2,7 @@
 
     python -m nuvem.sincronizar dia    [--data AAAA-MM-DD] [--empresa slug] [--dados ~/MotorCob-dados]
     python -m nuvem.sincronizar comite --mes AAAA-MM   [--empresa slug] [--dados ~/MotorCob-dados]
+    python -m nuvem.sincronizar vigiar [--checar]       (roda o dia só de quem tem carga nova no site)
 
 Roda para cada empresa ativa em public.empresas (ou só a de --empresa). Cada empresa tem
 a própria pasta de dados, <dados>/empresas/<slug>/, e o próprio arquivo de entrada no
@@ -20,6 +21,11 @@ dia, para cada empresa:
      o relatório de ingestão, e a execução com resumo e alertas.
   Se algo falhar, a execução da empresa fica com status 'erro' e os envios dela
   continuam pendentes.
+
+vigiar: para o Mac rodar a cada 2 minutos. Se uma empresa subiu carga do credor no site
+  (envio tipo base pendente), roda o dia dela na hora e a lista sai no site em minutos.
+  Sem carga nova, não faz nada. Se a rodada der erro, só tenta de novo quando chegar outra
+  carga (não fica repetindo o mesmo erro). --checar: só diz se há trabalho (saída 0) ou não (3).
 
 comite: roda o relatório do mês de cada empresa, sobe em saidas/<slug>/comite/<mês>/ e
 grava kpis.
@@ -316,6 +322,34 @@ def baixar_clusters(sb: Supabase, pasta: Path, empresa_id) -> list[dict]:
     return regras
 
 
+def _separar_cargas_ruins(sb: Supabase, entrada, pasta: Path, baixados, out=print):
+    """Carga do credor sem as colunas obrigatórias não entra em bruto/ (senão travaria as
+    próximas rodadas): vai para bruto/rejeitados/ e o envio fica com erro e o motivo.
+    Se todas as cargas novas forem rejeitadas, a rodada para (não gera lista com a carga velha)."""
+    from motor.entrada import carregar_entrada, checar_base
+    layout = carregar_entrada(entrada).base
+    novas, ruins, ficam = 0, [], []
+    for e, destino in baixados:
+        if e["tipo"] != "base":
+            ficam.append((e, destino))
+            continue
+        novas += 1
+        ausentes = checar_base(destino, layout)
+        if not ausentes:
+            ficam.append((e, destino))
+            continue
+        rej = destino.parent / "rejeitados" / destino.name
+        rej.parent.mkdir(parents=True, exist_ok=True)
+        destino.replace(rej)
+        motivo = f"carga sem as colunas obrigatórias {ausentes}: confira o arquivo e envie de novo"
+        sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "erro", "relatorio": {"erro": motivo}})
+        out(f"  envio {e['id']} ({e['nome_original']}): {motivo}")
+        ruins.append(e["nome_original"])
+    if ruins and len(ruins) == novas:
+        raise RuntimeError(f"carga do credor rejeitada ({', '.join(ruins)}): lista do dia não gerada")
+    return ficam
+
+
 def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, out=print,
                             pasta_empresas: Path = PASTA_EMPRESAS):
     import rodar_dia
@@ -334,6 +368,8 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
         if (tem_bruto or tem_ocorrencia or tem_enriq) and entrada is None:
             raise RuntimeError(f"a empresa {slug} ainda não tem arquivo de entrada (empresas/{slug}.json): "
                                "mande o cabeçalho da base e da ocorrência para configurar")
+        if entrada is not None:
+            baixados = _separar_cargas_ruins(sb, entrada, pasta, baixados, out)
         if tem_bruto:
             rel_base = rodar_dia.preparar_base(entrada, pasta / "bruto", pasta / "base")
             out(f"  base bruta: {rel_base['clientes']} clientes, {rel_base['contatos']} contatos")
@@ -415,6 +451,53 @@ def sincronizar_dia(dados: Path, data: date, sb: Supabase | None = None, out=pri
     return resultados
 
 
+def _pendentes_base(sb: Supabase) -> dict:
+    """{empresa_id: maior id de envio de carga do credor pendente}"""
+    por = {}
+    for e in sb.selecionar("envios", {"status": "eq.pendente", "tipo": "eq.base"}) or []:
+        por[e["empresa_id"]] = max(por.get(e["empresa_id"], 0), int(e["id"]))
+    return por
+
+
+def _vigia_arq(dados: Path, emp: dict) -> Path:
+    return pasta_empresa(dados, emp) / "estado" / "vigia.json"
+
+
+def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = None) -> list[dict]:
+    """Empresas ativas com carga do credor pendente que ainda não falhou nesta mesma carga."""
+    pend = _pendentes_base(sb)
+    saida = []
+    for emp in empresas_ativas(sb, empresa) if pend else []:
+        if emp["id"] not in pend:
+            continue
+        arq = _vigia_arq(dados, emp)
+        falhou_ate = json.loads(arq.read_text(encoding="utf-8")).get("falhou_ate", 0) if arq.exists() else 0
+        if pend[emp["id"]] > falhou_ate:
+            saida.append(emp)
+    return saida
+
+
+def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empresa: str | None = None,
+           pasta_empresas: Path = PASTA_EMPRESAS):
+    """Roda o dia das empresas que acabaram de subir carga. Retorna {slug: resultado}."""
+    sb = sb or Supabase(*carregar_config(dados))
+    resultados = {}
+    for emp in empresas_com_carga_nova(dados, sb, empresa):
+        pend = _pendentes_base(sb).get(emp["id"], 0)
+        out(f"CARGA NOVA: {emp['slug']} — gerando a lista de {data:%d/%m/%Y}")
+        arq = _vigia_arq(dados, emp)
+        try:
+            resultados[emp["slug"]] = sincronizar_empresa_dia(sb, dados, emp, data, out, pasta_empresas)
+            if arq.exists():
+                arq.unlink()
+        except Exception as ex:  # noqa: BLE001 — uma empresa com erro não para as outras
+            out(f"  ERRO na empresa {emp['slug']}: {ex}")
+            resultados[emp["slug"]] = {"erro": str(ex)}
+            arq.parent.mkdir(parents=True, exist_ok=True)
+            arq.write_text(json.dumps({"falhou_ate": pend, "erro": str(ex)[:500]}), encoding="utf-8")
+    return resultados
+
+
 # ------------------------------------------------------------------ comitê
 def sincronizar_comite(dados: Path, mes: str, sb: Supabase | None = None, out=print, empresa: str | None = None,
                        pasta_empresas: Path = PASTA_EMPRESAS):
@@ -461,16 +544,41 @@ def sincronizar_comite(dados: Path, mes: str, sb: Supabase | None = None, out=pr
     return resultados
 
 
+def _travar(dados: Path, esperar: bool):
+    """Uma rodada por vez (agendamento diário e vigia não se atropelam). Devolve o arquivo
+    travado, ou None se outra rodada estiver em andamento e esperar=False."""
+    import fcntl
+    arq = Path(dados) / "logs" / ".rodando.lock"
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    f = open(arq, "w")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | (0 if esperar else fcntl.LOCK_NB))
+    except BlockingIOError:
+        f.close()
+        return None
+    return f
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("modo", choices=["dia", "comite"])
+    ap.add_argument("modo", choices=["dia", "comite", "vigiar"])
+    ap.add_argument("--checar", action="store_true", help="vigiar: só diz se há carga nova (saída 0) ou não (3)")
     ap.add_argument("--dados", type=Path, default=Path(os.environ.get("MOTORCOB_DADOS", Path.home() / "MotorCob-dados")))
     ap.add_argument("--data", type=date.fromisoformat, default=date.today())
     ap.add_argument("--mes", help="AAAA-MM (modo comite)")
     ap.add_argument("--empresa", help="slug de uma empresa (padrão: todas as ativas)")
     a = ap.parse_args()
     try:
-        if a.modo == "dia":
+        if a.modo == "vigiar" and a.checar:
+            sys.exit(0 if empresas_com_carga_nova(a.dados, Supabase(*carregar_config(a.dados)), a.empresa) else 3)
+        trava = _travar(a.dados, esperar=a.modo != "vigiar")
+        if trava is None:
+            return   # outra rodada em andamento: a vigia tenta de novo daqui a pouco
+        if a.modo == "vigiar":
+            res = vigiar(a.dados, a.data, empresa=a.empresa)
+            if any("erro" in r for r in res.values()):
+                sys.exit(1)
+        elif a.modo == "dia":
             res = sincronizar_dia(a.dados, a.data, empresa=a.empresa)
             if any("erro" in r for r in res.values()):
                 sys.exit(1)

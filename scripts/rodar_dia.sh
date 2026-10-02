@@ -1,6 +1,8 @@
 #!/bin/bash
 # Rotina diária do MotorCob no Mac (ou Linux).
 # Uso: scripts/rodar_dia.sh [AAAA-MM-DD]      (sem data = hoje)
+#      scripts/rodar_dia.sh --vigiar           (só roda se alguma empresa subiu carga nova no site;
+#                                               é o que o agendamento "vigiar" chama a cada 2 minutos)
 # Pasta de dados: $MOTORCOB_DADOS (padrão: ~/MotorCob-dados), fora do repositório
 # porque tem dado pessoal. Estrutura em docs/PRODUCAO.md.
 set -euo pipefail
@@ -8,12 +10,31 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 DADOS="${MOTORCOB_DADOS:-$HOME/MotorCob-dados}"
 PY="${MOTORCOB_PYTHON:-python3}"
+VIGIAR=0
+if [ "${1:-}" = "--vigiar" ]; then VIGIAR=1; shift; fi
 DATA="${1:-$(date +%F)}"
 
 if ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
   echo "ERRO: precisa de Python 3.11 ou mais novo (brew install python@3.12)." >&2
   exit 1
 fi
+if [ "$VIGIAR" = 1 ]; then
+  [ -f "$DADOS/config/supabase.env" ] || { echo "ERRO: --vigiar precisa da nuvem configurada (scripts/configurar_nuvem.sh)" >&2; exit 1; }
+  cd "$REPO"
+  # sem carga nova: sai calado (roda a cada 2 minutos)
+  MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar vigiar --checar --dados "$DADOS" 2>/dev/null || exit 0
+  mkdir -p "$DADOS/logs"
+  LOG="$DADOS/logs/vigia_$DATA.log"
+  echo "== $(date '+%F %T') carga nova no site" >> "$LOG"
+  git -C "$REPO" pull --ff-only -q 2>>"$LOG" || echo "aviso: não consegui atualizar o motor (git pull)" >> "$LOG"
+  if MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar vigiar --dados "$DADOS" --data "$DATA" >> "$LOG" 2>&1; then
+    echo "Lista do dia publicada no site ($(date '+%T'))." | tee -a "$LOG"
+    exit 0
+  fi
+  echo "ERRO ao gerar a lista — veja $LOG (o site mostra a execução com erro)" | tee -a "$LOG" >&2
+  exit 1
+fi
+
 for obrigatorio in base/clientes.csv base/contatos.csv; do
   if [ ! -f "$DADOS/config/supabase.env" ] && [ ! -f "$DADOS/$obrigatorio" ]; then
     echo "ERRO: falta $DADOS/$obrigatorio" >&2
