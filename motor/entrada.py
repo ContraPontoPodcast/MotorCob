@@ -47,7 +47,8 @@ GENERICOS: dict[str, dict[str, str]] = {
     "opt_out": {"whatsapp": "bloqueio", "sms": "opt_out", "email": "descadastro"},
 }
 DIAS_BUSCA_ESCOLHA = 3   # ocorrência de hoje pode ser de uma ação exportada até 3 dias antes
-CAMPOS_ESCOLHA = ("data", "id_cliente", "canal", "contato", "ordem_contato", "reserva")
+CAMPOS_ESCOLHA = ("data", "id_cliente", "canal", "contato", "ordem_contato", "reserva", "regua", "cluster",
+                  "estado", "persona")
 _DATA_NO_NOME = re.compile(r"(20\d{2})-?(\d{2})-?(\d{2})")
 
 
@@ -488,9 +489,12 @@ def salvar_escolhas(pasta_estado: str | Path, dia: date, fila: list[dict]):
     antigas = []
     if arq.exists():
         with open(arq, newline="", encoding="utf-8") as f:
-            antigas = [l for l in csv.DictReader(f, delimiter=";") if l["data"] != dia.isoformat()]
+            antigas = [{k: l.get(k) or "" for k in CAMPOS_ESCOLHA}   # arquivo antigo: sem régua/segmento
+                       for l in csv.DictReader(f, delimiter=";") if l["data"] != dia.isoformat()]
     novas = [{"data": dia.isoformat(), "id_cliente": l["id_cliente"], "canal": l["canal"], "contato": l["contato"],
-              "ordem_contato": l["ordem_contato"], "reserva": int(bool(l["condicao"]))} for l in fila]
+              "ordem_contato": l["ordem_contato"], "reserva": int(bool(l["condicao"])),
+              "regua": l.get("regua") or "", "cluster": l.get("cluster") or "", "estado": l.get("estado") or "",
+              "persona": (l.get("persona") or "").split(" · ")[0]} for l in fila]
     tmp = arq.with_suffix(".tmp")
     with open(tmp, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=CAMPOS_ESCOLHA, delimiter=";")

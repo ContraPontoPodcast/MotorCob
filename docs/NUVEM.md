@@ -39,9 +39,11 @@ ordem, › Run. Cada um deve terminar sem erro:
 5. `20260930000001_mapa_esteira.sql` (saldo por cliente e as views do Mapa da Esteira)
 6. `20261002000001_numeros_por_cliente.sql` (quantos contatos por cliente em cada canal)
 7. `20261003000001_personas.sql` (personas aprendidas e sugestões de régua)
+8. `20261004000001_acoes_dia.sql` (ações realizadas: totais por dia, canal, régua,
+   segmento e persona — sem dado pessoal)
 
-Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta o 5 e
-o 6 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
+Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta do 5
+ao 8 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 

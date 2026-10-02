@@ -203,7 +203,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             for ordem, contato in enumerate(contatos, 1):
                 fila.append({
                     "data": hoje.isoformat(), "id_cliente": idc, "tag": est.tag, "estado": est.estado,
-                    "prioridade": prioridade.get(est.estado, 9), "regua": nome_regua, "passo": rotulo,
+                    "cluster": est.cluster_atual, "prioridade": prioridade.get(est.estado, 9), "regua": nome_regua, "passo": rotulo,
                     "canal": canal, "contato": contato, "ordem_contato": ordem,
                     "status_contato": status_contato(cert_de.get(contato), sin.get(contato, {}),
                                                      flags.get(contato, {}), est),
