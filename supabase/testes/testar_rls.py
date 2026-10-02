@@ -11,6 +11,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261002000001_numeros_por_cliente.sql
     psql -d sb -f supabase/migrations/20261003000001_personas.sql
     psql -d sb -f supabase/migrations/20261004000001_acoes_dia.sql
+    psql -d sb -f supabase/migrations/20261005000001_credores.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -187,6 +188,26 @@ checar("ações: B vê só a B", True, "select sum(enviadas) from public.acoes_d
 checar("site não altera ações (0 linhas)", True, "with x as (update public.acoes_dia set enviadas=0 returning 1) select count(*) from x", "authenticated", u["admin"], 0)
 checar("site não grava ações", False, f"insert into public.acoes_dia (empresa_id,data,canal) values ({EA},'2026-09-02','sms')", "authenticated", u["admin"])
 checar("anônimo não lê ações", False, "select count(*) from public.acoes_dia", "anon")
+# credores (carteiras) da empresa
+checar("toda empresa nasce com o credor principal", True, "select count(*) from public.empresas e where not exists (select 1 from public.credores c where c.empresa_id=e.id and c.codigo='principal')", "service_role", None, 0)
+checar("planejamento A cria credor na A", True, f"insert into public.credores (empresa_id,codigo,nome) values ({EA},'banco-x','Banco X')", "authenticated", u["plan"])
+checar("operação não cria credor", False, f"insert into public.credores (empresa_id,codigo,nome) values ({EA},'banco-y','Banco Y')", "authenticated", u["oper"])
+checar("planejamento A não cria credor na B", False, f"insert into public.credores (empresa_id,codigo,nome) values ({EB},'banco-z','Banco Z')", "authenticated", u["plan"])
+checar("B não vê credores da A", True, "select string_agg(codigo, ',') from public.credores", "authenticated", u["operb"], "principal")
+checar("site não apaga credor (0 linhas)", True, "with x as (delete from public.credores returning 1) select count(*) from x", "authenticated", u["admin"], 0)
+_, CX, _ = sql(f"select id from public.credores where empresa_id={EA} and codigo='banco-x'")
+_, CB, _ = sql(f"select id from public.credores where empresa_id={EB}")
+checar("com 2 credores, carga sem credor é recusada", False, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'base','alfa/base/2026-10-05/s.csv','s.csv')", "authenticated", u["plan"])
+checar("carga incremental do Banco X", True, f"insert into public.envios (empresa_id,credor_id,tipo,caminho,nome_original) values ({EA},{CX},'incremental','alfa/incremental/2026-10-05/i.csv','i.csv')", "authenticated", u["plan"])
+for tipo in ("retirada", "acordo", "baixa"):
+    checar(f"arquivo de {tipo} do Banco X", True, f"insert into public.envios (empresa_id,credor_id,tipo,caminho,nome_original) values ({EA},{CX},'{tipo}','alfa/{tipo}/2026-10-05/{tipo}.csv','{tipo}.csv')", "authenticated", u["plan"])
+checar("bureau sem credor vale para todos", True, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'enriquecimento','alfa/enriquecimento/2026-10-05/e2.csv','e2.csv')", "authenticated", u["plan"])
+checar("credor de outra empresa é recusado", False, f"insert into public.envios (empresa_id,credor_id,tipo,caminho,nome_original) values ({EA},{CB},'base','alfa/base/2026-10-05/x.csv','x.csv')", "authenticated", u["plan"])
+checar("credor inativo não recebe arquivo", False, f"update public.credores set ativo=false where id={CX}; insert into public.envios (empresa_id,credor_id,tipo,caminho,nome_original) values ({EA},{CX},'base','alfa/base/2026-10-05/y.csv','y.csv')", "authenticated", u["plan"])
+sql(f"update public.credores set ativo=true where id={CX}")
+checar("estado do mesmo ID em dois credores", True, f"insert into public.estado_cliente (empresa_id,credor_id,id_cliente,tag,safra,cluster_origem,cluster_atual,estado,canal,ciclo) select empresa_id,{CX},id_cliente,tag,safra,cluster_origem,cluster_atual,estado,canal,ciclo from public.estado_cliente where empresa_id={EA} limit 1", "service_role")
+checar("mapa separa por credor", True, f"select count(distinct credor_id) from public.mapa_esteira where empresa_id={EA}", "authenticated", u["oper"], 2)
+checar("rotina antiga sem credor cai no principal", True, f"insert into public.acoes_dia (empresa_id,data,canal) values ({EA},'2026-10-05','sms'); select c.codigo from public.acoes_dia a join public.credores c on c.id=a.credor_id where a.data='2026-10-05'", "service_role", None, "principal")
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

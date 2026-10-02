@@ -41,7 +41,7 @@ from motor.estrategia import validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor.fila import gerar_fila, lista_enriquecimento
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
-from motor.marcacao import EstadoCliente, processar_dia
+from motor.marcacao import ESTADOS_MASSIVOS, EstadoCliente, processar_dia
 from motor.rastreio import carregar_acoes, ler_log_portal
 from motor.regua import carregar_regua
 
@@ -97,6 +97,13 @@ def preparar_base(entrada, pasta_bruta, pasta_base) -> dict:
     return converter_base(arquivos, ent.base, pasta_base)
 
 
+def preparar_carteira(entrada, pasta) -> dict:
+    """Carteira do credor (carga geral, incremental, retirada, acordo e baixa) -> <pasta>/base/."""
+    from motor.carteira import montar
+    ent = entrada if isinstance(entrada, Entrada) else carregar_entrada(entrada)
+    return montar(pasta, ent)
+
+
 def preparar_enriquecimento(entrada, pasta_enriq, pasta_base) -> dict | None:
     """Junta os retornos do bureau (todos os arquivos da pasta) em base/contatos.csv."""
     from fnmatch import fnmatch
@@ -138,14 +145,18 @@ def salvar_estado(pasta: Path, estados, ultimo_dia):
 def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts", parcelas_csv=None,
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
               ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
-              na_carga=None):
+              na_carga=None, compartilhado=None):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
     atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
     na_carga: base/na_carga.csv — quem está na carga do dia (só esses recebem ação hoje).
               Padrão: o na_carga.csv ao lado de clientes_csv, se existir.
     estrategias: [{id, nome, definicao, padrao}] da tabela `estrategias` (ou .json).
     canais: [{canal, ativo, janela_inicio, janela_fim, sabado, capacidade_dia, custo, tentativas_dia,
-             respeitar_nao_perturbe}] da tabela `canais_empresa` (ou .json)."""
+             respeitar_nao_perturbe}] da tabela `canais_empresa` (ou .json).
+    compartilhado: o que os OUTROS credores da empresa sabem da mesma pessoa (mesmo CPF):
+             {"hot": {(pessoa, contato)}, "whatsapp": {contato}, "acionados": {pessoa: data}}.
+             Hot e WhatsApp valem aqui; quem outro credor acionou nas últimas 48h não recebe
+             ação massiva hoje. O resultado traz r["compartilhar"] no mesmo formato."""
     regua = carregar_regua(regua_json) if regua_json else carregar_regua()
     avisos_cluster = []
     if clusters:
@@ -193,6 +204,13 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     sinais = {(c["id_cliente"], c["contato"]): {k: c.get(k) for k in ("rcs", "nao_perturbe", "score_bureau",
                                                                        "ranking", "pertence", "origem", "hot")}
               for c in contatos}
+    compartilhado = compartilhado or {}
+    hot_ext, wa_ext = compartilhado.get("hot") or set(), compartilhado.get("whatsapp") or set()
+    for c in contatos:
+        if c["contato"] in wa_ext and c["tipo"] == "telefone":
+            flags[c["contato"]]["whatsapp_valido"] = True
+        if (pessoa_de.get(c["id_cliente"]), c["contato"]) in hot_ext:
+            sinais[(c["id_cliente"], c["contato"])]["hot"] = True
     atualizados = {}
     for c in contatos:
         if c["atualizado_em"] and c["atualizado_em"] > atualizados.get(c["id_cliente"], date.min):
@@ -246,7 +264,14 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     ativos = None
     if arq_carga.exists():
         ativos = {l.strip() for l in arq_carga.read_text(encoding="utf-8").splitlines()[1:] if l.strip()}
-    fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos)
+    recencia = timedelta(hours=regua["recencia_horas"])
+    pausados = {idc for idc, p in pessoa_de.items()
+                if (d := (compartilhado.get("acionados") or {}).get(p)) and hoje - d < recencia}
+    fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos,
+                                  pausados=pausados)
+    if pausados & {k for k, e in estados.items() if e.estado in ESTADOS_MASSIVOS and (ativos is None or k in ativos)}:
+        alertas.append(f"OUTRO CREDOR: {len(pausados)} clientes acionados por outro credor nas últimas "
+                       f"{regua['recencia_horas']}h ficam sem ação massiva hoje")
     contatos_status = _contar_contatos(certs, sinais, flags, estados, ativos)
     alertas = [f"CLUSTER: {a}" for a in avisos_cluster] + alertas
     enriq = lista_enriquecimento(estados, flags, contatos_por, hoje, regua)
@@ -322,7 +347,13 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     for a in alertas:
         out(f"  ALERTA: {a}")
     out(f"  saídas em {saida}/ · estado em {pasta_estado}/")
-    return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "personas": personas, "sugestoes": sugestoes,
+    compartilhar = {
+        "hot": {(pessoa_de[k], e.contato_localizador) for k, e in estados.items()
+                if e.contato_localizador and k in pessoa_de},
+        "whatsapp": {c for c, f in flags.items() if f.get("whatsapp_valido")},
+        "acionados": {pessoa_de[l["id_cliente"]]: hoje for l in fila
+                      if l["id_cliente"] in pessoa_de and not l["condicao"] and l["estado"] in ESTADOS_MASSIVOS}}
+    return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "compartilhar": compartilhar, "personas": personas, "sugestoes": sugestoes,
             "caracteristicas_persona": modelo.colunas,
             "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
             "saida": saida, "relatorios": relatorios, "relatorios_ocorrencia": rel_ocorrencias,

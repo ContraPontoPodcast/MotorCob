@@ -1,0 +1,123 @@
+"""Carteira do credor: carga geral, incremental, retirada, acordo e baixa."""
+import csv
+import shutil
+import tempfile
+import unittest
+from datetime import date
+from pathlib import Path
+
+import rodar_dia
+from motor.carteira import montar
+from motor.entrada import carregar_entrada
+from motor.ingestao import LayoutInvalido
+
+RAIZ = Path(__file__).resolve().parent.parent
+EX = RAIZ / "exemplos" / "empresa"
+EMPRESA = RAIZ / "empresas" / "exemplo.json"
+CAB = "COD_CLIENTE;CONTRATO;CPF;SALDO_DEVEDOR;DT_VENCIMENTO;PRODUTO;UF;TEL1;WHATS_TEL1;TEL2;TEL3;EMAIL;BLOQUEIO\n"
+
+
+def _ler(p):
+    with open(p, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f, delimiter=";"))
+
+
+class TestCarteira(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        for d in ("bruto", "incremental", "retirada", "acordo", "baixa"):
+            shutil.copytree(EX / d, self.tmp / d)
+        self.ent = carregar_entrada(EMPRESA)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _na_carga(self):
+        return {l["id_cliente"] for l in _ler(self.tmp / "base" / "na_carga.csv")}
+
+    def test_estoque_com_os_cinco_arquivos(self):
+        rel = montar(self.tmp, self.ent)
+        # X0003 retirado (devolução); X0004 entrou na incremental e quitou; X0001 ganhou contrato
+        self.assertEqual(self._na_carga(), {"X0001", "X0002"})
+        self.assertEqual(rel["retirados"], {"devolução": 1})
+        self.assertEqual(rel["quitados"], {"X0004": "2026-09-06"})
+        cli = _ler(self.tmp / "base" / "clientes.csv")
+        x1 = {l["id_contrato"]: float(l["saldo"]) for l in cli if l["id_cliente"] == "X0001"}
+        self.assertEqual(x1, {"CT01": 1000.0, "CT06": 300.0})      # parcial abateu 250,40 do CT01
+        parc = _ler(self.tmp / "base" / "parcelas.csv")
+        ac = [p for p in parc if p["id_acordo"] == "AC100"]
+        self.assertEqual([p["pago_em"] for p in ac], ["2026-09-05", "", ""])   # baixa pagou a 1ª parcela
+        self.assertTrue(any(p["id_cliente"] == "X0004" and p["id_acordo"] == "QUITACAO" for p in parc))
+
+    def test_geral_nova_substitui_o_estoque(self):
+        (self.tmp / "bruto" / "geral_2026-09-10.csv").write_text(
+            CAB + "X0003;CT04;10000003387;5.000,00;10/05/2026;VEICULO;MG;31955550003;S;;;;\n", encoding="utf-8")
+        montar(self.tmp, self.ent)
+        # X0003 volta com a geral; X0001 sai (não veio); X0002 fica por ter acordo aberto
+        self.assertEqual(self._na_carga(), {"X0002", "X0003"})
+
+    def test_retirada_depois_do_acordo_para_tudo(self):
+        (self.tmp / "retirada" / "retirada_2026-09-08.csv").write_text(
+            "CONTRATO;DT_RETIRADA;MOTIVO\nCT02;08/09/2026;JUD\nCT03;08/09/2026;JUD\n", encoding="utf-8")
+        rel = montar(self.tmp, self.ent)
+        self.assertNotIn("X0002", self._na_carga())
+        self.assertEqual(rel["retirados"]["judicial"], 2)
+
+    def test_arquivo_sem_layout_avisa(self):
+        ent = carregar_entrada(EMPRESA)
+        from dataclasses import replace
+        with self.assertRaises(LayoutInvalido):
+            montar(self.tmp, replace(ent, baixa=None))
+
+    def test_motor_liquida_quitado_e_nao_aciona_retirado(self):
+        rel = rodar_dia.preparar_carteira(EMPRESA, self.tmp)
+        self.assertEqual(rel["na_carga"], 2)
+        base = self.tmp / "base"
+        r = rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", self.tmp / "ret", date(2026, 9, 8),
+                                parcelas_csv=base / "parcelas.csv", pasta_estado=self.tmp / "estado",
+                                pasta_saida=self.tmp / "saida", out=lambda *a: None)
+        est = {k: e.estado for k, e in r["estados"].items()}
+        self.assertEqual(est["X0004"], "LIQ")
+        self.assertIn(est["X0002"], ("COL", "PRE"))
+        self.assertFalse({"X0003", "X0004"} & {l["id_cliente"] for l in r["fila"]})
+
+
+
+class TestEntreCredores(unittest.TestCase):
+    """Mesmo CPF em dois credores: Hot e WhatsApp valem para os dois; 48h contam juntas."""
+    def _rodar(self, tmp, comp):
+        base = tmp / "base"
+        r = rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", tmp / "ret", date(2026, 9, 2),
+                                pasta_estado=tmp / "estado", pasta_saida=tmp / "saida", out=lambda *a: None,
+                                compartilhado=comp)
+        return [l for l in r["fila"] if l["id_cliente"] == "B1"], r
+
+    def _preparar(self, tmp):
+        (tmp / "bruto").mkdir(parents=True)
+        (tmp / "bruto" / "carga_2026-09-01.csv").write_text(
+            CAB + "B1;K1;10000001171;800,00;01/08/2026;CARTAO;SP;11911110001;N;11922220002;;;\n", encoding="utf-8")
+        rodar_dia.preparar_carteira(EMPRESA, tmp)
+
+    def test_hot_de_outro_credor_vai_primeiro_e_48h_pausa(self):
+        from motor import normalizacao as norm
+        pessoa = norm.chave_pessoa(norm.cpf("10000001171"))
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            self._preparar(tmp)
+            fila, r = self._rodar(tmp, {"hot": {(pessoa, "11922220002")}, "whatsapp": {"11922220002"}})
+            self.assertTrue(fila)
+            self.assertEqual({l["contato"] for l in fila if l["canal"] == "whatsapp"}, {"11922220002"})
+            self.assertIn(pessoa, r["compartilhar"]["acionados"])           # este credor também avisa
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            self._preparar(tmp)
+            fila, r = self._rodar(tmp, {"acionados": {pessoa: date(2026, 9, 1)}, "whatsapp": {"11922220002"}})
+            self.assertEqual(fila, [])
+            self.assertTrue(any("OUTRO CREDOR" in a for a in r["alertas"]))
+            fila, _ = self._rodar(tmp, {"acionados": {pessoa: date(2026, 8, 30)}, "whatsapp": {"11922220002"}})   # passou das 48h
+            self.assertTrue(fila)
+
+
+if __name__ == "__main__":
+    unittest.main()

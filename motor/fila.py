@@ -19,7 +19,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 
 from .certificacao import Certificacao, Evento
-from .marcacao import Cliente, EstadoCliente, proximo_canal
+from .marcacao import ESTADOS_MASSIVOS, Cliente, EstadoCliente, proximo_canal
 from .estrategia import normalizar, passa, resolver
 from .persona import resolver_tokens
 from .regua import CANAIS_VOZ, Regua
@@ -147,7 +147,8 @@ def _disponiveis_cpc(cands, est, flags, sinais, regua) -> set[str]:
 def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                certs: dict[tuple[str, str], Certificacao], flags: dict[str, dict],
                parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None,
-               sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None):
+               sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
+               pausados: set[str] = frozenset()):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -157,6 +158,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
              "origem"}} da base e do retorno do enriquecimento.
     Cada cliente segue a estratégia do cluster dele (regua.para).
     ativos: quem está na carga do dia (None = todos); os demais não recebem ação.
+    pausados: acionados por outro credor nas últimas 48h — sem ação massiva hoje (acordo segue).
     """
     alertas = []
     taxa, envios = taxa_bloqueio_whatsapp(eventos or [], hoje, regua)
@@ -185,6 +187,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         disp = _disponiveis_cpc(cands, est, flags, sin, rc)
         disponiveis[idc] = disp
         if janela is None or est.estado in ("BLQ", "LIQ", "COL") or (ativos is not None and idc not in ativos):
+            continue
+        if idc in pausados and est.estado in ESTADOS_MASSIVOS:
             continue
         passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp)
         if passo is None:
