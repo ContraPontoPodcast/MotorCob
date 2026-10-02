@@ -36,7 +36,11 @@ ordem, › Run. Cada um deve terminar sem erro:
 3. `20260928000002_clusters.sql` (clusters de cada empresa, definidos no site)
 4. `20260929000001_estrategias.sql` (estratégias por cluster, canais da empresa e retorno do
    enriquecimento)
-5. `20261002000001_numeros_por_cliente.sql` (quantos contatos por cliente em cada canal)
+5. `20260930000001_mapa_esteira.sql` (saldo por cliente e as views do Mapa da Esteira)
+6. `20261002000001_numeros_por_cliente.sql` (quantos contatos por cliente em cada canal)
+
+Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta o 5 e
+o 6 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 
@@ -118,5 +122,6 @@ psql -d sb -f supabase/migrations/20260925000001_motorcob.sql
 psql -d sb -f supabase/migrations/20260928000001_multiempresa.sql
 psql -d sb -f supabase/migrations/20260928000002_clusters.sql
 psql -d sb -f supabase/migrations/20260929000001_estrategias.sql
-python supabase/testes/testar_rls.py      # 91 verificações por papel e por empresa
+psql -d sb -f supabase/migrations/20260930000001_mapa_esteira.sql
+python supabase/testes/testar_rls.py      # 96 verificações por papel e por empresa
 ```

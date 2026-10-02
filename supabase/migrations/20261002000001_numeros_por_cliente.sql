@@ -5,6 +5,6 @@
 -- enviados viram candidatos a Hot: as ações seguintes vão a um candidato por vez até um
 -- deles dar CPC sozinho.
 alter table public.canais_empresa
-    add column numeros_por_cliente int check (numeros_por_cliente between 1 and 99);
+    add column if not exists numeros_por_cliente int check (numeros_por_cliente between 1 and 99);
 comment on column public.canais_empresa.numeros_por_cliente is
     'Contatos por cliente na lista do dia: nulo/1 = um (padrão), 99 = todos.';
