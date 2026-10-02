@@ -12,6 +12,11 @@
 4. **CPC → Hot.** O contato que deu CPC vira Hot (prioritário em toda exportação) e o
    canal do CPC fica marcado: o cliente vai para CPC A e as ações seguintes saem por ali.
 
+**Mais de um telefone por cliente:** em cada canal a empresa escolhe 1 contato (padrão)
+ou mais (2, 3, todos) na Lista do dia. Com mais de um, o CPC vale para o cliente na hora
+(CPC A, canal marcado) e os telefones enviados viram candidatos: as próximas ações vão a
+um candidato por vez; o que der CPC sozinho vira Hot, o que não atender sai da lista.
+
 Status do contato: **HOT** (deu CPC ou veio marcado como preferencial na carga) ·
 **WHATSAPP** · **RCS** · **NEUTRO** (sem validação) · **INVÁLIDO**. O retorno do bureau
 só atualiza esses status e traz números novos.

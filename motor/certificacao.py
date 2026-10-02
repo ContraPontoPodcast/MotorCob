@@ -36,6 +36,7 @@ class Evento:
     custo: float = 0.0
     fornecedor: str | None = None
     id_externo: str | None = None  # id do retorno no fornecedor, para deduplicar
+    candidatos: tuple = ()         # contato vazio: os contatos que foram na ação (descoberta do Hot)
 
 
 @dataclass

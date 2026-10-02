@@ -109,7 +109,13 @@ def contatos_da_acao(acao: dict, cands: dict[str, list], est: EstadoCliente, fla
     """Contatos que recebem a ação: candidatos do canal que passam no filtro, até o limite."""
     lista = [c.contato for c in cands.get(acao["canal"], [])
              if passa(acao.get("contatos") or {}, c, sinais.get(c.contato, {}), flags.get(c.contato, {}))]
-    limite = acao.get("numeros") or _limite_padrao(acao["canal"], est, regua)
+    if est.estado in ("CPA", "CPB") and not est.contato_localizador and est.candidatos_hot:
+        # descoberta do Hot: um candidato por vez, mesmo com "todos os números"
+        cand = [c for c in est.candidatos_hot if c in lista]
+        if cand:
+            return cand[:1]
+    limite = acao.get("numeros") or regua.canal_cfg(acao["canal"]).get("numeros_por_cliente") \
+        or _limite_padrao(acao["canal"], est, regua)
     return lista[:limite] if limite else lista
 
 

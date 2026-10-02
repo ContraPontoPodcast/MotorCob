@@ -152,6 +152,10 @@ de outra pessoa pela certificação e a rotação segue.
   (`contato_localizador` + certificação) e o canal do CPC fica marcado (`canal_atual`).
   Status do contato na exportação (`status_contato` em `fila_do_dia.csv`): HOT · WHATSAPP
   · RCS · NEUTRO · INVALIDO; marcas `hot`/`whatsapp`/`rcs` podem vir por telefone na carga.
+  Mais de um contato por canal: `canais_empresa.numeros_por_cliente` (1 padrão, 99 =
+  todos). CPC sem contato identificado → `EstadoCliente.candidatos_hot` (contatos da ação,
+  via `Evento.candidatos`); em CPA/CPB sem Hot, um candidato por vez até um dar CPC
+  sozinho; candidato acionado sozinho sem CPC sai da lista.
   Nome do arquivo não importa: cada pasta (bruto/, ocorrencias/, enriquecimento/) só
   recebe um tipo; colunas opcionais ausentes no arquivo do dia ficam vazias.
 - `motor/estrategia.py`: estratégia de acionamento por cluster (tabela `estrategias`,

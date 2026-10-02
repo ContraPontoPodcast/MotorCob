@@ -2,7 +2,11 @@
 
 O site fica com o fluxo da operação na frente: **carga do credor → lista do dia →
 ocorrência (CPC sim/não)**. Clusters, estratégias, canais, empresas e usuários continuam
-existindo, mas vão para um grupo "Avançado". Não precisa de migração nova no Supabase.
+existindo, mas vão para um grupo "Avançado".
+
+Antes de colar, aplique no Supabase a migração
+`supabase/migrations/20261002000001_numeros_por_cliente.sql` (SQL Editor › New query ›
+colar o conteúdo › Run).
 
 ---
 
@@ -60,6 +64,15 @@ Mesmos downloads de antes (ids/{canal}.csv com id_cliente;contato). Troque os te
 título "Lista do dia"; ajuda "Um contato por cliente em cada canal. O contato HOT do
 cliente sempre vai primeiro." Para admin e planejamento, o arquivo de detalhe
 fila_do_dia.csv agora tem a coluna status_contato (HOT, WHATSAPP, RCS, NEUTRO).
+
+## Contatos por cliente (na página Lista do dia, para admin e planejamento)
+Bloco "Contatos por cliente em cada canal": uma linha por canal (WhatsApp, RCS, SMS,
+E-mail, Agente virtual, Discador) com um seletor "1 (recomendado)", "2", "3", "Todos".
+Grava em canais_empresa.numeros_por_cliente da empresa (upsert em (empresa_id, canal);
+1 = null, Todos = 99). Texto de ajuda: "Com 1 contato, o CPC da ocorrência marca na hora
+qual é o telefone Hot. Com mais de um, o CPC vale para o cliente e o MotorCob descobre o
+Hot testando um telefone por vez nas próximas ações." Vale a partir da rotina seguinte.
+A página Canais (Avançado) mostra o mesmo campo.
 
 ## Cliente
 Na TAG decomposta, mostre o estado com o nome da operação (Não localizado, CPC A, CPC B,

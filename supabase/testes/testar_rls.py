@@ -7,6 +7,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20260928000001_multiempresa.sql
     psql -d sb -f supabase/migrations/20260928000002_clusters.sql
     psql -d sb -f supabase/migrations/20260929000001_estrategias.sql
+    psql -d sb -f supabase/migrations/20261002000001_numeros_por_cliente.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -153,6 +154,8 @@ checar("operação B não lê canais da A", True, "select count(*) from public.c
 checar("planejamento sobe retorno de enriquecimento", True, f"insert into public.envios (empresa_id,tipo,caminho,nome_original) values ({EA},'enriquecimento','alfa/enriquecimento/2026-09-25/e.csv','e.csv')", "authenticated", u["plan"])
 checar("planejamento sobe arquivo em entradas/alfa/enriquecimento", True, "insert into storage.objects (bucket_id,name) values ('entradas','alfa/enriquecimento/2026-09-25/e.csv')", "authenticated", u["plan"])
 checar("apagar estratégia deixa o cluster sem estratégia", True, f"delete from public.estrategias where nome='Digital'; select count(*) from public.clusters where estrategia_id is null and empresa_id={EA}", "authenticated", u["plan"], 1)
+checar("planejamento escolhe todos os números no discador", True, f"update public.canais_empresa set numeros_por_cliente=99 where empresa_id={EA} and canal='discador'", "authenticated", u["plan"])
+checar("números por cliente fora de 1–99 é recusado", False, f"update public.canais_empresa set numeros_por_cliente=0 where empresa_id={EA}", "authenticated", u["plan"])
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

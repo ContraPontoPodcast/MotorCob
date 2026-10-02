@@ -102,3 +102,54 @@ class TestExportacao(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTodosOsNumeros(unittest.TestCase):
+    NUMS = ["11900000001", "11900000002", "11900000003"]
+
+    def _fila(self, est, dia, canais=None):
+        from motor.cluster import carregar_regras
+        regras, _ = carregar_regras([])
+        regua = carregar_regua().com_clusters(regras, {}, None, canais or {})
+        certs = {("C1", n): Certificacao("C1", n, "telefone", "DESCONHECIDO", 0.4) for n in self.NUMS}
+        return gerar_fila({"C1": est}, {"C1": Cliente("C1", est.safra, 900.0, 30)}, certs, {}, {}, dia, regua, [])[0], regua
+
+    def test_empresa_escolhe_todos_os_numeros_no_canal(self):
+        safra = date(2026, 8, 31)                                     # D+5 = sábado: agente virtual
+        cfg = {"agente_voz": {"canal": "agente_voz", "numeros_por_cliente": 99}}
+        fila, _ = self._fila(EstadoCliente("C1", safra, "M1", "M1", "2026-08"), date(2026, 9, 5), cfg)
+        self.assertEqual(len([l for l in fila if l["canal"] == "agente_voz"]), 3)
+        fila, _ = self._fila(EstadoCliente("C1", safra, "M1", "M1", "2026-08"), date(2026, 9, 5))
+        self.assertEqual(len([l for l in fila if l["canal"] == "agente_voz"]), 1)   # padrão: 1
+
+    def test_cpc_com_varios_numeros_descobre_o_hot_um_por_vez(self):
+        from motor.certificacao import Evento
+        from motor.entrada import _resolver
+        from motor.marcacao import processar_dia
+        # ocorrência sem telefone, com 3 números na ação: CPC vale, números viram candidatos
+        escolhas = {("2026-09-05", "C1"): [{"canal": "agente_voz", "contato": n, "ordem_contato": i + 1, "reserva": 0}
+                                          for i, n in enumerate(self.NUMS)]}
+        canal, contato, _, cand = _resolver(escolhas, "C1", date(2026, 9, 5), "agente_voz")
+        self.assertEqual((canal, contato, cand), ("agente_voz", "", tuple(self.NUMS)))
+        safra = date(2026, 8, 31)
+        est = EstadoCliente("C1", safra, "M1", "M1", "2026-08")
+        cli = {"C1": Cliente("C1", safra, 900.0, 30)}
+        regua = carregar_regua()
+        cpc = Evento("C1", "", "telefone", "agente_voz", "cpc", date(2026, 9, 5), candidatos=tuple(self.NUMS))
+        processar_dia({"C1": est}, cli, [cpc], {}, date(2026, 9, 5), regua)
+        self.assertEqual((est.estado, est.canal_atual, est.contato_localizador, est.candidatos_hot),
+                         ("CPA", "agente_voz", None, self.NUMS))
+        cfg = {"agente_voz": {"canal": "agente_voz", "numeros_por_cliente": 99}}
+        fila, _ = self._fila(est, date(2026, 9, 8), cfg)               # mesmo com "todos": 1 candidato
+        self.assertEqual({(l["canal"], l["contato"]) for l in fila},   # agente virtual + discador de reserva
+                         {("agente_voz", self.NUMS[0]), ("discador", self.NUMS[0])})
+        # o 1º candidato não atende: sai da descoberta; o próximo entra
+        nao = Evento("C1", self.NUMS[0], "telefone", "agente_voz", "nao_atendida", date(2026, 9, 8))
+        processar_dia({"C1": est}, cli, [nao], {}, date(2026, 9, 8), regua)
+        self.assertEqual(est.candidatos_hot, self.NUMS[1:])
+        fila, _ = self._fila(est, date(2026, 9, 10), cfg)
+        self.assertEqual({l["contato"] for l in fila}, {self.NUMS[1]})
+        # CPC no número sozinho: esse é o Hot
+        sim = Evento("C1", self.NUMS[1], "telefone", "agente_voz", "cpc", date(2026, 9, 10))
+        processar_dia({"C1": est}, cli, [sim], {}, date(2026, 9, 10), regua)
+        self.assertEqual((est.contato_localizador, est.candidatos_hot), (self.NUMS[1], []))

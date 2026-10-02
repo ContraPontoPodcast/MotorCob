@@ -61,6 +61,7 @@ class EstadoCliente:
     reenriquecer: str | None = None  # motivo, quando o cliente precisa de novo enriquecimento
     acordos_quebrados: list[str] = field(default_factory=list)
     cluster_versao: str = ""         # versão das regras de cluster da empresa usada na revisão
+    candidatos_hot: list[str] = field(default_factory=list)  # CPC com vários números: um deles é o Hot
 
     @property
     def tag(self) -> str:
@@ -187,6 +188,9 @@ def _aplicar_retornos(est, eventos, dia, regua, disponiveis, trilha):
     massivo = est.estado in ESTADOS_MASSIVOS
     if massivo and tentados:
         est.ultima_massiva = dia
+    if est.candidatos_hot:  # candidato acionado sozinho e sem CPC sai da descoberta
+        falhou = {e.contato for e in eventos if e.contato and not regua.e_contato(e.canal, e.resultado)}
+        est.candidatos_hot = [c for c in est.candidatos_hot if c not in falhou]
 
     if contatos:
         e = min(contatos, key=lambda e: _ordem(regua, e.canal))
@@ -194,6 +198,8 @@ def _aplicar_retornos(est, eventos, dia, regua, disponiveis, trilha):
         if massivo:
             est.estado, est.ciclo, est.tentativas = "CPA", "T1", 1
             est.canal_atual, est.contato_localizador = e.canal, e.contato or None
+            # CPC sem saber o número (vários na ação): os números enviados viram candidatos a Hot
+            est.candidatos_hot = [] if e.contato else list(e.candidatos)
             est.canais_esgotados, est.giro_inicio, est.giro_pausado, est.reenriquecer = [], None, False, None
         trilha.marcar(dia, est, antes, f"contato no {QUEM.get(e.canal, e.canal)}"
                       + (" → CPC A" if massivo else ""), QUEM.get(e.canal, e.canal))

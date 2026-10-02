@@ -36,6 +36,7 @@ ordem, › Run. Cada um deve terminar sem erro:
 3. `20260928000002_clusters.sql` (clusters de cada empresa, definidos no site)
 4. `20260929000001_estrategias.sql` (estratégias por cluster, canais da empresa e retorno do
    enriquecimento)
+5. `20261002000001_numeros_por_cliente.sql` (quantos contatos por cliente em cada canal)
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 

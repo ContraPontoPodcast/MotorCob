@@ -528,7 +528,9 @@ class RelatorioOcorrencia:
 
 
 def _resolver(escolhas, idc: str, dia: date, canal: str | None):
-    """(canal, contato, aviso) a partir do que o MotorCob mandou acionar até DIAS_BUSCA_ESCOLHA antes."""
+    """(canal, contato, aviso, candidatos) a partir do que o MotorCob mandou acionar até
+    DIAS_BUSCA_ESCOLHA antes. Com vários contatos no canal, contato = "" e candidatos = os
+    contatos enviados, na ordem de exportação."""
     for atras in range(DIAS_BUSCA_ESCOLHA + 1):
         ls = escolhas.get(((dia - timedelta(days=atras)).isoformat(), idc))
         if not ls:
@@ -542,9 +544,14 @@ def _resolver(escolhas, idc: str, dia: date, canal: str | None):
         if len(canais) > 1:  # sem coluna de canal e mais de um canal no dia: vale o principal
             aviso = "canal presumido (mais de um canal no dia)"
         escolhido = canais[0]
-        contatos = sorted({l["contato"] for l in ls if l["canal"] == escolhido})
-        return escolhido, (contatos[0] if len(contatos) == 1 else ""), aviso
-    return canal, "", "sem ação do MotorCob para este ID na data"
+        contatos = []
+        for l in sorted((l for l in ls if l["canal"] == escolhido), key=lambda l: int(l.get("ordem_contato") or 1)):
+            if l["contato"] not in contatos:
+                contatos.append(l["contato"])
+        if len(contatos) == 1:
+            return escolhido, contatos[0], aviso, ()
+        return escolhido, "", aviso, tuple(contatos)
+    return canal, "", "sem ação do MotorCob para este ID na data", ()
 
 
 def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, escolhas, vistos: set | None = None):
@@ -598,7 +605,7 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
                 contato = norm.contato(linha[col["contato"]], _tipo(canal) if canal else "telefone")
                 if contato is None and not canal:
                     contato = norm.email(linha[col["contato"]])
-            canal_res, contato_res, aviso = _resolver(escolhas, idc, dia, canal)
+            canal_res, contato_res, aviso, candidatos = _resolver(escolhas, idc, dia, canal)
             canal = canal or canal_res
             if canal is None:
                 rel.rejeitadas["sem canal e sem ação do MotorCob na data"] += 1
@@ -625,7 +632,8 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
             else:
                 custo = layout.custo_fixo.get(canal, 0.0)
             eventos.append(Evento(idc, contato or "", _tipo(canal), canal, resultado, dia, custo,
-                                  fornecedor=fornecedor, id_externo=id_ext))
+                                  fornecedor=fornecedor, id_externo=id_ext,
+                                  candidatos=() if contato else candidatos))
             rel.aceitas += 1
             rel.contato_identificado += bool(contato)
     return eventos, rel, quarentena
