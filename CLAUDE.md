@@ -223,7 +223,13 @@ de outra pessoa pela certificação e a rotação segue.
   pendentes, e as outras empresas seguem. Chave service_role só em
   `~/MotorCob-dados/config/supabase.env` (criado por `scripts/configurar_nuvem.sh`).
 - `scripts/` + `docs/PRODUCAO.md`: produção no Mac (instalador, rotina agendada via
-  launchd, relatório mensal). Dados reais ficam em `~/MotorCob-dados`, fora do repo.
+  launchd, relatório mensal). `instalar_mac.sh vigiar`: launchd a cada 120 s chama
+  `rodar_dia.sh --vigiar` → `nuvem.sincronizar vigiar --checar` (sai 3 sem carga nova) e
+  `vigiar` roda o dia só das empresas com envio `base` pendente. Trava em
+  `logs/.rodando.lock` (diário e vigia não se atropelam). Rodada com erro grava
+  `estado/vigia.json` (`falhou_ate` = id do envio) e só tenta de novo com carga nova. Carga
+  sem colunas obrigatórias (`entrada.checar_base`) vai para `bruto/rejeitados/` e o envio
+  fica com erro; se todas as cargas novas forem ruins, a rodada para sem gerar lista. Dados reais ficam em `~/MotorCob-dados`, fora do repo.
 - `exemplos/simular_operacao.py`: operação simulada dia a dia com verdade conhecida e
   auditoria das regras. `exemplos/gerar_retornos.py`: arquivos de exemplo.
 - `db/schema.sql`: modelo alvo em Postgres. `tests/`: testes das regras e princípios.

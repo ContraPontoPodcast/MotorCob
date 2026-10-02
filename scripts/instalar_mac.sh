@@ -1,6 +1,9 @@
 #!/bin/bash
 # Instalação no Mac: pasta de dados, dependência do Excel, testes e (opcional)
-# agendamento diário. Uso: scripts/instalar_mac.sh [HH:MM]   ex.: 06:30
+# agendamento. Uso: scripts/instalar_mac.sh [HH:MM | vigiar]
+#   HH:MM   roda uma vez por dia nesse horário (ex.: 06:30)
+#   vigiar  a cada 2 minutos olha o site e, se chegou carga do credor, gera a lista na hora
+#           (substitui o agendamento diário)
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 DADOS="${MOTORCOB_DADOS:-$HOME/MotorCob-dados}"
@@ -17,7 +20,39 @@ echo "Pasta de dados: $DADOS"
 (cd "$REPO" && "$PY" -m unittest -q) && echo "Testes OK"
 chmod +x "$REPO"/scripts/*.sh
 
-if [ -n "${1:-}" ]; then
+if [ "${1:-}" = "vigiar" ]; then
+  DIARIO="$HOME/Library/LaunchAgents/br.com.contraponto.motorcob.plist"
+  if [ -f "$DIARIO" ]; then
+    launchctl unload "$DIARIO" 2>/dev/null || true
+    rm "$DIARIO"
+    echo "Agendamento diário removido: a lista passa a sair quando a carga chegar."
+  fi
+  PLIST="$HOME/Library/LaunchAgents/br.com.contraponto.motorcob.vigia.plist"
+  mkdir -p "$HOME/Library/LaunchAgents"
+  cat > "$PLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>br.com.contraponto.motorcob.vigia</string>
+  <key>ProgramArguments</key><array><string>$REPO/scripts/rodar_dia.sh</string><string>--vigiar</string></array>
+  <key>EnvironmentVariables</key><dict>
+    <key>MOTORCOB_DADOS</key><string>$DADOS</string>
+    <key>MOTORCOB_PYTHON</key><string>$(command -v "$PY")</string>
+  </dict>
+  <key>StartInterval</key><integer>120</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>$DADOS/logs/vigia.log</string>
+  <key>StandardErrorPath</key><string>$DADOS/logs/vigia.log</string>
+</dict></plist>
+PL
+  launchctl unload "$PLIST" 2>/dev/null || true
+  launchctl load "$PLIST"
+  echo "Vigia ligada: a cada 2 minutos o Mac olha o site; carga nova = lista do dia na hora."
+  echo "O Mac precisa ficar ligado e sem dormir (Ajustes › Bateria/Energia › impedir repouso)."
+  echo "Para desligar: launchctl unload $PLIST && rm $PLIST"
+elif [ -n "${1:-}" ]; then
+  VIGIA="$HOME/Library/LaunchAgents/br.com.contraponto.motorcob.vigia.plist"
+  [ -f "$VIGIA" ] && { launchctl unload "$VIGIA" 2>/dev/null || true; rm "$VIGIA"; echo "Vigia desligada."; }
   HORA="${1%%:*}"; MIN="${1##*:}"
   PLIST="$HOME/Library/LaunchAgents/br.com.contraponto.motorcob.plist"
   mkdir -p "$HOME/Library/LaunchAgents"
