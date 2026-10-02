@@ -163,6 +163,16 @@ de outra pessoa pela certificação e a rotação segue.
   sozinho; candidato acionado sozinho sem CPC sai da lista.
   Nome do arquivo não importa: cada pasta (bruto/, ocorrencias/, enriquecimento/) só
   recebe um tipo; colunas opcionais ausentes no arquivo do dia ficam vazias.
+- `motor/persona.py`: personas aprendidas a cada rotina (`aprender`): tentativas por
+  cliente × canal × dia (sucesso = `regua.e_contato`), características (atributos da carga
+  + faixa_saldo, faixa_atraso, ddd, tem_whatsapp, tem_rcs; numéricas em tercis), seleção
+  automática das 2 que mais separam (qui²/gl ≥ 4, grupos ≥ 30), taxa encolhida
+  persona → 1ª característica → carteira (Beta, força 50). Ranking por CPC por real
+  (taxa ÷ custo; canal sem histórico vai depois). Etiquetas `persona_1`/`persona_2` na
+  estratégia são trocadas pelo canal do cliente (`resolver_tokens`, 10% exploração
+  estável por cliente/dia). `sugerir`: régua cujo 1º canal rende < 1/1,2 do melhor com
+  ≥ 200 tentativas → sugestão; aprovada no site, `nuvem.aplicar_sugestoes` cria segmento
+  (condições da persona, no topo) + estratégia com a troca. Tabelas `personas` e `sugestoes`.
 - `motor/estrategia.py`: estratégia de acionamento por cluster (tabela `estrategias`,
   editada no site; `clusters.estrategia_id`; uma pode ser a padrão da empresa). Sobrescreve
   fases do playbook (`localizacao`, `cpc`, `giro`, `preventivo`, `quebra`,

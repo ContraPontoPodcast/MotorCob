@@ -21,6 +21,7 @@ from datetime import date, timedelta
 from .certificacao import Certificacao, Evento
 from .marcacao import Cliente, EstadoCliente, proximo_canal
 from .estrategia import normalizar, passa, resolver
+from .persona import resolver_tokens
 from .regua import CANAIS_VOZ, Regua
 
 FORA = {"INVALIDO", "CONTESTADO"}
@@ -189,6 +190,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         if passo is None:
             continue
         nome_regua, rotulo, acoes, data_fixa = passo
+        acoes, persona_rot = resolver_tokens(acoes, rc.persona, idc, hoje, set(cands))
         blend = resolver(acoes, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
         cert_de = {c.contato: c for cs in cands.values() for c in cs}
         for canal, condicao, contatos in blend:
@@ -208,6 +210,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                     "condicao": condicao, "data_fixa": data_fixa,
                     "spins_max": cfg.get("tentativas_dia") or (rc["spins_discador_dia"] if canal == "discador" else ""),
                     "janela": f"{jan[0]}-{jan[1]}",
+                    "persona": persona_rot,
                 })
     fila.sort(key=lambda l: (l["prioridade"], l["id_cliente"], l["ordem_contato"]))
     fila = _aplicar_capacidade(fila, clientes, regua, alertas)

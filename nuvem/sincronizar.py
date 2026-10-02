@@ -224,6 +224,71 @@ def _baixar(sb: Supabase, pasta: Path, tabela: str, empresa_id, ordem: str) -> l
     return linhas
 
 
+def chave_sugestao(s: dict) -> str:
+    return f'{s["persona"]}|{s["fase"]}|{s["dia"]}|{s["de"]}|{s["para"]}'
+
+
+def publicar_personas(sb: Supabase, empresa_id, r) -> int:
+    """Personas do dia (substitui as anteriores) e sugestões novas; devolve quantas sugestões novas."""
+    ts = agora()
+    sb.apagar("personas", {"empresa_id": f"eq.{empresa_id}"})
+    linhas = [{"empresa_id": empresa_id, "persona": p["persona"], "nome": p["nome"], "clientes": p["clientes"],
+               "condicoes": p["condicoes"], "ranking": p["ranking"],
+               "caracteristicas": r.get("caracteristicas_persona") or [], "atualizado_em": ts}
+              for p in r.get("personas") or []]
+    if linhas:
+        sb.inserir("personas", linhas)
+    existentes = {s["chave"]: s for s in sb.selecionar("sugestoes", {"empresa_id": f"eq.{empresa_id}"}) or []}
+    novas = 0
+    for s in r.get("sugestoes") or []:
+        chave = chave_sugestao(s)
+        if chave not in existentes:
+            sb.inserir("sugestoes", {"empresa_id": empresa_id, "chave": chave, "texto": s["texto"], "dados": s})
+            novas += 1
+        elif existentes[chave]["status"] == "pendente":  # evidência do dia
+            sb.atualizar("sugestoes", {"id": f"eq.{existentes[chave]['id']}"}, {"texto": s["texto"], "dados": s})
+    return novas
+
+
+def aplicar_sugestoes(sb: Supabase, empresa_id, out=print) -> int:
+    """Sugestões aprovadas no site viram um segmento (condições da persona, no topo da lista) com
+    uma estratégia igual à que a persona seguia, com a troca de canal sugerida."""
+    import copy
+    from motor.persona import condicoes_cluster
+    from motor.regua import carregar_regua
+    aprovadas = sb.selecionar("sugestoes", {"empresa_id": f"eq.{empresa_id}", "status": "eq.aprovada"}) or []
+    if not aprovadas:
+        return 0
+    clusters = sb.selecionar("clusters", {"empresa_id": f"eq.{empresa_id}"}) or []
+    usados = {c["codigo"] for c in clusters}
+    ordem = min([c.get("ordem") or 100 for c in clusters] + [100]) - 10
+    for sug in aprovadas:
+        d = sug["dados"]
+        base = {}
+        if d.get("estrategia_base") is not None:
+            achou = sb.selecionar("estrategias", {"id": f"eq.{d['estrategia_base']}"}) or []
+            base = copy.deepcopy(achou[0]["definicao"]) if achou else {}
+        loc = base.setdefault("localizacao", {})
+        passos = loc.get("passos") or copy.deepcopy(carregar_regua()["localizacao"]["passos"])
+        passo = passos.get(str(d["dia"])) or [d["de"]]
+        primeiro = passo[0]
+        passo[0] = d["para"] if isinstance(primeiro, str) else {**primeiro, "canal": d["para"]}
+        passos[str(d["dia"])] = passo
+        loc["passos"] = passos
+        nome = f"Persona {d['nome']}"[:70] + f" #{sug['id']}"
+        estr = sb.inserir("estrategias", {"empresa_id": empresa_id, "nome": nome,
+                                          "descricao": sug["texto"], "definicao": base}, retornar=True)[0]
+        codigo = next(f"P{n}" for n in range(1, 1000) if f"P{n}" not in usados)
+        usados.add(codigo)
+        sb.inserir("clusters", {"empresa_id": empresa_id, "ordem": ordem, "codigo": codigo, "ativo": True,
+                                "nome": f"Persona {d['nome']}"[:120],
+                                "condicoes": condicoes_cluster(d["condicoes"]), "estrategia_id": estr["id"]})
+        ordem -= 10
+        sb.atualizar("sugestoes", {"id": f"eq.{sug['id']}"}, {"status": "aplicada", "aplicada_em": agora()})
+        out(f"  sugestão aplicada: {sug['texto']} (segmento {codigo})")
+    return len(aprovadas)
+
+
 def baixar_clusters(sb: Supabase, pasta: Path, empresa_id) -> list[dict]:
     """Regras de cluster ativas da empresa; cópia em config/clusters.json (auditoria da rodada)."""
     regras = sb.selecionar("clusters", {"empresa_id": f"eq.{empresa_id}", "ativo": "eq.true"},
@@ -261,6 +326,7 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
         rel_enriq = None
         if tem_enriq and (pasta / "base" / "contatos.csv").exists():
             rel_enriq = rodar_dia.preparar_enriquecimento(entrada, pasta / "enriquecimento", pasta / "base")
+        n_aplicadas = aplicar_sugestoes(sb, eid, out)
         clusters = baixar_clusters(sb, pasta, eid)
         estrategias = _baixar(sb, pasta, "estrategias", eid, "id.asc")
         canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
@@ -287,6 +353,7 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
         if fila:
             sb.inserir("fila_dia", fila)
         n_arq = publicar_arquivos(sb, r["saida"], f"{slug}/{data.isoformat()}")
+        n_sug = publicar_personas(sb, eid, r)
         for e, destino in baixados:
             status, rel = _relatorio_envio(e, destino, r, rel_base, rel_enriq)
             sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": status, "relatorio": rel})
@@ -299,6 +366,8 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
                   "dias_processados": r["dias_processados"], "trilha_enviada": n_trilha,
                   "ocorrencias": sum(x.aceitas for x in r["relatorios_ocorrencia"]),
                   "na_carga": r.get("na_carga"), "contatos": r.get("contatos_status") or {},
+                  "personas": len(r.get("personas") or []), "sugestoes_novas": n_sug,
+                  "sugestoes_aplicadas": n_aplicadas,
                   "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq}
         sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
                      {"status": "ok", "terminada_em": agora(), "resumo": resumo, "alertas": r["alertas"]})

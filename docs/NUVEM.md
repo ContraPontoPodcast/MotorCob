@@ -38,6 +38,7 @@ ordem, › Run. Cada um deve terminar sem erro:
    enriquecimento)
 5. `20260930000001_mapa_esteira.sql` (saldo por cliente e as views do Mapa da Esteira)
 6. `20261002000001_numeros_por_cliente.sql` (quantos contatos por cliente em cada canal)
+7. `20261003000001_personas.sql` (personas aprendidas e sugestões de régua)
 
 Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta o 5 e
 o 6 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.

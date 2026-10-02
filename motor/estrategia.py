@@ -51,13 +51,18 @@ NUMEROS_FASE = {"localizacao": ("dias_sem_contato_para_ncp",), "giro": ("ciclo_d
                 "quebra": ("dias_para_estoque",), "cpc": ("tentativas_por_canal",), "preventivo": ()}
 
 
+TOKENS_PERSONA = ("persona_1", "persona_2")   # melhor / 2º melhor canal da persona (motor/persona.py)
+
+
 def _acao(a, onde: str, erros: list) -> dict | None:
+    if isinstance(a, str) and a in TOKENS_PERSONA:
+        a = {"canal": a}
     if isinstance(a, str):
         if a not in CANAIS:
             erros.append(f"{onde}: canal desconhecido '{a}'")
             return None
         return a
-    if not isinstance(a, dict) or a.get("canal") not in CANAIS:
+    if not isinstance(a, dict) or a.get("canal") not in CANAIS + TOKENS_PERSONA:
         erros.append(f"{onde}: ação sem canal válido {a!r}")
         return None
     modo = a.get("modo") or "sempre"
@@ -158,6 +163,9 @@ def normalizar(passo: list, regua) -> list[dict]:
     for item in passo:
         if isinstance(item, dict):
             acoes.append(item)
+            continue
+        if item in TOKENS_PERSONA:
+            acoes.append({"canal": item, "modo": "sempre", "numeros": None, "contatos": {}})
             continue
         acoes.append({"canal": item, "modo": "sempre", "numeros": None, "contatos": {}})
         acoes += [{"canal": e, "modo": "junto", "numeros": None, "contatos": {}}

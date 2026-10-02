@@ -103,7 +103,7 @@ class SupabaseFalso:
             for l in linhas:
                 if chaves:
                     t[:] = [x for x in t if [x.get(k) for k in chaves] != [l.get(k) for k in chaves]]
-                if "id" not in l and tabela in ("execucoes", "envios", "trilha"):
+                if "id" not in l and tabela in ("execucoes", "envios", "trilha", "estrategias", "clusters", "sugestoes"):
                     self.seq += 1
                     l = {"id": self.seq, **l}
                 t.append(l)
@@ -255,6 +255,25 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual((env["status"], env["relatorio"]["telefones_novos"]), ("processado", 2))
         cont = (self.dados / "empresas" / "beta" / "base" / "contatos.csv").read_text()
         self.assertIn("11977770009;telefone;enriquecimento", cont)
+
+    def test_sugestao_aprovada_vira_segmento_com_estrategia(self):
+        dados = {"persona": "RJ", "nome": "UF RJ", "condicoes": [{"campo": "UF", "valor": "RJ"}],
+                 "estrategia_base": None, "fase": "localizacao", "dia": 1, "de": "whatsapp", "para": "sms"}
+        self.falso.tabelas["sugestoes"] = [{"id": 900, "empresa_id": 2, "chave": "RJ|localizacao|1|whatsapp|sms",
+                                             "texto": "UF RJ: trocar o D+1 de whatsapp para sms", "dados": dados,
+                                             "status": "aprovada"}]
+        r = self._dia(date(2026, 9, 2), empresa="beta")["beta"]
+        t = self.falso.tabelas
+        self.assertEqual(t["sugestoes"][0]["status"], "aplicada")
+        seg = next(c for c in t["clusters"] if c["empresa_id"] == 2)
+        self.assertEqual((seg["codigo"], seg["condicoes"]), ("P1", [{"campo": "UF", "op": "=", "valor": "RJ"}]))
+        estr = next(e for e in t["estrategias"] if e["id"] == seg["estrategia_id"])
+        self.assertEqual(estr["definicao"]["localizacao"]["passos"]["1"], ["sms"])
+        est = {l["id_cliente"]: l["cluster_atual"] for l in t["estado_cliente"] if l["empresa_id"] == 2}
+        self.assertEqual(est["X0002"], "P1")                       # o cliente do RJ caiu no segmento
+        self.assertEqual(r["resumo"]["sugestoes_aplicadas"], 1)
+        ids = self.falso.objetos["saidas/beta/2026-09-02/ids/sms.csv"].decode()
+        self.assertIn("X0002;", ids)                               # D+1 por SMS, como aprovado
 
     def test_falha_de_uma_empresa_nao_para_as_outras(self):
         self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["tipo"] != "clientes"]

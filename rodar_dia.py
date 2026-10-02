@@ -37,6 +37,7 @@ from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
                            ingerir_ocorrencias, salvar_escolhas)
 from motor.estrategia import validar_estrategia
+from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor.fila import gerar_fila, lista_enriquecimento
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
 from motor.marcacao import EstadoCliente, processar_dia
@@ -196,8 +197,18 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         if c["atualizado_em"] and c["atualizado_em"] > atualizados.get(c["id_cliente"], date.min):
             atualizados[c["id_cliente"]] = c["atualizado_em"]
     contatos_por = defaultdict(list)
+    dados_contatos = defaultdict(list)
     for c in contatos:
         contatos_por[c["id_cliente"]].append(c["contato"])
+        dados_contatos[c["id_cliente"]].append(c)
+    # características derivadas dos contatos: valem para regras de segmento e para as personas
+    for k, c in list(clientes.items()):
+        tels = [x for x in dados_contatos.get(k, []) if x["tipo"] == "telefone"]
+        if tels:
+            extra = {"ddd": tels[0]["contato"][:2],
+                     "tem_whatsapp": "sim" if any(x["whatsapp_valido"] for x in tels) else "não",
+                     "tem_rcs": "sim" if any(x.get("rcs") for x in tels) else "não"}
+            clientes[k] = replace(c, atributos={**extra, **(c.atributos or {})})
     por_dia = defaultdict(list)
     for e in eventos:
         por_dia[e.data].append(e)
@@ -226,6 +237,10 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
 
     ev_ate = [e for e in eventos if e.data < hoje]
     certs = certificar_contatos(ev_ate, hoje, contatos, pessoa_de)
+    # personas: aprendidas com o histórico até ontem; escolhem o canal das etiquetas persona_1/2
+    custos = {c["canal"]: c.get("custo") for c in _ler_lista(canais) if c.get("custo") is not None}
+    modelo = aprender(ev_ate, clientes, regua, hoje, dados_contatos, custos)
+    regua = replace(regua, persona=modelo, _cache={})
     arq_carga = Path(na_carga) if na_carga else Path(clientes_csv).parent / "na_carga.csv"
     ativos = None
     if arq_carga.exists():
@@ -244,6 +259,26 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     exportar_ids(saida / "ids", por_canal)
     salvar_escolhas(pasta_estado, hoje, fila)
     _salvar(saida / "enriquecimento.csv", enriq)
+    personas = resumo_personas(modelo, ativos)
+    nomes_estr = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
+
+    def primeiro_passo(idc):
+        est = estados.get(idc)
+        if est is None:
+            return (None, 0, None)
+        passos = regua.para(est.cluster_atual)["localizacao"]["passos"]
+        if not passos:
+            return (None, 0, None)
+        d = min(passos, key=int)
+        a = passos[d][0]
+        return (regua.estrategia_de(est.cluster_atual), int(d), a if isinstance(a, str) else a.get("canal"))
+
+    sugestoes = sugerir(modelo, primeiro_passo, ativos)
+    for s in sugestoes:
+        s["estrategia_nome"] = nomes_estr.get(s["estrategia_base"]) or "Playbook MotorCob"
+    (saida / "personas.json").write_text(json.dumps({"caracteristicas": modelo.colunas, "personas": personas},
+                                                    ensure_ascii=False, indent=1), encoding="utf-8")
+    (saida / "sugestoes.json").write_text(json.dumps(sugestoes, ensure_ascii=False, indent=1), encoding="utf-8")
     (saida / "alertas.txt").write_text("\n".join(alertas) + ("\n" if alertas else ""), encoding="utf-8")
 
     contagem = defaultdict(int)
@@ -275,7 +310,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     for a in alertas:
         out(f"  ALERTA: {a}")
     out(f"  saídas em {saida}/ · estado em {pasta_estado}/")
-    return {"estados": estados, "clientes": clientes, "fila": fila,
+    return {"estados": estados, "clientes": clientes, "fila": fila, "personas": personas, "sugestoes": sugestoes,
+            "caracteristicas_persona": modelo.colunas,
             "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
             "saida": saida, "relatorios": relatorios, "relatorios_ocorrencia": rel_ocorrencias,
             "quarentena": quarentena, "sem_layout": sem_layout,
