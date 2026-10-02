@@ -203,7 +203,8 @@ def carregar_carteira(caminho: str | Path) -> tuple[list[dict], dict[str, str], 
                              "nao_perturbe": _sim(linha.get("nao_perturbe")),
                              "score_bureau": _num_ou_none(linha.get("score_bureau")),
                              "ranking": _num_ou_none(linha.get("ranking")),
-                             "pertence": (linha.get("pertence") or "").strip().lower()})
+                             "pertence": (linha.get("pertence") or "").strip().lower(),
+                             "hot": _sim(linha.get("hot"))})
     return contatos, pessoa_de, rejeitados
 
 

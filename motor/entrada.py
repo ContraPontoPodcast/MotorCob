@@ -74,7 +74,7 @@ class LayoutBase:
     encoding: str = "utf-8"
     decimal: str = ","
     origem: str = "cliente"
-    base_completa: bool = False  # cada arquivo traz a carteira toda: quem sumiu da última sai das ações
+    base_completa: bool = True   # (obsoleto) a carga do dia é sempre o universo de quem recebe ação
 
 
 @dataclass(frozen=True)
@@ -183,8 +183,14 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
 
     Vários arquivos: cada cliente fica com os dados do arquivo mais recente em que
     aparece; a entrada na carteira é o primeiro arquivo (ou a coluna data_entrada) e
-    o atraso é trazido para essa data. Contatos se acumulam. Com base_completa, quem
-    não está no arquivo mais recente sai das ações (bloqueio "fora_da_base").
+    o atraso é trazido para essa data. Contatos se acumulam.
+
+    Carga do dia: o arquivo mais recente é o universo de quem recebe ação (base/na_carga.csv),
+    seja a carteira toda, colchão ou preventivo. Quem não está nele não é acionado, mas o
+    histórico (TAG, trilha, contato Hot) continua e volta a valer quando ele reaparecer.
+
+    Marcas por telefone na carga (opcionais): hot (preferencial), whatsapp, rcs. Sem marca,
+    o telefone é neutro.
     """
     col = layout.colunas
     arquivos = sorted(arquivos, key=lambda p: (data_do_arquivo(p), p.name))
@@ -201,14 +207,23 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
         with open(arq, newline="", encoding=layout.encoding) as f:
             leitor = csv.DictReader(f, delimiter=layout.delimitador)
             nomes = leitor.fieldnames or []
-            tel_cols = [t if isinstance(t, dict) else {"coluna": t} for t in layout.telefones]
-            usadas = list(col.values()) + [t["coluna"] for t in tel_cols] + list(layout.emails)
-            ausentes = sorted({c for c in usadas if c not in nomes})
+            # Obrigatórias: ID, saldo e atraso (ou vencimento) e ao menos um contato. As demais
+            # colunas do cadastro que não vierem no arquivo do dia ficam vazias.
+            obrig = [layout.colunas["id_cliente"], layout.colunas["saldo"],
+                     layout.colunas.get("dias_atraso") or layout.colunas.get("vencimento")]
+            ausentes = sorted(c for c in obrig if c not in nomes)
+            col = {k: v for k, v in layout.colunas.items() if v in nomes}
+            tel_cols = [{k: v for k, v in (t if isinstance(t, dict) else {"coluna": t}).items() if v in nomes}
+                        for t in layout.telefones]
+            tel_cols = [t for t in tel_cols if t.get("coluna")]
+            emails = [e for e in layout.emails if e in nomes]
+            if not tel_cols and not emails:
+                ausentes.append("nenhuma coluna de telefone ou e-mail do cadastro")
             if ausentes:
-                raise LayoutInvalido(f"{arq.name}: colunas ausentes no arquivo {ausentes}")
+                raise LayoutInvalido(f"{arq.name}: colunas obrigatórias ausentes no arquivo {ausentes}")
             # contato, CPF e ID não viram atributo: só o que descreve o cliente/contrato
             pessoais = {col["id_cliente"], col.get("cpf")} | {t["coluna"] for t in tel_cols} \
-                | {t.get("whatsapp") for t in tel_cols} | set(layout.emails)
+                | {t.get(k) for t in tel_cols for k in ("whatsapp", "rcs", "hot")} | set(emails)
             colunas_atrib = [c for c in nomes if c and c not in pessoais]
             n = 0
             for linha in leitor:
@@ -248,8 +263,12 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                     if tel:
                         c = contatos.setdefault((idc, tel), {"tipo": "telefone", "cpf": cpf, "wa": False})
                         c["wa"] = c["wa"] or (_sim(linha[t["whatsapp"]]) if t.get("whatsapp") else False)
+                        if t.get("rcs"):
+                            c["rcs"] = c.get("rcs") or _sim(linha[t["rcs"]])
+                        if t.get("hot"):
+                            c["hot"] = c.get("hot") or _sim(linha[t["hot"]])
                         c["atualizado"] = dia
-                for ce in layout.emails:
+                for ce in emails:
                     em = norm.email(linha[ce])
                     if em:
                         contatos.setdefault((idc, em), {"tipo": "email", "cpf": cpf, "wa": False})["atualizado"] = dia
@@ -269,16 +288,18 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
         for idc in sorted(ultimo):
             dia, ls = ultimo[idc]
             entrada = primeira[idc]
-            fora = layout.base_completa and idc not in presentes_ultimo
             for l in ls:
                 # atraso informado no dia do arquivo, trazido para a entrada do cliente
                 w.writerow([idc, l["id_contrato"], entrada.isoformat(), f"{l['saldo']:.2f}",
                             max(l["atraso"] - (dia - entrada).days, 0),
-                            "fora_da_base" if fora else l["bloqueio"]])
+                            l["bloqueio"]])
     _gravar_contatos(pasta / "contatos.csv", [
         {"id_cliente": idc, "contato": contato, "tipo": c["tipo"], "origem": layout.origem, "cpf": c["cpf"] or "",
-         "whatsapp_valido": int(c["wa"]), "atualizado_em": c["atualizado"].isoformat()}
+         "whatsapp_valido": int(c["wa"]), "atualizado_em": c["atualizado"].isoformat(),
+         "rcs_valido": int(c["rcs"]) if "rcs" in c else "", "hot": int(c["hot"]) if "hot" in c else ""}
         for (idc, contato), c in sorted(contatos.items())])
+    with open(pasta / "na_carga.csv", "w", newline="", encoding="utf-8") as f:
+        f.write("id_cliente\n" + "".join(i + "\n" for i in sorted(presentes_ultimo)))
     with open(pasta / "pessoas.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, delimiter=";")
         w.writerow(["id_cliente", "documento"])
@@ -296,14 +317,16 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     rel["colunas"] = tipos_das_colunas(list(repres.values()), todas)
     rel["clientes"] = len(ultimo)
     rel["contatos"] = len(contatos)
-    rel["fora_da_base"] = len(set(ultimo) - presentes_ultimo) if layout.base_completa else 0
+    rel["na_carga"] = len(presentes_ultimo)
+    rel["carga_do_dia"] = rel["arquivos"][-1]["arquivo"] if rel["arquivos"] else None
+    rel["fora_da_carga"] = len(set(ultimo) - presentes_ultimo)
     rel["rejeitadas"] = dict(rel["rejeitadas"])
     return rel
 
 
 # ------------------------------------------------------------------ retorno do enriquecimento
 CAMPOS_CONTATO = ("id_cliente", "contato", "tipo", "origem", "cpf", "whatsapp_valido", "atualizado_em",
-                  "rcs_valido", "nao_perturbe", "score_bureau", "ranking", "pertence")
+                  "rcs_valido", "nao_perturbe", "score_bureau", "ranking", "pertence", "hot")
 
 
 def documento(v) -> str | None:
@@ -539,9 +562,12 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
     fornecedor = f"ocorrencia:{empresa}"
     with open(caminho, newline="", encoding=layout.encoding) as f:
         leitor = csv.DictReader(f, delimiter=layout.delimitador)
-        ausentes = [c for c in col.values() if c not in (leitor.fieldnames or [])]
+        nomes = leitor.fieldnames or []
+        # obrigatórias: cliente, data e resultado (CPC sim/não); canal, contato e id são opcionais
+        ausentes = [col[k] for k in ("id_cliente", "data", "resultado") if col[k] not in nomes]
         if ausentes:
-            raise LayoutInvalido(f"{caminho.name}: colunas ausentes no arquivo {ausentes}")
+            raise LayoutInvalido(f"{caminho.name}: colunas obrigatórias ausentes no arquivo {ausentes}")
+        col = {k: v for k, v in col.items() if v in nomes}
         for n, linha in enumerate(leitor, start=2):
             rel.linhas += 1
             codigo = (linha[col["resultado"]] or "").strip()
@@ -614,9 +640,11 @@ def ingerir_ocorrencias(pasta: str | Path, entrada: Entrada, pasta_estado: str |
     if not pasta.exists():
         return eventos, relatorios, quarentena, sem_layout
     for arq in sorted(pasta.glob("*")):
-        if not arq.is_file():
+        if not arq.is_file() or arq.name.startswith("."):
             continue
-        cands = [o for o in entrada.ocorrencias if fnmatch(arq.name, o.arquivo)]
+        # um layout de ocorrência só: vale para qualquer arquivo da pasta, seja qual for o nome
+        cands = entrada.ocorrencias if len(entrada.ocorrencias) == 1 else \
+            [o for o in entrada.ocorrencias if fnmatch(arq.name, o.arquivo)]
         if len(cands) != 1:
             sem_layout.append(arq.name if not cands else f"{arq.name} (layouts ambíguos)")
             continue

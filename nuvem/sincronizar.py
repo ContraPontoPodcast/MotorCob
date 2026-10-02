@@ -184,7 +184,8 @@ def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
         if arq is None:
             return "erro", {"erro": "arquivo não reconhecido como base bruta: confira o nome do arquivo"}
         return "processado", {**arq, "clientes_na_base": rel_base["clientes"], "contatos": rel_base["contatos"],
-                              "rejeitadas": rel_base["rejeitadas"], "fora_da_base": rel_base["fora_da_base"]}
+                              "rejeitadas": rel_base["rejeitadas"], "na_carga": rel_base["na_carga"],
+                              "fora_da_carga": rel_base["fora_da_carga"]}
     if e["tipo"] == "ocorrencia":
         if nome in r["sem_layout"] or any(s.startswith(nome + " ") for s in r["sem_layout"]):
             return "erro", {"erro": "arquivo não reconhecido como ocorrência: confira o nome do arquivo"}
@@ -288,6 +289,7 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
                   "reserva": sum(l["reserva"] for l in fila), "enriquecimento": len(r["enriquecimento"]),
                   "dias_processados": r["dias_processados"], "trilha_enviada": n_trilha,
                   "ocorrencias": sum(x.aceitas for x in r["relatorios_ocorrencia"]),
+                  "na_carga": r.get("na_carga"), "contatos": r.get("contatos_status") or {},
                   "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq}
         sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
                      {"status": "ok", "terminada_em": agora(), "resumo": resumo, "alertas": r["alertas"]})
