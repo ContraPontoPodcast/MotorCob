@@ -1,85 +1,124 @@
 {
-  "_doc": "Entrada da empresa cliente 'exemplo' (fictícia). Copie para empresas/<slug>.json e ajuste aos cabeçalhos reais dos arquivos da empresa. Resultados genéricos: cpc, sem_contato, atendida_sem_cpc, terceiro, invalido, opt_out (ou um resultado da taxonomia do canal).",
-  "empresa": "exemplo",
-  "base": {
-    "arquivo": "base_*.csv",
-    "delimitador": ";",
-    "formato_data": "%d/%m/%Y",
-    "decimal": ",",
-    "base_completa": false,
-    "colunas": {
-      "id_cliente": "COD_CLIENTE",
-      "id_contrato": "CONTRATO",
-      "saldo": "SALDO_DEVEDOR",
-      "vencimento": "DT_VENCIMENTO",
-      "cpf": "CPF",
-      "bloqueio": "BLOQUEIO"
-    },
-    "telefones": [
-      {
-        "coluna": "TEL1",
-        "whatsapp": "WHATS_TEL1"
-      },
-      "TEL2",
-      "TEL3"
-    ],
-    "emails": [
-      "EMAIL"
-    ]
+ "_doc": "Entrada da empresa cliente 'exemplo' (fictícia). Copie para empresas/<slug>.json e ajuste aos cabeçalhos reais dos arquivos da empresa. Resultados genéricos: cpc, sem_contato, atendida_sem_cpc, terceiro, invalido, opt_out (ou um resultado da taxonomia do canal). Carteira do credor: carga geral (bruto/), incremental (mesmo layout da geral, ou 'incremental' próprio), retirada, acordo e baixa.",
+ "empresa": "exemplo",
+ "base": {
+  "arquivo": "base_*.csv",
+  "delimitador": ";",
+  "formato_data": "%d/%m/%Y",
+  "decimal": ",",
+  "base_completa": false,
+  "colunas": {
+   "id_cliente": "COD_CLIENTE",
+   "id_contrato": "CONTRATO",
+   "saldo": "SALDO_DEVEDOR",
+   "vencimento": "DT_VENCIMENTO",
+   "cpf": "CPF",
+   "bloqueio": "BLOQUEIO"
   },
-  "ocorrencia": [
-    {
-      "arquivo": "ocorrencia_*.csv",
-      "delimitador": ";",
-      "formato_data": "%d/%m/%Y %H:%M",
-      "colunas": {
-        "id_cliente": "COD_CLIENTE",
-        "data": "DT_ACAO",
-        "canal": "CANAL",
-        "resultado": "OCORRENCIA"
-      },
-      "canais": {
-        "WHATS": "whatsapp",
-        "SMS": "sms",
-        "EMAIL": "email",
-        "URA": "agente_voz",
-        "DISCADOR": "discador",
-        "RCS": "rcs"
-      },
-      "resultados": {
-        "CPC": "cpc",
-        "NAO CPC": "sem_contato",
-        "ATENDEU TERCEIRO": "terceiro",
-        "NUMERO INVALIDO": "invalido",
-        "SEM RETORNO": "sem_contato",
-        "OPT OUT": "opt_out"
-      }
-    }
+  "telefones": [
+   {
+    "coluna": "TEL1",
+    "whatsapp": "WHATS_TEL1"
+   },
+   "TEL2",
+   "TEL3"
   ],
-  "enriquecimento": [
-    {
-      "_doc": "Retorno do bureau: uma linha por CPF/CNPJ, até 8 telefones em colunas repetidas (DDD, FONE, ... lidas pela posição) e até 3 e-mails.",
-      "arquivo": "*-output*.csv",
-      "delimitador": ";",
-      "encoding": "utf-8-sig",
-      "chave": {
-        "cpf": "CPF/CNPJ"
-      },
-      "telefone": {
-        "ddd": "DDD",
-        "numero": "FONE",
-        "whatsapp": "POSSUI-WHATSAPP",
-        "rcs": "POSSUI-RCS",
-        "nao_perturbe": "NAO-PERTURBE",
-        "score": "SCORE",
-        "ranking": "RANKING"
-      },
-      "emails": [
-        "EMAIL-1",
-        "EMAIL-2",
-        "EMAIL-3"
-      ],
-      "pertence": {}
-    }
+  "emails": [
+   "EMAIL"
   ]
+ },
+ "ocorrencia": [
+  {
+   "arquivo": "ocorrencia_*.csv",
+   "delimitador": ";",
+   "formato_data": "%d/%m/%Y %H:%M",
+   "colunas": {
+    "id_cliente": "COD_CLIENTE",
+    "data": "DT_ACAO",
+    "canal": "CANAL",
+    "resultado": "OCORRENCIA"
+   },
+   "canais": {
+    "WHATS": "whatsapp",
+    "SMS": "sms",
+    "EMAIL": "email",
+    "URA": "agente_voz",
+    "DISCADOR": "discador",
+    "RCS": "rcs"
+   },
+   "resultados": {
+    "CPC": "cpc",
+    "NAO CPC": "sem_contato",
+    "ATENDEU TERCEIRO": "terceiro",
+    "NUMERO INVALIDO": "invalido",
+    "SEM RETORNO": "sem_contato",
+    "OPT OUT": "opt_out"
+   }
+  }
+ ],
+ "enriquecimento": [
+  {
+   "_doc": "Retorno do bureau: uma linha por CPF/CNPJ, até 8 telefones em colunas repetidas (DDD, FONE, ... lidas pela posição) e até 3 e-mails.",
+   "arquivo": "*-output*.csv",
+   "delimitador": ";",
+   "encoding": "utf-8-sig",
+   "chave": {
+    "cpf": "CPF/CNPJ"
+   },
+   "telefone": {
+    "ddd": "DDD",
+    "numero": "FONE",
+    "whatsapp": "POSSUI-WHATSAPP",
+    "rcs": "POSSUI-RCS",
+    "nao_perturbe": "NAO-PERTURBE",
+    "score": "SCORE",
+    "ranking": "RANKING"
+   },
+   "emails": [
+    "EMAIL-1",
+    "EMAIL-2",
+    "EMAIL-3"
+   ],
+   "pertence": {}
+  }
+ ],
+ "retirada": {
+  "_doc": "Contratos que saem da cobrança. id_cliente ou id_contrato; data e motivo opcionais (sem data = data do arquivo).",
+  "colunas": {
+   "id_contrato": "CONTRATO",
+   "data": "DT_RETIRADA",
+   "motivo": "MOTIVO"
+  },
+  "motivos": {
+   "DEV": "devolução",
+   "PG": "pagamento no credor",
+   "OB": "óbito",
+   "JUD": "judicial"
+  }
+ },
+ "acordo": {
+  "_doc": "Acordo formalizado: uma linha por parcela. Sem id_acordo, cada arquivo vira um acordo do cliente.",
+  "colunas": {
+   "id_cliente": "COD_CLIENTE",
+   "id_acordo": "NUM_ACORDO",
+   "parcela": "PARCELA",
+   "vencimento": "VENCIMENTO",
+   "valor": "VALOR"
+  }
+ },
+ "baixa": {
+  "_doc": "Pagamentos. Com acordo aberto: paga a parcela (a informada ou a mais antiga). Sem acordo: quitação tira o contrato e o cliente vira Liquidado; parcial abate o saldo. Sem tipo: quita se o valor cobre o saldo.",
+  "colunas": {
+   "id_cliente": "COD_CLIENTE",
+   "id_contrato": "CONTRATO",
+   "data": "DT_PAGAMENTO",
+   "valor": "VALOR_PAGO",
+   "tipo": "TIPO"
+  },
+  "tipos": {
+   "Q": "quitacao",
+   "P": "parcial",
+   "PA": "parcela"
+  }
+ }
 }

@@ -173,6 +173,19 @@ de outra pessoa pela certificação e a rotação segue.
   estável por cliente/dia). `sugerir`: régua cujo 1º canal rende < 1/1,2 do melhor com
   ≥ 200 tentativas → sugestão; aprovada no site, `nuvem.aplicar_sugestoes` cria segmento
   (condições da persona, no topo) + estratégia com a troca. Tabelas `personas` e `sugestoes`.
+- `motor/carteira.py` (credores): pasta do credor com bruto/ (carga geral: substitui o
+  estoque), incremental/ (soma), retirada/ (tira contrato, com motivo), acordo/ (parcelas) e
+  baixa/ (pagamentos). `converter_base` monta o estoque por contrato em ordem de data
+  (geral → incremental → retirada → pagamento no mesmo dia); `montar` liga contrato→cliente,
+  aplica baixas nas parcelas (informada ou mais antiga em aberto, ≥ 99% = paga), manda o resto
+  como quitação/parcial ao estoque, grava base/parcelas.csv (quitação sem acordo = acordo
+  "QUITACAO" pago → LIQ) e na_carga = estoque + acordo aberto (salvo retirado depois).
+  Layouts `retirada`, `acordo`, `baixa` (e `incremental` opcional) em empresas/<slug>.json.
+  Entre credores da mesma empresa (mesmo CPF, `pessoa_de`): `rodar_dia(compartilhado=)`
+  recebe Hot (pessoa, contato), WhatsApp válido e acionados (pessoa → data); quem outro credor
+  acionou há < `recencia_horas` não recebe massiva (`gerar_fila(pausados=)`); devolve
+  r["compartilhar"]. No Mac fica em <empresa>/compartilhado/<credor>.json; a foto das 48h é
+  a da primeira rodada do dia (estado/outros_credores.json).
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias
@@ -229,7 +242,12 @@ de outra pessoa pela certificação e a rotação segue.
   `logs/.rodando.lock` (diário e vigia não se atropelam). Rodada com erro grava
   `estado/vigia.json` (`falhou_ate` = id do envio) e só tenta de novo com carga nova. Carga
   sem colunas obrigatórias (`entrada.checar_base`) vai para `bruto/rejeitados/` e o envio
-  fica com erro; se todas as cargas novas forem ruins, a rodada para sem gerar lista. Dados reais ficam em `~/MotorCob-dados`, fora do repo.
+  fica com erro; se todas as cargas novas forem ruins, a rodada para sem gerar lista.
+  Credores: `nuvem.credores()` lista os ativos (sem tabela/sem credor = modo antigo, pasta da
+  empresa); cada um roda em <empresa>/credores/<codigo>/ (o 'principal' herda a pasta antiga),
+  publica com credor_id e saídas em saidas/<slug>/<data>/<codigo>/. Envio sem credor só para
+  bureau (vai para todos). A vigia dispara em base/incremental/retirada/acordo/baixa e roda
+  só os credores com arquivo novo. Dados reais ficam em `~/MotorCob-dados`, fora do repo.
 - `exemplos/simular_operacao.py`: operação simulada dia a dia com verdade conhecida e
   auditoria das regras. `exemplos/gerar_retornos.py`: arquivos de exemplo.
 - `db/schema.sql`: modelo alvo em Postgres. `tests/`: testes das regras e princípios.

@@ -93,11 +93,36 @@ class LayoutOcorrencia:
 
 
 @dataclass(frozen=True)
+class LayoutArquivo:
+    """Retirada, acordo ou baixa: colunas e, quando houver, o de-para de motivos/tipos."""
+    colunas: dict[str, str]
+    arquivo: str = "*"
+    formato_data: str = "%d/%m/%Y"
+    delimitador: str = ";"
+    encoding: str = "utf-8"
+    decimal: str = ","
+    motivos: dict[str, str] = field(default_factory=dict)   # retirada: código -> motivo
+    tipos: dict[str, str] = field(default_factory=dict)     # baixa: código -> quitacao | parcial | parcela
+
+
+# colunas que cada arquivo da carteira entende (* = obrigatória; id_cliente OU id_contrato)
+CAMPOS_ARQUIVO = {
+    "retirada": ("id_cliente", "id_contrato", "data", "motivo"),
+    "acordo": ("id_cliente", "id_contrato", "id_acordo", "parcela*", "vencimento*", "valor"),
+    "baixa": ("id_cliente", "id_contrato", "id_acordo", "parcela", "data*", "valor*", "tipo"),
+}
+
+
+@dataclass(frozen=True)
 class Entrada:
     empresa: str
     base: LayoutBase
     ocorrencias: list[LayoutOcorrencia]
     enriquecimento: list = field(default_factory=list)  # [LayoutEnriquecimento]
+    incremental: LayoutBase | None = None   # sem layout próprio: o mesmo da carga geral
+    retirada: LayoutArquivo | None = None
+    acordo: LayoutArquivo | None = None
+    baixa: LayoutArquivo | None = None
 
 
 def _sem_doc(d: dict) -> dict:
@@ -113,8 +138,22 @@ def validar_entrada(dados: dict) -> Entrada:
         ocs = [LayoutOcorrencia(**_sem_doc(o)) for o in (ocs if isinstance(ocs, list) else [ocs])]
         enr = dados.get("enriquecimento") or []
         enr = [LayoutEnriquecimento(**_sem_doc(x)) for x in (enr if isinstance(enr, list) else [enr])]
+        incremental = LayoutBase(**_sem_doc(dados["incremental"])) if dados.get("incremental") else None
+        extras = {k: LayoutArquivo(**_sem_doc(dados[k])) for k in CAMPOS_ARQUIVO if dados.get(k)}
     except (TypeError, KeyError) as e:
         raise LayoutInvalido(f"{emp}: {e}") from None
+    for tipo, lay in extras.items():
+        conhecidas = {c.rstrip("*") for c in CAMPOS_ARQUIVO[tipo]}
+        fora = sorted(set(lay.colunas) - conhecidas)
+        if fora:
+            raise LayoutInvalido(f"{emp}: {tipo}: colunas desconhecidas {fora} (use {sorted(conhecidas)})")
+        falta = [c.rstrip("*") for c in CAMPOS_ARQUIVO[tipo] if c.endswith("*") and c.rstrip("*") not in lay.colunas]
+        if not ({"id_cliente", "id_contrato"} & set(lay.colunas)):
+            falta.append("id_cliente ou id_contrato")
+        if falta:
+            raise LayoutInvalido(f"{emp}: {tipo}: falta dizer a coluna de {falta}")
+        if tipo == "baixa" and set(lay.tipos.values()) - {"quitacao", "parcial", "parcela"}:
+            raise LayoutInvalido(f"{emp}: baixa: tipos devem ser quitacao, parcial ou parcela")
     for x in enr:
         if set(x.chave) - {"cpf", "id_cliente"} or len(x.chave) != 1:
             raise LayoutInvalido(f"{emp}: enriquecimento {x.arquivo}: chave deve ser cpf ou id_cliente")
@@ -142,7 +181,7 @@ def validar_entrada(dados: dict) -> Entrada:
         if ruins:
             raise LayoutInvalido(f"{emp}: resultados sem significado {ruins} "
                                  f"(use {sorted(GENERICOS)} ou um resultado da taxonomia)")
-    return Entrada(emp, base, ocs, enr)
+    return Entrada(emp, base, ocs, enr, incremental, **extras)
 
 
 def carregar_entrada(caminho: str | Path) -> Entrada:
@@ -206,36 +245,90 @@ def checar_base(arq: str | Path, layout: LayoutBase) -> list[str]:
     return _colunas_base(nomes, layout)[0]
 
 
-def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | Path) -> dict:
-    """Base bruta (um ou vários arquivos) -> base/clientes.csv e base/contatos.csv.
+def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | Path,
+                   incrementais: list[Path] = (), retiradas: list[dict] = (), pagamentos: list[dict] = (),
+                   layout_incremental: LayoutBase | None = None) -> dict:
+    """Carteira do credor -> base/clientes.csv, contatos.csv, na_carga.csv, pessoas.csv, atributos.csv.
 
-    Vários arquivos: cada cliente fica com os dados do arquivo mais recente em que
-    aparece; a entrada na carteira é o primeiro arquivo (ou a coluna data_entrada) e
-    o atraso é trazido para essa data. Contatos se acumulam.
+    O ESTOQUE (quem recebe ação) é montado por contrato, em ordem de data:
+      carga geral (`arquivos`)    substitui o estoque inteiro pelo que vem no arquivo
+      carga incremental           acrescenta/atualiza os contratos que vierem
+      retirada                    tira o contrato (ou o cliente todo) do estoque, com motivo
+      pagamento sem acordo        quitação tira o contrato; parcial abate o saldo
+    No mesmo dia: geral → incremental → retirada → pagamento. Um arquivo só de carga, sem
+    incremental, é o caso antigo: a carga mais recente é o universo de quem recebe ação.
+    Quem sai do estoque não é acionado, mas o histórico (TAG, trilha, Hot) continua e volta a
+    valer se ele reaparecer numa carga.
 
-    Carga do dia: o arquivo mais recente é o universo de quem recebe ação (base/na_carga.csv),
-    seja a carteira toda, colchão ou preventivo. Quem não está nele não é acionado, mas o
-    histórico (TAG, trilha, contato Hot) continua e volta a valer quando ele reaparecer.
-
-    Marcas por telefone na carga (opcionais): hot (preferencial), whatsapp, rcs. Sem marca,
-    o telefone é neutro.
+    retiradas: [{data, id_cliente, id_contrato, motivo}] · pagamentos: [{data, id_cliente,
+    id_contrato, valor, tipo: quitacao|parcial|""}] (já com o cliente resolvido).
+    Marcas por telefone na carga (opcionais): hot (preferencial), whatsapp, rcs.
     """
-    col = layout.colunas
-    arquivos = sorted(arquivos, key=lambda p: (data_do_arquivo(p), p.name))
-    rel = {"arquivos": [], "rejeitadas": Counter()}
+    eventos = [(data_do_arquivo(a), 0, a.name, "geral", a) for a in arquivos]
+    eventos += [(data_do_arquivo(a), 1, a.name, "incremental", a) for a in incrementais]
+    eventos += [(r["data"], 2, str(n), "retirada", r) for n, r in enumerate(retiradas)]
+    eventos += [(p["data"], 3, str(n), "pagamento", p) for n, p in enumerate(pagamentos)]
+    eventos.sort(key=lambda e: e[:3])
+    rel = {"arquivos": [], "rejeitadas": Counter(), "retirados": Counter(), "pagamentos": Counter()}
     colunas_atrib: list[str] = []   # colunas da base que viram atributos (para as regras de cluster)
     primeira: dict[str, date] = {}
-    ultimo: dict[str, tuple[date, list[dict]]] = {}
+    estoque: dict[str, dict[str, dict]] = {}     # contratos em cobrança: {idc: {contrato: linha}}
+    historico: dict[str, dict[str, dict]] = {}   # último retrato de cada cliente (também os que saíram)
+    contrato_de: dict[str, str] = {}
     contatos: dict[tuple[str, str], dict] = {}
-    presentes_ultimo: set[str] = set()
     documentos: dict[str, str] = {}   # id_cliente -> CPF/CNPJ (só dígitos), para ligar o enriquecimento
-    for n_arq, arq in enumerate(arquivos):
-        dia = data_do_arquivo(arq)
+    saiu: dict[str, tuple[date, str]] = {}       # cliente que saiu do estoque: (data, motivo)
+    quitados: dict[str, date] = {}
+    for dia, _, _, tipo, item in eventos:
+        if tipo == "retirada":
+            idc, ct = item["id_cliente"], item.get("id_contrato") or ""
+            if idc not in estoque:
+                rel["retirados"]["já fora do estoque"] += 1
+                continue
+            if ct and ct in estoque[idc]:
+                del estoque[idc][ct]
+            elif not ct:
+                estoque[idc] = {}
+            else:
+                rel["retirados"]["contrato não encontrado"] += 1
+                continue
+            rel["retirados"][item.get("motivo") or "sem motivo"] += 1
+            if not estoque[idc]:
+                del estoque[idc]
+                saiu[idc] = (dia, item.get("motivo") or "retirada")
+            continue
+        if tipo == "pagamento":
+            idc, ct = item["id_cliente"], item.get("id_contrato") or ""
+            alvo = estoque.get(idc) or {}
+            linhas = [alvo[ct]] if ct in alvo else ([] if ct else list(alvo.values()))
+            if not linhas:
+                rel["pagamentos"]["sem contrato em cobrança"] += 1
+                continue
+            saldo = sum(l["saldo"] for l in linhas)
+            quita = item.get("tipo") == "quitacao" or (item.get("tipo") != "parcial"
+                                                        and item["valor"] >= saldo * 0.99)
+            if quita:
+                for k in ([ct] if ct in alvo else list(alvo)):
+                    del alvo[k]
+                rel["pagamentos"]["quitação"] += 1
+                if not alvo:
+                    del estoque[idc]
+                    saiu[idc] = (dia, "quitado")
+                    quitados[idc] = dia
+            else:
+                resta = item["valor"]
+                for l in sorted(linhas, key=lambda l: -l["saldo"]):
+                    abate = min(resta, l["saldo"])
+                    l["saldo"] -= abate
+                    resta -= abate
+                rel["pagamentos"]["parcial"] += 1
+            continue
+        arq, lay = item, (layout_incremental or layout) if tipo == "incremental" else layout
         linhas_arq: dict[str, list[dict]] = defaultdict(list)
-        with open(arq, newline="", encoding=layout.encoding) as f:
-            leitor = csv.DictReader(f, delimiter=layout.delimitador)
+        with open(arq, newline="", encoding=lay.encoding) as f:
+            leitor = csv.DictReader(f, delimiter=lay.delimitador)
             nomes = leitor.fieldnames or []
-            ausentes, col, tel_cols, emails = _colunas_base(nomes, layout)
+            ausentes, col, tel_cols, emails = _colunas_base(nomes, lay)
             if ausentes:
                 raise LayoutInvalido(f"{arq.name}: colunas obrigatórias ausentes no arquivo {ausentes}")
             # contato, CPF e ID não viram atributo: só o que descreve o cliente/contrato
@@ -250,17 +343,17 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                     rel["rejeitadas"]["id_cliente vazio"] += 1
                     continue
                 try:
-                    saldo = _num(linha[col["saldo"]], layout.decimal)
+                    saldo = _num(linha[col["saldo"]], lay.decimal)
                     if "dias_atraso" in col:
                         atraso = int(float((linha[col["dias_atraso"]] or "0").strip().replace(",", ".")))
                     else:
-                        venc = _data(linha[col["vencimento"]], layout.formato_data)
+                        venc = _data(linha[col["vencimento"]], lay.formato_data)
                         if venc is None:
                             raise ValueError("vencimento")
                         atraso = max((dia - venc).days, 0)
                     entrada = None
                     if "data_entrada" in col and (linha[col["data_entrada"]] or "").strip():
-                        entrada = _data(linha[col["data_entrada"]], layout.formato_data)
+                        entrada = _data(linha[col["data_entrada"]], lay.formato_data)
                         if entrada is None:
                             raise ValueError("data_entrada")
                 except (ValueError, AttributeError):
@@ -272,7 +365,7 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                     documentos[idc] = doc
                 linhas_arq[idc].append({
                     "id_contrato": (linha[col["id_contrato"]] or "").strip() if "id_contrato" in col else "",
-                    "saldo": saldo, "atraso": atraso, "entrada": entrada,
+                    "saldo": saldo, "atraso": atraso, "entrada": entrada, "dia": dia,
                     "bloqueio": (linha[col["bloqueio"]] or "").strip() if "bloqueio" in col else "",
                     "atributos": {c: (linha.get(c) or "").strip() for c in colunas_atrib}})
                 for t in tel_cols:
@@ -289,56 +382,78 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                     em = norm.email(linha[ce])
                     if em:
                         contatos.setdefault((idc, em), {"tipo": "email", "cpf": cpf, "wa": False})["atualizado"] = dia
+        if tipo == "geral":
+            estoque = {}
         for idc, ls in linhas_arq.items():
             primeira.setdefault(idc, min([dia] + [l["entrada"] for l in ls if l["entrada"]]))
-            ultimo[idc] = (dia, ls)
-        if n_arq == len(arquivos) - 1:
-            presentes_ultimo = set(linhas_arq)
-        rel["arquivos"].append({"arquivo": arq.name, "data": dia.isoformat(), "linhas": n,
+            novos = {(l["id_contrato"] or f"#{k}"): l for k, l in enumerate(ls)}
+            for ct in novos:
+                if not ct.startswith("#"):
+                    contrato_de[ct] = idc
+            sem_id = any(ct.startswith("#") for ct in novos)
+            atual = {} if (tipo == "geral" or sem_id) else dict(estoque.get(idc, {}))
+            atual.update(novos)
+            estoque[idc] = atual
+            historico[idc] = dict(atual)
+            saiu.pop(idc, None)
+            quitados.pop(idc, None)
+        rel["arquivos"].append({"arquivo": arq.name, "tipo": tipo, "data": dia.isoformat(), "linhas": n,
                                 "clientes": len(linhas_arq)})
 
     pasta = Path(pasta_saida)
     pasta.mkdir(parents=True, exist_ok=True)
+    retrato = {idc: (estoque.get(idc) or historico[idc]) for idc in historico}
     with open(pasta / "clientes.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, delimiter=";")
         w.writerow(["id_cliente", "id_contrato", "data_entrada", "saldo", "dias_atraso", "bloqueio"])
-        for idc in sorted(ultimo):
-            dia, ls = ultimo[idc]
+        for idc in sorted(retrato):
             entrada = primeira[idc]
-            for l in ls:
+            for l in retrato[idc].values():
                 # atraso informado no dia do arquivo, trazido para a entrada do cliente
-                w.writerow([idc, l["id_contrato"], entrada.isoformat(), f"{l['saldo']:.2f}",
-                            max(l["atraso"] - (dia - entrada).days, 0),
-                            l["bloqueio"]])
+                w.writerow([idc, l["id_contrato"], entrada.isoformat(), f"{max(l['saldo'], 0):.2f}",
+                            max(l["atraso"] - (l["dia"] - entrada).days, 0), l["bloqueio"]])
     _gravar_contatos(pasta / "contatos.csv", [
         {"id_cliente": idc, "contato": contato, "tipo": c["tipo"], "origem": layout.origem, "cpf": c["cpf"] or "",
          "whatsapp_valido": int(c["wa"]), "atualizado_em": c["atualizado"].isoformat(),
          "rcs_valido": int(c["rcs"]) if "rcs" in c else "", "hot": int(c["hot"]) if "hot" in c else ""}
         for (idc, contato), c in sorted(contatos.items())])
-    with open(pasta / "na_carga.csv", "w", newline="", encoding="utf-8") as f:
-        f.write("id_cliente\n" + "".join(i + "\n" for i in sorted(presentes_ultimo)))
+    gravar_na_carga(pasta, set(estoque))
     with open(pasta / "pessoas.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, delimiter=";")
         w.writerow(["id_cliente", "documento"])
         for idc in sorted(documentos):
             w.writerow([idc, documentos[idc]])
-    # atributos do contrato de maior saldo de cada cliente (arquivo mais recente)
-    todas = sorted({c for _, ls in ultimo.values() for l in ls for c in l["atributos"]},
+    with open(pasta / "fora_do_estoque.csv", "w", newline="", encoding="utf-8") as f:
+        f.write("id_cliente;data;motivo\n" + "".join(f"{i};{d.isoformat()};{m}\n" for i, (d, m) in sorted(saiu.items())))
+    # atributos do contrato de maior saldo de cada cliente
+    todas = sorted({c for ls in retrato.values() for l in ls.values() for c in l["atributos"]},
                    key=lambda c: (colunas_atrib.index(c) if c in colunas_atrib else len(colunas_atrib), c))
-    repres = {idc: max(ls, key=lambda l: l["saldo"])["atributos"] for idc, (_, ls) in ultimo.items()}
+    repres = {idc: max(ls.values(), key=lambda l: l["saldo"])["atributos"] for idc, ls in retrato.items() if ls}
     with open(pasta / "atributos.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, delimiter=";")
         w.writerow(["id_cliente"] + todas)
         for idc in sorted(repres):
             w.writerow([idc] + [repres[idc].get(c, "") for c in todas])
     rel["colunas"] = tipos_das_colunas(list(repres.values()), todas)
-    rel["clientes"] = len(ultimo)
+    rel["clientes"] = len(retrato)
     rel["contatos"] = len(contatos)
-    rel["na_carga"] = len(presentes_ultimo)
-    rel["carga_do_dia"] = rel["arquivos"][-1]["arquivo"] if rel["arquivos"] else None
-    rel["fora_da_carga"] = len(set(ultimo) - presentes_ultimo)
+    rel["na_carga"] = len(estoque)
+    cargas = [a for a in rel["arquivos"]]
+    rel["carga_do_dia"] = cargas[-1]["arquivo"] if cargas else None
+    rel["fora_da_carga"] = len(set(retrato) - set(estoque))
     rel["rejeitadas"] = dict(rel["rejeitadas"])
+    rel["retirados"] = dict(rel["retirados"])
+    rel["pagamentos"] = dict(rel["pagamentos"])
+    rel["quitados"] = {k: v.isoformat() for k, v in quitados.items()}
+    rel["saiu"] = {k: (d.isoformat(), m) for k, (d, m) in saiu.items()}
+    rel["estoque"] = sorted(estoque)
+    rel["contrato_de"] = contrato_de
     return rel
+
+
+def gravar_na_carga(pasta: str | Path, ids: set[str]):
+    with open(Path(pasta) / "na_carga.csv", "w", newline="", encoding="utf-8") as f:
+        f.write("id_cliente\n" + "".join(i + "\n" for i in sorted(ids)))
 
 
 # ------------------------------------------------------------------ retorno do enriquecimento

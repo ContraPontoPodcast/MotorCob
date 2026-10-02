@@ -12,7 +12,8 @@ alter table public.estado_cliente
     add column if not exists saldo numeric(14, 2),
     add column if not exists dias_atraso int;
 
-create or replace view public.mapa_esteira with (security_invoker = true) as
+drop view if exists public.mapa_esteira;  -- refeita (a de credores acrescenta credor_id)
+create view public.mapa_esteira with (security_invoker = true) as
     select empresa_id,
            estado,
            case
@@ -29,13 +30,15 @@ create or replace view public.mapa_esteira with (security_invoker = true) as
     group by 1, 2, 3, 4, 5, 6;
 comment on view public.mapa_esteira is 'Clientes e saldo por estado, etapa (ciclo), canal, cluster e safra (mês de entrada).';
 
-create or replace view public.acoes_hoje with (security_invoker = true) as
+drop view if exists public.acoes_hoje;  -- refeita (a de credores acrescenta credor_id)
+create view public.acoes_hoje with (security_invoker = true) as
     select empresa_id, data, regua, passo, canal, reserva, count(*)::int as clientes
     from public.fila_dia
     group by 1, 2, 3, 4, 5, 6;
 comment on view public.acoes_hoje is 'Clientes por régua, passo e canal na fila do dia.';
 
-create or replace view public.fluxo_esteira with (security_invoker = true) as
+drop view if exists public.fluxo_esteira;  -- refeita (a de credores acrescenta credor_id)
+create view public.fluxo_esteira with (security_invoker = true) as
     select empresa_id,
            data,
            nullif(split_part(tag_anterior, '-', 3), '') as de,

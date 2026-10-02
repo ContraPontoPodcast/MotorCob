@@ -77,7 +77,11 @@ class SupabaseFalso:
             if campo in ("select", "order", "limit", "on_conflict"):
                 continue
             op, _, valor = cond.partition(".")
-            assert op in ("eq", "gte"), op
+            assert op in ("eq", "gte", "in"), op
+            if op == "in":
+                ok = valor.strip("()").split(",")
+                linhas = [l for l in linhas if str(l.get(campo)) in ok]
+                continue
             if op == "gte":
                 linhas = [l for l in linhas if str(l.get(campo)) >= valor]
                 continue
@@ -151,13 +155,13 @@ class TestSincronizar(unittest.TestCase):
         for i, (eid, tipo, arq) in enumerate(envios):
             self._envio(1000 + i, eid, tipo, arq.name, arq.read_bytes())
 
-    def _envio(self, id_, eid, tipo, nome, conteudo, dia="2026-09-01"):
+    def _envio(self, id_, eid, tipo, nome, conteudo, dia="2026-09-01", credor=None):
         slug = {1: "alfa", 2: "beta"}[eid]
         caminho = f"{slug}/{tipo}/{dia}/{id_}_{nome}"
         self.falso.objetos[f"entradas/{caminho}"] = conteudo
         self.falso.tabelas.setdefault("envios", []).append(
             {"id": id_, "empresa_id": eid, "tipo": tipo, "caminho": caminho, "nome_original": nome,
-             "status": "pendente", "enviado_em": f"{dia}T10:00:{id_ % 60:02d}"})
+             "status": "pendente", "enviado_em": f"{dia}T10:00:{id_ % 60:02d}", "credor_id": credor})
 
     def _dia(self, dia, empresa=None):
         return sincronizar_dia(self.dados, dia, self.sb, out=lambda *a: None, empresa=empresa,
@@ -292,6 +296,53 @@ class TestSincronizar(unittest.TestCase):
         r = vig()
         self.assertEqual(list(r), ["beta"])
         self.assertNotIn("erro", r["beta"], r["beta"].get("erro"))
+
+    def test_credores_da_empresa_rodam_separados(self):
+        """beta com dois credores: cada arquivo vai para o seu; o bureau sem credor vale para os dois."""
+        from nuvem.sincronizar import vigiar
+        t = self.falso.tabelas
+        self._dia(date(2026, 9, 1), empresa="beta")             # antes dos credores: pasta da empresa
+        t["credores"] = [{"id": 21, "empresa_id": 2, "codigo": "principal", "nome": "Principal", "ativo": True},
+                         {"id": 22, "empresa_id": 2, "codigo": "banco-x", "nome": "Banco X", "ativo": True,
+                          "estrategia_id": 5}]
+        t["estrategias"] = [{"id": 5, "empresa_id": 2, "nome": "Só SMS", "padrao": False,
+                             "definicao": {"localizacao": {"passos": {"1": [{"canal": "sms"}]}}}}]
+        carga = (EX / "empresa" / "bruto" / "base_2026-09-01.csv").read_bytes()
+        self._envio(5001, 2, "base", "carga_x_2026-09-01.csv", carga, "2026-09-02", credor=22)
+        enr = next((EX / "empresa" / "enriquecimento").glob("*.csv"))
+        self._envio(5002, 2, "enriquecimento", enr.name, enr.read_bytes(), "2026-09-02")
+        r = self._dia(date(2026, 9, 2), empresa="beta")["beta"]
+        self.assertEqual(set(r["credores"]), {"principal", "banco-x"})
+        cred = self.dados / "empresas" / "beta" / "credores"
+        self.assertTrue((cred / "principal" / "estado" / "estados.json").exists())   # pasta antiga migrou
+        self.assertTrue((cred / "banco-x" / "bruto" / "carga_x_2026-09-01.csv").exists())
+        self.assertTrue((cred / "banco-x" / "enriquecimento" / enr.name).exists())
+        self.assertTrue((cred / "principal" / "enriquecimento" / enr.name).exists())
+        o = self.falso.objetos
+        self.assertIn("saidas/beta/2026-09-02/principal/fila_do_dia.csv", o)
+        estr = json.loads((cred / "banco-x" / "config" / "estrategias.json").read_text())
+        self.assertTrue(estr[0]["padrao"])                                           # estratégia do credor
+        # mesmo CPF: o principal acionou hoje → o Banco X não manda massiva (48h contam juntas)
+        self.assertIn("OUTRO CREDOR", o["saidas/beta/2026-09-02/banco-x/alertas.txt"].decode())
+        self.assertNotIn("saidas/beta/2026-09-02/banco-x/ids/sms.csv", o)
+        est = {(l.get("credor_id"), l["id_cliente"]) for l in t["estado_cliente"] if l["empresa_id"] == 2}
+        self.assertIn((22, "X0001"), est)
+        self.assertIn((21, "X0001"), est)
+        self.assertEqual({e.get("credor_id") for e in t["execucoes"] if e["empresa_id"] == 2} - {None}, {21, 22})
+        # mesmo CPF nos dois credores: quem foi acionado hoje por um não recebe massiva do outro amanhã
+        comp = json.loads((self.dados / "empresas" / "beta" / "compartilhado" / "principal.json").read_text())
+        self.assertTrue(comp["acionados"])
+        # retirada só do Banco X: a vigia roda só ele
+        n_ex = len(t["execucoes"])
+        self._envio(5003, 2, "retirada", "ret.csv", b"CONTRATO;DT_RETIRADA;MOTIVO\nCT04;03/09/2026;DEV\n",
+                    "2026-09-03", credor=22)
+        rv = vigiar(self.dados, date(2026, 9, 3), self.sb, out=lambda *a: None, pasta_empresas=self.cfg)
+        self.assertEqual(set(rv["beta"]["credores"]), {"banco-x"})
+        self.assertEqual(len(t["execucoes"]), n_ex + 1)
+        env = next(e for e in t["envios"] if e["id"] == 5003)
+        self.assertEqual((env["status"], env["relatorio"]["retirados"]), ("processado", {"devolução": 1}))
+        na = (cred / "banco-x" / "base" / "na_carga.csv").read_text().split()
+        self.assertNotIn("X0003", na)
 
     def test_sugestao_aprovada_vira_segmento_com_estrategia(self):
         dados = {"persona": "RJ", "nome": "UF RJ", "condicoes": [{"campo": "UF", "valor": "RJ"}],
