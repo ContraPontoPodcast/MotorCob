@@ -131,6 +131,11 @@ class TestEstrategia(unittest.TestCase):
                  for c in (WA, EM)}
         fila, _, _ = gerar_fila(est, {"C1": Cliente("C1", D0, 100.0, 10)}, certs, {}, {}, date(2026, 9, 10),
                                 regua, [])
+        # o canal do CPC (WhatsApp) vem primeiro mesmo fora da ordem de reserva da estratégia
+        self.assertEqual(sorted(l["canal"] for l in fila), ["email", "whatsapp"])
+        est["C1"].canal_atual = "rcs"                            # canal do CPC sem número com RCS
+        fila, _, _ = gerar_fila(est, {"C1": Cliente("C1", D0, 100.0, 10)}, certs, {}, {}, date(2026, 9, 10),
+                                regua, [])
         self.assertEqual(sorted(l["canal"] for l in fila), ["email", "sms"])   # sem RCS no número → SMS
         fila, _, _ = gerar_fila(est, {"C1": Cliente("C1", D0, 100.0, 10)}, certs, {}, {}, date(2026, 9, 10),
                                 regua, [], {("C1", WA): {"rcs": True}})
