@@ -137,8 +137,8 @@ def contatos_elegiveis(est: EstadoCliente, cluster: str, certs: list[Certificaca
 def _disponiveis_cpc(cands, est, flags, sinais, regua) -> set[str]:
     """Canais em que o cliente tem contato para a régua de CPC (com o filtro da estratégia)."""
     acoes = regua.dados.get("cpc_acoes") or {}
-    if acoes:  # a estratégia define a ordem de CPC: só esses canais contam
-        cands = {c: v for c, v in cands.items() if c in acoes}
+    if acoes:  # a estratégia define a ordem de CPC: esses canais e sempre o canal em que o cliente deu CPC
+        cands = {c: v for c, v in cands.items() if c in acoes or c == est.canal_atual}
     return {c for c in cands
             if contatos_da_acao(acoes.get(c) or {"canal": c, "contatos": {}}, cands, est, flags, sinais, regua)}
 
