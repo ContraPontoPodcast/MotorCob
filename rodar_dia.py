@@ -36,6 +36,7 @@ from motor.certificacao import certificar_contatos
 from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
                            ingerir_ocorrencias, salvar_escolhas)
+from motor.acoes import agregar as agregar_acoes, sem_ocorrencia, totais as totais_acoes
 from motor.estrategia import validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor.fila import gerar_fila, lista_enriquecimento
@@ -259,6 +260,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     exportar_ids(saida / "ids", por_canal)
     salvar_escolhas(pasta_estado, hoje, fila)
     _salvar(saida / "enriquecimento.csv", enriq)
+    # ações realizadas (agregado, sem dado pessoal): últimos DIAS_ACOES dias
+    acoes = agregar_acoes(carregar_escolhas(pasta_estado), eventos, regua, custos,
+                          desde=hoje - timedelta(days=DIAS_ACOES))
+    if ocorrencias:
+        alertas += sem_ocorrencia(acoes, _dia_util_anterior(hoje, regua))
+    (saida / "acoes.json").write_text(json.dumps(acoes, ensure_ascii=False), encoding="utf-8")
     personas = resumo_personas(modelo, ativos)
     nomes_estr = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
 
@@ -306,16 +313,34 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     if contatos_status:
         out("  contatos: " + " · ".join(f"{k} {contatos_status[k]}" for k in
                                         ("HOT", "WHATSAPP", "RCS", "NEUTRO", "INVALIDO") if contatos_status.get(k)))
+    ontem = [l for l in acoes if l["data"] == (hoje - timedelta(days=1)).isoformat()]
+    if ontem:
+        t = totais_acoes(ontem)
+        out(f"  ações de ontem: {t['enviadas']} enviadas · {t['com_retorno']} com retorno · {t['cpcs']} CPC"
+            + (f" · R$ {t['custo']:.2f}" if t["custo"] else ""))
     out(f"  enriquecimento: {len(enriq)} clientes")
     for a in alertas:
         out(f"  ALERTA: {a}")
     out(f"  saídas em {saida}/ · estado em {pasta_estado}/")
-    return {"estados": estados, "clientes": clientes, "fila": fila, "personas": personas, "sugestoes": sugestoes,
+    return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "personas": personas, "sugestoes": sugestoes,
             "caracteristicas_persona": modelo.colunas,
             "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
             "saida": saida, "relatorios": relatorios, "relatorios_ocorrencia": rel_ocorrencias,
             "quarentena": quarentena, "sem_layout": sem_layout,
             "dias_processados": (hoje - inicio).days if inicio < hoje else 0}
+
+
+DIAS_ACOES = 60
+
+
+def _dia_util_anterior(hoje: date, regua) -> date:
+    """Último dia antes de hoje em que houve janela de ações (pula domingo e feriado)."""
+    d = hoje - timedelta(days=1)
+    for _ in range(7):
+        if regua.janela(d) is not None:
+            return d
+        d -= timedelta(days=1)
+    return hoje - timedelta(days=1)
 
 
 def _contar_contatos(certs, sinais, flags, estados, ativos) -> dict:

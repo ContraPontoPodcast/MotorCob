@@ -37,7 +37,7 @@ import re
 import sys
 import traceback
 from collections import Counter
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -250,6 +250,23 @@ def publicar_personas(sb: Supabase, empresa_id, r) -> int:
     return novas
 
 
+def _acoes_de(linhas, dia) -> dict:
+    from motor.acoes import totais
+    return totais([l for l in linhas or [] if l["data"] == dia.isoformat()])
+
+
+def publicar_acoes(sb: Supabase, empresa_id, r) -> int:
+    """Ações realizadas (só totais): regrava a janela que a rotina recalculou."""
+    linhas = r.get("acoes") or []
+    desde = min((l["data"] for l in linhas), default=None)
+    if desde is None:
+        return 0
+    sb.apagar("acoes_dia", {"empresa_id": f"eq.{empresa_id}", "data": f"gte.{desde}"})
+    ts = agora()
+    sb.inserir("acoes_dia", [{**l, "empresa_id": empresa_id, "atualizado_em": ts} for l in linhas])
+    return len(linhas)
+
+
 def aplicar_sugestoes(sb: Supabase, empresa_id, out=print) -> int:
     """Sugestões aprovadas no site viram um segmento (condições da persona, no topo da lista) com
     uma estratégia igual à que a persona seguia, com a troca de canal sugerida."""
@@ -354,6 +371,7 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
             sb.inserir("fila_dia", fila)
         n_arq = publicar_arquivos(sb, r["saida"], f"{slug}/{data.isoformat()}")
         n_sug = publicar_personas(sb, eid, r)
+        publicar_acoes(sb, eid, r)
         for e, destino in baixados:
             status, rel = _relatorio_envio(e, destino, r, rel_base, rel_enriq)
             sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": status, "relatorio": rel})
@@ -368,6 +386,7 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
                   "na_carga": r.get("na_carga"), "contatos": r.get("contatos_status") or {},
                   "personas": len(r.get("personas") or []), "sugestoes_novas": n_sug,
                   "sugestoes_aplicadas": n_aplicadas,
+                  "acoes_ontem": _acoes_de(r.get("acoes"), data - timedelta(days=1)),
                   "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq}
         sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
                      {"status": "ok", "terminada_em": agora(), "resumo": resumo, "alertas": r["alertas"]})

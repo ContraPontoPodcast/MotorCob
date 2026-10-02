@@ -77,7 +77,10 @@ class SupabaseFalso:
             if campo in ("select", "order", "limit", "on_conflict"):
                 continue
             op, _, valor = cond.partition(".")
-            assert op == "eq", op
+            assert op in ("eq", "gte"), op
+            if op == "gte":
+                linhas = [l for l in linhas if str(l.get(campo)) >= valor]
+                continue
             linhas = [l for l in linhas if json.dumps(l.get(campo)).strip('"') == valor]
         return linhas
 
@@ -214,6 +217,17 @@ class TestSincronizar(unittest.TestCase):
         r = self._dia(date(2026, 9, 3), empresa="beta")["beta"]
         est = {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"]}
         self.assertEqual(est["X0001"], "CPA")
+        # ações realizadas: só totais, por dia × canal × régua × segmento
+        acoes = [l for l in self.falso.tabelas["acoes_dia"] if l["empresa_id"] == 2]
+        wa = [l for l in acoes if l["data"] == "2026-09-02" and l["canal"] == "whatsapp"]
+        self.assertEqual(sum(l["cpcs"] for l in wa), 1)
+        self.assertEqual(sum(l["primeiros_cpc"] for l in wa), 1)
+        self.assertGreaterEqual(sum(l["enviadas"] for l in wa), 1)
+        self.assertNotIn("X0001", json.dumps(acoes))
+        self.assertEqual(r["resumo"]["acoes_ontem"]["cpcs"], 1)
+        n = len(self.falso.tabelas["acoes_dia"])
+        self._dia(date(2026, 9, 3), empresa="beta")                       # rodar de novo não duplica
+        self.assertEqual(len(self.falso.tabelas["acoes_dia"]), n)
         self.assertEqual(r["resumo"]["ocorrencias"], 1)
         env = next(e for e in self.falso.tabelas["envios"] if e["id"] == 2001)
         self.assertEqual((env["status"], env["relatorio"]["contato_identificado"]), ("processado", 1))

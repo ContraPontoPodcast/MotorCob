@@ -173,6 +173,14 @@ de outra pessoa pela certificação e a rotação segue.
   estável por cliente/dia). `sugerir`: régua cujo 1º canal rende < 1/1,2 do melhor com
   ≥ 200 tentativas → sugestão; aprovada no site, `nuvem.aplicar_sugestoes` cria segmento
   (condições da persona, no topo) + estratégia com a troca. Tabelas `personas` e `sugestoes`.
+- `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
+  de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
+  evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias
+  antes; ocorrência sem ação vai para a régua `fora_da_lista`). Métricas aditivas por
+  data × canal × régua × cluster × persona: enviadas, reservas, com_retorno, retornos, cpcs,
+  custo, primeiros_cpc, acoes_ate_primeiro_cpc. `rodar_dia` grava `saida/<data>/acoes.json`
+  (60 dias) e alerta "SEM OCORRÊNCIA" quando o último dia útil não teve retorno num canal;
+  `nuvem.publicar_acoes` regrava a janela na tabela `acoes_dia` (só totais).
 - `motor/estrategia.py`: estratégia de acionamento por cluster (tabela `estrategias`,
   editada no site; `clusters.estrategia_id`; uma pode ser a padrão da empresa). Sobrescreve
   fases do playbook (`localizacao`, `cpc`, `giro`, `preventivo`, `quebra`,
