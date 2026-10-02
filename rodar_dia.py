@@ -34,8 +34,8 @@ from pathlib import Path
 
 from motor.certificacao import certificar_contatos
 from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
-from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, converter_base, ingerir_ocorrencias,
-                           salvar_escolhas)
+from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
+                           ingerir_ocorrencias, salvar_escolhas)
 from motor.estrategia import validar_estrategia
 from motor.fila import gerar_fila, lista_enriquecimento
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
@@ -88,7 +88,8 @@ def preparar_base(entrada, pasta_bruta, pasta_base) -> dict:
     """Converte a base bruta da empresa (todos os arquivos da pasta) na base canônica."""
     ent = entrada if isinstance(entrada, Entrada) else carregar_entrada(entrada)
     from fnmatch import fnmatch
-    arquivos = [p for p in sorted(Path(pasta_bruta).glob("*")) if p.is_file() and fnmatch(p.name, ent.base.arquivo)]
+    # a pasta só recebe carga do credor: o nome do arquivo não importa
+    arquivos = [p for p in sorted(Path(pasta_bruta).glob("*")) if p.is_file() and not p.name.startswith(".")]
     if not arquivos:
         raise FileNotFoundError(f"nenhuma base bruta ({ent.base.arquivo}) em {pasta_bruta}")
     return converter_base(arquivos, ent.base, pasta_base)
@@ -102,8 +103,9 @@ def preparar_enriquecimento(entrada, pasta_enriq, pasta_base) -> dict | None:
     if not ent.enriquecimento or not pasta_enriq.exists():
         return None
     rel = {"arquivos": [], "sem_layout": []}
-    for arq in sorted(p for p in pasta_enriq.glob("*") if p.is_file()):
-        lays = [l for l in ent.enriquecimento if fnmatch(arq.name, l.arquivo)]
+    for arq in sorted(p for p in pasta_enriq.glob("*") if p.is_file() and not p.name.startswith(".")):
+        lays = ent.enriquecimento if len(ent.enriquecimento) == 1 else \
+            [l for l in ent.enriquecimento if fnmatch(arq.name, l.arquivo)]  # um layout só: nome não importa
         if len(lays) != 1:
             rel["sem_layout"].append(arq.name)
             continue
@@ -133,9 +135,12 @@ def salvar_estado(pasta: Path, estados, ultimo_dia):
 
 def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts", parcelas_csv=None,
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
-              ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None):
+              ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
+              na_carga=None):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
     atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
+    na_carga: base/na_carga.csv — quem está na carga do dia (só esses recebem ação hoje).
+              Padrão: o na_carga.csv ao lado de clientes_csv, se existir.
     estrategias: [{id, nome, definicao, padrao}] da tabela `estrategias` (ou .json).
     canais: [{canal, ativo, janela_inicio, janela_fim, sabado, capacidade_dia, custo, tentativas_dia,
              respeitar_nao_perturbe}] da tabela `canais_empresa` (ou .json)."""
@@ -184,7 +189,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     flags = {c["contato"]: {"whatsapp_valido": c["whatsapp_valido"], "atualizado_em": c["atualizado_em"]}
              for c in contatos}
     sinais = {(c["id_cliente"], c["contato"]): {k: c.get(k) for k in ("rcs", "nao_perturbe", "score_bureau",
-                                                                       "ranking", "pertence", "origem")}
+                                                                       "ranking", "pertence", "origem", "hot")}
               for c in contatos}
     atualizados = {}
     for c in contatos:
@@ -200,6 +205,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     pasta_estado = Path(pasta_estado)
     estados, ultimo = carregar_estado(pasta_estado)
     inicio = (ultimo + timedelta(days=1)) if ultimo else min(c.data_entrada for c in clientes.values())
+    # o que o motor exportou em cada dia (sem as reservas condicionais): base da rotação de contatos
+    enviados_dia = defaultdict(lambda: defaultdict(list))
+    for (d, idc), ls in carregar_escolhas(pasta_estado).items():
+        for l in sorted(ls, key=lambda l: int(l.get("ordem_contato") or 1)):
+            if str(l.get("reserva")) != "1" and l["contato"] not in enviados_dia[d][idc]:
+                enviados_dia[d][idc].append(l["contato"])
     trilha = []
     dia = inicio
     while dia < hoje:
@@ -207,7 +218,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         certs = certificar_contatos(ev_ate, dia, contatos, pessoa_de)
         _, disp, _ = gerar_fila(estados, clientes, certs, flags, parcelas, dia, regua, ev_ate, sinais)
         trilha += processar_dia(estados, clientes, por_dia.get(dia, []), parcelas, dia, regua, disp,
-                                baixas_ate=dia, atualizados=atualizados)
+                                baixas_ate=dia, atualizados=atualizados, enviados=enviados_dia.get(dia.isoformat()))
         dia += timedelta(days=1)
     ultimo = max(ultimo or hoje - timedelta(days=1), hoje - timedelta(days=1))
     salvar_estado(pasta_estado, estados, ultimo)
@@ -215,7 +226,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
 
     ev_ate = [e for e in eventos if e.data < hoje]
     certs = certificar_contatos(ev_ate, hoje, contatos, pessoa_de)
-    fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais)
+    arq_carga = Path(na_carga) if na_carga else Path(clientes_csv).parent / "na_carga.csv"
+    ativos = None
+    if arq_carga.exists():
+        ativos = {l.strip() for l in arq_carga.read_text(encoding="utf-8").splitlines()[1:] if l.strip()}
+    fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos)
+    contatos_status = _contar_contatos(certs, sinais, flags, estados, ativos)
     alertas = [f"CLUSTER: {a}" for a in avisos_cluster] + alertas
     enriq = lista_enriquecimento(estados, flags, contatos_por, hoje, regua)
 
@@ -250,14 +266,31 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         for e in estados.values():
             por_cluster[e.cluster_atual] += 1
         out("  clusters: " + " · ".join(f"{k} {v}" for k, v in sorted(por_cluster.items())))
+    if ativos is not None:
+        out(f"  na carga de hoje: {len(ativos)} clientes")
+    if contatos_status:
+        out("  contatos: " + " · ".join(f"{k} {contatos_status[k]}" for k in
+                                        ("HOT", "WHATSAPP", "RCS", "NEUTRO", "INVALIDO") if contatos_status.get(k)))
     out(f"  enriquecimento: {len(enriq)} clientes")
     for a in alertas:
         out(f"  ALERTA: {a}")
     out(f"  saídas em {saida}/ · estado em {pasta_estado}/")
-    return {"estados": estados, "fila": fila, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
+    return {"estados": estados, "clientes": clientes, "fila": fila,
+            "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
             "saida": saida, "relatorios": relatorios, "relatorios_ocorrencia": rel_ocorrencias,
             "quarentena": quarentena, "sem_layout": sem_layout,
             "dias_processados": (hoje - inicio).days if inicio < hoje else 0}
+
+
+def _contar_contatos(certs, sinais, flags, estados, ativos) -> dict:
+    """Contatos dos clientes na carga por status: HOT · WHATSAPP · RCS · NEUTRO · INVALIDO."""
+    from motor.fila import status_contato
+    cont = defaultdict(int)
+    for (idc, contato), c in certs.items():
+        if ativos is not None and idc not in ativos:
+            continue
+        cont[status_contato(c, sinais.get((idc, contato), {}), flags.get(contato, {}), estados.get(idc))] += 1
+    return dict(cont)
 
 
 def _ler_lista(v) -> list[dict]:

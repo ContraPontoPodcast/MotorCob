@@ -189,6 +189,10 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual((len(t["trilha"]), len(t["fila_dia"])), (n_trilha, n_fila))
         self.assertEqual(len(alfa("estado_cliente")), 600)
         self.assertEqual(r["resumo"]["clientes"], 600)
+        # saldo e atraso vão para o mapa da esteira (não são dado pessoal)
+        linha = next(l for l in alfa("estado_cliente"))
+        self.assertIsInstance(linha["saldo"], float)
+        self.assertGreaterEqual(linha["dias_atraso"], 0)
 
     def test_empresas_ficam_separadas(self):
         self._dia(date(2026, 9, 25))

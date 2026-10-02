@@ -1,5 +1,32 @@
 # MotorCob em produção no Mac
 
+## Como a operação funciona
+
+1. **Carga do credor, todo dia.** A base de devedores com dívida e contatos (a carteira
+   toda, o colchão ou o preventivo). Só quem está na carga do dia recebe ação; quem saiu
+   não é acionado, mas não perde o histórico.
+2. **Lista do dia.** Um contato por cliente em cada canal (WhatsApp, RCS, SMS, e-mail,
+   agente virtual, discador), com o contato **Hot** sempre primeiro.
+3. **Ocorrência.** A empresa diz só se cada cliente deu CPC ou não. O motor sabe qual
+   contato e qual canal foram usados na ação.
+4. **CPC → Hot.** O contato que deu CPC vira Hot (prioritário em toda exportação) e o
+   canal do CPC fica marcado: o cliente vai para CPC A e as ações seguintes saem por ali.
+
+**Rotação até achar o Hot:** com 1 telefone por cliente, cada passagem usa o próximo
+telefone ainda não tentado — 1ª passagem o telefone 1, 2ª o 2, 3ª o 3, 4ª o 4, e então
+recomeça pelo tentado há mais tempo. A rotação conta pelo que foi exportado, mesmo que a
+ocorrência atrase. No primeiro CPC, o telefone exportado vira Hot e o motor fica fiel a
+ele em todos os canais.
+
+**Mais de um telefone por cliente:** em cada canal a empresa escolhe 1 contato (padrão)
+ou mais (2, 3, todos) na Lista do dia. Com mais de um, o CPC vale para o cliente na hora
+(CPC A, canal marcado) e os telefones enviados viram candidatos: as próximas ações vão a
+um candidato por vez; o que der CPC sozinho vira Hot, o que não atender sai da lista.
+
+Status do contato: **HOT** (deu CPC ou veio marcado como preferencial na carga) ·
+**WHATSAPP** · **RCS** · **NEUTRO** (sem validação) · **INVÁLIDO**. O retorno do bureau
+só atualiza esses status e traz números novos.
+
 ## 1. Instalar (uma vez)
 
 1. Instale o Homebrew (https://brew.sh) e o Python:

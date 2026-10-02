@@ -62,7 +62,7 @@ class TestBaseBruta(unittest.TestCase):
         wa = {c["contato"]: c["whatsapp_valido"] for c in cont}
         self.assertEqual((wa["11988880001"], wa["21977770002"]), ("1", "0"))
 
-    def test_arquivo_novo_atualiza_e_base_completa_tira_quem_saiu(self):
+    def test_carga_do_dia_e_o_universo_das_acoes_sem_bloquear_quem_saiu(self):
         with tempfile.TemporaryDirectory() as tmp:
             bruto = Path(tmp) / "bruto"
             cab = "COD_CLIENTE;CONTRATO;CPF;SALDO_DEVEDOR;DT_VENCIMENTO;TEL1;WHATS_TEL1;TEL2;TEL3;EMAIL;BLOQUEIO\n"
@@ -70,11 +70,12 @@ class TestBaseBruta(unittest.TestCase):
                                                       "A2;K2;;200,00;22/08/2026;11988880002;S;;;;\n")
             _csv(bruto / "base_2026-09-10.csv", cab + "A1;K1;;90,00;22/08/2026;11988880001;S;11977770001;;;\n")
             ent = carregar_entrada(EMPRESA)
-            ent = replace(ent, base=replace(ent.base, base_completa=True))
             rel = rodar_dia.preparar_base(ent, bruto, Path(tmp) / "base")
             cli = {c["id_cliente"]: c for c in _ler(Path(tmp) / "base" / "clientes.csv")}
-        self.assertEqual(rel["fora_da_base"], 1)
-        self.assertEqual(cli["A2"]["bloqueio"], "fora_da_base")
+            na_carga = (Path(tmp) / "base" / "na_carga.csv").read_text()
+        self.assertEqual((rel["na_carga"], rel["fora_da_carga"]), (1, 1))
+        self.assertEqual(na_carga, "id_cliente\nA1\n")
+        self.assertEqual(cli["A2"]["bloqueio"], "")       # não bloqueia: volta a ser acionado se reaparecer
         # A1: entrou em 01/09 com 10 dias de atraso; saldo do arquivo mais recente
         self.assertEqual((cli["A1"]["data_entrada"], cli["A1"]["dias_atraso"], cli["A1"]["saldo"]),
                          ("2026-09-01", "10", "90.00"))

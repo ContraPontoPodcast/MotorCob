@@ -47,7 +47,11 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
     sinais = sinais or {}
     bloqueados = regua.canais_bloqueados(cluster)
     validos = [c for c in certs if c.status not in FORA and sinais.get(c.contato, {}).get("pertence") != "nao"]
-    validos.sort(key=lambda c: (-c.score, sinais.get(c.contato, {}).get("ranking") or 99))  # estável
+    # Hot (deu CPC ou marcado na carga) primeiro. Sem Hot, rotação: contato ainda não exportado
+    # antes, depois os já tentados do mais antigo para o mais recente. Depois score e ranking.
+    tent = {c: i + 1 for i, c in enumerate(est.contatos_tentados)} if not est.contato_localizador else {}
+    validos.sort(key=lambda c: (not (c.status == "CERTIFICADO" or sinais.get(c.contato, {}).get("hot")),
+                                tent.get(c.contato, 0), -c.score, sinais.get(c.contato, {}).get("ranking") or 99))
     loc = est.contato_localizador
     w = regua["whatsapp"]
     saida = {}
@@ -79,9 +83,24 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
     return saida
 
 
+def status_contato(cert, sinal: dict, flag: dict, est: EstadoCliente | None = None) -> str:
+    """Rótulo da operação: HOT · WHATSAPP · RCS · NEUTRO · INVALIDO."""
+    if cert is not None and cert.status in FORA or sinal.get("pertence") == "nao":
+        return "INVALIDO"
+    if (cert is not None and cert.status == "CERTIFICADO") or sinal.get("hot") \
+            or (est is not None and cert is not None and cert.contato == est.contato_localizador):
+        return "HOT"
+    if flag.get("whatsapp_valido"):
+        return "WHATSAPP"
+    if sinal.get("rcs"):
+        return "RCS"
+    return "NEUTRO"
+
+
 def _limite_padrao(canal: str, est: EstadoCliente, regua: Regua) -> int | None:
     if canal in CANAIS_VOZ:
-        return None  # discador/agente: todos os números válidos, em ordem de score
+        # 1 número por cliente: o CPC da ocorrência marca exatamente esse número como Hot
+        return regua["localizacao"].get("numeros_voz") or None
     if est.estado in ("CPA", "CPB", "PRE", "QBR"):
         return 1
     return 1 if canal == "whatsapp" else regua["localizacao"]["numeros_digitais"]
@@ -92,7 +111,13 @@ def contatos_da_acao(acao: dict, cands: dict[str, list], est: EstadoCliente, fla
     """Contatos que recebem a ação: candidatos do canal que passam no filtro, até o limite."""
     lista = [c.contato for c in cands.get(acao["canal"], [])
              if passa(acao.get("contatos") or {}, c, sinais.get(c.contato, {}), flags.get(c.contato, {}))]
-    limite = acao.get("numeros") or _limite_padrao(acao["canal"], est, regua)
+    if est.estado in ("CPA", "CPB") and not est.contato_localizador and est.candidatos_hot:
+        # descoberta do Hot: um candidato por vez, mesmo com "todos os números"
+        cand = [c for c in est.candidatos_hot if c in lista]
+        if cand:
+            return cand[:1]
+    limite = acao.get("numeros") or regua.canal_cfg(acao["canal"]).get("numeros_por_cliente") \
+        or _limite_padrao(acao["canal"], est, regua)
     return lista[:limite] if limite else lista
 
 
@@ -121,7 +146,7 @@ def _disponiveis_cpc(cands, est, flags, sinais, regua) -> set[str]:
 def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                certs: dict[tuple[str, str], Certificacao], flags: dict[str, dict],
                parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None,
-               sinais: dict[tuple[str, str], dict] | None = None):
+               sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -130,6 +155,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     sinais: {(id_cliente, contato): {"pertence", "rcs", "nao_perturbe", "score_bureau", "ranking",
              "origem"}} da base e do retorno do enriquecimento.
     Cada cliente segue a estratégia do cluster dele (regua.para).
+    ativos: quem está na carga do dia (None = todos); os demais não recebem ação.
     """
     alertas = []
     taxa, envios = taxa_bloqueio_whatsapp(eventos or [], hoje, regua)
@@ -157,13 +183,14 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio, sin)
         disp = _disponiveis_cpc(cands, est, flags, sin, rc)
         disponiveis[idc] = disp
-        if janela is None or est.estado in ("BLQ", "LIQ", "COL"):
+        if janela is None or est.estado in ("BLQ", "LIQ", "COL") or (ativos is not None and idc not in ativos):
             continue
         passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp)
         if passo is None:
             continue
         nome_regua, rotulo, acoes, data_fixa = passo
         blend = resolver(acoes, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
+        cert_de = {c.contato: c for cs in cands.values() for c in cs}
         for canal, condicao, contatos in blend:
             cfg = rc.canal_cfg(canal)
             if hoje.weekday() == 5 and cfg.get("sabado") is False:
@@ -176,6 +203,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                     "data": hoje.isoformat(), "id_cliente": idc, "tag": est.tag, "estado": est.estado,
                     "prioridade": prioridade.get(est.estado, 9), "regua": nome_regua, "passo": rotulo,
                     "canal": canal, "contato": contato, "ordem_contato": ordem,
+                    "status_contato": status_contato(cert_de.get(contato), sin.get(contato, {}),
+                                                     flags.get(contato, {}), est),
                     "condicao": condicao, "data_fixa": data_fixa,
                     "spins_max": cfg.get("tentativas_dia") or (rc["spins_discador_dia"] if canal == "discador" else ""),
                     "janela": f"{jan[0]}-{jan[1]}",

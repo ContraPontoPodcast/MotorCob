@@ -145,6 +145,24 @@ de outra pessoa pela certificação e a rotação segue.
   define pacote, revalidação, só digital, voz no D0 e canais bloqueados
   (`Regua.com_clusters`). Mudou a regra → `cluster_versao` muda → todos revisam o cluster
   atual na rotina seguinte. Regra inválida vira alerta, nunca derruba a rotina.
+- **Fluxo da operação (o que importa no dia a dia):** carga do credor do dia
+  (`base/na_carga.csv` = universo de ações; quem saiu não é acionado nem bloqueado) →
+  lista do dia com **1 contato por cliente por canal** (inclusive voz: `numeros_voz` em
+  `regua.json`) → ocorrência só com CPC sim/não → o contato da ação vira **Hot**
+  (`contato_localizador` + certificação) e o canal do CPC fica marcado (`canal_atual`).
+  Status do contato na exportação (`status_contato` em `fila_do_dia.csv`): HOT · WHATSAPP
+  · RCS · NEUTRO · INVALIDO; marcas `hot`/`whatsapp`/`rcs` podem vir por telefone na carga.
+  Rotação sem Hot: `EstadoCliente.contatos_tentados` recebe o que foi exportado em cada dia
+  (`escolhas.csv`, sem reservas, via `processar_dia(enviados=...)`); `candidatos()` ordena
+  não tentados primeiro e depois os tentados do mais antigo (1, 2, 3, 4, 1…). Com Hot
+  (`contato_localizador`), a lista é zerada e o Hot vai primeiro sempre. `numeros_digitais`
+  e `numeros_voz` = 1 por padrão.
+  Mais de um contato por canal: `canais_empresa.numeros_por_cliente` (1 padrão, 99 =
+  todos). CPC sem contato identificado → `EstadoCliente.candidatos_hot` (contatos da ação,
+  via `Evento.candidatos`); em CPA/CPB sem Hot, um candidato por vez até um dar CPC
+  sozinho; candidato acionado sozinho sem CPC sai da lista.
+  Nome do arquivo não importa: cada pasta (bruto/, ocorrencias/, enriquecimento/) só
+  recebe um tipo; colunas opcionais ausentes no arquivo do dia ficam vazias.
 - `motor/estrategia.py`: estratégia de acionamento por cluster (tabela `estrategias`,
   editada no site; `clusters.estrategia_id`; uma pode ser a padrão da empresa). Sobrescreve
   fases do playbook (`localizacao`, `cpc`, `giro`, `preventivo`, `quebra`,

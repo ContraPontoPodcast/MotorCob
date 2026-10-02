@@ -121,11 +121,19 @@ def baixar_entradas(sb: Supabase, dados: Path, empresa_id, out=print):
         baixados.append((e, destino))
     out(f"  entradas: {len(baixados)} arquivo(s) baixado(s) do site")
     return baixados
-def _linhas_estado(estados, empresa_id):
+def _linhas_estado(estados, empresa_id, clientes=None, dia=None):
     ts = agora()
+    clientes = clientes or {}
+
+    def extra(k):
+        c = clientes.get(k)
+        if c is None:
+            return {}
+        return {"saldo": round(c.saldo, 2), "dias_atraso": c.atraso_em(dia) if dia else c.dias_atraso}
+
     return [{"empresa_id": empresa_id, "id_cliente": k, "tag": e.tag, "safra": e.safra.isoformat(),
              "cluster_origem": e.cluster_origem, "cluster_atual": e.cluster_atual, "estado": e.estado,
-             "canal": e.canal, "ciclo": e.ciclo, "reenriquecer": e.reenriquecer, "atualizado_em": ts}
+             "canal": e.canal, "ciclo": e.ciclo, "reenriquecer": e.reenriquecer, "atualizado_em": ts, **extra(k)}
             for k, e in estados.items()]
 
 
@@ -184,7 +192,8 @@ def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
         if arq is None:
             return "erro", {"erro": "arquivo não reconhecido como base bruta: confira o nome do arquivo"}
         return "processado", {**arq, "clientes_na_base": rel_base["clientes"], "contatos": rel_base["contatos"],
-                              "rejeitadas": rel_base["rejeitadas"], "fora_da_base": rel_base["fora_da_base"]}
+                              "rejeitadas": rel_base["rejeitadas"], "na_carga": rel_base["na_carga"],
+                              "fora_da_carga": rel_base["fora_da_carga"]}
     if e["tipo"] == "ocorrencia":
         if nome in r["sem_layout"] or any(s.startswith(nome + " ") for s in r["sem_layout"]):
             return "erro", {"erro": "arquivo não reconhecido como ocorrência: confira o nome do arquivo"}
@@ -270,7 +279,8 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
                                 clusters=clusters, atributos=pasta / "base" / "atributos.csv",
                                 estrategias=estrategias, canais=canais)
 
-        sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid), conflito="empresa_id,id_cliente")
+        sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data),
+                   conflito="empresa_id,id_cliente")
         n_trilha = publicar_trilha(sb, pasta / "estado", eid)
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", "data": f"eq.{data.isoformat()}"})
         fila = _linhas_fila(r["fila"], data, eid)
@@ -288,6 +298,7 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
                   "reserva": sum(l["reserva"] for l in fila), "enriquecimento": len(r["enriquecimento"]),
                   "dias_processados": r["dias_processados"], "trilha_enviada": n_trilha,
                   "ocorrencias": sum(x.aceitas for x in r["relatorios_ocorrencia"]),
+                  "na_carga": r.get("na_carga"), "contatos": r.get("contatos_status") or {},
                   "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq}
         sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
                      {"status": "ok", "terminada_em": agora(), "resumo": resumo, "alertas": r["alertas"]})
