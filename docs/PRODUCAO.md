@@ -12,6 +12,12 @@
 4. **CPC → Hot.** O contato que deu CPC vira Hot (prioritário em toda exportação) e o
    canal do CPC fica marcado: o cliente vai para CPC A e as ações seguintes saem por ali.
 
+**Rotação até achar o Hot:** com 1 telefone por cliente, cada passagem usa o próximo
+telefone ainda não tentado — 1ª passagem o telefone 1, 2ª o 2, 3ª o 3, 4ª o 4, e então
+recomeça pelo tentado há mais tempo. A rotação conta pelo que foi exportado, mesmo que a
+ocorrência atrase. No primeiro CPC, o telefone exportado vira Hot e o motor fica fiel a
+ele em todos os canais.
+
 **Mais de um telefone por cliente:** em cada canal a empresa escolhe 1 contato (padrão)
 ou mais (2, 3, todos) na Lista do dia. Com mais de um, o CPC vale para o cliente na hora
 (CPC A, canal marcado) e os telefones enviados viram candidatos: as próximas ações vão a

@@ -47,9 +47,11 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
     sinais = sinais or {}
     bloqueados = regua.canais_bloqueados(cluster)
     validos = [c for c in certs if c.status not in FORA and sinais.get(c.contato, {}).get("pertence") != "nao"]
-    # Hot (deu CPC ou marcado na carga) primeiro; depois score e ranking do bureau. Ordenação estável.
+    # Hot (deu CPC ou marcado na carga) primeiro. Sem Hot, rotação: contato ainda não exportado
+    # antes, depois os já tentados do mais antigo para o mais recente. Depois score e ranking.
+    tent = {c: i + 1 for i, c in enumerate(est.contatos_tentados)} if not est.contato_localizador else {}
     validos.sort(key=lambda c: (not (c.status == "CERTIFICADO" or sinais.get(c.contato, {}).get("hot")),
-                                -c.score, sinais.get(c.contato, {}).get("ranking") or 99))
+                                tent.get(c.contato, 0), -c.score, sinais.get(c.contato, {}).get("ranking") or 99))
     loc = est.contato_localizador
     w = regua["whatsapp"]
     saida = {}

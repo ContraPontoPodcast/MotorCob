@@ -34,8 +34,8 @@ from pathlib import Path
 
 from motor.certificacao import certificar_contatos
 from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
-from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, converter_base, ingerir_ocorrencias,
-                           salvar_escolhas)
+from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
+                           ingerir_ocorrencias, salvar_escolhas)
 from motor.estrategia import validar_estrategia
 from motor.fila import gerar_fila, lista_enriquecimento
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
@@ -205,6 +205,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     pasta_estado = Path(pasta_estado)
     estados, ultimo = carregar_estado(pasta_estado)
     inicio = (ultimo + timedelta(days=1)) if ultimo else min(c.data_entrada for c in clientes.values())
+    # o que o motor exportou em cada dia (sem as reservas condicionais): base da rotação de contatos
+    enviados_dia = defaultdict(lambda: defaultdict(list))
+    for (d, idc), ls in carregar_escolhas(pasta_estado).items():
+        for l in sorted(ls, key=lambda l: int(l.get("ordem_contato") or 1)):
+            if str(l.get("reserva")) != "1" and l["contato"] not in enviados_dia[d][idc]:
+                enviados_dia[d][idc].append(l["contato"])
     trilha = []
     dia = inicio
     while dia < hoje:
@@ -212,7 +218,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         certs = certificar_contatos(ev_ate, dia, contatos, pessoa_de)
         _, disp, _ = gerar_fila(estados, clientes, certs, flags, parcelas, dia, regua, ev_ate, sinais)
         trilha += processar_dia(estados, clientes, por_dia.get(dia, []), parcelas, dia, regua, disp,
-                                baixas_ate=dia, atualizados=atualizados)
+                                baixas_ate=dia, atualizados=atualizados, enviados=enviados_dia.get(dia.isoformat()))
         dia += timedelta(days=1)
     ultimo = max(ultimo or hoje - timedelta(days=1), hoje - timedelta(days=1))
     salvar_estado(pasta_estado, estados, ultimo)

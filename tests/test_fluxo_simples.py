@@ -153,3 +153,41 @@ class TestTodosOsNumeros(unittest.TestCase):
         sim = Evento("C1", self.NUMS[1], "telefone", "agente_voz", "cpc", date(2026, 9, 10))
         processar_dia({"C1": est}, cli, [sim], {}, date(2026, 9, 10), regua)
         self.assertEqual((est.contato_localizador, est.candidatos_hot), (self.NUMS[1], []))
+
+
+class TestRotacaoAteOHot(unittest.TestCase):
+    def test_uma_passagem_por_telefone_ate_o_cpc_e_depois_fiel_ao_hot(self):
+        from motor.certificacao import Evento
+        from motor.marcacao import processar_dia
+        nums = ["11900000001", "11900000002", "11900000003", "11900000004"]
+        safra = date(2026, 9, 1)
+        regua = carregar_regua()
+        est = EstadoCliente("C1", safra, "M1", "M1", "2026-09")
+        cli = {"C1": Cliente("C1", safra, 900.0, 30)}
+        certs = {("C1", n): Certificacao("C1", n, "telefone", "DESCONHECIDO", 0.4) for n in nums}
+        passo = date(2026, 9, 4)                                    # D+3: RCS → senão SMS
+
+        def exportado():
+            fila, _, _ = gerar_fila({"C1": est}, cli, certs, {}, {}, passo, regua, [])
+            tel = {l["contato"] for l in fila if l["canal"] in ("rcs", "sms")}
+            self.assertEqual(len(tel), 1)                           # 1 telefone por cliente
+            return tel.pop()
+
+        enviados = []
+        for _ in range(5):                                          # 5 passagens sem CPC
+            t = exportado()
+            enviados.append(t)
+            processar_dia({"C1": est}, cli, [], {}, date(2026, 9, 2), regua, enviados={"C1": [t]})
+        self.assertEqual(enviados, nums + [nums[0]])                # 1, 2, 3, 4 e recomeça no 1
+        # CPC no telefone exportado (o 2): vira Hot e o motor fica fiel a ele
+        processar_dia({"C1": est}, cli, [Evento("C1", nums[1], "telefone", "rcs", "identidade_confirmada",
+                                                date(2026, 9, 2))], {}, date(2026, 9, 2), regua,
+                      enviados={"C1": [nums[1]]})
+        self.assertEqual((est.estado, est.contato_localizador, est.contatos_tentados), ("CPA", nums[1], []))
+        certs[("C1", nums[1])] = Certificacao("C1", nums[1], "telefone", "CERTIFICADO", 0.9)
+        for d in (8, 10, 14):                                       # negociação: sempre o Hot
+            fila, _, _ = gerar_fila({"C1": est}, cli, certs, {}, {}, date(2026, 9, d), regua, [])
+            self.assertEqual({(l["contato"], l["status_contato"]) for l in fila if l["canal"] != "email"},
+                             {(nums[1], "HOT")})
+            processar_dia({"C1": est}, cli, [], {}, date(2026, 9, d), regua,
+                          enviados={"C1": [l["contato"] for l in fila]})

@@ -62,6 +62,7 @@ class EstadoCliente:
     acordos_quebrados: list[str] = field(default_factory=list)
     cluster_versao: str = ""         # versão das regras de cluster da empresa usada na revisão
     candidatos_hot: list[str] = field(default_factory=list)  # CPC com vários números: um deles é o Hot
+    contatos_tentados: list[str] = field(default_factory=list)  # sem Hot: exportados sem CPC, do mais antigo
 
     @property
     def tag(self) -> str:
@@ -119,13 +120,17 @@ def proximo_canal(est: EstadoCliente, regua: Regua, disponiveis: set[str]) -> st
 def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente], eventos_dia: list[Evento],
                   parcelas: dict[str, list[Parcela]], dia: date, regua: Regua,
                   disponiveis: dict[str, set[str]] | None = None, baixas_ate: date | None = None,
-                  atualizados: dict[str, date] | None = None) -> list[dict]:
+                  atualizados: dict[str, date] | None = None,
+                  enviados: dict[str, list[str]] | None = None) -> list[dict]:
     """Atualiza os estados com o que aconteceu em `dia`. Retorna os eventos da trilha.
 
     disponiveis: {id_cliente: canais com contato elegível} — decide a rotação e quando
     o cliente esgotou os canais. baixas_ate: pagamentos refletidos até esta data.
     atualizados: {id_cliente: data do contato mais recente (enriquecimento)} — reativa o giro
     de quem estava parado aguardando re-enriquecimento.
+    enviados: {id_cliente: contatos exportados em `dia`} — enquanto o cliente não tem contato
+    Hot, cada contato exportado vai para o fim de `contatos_tentados`, e a próxima passagem
+    usa o próximo contato (1, 2, 3, 4 e recomeça pelo tentado há mais tempo).
     """
     trilha = Trilha()
     disponiveis = disponiveis or {}
@@ -176,6 +181,13 @@ def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente
             _aplicar_retornos(est, retornos, dia, rc, disponiveis.get(idc, set()), trilha)
             _aplicar_acordo(est, parcelas.get(idc, []), dia, baixas_ate, rc, trilha)
         _aplicar_tempo(est, dia, rc, trilha)
+        if est.contato_localizador:
+            est.contatos_tentados = []     # achou o Hot: fiel a ele, rotação encerrada
+        else:
+            for contato in (enviados or {}).get(idc, []):
+                if contato in est.contatos_tentados:
+                    est.contatos_tentados.remove(contato)
+                est.contatos_tentados.append(contato)
     return trilha.eventos
 
 

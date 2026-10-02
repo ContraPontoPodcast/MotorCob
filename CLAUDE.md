@@ -152,6 +152,11 @@ de outra pessoa pela certificação e a rotação segue.
   (`contato_localizador` + certificação) e o canal do CPC fica marcado (`canal_atual`).
   Status do contato na exportação (`status_contato` em `fila_do_dia.csv`): HOT · WHATSAPP
   · RCS · NEUTRO · INVALIDO; marcas `hot`/`whatsapp`/`rcs` podem vir por telefone na carga.
+  Rotação sem Hot: `EstadoCliente.contatos_tentados` recebe o que foi exportado em cada dia
+  (`escolhas.csv`, sem reservas, via `processar_dia(enviados=...)`); `candidatos()` ordena
+  não tentados primeiro e depois os tentados do mais antigo (1, 2, 3, 4, 1…). Com Hot
+  (`contato_localizador`), a lista é zerada e o Hot vai primeiro sempre. `numeros_digitais`
+  e `numeros_voz` = 1 por padrão.
   Mais de um contato por canal: `canais_empresa.numeros_por_cliente` (1 padrão, 99 =
   todos). CPC sem contato identificado → `EstadoCliente.candidatos_hot` (contatos da ação,
   via `Evento.candidatos`); em CPA/CPB sem Hot, um candidato por vez até um dar CPC
