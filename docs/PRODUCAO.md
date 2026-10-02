@@ -23,6 +23,14 @@ ou mais (2, 3, todos) na Lista do dia. Com mais de um, o CPC vale para o cliente
 (CPC A, canal marcado) e os telefones enviados viram candidatos: as próximas ações vão a
 um candidato por vez; o que der CPC sozinho vira Hot, o que não atender sai da lista.
 
+**Personas (aprendizado automático):** a cada rotina o motor cruza as características dos
+clientes (colunas da carga, faixa de saldo e atraso, DDD, tem WhatsApp/RCS) com as
+ocorrências e escolhe sozinho as que mais mudam a resposta por canal. Na esteira, "★
+melhor canal da persona" usa, para cada cliente, o canal com mais CPC por real gasto entre
+clientes parecidos (10% exploram outro canal). Mudanças de régua viram sugestões com
+evidência na página Personas; aprovadas, entram na rotina seguinte como um segmento novo
+na Orquestração. Sem histórico suficiente, vale a média da carteira.
+
 Status do contato: **HOT** (deu CPC ou veio marcado como preferencial na carga) ·
 **WHATSAPP** · **RCS** · **NEUTRO** (sem validação) · **INVÁLIDO**. O retorno do bureau
 só atualiza esses status e traz números novos.

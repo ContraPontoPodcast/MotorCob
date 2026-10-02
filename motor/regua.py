@@ -26,6 +26,7 @@ class Regua:
     versao_clusters: str = ""
     estrategias: dict = field(default_factory=dict, compare=False)  # id -> partes do playbook (estrategia.py)
     estrategia_padrao: int | None = None                           # da empresa, p/ quem não tem estratégia
+    persona: object = field(default=None, compare=False)           # ModeloPersona (motor/persona.py)
     canais_cfg: dict = field(default_factory=dict, compare=False)   # canal -> limites da empresa
     _cache: dict = field(default_factory=dict, compare=False, repr=False)
 

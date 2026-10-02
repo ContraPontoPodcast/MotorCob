@@ -9,6 +9,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20260929000001_estrategias.sql
     psql -d sb -f supabase/migrations/20260930000001_mapa_esteira.sql
     psql -d sb -f supabase/migrations/20261002000001_numeros_por_cliente.sql
+    psql -d sb -f supabase/migrations/20261003000001_personas.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -168,6 +169,16 @@ checar("fluxo: entradas e mudanças de estado (não de ciclo)", True, "select st
 checar("fluxo: B não vê a trilha da A", True, "select count(*) from public.fluxo_esteira", "authenticated", u["operb"], 0)
 checar("planejamento escolhe todos os números no discador", True, f"update public.canais_empresa set numeros_por_cliente=99 where empresa_id={EA} and canal='discador'", "authenticated", u["plan"])
 checar("números por cliente fora de 1–99 é recusado", False, f"update public.canais_empresa set numeros_por_cliente=0 where empresa_id={EA}", "authenticated", u["plan"])
+# personas e sugestões
+sql(f"set role service_role; insert into public.personas (empresa_id,persona,nome,clientes) values ({EA},'RJ','UF RJ',400),({EB},'SP','UF SP',10);"
+    f"insert into public.sugestoes (empresa_id,chave,texto,dados) values ({EA},'RJ|loc|1|whatsapp|discador','UF RJ: trocar','{{}}'),({EB},'SP|x','b','{{}}')")
+checar("personas: cada empresa vê as suas", True, "select string_agg(nome, ',') from public.personas", "authenticated", u["oper"], "UF RJ")
+checar("operação não aprova sugestão (0 linhas)", True, "with x as (update public.sugestoes set status='aprovada' returning 1) select count(*) from x", "authenticated", u["oper"], 0)
+checar("planejamento A aprova sugestão da A", True, f"update public.sugestoes set status='aprovada' where empresa_id={EA}; select decidida_por is not null from public.sugestoes where empresa_id={EA}", "authenticated", u["plan"], "t")
+checar("não dá para mudar a sugestão depois de decidida", False, f"update public.sugestoes set status='recusada' where empresa_id={EA}", "authenticated", u["plan"])
+checar("pelo site não se marca como aplicada", False, f"update public.sugestoes set status='aplicada' where empresa_id={EB}", "authenticated", u["admin"])
+checar("planejamento A não decide sugestão da B (0 linhas)", True, f"with x as (update public.sugestoes set status='recusada' where empresa_id={EB} returning 1) select count(*) from x", "authenticated", u["plan"], 0)
+checar("rotina marca como aplicada", True, f"update public.sugestoes set status='aplicada', aplicada_em=now() where empresa_id={EA}", "service_role")
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
