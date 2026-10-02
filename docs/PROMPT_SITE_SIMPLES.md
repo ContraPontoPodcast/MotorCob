@@ -30,9 +30,32 @@ Status do cliente (estado da TAG): Não localizado = LOC e NCP; CPC A = CPA; CPC
 Acordo = PRE, COL e QBR; Liquidado = LIQ; Bloqueado = BLQ.
 
 ## Menu
-Início · Enviar arquivos · Lista do dia (a antiga "Fila do dia") · Cliente · Painel ·
-Comitê. Depois um grupo recolhido "Avançado" (só admin e planejamento) com: Clusters,
-Estratégias, Canais, Empresas (só equipe admin), Usuários (admin).
+Início · Enviar arquivos · Orquestração · Lista do dia (a antiga "Fila do dia") · Cliente ·
+Painel · Comitê. Depois um grupo recolhido "Avançado" (só admin e planejamento) com:
+Canais, Empresas (só equipe admin), Usuários (admin).
+
+## Orquestração (/orquestracao) — junta Clusters e Estratégias numa página só
+É onde a empresa desenha o que mandar para cada segmento. Texto no topo: "Cada cliente da
+carga cai num segmento. O MotorCob vê em que momento ele está — Novo, CPC A, Não CPC,
+Acordo — e aplica a regra desse momento. Quem deu CPC segue no contato Hot e no canal
+do CPC."
+- Coluna da esquerda: "Segmentos" = lista dos clusters (tabela clusters, em ordem), mais
+  um item fixo no fim "Demais clientes" (quem não cai em nenhum segmento = estratégia
+  padrão da empresa). Botões "+ Segmento", Subir/Descer. Clicar abre à direita.
+- À direita, para o segmento escolhido:
+  1. "Quem entra": as condições do cluster (mesmo formulário da página Clusters).
+  2. "Estratégia": select com as estratégias da empresa + "Nova estratégia". Mostra a
+     estratégia escolhida em 3 abas grandes, com os nomes da operação, e as 2 de acordo
+     menores:
+     - "Novo" (localização): passos por dia com o blend de canais;
+     - "CPC A / CPC B": ordem dos canais quando o canal do CPC parar de responder (o canal
+       do CPC e o contato Hot sempre vêm primeiro — texto fixo);
+     - "Não CPC" (giro): passos do ciclo, ciclos;
+     - "Preventivo" e "Quebra" (acordo).
+     É o mesmo editor da página Estratégias (grava em estrategias.definicao); se a
+     estratégia for usada por outros segmentos, avise "Esta estratégia também vale para:
+     …" antes de salvar.
+- As páginas Clusters e Estratégias antigas saem do menu (as rotas podem continuar).
 
 ## Início
 - Card "Última rotina" como já existe (ultima_execucao), com "Carga do dia:
