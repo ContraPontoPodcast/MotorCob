@@ -203,6 +203,11 @@ de outra pessoa pela certificação e a rotação segue.
   sai no dia da carga. Playbook: WhatsApp senão SMS no D+1. SMS e RCS só em celular (11 dígitos
   com 9); WhatsApp em fixo só com marca de WhatsApp. Passo sem contato que sirva gera o alerta
   "SEM CONTATO PARA O PASSO DE HOJE". No CPC, o reforço (cpc.junto) acompanha o canal que foi.
+- Personas do usuário (tabela `personas_usuario`, por carteira): `cluster.carregar_personas` /
+  `persona_de` (mesmas condições dos segmentos; 1ª que bate pela ordem). `rodar_dia(personas_usuario=)`
+  põe o nome no atributo "persona" (vale em segmento e no aprendizado) e em
+  enquadramento.persona_usuario; ação da estratégia com "personas": [ids] só vai para esses
+  clientes (`gerar_fila(publico=)`; fora dela o "senão" seguinte vai).
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias

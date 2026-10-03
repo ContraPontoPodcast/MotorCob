@@ -528,6 +528,21 @@ def _guardar_compartilhado(pasta_emp: Path, u: dict, r: dict, hoje: date):
     tmp.replace(arq)
 
 
+def _personas_usuario(sb: Supabase, pasta: Path, empresa_id, cid) -> list[dict]:
+    """Personas que a empresa criou para esta carteira (banco sem a tabela: nenhuma)."""
+    if cid is None:
+        return []
+    try:
+        linhas = sb.selecionar("personas_usuario", {"empresa_id": f"eq.{empresa_id}", "credor_id": f"eq.{cid}",
+                                                    "ativo": "eq.true"}, ordem="ordem.asc,id.asc") or []
+    except ErroSupabase:
+        return []
+    (pasta / "config").mkdir(parents=True, exist_ok=True)
+    (pasta / "config" / "personas_usuario.json").write_text(json.dumps(linhas, ensure_ascii=False, indent=1),
+                                                            encoding="utf-8")
+    return linhas
+
+
 def _layout_automatico(sb: Supabase, pasta: Path, baixados, out):
     """Empresa sem empresas/<slug>.json: o MotorCob reconhece as colunas pelos arquivos (motor/detectar).
     Grava o que entendeu em config/entrada_automatica.json e devolve (Entrada, alerta para conferir).
@@ -587,6 +602,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             (pasta / "config" / "estrategias.json").write_text(json.dumps(estrategias, ensure_ascii=False, indent=1),
                                                                encoding="utf-8")
         canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
+        personas_usuario = _personas_usuario(sb, pasta, eid, cid)
         for obrig in ("base/clientes.csv", "base/contatos.csv"):
             if not (pasta / obrig).exists():
                 raise RuntimeError(f"falta a base de {nome}: envie a carga geral pelo site (Enviar arquivos)")
@@ -601,7 +617,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 ocorrencias=pasta / "ocorrencias" if entrada else None, entrada=entrada,
                                 clusters=clusters, atributos=pasta / "base" / "atributos.csv",
                                 estrategias=estrategias, canais=canais,
-                                compartilhado=_compartilhado(pasta_emp, u, data))
+                                compartilhado=_compartilhado(pasta_emp, u, data),
+                                personas_usuario=personas_usuario)
         _guardar_compartilhado(pasta_emp, u, r, data)
 
         if aviso_layout:
@@ -611,8 +628,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid,
                                                         r.get("enquadramento")), conflito=conflito)
         except ErroSupabase as ex:   # banco sem as colunas do enquadramento: grava o resto e avisa
-            if "estrategia" not in str(ex) and "persona" not in str(ex) and "acao_hoje" not in str(ex) \
-                    and "na_carga" not in str(ex) and "passo_hoje" not in str(ex):
+            if not any(c in str(ex) for c in ("estrategia", "persona", "acao_hoje", "na_carga", "passo_hoje")):
                 raise
             sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid),
                        conflito=conflito)

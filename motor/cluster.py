@@ -67,6 +67,52 @@ def _texto(v) -> str:
     return str(v if v is not None else "").strip().casefold()
 
 
+def ler_condicoes(lista) -> tuple[list[tuple], str | None]:
+    """[{campo, op, valor}] -> ([(campo, op, valor)], erro)."""
+    conds = []
+    for c in lista or []:
+        campo, op, valor = str(c.get("campo") or "").strip(), str(c.get("op") or "").strip(), c.get("valor")
+        if not campo or op not in OPERADORES:
+            return [], f"condição inválida {c}"
+        if op in (">", ">=", "<", "<=") and numero(valor) is None:
+            return [], f"'{campo} {op} {valor}': valor precisa ser número"
+        if op in ("em", "nao_em"):
+            valor = tuple(_texto(v) for v in (valor if isinstance(valor, list) else str(valor or "").split(";"))
+                          if _texto(v))
+        conds.append((campo, op, valor))
+    return conds, None
+
+
+@dataclass(frozen=True)
+class PersonaUsuario:
+    """Persona criada pela empresa: o perfil do devedor (público), por carteira."""
+    id: int
+    nome: str
+    condicoes: tuple[tuple[str, str, object], ...]
+
+
+def carregar_personas(linhas: list[dict]) -> tuple[list[PersonaUsuario], list[str]]:
+    """Linhas da tabela `personas_usuario` (ativas) em ordem -> (personas, avisos). Vale a 1ª que bate."""
+    saida, avisos = [], []
+    for l in sorted(linhas or [], key=lambda l: (l.get("ordem") or 0, l.get("id") or 0)):
+        if l.get("ativo") is False:
+            continue
+        nome = str(l.get("nome") or "").strip()
+        conds, erro = ler_condicoes(l.get("condicoes"))
+        if not nome or erro or not conds:
+            avisos.append(f"persona '{nome or l.get('id')}' ignorada: {erro or 'sem nome ou sem características'}")
+            continue
+        saida.append(PersonaUsuario(l.get("id"), nome, tuple(conds)))
+    return saida, avisos
+
+
+def persona_de(personas: list[PersonaUsuario], cliente, dia: date) -> PersonaUsuario | None:
+    for p in personas:
+        if all(condicao_ok(cliente, dia, *c) for c in p.condicoes):
+            return p
+    return None
+
+
 def carregar_regras(linhas: list[dict]) -> tuple[list[RegraCluster], list[str]]:
     """Linhas da tabela `clusters` (ativas, em ordem) -> (regras válidas, avisos).
 
@@ -81,19 +127,7 @@ def carregar_regras(linhas: list[dict]) -> tuple[list[RegraCluster], list[str]]:
         if cod in vistos:
             avisos.append(f"cluster '{cod}': código repetido, vale só o primeiro")
             continue
-        conds, erro = [], None
-        for c in l.get("condicoes") or []:
-            campo, op, valor = str(c.get("campo") or "").strip(), str(c.get("op") or "").strip(), c.get("valor")
-            if not campo or op not in OPERADORES:
-                erro = f"condição inválida {c}"
-                break
-            if op in (">", ">=", "<", "<=") and numero(valor) is None:
-                erro = f"'{campo} {op} {valor}': valor precisa ser número"
-                break
-            if op in ("em", "nao_em"):
-                valor = tuple(_texto(v) for v in (valor if isinstance(valor, list) else str(valor or "").split(";"))
-                              if _texto(v))
-            conds.append((campo, op, valor))
+        conds, erro = ler_condicoes(l.get("condicoes"))
         if erro:
             avisos.append(f"cluster '{cod}' ignorado: {erro}")
             continue

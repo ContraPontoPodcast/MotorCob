@@ -84,6 +84,34 @@ class TestCarteira(unittest.TestCase):
 
 
 
+class TestPersonasDaEmpresa(unittest.TestCase):
+    """Persona criada pela empresa: perfil do devedor; a esteira manda ação só para ela."""
+    def test_persona_filtra_a_acao_e_aparece_no_enquadramento(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            (tmp / "bruto").mkdir()
+            (tmp / "bruto" / "carga_2026-09-02.csv").write_text(
+                CAB + "A1;K1;;800,00;01/08/2026;CARTAO;SP;11911110001;S;;;;\n"
+                      "B1;K2;;9000,00;01/08/2026;VEICULO;RJ;21922220002;S;;;;\n", encoding="utf-8")
+            rodar_dia.preparar_carteira(EMPRESA, tmp)
+            personas = [{"id": 7, "nome": "Digitais SP", "ordem": 1, "ativo": True,
+                         "condicoes": [{"campo": "UF", "op": "=", "valor": "SP"},
+                                       {"campo": "tem_whatsapp", "op": "=", "valor": "sim"},
+                                       {"campo": "saldo", "op": "<=", "valor": 2000}]}]
+            estr = [{"id": 1, "nome": "E", "padrao": True, "definicao": {"localizacao": {"passos": {"1": [
+                {"canal": "whatsapp", "modo": "sempre", "personas": [7]},
+                {"canal": "sms", "modo": "senao"}]}}}}]
+            base = tmp / "base"
+            r = rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", tmp / "ret", date(2026, 9, 2),
+                                    pasta_estado=tmp / "estado", pasta_saida=tmp / "saida", out=lambda *a: None,
+                                    atributos=base / "atributos.csv", estrategias=estr, personas_usuario=personas)
+            canal = {l["id_cliente"]: l["canal"] for l in r["fila"]}
+            self.assertEqual(canal, {"A1": "whatsapp", "B1": "sms"})      # B1 fora da persona: senão SMS
+            self.assertEqual(r["enquadramento"]["A1"]["persona_usuario"], "Digitais SP")
+            self.assertEqual(r["enquadramento"]["B1"]["persona_usuario"], "")
+            self.assertEqual(r["clientes"]["B1"].atributos["persona"], "Sem persona")
+
+
 class TestEntreCredores(unittest.TestCase):
     """Mesmo CPF em dois credores: Hot e WhatsApp valem para os dois; 48h contam juntas."""
     def _rodar(self, tmp, comp):
