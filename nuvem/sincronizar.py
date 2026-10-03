@@ -648,7 +648,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 clusters=clusters, atributos=pasta / "base" / "atributos.csv",
                                 estrategias=estrategias, canais=canais,
                                 compartilhado=_compartilhado(pasta_emp, u, data),
-                                personas_usuario=personas_usuario)
+                                personas_usuario=personas_usuario,
+                                demais_ativo=u.get("demais_ativo") is not False)
         _guardar_compartilhado(pasta_emp, u, r, data)
 
         if aviso_layout:

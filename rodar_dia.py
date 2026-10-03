@@ -145,7 +145,7 @@ def salvar_estado(pasta: Path, estados, ultimo_dia):
 def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts", parcelas_csv=None,
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
               ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
-              na_carga=None, compartilhado=None, personas_usuario=None):
+              na_carga=None, compartilhado=None, personas_usuario=None, demais_ativo=True):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
     atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
     na_carga: base/na_carga.csv — quem está na carga do dia (só esses recebem ação hoje).
@@ -294,9 +294,20 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     recencia = timedelta(hours=regua["recencia_horas"])
     pausados = {idc for idc, p in pessoa_de.items()
                 if (d := (compartilhado.get("acionados") or {}).get(p)) and hoje - d < recencia}
+    # "Demais clientes" desligado na carteira: quem não caiu em nenhum segmento fica sem ação
+    # massiva (acordo segue) e não vai ao bureau
+    desligados = set() if demais_ativo else {
+        k for k, e in estados.items() if regua._regra(e.cluster_atual) is None and e.estado in ESTADOS_MASSIVOS}
+    ativos_fila = ativos
+    if desligados:
+        ativos_fila = (set(estados) if ativos is None else ativos) - desligados
     adiados, para_bureau = set(), {}
-    fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos,
+    fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau)
+    if desligados:
+        n = len(desligados if ativos is None else desligados & ativos)
+        alertas.append(f"DEMAIS CLIENTES DESLIGADO: {n} clientes da carga não caíram em nenhum segmento em uso "
+                       f"e ficam sem ação (ligue em Orquestração › Demais clientes)")
     if adiados:
         alertas.append(f"OUTRO CREDOR: {len(adiados)} clientes ficam sem ação massiva hoje (outro credor acionou "
                        f"nas últimas {regua['recencia_horas']}h ou é a vez dele); voltam na próxima")
@@ -306,7 +317,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     # repetir o mesmo cliente antes de INTERVALO_BUREAU dias
     if ativos is not None:
         para_bureau = {k: v for k, v in para_bureau.items() if k in ativos}
-    enriq = lista_enriquecimento(estados, flags, contatos_por, hoje, regua, para_bureau)
+    enriq = lista_enriquecimento({k: e for k, e in estados.items() if k not in desligados}, flags, contatos_por,
+                                 hoje, regua, para_bureau)
     arq_env = pasta_estado / "bureau_enviados.json"
     enviados_bureau = json.loads(arq_env.read_text(encoding="utf-8")) if arq_env.exists() else {}
     recentes = {k for k, d in enviados_bureau.items()
@@ -419,7 +431,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     for k, e in estados.items():
         eid = regua.estrategia_de(e.cluster_atual)
         enquadramento[k] = {
-            "estrategia": (nomes_estr.get(eid) or f"estratégia {eid}") if eid is not None else "Playbook MotorCob",
+            "estrategia": "Demais clientes (desligado)" if k in desligados else
+            (nomes_estr.get(eid) or f"estratégia {eid}") if eid is not None else "Playbook MotorCob",
             "persona": modelo.nome(modelo.persona(k)) if k in modelo.feats and modelo.colunas else "",
             "na_carga": ativos is None or k in ativos,
             "acao_hoje": ", ".join(acao_hoje.get(k, [])),
