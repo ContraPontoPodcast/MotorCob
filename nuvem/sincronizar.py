@@ -40,7 +40,9 @@ import csv
 import json
 import os
 import re
+import subprocess
 import sys
+import time
 import traceback
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
@@ -845,6 +847,25 @@ def credores_sem_rotina_hoje(sb: Supabase, emp: dict, hoje: date) -> set:
     return (rodaram & validos) - hoje_ja
 
 
+def _falhou(dados: Path, emp: dict) -> dict:
+    arq = _vigia_arq(dados, emp)
+    falhou = json.loads(arq.read_text(encoding="utf-8")).get("falhou_ate", {}) if arq.exists() else {}
+    return falhou if isinstance(falhou, dict) else {"None": falhou}
+
+
+def ha_arquivo_novo(dados: Path, sb: Supabase, empresa: str | None = None) -> frozenset:
+    """Consulta leve (o plantão faz a cada poucos segundos): arquivos da carteira pendentes que
+    ainda não falharam, como {(empresa_id, credor_id, maior id de envio)} (vazio = nada novo)."""
+    pend = _pendentes_base(sb)
+    if not pend:
+        return frozenset()
+    saida = set()
+    for emp in empresas_ativas(sb, empresa):
+        falhou = _falhou(dados, emp)
+        saida |= {(emp["id"], c, i) for c, i in pend.get(emp["id"], {}).items() if i > falhou.get(str(c), 0)}
+    return frozenset(saida)
+
+
 def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = None,
                             hoje: date | None = None) -> list[dict]:
     """Empresas ativas com arquivo da carteira pendente que ainda não falhou nesse mesmo arquivo, ou
@@ -854,10 +875,7 @@ def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = Non
     rotina_vale = hoje is not None and _passou_hora_rotina(hoje)
     saida = []
     for emp in empresas_ativas(sb, empresa):
-        arq = _vigia_arq(dados, emp)
-        falhou = json.loads(arq.read_text(encoding="utf-8")).get("falhou_ate", {}) if arq.exists() else {}
-        if not isinstance(falhou, dict):
-            falhou = {"None": falhou}
+        falhou = _falhou(dados, emp)
         novos = {c for c, i in pend.get(emp["id"], {}).items() if i > falhou.get(str(c), 0)}
         ja = falhou.get("orquestracao") if isinstance(falhou.get("orquestracao"), dict) else {}
         mudou = {c: q for c, q in credores_com_orquestracao_nova(sb, emp).items() if q > ja.get(str(c), "")}
@@ -909,6 +927,51 @@ def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empre
         elif arq.exists():
             arq.unlink()
     return resultados
+
+
+def _versao_repo() -> str:
+    try:
+        return subprocess.run(["git", "-C", str(RAIZ), "rev-parse", "HEAD"], capture_output=True, text=True,
+                              timeout=10).stdout.strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def plantao(dados: Path, comando: list[str], sb: Supabase | None = None, out=print, empresa: str | None = None,
+            intervalo: float = 5, completo: float = 60, parar=None, dormir=time.sleep, relogio=time.monotonic,
+            versao=_versao_repo) -> str:
+    """Vigia em tempo real (processo que fica no ar, mantido pelo launchd): a cada `intervalo`
+    segundos faz a consulta leve de arquivo novo e, se houver, chama `comando` (rodar_dia.sh
+    --vigiar) na hora; a cada `completo` segundos chama o comando de qualquer jeito, para pegar
+    orquestração alterada e a rotina do dia. Sai quando o motor é atualizado (git pull), para o
+    launchd subir a versão nova. Devolve o motivo da saída."""
+    sb = sb or Supabase(*carregar_config(dados))
+    inicio = versao()
+    ultimo, visto = None, frozenset()
+    falhas = 0
+    out(f"plantão no ar: olha o site a cada {intervalo:g} s")
+    while not (parar and parar()):
+        agora = relogio()
+        try:
+            novo = ha_arquivo_novo(dados, sb, empresa)
+            falhas = 0
+        except Exception as ex:  # noqa: BLE001 — sem internet ou Supabase fora: tenta de novo
+            falhas += 1
+            if falhas in (1, 10) or falhas % 100 == 0:
+                out(f"{datetime.now():%F %T} sem acesso ao site ({str(ex)[:200]}); tento de novo")
+            dormir(min(60, intervalo * (1 + falhas)))
+            continue
+        chegou = bool(novo - visto)   # o mesmo arquivo parado não roda a cada 5 s: espera o ciclo completo
+        if chegou or ultimo is None or agora - ultimo >= completo:
+            if chegou:
+                out(f"{datetime.now():%F %T} arquivo novo no site: rodando agora")
+            ultimo, visto = agora, novo
+            subprocess.run(comando, check=False)
+            if inicio and versao() != inicio:
+                out("motor atualizado: reiniciando o plantão")
+                return "atualizado"
+        dormir(intervalo)
+    return "parado"
 
 
 # ------------------------------------------------------------------ comitê
@@ -980,7 +1043,7 @@ def _travar(dados: Path, esperar: bool):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("modo", choices=["dia", "comite", "vigiar"])
+    ap.add_argument("modo", choices=["dia", "comite", "vigiar", "plantao"])
     ap.add_argument("--checar", action="store_true", help="vigiar: só diz se há carga nova (saída 0) ou não (3)")
     ap.add_argument("--dados", type=Path, default=Path(os.environ.get("MOTORCOB_DADOS", Path.home() / "MotorCob-dados")))
     ap.add_argument("--data", type=date.fromisoformat, default=date.today())
@@ -988,6 +1051,11 @@ def main():
     ap.add_argument("--empresa", help="slug de uma empresa (padrão: todas as ativas)")
     a = ap.parse_args()
     try:
+        if a.modo == "plantao":
+            intervalo = float(os.environ.get("MOTORCOB_PLANTAO_SEGUNDOS", "5"))
+            plantao(a.dados, [str(RAIZ / "scripts" / "rodar_dia.sh"), "--vigiar"], empresa=a.empresa,
+                    intervalo=intervalo, out=lambda m: print(m, flush=True))
+            return
         if a.modo == "vigiar" and a.checar:
             sys.exit(0 if empresas_com_carga_nova(a.dados, Supabase(*carregar_config(a.dados)), a.empresa, a.data)
                      else 3)

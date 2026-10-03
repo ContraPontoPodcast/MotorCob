@@ -456,6 +456,49 @@ class TestSincronizar(unittest.TestCase):
         self.assertTrue(_passou_hora_rotina(hoje, datetime(2026, 9, 3, 6, 0)))
         self.assertTrue(_passou_hora_rotina(hoje, datetime(2026, 9, 4, 1, 0)))   # data informada à mão
 
+    def test_plantao_roda_na_hora_que_o_arquivo_chega(self):
+        from nuvem.sincronizar import ha_arquivo_novo, plantao
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self.assertEqual(ha_arquivo_novo(self.dados, self.sb), frozenset())
+        relogio = {"t": 0.0}
+        chamadas, ticks = [], {"n": 0}
+
+        def dormir(s):
+            relogio["t"] += s
+            ticks["n"] += 1
+            if ticks["n"] == 3:   # 15 s depois de subir: chega a carga no site
+                self._envio(6001, 2, "base", "nova.csv", b"x", "2026-09-03")
+
+        def comando(cmd, check=False):
+            chamadas.append(relogio["t"])
+
+        import nuvem.sincronizar as s
+        orig = s.subprocess.run
+        s.subprocess.run = comando
+        try:
+            r = plantao(self.dados, ["rodar"], self.sb, out=lambda *a: None, intervalo=5, completo=60,
+                        parar=lambda: ticks["n"] >= 20, dormir=dormir, relogio=lambda: relogio["t"],
+                        versao=lambda: "")
+        finally:
+            s.subprocess.run = orig
+        self.assertEqual(r, "parado")
+        # sobe e roda (rotina/orquestração); arquivo chega aos 15 s → roda aos 15 s;
+        # o mesmo arquivo parado não roda de novo a cada 5 s, só no ciclo de 60 s
+        self.assertEqual(chamadas, [0.0, 15.0, 75.0])
+
+    def test_plantao_reinicia_quando_o_motor_atualiza(self):
+        from nuvem.sincronizar import plantao
+        import nuvem.sincronizar as s
+        versoes = iter(["a", "b"])
+        orig = s.subprocess.run
+        s.subprocess.run = lambda *a, **k: None
+        try:
+            r = plantao(self.dados, ["rodar"], self.sb, out=lambda *a: None, dormir=lambda x: None,
+                        versao=lambda: next(versoes))
+        finally:
+            s.subprocess.run = orig
+        self.assertEqual(r, "atualizado")
+
     def test_sugestao_aprovada_vira_segmento_com_estrategia(self):
         dados = {"persona": "RJ", "nome": "UF RJ", "condicoes": [{"campo": "UF", "valor": "RJ"}],
                  "estrategia_base": None, "fase": "localizacao", "dia": 1, "de": "whatsapp", "para": "sms"}

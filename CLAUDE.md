@@ -284,8 +284,11 @@ de outra pessoa pela certificação e a rotação segue.
   pendentes, e as outras empresas seguem. Chave service_role só em
   `~/MotorCob-dados/config/supabase.env` (criado por `scripts/configurar_nuvem.sh`).
 - `scripts/` + `docs/PRODUCAO.md`: produção no Mac (instalador, rotina agendada via
-  launchd, relatório mensal). `instalar_mac.sh vigiar`: launchd a cada 120 s chama
-  `rodar_dia.sh --vigiar` → `nuvem.sincronizar vigiar --checar` (sai 3 sem carga nova) e
+  launchd, relatório mensal). `instalar_mac.sh vigiar`: launchd (KeepAlive, sob `caffeinate -i`) mantém
+  `rodar_dia.sh --plantao` → `nuvem.sincronizar plantao`, que a cada 5 s (`MOTORCOB_PLANTAO_SEGUNDOS`)
+  faz a consulta leve `ha_arquivo_novo` e, com arquivo novo (ou a cada 60 s de qualquer jeito),
+  chama `rodar_dia.sh --vigiar`; sai quando o git pull muda o HEAD (launchd sobe de novo).
+  `--vigiar` → `nuvem.sincronizar vigiar --checar` (sai 3 sem carga nova) e
   `vigiar` roda o dia só das empresas com envio `base` pendente. Trava em
   `logs/.rodando.lock` (diário e vigia não se atropelam). Rodada com erro grava
   `estado/vigia.json` (`falhou_ate` = id do envio) e só tenta de novo com carga nova. Carga

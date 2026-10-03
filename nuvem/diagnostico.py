@@ -124,10 +124,13 @@ def main():
     except Exception as ex:  # noqa: BLE001
         info(f"não consegui ler a orquestração: {str(ex)[:200]}")
 
-    print("\n5. Vigia (roda sozinha a cada 2 minutos)")
+    print("\n5. Vigia (plantão em tempo real: olha o site a cada 5 segundos)")
     if sys.platform == "darwin":
         if PLIST.exists():
             ok("vigia instalada")
+            if "--plantao" not in PLIST.read_text(encoding="utf-8"):
+                ruim("a vigia instalada é a antiga (olha o site só a cada 2 minutos)",
+                     "Troque pela de tempo real: cd ~/MotorCob && MOTORCOB_PYTHON=python3.12 scripts/instalar_mac.sh vigiar")
             lista = subprocess.run(["launchctl", "list"], capture_output=True, text=True).stdout
             if "br.com.contraponto.motorcob.vigia" in lista:
                 ok("vigia ligada")
@@ -185,7 +188,7 @@ def _orquestracao(sb, dados, empresas, ok, ruim, info):
                 info("   nenhum segmento em uso nesta carteira")
             if u["id"] in mudou:
                 ruim(f"{nome}: a orquestração mudou depois da última rotina",
-                     "A vigia refaz a lista em até 2 minutos; para já: scripts/rodar_dia.sh")
+                     "A vigia refaz a lista em até 1 minuto; para já: scripts/rodar_dia.sh")
         for e in estr.values():
             _, avisos = validar_estrategia(e.get("definicao") or {}, e.get("nome") or str(e["id"]))
             if avisos:

@@ -60,12 +60,15 @@ só atualiza esses status e traz números novos.
    ```bash
    scripts/instalar_mac.sh vigiar
    ```
-   A cada 2 minutos o Mac olha o site; se alguma empresa subiu carga do credor, ele baixa,
-   roda o dia dessa empresa e publica a lista (em geral em 2 a 5 minutos). Também refaz a
-   lista quando a orquestração muda no site e, **todo dia a partir das 06:00**, roda a rotina
-   do dia das carteiras que ainda não rodaram hoje (sem isso, em dia sem carga a esteira não
-   anda). Substitui o
-   agendamento diário (e `instalar_mac.sh 06:30` volta para o diário). O Mac precisa ficar ligado e sem dormir. Suba a **ocorrência antes da carga**:
+   A vigia fica no ar (plantão) e olha o site a cada 5 segundos; quando alguma empresa sobe
+   arquivo da carteira (carga, incremental, retirada, acordo, baixa), ela começa na hora:
+   baixa, roda o dia dessa carteira e publica a lista (o tempo é o da própria rotina, em geral
+   1 a 3 minutos). Também refaz a lista em até 1 minuto quando a orquestração muda no site e,
+   **todo dia a partir das 06:00**, roda a rotina do dia das carteiras que ainda não rodaram
+   hoje (sem isso, em dia sem carga a esteira não anda). Substitui o agendamento diário (e
+   `instalar_mac.sh 06:30` volta para o diário). Enquanto a vigia está no ar o Mac não dorme
+   sozinho (`caffeinate`), mas com a tampa fechada ou desligado ela para. Suba a **ocorrência
+   antes da carga**:
    assim a lista já sai com os CPCs de ontem. Carga sem as colunas obrigatórias fica com
    erro no site (com o motivo) e não gera lista; envie de novo corrigida.
    Registro: `~/MotorCob-dados/logs/vigia_<data>.log`.
