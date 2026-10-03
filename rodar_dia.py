@@ -145,7 +145,7 @@ def salvar_estado(pasta: Path, estados, ultimo_dia):
 def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts", parcelas_csv=None,
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
               ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
-              na_carga=None, compartilhado=None):
+              na_carga=None, compartilhado=None, personas_usuario=None):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
     atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
     na_carga: base/na_carga.csv — quem está na carga do dia (só esses recebem ação hoje).
@@ -153,6 +153,10 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     estrategias: [{id, nome, definicao, padrao}] da tabela `estrategias` (ou .json).
     canais: [{canal, ativo, janela_inicio, janela_fim, sabado, capacidade_dia, custo, tentativas_dia,
              respeitar_nao_perturbe}] da tabela `canais_empresa` (ou .json).
+    personas_usuario: personas criadas pela empresa para a carteira ([{id, nome, ordem, condicoes,
+             ativo}] da tabela personas_usuario, ou .json). Cada cliente fica na 1ª que bate; o nome vai
+             para o atributo "persona" (vale em segmentos e no aprendizado) e a esteira pode mandar uma
+             ação só para algumas personas.
     compartilhado: o que os OUTROS credores da empresa sabem da mesma pessoa (mesmo CPF):
              {"hot": {(pessoa, contato)}, "whatsapp": {contato}, "acionados": {pessoa: data}}.
              Hot e WhatsApp valem aqui; quem está em "acionados" com data nas últimas 48h não
@@ -183,7 +187,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     atrib = carregar_atributos(atributos)
     if atrib:
         clientes = {k: replace(c, atributos=atrib.get(k, {})) for k, c in clientes.items()}
-    faltam = sorted(colunas_usadas(list(regua.clusters)) - {k for a in atrib.values() for k in a})
+    faltam = sorted(colunas_usadas(list(regua.clusters)) - {k for a in atrib.values() for k in a}
+                    - {"persona", "ddd", "tem_whatsapp", "tem_rcs"})   # calculadas pelo motor
     if faltam:
         avisos_cluster.append(f"regras de cluster usam colunas que não estão na base: {faltam}")
     contatos, pessoa_de, _ = carregar_carteira(carteira_csv)
@@ -229,6 +234,16 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                      "tem_whatsapp": "sim" if any(x["whatsapp_valido"] for x in tels) else "não",
                      "tem_rcs": "sim" if any(x.get("rcs") for x in tels) else "não"}
             clientes[k] = replace(c, atributos={**extra, **(c.atributos or {})})
+    from motor.cluster import carregar_personas, persona_de
+    pers_usuario, avisos_pers = carregar_personas(_ler_lista(personas_usuario))
+    avisos_cluster += avisos_pers
+    publico = {}
+    if pers_usuario:
+        for k, c in list(clientes.items()):
+            p = persona_de(pers_usuario, c, hoje)
+            publico[k] = p.id if p else None
+            clientes[k] = replace(c, atributos={**(c.atributos or {}), "persona": p.nome if p else "Sem persona"})
+    nome_persona = {p.id: p.nome for p in pers_usuario}
     por_dia = defaultdict(list)
     for e in eventos:
         por_dia[e.data].append(e)
@@ -271,7 +286,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                 if (d := (compartilhado.get("acionados") or {}).get(p)) and hoje - d < recencia}
     adiados = set()
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos,
-                                  pausados=pausados, adiados=adiados)
+                                  pausados=pausados, adiados=adiados, publico=publico)
     if adiados:
         alertas.append(f"OUTRO CREDOR: {len(adiados)} clientes ficam sem ação massiva hoje (outro credor acionou "
                        f"nas últimas {regua['recencia_horas']}h ou é a vez dele); voltam na próxima")
@@ -365,7 +380,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "persona": modelo.nome(modelo.persona(k)) if k in modelo.feats and modelo.colunas else "",
             "na_carga": ativos is None or k in ativos,
             "acao_hoje": ", ".join(acao_hoje.get(k, [])),
-            "passo_hoje": passo_hoje.get(k, "")}
+            "passo_hoje": passo_hoje.get(k, ""),
+            "persona_usuario": nome_persona.get(publico.get(k), "") if pers_usuario else ""}
     compartilhar = {
         "hot": {(pessoa_de[k], e.contato_localizador) for k, e in estados.items()
                 if e.contato_localizador and k in pessoa_de},

@@ -33,6 +33,8 @@ contatos (todos opcionais; o que não for informado não filtra):
   score_bureau_min   score mínimo do bureau
   origem             origens aceitas (cliente, bureau, enriquecimento…)
 numeros: quantos contatos do cliente recebem a ação (vazio = regra padrão do canal).
+personas: ids das personas da carteira (tabela personas_usuario) que recebem a ação; vazio = todos.
+          Cliente fora delas: a ação não vai para ele (o "senão" seguinte vai).
 
 Travas que nenhuma estratégia desliga: contato inválido, contestado ou marcado como
 "não pertence" nunca recebe; WhatsApp só em número confiável ou com WhatsApp válido e
@@ -81,7 +83,14 @@ def _acao(a, onde: str, erros: list) -> dict | None:
     if numeros not in (None, "") and (not isinstance(numeros, int) or numeros < 1):
         erros.append(f"{onde}: numeros deve ser inteiro ≥ 1")
         return None
-    return {"canal": a["canal"], "modo": modo, "numeros": numeros or None, "contatos": filtro}
+    personas = a.get("personas") or []
+    if not isinstance(personas, list) or not all(isinstance(p, int) or str(p).isdigit() for p in personas):
+        erros.append(f"{onde}: personas deve ser lista de ids de persona")
+        return None
+    acao = {"canal": a["canal"], "modo": modo, "numeros": numeros or None, "contatos": filtro}
+    if personas:
+        acao["personas"] = [int(p) for p in personas]
+    return acao
 
 
 def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str]]:

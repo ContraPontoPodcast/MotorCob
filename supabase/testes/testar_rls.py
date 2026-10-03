@@ -13,6 +13,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261004000001_acoes_dia.sql
     psql -d sb -f supabase/migrations/20261005000001_credores.sql
     psql -d sb -f supabase/migrations/20261006000001_enquadramento.sql
+    psql -d sb -f supabase/migrations/20261007000001_personas_usuario.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -213,6 +214,12 @@ checar("rotina antiga sem credor cai no principal", True, f"insert into public.a
 checar("rotina grava esteira e ação de hoje", True, f"update public.estado_cliente set estrategia='Esteira X', acao_hoje='whatsapp', na_carga=true where empresa_id={EA}", "service_role")
 checar("enquadramento: A vê a esteira dos seus clientes", True, "select string_agg(distinct estrategia, ',') from public.enquadramento where com_acao_hoje > 0", "authenticated", u["oper"], "Esteira X")
 checar("enquadramento: B não vê a A", True, "select count(*) from public.enquadramento where estrategia='Esteira X'", "authenticated", u["operb"], 0)
+# personas criadas pela empresa (por carteira)
+checar("planejamento A cria persona na carteira", True, f"insert into public.personas_usuario (empresa_id,credor_id,nome,condicoes) values ({EA},{CX},'Digitais SP','[{{\"campo\":\"UF\",\"op\":\"=\",\"valor\":\"SP\"}}]')", "authenticated", u["plan"])
+checar("operação não cria persona", False, f"insert into public.personas_usuario (empresa_id,credor_id,nome) values ({EA},{CX},'X')", "authenticated", u["oper"])
+checar("persona com carteira de outra empresa é recusada", False, f"insert into public.personas_usuario (empresa_id,credor_id,nome) values ({EA},{CB},'Y')", "service_role")
+checar("B não vê as personas da A", True, "select count(*) from public.personas_usuario", "authenticated", u["operb"], 0)
+checar("nome repetido na mesma carteira é recusado", False, f"insert into public.personas_usuario (empresa_id,credor_id,nome) values ({EA},{CX},'Digitais SP')", "service_role")
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

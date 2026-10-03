@@ -153,7 +153,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                certs: dict[tuple[str, str], Certificacao], flags: dict[str, dict],
                parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None,
                sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
-               pausados: set[str] = frozenset(), adiados: set | None = None):
+               pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -163,6 +163,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
              "origem"}} da base e do retorno do enriquecimento.
     Cada cliente segue a estratégia do cluster dele (regua.para).
     ativos: quem está na carga do dia (None = todos); os demais não recebem ação.
+    publico: {id_cliente: id da persona criada pela empresa}; ação com "personas" só vai para elas.
     pausados: acionados por outro credor nas últimas 48h (ou é a vez dele) — sem ação massiva
               hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`.
     """
@@ -200,8 +201,10 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             continue
         nome_regua, rotulo, acoes, data_fixa = passo
         acoes, persona_rot = resolver_tokens(acoes, rc.persona, idc, hoje, set(cands))
-        blend = resolver(acoes, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
-        if not blend and acoes:
+        minha = (publico or {}).get(idc)
+        blend = resolver(acoes, lambda a: [] if a.get("personas") and minha not in a["personas"]
+                         else contatos_da_acao(a, cands, est, flags, sin, rc))
+        if not blend and any(not a.get("personas") or minha in a["personas"] for a in acoes):
             sem_contato[nome_regua] += 1
         if blend and idc in pausados and est.estado in ESTADOS_MASSIVOS:
             if adiados is not None:

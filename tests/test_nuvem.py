@@ -307,6 +307,8 @@ class TestSincronizar(unittest.TestCase):
                           "estrategia_id": 5}]
         t["estrategias"] = [{"id": 5, "empresa_id": 2, "nome": "Só SMS", "padrao": False,
                              "definicao": {"localizacao": {"passos": {"1": [{"canal": "sms"}]}}}}]
+        t["personas_usuario"] = [{"id": 31, "empresa_id": 2, "credor_id": 22, "nome": "Paulistas", "ordem": 1,
+                                  "ativo": True, "condicoes": [{"campo": "UF", "op": "=", "valor": "SP"}]}]
         carga = (EX / "empresa" / "bruto" / "base_2026-09-02.csv").read_bytes()
         self._envio(5001, 2, "base", "carga_x_2026-09-02.csv", carga, "2026-09-02", credor=22)
         enr = next((EX / "empresa" / "enriquecimento").glob("*.csv"))
@@ -331,6 +333,8 @@ class TestSincronizar(unittest.TestCase):
         # onde cada cliente se enquadrou: esteira, carga e ação de hoje
         linha = {(l.get("credor_id"), l["id_cliente"]): l for l in t["estado_cliente"] if l["empresa_id"] == 2}
         self.assertEqual(linha[(22, "X0001")]["estrategia"], "Só SMS")
+        self.assertEqual(linha[(22, "X0001")]["persona_usuario"], "Paulistas")     # persona da carteira
+        self.assertEqual(linha[(21, "X0001")]["persona_usuario"], "")             # outra carteira: sem ela
         self.assertEqual(linha[(21, "X0001")]["estrategia"], "Playbook MotorCob")
         self.assertIn("whatsapp", linha[(21, "X0001")]["acao_hoje"])
         self.assertTrue(linha[(21, "X0001")]["na_carga"])

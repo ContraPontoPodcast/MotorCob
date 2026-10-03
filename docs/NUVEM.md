@@ -45,9 +45,11 @@ ordem, › Run. Cada um deve terminar sem erro:
    tipos de arquivo incremental, retirada, acordo e baixa)
 10. `20261006000001_enquadramento.sql` (onde cada cliente se enquadrou: esteira, persona,
    ação de hoje; view enquadramento)
+11. `20261007000001_personas_usuario.sql` (personas criadas pela empresa por carteira, usadas
+   como público das ações da esteira)
 
 Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta do 5
-ao 10 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
+ao 11 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 
