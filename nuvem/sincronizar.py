@@ -655,17 +655,20 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         if aviso_layout:
             r["alertas"] = [aviso_layout] + r["alertas"]
         conflito = "empresa_id,credor_id,id_cliente" if cid is not None else "empresa_id,id_cliente"
-        try:
-            sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid,
-                                                        r.get("enquadramento")), conflito=conflito)
-        except ErroSupabase as ex:   # banco sem as colunas do enquadramento: grava o resto e avisa
-            if not any(c in str(ex) for c in ("estrategia", "persona", "acao_hoje", "na_carga", "passo_hoje",
-                                              "enriq_")):
-                raise
-            sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid),
-                       conflito=conflito)
+        enq = r.get("enquadramento") or {}
+        sem_motivo = {k: {c: v for c, v in d.items() if c != "motivo_hoje"} for k, d in enq.items()}
+        for i, tentativa in enumerate((enq, sem_motivo, None)):
+            try:
+                sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid,
+                                                            tentativa), conflito=conflito)
+                break
+            except ErroSupabase as ex:   # banco sem as colunas novas: grava o resto e avisa
+                if i == 2 or not any(c in str(ex) for c in ("estrategia", "persona", "acao_hoje", "na_carga",
+                                                             "passo_hoje", "enriq_", "motivo_hoje")):
+                    raise
+        if i:
             r["alertas"].append("BANCO: rode supabase/atualizar_producao_2026-10.sql para ver onde cada cliente "
-                                "se enquadrou (esteira, persona e ação de hoje)")
+                                "se enquadrou (esteira, persona, ação de hoje e o motivo)")
         n_trilha = publicar_trilha(sb, pasta / "estado", eid, cid)
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
         fila = _linhas_fila(r["fila"], data, eid, cid)

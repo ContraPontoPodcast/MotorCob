@@ -58,6 +58,7 @@ ordem, › Run. Cada um deve terminar sem erro:
    carteira: a empresa vem do credor; sem isso "Usar nesta carteira" não gravava)
 17. `20261013000001_demais_ativo.sql` (liga/desliga o "Demais clientes" por carteira)
 18. `20261014000001_pedidos_rotina.sql` (botão "Reenquadrar agora": o site pede, a vigia roda na hora)
+19. `20261015000001_motivo_hoje.sql` (por que cada cliente está ou não na lista de hoje + view motivos_hoje)
 
 Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta do 5
 ao 15 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
