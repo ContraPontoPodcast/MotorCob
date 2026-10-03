@@ -375,6 +375,22 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual([c for _, c in x1], ["principal", "banco-x"])   # D+1 no principal, D+3 no Banco X
         self.assertEqual(len({d for d, _ in x1}), len(x1))               # nunca os dois no mesmo dia
 
+    def test_segmento_escolhe_as_carteiras_e_liga_por_carteira(self):
+        from nuvem.sincronizar import baixar_clusters
+        t = self.falso.tabelas
+        t["clusters"] = [
+            {"id": 1, "empresa_id": 2, "ordem": 10, "codigo": "VE", "ativo": True, "credor_id": None, "condicoes": []},
+            {"id": 2, "empresa_id": 2, "ordem": 20, "codigo": "UM", "ativo": True, "credor_id": 21, "condicoes": []},
+            {"id": 3, "empresa_id": 2, "ordem": 30, "codigo": "TD", "ativo": True, "credor_id": None, "condicoes": []},
+            {"id": 4, "empresa_id": 2, "ordem": 40, "codigo": "DES", "ativo": False, "credor_id": None, "condicoes": []}]
+        # VE: vinculado às carteiras 21 (em uso) e 22 (pausado); UM e TD sem vínculo (regra antiga)
+        t["segmentos_carteira"] = [{"empresa_id": 2, "cluster_id": 1, "credor_id": 21, "ativo": True},
+                                   {"empresa_id": 2, "cluster_id": 1, "credor_id": 22, "ativo": False}]
+        cod = lambda cid: [c["codigo"] for c in baixar_clusters(self.sb, self.dados / "x", 2, cid)]  # noqa: E731
+        self.assertEqual(cod(21), ["VE", "UM", "TD"])
+        self.assertEqual(cod(22), ["TD"])                   # VE pausado na 22; UM é só da 21
+        self.assertEqual(cod(23), ["TD"])                   # VE não vinculado à 23
+
     def test_sugestao_aprovada_vira_segmento_com_estrategia(self):
         dados = {"persona": "RJ", "nome": "UF RJ", "condicoes": [{"campo": "UF", "valor": "RJ"}],
                  "estrategia_base": None, "fase": "localizacao", "dia": 1, "de": "whatsapp", "para": "sms"}

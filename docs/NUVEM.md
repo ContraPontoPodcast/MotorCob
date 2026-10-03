@@ -48,9 +48,11 @@ ordem, › Run. Cada um deve terminar sem erro:
 11. `20261007000001_personas_usuario.sql` (personas criadas pela empresa por carteira, usadas
    como público das ações da esteira)
 12. `20261008000001_enriquecimento_esteira.sql` (quando cada cliente foi ao bureau e quando voltou)
+13. `20261009000001_segmentos_carteira.sql` (quais carteiras usam cada segmento e se está em uso
+   em cada uma; view segmentos_em_uso)
 
 Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta do 5
-ao 12 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
+ao 13 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 

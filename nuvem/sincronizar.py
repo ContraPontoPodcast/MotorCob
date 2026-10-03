@@ -418,12 +418,26 @@ def aplicar_sugestoes(sb: Supabase, empresa_id, out=print, cid=None) -> int:
     return len(aprovadas)
 
 
+def segmento_vale(c: dict, cid, vinculos: dict) -> bool:
+    """O segmento (ativo) vale nesta carteira? Com vínculos em segmentos_carteira, vale nas
+    carteiras vinculadas e em uso; sem vínculo, credor_id preenchido = só ela, vazio = todas."""
+    v = vinculos.get(c.get("id"))
+    if v:
+        return bool(v.get(cid))
+    return c.get("credor_id") in (None, cid)
+
+
 def baixar_clusters(sb: Supabase, pasta: Path, empresa_id, cid=None) -> list[dict]:
-    """Regras de cluster ativas do credor (as dele e as que valem para todos os credores);
-    cópia em config/clusters.json (auditoria da rodada)."""
+    """Regras de cluster ativas que valem nesta carteira; cópia em config/clusters.json (auditoria)."""
     regras = sb.selecionar("clusters", {"empresa_id": f"eq.{empresa_id}", "ativo": "eq.true"},
                            ordem="ordem.asc,codigo.asc") or []
-    regras = [c for c in regras if c.get("credor_id") in (None, cid)]
+    vinculos = {}
+    try:
+        for l in sb.selecionar("segmentos_carteira", {"empresa_id": f"eq.{empresa_id}"}) or []:
+            vinculos.setdefault(l["cluster_id"], {})[l["credor_id"]] = bool(l.get("ativo", True))
+    except ErroSupabase:   # banco sem a tabela: regra antiga
+        pass
+    regras = [c for c in regras if segmento_vale(c, cid, vinculos)]
     (pasta / "config").mkdir(parents=True, exist_ok=True)
     (pasta / "config" / "clusters.json").write_text(json.dumps(regras, ensure_ascii=False, indent=1),
                                                     encoding="utf-8")
