@@ -22,7 +22,9 @@ if [ "$VIGIAR" = 1 ]; then
   [ -f "$DADOS/config/supabase.env" ] || { echo "ERRO: --vigiar precisa da nuvem configurada (scripts/configurar_nuvem.sh)" >&2; exit 1; }
   cd "$REPO"
   # sem carga nova: sai calado (roda a cada 2 minutos)
-  MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar vigiar --checar --dados "$DADOS" 2>/dev/null || exit 0
+  mkdir -p "$DADOS/logs"
+  MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar vigiar --checar --dados "$DADOS" \
+    2>"$DADOS/logs/vigia_ultimo_erro.log" || exit 0   # erro de conexão fica no log (scripts/diagnostico.sh mostra)
   mkdir -p "$DADOS/logs"
   LOG="$DADOS/logs/vigia_$DATA.log"
   echo "== $(date '+%F %T') carga nova no site" >> "$LOG"

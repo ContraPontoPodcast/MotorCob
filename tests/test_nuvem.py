@@ -411,6 +411,26 @@ class TestSincronizar(unittest.TestCase):
         est = {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"] if l["empresa_id"] == 2}
         self.assertEqual(est["X0001"], "CPA")
 
+    def test_carga_em_excel(self):
+        import csv as _csv
+        import io
+        from openpyxl import Workbook
+        (self.cfg / "beta.json").unlink()
+        self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["empresa_id"] != 2]
+        wb = Workbook()
+        ws = wb.active
+        with open(EX / "empresa" / "bruto" / "base_2026-09-01.csv", encoding="utf-8") as f:
+            for linha in _csv.reader(f, delimiter=";"):
+                ws.append(linha)
+        buf = io.BytesIO()
+        wb.save(buf)
+        self._envio(7201, 2, "base", "mailing_2026-09-01.xlsx", buf.getvalue())
+        self._dia(date(2026, 9, 2), empresa="beta")
+        env = next(e for e in self.falso.tabelas["envios"] if e["id"] == 7201)
+        self.assertEqual(env["status"], "processado", env.get("relatorio"))
+        self.assertEqual(env["relatorio"]["clientes"], 3)
+        self.assertIn("saidas/beta/2026-09-02/ids/whatsapp.csv", self.falso.objetos)
+
     def test_carga_que_nao_da_para_entender_fica_com_erro(self):
         (self.cfg / "beta.json").unlink()
         self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["empresa_id"] != 2]
