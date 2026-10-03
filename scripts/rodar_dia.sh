@@ -1,8 +1,10 @@
 #!/bin/bash
 # Rotina diária do MotorCob no Mac (ou Linux).
 # Uso: scripts/rodar_dia.sh [AAAA-MM-DD]      (sem data = hoje)
-#      scripts/rodar_dia.sh --vigiar           (só roda se alguma empresa subiu carga nova no site;
-#                                               é o que o agendamento "vigiar" chama a cada 2 minutos)
+#      scripts/rodar_dia.sh --vigiar           (só roda se alguma empresa subiu carga nova no site,
+#                                               mudou a orquestração ou ainda não fez a rotina do dia)
+#      scripts/rodar_dia.sh --plantao          (fica no ar: olha o site a cada 5 s e chama o --vigiar
+#                                               na hora em que chega arquivo; é o que o launchd mantém)
 # Pasta de dados: $MOTORCOB_DADOS (padrão: ~/MotorCob-dados), fora do repositório
 # porque tem dado pessoal. Estrutura em docs/PRODUCAO.md.
 set -euo pipefail
@@ -11,17 +13,25 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 DADOS="${MOTORCOB_DADOS:-$HOME/MotorCob-dados}"
 PY="${MOTORCOB_PYTHON:-python3}"
 VIGIAR=0
+PLANTAO=0
 if [ "${1:-}" = "--vigiar" ]; then VIGIAR=1; shift; fi
+if [ "${1:-}" = "--plantao" ]; then PLANTAO=1; shift; fi
 DATA="${1:-$(date +%F)}"
 
 if ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
   echo "ERRO: precisa de Python 3.11 ou mais novo (brew install python@3.12)." >&2
   exit 1
 fi
+if [ "$PLANTAO" = 1 ]; then
+  [ -f "$DADOS/config/supabase.env" ] || { echo "ERRO: --plantao precisa da nuvem configurada (scripts/configurar_nuvem.sh)" >&2; exit 1; }
+  cd "$REPO"
+  export MOTORCOB_DADOS="$DADOS" MOTORCOB_PYTHON="$PY"
+  exec "$PY" -m nuvem.sincronizar plantao --dados "$DADOS"
+fi
 if [ "$VIGIAR" = 1 ]; then
   [ -f "$DADOS/config/supabase.env" ] || { echo "ERRO: --vigiar precisa da nuvem configurada (scripts/configurar_nuvem.sh)" >&2; exit 1; }
   cd "$REPO"
-  # sem carga nova: sai calado (roda a cada 2 minutos)
+  # sem nada a fazer: sai calado (o plantão chama a cada minuto e na hora do arquivo novo)
   mkdir -p "$DADOS/logs"
   MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar vigiar --checar --dados "$DADOS" \
     2>"$DADOS/logs/vigia_ultimo_erro.log" || exit 0   # erro de conexão fica no log (scripts/diagnostico.sh mostra)

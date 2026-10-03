@@ -113,8 +113,8 @@ A partir daí, o fluxo diário é:
 1. Durante o dia, cada empresa (ou a equipe MotorCob por ela) envia pelo site a **base
    bruta** e o arquivo de **ocorrências** (CPC ou não por tentativa), além de retornos de
    fornecedor e parcelas quando houver.
-2. No horário agendado — ou, com `scripts/instalar_mac.sh vigiar`, até 2 minutos depois
-   de a carga do credor chegar (`rodar_dia.sh --vigiar` → `nuvem.sincronizar vigiar`, só
+2. No horário agendado — ou, com `scripts/instalar_mac.sh vigiar`, em até 5 segundos depois
+   de a carga do credor chegar (plantão `rodar_dia.sh --plantao` → `rodar_dia.sh --vigiar` → `nuvem.sincronizar vigiar`, só
    para a empresa que subiu a carga; e uma vez por dia, a partir das 06:00, para as carteiras
    que ainda não rodaram) — o Mac roda `scripts/rodar_dia.sh`, que: atualiza o motor
    (`git pull`) → para cada empresa ativa, baixa os envios pendentes → converte a base

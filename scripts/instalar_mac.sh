@@ -2,7 +2,8 @@
 # Instalação no Mac: pasta de dados, dependência do Excel, testes e (opcional)
 # agendamento. Uso: scripts/instalar_mac.sh [HH:MM | vigiar]
 #   HH:MM   roda uma vez por dia nesse horário (ex.: 06:30)
-#   vigiar  a cada 2 minutos olha o site e, se chegou carga do credor, gera a lista na hora
+#   vigiar  plantão em tempo real: olha o site a cada 5 segundos e, se chegou arquivo da
+#           carteira, gera a lista na hora; também faz a rotina do dia às 06:00
 #           (substitui o agendamento diário)
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,12 +35,14 @@ if [ "${1:-}" = "vigiar" ]; then
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>br.com.contraponto.motorcob.vigia</string>
-  <key>ProgramArguments</key><array><string>$REPO/scripts/rodar_dia.sh</string><string>--vigiar</string></array>
+  <key>ProgramArguments</key><array><string>/usr/bin/caffeinate</string><string>-i</string>
+    <string>$REPO/scripts/rodar_dia.sh</string><string>--plantao</string></array>
   <key>EnvironmentVariables</key><dict>
     <key>MOTORCOB_DADOS</key><string>$DADOS</string>
     <key>MOTORCOB_PYTHON</key><string>$(command -v "$PY")</string>
   </dict>
-  <key>StartInterval</key><integer>120</integer>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
   <key>RunAtLoad</key><true/>
   <key>StandardOutPath</key><string>$DADOS/logs/vigia.log</string>
   <key>StandardErrorPath</key><string>$DADOS/logs/vigia.log</string>
@@ -47,8 +50,8 @@ if [ "${1:-}" = "vigiar" ]; then
 PL
   launchctl unload "$PLIST" 2>/dev/null || true
   launchctl load "$PLIST"
-  echo "Vigia ligada: a cada 2 minutos o Mac olha o site; carga nova = lista do dia na hora."
-  echo "O Mac precisa ficar ligado e sem dormir (Ajustes › Bateria/Energia › impedir repouso)."
+  echo "Vigia ligada em tempo real: a cada 5 segundos o Mac olha o site; arquivo novo = lista na hora."
+  echo "Enquanto a vigia roda, o Mac não dorme sozinho (caffeinate). Tampa fechada ou desligado: para."
   echo "Para desligar: launchctl unload $PLIST && rm $PLIST"
 elif [ -n "${1:-}" ]; then
   VIGIA="$HOME/Library/LaunchAgents/br.com.contraponto.motorcob.vigia.plist"
