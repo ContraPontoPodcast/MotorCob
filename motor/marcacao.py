@@ -63,6 +63,8 @@ class EstadoCliente:
     cluster_versao: str = ""         # versão das regras de cluster da empresa usada na revisão
     candidatos_hot: list[str] = field(default_factory=list)  # CPC com vários números: um deles é o Hot
     contatos_tentados: list[str] = field(default_factory=list)  # sem Hot: exportados sem CPC, do mais antigo
+    inicio_esteira: date | None = None  # dia em que a 1ª lista do cliente saiu (o D+1 dele); None = a safra
+    esteira_pendente: bool = False      # a 1ª lista ainda não saiu: o cliente fica no D+1
 
     @property
     def tag(self) -> str:
@@ -71,31 +73,33 @@ class EstadoCliente:
 
     def para_json(self) -> dict:
         d = asdict(self)
-        for k in ("safra", "ultima_massiva", "giro_inicio"):
+        for k in ("safra", "ultima_massiva", "giro_inicio", "inicio_esteira"):
             d[k] = d[k].isoformat() if d[k] else None
         return d
 
     @classmethod
     def de_json(cls, d: dict) -> "EstadoCliente":
         d = dict(d)
-        for k in ("safra", "ultima_massiva", "giro_inicio"):
+        for k in ("safra", "ultima_massiva", "giro_inicio", "inicio_esteira"):
             d[k] = date.fromisoformat(d[k]) if d.get(k) else None
         return cls(**d)
 
 
-def _entradas(estados, clientes, dia, regua, trilha):
+def _entradas(estados, clientes, dia, regua, trilha, pela_lista=False):
     for c in clientes.values():
         if c.id_cliente not in estados and c.data_entrada <= dia:
             est = iniciar(c, regua)
+            est.esteira_pendente = pela_lista
             estados[c.id_cliente] = est
             trilha.marcar(dia, est, None, f"entrada na esteira; enriquecimento "
                                           f"{regua.enriquecimento(est.cluster_origem)['pacote']}", "Planejamento")
 
 
-def registrar_entradas(estados, clientes, dia, regua) -> list[dict]:
-    """Quem chegou na carga hoje entra na esteira já hoje (para a 1ª ação sair no dia da carga)."""
+def registrar_entradas(estados, clientes, dia, regua, pela_lista=False) -> list[dict]:
+    """Quem chegou na carga hoje entra na esteira já hoje (para a 1ª ação sair no dia da carga).
+    pela_lista: a esteira do cliente só começa quando a 1ª lista dele sair (rodar_dia)."""
     trilha = Trilha()
-    _entradas(estados, clientes, dia, regua, trilha)
+    _entradas(estados, clientes, dia, regua, trilha, pela_lista)
     return trilha.eventos
 
 
@@ -137,8 +141,9 @@ def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente
                   parcelas: dict[str, list[Parcela]], dia: date, regua: Regua,
                   disponiveis: dict[str, set[str]] | None = None, baixas_ate: date | None = None,
                   atualizados: dict[str, date] | None = None,
-                  enviados: dict[str, list[str]] | None = None) -> list[dict]:
+                  enviados: dict[str, list[str]] | None = None, pela_lista: bool = False) -> list[dict]:
     """Atualiza os estados com o que aconteceu em `dia`. Retorna os eventos da trilha.
+    pela_lista: quem entra fica no D+1 até a 1ª lista dele sair (ver dia_na_carga).
 
     disponiveis: {id_cliente: canais com contato elegível} — decide a rotação e quando
     o cliente esgotou os canais. baixas_ate: pagamentos refletidos até esta data.
@@ -155,7 +160,7 @@ def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente
     for e in eventos_dia:
         por_cliente[e.id_cliente].append(e)
 
-    _entradas(estados, clientes, dia, regua, trilha)
+    _entradas(estados, clientes, dia, regua, trilha, pela_lista)
 
     for idc, est in estados.items():
         c = clientes.get(idc)
@@ -285,8 +290,12 @@ def _aplicar_acordo(est, parcelas, dia, baixas_ate, regua, trilha):
 
 
 def dia_na_carga(est, dia) -> int:
-    """D+N da localização: o dia em que o cliente chega na carga é o D+1 (a 1ª ação sai no mesmo dia)."""
-    return (dia - est.safra).days + 1
+    """D+N da localização. A esteira do cliente começa no dia em que a 1ª lista dele sai de fato
+    (inicio_esteira, em geral o dia da carga): se a lista não saiu (rotina não rodou, outra carteira
+    acionou…), o D+1 não aconteceu e ele continua no D+1."""
+    if est.esteira_pendente:
+        return 1
+    return max(1, (dia - (est.inicio_esteira or est.safra)).days + 1)
 
 
 def _aplicar_tempo(est, dia, regua, trilha):

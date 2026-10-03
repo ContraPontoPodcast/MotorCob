@@ -39,7 +39,7 @@ from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, ca
 from motor.acoes import agregar as agregar_acoes, sem_ocorrencia, totais as totais_acoes
 from motor.estrategia import validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
-from motor.fila import gerar_fila, lista_enriquecimento
+from motor.fila import MOTIVOS, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
 from motor.marcacao import ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
 from motor.rastreio import carregar_acoes, ler_log_portal
@@ -48,6 +48,8 @@ from motor.regua import carregar_regua
 
 def _salvar(caminho: Path, linhas: list[dict], anexar=False):
     if not linhas:
+        if not anexar and caminho.exists():   # dia refeito e agora vazio: não fica a lista velha
+            caminho.unlink()
         return
     novo = not (anexar and caminho.exists())
     with open(caminho, "a" if anexar else "w", newline="", encoding="utf-8") as f:
@@ -124,13 +126,27 @@ def preparar_enriquecimento(entrada, pasta_enriq, pasta_base) -> dict | None:
     return rel
 
 
+NAO_INICIA_ESTEIRA = {"outro_credor", "fora_da_carga", "encerrado", "domingo_feriado", "demais_desligado"}
+
+
 def carregar_estado(pasta: Path):
     arq = pasta / "estados.json"
     if not arq.exists():
         return {}, None
     d = json.loads(arq.read_text(encoding="utf-8"))
-    return ({k: EstadoCliente.de_json(v) for k, v in d["estados"].items()},
-            date.fromisoformat(d["ultimo_dia"]) if d.get("ultimo_dia") else None)
+    estados = {k: EstadoCliente.de_json(v) for k, v in d["estados"].items()}
+    faltam = [k for k, v in d["estados"].items() if "esteira_pendente" not in v]
+    if faltam:   # estado de antes desta regra: a esteira começou na 1ª lista que saiu para o cliente
+        primeira = {}
+        for (dia, idc), ls in carregar_escolhas(pasta).items():
+            if any(str(l.get("reserva")) != "1" for l in ls):
+                primeira[idc] = min(primeira.get(idc, dia), dia)
+        for k in faltam:
+            if k in primeira:
+                estados[k].inicio_esteira = date.fromisoformat(primeira[k])
+            elif estados[k].estado == "LOC":   # nenhuma lista saiu para ele: o D+1 não aconteceu
+                estados[k].esteira_pendente = True
+    return estados, date.fromisoformat(d["ultimo_dia"]) if d.get("ultimo_dia") else None
 
 
 def salvar_estado(pasta: Path, estados, ultimo_dia):
@@ -274,10 +290,11 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         certs = certificar_contatos(ev_ate, dia, contatos, pessoa_de)
         _, disp, _ = gerar_fila(estados, clientes, certs, flags, parcelas, dia, regua, ev_ate, sinais)
         trilha += processar_dia(estados, clientes, por_dia.get(dia, []), parcelas, dia, regua, disp,
-                                baixas_ate=dia, atualizados=atualizados, enviados=enviados_dia.get(dia.isoformat()))
+                                baixas_ate=dia, atualizados=atualizados, enviados=enviados_dia.get(dia.isoformat()),
+                                pela_lista=True)
         dia += timedelta(days=1)
     ultimo = max(ultimo or hoje - timedelta(days=1), hoje - timedelta(days=1))
-    trilha += registrar_entradas(estados, clientes, hoje, regua)   # carga de hoje já entra hoje
+    trilha += registrar_entradas(estados, clientes, hoje, regua, pela_lista=True)   # carga de hoje já entra hoje
     salvar_estado(pasta_estado, estados, ultimo)
     _salvar(pasta_estado / "trilha.csv", trilha, anexar=True)
 
@@ -301,9 +318,30 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     ativos_fila = ativos
     if desligados:
         ativos_fila = (set(estados) if ativos is None else ativos) - desligados
-    adiados, para_bureau = set(), {}
+    adiados, para_bureau, motivos, motivo_de = set(), {}, {}, {}
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
-                                  pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau)
+                                  pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
+                                  motivos=motivos, motivo_de=motivo_de)
+    # a esteira do cliente começa hoje se a lista dele saiu hoje (ou se não depende de ação: sem
+    # passo no D+1, sem contato, persona em "sem ação"). Adiado, fora da carga, domingo: segue no D+1
+    for k, m in motivo_de.items():
+        if estados[k].esteira_pendente and m not in NAO_INICIA_ESTEIRA:
+            estados[k].esteira_pendente, estados[k].inicio_esteira = False, hoje
+    salvar_estado(pasta_estado, estados, ultimo)
+    if desligados:   # quem o "Demais desligado" tirou da lista contou como fora da carga
+        n = len(desligados if ativos is None else desligados & ativos)
+        motivos["fora_da_carga"] = motivos.get("fora_da_carga", 0) - n
+        motivos["demais_desligado"] = n
+    motivos = {k: v for k, v in motivos.items() if v > 0}
+    proximos = previsao(estados, clientes, hoje, regua, ativos, fora=desligados)
+    if not fila:
+        porque = "; ".join(f"{v} {MOTIVOS.get(k, k)}" for k, v in sorted(motivos.items(), key=lambda x: -x[1])
+                           if k != "com_acao")
+        prox = next((p for p in proximos if p["clientes"]), None)
+        alertas.append("LISTA VAZIA HOJE: " + (porque or "nenhum cliente") + ". " +
+                       (f"Próxima lista: {date.fromisoformat(prox['data']):%d/%m} com cerca de {prox['clientes']} "
+                        f"clientes ({', '.join(sorted(prox['passos']))})." if prox
+                        else "Nenhuma ação prevista nos próximos 7 dias: confira a esteira."))
     if desligados:
         n = len(desligados if ativos is None else desligados & ativos)
         alertas.append(f"DEMAIS CLIENTES DESLIGADO: {n} clientes da carga não caíram em nenhum segmento em uso "
@@ -338,6 +376,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     saida = Path(pasta_saida) / hoje.isoformat()
     saida.mkdir(parents=True, exist_ok=True)
     _salvar(saida / "fila_do_dia.csv", fila)  # completa: régua, passo, contato escolhido etc.
+    (saida / "previsao.json").write_text(json.dumps({"motivos": motivos, "rotulos": MOTIVOS, "proximos": proximos},
+                                                    ensure_ascii=False), encoding="utf-8")
     por_canal = defaultdict(list)
     for l in fila:
         por_canal[l["canal"]].append(l)
@@ -451,6 +491,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "compartilhar": compartilhar,
             "enquadramento": enquadramento, "personas": personas, "sugestoes": sugestoes,
             "caracteristicas_persona": modelo.colunas,
+            "motivos": motivos, "proximos": proximos,
             "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
             "saida": saida, "relatorios": relatorios, "relatorios_ocorrencia": rel_ocorrencias,
             "quarentena": quarentena, "sem_layout": sem_layout,
