@@ -218,7 +218,11 @@ de outra pessoa pela certificação e a rotação segue.
   raia) começa: `inicio_esteira = hoje`; adiado por outro credor, fora da carga, Demais desligado
   e domingo seguem no D+1 (`NAO_INICIA_ESTEIRA`). `dia_na_carga` conta de `inicio_esteira` (ou
   da safra, para quem usa o motor direto). Estado antigo: início = 1ª data em escolhas.csv; sem
-  escolha e em LOC → pendente. Lista vazia: `gerar_fila(motivos=, motivo_de=)` + `previsao()`
+  escolha e em LOC → pendente. Depois do início, a esteira (localização e giro) só anda em dia
+  de lista: `rodar_dia.dias_de_lista` (pastas saida/AAAA-MM-DD em dia útil + hoje) vai para
+  `regua.dias_lista`/`hoje_lista`, e `marcacao.dias_de_esteira` conta só esses dias (depois de
+  hoje, os dias úteis). Sem `dias_lista` (motor direto/testes): calendário corrido. Preventivo e
+  quebra seguem as datas do acordo. Lista vazia: `gerar_fila(motivos=, motivo_de=)` + `previsao()`
   (próximos 7 dias) → alerta "LISTA VAZIA HOJE", resumo.sem_acao/proximos, previsao.json.
 - "Reenquadrar agora": o site insere em `pedidos_rotina` (credor_id; status pendente). `ha_arquivo_novo`
   e `empresas_com_carga_nova` incluem os pedidos (o plantão roda em até 5 s, sem o freio de

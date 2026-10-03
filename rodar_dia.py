@@ -126,6 +126,22 @@ def preparar_enriquecimento(entrada, pasta_enriq, pasta_base) -> dict | None:
     return rel
 
 
+def dias_de_lista(pasta_saida, hoje: date, regua) -> tuple:
+    """Dias úteis em que a rotina gerou a lista da carteira (as pastas saida/AAAA-MM-DD) e hoje:
+    a esteira só anda neles. Dia sem rotina (Mac desligado), domingo e feriado pausam."""
+    dias = {hoje} if regua.janela(hoje) is not None else set()
+    pasta = Path(pasta_saida)
+    if pasta.exists():
+        for p in pasta.iterdir():
+            try:
+                d = date.fromisoformat(p.name)
+            except ValueError:
+                continue
+            if p.is_dir() and d < hoje and regua.janela(d) is not None:
+                dias.add(d)
+    return tuple(sorted(dias))
+
+
 NAO_INICIA_ESTEIRA = {"outro_credor", "fora_da_carga", "encerrado", "domingo_feriado", "demais_desligado"}
 
 
@@ -201,6 +217,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     cfg_canais = {c["canal"]: c for c in _ler_lista(canais) if c.get("canal")}
     if regras or est_validas or cfg_canais:
         regua = regua.com_clusters(regras, est_validas, padrao, cfg_canais)
+    regua = replace(regua, dias_lista=dias_de_lista(pasta_saida, hoje, regua), hoje_lista=hoje)
     clientes, rej_cli = carregar_clientes(clientes_csv)
     atrib = carregar_atributos(atributos)
     if atrib:

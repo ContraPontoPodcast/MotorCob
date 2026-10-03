@@ -246,6 +246,28 @@ class TestPersonasDaEmpresa(unittest.TestCase):
             self.assertTrue(est["A1"].esteira_pendente)
 
 
+    def test_esteira_pausa_no_dia_sem_lista(self):
+        """D+1 na quarta; quinta e sexta sem rotina (Mac desligado); sábado é o D+2, não o D+4."""
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            (tmp / "bruto").mkdir()
+            (tmp / "bruto" / "carga_2026-09-02.csv").write_text(
+                CAB + "A1;K1;;800,00;01/08/2026;CARTAO;SP;11911110001;S;;;;\n", encoding="utf-8")
+            rodar_dia.preparar_carteira(EMPRESA, tmp)
+            base = tmp / "base"
+            rodar = lambda d: rodar_dia.rodar_dia(  # noqa: E731
+                base / "clientes.csv", base / "contatos.csv", tmp / "ret", d, pasta_estado=tmp / "estado",
+                pasta_saida=tmp / "saida", out=lambda *a: None, atributos=base / "atributos.csv")
+            self.assertEqual({l["passo"] for l in rodar(date(2026, 9, 2))["fila"]}, {"D+1"})
+            r = rodar(date(2026, 9, 5))                       # sábado: D+2, sem passo no playbook
+            self.assertEqual(r["motivos"], {"sem_passo_hoje": 1})
+            self.assertEqual(r["proximos"][0]["data"], "2026-09-06")      # domingo: sem ações
+            self.assertEqual(r["proximos"][1]["sem_acoes"], "domingo ou feriado")  # 07/09: feriado
+            self.assertEqual(r["proximos"][2]["passos"], {"localizacao D+3": 1})   # terça 08/09
+            r = rodar(date(2026, 9, 8))                       # terça: D+3 de fato
+            self.assertEqual({l["passo"] for l in r["fila"]}, {"D+3"})
+
+
 class TestEnriquecimentoNaEsteira(unittest.TestCase):
     """Enriquecimento como ação da esteira e prioridade dos telefones pelo Score/Ranking do bureau."""
     def _rodar(self, tmp, dia, estr):
@@ -270,6 +292,7 @@ class TestEnriquecimentoNaEsteira(unittest.TestCase):
             self._carga(tmp)
             r = self._rodar(tmp, date(2026, 9, 2), estr)                 # D+1: sem bureau (está no D+3)
             self.assertEqual(r["enriquecimento"], [])
+            self._rodar(tmp, date(2026, 9, 3), estr)                     # D+2 (a esteira só anda com lista)
             r = self._rodar(tmp, date(2026, 9, 4), estr)                 # D+3: vai para o bureau
             self.assertEqual([(l["id_cliente"], l["motivo"], l["documento"]) for l in r["enriquecimento"]],
                              [("A1", "esteira localizacao D+3", "10000001171")])
