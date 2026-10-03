@@ -355,10 +355,24 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     for e in estados.values():
         if e.inicio_esteira == hoje and e.estado == "LOC":
             e.esteira_pendente, e.inicio_esteira = True, None
-    adiados, para_bureau, motivos, motivo_de, detalhe_de = set(), {}, {}, {}, {}
+    adiados, para_bureau, motivos, motivo_de, detalhe_de, senao_auto = set(), {}, {}, {}, {}, {}
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
-                                  motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de)
+                                  motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto)
+    perfil = _perfil_contatos(contatos, flags, ativos if ativos is not None else set(clientes))
+    alertas.append("PERFIL DOS CONTATOS: " + " · ".join(f"{v} {k}" for k, v in perfil.items()))
+    if perfil.get("clientes") and perfil.get("sem telefone nem e-mail", 0) * 2 > perfil["clientes"]:
+        alertas.append("CONTATOS: mais da metade da carga sem telefone nem e-mail válido. Confira a leitura da "
+                       "carga (colunas de telefone, DDD em coluna separada) no alerta LAYOUT e envie ao bureau.")
+    fones = [c for c in contatos if c["tipo"] == "telefone"]
+    if fones and not any(flags[c["contato"]]["whatsapp_valido"] for c in fones):
+        alertas.append("WHATSAPP: nenhum número marcado com WhatsApp nesta carteira (coluna de WhatsApp na "
+                       "carga, ex.: TEM_WHATSAPP = S, ou retorno do bureau). O WhatsApp vai para o celular; "
+                       "nas esteiras com 'WhatsApp só para números marcados' ele não sai e o senão (SMS) assume.")
+    if senao_auto:
+        alertas.append("SENÃO AUTOMÁTICO: " + " | ".join(f"{n} clientes {t}" for t, n in
+                                                          sorted(senao_auto.items(), key=lambda x: -x[1]))
+                       + " (o canal do dia não tinha contato; ponha o 'senão' na esteira para escolher você)")
     # a esteira do cliente começa hoje se a lista dele saiu hoje (ou se não depende de ação: sem
     # passo no D+1, sem contato, persona em "sem ação"). Adiado, fora da carga, domingo: segue no D+1
     for k, m in motivo_de.items():
@@ -556,6 +570,27 @@ def _dia_util_anterior(hoje: date, regua) -> date:
             return d
         d -= timedelta(days=1)
     return hoje - timedelta(days=1)
+
+
+def _perfil_contatos(contatos, flags, ids) -> dict:
+    """Quantos clientes da carga têm cada tipo de contato (para enxergar problema de leitura)."""
+    from motor import normalizacao as norm
+    por = defaultdict(list)
+    for c in contatos:
+        if c["id_cliente"] in ids:
+            por[c["id_cliente"]].append(c)
+    p = {"clientes": len(ids), "com celular": 0, "só fixo": 0, "com WhatsApp marcado": 0, "com e-mail": 0,
+         "sem telefone nem e-mail": 0}
+    for k in ids:
+        cs = por.get(k, [])
+        fones = [c["contato"] for c in cs if c["tipo"] == "telefone"]
+        cel = any(norm.celular(f) for f in fones)
+        p["com celular"] += cel
+        p["só fixo"] += bool(fones) and not cel
+        p["com WhatsApp marcado"] += any(flags.get(f, {}).get("whatsapp_valido") for f in fones)
+        p["com e-mail"] += any(c["tipo"] == "email" for c in cs)
+        p["sem telefone nem e-mail"] += not cs
+    return p
 
 
 def _contar_contatos(certs, sinais, flags, estados, ativos) -> dict:

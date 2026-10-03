@@ -165,7 +165,7 @@
   "whatsapp": {
     "limiar_score": 0.8,
     "numeros_nao_certificados": 1,
-    "exige_whatsapp_valido": true,
+    "exige_whatsapp_valido": false,
     "limite_taxa_bloqueio": 0.02,
     "janela_taxa_dias": 7,
     "minimo_envios_para_freio": 50
