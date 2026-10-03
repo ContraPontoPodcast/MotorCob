@@ -112,6 +112,42 @@ class TestPersonasDaEmpresa(unittest.TestCase):
             self.assertEqual(r["clientes"]["B1"].atributos["persona"], "Sem persona")
 
 
+    def _raias(self, raia_sp):
+        """D+1: público geral SMS; raia de Digitais SP = raia_sp; raia de Cariocas = sem ação."""
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            (tmp / "bruto").mkdir()
+            (tmp / "bruto" / "carga_2026-09-02.csv").write_text(
+                CAB + "A1;K1;;800,00;01/08/2026;CARTAO;SP;11911110001;S;;;;\n"
+                      "B1;K2;;9000,00;01/08/2026;VEICULO;RJ;21922220002;S;;;;\n"
+                      "C1;K3;;500,00;01/08/2026;CARTAO;MG;31933330003;S;;;;\n", encoding="utf-8")
+            rodar_dia.preparar_carteira(EMPRESA, tmp)
+            personas = [{"id": 7, "nome": "Digitais SP", "ordem": 1, "ativo": True,
+                         "condicoes": [{"campo": "UF", "op": "=", "valor": "SP"}]},
+                        {"id": 8, "nome": "Cariocas", "ordem": 2, "ativo": True,
+                         "condicoes": [{"campo": "UF", "op": "=", "valor": "RJ"}]}]
+            estr = [{"id": 1, "nome": "E", "padrao": True, "definicao": {"localizacao": {"passos": {"1": [
+                {"canal": "sms", "modo": "sempre"}] + raia_sp + [{"canal": "Nenhum", "personas": [8]}]}}}}]
+            base = tmp / "base"
+            r = rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", tmp / "ret", date(2026, 9, 2),
+                                    pasta_estado=tmp / "estado", pasta_saida=tmp / "saida", out=lambda *a: None,
+                                    atributos=base / "atributos.csv", estrategias=estr, personas_usuario=personas)
+            canais = {}
+            for l in r["fila"]:
+                canais.setdefault(l["id_cliente"], set()).add(l["canal"])
+            return canais
+
+    def test_persona_arrastada_para_o_dia_troca_so_a_acao_dela(self):
+        c = self._raias([{"canal": "whatsapp", "modo": "sempre", "personas": [7]}])
+        self.assertEqual(c.get("A1"), {"whatsapp"})     # raia própria: não recebe o SMS do público geral
+        self.assertNotIn("B1", c)                       # Cariocas: sem ação neste dia
+        self.assertEqual(c.get("C1"), {"sms"})          # sem persona: público geral
+
+    def test_persona_sem_contato_na_raia_segue_o_publico_geral(self):
+        c = self._raias([{"canal": "email", "modo": "sempre", "personas": [7]}])   # A1 não tem e-mail
+        self.assertEqual(c.get("A1"), {"sms"})
+
+
 class TestEnriquecimentoNaEsteira(unittest.TestCase):
     """Enriquecimento como ação da esteira e prioridade dos telefones pelo Score/Ranking do bureau."""
     def _rodar(self, tmp, dia, estr):
