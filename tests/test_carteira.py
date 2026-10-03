@@ -148,6 +148,31 @@ class TestPersonasDaEmpresa(unittest.TestCase):
         self.assertEqual(c.get("A1"), {"sms"})
 
 
+    def test_segmento_por_persona_reclassifica_quando_a_persona_muda(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            (tmp / "bruto").mkdir()
+            (tmp / "bruto" / "carga_2026-09-02.csv").write_text(
+                CAB + "A1;K1;;800,00;01/08/2026;CARTAO;SP;11911110001;S;;;;\n"
+                      "B1;K2;;9000,00;01/08/2026;VEICULO;RJ;21922220002;S;;;;\n", encoding="utf-8")
+            rodar_dia.preparar_carteira(EMPRESA, tmp)
+            base = tmp / "base"
+            seg = [{"id": 1, "codigo": "VIP", "nome": "Persona VIP", "ordem": 1, "ativo": True,
+                    "condicoes": [{"campo": "persona", "op": "=", "valor": "VIP"}]}]
+
+            def rodar(dia, uf):
+                pers = [{"id": 7, "nome": "VIP", "ordem": 1, "ativo": True,
+                         "condicoes": [{"campo": "UF", "op": "=", "valor": uf}]}]
+                r = rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", tmp / "ret", dia,
+                                        pasta_estado=tmp / "estado", pasta_saida=tmp / "saida", out=lambda *a: None,
+                                        atributos=base / "atributos.csv", clusters=seg, personas_usuario=pers)
+                return {k: e.cluster_atual for k, e in r["estados"].items()}
+            self.assertEqual(rodar(date(2026, 9, 2), "SP")["A1"], "VIP")
+            depois = rodar(date(2026, 9, 3), "RJ")          # mesma semana: sem revisão mensal
+            self.assertNotEqual(depois["A1"], "VIP")
+            self.assertEqual(depois["B1"], "VIP")
+
+
 class TestEnriquecimentoNaEsteira(unittest.TestCase):
     """Enriquecimento como ação da esteira e prioridade dos telefones pelo Score/Ranking do bureau."""
     def _rodar(self, tmp, dia, estr):
