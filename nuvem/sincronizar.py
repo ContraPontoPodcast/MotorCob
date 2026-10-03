@@ -136,6 +136,22 @@ def arquivo_entrada(emp: dict, pasta_empresas: Path = PASTA_EMPRESAS) -> Path | 
 
 
 # ------------------------------------------------------------------ dia
+def planilha_para_csv(conteudo: bytes) -> bytes:
+    """Excel (.xlsx) -> CSV com ';' (1ª aba). Datas em dd/mm/aaaa; o resto como está na célula."""
+    import io
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
+    ws = wb.worksheets[0]
+    saida = io.StringIO()
+    w = csv.writer(saida, delimiter=";")
+    for linha in ws.iter_rows(values_only=True):
+        if linha is None or all(c is None or str(c).strip() == "" for c in linha):
+            continue
+        w.writerow(["" if c is None else c.strftime("%d/%m/%Y") if hasattr(c, "strftime")
+                    else (str(int(c)) if isinstance(c, float) and c.is_integer() else str(c)) for c in linha])
+    return saida.getvalue().encode("utf-8")
+
+
 def baixar_entradas(sb: Supabase, dados: Path, empresa_id, out=print, unidades: list[dict] | None = None,
                     so_credores: set | None = None):
     """Baixa os envios pendentes. Com credores, cada arquivo vai para a pasta do credor dele; o
@@ -169,9 +185,21 @@ def baixar_entradas(sb: Supabase, dados: Path, empresa_id, out=print, unidades: 
                          {"status": "erro", "relatorio": {"erro": f"não foi possível baixar: {ex}"}})
             out(f"  envio {e['id']} ({e['nome_original']}): erro ao baixar")
             continue
+        nome = e["nome_original"]
+        if nome.lower().endswith((".xlsx", ".xlsm")):
+            try:
+                conteudo, nome = planilha_para_csv(conteudo), nome.rsplit(".", 1)[0] + ".csv"
+            except Exception as ex:  # noqa: BLE001
+                sb.atualizar("envios", {"id": f"eq.{e['id']}"},
+                             {"status": "erro", "relatorio": {"erro": f"não consegui abrir a planilha: {ex}"}})
+                continue
+        elif nome.lower().endswith(".xls"):
+            sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "erro", "relatorio": {
+                "erro": "planilha no formato antigo (.xls): salve como .xlsx ou .csv e envie de novo"}})
+            continue
         for u in alvos:
             if e["tipo"] in PASTA_DO_TIPO:
-                destino = u["pasta"] / PASTA_DO_TIPO[e["tipo"]] / nome_seguro(e["nome_original"])
+                destino = u["pasta"] / PASTA_DO_TIPO[e["tipo"]] / nome_seguro(nome)
             else:
                 destino = u["pasta"] / DESTINO_BASE[e["tipo"]]
             destino.parent.mkdir(parents=True, exist_ok=True)

@@ -68,6 +68,10 @@ só atualiza esses status e traz números novos.
    erro no site (com o motivo) e não gera lista; envie de novo corrigida.
    Registro: `~/MotorCob-dados/logs/vigia_<data>.log`.
 
+   **Arquivo parado em "pendente"?** Rode `scripts/diagnostico.sh`: confere Python, versão,
+   ligação com o Supabase, banco, arquivos pendentes, última rotina e a vigia, e diz o que
+   fazer. Carga em Excel (.xlsx) também é aceita (vira CSV ao baixar; .xls antigo não).
+
    **Empresa nova não precisa de configuração**: sem `empresas/<slug>.json`, o MotorCob
    reconhece as colunas de cada arquivo sozinho e mostra no alerta da rotina (Início do site)
    o que entendeu ("LAYOUT AUTOMÁTICO (confira)"). Se algo estiver errado, mande o cabeçalho
