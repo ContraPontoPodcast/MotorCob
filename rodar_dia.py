@@ -142,6 +142,19 @@ def dias_de_lista(pasta_saida, hoje: date, regua) -> tuple:
     return tuple(sorted(dias))
 
 
+def _motivo_do_cliente(motivo, est, hoje, regua) -> str:
+    """Por que o cliente está (ou não) na lista de hoje, em português, para o site."""
+    if motivo is None:
+        return "não avaliado hoje"
+    if motivo == "sem_passo_hoje" and est.estado == "LOC":
+        from motor.marcacao import dia_na_carga
+        return f"sem ação: a esteira não tem passo no D+{dia_na_carga(est, hoje, regua)}"
+    if motivo == "sem_passo_hoje" and est.estado == "NCP":
+        return "sem ação: giro sem passo hoje (ou pausado aguardando enriquecimento)"
+    texto = MOTIVOS.get(motivo, motivo)
+    return texto if motivo == "com_acao" else f"sem ação: {texto}"
+
+
 NAO_INICIA_ESTEIRA = {"outro_credor", "fora_da_carga", "encerrado", "domingo_feriado", "demais_desligado"}
 
 
@@ -494,6 +507,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "na_carga": ativos is None or k in ativos,
             "acao_hoje": ", ".join(acao_hoje.get(k, [])),
             "passo_hoje": passo_hoje.get(k, ""),
+            "motivo_hoje": _motivo_do_cliente(motivo_de.get(k), e, hoje, regua),
             "persona_usuario": nome_persona.get(publico.get(k), "") if pers_usuario else "",
             "enriq_enviado": enviados_bureau.get(k),
             "enriq_retorno": ultimo_retorno[k].isoformat() if k in ultimo_retorno else None}
