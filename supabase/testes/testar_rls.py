@@ -12,6 +12,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261003000001_personas.sql
     psql -d sb -f supabase/migrations/20261004000001_acoes_dia.sql
     psql -d sb -f supabase/migrations/20261005000001_credores.sql
+    psql -d sb -f supabase/migrations/20261006000001_enquadramento.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -208,6 +209,10 @@ sql(f"update public.credores set ativo=true where id={CX}")
 checar("estado do mesmo ID em dois credores", True, f"insert into public.estado_cliente (empresa_id,credor_id,id_cliente,tag,safra,cluster_origem,cluster_atual,estado,canal,ciclo) select empresa_id,{CX},id_cliente,tag,safra,cluster_origem,cluster_atual,estado,canal,ciclo from public.estado_cliente where empresa_id={EA} limit 1", "service_role")
 checar("mapa separa por credor", True, f"select count(distinct credor_id) from public.mapa_esteira where empresa_id={EA}", "authenticated", u["oper"], 2)
 checar("rotina antiga sem credor cai no principal", True, f"insert into public.acoes_dia (empresa_id,data,canal) values ({EA},'2026-10-05','sms'); select c.codigo from public.acoes_dia a join public.credores c on c.id=a.credor_id where a.data='2026-10-05'", "service_role", None, "principal")
+# enquadramento
+checar("rotina grava esteira e ação de hoje", True, f"update public.estado_cliente set estrategia='Esteira X', acao_hoje='whatsapp', na_carga=true where empresa_id={EA}", "service_role")
+checar("enquadramento: A vê a esteira dos seus clientes", True, "select string_agg(distinct estrategia, ',') from public.enquadramento where com_acao_hoje > 0", "authenticated", u["oper"], "Esteira X")
+checar("enquadramento: B não vê a A", True, "select count(*) from public.enquadramento where estrategia='Esteira X'", "authenticated", u["operb"], 0)
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

@@ -43,9 +43,11 @@ ordem, › Run. Cada um deve terminar sem erro:
    segmento e persona — sem dado pessoal)
 9. `20261005000001_credores.sql` (credores/carteiras de cada empresa; credor_id em tudo;
    tipos de arquivo incremental, retirada, acordo e baixa)
+10. `20261006000001_enquadramento.sql` (onde cada cliente se enquadrou: esteira, persona,
+   ação de hoje; view enquadramento)
 
 Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta do 5
-ao 9 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
+ao 10 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 

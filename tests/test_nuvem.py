@@ -328,6 +328,12 @@ class TestSincronizar(unittest.TestCase):
         est = {(l.get("credor_id"), l["id_cliente"]) for l in t["estado_cliente"] if l["empresa_id"] == 2}
         self.assertIn((22, "X0001"), est)
         self.assertIn((21, "X0001"), est)
+        # onde cada cliente se enquadrou: esteira, carga e ação de hoje
+        linha = {(l.get("credor_id"), l["id_cliente"]): l for l in t["estado_cliente"] if l["empresa_id"] == 2}
+        self.assertEqual(linha[(22, "X0001")]["estrategia"], "Só SMS")
+        self.assertEqual(linha[(21, "X0001")]["estrategia"], "Playbook MotorCob")
+        self.assertIn("whatsapp", linha[(21, "X0001")]["acao_hoje"])
+        self.assertTrue(linha[(21, "X0001")]["na_carga"])
         self.assertEqual({e.get("credor_id") for e in t["execucoes"] if e["empresa_id"] == 2} - {None}, {21, 22})
         # mesmo CPF nos dois credores: quem foi acionado hoje por um não recebe massiva do outro amanhã
         comp = json.loads((self.dados / "empresas" / "beta" / "compartilhado" / "principal.json").read_text())

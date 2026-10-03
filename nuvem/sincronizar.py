@@ -49,7 +49,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
-from nuvem.supabase_api import Supabase  # noqa: E402
+from nuvem.supabase_api import ErroSupabase, Supabase  # noqa: E402
 
 DESTINO_BASE = {"clientes": "base/clientes.csv", "contatos": "base/contatos.csv",
                 "parcelas": "base/parcelas.csv", "portal": "logs/portal.csv"}
@@ -222,7 +222,7 @@ def _fc(cid) -> dict:
     return {"credor_id": f"eq.{cid}"} if cid is not None else {}
 
 
-def _linhas_estado(estados, empresa_id, clientes=None, dia=None, cid=None):
+def _linhas_estado(estados, empresa_id, clientes=None, dia=None, cid=None, enquadramento=None):
     ts = agora()
     clientes = clientes or {}
 
@@ -234,7 +234,8 @@ def _linhas_estado(estados, empresa_id, clientes=None, dia=None, cid=None):
 
     return [{"empresa_id": empresa_id, **_c(cid), "id_cliente": k, "tag": e.tag, "safra": e.safra.isoformat(),
              "cluster_origem": e.cluster_origem, "cluster_atual": e.cluster_atual, "estado": e.estado,
-             "canal": e.canal, "ciclo": e.ciclo, "reenriquecer": e.reenriquecer, "atualizado_em": ts, **extra(k)}
+             "canal": e.canal, "ciclo": e.ciclo, "reenriquecer": e.reenriquecer, "atualizado_em": ts, **extra(k),
+             **((enquadramento or {}).get(k) or {})}
             for k, e in estados.items()]
 
 
@@ -605,8 +606,18 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
 
         if aviso_layout:
             r["alertas"] = [aviso_layout] + r["alertas"]
-        sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid),
-                   conflito="empresa_id,credor_id,id_cliente" if cid is not None else "empresa_id,id_cliente")
+        conflito = "empresa_id,credor_id,id_cliente" if cid is not None else "empresa_id,id_cliente"
+        try:
+            sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid,
+                                                        r.get("enquadramento")), conflito=conflito)
+        except ErroSupabase as ex:   # banco sem as colunas do enquadramento: grava o resto e avisa
+            if "estrategia" not in str(ex) and "persona" not in str(ex) and "acao_hoje" not in str(ex) \
+                    and "na_carga" not in str(ex) and "passo_hoje" not in str(ex):
+                raise
+            sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid),
+                       conflito=conflito)
+            r["alertas"].append("BANCO: rode supabase/atualizar_producao_2026-10.sql para ver onde cada cliente "
+                                "se enquadrou (esteira, persona e ação de hoje)")
         n_trilha = publicar_trilha(sb, pasta / "estado", eid, cid)
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
         fila = _linhas_fila(r["fila"], data, eid, cid)
