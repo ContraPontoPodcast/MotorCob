@@ -189,6 +189,15 @@ def classificar(regras: list[RegraCluster], cliente, dia: date) -> RegraCluster 
     return None
 
 
+def versao_com_personas(versao_regras: str, regras: list[RegraCluster], personas: list) -> str:
+    """Segmento que usa o campo "persona" depende das personas da carteira: mudou uma persona,
+    muda a versão e o motor reclassifica todos na rotina seguinte (sem esperar a revisão mensal)."""
+    if not versao_regras or not any(c[0] == "persona" for r in regras for c in r.condicoes):
+        return versao_regras
+    pers = json.dumps([(p.id, p.nome, p.condicoes) for p in personas], default=list, ensure_ascii=False)
+    return versao_regras + "-" + hashlib.sha256(pers.encode()).hexdigest()[:8]
+
+
 def colunas_usadas(regras: list[RegraCluster]) -> set[str]:
     return {c[0] for r in regras for c in r.condicoes} - set(CAMPOS_CALCULADOS)
 

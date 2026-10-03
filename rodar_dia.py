@@ -251,6 +251,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             publico[k] = p.id if p else None
             clientes[k] = replace(c, atributos={**(c.atributos or {}), "persona": p.nome if p else "Sem persona"})
     nome_persona = {p.id: p.nome for p in pers_usuario}
+    from motor.cluster import versao_com_personas
+    regua = replace(regua, versao_clusters=versao_com_personas(regua.versao_clusters, list(regua.clusters),
+                                                               pers_usuario))
     por_dia = defaultdict(list)
     for e in eventos:
         por_dia[e.data].append(e)
