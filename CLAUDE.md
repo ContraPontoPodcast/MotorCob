@@ -254,7 +254,8 @@ de outra pessoa pela certificação e a rotação segue.
   virtual"/"E-mail", modo "senão", números em texto) e descarta só a parte inválida (aviso
   "esteira 'X': partes ignoradas"); a esteira vazia vira aviso. Vigia: `credores_com_orquestracao_nova`
   refaz a lista quando clusters/estrategias/segmentos_carteira/personas_usuario/canais_empresa/credores
-  mudam depois da última execução ok. Rotina do dia: a partir de `HORA_ROTINA` (env
+  mudam depois da última execução ok (exclusão: gatilho `orquestracao_excluida` carimba
+  credores.atualizado_em, porque linha apagada não deixa carimbo). Rotina do dia: a partir de `HORA_ROTINA` (env
   `MOTORCOB_HORA_ROTINA`, padrão 06:00) a vigia roda uma vez cada credor ativo que já rodou e
   ainda não tem execução com `data_ref` de hoje (`credores_sem_rotina_hoje`); erro grava
   `falhou_ate.rotina` e não repete no dia. `publicar_arquivos(limpar=True)` apaga do Storage os arquivos
