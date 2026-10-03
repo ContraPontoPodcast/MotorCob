@@ -18,7 +18,7 @@ from motor.regua import carregar_regua
 RAIZ = Path(__file__).resolve().parent.parent
 EX = RAIZ / "exemplos" / "empresa"
 EMPRESA = RAIZ / "empresas" / "exemplo.json"
-D0 = date(2026, 9, 1)          # terça: D+1 = quarta
+D0 = date(2026, 9, 1)          # terça: dia da carga = D+1
 WA, WA2, TEL3, EM = "11988880001", "11977770001", "11966660001", "c1@exemplo.invalid"
 
 BLEND = {"localizacao": {"passos": {"1": [
@@ -28,7 +28,7 @@ BLEND = {"localizacao": {"passos": {"1": [
     {"canal": "email", "modo": "junto"}]}}}
 
 
-def _cenario(sinais=None, flags=None, canais=None, definicao=BLEND, dia=D0 + timedelta(days=1)):
+def _cenario(sinais=None, flags=None, canais=None, definicao=BLEND, dia=D0):
     regras, _ = carregar_regras([{"codigo": "DG", "condicoes": [], "estrategia_id": 7}])
     over, erros = validar_estrategia(definicao)
     assert not erros, erros
@@ -78,7 +78,7 @@ class TestBlend(unittest.TestCase):
         fila, _ = _cenario(definicao=d, canais={"sms": {"canal": "sms", "ativo": False}})
         self.assertEqual(fila, [])
         sabado = date(2026, 9, 5)
-        d_sab = {"localizacao": {"passos": {"4": [{"canal": "sms"}]}}}
+        d_sab = {"localizacao": {"passos": {"5": [{"canal": "sms"}]}}}       # D+5 = sábado
         fila, _ = _cenario(definicao=d_sab, dia=sabado, canais={"sms": {"canal": "sms", "sabado": False}})
         self.assertEqual(fila, [])
 
@@ -90,7 +90,7 @@ class TestBlend(unittest.TestCase):
         cli = {"A": Cliente("A", D0, 100.0, 30), "B": Cliente("B", D0, 900.0, 30)}
         certs = {(i, f"1190000000{n}"): Certificacao(i, f"1190000000{n}", "telefone", "DESCONHECIDO")
                  for n, i in enumerate(("A", "B"))}
-        fila, _, alertas = gerar_fila(est, cli, certs, {}, {}, D0 + timedelta(days=1), regua, [])
+        fila, _, alertas = gerar_fila(est, cli, certs, {}, {}, D0, regua, [])
         self.assertEqual([l["id_cliente"] for l in fila], ["B"])
         self.assertTrue(any("CAPACIDADE sms" in a for a in alertas))
 

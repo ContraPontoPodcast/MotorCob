@@ -24,6 +24,7 @@
     "agente_voz": "discador"
   },
   "substituto": {
+    "whatsapp": "sms",
     "rcs": "sms"
   },
   "contato": {

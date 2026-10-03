@@ -41,7 +41,7 @@ from motor.estrategia import validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor.fila import gerar_fila, lista_enriquecimento
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
-from motor.marcacao import ESTADOS_MASSIVOS, EstadoCliente, processar_dia
+from motor.marcacao import ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
 from motor.rastreio import carregar_acoes, ler_log_portal
 from motor.regua import carregar_regua
 
@@ -252,6 +252,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                                 baixas_ate=dia, atualizados=atualizados, enviados=enviados_dia.get(dia.isoformat()))
         dia += timedelta(days=1)
     ultimo = max(ultimo or hoje - timedelta(days=1), hoje - timedelta(days=1))
+    trilha += registrar_entradas(estados, clientes, hoje, regua)   # carga de hoje já entra hoje
     salvar_estado(pasta_estado, estados, ultimo)
     _salvar(pasta_estado / "trilha.csv", trilha, anexar=True)
 
