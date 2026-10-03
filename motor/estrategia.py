@@ -58,7 +58,35 @@ ENRIQUECIMENTO = "enriquecimento"   # ação da esteira: manda o cliente para o 
 CAMPOS_PRIORIDADE = ("ranking", "score", "whatsapp", "rcs", "bureau")
 
 
+def _simples(v) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(v or "")).encode("ascii", "ignore").decode().lower().strip()
+    return "".join(c if c.isalnum() else "_" for c in t).strip("_")
+
+
+APELIDOS_CANAL = {
+    "whats": "whatsapp", "wpp": "whatsapp", "zap": "whatsapp", "wa": "whatsapp", "whatsapp_business": "whatsapp",
+    "e_mail": "email", "mail": "email", "agente_virtual": "agente_voz", "agente": "agente_voz", "ura": "agente_voz",
+    "voz": "agente_voz", "ia": "agente_voz", "bot": "agente_voz", "voicebot": "agente_voz", "robo": "agente_voz",
+    "discadora": "discador", "ligacao": "discador", "telefone": "discador",
+    "bureau": ENRIQUECIMENTO, "enriquecimento_bureau": ENRIQUECIMENTO, "enriquecer": ENRIQUECIMENTO,
+    "melhor_canal_da_persona": "persona_1", "persona1": "persona_1", "persona_melhor": "persona_1",
+    "2_melhor_da_persona": "persona_2", "segundo_melhor_da_persona": "persona_2", "persona2": "persona_2"}
+APELIDOS_MODO = {"senao": "senao", "se_nao": "senao", "junto": "junto", "junto_com": "junto", "e": "junto",
+                 "reserva": "reserva", "sempre": "sempre", "principal": "sempre", "": "sempre"}
+
+
+def canal_padrao(v) -> str:
+    """Nome de canal como o site escrever ('WhatsApp', 'Agente virtual', 'E-mail') -> canal do motor."""
+    t = _simples(v)
+    return APELIDOS_CANAL.get(t, t)
+
+
 def _acao(a, onde: str, erros: list) -> dict | None:
+    if isinstance(a, str):
+        a = canal_padrao(a)
+    elif isinstance(a, dict) and a.get("canal"):
+        a = {**a, "canal": canal_padrao(a["canal"])}
     if isinstance(a, str) and a in TOKENS_PERSONA + (ENRIQUECIMENTO,):
         a = {"canal": a}
     if isinstance(a, str):
@@ -69,26 +97,37 @@ def _acao(a, onde: str, erros: list) -> dict | None:
     if not isinstance(a, dict) or a.get("canal") not in CANAIS + TOKENS_PERSONA + (ENRIQUECIMENTO,):
         erros.append(f"{onde}: ação sem canal válido {a!r}")
         return None
-    modo = a.get("modo") or "sempre"
+    modo = APELIDOS_MODO.get(_simples(a.get("modo")), _simples(a.get("modo")))
     if modo not in MODOS:
-        erros.append(f"{onde}: modo '{modo}' inválido")
-        return None
-    filtro = dict(a.get("contatos") or {})
+        erros.append(f"{onde}: modo '{a.get('modo')}' não reconhecido, vale como 'sempre'")
+        modo = "sempre"
+    filtro = {k: v for k, v in dict(a.get("contatos") or {}).items() if v not in (None, "", False, [])}
     fora = sorted(set(filtro) - set(FILTROS))
     if fora:
-        erros.append(f"{onde}: filtros desconhecidos {fora}")
-        return None
-    if "status" in filtro and (not isinstance(filtro["status"], list) or set(filtro["status"]) - set(STATUS)):
-        erros.append(f"{onde}: status deve ser lista de {list(STATUS)}")
-        return None
+        erros.append(f"{onde}: filtros desconhecidos {fora} ignorados")
+        filtro = {k: v for k, v in filtro.items() if k in FILTROS}
+    if "status" in filtro:
+        st = filtro["status"] if isinstance(filtro["status"], list) else [filtro["status"]]
+        st = [str(x).upper() for x in st if str(x).upper() in STATUS]
+        if st:
+            filtro["status"] = st
+        else:
+            erros.append(f"{onde}: status do filtro ignorado (use {list(STATUS)})")
+            del filtro["status"]
     numeros = a.get("numeros")
+    if isinstance(numeros, str) and numeros.strip().isdigit():
+        numeros = int(numeros)
+    elif isinstance(numeros, str) and _simples(numeros) in ("todos", "todas"):
+        numeros = 99
     if numeros not in (None, "") and (not isinstance(numeros, int) or numeros < 1):
-        erros.append(f"{onde}: numeros deve ser inteiro ≥ 1")
-        return None
+        erros.append(f"{onde}: numeros '{numeros}' ignorado (vale a regra do canal)")
+        numeros = None
     personas = a.get("personas") or []
-    if not isinstance(personas, list) or not all(isinstance(p, int) or str(p).isdigit() for p in personas):
-        erros.append(f"{onde}: personas deve ser lista de ids de persona")
-        return None
+    if not isinstance(personas, list):
+        personas = [personas]
+    if not all(isinstance(p, int) or str(p).isdigit() for p in personas):
+        erros.append(f"{onde}: personas inválidas ignoradas (a ação vale para todos)")
+        personas = []
     acao = {"canal": a["canal"], "modo": modo, "numeros": numeros or None, "contatos": filtro}
     if personas:
         acao["personas"] = [int(p) for p in personas]
@@ -96,7 +135,11 @@ def _acao(a, onde: str, erros: list) -> dict | None:
 
 
 def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str]]:
-    """Definição do site -> (partes do playbook a sobrescrever, erros). Com erro, não sobrescreve nada."""
+    """Definição do site -> (partes do playbook a sobrescrever, avisos).
+
+    Tolerante com o que o site gravar: dia "D+3" vira 3, canal "Agente virtual" vira agente_voz, modo
+    "senão" vira senao. O que não der para entender é descartado SÓ naquele ponto (com aviso); o resto
+    da esteira vale."""
     erros: list[str] = []
     if not isinstance(definicao, dict):
         return {}, [f"estratégia {nome}: definição precisa ser um objeto"]
@@ -109,17 +152,19 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
         if "passos" in f:
             passos = {}
             for dia, acoes in (f["passos"] or {}).items():
-                try:
-                    d = int(dia)
-                except (TypeError, ValueError):
-                    erros.append(f"{nome}/{fase}: dia '{dia}' não é número")
+                digitos = "".join(c for c in str(dia) if c.isdigit())
+                if not digitos:
+                    erros.append(f"{nome}/{fase}: dia '{dia}' não é número (ignorado)")
                     continue
+                d = int(digitos)
                 if not isinstance(acoes, list) or not acoes:
                     continue
                 lista = [_acao(a, f"{nome}/{fase}/dia {d}", erros) for a in acoes]
                 passos[str(d)] = [a for a in lista if a is not None]
             sec["passos"] = passos
         for k in NUMEROS_FASE[fase]:
+            if isinstance(f.get(k), str) and f[k].strip().isdigit():
+                f = {**f, k: int(f[k])}
             if f.get(k) not in (None, ""):
                 if not isinstance(f[k], int) or f[k] < 1:
                     erros.append(f"{nome}/{fase}: {k} deve ser inteiro ≥ 1")
@@ -162,7 +207,7 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
             erros.append(f"{nome}: recencia_horas deve ser inteiro ≥ 0")
         else:
             saida["recencia_horas"] = r
-    return ({} if erros else saida), erros
+    return saida, erros
 
 
 def _prioridade(p) -> tuple[dict | None, str | None]:

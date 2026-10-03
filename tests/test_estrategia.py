@@ -46,6 +46,23 @@ def _canais(fila):
     return sorted({(l["canal"], l["contato"], l["condicao"]) for l in fila})
 
 
+class TestTolerante(unittest.TestCase):
+    def test_esteira_gravada_do_jeito_do_site_vale(self):
+        d = {"localizacao": {"dias_sem_contato_para_ncp": "10", "passos": {
+            "D+1": [{"canal": "WhatsApp", "modo": "Sempre"}, {"canal": "SMS", "modo": "senão", "numeros": "2"}],
+            "dia 3": [{"canal": "Agente virtual"}, {"canal": "Discador", "modo": "Reserva"}],
+            "D+5": [{"canal": "Telegrama"}, {"canal": "E-mail", "contatos": {"cor": "azul"}}]}}}
+        over, avisos = validar_estrategia(d, "Minha")
+        p = over["localizacao"]["passos"]
+        self.assertEqual([(a["canal"], a["modo"], a["numeros"]) for a in p["1"]],
+                         [("whatsapp", "sempre", None), ("sms", "senao", 2)])
+        self.assertEqual([(a["canal"], a["modo"]) for a in p["3"]], [("agente_voz", "sempre"), ("discador", "reserva")])
+        self.assertEqual([a["canal"] for a in p["5"]], ["email"])           # só o canal inválido sai
+        self.assertEqual(over["localizacao"]["dias_sem_contato_para_ncp"], 10)
+        self.assertTrue(any("telegrama" in a for a in avisos))
+        self.assertTrue(any("cor" in a for a in avisos))
+
+
 class TestBlend(unittest.TestCase):
     def test_whatsapp_primeiro_quando_ha_numero_com_whatsapp(self):
         fila, _ = _cenario(flags={WA: {"whatsapp_valido": True}}, sinais={WA2: {"rcs": True, "pertence": "sim"}})

@@ -64,7 +64,12 @@ class SupabaseFalso:
 
             def do_DELETE(self):
                 r = self._rota()
-                if r:
+                if r and r[0].startswith("/storage/v1/object/"):
+                    bucket = r[0][len("/storage/v1/object/"):]
+                    for c in json.loads(self._corpo())["prefixes"]:
+                        falso.objetos.pop(f"{bucket}/{c}", None)
+                    self._resp(200, b"[]")
+                elif r:
                     falso.delete(self, *r)
 
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
@@ -98,6 +103,18 @@ class SupabaseFalso:
         h._resp(200, json.dumps(self._filtra(self.tabelas.get(tabela, []), q)).encode())
 
     def post(self, h, caminho, q, corpo):
+        if caminho.startswith("/storage/v1/object/list/"):
+            bucket = caminho[len("/storage/v1/object/list/"):]
+            pre = f"{bucket}/" + json.loads(corpo)["prefix"]
+            itens, pastas = [], set()
+            for k in self.objetos:
+                if k.startswith(pre):
+                    resto = k[len(pre):]
+                    if "/" in resto:
+                        pastas.add(resto.split("/")[0])
+                    else:
+                        itens.append({"name": resto, "id": "x"})
+            return h._resp(200, json.dumps(itens + [{"name": p, "id": None} for p in sorted(pastas)]).encode())
         if caminho.startswith("/storage/v1/object/"):
             self.objetos[urllib.parse.unquote(caminho[len("/storage/v1/object/"):])] = corpo
             return h._resp(200, b'{"Key":"ok"}')
@@ -390,6 +407,27 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(cod(21), ["VE", "UM", "TD"])
         self.assertEqual(cod(22), ["TD"])                   # VE pausado na 22; UM é só da 21
         self.assertEqual(cod(23), ["TD"])                   # VE não vinculado à 23
+
+    def test_vigia_refaz_a_lista_quando_a_orquestracao_muda(self):
+        from nuvem.sincronizar import empresas_com_carga_nova, vigiar
+        t = self.falso.tabelas
+        self._dia(date(2026, 9, 2), empresa="beta")
+        for e in t["execucoes"]:
+            e["iniciada_em"] = "2026-09-02T09:00:00+00:00"
+        vig = lambda: vigiar(self.dados, date(2026, 9, 2), self.sb, out=lambda *a: None,  # noqa: E731
+                             pasta_empresas=self.cfg)
+        self.assertEqual(empresas_com_carga_nova(self.dados, self.sb), [])     # nada mudou
+        # a esteira da beta foi ativada no site depois da rotina: só SMS
+        t["estrategias"] = [{"id": 9, "empresa_id": 2, "nome": "Só SMS", "padrao": True,
+                             "atualizado_em": "2026-09-02T10:00:00+00:00",
+                             "definicao": {"localizacao": {"passos": {"D+1": [{"canal": "SMS"}]}}}}]
+        r = vig()
+        self.assertEqual(list(r), ["beta"])
+        self.assertIn("saidas/beta/2026-09-02/ids/sms.csv", self.falso.objetos)
+        self.assertNotIn("saidas/beta/2026-09-02/ids/whatsapp.csv", self.falso.objetos)   # lista refeita
+        for e in t["execucoes"]:
+            e.setdefault("iniciada_em", "2026-09-02T10:05:00+00:00")
+        self.assertEqual(empresas_com_carga_nova(self.dados, self.sb), [])     # já refeita: não repete
 
     def test_sugestao_aprovada_vira_segmento_com_estrategia(self):
         dados = {"persona": "RJ", "nome": "UF RJ", "condicoes": [{"campo": "UF", "valor": "RJ"}],

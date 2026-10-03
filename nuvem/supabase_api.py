@@ -94,6 +94,27 @@ class Supabase:
     def baixar(self, bucket, caminho) -> bytes:
         return self._req("GET", f"/storage/v1/object/{bucket}/{urllib.parse.quote(caminho)}", bruto=True)
 
+    def listar(self, bucket, prefixo: str) -> list[str]:
+        """Caminhos dos arquivos sob o prefixo (desce nas pastas)."""
+        saida, pastas = [], [prefixo.rstrip("/")]
+        while pastas:
+            pasta = pastas.pop()
+            offset = 0
+            while True:
+                itens = self._req("POST", f"/storage/v1/object/list/{bucket}",
+                                  {"prefix": pasta + "/", "limit": 1000, "offset": offset}) or []
+                for i in itens:
+                    nome = f"{pasta}/{i['name']}"
+                    (saida.append(nome) if i.get("id") else pastas.append(nome))
+                if len(itens) < 1000:
+                    break
+                offset += 1000
+        return saida
+
+    def apagar_arquivos(self, bucket, caminhos: list[str]):
+        for i in range(0, len(caminhos), 500):
+            self._req("DELETE", f"/storage/v1/object/{bucket}", {"prefixes": caminhos[i:i + 500]})
+
     def enviar(self, bucket, caminho, conteudo: bytes, tipo="text/csv"):
         self._req("POST", f"/storage/v1/object/{bucket}/{urllib.parse.quote(caminho)}", conteudo,
                   {"Content-Type": tipo, "x-upsert": "true"}, bruto=True)
