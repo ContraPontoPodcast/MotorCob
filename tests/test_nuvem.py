@@ -467,6 +467,42 @@ class TestSincronizar(unittest.TestCase):
         self.assertTrue(p["iniciado_em"] and p["terminado_em"])
         self.assertEqual(empresas_com_carga_nova(self.dados, self.sb, hoje=dia), [])   # saiu da fila
 
+    def test_pedido_preso_em_rodando_vira_erro(self):
+        from nuvem.sincronizar import _pedidos_pendentes
+        t = self.falso.tabelas
+        t["pedidos_rotina"] = [
+            {"id": 1, "empresa_id": 2, "credor_id": None, "status": "rodando",
+             "iniciado_em": "2026-01-01T09:00:00+00:00"},                  # caiu no meio: preso
+            {"id": 2, "empresa_id": 2, "credor_id": 22, "status": "pendente"}]
+        self.assertEqual(_pedidos_pendentes(self.sb), {2: {22: [2]}})
+        p = t["pedidos_rotina"][0]
+        self.assertEqual(p["status"], "erro")
+        self.assertIn("interrompida", p["erro"])
+
+    def test_plantao_se_atualiza_mesmo_sem_trabalho(self):
+        from nuvem.sincronizar import plantao
+        import nuvem.sincronizar as s
+        relogio, versoes, puxou = {"t": 0.0}, ["a"], []
+
+        def dormir(x):
+            relogio["t"] += x
+
+        def atualizar():
+            puxou.append(relogio["t"])
+            versoes.append("b")
+
+        orig = s.subprocess.run
+        s.subprocess.run = lambda *a, **k: None
+        try:
+            r = plantao(self.dados, ["rodar"], self.sb, out=lambda *a: None, dormir=dormir,
+                        relogio=lambda: relogio["t"], versao=lambda: versoes[-1], atualizar=atualizar,
+                        a_cada_atualizar=900, parar=lambda: relogio["t"] > 5000)
+        finally:
+            s.subprocess.run = orig
+        self.assertEqual(r, "atualizado")
+        self.assertEqual(len(puxou), 1)
+        self.assertGreaterEqual(puxou[0], 900)
+
     def test_rotina_do_dia_so_depois_da_hora(self):
         from datetime import datetime
         from nuvem.sincronizar import _passou_hora_rotina

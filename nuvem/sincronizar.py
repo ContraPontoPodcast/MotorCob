@@ -771,14 +771,29 @@ def _pendentes_base(sb: Supabase) -> dict:
     return por
 
 
+PEDIDO_TEMPO_MAXIMO = timedelta(minutes=20)
+
+
 def _pedidos_pendentes(sb: Supabase) -> dict:
-    """{empresa_id: {credor_id: [ids]}} dos pedidos "Reenquadrar agora" do site ainda na fila."""
+    """{empresa_id: {credor_id: [ids]}} dos pedidos "Reenquadrar agora" do site ainda na fila.
+    Pedido "rodando" há mais de PEDIDO_TEMPO_MAXIMO (rotina interrompida: Mac desligou, erro
+    grave) vira erro, para não travar a carteira (só pode haver um pedido na fila)."""
     try:
-        linhas = sb.selecionar("pedidos_rotina", {"status": "eq.pendente"}, ordem="id.asc") or []
+        linhas = sb.selecionar("pedidos_rotina", {"status": "in.(pendente,rodando)"}, ordem="id.asc") or []
     except ErroSupabase:   # banco sem a tabela de pedidos
         return {}
-    por = {}
+    por, limite = {}, datetime.now(timezone.utc) - PEDIDO_TEMPO_MAXIMO
     for l in linhas:
+        if l.get("status") == "rodando":
+            try:
+                inicio = datetime.fromisoformat(str(l.get("iniciado_em") or "").replace("Z", "+00:00"))
+            except ValueError:
+                inicio = None
+            if inicio is None or inicio.tzinfo is None or inicio < limite:
+                sb.atualizar("pedidos_rotina", {"id": f"eq.{l['id']}"},
+                             {"status": "erro", "terminado_em": agora(),
+                              "erro": "a rotina foi interrompida (Mac desligou ou caiu): peça de novo"})
+            continue
         por.setdefault(l["empresa_id"], {}).setdefault(l.get("credor_id"), []).append(l["id"])
     return por
 
@@ -937,10 +952,14 @@ def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empre
             r = sincronizar_empresa_dia(sb, dados, emp, data, out, pasta_empresas, so_credores=alvo)
             resultados[emp["slug"]] = r
             erro = r.get("erro")
-        except Exception as ex:  # noqa: BLE001 — uma empresa com erro não para as outras
+        except BaseException as ex:  # noqa: BLE001 — uma empresa com erro não para as outras
             out(f"  ERRO na empresa {emp['slug']}: {ex}")
-            resultados[emp["slug"]] = {"erro": str(ex)}
-            erro = str(ex)
+            resultados[emp["slug"]] = {"erro": str(ex) or type(ex).__name__}
+            erro = resultados[emp["slug"]]["erro"]
+            if not isinstance(ex, Exception):   # Ctrl+C / encerramento: fecha os pedidos e sai
+                if pedidos:
+                    _fechar_pedidos(sb, emp, pedidos, resultados[emp["slug"]])
+                raise
         if pedidos:
             _fechar_pedidos(sb, emp, pedidos, resultados[emp["slug"]])
         if erro:   # não repete o mesmo erro: só tenta de novo quando chegar outro arquivo ou outra mudança
@@ -962,21 +981,36 @@ def _versao_repo() -> str:
         return ""
 
 
+def _atualizar_repo():
+    subprocess.run(["git", "-C", str(RAIZ), "pull", "--ff-only", "-q"], capture_output=True, timeout=120)
+
+
 def plantao(dados: Path, comando: list[str], sb: Supabase | None = None, out=print, empresa: str | None = None,
             intervalo: float = 5, completo: float = 60, parar=None, dormir=time.sleep, relogio=time.monotonic,
-            versao=_versao_repo) -> str:
+            versao=_versao_repo, atualizar=_atualizar_repo, a_cada_atualizar: float = 900) -> str:
     """Vigia em tempo real (processo que fica no ar, mantido pelo launchd): a cada `intervalo`
     segundos faz a consulta leve de arquivo novo e, se houver, chama `comando` (rodar_dia.sh
     --vigiar) na hora; a cada `completo` segundos chama o comando de qualquer jeito, para pegar
     orquestração alterada e a rotina do dia. Sai quando o motor é atualizado (git pull), para o
-    launchd subir a versão nova. Devolve o motivo da saída."""
+    launchd subir a versão nova; a cada `a_cada_atualizar` segundos faz git pull mesmo sem
+    trabalho (senão uma versão velha que não enxerga um pedido novo nunca se atualizaria).
+    Devolve o motivo da saída."""
     sb = sb or Supabase(*carregar_config(dados))
     inicio = versao()
-    ultimo, visto = None, frozenset()
+    ultimo, visto, atualizado = None, frozenset(), relogio()
     falhas = 0
     out(f"plantão no ar: olha o site a cada {intervalo:g} s")
     while not (parar and parar()):
         agora = relogio()
+        if agora - atualizado >= a_cada_atualizar:
+            atualizado = agora
+            try:
+                atualizar()
+            except Exception:  # noqa: BLE001 — sem internet: tenta na próxima
+                pass
+            if inicio and versao() != inicio:
+                out("motor atualizado: reiniciando o plantão")
+                return "atualizado"
         try:
             novo = ha_arquivo_novo(dados, sb, empresa)
             falhas = 0
