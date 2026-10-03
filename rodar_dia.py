@@ -155,8 +155,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
              respeitar_nao_perturbe}] da tabela `canais_empresa` (ou .json).
     compartilhado: o que os OUTROS credores da empresa sabem da mesma pessoa (mesmo CPF):
              {"hot": {(pessoa, contato)}, "whatsapp": {contato}, "acionados": {pessoa: data}}.
-             Hot e WhatsApp valem aqui; quem outro credor acionou nas últimas 48h não recebe
-             ação massiva hoje. O resultado traz r["compartilhar"] no mesmo formato."""
+             Hot e WhatsApp valem aqui; quem está em "acionados" com data nas últimas 48h não
+             recebe ação massiva hoje (o rodízio entre credores entra aí também). O resultado
+             traz r["compartilhar"] com hot, whatsapp, acionados e esperando (adiados hoje)."""
     regua = carregar_regua(regua_json) if regua_json else carregar_regua()
     avisos_cluster = []
     if clusters:
@@ -267,11 +268,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     recencia = timedelta(hours=regua["recencia_horas"])
     pausados = {idc for idc, p in pessoa_de.items()
                 if (d := (compartilhado.get("acionados") or {}).get(p)) and hoje - d < recencia}
+    adiados = set()
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos,
-                                  pausados=pausados)
-    if pausados & {k for k, e in estados.items() if e.estado in ESTADOS_MASSIVOS and (ativos is None or k in ativos)}:
-        alertas.append(f"OUTRO CREDOR: {len(pausados)} clientes acionados por outro credor nas últimas "
-                       f"{regua['recencia_horas']}h ficam sem ação massiva hoje")
+                                  pausados=pausados, adiados=adiados)
+    if adiados:
+        alertas.append(f"OUTRO CREDOR: {len(adiados)} clientes ficam sem ação massiva hoje (outro credor acionou "
+                       f"nas últimas {regua['recencia_horas']}h ou é a vez dele); voltam na próxima")
     contatos_status = _contar_contatos(certs, sinais, flags, estados, ativos)
     alertas = [f"CLUSTER: {a}" for a in avisos_cluster] + alertas
     enriq = lista_enriquecimento(estados, flags, contatos_por, hoje, regua)
@@ -352,7 +354,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                 if e.contato_localizador and k in pessoa_de},
         "whatsapp": {c for c, f in flags.items() if f.get("whatsapp_valido")},
         "acionados": {pessoa_de[l["id_cliente"]]: hoje for l in fila
-                      if l["id_cliente"] in pessoa_de and not l["condicao"] and l["estado"] in ESTADOS_MASSIVOS}}
+                      if l["id_cliente"] in pessoa_de and not l["condicao"] and l["estado"] in ESTADOS_MASSIVOS},
+        # quem este credor queria acionar hoje e ficou de fora: na próxima, é a vez dele
+        "esperando": {pessoa_de[i]: hoje for i in adiados if i in pessoa_de}}
     return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "compartilhar": compartilhar, "personas": personas, "sugestoes": sugestoes,
             "caracteristicas_persona": modelo.colunas,
             "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,

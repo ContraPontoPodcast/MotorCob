@@ -344,6 +344,27 @@ class TestSincronizar(unittest.TestCase):
         na = (cred / "banco-x" / "base" / "na_carga.csv").read_text().split()
         self.assertNotIn("X0003", na)
 
+    def test_rodizio_entre_credores_com_o_mesmo_cpf(self):
+        """Mesmos clientes e mesma régua em dois credores: eles se alternam (ninguém fica sem acionar)."""
+        t = self.falso.tabelas
+        t["envios"] = [e for e in t["envios"] if e["empresa_id"] != 2]
+        t["credores"] = [{"id": 21, "empresa_id": 2, "codigo": "principal", "nome": "P", "ativo": True},
+                         {"id": 22, "empresa_id": 2, "codigo": "banco-x", "nome": "X", "ativo": True}]
+        carga = (EX / "empresa" / "bruto" / "base_2026-09-01.csv").read_bytes()
+        self._envio(6001, 2, "base", "base_2026-09-01.csv", carga, credor=21)
+        self._envio(6002, 2, "base", "base_2026-09-01.csv", carga, credor=22)
+        quem = {}
+        for d in (2, 3, 4):
+            self._dia(date(2026, 9, d), empresa="beta")
+            for cod in ("principal", "banco-x"):
+                k = f"saidas/beta/2026-09-{d:02d}/{cod}/fila_do_dia.csv"
+                linhas = self.falso.objetos.get(k, b"").decode().splitlines()[1:]
+                for l in linhas:
+                    quem.setdefault(l.split(",")[1], []).append((d, cod))
+        x1 = quem["X0001"]
+        self.assertEqual([c for _, c in x1], ["principal", "banco-x"])   # D+1 no principal, D+3 no Banco X
+        self.assertEqual(len({d for d, _ in x1}), len(x1))               # nunca os dois no mesmo dia
+
     def test_sugestao_aprovada_vira_segmento_com_estrategia(self):
         dados = {"persona": "RJ", "nome": "UF RJ", "condicoes": [{"campo": "UF", "valor": "RJ"}],
                  "estrategia_base": None, "fase": "localizacao", "dia": 1, "de": "whatsapp", "para": "sms"}
