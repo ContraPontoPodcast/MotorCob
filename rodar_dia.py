@@ -173,10 +173,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     est_validas, padrao = {}, None
     for e in _ler_lista(estrategias):
         override, erros = validar_estrategia(e.get("definicao") or {}, e.get("nome") or str(e.get("id")))
-        if erros:
-            avisos_cluster.append(f"estratégia '{e.get('nome')}' ignorada (vale o playbook padrão): "
-                                  + "; ".join(erros[:3]))
-            continue
+        if erros:   # o que não deu para entender fica de fora; o resto da esteira vale
+            avisos_cluster.append(f"esteira '{e.get('nome')}': partes ignoradas — " + "; ".join(erros[:4])
+                                  + (f" (+{len(erros) - 4})" if len(erros) > 4 else ""))
+        if not any((override.get(f) or {}).get("passos") for f in ("localizacao", "giro", "preventivo", "quebra")) \
+                and not override.get("ordem_rotacao"):
+            avisos_cluster.append(f"esteira '{e.get('nome')}' está vazia: os clientes dela seguem o playbook MotorCob")
         est_validas[e.get("id")] = override
         if e.get("padrao"):
             padrao = e.get("id")

@@ -117,7 +117,13 @@ def main():
         if not ult:
             info(f"{emp['slug']}: a rotina ainda não rodou nenhuma vez")
 
-    print("\n4. Vigia (roda sozinha a cada 2 minutos)")
+    print("\n4. Orquestração (o que o MotorCob vai usar em cada carteira)")
+    try:
+        _orquestracao(sb, dados, empresas, ok, ruim, info)
+    except Exception as ex:  # noqa: BLE001
+        info(f"não consegui ler a orquestração: {str(ex)[:200]}")
+
+    print("\n5. Vigia (roda sozinha a cada 2 minutos)")
     if sys.platform == "darwin":
         if PLIST.exists():
             ok("vigia instalada")
@@ -147,6 +153,44 @@ def main():
             for l in linhas:
                 print(f"       {l[:220]}")
     return fim(problemas)
+
+
+def _orquestracao(sb, dados, empresas, ok, ruim, info):
+    from motor.estrategia import validar_estrategia
+    from nuvem.sincronizar import credores, credores_com_orquestracao_nova, segmento_vale
+    for emp in empresas:
+        estr = {e["id"]: e for e in sb.selecionar("estrategias", {"empresa_id": f"eq.{emp['id']}"}) or []}
+        padrao_emp = next((e for e in estr.values() if e.get("padrao")), None)
+        clusters = sb.selecionar("clusters", {"empresa_id": f"eq.{emp['id']}"}, ordem="ordem.asc") or []
+        try:
+            vinc = {}
+            for l in sb.selecionar("segmentos_carteira", {"empresa_id": f"eq.{emp['id']}"}) or []:
+                vinc.setdefault(l["cluster_id"], {})[l["credor_id"]] = bool(l.get("ativo", True))
+        except Exception:  # noqa: BLE001
+            vinc = {}
+        mudou = credores_com_orquestracao_nova(sb, emp)
+        for u in credores(sb, dados, emp):
+            nome = emp["slug"] + (f" / {u['codigo']}" if u["id"] is not None else "")
+            base = estr.get(u.get("estrategia_id")) or padrao_emp
+            origem = "da carteira" if estr.get(u.get("estrategia_id")) else "padrão da empresa"
+            info(f"{nome} · Demais clientes: " + (f"esteira '{base['nome']}' ({origem})" if base
+                                                   else "playbook MotorCob (nenhuma esteira padrão escolhida)"))
+            em_uso = [c for c in clusters if c.get("ativo") and segmento_vale(c, u["id"], vinc)]
+            for c in em_uso:
+                e = estr.get(c.get("estrategia_id"))
+                info(f"   segmento {c['codigo']} ({c.get('nome') or ''}) → " +
+                     (f"esteira '{e['nome']}'" if e else "esteira padrão acima"))
+            if not em_uso:
+                info("   nenhum segmento em uso nesta carteira")
+            if u["id"] in mudou:
+                ruim(f"{nome}: a orquestração mudou depois da última rotina",
+                     "A vigia refaz a lista em até 2 minutos; para já: scripts/rodar_dia.sh")
+        for e in estr.values():
+            _, avisos = validar_estrategia(e.get("definicao") or {}, e.get("nome") or str(e["id"]))
+            if avisos:
+                info(f"esteira '{e.get('nome')}': o MotorCob ignora — " + "; ".join(avisos[:3]))
+            else:
+                ok(f"esteira '{e.get('nome')}' entendida por inteiro")
 
 
 def fim(problemas):

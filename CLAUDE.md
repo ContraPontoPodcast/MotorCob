@@ -220,6 +220,12 @@ de outra pessoa pela certificação e a rotação segue.
   vinculadas com ativo; sem vínculo, regra antiga (credor_id = uma carteira; vazio = todas).
   `clusters.ativo` é o liga/desliga geral. `nuvem.segmento_vale` / `baixar_clusters`. View
   `segmentos_em_uso` resolve vinculado/em_uso por carteira para o site.
+- Esteira tolerante: `validar_estrategia` normaliza o que o site gravar (dia "D+3", canal "Agente
+  virtual"/"E-mail", modo "senão", números em texto) e descarta só a parte inválida (aviso
+  "esteira 'X': partes ignoradas"); a esteira vazia vira aviso. Vigia: `credores_com_orquestracao_nova`
+  refaz a lista quando clusters/estrategias/segmentos_carteira/personas_usuario/canais_empresa/credores
+  mudam depois da última execução ok. `publicar_arquivos(limpar=True)` apaga do Storage os arquivos
+  do dia (raiz, ids/, bureau/) que não fazem mais parte da lista. Diagnóstico mostra a orquestração.
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias

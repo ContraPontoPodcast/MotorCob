@@ -269,14 +269,28 @@ def publicar_trilha(sb: Supabase, pasta_estado: Path, empresa_id, cid=None) -> i
     return len(novas)
 
 
-def publicar_arquivos(sb: Supabase, pasta: Path, prefixo: str) -> int:
-    n = 0
+def publicar_arquivos(sb: Supabase, pasta: Path, prefixo: str, limpar: bool = False) -> int:
+    """Sobe os arquivos da pasta. limpar=True (lista do dia): apaga do site os arquivos do dia que
+    não fazem mais parte dela (ex.: whatsapp.csv quando a esteira refeita não tem mais WhatsApp)."""
+    n, enviados = 0, set()
     for arq in sorted(p for p in pasta.rglob("*") if p.is_file()):
         rel = arq.relative_to(pasta).as_posix()
         tipo = {"xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "txt": "text/plain; charset=utf-8"}.get(arq.suffix.lstrip("."), "text/csv; charset=utf-8")
         sb.enviar("saidas", f"{prefixo}/{rel}", arq.read_bytes(), tipo)
+        enviados.add(f"{prefixo}/{rel}")
         n += 1
+    if limpar:
+        try:
+            no_site = sb.listar("saidas", prefixo)
+        except Exception:  # noqa: BLE001 — limpeza não pode derrubar a rotina
+            no_site = []
+        # só a lista do dia: arquivos soltos da pasta do dia e as pastas ids/ e bureau/
+        velhos = [c for c in no_site if c not in enviados
+                  and (c.count("/") == prefixo.count("/") + 1
+                       or c.startswith(f"{prefixo}/ids/") or c.startswith(f"{prefixo}/bureau/"))]
+        if velhos:
+            sb.apagar_arquivos("saidas", velhos)
     return n
 
 
@@ -655,7 +669,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         if fila:
             sb.inserir("fila_dia", fila)
         prefixo = f"{slug}/{data.isoformat()}" + (f"/{u['codigo']}" if cid is not None else "")
-        n_arq = publicar_arquivos(sb, r["saida"], prefixo)
+        n_arq = publicar_arquivos(sb, r["saida"], prefixo, limpar=True)
         n_sug = publicar_personas(sb, eid, r, cid)
         publicar_acoes(sb, eid, r, cid)
         for e, destino in baixados:
@@ -757,21 +771,64 @@ def _vigia_arq(dados: Path, emp: dict) -> Path:
     return pasta_empresa(dados, emp) / "estado" / "vigia.json"
 
 
+CONFIG_ORQUESTRACAO = ("clusters", "estrategias", "segmentos_carteira", "personas_usuario", "canais_empresa",
+                       "credores")
+
+
+def _ultima_mudanca(sb: Supabase, tabela: str, empresa_id) -> dict:
+    """{credor_id ou None (vale para todos): última alteração} da configuração da orquestração."""
+    try:
+        linhas = sb.selecionar(tabela, {"empresa_id": f"eq.{empresa_id}"}) or []
+    except ErroSupabase:
+        return {}
+    por = {}
+    for l in linhas:
+        quando = l.get("atualizado_em") or ""
+        if not quando:
+            continue
+        chave = l.get("credor_id") if tabela in ("segmentos_carteira", "personas_usuario") else \
+            (l.get("id") if tabela == "credores" else None)
+        por[chave] = max(por.get(chave, ""), quando)
+    return por
+
+
+def credores_com_orquestracao_nova(sb: Supabase, emp: dict) -> dict:
+    """Credores que já rodaram e cuja orquestração (segmentos, esteiras, personas, canais, esteira
+    padrão) mudou depois da última rotina: a vigia refaz a lista deles."""
+    try:
+        ex = sb.selecionar("execucoes", {"empresa_id": f"eq.{emp['id']}", "status": "eq.ok"},
+                           ordem="iniciada_em.desc", limite=500) or []
+    except ErroSupabase:
+        return {}
+    ultima = {}
+    for e in ex:
+        if e.get("iniciada_em"):
+            ultima[e.get("credor_id")] = max(ultima.get(e.get("credor_id"), ""), e["iniciada_em"])
+    if not ultima:
+        return {}
+    mudou = {}
+    for t in CONFIG_ORQUESTRACAO:
+        for c, q in _ultima_mudanca(sb, t, emp["id"]).items():
+            mudou[c] = max(mudou.get(c, ""), q)
+    geral = mudou.get(None, "")
+    return {c: max(geral, mudou.get(c, "")) for c, quando in ultima.items() if max(geral, mudou.get(c, "")) > quando}
+
+
 def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = None) -> list[dict]:
-    """Empresas ativas com arquivo da carteira pendente que ainda não falhou nesse mesmo arquivo.
-    Cada uma vem com "_credores": os credores que têm arquivo novo."""
+    """Empresas ativas com arquivo da carteira pendente que ainda não falhou nesse mesmo arquivo, ou
+    com a orquestração alterada depois da última rotina. Cada uma vem com "_credores"."""
     pend = _pendentes_base(sb)
     saida = []
-    for emp in empresas_ativas(sb, empresa) if pend else []:
-        if emp["id"] not in pend:
-            continue
+    for emp in empresas_ativas(sb, empresa):
         arq = _vigia_arq(dados, emp)
         falhou = json.loads(arq.read_text(encoding="utf-8")).get("falhou_ate", {}) if arq.exists() else {}
         if not isinstance(falhou, dict):
             falhou = {"None": falhou}
-        novos = {c for c, i in pend[emp["id"]].items() if i > falhou.get(str(c), 0)}
-        if novos:
-            saida.append({**emp, "_credores": novos})
+        novos = {c for c, i in pend.get(emp["id"], {}).items() if i > falhou.get(str(c), 0)}
+        ja = falhou.get("orquestracao") if isinstance(falhou.get("orquestracao"), dict) else {}
+        mudou = {c: q for c, q in credores_com_orquestracao_nova(sb, emp).items() if q > ja.get(str(c), "")}
+        if novos or mudou:
+            saida.append({**emp, "_credores": novos | set(mudou), "_orquestracao": mudou})
     return saida
 
 
@@ -782,8 +839,10 @@ def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empre
     resultados = {}
     for emp in empresas_com_carga_nova(dados, sb, empresa):
         alvo = emp.pop("_credores")
+        so_config = emp.pop("_orquestracao", {})
         pend = _pendentes_base(sb).get(emp["id"], {})
-        out(f"ARQUIVO NOVO DA CARTEIRA: {emp['slug']} — gerando a lista de {data:%d/%m/%Y}")
+        motivo = "ORQUESTRAÇÃO ALTERADA" if set(so_config) == alvo else "ARQUIVO NOVO DA CARTEIRA"
+        out(f"{motivo}: {emp['slug']} — gerando a lista de {data:%d/%m/%Y}")
         arq = _vigia_arq(dados, emp)
         falhou = json.loads(arq.read_text(encoding="utf-8")).get("falhou_ate", {}) if arq.exists() else {}
         falhou = falhou if isinstance(falhou, dict) else {}
@@ -795,8 +854,9 @@ def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empre
             out(f"  ERRO na empresa {emp['slug']}: {ex}")
             resultados[emp["slug"]] = {"erro": str(ex)}
             erro = str(ex)
-        if erro:   # não repete o mesmo erro: só tenta de novo quando chegar outro arquivo
+        if erro:   # não repete o mesmo erro: só tenta de novo quando chegar outro arquivo ou outra mudança
             falhou.update({str(c): pend.get(c, 0) for c in alvo})
+            falhou["orquestracao"] = {**(falhou.get("orquestracao") or {}), **{str(c): q for c, q in so_config.items()}}
             arq.parent.mkdir(parents=True, exist_ok=True)
             arq.write_text(json.dumps({"falhou_ate": falhou, "erro": erro[:500]}), encoding="utf-8")
         elif arq.exists():
