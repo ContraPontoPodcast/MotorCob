@@ -690,7 +690,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                   "personas": len(r.get("personas") or []), "sugestoes_novas": n_sug,
                   "sugestoes_aplicadas": n_aplicadas,
                   "acoes_ontem": _acoes_de(r.get("acoes"), data - timedelta(days=1)),
-                  "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq}
+                  "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq,
+                  "sem_acao": r.get("motivos") or {}, "proximos": r.get("proximos") or []}
         if cid is not None:
             resumo["credor"] = u["codigo"]
         if rel_base:

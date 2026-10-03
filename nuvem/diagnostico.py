@@ -128,6 +128,12 @@ def main():
             quando = (x.get("iniciada_em") or "")[:16].replace("T", " ")
             msg = f"última rotina {quando}: {x['status']}" + (f" — {x.get('erro')[:300]}" if x.get("erro") else "")
             (ok if x["status"] == "ok" else info)(f"{emp['slug']} · {msg}")
+            res = x.get("resumo") or {}
+            if res.get("sem_acao") and x is ult[0]:
+                info("   hoje: " + ", ".join(f"{k} {v}" for k, v in res["sem_acao"].items()))
+                prox = next((p for p in res.get("proximos") or [] if p.get("clientes")), None)
+                if prox and not (res.get("sem_acao") or {}).get("com_acao"):
+                    info(f"   lista vazia hoje; próxima em {prox['data']} com ~{prox['clientes']} clientes")
         if not ult:
             info(f"{emp['slug']}: a rotina ainda não rodou nenhuma vez")
 

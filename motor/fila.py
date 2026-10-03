@@ -198,7 +198,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None,
                sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
                pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None,
-               para_bureau: dict | None = None):
+               para_bureau: dict | None = None, motivos: dict | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -210,6 +210,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     ativos: quem está na carga do dia (None = todos); os demais não recebem ação.
     publico: {id_cliente: id da persona criada pela empresa}; ação com "personas" só vai para elas.
     para_bureau: recebe {id_cliente: "régua passo"} de quem tem a ação "enriquecimento" hoje na esteira.
+    motivos: recebe {motivo: clientes} — com ação ou por que ficou sem ação hoje (MOTIVOS).
     pausados: acionados por outro credor nas últimas 48h (ou é a vez dele) — sem ação massiva
               hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`.
     """
@@ -240,10 +241,19 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio, sin)
         disp = _disponiveis_cpc(cands, est, flags, sin, rc)
         disponiveis[idc] = disp
-        if janela is None or est.estado in ("BLQ", "LIQ", "COL") or (ativos is not None and idc not in ativos):
+        conta = (lambda m: motivos.__setitem__(m, motivos.get(m, 0) + 1)) if motivos is not None else (lambda m: None)
+        if est.estado in ("BLQ", "LIQ", "COL"):
+            conta("encerrado")
+            continue
+        if ativos is not None and idc not in ativos:
+            conta("fora_da_carga")
+            continue
+        if janela is None:
+            conta("domingo_feriado")
             continue
         passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp)
         if passo is None:
+            conta("sem_passo_hoje")
             continue
         nome_regua, rotulo, acoes, data_fixa = passo
         minha = (publico or {}).get(idc)
@@ -269,13 +279,18 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             if blend:
                 break
         if not tinha:
+            conta("bureau_hoje" if idc in (para_bureau or {}) else "sem_acao_na_raia")
             continue
         if not blend:
             sem_contato[nome_regua] += 1
+            conta("sem_contato")
+            continue
         if blend and idc in pausados and est.estado in ESTADOS_MASSIVOS:
             if adiados is not None:
                 adiados.add(idc)
+            conta("outro_credor")
             continue
+        conta("com_acao")
         cert_de = {c.contato: c for cs in cands.values() for c in cs}
         for canal, condicao, contatos in blend:
             cfg = rc.canal_cfg(canal)
@@ -326,6 +341,44 @@ def _aplicar_capacidade(fila, clientes, regua, alertas):
 
 def _recencia_ok(est: EstadoCliente, hoje: date, regua: Regua) -> bool:
     return est.ultima_massiva is None or (hoje - est.ultima_massiva).days * 24 >= regua["recencia_horas"]
+
+
+MOTIVOS = {
+    "com_acao": "com ação hoje",
+    "sem_passo_hoje": "a esteira não tem passo hoje (ex.: D+2)",
+    "sem_contato": "sem contato para os canais do dia",
+    "sem_acao_na_raia": "persona com 'sem ação' hoje",
+    "bureau_hoje": "só enriquecimento hoje",
+    "outro_credor": "acionados por outra carteira nas últimas 48h",
+    "demais_desligado": "Demais clientes desligado",
+    "fora_da_carga": "fora da carga (retirados/quitados)",
+    "encerrado": "bloqueados, liquidados ou em cobrança encerrada",
+    "domingo_feriado": "domingo ou feriado",
+}
+
+
+def previsao(estados: dict, clientes: dict, hoje: date, regua: Regua, ativos=None, dias: int = 7,
+             fora: set = frozenset()) -> list[dict]:
+    """Próximos dias com quantos clientes a esteira aciona em cada um (estimativa: sem contar os
+    retornos de hoje em diante nem a checagem de contato)."""
+    saida = []
+    for n in range(1, dias + 1):
+        d = hoje + timedelta(days=n)
+        if regua.janela(d) is None:
+            saida.append({"data": d.isoformat(), "clientes": 0, "passos": {}, "sem_acoes": "domingo ou feriado"})
+            continue
+        passos = defaultdict(int)
+        for idc, est in estados.items():
+            if est.estado in ("BLQ", "LIQ", "COL") or idc in fora or (ativos is not None and idc not in ativos):
+                continue
+            if est.estado in ("CPA", "CPB"):
+                continue    # CPC segue o canal do contato: depende do retorno do dia
+            rc = regua.para(est.cluster_atual)
+            p = _passo_do_dia(est, clientes.get(idc), d, rc, set())
+            if p and any(a["canal"] != SEM_ACAO for a in p[2]):
+                passos[f"{p[0]} {p[1]}"] += 1
+        saida.append({"data": d.isoformat(), "clientes": sum(passos.values()), "passos": dict(passos)})
+    return saida
 
 
 def _passo_do_dia(est, cliente, hoje, regua, disp):
