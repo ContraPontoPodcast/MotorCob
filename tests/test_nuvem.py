@@ -656,6 +656,26 @@ class TestSincronizar(unittest.TestCase):
         comite()   # upsert, não duplica
         self.assertEqual(len(self.falso.tabelas["kpis"]), n)
 
+    def test_comite_usa_custo_do_canal_quando_ocorrencia_nao_traz(self):
+        from unittest import mock
+        import relatorio
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._envio(2101, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 10:15;WHATS;CPC\n", "2026-09-02")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        self.falso.tabelas["canais_empresa"] = [{"empresa_id": 2, "canal": "whatsapp", "ativo": True, "custo": 0.5}]
+        visto = []
+        original = relatorio.montar
+        def espiao(clientes, estados, trilha, eventos, *a, **k):
+            visto.extend(eventos)
+            return original(clientes, estados, trilha, eventos, *a, **k)
+        with mock.patch.object(relatorio, "montar", espiao):
+            sincronizar_comite(self.dados, "2026-09", self.sb, out=lambda *a: None, pasta_empresas=self.cfg,
+                               empresa="beta")
+        zap = [e for e in visto if e.canal == "whatsapp" and e.id_cliente == "X0001"]
+        self.assertTrue(zap)
+        self.assertTrue(all(e.custo == 0.5 for e in zap))   # a ocorrência não traz custo: vale o do canal
+
     def test_chave_errada_falha_alto(self):
         from nuvem.supabase_api import ErroSupabase
         with self.assertRaises(ErroSupabase):
