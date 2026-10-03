@@ -195,6 +195,9 @@ de outra pessoa pela certificação e a rotação segue.
   entendeu no 1º alerta ("LAYOUT AUTOMÁTICO (confira)", só nomes de coluna). Carga que não
   dá para entender → rejeitados/ + envio com erro listando as colunas. O .json do repositório
   sempre vence.
+- Enquadramento: `rodar_dia` devolve r["enquadramento"] {id: estrategia (nome da estratégia do
+  segmento ou "Playbook MotorCob"), persona, na_carga, acao_hoje, passo_hoje}; sai em
+  estado_cliente (se o banco não tiver as colunas, grava sem elas e alerta). View enquadramento.
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias

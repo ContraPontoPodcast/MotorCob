@@ -349,6 +349,22 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     for a in alertas:
         out(f"  ALERTA: {a}")
     out(f"  saídas em {saida}/ · estado em {pasta_estado}/")
+    # onde cada cliente se enquadrou: esteira (estratégia do segmento), persona, carga e ação de hoje
+    acao_hoje, passo_hoje = defaultdict(list), {}
+    for l in fila:
+        passo_hoje.setdefault(l["id_cliente"], f"{l['regua']} {l['passo']}")
+        nome_c = l["canal"] + (" (reserva)" if l["condicao"] else "")
+        if nome_c not in acao_hoje[l["id_cliente"]]:
+            acao_hoje[l["id_cliente"]].append(nome_c)
+    enquadramento = {}
+    for k, e in estados.items():
+        eid = regua.estrategia_de(e.cluster_atual)
+        enquadramento[k] = {
+            "estrategia": (nomes_estr.get(eid) or f"estratégia {eid}") if eid is not None else "Playbook MotorCob",
+            "persona": modelo.nome(modelo.persona(k)) if k in modelo.feats and modelo.colunas else "",
+            "na_carga": ativos is None or k in ativos,
+            "acao_hoje": ", ".join(acao_hoje.get(k, [])),
+            "passo_hoje": passo_hoje.get(k, "")}
     compartilhar = {
         "hot": {(pessoa_de[k], e.contato_localizador) for k, e in estados.items()
                 if e.contato_localizador and k in pessoa_de},
@@ -357,7 +373,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                       if l["id_cliente"] in pessoa_de and not l["condicao"] and l["estado"] in ESTADOS_MASSIVOS},
         # quem este credor queria acionar hoje e ficou de fora: na próxima, é a vez dele
         "esperando": {pessoa_de[i]: hoje for i in adiados if i in pessoa_de}}
-    return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "compartilhar": compartilhar, "personas": personas, "sugestoes": sugestoes,
+    return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "compartilhar": compartilhar,
+            "enquadramento": enquadramento, "personas": personas, "sugestoes": sugestoes,
             "caracteristicas_persona": modelo.colunas,
             "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
             "saida": saida, "relatorios": relatorios, "relatorios_ocorrencia": rel_ocorrencias,
