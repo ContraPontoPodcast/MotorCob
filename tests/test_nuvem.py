@@ -360,6 +360,8 @@ class TestSincronizar(unittest.TestCase):
         comp = json.loads((self.dados / "empresas" / "beta" / "compartilhado" / "principal.json").read_text())
         self.assertTrue(comp["acionados"])
         # retirada só do Banco X: a vigia roda só ele
+        t["execucoes"].append({"id": 990, "empresa_id": 2, "credor_id": 21, "data_ref": "2026-09-03",
+                               "status": "ok"})          # o principal já fez a rotina de 03/09
         n_ex = len(t["execucoes"])
         self._envio(5003, 2, "retirada", "ret.csv", b"CONTRATO;DT_RETIRADA;MOTIVO\nCT04;03/09/2026;DEV\n",
                     "2026-09-03", credor=22)
@@ -428,6 +430,31 @@ class TestSincronizar(unittest.TestCase):
         for e in t["execucoes"]:
             e.setdefault("iniciada_em", "2026-09-02T10:05:00+00:00")
         self.assertEqual(empresas_com_carga_nova(self.dados, self.sb), [])     # já refeita: não repete
+
+    def test_vigia_faz_a_rotina_do_dia_sem_arquivo_novo(self):
+        """Dia sem arquivo nem mudança: a vigia roda a rotina uma vez para a esteira andar."""
+        from nuvem.sincronizar import empresas_com_carga_nova, vigiar
+        t = self.falso.tabelas
+        self._dia(date(2026, 9, 2), empresa="beta")
+        for e in t["execucoes"]:
+            e["iniciada_em"] = "2026-09-02T09:00:00+00:00"
+        dia = date(2026, 9, 3)
+        self.assertEqual(empresas_com_carga_nova(self.dados, self.sb), [])             # sem data: só arquivo
+        self.assertEqual([e["slug"] for e in empresas_com_carga_nova(self.dados, self.sb, hoje=dia)], ["beta"])
+        r = vigiar(self.dados, dia, self.sb, out=lambda *a: None, pasta_empresas=self.cfg)
+        self.assertEqual(list(r), ["beta"])                       # alfa nunca rodou: fica de fora
+        self.assertNotIn("erro", r["beta"], r["beta"].get("erro"))
+        self.assertIn("saidas/beta/2026-09-03/acoes.json", self.falso.objetos)   # D+2: sem passo, sem fila
+        self.assertIn("2026-09-03", {e["data_ref"] for e in t["execucoes"] if e["empresa_id"] == 2})
+        self.assertEqual(empresas_com_carga_nova(self.dados, self.sb, hoje=dia), [])  # uma vez por dia
+
+    def test_rotina_do_dia_so_depois_da_hora(self):
+        from datetime import datetime
+        from nuvem.sincronizar import _passou_hora_rotina
+        hoje = date(2026, 9, 3)
+        self.assertFalse(_passou_hora_rotina(hoje, datetime(2026, 9, 3, 5, 59)))
+        self.assertTrue(_passou_hora_rotina(hoje, datetime(2026, 9, 3, 6, 0)))
+        self.assertTrue(_passou_hora_rotina(hoje, datetime(2026, 9, 4, 1, 0)))   # data informada à mão
 
     def test_sugestao_aprovada_vira_segmento_com_estrategia(self):
         dados = {"persona": "RJ", "nome": "UF RJ", "condicoes": [{"campo": "UF", "valor": "RJ"}],
