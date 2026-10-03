@@ -307,15 +307,15 @@ class TestSincronizar(unittest.TestCase):
                           "estrategia_id": 5}]
         t["estrategias"] = [{"id": 5, "empresa_id": 2, "nome": "Só SMS", "padrao": False,
                              "definicao": {"localizacao": {"passos": {"1": [{"canal": "sms"}]}}}}]
-        carga = (EX / "empresa" / "bruto" / "base_2026-09-01.csv").read_bytes()
-        self._envio(5001, 2, "base", "carga_x_2026-09-01.csv", carga, "2026-09-02", credor=22)
+        carga = (EX / "empresa" / "bruto" / "base_2026-09-02.csv").read_bytes()
+        self._envio(5001, 2, "base", "carga_x_2026-09-02.csv", carga, "2026-09-02", credor=22)
         enr = next((EX / "empresa" / "enriquecimento").glob("*.csv"))
         self._envio(5002, 2, "enriquecimento", enr.name, enr.read_bytes(), "2026-09-02")
         r = self._dia(date(2026, 9, 2), empresa="beta")["beta"]
         self.assertEqual(set(r["credores"]), {"principal", "banco-x"})
         cred = self.dados / "empresas" / "beta" / "credores"
         self.assertTrue((cred / "principal" / "estado" / "estados.json").exists())   # pasta antiga migrou
-        self.assertTrue((cred / "banco-x" / "bruto" / "carga_x_2026-09-01.csv").exists())
+        self.assertTrue((cred / "banco-x" / "bruto" / "carga_x_2026-09-02.csv").exists())
         self.assertTrue((cred / "banco-x" / "enriquecimento" / enr.name).exists())
         self.assertTrue((cred / "principal" / "enriquecimento" / enr.name).exists())
         o = self.falso.objetos
@@ -356,9 +356,9 @@ class TestSincronizar(unittest.TestCase):
         t["envios"] = [e for e in t["envios"] if e["empresa_id"] != 2]
         t["credores"] = [{"id": 21, "empresa_id": 2, "codigo": "principal", "nome": "P", "ativo": True},
                          {"id": 22, "empresa_id": 2, "codigo": "banco-x", "nome": "X", "ativo": True}]
-        carga = (EX / "empresa" / "bruto" / "base_2026-09-01.csv").read_bytes()
-        self._envio(6001, 2, "base", "base_2026-09-01.csv", carga, credor=21)
-        self._envio(6002, 2, "base", "base_2026-09-01.csv", carga, credor=22)
+        carga = (EX / "empresa" / "bruto" / "base_2026-09-02.csv").read_bytes()
+        self._envio(6001, 2, "base", "base_2026-09-02.csv", carga, credor=21)
+        self._envio(6002, 2, "base", "base_2026-09-02.csv", carga, credor=22)
         quem = {}
         for d in (2, 3, 4):
             self._dia(date(2026, 9, d), empresa="beta")
@@ -425,12 +425,12 @@ class TestSincronizar(unittest.TestCase):
         self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["empresa_id"] != 2]
         wb = Workbook()
         ws = wb.active
-        with open(EX / "empresa" / "bruto" / "base_2026-09-01.csv", encoding="utf-8") as f:
+        with open(EX / "empresa" / "bruto" / "base_2026-09-02.csv", encoding="utf-8") as f:
             for linha in _csv.reader(f, delimiter=";"):
                 ws.append(linha)
         buf = io.BytesIO()
         wb.save(buf)
-        self._envio(7201, 2, "base", "mailing_2026-09-01.xlsx", buf.getvalue())
+        self._envio(7201, 2, "base", "mailing_2026-09-02.xlsx", buf.getvalue())
         self._dia(date(2026, 9, 2), empresa="beta")
         env = next(e for e in self.falso.tabelas["envios"] if e["id"] == 7201)
         self.assertEqual(env["status"], "processado", env.get("relatorio"))

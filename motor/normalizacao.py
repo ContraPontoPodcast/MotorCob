@@ -64,6 +64,11 @@ def telefone(valor: str) -> str | None:
     return d
 
 
+def celular(tel: str) -> bool:
+    """Telefone normalizado (DDD + número) é celular: 11 dígitos com 9 depois do DDD."""
+    return len(tel) == 11 and tel[2] == "9"
+
+
 def email(valor: str) -> str | None:
     e = (valor or "").strip().lower()
     return e if _EMAIL.match(e) else None

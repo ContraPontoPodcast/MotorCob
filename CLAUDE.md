@@ -198,6 +198,11 @@ de outra pessoa pela certificação e a rotação segue.
 - Enquadramento: `rodar_dia` devolve r["enquadramento"] {id: estrategia (nome da estratégia do
   segmento ou "Playbook MotorCob"), persona, na_carga, acao_hoje, passo_hoje}; sai em
   estado_cliente (se o banco não tiver as colunas, grava sem elas e alerta). View enquadramento.
+- Calendário da localização: o dia em que o cliente chega na carga é o D+1 (`marcacao.dia_na_carga`);
+  `rodar_dia` registra as entradas de hoje (`registrar_entradas`) antes da lista, então a 1ª ação
+  sai no dia da carga. Playbook: WhatsApp senão SMS no D+1. SMS e RCS só em celular (11 dígitos
+  com 9); WhatsApp em fixo só com marca de WhatsApp. Passo sem contato que sirva gera o alerta
+  "SEM CONTATO PARA O PASSO DE HOJE". No CPC, o reforço (cpc.junto) acompanha o canal que foi.
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias

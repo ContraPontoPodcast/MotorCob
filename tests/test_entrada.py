@@ -56,8 +56,8 @@ class TestBaseBruta(unittest.TestCase):
             cli, cont = _ler(Path(tmp) / "clientes.csv"), _ler(Path(tmp) / "contatos.csv")
         self.assertEqual((rel["clientes"], rel["contatos"]), (3, 7))
         x2 = [c for c in cli if c["id_cliente"] == "X0002"]
-        self.assertEqual(sorted(c["dias_atraso"] for c in x2), ["15", "62"])  # vencimento → atraso na entrada
-        self.assertEqual({c["data_entrada"] for c in cli}, {"2026-09-01"})    # data do nome do arquivo
+        self.assertEqual(sorted(c["dias_atraso"] for c in x2), ["16", "63"])  # vencimento → atraso na entrada
+        self.assertEqual({c["data_entrada"] for c in cli}, {"2026-09-02"})    # data do nome do arquivo
         self.assertEqual(sum(c["contato"] == "21977770002" for c in cont), 1)  # repetido em 2 contratos
         wa = {c["contato"]: c["whatsapp_valido"] for c in cont}
         self.assertEqual((wa["11988880001"], wa["21977770002"]), ("1", "0"))

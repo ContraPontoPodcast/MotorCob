@@ -19,9 +19,10 @@ from collections import defaultdict
 from datetime import date, timedelta
 
 from .certificacao import Certificacao, Evento
-from .marcacao import ESTADOS_MASSIVOS, Cliente, EstadoCliente, proximo_canal
+from .marcacao import ESTADOS_MASSIVOS, Cliente, EstadoCliente, dia_na_carga, proximo_canal
 from .estrategia import normalizar, passa, resolver
 from .persona import resolver_tokens
+from . import normalizacao as norm
 from .regua import CANAIS_VOZ, Regua
 
 FORA = {"INVALIDO", "CONTESTADO"}
@@ -62,6 +63,10 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
             continue
         tipo = "email" if canal == "email" else "telefone"
         cands = [c for c in validos if c.tipo == tipo and not any(r.startswith(canal + ":") for r in c.restricoes)]
+        if canal in ("sms", "rcs"):        # SMS e RCS só em celular (fixo não recebe)
+            cands = [c for c in cands if norm.celular(c.contato)]
+        elif canal == "whatsapp":          # WhatsApp em fixo só se o número tiver WhatsApp marcado
+            cands = [c for c in cands if norm.celular(c.contato) or flags.get(c.contato, {}).get("whatsapp_valido")]
         respeitar = cfg.get("respeitar_nao_perturbe")
         if canal in CANAIS_VOZ if respeitar is None else respeitar:
             cands = [c for c in cands if not sinais.get(c.contato, {}).get("nao_perturbe")]
@@ -180,6 +185,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         sinais_por[idc][contato] = s
 
     fila, disponiveis = [], {}
+    sem_contato = defaultdict(int)
     prioridade = {e: i + 1 for i, e in enumerate(regua["hierarquia"])}
     for idc, est in estados.items():
         rc = regua.para(est.cluster_atual)
@@ -195,6 +201,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         nome_regua, rotulo, acoes, data_fixa = passo
         acoes, persona_rot = resolver_tokens(acoes, rc.persona, idc, hoje, set(cands))
         blend = resolver(acoes, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
+        if not blend and acoes:
+            sem_contato[nome_regua] += 1
         if blend and idc in pausados and est.estado in ESTADOS_MASSIVOS:
             if adiados is not None:
                 adiados.add(idc)
@@ -219,6 +227,11 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                     "janela": f"{jan[0]}-{jan[1]}",
                     "persona": persona_rot,
                 })
+    if sum(sem_contato.values()):
+        alertas.append(f"SEM CONTATO PARA O PASSO DE HOJE: {sum(sem_contato.values())} clientes tinham ação hoje "
+                       f"({', '.join(f'{k} {v}' for k, v in sorted(sem_contato.items()))}), mas nenhum contato "
+                       "serve para o canal (ex.: WhatsApp só vai para número com WhatsApp). Ponha um 'senão' "
+                       "(SMS, agente virtual ou discador) nesse dia da esteira, ou envie a base ao bureau.")
     fila.sort(key=lambda l: (l["prioridade"], l["id_cliente"], l["ordem_contato"]))
     fila = _aplicar_capacidade(fila, clientes, regua, alertas)
     return fila, disponiveis, alertas
@@ -264,7 +277,7 @@ def _passo_do_dia(est, cliente, hoje, regua, disp):
     if not _recencia_ok(est, hoje, regua):
         return None
     if est.estado == "LOC":
-        d = (hoje - est.safra).days
+        d = dia_na_carga(est, hoje)      # o dia da carga é o D+1
         passo = regua["localizacao"]["passos"].get(str(d))
         return ("localizacao", f"D+{d}", acoes(passo), False) if passo else None
     if est.estado == "NCP":
@@ -286,7 +299,12 @@ def _passo_do_dia(est, cliente, hoje, regua, disp):
         if not canal:
             return None
         acao = (regua.dados.get("cpc_acoes") or {}).get(canal)
-        passo = ([acao] if acao else acoes([canal])) + list(regua.dados.get("cpc_junto") or [])
+        junto = list(regua.dados.get("cpc_junto") or [])
+        passo = []
+        for a in ([acao] if acao else acoes([canal])):   # o reforço (junto) acompanha o canal que for
+            passo.append(a)
+            if isinstance(a, dict) and a.get("modo") in ("sempre", "senao"):
+                passo += junto
         return ("cpc", rotulo, passo, False)
     return None
 

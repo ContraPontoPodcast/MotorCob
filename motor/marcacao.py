@@ -83,6 +83,22 @@ class EstadoCliente:
         return cls(**d)
 
 
+def _entradas(estados, clientes, dia, regua, trilha):
+    for c in clientes.values():
+        if c.id_cliente not in estados and c.data_entrada <= dia:
+            est = iniciar(c, regua)
+            estados[c.id_cliente] = est
+            trilha.marcar(dia, est, None, f"entrada na esteira; enriquecimento "
+                                          f"{regua.enriquecimento(est.cluster_origem)['pacote']}", "Planejamento")
+
+
+def registrar_entradas(estados, clientes, dia, regua) -> list[dict]:
+    """Quem chegou na carga hoje entra na esteira já hoje (para a 1ª ação sair no dia da carga)."""
+    trilha = Trilha()
+    _entradas(estados, clientes, dia, regua, trilha)
+    return trilha.eventos
+
+
 def iniciar(cliente: Cliente, regua: Regua) -> EstadoCliente:
     cl = regua.cluster_de(cliente, cliente.data_entrada)
     return EstadoCliente(cliente.id_cliente, cliente.data_entrada, cl, cl, f"{cliente.data_entrada:%Y-%m}",
@@ -139,12 +155,7 @@ def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente
     for e in eventos_dia:
         por_cliente[e.id_cliente].append(e)
 
-    for c in clientes.values():
-        if c.id_cliente not in estados and c.data_entrada <= dia:
-            est = iniciar(c, regua)
-            estados[c.id_cliente] = est
-            trilha.marcar(dia, est, None, f"entrada na esteira; enriquecimento "
-                                          f"{regua.enriquecimento(est.cluster_origem)['pacote']}", "Planejamento")
+    _entradas(estados, clientes, dia, regua, trilha)
 
     for idc, est in estados.items():
         c = clientes.get(idc)
@@ -222,7 +233,7 @@ def _aplicar_retornos(est, eventos, dia, regua, disponiveis, trilha):
     principal = est.canal_atual if est.canal_atual in tentados else tentados[0]
     quem = QUEM.get(principal, principal)
     if est.estado == "LOC":
-        est.ciclo = f"L{(dia - est.safra).days}"
+        est.ciclo = f"L{dia_na_carga(est, dia)}"
         trilha.marcar(dia, est, antes, f"localização por {'+'.join(QUEM[t] for t in tentados)} sem contato", quem)
     elif est.estado == "CPA":
         est.estado, est.canal, est.ciclo, est.tentativas = "CPB", regua.codigo(principal), "T1", 1
@@ -273,11 +284,16 @@ def _aplicar_acordo(est, parcelas, dia, baixas_ate, regua, trilha):
     trilha.marcar(dia, est, antes, motivo, "Sist. acordos")
 
 
+def dia_na_carga(est, dia) -> int:
+    """D+N da localização: o dia em que o cliente chega na carga é o D+1 (a 1ª ação sai no mesmo dia)."""
+    return (dia - est.safra).days + 1
+
+
 def _aplicar_tempo(est, dia, regua, trilha):
     antes = est.tag
-    if est.estado == "LOC" and (dia - est.safra).days >= regua["localizacao"]["dias_sem_contato_para_ncp"]:
+    if est.estado == "LOC" and dia_na_carga(est, dia) >= regua["localizacao"]["dias_sem_contato_para_ncp"]:
         _ir_para_giro(est, dia)
-        trilha.marcar(dia, est, antes, f"D+{(dia - est.safra).days} sem contato → Não CPC, entra no giro",
+        trilha.marcar(dia, est, antes, f"D+{dia_na_carga(est, dia)} sem contato → Não CPC, entra no giro",
                       "Automático")
     elif est.estado == "NCP" and est.giro_inicio and dia >= est.giro_inicio and not est.giro_pausado:
         n = (dia - est.giro_inicio).days // regua["giro"]["ciclo_dias"] + 1

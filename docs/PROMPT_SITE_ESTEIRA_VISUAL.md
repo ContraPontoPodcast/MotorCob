@@ -22,8 +22,8 @@ no chip (fica com borda âmbar, aviso "Agora toque no dia…") e depois tocar no
 (celular).
 
 ## Faixa 1 — "Cliente novo · ainda não deu CPC" → definicao.localizacao
-- Texto: "Cada dia conta desde a entrada do cliente na carga. A cada passagem o MotorCob
-  usa o próximo telefone (1, 2, 3, 4…), até alguém dar CPC."
+- Texto: "O dia em que o cliente chega na carga é o D+1: a primeira ação sai no mesmo dia.
+  A cada passagem o MotorCob usa o próximo telefone (1, 2, 3, 4…), até alguém dar CPC."
 - Ajuste com botões − / +: "Vira Não CPC no dia" (2 a 30, padrão 8) →
   localizacao.dias_sem_contato_para_ncp.
 - Linha do tempo com rolagem horizontal: uma coluna por dia, de D+1 até o dia anterior
@@ -76,7 +76,7 @@ Cartão ao lado (embaixo no celular) que reescreve a estratégia em frases a cad
 ## Botões
 - "Salvar" (grava estrategias.definicao; toast "Estratégia salva · vale a partir da
   rotina de amanhã"). Ao sair com alterações não salvas, pergunte se quer salvar.
-- "Começar do playbook MotorCob": preenche as faixas com 1 WhatsApp; 3 RCS senão SMS
+- "Começar do playbook MotorCob": preenche as faixas com 1 WhatsApp senão SMS; 3 RCS senão SMS
   junto E-mail; 5 Agente virtual reserva Discador; 7 SMS junto E-mail; Não CPC no 8;
   CPC: WhatsApp → RCS → Agente virtual → Discador → SMS, 3 tentativas; ciclo igual,
   8 dias, 3 vezes.

@@ -95,7 +95,7 @@ class TestEntreCredores(unittest.TestCase):
 
     def _preparar(self, tmp):
         (tmp / "bruto").mkdir(parents=True)
-        (tmp / "bruto" / "carga_2026-09-01.csv").write_text(
+        (tmp / "bruto" / "carga_2026-09-02.csv").write_text(
             CAB + "B1;K1;10000001171;800,00;01/08/2026;CARTAO;SP;11911110001;N;11922220002;;;\n", encoding="utf-8")
         rodar_dia.preparar_carteira(EMPRESA, tmp)
 

@@ -9,7 +9,7 @@ from motor.acordos import Parcela, situacao_acordo
 from motor.certificacao import Evento, certificar_contatos
 from motor.fila import gerar_fila
 from motor.ingestao import carregar_clientes
-from motor.marcacao import Cliente, processar_dia
+from motor.marcacao import Cliente, processar_dia, registrar_entradas
 from motor.regua import PADRAO, ReguaInvalida, carregar_regua
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -39,6 +39,11 @@ class Cenario:
         self.trilha += processar_dia(self.estados, self.clientes, list(eventos), self.parcelas, d, R,
                                      disp or {"C1": set(R["canais"])}, baixas_ate or d)
         return self.est
+
+    def entrar(self, d):
+        """Como a rotina faz no dia da carga: o cliente entra na esteira antes da lista do dia."""
+        self.trilha += registrar_entradas(self.estados, self.clientes, d, R)
+        return self
 
     def fila(self, d, flags=None):
         certs = certificar_contatos(self.eventos, d, self.contatos)
@@ -159,12 +164,12 @@ class TestAcordos(unittest.TestCase):
 
 class TestFila(unittest.TestCase):
     def test_passos_da_localizacao(self):
-        c = Cenario(contatos=((TEL, "telefone"), (MAIL, "email")))
-        c.dia(SEG)
+        ter = SEG + timedelta(1)                # carga na terça: o D+7 cai na segunda (domingo não aciona)
+        c = Cenario(contatos=((TEL, "telefone"), (MAIL, "email")), entrada=ter).entrar(ter)
         flags = {TEL: {"whatsapp_valido": True}}
         canais = {}
         for k in (1, 3, 5, 7):
-            d = SEG + timedelta(k)
+            d = ter + timedelta(k - 1)          # o dia da carga é o D+1
             canais[k] = sorted({(l["canal"], l["condicao"]) for l in c.fila(d, flags)[0]})
             c.dia(d)
         self.assertEqual(canais[1], [("whatsapp", "")])
@@ -173,10 +178,10 @@ class TestFila(unittest.TestCase):
         self.assertEqual(canais[7], [("email", ""), ("sms", "")])  # SMS sempre com e-mail de reforço
 
     def test_whatsapp_nao_certificado_exige_whatsapp_valido_e_um_numero(self):
-        c = Cenario(contatos=((TEL, "telefone"), (TEL2, "telefone")))
-        c.dia(SEG)
-        d = SEG + timedelta(1)
-        self.assertEqual(c.fila(d)[0], [])                                   # sem flag: não manda
+        c = Cenario(contatos=((TEL, "telefone"), (TEL2, "telefone"))).entrar(SEG)
+        d = SEG                                                              # D+1 = dia da carga
+        sem = c.fila(d)[0]                                                   # sem flag: WhatsApp não vai…
+        self.assertEqual({(l["canal"], l["contato"]) for l in sem}, {("sms", TEL)})   # …vai SMS, 1 número
         flags = {TEL: {"whatsapp_valido": True}, TEL2: {"whatsapp_valido": True}}
         self.assertEqual(len(c.fila(d, flags)[0]), 1)                         # com flag: 1 número só
 

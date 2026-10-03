@@ -33,10 +33,10 @@ class TestFluxo(unittest.TestCase):
     def test_cpc_marca_o_telefone_da_acao_como_hot_e_flega_o_canal(self):
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
-            _csv(tmp / "bruto" / "carga_2026-09-01.csv", CAB +
+            _csv(tmp / "bruto" / "carga_2026-09-02.csv", CAB +
                  "A1;K1;;900,00;01/08/2026;CARTAO;SP;11988880001;S;11977770001;;a1@exemplo.invalid;\n"
                  "B1;K2;;500,00;01/08/2026;CARTAO;SP;21988880002;S;;;;\n")
-            r = self._rodar(tmp, date(2026, 9, 2))                       # D+1: WhatsApp
+            r = self._rodar(tmp, date(2026, 9, 2))                       # dia da carga = D+1: WhatsApp
             wa = [l for l in r["fila"] if l["canal"] == "whatsapp"]
             self.assertEqual({(l["id_cliente"], l["contato"]) for l in wa},
                              {("A1", "11988880001"), ("B1", "21988880002")})
@@ -57,7 +57,7 @@ class TestFluxo(unittest.TestCase):
     def test_so_quem_esta_na_carga_do_dia_recebe_acao(self):
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
-            _csv(tmp / "bruto" / "carga_2026-09-01.csv", CAB +
+            _csv(tmp / "bruto" / "carga_2026-08-31.csv", CAB +            # 02/09 = D+3
                  "A1;K1;;900,00;01/08/2026;CARTAO;SP;11988880001;S;;;;\n"
                  "B1;K2;;500,00;01/08/2026;CARTAO;SP;21988880002;S;;;;\n")
             _csv(tmp / "bruto" / "carga_2026-09-02.csv", CAB +            # colchão/preventivo de hoje: só A1
@@ -72,7 +72,7 @@ class TestFluxo(unittest.TestCase):
 class TestExportacao(unittest.TestCase):
     def test_voz_exporta_um_numero_hot_primeiro_e_marcas_da_carga(self):
         regua = carregar_regua()
-        safra = date(2026, 8, 31)                                     # D+5 = sábado 05/09: agente virtual
+        safra = date(2026, 9, 1)                                      # D+5 = sábado 05/09: agente virtual
         est = {"C1": EstadoCliente("C1", safra, "M1", "M1", "2026-08")}
         nums = ["11900000001", "11900000002", "11900000003"]
         certs = {("C1", n): Certificacao("C1", n, "telefone", "DESCONHECIDO", 0.4) for n in nums}
@@ -115,7 +115,7 @@ class TestTodosOsNumeros(unittest.TestCase):
         return gerar_fila({"C1": est}, {"C1": Cliente("C1", est.safra, 900.0, 30)}, certs, {}, {}, dia, regua, [])[0], regua
 
     def test_empresa_escolhe_todos_os_numeros_no_canal(self):
-        safra = date(2026, 8, 31)                                     # D+5 = sábado: agente virtual
+        safra = date(2026, 9, 1)                                      # D+5 = sábado: agente virtual
         cfg = {"agente_voz": {"canal": "agente_voz", "numeros_por_cliente": 99}}
         fila, _ = self._fila(EstadoCliente("C1", safra, "M1", "M1", "2026-08"), date(2026, 9, 5), cfg)
         self.assertEqual(len([l for l in fila if l["canal"] == "agente_voz"]), 3)
@@ -165,7 +165,7 @@ class TestRotacaoAteOHot(unittest.TestCase):
         est = EstadoCliente("C1", safra, "M1", "M1", "2026-09")
         cli = {"C1": Cliente("C1", safra, 900.0, 30)}
         certs = {("C1", n): Certificacao("C1", n, "telefone", "DESCONHECIDO", 0.4) for n in nums}
-        passo = date(2026, 9, 4)                                    # D+3: RCS → senão SMS
+        passo = date(2026, 9, 3)                                    # D+3 (carga em 01/09 = D+1): RCS → senão SMS
 
         def exportado():
             fila, _, _ = gerar_fila({"C1": est}, cli, certs, {}, {}, passo, regua, [])

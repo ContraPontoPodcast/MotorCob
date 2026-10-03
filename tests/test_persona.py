@@ -78,7 +78,7 @@ class TestAprender(unittest.TestCase):
         regua = carregar_regua().com_clusters(regras, {1: over})
         from dataclasses import replace
         regua = replace(regua, persona=self.modelo, _cache={})
-        safra = HOJE - timedelta(days=1)
+        safra = HOJE                                      # carga hoje = D+1
         ids = [i for i in ("SP0001", "SP0002", "SP0003", "RJ0001", "RJ0002", "RJ0003") if not explorar(i, HOJE)]
         est = {i: EstadoCliente(i, safra, "DG", "DG", "2026-09", cluster_versao=regua.versao_clusters) for i in ids}
         certs = {(i, f"119{n:08d}"): Certificacao(i, f"119{n:08d}", "telefone", "CERTIFICADO", .9)
