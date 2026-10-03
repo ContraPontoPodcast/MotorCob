@@ -171,6 +171,36 @@ def contatos_da_acao(acao: dict, cands: dict[str, list], est: EstadoCliente, fla
     return lista[:limite] if limite else lista
 
 
+NOME_CANAL = {"whatsapp": "WhatsApp", "rcs": "RCS", "sms": "SMS", "email": "E-mail",
+              "agente_voz": "Agente virtual", "discador": "Discador"}
+
+
+def por_que_sem_contato(canais: list[str], cands: dict, certs: list[Certificacao], flags: dict[str, dict],
+                        regua: Regua, cluster: str) -> str:
+    """Por que nenhum canal do dia tem contato para o cliente, canal a canal (texto curto)."""
+    validos = [c for c in certs if c.status not in FORA]
+    fones = [c for c in validos if c.tipo == "telefone"]
+    partes = []
+    for canal in dict.fromkeys(c for c in canais if c in NOME_CANAL):
+        cfg = regua.canal_cfg(canal)
+        if canal in regua.canais_bloqueados(cluster) or cfg.get("ativo") is False:
+            motivo = "canal desligado ou bloqueado no segmento"
+        elif canal in cands:
+            motivo = "nenhum contato passa no filtro da ação"
+        elif canal == "email":
+            motivo = "sem e-mail"
+        elif not fones:
+            motivo = "sem telefone válido"
+        elif canal in ("sms", "rcs") and not any(norm.celular(c.contato) for c in fones):
+            motivo = "só telefone fixo (precisa de celular)"
+        elif canal == "whatsapp" and not any(flags.get(c.contato, {}).get("whatsapp_valido") for c in fones):
+            motivo = "nenhum número marcado com WhatsApp (na carga ou no retorno do bureau)"
+        else:
+            motivo = "contatos sem condição para o canal (Não Perturbe, opt-out ou trava)"
+        partes.append(f"{NOME_CANAL[canal]}: {motivo}")
+    return "; ".join(partes) or "sem contato"
+
+
 def contatos_elegiveis(est: EstadoCliente, cluster: str, certs: list[Certificacao], flags: dict[str, dict],
                        regua: Regua, freio_whatsapp: bool, sinais: dict[str, dict] | None = None
                        ) -> dict[str, list[str]]:
@@ -198,7 +228,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None,
                sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
                pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None,
-               para_bureau: dict | None = None, motivos: dict | None = None, motivo_de: dict | None = None):
+               para_bureau: dict | None = None, motivos: dict | None = None, motivo_de: dict | None = None,
+               detalhe_de: dict | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -211,7 +242,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     publico: {id_cliente: id da persona criada pela empresa}; ação com "personas" só vai para elas.
     para_bureau: recebe {id_cliente: "régua passo"} de quem tem a ação "enriquecimento" hoje na esteira.
     motivos: recebe {motivo: clientes} — com ação ou por que ficou sem ação hoje (MOTIVOS).
-    motivo_de: recebe {id_cliente: motivo}.
+    motivo_de: recebe {id_cliente: motivo}; detalhe_de: {id_cliente: por que ficou sem contato}.
     pausados: acionados por outro credor nas últimas 48h (ou é a vez dele) — sem ação massiva
               hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`.
     """
@@ -289,6 +320,9 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         if not blend:
             sem_contato[nome_regua] += 1
             conta("sem_contato")
+            if detalhe_de is not None:
+                detalhe_de[idc] = por_que_sem_contato([a["canal"] for t in tentativas for a in t], cands,
+                                                      certs_por.get(idc, []), flags, rc, est.cluster_atual)
             continue
         if blend and idc in pausados and est.estado in ESTADOS_MASSIVOS:
             if adiados is not None:

@@ -27,7 +27,7 @@ Para usar o link rastreável, a fila completa pode ir para o disparar.py:
 import argparse
 import csv
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -155,7 +155,10 @@ def _motivo_do_cliente(motivo, est, hoje, regua) -> str:
     return texto if motivo == "com_acao" else f"sem ação: {texto}"
 
 
-NAO_INICIA_ESTEIRA = {"outro_credor", "fora_da_carga", "encerrado", "domingo_feriado", "demais_desligado"}
+# sem ação saindo, o D+1 não aconteceu: segue no D+1 (sem contato também: quando o contato
+# chegar — carga, bureau — ou a esteira mudar, o D+1 sai)
+NAO_INICIA_ESTEIRA = {"outro_credor", "fora_da_carga", "encerrado", "domingo_feriado", "demais_desligado",
+                      "sem_contato"}
 
 
 def carregar_estado(pasta: Path):
@@ -348,10 +351,14 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     ativos_fila = ativos
     if desligados:
         ativos_fila = (set(estados) if ativos is None else ativos) - desligados
-    adiados, para_bureau, motivos, motivo_de = set(), {}, {}, {}
+    # rodada de novo no mesmo dia: o início da esteira de hoje é decidido de novo
+    for e in estados.values():
+        if e.inicio_esteira == hoje and e.estado == "LOC":
+            e.esteira_pendente, e.inicio_esteira = True, None
+    adiados, para_bureau, motivos, motivo_de, detalhe_de = set(), {}, {}, {}, {}
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
-                                  motivos=motivos, motivo_de=motivo_de)
+                                  motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de)
     # a esteira do cliente começa hoje se a lista dele saiu hoje (ou se não depende de ação: sem
     # passo no D+1, sem contato, persona em "sem ação"). Adiado, fora da carga, domingo: segue no D+1
     for k, m in motivo_de.items():
@@ -364,6 +371,11 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         motivos["demais_desligado"] = n
     motivos = {k: v for k, v in motivos.items() if v > 0}
     proximos = previsao(estados, clientes, hoje, regua, ativos, fora=desligados)
+    if detalhe_de:
+        top = Counter(detalhe_de.values()).most_common(3)
+        alertas.append(f"SEM CONTATO: {len(detalhe_de)} clientes sem contato para os canais do dia — "
+                       + " | ".join(f"{n} → {t}" for t, n in top)
+                       + ". Eles seguem no D+1 até ter contato (ponha um 'senão' no dia ou mande ao bureau).")
     if not fila:
         porque = "; ".join(f"{v} {MOTIVOS.get(k, k)}" for k, v in sorted(motivos.items(), key=lambda x: -x[1])
                            if k != "com_acao")
@@ -507,7 +519,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "na_carga": ativos is None or k in ativos,
             "acao_hoje": ", ".join(acao_hoje.get(k, [])),
             "passo_hoje": passo_hoje.get(k, ""),
-            "motivo_hoje": _motivo_do_cliente(motivo_de.get(k), e, hoje, regua),
+            "motivo_hoje": (f"sem ação: sem contato — {detalhe_de[k]}" if k in detalhe_de
+                            else _motivo_do_cliente(motivo_de.get(k), e, hoje, regua)),
             "persona_usuario": nome_persona.get(publico.get(k), "") if pers_usuario else "",
             "enriq_enviado": enviados_bureau.get(k),
             "enriq_retorno": ultimo_retorno[k].isoformat() if k in ultimo_retorno else None}
