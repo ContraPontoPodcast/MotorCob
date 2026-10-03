@@ -206,8 +206,10 @@ de outra pessoa pela certificação e a rotação segue.
 - Personas do usuário (tabela `personas_usuario`, por carteira): `cluster.carregar_personas` /
   `persona_de` (mesmas condições dos segmentos; 1ª que bate pela ordem). `rodar_dia(personas_usuario=)`
   põe o nome no atributo "persona" (vale em segmento e no aprendizado) e em
-  enquadramento.persona_usuario; ação da estratégia com "personas": [ids] só vai para esses
-  clientes (`gerar_fila(publico=)`; fora dela o "senão" seguinte vai).
+  enquadramento.persona_usuario. Raias (`estrategia.raia`): ações do dia sem "personas" = público
+  geral; com "personas": [id] = raia da persona. Cliente cuja persona tem raia no dia recebe só a
+  raia dela (sem contato para ela → público geral; `{"canal": "sem_acao", "personas": [id]}` =
+  nada no dia); sem raia no dia ou sem persona → público geral (`gerar_fila(publico=)`).
 - Enriquecimento na esteira: ação `{"canal": "enriquecimento"}` em qualquer dia (não na ordem do
   CPC); `gerar_fila(para_bureau=)` separa essa ação da cadeia de contato. `lista_enriquecimento`
   usa o dia programado; sem enriquecimento na esteira, vai na entrada (D+1). Mesmo cliente não

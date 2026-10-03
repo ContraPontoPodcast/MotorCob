@@ -20,7 +20,7 @@ from datetime import date, timedelta
 
 from .certificacao import Certificacao, Evento
 from .marcacao import ESTADOS_MASSIVOS, Cliente, EstadoCliente, dia_na_carga, proximo_canal
-from .estrategia import ENRIQUECIMENTO, normalizar, passa, resolver
+from .estrategia import ENRIQUECIMENTO, SEM_ACAO, normalizar, passa, raia, resolver
 from .persona import resolver_tokens
 from . import normalizacao as norm
 from .regua import CANAIS_VOZ, Regua
@@ -247,16 +247,30 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             continue
         nome_regua, rotulo, acoes, data_fixa = passo
         minha = (publico or {}).get(idc)
-        enriq = [a for a in acoes if a["canal"] == ENRIQUECIMENTO]
-        acoes = [a for a in acoes if a["canal"] != ENRIQUECIMENTO]
-        if any(not a.get("personas") or minha in a["personas"] for a in enriq) and para_bureau is not None:
-            para_bureau[idc] = f"esteira {nome_regua} {rotulo}"
-        if not acoes:
+        propria, geral = raia(acoes, minha)
+        # raia da persona no dia: só ela vale; se a persona não tiver contato para nenhum canal
+        # dela, segue o público geral (a não ser que a raia diga "sem ação")
+        tentativas = [propria, geral] if propria else [geral]
+        if any(a["canal"] == SEM_ACAO for a in propria):
+            tentativas = [[a for a in propria if a["canal"] != SEM_ACAO]]
+        blend, tinha = [], False
+        for lista in tentativas:
+            enriq = [a for a in lista if a["canal"] == ENRIQUECIMENTO]
+            lista = [a for a in lista if a["canal"] != ENRIQUECIMENTO]
+            if enriq and para_bureau is not None:
+                para_bureau[idc] = f"esteira {nome_regua} {rotulo}"
+            if not lista:
+                if enriq:
+                    break
+                continue
+            tinha = True
+            lista, persona_rot = resolver_tokens(lista, rc.persona, idc, hoje, set(cands))
+            blend = resolver(lista, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
+            if blend:
+                break
+        if not tinha:
             continue
-        acoes, persona_rot = resolver_tokens(acoes, rc.persona, idc, hoje, set(cands))
-        blend = resolver(acoes, lambda a: [] if a.get("personas") and minha not in a["personas"]
-                         else contatos_da_acao(a, cands, est, flags, sin, rc))
-        if not blend and any(not a.get("personas") or minha in a["personas"] for a in acoes):
+        if not blend:
             sem_contato[nome_regua] += 1
         if blend and idc in pausados and est.estado in ESTADOS_MASSIVOS:
             if adiados is not None:

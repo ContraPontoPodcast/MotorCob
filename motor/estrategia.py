@@ -55,6 +55,7 @@ NUMEROS_FASE = {"localizacao": ("dias_sem_contato_para_ncp",), "giro": ("ciclo_d
 
 TOKENS_PERSONA = ("persona_1", "persona_2")   # melhor / 2º melhor canal da persona (motor/persona.py)
 ENRIQUECIMENTO = "enriquecimento"   # ação da esteira: manda o cliente para o bureau nesse dia (não é contato)
+SEM_ACAO = "sem_acao"               # na raia de uma persona: neste dia ela não recebe nada
 CAMPOS_PRIORIDADE = ("ranking", "score", "whatsapp", "rcs", "bureau")
 
 
@@ -70,6 +71,7 @@ APELIDOS_CANAL = {
     "voz": "agente_voz", "ia": "agente_voz", "bot": "agente_voz", "voicebot": "agente_voz", "robo": "agente_voz",
     "discadora": "discador", "ligacao": "discador", "telefone": "discador",
     "bureau": ENRIQUECIMENTO, "enriquecimento_bureau": ENRIQUECIMENTO, "enriquecer": ENRIQUECIMENTO,
+    "nenhum": SEM_ACAO, "nenhuma": SEM_ACAO, "pausa": SEM_ACAO, "nao_acionar": SEM_ACAO, "sem_acionamento": SEM_ACAO,
     "melhor_canal_da_persona": "persona_1", "persona1": "persona_1", "persona_melhor": "persona_1",
     "2_melhor_da_persona": "persona_2", "segundo_melhor_da_persona": "persona_2", "persona2": "persona_2"}
 APELIDOS_MODO = {"senao": "senao", "se_nao": "senao", "junto": "junto", "junto_com": "junto", "e": "junto",
@@ -87,14 +89,14 @@ def _acao(a, onde: str, erros: list) -> dict | None:
         a = canal_padrao(a)
     elif isinstance(a, dict) and a.get("canal"):
         a = {**a, "canal": canal_padrao(a["canal"])}
-    if isinstance(a, str) and a in TOKENS_PERSONA + (ENRIQUECIMENTO,):
+    if isinstance(a, str) and a in TOKENS_PERSONA + (ENRIQUECIMENTO, SEM_ACAO):
         a = {"canal": a}
     if isinstance(a, str):
         if a not in CANAIS:
             erros.append(f"{onde}: canal desconhecido '{a}'")
             return None
         return a
-    if not isinstance(a, dict) or a.get("canal") not in CANAIS + TOKENS_PERSONA + (ENRIQUECIMENTO,):
+    if not isinstance(a, dict) or a.get("canal") not in CANAIS + TOKENS_PERSONA + (ENRIQUECIMENTO, SEM_ACAO):
         erros.append(f"{onde}: ação sem canal válido {a!r}")
         return None
     modo = APELIDOS_MODO.get(_simples(a.get("modo")), _simples(a.get("modo")))
@@ -128,6 +130,9 @@ def _acao(a, onde: str, erros: list) -> dict | None:
     if not all(isinstance(p, int) or str(p).isdigit() for p in personas):
         erros.append(f"{onde}: personas inválidas ignoradas (a ação vale para todos)")
         personas = []
+    if a["canal"] == SEM_ACAO and not personas:
+        erros.append(f"{onde}: 'sem ação' só vale na raia de uma persona (ignorado)")
+        return None
     acao = {"canal": a["canal"], "modo": modo, "numeros": numeros or None, "contatos": filtro}
     if personas:
         acao["personas"] = [int(p) for p in personas]
@@ -256,7 +261,7 @@ def normalizar(passo: list, regua) -> list[dict]:
         if isinstance(item, dict):
             acoes.append(item)
             continue
-        if item in TOKENS_PERSONA or item == ENRIQUECIMENTO:
+        if item in TOKENS_PERSONA or item in (ENRIQUECIMENTO, SEM_ACAO):
             acoes.append({"canal": item, "modo": "sempre", "numeros": None, "contatos": {}})
             continue
         acoes.append({"canal": item, "modo": "sempre", "numeros": None, "contatos": {}})
@@ -270,6 +275,20 @@ def normalizar(passo: list, regua) -> list[dict]:
         if item in regua["reserva"]:
             acoes.append({"canal": regua["reserva"][item], "modo": "reserva", "numeros": None, "contatos": {}})
     return acoes
+
+
+def raia(acoes: list[dict], persona) -> tuple[list[dict], list[dict]]:
+    """Raias do dia: (ações da raia da persona do cliente, ações do público geral).
+
+    O dia tem a raia do público geral (ações sem "personas") e, se o usuário arrastou alguma
+    persona para ele, a raia dela (ações com o id em "personas"). Cliente cuja persona tem raia
+    no dia recebe só a raia dela; quem não tem persona, ou cuja persona não está no dia, segue o
+    público geral. A raia própria vem sem os itens 'sem ação' (raia só com eles = nada hoje)."""
+    geral = [a for a in acoes if not a.get("personas")]
+    if persona is None:
+        return [], geral
+    propria = [a for a in acoes if a.get("personas") and persona in a["personas"]]
+    return propria, geral
 
 
 def resolver(acoes: list[dict], contatos_da) -> list[tuple[str, str, list[str]]]:
