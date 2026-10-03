@@ -68,6 +68,11 @@ só atualiza esses status e traz números novos.
    erro no site (com o motivo) e não gera lista; envie de novo corrigida.
    Registro: `~/MotorCob-dados/logs/vigia_<data>.log`.
 
+   **Empresa nova não precisa de configuração**: sem `empresas/<slug>.json`, o MotorCob
+   reconhece as colunas de cada arquivo sozinho e mostra no alerta da rotina (Início do site)
+   o que entendeu ("LAYOUT AUTOMÁTICO (confira)"). Se algo estiver errado, mande o cabeçalho
+   para criar o `empresas/<slug>.json`, que passa a valer no lugar do automático.
+
 Para atualizar o programa depois: `cd ~/MotorCob && git pull`.
 
 > **Com o site motorcob.online:** depois de instalar, rode `scripts/configurar_nuvem.sh`

@@ -333,7 +333,7 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                 raise LayoutInvalido(f"{arq.name}: colunas obrigatórias ausentes no arquivo {ausentes}")
             # contato, CPF e ID não viram atributo: só o que descreve o cliente/contrato
             pessoais = {col["id_cliente"], col.get("cpf")} | {t["coluna"] for t in tel_cols} \
-                | {t.get(k) for t in tel_cols for k in ("whatsapp", "rcs", "hot")} | set(emails)
+                | {t.get(k) for t in tel_cols for k in ("whatsapp", "rcs", "hot", "ddd")} | set(emails)
             colunas_atrib = [c for c in nomes if c and c not in pessoais]
             n = 0
             for linha in leitor:
@@ -369,7 +369,10 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                     "bloqueio": (linha[col["bloqueio"]] or "").strip() if "bloqueio" in col else "",
                     "atributos": {c: (linha.get(c) or "").strip() for c in colunas_atrib}})
                 for t in tel_cols:
-                    tel = norm.telefone(linha[t["coluna"]])
+                    bruto = linha[t["coluna"]] or ""
+                    if t.get("ddd") and len(re.sub(r"\D", "", bruto)) < 10:   # DDD numa coluna, número na outra
+                        bruto = (linha[t["ddd"]] or "") + bruto
+                    tel = norm.telefone(bruto)
                     if tel:
                         c = contatos.setdefault((idc, tel), {"tipo": "telefone", "cpf": cpf, "wa": False})
                         c["wa"] = c["wa"] or (_sim(linha[t["whatsapp"]]) if t.get("whatsapp") else False)
