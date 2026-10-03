@@ -770,6 +770,18 @@ def _pendentes_base(sb: Supabase) -> dict:
     return por
 
 
+def _pedidos_pendentes(sb: Supabase) -> dict:
+    """{empresa_id: {credor_id: [ids]}} dos pedidos "Reenquadrar agora" do site ainda na fila."""
+    try:
+        linhas = sb.selecionar("pedidos_rotina", {"status": "eq.pendente"}, ordem="id.asc") or []
+    except ErroSupabase:   # banco sem a tabela de pedidos
+        return {}
+    por = {}
+    for l in linhas:
+        por.setdefault(l["empresa_id"], {}).setdefault(l.get("credor_id"), []).append(l["id"])
+    return por
+
+
 def _vigia_arq(dados: Path, emp: dict) -> Path:
     return pasta_empresa(dados, emp) / "estado" / "vigia.json"
 
@@ -857,13 +869,14 @@ def _falhou(dados: Path, emp: dict) -> dict:
 def ha_arquivo_novo(dados: Path, sb: Supabase, empresa: str | None = None) -> frozenset:
     """Consulta leve (o plantão faz a cada poucos segundos): arquivos da carteira pendentes que
     ainda não falharam, como {(empresa_id, credor_id, maior id de envio)} (vazio = nada novo)."""
-    pend = _pendentes_base(sb)
-    if not pend:
+    pend, pedidos = _pendentes_base(sb), _pedidos_pendentes(sb)
+    if not pend and not pedidos:
         return frozenset()
     saida = set()
     for emp in empresas_ativas(sb, empresa):
         falhou = _falhou(dados, emp)
         saida |= {(emp["id"], c, i) for c, i in pend.get(emp["id"], {}).items() if i > falhou.get(str(c), 0)}
+        saida |= {(emp["id"], c, f"pedido {i}") for c, ids in pedidos.get(emp["id"], {}).items() for i in ids}
     return frozenset(saida)
 
 
@@ -871,8 +884,9 @@ def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = Non
                             hoje: date | None = None) -> list[dict]:
     """Empresas ativas com arquivo da carteira pendente que ainda não falhou nesse mesmo arquivo, ou
     com a orquestração alterada depois da última rotina, ou (com hoje) com credor que ainda não fez
-    a rotina do dia. Cada uma vem com "_credores", "_orquestracao" e "_rotina"."""
-    pend = _pendentes_base(sb)
+    a rotina do dia, ou com pedido "Reenquadrar agora" do site. Cada uma vem com "_credores",
+    "_orquestracao", "_rotina" e "_pedidos"."""
+    pend, pedidos = _pendentes_base(sb), _pedidos_pendentes(sb)
     rotina_vale = hoje is not None and _passou_hora_rotina(hoje)
     saida = []
     for emp in empresas_ativas(sb, empresa):
@@ -884,9 +898,10 @@ def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = Non
         if rotina_vale:
             tentou = falhou.get("rotina") if isinstance(falhou.get("rotina"), dict) else {}
             rotina = {c for c in credores_sem_rotina_hoje(sb, emp, hoje) if tentou.get(str(c)) != hoje.isoformat()}
-        if novos or mudou or rotina:
-            saida.append({**emp, "_credores": novos | set(mudou) | rotina, "_orquestracao": mudou,
-                          "_rotina": rotina})
+        pedido = pedidos.get(emp["id"], {})   # "Reenquadrar agora": sempre roda (o pedido sai da fila)
+        if novos or mudou or rotina or pedido:
+            saida.append({**emp, "_credores": novos | set(mudou) | rotina | set(pedido), "_orquestracao": mudou,
+                          "_rotina": rotina, "_pedidos": pedido})
     return saida
 
 
@@ -900,8 +915,14 @@ def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empre
         alvo = emp.pop("_credores")
         so_config = emp.pop("_orquestracao", {})
         rotina = emp.pop("_rotina", set())
+        pedidos = emp.pop("_pedidos", {})
         pend = _pendentes_base(sb).get(emp["id"], {})
-        if alvo - set(so_config) - rotina:
+        ids_pedido = [i for ids in pedidos.values() for i in ids]
+        for i in ids_pedido:
+            sb.atualizar("pedidos_rotina", {"id": f"eq.{i}"}, {"status": "rodando", "iniciado_em": agora()})
+        if pedidos:
+            motivo = "REENQUADRAMENTO PEDIDO NO SITE"
+        elif alvo - set(so_config) - rotina:
             motivo = "ARQUIVO NOVO DA CARTEIRA"
         elif so_config:
             motivo = "ORQUESTRAÇÃO ALTERADA"
@@ -919,6 +940,8 @@ def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empre
             out(f"  ERRO na empresa {emp['slug']}: {ex}")
             resultados[emp["slug"]] = {"erro": str(ex)}
             erro = str(ex)
+        if pedidos:
+            _fechar_pedidos(sb, emp, pedidos, resultados[emp["slug"]])
         if erro:   # não repete o mesmo erro: só tenta de novo quando chegar outro arquivo ou outra mudança
             falhou.update({str(c): pend.get(c, 0) for c in alvo})
             falhou["orquestracao"] = {**(falhou.get("orquestracao") or {}), **{str(c): q for c, q in so_config.items()}}
@@ -973,6 +996,24 @@ def plantao(dados: Path, comando: list[str], sb: Supabase | None = None, out=pri
                 return "atualizado"
         dormir(intervalo)
     return "parado"
+
+
+def _fechar_pedidos(sb: Supabase, emp: dict, pedidos: dict, r: dict):
+    """Pedidos "Reenquadrar agora": ok (com a execução) ou erro, por carteira."""
+    codigos = {}
+    if "credores" in r:
+        try:
+            codigos = {c["id"]: c["codigo"] for c in sb.selecionar("credores", {"empresa_id": f"eq.{emp['id']}"}) or []}
+        except ErroSupabase:
+            codigos = {}
+    for cid, ids in pedidos.items():
+        res = r["credores"].get(codigos.get(cid)) if "credores" in r else r
+        if res is None:
+            res = {"erro": "carteira inativa ou sem base: nada a reenquadrar"}
+        valores = {"status": "erro" if "erro" in res else "ok", "terminado_em": agora(),
+                   "execucao_id": res.get("execucao"), "erro": (res.get("erro") or None) and str(res["erro"])[:500]}
+        for i in ids:
+            sb.atualizar("pedidos_rotina", {"id": f"eq.{i}"}, valores)
 
 
 # ------------------------------------------------------------------ comitê

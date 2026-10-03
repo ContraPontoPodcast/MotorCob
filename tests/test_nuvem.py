@@ -448,6 +448,25 @@ class TestSincronizar(unittest.TestCase):
         self.assertIn("2026-09-03", {e["data_ref"] for e in t["execucoes"] if e["empresa_id"] == 2})
         self.assertEqual(empresas_com_carga_nova(self.dados, self.sb, hoje=dia), [])  # uma vez por dia
 
+    def test_reenquadrar_agora_pedido_pelo_site(self):
+        from nuvem.sincronizar import empresas_com_carga_nova, ha_arquivo_novo, vigiar
+        t = self.falso.tabelas
+        dia = date(2026, 9, 2)
+        self._dia(dia, empresa="beta")
+        for e in t["execucoes"]:
+            e["iniciada_em"] = "2026-09-02T09:00:00+00:00"
+        self.assertEqual(empresas_com_carga_nova(self.dados, self.sb, hoje=dia), [])
+        t["pedidos_rotina"] = [{"id": 1, "empresa_id": 2, "credor_id": None, "status": "pendente"}]
+        self.assertTrue(ha_arquivo_novo(self.dados, self.sb))           # o plantão pega na hora
+        n_ex = len(t["execucoes"])
+        r = vigiar(self.dados, dia, self.sb, out=lambda *a: None, pasta_empresas=self.cfg)
+        self.assertEqual(list(r), ["beta"])
+        self.assertEqual(len(t["execucoes"]), n_ex + 1)
+        p = t["pedidos_rotina"][0]
+        self.assertEqual((p["status"], p["execucao_id"]), ("ok", r["beta"]["execucao"]))
+        self.assertTrue(p["iniciado_em"] and p["terminado_em"])
+        self.assertEqual(empresas_com_carga_nova(self.dados, self.sb, hoje=dia), [])   # saiu da fila
+
     def test_rotina_do_dia_so_depois_da_hora(self):
         from datetime import datetime
         from nuvem.sincronizar import _passou_hora_rotina

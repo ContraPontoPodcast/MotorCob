@@ -213,6 +213,10 @@ de outra pessoa pela certificação e a rotação segue.
 - "Demais clientes" (sem segmento em uso): esteira padrão da carteira (`credores.estrategia_id`).
   `credores.demais_ativo = false` → `rodar_dia(demais_ativo=False)` tira esses clientes da ação
   massiva e do bureau (acordo segue), estrategia "Demais clientes (desligado)" e alerta.
+- "Reenquadrar agora": o site insere em `pedidos_rotina` (credor_id; status pendente). `ha_arquivo_novo`
+  e `empresas_com_carga_nova` incluem os pedidos (o plantão roda em até 5 s, sem o freio de
+  `vigia.json`); `vigiar` marca rodando → ok/erro com `execucao_id` (`_fechar_pedidos`). Um pedido
+  por carteira na fila (índice parcial); status só a rotina grava.
 - Enriquecimento na esteira: ação `{"canal": "enriquecimento"}` em qualquer dia (não na ordem do
   CPC); `gerar_fila(para_bureau=)` separa essa ação da cadeia de contato. `lista_enriquecimento`
   usa o dia programado; sem enriquecimento na esteira, vai na entrada (D+1). Mesmo cliente não

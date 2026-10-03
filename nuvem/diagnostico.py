@@ -82,6 +82,19 @@ def main():
     pend = sb.selecionar("envios", {"status": "eq.pendente"}, ordem="enviado_em.asc") or []
     nomes = {e["id"]: e["slug"] for e in empresas}
     credores = {c["id"]: c["codigo"] for c in (sb.selecionar("credores") or [])} if tem_credores else {}
+    try:
+        pedidos = sb.selecionar("pedidos_rotina", {"status": "in.(pendente,rodando)"}, ordem="id.asc") or []
+    except Exception:  # noqa: BLE001 — banco sem a tabela de pedidos
+        pedidos = []
+    for p in pedidos:
+        quando = (p.get("pedido_em") or "")[:16].replace("T", " ")
+        cred = credores.get(p.get("credor_id"), "todas")
+        msg = (f"Reenquadrar agora: pedido {p['status']} desde {quando} · {nomes.get(p['empresa_id'], p['empresa_id'])} · "
+               f"carteira {cred}")
+        if p["status"] == "rodando":
+            info(msg)
+        else:
+            ruim(msg, "A vigia pega em até 5 segundos: confira a seção 5 (vigia ligada e em tempo real)")
     if not pend:
         info("nenhum arquivo pendente")
     for e in pend:
