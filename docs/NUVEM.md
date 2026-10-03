@@ -52,9 +52,11 @@ ordem, › Run. Cada um deve terminar sem erro:
    em cada uma; view segmentos_em_uso)
 14. `20261010000001_credores_atualizado.sql` (carimbo de alteração na carteira: a vigia refaz a
    lista quando a esteira padrão muda)
+15. `20261011000001_personas_modelo.sql` (catálogo de modelos de persona digital × analógico,
+   de `regras/personas_modelo.json`)
 
 Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta do 5
-ao 14 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
+ao 15 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
 
 (Alternativa pela linha de comando: `supabase link --project-ref <ref>` e `supabase db push`.)
 

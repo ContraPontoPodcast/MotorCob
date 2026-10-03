@@ -218,6 +218,36 @@ def _num(v: str, decimal: str) -> float:
     return float(v)
 
 
+NOMES_NASCIMENTO = ("DATA_NASCIMENTO", "DT_NASCIMENTO", "DT_NASC", "DATA_NASC", "NASCIMENTO", "DATANASCIMENTO",
+                    "DT_NASCTO", "DATA_DE_NASCIMENTO")
+
+
+def _nome_simples(nome: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", nome or "").encode("ascii", "ignore").decode().upper()
+    return re.sub(r"[^A-Z0-9]+", "_", t).strip("_")
+
+
+def _idade(linha: dict, col_nasc, col_idade, dia: date, formato: str) -> dict:
+    """Atributo calculado "idade" (anos) a partir da data de nascimento ou da coluna IDADE."""
+    if col_nasc and (linha.get(col_nasc) or "").strip():
+        nasc = _data(linha[col_nasc], formato)
+        if nasc is None:
+            for f in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y"):
+                nasc = _data(linha[col_nasc], f)
+                if nasc:
+                    break
+        if nasc and nasc < dia:
+            anos = dia.year - nasc.year - ((dia.month, dia.day) < (nasc.month, nasc.day))
+            if 14 <= anos <= 110:
+                return {"idade": str(anos)}
+    if col_idade:
+        v = re.sub(r"\D", "", linha.get(col_idade) or "")
+        if v and 14 <= int(v) <= 110:
+            return {"idade": v}
+    return {}
+
+
 def _colunas_base(nomes: list[str], layout: LayoutBase):
     """Obrigatórias: ID, saldo e atraso (ou vencimento) e ao menos um contato. As demais
     colunas do cadastro que não vierem no arquivo do dia ficam vazias.
@@ -334,6 +364,10 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
             # contato, CPF e ID não viram atributo: só o que descreve o cliente/contrato
             pessoais = {col["id_cliente"], col.get("cpf")} | {t["coluna"] for t in tel_cols} \
                 | {t.get(k) for t in tel_cols for k in ("whatsapp", "rcs", "hot", "ddd")} | set(emails)
+            # data de nascimento é dado pessoal: não vira atributo, vira só a idade
+            col_nasc = next((c for c in nomes if _nome_simples(c) in NOMES_NASCIMENTO), None)
+            col_idade = next((c for c in nomes if _nome_simples(c) == "IDADE"), None)
+            pessoais.add(col_nasc)
             colunas_atrib = [c for c in nomes if c and c not in pessoais]
             n = 0
             for linha in leitor:
@@ -367,7 +401,8 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                     "id_contrato": (linha[col["id_contrato"]] or "").strip() if "id_contrato" in col else "",
                     "saldo": saldo, "atraso": atraso, "entrada": entrada, "dia": dia,
                     "bloqueio": (linha[col["bloqueio"]] or "").strip() if "bloqueio" in col else "",
-                    "atributos": {c: (linha.get(c) or "").strip() for c in colunas_atrib}})
+                    "atributos": {**{c: (linha.get(c) or "").strip() for c in colunas_atrib},
+                                  **_idade(linha, col_nasc, col_idade, dia, lay.formato_data)}})
                 for t in tel_cols:
                     bruto = linha[t["coluna"]] or ""
                     if t.get("ddd") and len(re.sub(r"\D", "", bruto)) < 10:   # DDD numa coluna, número na outra

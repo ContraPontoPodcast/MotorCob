@@ -145,3 +145,17 @@ class TestOcorrencia(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestIdade(unittest.TestCase):
+    def test_idade_vem_da_data_de_nascimento_que_nao_e_guardada(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bruto = Path(tmp) / "bruto"
+            _csv(bruto / "base_2026-10-05.csv",
+                 "COD_CLIENTE;CONTRATO;SALDO_DEVEDOR;DT_VENCIMENTO;DT_NASCIMENTO;UF;TEL1\n"
+                 "A1;K1;100,00;01/09/2026;15/03/1990;SP;11988880001\n"
+                 "A2;K2;100,00;01/09/2026;06/10/1960;RJ;21988880002\n")
+            rodar_dia.preparar_base(EMPRESA, bruto, Path(tmp) / "base")
+            atr = {l["id_cliente"]: l for l in _ler(Path(tmp) / "base" / "atributos.csv")}
+        self.assertEqual((atr["A1"]["idade"], atr["A2"]["idade"]), ("36", "65"))   # 06/10 ainda não fez 66
+        self.assertNotIn("DT_NASCIMENTO", atr["A1"])
