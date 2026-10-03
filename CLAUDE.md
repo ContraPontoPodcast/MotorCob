@@ -216,6 +216,10 @@ de outra pessoa pela certificação e a rotação segue.
   enriq_retorno. `prioridade_contatos` na estratégia (critérios ranking/score/whatsapp/rcs/bureau
   asc|desc, score_minimo, ranking_maximo) ordena e filtra os telefones em `candidatos` depois do
   Hot e do rodízio; sem dado do bureau passa e vai depois.
+- Segmento × carteira (`segmentos_carteira`): com vínculos, o segmento vale só nas carteiras
+  vinculadas com ativo; sem vínculo, regra antiga (credor_id = uma carteira; vazio = todas).
+  `clusters.ativo` é o liga/desliga geral. `nuvem.segmento_vale` / `baixar_clusters`. View
+  `segmentos_em_uso` resolve vinculado/em_uso por carteira para o site.
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias

@@ -14,6 +14,8 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261005000001_credores.sql
     psql -d sb -f supabase/migrations/20261006000001_enquadramento.sql
     psql -d sb -f supabase/migrations/20261007000001_personas_usuario.sql
+    psql -d sb -f supabase/migrations/20261008000001_enriquecimento_esteira.sql
+    psql -d sb -f supabase/migrations/20261009000001_segmentos_carteira.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -220,6 +222,16 @@ checar("operação não cria persona", False, f"insert into public.personas_usua
 checar("persona com carteira de outra empresa é recusada", False, f"insert into public.personas_usuario (empresa_id,credor_id,nome) values ({EA},{CB},'Y')", "service_role")
 checar("B não vê as personas da A", True, "select count(*) from public.personas_usuario", "authenticated", u["operb"], 0)
 checar("nome repetido na mesma carteira é recusado", False, f"insert into public.personas_usuario (empresa_id,credor_id,nome) values ({EA},{CX},'Digitais SP')", "service_role")
+# segmento × carteira
+_, VE, _ = sql(f"select id from public.clusters where empresa_id={EA} and codigo='VE'")
+_, CP, _ = sql(f"select id from public.credores where empresa_id={EA} and codigo='principal'")
+checar("segmento sem vínculo vale em todas as carteiras", True, f"select string_agg(em_uso::text, ',' order by credor_id) from public.segmentos_em_uso where cluster_id={VE}", "authenticated", u["oper"], "true,true")
+checar("planejamento vincula o segmento à carteira principal", True, f"insert into public.segmentos_carteira (empresa_id,cluster_id,credor_id,ativo) values ({EA},{VE},{CP},true)", "authenticated", u["plan"])
+checar("com vínculo, só a carteira vinculada usa", True, f"select string_agg(credor_id::text, ',') from public.segmentos_em_uso where cluster_id={VE} and em_uso", "authenticated", u["oper"], CP)
+checar("planejamento pausa o segmento na carteira", True, f"update public.segmentos_carteira set ativo=false where cluster_id={VE} and credor_id={CP}; select count(*) from public.segmentos_em_uso where cluster_id={VE} and em_uso", "authenticated", u["plan"], 0)
+checar("vínculo com carteira de outra empresa é recusado", False, f"insert into public.segmentos_carteira (empresa_id,cluster_id,credor_id) values ({EA},{VE},{CB})", "service_role")
+checar("operação não vincula segmento", False, f"insert into public.segmentos_carteira (empresa_id,cluster_id,credor_id) values ({EA},{VE},{CX})", "authenticated", u["oper"])
+checar("B não vê os vínculos da A", True, "select count(*) from public.segmentos_carteira", "authenticated", u["operb"], 0)
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
