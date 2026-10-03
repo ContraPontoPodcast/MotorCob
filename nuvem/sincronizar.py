@@ -408,7 +408,7 @@ def _separar_cargas_ruins(sb: Supabase, entrada, pasta: Path, baixados, out=prin
     (não gera lista com a carga velha)."""
     from motor.carteira import checar_arquivo
     from motor.entrada import carregar_entrada, checar_base
-    ent = carregar_entrada(entrada)
+    ent = entrada if not isinstance(entrada, (str, Path)) else carregar_entrada(entrada)
     novas, ruins, ficam = 0, [], []
     for e, destino in baixados:
         tipo = e["tipo"]
@@ -427,8 +427,10 @@ def _separar_cargas_ruins(sb: Supabase, entrada, pasta: Path, baixados, out=prin
         rej = destino.parent / "rejeitados" / destino.name
         rej.parent.mkdir(parents=True, exist_ok=True)
         destino.replace(rej)
-        motivo = (f"o layout de {tipo} desta empresa ainda não foi configurado no MotorCob"
-                  if ausentes == ["layout"] else
+        precisa = {"retirada": "cliente ou contrato", "acordo": "cliente ou contrato, parcela e vencimento",
+                   "baixa": "cliente ou contrato, data e valor do pagamento"}.get(tipo, "")
+        motivo = (f"não reconheci as colunas deste arquivo de {tipo} (precisa de {precisa}): confira e envie "
+                  f"de novo" if ausentes == ["layout"] else
                   f"arquivo sem as colunas obrigatórias {ausentes}: confira o arquivo e envie de novo")
         sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "erro", "relatorio": {"erro": motivo}})
         out(f"  envio {e['id']} ({e['nome_original']}): {motivo}")
@@ -497,6 +499,31 @@ def _guardar_compartilhado(pasta_emp: Path, u: dict, r: dict, hoje: date):
     tmp.replace(arq)
 
 
+def _layout_automatico(sb: Supabase, pasta: Path, baixados, out):
+    """Empresa sem empresas/<slug>.json: o MotorCob reconhece as colunas pelos arquivos (motor/detectar).
+    Grava o que entendeu em config/entrada_automatica.json e devolve (Entrada, alerta para conferir).
+    Carga que não dá para entender vai para rejeitados/ com a lista das colunas no envio."""
+    from motor.detectar import entrada_automatica, frase
+    from motor.ingestao import LayoutInvalido
+    try:
+        entrada, info = entrada_automatica(pasta)
+    except LayoutInvalido as ex:
+        for e, destino in baixados:
+            if e["tipo"] in ("base", "incremental") and destino.exists():
+                rej = destino.parent / "rejeitados" / destino.name
+                rej.parent.mkdir(parents=True, exist_ok=True)
+                destino.replace(rej)
+                sb.atualizar("envios", {"id": f"eq.{e['id']}"},
+                             {"status": "erro", "relatorio": {"erro": f"não reconheci as colunas: {ex}"}})
+        raise RuntimeError(f"não reconheci as colunas da carga: {ex}") from None
+    (pasta / "config").mkdir(parents=True, exist_ok=True)
+    (pasta / "config" / "entrada_automatica.json").write_text(
+        json.dumps(info["layout"], ensure_ascii=False, indent=1), encoding="utf-8")
+    aviso = frase(info["entendido"])
+    out(f"  {aviso}")
+    return entrada, aviso
+
+
 def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrada, out, pasta_emp: Path):
     import rodar_dia
     eid, slug, cid, pasta = emp["id"], emp["slug"], u["id"], u["pasta"]
@@ -507,9 +534,9 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                         "status": "rodando"}, retornar=True)[0]
     try:
         tem = lambda d: (pasta / d).exists() and any(p.is_file() for p in (pasta / d).iterdir())  # noqa: E731
-        if (any(tem(d) for d in PASTAS_CARTEIRA + ("ocorrencias", "enriquecimento"))) and entrada is None:
-            raise RuntimeError(f"a empresa {slug} ainda não tem arquivo de entrada (empresas/{slug}.json): "
-                               "mande o cabeçalho da base e da ocorrência para configurar")
+        aviso_layout = None
+        if entrada is None and any(tem(d) for d in PASTAS_CARTEIRA + ("ocorrencias", "enriquecimento")):
+            entrada, aviso_layout = _layout_automatico(sb, pasta, baixados, out)
         if entrada is not None:
             baixados = _separar_cargas_ruins(sb, entrada, pasta, baixados, out)
         rel_base = None
@@ -548,6 +575,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 compartilhado=_compartilhado(pasta_emp, u, data))
         _guardar_compartilhado(pasta_emp, u, r, data)
 
+        if aviso_layout:
+            r["alertas"] = [aviso_layout] + r["alertas"]
         sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid),
                    conflito="empresa_id,credor_id,id_cliente" if cid is not None else "empresa_id,id_cliente")
         n_trilha = publicar_trilha(sb, pasta / "estado", eid, cid)
@@ -732,6 +761,8 @@ def sincronizar_comite(dados: Path, mes: str, sb: Supabase | None = None, out=pr
             contatos, pessoa_de, _ = carregar_carteira(pasta / "base" / "contatos.csv")
             eventos = ingerir_pasta(pasta / "retornos", carregar_layouts(RAIZ / "layouts"))[0]
             entrada = arquivo_entrada(emp, pasta_empresas)
+            if entrada is None and (pasta / "config" / "entrada_automatica.json").exists():
+                entrada = pasta / "config" / "entrada_automatica.json"
             if entrada:
                 eventos += ingerir_ocorrencias(pasta / "ocorrencias", carregar_entrada(entrada), pasta / "estado")[0]
             parc = pasta / "base" / "parcelas.csv"

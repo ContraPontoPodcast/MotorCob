@@ -393,10 +393,33 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual((ex[1]["status"], ex[2]["status"]), ("erro", "ok"))
         self.assertTrue(all(e["status"] == "pendente" for e in self.falso.tabelas["envios"] if e["empresa_id"] == 1))
 
-    def test_empresa_sem_arquivo_de_entrada_avisa(self):
+    def test_empresa_sem_arquivo_de_entrada_usa_layout_automatico(self):
         (self.cfg / "beta.json").unlink()
-        res = self._dia(date(2026, 9, 25), empresa="beta")
-        self.assertIn("empresas/beta.json", res["beta"]["erro"])
+        res = self._dia(date(2026, 9, 2), empresa="beta")["beta"]
+        self.assertNotIn("erro", res)
+        ex = next(e for e in self.falso.tabelas["execucoes"] if e["empresa_id"] == 2)
+        self.assertTrue(ex["alertas"][0].startswith("LAYOUT AUTOMÁTICO"))
+        self.assertIn("saldo = SALDO_DEVEDOR", ex["alertas"][0])
+        self.assertNotRegex(ex["alertas"][0], r"\d{8,}")                       # só nomes de coluna, nada pessoal
+        self.assertIn("saidas/beta/2026-09-02/ids/whatsapp.csv", self.falso.objetos)
+        cfg = self.dados / "empresas" / "beta" / "config" / "entrada_automatica.json"
+        self.assertEqual(json.loads(cfg.read_text())["base"]["colunas"]["id_cliente"], "COD_CLIENTE")
+        # ocorrência sem layout configurado também é entendida
+        self._envio(7001, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 10:15;WHATS;CPC\n", "2026-09-02")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        est = {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"] if l["empresa_id"] == 2}
+        self.assertEqual(est["X0001"], "CPA")
+
+    def test_carga_que_nao_da_para_entender_fica_com_erro(self):
+        (self.cfg / "beta.json").unlink()
+        self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["empresa_id"] != 2]
+        self._envio(7101, 2, "base", "estranha.csv", b"COLUNA_A;COLUNA_B\n1;2\n")
+        res = self._dia(date(2026, 9, 2), empresa="beta")
+        self.assertIn("COLUNA_A", res["beta"]["erro"])
+        env = next(e for e in self.falso.tabelas["envios"] if e["id"] == 7101)
+        self.assertEqual(env["status"], "erro")
+        self.assertIn("não reconheci as colunas", env["relatorio"]["erro"])
 
     def test_trilha_retoma_de_onde_parou(self):
         self._dia(date(2026, 9, 25), empresa="alfa")

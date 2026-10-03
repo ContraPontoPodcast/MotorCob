@@ -187,6 +187,14 @@ de outra pessoa pela certificação e a rotação segue.
   r["compartilhar"]. No Mac fica em <empresa>/compartilhado/<credor>.json; a foto das 48h é
   a da primeira rodada do dia (estado/outros_credores.json). Rodízio: quem foi adiado (`adiados`
   → "esperando") tem a vez; o credor que acionou por último cede (`_compartilhado`).
+- `motor/detectar.py`: layout automático. Empresa sem `empresas/<slug>.json` → `nuvem._layout_automatico`
+  monta a Entrada pelos arquivos do credor (cabeçalho: nomes usuais de cobrança; separador,
+  encoding, formato de data e decimal pela amostra; DDD em coluna separada; marcas S/N de
+  WhatsApp/RCS/Hot por telefone; códigos de CPC da ocorrência; bureau no formato conhecido).
+  Sem código de cliente, o CPF vira o ID. Grava config/entrada_automatica.json e põe o que
+  entendeu no 1º alerta ("LAYOUT AUTOMÁTICO (confira)", só nomes de coluna). Carga que não
+  dá para entender → rejeitados/ + envio com erro listando as colunas. O .json do repositório
+  sempre vence.
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias
