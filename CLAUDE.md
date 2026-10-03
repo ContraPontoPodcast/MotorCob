@@ -185,7 +185,8 @@ de outra pessoa pela certificação e a rotação segue.
   recebe Hot (pessoa, contato), WhatsApp válido e acionados (pessoa → data); quem outro credor
   acionou há < `recencia_horas` não recebe massiva (`gerar_fila(pausados=)`); devolve
   r["compartilhar"]. No Mac fica em <empresa>/compartilhado/<credor>.json; a foto das 48h é
-  a da primeira rodada do dia (estado/outros_credores.json).
+  a da primeira rodada do dia (estado/outros_credores.json). Rodízio: quem foi adiado (`adiados`
+  → "esperando") tem a vez; o credor que acionou por último cede (`_compartilhado`).
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias

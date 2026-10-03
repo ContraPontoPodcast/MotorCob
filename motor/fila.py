@@ -148,7 +148,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                certs: dict[tuple[str, str], Certificacao], flags: dict[str, dict],
                parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None,
                sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
-               pausados: set[str] = frozenset()):
+               pausados: set[str] = frozenset(), adiados: set | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -158,7 +158,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
              "origem"}} da base e do retorno do enriquecimento.
     Cada cliente segue a estratégia do cluster dele (regua.para).
     ativos: quem está na carga do dia (None = todos); os demais não recebem ação.
-    pausados: acionados por outro credor nas últimas 48h — sem ação massiva hoje (acordo segue).
+    pausados: acionados por outro credor nas últimas 48h (ou é a vez dele) — sem ação massiva
+              hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`.
     """
     alertas = []
     taxa, envios = taxa_bloqueio_whatsapp(eventos or [], hoje, regua)
@@ -188,14 +189,16 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         disponiveis[idc] = disp
         if janela is None or est.estado in ("BLQ", "LIQ", "COL") or (ativos is not None and idc not in ativos):
             continue
-        if idc in pausados and est.estado in ESTADOS_MASSIVOS:
-            continue
         passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp)
         if passo is None:
             continue
         nome_regua, rotulo, acoes, data_fixa = passo
         acoes, persona_rot = resolver_tokens(acoes, rc.persona, idc, hoje, set(cands))
         blend = resolver(acoes, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
+        if blend and idc in pausados and est.estado in ESTADOS_MASSIVOS:
+            if adiados is not None:
+                adiados.add(idc)
+            continue
         cert_de = {c.contato: c for cs in cands.values() for c in cs}
         for canal, condicao, contatos in blend:
             cfg = rc.canal_cfg(canal)

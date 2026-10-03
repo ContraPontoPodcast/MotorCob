@@ -440,19 +440,32 @@ def _separar_cargas_ruins(sb: Supabase, entrada, pasta: Path, baixados, out=prin
 
 def _compartilhado(pasta_emp: Path, u: dict, hoje: date) -> dict:
     """O que os OUTROS credores da empresa sabem da mesma pessoa (Hot, WhatsApp, quem acionaram).
-    Fica só no Mac (pasta da empresa), nunca vai para o site. As 48h usam a foto da primeira
-    rodada do dia: rodar de novo (carga nova à tarde) não muda a lista por causa de outro credor."""
+    Fica só no Mac (pasta da empresa), nunca vai para o site.
+
+    48h juntas, com rodízio: não aciona quem outro credor acionou há menos de 48h; e cede a vez
+    a outro credor que ficou esperando por essa pessoa (adiado e ainda sem acionar, até 7 dias)
+    se este credor foi o último a acioná-la. Assim dois credores com a mesma régua se alternam, em vez de o
+    primeiro do dia ganhar sempre. Vale a foto da primeira rodada do dia: rodar de novo (carga
+    nova à tarde) não muda a lista por causa de outro credor."""
     if u["id"] is None:
         return {}
+    pasta = pasta_emp / "compartilhado"
+    ler = lambda a: json.loads(a.read_text(encoding="utf-8")) if a.exists() else {}  # noqa: E731
+    meu = ler(pasta / f"{u['codigo']}.json").get("acionados") or {}
     hot, wa, acion = set(), set(), {}
-    for arq in sorted((pasta_emp / "compartilhado").glob("*.json")):
+    semana = (hoje - timedelta(days=7)).isoformat()
+    for arq in sorted(pasta.glob("*.json")) if pasta.exists() else []:
         if arq.stem == u["codigo"]:
             continue
-        d = json.loads(arq.read_text(encoding="utf-8"))
+        d = ler(arq)
         hot |= {tuple(x) for x in d.get("hot", [])}
         wa |= set(d.get("whatsapp", []))
-        for p, dia in (d.get("acionados") or {}).items():
+        dele = d.get("acionados") or {}
+        for p, dia in dele.items():
             acion[p] = max(acion.get(p, ""), dia)
+        for p, dia in (d.get("esperando") or {}).items():
+            if dia >= semana and p in meu and meu[p] >= dele.get(p, ""):
+                acion[p] = hoje.isoformat()      # é a vez do outro credor
     foto = u["pasta"] / "estado" / "outros_credores.json"
     if foto.exists():
         f = json.loads(foto.read_text(encoding="utf-8"))
@@ -468,15 +481,19 @@ def _guardar_compartilhado(pasta_emp: Path, u: dict, r: dict, hoje: date):
         return
     arq = pasta_emp / "compartilhado" / f"{u['codigo']}.json"
     arq.parent.mkdir(parents=True, exist_ok=True)
-    antes = json.loads(arq.read_text(encoding="utf-8")).get("acionados", {}) if arq.exists() else {}
-    limite = (hoje - timedelta(days=7)).isoformat()
-    acion = {p: d for p, d in antes.items() if limite <= d < hoje.isoformat()}   # o dia de hoje é refeito
+    antes = json.loads(arq.read_text(encoding="utf-8")) if arq.exists() else {}
+    limite, hj = (hoje - timedelta(days=7)).isoformat(), hoje.isoformat()
     comp = r.get("compartilhar") or {}
+    acion = {p: d for p, d in (antes.get("acionados") or {}).items() if limite <= d < hj}   # hoje é refeito
     acion.update({p: d.isoformat() for p, d in (comp.get("acionados") or {}).items()})
+    # a espera vale até o credor acionar a pessoa (até 7 dias); a de hoje é refeita
+    esper = {p: d for p, d in (antes.get("esperando") or {}).items() if limite <= d < hj}
+    esper.update({p: d.isoformat() for p, d in (comp.get("esperando") or {}).items()})
+    esper = {p: d for p, d in esper.items() if acion.get(p, "") < d}
     tmp = arq.with_suffix(".tmp")
     tmp.write_text(json.dumps({"hot": sorted(list(x) for x in comp.get("hot", ())),
-                               "whatsapp": sorted(comp.get("whatsapp", ())), "acionados": acion}),
-                   encoding="utf-8")
+                               "whatsapp": sorted(comp.get("whatsapp", ())), "acionados": acion,
+                               "esperando": esper}), encoding="utf-8")
     tmp.replace(arq)
 
 
