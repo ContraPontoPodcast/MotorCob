@@ -22,6 +22,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261013000001_demais_ativo.sql
     psql -d sb -f supabase/migrations/20261014000001_pedidos_rotina.sql
     psql -d sb -f supabase/migrations/20261015000001_motivo_hoje.sql
+    psql -d sb -f supabase/migrations/20261016000001_exclusao_dispara_rotina.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -234,6 +235,9 @@ checar("site não altera o status do pedido", False, "update public.pedidos_roti
 checar("B não vê os pedidos da A", True, "select count(*) from public.pedidos_rotina", "authenticated", u["operb"], 0)
 checar("rotina marca o pedido como pronto", True, "update public.pedidos_rotina set status='ok', terminado_em=now() where status='pendente'", "service_role")
 checar("B só vê os motivos da própria empresa", True, "select string_agg(distinct empresa_id::text, ',') from public.motivos_hoje", "authenticated", u["operb"], EB)
+sql(f"alter table public.credores disable trigger carimbar_credor; update public.credores set atualizado_em = '2020-01-01' where empresa_id={EA}; alter table public.credores enable trigger carimbar_credor")
+checar("planejamento exclui persona", True, f"delete from public.personas_usuario where credor_id={CX} and nome='Sênior'", "authenticated", u["plan"])
+checar("excluir persona carimba só a carteira dela", True, f"select string_agg(id::text, ',' order by id) from public.credores where empresa_id={EA} and atualizado_em > '2020-01-02'", "service_role", None, str(CX))
 checar("operação não cria persona", False, f"insert into public.personas_usuario (empresa_id,credor_id,nome) values ({EA},{CX},'X')", "authenticated", u["oper"])
 checar("persona com carteira de outra empresa é recusada", False, f"insert into public.personas_usuario (empresa_id,credor_id,nome) values ({EA},{CB},'Y')", "service_role")
 checar("B não vê as personas da A", True, "select count(*) from public.personas_usuario", "authenticated", u["operb"], 0)
