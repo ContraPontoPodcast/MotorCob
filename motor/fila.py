@@ -20,7 +20,7 @@ from datetime import date, timedelta
 
 from .certificacao import Certificacao, Evento
 from .marcacao import ESTADOS_MASSIVOS, Cliente, EstadoCliente, dia_na_carga, proximo_canal
-from .estrategia import normalizar, passa, resolver
+from .estrategia import ENRIQUECIMENTO, normalizar, passa, resolver
 from .persona import resolver_tokens
 from . import normalizacao as norm
 from .regua import CANAIS_VOZ, Regua
@@ -38,6 +38,45 @@ def taxa_bloqueio_whatsapp(eventos: list[Evento], hoje: date, regua: Regua) -> t
     return (ruins / len(envios) if envios else 0.0), len(envios)
 
 
+def _num(v):
+    try:
+        return float(v) if v not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _passa_prioridade(regra: dict, sinal: dict) -> bool:
+    """Filtro da regra do usuário: score mínimo / ranking máximo (sem dado do bureau: passa)."""
+    score, ranking = _num(sinal.get("score_bureau")), _num(sinal.get("ranking"))
+    if regra.get("score_minimo") is not None and score is not None and score < regra["score_minimo"]:
+        return False
+    if regra.get("ranking_maximo") is not None and ranking is not None and ranking > regra["ranking_maximo"]:
+        return False
+    return True
+
+
+def _chave_prioridade(regra: dict, sinal: dict, flag: dict) -> tuple:
+    """Ordem da regra do usuário (ex.: ranking menor primeiro, depois score maior). Sem o dado: vai depois."""
+    chave = []
+    for c in regra.get("criterios") or []:
+        campo = c["campo"]
+        if campo == "score":
+            v = _num(sinal.get("score_bureau"))
+        elif campo == "ranking":
+            v = _num(sinal.get("ranking"))
+        elif campo == "whatsapp":
+            v = 1.0 if flag.get("whatsapp_valido") else 0.0
+        elif campo == "rcs":
+            v = 1.0 if sinal.get("rcs") else 0.0
+        else:   # bureau: veio do retorno do enriquecimento
+            v = 1.0 if (sinal.get("origem") or "") == "enriquecimento" else 0.0
+        if v is None:
+            chave += [1, 0.0]
+        else:
+            chave += [0, v if c["sentido"] == "asc" else -v]
+    return tuple(chave)
+
+
 def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flags: dict[str, dict],
                regua: Regua, freio_whatsapp: bool, sinais: dict[str, dict] | None = None) -> dict[str, list]:
     """{canal: Certificacoes que podem receber, em ordem de prioridade}, antes do filtro da ação.
@@ -52,8 +91,13 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
     # Hot (deu CPC ou marcado na carga) primeiro. Sem Hot, rotação: contato ainda não exportado
     # antes, depois os já tentados do mais antigo para o mais recente. Depois score e ranking.
     tent = {c: i + 1 for i, c in enumerate(est.contatos_tentados)} if not est.contato_localizador else {}
+    regra = regua.dados.get("prioridade_contatos") or {}
+    if regra:
+        validos = [c for c in validos if _passa_prioridade(regra, sinais.get(c.contato, {}))]
     validos.sort(key=lambda c: (not (c.status == "CERTIFICADO" or sinais.get(c.contato, {}).get("hot")),
-                                tent.get(c.contato, 0), -c.score, sinais.get(c.contato, {}).get("ranking") or 99))
+                                tent.get(c.contato, 0),
+                                *_chave_prioridade(regra, sinais.get(c.contato, {}), flags.get(c.contato, {})),
+                                -c.score, sinais.get(c.contato, {}).get("ranking") or 99))
     loc = est.contato_localizador
     w = regua["whatsapp"]
     saida = {}
@@ -153,7 +197,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                certs: dict[tuple[str, str], Certificacao], flags: dict[str, dict],
                parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None,
                sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
-               pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None):
+               pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None,
+               para_bureau: dict | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -164,6 +209,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     Cada cliente segue a estratégia do cluster dele (regua.para).
     ativos: quem está na carga do dia (None = todos); os demais não recebem ação.
     publico: {id_cliente: id da persona criada pela empresa}; ação com "personas" só vai para elas.
+    para_bureau: recebe {id_cliente: "régua passo"} de quem tem a ação "enriquecimento" hoje na esteira.
     pausados: acionados por outro credor nas últimas 48h (ou é a vez dele) — sem ação massiva
               hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`.
     """
@@ -200,8 +246,14 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         if passo is None:
             continue
         nome_regua, rotulo, acoes, data_fixa = passo
-        acoes, persona_rot = resolver_tokens(acoes, rc.persona, idc, hoje, set(cands))
         minha = (publico or {}).get(idc)
+        enriq = [a for a in acoes if a["canal"] == ENRIQUECIMENTO]
+        acoes = [a for a in acoes if a["canal"] != ENRIQUECIMENTO]
+        if any(not a.get("personas") or minha in a["personas"] for a in enriq) and para_bureau is not None:
+            para_bureau[idc] = f"esteira {nome_regua} {rotulo}"
+        if not acoes:
+            continue
+        acoes, persona_rot = resolver_tokens(acoes, rc.persona, idc, hoje, set(cands))
         blend = resolver(acoes, lambda a: [] if a.get("personas") and minha not in a["personas"]
                          else contatos_da_acao(a, cands, est, flags, sin, rc))
         if not blend and any(not a.get("personas") or minha in a["personas"] for a in acoes):
@@ -312,17 +364,30 @@ def _passo_do_dia(est, cliente, hoje, regua, disp):
     return None
 
 
+def esteira_tem_enriquecimento(rc: Regua) -> bool:
+    """A esteira (estratégia do segmento) programa o enriquecimento em algum dia?"""
+    for fase in ("localizacao", "giro", "preventivo", "quebra"):
+        for passo in ((rc.dados.get(fase) or {}).get("passos") or {}).values():
+            if any((a if isinstance(a, str) else a.get("canal")) == ENRIQUECIMENTO for a in passo):
+                return True
+    return False
+
+
 def lista_enriquecimento(estados: dict[str, EstadoCliente], flags: dict[str, dict], certs_contatos: dict[str, list[str]],
-                         hoje: date, regua: Regua) -> list[dict]:
-    """Quem precisa de enriquecimento hoje: entrada (D0), revalidação vencida ou re-enriquecimento."""
+                         hoje: date, regua: Regua, programados: dict | None = None) -> list[dict]:
+    """Quem vai para o bureau hoje: o dia que a esteira programou (programados) ou, se a esteira
+    não programa enriquecimento, a entrada na carga; mais revalidação vencida e re-enriquecimento."""
     saida = []
+    programados = programados or {}
     for idc, est in estados.items():
         if est.estado in ("BLQ", "LIQ"):
             continue
         cfg = regua.enriquecimento(est.cluster_atual)
         motivo = None
-        if est.estado == "LOC" and est.safra == hoje:
-            motivo = "entrada na carteira (D0)"
+        if idc in programados:
+            motivo = programados[idc]
+        elif est.estado == "LOC" and est.safra == hoje and not esteira_tem_enriquecimento(regua.para(est.cluster_atual)):
+            motivo = "entrada na carteira (D+1)"
         elif est.reenriquecer:
             motivo = est.reenriquecer
         else:

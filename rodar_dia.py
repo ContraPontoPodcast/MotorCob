@@ -284,15 +284,34 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     recencia = timedelta(hours=regua["recencia_horas"])
     pausados = {idc for idc, p in pessoa_de.items()
                 if (d := (compartilhado.get("acionados") or {}).get(p)) and hoje - d < recencia}
-    adiados = set()
+    adiados, para_bureau = set(), {}
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos,
-                                  pausados=pausados, adiados=adiados, publico=publico)
+                                  pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau)
     if adiados:
         alertas.append(f"OUTRO CREDOR: {len(adiados)} clientes ficam sem ação massiva hoje (outro credor acionou "
                        f"nas últimas {regua['recencia_horas']}h ou é a vez dele); voltam na próxima")
     contatos_status = _contar_contatos(certs, sinais, flags, estados, ativos)
     alertas = [f"CLUSTER: {a}" for a in avisos_cluster] + alertas
-    enriq = lista_enriquecimento(estados, flags, contatos_por, hoje, regua)
+    # bureau: quem a esteira mandou enriquecer hoje (ou a entrada, se a esteira não programa), sem
+    # repetir o mesmo cliente antes de INTERVALO_BUREAU dias
+    if ativos is not None:
+        para_bureau = {k: v for k, v in para_bureau.items() if k in ativos}
+    enriq = lista_enriquecimento(estados, flags, contatos_por, hoje, regua, para_bureau)
+    arq_env = pasta_estado / "bureau_enviados.json"
+    enviados_bureau = json.loads(arq_env.read_text(encoding="utf-8")) if arq_env.exists() else {}
+    recentes = {k for k, d in enviados_bureau.items()
+                if d < hoje.isoformat() and (hoje - date.fromisoformat(d)).days < INTERVALO_BUREAU}
+    enriq = [l for l in enriq if l["id_cliente"] not in recentes]
+    docs = {}
+    arq_pessoas = Path(clientes_csv).parent / "pessoas.csv"
+    if arq_pessoas.exists():
+        with open(arq_pessoas, newline="", encoding="utf-8") as f:
+            docs = {l["id_cliente"]: l["documento"] for l in csv.DictReader(f, delimiter=";")}
+    for l in enriq:
+        l["documento"] = docs.get(l["id_cliente"], "")
+        enviados_bureau[l["id_cliente"]] = hoje.isoformat()
+    if enriq:
+        arq_env.write_text(json.dumps(enviados_bureau), encoding="utf-8")
 
     saida = Path(pasta_saida) / hoje.isoformat()
     saida.mkdir(parents=True, exist_ok=True)
@@ -303,6 +322,16 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     exportar_ids(saida / "ids", por_canal)
     salvar_escolhas(pasta_estado, hoje, fila)
     _salvar(saida / "enriquecimento.csv", enriq)
+    bureau = saida / "bureau"
+    for antigo in bureau.glob("*.csv") if bureau.exists() else []:
+        antigo.unlink()
+    if enriq:   # arquivo pronto para mandar ao bureau: CPF/CNPJ e o ID do cliente
+        bureau.mkdir(parents=True, exist_ok=True)
+        with open(bureau / "enviar_bureau.csv", "w", newline="", encoding="utf-8") as f:
+            f.write("CPF_CNPJ;ID_CLIENTE\n" + "".join(f"{l['documento']};{l['id_cliente']}\n" for l in enriq))
+        sem_doc = sum(1 for l in enriq if not l["documento"])
+        if sem_doc:
+            alertas.append(f"BUREAU: {sem_doc} clientes sem CPF/CNPJ na carga não vão no arquivo do bureau por CPF")
     # ações realizadas (agregado, sem dado pessoal): últimos DIAS_ACOES dias
     acoes = agregar_acoes(carregar_escolhas(pasta_estado), eventos, regua, custos,
                           desde=hoje - timedelta(days=DIAS_ACOES))
@@ -372,6 +401,10 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         nome_c = l["canal"] + (" (reserva)" if l["condicao"] else "")
         if nome_c not in acao_hoje[l["id_cliente"]]:
             acao_hoje[l["id_cliente"]].append(nome_c)
+    ultimo_retorno = {}
+    for c in contatos:
+        if (c.get("origem") or "") == "enriquecimento" and c["atualizado_em"]:
+            ultimo_retorno[c["id_cliente"]] = max(ultimo_retorno.get(c["id_cliente"], date.min), c["atualizado_em"])
     enquadramento = {}
     for k, e in estados.items():
         eid = regua.estrategia_de(e.cluster_atual)
@@ -381,7 +414,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "na_carga": ativos is None or k in ativos,
             "acao_hoje": ", ".join(acao_hoje.get(k, [])),
             "passo_hoje": passo_hoje.get(k, ""),
-            "persona_usuario": nome_persona.get(publico.get(k), "") if pers_usuario else ""}
+            "persona_usuario": nome_persona.get(publico.get(k), "") if pers_usuario else "",
+            "enriq_enviado": enviados_bureau.get(k),
+            "enriq_retorno": ultimo_retorno[k].isoformat() if k in ultimo_retorno else None}
     compartilhar = {
         "hot": {(pessoa_de[k], e.contato_localizador) for k, e in estados.items()
                 if e.contato_localizador and k in pessoa_de},
@@ -400,6 +435,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
 
 
 DIAS_ACOES = 60
+INTERVALO_BUREAU = 30   # o mesmo cliente não volta ao bureau antes disso
 
 
 def _dia_util_anterior(hoje: date, regua) -> date:

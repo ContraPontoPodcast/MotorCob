@@ -54,17 +54,19 @@ NUMEROS_FASE = {"localizacao": ("dias_sem_contato_para_ncp",), "giro": ("ciclo_d
 
 
 TOKENS_PERSONA = ("persona_1", "persona_2")   # melhor / 2º melhor canal da persona (motor/persona.py)
+ENRIQUECIMENTO = "enriquecimento"   # ação da esteira: manda o cliente para o bureau nesse dia (não é contato)
+CAMPOS_PRIORIDADE = ("ranking", "score", "whatsapp", "rcs", "bureau")
 
 
 def _acao(a, onde: str, erros: list) -> dict | None:
-    if isinstance(a, str) and a in TOKENS_PERSONA:
+    if isinstance(a, str) and a in TOKENS_PERSONA + (ENRIQUECIMENTO,):
         a = {"canal": a}
     if isinstance(a, str):
         if a not in CANAIS:
             erros.append(f"{onde}: canal desconhecido '{a}'")
             return None
         return a
-    if not isinstance(a, dict) or a.get("canal") not in CANAIS + TOKENS_PERSONA:
+    if not isinstance(a, dict) or a.get("canal") not in CANAIS + TOKENS_PERSONA + (ENRIQUECIMENTO,):
         erros.append(f"{onde}: ação sem canal válido {a!r}")
         return None
     modo = a.get("modo") or "sempre"
@@ -124,14 +126,24 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                 else:
                     sec[k] = f[k]
         saida[fase] = sec
+    if "prioridade_contatos" in definicao:
+        pr, erro = _prioridade(definicao["prioridade_contatos"])
+        if erro:
+            erros.append(f"{nome}/prioridade_contatos: {erro}")
+        elif pr:
+            saida["prioridade_contatos"] = pr
     if "cpc" in definicao:
         c = definicao["cpc"] or {}
         ordem = [_acao(a, f"{nome}/cpc", erros) for a in (c.get("ordem") or [])]
         ordem = [a if isinstance(a, dict) else {"canal": a, "modo": "sempre", "numeros": None, "contatos": {}}
                  for a in ordem if a is not None]
+        if any(a["canal"] == ENRIQUECIMENTO for a in ordem):
+            erros.append(f"{nome}/cpc: enriquecimento vai nos dias da esteira, não na ordem do CPC")
         if len({a["canal"] for a in ordem}) != len(ordem):
             erros.append(f"{nome}/cpc: canal repetido na ordem de rotação")
         junto = [_acao(a, f"{nome}/cpc/junto", erros) for a in (c.get("junto") or [])]
+        if any((a if isinstance(a, str) else a["canal"]) == ENRIQUECIMENTO for a in junto if a is not None):
+            erros.append(f"{nome}/cpc: enriquecimento vai nos dias da esteira, não junto do CPC")
         if ordem:
             saida["ordem_rotacao"] = [a["canal"] for a in ordem]
             saida["cpc_acoes"] = {a["canal"]: {**a, "modo": "sempre"} for a in ordem}
@@ -151,6 +163,32 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
         else:
             saida["recencia_horas"] = r
     return ({} if erros else saida), erros
+
+
+def _prioridade(p) -> tuple[dict | None, str | None]:
+    """Regra do usuário para ordenar (e filtrar) os telefones com o retorno do bureau:
+    {"criterios": [{"campo": ranking|score|whatsapp|rcs|bureau, "sentido": asc|desc}],
+     "score_minimo": número, "ranking_maximo": número}. Telefone sem score/ranking passa no
+    filtro e vai depois dos que têm."""
+    if not p:
+        return None, None
+    if not isinstance(p, dict):
+        return None, "precisa ser um objeto"
+    crit = []
+    for c in p.get("criterios") or []:
+        campo, sentido = (c or {}).get("campo"), (c or {}).get("sentido") or "desc"
+        if campo not in CAMPOS_PRIORIDADE or sentido not in ("asc", "desc"):
+            return None, f"critério inválido {c} (campos: {list(CAMPOS_PRIORIDADE)}; sentido asc/desc)"
+        crit.append({"campo": campo, "sentido": sentido})
+    saida = {"criterios": crit}
+    for k in ("score_minimo", "ranking_maximo"):
+        v = p.get(k)
+        if v not in (None, ""):
+            try:
+                saida[k] = float(v)
+            except (TypeError, ValueError):
+                return None, f"{k} precisa ser número"
+    return saida, None
 
 
 def aplicar(dados: dict, override: dict) -> dict:
@@ -173,7 +211,7 @@ def normalizar(passo: list, regua) -> list[dict]:
         if isinstance(item, dict):
             acoes.append(item)
             continue
-        if item in TOKENS_PERSONA:
+        if item in TOKENS_PERSONA or item == ENRIQUECIMENTO:
             acoes.append({"canal": item, "modo": "sempre", "numeros": None, "contatos": {}})
             continue
         acoes.append({"canal": item, "modo": "sempre", "numeros": None, "contatos": {}})

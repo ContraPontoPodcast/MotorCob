@@ -112,6 +112,76 @@ class TestPersonasDaEmpresa(unittest.TestCase):
             self.assertEqual(r["clientes"]["B1"].atributos["persona"], "Sem persona")
 
 
+class TestEnriquecimentoNaEsteira(unittest.TestCase):
+    """Enriquecimento como ação da esteira e prioridade dos telefones pelo Score/Ranking do bureau."""
+    def _rodar(self, tmp, dia, estr):
+        base = tmp / "base"
+        return rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", tmp / "ret", dia,
+                                   pasta_estado=tmp / "estado", pasta_saida=tmp / "saida", out=lambda *a: None,
+                                   estrategias=estr)
+
+    def _carga(self, tmp):
+        (tmp / "bruto").mkdir()
+        (tmp / "bruto" / "carga_2026-09-02.csv").write_text(
+            CAB + "A1;K1;10000001171;800,00;01/08/2026;CARTAO;SP;11911110001;N;11922220002;11933330003;;\n",
+            encoding="utf-8")
+        rodar_dia.preparar_carteira(EMPRESA, tmp)
+
+    def test_bureau_no_dia_que_a_esteira_mandou(self):
+        estr = [{"id": 1, "nome": "E", "padrao": True, "definicao": {"localizacao": {"passos": {
+            "1": [{"canal": "sms", "modo": "sempre"}],
+            "3": [{"canal": "enriquecimento"}, {"canal": "sms", "modo": "sempre"}]}}}}]
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            self._carga(tmp)
+            r = self._rodar(tmp, date(2026, 9, 2), estr)                 # D+1: sem bureau (está no D+3)
+            self.assertEqual(r["enriquecimento"], [])
+            r = self._rodar(tmp, date(2026, 9, 4), estr)                 # D+3: vai para o bureau
+            self.assertEqual([(l["id_cliente"], l["motivo"], l["documento"]) for l in r["enriquecimento"]],
+                             [("A1", "esteira localizacao D+3", "10000001171")])
+            arq = (tmp / "saida" / "2026-09-04" / "bureau" / "enviar_bureau.csv").read_text()
+            self.assertEqual(arq, "CPF_CNPJ;ID_CLIENTE\n10000001171;A1\n")
+            self.assertEqual(r["enquadramento"]["A1"]["enriq_enviado"], "2026-09-04")
+            self.assertEqual({l["canal"] for l in r["fila"]}, {"sms"})     # o SMS do dia segue
+
+    def test_sem_enriquecimento_na_esteira_vai_na_entrada(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            self._carga(tmp)
+            r = self._rodar(tmp, date(2026, 9, 2), [])
+            self.assertEqual([l["motivo"] for l in r["enriquecimento"]], ["entrada na carteira (D+1)"])
+
+    def test_prioridade_dos_telefones_pelo_retorno_do_bureau(self):
+        from motor.entrada import aplicar_enriquecimento, carregar_entrada
+        ent = carregar_entrada(EMPRESA)
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            self._carga(tmp)
+            from dataclasses import replace
+            cab = replace(ent.enriquecimento[0], emails=[], telefone={"ddd": "DDD", "numero": "FONE",
+                                                                       "score": "SCORE", "ranking": "RANKING"})
+            # retorno do bureau: ranking 3 / score 2 no 1º número, ranking 1 / score 5 no 3º
+            linha = {"CPF/CNPJ": "10000001171", "DDD": ["11", "11", "11"], "FONE": ["911110001", "922220002",
+                                                                                   "933330003"],
+                     "RANKING": ["3", "2", "1"], "SCORE": ["2", "4", "5"]}
+            cols = ["CPF/CNPJ"] + [c for _ in range(3) for c in ("DDD", "FONE", "RANKING", "SCORE")]
+            vals = ["10000001171"] + [v for i in range(3) for v in (linha["DDD"][i], linha["FONE"][i],
+                                                                     linha["RANKING"][i], linha["SCORE"][i])]
+            (tmp / "enr.csv").write_text(";".join(cols) + "\n" + ";".join(vals) + "\n", encoding="utf-8")
+            aplicar_enriquecimento([tmp / "enr.csv"], cab, tmp / "base")
+            regra = {"criterios": [{"campo": "ranking", "sentido": "asc"}], "score_minimo": 3}
+            estr = [{"id": 1, "nome": "E", "padrao": True, "definicao": {
+                "prioridade_contatos": regra,
+                "localizacao": {"passos": {"1": [{"canal": "sms", "modo": "sempre"}]}}}}]
+            r = self._rodar(tmp, date(2026, 9, 2), estr)
+            self.assertEqual([l["contato"] for l in r["fila"]], ["11933330003"])   # ranking 1 primeiro
+            regra["criterios"] = [{"campo": "score", "sentido": "asc"}]               # score menor (ainda ≥ 3)
+            r2 = rodar_dia.rodar_dia(tmp / "base" / "clientes.csv", tmp / "base" / "contatos.csv", tmp / "ret",
+                                     date(2026, 9, 2), pasta_estado=tmp / "estado2", pasta_saida=tmp / "s2",
+                                     out=lambda *a: None, estrategias=estr)
+            self.assertEqual([l["contato"] for l in r2["fila"]], ["11922220002"])  # score 2 ficou de fora
+
+
 class TestEntreCredores(unittest.TestCase):
     """Mesmo CPF em dois credores: Hot e WhatsApp valem para os dois; 48h contam juntas."""
     def _rodar(self, tmp, comp):
