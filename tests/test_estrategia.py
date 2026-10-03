@@ -230,3 +230,16 @@ class TestRetornoEnriquecimento(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSemRepetir(unittest.TestCase):
+    def test_mesmo_canal_nao_repete_no_dia_do_mesmo_publico(self):
+        from motor.estrategia import validar_estrategia
+        over, erros = validar_estrategia({"localizacao": {"passos": {"1": [
+            {"canal": "whatsapp", "modo": "sempre"}, {"canal": "sms", "modo": "senao"},
+            {"canal": "SMS", "modo": "junto"},                                   # repetido: sai
+            {"canal": "sms", "modo": "sempre", "personas": [7]}]}}})              # outra raia: fica
+        canais = [(a["canal"], tuple(a.get("personas") or [])) for a in over["localizacao"]["passos"]["1"]]
+        self.assertEqual(canais, [("whatsapp", ()), ("sms", ()), ("sms", (7,))])
+        self.assertTrue(any("sms repetido no mesmo dia" in e for e in erros))
+

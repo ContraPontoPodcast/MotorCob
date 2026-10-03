@@ -774,13 +774,31 @@ def _pendentes_base(sb: Supabase) -> dict:
     return por
 
 
-PEDIDO_TEMPO_MAXIMO = timedelta(minutes=20)
+PEDIDO_TEMPO_MAXIMO = timedelta(minutes=10)
 
 
-def _pedidos_pendentes(sb: Supabase) -> dict:
+def _rodada_em_andamento(dados: Path | None) -> bool:
+    """Alguma rotina segura a trava (logs/.rodando.lock) agora?"""
+    if dados is None:
+        return False
+    arq = dados / "logs" / ".rodando.lock"
+    if not arq.exists():
+        return False
+    import fcntl
+    with open(arq, "a") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        fcntl.flock(f, fcntl.LOCK_UN)
+    return False
+
+
+def _pedidos_pendentes(sb: Supabase, dados: Path | None = None) -> dict:
     """{empresa_id: {credor_id: [ids]}} dos pedidos "Reenquadrar agora" do site ainda na fila.
-    Pedido "rodando" há mais de PEDIDO_TEMPO_MAXIMO (rotina interrompida: Mac desligou, erro
-    grave) vira erro, para não travar a carteira (só pode haver um pedido na fila)."""
+    Pedido "rodando" há mais de PEDIDO_TEMPO_MAXIMO sem nenhuma rotina em andamento no Mac
+    (rotina interrompida: Mac desligou, erro grave) vira erro, para não travar a carteira (só pode
+    haver um pedido na fila). Rotina longa ainda trabalhando não é interrompida."""
     try:
         linhas = sb.selecionar("pedidos_rotina", {"status": "in.(pendente,rodando)"}, ordem="id.asc") or []
     except ErroSupabase:   # banco sem a tabela de pedidos
@@ -792,7 +810,7 @@ def _pedidos_pendentes(sb: Supabase) -> dict:
                 inicio = datetime.fromisoformat(str(l.get("iniciado_em") or "").replace("Z", "+00:00"))
             except ValueError:
                 inicio = None
-            if inicio is None or inicio.tzinfo is None or inicio < limite:
+            if (inicio is None or inicio.tzinfo is None or inicio < limite) and not _rodada_em_andamento(dados):
                 sb.atualizar("pedidos_rotina", {"id": f"eq.{l['id']}"},
                              {"status": "erro", "terminado_em": agora(),
                               "erro": "a rotina foi interrompida (Mac desligou ou caiu): peça de novo"})
@@ -888,7 +906,7 @@ def _falhou(dados: Path, emp: dict) -> dict:
 def ha_arquivo_novo(dados: Path, sb: Supabase, empresa: str | None = None) -> frozenset:
     """Consulta leve (o plantão faz a cada poucos segundos): arquivos da carteira pendentes que
     ainda não falharam, como {(empresa_id, credor_id, maior id de envio)} (vazio = nada novo)."""
-    pend, pedidos = _pendentes_base(sb), _pedidos_pendentes(sb)
+    pend, pedidos = _pendentes_base(sb), _pedidos_pendentes(sb, dados)
     if not pend and not pedidos:
         return frozenset()
     saida = set()
@@ -905,7 +923,7 @@ def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = Non
     com a orquestração alterada depois da última rotina, ou (com hoje) com credor que ainda não fez
     a rotina do dia, ou com pedido "Reenquadrar agora" do site. Cada uma vem com "_credores",
     "_orquestracao", "_rotina" e "_pedidos"."""
-    pend, pedidos = _pendentes_base(sb), _pedidos_pendentes(sb)
+    pend, pedidos = _pendentes_base(sb), _pedidos_pendentes(sb, dados)
     rotina_vale = hoje is not None and _passou_hora_rotina(hoje)
     saida = []
     for emp in empresas_ativas(sb, empresa):

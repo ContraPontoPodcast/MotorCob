@@ -230,10 +230,14 @@ de outra pessoa pela certificação e a rotação segue.
   hoje, os dias úteis). Sem `dias_lista` (motor direto/testes): calendário corrido. Preventivo e
   quebra seguem as datas do acordo. Lista vazia: `gerar_fila(motivos=, motivo_de=)` + `previsao()`
   (próximos 7 dias) → alerta "LISTA VAZIA HOJE", resumo.sem_acao/proximos, previsao.json.
+- Desempenho: `persona.aprender` conta os valores distintos de cada coluna numa passada (era
+  quadrático no nº de clientes: 10 mil clientes levavam minutos a horas). Mesmo canal no mesmo
+  dia e mesma raia: `estrategia._sem_repetir` fica com o 1º e avisa.
 - "Reenquadrar agora": o site insere em `pedidos_rotina` (credor_id; status pendente). `ha_arquivo_novo`
   e `empresas_com_carga_nova` incluem os pedidos (o plantão roda em até 5 s, sem o freio de
   `vigia.json`); `vigiar` marca rodando → ok/erro com `execucao_id` (`_fechar_pedidos`). Um pedido
-  por carteira na fila (índice parcial); status só a rotina grava.
+  por carteira na fila (índice parcial); status só a rotina grava. "rodando" há mais de 10 min
+  sem rotina segurando a trava (`_rodada_em_andamento`) vira erro.
 - Enriquecimento na esteira: ação `{"canal": "enriquecimento"}` em qualquer dia (não na ordem do
   CPC); `gerar_fila(para_bureau=)` separa essa ação da cadeia de contato. `lista_enriquecimento`
   usa o dia programado; sem enriquecimento na esteira, vai na entrada (D+1). Mesmo cliente não
