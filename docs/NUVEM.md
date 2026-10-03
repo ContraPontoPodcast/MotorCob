@@ -115,7 +115,8 @@ A partir daí, o fluxo diário é:
    fornecedor e parcelas quando houver.
 2. No horário agendado — ou, com `scripts/instalar_mac.sh vigiar`, até 2 minutos depois
    de a carga do credor chegar (`rodar_dia.sh --vigiar` → `nuvem.sincronizar vigiar`, só
-   para a empresa que subiu a carga) — o Mac roda `scripts/rodar_dia.sh`, que: atualiza o motor
+   para a empresa que subiu a carga; e uma vez por dia, a partir das 06:00, para as carteiras
+   que ainda não rodaram) — o Mac roda `scripts/rodar_dia.sh`, que: atualiza o motor
    (`git pull`) → para cada empresa ativa, baixa os envios pendentes → converte a base
    bruta pelo `empresas/<slug>.json` → junta o retorno do enriquecimento → lê clusters,
    estratégias e canais que a empresa definiu no site →

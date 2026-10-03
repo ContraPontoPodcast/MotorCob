@@ -814,10 +814,44 @@ def credores_com_orquestracao_nova(sb: Supabase, emp: dict) -> dict:
     return {c: max(geral, mudou.get(c, "")) for c, quando in ultima.items() if max(geral, mudou.get(c, "")) > quando}
 
 
-def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = None) -> list[dict]:
+HORA_ROTINA = os.environ.get("MOTORCOB_HORA_ROTINA", "06:00")
+
+
+def _passou_hora_rotina(hoje: date, agora: datetime | None = None) -> bool:
+    """A rotina do dia vale a partir de HORA_ROTINA (hora do Mac); para outra data, vale direto."""
+    agora = agora or datetime.now()
+    if hoje != agora.date():
+        return True
+    h, m = (int(x) for x in HORA_ROTINA.split(":"))
+    return (agora.hour, agora.minute) >= (h, m)
+
+
+def credores_sem_rotina_hoje(sb: Supabase, emp: dict, hoje: date) -> set:
+    """Credores ativos que já rodaram alguma vez e ainda não têm rotina (ok ou erro) com data de
+    hoje: sem isto, num dia sem arquivo novo a lista não sai e a esteira não anda."""
+    try:
+        ex = sb.selecionar("execucoes", {"empresa_id": f"eq.{emp['id']}"}, ordem="iniciada_em.desc",
+                           limite=1000) or []
+    except ErroSupabase:
+        return set()
+    rodaram = {e.get("credor_id") for e in ex}
+    hoje_ja = {e.get("credor_id") for e in ex if (e.get("data_ref") or "")[:10] == hoje.isoformat()}
+    try:
+        ativos = {c["id"] for c in sb.selecionar("credores", {"empresa_id": f"eq.{emp['id']}",
+                                                              "ativo": "eq.true"}) or []}
+    except ErroSupabase:
+        ativos = set()
+    validos = ativos or {None}
+    return (rodaram & validos) - hoje_ja
+
+
+def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = None,
+                            hoje: date | None = None) -> list[dict]:
     """Empresas ativas com arquivo da carteira pendente que ainda não falhou nesse mesmo arquivo, ou
-    com a orquestração alterada depois da última rotina. Cada uma vem com "_credores"."""
+    com a orquestração alterada depois da última rotina, ou (com hoje) com credor que ainda não fez
+    a rotina do dia. Cada uma vem com "_credores", "_orquestracao" e "_rotina"."""
     pend = _pendentes_base(sb)
+    rotina_vale = hoje is not None and _passou_hora_rotina(hoje)
     saida = []
     for emp in empresas_ativas(sb, empresa):
         arq = _vigia_arq(dados, emp)
@@ -827,21 +861,33 @@ def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = Non
         novos = {c for c, i in pend.get(emp["id"], {}).items() if i > falhou.get(str(c), 0)}
         ja = falhou.get("orquestracao") if isinstance(falhou.get("orquestracao"), dict) else {}
         mudou = {c: q for c, q in credores_com_orquestracao_nova(sb, emp).items() if q > ja.get(str(c), "")}
-        if novos or mudou:
-            saida.append({**emp, "_credores": novos | set(mudou), "_orquestracao": mudou})
+        rotina = set()
+        if rotina_vale:
+            tentou = falhou.get("rotina") if isinstance(falhou.get("rotina"), dict) else {}
+            rotina = {c for c in credores_sem_rotina_hoje(sb, emp, hoje) if tentou.get(str(c)) != hoje.isoformat()}
+        if novos or mudou or rotina:
+            saida.append({**emp, "_credores": novos | set(mudou) | rotina, "_orquestracao": mudou,
+                          "_rotina": rotina})
     return saida
 
 
 def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empresa: str | None = None,
            pasta_empresas: Path = PASTA_EMPRESAS):
-    """Roda o dia dos credores que acabaram de receber arquivo da carteira. Retorna {slug: resultado}."""
+    """Roda o dia dos credores que acabaram de receber arquivo da carteira, que tiveram a orquestração
+    alterada ou que ainda não fizeram a rotina do dia (a partir de HORA_ROTINA). Retorna {slug: resultado}."""
     sb = sb or Supabase(*carregar_config(dados))
     resultados = {}
-    for emp in empresas_com_carga_nova(dados, sb, empresa):
+    for emp in empresas_com_carga_nova(dados, sb, empresa, hoje=data):
         alvo = emp.pop("_credores")
         so_config = emp.pop("_orquestracao", {})
+        rotina = emp.pop("_rotina", set())
         pend = _pendentes_base(sb).get(emp["id"], {})
-        motivo = "ORQUESTRAÇÃO ALTERADA" if set(so_config) == alvo else "ARQUIVO NOVO DA CARTEIRA"
+        if alvo - set(so_config) - rotina:
+            motivo = "ARQUIVO NOVO DA CARTEIRA"
+        elif so_config:
+            motivo = "ORQUESTRAÇÃO ALTERADA"
+        else:
+            motivo = "ROTINA DO DIA"
         out(f"{motivo}: {emp['slug']} — gerando a lista de {data:%d/%m/%Y}")
         arq = _vigia_arq(dados, emp)
         falhou = json.loads(arq.read_text(encoding="utf-8")).get("falhou_ate", {}) if arq.exists() else {}
@@ -857,6 +903,7 @@ def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empre
         if erro:   # não repete o mesmo erro: só tenta de novo quando chegar outro arquivo ou outra mudança
             falhou.update({str(c): pend.get(c, 0) for c in alvo})
             falhou["orquestracao"] = {**(falhou.get("orquestracao") or {}), **{str(c): q for c, q in so_config.items()}}
+            falhou["rotina"] = {**(falhou.get("rotina") or {}), **{str(c): data.isoformat() for c in alvo}}
             arq.parent.mkdir(parents=True, exist_ok=True)
             arq.write_text(json.dumps({"falhou_ate": falhou, "erro": erro[:500]}), encoding="utf-8")
         elif arq.exists():
@@ -942,7 +989,8 @@ def main():
     a = ap.parse_args()
     try:
         if a.modo == "vigiar" and a.checar:
-            sys.exit(0 if empresas_com_carga_nova(a.dados, Supabase(*carregar_config(a.dados)), a.empresa) else 3)
+            sys.exit(0 if empresas_com_carga_nova(a.dados, Supabase(*carregar_config(a.dados)), a.empresa, a.data)
+                     else 3)
         trava = _travar(a.dados, esperar=a.modo != "vigiar")
         if trava is None:
             return   # outra rodada em andamento: a vigia tenta de novo daqui a pouco

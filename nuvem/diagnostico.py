@@ -9,7 +9,7 @@ import os
 import subprocess
 import sys
 from collections import Counter
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -96,9 +96,10 @@ def main():
             info(f"   ({e['tipo']} não dispara a lista sozinho: entra junto com a próxima carga/retirada/"
                  f"acordo/baixa, ou rode scripts/rodar_dia.sh)")
     try:
-        novos = empresas_com_carga_nova(dados, sb)
+        novos = empresas_com_carga_nova(dados, sb, hoje=date.today())
         if novos:
-            info("a vigia vai pegar agora: " + ", ".join(e["slug"] for e in novos))
+            info("a vigia vai rodar agora (arquivo novo, orquestração alterada ou rotina do dia): "
+                 + ", ".join(e["slug"] for e in novos))
         elif any(e["tipo"] in ("base", "incremental", "retirada", "acordo", "baixa") for e in pend):
             ruim("a vigia está ignorando o arquivo porque a última tentativa deu erro com ele",
                  "Rode na mão para ver o erro: scripts/rodar_dia.sh  (ou suba o arquivo de novo)")

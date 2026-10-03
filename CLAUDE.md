@@ -224,7 +224,10 @@ de outra pessoa pela certificação e a rotação segue.
   virtual"/"E-mail", modo "senão", números em texto) e descarta só a parte inválida (aviso
   "esteira 'X': partes ignoradas"); a esteira vazia vira aviso. Vigia: `credores_com_orquestracao_nova`
   refaz a lista quando clusters/estrategias/segmentos_carteira/personas_usuario/canais_empresa/credores
-  mudam depois da última execução ok. `publicar_arquivos(limpar=True)` apaga do Storage os arquivos
+  mudam depois da última execução ok. Rotina do dia: a partir de `HORA_ROTINA` (env
+  `MOTORCOB_HORA_ROTINA`, padrão 06:00) a vigia roda uma vez cada credor ativo que já rodou e
+  ainda não tem execução com `data_ref` de hoje (`credores_sem_rotina_hoje`); erro grava
+  `falhou_ate.rotina` e não repete no dia. `publicar_arquivos(limpar=True)` apaga do Storage os arquivos
   do dia (raiz, ids/, bureau/) que não fazem mais parte da lista. Diagnóstico mostra a orquestração.
 - Modelos de persona: `regras/personas_modelo.json` (9 hipóteses de mercado, digital × analógico,
   com canais sugeridos) → tabela `personas_modelo` (migração gerada do JSON; teste confere). O
