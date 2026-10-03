@@ -18,6 +18,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261009000001_segmentos_carteira.sql
     psql -d sb -f supabase/migrations/20261010000001_credores_atualizado.sql
     psql -d sb -f supabase/migrations/20261011000001_personas_modelo.sql
+    psql -d sb -f supabase/migrations/20261012000001_personas_empresa_do_credor.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -220,6 +221,8 @@ checar("enquadramento: A vê a esteira dos seus clientes", True, "select string_
 checar("enquadramento: B não vê a A", True, "select count(*) from public.enquadramento where estrategia='Esteira X'", "authenticated", u["operb"], 0)
 # personas criadas pela empresa (por carteira)
 checar("planejamento A cria persona na carteira", True, f"insert into public.personas_usuario (empresa_id,credor_id,nome,condicoes) values ({EA},{CX},'Digitais SP','[{{\"campo\":\"UF\",\"op\":\"=\",\"valor\":\"SP\"}}]')", "authenticated", u["plan"])
+checar("site cria persona só com a carteira (empresa vem do credor)", True, f"insert into public.personas_usuario (credor_id,nome) values ({CX},'Sênior') returning empresa_id", "authenticated", u["plan"], EA)
+checar("persona só com carteira de outra empresa é recusada", False, f"insert into public.personas_usuario (credor_id,nome) values ({CB},'Z')", "authenticated", u["plan"])
 checar("operação não cria persona", False, f"insert into public.personas_usuario (empresa_id,credor_id,nome) values ({EA},{CX},'X')", "authenticated", u["oper"])
 checar("persona com carteira de outra empresa é recusada", False, f"insert into public.personas_usuario (empresa_id,credor_id,nome) values ({EA},{CB},'Y')", "service_role")
 checar("B não vê as personas da A", True, "select count(*) from public.personas_usuario", "authenticated", u["operb"], 0)
