@@ -191,3 +191,21 @@ class TestRotacaoAteOHot(unittest.TestCase):
                              {(nums[1], "HOT")})
             processar_dia({"C1": est}, cli, [], {}, date(2026, 9, d), regua,
                           enviados={"C1": [l["contato"] for l in fila]})
+
+
+class TestEsteiraPorPersona(unittest.TestCase):
+    """Esteira montada pelas personas: 1º canal da persona em 'sempre', as outras personas em
+    'senão' e, por último, um 'senão' sem persona para quem não caiu em nenhuma."""
+
+    def test_cada_cliente_recebe_so_o_canal_da_sua_persona(self):
+        from motor.fila import resolver
+        acoes = [{"canal": "whatsapp", "modo": "sempre", "personas": [1]},
+                 {"canal": "discador", "modo": "senao", "personas": [2]},
+                 {"canal": "sms", "modo": "senao"}]
+
+        def blend(minha):
+            return [c for c, _, _ in resolver(acoes, lambda a: [] if a.get("personas") and minha not in a["personas"]
+                                              else ["11999990000"])]
+        self.assertEqual(blend(1), ["whatsapp"])
+        self.assertEqual(blend(2), ["discador"])
+        self.assertEqual(blend(None), ["sms"])
