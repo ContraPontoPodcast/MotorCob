@@ -19,7 +19,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 
 from .certificacao import Certificacao, Evento
-from .marcacao import ESTADOS_MASSIVOS, Cliente, EstadoCliente, dia_na_carga, proximo_canal
+from .marcacao import ESTADOS_MASSIVOS, Cliente, EstadoCliente, dia_na_carga, dias_de_esteira, proximo_canal
 from .estrategia import ENRIQUECIMENTO, SEM_ACAO, normalizar, passa, raia, resolver
 from .persona import resolver_tokens
 from . import normalizacao as norm
@@ -410,13 +410,13 @@ def _passo_do_dia(est, cliente, hoje, regua, disp):
     if not _recencia_ok(est, hoje, regua):
         return None
     if est.estado == "LOC":
-        d = dia_na_carga(est, hoje)      # o dia da carga é o D+1
+        d = dia_na_carga(est, hoje, regua)      # o dia da 1ª lista é o D+1; só anda em dia de lista
         passo = regua["localizacao"]["passos"].get(str(d))
         return ("localizacao", f"D+{d}", acoes(passo), False) if passo else None
     if est.estado == "NCP":
         if est.giro_pausado or not est.giro_inicio or hoje < est.giro_inicio:
             return None
-        dias = (hoje - est.giro_inicio).days
+        dias = dias_de_esteira(regua, est.giro_inicio, hoje) - 1
         n, dia_ciclo = dias // regua["giro"]["ciclo_dias"] + 1, dias % regua["giro"]["ciclo_dias"] + 1
         passo = regua["giro"]["passos"].get(str(dia_ciclo))
         return ("giro", f"G{n}-dia{dia_ciclo}", acoes(passo), False) if passo else None
@@ -464,7 +464,8 @@ def lista_enriquecimento(estados: dict[str, EstadoCliente], flags: dict[str, dic
         motivo = None
         if idc in programados:
             motivo = programados[idc]
-        elif est.estado == "LOC" and est.safra == hoje and not esteira_tem_enriquecimento(regua.para(est.cluster_atual)):
+        elif (est.estado == "LOC" and not est.esteira_pendente and dia_na_carga(est, hoje, regua) == 1
+              and not esteira_tem_enriquecimento(regua.para(est.cluster_atual))):   # no D+1 de fato
             motivo = "entrada na carteira (D+1)"
         elif est.reenriquecer:
             motivo = est.reenriquecer

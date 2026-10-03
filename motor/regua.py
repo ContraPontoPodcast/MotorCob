@@ -28,6 +28,10 @@ class Regua:
     estrategia_padrao: int | None = None                           # da empresa, p/ quem não tem estratégia
     persona: object = field(default=None, compare=False)           # ModeloPersona (motor/persona.py)
     canais_cfg: dict = field(default_factory=dict, compare=False)   # canal -> limites da empresa
+    # dias em que a lista da carteira saiu (dias úteis com rotina): a esteira só anda neles.
+    # None = calendário corrido (uso direto do motor, testes)
+    dias_lista: tuple | None = field(default=None, compare=False)
+    hoje_lista: date | None = field(default=None, compare=False)
     _cache: dict = field(default_factory=dict, compare=False, repr=False)
 
     def com_clusters(self, regras, estrategias: dict | None = None, padrao: int | None = None,

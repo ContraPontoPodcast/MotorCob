@@ -13,6 +13,7 @@ Toda mudança de TAG gera um evento na trilha (com quem marcou). O extrato do
 cliente é a sequência desses eventos. O estado é atualizado uma vez por dia,
 pelos retornos do dia, pelas parcelas e pela passagem do tempo.
 """
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
@@ -238,7 +239,7 @@ def _aplicar_retornos(est, eventos, dia, regua, disponiveis, trilha):
     principal = est.canal_atual if est.canal_atual in tentados else tentados[0]
     quem = QUEM.get(principal, principal)
     if est.estado == "LOC":
-        est.ciclo = f"L{dia_na_carga(est, dia)}"
+        est.ciclo = f"L{dia_na_carga(est, dia, regua)}"
         trilha.marcar(dia, est, antes, f"localização por {'+'.join(QUEM[t] for t in tentados)} sem contato", quem)
     elif est.estado == "CPA":
         est.estado, est.canal, est.ciclo, est.tentativas = "CPB", regua.codigo(principal), "T1", 1
@@ -289,23 +290,41 @@ def _aplicar_acordo(est, parcelas, dia, baixas_ate, regua, trilha):
     trilha.marcar(dia, est, antes, motivo, "Sist. acordos")
 
 
-def dia_na_carga(est, dia) -> int:
+def dias_de_esteira(regua, inicio, dia) -> int:
+    """Quantos dias de esteira há de `inicio` a `dia` (os dois inclusos). A esteira só anda nos
+    dias em que a lista da carteira saiu (regua.dias_lista): rotina que não rodou, domingo e
+    feriado pausam. Depois de hoje, conta os dias úteis (a lista sai sozinha). Sem dias_lista:
+    calendário corrido."""
+    if regua is None or getattr(regua, "dias_lista", None) is None:
+        return (dia - inicio).days + 1
+    hoje = regua.hoje_lista
+    lista = regua.dias_lista
+    n = bisect_right(lista, min(dia, hoje)) - bisect_left(lista, inicio)
+    d = max(hoje, inicio - timedelta(days=1)) + timedelta(days=1)
+    while d <= dia:
+        if regua.janela(d) is not None:
+            n += 1
+        d += timedelta(days=1)
+    return max(n, 0)
+
+
+def dia_na_carga(est, dia, regua=None) -> int:
     """D+N da localização. A esteira do cliente começa no dia em que a 1ª lista dele sai de fato
     (inicio_esteira, em geral o dia da carga): se a lista não saiu (rotina não rodou, outra carteira
-    acionou…), o D+1 não aconteceu e ele continua no D+1."""
+    acionou…), o D+1 não aconteceu e ele continua no D+1. Depois, só anda nos dias de lista."""
     if est.esteira_pendente:
         return 1
-    return max(1, (dia - (est.inicio_esteira or est.safra)).days + 1)
+    return max(1, dias_de_esteira(regua, est.inicio_esteira or est.safra, dia))
 
 
 def _aplicar_tempo(est, dia, regua, trilha):
     antes = est.tag
-    if est.estado == "LOC" and dia_na_carga(est, dia) >= regua["localizacao"]["dias_sem_contato_para_ncp"]:
+    if est.estado == "LOC" and dia_na_carga(est, dia, regua) >= regua["localizacao"]["dias_sem_contato_para_ncp"]:
         _ir_para_giro(est, dia)
-        trilha.marcar(dia, est, antes, f"D+{dia_na_carga(est, dia)} sem contato → Não CPC, entra no giro",
+        trilha.marcar(dia, est, antes, f"D+{dia_na_carga(est, dia, regua)} sem contato → Não CPC, entra no giro",
                       "Automático")
     elif est.estado == "NCP" and est.giro_inicio and dia >= est.giro_inicio and not est.giro_pausado:
-        n = (dia - est.giro_inicio).days // regua["giro"]["ciclo_dias"] + 1
+        n = (dias_de_esteira(regua, est.giro_inicio, dia) - 1) // regua["giro"]["ciclo_dias"] + 1
         if n > regua["giro"]["max_ciclos"]:
             est.giro_pausado, est.ciclo = True, "RE"
             est.reenriquecer = f"{regua['giro']['max_ciclos']} ciclos de giro sem contato"
