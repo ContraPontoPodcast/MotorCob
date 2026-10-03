@@ -177,8 +177,11 @@ def _orquestracao(sb, dados, empresas, ok, ruim, info):
             nome = emp["slug"] + (f" / {u['codigo']}" if u["id"] is not None else "")
             base = estr.get(u.get("estrategia_id")) or padrao_emp
             origem = "da carteira" if estr.get(u.get("estrategia_id")) else "padrão da empresa"
-            info(f"{nome} · Demais clientes: " + (f"esteira '{base['nome']}' ({origem})" if base
-                                                   else "playbook MotorCob (nenhuma esteira padrão escolhida)"))
+            if u.get("demais_ativo") is False:
+                info(f"{nome} · Demais clientes: DESLIGADO (quem não cai em segmento fica sem ação)")
+            else:
+                info(f"{nome} · Demais clientes: " + (f"esteira '{base['nome']}' ({origem})" if base
+                                                       else "playbook MotorCob (nenhuma esteira padrão escolhida)"))
             em_uso = [c for c in clusters if c.get("ativo") and segmento_vale(c, u["id"], vinc)]
             for c in em_uso:
                 e = estr.get(c.get("estrategia_id"))

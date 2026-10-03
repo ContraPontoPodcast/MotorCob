@@ -173,6 +173,26 @@ class TestPersonasDaEmpresa(unittest.TestCase):
             self.assertEqual(depois["B1"], "VIP")
 
 
+    def test_demais_clientes_desligado_fica_sem_acao(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            (tmp / "bruto").mkdir()
+            (tmp / "bruto" / "carga_2026-09-02.csv").write_text(
+                CAB + "A1;K1;;800,00;01/08/2026;CARTAO;SP;11911110001;S;;;;\n"
+                      "B1;K2;;9000,00;01/08/2026;VEICULO;RJ;21922220002;S;;;;\n", encoding="utf-8")
+            rodar_dia.preparar_carteira(EMPRESA, tmp)
+            base = tmp / "base"
+            seg = [{"id": 1, "codigo": "SP", "nome": "Paulistas", "ordem": 1, "ativo": True,
+                    "condicoes": [{"campo": "UF", "op": "=", "valor": "SP"}]}]
+            r = rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", tmp / "ret", date(2026, 9, 2),
+                                    pasta_estado=tmp / "estado", pasta_saida=tmp / "saida", out=lambda *a: None,
+                                    atributos=base / "atributos.csv", clusters=seg, demais_ativo=False)
+            self.assertEqual({l["id_cliente"] for l in r["fila"]}, {"A1"})     # B1 não caiu em segmento
+            self.assertEqual(r["enquadramento"]["B1"]["estrategia"], "Demais clientes (desligado)")
+            self.assertNotIn("B1", {e["id_cliente"] for e in r["enriquecimento"]})
+            self.assertTrue(any("DEMAIS CLIENTES DESLIGADO: 1 " in a for a in r["alertas"]))
+
+
 class TestEnriquecimentoNaEsteira(unittest.TestCase):
     """Enriquecimento como ação da esteira e prioridade dos telefones pelo Score/Ranking do bureau."""
     def _rodar(self, tmp, dia, estr):
