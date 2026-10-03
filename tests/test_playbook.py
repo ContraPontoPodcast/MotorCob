@@ -177,13 +177,13 @@ class TestFila(unittest.TestCase):
         self.assertEqual(canais[5], [("agente_voz", ""), ("discador", "se agente_voz sem contato no dia")])
         self.assertEqual(canais[7], [("email", ""), ("sms", "")])  # SMS sempre com e-mail de reforço
 
-    def test_whatsapp_nao_certificado_exige_whatsapp_valido_e_um_numero(self):
+    def test_whatsapp_no_celular_um_numero_marcado_primeiro(self):
         c = Cenario(contatos=((TEL, "telefone"), (TEL2, "telefone"))).entrar(SEG)
         d = SEG                                                              # D+1 = dia da carga
-        sem = c.fila(d)[0]                                                   # sem flag: WhatsApp não vai…
-        self.assertEqual({(l["canal"], l["contato"]) for l in sem}, {("sms", TEL)})   # …vai SMS, 1 número
-        flags = {TEL: {"whatsapp_valido": True}, TEL2: {"whatsapp_valido": True}}
-        self.assertEqual(len(c.fila(d, flags)[0]), 1)                         # com flag: 1 número só
+        sem = c.fila(d)[0]                                                   # sem marcação: vai no celular,
+        self.assertEqual([l["canal"] for l in sem], ["whatsapp"])            # 1 número não certificado
+        marcado = c.fila(d, {TEL2: {"whatsapp_valido": True}})[0]           # o marcado vai na frente
+        self.assertEqual([(l["canal"], l["contato"]) for l in marcado], [("whatsapp", TEL2)])
 
     def test_recencia_48h_e_isencao_de_data_fixa(self):
         c = Cenario()

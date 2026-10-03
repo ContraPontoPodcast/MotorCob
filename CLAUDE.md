@@ -218,7 +218,11 @@ de outra pessoa pela certificação e a rotação segue.
   raia) começa: `inicio_esteira = hoje`; sem contato, adiado por outro credor, fora da carga,
   Demais desligado e domingo seguem no D+1 (`NAO_INICIA_ESTEIRA`). Rodada de novo no mesmo dia
   decide o início de hoje de novo. Sem contato: `fila.por_que_sem_contato` diz canal a canal
-  (alerta "SEM CONTATO" e motivo_hoje do cliente). `dia_na_carga` conta de `inicio_esteira` (ou
+  (alerta "SEM CONTATO" e motivo_hoje do cliente). Senão automático (`senao_automatico`, padrão
+  ligado): nenhum canal do dia com contato → substituto/reserva do playbook (alerta "SENÃO
+  AUTOMÁTICO"). WhatsApp: padrão vai a qualquer celular, número marcado (carga/bureau) na frente;
+  estratégia `{"whatsapp": {"so_marcados": true}}` exige a marcação. Alerta "PERFIL DOS CONTATOS"
+  (`_perfil_contatos`) em toda rotina. `dia_na_carga` conta de `inicio_esteira` (ou
   da safra, para quem usa o motor direto). Estado antigo: início = 1ª data em escolhas.csv; sem
   escolha e em LOC → pendente. Depois do início, a esteira (localização e giro) só anda em dia
   de lista: `rodar_dia.dias_de_lista` (pastas saida/AAAA-MM-DD em dia útil + hoje) vai para

@@ -115,6 +115,9 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
         if canal in CANAIS_VOZ if respeitar is None else respeitar:
             cands = [c for c in cands if not sinais.get(c.contato, {}).get("nao_perturbe")]
         if canal == "whatsapp":
+            # número marcado com WhatsApp (carga ou bureau) na frente; sem marcação, o celular vale
+            # (a não ser que a estratégia peça "só números marcados": exige_whatsapp_valido)
+            cands = sorted(cands, key=lambda c: not flags.get(c.contato, {}).get("whatsapp_valido"))
             ok = []
             for c in cands:
                 confiavel = c.status == "CERTIFICADO" or c.score >= w["limiar_score"] or c.contato == loc
@@ -229,7 +232,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
                pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None,
                para_bureau: dict | None = None, motivos: dict | None = None, motivo_de: dict | None = None,
-               detalhe_de: dict | None = None):
+               detalhe_de: dict | None = None, senao_auto: dict | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -243,6 +246,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     para_bureau: recebe {id_cliente: "régua passo"} de quem tem a ação "enriquecimento" hoje na esteira.
     motivos: recebe {motivo: clientes} — com ação ou por que ficou sem ação hoje (MOTIVOS).
     motivo_de: recebe {id_cliente: motivo}; detalhe_de: {id_cliente: por que ficou sem contato}.
+    senao_auto: recebe {"whatsapp → sms": clientes} de quem saiu pelo senão automático.
     pausados: acionados por outro credor nas últimas 48h (ou é a vez dele) — sem ação massiva
               hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`.
     """
@@ -314,6 +318,21 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             blend = resolver(lista, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
             if blend:
                 break
+        if tinha and not blend and rc.dados.get("senao_automatico", True):
+            # senão automático: nenhum canal do dia tem contato → substituto do playbook
+            # (WhatsApp/RCS → SMS, agente virtual → discador), em vez de deixar sem ação
+            tentados = {a["canal"] for t in tentativas for a in t}
+            auto = []
+            for c in dict.fromkeys(a["canal"] for t in tentativas for a in t):
+                sub = rc["substituto"].get(c) or rc["reserva"].get(c)
+                if sub and sub not in tentados and sub not in {a["canal"] for a in auto}:
+                    auto.append({"canal": sub, "modo": "sempre" if not auto else "senao", "numeros": None,
+                                 "contatos": {}})
+            if auto:
+                blend = resolver(auto, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
+                if blend and senao_auto is not None:
+                    senao_auto[f"{'+'.join(sorted(tentados - {ENRIQUECIMENTO}))} → {blend[0][0]}"] = \
+                        senao_auto.get(f"{'+'.join(sorted(tentados - {ENRIQUECIMENTO}))} → {blend[0][0]}", 0) + 1
         if not tinha:
             conta("bureau_hoje" if idc in (para_bureau or {}) else "sem_acao_na_raia")
             continue
@@ -350,11 +369,11 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                     "janela": f"{jan[0]}-{jan[1]}",
                     "persona": persona_rot,
                 })
-    if sum(sem_contato.values()):
+    if sum(sem_contato.values()) and detalhe_de is None:   # com detalhe_de, quem chama explica canal a canal
         alertas.append(f"SEM CONTATO PARA O PASSO DE HOJE: {sum(sem_contato.values())} clientes tinham ação hoje "
                        f"({', '.join(f'{k} {v}' for k, v in sorted(sem_contato.items()))}), mas nenhum contato "
-                       "serve para o canal (ex.: WhatsApp só vai para número com WhatsApp). Ponha um 'senão' "
-                       "(SMS, agente virtual ou discador) nesse dia da esteira, ou envie a base ao bureau.")
+                       "serve para o canal. Ponha um 'senão' (SMS, agente virtual ou discador) nesse dia da "
+                       "esteira, ou envie a base ao bureau.")
     fila.sort(key=lambda l: (l["prioridade"], l["id_cliente"], l["ordem_contato"]))
     fila = _aplicar_capacidade(fila, clientes, regua, alertas)
     return fila, disponiveis, alertas

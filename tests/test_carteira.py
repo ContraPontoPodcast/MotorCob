@@ -269,33 +269,44 @@ class TestPersonasDaEmpresa(unittest.TestCase):
             self.assertEqual({l["passo"] for l in r["fila"]}, {"D+3"})
 
 
-    def test_sem_contato_explica_o_canal_e_segura_o_d1(self):
-        """Carga sem WhatsApp marcado e D+1 só com WhatsApp: ninguém sai, todos seguem no D+1;
-        com um 'senão SMS' na esteira, o D+1 sai."""
+    def test_whatsapp_no_celular_e_senao_automatico(self):
+        """Carga sem WhatsApp marcado. Padrão: WhatsApp vai para o celular. Esteira com "só números
+        marcados": o celular sai pelo senão automático (SMS) e quem só tem fixo fica no D+1 com o
+        motivo; com discador no dia, sai."""
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
             (tmp / "bruto").mkdir()
             (tmp / "bruto" / "carga_2026-09-02.csv").write_text(
-                CAB + "A1;K1;;800,00;01/08/2026;CARTAO;SP;11911110001;N;;;;\n", encoding="utf-8")
+                CAB + "A1;K1;;800,00;01/08/2026;CARTAO;SP;11911110001;N;;;;\n"
+                      "B1;K2;;900,00;01/08/2026;CARTAO;RJ;2132220002;N;;;;\n", encoding="utf-8")
             rodar_dia.preparar_carteira(EMPRESA, tmp)
             base = tmp / "base"
 
-            def rodar(d, passos):
-                estr = [{"id": 1, "nome": "E", "padrao": True, "definicao": {"localizacao": {"passos": passos}}}]
+            def rodar(d, passos, so_marcados=None):
+                definicao = {"localizacao": {"passos": passos}}
+                if so_marcados is not None:
+                    definicao["whatsapp"] = {"so_marcados": so_marcados}
+                estr = [{"id": 1, "nome": "E", "padrao": True, "definicao": definicao}]
                 return rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", tmp / "ret", d,
                                            pasta_estado=tmp / "estado", pasta_saida=tmp / "saida",
                                            out=lambda *a: None, atributos=base / "atributos.csv", estrategias=estr)
             so_whats = {"1": [{"canal": "whatsapp", "modo": "sempre"}], "3": [{"canal": "sms", "modo": "sempre"}]}
             r = rodar(date(2026, 9, 2), so_whats)
-            self.assertEqual(r["fila"], [])
-            self.assertIn("WhatsApp: nenhum número marcado com WhatsApp", r["enquadramento"]["A1"]["motivo_hoje"])
+            self.assertEqual({(l["id_cliente"], l["canal"]) for l in r["fila"]}, {("A1", "whatsapp")})
+            self.assertTrue(any(a.startswith("PERFIL DOS CONTATOS: 2 clientes · 1 com celular · 1 só fixo · "
+                                             "0 com WhatsApp marcado") for a in r["alertas"]))
+            r = rodar(date(2026, 9, 2), so_whats, so_marcados=True)       # reenquadrou: só marcados
+            self.assertEqual({(l["id_cliente"], l["passo"], l["canal"]) for l in r["fila"]}, {("A1", "D+1", "sms")})
+            self.assertTrue(any(a.startswith("SENÃO AUTOMÁTICO: 1 clientes whatsapp → sms") for a in r["alertas"]))
+            self.assertIn("WhatsApp: nenhum número marcado com WhatsApp", r["enquadramento"]["B1"]["motivo_hoje"])
             self.assertTrue(any(a.startswith("SEM CONTATO: 1 clientes") for a in r["alertas"]))
-            self.assertTrue(r["estados"]["A1"].esteira_pendente)            # o D+1 não aconteceu
-            com_senao = {"1": [{"canal": "whatsapp", "modo": "sempre"}, {"canal": "sms", "modo": "senao"}],
-                         "3": [{"canal": "sms", "modo": "sempre"}]}
-            r = rodar(date(2026, 9, 2), com_senao)                        # ajustou e reenquadrou no mesmo dia
-            self.assertEqual({(l["passo"], l["canal"]) for l in r["fila"]}, {("D+1", "sms")})
+            self.assertTrue(r["estados"]["B1"].esteira_pendente)            # o D+1 dele não aconteceu
             self.assertEqual(r["estados"]["A1"].inicio_esteira, date(2026, 9, 2))
+            com_voz = {"1": [{"canal": "whatsapp", "modo": "sempre"}, {"canal": "discador", "modo": "senao"}],
+                       "3": [{"canal": "sms", "modo": "sempre"}]}
+            r = rodar(date(2026, 9, 2), com_voz, so_marcados=True)
+            self.assertIn(("B1", "D+1", "discador"), {(l["id_cliente"], l["passo"], l["canal"]) for l in r["fila"]})
+            self.assertEqual(r["estados"]["B1"].inicio_esteira, date(2026, 9, 2))
 
 
 class TestEnriquecimentoNaEsteira(unittest.TestCase):

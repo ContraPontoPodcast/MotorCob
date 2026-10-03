@@ -176,6 +176,10 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                 else:
                     sec[k] = f[k]
         saida[fase] = sec
+    if isinstance(definicao.get("whatsapp"), dict) and "so_marcados" in definicao["whatsapp"]:
+        # True: WhatsApp só para número marcado com WhatsApp (carga ou bureau); False: qualquer celular
+        v = definicao["whatsapp"]["so_marcados"]
+        saida["whatsapp"] = {"exige_whatsapp_valido": v is True or _simples(v) in ("true", "sim", "s", "1")}
     if "prioridade_contatos" in definicao:
         pr, erro = _prioridade(definicao["prioridade_contatos"])
         if erro:
