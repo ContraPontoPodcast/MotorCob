@@ -628,7 +628,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid,
                                                         r.get("enquadramento")), conflito=conflito)
         except ErroSupabase as ex:   # banco sem as colunas do enquadramento: grava o resto e avisa
-            if not any(c in str(ex) for c in ("estrategia", "persona", "acao_hoje", "na_carga", "passo_hoje")):
+            if not any(c in str(ex) for c in ("estrategia", "persona", "acao_hoje", "na_carga", "passo_hoje",
+                                              "enriq_")):
                 raise
             sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid),
                        conflito=conflito)

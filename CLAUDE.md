@@ -208,6 +208,14 @@ de outra pessoa pela certificação e a rotação segue.
   põe o nome no atributo "persona" (vale em segmento e no aprendizado) e em
   enquadramento.persona_usuario; ação da estratégia com "personas": [ids] só vai para esses
   clientes (`gerar_fila(publico=)`; fora dela o "senão" seguinte vai).
+- Enriquecimento na esteira: ação `{"canal": "enriquecimento"}` em qualquer dia (não na ordem do
+  CPC); `gerar_fila(para_bureau=)` separa essa ação da cadeia de contato. `lista_enriquecimento`
+  usa o dia programado; sem enriquecimento na esteira, vai na entrada (D+1). Mesmo cliente não
+  volta ao bureau antes de `INTERVALO_BUREAU` (30) dias (estado/bureau_enviados.json). Saída
+  `saida/<data>/bureau/enviar_bureau.csv` (CPF_CNPJ;ID_CLIENTE). Enquadramento: enriq_enviado e
+  enriq_retorno. `prioridade_contatos` na estratégia (critérios ranking/score/whatsapp/rcs/bureau
+  asc|desc, score_minimo, ranking_maximo) ordena e filtra os telefones em `candidatos` depois do
+  Hot e do rodízio; sem dado do bureau passa e vai depois.
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias

@@ -491,3 +491,12 @@ create view public.enquadramento with (security_invoker = true) as
            coalesce(sum(saldo), 0)::numeric(16, 2) as saldo
     from public.estado_cliente
     group by 1, 2, 3, 4, 5, 6, 7;
+
+-- ===================== 20261008000001_enriquecimento_esteira.sql
+-- Enriquecimento mapeado por cliente: quando a esteira mandou o cliente para o bureau e quando
+-- chegou o último retorno (telefones atualizados pelo bureau). A ação "enriquecimento" e a regra
+-- de prioridade dos telefones (Score/Ranking) ficam em estrategias.definicao: não precisam de
+-- tabela nova. Pode ser rodado de novo sem erro.
+alter table public.estado_cliente
+    add column if not exists enriq_enviado date,
+    add column if not exists enriq_retorno date;
