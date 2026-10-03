@@ -107,3 +107,45 @@ class TestRotina(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestModelosDePersona(unittest.TestCase):
+    """Catálogo de modelos de persona: condições válidas, SQL igual ao JSON e efeito esperado."""
+    def setUp(self):
+        import json
+        self.dados = json.loads((RAIZ / "regras" / "personas_modelo.json").read_text(encoding="utf-8"))["modelos"]
+
+    def test_modelos_validos_e_iguais_no_sql(self):
+        from motor.cluster import carregar_personas
+        from motor.estrategia import CANAIS
+        sql = (RAIZ / "supabase" / "migrations" / "20261011000001_personas_modelo.sql").read_text(encoding="utf-8")
+        pers, avisos = carregar_personas([{**m, "id": i} for i, m in enumerate(self.dados)])
+        self.assertEqual((len(pers), avisos), (len(self.dados), []))
+        for m in self.dados:
+            self.assertIn(m["propensao"], ("digital", "analogico"))
+            self.assertTrue(set(m["canais_sugeridos"]) <= set(CANAIS), m["id"])
+            self.assertIn(f'"id": "{m["id"]}"', sql)
+            self.assertIn(m["descricao"].replace("'", "''"), sql)
+
+    def test_cada_perfil_cai_no_modelo_esperado(self):
+        from datetime import date
+        from motor.cluster import carregar_personas, persona_de
+        from motor.marcacao import Cliente
+        pers, _ = carregar_personas([{**m, "id": m["id"]} for m in self.dados])
+        hoje = date(2026, 10, 5)
+
+        def cli(saldo=800, atraso=20, **atrib):
+            base = {"tem_whatsapp": "não", "tem_rcs": "não", "tem_email": "não", "tem_celular": "sim", "so_fixo": "não"}
+            return Cliente("C", hoje, saldo, atraso, atributos={**base, **atrib})
+
+        casos = {"so-telefone-fixo": cli(so_fixo="sim", tem_celular="não"),
+                 "senior": cli(idade="67", tem_whatsapp="sim"),
+                 "digital-nativo": cli(idade="24", tem_whatsapp="sim"),
+                 "ticket-alto": cli(saldo=25000, atraso=90, tem_whatsapp="sim"),
+                 "conectado": cli(saldo=3000, atraso=60, tem_whatsapp="sim", tem_email="sim"),
+                 "atraso-recente-ticket-baixo": cli(),
+                 "atraso-longo": cli(saldo=3000, atraso=400, tem_rcs="sim"),
+                 "sem-canal-digital": cli(saldo=3000, atraso=60),
+                 "celular-sem-whatsapp": cli(saldo=3000, atraso=60, tem_rcs="sim")}
+        for esperado, c in casos.items():
+            self.assertEqual(persona_de(pers, c, hoje).id, esperado, esperado)

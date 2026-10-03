@@ -190,7 +190,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     if atrib:
         clientes = {k: replace(c, atributos=atrib.get(k, {})) for k, c in clientes.items()}
     faltam = sorted(colunas_usadas(list(regua.clusters)) - {k for a in atrib.values() for k in a}
-                    - {"persona", "ddd", "tem_whatsapp", "tem_rcs"})   # calculadas pelo motor
+                    - set(CALCULADAS))   # calculadas pelo motor
     if faltam:
         avisos_cluster.append(f"regras de cluster usam colunas que não estão na base: {faltam}")
     contatos, pessoa_de, _ = carregar_carteira(carteira_csv)
@@ -229,13 +229,18 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         contatos_por[c["id_cliente"]].append(c["contato"])
         dados_contatos[c["id_cliente"]].append(c)
     # características derivadas dos contatos: valem para regras de segmento e para as personas
+    from motor.normalizacao import celular
     for k, c in list(clientes.items()):
         tels = [x for x in dados_contatos.get(k, []) if x["tipo"] == "telefone"]
+        mails = [x for x in dados_contatos.get(k, []) if x["tipo"] == "email"]
+        cel = any(celular(x["contato"]) for x in tels)
+        extra = {"tem_email": "sim" if mails else "não", "tem_celular": "sim" if cel else "não",
+                 "so_fixo": "sim" if tels and not cel else "não", "qtd_telefones": str(len(tels)),
+                 "tem_whatsapp": "sim" if any(x["whatsapp_valido"] for x in tels) else "não",
+                 "tem_rcs": "sim" if any(x.get("rcs") for x in tels) else "não"}
         if tels:
-            extra = {"ddd": tels[0]["contato"][:2],
-                     "tem_whatsapp": "sim" if any(x["whatsapp_valido"] for x in tels) else "não",
-                     "tem_rcs": "sim" if any(x.get("rcs") for x in tels) else "não"}
-            clientes[k] = replace(c, atributos={**extra, **(c.atributos or {})})
+            extra["ddd"] = tels[0]["contato"][:2]
+        clientes[k] = replace(c, atributos={**extra, **(c.atributos or {})})
     from motor.cluster import carregar_personas, persona_de
     pers_usuario, avisos_pers = carregar_personas(_ler_lista(personas_usuario))
     avisos_cluster += avisos_pers
@@ -436,6 +441,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "dias_processados": (hoje - inicio).days if inicio < hoje else 0}
 
 
+CALCULADAS = ("persona", "ddd", "tem_whatsapp", "tem_rcs", "tem_email", "tem_celular", "so_fixo", "qtd_telefones",
+              "idade")   # atributos que o motor calcula (valem em segmentos e personas)
 DIAS_ACOES = 60
 INTERVALO_BUREAU = 30   # o mesmo cliente não volta ao bureau antes disso
 

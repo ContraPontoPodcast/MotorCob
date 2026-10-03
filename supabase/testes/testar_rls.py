@@ -16,6 +16,8 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261007000001_personas_usuario.sql
     psql -d sb -f supabase/migrations/20261008000001_enriquecimento_esteira.sql
     psql -d sb -f supabase/migrations/20261009000001_segmentos_carteira.sql
+    psql -d sb -f supabase/migrations/20261010000001_credores_atualizado.sql
+    psql -d sb -f supabase/migrations/20261011000001_personas_modelo.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -232,6 +234,10 @@ checar("planejamento pausa o segmento na carteira", True, f"update public.segmen
 checar("vínculo com carteira de outra empresa é recusado", False, f"insert into public.segmentos_carteira (empresa_id,cluster_id,credor_id) values ({EA},{VE},{CB})", "service_role")
 checar("operação não vincula segmento", False, f"insert into public.segmentos_carteira (empresa_id,cluster_id,credor_id) values ({EA},{VE},{CX})", "authenticated", u["oper"])
 checar("B não vê os vínculos da A", True, "select count(*) from public.segmentos_carteira", "authenticated", u["operb"], 0)
+# modelos de persona (catálogo)
+checar("todos leem os modelos de persona", True, "select count(*) from public.personas_modelo", "authenticated", u["operb"], 9)
+checar("site não altera modelo de persona", False, "insert into public.personas_modelo (id,propensao,nome,descricao,condicoes) values ('x','digital','x','x','[]')", "authenticated", u["admin"])
+checar("anônimo não lê modelos", False, "select count(*) from public.personas_modelo", "anon")
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

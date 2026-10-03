@@ -226,6 +226,11 @@ de outra pessoa pela certificação e a rotação segue.
   refaz a lista quando clusters/estrategias/segmentos_carteira/personas_usuario/canais_empresa/credores
   mudam depois da última execução ok. `publicar_arquivos(limpar=True)` apaga do Storage os arquivos
   do dia (raiz, ids/, bureau/) que não fazem mais parte da lista. Diagnóstico mostra a orquestração.
+- Modelos de persona: `regras/personas_modelo.json` (9 hipóteses de mercado, digital × analógico,
+  com canais sugeridos) → tabela `personas_modelo` (migração gerada do JSON; teste confere). O
+  usuário copia para `personas_usuario`. Atributos calculados para personas/segmentos
+  (`rodar_dia.CALCULADAS`): idade (da data de nascimento — que não vira atributo — ou IDADE),
+  tem_email, tem_celular, so_fixo, qtd_telefones, tem_whatsapp, tem_rcs, ddd.
 - `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
   de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias

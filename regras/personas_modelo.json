@@ -1,0 +1,104 @@
+{
+ "_doc": "Modelos de persona do MotorCob: hipóteses de mercado (cobrança no Brasil) sobre quem responde melhor no digital e quem responde melhor no analógico (voz). São ponto de partida: o usuário copia para a carteira, ajusta, e a inteligência (personas aprendidas) confirma ou corrige com as ocorrências. A ordem importa: o cliente fica na primeira que combina. Campos calculados pelo MotorCob: idade (da data de nascimento ou da coluna IDADE da carga), tem_whatsapp, tem_rcs, tem_email, tem_celular, so_fixo, qtd_telefones, ddd, saldo, dias_atraso, qtd_contratos.",
+ "modelos": [
+  {
+   "id": "digital-nativo",
+   "propensao": "digital",
+   "nome": "Digital nativo",
+   "descricao": "Até 35 anos e com WhatsApp. Responde rápido por mensagem, prefere resolver sozinho por link, rejeita ligação. Costuma aceitar acordo no autoatendimento.",
+   "canais_sugeridos": ["whatsapp", "rcs", "sms", "email"],
+   "condicoes": [{"campo": "idade", "op": "<=", "valor": 35}, {"campo": "tem_whatsapp", "op": "=", "valor": "sim"}],
+   "campos_necessarios": ["idade"],
+   "ordem": 10,
+   "cor": "#1F8A4C"
+  },
+  {
+   "id": "conectado",
+   "propensao": "digital",
+   "nome": "Conectado (WhatsApp + e-mail)",
+   "descricao": "Tem WhatsApp e e-mail, qualquer idade. Lê mensagem e abre e-mail; voz só como reforço depois de dias sem resposta.",
+   "canais_sugeridos": ["whatsapp", "email", "sms", "agente_voz"],
+   "condicoes": [{"campo": "tem_whatsapp", "op": "=", "valor": "sim"}, {"campo": "tem_email", "op": "=", "valor": "sim"}],
+   "campos_necessarios": [],
+   "ordem": 20,
+   "cor": "#3B5BA9"
+  },
+  {
+   "id": "atraso-recente-ticket-baixo",
+   "propensao": "digital",
+   "nome": "Atraso recente, ticket baixo",
+   "descricao": "Até 30 dias de atraso, saldo até R$ 1.500 e celular. Esquecimento ou aperto pontual: lembrete com link de pagamento resolve; ligação é custo alto para pouco saldo.",
+   "canais_sugeridos": ["sms", "whatsapp", "rcs", "agente_voz"],
+   "condicoes": [{"campo": "dias_atraso", "op": "<=", "valor": 30}, {"campo": "saldo", "op": "<=", "valor": 1500}, {"campo": "tem_celular", "op": "=", "valor": "sim"}],
+   "campos_necessarios": [],
+   "ordem": 30,
+   "cor": "#7A4FB0"
+  },
+  {
+   "id": "celular-sem-whatsapp",
+   "propensao": "digital",
+   "nome": "Celular sem WhatsApp confirmado",
+   "descricao": "Tem celular, mas o WhatsApp não foi confirmado. RCS e SMS chegam; o agente virtual entra se não houver clique.",
+   "canais_sugeridos": ["rcs", "sms", "agente_voz", "discador"],
+   "condicoes": [{"campo": "tem_celular", "op": "=", "valor": "sim"}, {"campo": "tem_whatsapp", "op": "=", "valor": "não"}],
+   "campos_necessarios": [],
+   "ordem": 70,
+   "cor": "#0E7C86"
+  },
+  {
+   "id": "senior",
+   "propensao": "analogico",
+   "nome": "Sênior (60+)",
+   "descricao": "60 anos ou mais. Confia mais na voz humana, desconfia de link (medo de golpe) e prefere negociar falando. Mensagem curta e sem link como aviso.",
+   "canais_sugeridos": ["discador", "agente_voz", "sms"],
+   "condicoes": [{"campo": "idade", "op": ">=", "valor": 60}],
+   "campos_necessarios": ["idade"],
+   "ordem": 5,
+   "cor": "#A2552B"
+  },
+  {
+   "id": "so-telefone-fixo",
+   "propensao": "analogico",
+   "nome": "Só telefone fixo",
+   "descricao": "Nenhum celular na carga, só fixo. Não recebe WhatsApp, SMS nem RCS: voz é o único caminho (melhor horário: fim de tarde e sábado de manhã).",
+   "canais_sugeridos": ["discador", "agente_voz"],
+   "condicoes": [{"campo": "so_fixo", "op": "=", "valor": "sim"}],
+   "campos_necessarios": [],
+   "ordem": 1,
+   "cor": "#475569"
+  },
+  {
+   "id": "ticket-alto",
+   "propensao": "analogico",
+   "nome": "Ticket alto (R$ 10 mil+)",
+   "descricao": "Saldo de R$ 10 mil ou mais (veículo, imobiliário, empréstimo). Acordo exige negociação: proposta, parcelamento, entrada. Voz humana fecha; WhatsApp apoia com a proposta por escrito.",
+   "canais_sugeridos": ["discador", "whatsapp", "agente_voz", "email"],
+   "condicoes": [{"campo": "saldo", "op": ">=", "valor": 10000}],
+   "campos_necessarios": [],
+   "ordem": 15,
+   "cor": "#C62828"
+  },
+  {
+   "id": "atraso-longo",
+   "propensao": "analogico",
+   "nome": "Atraso longo (180 dias+)",
+   "descricao": "180 dias ou mais de atraso. Já ignorou mensagens; voz (agente virtual em massa, humano no fim do funil) recupera o contato. Vale enriquecer antes.",
+   "canais_sugeridos": ["agente_voz", "discador", "sms"],
+   "condicoes": [{"campo": "dias_atraso", "op": ">=", "valor": 180}],
+   "campos_necessarios": [],
+   "ordem": 40,
+   "cor": "#E9A23B"
+  },
+  {
+   "id": "sem-canal-digital",
+   "propensao": "analogico",
+   "nome": "Sem canal digital",
+   "descricao": "Sem WhatsApp, sem RCS e sem e-mail. Mesmo com celular, só a voz e o SMS chegam; priorize enriquecimento para achar canais.",
+   "canais_sugeridos": ["agente_voz", "discador", "sms"],
+   "condicoes": [{"campo": "tem_whatsapp", "op": "=", "valor": "não"}, {"campo": "tem_rcs", "op": "=", "valor": "não"}, {"campo": "tem_email", "op": "=", "valor": "não"}],
+   "campos_necessarios": [],
+   "ordem": 60,
+   "cor": "#6B7280"
+  }
+ ]
+}
