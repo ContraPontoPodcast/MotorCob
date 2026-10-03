@@ -54,6 +54,8 @@ ordem, › Run. Cada um deve terminar sem erro:
    lista quando a esteira padrão muda)
 15. `20261011000001_personas_modelo.sql` (catálogo de modelos de persona digital × analógico,
    de `regras/personas_modelo.json`)
+16. `20261012000001_personas_empresa_do_credor.sql` (persona e segmento gravados só com a
+   carteira: a empresa vem do credor; sem isso "Usar nesta carteira" não gravava)
 
 Atalho para quem já aplicou até o 4: `supabase/atualizar_producao_2026-10.sql` junta do 5
 ao 15 num arquivo só (pode ser rodado mais de uma vez). Site: `docs/PROMPT_SITE_ATUALIZACAO.md`.
