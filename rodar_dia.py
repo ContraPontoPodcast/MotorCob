@@ -126,13 +126,27 @@ def preparar_enriquecimento(entrada, pasta_enriq, pasta_base) -> dict | None:
     return rel
 
 
+NAO_INICIA_ESTEIRA = {"outro_credor", "fora_da_carga", "encerrado", "domingo_feriado", "demais_desligado"}
+
+
 def carregar_estado(pasta: Path):
     arq = pasta / "estados.json"
     if not arq.exists():
         return {}, None
     d = json.loads(arq.read_text(encoding="utf-8"))
-    return ({k: EstadoCliente.de_json(v) for k, v in d["estados"].items()},
-            date.fromisoformat(d["ultimo_dia"]) if d.get("ultimo_dia") else None)
+    estados = {k: EstadoCliente.de_json(v) for k, v in d["estados"].items()}
+    faltam = [k for k, v in d["estados"].items() if "esteira_pendente" not in v]
+    if faltam:   # estado de antes desta regra: a esteira começou na 1ª lista que saiu para o cliente
+        primeira = {}
+        for (dia, idc), ls in carregar_escolhas(pasta).items():
+            if any(str(l.get("reserva")) != "1" for l in ls):
+                primeira[idc] = min(primeira.get(idc, dia), dia)
+        for k in faltam:
+            if k in primeira:
+                estados[k].inicio_esteira = date.fromisoformat(primeira[k])
+            elif estados[k].estado == "LOC":   # nenhuma lista saiu para ele: o D+1 não aconteceu
+                estados[k].esteira_pendente = True
+    return estados, date.fromisoformat(d["ultimo_dia"]) if d.get("ultimo_dia") else None
 
 
 def salvar_estado(pasta: Path, estados, ultimo_dia):
@@ -276,10 +290,11 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         certs = certificar_contatos(ev_ate, dia, contatos, pessoa_de)
         _, disp, _ = gerar_fila(estados, clientes, certs, flags, parcelas, dia, regua, ev_ate, sinais)
         trilha += processar_dia(estados, clientes, por_dia.get(dia, []), parcelas, dia, regua, disp,
-                                baixas_ate=dia, atualizados=atualizados, enviados=enviados_dia.get(dia.isoformat()))
+                                baixas_ate=dia, atualizados=atualizados, enviados=enviados_dia.get(dia.isoformat()),
+                                pela_lista=True)
         dia += timedelta(days=1)
     ultimo = max(ultimo or hoje - timedelta(days=1), hoje - timedelta(days=1))
-    trilha += registrar_entradas(estados, clientes, hoje, regua)   # carga de hoje já entra hoje
+    trilha += registrar_entradas(estados, clientes, hoje, regua, pela_lista=True)   # carga de hoje já entra hoje
     salvar_estado(pasta_estado, estados, ultimo)
     _salvar(pasta_estado / "trilha.csv", trilha, anexar=True)
 
@@ -303,10 +318,16 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     ativos_fila = ativos
     if desligados:
         ativos_fila = (set(estados) if ativos is None else ativos) - desligados
-    adiados, para_bureau, motivos = set(), {}, {}
+    adiados, para_bureau, motivos, motivo_de = set(), {}, {}, {}
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
-                                  motivos=motivos)
+                                  motivos=motivos, motivo_de=motivo_de)
+    # a esteira do cliente começa hoje se a lista dele saiu hoje (ou se não depende de ação: sem
+    # passo no D+1, sem contato, persona em "sem ação"). Adiado, fora da carga, domingo: segue no D+1
+    for k, m in motivo_de.items():
+        if estados[k].esteira_pendente and m not in NAO_INICIA_ESTEIRA:
+            estados[k].esteira_pendente, estados[k].inicio_esteira = False, hoje
+    salvar_estado(pasta_estado, estados, ultimo)
     if desligados:   # quem o "Demais desligado" tirou da lista contou como fora da carga
         n = len(desligados if ativos is None else desligados & ativos)
         motivos["fora_da_carga"] = motivos.get("fora_da_carga", 0) - n

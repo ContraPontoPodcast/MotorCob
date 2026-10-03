@@ -198,7 +198,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                parcelas: dict, hoje: date, regua: Regua, eventos: list[Evento] | None = None,
                sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
                pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None,
-               para_bureau: dict | None = None, motivos: dict | None = None):
+               para_bureau: dict | None = None, motivos: dict | None = None, motivo_de: dict | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -211,6 +211,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     publico: {id_cliente: id da persona criada pela empresa}; ação com "personas" só vai para elas.
     para_bureau: recebe {id_cliente: "régua passo"} de quem tem a ação "enriquecimento" hoje na esteira.
     motivos: recebe {motivo: clientes} — com ação ou por que ficou sem ação hoje (MOTIVOS).
+    motivo_de: recebe {id_cliente: motivo}.
     pausados: acionados por outro credor nas últimas 48h (ou é a vez dele) — sem ação massiva
               hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`.
     """
@@ -241,7 +242,11 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio, sin)
         disp = _disponiveis_cpc(cands, est, flags, sin, rc)
         disponiveis[idc] = disp
-        conta = (lambda m: motivos.__setitem__(m, motivos.get(m, 0) + 1)) if motivos is not None else (lambda m: None)
+        def conta(m, idc=idc):
+            if motivos is not None:
+                motivos[m] = motivos.get(m, 0) + 1
+            if motivo_de is not None:
+                motivo_de[idc] = m
         if est.estado in ("BLQ", "LIQ", "COL"):
             conta("encerrado")
             continue
@@ -361,6 +366,12 @@ def previsao(estados: dict, clientes: dict, hoje: date, regua: Regua, ativos=Non
              fora: set = frozenset()) -> list[dict]:
     """Próximos dias com quantos clientes a esteira aciona em cada um (estimativa: sem contar os
     retornos de hoje em diante nem a checagem de contato)."""
+    from dataclasses import replace as _replace
+    proximo_util = next((hoje + timedelta(days=n) for n in range(1, 15)
+                         if regua.janela(hoje + timedelta(days=n)) is not None), None)
+    # quem ainda não começou a esteira começa na próxima lista
+    estados = {k: (_replace(e, esteira_pendente=False, inicio_esteira=proximo_util) if e.esteira_pendente else e)
+               for k, e in estados.items()}
     saida = []
     for n in range(1, dias + 1):
         d = hoje + timedelta(days=n)

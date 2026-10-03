@@ -213,6 +213,13 @@ de outra pessoa pela certificação e a rotação segue.
 - "Demais clientes" (sem segmento em uso): esteira padrão da carteira (`credores.estrategia_id`).
   `credores.demais_ativo = false` → `rodar_dia(demais_ativo=False)` tira esses clientes da ação
   massiva e do bureau (acordo segue), estrategia "Demais clientes (desligado)" e alerta.
+- Início da esteira: `rodar_dia` cria o cliente com `esteira_pendente` (D+1 até a 1ª lista dele
+  sair). Ao gerar a lista de hoje, quem teve ação (ou sem contato / sem passo / "sem ação" na
+  raia) começa: `inicio_esteira = hoje`; adiado por outro credor, fora da carga, Demais desligado
+  e domingo seguem no D+1 (`NAO_INICIA_ESTEIRA`). `dia_na_carga` conta de `inicio_esteira` (ou
+  da safra, para quem usa o motor direto). Estado antigo: início = 1ª data em escolhas.csv; sem
+  escolha e em LOC → pendente. Lista vazia: `gerar_fila(motivos=, motivo_de=)` + `previsao()`
+  (próximos 7 dias) → alerta "LISTA VAZIA HOJE", resumo.sem_acao/proximos, previsao.json.
 - "Reenquadrar agora": o site insere em `pedidos_rotina` (credor_id; status pendente). `ha_arquivo_novo`
   e `empresas_com_carga_nova` incluem os pedidos (o plantão roda em até 5 s, sem o freio de
   `vigia.json`); `vigiar` marca rodando → ok/erro com `execucao_id` (`_fechar_pedidos`). Um pedido

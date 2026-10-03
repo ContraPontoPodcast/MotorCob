@@ -1,6 +1,7 @@
 """Carteira do credor: carga geral, incremental, retirada, acordo e baixa."""
 import csv
 import shutil
+import json
 import tempfile
 import unittest
 from datetime import date
@@ -216,6 +217,33 @@ class TestPersonasDaEmpresa(unittest.TestCase):
             self.assertIn("2 a esteira não tem passo hoje", alerta)
             self.assertIn("Próxima lista: 04/09 com cerca de 2 clientes", alerta)
             self.assertFalse((tmp / "saida" / "2026-09-03" / "fila_do_dia.csv").exists())
+
+
+    def test_d1_so_conta_quando_a_lista_sai(self):
+        """Carga em 02/09, mas a 1ª rotina só rodou em 03/09: o D+1 é 03/09, não 02/09."""
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            (tmp / "bruto").mkdir()
+            (tmp / "bruto" / "carga_2026-09-02.csv").write_text(
+                CAB + "A1;K1;;800,00;01/08/2026;CARTAO;SP;11911110001;S;;;;\n", encoding="utf-8")
+            rodar_dia.preparar_carteira(EMPRESA, tmp)
+            base = tmp / "base"
+            rodar = lambda d: rodar_dia.rodar_dia(  # noqa: E731
+                base / "clientes.csv", base / "contatos.csv", tmp / "ret", d, pasta_estado=tmp / "estado",
+                pasta_saida=tmp / "saida", out=lambda *a: None, atributos=base / "atributos.csv")
+            r = rodar(date(2026, 9, 3))
+            self.assertEqual({(l["passo"], l["canal"]) for l in r["fila"]}, {("D+1", "whatsapp")})
+            self.assertEqual(r["estados"]["A1"].inicio_esteira, date(2026, 9, 3))
+            self.assertEqual(r["proximos"][1]["passos"], {"localizacao D+3": 1})   # 05/09 (D+3)
+            # estado de antes desta regra, sem lista para o cliente: volta ao D+1
+            arq = tmp / "estado" / "estados.json"
+            d = json.loads(arq.read_text(encoding="utf-8"))
+            for v in d["estados"].values():
+                v.pop("esteira_pendente"); v.pop("inicio_esteira")
+            arq.write_text(json.dumps(d), encoding="utf-8")
+            (tmp / "estado" / "escolhas.csv").unlink()
+            est, _ = rodar_dia.carregar_estado(tmp / "estado")
+            self.assertTrue(est["A1"].esteira_pendente)
 
 
 class TestEnriquecimentoNaEsteira(unittest.TestCase):
