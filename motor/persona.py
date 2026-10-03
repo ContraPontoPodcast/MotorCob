@@ -177,7 +177,17 @@ def aprender(eventos, clientes, regua, dia, contatos_por=None, custos: dict | No
     m.global_ = {c: (g[c][0] + 1) / (g[c][1] + 20) for c in CANAIS}  # prior fraco: ~5%
     m.vol_global = {c: g[c][1] for c in CANAIS}
     # seleção das características
-    colunas = sorted({k for f in feats.values() for k in f if len({x.get(k) for x in feats.values()}) <= MAX_VALORES})
+    # valores distintos de cada coluna numa passada só (antes: quadrático no nº de clientes)
+    distintos = defaultdict(set)
+    for f in feats.values():
+        for k, v in f.items():
+            if len(distintos[k]) <= MAX_VALORES:
+                distintos[k].add(v)
+    if any(len(f) < len(distintos) for f in feats.values()):   # coluna que falta em algum cliente: vale None
+        for k in distintos:
+            if len(distintos[k]) <= MAX_VALORES and any(k not in f for f in feats.values()):
+                distintos[k].add(None)
+    colunas = sorted(k for k, vs in distintos.items() if len(vs) <= MAX_VALORES)
     pontos = sorted(((_qui2(tent, feats, col), col) for col in colunas), key=lambda x: -x[0][0])
     m.colunas = [col for (q, gl), col in pontos if gl and q >= 4.0][:2]
     if not m.colunas:

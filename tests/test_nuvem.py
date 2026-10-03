@@ -474,7 +474,12 @@ class TestSincronizar(unittest.TestCase):
             {"id": 1, "empresa_id": 2, "credor_id": None, "status": "rodando",
              "iniciado_em": "2026-01-01T09:00:00+00:00"},                  # caiu no meio: preso
             {"id": 2, "empresa_id": 2, "credor_id": 22, "status": "pendente"}]
-        self.assertEqual(_pedidos_pendentes(self.sb), {2: {22: [2]}})
+        from nuvem.sincronizar import _travar
+        trava = _travar(self.dados, esperar=False)               # rotina longa ainda rodando: não mexe
+        self.assertEqual(_pedidos_pendentes(self.sb, self.dados), {2: {22: [2]}})
+        self.assertEqual(t["pedidos_rotina"][0]["status"], "rodando")
+        trava.close()                                            # rotina caiu: vira erro
+        self.assertEqual(_pedidos_pendentes(self.sb, self.dados), {2: {22: [2]}})
         p = t["pedidos_rotina"][0]
         self.assertEqual(p["status"], "erro")
         self.assertIn("interrompida", p["erro"])

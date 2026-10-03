@@ -139,6 +139,21 @@ def _acao(a, onde: str, erros: list) -> dict | None:
     return acao
 
 
+def _sem_repetir(acoes: list, onde: str, erros: list) -> list:
+    """O mesmo canal não se repete no mesmo dia para o mesmo público (raia geral ou da persona):
+    fica a 1ª vez, as outras saem com aviso."""
+    vistos, saida = set(), []
+    for a in acoes:
+        canal = a if isinstance(a, str) else a["canal"]
+        chave = (canal, tuple(sorted(a.get("personas") or [])) if isinstance(a, dict) else ())
+        if chave in vistos and canal != SEM_ACAO:
+            erros.append(f"{onde}: {canal} repetido no mesmo dia (fica só o 1º)")
+            continue
+        vistos.add(chave)
+        saida.append(a)
+    return saida
+
+
 def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str]]:
     """Definição do site -> (partes do playbook a sobrescrever, avisos).
 
@@ -165,7 +180,7 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                 if not isinstance(acoes, list) or not acoes:
                     continue
                 lista = [_acao(a, f"{nome}/{fase}/dia {d}", erros) for a in acoes]
-                passos[str(d)] = [a for a in lista if a is not None]
+                passos[str(d)] = _sem_repetir([a for a in lista if a is not None], f"{nome}/{fase}/dia {d}", erros)
             sec["passos"] = passos
         for k in NUMEROS_FASE[fase]:
             if isinstance(f.get(k), str) and f[k].strip().isdigit():
