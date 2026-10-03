@@ -45,6 +45,7 @@ import sys
 import time
 import traceback
 from collections import Counter
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -1103,6 +1104,11 @@ def sincronizar_comite(dados: Path, mes: str, sb: Supabase | None = None, out=pr
                 entrada = pasta / "config" / "entrada_automatica.json"
             if entrada:
                 eventos += ingerir_ocorrencias(pasta / "ocorrencias", carregar_entrada(entrada), pasta / "estado")[0]
+            # ocorrência sem coluna de custo: usa o custo do canal da empresa, como a rotina diária
+            custos = {c["canal"]: c["custo"] for c in _baixar(sb, pasta, "canais_empresa", emp["id"], "canal.asc")
+                      if c.get("custo") is not None}
+            eventos = [replace(e, custo=float(custos[e.canal])) if not e.custo and e.canal in custos else e
+                       for e in eventos]
             parc = pasta / "base" / "parcelas.csv"
             parcelas = carregar_parcelas(parc)[0] if parc.exists() else {}
             estados, _ = rodar_dia.carregar_estado(pasta / "estado")
