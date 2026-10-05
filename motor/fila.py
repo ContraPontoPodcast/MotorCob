@@ -232,7 +232,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
                pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None,
                para_bureau: dict | None = None, motivos: dict | None = None, motivo_de: dict | None = None,
-               detalhe_de: dict | None = None, senao_auto: dict | None = None):
+               detalhe_de: dict | None = None, senao_auto: dict | None = None, ultima_cpc: dict | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -247,6 +247,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     motivos: recebe {motivo: clientes} — com ação ou por que ficou sem ação hoje (MOTIVOS).
     motivo_de: recebe {id_cliente: motivo}; detalhe_de: {id_cliente: por que ficou sem contato}.
     senao_auto: recebe {"whatsapp → sms": clientes} de quem saiu pelo senão automático.
+    ultima_cpc: {id_cliente: data da última ação de CPC exportada} — intervalo do CPC A/B da estratégia.
     pausados: acionados por outro credor nas últimas 48h (ou é a vez dele) — sem ação massiva
               hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`.
     """
@@ -257,9 +258,9 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     if freio:
         alertas.append(f"FREIO WHATSAPP: taxa de bloqueio {taxa:.1%} em {envios} envios > "
                        f"{w['limite_taxa_bloqueio']:.0%}; WhatsApp só para contatos certificados")
-    janela = regua.janela(hoje)
-    if janela is None:
-        alertas.append(f"{hoje:%d/%m/%Y} é domingo ou feriado: sem ações")
+    if regua.janela_alguma(hoje) is None:
+        alertas.append(f"{hoje:%d/%m/%Y} é dia sem exportação no calendário (domingo, feriado ou data marcada): "
+                       "sem ações")
 
     certs_por = defaultdict(list)
     for (idc, _), c in certs.items():
@@ -288,13 +289,18 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         if ativos is not None and idc not in ativos:
             conta("fora_da_carga")
             continue
+        janela = rc.janela(hoje)            # calendário da estratégia do cliente (ou do credor)
         if janela is None:
             conta("domingo_feriado")
             continue
-        passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp)
+        ult = (ultima_cpc or {}).get(idc)
+        passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp, ult)
         if passo is None:
-            conta("sem_passo_hoje" if _recencia_ok(est, hoje, rc) or est.estado in ("PRE", "QBR")
-                  else "intervalo_48h")
+            if est.estado in ("CPA", "CPB") and not _intervalo_cpc_ok(est, hoje, rc, ult):
+                conta("intervalo_cpc")
+            else:
+                conta("sem_passo_hoje" if _recencia_ok(est, hoje, rc) or est.estado in ("PRE", "QBR")
+                      else "intervalo_48h")
             continue
         nome_regua, rotulo, acoes, data_fixa = passo
         minha = (publico or {}).get(idc)
@@ -398,6 +404,13 @@ def _aplicar_capacidade(fila, clientes, regua, alertas):
     return [l for l in fila if l["canal"] not in limites or (l["canal"], l["id_cliente"]) in manter]
 
 
+def _intervalo_cpc_ok(est: EstadoCliente, hoje: date, regua: Regua, ultima: date | None) -> bool:
+    """Intervalo de acionamento do CPC A / CPC B definido na estratégia: "a cada N dias" (padrão 1 = todo
+    dia de lista), contado da última ação de CPC exportada para o cliente."""
+    n = regua.dados.get("intervalo_cpa" if est.estado == "CPA" else "intervalo_cpb") or 1
+    return ultima is None or (hoje - ultima).days >= n
+
+
 def _recencia_ok(est: EstadoCliente, hoje: date, regua: Regua) -> bool:
     """48h entre ações nas réguas massivas (localização e Não CPC). Quem deu CPC (CPC A/B) está em
     negociação: segue todo dia de lista no canal do CPC, sem esperar as 48h."""
@@ -417,7 +430,8 @@ MOTIVOS = {
     "demais_desligado": "Demais clientes desligado",
     "fora_da_carga": "fora da carga (retirados/quitados)",
     "encerrado": "bloqueados, liquidados ou em cobrança encerrada",
-    "domingo_feriado": "domingo ou feriado",
+    "domingo_feriado": "domingo, feriado ou dia sem exportação no calendário",
+    "intervalo_cpc": "CPC: aguardando o intervalo de acionamento da estratégia",
 }
 
 
@@ -427,15 +441,16 @@ def previsao(estados: dict, clientes: dict, hoje: date, regua: Regua, ativos=Non
     retornos de hoje em diante nem a checagem de contato)."""
     from dataclasses import replace as _replace
     proximo_util = next((hoje + timedelta(days=n) for n in range(1, 15)
-                         if regua.janela(hoje + timedelta(days=n)) is not None), None)
+                         if regua.janela_alguma(hoje + timedelta(days=n)) is not None), None)
     # quem ainda não começou a esteira começa na próxima lista
     estados = {k: (_replace(e, esteira_pendente=False, inicio_esteira=proximo_util) if e.esteira_pendente else e)
                for k, e in estados.items()}
     saida = []
     for n in range(1, dias + 1):
         d = hoje + timedelta(days=n)
-        if regua.janela(d) is None:
-            saida.append({"data": d.isoformat(), "clientes": 0, "passos": {}, "sem_acoes": "domingo ou feriado"})
+        if regua.janela_alguma(d) is None:
+            saida.append({"data": d.isoformat(), "clientes": 0, "passos": {},
+                          "sem_acoes": "domingo, feriado ou dia sem exportação"})
             continue
         passos = defaultdict(int)
         for idc, est in estados.items():
@@ -444,6 +459,8 @@ def previsao(estados: dict, clientes: dict, hoje: date, regua: Regua, ativos=Non
             if est.estado in ("CPA", "CPB"):
                 continue    # CPC segue o canal do contato: depende do retorno do dia
             rc = regua.para(est.cluster_atual)
+            if rc.janela(d) is None:      # a estratégia dele não exporta neste dia
+                continue
             p = _passo_do_dia(est, clientes.get(idc), d, rc, set())
             if p and any(a["canal"] != SEM_ACAO for a in p[2]):
                 passos[f"{p[0]} {p[1]}"] += 1
@@ -451,7 +468,7 @@ def previsao(estados: dict, clientes: dict, hoje: date, regua: Regua, ativos=Non
     return saida
 
 
-def _passo_do_dia(est, cliente, hoje, regua, disp):
+def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None):
     """(régua, rótulo do passo, ações, data_fixa) ou None. regua já é a do cluster (estratégia)."""
     def acoes(passo):
         return normalizar(passo, regua)
@@ -480,6 +497,8 @@ def _passo_do_dia(est, cliente, hoje, regua, disp):
         passo = regua["giro"]["passos"].get(str(dia_ciclo))
         return ("giro", f"G{n}-dia{dia_ciclo}", acoes(passo), False) if passo else None
     if est.estado in ("CPA", "CPB"):
+        if not _intervalo_cpc_ok(est, hoje, regua, ultima_cpc):
+            return None
         if est.estado == "CPA":
             canal = est.canal_atual if est.canal_atual in disp else proximo_canal(est, regua, disp)
             rotulo = "CPC A · negociação"

@@ -5,7 +5,8 @@ padrão (`regras/regua.json`) para os clusters que a usam:
 
     {
       "localizacao": {"passos": {"1": [ação, ...], "3": [...]}, "dias_sem_contato_para_ncp": 8},
-      "cpc":         {"ordem": [ação, ...], "junto": [ação, ...], "tentativas_por_canal": 3},
+      "cpc":         {"ordem": [ação, ...], "junto": [ação, ...], "tentativas_por_canal": 3,
+                      "intervalo_cpa": 1, "intervalo_cpb": 2},   # acionar a cada N dias
       "giro":        {"passos": {...}, "ciclo_dias": 8, "max_ciclos": 3},
       "preventivo":  {"passos": {"3": [...], "1": [...], "0": [...]}},
       "quebra":      {"passos": {...}, "dias_para_estoque": 6},
@@ -225,6 +226,16 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                 erros.append(f"{nome}/cpc: tentativas_por_canal deve ser inteiro ≥ 1")
             else:
                 saida["tentativas_por_canal"] = t
+        for k in ("intervalo_cpa", "intervalo_cpb"):   # acionar a cada N dias (1 = todo dia de lista)
+            v = c.get(k)
+            if isinstance(v, str) and v.strip().isdigit():
+                v = int(v)
+            if v in (None, ""):
+                continue
+            if not isinstance(v, int) or isinstance(v, bool) or not 1 <= v <= 30:
+                erros.append(f"{nome}/cpc: {k} deve ser inteiro de 1 a 30 (dias)")
+            else:
+                saida[k] = v
     r = definicao.get("recencia_horas")
     if r not in (None, ""):
         if not isinstance(r, int) or r < 0:

@@ -17,11 +17,12 @@ carteira).eq("data_ref", data).order("iniciada_em", desc).limit(1).
 - resumo.sem_acao: {motivo: clientes}. Rótulos:
   com_acao "Com ação hoje" · sem_passo_hoje "A esteira não tem passo hoje (ex.: D+2)" ·
   intervalo_48h "Aguardando 48h desde a última ação (localização e Não CPC)" ·
+  intervalo_cpc "CPC: aguardando o intervalo de acionamento da estratégia" ·
   sem_contato "Sem contato para os canais do dia" · sem_acao_na_raia "Persona com 'sem ação'
   hoje" · bureau_hoje "Só enriquecimento hoje" · outro_credor "Acionados por outra carteira
   nas últimas 48h" · demais_desligado "Demais clientes desligado" · fora_da_carga "Fora da
   carga (retirados/quitados)" · encerrado "Bloqueados, liquidados ou encerrados" ·
-  domingo_feriado "Domingo ou feriado".
+  domingo_feriado "Domingo, feriado ou dia sem exportação no calendário".
 - resumo.proximos: [{data, clientes, passos: {"localizacao D+3": n, ...}, sem_acoes?}] para os
   próximos 7 dias (estimativa).
 

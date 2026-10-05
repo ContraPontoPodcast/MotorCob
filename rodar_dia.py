@@ -27,6 +27,7 @@ Para usar o link rastreável, a fila completa pode ir para o disparar.py:
 import argparse
 import csv
 import json
+import re
 from collections import Counter, defaultdict
 from dataclasses import replace
 from datetime import date, timedelta
@@ -57,6 +58,41 @@ def _salvar(caminho: Path, linhas: list[dict], anexar=False):
         if novo:
             w.writeheader()
         w.writerows(linhas)
+
+
+def _pasta_estrategia(eid, nome: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", nome or "").encode("ascii", "ignore").decode().lower()
+    t = re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:40] or "estrategia"
+    return f"{eid}-{t}" if eid not in (None, "") else t
+
+
+def exportar_por_estrategia(pasta: Path, fila: list[dict]) -> list[dict]:
+    """A lista do dia separada por estratégia: ids/estrategias/<id-nome>/<canal>.csv (mesmo formato de
+    exportar_ids) e ids/estrategias/indice.json com o nome, os canais e quantos clientes em cada um."""
+    import shutil
+    if pasta.exists():
+        shutil.rmtree(pasta)        # reprocessar o dia não deixa estratégia velha
+    grupos = defaultdict(list)
+    for l in fila:
+        grupos[(l.get("estrategia_id", ""), l.get("estrategia") or "Playbook MotorCob")].append(l)
+    indice = []
+    for (eid, nome), linhas in sorted(grupos.items(), key=lambda g: str(g[0][1])):
+        sub = _pasta_estrategia(eid, nome)
+        por_canal = defaultdict(list)
+        for l in linhas:
+            por_canal[l["canal"]].append(l)
+        exportar_ids(pasta / sub, por_canal)
+        indice.append({"pasta": sub, "estrategia": nome, "estrategia_id": eid if eid != "" else None,
+                       "clientes": len({l["id_cliente"] for l in linhas if not l["condicao"]}),
+                       "canais": {c: len({l["id_cliente"] for l in ls if not l["condicao"]})
+                                  for c, ls in sorted(por_canal.items())},
+                       "reserva": {c: len({l["id_cliente"] for l in ls if l["condicao"]})
+                                   for c, ls in sorted(por_canal.items()) if any(l["condicao"] for l in ls)}})
+    if indice:
+        pasta.mkdir(parents=True, exist_ok=True)
+        (pasta / "indice.json").write_text(json.dumps(indice, ensure_ascii=False, indent=1), encoding="utf-8")
+    return indice
 
 
 def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]]) -> dict[str, list[str]]:
@@ -129,7 +165,7 @@ def preparar_enriquecimento(entrada, pasta_enriq, pasta_base) -> dict | None:
 def dias_de_lista(pasta_saida, hoje: date, regua) -> tuple:
     """Dias úteis em que a rotina gerou a lista da carteira (as pastas saida/AAAA-MM-DD) e hoje:
     a esteira só anda neles. Dia sem rotina (Mac desligado), domingo e feriado pausam."""
-    dias = {hoje} if regua.janela(hoje) is not None else set()
+    dias = {hoje} if regua.janela_alguma(hoje) is not None else set()
     pasta = Path(pasta_saida)
     if pasta.exists():
         for p in pasta.iterdir():
@@ -137,7 +173,7 @@ def dias_de_lista(pasta_saida, hoje: date, regua) -> tuple:
                 d = date.fromisoformat(p.name)
             except ValueError:
                 continue
-            if p.is_dir() and d < hoje and regua.janela(d) is not None:
+            if p.is_dir() and d < hoje and regua.janela_alguma(d) is not None:
                 dias.add(d)
     return tuple(sorted(dias))
 
@@ -193,7 +229,7 @@ def salvar_estado(pasta: Path, estados, ultimo_dia):
 def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts", parcelas_csv=None,
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
               ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
-              na_carga=None, compartilhado=None, personas_usuario=None, demais_ativo=True):
+              na_carga=None, compartilhado=None, personas_usuario=None, demais_ativo=True, calendario=None):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
     atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
     na_carga: base/na_carga.csv — quem está na carga do dia (só esses recebem ação hoje).
@@ -233,7 +269,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     cfg_canais = {c["canal"]: c for c in _ler_lista(canais) if c.get("canal")}
     if regras or est_validas or cfg_canais:
         regua = regua.com_clusters(regras, est_validas, padrao, cfg_canais)
-    regua = replace(regua, dias_lista=dias_de_lista(pasta_saida, hoje, regua), hoje_lista=hoje)
+    regua = regua.com_calendario(calendario)
+    regua = replace(regua, dias_lista=dias_de_lista(pasta_saida, hoje, regua), hoje_lista=hoje, _cache={})
     clientes, rej_cli = carregar_clientes(clientes_csv)
     atrib = carregar_atributos(atributos)
     if atrib:
@@ -375,9 +412,20 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         if e.inicio_esteira == hoje and e.estado == "LOC":
             e.esteira_pendente, e.inicio_esteira = True, None
     adiados, para_bureau, motivos, motivo_de, detalhe_de, senao_auto = set(), {}, {}, {}, {}, {}
+    ultima_cpc = {}
+    for (d_, idc_), ls_ in carregar_escolhas(pasta_estado).items():
+        if d_ < hoje.isoformat() and any(l.get("regua") == "cpc" and str(l.get("reserva")) != "1" for l in ls_):
+            ultima_cpc[idc_] = max(ultima_cpc.get(idc_, date.min), date.fromisoformat(d_))
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
-                                  motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto)
+                                  motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto,
+                                  ultima_cpc=ultima_cpc)
+    nomes_e = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
+    for l in fila:
+        e_ = estados.get(l["id_cliente"])
+        eid_ = regua.estrategia_de(e_.cluster_atual) if e_ else None
+        l["estrategia_id"] = eid_ if eid_ is not None else ""
+        l["estrategia"] = (nomes_e.get(eid_) or f"estratégia {eid_}") if eid_ is not None else "Playbook MotorCob"
     perfil = _perfil_contatos(contatos, flags, ativos if ativos is not None else set(clientes))
     alertas.append("PERFIL DOS CONTATOS: " + " · ".join(f"{v} {k}" for k, v in perfil.items()))
     for ro in rel_ocorrencias:
@@ -469,6 +517,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     for l in fila:
         por_canal[l["canal"]].append(l)
     exportar_ids(saida / "ids", por_canal)
+    exportar_por_estrategia(saida / "ids" / "estrategias", fila)
     salvar_escolhas(pasta_estado, hoje, fila)
     _salvar(saida / "enriquecimento.csv", enriq)
     bureau = saida / "bureau"
