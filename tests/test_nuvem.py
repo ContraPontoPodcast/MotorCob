@@ -605,6 +605,62 @@ class TestSincronizar(unittest.TestCase):
         est = {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"] if l["empresa_id"] == 2}
         self.assertEqual(est["X0001"], "CPA")
 
+    def test_layout_automatico_entende_tabulacao_de_cpc_e_data_do_pagamento(self):
+        """Arquivos como o cliente manda: CPF na ocorrência, tabulação 'ALÔ - PROMESSA', e no pagamento a
+        coluna VALOR_PAGO vem antes da DATA_PAGTO (as duas têm PAG no nome)."""
+        (self.cfg / "beta.json").unlink()
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._envio(7101, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    "CPF;DATA_ACIONAMENTO;CANAL;TABULACAO\n100.000.011-71;02/09/2026 10:15;Discador;"
+                    "ALÔ - PROMESSA DE PAGAMENTO\n100.000.022-24;02/09/2026 11:00;Discador;CAIXA POSTAL\n"
+                    .encode("latin-1"), "2026-09-02")
+        self._envio(7102, 2, "acordo", "acordo_2026-09-02.csv",
+                    b"COD_CLIENTE;ACORDO;PARCELA;VENCIMENTO;VALOR\nX0001;77;1;03/09/2026;150,00\n"
+                    b"X0001;77;2;03/10/2026;150,00\n", "2026-09-02")
+        self._envio(7103, 2, "baixa", "pagamentos_2026-09-03.csv",
+                    b"COD_CLIENTE;VALOR_PAGO;DATA_PAGTO\nX0001;150,00;03/09/2026\n", "2026-09-03")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        st = {i: self._status(i)["status"] for i in (7101, 7102, 7103)}
+        self.assertEqual(st, {7101: "processado", 7102: "processado", 7103: "processado"})
+        est = {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"] if l["empresa_id"] == 2}
+        self.assertNotEqual(est["X0002"], "CPA")
+        parc = (self.dados / "empresas" / "beta" / "base" / "parcelas.csv").read_text()
+        self.assertIn("X0001;77;1;2026-09-03;150.00;2026-09-03", parc)          # acordo + pagamento
+        self.assertIn(est["X0001"], ("CPA", "PRE", "COL"))                      # CPC e acordo reconhecidos
+        cpc = [e for e in self.falso.tabelas["acoes_dia"] if e["empresa_id"] == 2 and e.get("cpcs")]
+        self.assertTrue(cpc)
+
+    def test_ocorrencia_com_resultado_desconhecido_vira_alerta_com_os_codigos(self):
+        (self.cfg / "beta.json").unlink()
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._envio(7201, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DATA;OCORRENCIA\nX0001;02/09/2026;COD 47\nX0002;02/09/2026;CAIXA POSTAL\n",
+                    "2026-09-02")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        ex = [e for e in self.falso.tabelas["execucoes"] if e["empresa_id"] == 2][-1]
+        alerta = next(a for a in ex["alertas"] if a.startswith("OCORRÊNCIA"))
+        self.assertIn("'COD 47'", alerta)
+        self.assertIn("1 de 2 linhas aproveitadas", alerta)
+
+    def test_diagnostico_de_arquivos_mostra_colunas_e_codigos_sem_dado_pessoal(self):
+        import contextlib
+        import io
+        from nuvem import diagnostico_arquivos
+        (self.cfg / "beta.json").unlink()
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._envio(7301, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"CPF;DATA;OCORRENCIA\n10000001171;02/09/2026;COD 47\n10000002224;02/09/2026;CAIXA POSTAL\n",
+                    "2026-09-02")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        saida = io.StringIO()
+        with contextlib.redirect_stdout(saida):
+            diagnostico_arquivos.carteira(self.dados / "empresas" / "beta", "beta", "beta")
+        txt = saida.getvalue()
+        self.assertIn("'COD 47'→NÃO ENTENDIDO (1)", txt)
+        self.assertIn("nenhum código deste arquivo foi entendido como CPC", txt)
+        self.assertIn("aproveitadas 1 de 2", txt)
+        self.assertNotRegex(txt, r"\d{11}")                                    # nenhum CPF
+
     def test_carga_em_excel(self):
         import csv as _csv
         import io

@@ -363,6 +363,18 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                                   motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto)
     perfil = _perfil_contatos(contatos, flags, ativos if ativos is not None else set(clientes))
     alertas.append("PERFIL DOS CONTATOS: " + " · ".join(f"{v} {k}" for k, v in perfil.items()))
+    for ro in rel_ocorrencias:
+        fora = sum(ro.desconhecidos.values()) + sum(n for m, n in ro.rejeitadas.items() if m.startswith("cliente"))
+        if fora:
+            partes = []
+            if ro.desconhecidos:
+                partes.append(f"{sum(ro.desconhecidos.values())} com resultado não entendido ("
+                              + ", ".join(f"'{c}'" for c, _ in ro.desconhecidos.most_common(8)) + ")")
+            for m, n in ro.rejeitadas.items():
+                if m.startswith("cliente"):
+                    partes.append(f"{n} {m}")
+            alertas.append(f"OCORRÊNCIA {ro.arquivo}: {ro.aceitas} de {ro.linhas} linhas aproveitadas; ficaram de "
+                           "fora " + "; ".join(partes) + ". Se algum desses resultados é CPC, informe ao suporte.")
     if perfil.get("clientes") and perfil.get("sem telefone nem e-mail", 0) * 2 > perfil["clientes"]:
         alertas.append("CONTATOS: mais da metade da carga sem telefone nem e-mail válido. Confira a leitura da "
                        "carga (colunas de telefone, DDD em coluna separada) no alerta LAYOUT e envie ao bureau.")

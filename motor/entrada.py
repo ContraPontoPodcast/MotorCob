@@ -751,6 +751,7 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
         if ausentes:
             raise LayoutInvalido(f"{caminho.name}: colunas obrigatórias ausentes no arquivo {ausentes}")
         col = {k: v for k, v in col.items() if v in nomes}
+        ultimo = None   # id_cliente -> (data, canal) da última ação do MotorCob (montado só se precisar)
         for n, linha in enumerate(leitor, start=2):
             rel.linhas += 1
             codigo = (linha[col["resultado"]] or "").strip()
@@ -793,8 +794,15 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
             canal_res, contato_res, aviso, candidatos = _resolver(escolhas, idc, dia, canal)
             canal = canal or canal_res
             if canal is None:
-                rel.rejeitadas["sem canal e sem ação do MotorCob na data"] += 1
-                continue
+                # a operação acionou fora da lista do MotorCob (outra data, outro canal): o CPC vale
+                # do mesmo jeito; o canal é o último que o MotorCob usou com ele, senão o discador
+                if ultimo is None:
+                    ultimo = {}
+                    for (d, i), ls in escolhas.items():
+                        if ls and (i not in ultimo or d > ultimo[i][0]):
+                            ultimo[i] = (d, min(ls, key=lambda x: int(x["reserva"]))["canal"])
+                canal = ultimo[idc][1] if idc in ultimo else "discador"
+                aviso = "canal presumido (sem coluna de canal e sem ação do MotorCob na data)"
             contato = contato or contato_res
             if aviso:
                 rel.avisos[aviso] += 1
