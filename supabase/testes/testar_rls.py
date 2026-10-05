@@ -25,6 +25,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261016000001_exclusao_dispara_rotina.sql
     psql -d sb -f supabase/migrations/20261017000001_mapeamento_arquivos.sql
     psql -d sb -f supabase/migrations/20261018000001_lista_por_estrategia_calendario.sql
+    psql -d sb -f supabase/migrations/20261019000001_rls_rapido.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -280,5 +281,7 @@ checar("resumo por estratégia: B não vê a fila da A", True, "select count(*) 
 checar("planejamento define o calendário do credor", True, f"update public.credores set calendario='{{\"padrao\":{{\"dias_semana\":[0,1,2,3,4]}}}}' where id={CX} returning id", "authenticated", u["plan"], CX)
 checar("operação não altera o calendário", True, f"update public.credores set calendario=null where id={CX} returning id", "authenticated", u["oper"], None)
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
+# desempenho: nenhuma política chama pode_ver_empresa por linha
+checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
