@@ -26,6 +26,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261017000001_mapeamento_arquivos.sql
     psql -d sb -f supabase/migrations/20261018000001_lista_por_estrategia_calendario.sql
     psql -d sb -f supabase/migrations/20261019000001_rls_rapido.sql
+    psql -d sb -f supabase/migrations/20261020000001_views_por_credor.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
