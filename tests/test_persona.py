@@ -62,6 +62,33 @@ class TestAprender(unittest.TestCase):
         self.assertEqual([(s["de"], s["para"]) for s in sug if "RJ" in s["nome"]], [("whatsapp", "discador")])
         self.assertFalse([s for s in sug if "SP" in s["nome"]])     # SP já começa pelo melhor canal
 
+    def test_maturidade_da_persona(self):
+        rj = next(l for l in resumo(self.modelo) if "RJ" in l["nome"])
+        m = rj["maturidade"]
+        # 400 tentativas por canal e discador muito à frente: definida, índice cheio
+        self.assertEqual((m["fase"], m["indice"], m["volume_pct"]), ("definida", 100, 100))
+        self.assertGreater(m["confianca"], 0.99)
+        self.assertEqual(rj["ranking"][0]["evidencia"], "firme")
+        self.assertAlmostEqual(rj["ranking"][0]["peso_proprio"], 400 / 450, places=2)
+        # pouco volume: só a carteira toda, ainda coletando, e o volume vem da carteira
+        clientes, eventos = carteira(n_por_uf=8)
+        m2 = aprender(eventos, clientes, self.regua, HOJE)
+        (cart,) = resumo(m2)
+        self.assertEqual(cart["nome"], "Carteira toda")
+        self.assertEqual(cart["maturidade"]["fase"], "coletando")
+        self.assertFalse(cart["maturidade"]["persona_formada"])
+        self.assertEqual({r["canal"]: r["tentativas"] for r in cart["ranking"]}["whatsapp"], 16)
+        self.assertIn("faltam", cart["maturidade"]["proximo_passo"])
+
+    def test_maturidade_previa_quando_canais_empatados(self):
+        from motor.persona import maturidade
+        # sms: 0,10 ÷ R$ 0,08 = 1,25 CPC/real; whatsapp: 0,37 ÷ R$ 0,30 = 1,23 — praticamente empate
+        rk = [{"canal": "sms", "taxa_cpc": .10, "tentativas": 250},
+              {"canal": "whatsapp", "taxa_cpc": .37, "tentativas": 250}]
+        m = maturidade(self.modelo, ("RJ",), rk)
+        self.assertEqual(m["fase"], "previa")
+        self.assertIn("próximos", m["proximo_passo"])
+
     def test_condicoes_da_persona_viram_segmento(self):
         regras, avisos = carregar_regras([{"codigo": "P1", "condicoes": condicoes_cluster(
             [{"campo": "UF", "valor": "RJ"}, {"campo": "faixa_saldo", "valor": "500 a 2 mil"}])}])

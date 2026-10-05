@@ -19,6 +19,7 @@ A esteira usa o ranking pelas etiquetas `persona_1` (melhor canal da persona) e
 entram na orquestração depois de aprovadas.
 """
 import hashlib
+import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -32,6 +33,7 @@ MAX_VALORES = 30      # coluna com mais valores distintos que isso não vira car
 EXPLORACAO = 0.10
 MIN_SUGESTAO = 200    # tentativas por canal na persona para sugerir mudança de régua
 GANHO_SUGESTAO = 1.2  # o canal sugerido precisa render 20% mais CPC por real
+CONFIANCA_DEFINIDA = 0.90   # chance de o 1º canal render mais CPC por real que o 2º para dar a persona como definida
 
 
 def faixa_saldo(v: float) -> str:
@@ -128,6 +130,7 @@ class ModeloPersona:
     custo: dict = field(default_factory=dict)                  # canal -> custo por tentativa
     global_: dict = field(default_factory=dict)                # canal -> taxa da carteira
     vol_global: dict = field(default_factory=dict)             # canal -> tentativas na carteira
+    cpc_global: dict = field(default_factory=dict)             # canal -> CPCs na carteira
     feats: dict = field(default_factory=dict)                  # id_cliente -> características
     nivel1: dict = field(default_factory=dict)                 # (valor da 1ª, canal) -> taxa
 
@@ -176,6 +179,7 @@ def aprender(eventos, clientes, regua, dia, contatos_por=None, custos: dict | No
         g[c][1] += 1
     m.global_ = {c: (g[c][0] + 1) / (g[c][1] + 20) for c in CANAIS}  # prior fraco: ~5%
     m.vol_global = {c: g[c][1] for c in CANAIS}
+    m.cpc_global = {c: g[c][0] for c in CANAIS}
     # seleção das características
     # valores distintos de cada coluna numa passada só (antes: quadrático no nº de clientes)
     distintos = defaultdict(set)
@@ -241,23 +245,83 @@ def resolver_tokens(acoes: list[dict], modelo: ModeloPersona | None, idc: str, d
     return saida, rotulo
 
 
+def _evidencia(n: int) -> str:
+    return "pouca" if n < MIN_GRUPO else ("previa" if n < MIN_SUGESTAO else "firme")
+
+
+def _chance_1_vence_2(t1, n1, k1, t2, n2, k2) -> float:
+    """Chance de o 1º canal render mais CPC por real que o 2º (aproximação normal das taxas
+    encolhidas; n = tentativas + peso do prior)."""
+    v1 = t1 * (1 - t1) / (n1 + 1) / (k1 * k1)
+    v2 = t2 * (1 - t2) / (n2 + 1) / (k2 * k2)
+    if v1 + v2 <= 0:
+        return 0.5
+    z = (t1 / k1 - t2 / k2) / math.sqrt(v1 + v2)
+    return 0.5 * (1 + math.erf(z / math.sqrt(2)))
+
+
+def maturidade(modelo: ModeloPersona, persona: tuple, ranking: list[dict]) -> dict:
+    """Quanto a persona já está construída: o que o motor está vendo, e se já dá para decidir.
+
+    * fase `coletando`: o 1º ou o 2º canal tem menos de MIN_GRUPO tentativas na persona — o
+      ★/☆ ainda segue praticamente a média da carteira;
+    * fase `previa`: já há sinal, mas falta volume (MIN_SUGESTAO por canal) ou o 1º e o 2º
+      ainda não se separaram (chance < CONFIANCA_DEFINIDA);
+    * fase `definida`: volume suficiente nos dois e o 1º rende mais CPC por real com folga.
+    O índice (0–100) é metade volume, metade separação entre 1º e 2º canal."""
+    prior = FORCA if modelo.colunas else 20.0
+    top = [r for r in ranking if r["taxa_cpc"] is not None][:2]
+    if len(top) < 2:
+        return {"fase": "coletando", "indice": 0, "volume_pct": 0, "confianca": None,
+                "meta_tentativas": MIN_SUGESTAO, "persona_formada": bool(modelo.colunas),
+                "proximo_passo": "precisa de pelo menos dois canais acionados para comparar"}
+    (a, b) = top
+    conf = _chance_1_vence_2(a["taxa_cpc"], a["tentativas"] + prior, modelo.custo.get(a["canal"], 1.0) or 1.0,
+                             b["taxa_cpc"], b["tentativas"] + prior, modelo.custo.get(b["canal"], 1.0) or 1.0)
+    menor = min(a["tentativas"], b["tentativas"])
+    vol = min(1.0, menor / MIN_SUGESTAO)
+    sep = min(1.0, max(0.0, (conf - 0.5) / (CONFIANCA_DEFINIDA - 0.5)))
+    if menor < MIN_GRUPO:
+        fase = "coletando"
+    elif vol >= 1 and conf >= CONFIANCA_DEFINIDA:
+        fase = "definida"
+    else:
+        fase = "previa"
+    if vol < 1:
+        falta = a if a["tentativas"] <= b["tentativas"] else b
+        passo = f"faltam {MIN_SUGESTAO - falta['tentativas']} tentativas em {falta['canal']} para confirmar"
+    elif conf < CONFIANCA_DEFINIDA:
+        passo = (f"{a['canal']} e {b['canal']} ainda estão próximos ({round(conf * 100)}% de chance de "
+                 f"{a['canal']} ser o melhor); o motor segue testando")
+    else:
+        passo = f"{a['canal']} confirmado como melhor canal, {b['canal']} como 2º"
+    return {"fase": fase, "indice": round(100 * (0.5 * vol + 0.5 * sep)), "volume_pct": round(100 * vol),
+            "confianca": round(conf, 3), "meta_tentativas": MIN_SUGESTAO, "persona_formada": bool(modelo.colunas),
+            "proximo_passo": passo}
+
+
 def resumo(modelo: ModeloPersona, clientes_ativos: set[str] | None = None) -> list[dict]:
-    """Uma linha por persona: clientes, ranking com taxa, volume e custo por CPC."""
+    """Uma linha por persona: clientes, ranking com taxa, volume e custo por CPC, e maturidade."""
     contagem = defaultdict(int)
     for idc in modelo.feats:
         if clientes_ativos is None or idc in clientes_ativos:
             contagem[modelo.persona(idc)] += 1
+    prior = FORCA if modelo.colunas else 20.0
     linhas = []
     for p, n in sorted(contagem.items(), key=lambda x: -x[1]):
         ranking = []
         for c in modelo.ranking(next(i for i in modelo.feats if modelo.persona(i) == p)):
             t = modelo.taxa_de(p, c)
-            s, v = modelo.volume.get((p, c), [0, 0])
+            # sem persona formada, a "persona" é a carteira toda: o volume é o da carteira
+            s, v = (modelo.volume.get((p, c), [0, 0]) if modelo.colunas
+                    else (modelo.cpc_global.get(c, 0), modelo.vol_global.get(c, 0)))
             ranking.append({"canal": c, "taxa_cpc": round(t, 4), "tentativas": v, "cpcs": s,
-                            "custo_por_cpc": round(modelo.custo[c] / t, 2) if t > 0 else None})
+                            "custo_por_cpc": round(modelo.custo[c] / t, 2) if t > 0 else None,
+                            # quanto da taxa vem dos dados da própria persona (o resto é a média da carteira)
+                            "peso_proprio": round(v / (v + prior), 2), "evidencia": _evidencia(v)})
         linhas.append({"persona": "|".join(p), "nome": modelo.nome(p), "clientes": n,
                        "condicoes": [{"campo": c, "valor": v} for c, v in zip(modelo.colunas, p)],
-                       "ranking": ranking})
+                       "ranking": ranking, "maturidade": maturidade(modelo, p, ranking)})
     return linhas
 
 

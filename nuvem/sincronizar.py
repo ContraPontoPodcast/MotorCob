@@ -358,13 +358,29 @@ def chave_sugestao(s: dict) -> str:
 def publicar_personas(sb: Supabase, empresa_id, r, cid=None) -> int:
     """Personas do dia (substitui as anteriores) e sugestões novas; devolve quantas sugestões novas."""
     ts = agora()
+    # índice de maturidade da rodada anterior: o site mostra se a persona está avançando
+    anterior = {}
+    try:
+        for l in sb.selecionar("personas", {"empresa_id": f"eq.{empresa_id}", **_fc(cid)}) or []:
+            if isinstance(l.get("maturidade"), dict):
+                anterior[l["persona"]] = l["maturidade"].get("indice")
+    except ErroSupabase:
+        pass
     sb.apagar("personas", {"empresa_id": f"eq.{empresa_id}", **_fc(cid)})
     linhas = [{"empresa_id": empresa_id, **_c(cid), "persona": p["persona"], "nome": p["nome"], "clientes": p["clientes"],
                "condicoes": p["condicoes"], "ranking": p["ranking"],
+               "maturidade": {**p.get("maturidade", {}), "indice_anterior": anterior.get(p["persona"])},
                "caracteristicas": r.get("caracteristicas_persona") or [], "atualizado_em": ts}
               for p in r.get("personas") or []]
     if linhas:
-        sb.inserir("personas", linhas)
+        try:
+            sb.inserir("personas", linhas)
+        except ErroSupabase as ex:   # banco sem a coluna nova: grava sem a maturidade e avisa
+            if "maturidade" not in str(ex):
+                raise
+            sb.inserir("personas", [{k: v for k, v in l.items() if k != "maturidade"} for l in linhas])
+            r.setdefault("alertas", []).append("BANCO: rode supabase/atualizar_producao_2026-10.sql para ver a "
+                                               "maturidade das personas")
     existentes = {s["chave"]: s for s in sb.selecionar("sugestoes", {"empresa_id": f"eq.{empresa_id}", **_fc(cid)})
                   or []}
     novas = 0
