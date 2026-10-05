@@ -16,6 +16,7 @@ execucoes.select("resumo, iniciada_em, status").eq("empresa_id", empresa).eq("cr
 carteira).eq("data_ref", data).order("iniciada_em", desc).limit(1).
 - resumo.sem_acao: {motivo: clientes}. Rótulos:
   com_acao "Com ação hoje" · sem_passo_hoje "A esteira não tem passo hoje (ex.: D+2)" ·
+  intervalo_48h "Aguardando 48h desde a última ação (localização e Não CPC)" ·
   sem_contato "Sem contato para os canais do dia" · sem_acao_na_raia "Persona com 'sem ação'
   hoje" · bureau_hoje "Só enriquecimento hoje" · outro_credor "Acionados por outra carteira
   nas últimas 48h" · demais_desligado "Demais clientes desligado" · fora_da_carga "Fora da

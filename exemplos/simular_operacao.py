@@ -142,7 +142,9 @@ def simular(seed=7, dias=45, n_clientes=400, pasta=RAIZ / "exemplos" / "operacao
             seq_ev += 1
             evs_dia.append(Evento(idc, linha["contato"], c["tipo"], linha["canal"], res, dia,
                                   demo.CUSTOS[linha["canal"]], fornecedor="sim", id_externo=str(seq_ev)))
-            execucoes.append((dia, idc, linha["canal"], not linha["data_fixa"], linha["tag"].split("-")[1]))
+            # 48h valem nas réguas massivas (localização, Não CPC); CPC (negociação) segue todo dia
+            execucoes.append((dia, idc, linha["canal"], not linha["data_fixa"] and linha.get("regua") != "cpc",
+                              linha["tag"].split("-")[1]))
             if regua.e_contato(linha["canal"], res):
                 contato_no_dia.add(idc)
         # negociação: parte dos contatos com o cliente vira acordo
