@@ -202,9 +202,18 @@ class TestFila(unittest.TestCase):
         c = Cenario()
         c.dia(SEG)
         d = SEG + timedelta(1)
-        c.dia(d, [ev("whatsapp", "resposta", d)])
-        self.assertEqual(c.fila(d + timedelta(1))[0], [])                    # 24h depois: não
-        self.assertTrue(c.fila(d + timedelta(2))[0])                         # 48h depois: sim
+        from motor.fila import _recencia_ok
+        c.dia(d, [ev("whatsapp", "entregue", d)])                           # localização, sem CPC
+        self.assertEqual(c.est.estado, "LOC")
+        self.assertFalse(_recencia_ok(c.est, d + timedelta(1), R))     # 24h depois: não
+        self.assertEqual(c.fila(d + timedelta(1))[0], [])
+        self.assertTrue(_recencia_ok(c.est, d + timedelta(2), R))      # 48h depois: sim
+        # deu CPC: está em negociação e segue no dia seguinte, sem esperar 48h
+        c2 = Cenario()
+        c2.dia(SEG)
+        c2.dia(d, [ev("whatsapp", "resposta", d)])
+        self.assertIn(c2.est.estado, ("CPA", "CPB"))
+        self.assertTrue(c2.fila(d + timedelta(1))[0])
         c.parcelas = {"C1": [Parcela("C1", "A1", 1, d + timedelta(1), 100.0)]}
         c.dia(d)                                                              # acordo → PRE D-1 hoje
         fila = c.fila(d + timedelta(1))[0]                                    # D0 no dia seguinte

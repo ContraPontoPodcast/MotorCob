@@ -293,7 +293,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             continue
         passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp)
         if passo is None:
-            conta("sem_passo_hoje")
+            conta("sem_passo_hoje" if _recencia_ok(est, hoje, rc) or est.estado in ("PRE", "QBR")
+                  else "intervalo_48h")
             continue
         nome_regua, rotulo, acoes, data_fixa = passo
         minha = (publico or {}).get(idc)
@@ -398,12 +399,17 @@ def _aplicar_capacidade(fila, clientes, regua, alertas):
 
 
 def _recencia_ok(est: EstadoCliente, hoje: date, regua: Regua) -> bool:
+    """48h entre ações nas réguas massivas (localização e Não CPC). Quem deu CPC (CPC A/B) está em
+    negociação: segue todo dia de lista no canal do CPC, sem esperar as 48h."""
+    if est.estado in ("CPA", "CPB"):
+        return True
     return est.ultima_massiva is None or (hoje - est.ultima_massiva).days * 24 >= regua["recencia_horas"]
 
 
 MOTIVOS = {
     "com_acao": "com ação hoje",
     "sem_passo_hoje": "a esteira não tem passo hoje (ex.: D+2)",
+    "intervalo_48h": "aguardando 48h desde a última ação (localização e Não CPC)",
     "sem_contato": "sem contato para os canais do dia",
     "sem_acao_na_raia": "persona com 'sem ação' hoje",
     "bureau_hoje": "só enriquecimento hoje",
