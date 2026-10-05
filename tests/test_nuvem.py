@@ -635,6 +635,52 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(env["status"], "erro")
         self.assertIn("não reconheci as colunas", env["relatorio"]["erro"])
 
+    def _status(self, id_):
+        return next(e for e in self.falso.tabelas["envios"] if e["id"] == id_)
+
+    def test_acordo_baixa_e_ocorrencia_acham_o_cliente_pelo_cpf_ou_codigo_formatado(self):
+        self._dia(date(2026, 9, 2), empresa="beta")
+        # acordo com o CPF formatado na coluna do cliente; baixa com o código em minúsculas
+        self._envio(2201, 2, "acordo", "acordo_2026-09-02.csv",
+                    b"COD_CLIENTE;NUM_ACORDO;PARCELA;VENCIMENTO;VALOR\n100.000.011-71;AC9;1;03/09/2026;100,00\n"
+                    b"100.000.011-71;AC9;2;03/10/2026;100,00\n", "2026-09-02")
+        self._envio(2202, 2, "baixa", "baixa_2026-09-03.csv",
+                    b"COD_CLIENTE;CONTRATO;DT_PAGAMENTO;VALOR_PAGO;TIPO\nx0001;;03/09/2026;100,00;PA\n", "2026-09-03")
+        # ocorrência com o CPF só com dígitos
+        self._envio(2203, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\n10000002224;02/09/2026 10:15;WHATS;CPC\n", "2026-09-02")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        acordo, baixa, occ = self._status(2201), self._status(2202), self._status(2203)
+        self.assertEqual((acordo["status"], baixa["status"], occ["status"]), ("processado",) * 3)
+        self.assertEqual(acordo["relatorio"]["identificacao"], {"cpf": 2})
+        self.assertEqual(baixa["relatorio"]["identificacao"], {"formatacao": 1})
+        self.assertEqual(occ["relatorio"]["aceitas"], 1)
+        parc = (self.dados / "empresas" / "beta" / "base" / "parcelas.csv").read_text()
+        self.assertIn("X0001;AC9;1;2026-09-03;100.00;2026-09-03", parc)     # acordo e pagamento no X0001
+        est = {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"] if l["empresa_id"] == 2}
+        self.assertEqual(est["X0002"], "CPA")                                  # CPC achado pelo CPF
+
+    def test_arquivo_sem_nenhum_cliente_da_carga_fica_com_erro_e_o_motivo(self):
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._envio(2301, 2, "acordo", "acordo_2026-09-02.csv",
+                    b"COD_CLIENTE;NUM_ACORDO;PARCELA;VENCIMENTO;VALOR\nZZ999;AC1;1;10/09/2026;100,00\n", "2026-09-02")
+        self._envio(2302, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 10:15;WHATS;ALO OK\n", "2026-09-02")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        acordo, occ = self._status(2301), self._status(2302)
+        self.assertEqual(acordo["status"], "erro")
+        self.assertIn("nenhum cliente do arquivo foi encontrado na carga", acordo["relatorio"]["erro"])
+        self.assertEqual(occ["status"], "erro")
+        self.assertIn("'ALO OK'", occ["relatorio"]["erro"])
+
+    def test_ocorrencia_nova_aciona_a_vigia_na_hora(self):
+        from nuvem.sincronizar import ha_arquivo_novo
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self.assertFalse({x for x in ha_arquivo_novo(self.dados, self.sb, "beta") if x[0] == 2})
+        self._envio(2401, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 10:15;WHATS;CPC\n", "2026-09-02")
+        self.assertIn((2, None, 2401), ha_arquivo_novo(self.dados, self.sb, "beta"))
+
     def test_trilha_retoma_de_onde_parou(self):
         self._dia(date(2026, 9, 25), empresa="alfa")
         total = len(self.falso.tabelas["trilha"])

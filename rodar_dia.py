@@ -247,7 +247,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     rel_ocorrencias = []
     if ocorrencias:
         ent = entrada if isinstance(entrada, Entrada) else carregar_entrada(entrada)
-        ev, rel_ocorrencias, q, sl = ingerir_ocorrencias(ocorrencias, ent, pasta_estado)
+        from motor.identificar import Identificador
+        ev, rel_ocorrencias, q, sl = ingerir_ocorrencias(ocorrencias, ent, pasta_estado,
+                                                         Identificador.da_base(Path(clientes_csv).parent))
         custos = {c.get("canal"): c.get("custo") for c in _ler_lista(canais) if c.get("custo") is not None}
         ev = [replace(e, custo=float(custos[e.canal])) if not e.custo and e.canal in custos else e for e in ev]
         eventos += ev
