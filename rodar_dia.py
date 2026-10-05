@@ -67,9 +67,30 @@ def _pasta_estrategia(eid, nome: str) -> str:
     return f"{eid}-{t}" if eid not in (None, "") else t
 
 
+ESTAGIOS = [  # (chave, rótulo, pasta): a comunicação de cada canal muda com o estágio do cliente
+    ("localizacao", "Cliente novo · ainda não deu CPC", "1-cliente-novo"),
+    ("cpa", "CPC A · negociação", "2-cpc-a"),
+    ("cpb", "CPC B", "3-cpc-b"),
+    ("giro", "Não CPC", "4-nao-cpc"),
+    ("preventivo", "Acordo · preventivo", "5-preventivo"),
+    ("quebra", "Acordo · quebra", "6-quebra"),
+]
+
+
+def estagio_da_linha(l: dict) -> str:
+    """Estágio da esteira da linha da fila: régua do dia, e no CPC separa CPC A de CPC B."""
+    r = l.get("regua") or ""
+    if r == "cpc":
+        return "cpb" if l.get("estado") == "CPB" else "cpa"
+    return r if r in {e[0] for e in ESTAGIOS} else (r or "outros")
+
+
 def exportar_por_estrategia(pasta: Path, fila: list[dict]) -> list[dict]:
-    """A lista do dia separada por estratégia: ids/estrategias/<id-nome>/<canal>.csv (mesmo formato de
-    exportar_ids) e ids/estrategias/indice.json com o nome, os canais e quantos clientes em cada um."""
+    """A lista do dia separada por estratégia e, dentro dela, por estágio (cliente novo, CPC A, CPC B,
+    Não CPC, preventivo, quebra) e canal:
+      ids/estrategias/<id-nome>/<estágio>/<canal>.csv   (mesmo formato de exportar_ids)
+      ids/estrategias/<id-nome>/<canal>.csv             (a estratégia inteira, por canal)
+      ids/estrategias/indice.json                       nomes, estágios, canais, passos e contagens."""
     import shutil
     if pasta.exists():
         shutil.rmtree(pasta)        # reprocessar o dia não deixa estratégia velha
@@ -83,12 +104,36 @@ def exportar_por_estrategia(pasta: Path, fila: list[dict]) -> list[dict]:
         for l in linhas:
             por_canal[l["canal"]].append(l)
         exportar_ids(pasta / sub, por_canal)
+        estagios = []
+        por_estagio = defaultdict(list)
+        for l in linhas:
+            por_estagio[estagio_da_linha(l)].append(l)
+        ordem = {e[0]: i for i, e in enumerate(ESTAGIOS)}
+        for chave in sorted(por_estagio, key=lambda k: ordem.get(k, 99)):
+            ls_e = por_estagio[chave]
+            rot, pasta_e = next(((r, p) for k, r, p in ESTAGIOS if k == chave), (chave, f"9-{chave}"))
+            canais_e = defaultdict(list)
+            for l in ls_e:
+                canais_e[l["canal"]].append(l)
+            exportar_ids(pasta / sub / pasta_e, canais_e)
+            passos = defaultdict(set)
+            for l in ls_e:
+                if not l["condicao"]:
+                    passos[l.get("passo") or ""].add(l["id_cliente"])
+            estagios.append({"estagio": chave, "rotulo": rot, "pasta": f"{sub}/{pasta_e}",
+                             "clientes": len({l["id_cliente"] for l in ls_e if not l["condicao"]}),
+                             "canais": {c: len({l["id_cliente"] for l in x if not l["condicao"]})
+                                        for c, x in sorted(canais_e.items())},
+                             "reserva": {c: len({l["id_cliente"] for l in x if l["condicao"]})
+                                         for c, x in sorted(canais_e.items()) if any(l["condicao"] for l in x)},
+                             "passos": {k: len(v) for k, v in sorted(passos.items()) if k}})
         indice.append({"pasta": sub, "estrategia": nome, "estrategia_id": eid if eid != "" else None,
                        "clientes": len({l["id_cliente"] for l in linhas if not l["condicao"]}),
                        "canais": {c: len({l["id_cliente"] for l in ls if not l["condicao"]})
                                   for c, ls in sorted(por_canal.items())},
                        "reserva": {c: len({l["id_cliente"] for l in ls if l["condicao"]})
-                                   for c, ls in sorted(por_canal.items()) if any(l["condicao"] for l in ls)}})
+                                   for c, ls in sorted(por_canal.items()) if any(l["condicao"] for l in ls)},
+                       "estagios": estagios})
     if indice:
         pasta.mkdir(parents=True, exist_ok=True)
         (pasta / "indice.json").write_text(json.dumps(indice, ensure_ascii=False, indent=1), encoding="utf-8")
