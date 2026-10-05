@@ -23,6 +23,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261014000001_pedidos_rotina.sql
     psql -d sb -f supabase/migrations/20261015000001_motivo_hoje.sql
     psql -d sb -f supabase/migrations/20261016000001_exclusao_dispara_rotina.sql
+    psql -d sb -f supabase/migrations/20261017000001_mapeamento_arquivos.sql
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -257,5 +258,19 @@ checar("todos leem os modelos de persona", True, "select count(*) from public.pe
 checar("site não altera modelo de persona", False, "insert into public.personas_modelo (id,propensao,nome,descricao,condicoes) values ('x','digital','x','x','[]')", "authenticated", u["admin"])
 checar("anônimo não lê modelos", False, "select count(*) from public.personas_modelo", "anon")
 checar("rotina (service_role) atualiza status do envio", True, "update public.envios set status='processado', relatorio='{\"linhas\":10}'", "service_role")
+# mapeamento dos arquivos e códigos de ocorrência (por credor)
+checar("rotina sugere o mapeamento da ocorrência", True, f"insert into public.mapeamento_arquivos (empresa_id,credor_id,tipo,sugerido,cabecalho,visto_em) values ({EA},{CX},'ocorrencia','{{\"resultado\":\"TAB\"}}','[\"CPF\",\"TAB\"]',now())", "service_role")
+checar("planejamento confirma o mapeamento", True, f"update public.mapeamento_arquivos set colunas='{{\"id_cliente\":\"CPF\",\"data\":\"DT\",\"resultado\":\"TAB\"}}', confirmado=true, atualizado_em=now() where credor_id={CX}", "authenticated", u["plan"])
+checar("operação não altera o mapeamento", True, f"update public.mapeamento_arquivos set confirmado=false where credor_id={CX} returning id", "authenticated", u["oper"], None)
+checar("mapeamento repetido do mesmo tipo é recusado", False, f"insert into public.mapeamento_arquivos (empresa_id,credor_id,tipo) values ({EA},{CX},'ocorrencia')", "service_role")
+checar("tipo de arquivo desconhecido é recusado", False, f"insert into public.mapeamento_arquivos (empresa_id,credor_id,tipo) values ({EA},{CX},'base')", "service_role")
+checar("rotina registra código novo sem marca", True, f"insert into public.ocorrencia_codigos (empresa_id,credor_id,codigo,qtd,visto_em) values ({EA},{CX},'ALO',12,now()),({EA},{CX},'CAIXA POSTAL',30,now())", "service_role")
+checar("planejamento marca CPC", True, f"update public.ocorrencia_codigos set resultado='cpc', mapeado=true, atualizado_em=now() where codigo='ALO' returning resultado", "authenticated", u["plan"], "cpc")
+checar("marca inválida é recusada", False, f"update public.ocorrencia_codigos set resultado='talvez' where codigo='ALO'", "service_role")
+checar("site copia os códigos para outra carteira (empresa vem do credor)", True, f"insert into public.ocorrencia_codigos (credor_id,codigo,resultado,mapeado) values ({CP},'ALO','cpc',true) returning empresa_id", "authenticated", u["plan"], EA)
+checar("código copiado para carteira de outra empresa é recusado", False, f"insert into public.ocorrencia_codigos (credor_id,codigo) values ({CB},'ALO')", "authenticated", u["plan"])
+checar("B não vê os códigos da A", True, "select count(*) from public.ocorrencia_codigos", "authenticated", u["operb"], 0)
+checar("rotina deixa o envio aguardando o mapeamento", True, "update public.envios set status='aguardando'", "service_role")
+checar("status de envio inválido é recusado", False, "update public.envios set status='talvez'", "service_role")
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

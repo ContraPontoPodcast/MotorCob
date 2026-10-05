@@ -47,11 +47,13 @@ def _envios(dados: Path):
 def _layout(pasta: Path, slug: str):
     from motor.entrada import carregar_entrada
     repo = RAIZ / "empresas" / f"{slug}.json"
+    efetiva = pasta / "config" / "entrada_efetiva.json"
     auto = pasta / "config" / "entrada_automatica.json"
-    arq = repo if repo.exists() else auto if auto.exists() else None
-    if arq is None:
-        return None, "nenhum (ainda não rodou)"
-    return carregar_entrada(arq), ("empresas/" + repo.name if arq == repo else "automático (config/entrada_automatica.json)")
+    for arq, nome in ((efetiva, "mapeamento do site (config/entrada_efetiva.json)"), (repo, f"empresas/{repo.name}"),
+                      (auto, "automático (config/entrada_automatica.json)")):
+        if arq.exists():
+            return carregar_entrada(arq), nome
+    return None, "nenhum (ainda não rodou)"
 
 
 def _arquivos(p: Path):
@@ -75,6 +77,10 @@ def carteira(pasta: Path, slug: str, nome: str):
     for tipo in TIPOS:
         arqs = _arquivos(pasta / PASTA[tipo])
         rej = _arquivos(pasta / PASTA[tipo] / "rejeitados")
+        espera = _arquivos(pasta / PASTA[tipo] / "aguardando")
+        if espera:
+            print(f"  [{tipo}] ⏳ {len(espera)} arquivo(s) aguardando o mapeamento no site "
+                  "(Credores → Configurações): " + ", ".join(a.name for a in espera[-3:]))
         lay = (ent.ocorrencias[0] if ent.ocorrencias else None) if tipo == "ocorrencia" else getattr(ent, tipo)
         print(f"  [{tipo}] {len(arqs)} arquivo(s)" + (f", {len(rej)} rejeitado(s)" if rej else ""))
         if lay is None:

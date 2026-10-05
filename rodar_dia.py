@@ -41,7 +41,7 @@ from motor.estrategia import validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor.fila import MOTIVOS, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
-from motor.marcacao import ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
+from motor.marcacao import aplicar_pendentes, ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
 from motor.rastreio import carregar_acoes, ler_log_portal
 from motor.regua import carregar_regua
 
@@ -319,6 +319,21 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             if str(l.get("reserva")) != "1" and l["contato"] not in enviados_dia[d][idc]:
                 enviados_dia[d][idc].append(l["contato"])
     trilha = []
+    # chegou depois de o dia ser fechado (ocorrência de ontem enviada depois da rotina, acordo novo):
+    # aplica agora, uma vez só (estado/eventos_aplicados.txt guarda o que já entrou)
+    aplicados_arq = pasta_estado / "eventos_aplicados.txt"
+    chave_ev = lambda e: f"{e.fornecedor}|{e.id_externo}|{e.id_cliente}|{e.data.isoformat()}"  # noqa: E731
+    if ultimo is not None:
+        if aplicados_arq.exists():
+            aplicados = set(aplicados_arq.read_text(encoding="utf-8").splitlines())
+            tardios = [e for e in eventos if e.data <= ultimo and chave_ev(e) not in aplicados]
+        else:   # 1ª rodada com o controle: ocorrência cujo arquivo chegou depois do dia dela não tinha entrado
+            chegada = {a.name: date.fromtimestamp(a.stat().st_mtime)
+                       for a in Path(ocorrencias).glob("*") if a.is_file()} if ocorrencias else {}
+            tardios = [e for e in eventos if e.data <= ultimo and e.origem in chegada and chegada[e.origem] > e.data]
+        trilha += aplicar_pendentes(estados, clientes, tardios, parcelas, ultimo, regua)
+        if tardios:
+            out(f"  {len(tardios)} ocorrência(s) que chegaram depois do dia fechado aplicadas agora")
     dia = inicio
     while dia < hoje:
         ev_ate = [e for e in eventos if e.data <= dia]
@@ -332,6 +347,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     trilha += registrar_entradas(estados, clientes, hoje, regua, pela_lista=True)   # carga de hoje já entra hoje
     salvar_estado(pasta_estado, estados, ultimo)
     _salvar(pasta_estado / "trilha.csv", trilha, anexar=True)
+    pasta_estado.mkdir(parents=True, exist_ok=True)
+    aplicados_arq.write_text("\n".join(sorted({chave_ev(e) for e in eventos if e.data <= ultimo})), encoding="utf-8")
 
     ev_ate = [e for e in eventos if e.data < hoje]
     certs = certificar_contatos(ev_ate, hoje, contatos, pessoa_de)

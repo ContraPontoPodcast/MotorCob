@@ -826,7 +826,7 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
                 custo = layout.custo_fixo.get(canal, 0.0)
             eventos.append(Evento(idc, contato or "", _tipo(canal), canal, resultado, dia, custo,
                                   fornecedor=fornecedor, id_externo=id_ext,
-                                  candidatos=() if contato else candidatos))
+                                  candidatos=() if contato else candidatos, origem=caminho.name))
             rel.aceitas += 1
             rel.contato_identificado += bool(contato)
     return eventos, rel, quarentena

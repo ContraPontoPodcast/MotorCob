@@ -317,6 +317,54 @@ def _por_que_ocorrencia_vazia(rel) -> str:
     return f"nenhuma linha aproveitada: {principal} ({motivos[principal]} linhas)"
 
 
+def _msg_colunas(tipo, u):
+    from nuvem.mapeamento import NOME
+    credor = u.get("nome") or u.get("codigo") or ""
+    return (f"aguardando o mapeamento: aponte as colunas do arquivo de {NOME.get(tipo, tipo)} em Credores → "
+            f"{credor} → Configurações → Arquivos. Feito isso, o MotorCob processa sozinho.")
+
+
+def _status_mapeamento(e, destino, mapa, status, rel):
+    """Ocorrência com resultado ainda não marcado no site: o envio fica "aguardando" (as linhas esperam)."""
+    novos = (mapa or {}).get("codigos_do_arquivo", {}).get(destino.name)
+    if e["tipo"] == "ocorrencia" and novos:
+        return "aguardando", {**(rel or {}), "codigos_novos": novos, "aguardando": (
+            f"{len(novos)} resultado(s) novo(s) para marcar ({', '.join(repr(c) for c in novos[:5])}): marque CPC, "
+            "número errado ou não contatar em Credores → Configurações → Ocorrências. As linhas esperam e entram "
+            "assim que marcar.")}
+    return status, rel
+
+
+def _reavaliar_aguardando(sb, pasta, desta_vez, mapa, r, rel_base, rel_enriq, u):
+    """Envios que estavam "aguardando" o mapeamento: quando o cliente mapeia, a rodada relê o arquivo e o
+    envio ganha o status de verdade. A lista fica no Mac (config/envios_aguardando.json)."""
+    from nuvem import mapeamento
+    arq = pasta / "config" / "envios_aguardando.json"
+    lista = json.loads(arq.read_text(encoding="utf-8")) if arq.exists() else []
+    ids = {str(e["id"]) for e, _ in desta_vez}
+    lista = [x for x in lista if str(x["id"]) not in ids]
+    for e, destino in desta_vez:
+        if e["tipo"] in mapeamento.TIPOS:
+            lista.append({"id": e["id"], "tipo": e["tipo"], "arquivo": destino.name, "_novo": True})
+    fica = []
+    for x in lista:
+        destino = pasta / PASTA_DO_TIPO[x["tipo"]] / x["arquivo"]
+        e = {"id": x["id"], "tipo": x["tipo"]}
+        if mapeamento.segurado(destino):
+            fica.append(x)
+            continue
+        if not destino.exists():
+            continue
+        status, rel = _status_mapeamento(e, destino, mapa, *_relatorio_envio(e, destino, r, rel_base, rel_enriq))
+        if status == "aguardando":
+            fica.append(x)
+        if not x.get("_novo"):       # o motivo pode ter mudado (colunas → códigos) ou o envio foi liberado
+            sb.atualizar("envios", {"id": f"eq.{x['id']}"}, {"status": status, "relatorio": rel})
+    fica = [{k: v for k, v in x.items() if k != "_novo"} for x in fica]
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    arq.write_text(json.dumps(fica, ensure_ascii=False), encoding="utf-8")
+
+
 def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
     nome = destino.name
     if e["tipo"] == "enriquecimento":
@@ -647,10 +695,16 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
     execucao = sb.inserir("execucoes", {"empresa_id": eid, **_c(cid), "data_ref": data.isoformat(),
                                         "status": "rodando"}, retornar=True)[0]
     try:
+        from nuvem import mapeamento
         tem = lambda d: (pasta / d).exists() and any(p.is_file() for p in (pasta / d).iterdir())  # noqa: E731
         aviso_layout = None
+        mapeamento.liberar(pasta)
+        repo = entrada is not None
         if entrada is None and any(tem(d) for d in PASTAS_CARTEIRA + ("ocorrencias", "enriquecimento")):
             entrada, aviso_layout = _layout_automatico(sb, pasta, baixados, out)
+        entrada, mapa = mapeamento.aplicar(sb, eid, cid, pasta, entrada, repo, out)
+        segurados = [(e, d) for e, d in baixados if mapeamento.segurado(d)]
+        baixados = [(e, d) for e, d in baixados if not mapeamento.segurado(d)]
         if entrada is not None:
             baixados = _separar_cargas_ruins(sb, entrada, pasta, baixados, out)
         rel_base = None
@@ -694,6 +748,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
 
         if aviso_layout:
             r["alertas"] = [aviso_layout] + r["alertas"]
+        r["alertas"] = mapeamento.alertas(mapa, u.get("nome") or u.get("codigo") or "") + r["alertas"]
         conflito = "empresa_id,credor_id,id_cliente" if cid is not None else "empresa_id,id_cliente"
         enq = r.get("enquadramento") or {}
         sem_motivo = {k: {c: v for c, v in d.items() if c != "motivo_hoje"} for k, d in enq.items()}
@@ -719,8 +774,12 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         n_sug = publicar_personas(sb, eid, r, cid)
         publicar_acoes(sb, eid, r, cid)
         for e, destino in baixados:
-            status, rel = _relatorio_envio(e, destino, r, rel_base, rel_enriq)
+            status, rel = _status_mapeamento(e, destino, mapa, *_relatorio_envio(e, destino, r, rel_base, rel_enriq))
             sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": status, "relatorio": rel})
+        for e, destino in segurados:
+            sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "aguardando", "relatorio": {
+                "aguardando": _msg_colunas(e["tipo"], u)}})
+        _reavaliar_aguardando(sb, pasta, baixados + segurados, mapa, r, rel_base, rel_enriq, u)
 
         estados = Counter(e.estado for e in r["estados"].values())
         resumo = {"clientes": len(r["estados"]), "estados": dict(estados),
@@ -864,7 +923,7 @@ def _vigia_arq(dados: Path, emp: dict) -> Path:
 
 
 CONFIG_ORQUESTRACAO = ("clusters", "estrategias", "segmentos_carteira", "personas_usuario", "canais_empresa",
-                       "credores")
+                       "credores", "mapeamento_arquivos", "ocorrencia_codigos")
 
 
 def _ultima_mudanca(sb: Supabase, tabela: str, empresa_id) -> dict:
@@ -878,7 +937,8 @@ def _ultima_mudanca(sb: Supabase, tabela: str, empresa_id) -> dict:
         quando = l.get("atualizado_em") or ""
         if not quando:
             continue
-        chave = l.get("credor_id") if tabela in ("segmentos_carteira", "personas_usuario") else \
+        chave = l.get("credor_id") if tabela in ("segmentos_carteira", "personas_usuario", "mapeamento_arquivos",
+                                                 "ocorrencia_codigos") else \
             (l.get("id") if tabela == "credores" else None)
         por[chave] = max(por.get(chave, ""), quando)
     return por
@@ -1139,7 +1199,9 @@ def sincronizar_comite(dados: Path, mes: str, sb: Supabase | None = None, out=pr
             contatos, pessoa_de, _ = carregar_carteira(pasta / "base" / "contatos.csv")
             eventos = ingerir_pasta(pasta / "retornos", carregar_layouts(RAIZ / "layouts"))[0]
             entrada = arquivo_entrada(emp, pasta_empresas)
-            if entrada is None and (pasta / "config" / "entrada_automatica.json").exists():
+            if (pasta / "config" / "entrada_efetiva.json").exists():   # com o mapeamento do site
+                entrada = pasta / "config" / "entrada_efetiva.json"
+            elif entrada is None and (pasta / "config" / "entrada_automatica.json").exists():
                 entrada = pasta / "config" / "entrada_automatica.json"
             if entrada:
                 from motor.identificar import Identificador

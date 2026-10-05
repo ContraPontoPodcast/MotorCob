@@ -127,7 +127,8 @@ class SupabaseFalso:
             for l in linhas:
                 if chaves:
                     t[:] = [x for x in t if [x.get(k) for k in chaves] != [l.get(k) for k in chaves]]
-                if "id" not in l and tabela in ("execucoes", "envios", "trilha", "estrategias", "clusters", "sugestoes"):
+                if "id" not in l and tabela in ("execucoes", "envios", "trilha", "estrategias", "clusters", "sugestoes",
+                                                    "mapeamento_arquivos", "ocorrencia_codigos"):
                     self.seq += 1
                     l = {"id": self.seq, **l}
                 t.append(l)
@@ -598,12 +599,29 @@ class TestSincronizar(unittest.TestCase):
         self.assertIn("saidas/beta/2026-09-02/ids/whatsapp.csv", self.falso.objetos)
         cfg = self.dados / "empresas" / "beta" / "config" / "entrada_automatica.json"
         self.assertEqual(json.loads(cfg.read_text())["base"]["colunas"]["id_cliente"], "COD_CLIENTE")
-        # ocorrência sem layout configurado também é entendida
+        # ocorrência: espera o cliente apontar as colunas e marcar os códigos; depois entra sozinha
         self._envio(7001, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
                     b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 10:15;WHATS;CPC\n", "2026-09-02")
         self._dia(date(2026, 9, 3), empresa="beta")
-        est = {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"] if l["empresa_id"] == 2}
-        self.assertEqual(est["X0001"], "CPA")
+        est = lambda: {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"]  # noqa: E731
+                       if l["empresa_id"] == 2}
+        self.assertEqual(self._status(7001)["status"], "aguardando")
+        self.assertIn("Configurações → Arquivos", self._status(7001)["relatorio"]["aguardando"])
+        self.assertNotEqual(est()["X0001"], "CPA")
+        m = next(x for x in self.falso.tabelas["mapeamento_arquivos"] if x["empresa_id"] == 2)
+        self.assertEqual(m["sugerido"], {"id_cliente": "COD_CLIENTE", "data": "DT_ACAO", "resultado": "OCORRENCIA",
+                                         "canal": "CANAL"})
+        self.assertEqual(m["cabecalho"], ["COD_CLIENTE", "DT_ACAO", "CANAL", "OCORRENCIA"])
+        self._mapear(2, "ocorrencia")                      # colunas confirmadas, código ainda sem marca
+        self._dia(date(2026, 9, 3), empresa="beta")
+        self.assertEqual(self._status(7001)["status"], "aguardando")
+        self.assertEqual(self._status(7001)["relatorio"]["codigos_novos"], ["CPC"])
+        cod = next(x for x in self.falso.tabelas["ocorrencia_codigos"] if x["empresa_id"] == 2)
+        self.assertEqual((cod["codigo"], cod["sugerido"], cod["qtd"], cod.get("mapeado", False)), ("CPC", "cpc", 1, False))
+        self._mapear(2, codigos={"CPC": "cpc"})            # marcou: a linha que esperava entra
+        self._dia(date(2026, 9, 3), empresa="beta")
+        self.assertEqual(est()["X0001"], "CPA")
+        self.assertEqual(self._status(7001)["status"], "processado")
 
     def test_layout_automatico_entende_tabulacao_de_cpc_e_data_do_pagamento(self):
         """Arquivos como o cliente manda: CPF na ocorrência, tabulação 'ALÔ - PROMESSA', e no pagamento a
@@ -619,6 +637,16 @@ class TestSincronizar(unittest.TestCase):
                     b"X0001;77;2;03/10/2026;150,00\n", "2026-09-02")
         self._envio(7103, 2, "baixa", "pagamentos_2026-09-03.csv",
                     b"COD_CLIENTE;VALOR_PAGO;DATA_PAGTO\nX0001;150,00;03/09/2026\n", "2026-09-03")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        st = {i: self._status(i)["status"] for i in (7101, 7102, 7103)}
+        self.assertEqual(st, {7101: "aguardando", 7102: "aguardando", 7103: "aguardando"})
+        sug = {m["tipo"]: m["sugerido"] for m in self.falso.tabelas["mapeamento_arquivos"] if m["empresa_id"] == 2}
+        self.assertEqual(sug["baixa"]["data"], "DATA_PAGTO")                  # não confunde com VALOR_PAGO
+        for tipo in ("ocorrencia", "acordo", "baixa"):
+            self._mapear(2, tipo)
+        sugeridos = {c["codigo"]: c["sugerido"] for c in self.falso.tabelas["ocorrencia_codigos"]}
+        self.assertEqual(sugeridos, {"ALÔ - PROMESSA DE PAGAMENTO": "cpc", "CAIXA POSTAL": "sem_contato"})
+        self._mapear(2, codigos={"ALÔ - PROMESSA DE PAGAMENTO": "cpc", "CAIXA POSTAL": "sem_contato"})
         self._dia(date(2026, 9, 3), empresa="beta")
         st = {i: self._status(i)["status"] for i in (7101, 7102, 7103)}
         self.assertEqual(st, {7101: "processado", 7102: "processado", 7103: "processado"})
@@ -637,10 +665,12 @@ class TestSincronizar(unittest.TestCase):
                     b"COD_CLIENTE;DATA;OCORRENCIA\nX0001;02/09/2026;COD 47\nX0002;02/09/2026;CAIXA POSTAL\n",
                     "2026-09-02")
         self._dia(date(2026, 9, 3), empresa="beta")
+        self._mapear(2, "ocorrencia", codigos={"CAIXA POSTAL": "sem_contato"})
+        self._dia(date(2026, 9, 3), empresa="beta")
         ex = [e for e in self.falso.tabelas["execucoes"] if e["empresa_id"] == 2][-1]
-        alerta = next(a for a in ex["alertas"] if a.startswith("OCORRÊNCIA"))
-        self.assertIn("'COD 47'", alerta)
-        self.assertIn("1 de 2 linhas aproveitadas", alerta)
+        alerta = next(a for a in ex["alertas"] if a.startswith("OCORRÊNCIAS PARA MARCAR"))
+        self.assertIn("'COD 47' 1x", alerta)
+        self.assertEqual(self._status(7201)["status"], "aguardando")
 
     def test_diagnostico_de_arquivos_mostra_colunas_e_codigos_sem_dado_pessoal(self):
         import contextlib
@@ -651,6 +681,8 @@ class TestSincronizar(unittest.TestCase):
         self._envio(7301, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
                     b"CPF;DATA;OCORRENCIA\n10000001171;02/09/2026;COD 47\n10000002224;02/09/2026;CAIXA POSTAL\n",
                     "2026-09-02")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        self._mapear(2, "ocorrencia", codigos={"CAIXA POSTAL": "sem_contato"})
         self._dia(date(2026, 9, 3), empresa="beta")
         saida = io.StringIO()
         with contextlib.redirect_stdout(saida):
@@ -691,6 +723,17 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(env["status"], "erro")
         self.assertIn("não reconheci as colunas", env["relatorio"]["erro"])
 
+    def _mapear(self, eid, tipo=None, colunas=None, codigos=None, credor=None):
+        """Faz o que o cliente faz no site: confirma as colunas (a sugestão do motor, se não disser) e marca códigos."""
+        T = self.falso.tabelas
+        if tipo:
+            m = next(x for x in T["mapeamento_arquivos"] if x["empresa_id"] == eid and x["tipo"] == tipo
+                     and x.get("credor_id") == credor)
+            m.update({"colunas": colunas or m["sugerido"], "confirmado": True, "atualizado_em": "2099-01-01T00:00:00"})
+        for cod, res in (codigos or {}).items():
+            c = next(x for x in T["ocorrencia_codigos"] if x["empresa_id"] == eid and x["codigo"] == cod)
+            c.update({"resultado": res, "mapeado": True, "atualizado_em": "2099-01-01T00:00:00"})
+
     def _status(self, id_):
         return next(e for e in self.falso.tabelas["envios"] if e["id"] == id_)
 
@@ -726,8 +769,8 @@ class TestSincronizar(unittest.TestCase):
         acordo, occ = self._status(2301), self._status(2302)
         self.assertEqual(acordo["status"], "erro")
         self.assertIn("nenhum cliente do arquivo foi encontrado na carga", acordo["relatorio"]["erro"])
-        self.assertEqual(occ["status"], "erro")
-        self.assertIn("'ALO OK'", occ["relatorio"]["erro"])
+        self.assertEqual(occ["status"], "aguardando")                       # espera o cliente marcar
+        self.assertEqual(occ["relatorio"]["codigos_novos"], ["ALO OK"])
 
     def test_ocorrencia_nova_aciona_a_vigia_na_hora(self):
         from nuvem.sincronizar import ha_arquivo_novo
@@ -736,6 +779,47 @@ class TestSincronizar(unittest.TestCase):
         self._envio(2401, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
                     b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 10:15;WHATS;CPC\n", "2026-09-02")
         self.assertIn((2, None, 2401), ha_arquivo_novo(self.dados, self.sb, "beta"))
+
+    def test_ocorrencia_que_chega_depois_da_rotina_vale_e_so_uma_vez(self):
+        """A rotina das 6h fecha o dia anterior; a operação manda a tabulação de ontem depois disso."""
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._dia(date(2026, 9, 3), empresa="beta")          # rotina de 03/09: o dia 02/09 está fechado
+        self._envio(2501, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 15:00;WHATS;CPC\n", "2026-09-03")
+        self._dia(date(2026, 9, 3), empresa="beta")          # a vigia roda de novo no mesmo dia
+        est = lambda: {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"]  # noqa: E731
+                       if l["empresa_id"] == 2}
+        self.assertEqual(est()["X0001"], "CPA")
+        trilha = (self.dados / "empresas" / "beta" / "estado" / "trilha.csv").read_text()
+        self.assertIn("que chegou depois", trilha)
+        n = trilha.count("que chegou depois")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        self._dia(date(2026, 9, 4), empresa="beta")
+        self.assertEqual((self.dados / "empresas" / "beta" / "estado" / "trilha.csv").read_text()
+                         .count("que chegou depois"), n)                    # não aplica de novo
+
+    def test_acordo_enviado_hoje_vale_na_mesma_rodada(self):
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        self._envio(2601, 2, "acordo", "acordo_2026-09-03.csv",
+                    b"COD_CLIENTE;NUM_ACORDO;PARCELA;VENCIMENTO;VALOR\nX0001;AC5;1;20/09/2026;200,00\n", "2026-09-03")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        est = {l["id_cliente"]: l["estado"] for l in self.falso.tabelas["estado_cliente"] if l["empresa_id"] == 2}
+        self.assertEqual(est["X0001"], "COL")
+
+    def test_mapeamento_confirmado_no_site_aciona_a_vigia(self):
+        from nuvem.sincronizar import credores_com_orquestracao_nova
+        (self.cfg / "beta.json").unlink()
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._envio(2701, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;OCORRENCIA\nX0001;02/09/2026;ALO\n", "2026-09-02")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        for e in self.falso.tabelas["execucoes"]:
+            e.setdefault("iniciada_em", "2026-09-03T09:00:00+00:00")
+        emp = {"id": 2, "slug": "beta"}
+        self.assertEqual(credores_com_orquestracao_nova(self.sb, emp), {})   # o motor gravar não dispara
+        self._mapear(2, "ocorrencia")
+        self.assertIn(None, credores_com_orquestracao_nova(self.sb, emp))   # o cliente confirmar dispara
 
     def test_trilha_retoma_de_onde_parou(self):
         self._dia(date(2026, 9, 25), empresa="alfa")

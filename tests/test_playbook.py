@@ -144,6 +144,19 @@ class TestAcordos(unittest.TestCase):
         self.assertEqual(situacao_acordo([self.p(v)], date(2026, 9, 11), date(2026, 9, 10), set())[:2], ("QBR", "D1"))
         self.assertEqual(situacao_acordo([self.p(v, v)], date(2026, 9, 11), date(2026, 9, 10), set())[0], "LIQ")
 
+    def test_janela_do_preventivo_segue_a_estrategia(self):
+        from motor.marcacao import janela_preventivo
+        v = date(2026, 9, 10)
+        # D-5 desenhado: a 5 dias do vencimento o cliente já está no preventivo (antes ficava travado em 3)
+        self.assertEqual(situacao_acordo([self.p(v)], date(2026, 9, 5), date(2026, 9, 4), set(), 5)[:2], ("PRE", "D-5"))
+        self.assertEqual(situacao_acordo([self.p(v)], date(2026, 9, 5), date(2026, 9, 4), set())[0], "COL")
+        # cada parcela recomeça pelo seu vencimento
+        ps = [self.p(v, v), self.p(date(2026, 10, 10), n=2)]
+        self.assertEqual(situacao_acordo(ps, date(2026, 10, 8), date(2026, 10, 7), set(), 5)[:2], ("PRE", "D-2"))
+        # o site grava os dias do preventivo como -5, -3, 0
+        self.assertEqual(janela_preventivo({"preventivo": {"passos": {"-5": ["sms"], "-1": ["whatsapp"], "0": []}}}), 5)
+        self.assertEqual(janela_preventivo({"preventivo": {"passos": {}}}), 0)
+
     def test_sem_baixa_nao_quebra(self):
         v = date(2026, 9, 10)
         # arquivo de baixas ainda não cobre o vencimento: não aciona quebra
