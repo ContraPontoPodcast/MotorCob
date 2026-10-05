@@ -727,12 +727,15 @@ def _resolver(escolhas, idc: str, dia: date, canal: str | None):
     return canal, "", "sem ação do MotorCob para este ID na data", ()
 
 
-def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, escolhas, vistos: set | None = None):
+def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, escolhas, vistos: set | None = None,
+                   identificar=None):
     """Retorna (eventos, relatorio, quarentena).
 
     O contato vem da coluna contato, se houver; senão do que o MotorCob mandou acionar.
     Quando o canal teve vários números (discador), a ocorrência vale para a TAG do
     cliente mas não certifica nenhum número (contato fica vazio).
+    identificar (motor.identificar.Identificador da base do credor): acha o cliente da carga
+    mesmo quando o arquivo traz contrato, CPF ou o código com outra formatação.
     """
     caminho = Path(caminho)
     vistos = set() if vistos is None else vistos
@@ -762,6 +765,15 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
             if idc is None:
                 rel.rejeitadas["id_cliente inválido"] += 1
                 continue
+            if identificar:
+                achado, como = identificar.resolver(idc)
+                if achado is None:
+                    rel.rejeitadas["cliente com o mesmo CPF/código em mais de um cadastro" if como == "ambiguo"
+                                   else "cliente não encontrado na carga (código, contrato e CPF)"] += 1
+                    continue
+                if como != "codigo":
+                    rel.avisos[f"cliente achado pelo {'CPF' if como == 'cpf' else como}"] += 1
+                idc = achado
             dia = _data(linha[col["data"]], layout.formato_data)
             if dia is None:
                 rel.rejeitadas["data inválida"] += 1
@@ -812,7 +824,7 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
     return eventos, rel, quarentena
 
 
-def ingerir_ocorrencias(pasta: str | Path, entrada: Entrada, pasta_estado: str | Path):
+def ingerir_ocorrencias(pasta: str | Path, entrada: Entrada, pasta_estado: str | Path, identificar=None):
     """Lê todos os arquivos de ocorrência da pasta. Retorna (eventos, relatorios, quarentena, sem_layout)."""
     escolhas = carregar_escolhas(pasta_estado)
     eventos, relatorios, quarentena, sem_layout = [], [], [], []
@@ -829,7 +841,7 @@ def ingerir_ocorrencias(pasta: str | Path, entrada: Entrada, pasta_estado: str |
         if len(cands) != 1:
             sem_layout.append(arq.name if not cands else f"{arq.name} (layouts ambíguos)")
             continue
-        ev, rel, q = ler_ocorrencia(arq, cands[0], entrada.empresa, escolhas, vistos)
+        ev, rel, q = ler_ocorrencia(arq, cands[0], entrada.empresa, escolhas, vistos, identificar)
         eventos += ev
         relatorios.append(rel)
         quarentena += q

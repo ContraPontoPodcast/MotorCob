@@ -61,6 +61,7 @@ PASTA_DO_TIPO = {"retorno": "retornos", "base": "bruto", "ocorrencia": "ocorrenc
                  "acordo": "acordo", "baixa": "baixa"}
 TIPOS_CARTEIRA = ("base", "incremental", "retirada", "acordo", "baixa")   # chegou um: a vigia roda o credor
 PASTAS_CARTEIRA = ("bruto", "incremental", "retirada", "acordo", "baixa")
+TIPOS_VIGIA = TIPOS_CARTEIRA + ("ocorrencia",)   # chegou um destes: a vigia roda o credor na hora (CPC já entra)
 MARCADOR_TRILHA = "nuvem_trilha_enviada.txt"
 PASTA_EMPRESAS = RAIZ / "empresas"
 
@@ -297,6 +298,25 @@ def publicar_arquivos(sb: Supabase, pasta: Path, prefixo: str, limpar: bool = Fa
     return n
 
 
+def _por_que_ocorrencia_vazia(rel) -> str:
+    """Nenhuma linha da ocorrência foi aproveitada: o motivo principal, em português."""
+    motivos = Counter(rel.rejeitadas)
+    if rel.desconhecidos:
+        motivos["resultado"] = sum(rel.desconhecidos.values())
+    if not motivos:
+        return "nenhuma linha aproveitada"
+    principal, _ = motivos.most_common(1)[0]
+    if principal == "resultado":
+        cods = ", ".join(f"'{c}'" for c, _ in rel.desconhecidos.most_common(5))
+        return (f"nenhuma linha aproveitada: resultado não reconhecido ({cods}). Inclua esses códigos em "
+                "'resultados' no layout da empresa (CPC, não CPC, terceiro, inválido...).")
+    if principal.startswith("cliente não encontrado"):
+        return ("nenhuma linha aproveitada: nenhum cliente do arquivo está na carga deste credor. A coluna do "
+                "cliente precisa trazer o mesmo código da carga, o contrato ou o CPF/CNPJ; confira também se o "
+                "arquivo foi enviado no credor certo.")
+    return f"nenhuma linha aproveitada: {principal} ({motivos[principal]} linhas)"
+
+
 def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
     nome = destino.name
     if e["tipo"] == "enriquecimento":
@@ -313,7 +333,15 @@ def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
                 return "erro", {"erro": "arquivo recebido, mas o credor ainda não tem carga geral: envie a carga"}
             return "erro", {"erro": "arquivo não reconhecido como base bruta: confira o nome do arquivo"}
         if e["tipo"] in ("retirada", "acordo", "baixa"):
-            return "processado", {**arq, "retirados": rel_base.get("retirados") or {},
+            ident = (rel_base.get("identificacao") or {}).get(nome, {})
+            achados = sum(n for como, n in ident.items() if como not in ("nao_encontrado", "ambiguo"))
+            extra = {"identificacao": ident} if ident else {}
+            if arq.get("linhas") and ident and achados == 0:
+                return "erro", {**arq, **extra, "erro": (
+                    "nenhum cliente do arquivo foi encontrado na carga deste credor. A coluna do cliente precisa "
+                    "trazer o mesmo código da carga, o contrato ou o CPF/CNPJ; confira também se o arquivo foi "
+                    "enviado no credor certo.")}
+            return "processado", {**arq, **extra, "retirados": rel_base.get("retirados") or {},
                                   "pagamentos": rel_base.get("pagamentos") or {},
                                   "parcelas_pagas": rel_base.get("parcelas_pagas", 0),
                                   "acordos_abertos": rel_base.get("acordos_abertos", 0),
@@ -327,9 +355,12 @@ def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
         rel = next((x for x in r["relatorios_ocorrencia"] if x.arquivo == nome), None)
         if rel is None:
             return "processado", {"observacao": "arquivo recebido"}
-        return "processado", {"linhas": rel.linhas, "aceitas": rel.aceitas, "duplicadas": rel.duplicadas,
-                              "contato_identificado": rel.contato_identificado, "avisos": dict(rel.avisos),
-                              "rejeitadas": dict(rel.rejeitadas), "quarentena": dict(rel.desconhecidos)}
+        corpo = {"linhas": rel.linhas, "aceitas": rel.aceitas, "duplicadas": rel.duplicadas,
+                 "contato_identificado": rel.contato_identificado, "avisos": dict(rel.avisos),
+                 "rejeitadas": dict(rel.rejeitadas), "quarentena": dict(rel.desconhecidos)}
+        if rel.linhas and not rel.aceitas and not rel.duplicadas:
+            return "erro", {**corpo, "erro": _por_que_ocorrencia_vazia(rel)}
+        return "processado", corpo
     if e["tipo"] != "retorno":
         with open(destino, encoding="utf-8", errors="replace") as f:
             return "processado", {"linhas": max(sum(1 for _ in f) - 1, 0)}
@@ -766,9 +797,9 @@ def sincronizar_dia(dados: Path, data: date, sb: Supabase | None = None, out=pri
 
 
 def _pendentes_base(sb: Supabase) -> dict:
-    """{empresa_id: {credor_id: maior id de envio da carteira pendente}} (carga, retirada, acordo, baixa)."""
+    """{empresa_id: {credor_id: maior id de envio pendente}} (carga, retirada, acordo, baixa, ocorrência)."""
     por = {}
-    tipos = ",".join(TIPOS_CARTEIRA)
+    tipos = ",".join(TIPOS_VIGIA)
     for e in sb.selecionar("envios", {"status": "eq.pendente", "tipo": f"in.({tipos})"}) or []:
         c = por.setdefault(e["empresa_id"], {})
         c[e.get("credor_id")] = max(c.get(e.get("credor_id"), 0), int(e["id"]))
@@ -1103,7 +1134,9 @@ def sincronizar_comite(dados: Path, mes: str, sb: Supabase | None = None, out=pr
             if entrada is None and (pasta / "config" / "entrada_automatica.json").exists():
                 entrada = pasta / "config" / "entrada_automatica.json"
             if entrada:
-                eventos += ingerir_ocorrencias(pasta / "ocorrencias", carregar_entrada(entrada), pasta / "estado")[0]
+                from motor.identificar import Identificador
+                eventos += ingerir_ocorrencias(pasta / "ocorrencias", carregar_entrada(entrada), pasta / "estado",
+                                               Identificador.da_base(pasta / "base"))[0]
             # ocorrência sem coluna de custo: usa o custo do canal da empresa, como a rotina diária
             custos = {c["canal"]: c["custo"] for c in _baixar(sb, pasta, "canais_empresa", emp["id"], "canal.asc")
                       if c.get("custo") is not None}

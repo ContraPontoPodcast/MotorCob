@@ -20,6 +20,7 @@ from pathlib import Path
 
 from . import normalizacao as norm
 from .entrada import Entrada, LayoutArquivo, _data, _num, converter_base, data_do_arquivo, gravar_na_carga
+from .identificar import Identificador
 from .ingestao import LayoutInvalido
 
 PASTAS = {"geral": "bruto", "incremental": "incremental", "retirada": "retirada", "acordo": "acordo",
@@ -101,19 +102,16 @@ def checar_arquivo(arq: Path, lay: LayoutArquivo | None, tipo: str) -> list[str]
     return ausentes
 
 
-def _mapa_contratos(arquivos: list[tuple[Path, object]]) -> dict[str, str]:
-    """contrato -> cliente, lendo só as duas colunas das cargas."""
-    mapa = {}
+def _identificador(arquivos: list[tuple[Path, object]]) -> Identificador:
+    """Quem está nas cargas: código, contrato e CPF/CNPJ (só essas colunas)."""
+    ident = Identificador()
     for arq, lay in arquivos:
-        cc, ci = lay.colunas.get("id_contrato"), lay.colunas.get("id_cliente")
-        if not cc:
-            continue
+        cc, ci, cd = (lay.colunas.get(k) for k in ("id_contrato", "id_cliente", "cpf"))
         with open(arq, newline="", encoding=lay.encoding) as f:
             for linha in csv.DictReader(f, delimiter=lay.delimitador):
-                ct, idc = (linha.get(cc) or "").strip(), norm.id_cliente(linha.get(ci))
-                if ct and idc:
-                    mapa[ct] = idc
-    return mapa
+                ident.incluir(linha.get(ci) or "", (linha.get(cc) or "") if cc else "",
+                              (linha.get(cd) or "") if cd else "")
+    return ident
 
 
 def montar(pasta: str | Path, entrada: Entrada) -> dict:
@@ -127,13 +125,17 @@ def montar(pasta: str | Path, entrada: Entrada) -> dict:
         if arqs[t] and getattr(entrada, t) is None:
             raise LayoutInvalido(f"chegou arquivo de {t}, mas o layout de {t} não está em empresas/<slug>.json")
     lay_inc = entrada.incremental or entrada.base
-    mapa = _mapa_contratos([(a, entrada.base) for a in arqs["geral"]] + [(a, lay_inc) for a in arqs["incremental"]])
+    ident = _identificador([(a, entrada.base) for a in arqs["geral"]] + [(a, lay_inc) for a in arqs["incremental"]])
     avisos = Counter()
+    achados = Counter()
 
     def cliente(r):
-        idc = r["id_cliente"] or mapa.get(r["id_contrato"])
+        idc, como = ident.resolver(r["id_cliente"] or "", r["id_contrato"])
+        achados[(r["arquivo"], como)] += 1
         if idc is None:
-            avisos[f"{r['arquivo']}: contrato sem cliente na carga"] += 1
+            motivo = "cliente com o mesmo CPF/código em mais de um cadastro" if como == "ambiguo" else \
+                "cliente não encontrado na carga (código, contrato e CPF)"
+            avisos[f"{r['arquivo']}: {motivo}"] += 1
         return idc
 
     linhas = {t: [r for a in arqs[t] for r in ler(a, getattr(entrada, t), t, avisos)]
@@ -192,6 +194,10 @@ def montar(pasta: str | Path, entrada: Entrada) -> dict:
     rel = converter_base(arqs["geral"], entrada.base, base, incrementais=arqs["incremental"],
                          retiradas=retiradas, pagamentos=pagamentos, layout_incremental=entrada.incremental)
     rel["avisos"] = dict(avisos)
+    # por arquivo: quantas linhas acharam o cliente e por qual chave (código, contrato, CPF...)
+    rel["identificacao"] = {}
+    for (arq, como), n in achados.items():
+        rel["identificacao"].setdefault(arq, {})[como] = rel["identificacao"].get(arq, {}).get(como, 0) + n
     rel["parcelas_pagas"] = rel_baixa["parcelas pagas"]
 
     # parcelas.csv: acordos do credor + quitações sem acordo (acordo quitado → Liquidado)
