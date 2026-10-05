@@ -37,6 +37,7 @@ class Evento:
     fornecedor: str | None = None
     id_externo: str | None = None  # id do retorno no fornecedor, para deduplicar
     candidatos: tuple = ()         # contato vazio: os contatos que foram na ação (descoberta do Hot)
+    origem: str = ""               # arquivo de onde veio (ocorrência que chegou depois do dia fechado)
 
 
 @dataclass

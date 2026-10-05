@@ -314,6 +314,16 @@ de outra pessoa pela certificação e a rotação segue.
   com `empresa_id`. Falha → execução da empresa com status erro, envios dela continuam
   pendentes, e as outras empresas seguem. Chave service_role só em
   `~/MotorCob-dados/config/supabase.env` (criado por `scripts/configurar_nuvem.sh`).
+- `nuvem/mapeamento.py`: mapeamento por credor feito no site (Credores → Configurações). O
+  cliente aponta as colunas de ocorrência, acordo e pagamento (`mapeamento_arquivos`) e marca
+  cada resultado de ocorrência (`ocorrencia_codigos`: cpc · terceiro · opt_out · sem marca =
+  sem_contato). O motor sugere, registra os códigos e SEGURA o que não está mapeado
+  (`<tipo>/aguardando/`, envio com status `aguardando`); quando o cliente confirma, a vigia
+  roda e relê tudo. Com `empresas/<slug>.json`, o arquivo já vale como mapeado.
+- Evento que chega depois do dia fechado (ocorrência de ontem enviada depois da rotina) e acordo
+  novo valem na mesma rodada (`marcacao.aplicar_pendentes`), uma vez só
+  (`estado/eventos_aplicados.txt`). Preventivo: janela = maior dia antes do vencimento desenhado
+  na estratégia (o site grava "-5", "-3", "0").
 - `scripts/` + `docs/PRODUCAO.md`: produção no Mac (instalador, rotina agendada via
   launchd, relatório mensal). `instalar_mac.sh vigiar`: launchd (KeepAlive, sob `caffeinate -i`) mantém
   `rodar_dia.sh --plantao` → `nuvem.sincronizar plantao`, que a cada 5 s (`MOTORCOB_PLANTAO_SEGUNDOS`)

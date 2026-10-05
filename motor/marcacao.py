@@ -269,8 +269,17 @@ def _ir_para_giro(est, dia, motivo_reenriquecer=None):
     est.reenriquecer = motivo_reenriquecer
 
 
+def janela_preventivo(regua) -> int:
+    """Quantos dias antes do vencimento o preventivo começa: o maior dia desenhado (mínimo 0)."""
+    try:
+        return max([abs(int(k)) for k in (regua["preventivo"]["passos"] or {})] + [0])
+    except (KeyError, TypeError, ValueError):
+        return 3
+
+
 def _aplicar_acordo(est, parcelas, dia, baixas_ate, regua, trilha):
-    sit = situacao_acordo(parcelas, dia, baixas_ate, set(est.acordos_quebrados)) if parcelas else None
+    sit = situacao_acordo(parcelas, dia, baixas_ate, set(est.acordos_quebrados),
+                          janela_preventivo(regua)) if parcelas else None
     antes = est.tag
     if sit is None:
         if est.estado in ESTADOS_ACORDO:  # acordo sumiu do sistema: volta ao estoque
@@ -344,3 +353,28 @@ def reativar_apos_enriquecimento(est: EstadoCliente, dia: date, trilha: Trilha):
 
 __all__ = ["Cliente", "EstadoCliente", "Trilha", "iniciar", "processar_dia", "proximo_canal",
            "reativar_apos_enriquecimento", "CANAIS_VOZ"]
+
+
+def aplicar_pendentes(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente], tardios: list[Evento],
+                      parcelas: dict[str, list[Parcela]], dia: date, regua: Regua) -> list[dict]:
+    """O que chegou depois de o dia ser fechado: ocorrência de um dia já processado (a operação
+    manda a tabulação depois da rotina) e acordo/pagamento novos. Aplica na hora, com a data do
+    último dia processado, sem andar a esteira de ninguém (o tempo já foi contado)."""
+    trilha = Trilha()
+    por_cliente = defaultdict(list)
+    for e in tardios:
+        por_cliente[e.id_cliente].append(e)
+    for idc, est in estados.items():
+        if idc not in clientes or est.estado in ("BLQ", "LIQ"):
+            continue
+        rc = regua.para(est.cluster_atual)
+        evs = sorted(por_cliente.get(idc, []), key=lambda e: e.data)
+        if evs:
+            antes = est.tag
+            _aplicar_retornos(est, evs, dia, rc, set(), trilha)
+            if est.tag != antes and trilha.eventos and trilha.eventos[-1]["id_cliente"] == idc:
+                datas = sorted({e.data.strftime("%d/%m") for e in evs})
+                trilha.eventos[-1]["motivo"] += f" (ocorrência de {', '.join(datas)} que chegou depois)"
+        if parcelas.get(idc) or est.estado in ESTADOS_ACORDO:
+            _aplicar_acordo(est, parcelas.get(idc, []), dia, dia, rc, trilha)
+    return trilha.eventos
