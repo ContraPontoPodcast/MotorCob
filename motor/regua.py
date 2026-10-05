@@ -32,7 +32,36 @@ class Regua:
     # None = calendário corrido (uso direto do motor, testes)
     dias_lista: tuple | None = field(default=None, compare=False)
     hoje_lista: date | None = field(default=None, compare=False)
+    # calendário de exportação por estratégia (id -> janela), definido no credor (site)
+    calendarios: dict = field(default_factory=dict, compare=False)
     _cache: dict = field(default_factory=dict, compare=False, repr=False)
+
+    def com_calendario(self, cal: dict | None) -> "Regua":
+        """Calendário do credor (credores.calendario): padrão do credor e exceções por estratégia."""
+        if not cal:
+            return self
+        dados = dict(self.dados)
+        dados["janela"] = {**dados["janela"], **_janela_do_site(cal.get("padrao") or {})}
+        por = {}
+        for eid, c in (cal.get("estrategias") or {}).items():
+            if isinstance(c, dict) and not c.get("seguir_padrao"):
+                try:
+                    por[int(eid)] = _janela_do_site(c)
+                except (TypeError, ValueError):
+                    continue
+        return replace(self, dados=dados, calendarios=por, _cache={})
+
+    def janela_alguma(self, dia: date) -> tuple[str, str] | None:
+        """Janela do credor ou de alguma estratégia com calendário próprio (o dia tem lista para alguém)."""
+        j = self.janela(dia)
+        if j is not None:
+            return j
+        for eid in self.calendarios:
+            if eid in self.estrategias:
+                j = self.para_estrategia(eid).janela(dia)
+                if j is not None:
+                    return j
+        return None
 
     def com_clusters(self, regras, estrategias: dict | None = None, padrao: int | None = None,
                      canais: dict | None = None) -> "Regua":
@@ -53,11 +82,19 @@ class Regua:
         eid = self.estrategia_de(cluster)
         if eid is None:
             return self
+        return self.para_estrategia(eid)
+
+    def para_estrategia(self, eid: int) -> "Regua":
         if eid not in self._cache:
             from .estrategia import aplicar
+            dados = aplicar(self.dados, self.estrategias[eid])
+            if eid in self.calendarios:      # a estratégia exporta nos dias dela; a esteira só anda neles
+                dados["janela"] = {**dados["janela"], **self.calendarios[eid]}
             # a cópia não reaplica estratégia: para() sempre é chamado na régua da empresa
-            self._cache[eid] = replace(self, dados=aplicar(self.dados, self.estrategias[eid]), _cache={},
-                                       estrategias={}, estrategia_padrao=None)
+            nova = replace(self, dados=dados, _cache={}, estrategias={}, estrategia_padrao=None, calendarios={})
+            if eid in self.calendarios and self.dias_lista is not None:
+                nova = replace(nova, dias_lista=tuple(d for d in self.dias_lista if nova.janela(d) is not None))
+            self._cache[eid] = nova
         return self._cache[eid]
 
     def canal_cfg(self, canal: str) -> dict:
@@ -105,11 +142,33 @@ class Regua:
         return r.voz_d0 if r else cluster[:1] in self.dados["preventivo"]["voz_d0_tickets"]
 
     def janela(self, dia: date) -> tuple[str, str] | None:
-        """Janela de acionamento do dia, ou None (domingo/feriado)."""
+        """Janela de acionamento do dia, ou None (dia sem exportação: fora dos dias da semana do
+        calendário, feriado nacional ou data sem ação). Padrão: segunda a sábado, sem feriados."""
         j = self.dados["janela"]
-        if dia.isoformat() in j["feriados"] or dia.weekday() == 6:
-            return None
-        return tuple(j["sabado"] if dia.weekday() == 5 else j["seg_sex"])
+        iso, dsem = dia.isoformat(), dia.weekday()
+        if iso not in (j.get("com_acao") or []):
+            if dsem not in j.get("dias_semana", (0, 1, 2, 3, 4, 5)):
+                return None
+            if j.get("respeita_feriados", True) and iso in j["feriados"]:
+                return None
+            if iso in (j.get("sem_acao") or []):
+                return None
+        if dsem == 6:
+            return tuple(j.get("domingo") or j["sabado"])
+        return tuple(j["sabado"] if dsem == 5 else j["seg_sex"])
+
+
+def _janela_do_site(c: dict) -> dict:
+    """Calendário do site -> chaves da janela do motor."""
+    j = {}
+    if isinstance(c.get("dias_semana"), list):
+        j["dias_semana"] = sorted({int(d) for d in c["dias_semana"] if str(d).lstrip("-").isdigit() and 0 <= int(d) <= 6})
+    if "feriados_nacionais" in c:
+        j["respeita_feriados"] = bool(c["feriados_nacionais"])
+    for k in ("sem_acao", "com_acao"):
+        if isinstance(c.get(k), list):
+            j[k] = [str(x)[:10] for x in c[k] if x]
+    return j
 
 
 def carregar_regua(caminho: str | Path = PADRAO) -> Regua:

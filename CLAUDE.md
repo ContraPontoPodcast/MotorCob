@@ -324,6 +324,15 @@ de outra pessoa pela certificação e a rotação segue.
   novo valem na mesma rodada (`marcacao.aplicar_pendentes`), uma vez só
   (`estado/eventos_aplicados.txt`). Preventivo: janela = maior dia antes do vencimento desenhado
   na estratégia (o site grava "-5", "-3", "0").
+- CPC A/B: segue todo dia de lista (sem as 48h das réguas massivas), ou "a cada N dias" pela
+  estratégia (`definicao.cpc.intervalo_cpa` / `intervalo_cpb`), contado da última ação de CPC
+  exportada (`estado/escolhas.csv`).
+- Lista do dia por estratégia: `saida/<dia>/ids/estrategias/<id-nome>/<canal>.csv` + `indice.json`;
+  `fila_dia.estrategia` e a view `resumo_fila_estrategia`.
+- Calendário de exportação (`credores.calendario`, site → Configurações do credor): dias da semana,
+  feriados nacionais (`regras/regua.json`, 2026–2027), datas sem/com exportação; padrão do credor
+  e exceção por estratégia (`Regua.com_calendario`). Dia sem exportação: a estratégia não aciona e
+  a esteira dela pausa (dias_lista filtrado por estratégia).
 - `scripts/` + `docs/PRODUCAO.md`: produção no Mac (instalador, rotina agendada via
   launchd, relatório mensal). `instalar_mac.sh vigiar`: launchd (KeepAlive, sob `caffeinate -i`) mantém
   `rodar_dia.sh --plantao` → `nuvem.sincronizar plantao`, que a cada 5 s (`MOTORCOB_PLANTAO_SEGUNDOS`)

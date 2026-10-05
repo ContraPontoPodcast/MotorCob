@@ -252,7 +252,7 @@ def _linhas_fila(fila, data, empresa_id, cid=None):
         vistos.add(chave)
         saida.append({"empresa_id": empresa_id, **_c(cid), "data": data.isoformat(), "canal": l["canal"],
                       "id_cliente": l["id_cliente"], "reserva": bool(l["condicao"]), "regua": l["regua"],
-                      "passo": l["passo"], "tag": l["tag"]})
+                      "passo": l["passo"], "tag": l["tag"], "estrategia": l.get("estrategia") or None})
     return saida
 
 
@@ -743,7 +743,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 estrategias=estrategias, canais=canais,
                                 compartilhado=_compartilhado(pasta_emp, u, data),
                                 personas_usuario=personas_usuario,
-                                demais_ativo=u.get("demais_ativo") is not False)
+                                demais_ativo=u.get("demais_ativo") is not False,
+                                calendario=u.get("calendario"))
         _guardar_compartilhado(pasta_emp, u, r, data)
 
         if aviso_layout:
@@ -768,7 +769,14 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
         fila = _linhas_fila(r["fila"], data, eid, cid)
         if fila:
-            sb.inserir("fila_dia", fila)
+            try:
+                sb.inserir("fila_dia", fila)
+            except ErroSupabase as ex:   # banco sem a coluna nova: grava sem a estratégia e avisa
+                if "estrategia" not in str(ex):
+                    raise
+                sb.inserir("fila_dia", [{k: v for k, v in l.items() if k != "estrategia"} for l in fila])
+                r["alertas"].append("BANCO: rode supabase/atualizar_producao_2026-10.sql para a Lista do dia "
+                                    "por estratégia e o calendário do credor")
         prefixo = f"{slug}/{data.isoformat()}" + (f"/{u['codigo']}" if cid is not None else "")
         n_arq = publicar_arquivos(sb, r["saida"], prefixo, limpar=True)
         n_sug = publicar_personas(sb, eid, r, cid)

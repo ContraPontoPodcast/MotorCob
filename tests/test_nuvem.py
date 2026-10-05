@@ -821,6 +821,53 @@ class TestSincronizar(unittest.TestCase):
         self._mapear(2, "ocorrencia")
         self.assertIn(None, credores_com_orquestracao_nova(self.sb, emp))   # o cliente confirmar dispara
 
+    def test_intervalo_do_cpc_e_lista_por_estrategia(self):
+        T = self.falso.tabelas
+        T["estrategias"] = [{"id": 7, "empresa_id": 2, "nome": "Negociação", "padrao": True,
+                             "definicao": {"cpc": {"intervalo_cpa": 3}}}]
+        self._dia(date(2026, 9, 1), empresa="beta")
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._envio(2801, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 10:15;WHATS;CPC\n", "2026-09-02")
+        acionado = {}
+        for d in (3, 4, 5, 8):
+            dia = date(2026, 9, d)
+            self._dia(dia, empresa="beta")
+            acionado[d] = any(l["id_cliente"] == "X0001" and l["data"] == dia.isoformat() and l["regua"] == "cpc"
+                              for l in T["fila_dia"])
+            if d == 4:
+                est = next(l for l in T["estado_cliente"] if l["id_cliente"] == "X0001")
+                self.assertEqual(est["estado"], "CPA")
+                self.assertIn("intervalo de acionamento", est["motivo_hoje"])
+        # CPC A a cada 3 dias: 03/09 sim; 04 e 05 não; 08/09 sim (06 domingo, 07 feriado)
+        self.assertEqual(acionado, {3: True, 4: False, 5: False, 8: True})
+        # lista do dia separada por estratégia
+        o = self.falso.objetos
+        indice = json.loads(o["saidas/beta/2026-09-03/ids/estrategias/indice.json"])
+        self.assertEqual([i["estrategia"] for i in indice], ["Negociação"])
+        self.assertIn("saidas/beta/2026-09-03/ids/estrategias/7-negociacao/whatsapp.csv", o)
+        self.assertTrue(all(l["estrategia"] == "Negociação" for l in T["fila_dia"] if l["data"] == "2026-09-03"))
+
+    def test_calendario_do_credor_e_da_estrategia(self):
+        T = self.falso.tabelas
+        self._dia(date(2026, 9, 1), empresa="beta")             # antes dos credores: pasta da empresa
+        T["estrategias"] = [{"id": 5, "empresa_id": 2, "nome": "Dias úteis", "padrao": False,
+                             "definicao": {"localizacao": {"passos": {str(n): ["sms"] for n in range(1, 9)}}}}]
+        # o credor exporta todo dia, inclusive feriado; a estratégia dele, só de segunda a sexta
+        T["credores"] = [{"id": 21, "empresa_id": 2, "codigo": "principal", "nome": "P", "ativo": True,
+                          "estrategia_id": 5, "calendario": {
+                              "padrao": {"dias_semana": [0, 1, 2, 3, 4, 5, 6], "feriados_nacionais": False},
+                              "estrategias": {"5": {"seguir_padrao": False, "dias_semana": [0, 1, 2, 3, 4]}}}}]
+        tem = {}
+        for d in (2, 3, 4, 5, 6, 7, 8):
+            dia = date(2026, 9, d)
+            self._dia(dia, empresa="beta")
+            tem[d] = any(l["data"] == dia.isoformat() for l in T["fila_dia"])
+        # 05 sábado e 06 domingo: a estratégia não exporta; 07/09 feriado: o credor liberou
+        self.assertEqual({d: tem[d] for d in (5, 6, 7)}, {5: False, 6: False, 7: True})
+        est = next(l for l in T["estado_cliente"] if l["id_cliente"] == "X0001" and l.get("credor_id") == 21)
+        self.assertTrue(est["motivo_hoje"])
+
     def test_trilha_retoma_de_onde_parou(self):
         self._dia(date(2026, 9, 25), empresa="alfa")
         total = len(self.falso.tabelas["trilha"])

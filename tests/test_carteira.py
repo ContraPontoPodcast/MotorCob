@@ -263,7 +263,7 @@ class TestPersonasDaEmpresa(unittest.TestCase):
             self.assertEqual(r["motivos"], {"sem_passo_hoje": 1})
             self.assertEqual(r["enquadramento"]["A1"]["motivo_hoje"], "sem ação: a esteira não tem passo no D+2")
             self.assertEqual(r["proximos"][0]["data"], "2026-09-06")      # domingo: sem ações
-            self.assertEqual(r["proximos"][1]["sem_acoes"], "domingo ou feriado")  # 07/09: feriado
+            self.assertEqual(r["proximos"][1]["sem_acoes"], "domingo, feriado ou dia sem exportação")  # 07/09: feriado
             self.assertEqual(r["proximos"][2]["passos"], {"localizacao D+3": 1})   # terça 08/09
             r = rodar(date(2026, 9, 8))                       # terça: D+3 de fato
             self.assertEqual({l["passo"] for l in r["fila"]}, {"D+3"})
