@@ -846,7 +846,35 @@ class TestSincronizar(unittest.TestCase):
         indice = json.loads(o["saidas/beta/2026-09-03/ids/estrategias/indice.json"])
         self.assertEqual([i["estrategia"] for i in indice], ["Negociação"])
         self.assertIn("saidas/beta/2026-09-03/ids/estrategias/7-negociacao/whatsapp.csv", o)
+        # dentro da estratégia, por estágio: a mensagem do WhatsApp de CPC não é a do cliente novo
+        pre = "saidas/beta/2026-09-03/ids/estrategias/7-negociacao/"
+        self.assertIn("X0001", o[pre + "2-cpc-a/whatsapp.csv"].decode())
+        estagios = {e["estagio"]: e for e in indice[0]["estagios"]}
+        self.assertEqual(estagios["cpa"]["rotulo"], "CPC A · negociação")
+        self.assertEqual(estagios["cpa"]["pasta"], "7-negociacao/2-cpc-a")
+        outros = [k for k in estagios if k != "cpa"]
+        for k in outros:                                  # o X0001 não aparece em outro estágio
+            for canal in estagios[k]["canais"]:
+                self.assertNotIn("X0001", o[pre + estagios[k]["pasta"].split("/", 1)[1] + f"/{canal}.csv"].decode())
         self.assertTrue(all(l["estrategia"] == "Negociação" for l in T["fila_dia"] if l["data"] == "2026-09-03"))
+
+    def test_lista_separa_estagios_dentro_da_estrategia(self):
+        T = self.falso.tabelas
+        T["estrategias"] = [{"id": 7, "empresa_id": 2, "nome": "Negociação", "padrao": True, "definicao": {}}]
+        self._dia(date(2026, 9, 1), empresa="beta")
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self._envio(2901, 2, "ocorrencia", "ocorrencia_2026-09-02.csv",
+                    b"COD_CLIENTE;DT_ACAO;CANAL;OCORRENCIA\nX0001;02/09/2026 10:15;WHATS;CPC\n", "2026-09-02")
+        self._dia(date(2026, 9, 3), empresa="beta")
+        self._dia(date(2026, 9, 4), empresa="beta")
+        o = self.falso.objetos
+        idx = json.loads(o["saidas/beta/2026-09-04/ids/estrategias/indice.json"])
+        est = {e["estagio"]: e for e in idx[0]["estagios"]}
+        self.assertEqual(set(est), {"localizacao", "cpa"})       # cliente novo e CPC A, cada um no seu
+        self.assertEqual(est["localizacao"]["passos"], {"D+3": 2})
+        pre = "saidas/beta/2026-09-04/ids/estrategias/7-negociacao/"
+        self.assertIn("X0001", o[pre + "2-cpc-a/whatsapp.csv"].decode())
+        self.assertNotIn("X0001", o[pre + "1-cliente-novo/rcs.csv"].decode())
 
     def test_calendario_do_credor_e_da_estrategia(self):
         T = self.falso.tabelas
