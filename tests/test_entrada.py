@@ -138,9 +138,11 @@ class TestOcorrencia(unittest.TestCase):
                                    "ocorrencia": {"arquivo": "retorno_*", "colunas": {"id_cliente": "ID",
                                                   "data": "DATA", "resultado": "RES"}, "resultados": {"1": "cpc"}}})
             ev, rels, _, _ = ingerir_ocorrencias(Path(tmp) / "oc", ent, estado)
+        # X0002 não estava na lista do MotorCob: o CPC vale (a operação acionou por fora), canal presumido
         self.assertEqual([(e.canal, e.contato, e.resultado) for e in ev],
-                         [("email", "x0001@exemplo.invalid", "identidade_confirmada")])
-        self.assertEqual(rels[0].rejeitadas["sem canal e sem ação do MotorCob na data"], 1)
+                         [("email", "x0001@exemplo.invalid", "identidade_confirmada"), ("discador", "", "cpc")])
+        self.assertEqual(rels[0].avisos["canal presumido (sem coluna de canal e sem ação do MotorCob na data)"], 1)
+        self.assertFalse(rels[0].rejeitadas)
 
 
 if __name__ == "__main__":

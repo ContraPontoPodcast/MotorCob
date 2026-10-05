@@ -333,6 +333,14 @@ def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
                 return "erro", {"erro": "arquivo recebido, mas o credor ainda não tem carga geral: envie a carga"}
             return "erro", {"erro": "arquivo não reconhecido como base bruta: confira o nome do arquivo"}
         if e["tipo"] in ("retirada", "acordo", "baixa"):
+            if not arq.get("linhas") and destino.exists():
+                with open(destino, encoding="utf-8", errors="replace") as f:
+                    brutas = max(sum(1 for x in f if x.strip()) - 1, 0)
+                if brutas:
+                    avisos = {k: v for k, v in (rel_base.get("avisos") or {}).items() if k.startswith(e["tipo"])}
+                    return "erro", {**arq, "linhas_no_arquivo": brutas, "avisos": avisos, "erro": (
+                        f"nenhuma das {brutas} linhas foi lida: as datas ou os valores não estão no formato "
+                        "esperado (confira as colunas de data e valor do arquivo).")}
             ident = (rel_base.get("identificacao") or {}).get(nome, {})
             achados = sum(n for como, n in ident.items() if como not in ("nao_encontrado", "ambiguo"))
             extra = {"identificacao": ident} if ident else {}

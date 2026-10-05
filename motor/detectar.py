@@ -42,18 +42,44 @@ def ler(arq: Path):
     return enc, delim, nomes, amostra
 
 
-def _achar(nomes, exatos=(), contem=(), evitar=(), usados=()):
-    """Primeira coluna cujo nome normalizado é um dos `exatos` (na ordem) ou contém um de `contem`."""
+def _candidatas(nomes, exatos=(), contem=(), evitar=(), usados=()):
+    """Colunas cujo nome normalizado é um dos `exatos` (na ordem) ou contém um de `contem`, em ordem."""
     norm = {c: _n(c) for c in nomes if c not in usados}
+    saida = []
     for e in exatos:
-        for c, n in norm.items():
-            if n == e:
-                return c
+        saida += [c for c, n in norm.items() if n == e and c not in saida]
     for k in contem:
-        for c, n in norm.items():
-            if k in n and not any(x in n for x in evitar):
-                return c
-    return None
+        saida += [c for c, n in norm.items() if k in n and not any(x in n for x in evitar) and c not in saida]
+    return saida
+
+
+def _achar(nomes, exatos=(), contem=(), evitar=(), usados=(), amostra=None, conteudo=None):
+    """Primeira coluna candidata; com `conteudo` ("data"/"numero"), a primeira cujos valores parecem isso."""
+    cands = _candidatas(nomes, exatos, contem, evitar, usados)
+    if conteudo and amostra is not None:
+        cands = [c for c in cands if _parece(amostra, c, conteudo)]
+    return cands[0] if cands else None
+
+
+def _parece(amostra, col, conteudo):
+    vals = _valores(amostra, col)[:100]
+    if not vals:
+        return True
+    if conteudo == "data":
+        ok = 0
+        for v in vals:
+            v = v.split(" ")[0].split("T")[0]
+            for f in FORMATOS_DATA:
+                try:
+                    datetime.strptime(v, f)
+                    ok += 1
+                    break
+                except ValueError:
+                    pass
+        return ok >= 0.6 * len(vals)
+    # número: dígitos com , ou . (R$ e espaços tolerados), e não parece data
+    ok = sum(1 for v in vals if re.fullmatch(r"-?[\d.,]+", re.sub(r"[R$\s]", "", v)) and not re.search(r"\d[/-]\d", v))
+    return ok >= 0.6 * len(vals)
 
 
 def _valores(amostra, col):
@@ -188,21 +214,40 @@ def layout_base(arq: Path, explicar: dict) -> dict:
 
 
 # ------------------------------------------------------------------ ocorrência
+CPC_DESFECHO = ("PROMESSA", "ACORDO", "NEGOCIA", "RECUSA", "SEM_INTERESSE", "SEM_CONDIC", "DESEMPREGAD", "AGENDOU",
+                "PAGAMENTO_AGENDADO", "BOLETO", "ALEGA", "JA_PAGOU", "PAGOU", "QUITOU", "CONTESTA", "RENEGOCIA",
+                "PROPOSTA", "DESCONHECE_DIVIDA", "DESCONHECE_A_DIVIDA", "NAO_RECONHECE_A_DIVIDA",
+                "NAO_RECONHECE_DIVIDA", "PEDIU_RETORNO", "RETORNAR_DEPOIS")
+CPC_CONTATO = ("CONTATO_COM_CLIENTE", "CONTATO_CLIENTE", "CONTATO_COM_TITULAR", "CONTATO_TITULAR", "FALOU_COM_TITULAR",
+               "FALOU_COM_CLIENTE", "CLIENTE_ATENDEU", "TITULAR_ATENDEU", "ATENDIDO_PELO_TITULAR", "TITULAR",
+               "RESPONDEU", "INTERAGIU", "CLICOU", "CONTATO_EFETIVO", "CONTATO_POSITIVO")
+
+
 def _resultado(v: str) -> str | None:
     n = _n(v)
+    toks = n.split("_")
     neg = any(x in n for x in ("NAO", "SEM", "NO_", "N_CPC", "NCPC")) or n.startswith("N_")
-    if n in ("CPC", "SIM", "S", "1", "TRUE", "Y", "YES", "CPC_SIM", "CPC_A", "ALO_CPC", "CONTATO_EFETIVO") or \
-            ("CPC" in n and not neg):
-        return "cpc"
-    if "TERCEIRO" in n or "DESCONHEC" in n or "RECADO" in n:
+    if any(x in n for x in ("TERCEIRO", "RECADO", "DESCONHEC_PESSOA", "NAO_CONHECE", "NAO_E_O_TITULAR", "NAO_TITULAR",
+                            "PARENTE", "FAMILIAR", "CONHECIDO")):
         return "terceiro"
     if any(x in n for x in ("INVALID", "INEXIST", "ERRADO", "NAO_EXISTE", "NAO_PERTENCE")):
         return "invalido"
-    if "OPT" in n or "DESCADAST" in n or "NAO_PERTURBE" in n:
+    if "OPT" in n or "DESCADAST" in n or "NAO_PERTURBE" in n or "BLOQUEOU" in n:
         return "opt_out"
+    if n in ("CPC", "SIM", "S", "1", "TRUE", "Y", "YES", "CPC_SIM", "CPC_A", "ALO_CPC", "CONTATO_EFETIVO") or \
+            ("CPC" in n and not neg):
+        return "cpc"
+    if any(x in n for x in CPC_DESFECHO):              # desfecho de conversa com o titular
+        return "cpc"
+    if not neg and (any(x in n for x in CPC_CONTATO) or "ALO" in toks):
+        return "cpc"
+    if "DESCONHEC" in n:
+        return "terceiro"
     if n in ("N", "NAO", "0", "FALSE", "NO", "NAO_CPC", "SEM_CPC", "SEM_CONTATO", "NCPC") or ("CPC" in n and neg) or \
             any(x in n for x in ("NAO_ATEND", "CAIXA_POSTAL", "OCUPADO", "SEM_RESPOSTA", "NAO_LIDO", "ENTREGUE",
-                                 "LIDO", "ENVIADO", "SEM_RETORNO", "NAO_ATENDE")):
+                                 "LIDO", "ENVIADO", "SEM_RETORNO", "NAO_ATENDE", "SEM_ALO", "MUDO", "FALHA",
+                                 "NAO_ENTREGUE", "CHAMOU", "SECRETARIA_ELETRONICA", "LIGACAO_CAIU", "ABANDONO",
+                                 "SEM_CONTATO", "NAO_LOCALIZADO", "NAO_RESPONDEU")):
         return "sem_contato"
     return None
 
@@ -234,7 +279,8 @@ def layout_ocorrencia(arquivos: list[Path], id_base: str | None, explicar: dict)
     idc = pega("ID do cliente", ((_n(id_base),) if id_base else ()) + IDS + CPFS)
     data = pega("data", ("DATA", "DT_ACAO", "DATA_ACAO", "DT_OCORRENCIA", "DATA_OCORRENCIA", "DATA_HORA",
                          "DT_ACIONAMENTO", "DATA_ACIONAMENTO", "DT_EVENTO", "DATA_EVENTO", "DT", "DATA_ENVIO"),
-                contem=("DATA", "DT_"))
+                contem=("DATA", "DT_"), evitar=("NASC", "VENC", "CADASTRO", "ENTRADA"), amostra=amostra,
+                conteudo="data")
     res = pega("resultado (CPC)", ("OCORRENCIA", "RESULTADO", "CPC", "STATUS", "TABULACAO", "RETORNO", "EVENTO",
                                    "COD_OCORRENCIA", "DESCRICAO_OCORRENCIA", "DESCRICAO"),
                contem=("OCORR", "RESULT", "CPC", "TABUL", "STATUS"))
@@ -262,6 +308,9 @@ def layout_ocorrencia(arquivos: list[Path], id_base: str | None, explicar: dict)
 
 
 # ------------------------------------------------------------------ retirada, acordo, baixa
+CONTEUDO = {"data": "data", "vencimento": "data", "valor": "numero"}
+
+
 def layout_arquivo(arq: Path, tipo: str, id_base: str | None, contrato_base: str | None, explicar: dict) -> dict:
     enc, delim, nomes, amostra = ler(arq)
     usados = set()
@@ -296,7 +345,7 @@ def layout_arquivo(arq: Path, tipo: str, id_base: str | None, contrato_base: str
                                              "PARC"), ()),
                                 ("vencimento", VENCS, ("VENC",)),
                                 ("valor", ("VALOR_PARCELA", "VL_PARCELA", "VLR_PARCELA", "VALOR"), ("VALOR", "VL"))):
-            if (c := pega(campo, ex, contem=cont)):
+            if (c := pega(campo, ex, contem=cont, amostra=amostra, conteudo=CONTEUDO.get(campo))):
                 colunas[campo] = c
         datas = [colunas.get("vencimento")]
     else:
@@ -308,7 +357,7 @@ def layout_arquivo(arq: Path, tipo: str, id_base: str | None, contrato_base: str
                                  ("ACORDO",)),
                                 ("parcela", ("PARCELA", "NUM_PARCELA", "NR_PARCELA", "N_PARCELA"), ()),
                                 ("tipo", ("TIPO", "TIPO_BAIXA", "TIPO_PAGAMENTO", "TIPO_PGTO"), ("TIPO",))):
-            if (c := pega(campo, ex, contem=cont)):
+            if (c := pega(campo, ex, contem=cont, amostra=amostra, conteudo=CONTEUDO.get(campo))):
                 colunas[campo] = c
         datas = [colunas.get("data")]
     obrig = {"retirada": [], "acordo": ["parcela", "vencimento"], "baixa": ["data", "valor"]}[tipo]
