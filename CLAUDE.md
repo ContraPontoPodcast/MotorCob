@@ -320,6 +320,15 @@ de outra pessoa pela certificação e a rotação segue.
   sem_contato). O motor sugere, registra os códigos e SEGURA o que não está mapeado
   (`<tipo>/aguardando/`, envio com status `aguardando`); quando o cliente confirma, a vigia
   roda e relê tudo. Com `empresas/<slug>.json`, o arquivo já vale como mapeado.
+- Retorno de canal (`motor/retorno_canal.py`, `nuvem/retorno_canal.py`): arquivos dos fornecedores
+  (envios `canal_sms|rcs|whatsapp|email|voz` → `canais/<canal>/`) só com contato + status, apartados
+  do CPC. Mapeamento por credor e canal (`mapeamento_arquivos` tipo `canal_<canal>`; marcas em
+  `canal_codigos`: inexistente · temporario · entregue · lido · clique · bloqueio). Viram RESTRIÇÕES
+  do contato no canal (SMS inexistente → fora do SMS e do RCS; e-mail/voz inexistente → fora; RCS/
+  WhatsApp → retesta; N temporários → pausa; bloqueio → opt_out) e evidência na certificação — o
+  próximo contato do cliente assume ("oxigenação"). Nunca entram na esteira/CPC/personas. Regras de
+  renitência por canal em `canais_empresa.regras_retorno` (padrão em `retorno_canal.PADRAO`); trava
+  de lote (falha do fornecedor). Saídas: `higienizacao.csv` e `resumo.retorno_canal` na execução.
 - Evento que chega depois do dia fechado (ocorrência de ontem enviada depois da rotina) e acordo
   novo valem na mesma rodada (`marcacao.aplicar_pendentes`), uma vez só
   (`estado/eventos_aplicados.txt`). Preventivo: janela = maior dia antes do vencimento desenhado

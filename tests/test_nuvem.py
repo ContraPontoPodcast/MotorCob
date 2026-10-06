@@ -723,6 +723,40 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(env["status"], "erro")
         self.assertIn("não reconheci as colunas", env["relatorio"]["erro"])
 
+    def test_retorno_de_canal_oxigena_o_contato(self):
+        """DLR do fornecedor (só telefone e status): número 'não entregue' sai do canal e o próximo assume."""
+        import csv as _csv
+        dia = date(2026, 9, 2)
+        self._dia(dia, empresa="beta")
+        ler = lambda: list(_csv.DictReader(self.falso.objetos["saidas/beta/2026-09-02/fila_do_dia.csv"]  # noqa: E731
+                                           .decode().splitlines()))
+        alvo = next(l for l in ler() if l["canal"] in ("whatsapp", "sms", "rcs") and l["contato"])
+        canal, idc, numero = alvo["canal"], alvo["id_cliente"], alvo["contato"]
+        self._envio(7301, 2, f"canal_{canal}", "retorno_fornecedor.csv",
+                    f"TELEFONE;STATUS;DATA\n55{numero};UNDELIV;01/09/2026 10:00\n55{numero};DELIVRD;31/08/2026 10:00\n"
+                    .encode(), "2026-09-02")
+        self._dia(dia, empresa="beta")
+        T = self.falso.tabelas
+        self.assertEqual(self._status(7301)["status"], "aguardando")       # colunas ainda não confirmadas
+        self.assertIn("Configurações → Canais", self._status(7301)["relatorio"]["aguardando"])
+        m = next(x for x in T["mapeamento_arquivos"] if x["empresa_id"] == 2 and x["tipo"] == f"canal_{canal}")
+        self.assertEqual(m["sugerido"], {"contato": "TELEFONE", "status": "STATUS", "data": "DATA"})
+        cods = {c["codigo"]: c["sugerido"] for c in T["canal_codigos"] if c["canal"] == canal}
+        self.assertEqual(cods, {"UNDELIV": "inexistente", "DELIVRD": "entregue"})
+        # o cliente confirma as colunas e as marcas sugeridas
+        m.update({"colunas": m["sugerido"], "confirmado": True, "atualizado_em": "2099-01-01T00:00:00"})
+        for c in T["canal_codigos"]:
+            c.update({"marca": c["sugerido"], "mapeado": True})
+        self._dia(dia, empresa="beta")
+        env = self._status(7301)
+        self.assertEqual(env["status"], "processado")
+        self.assertEqual(env["relatorio"]["por_marca"], {"inexistente": 1, "entregue": 1})
+        depois = [l["contato"] for l in ler() if l["id_cliente"] == idc and l["canal"] == canal]
+        self.assertNotIn(numero, depois)                                    # o número morto saiu do canal
+        self.assertIn("saidas/beta/2026-09-02/higienizacao.csv", self.falso.objetos)
+        rc = T["execucoes"][-1]["resumo"]["retorno_canal"]
+        self.assertGreaterEqual(rc["contatos_fora"][canal], 1)
+
     def _mapear(self, eid, tipo=None, colunas=None, codigos=None, credor=None):
         """Faz o que o cliente faz no site: confirma as colunas (a sugestão do motor, se não disser) e marca códigos."""
         T = self.falso.tabelas
