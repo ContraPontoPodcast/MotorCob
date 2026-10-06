@@ -34,6 +34,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from motor.certificacao import certificar_contatos
+from motor.retorno_canal import aplicar_restricoes, avaliar as avaliar_canal, regras_de as regras_retorno
 from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
                            ingerir_ocorrencias, salvar_escolhas)
@@ -274,7 +275,8 @@ def salvar_estado(pasta: Path, estados, ultimo_dia):
 def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts", parcelas_csv=None,
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
               ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
-              na_carga=None, compartilhado=None, personas_usuario=None, demais_ativo=True, calendario=None):
+              na_carga=None, compartilhado=None, personas_usuario=None, demais_ativo=True, calendario=None,
+              retornos_canal=None):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
     atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
     na_carga: base/na_carga.csv — quem está na carga do dia (só esses recebem ação hoje).
@@ -290,7 +292,10 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
              {"hot": {(pessoa, contato)}, "whatsapp": {contato}, "acionados": {pessoa: data}}.
              Hot e WhatsApp valem aqui; quem está em "acionados" com data nas últimas 48h não
              recebe ação massiva hoje (o rodízio entre credores entra aí também). O resultado
-             traz r["compartilhar"] com hot, whatsapp, acionados e esperando (adiados hoje)."""
+             traz r["compartilhar"] com hot, whatsapp, acionados e esperando (adiados hoje).
+    retornos_canal: [motor.retorno_canal.Registro] — status dos fornecedores por número/e-mail (DLR,
+             bounce, lido, clique). Só mexe na qualidade do contato: número morto, em pausa ou bloqueado
+             sai do canal e o próximo contato do cliente assume; não mexe na esteira nem no CPC."""
     regua = carregar_regua(regua_json) if regua_json else carregar_regua()
     avisos_cluster = []
     if clusters:
@@ -340,6 +345,16 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     if portal:
         eventos += ler_log_portal(portal, carregar_acoes(acoes))[0]
     parcelas = carregar_parcelas(parcelas_csv)[0] if parcelas_csv else {}
+    # retorno de canal: vale só para a certificação/restrição dos contatos (fica fora da esteira e das personas)
+    donos = defaultdict(list)
+    for c in contatos:
+        donos[c["contato"]].append(c["id_cliente"])
+    regras_canal = regras_retorno(_ler_lista(canais))
+    ev_canal, restr_canal, situacao_canal, resumo_canal = avaliar_canal(retornos_canal or [], donos, hoje, regras_canal)
+
+    def certificar(ev, dia):
+        ev_c = [e for e in ev_canal if e.data <= dia] if dia < hoje else [e for e in ev_canal if e.data < hoje]
+        return aplicar_restricoes(certificar_contatos(ev + ev_c, dia, contatos, pessoa_de), restr_canal)
     flags = {c["contato"]: {"whatsapp_valido": c["whatsapp_valido"], "atualizado_em": c["atualizado_em"]}
              for c in contatos}
     sinais = {(c["id_cliente"], c["contato"]): {k: c.get(k) for k in ("rcs", "nao_perturbe", "score_bureau",
@@ -419,7 +434,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     dia = inicio
     while dia < hoje:
         ev_ate = [e for e in eventos if e.data <= dia]
-        certs = certificar_contatos(ev_ate, dia, contatos, pessoa_de)
+        certs = certificar(ev_ate, dia)
         _, disp, _ = gerar_fila(estados, clientes, certs, flags, parcelas, dia, regua, ev_ate, sinais)
         trilha += processar_dia(estados, clientes, por_dia.get(dia, []), parcelas, dia, regua, disp,
                                 baixas_ate=dia, atualizados=atualizados, enviados=enviados_dia.get(dia.isoformat()),
@@ -433,7 +448,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     aplicados_arq.write_text("\n".join(sorted({chave_ev(e) for e in eventos if e.data <= ultimo})), encoding="utf-8")
 
     ev_ate = [e for e in eventos if e.data < hoje]
-    certs = certificar_contatos(ev_ate, hoje, contatos, pessoa_de)
+    certs = certificar(ev_ate, hoje)
     # personas: aprendidas com o histórico até ontem; escolhem o canal das etiquetas persona_1/2
     custos = {c["canal"]: c.get("custo") for c in _ler_lista(canais) if c.get("custo") is not None}
     modelo = aprender(ev_ate, clientes, regua, hoje, dados_contatos, custos)
@@ -565,6 +580,30 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     exportar_por_estrategia(saida / "ids" / "estrategias", fila)
     salvar_escolhas(pasta_estado, hoje, fila)
     _salvar(saida / "enriquecimento.csv", enriq)
+    # retorno de canal: contatos mortos/em pausa/bloqueados (para devolver ao CRM/credor) e quantos clientes
+    # foram "oxigenados" hoje (saíram por outro contato porque o principal estava fora do canal)
+    retorno_canal = None
+    (saida / "higienizacao.csv").unlink(missing_ok=True)
+    if retornos_canal:
+        if situacao_canal:
+            _salvar(saida / "higienizacao.csv", situacao_canal)
+        fora = defaultdict(set)    # (id_cliente, canal) com algum contato fora do canal
+        for contato, rs in restr_canal.items():
+            for idc in donos.get(contato, []):
+                for r_ in rs:
+                    fora[(idc, r_.split(":", 1)[0])].add(contato)
+        oxigenados = Counter(l["canal"] for l in fila if (l["id_cliente"], l["canal"]) in fora
+                             and l.get("contato") not in fora[(l["id_cliente"], l["canal"])])
+        custos_c = {c["canal"]: float(c["custo"]) for c in _ler_lista(canais) if c.get("custo") is not None}
+        fora_canal = Counter(r_.split(":", 1)[0] for rs in restr_canal.values() for r_ in rs)
+        retorno_canal = {"resumo": resumo_canal, "oxigenados": dict(oxigenados), "contatos_fora": dict(fora_canal),
+                         "economia_por_rodada": round(sum(n * custos_c.get(c, 0) for c, n in fora_canal.items()), 2),
+                         "higienizacao": len(situacao_canal), "regras": regras_canal}
+        if fora_canal:
+            alertas.append("RETORNO DE CANAL: " + " · ".join(f"{n} contato(s) fora do {c}" for c, n in
+                                                             sorted(fora_canal.items(), key=lambda x: -x[1]))
+                           + (f"; {sum(oxigenados.values())} cliente(s) saíram hoje pelo próximo contato"
+                              if oxigenados else "") + ". Lista em higienizacao.csv.")
     bureau = saida / "bureau"
     for antigo in bureau.glob("*.csv") if bureau.exists() else []:
         antigo.unlink()
@@ -677,7 +716,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "motivos": motivos, "proximos": proximos,
             "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
             "saida": saida, "relatorios": relatorios, "relatorios_ocorrencia": rel_ocorrencias,
-            "quarentena": quarentena, "sem_layout": sem_layout,
+            "quarentena": quarentena, "sem_layout": sem_layout, "retorno_canal": retorno_canal,
             "dias_processados": (hoje - inicio).days if inicio < hoje else 0}
 
 

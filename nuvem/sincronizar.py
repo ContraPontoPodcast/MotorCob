@@ -58,10 +58,13 @@ DESTINO_BASE = {"clientes": "base/clientes.csv", "contatos": "base/contatos.csv"
                 "parcelas": "base/parcelas.csv", "portal": "logs/portal.csv"}
 PASTA_DO_TIPO = {"retorno": "retornos", "base": "bruto", "ocorrencia": "ocorrencias",
                  "enriquecimento": "enriquecimento", "incremental": "incremental", "retirada": "retirada",
-                 "acordo": "acordo", "baixa": "baixa"}
+                 "acordo": "acordo", "baixa": "baixa",
+                 # retorno de canal (DLR, bounce, lido, clique): status por número/e-mail, apartado do CPC
+                 **{f"canal_{c}": f"canais/{c}" for c in ("sms", "rcs", "whatsapp", "email", "voz")}}
+TIPOS_CANAL = tuple(t for t in PASTA_DO_TIPO if t.startswith("canal_"))
 TIPOS_CARTEIRA = ("base", "incremental", "retirada", "acordo", "baixa")   # chegou um: a vigia roda o credor
 PASTAS_CARTEIRA = ("bruto", "incremental", "retirada", "acordo", "baixa")
-TIPOS_VIGIA = TIPOS_CARTEIRA + ("ocorrencia",)   # chegou um destes: a vigia roda o credor na hora (CPC já entra)
+TIPOS_VIGIA = TIPOS_CARTEIRA + ("ocorrencia",) + TIPOS_CANAL   # chegou um destes: a vigia roda o credor na hora
 MARCADOR_TRILHA = "nuvem_trilha_enviada.txt"
 PASTA_EMPRESAS = RAIZ / "empresas"
 
@@ -320,6 +323,11 @@ def _por_que_ocorrencia_vazia(rel) -> str:
 def _msg_colunas(tipo, u):
     from nuvem.mapeamento import NOME
     credor = u.get("nome") or u.get("codigo") or ""
+    if tipo in TIPOS_CANAL:
+        from motor.retorno_canal import NOME as NOME_CANAL
+        return (f"aguardando o mapeamento: aponte a coluna do contato e a do status do retorno de "
+                f"{NOME_CANAL[tipo[6:]]} em Credores → {credor} → Configurações → Canais. Feito isso, o MotorCob "
+                "processa sozinho.")
     return (f"aguardando o mapeamento: aponte as colunas do arquivo de {NOME.get(tipo, tipo)} em Credores → "
             f"{credor} → Configurações → Arquivos. Feito isso, o MotorCob processa sozinho.")
 
@@ -344,7 +352,7 @@ def _reavaliar_aguardando(sb, pasta, desta_vez, mapa, r, rel_base, rel_enriq, u)
     ids = {str(e["id"]) for e, _ in desta_vez}
     lista = [x for x in lista if str(x["id"]) not in ids]
     for e, destino in desta_vez:
-        if e["tipo"] in mapeamento.TIPOS:
+        if e["tipo"] in mapeamento.TIPOS or e["tipo"] in TIPOS_CANAL:
             lista.append({"id": e["id"], "tipo": e["tipo"], "arquivo": destino.name, "_novo": True})
     fica = []
     for x in lista:
@@ -367,6 +375,13 @@ def _reavaliar_aguardando(sb, pasta, desta_vez, mapa, r, rel_base, rel_enriq, u)
 
 def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
     nome = destino.name
+    if e["tipo"] in TIPOS_CANAL:
+        rel = (r.get("retorno_canal_arquivos") or {}).get(nome)
+        if rel is None:
+            return "processado", {"observacao": "arquivo recebido"}
+        if rel["linhas"] and not rel["aproveitadas"] and not rel["status_para_marcar"]:
+            return "erro", {**rel, "erro": "nenhuma linha com contato válido: confira a coluna do telefone/e-mail"}
+        return "processado", rel
     if e["tipo"] == "enriquecimento":
         if rel_enriq is None:
             return "erro", {"erro": "retorno de enriquecimento sem base da empresa ou sem layout em empresas/<slug>.json"}
@@ -714,11 +729,16 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         from nuvem import mapeamento
         tem = lambda d: (pasta / d).exists() and any(p.is_file() for p in (pasta / d).iterdir())  # noqa: E731
         aviso_layout = None
+        from nuvem import retorno_canal
+        from motor.retorno_canal import regras_de
         mapeamento.liberar(pasta)
+        retorno_canal.liberar(pasta)
         repo = entrada is not None
         if entrada is None and any(tem(d) for d in PASTAS_CARTEIRA + ("ocorrencias", "enriquecimento")):
             entrada, aviso_layout = _layout_automatico(sb, pasta, baixados, out)
         entrada, mapa = mapeamento.aplicar(sb, eid, cid, pasta, entrada, repo, out)
+        canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
+        reg_canal, info_canal = retorno_canal.preparar(sb, eid, cid, pasta, regras_de(canais), out)
         segurados = [(e, d) for e, d in baixados if mapeamento.segurado(d)]
         baixados = [(e, d) for e, d in baixados if not mapeamento.segurado(d)]
         if entrada is not None:
@@ -741,7 +761,6 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             estrategias = [{**e, "padrao": e.get("id") == u["estrategia_id"]} for e in estrategias]
             (pasta / "config" / "estrategias.json").write_text(json.dumps(estrategias, ensure_ascii=False, indent=1),
                                                                encoding="utf-8")
-        canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
         personas_usuario = _personas_usuario(sb, pasta, eid, cid)
         for obrig in ("base/clientes.csv", "base/contatos.csv"):
             if not (pasta / obrig).exists():
@@ -760,12 +779,14 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 compartilhado=_compartilhado(pasta_emp, u, data),
                                 personas_usuario=personas_usuario,
                                 demais_ativo=u.get("demais_ativo") is not False,
-                                calendario=u.get("calendario"))
+                                calendario=u.get("calendario"), retornos_canal=reg_canal)
         _guardar_compartilhado(pasta_emp, u, r, data)
 
         if aviso_layout:
             r["alertas"] = [aviso_layout] + r["alertas"]
-        r["alertas"] = mapeamento.alertas(mapa, u.get("nome") or u.get("codigo") or "") + r["alertas"]
+        r["alertas"] = (mapeamento.alertas(mapa, u.get("nome") or u.get("codigo") or "")
+                        + retorno_canal.alertas(info_canal, u.get("nome") or u.get("codigo") or "") + r["alertas"])
+        r["retorno_canal_arquivos"] = info_canal["relatorios"]
         conflito = "empresa_id,credor_id,id_cliente" if cid is not None else "empresa_id,id_cliente"
         enq = r.get("enquadramento") or {}
         sem_motivo = {k: {c: v for c, v in d.items() if c != "motivo_hoje"} for k, d in enq.items()}
@@ -817,7 +838,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                   "sugestoes_aplicadas": n_aplicadas,
                   "acoes_ontem": _acoes_de(r.get("acoes"), data - timedelta(days=1)),
                   "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq,
-                  "sem_acao": r.get("motivos") or {}, "proximos": r.get("proximos") or []}
+                  "sem_acao": r.get("motivos") or {}, "proximos": r.get("proximos") or [],
+                  "retorno_canal": {k: v for k, v in (r.get("retorno_canal") or {}).items() if k != "regras"} or None}
         if cid is not None:
             resumo["credor"] = u["codigo"]
         if rel_base:
@@ -947,7 +969,7 @@ def _vigia_arq(dados: Path, emp: dict) -> Path:
 
 
 CONFIG_ORQUESTRACAO = ("clusters", "estrategias", "segmentos_carteira", "personas_usuario", "canais_empresa",
-                       "credores", "mapeamento_arquivos", "ocorrencia_codigos")
+                       "credores", "mapeamento_arquivos", "ocorrencia_codigos", "canal_codigos")
 
 
 def _ultima_mudanca(sb: Supabase, tabela: str, empresa_id) -> dict:
