@@ -62,28 +62,41 @@ e `canal_codigos`.
 
 ## 3. Página Canais — "Regras de retorno" em cada canal
 
+As regras são **sugeridas pelo MotorCob** (padrão de mercado) e o cliente **pode ajustar** — mostre sempre
+"Padrão MotorCob" ao lado do valor sugerido e destaque quando o cliente mudou.
+
 Em cada canal da página Canais (SMS, RCS, WhatsApp, E-mail; a voz usa a linha do Discador), um bloco recolhível
-**Regras de retorno** que edita `canais_empresa.regras_retorno` (jsonb). Mostre o padrão quando estiver vazio:
+**Regras de retorno** que edita `canais_empresa.regras_retorno` (jsonb). Vazio = padrão:
+
+| Canal | Quando vier "inexistente" (padrão) |
+|---|---|
+| **SMS** (DLR de não entregue) | **Suspensão escalonada** do número em tudo que vai para o celular (SMS, RCS, WhatsApp e voz nesse número): 1ª vez **7 dias**, 2ª **15**, 3ª **30**, 4ª **90**, 5ª **120**; depois reabre para uma próxima tentativa (nova falha suspende pelo último degrau). Uma entrega/leitura/clique zera a contagem. Os outros contatos do cliente assumem. |
+| **RCS** (aparelho sem RCS) | Sai do RCS e segue por SMS, WhatsApp e/ou voz; testa o RCS de novo em **60 dias** |
+| **WhatsApp** (sem conta) | Sai do WhatsApp; testa de novo em **15 dias** |
+| **E-mail** (hard bounce) | Sai o e-mail (vai o próximo e-mail do cliente) |
+| **Voz** (número inexistente) | A telefonia pode falhar, então não é severo: sozinha, **suspende só a voz** nesse número, na mesma escada (7/15/30/90/120). **Junção com o SMS:** as falhas da voz e do SMS somam na mesma contagem e, quando o SMS também falhou, a suspensão vale para tudo do celular. Atendeu/caixa postal zera. |
+
+Campos do bloco:
 
 | Campo | Rótulo | Padrão |
 |---|---|---|
+| `inexistente` | Quando vier "inexistente" | SMS, voz: `escalonar` · e-mail: `bloquear` · RCS, WhatsApp: `retestar` |
+| `escalonamento` | (SMS e voz, em "escalonar") Dias de suspensão a cada falha: 1ª, 2ª, 3ª… — lista editável de chips numéricos (até 10) com "+ degrau". Quando os dois escalonam, vale a escada do SMS | `[7, 15, 30, 90, 120]` |
+| `dias_rever` | (em "retestar") Testar de novo depois de (dias) | RCS 60 · WhatsApp 15 |
 | `temporarios_pausa` | Falhas temporárias seguidas para pausar (0 = nunca) | 3 (voz: 0) |
-| `dias_pausa` | Dias de pausa | 30 |
-| `inexistente` | Quando vier "inexistente" | SMS, e-mail, voz: `bloquear` · RCS, WhatsApp: `retestar` |
-| `dias_rever` | Retestar depois de (dias) — só em "retestar" | 60 |
+| `dias_pausa` | Dias de pausa por falhas temporárias | 30 |
 | `limite_lote` | Trava de lote: % de inexistente que indica falha do fornecedor | 50% (salve 0.5) |
 
-Opções de `inexistente`: **Tirar do canal** (`bloquear`), **Tirar e retestar depois** (`retestar`),
-**Não usar** (`ignorar`). Texto de ajuda: "No SMS, 'inexistente' tira o número do SMS e do RCS; voz e WhatsApp
-continuam. No e-mail, tira o e-mail. Na voz, tira o número de todos os canais de telefone. Qualquer entrega,
-leitura ou clique depois desfaz a pausa e o inexistente. Bloqueio nunca é desfeito por entrega."
-Botão **Restaurar padrão** (grava `null`).
+Opções de `inexistente`: **Suspensão escalonada** (`escalonar`, SMS e voz), **Tirar do canal** (`bloquear`),
+**Tirar e testar de novo depois** (`retestar`), **Não usar** (`ignorar`). Qualquer entrega, leitura ou clique
+depois desfaz pausa, suspensão e inexistente. Bloqueio (opt-out) nunca é desfeito por entrega.
+Botão **Restaurar padrão MotorCob** (grava `null`).
 
 ## 4. Saúde dos canais (Lista do dia e Início)
 
 A rodada grava em `execucoes.resumo.retorno_canal` (última execução do credor):
-`{resumo: {canal: {inexistente, temporario, entregue, lido, clique, bloqueio, contatos_inexistentes,
-contatos_em_pausa, contatos_bloqueados, contatos_ativos}}, oxigenados: {canal: n}, contatos_fora: {canal: n},
+`{resumo: {canal: {inexistente, temporario, entregue, lido, clique, bloqueio, contatos_suspensos,
+contatos_inexistentes, contatos_em_pausa, contatos_bloqueados, contatos_ativos}}, oxigenados: {canal: n}, contatos_fora: {canal: n},
 economia_por_rodada: R$, higienizacao: n}` (pode vir `null` se o credor não tem retorno de canal).
 
 - **Lista do dia**: card **Saúde dos contatos** acima das estratégias: por canal, "X contatos fora do canal"

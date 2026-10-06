@@ -52,7 +52,8 @@ class TestOxigenacao(unittest.TestCase):
         self.assertIn(segundo, (T1, T2, T3))
         rc = depois["retorno_canal"]
         self.assertEqual(rc["oxigenados"], {"sms": 1})
-        self.assertEqual(rc["contatos_fora"], {"sms": 1, "rcs": 1})        # SMS falho também sai do RCS
+        # DLR de não entregue suspende o celular em tudo (SMS, RCS, WhatsApp e voz nesse número)
+        self.assertEqual(rc["contatos_fora"], {c: 1 for c in ("sms", "rcs", "whatsapp", "discador", "agente_voz")})
         hig = (depois["saida"] / "higienizacao.csv").read_text(encoding="utf-8")
         self.assertIn(primeiro, hig)
         self.assertTrue(any("RETORNO DE CANAL" in a for a in depois["alertas"]))
@@ -65,12 +66,13 @@ class TestOxigenacao(unittest.TestCase):
         r = self._rodar([R(t, "sms", "inexistente") for t in (T1, T2, T3)])
         self.assertEqual(self._escolhido(r, "sms"), [])
 
-    def test_sms_inexistente_nao_tira_o_numero_da_voz(self):
+    def test_dlr_suspende_o_celular_tambem_na_voz_e_o_proximo_assume(self):
         (primeiro,) = self._escolhido(self._rodar(canal="discador"), "discador")
         r = self._rodar([R(primeiro, "sms", "inexistente")], canal="discador")
-        self.assertEqual(self._escolhido(r, "discador"), [primeiro])
+        (outro,) = self._escolhido(r, "discador")
+        self.assertNotEqual(outro, primeiro)
 
-    def test_voz_inexistente_tira_de_todos_os_canais_de_telefone(self):
+    def test_voz_inexistente_suspende_so_a_voz_e_o_proximo_numero_assume(self):
         (primeiro,) = self._escolhido(self._rodar(canal="discador"), "discador")
         r = self._rodar([R(primeiro, "voz", "inexistente")], canal="discador")
         (outro,) = self._escolhido(r, "discador")
@@ -96,20 +98,74 @@ class TestRegras(unittest.TestCase):
         _, restr, _, _ = avaliar(temps + [R(T1, "sms", "lido", 1)], donos, HOJE)  # leu depois: volta
         self.assertEqual(restr, {})
 
+    def test_dlr_suspensao_escalonada(self):
+        """1ª falha 7 dias, 2ª 15, 3ª 30, 4ª 90, 5ª 120; falha durante a suspensão não conta; entrega zera;
+        depois da 5ª reabre e uma nova falha suspende pelo último degrau."""
+        donos = {T1: ["A1"]}
+        susp = lambda regs: avaliar(regs, donos, HOJE)  # noqa: E731
+        _, restr, sit, _ = susp([R(T1, "sms", "inexistente", 3)])
+        self.assertIn("sms:suspenso", restr[T1])
+        self.assertTrue({"rcs:suspenso", "whatsapp:suspenso", "discador:suspenso", "agente_voz:suspenso"} <= restr[T1])
+        self.assertEqual((sit[0]["desde"], sit[0]["ate"]), ((HOJE - timedelta(3)).isoformat(),
+                                                            (HOJE + timedelta(4)).isoformat()))
+        self.assertEqual(susp([R(T1, "sms", "inexistente", 8)])[1], {})              # 7 dias já passaram
+        falhas = [R(T1, "sms", "inexistente", d) for d in (100, 90, 60, 29)]           # 7 → 15 → 30 → 90
+        _, restr, sit, _ = susp(falhas + [R(T1, "sms", "inexistente", 20)])         # 20: dentro da 4ª, não conta
+        self.assertIn("4ª falha", sit[0]["situacao"])
+        self.assertEqual(sit[0]["ate"], (HOJE + timedelta(61)).isoformat())
+        self.assertEqual(susp(falhas + [R(T1, "sms", "entregue", 10)])[1], {})       # entregou: zera
+        cinco = [R(T1, "sms", "inexistente", d) for d in (400, 390, 370, 330, 235)]  # 5ª acaba em HOJE-115
+        self.assertEqual(susp(cinco)[1], {})                                        # reabriu
+        _, _, sit, _ = susp(cinco + [R(T1, "sms", "inexistente", 5)])
+        self.assertIn("6ª falha", sit[0]["situacao"])
+        self.assertEqual(sit[0]["ate"], (HOJE + timedelta(115)).isoformat())        # último degrau: 120
+
+    def test_voz_sozinha_nao_e_severa_e_junta_com_o_sms(self):
+        """Telefonia pode falhar: 'número inexistente' na voz suspende só a voz (mesma escada). Se o SMS também
+        falha, as falhas somam e a suspensão passa a valer para tudo do celular."""
+        donos = {T1: ["A1"]}
+        voz = {"discador:suspenso", "agente_voz:suspenso"}
+        _, restr, sit, _ = avaliar([R(T1, "voz", "inexistente", 2)], donos, HOJE)
+        self.assertEqual(restr[T1], voz)                                     # só a voz, 7 dias
+        self.assertIn("só a voz", sit[0]["situacao"])
+        self.assertEqual(sit[0]["ate"], (HOJE + timedelta(5)).isoformat())
+        _, restr, sit, _ = avaliar([R(T1, "voz", "inexistente", 20), R(T1, "voz", "inexistente", 5)], donos, HOJE)
+        self.assertEqual(restr[T1], voz)                                     # 2ª falha só de voz: 15 dias
+        self.assertIn("2ª falha (Voz)", sit[0]["situacao"])
+        # junção: a voz suspendeu e o SMS também falhou (outro canal confirmando) → sobe e vale para tudo
+        _, restr, sit, _ = avaliar([R(T1, "voz", "inexistente", 4), R(T1, "sms", "inexistente", 2)], donos, HOJE)
+        self.assertIn("sms:suspenso", restr[T1])
+        self.assertIn("whatsapp:suspenso", restr[T1])
+        self.assertIn("2ª falha (SMS + Voz)", sit[0]["situacao"])
+        self.assertEqual(sit[0]["ate"], (HOJE + timedelta(13)).isoformat())  # 15 dias a partir do SMS
+        # atendeu / caixa postal depois: zera
+        self.assertEqual(avaliar([R(T1, "voz", "inexistente", 4), R(T1, "voz", "entregue", 1)], donos, HOJE)[1], {})
+        # a empresa pode voltar ao "bloquear" na voz (tira o número de todos os canais de telefone)
+        regras = regras_de([{"canal": "discador", "regras_retorno": {"inexistente": "bloquear"}}])
+        _, restr, _, _ = avaliar([R(T1, "voz", "inexistente", 2)], donos, HOJE, regras)
+        self.assertIn("sms:inexistente", restr[T1])
+
     def test_rcs_e_whatsapp_sem_suporte_sao_retestados(self):
         donos = {T1: ["A1"]}
         _, restr, _, _ = avaliar([R(T1, "rcs", "inexistente", 10)], donos, HOJE)
         self.assertEqual(restr[T1], {"rcs:sem_suporte"})
         _, restr, _, _ = avaliar([R(T1, "rcs", "inexistente", 70)], donos, HOJE)
         self.assertEqual(restr, {})                                          # passou 60 dias: testa de novo
-        _, restr, _, _ = avaliar([R(T1, "whatsapp", "inexistente", 3)], donos, HOJE)
+        _, restr, _, _ = avaliar([R(T1, "whatsapp", "inexistente", 10)], donos, HOJE)
         self.assertEqual(restr[T1], {"whatsapp:sem_conta"})
+        self.assertEqual(avaliar([R(T1, "whatsapp", "inexistente", 16)], donos, HOJE)[1], {})   # 15 dias: retesta
 
     def test_bloqueio_nao_e_desfeito_por_entrega(self):
         _, restr, _, _ = avaliar([R(T1, "sms", "bloqueio", 5), R(T1, "sms", "entregue", 1)], {T1: ["A1"]}, HOJE)
         self.assertEqual(restr[T1], {"sms:opt_out"})
 
     def test_regras_configuradas_na_pagina_canais(self):
+        esc = regras_de([{"canal": "sms", "regras_retorno": {"escalonamento": [2, 4]}}])
+        self.assertEqual(esc["sms"]["escalonamento"], [2, 4])
+        self.assertEqual(regras_de(None)["sms"]["escalonamento"], [7, 15, 30, 90, 120])   # padrão sugerido
+        self.assertEqual(regras_de(None)["whatsapp"]["dias_rever"], 15)
+        _, restr, _, _ = avaliar([R(T1, "sms", "inexistente", 3)], {T1: ["A1"]}, HOJE, esc)
+        self.assertEqual(restr, {})                                          # 1ª falha: só 2 dias
         regras = regras_de([{"canal": "sms", "regras_retorno": {"temporarios_pausa": 2, "dias_pausa": 7,
                                                                  "inexistente": "ignorar"}},
                             {"canal": "rcs", "regras_retorno": {"dias_pausa": "abc"}}])

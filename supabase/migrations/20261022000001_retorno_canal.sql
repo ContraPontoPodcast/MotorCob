@@ -7,8 +7,9 @@
 --   (tipo canal_<canal>; colunas = {contato, status, data?})
 -- * canal_codigos: cada status do fornecedor e a marca do cliente
 --   (inexistente · temporario · entregue · lido · clique · bloqueio); o motor sugere
--- * canais_empresa.regras_retorno: regras de renitência do canal (página Canais)
---   {temporarios_pausa, dias_pausa, inexistente: bloquear|retestar|ignorar, dias_rever, limite_lote}
+-- * canais_empresa.regras_retorno: regras de renitência do canal (página Canais), sugeridas pelo
+--   MotorCob e ajustáveis: {inexistente: escalonar(SMS)|bloquear|retestar|ignorar, escalonamento: [dias...],
+--   dias_rever, temporarios_pausa, dias_pausa, limite_lote}
 -- Pode ser rodado de novo sem erro.
 
 alter table public.envios drop constraint if exists envios_tipo_check;
@@ -73,4 +74,4 @@ revoke all on public.canal_codigos from anon;
 alter table public.canais_empresa add column if not exists regras_retorno jsonb
     check (regras_retorno is null or jsonb_typeof(regras_retorno) = 'object');
 comment on column public.canais_empresa.regras_retorno is
-    'Regras de renitência do retorno de canal: {temporarios_pausa, dias_pausa, inexistente: bloquear|retestar|ignorar, dias_rever, limite_lote}. Vazio = padrão do MotorCob.';
+    'Regras de renitência do retorno de canal (sugeridas pelo MotorCob, ajustáveis): {inexistente: escalonar|bloquear|retestar|ignorar, escalonamento, dias_rever, temporarios_pausa, dias_pausa, limite_lote}. Vazio = padrão do MotorCob.';
