@@ -476,7 +476,7 @@ def publicar_personas(sb: Supabase, empresa_id, r, cid=None) -> int:
         if chave not in existentes:
             sb.inserir("sugestoes", {"empresa_id": empresa_id, **_c(cid), "chave": chave, "texto": s["texto"], "dados": s})
             novas += 1
-        elif existentes[chave]["status"] == "pendente":  # evidência do dia
+        elif existentes[chave].get("status", "pendente") == "pendente":  # evidência do dia
             sb.atualizar("sugestoes", {"id": f"eq.{existentes[chave]['id']}"}, {"texto": s["texto"], "dados": s})
     return novas
 
