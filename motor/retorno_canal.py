@@ -15,10 +15,16 @@ cada status com uma das marcas:
 Regras (por contato × canal, na ordem das datas; qualquer positivo — entregue, lido, clique —
 desfaz inexistente e pausa anteriores):
 
-* SMS inexistente: o número sai do SMS e do RCS (rede de celular). Voz e WhatsApp seguem: fixo não
-  recebe SMS e uma parte dos números com DLR falho ainda atende.
-* RCS inexistente: aparelho sem RCS → sai do RCS e é retestado depois de dias_rever.
-* WhatsApp inexistente: sem conta → sai do WhatsApp e é retestado depois de dias_rever.
+* SMS inexistente (DLR de não entregue): SUSPENSÃO ESCALONADA do número em tudo que vai para o
+  celular (SMS, RCS, WhatsApp e voz nesse número): 1ª falha 7 dias, 2ª 15, 3ª 30, 4ª 90, 5ª 120; depois
+  reabre para uma próxima tentativa (nova falha volta a suspender pelo último degrau). Falha durante a
+  suspensão não conta; um entregue/lido/clique zera a contagem. Os outros contatos do cliente assumem.
+* Voz "número inexistente": a telefonia pode falhar, então sozinha suspende SÓ A VOZ nesse número, na
+  mesma escada. Junção: as falhas do SMS e da voz somam na mesma contagem; quando o SMS também falhou, a
+  suspensão vale para tudo que vai para o celular. Atendeu/caixa postal (positivo) zera.
+* RCS inexistente: aparelho sem RCS → sai do RCS (o senão automático leva para o SMS; a estratégia
+  pode usar WhatsApp e voz) e é retestado depois de dias_rever (60).
+* WhatsApp inexistente: sem conta → sai do WhatsApp e é retestado depois de dias_rever (15).
 * E-mail inexistente (hard bounce): sai do e-mail.
 * Voz inexistente (número não existe): sai de todos os canais de telefone.
 * Temporário: temporarios_pausa seguidos (sem positivo no meio) → pausa de dias_pausa no canal.
@@ -52,15 +58,19 @@ LOTE_MINIMO = 200
 LIMITE_LOTE = 0.5
 # regras de renitência por canal (página Canais do site; o que não vier usa o padrão)
 #   temporarios_pausa: falhas temporárias seguidas para pausar · dias_pausa: duração da pausa
-#   inexistente: "bloquear" (sai do canal) · "retestar" (sai e volta depois de dias_rever) · "ignorar"
+#   inexistente: "escalonar" (SMS e voz: suspensão escalonada do número, ver escalonamento) · "bloquear"
+#                (sai do canal) · "retestar" (sai e volta depois de dias_rever) · "ignorar"
+#   escalonamento: dias de suspensão a cada DLR de não entregue (1ª, 2ª, ...; depois repete o último)
 #   limite_lote: fração de "inexistente" num arquivo (com LOTE_MINIMO+ linhas) que indica falha do fornecedor
 PADRAO = {
-    "sms": {"temporarios_pausa": 3, "dias_pausa": 30, "inexistente": "bloquear", "dias_rever": 60, "limite_lote": 0.5},
+    "sms": {"temporarios_pausa": 3, "dias_pausa": 30, "inexistente": "escalonar", "dias_rever": 60, "limite_lote": 0.5,
+            "escalonamento": [7, 15, 30, 90, 120]},
     "rcs": {"temporarios_pausa": 3, "dias_pausa": 30, "inexistente": "retestar", "dias_rever": 60, "limite_lote": 0.5},
-    "whatsapp": {"temporarios_pausa": 3, "dias_pausa": 30, "inexistente": "retestar", "dias_rever": 60,
+    "whatsapp": {"temporarios_pausa": 3, "dias_pausa": 30, "inexistente": "retestar", "dias_rever": 15,
                  "limite_lote": 0.5},
     "email": {"temporarios_pausa": 3, "dias_pausa": 30, "inexistente": "bloquear", "dias_rever": 60, "limite_lote": 0.5},
-    "voz": {"temporarios_pausa": 0, "dias_pausa": 30, "inexistente": "bloquear", "dias_rever": 60, "limite_lote": 0.5},
+    "voz": {"temporarios_pausa": 0, "dias_pausa": 30, "inexistente": "escalonar", "dias_rever": 60, "limite_lote": 0.5,
+            "escalonamento": [7, 15, 30, 90, 120]},
 }
 CANAL_DA_CONFIG = {"sms": "sms", "rcs": "rcs", "whatsapp": "whatsapp", "email": "email", "voz": "discador"}
 
@@ -76,9 +86,14 @@ def regras_de(canais_empresa: list[dict] | None) -> dict:
             r["dias_pausa"] = max(1, int(r["dias_pausa"]))
             r["dias_rever"] = max(1, int(r["dias_rever"]))
             r["limite_lote"] = min(1.0, max(0.05, float(r["limite_lote"])))
+            if "escalonamento" in base:
+                esc = [min(365, max(1, int(d))) for d in (r["escalonamento"] or [])][:10]
+                r["escalonamento"] = esc or list(base["escalonamento"])
         except (TypeError, ValueError):
             r = dict(base)
-        if r["inexistente"] not in ("bloquear", "retestar", "ignorar"):
+        validas = ("escalonar", "bloquear", "retestar", "ignorar") if canal in ("sms", "voz") \
+            else ("bloquear", "retestar", "ignorar")
+        if r["inexistente"] not in validas:
             r["inexistente"] = base["inexistente"]
         saida[canal] = r
     return saida
@@ -310,6 +325,8 @@ def avaliar(registros: list[Registro], donos: dict[str, list[str]], hoje: date, 
             situacao.append({**linha, "situacao": "bloqueio (não enviar)", "desde": bloqueio.isoformat(), "ate": ""})
             resumo[canal]["contatos_bloqueados"] += 1
         rg = regras[canal]
+        if rg["inexistente"] == "escalonar":
+            inexistente = None                                   # suspensão escalonada (abaixo, SMS + voz juntos)
         if inexistente and rg["inexistente"] != "ignorar":
             rever = rg["inexistente"] == "retestar"
             if not rever or (hoje - inexistente).days <= rg["dias_rever"]:
@@ -341,7 +358,49 @@ def avaliar(registros: list[Registro], donos: dict[str, list[str]], hoje: date, 
                                       origem=r.arquivo))
         if ultimo_pos and not (bloqueio or inexistente):
             resumo[canal]["contatos_ativos"] += 1
+    # suspensão escalonada do número: DLR de não entregue no SMS e "número inexistente" na voz somam na
+    # mesma contagem; o alcance depende de quem falhou (só a voz → só voz; o SMS entrou → tudo do celular)
+    por_numero = defaultdict(list)
+    for (contato, canal), rs in por_chave.items():
+        if canal in ("sms", "voz") and regras[canal]["inexistente"] == "escalonar":
+            por_numero[contato] += rs
+    for contato, rs in por_numero.items():
+        sus = _suspensao(rs, regras, hoje)
+        if not sus:
+            continue
+        alvo, falhas, fontes, ini, fim = sus
+        restricoes[contato].update(f"{c}:suspenso" for c in alvo)
+        dono = donos.get(contato) or []
+        quem = " + ".join(NOME[c] for c in ("sms", "voz") if c in fontes)
+        onde = "tudo que vai para este celular" if "sms" in fontes else "só a voz neste número"
+        situacao.append({"contato": contato, "canal": quem, "clientes": " ".join(sorted(dono)[:5]),
+                         "ultimo_positivo": "", "situacao": f"suspenso: {falhas}ª falha ({quem}) — "
+                         f"{(fim - ini).days} dias, {onde}", "desde": ini.isoformat(), "ate": fim.isoformat()})
+        resumo["sms" if "sms" in fontes else "voz"]["contatos_suspensos"] += 1
     return eventos, dict(restricoes), situacao, {c: dict(v) for c, v in resumo.items()}
+
+
+def _suspensao(rs: list[Registro], regras: dict, hoje: date):
+    """Escada de suspensão do número (SMS e voz juntos). Cada falha fora da suspensão em curso sobe um
+    degrau; um positivo (entregue/lido/clique, em qualquer dos dois) zera. Falha do SMS durante uma
+    suspensão só de voz conta (é outro canal confirmando) e estende o alcance para tudo do celular.
+    Devolve (canais, falhas, fontes, início, fim) da suspensão em vigor ou None."""
+    participa = {c for c in ("sms", "voz") if regras[c]["inexistente"] == "escalonar"}
+    escala = regras["sms" if "sms" in participa else "voz"]["escalonamento"]
+    falhas, fim, ini, fontes = 0, None, None, set()
+    for r in sorted(rs, key=lambda r: (r.data, MARCAS.index(r.marca))):
+        if r.marca in POSITIVAS:
+            falhas, fim, fontes = 0, None, set()
+        elif r.marca == "inexistente":
+            em_curso = fim is not None and r.data < fim
+            if em_curso and (r.canal in fontes or "sms" in fontes):
+                continue                                  # o que já está suspenso não falha de novo
+            falhas += 1
+            fontes.add(r.canal)
+            ini, fim = r.data, date.fromordinal(r.data.toordinal() + escala[min(falhas, len(escala)) - 1])
+    if not fim or hoje >= fim:
+        return None
+    return (TELEFONE if "sms" in fontes else CANAIS_VOZ), falhas, fontes, ini, fim
 
 
 def aplicar_restricoes(certs: dict, restricoes: dict[str, set]):

@@ -324,9 +324,12 @@ de outra pessoa pela certificação e a rotação segue.
   (envios `canal_sms|rcs|whatsapp|email|voz` → `canais/<canal>/`) só com contato + status, apartados
   do CPC. Mapeamento por credor e canal (`mapeamento_arquivos` tipo `canal_<canal>`; marcas em
   `canal_codigos`: inexistente · temporario · entregue · lido · clique · bloqueio). Viram RESTRIÇÕES
-  do contato no canal (SMS inexistente → fora do SMS e do RCS; e-mail/voz inexistente → fora; RCS/
-  WhatsApp → retesta; N temporários → pausa; bloqueio → opt_out) e evidência na certificação — o
-  próximo contato do cliente assume ("oxigenação"). Nunca entram na esteira/CPC/personas. Regras de
+  do contato no canal: DLR de não entregue no SMS → suspensão escalonada do número (7/15/30/90/120 dias,
+  depois reabre) em tudo do celular; voz "inexistente" → mesma escada, só na voz (telefonia falha), e
+  soma com o SMS (junção: SMS entrou → tudo do celular); RCS sem suporte → fora do RCS, retesta em 60;
+  WhatsApp sem conta → retesta em 15; e-mail hard bounce → fora; N temporários → pausa; bloqueio →
+  opt_out. Positivo zera. Também evidência na certificação — o próximo contato do cliente assume.
+  Nunca entram na esteira/CPC/personas. Regras de
   renitência por canal em `canais_empresa.regras_retorno` (padrão em `retorno_canal.PADRAO`); trava
   de lote (falha do fornecedor). Saídas: `higienizacao.csv` e `resumo.retorno_canal` na execução.
 - Evento que chega depois do dia fechado (ocorrência de ontem enviada depois da rotina) e acordo
