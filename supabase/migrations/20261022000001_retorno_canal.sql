@@ -7,9 +7,8 @@
 --   (tipo canal_<canal>; colunas = {contato, status, data?})
 -- * canal_codigos: cada status do fornecedor e a marca do cliente
 --   (inexistente · temporario · entregue · lido · clique · bloqueio); o motor sugere
--- * canais_empresa.regras_retorno: regras de renitência do canal (página Canais), sugeridas pelo
---   MotorCob e ajustáveis: {inexistente: escalonar(SMS)|bloquear|retestar|ignorar, escalonamento: [dias...],
---   dias_rever, temporarios_pausa, dias_pausa, limite_lote}
+-- * credores.regras_retorno: regras de renitência do credor, por canal (Credores → Configurações → Canais),
+--   sugeridas pelo MotorCob e ajustáveis
 -- Pode ser rodado de novo sem erro.
 
 alter table public.envios drop constraint if exists envios_tipo_check;
@@ -71,7 +70,9 @@ create policy canal_codigos_apagar on public.canal_codigos for delete to authent
     using (public.tem_papel('admin', 'planejamento') and empresa_id in (select public.minhas_empresas()));
 revoke all on public.canal_codigos from anon;
 
-alter table public.canais_empresa add column if not exists regras_retorno jsonb
+-- regras de renitência POR CREDOR: {sms|rcs|whatsapp|email|voz: {inexistente, escalonamento, dias_rever,
+-- temporarios_pausa, dias_pausa, limite_lote}}; vazio = sugestão do MotorCob
+alter table public.credores add column if not exists regras_retorno jsonb
     check (regras_retorno is null or jsonb_typeof(regras_retorno) = 'object');
-comment on column public.canais_empresa.regras_retorno is
-    'Regras de renitência do retorno de canal (sugeridas pelo MotorCob, ajustáveis): {inexistente: escalonar|bloquear|retestar|ignorar, escalonamento, dias_rever, temporarios_pausa, dias_pausa, limite_lote}. Vazio = padrão do MotorCob.';
+comment on column public.credores.regras_retorno is
+    'Regras de renitência do retorno de canal do credor, por canal (sms, rcs, whatsapp, email, voz): {inexistente: escalonar|bloquear|retestar|ignorar, escalonamento, dias_rever, temporarios_pausa, dias_pausa, limite_lote}. Vazio = sugestão do MotorCob.';

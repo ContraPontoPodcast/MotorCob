@@ -34,7 +34,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from motor.certificacao import certificar_contatos
-from motor.retorno_canal import aplicar_restricoes, avaliar as avaliar_canal, regras_de as regras_retorno
+from motor.retorno_canal import aplicar_restricoes, avaliar as avaliar_canal, regras_de
 from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
                            ingerir_ocorrencias, salvar_escolhas)
@@ -276,7 +276,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
               ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
               na_carga=None, compartilhado=None, personas_usuario=None, demais_ativo=True, calendario=None,
-              retornos_canal=None):
+              retornos_canal=None, regras_retorno=None):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
     atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
     na_carga: base/na_carga.csv — quem está na carga do dia (só esses recebem ação hoje).
@@ -295,7 +295,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
              traz r["compartilhar"] com hot, whatsapp, acionados e esperando (adiados hoje).
     retornos_canal: [motor.retorno_canal.Registro] — status dos fornecedores por número/e-mail (DLR,
              bounce, lido, clique). Só mexe na qualidade do contato: número morto, em pausa ou bloqueado
-             sai do canal e o próximo contato do cliente assume; não mexe na esteira nem no CPC."""
+             sai do canal e o próximo contato do cliente assume; não mexe na esteira nem no CPC.
+    regras_retorno: regras de renitência do credor ({canal: {...}}, credores.regras_retorno); o que faltar
+             usa a sugestão do MotorCob."""
     regua = carregar_regua(regua_json) if regua_json else carregar_regua()
     avisos_cluster = []
     if clusters:
@@ -349,7 +351,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     donos = defaultdict(list)
     for c in contatos:
         donos[c["contato"]].append(c["id_cliente"])
-    regras_canal = regras_retorno(_ler_lista(canais))
+    regras_canal = regras_de(_ler_lista(canais), regras_retorno)
     ev_canal, restr_canal, situacao_canal, resumo_canal = avaliar_canal(retornos_canal or [], donos, hoje, regras_canal)
 
     def certificar(ev, dia):
