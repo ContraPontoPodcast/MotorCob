@@ -8,8 +8,8 @@ padrão (`regras/regua.json`) para os clusters que a usam:
       "cpc":         {"ordem": [ação, ...], "junto": [ação, ...], "tentativas_por_canal": 3,
                       "intervalo_cpa": 1, "intervalo_cpb": 2},   # acionar a cada N dias
       "giro":        {"passos": {...}, "ciclo_dias": 8, "max_ciclos": 3},
-      "preventivo":  {"passos": {"3": [...], "1": [...], "0": [...]}},
-      "quebra":      {"passos": {...}, "dias_para_estoque": 6},
+      "preventivo":  {"ativo": true, "passos": {"3": [...], "1": [...], "0": [...]}},
+      "quebra":      {"ativo": true, "carencia": 0, "passos": {...}, "dias_para_estoque": 6},
       "recencia_horas": 48
     }
 
@@ -191,6 +191,17 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                     erros.append(f"{nome}/{fase}: {k} deve ser inteiro ≥ 1")
                 else:
                     sec[k] = f[k]
+        if fase in ("preventivo", "quebra") and "ativo" in f:
+            # liga/desliga do preventivo e da quebra neste segmento (desligado: sem ação nessa fase)
+            v = f["ativo"]
+            sec["ativo"] = not (v is False or _simples(v) in ("false", "nao", "não", "n", "0", "off", "desligado"))
+        if fase == "quebra" and f.get("carencia") not in (None, ""):
+            c = f["carencia"]
+            c = int(c) if isinstance(c, str) and c.strip().isdigit() else c
+            if isinstance(c, int) and not isinstance(c, bool) and 0 <= c <= 60:
+                sec["carencia"] = c
+            else:
+                erros.append(f"{nome}/quebra: carencia deve ser inteiro de 0 a 60")
         saida[fase] = sec
     if isinstance(definicao.get("whatsapp"), dict) and "so_marcados" in definicao["whatsapp"]:
         # True: WhatsApp só para número marcado com WhatsApp (carga ou bureau); False: qualquer celular

@@ -19,12 +19,14 @@ class Parcela:
 
 
 def situacao_acordo(parcelas: list[Parcela], hoje: date, baixas_ate: date,
-                    quebrados: set[str], janela: int = 3) -> tuple[str, str, str] | None:
+                    quebrados: set[str], janela: int = 3, carencia: int = 0) -> tuple[str, str, str] | None:
     """Retorna (estado, ciclo, id_acordo) do acordo vigente, ou None se não há acordo.
 
     estado: LIQ (tudo pago) · QBR (parcela vencida sem pagamento; ciclo D1, D2…, contado do vencimento)
             · PRE (parcela vence em até `janela` dias; ciclo D-janela…D0, contado do vencimento)
-            · COL (em dia). A janela é o maior dia do preventivo desenhado na estratégia.
+            · COL (em dia). A janela é o maior dia do preventivo desenhado na estratégia (< 0: preventivo
+            desligado, nunca PRE). carencia: dias depois do vencimento em que a parcela sem baixa ainda não
+            é quebra (COL, esperando a baixa chegar); a quebra começa no D+(carencia+1).
     """
     por_acordo: dict[str, list[Parcela]] = {}
     for p in parcelas:
@@ -37,11 +39,11 @@ def situacao_acordo(parcelas: list[Parcela], hoje: date, baixas_ate: date,
     pendentes = [p for p in ps if p.pago_em is None or p.pago_em > baixas_ate]
     if not pendentes:
         return ("LIQ", "", id_acordo)
-    vencidas = [p for p in pendentes if p.vencimento < hoje and p.vencimento <= baixas_ate]
+    vencidas = [p for p in pendentes if (hoje - p.vencimento).days > max(carencia, 0) and p.vencimento <= baixas_ate]
     if vencidas:
         return ("QBR", f"D{(hoje - min(p.vencimento for p in vencidas)).days}", id_acordo)
     prox = min(p.vencimento for p in pendentes)
     dv = (prox - hoje).days
-    if 0 <= dv <= max(janela, 0):
+    if janela >= 0 and 0 <= dv <= janela:
         return ("PRE", "D0" if dv == 0 else f"D-{dv}", id_acordo)
     return ("COL", "", id_acordo)
