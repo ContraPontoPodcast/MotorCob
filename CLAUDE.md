@@ -330,7 +330,8 @@ de outra pessoa pela certificação e a rotação segue.
   WhatsApp sem conta → retesta em 15; e-mail hard bounce → fora; N temporários → pausa; bloqueio →
   opt_out. Positivo zera. Também evidência na certificação — o próximo contato do cliente assume.
   Nunca entram na esteira/CPC/personas. Regras de
-  renitência por canal em `canais_empresa.regras_retorno` (padrão em `retorno_canal.PADRAO`); trava
+  renitência POR CREDOR em `credores.regras_retorno` ({canal: {...}}; `retorno_canal.PADRAO` é só a
+  sugestão; nomes de cada retorno por canal em `retorno_canal.RETORNOS`); trava
   de lote (falha do fornecedor). Saídas: `higienizacao.csv` e `resumo.retorno_canal` na execução.
 - Evento que chega depois do dia fechado (ocorrência de ontem enviada depois da rotina) e acordo
   novo valem na mesma rodada (`marcacao.aplicar_pendentes`), uma vez só

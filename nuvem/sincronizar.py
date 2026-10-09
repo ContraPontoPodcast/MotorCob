@@ -738,7 +738,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             entrada, aviso_layout = _layout_automatico(sb, pasta, baixados, out)
         entrada, mapa = mapeamento.aplicar(sb, eid, cid, pasta, entrada, repo, out)
         canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
-        reg_canal, info_canal = retorno_canal.preparar(sb, eid, cid, pasta, regras_de(canais), out)
+        reg_canal, info_canal = retorno_canal.preparar(sb, eid, cid, pasta, regras_de(canais, u.get("regras_retorno")),
+                                                       out)
         segurados = [(e, d) for e, d in baixados if mapeamento.segurado(d)]
         baixados = [(e, d) for e, d in baixados if not mapeamento.segurado(d)]
         if entrada is not None:
@@ -779,7 +780,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 compartilhado=_compartilhado(pasta_emp, u, data),
                                 personas_usuario=personas_usuario,
                                 demais_ativo=u.get("demais_ativo") is not False,
-                                calendario=u.get("calendario"), retornos_canal=reg_canal)
+                                calendario=u.get("calendario"), retornos_canal=reg_canal,
+                                regras_retorno=u.get("regras_retorno"))
         _guardar_compartilhado(pasta_emp, u, r, data)
 
         if aviso_layout:

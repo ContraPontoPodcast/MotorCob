@@ -32,8 +32,8 @@ desfaz inexistente e pausa anteriores):
 * Trava de lote: arquivo com LOTE_MINIMO+ linhas e mais de limite_lote de "inexistente" é falha do
   fornecedor (rota), não dos números — os "inexistente" dele não valem, e vira alerta.
 
-Os números (pausa, retestar, lote) são as regras de renitência de cada canal, configuráveis na
-página Canais (regras_de); PADRAO é o ponto de partida.
+Os números (escada, pausa, retestar, lote) são as regras de renitência de cada canal, POR CREDOR
+(Credores → Configurações → Canais; regras_de). PADRAO é só a sugestão do MotorCob.
 
 Entregue/lido/clique também viram evidência na certificação do contato (lido e clique só quando o
 número é de um único cliente: num número compartilhado não dá para saber quem leu).
@@ -56,7 +56,7 @@ CANAIS_VOZ = ("discador", "agente_voz")
 TELEFONE = ("sms", "rcs", "whatsapp") + CANAIS_VOZ
 LOTE_MINIMO = 200
 LIMITE_LOTE = 0.5
-# regras de renitência por canal (página Canais do site; o que não vier usa o padrão)
+# regras de renitência por canal — sugestão do MotorCob; cada credor ajusta as suas (regras_de)
 #   temporarios_pausa: falhas temporárias seguidas para pausar · dias_pausa: duração da pausa
 #   inexistente: "escalonar" (SMS e voz: suspensão escalonada do número, ver escalonamento) · "bloquear"
 #                (sai do canal) · "retestar" (sai e volta depois de dias_rever) · "ignorar"
@@ -75,12 +75,18 @@ PADRAO = {
 CANAL_DA_CONFIG = {"sms": "sms", "rcs": "rcs", "whatsapp": "whatsapp", "email": "email", "voz": "discador"}
 
 
-def regras_de(canais_empresa: list[dict] | None) -> dict:
-    """Regras de cada canal: o padrão com o que a empresa configurou (canais_empresa.regras_retorno)."""
+def regras_de(canais_empresa: list[dict] | None = None, do_credor: dict | None = None) -> dict:
+    """Regras de cada canal. A regra é do CREDOR (credores.regras_retorno = {canal: {...}}, editada em
+    Credores → Configurações → Canais); o que ele não definiu usa o padrão sugerido pelo MotorCob (PADRAO).
+    canais_empresa.regras_retorno (antigo, por empresa) ainda vale como base, se existir."""
     cfg = {c.get("canal"): c.get("regras_retorno") or {} for c in canais_empresa or []}
+    credor = do_credor if isinstance(do_credor, dict) else {}
     saida = {}
     for canal, base in PADRAO.items():
-        r = {**base, **{k: v for k, v in (cfg.get(CANAL_DA_CONFIG[canal]) or {}).items() if k in base and v is not None}}
+        r = dict(base)
+        for fonte in (cfg.get(CANAL_DA_CONFIG[canal]), credor.get(canal)):
+            if isinstance(fonte, dict):
+                r.update({k: v for k, v in fonte.items() if k in base and v is not None})
         try:
             r["temporarios_pausa"] = max(0, int(r["temporarios_pausa"]))
             r["dias_pausa"] = max(1, int(r["dias_pausa"]))
@@ -100,6 +106,54 @@ def regras_de(canais_empresa: list[dict] | None) -> dict:
 
 
 NOME = {"sms": "SMS", "rcs": "RCS", "whatsapp": "WhatsApp", "email": "E-mail", "voz": "Voz"}
+
+# O que cada canal devolve, com o nome que o cliente vê, e a marca interna (que decide a regra).
+# É a fonte única para o site (marcação dos status e a página Canais) e para os textos do motor.
+RETORNOS = {
+    "sms": [
+        ("entregue", "Entregue", "DELIVRD, entregue ao aparelho — o número está ativo"),
+        ("clique", "Clique / resposta", "clicou no link ou respondeu"),
+        ("inexistente", "Não entregue (DLR)", "UNDELIV, REJECTD, número inválido ou cancelado na operadora"),
+        ("temporario", "Falha temporária", "EXPIRED, aparelho desligado, fora de área, operadora indisponível"),
+        ("bloqueio", "Opt-out", "pediu para sair (SAIR, STOP)"),
+    ],
+    "rcs": [
+        ("entregue", "Entregue", "chegou ao aparelho"),
+        ("lido", "Lido", "abriu a mensagem"),
+        ("clique", "Clique / interação", "clicou em botão, link ou respondeu"),
+        ("inexistente", "Sem suporte a RCS", "aparelho ou operadora não aceita RCS"),
+        ("temporario", "Falha temporária", "não entregue agora, expirado"),
+        ("bloqueio", "Opt-out / bloqueio", "pediu para não receber"),
+    ],
+    "whatsapp": [
+        ("entregue", "Entregue", "dois tiques"),
+        ("lido", "Lido", "dois tiques azuis"),
+        ("clique", "Respondeu / clicou", "respondeu, clicou em botão ou link"),
+        ("inexistente", "Sem conta no WhatsApp", "o número não tem WhatsApp"),
+        ("temporario", "Falha temporária", "falha de envio, fora do ar, expirado"),
+        ("bloqueio", "Bloqueou / denunciou", "bloqueou o remetente ou denunciou"),
+    ],
+    "email": [
+        ("entregue", "Entregue", "aceito pelo servidor do destinatário"),
+        ("lido", "Aberto", "abriu o e-mail (sinal fraco: o pixel engana)"),
+        ("clique", "Clique", "clicou em um link"),
+        ("inexistente", "Hard bounce", "e-mail inexistente ou domínio inválido"),
+        ("temporario", "Soft bounce", "caixa cheia, servidor indisponível, mensagem grande"),
+        ("bloqueio", "Descadastro / spam", "pediu descadastro ou marcou como spam"),
+    ],
+    "voz": [
+        ("clique", "Atendeu", "alguém atendeu (sem CPC)"),
+        ("entregue", "Caixa postal", "caiu na caixa postal — o número existe"),
+        ("inexistente", "Número inexistente", "não existe, não completa, mensagem da operadora"),
+        ("temporario", "Não atende / ocupado / fora de área", "tocou e ninguém atendeu, ocupado, desligado"),
+        ("bloqueio", "Não ligar", "pediu para não receber ligações"),
+    ],
+}
+
+
+def rotulo(canal: str, marca: str) -> str:
+    """Nome que o cliente vê para a marca no canal (ex.: sms/inexistente → 'Não entregue (DLR)')."""
+    return next((r for m, r, _ in RETORNOS.get(canal, []) if m == marca), marca)
 
 # resultado da taxonomia para a certificação (canal do motor, resultado)
 EVIDENCIA = {
@@ -322,7 +376,8 @@ def avaliar(registros: list[Registro], donos: dict[str, list[str]], hoje: date, 
         if bloqueio:
             alvo = CANAIS_VOZ if canal == "voz" else (canal,)
             restricoes[contato].update(f"{c}:opt_out" for c in alvo)
-            situacao.append({**linha, "situacao": "bloqueio (não enviar)", "desde": bloqueio.isoformat(), "ate": ""})
+            situacao.append({**linha, "situacao": f"{rotulo(canal, 'bloqueio')} (não enviar)", "desde": bloqueio.isoformat(),
+                             "ate": ""})
             resumo[canal]["contatos_bloqueados"] += 1
         rg = regras[canal]
         if rg["inexistente"] == "escalonar":
@@ -332,15 +387,13 @@ def avaliar(registros: list[Registro], donos: dict[str, list[str]], hoje: date, 
             if not rever or (hoje - inexistente).days <= rg["dias_rever"]:
                 restricoes[contato].update(_restricoes_inexistente(canal))
                 ate = (inexistente.toordinal() + rg["dias_rever"]) if rever else None
-                txt = {"sms": "inexistente no SMS (fora do SMS e do RCS; voz ainda pode atender)",
-                       "rcs": "sem RCS no aparelho", "whatsapp": "sem conta no WhatsApp",
-                       "email": "e-mail inexistente (hard bounce)", "voz": "número inexistente"}[canal]
+                txt = rotulo(canal, "inexistente") + (f" — testar de novo em {rg['dias_rever']} dias" if rever else "")
                 situacao.append({**linha, "situacao": txt, "desde": inexistente.isoformat(),
                                  "ate": date.fromordinal(ate).isoformat() if ate else ""})
                 resumo[canal]["contatos_inexistentes"] += 1
         if rg["temporarios_pausa"] and temps >= rg["temporarios_pausa"] and (hoje - temp_ini).days <= rg["dias_pausa"]:
             restricoes[contato].update(f"{c}:pausa" for c in (CANAIS_VOZ if canal == "voz" else (canal,)))
-            situacao.append({**linha, "situacao": f"pausa ({temps} falhas temporárias seguidas)",
+            situacao.append({**linha, "situacao": f"pausa: {temps}x {rotulo(canal, 'temporario').lower()} seguidas",
                              "desde": temp_ini.isoformat(),
                              "ate": date.fromordinal(temp_ini.toordinal() + rg["dias_pausa"]).isoformat()})
             resumo[canal]["contatos_em_pausa"] += 1
@@ -371,7 +424,7 @@ def avaliar(registros: list[Registro], donos: dict[str, list[str]], hoje: date, 
         alvo, falhas, fontes, ini, fim = sus
         restricoes[contato].update(f"{c}:suspenso" for c in alvo)
         dono = donos.get(contato) or []
-        quem = " + ".join(NOME[c] for c in ("sms", "voz") if c in fontes)
+        quem = " + ".join(f"{NOME[c]}: {rotulo(c, 'inexistente')}" for c in ("sms", "voz") if c in fontes)
         onde = "tudo que vai para este celular" if "sms" in fontes else "só a voz neste número"
         situacao.append({"contato": contato, "canal": quem, "clientes": " ".join(sorted(dono)[:5]),
                          "ultimo_positivo": "", "situacao": f"suspenso: {falhas}ª falha ({quem}) — "

@@ -11,7 +11,8 @@ rodada — quando o cliente marca, entra sozinho).
 from collections import Counter
 from pathlib import Path
 
-from motor.retorno_canal import CANAIS, LIMITE_LOTE, NOME, abrir, detectar_colunas, ler_arquivo, sugerir_marca
+from motor.retorno_canal import (CANAIS, LIMITE_LOTE, NOME, RETORNOS, abrir, detectar_colunas, ler_arquivo,
+                                  sugerir_marca)
 
 TIPOS = {f"canal_{c}": c for c in CANAIS}
 PASTA = {t: f"canais/{c}" for t, c in TIPOS.items()}
@@ -144,8 +145,8 @@ def alertas(info: dict, credor: str) -> list[str]:
     for canal, sts in info.get("status_para_marcar", {}).items():
         saida.append(f"STATUS PARA MARCAR ({NOME[canal]}): " + ", ".join(
             f"'{c}' {n}x" for c, n in sorted(sts.items(), key=lambda x: -x[1])[:8])
-            + f". Marque inexistente, temporário, entregue, lido, clique ou bloqueio em {onde}; as linhas entram "
-              "assim que marcar.")
+            + f". Marque cada um como {', '.join(r for _, r, _ in RETORNOS[canal])} em {onde}; as linhas "
+              "entram assim que marcar.")
     for a in info.get("lotes_travados", []):
         saida.append(f"LOTE SUSPEITO: no arquivo {a} mais da metade dos envios voltou como inexistente — parece falha "
                      "do fornecedor (rota), não dos números. Nenhum número foi descartado por esse arquivo; confira "

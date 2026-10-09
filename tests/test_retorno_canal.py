@@ -29,7 +29,7 @@ class TestOxigenacao(unittest.TestCase):
     """O caso da operação: o cliente tem vários telefones; o 1º volta 'não entregue' no SMS → o SMS de
     hoje sai pelo 2º. Idem no e-mail: hard bounce no 1º e-mail → vai o próximo."""
 
-    def _rodar(self, retornos=None, canal="sms"):
+    def _rodar(self, retornos=None, canal="sms", regras=None):
         tmp = Path(tempfile.mkdtemp())
         _csv(tmp / "bruto" / "carga_2026-09-01.csv", CAB +
              f"A1;K1;;900,00;01/08/2026;CARTAO;SP;{T1};N;{T2};{T3};a1@exemplo.invalid;\n")
@@ -39,7 +39,7 @@ class TestOxigenacao(unittest.TestCase):
             "1": [{"canal": canal, "modo": "sempre", "numeros": 1}]}}}}]
         return rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", tmp / "ret", HOJE,
                                    pasta_estado=tmp / "estado", pasta_saida=tmp / "saida", estrategias=estr,
-                                   retornos_canal=retornos, out=lambda *a: None)
+                                   retornos_canal=retornos, regras_retorno=regras, out=lambda *a: None)
 
     def _escolhido(self, r, canal):
         return [l["contato"] for l in r["fila"] if l["canal"] == canal]
@@ -61,6 +61,13 @@ class TestOxigenacao(unittest.TestCase):
         (terceiro,) = self._escolhido(self._rodar([R(primeiro, "sms", "inexistente"), R(segundo, "sms", "inexistente")]),
                                       "sms")
         self.assertEqual({primeiro, segundo, terceiro}, {T1, T2, T3})
+
+    def test_regra_do_credor_vale_na_lista(self):
+        (primeiro,) = self._escolhido(self._rodar(), "sms")
+        r = self._rodar([R(primeiro, "sms", "inexistente")], regras={"sms": {"inexistente": "ignorar"}})
+        self.assertEqual(self._escolhido(r, "sms"), [primeiro])                # este credor não usa o DLR
+        r = self._rodar([R(primeiro, "sms", "inexistente", 5)], regras={"sms": {"escalonamento": [3, 10]}})
+        self.assertEqual(self._escolhido(r, "sms"), [primeiro])                # 1ª falha = 3 dias: já passou
 
     def test_todos_os_numeros_mortos_no_sms_nao_acionam_sms(self):
         r = self._rodar([R(t, "sms", "inexistente") for t in (T1, T2, T3)])
@@ -131,12 +138,12 @@ class TestRegras(unittest.TestCase):
         self.assertEqual(sit[0]["ate"], (HOJE + timedelta(5)).isoformat())
         _, restr, sit, _ = avaliar([R(T1, "voz", "inexistente", 20), R(T1, "voz", "inexistente", 5)], donos, HOJE)
         self.assertEqual(restr[T1], voz)                                     # 2ª falha só de voz: 15 dias
-        self.assertIn("2ª falha (Voz)", sit[0]["situacao"])
+        self.assertIn("2ª falha (Voz: Número inexistente)", sit[0]["situacao"])
         # junção: a voz suspendeu e o SMS também falhou (outro canal confirmando) → sobe e vale para tudo
         _, restr, sit, _ = avaliar([R(T1, "voz", "inexistente", 4), R(T1, "sms", "inexistente", 2)], donos, HOJE)
         self.assertIn("sms:suspenso", restr[T1])
         self.assertIn("whatsapp:suspenso", restr[T1])
-        self.assertIn("2ª falha (SMS + Voz)", sit[0]["situacao"])
+        self.assertIn("2ª falha (SMS: Não entregue (DLR) + Voz: Número inexistente)", sit[0]["situacao"])
         self.assertEqual(sit[0]["ate"], (HOJE + timedelta(13)).isoformat())  # 15 dias a partir do SMS
         # atendeu / caixa postal depois: zera
         self.assertEqual(avaliar([R(T1, "voz", "inexistente", 4), R(T1, "voz", "entregue", 1)], donos, HOJE)[1], {})
@@ -158,6 +165,15 @@ class TestRegras(unittest.TestCase):
     def test_bloqueio_nao_e_desfeito_por_entrega(self):
         _, restr, _, _ = avaliar([R(T1, "sms", "bloqueio", 5), R(T1, "sms", "entregue", 1)], {T1: ["A1"]}, HOJE)
         self.assertEqual(restr[T1], {"sms:opt_out"})
+
+    def test_regras_por_credor_por_cima_da_sugestao(self):
+        r = regras_de([{"canal": "sms", "regras_retorno": {"dias_pausa": 10}}],
+                      {"sms": {"dias_pausa": 20, "escalonamento": [1, 2]}, "voz": {"inexistente": "bloquear"},
+                       "whatsapp": "lixo"})
+        self.assertEqual((r["sms"]["dias_pausa"], r["sms"]["escalonamento"]), (20, [1, 2]))   # credor vence
+        self.assertEqual(r["voz"]["inexistente"], "bloquear")
+        self.assertEqual(r["whatsapp"]["dias_rever"], 15)                                   # inválido: sugestão
+        self.assertEqual(regras_de(None, None)["sms"]["escalonamento"], [7, 15, 30, 90, 120])
 
     def test_regras_configuradas_na_pagina_canais(self):
         esc = regras_de([{"canal": "sms", "regras_retorno": {"escalonamento": [2, 4]}}])
@@ -203,6 +219,15 @@ class TestArquivo(unittest.TestCase):
         self.assertEqual(regs[0].contato, "11800000000")                     # DDI tirado
         regs, rel = ler_arquivo(arq, "sms", cols, {"DELIVRD": "entregue"}, HOJE)
         self.assertEqual(rel.sem_marca, {"UNDELIV": 150})                    # status sem marca espera
+
+    def test_cada_canal_tem_os_seus_retornos(self):
+        from motor.retorno_canal import CANAIS, MARCAS, RETORNOS, rotulo
+        for canal in CANAIS:
+            marcas = [m for m, _, _ in RETORNOS[canal]]
+            self.assertTrue(set(marcas) <= set(MARCAS) and len(marcas) == len(set(marcas)), canal)
+            self.assertTrue({"inexistente", "temporario", "entregue", "bloqueio"} <= set(marcas), canal)
+        self.assertEqual((rotulo("sms", "inexistente"), rotulo("email", "temporario"), rotulo("voz", "clique")),
+                         ("Não entregue (DLR)", "Soft bounce", "Atendeu"))
 
     def test_sugestao_das_marcas(self):
         casos = {"DELIVRD": "entregue", "UNDELIV": "inexistente", "Não entregue": "inexistente",
