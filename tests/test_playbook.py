@@ -175,6 +175,70 @@ class TestAcordos(unittest.TestCase):
         self.assertTrue(any("volta ao estoque" in t["motivo"] for t in c.trilha))
 
 
+class TestAcordoConfiguravel(unittest.TestCase):
+    """Preventivo e quebra por estratégia: liga/desliga, carência e dias da quebra."""
+
+    def p(self, venc, pago=None, n=1, acordo="A1"):
+        return Parcela("C1", acordo, n, venc, 100.0, pago)
+
+    def regua(self, preventivo=None, quebra=None):
+        d = json.loads(PADRAO.read_text(encoding="utf-8"))
+        d["preventivo"].update(preventivo or {})
+        d["quebra"].update(quebra or {})
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(d, f)
+        return carregar_regua(f.name)
+
+    def test_carencia_adia_a_quebra(self):
+        v = date(2026, 9, 10)
+        sit = lambda hoje, car: situacao_acordo([self.p(v)], hoje, hoje, set(), 3, car)[:2]  # noqa: E731
+        self.assertEqual(sit(date(2026, 9, 12), 2)[0], "COL")              # D+2 ainda na carência
+        self.assertEqual(sit(date(2026, 9, 13), 2), ("QBR", "D3"))         # a quebra começa no D+3
+        self.assertEqual(sit(date(2026, 9, 11), 0), ("QBR", "D1"))         # sem carência: como antes
+
+    def test_preventivo_desligado_nao_entra_em_pre(self):
+        from motor.marcacao import janela_preventivo
+        v = date(2026, 9, 10)
+        self.assertEqual(janela_preventivo({"preventivo": {"ativo": False, "passos": {"3": ["sms"]}}}), -1)
+        self.assertEqual(situacao_acordo([self.p(v)], v, v - timedelta(1), set(), -1)[0], "COL")
+        self.assertEqual(situacao_acordo([self.p(v)], v - timedelta(2), v, set(), -1)[0], "COL")
+
+    def test_estrategia_le_ativo_e_carencia_do_site(self):
+        from motor.estrategia import validar_estrategia
+        over, erros = validar_estrategia({"preventivo": {"ativo": False}, "quebra": {
+            "ativo": "true", "carencia": "2", "dias_para_estoque": 10, "passos": {"D+3": ["whatsapp"], "8": ["sms"]}}})
+        self.assertEqual(erros, [])
+        self.assertEqual(over["preventivo"], {"ativo": False})
+        self.assertEqual((over["quebra"]["ativo"], over["quebra"]["carencia"], over["quebra"]["dias_para_estoque"]),
+                         (True, 2, 10))
+        self.assertEqual(sorted(over["quebra"]["passos"]), ["3", "8"])          # dias livres, não só D+1..D+5
+        _, erros = validar_estrategia({"quebra": {"carencia": -1}})
+        self.assertTrue(erros)
+
+    def test_quebra_desligada_nao_aciona_e_volta_ao_estoque_no_prazo(self):
+        from motor.fila import _passo_do_dia
+        from motor.marcacao import EstadoCliente
+        ligada, desligada = self.regua(), self.regua(quebra={"ativo": False, "dias_para_estoque": 4})
+        est = EstadoCliente("C1", SEG, "M1", "M1", "2026-08")
+        est.estado, est.ciclo = "QBR", "D1"
+        self.assertIsNotNone(_passo_do_dia(est, None, SEG, ligada, {}))
+        self.assertIsNone(_passo_do_dia(est, None, SEG, desligada, {}))
+        # dia a dia: entra no acordo, quebra e, com a quebra desligada, volta ao estoque no D+4
+        clientes = {"C1": Cliente("C1", SEG, 2000, 30, None)}
+        estados, trilha = {}, []
+        venc = SEG + timedelta(5)
+        parcelas = {"C1": [self.p(venc)]}
+        for k in range(0, 12):
+            d = SEG + timedelta(k)
+            evs = [ev("whatsapp", "resposta", d)] if k == 1 else []
+            trilha += processar_dia(estados, clientes, evs, parcelas if k >= 2 else {}, d, desligada,
+                                    {"C1": set(desligada["canais"])}, d)
+        self.assertIn("A1", estados["C1"].acordos_quebrados)
+        volta = next(t for t in trilha if "volta ao estoque" in t["motivo"])
+        self.assertIn("quebra desligada", volta["motivo"])
+        self.assertEqual(volta["data"], (venc + timedelta(4)).isoformat())
+
+
 class TestFila(unittest.TestCase):
     def test_passos_da_localizacao(self):
         ter = SEG + timedelta(1)                # carga na terça: o D+7 cai na segunda (domingo não aciona)

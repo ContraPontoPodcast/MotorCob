@@ -270,7 +270,10 @@ def _ir_para_giro(est, dia, motivo_reenriquecer=None):
 
 
 def janela_preventivo(regua) -> int:
-    """Quantos dias antes do vencimento o preventivo começa: o maior dia desenhado (mínimo 0)."""
+    """Quantos dias antes do vencimento o preventivo começa: o maior dia desenhado (mínimo 0).
+    Preventivo desligado na estratégia do segmento: -1 (o cliente não entra em PRE)."""
+    if regua["preventivo"].get("ativo") is False:
+        return -1
     try:
         return max([abs(int(k)) for k in (regua["preventivo"]["passos"] or {})] + [0])
     except (KeyError, TypeError, ValueError):
@@ -279,7 +282,7 @@ def janela_preventivo(regua) -> int:
 
 def _aplicar_acordo(est, parcelas, dia, baixas_ate, regua, trilha):
     sit = situacao_acordo(parcelas, dia, baixas_ate, set(est.acordos_quebrados),
-                          janela_preventivo(regua)) if parcelas else None
+                          janela_preventivo(regua), int(regua["quebra"].get("carencia") or 0)) if parcelas else None
     antes = est.tag
     if sit is None:
         if est.estado in ESTADOS_ACORDO:  # acordo sumiu do sistema: volta ao estoque
@@ -290,7 +293,8 @@ def _aplicar_acordo(est, parcelas, dia, baixas_ate, regua, trilha):
     if estado == "QBR" and int(ciclo[1:]) >= regua["quebra"]["dias_para_estoque"]:
         est.acordos_quebrados.append(id_acordo)
         est.estado, est.ciclo, est.tentativas, est.canais_esgotados = "CPA", "T1", 1, []
-        trilha.marcar(dia, est, antes, f"D+{ciclo[1:]} da quebra sem pagamento → volta ao estoque como CPC A",
+        trilha.marcar(dia, est, antes, f"D+{ciclo[1:]} da quebra sem pagamento → volta ao estoque como CPC A"
+                      + (" (quebra desligada no segmento)" if regua["quebra"].get("ativo") is False else ""),
                       "Sist. acordos")
         return
     motivo = {"LIQ": "acordo quitado", "QBR": "parcela vencida sem pagamento",

@@ -296,7 +296,9 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         ult = (ultima_cpc or {}).get(idc)
         passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp, ult)
         if passo is None:
-            if est.estado in ("CPA", "CPB") and not _intervalo_cpc_ok(est, hoje, rc, ult):
+            if est.estado == "QBR" and rc["quebra"].get("ativo") is False:
+                conta("quebra_desligada")
+            elif est.estado in ("CPA", "CPB") and not _intervalo_cpc_ok(est, hoje, rc, ult):
                 conta("intervalo_cpc")
             else:
                 conta("sem_passo_hoje" if _recencia_ok(est, hoje, rc) or est.estado in ("PRE", "QBR")
@@ -422,6 +424,8 @@ def _recencia_ok(est: EstadoCliente, hoje: date, regua: Regua) -> bool:
 MOTIVOS = {
     "com_acao": "com ação hoje",
     "sem_passo_hoje": "a esteira não tem passo hoje (ex.: D+2)",
+    "quebra_desligada": "acordo quebrado, mas a quebra está desligada na estratégia deste segmento "
+                        "(volta ao estoque no prazo definido)",
     "intervalo_48h": "aguardando 48h desde a última ação (localização e Não CPC)",
     "sem_contato": "sem contato para os canais do dia",
     "sem_acao_na_raia": "persona com 'sem ação' hoje",
@@ -474,6 +478,8 @@ def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None):
         return normalizar(passo, regua)
 
     if est.estado == "QBR":
+        if regua["quebra"].get("ativo") is False:
+            return None
         d = int(est.ciclo[1:]) if est.ciclo.startswith("D") else -1
         passo = regua["quebra"]["passos"].get(str(d))
         return ("quebra", f"D+{d}", acoes(passo), True) if passo else None

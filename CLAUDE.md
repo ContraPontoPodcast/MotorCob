@@ -337,6 +337,10 @@ de outra pessoa pela certificação e a rotação segue.
   novo valem na mesma rodada (`marcacao.aplicar_pendentes`), uma vez só
   (`estado/eventos_aplicados.txt`). Preventivo: janela = maior dia antes do vencimento desenhado
   na estratégia (o site grava "-5", "-3", "0").
+- Acordo por estratégia (segmento): `preventivo.ativo` / `quebra.ativo` (desligado: o segmento não entra em
+  PRE; na quebra não aciona e volta ao estoque no prazo), `quebra.carencia` (dias depois do vencimento
+  sem baixa que ainda não são quebra; a quebra começa no D+carencia+1), `quebra.dias_para_estoque` e os
+  dias livres da esteira da quebra (D+N) e do preventivo (D-N).
 - CPC A/B: segue todo dia de lista (sem as 48h das réguas massivas), ou "a cada N dias" pela
   estratégia (`definicao.cpc.intervalo_cpa` / `intervalo_cpb`), contado da última ação de CPC
   exportada (`estado/escolhas.csv`).
