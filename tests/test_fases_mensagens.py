@@ -82,5 +82,49 @@ class TestMensagens(unittest.TestCase):
         self.assertEqual(len(erros), 2)
 
 
+class TestFrasePorDia(unittest.TestCase):
+    """A frase fica na ação de cada dia da esteira (cada dia pode ter a sua)."""
+
+    def _arquivo(self, r):
+        return [l["mensagem"] for l in r["fila"]]
+
+    def test_frase_da_acao_do_dia(self):
+        defin = {"localizacao": {"passos": {"1": [{"canal": "whatsapp", "modo": "sempre",
+                                                   "mensagem": "Dia 1: saldo {saldo}"}]}}}
+        self.assertEqual(self._arquivo(_rodar(defin)), ["Dia 1: saldo R$ 1.234,50"])
+
+    def test_acao_tem_prioridade_sobre_frase_do_estagio(self):
+        defin = {"localizacao": {"passos": {"1": [{"canal": "whatsapp", "mensagem": {"frase_id": 5}}]}},
+                 "mensagens": {"localizacao": {"whatsapp": "genérica"}}}
+        playbook = [{"id": 5, "canal": "whatsapp", "nome": "D1", "texto": "Do playbook {dias_atraso}", "ativo": True}]
+        self.assertEqual(self._arquivo(_rodar(defin, playbook)), ["Do playbook 32"])
+        # frase do dia desativada: sai sem frase (não cai na genérica do estágio)
+        self.assertEqual(self._arquivo(_rodar(defin, [{**playbook[0], "ativo": False}])), [""])
+        sem = {"localizacao": {"passos": {"1": [{"canal": "whatsapp"}]}},
+               "mensagens": {"localizacao": {"whatsapp": "genérica"}}}
+        self.assertEqual(self._arquivo(_rodar(sem)), ["genérica"])   # estratégia antiga continua valendo
+
+    def test_validacao_da_frase_na_acao(self):
+        over, erros = validar_estrategia({"giro": {"passos": {
+            "1": [{"canal": "sms", "mensagem": "Oi {saldo}"}],
+            "2": [{"canal": "persona_1", "mensagem": {"WhatsApp": {"frase_id": "3"}, "sms": "curta", "fax": "x"}}],
+            "3": [{"canal": "discador", "mensagem": {"frase_id": "abc"}}]}},
+            "cpc": {"ordem": [{"canal": "whatsapp", "mensagem": {"cpa": "negociar", "cpb": {"frase_id": 9}}}]}})
+        p = over["giro"]["passos"]
+        self.assertEqual(p["1"][0]["mensagem"], "Oi {saldo}")
+        self.assertEqual(p["2"][0]["mensagem"], {"whatsapp": {"frase_id": 3}, "sms": "curta"})
+        self.assertNotIn("mensagem", p["3"][0])
+        self.assertEqual(over["cpc_acoes"]["whatsapp"]["mensagem"], {"cpa": "negociar", "cpb": {"frase_id": 9}})
+        self.assertEqual(len(erros), 2)
+
+    def test_mapa_por_canal_e_estagio(self):
+        from motor.estrategia import frase_da_acao
+        m = {"whatsapp": "w", "cpb": "b"}
+        self.assertEqual(frase_da_acao(m, "whatsapp", "cpa"), "w")
+        self.assertEqual(frase_da_acao(m, "sms", "cpb"), "b")
+        self.assertIsNone(frase_da_acao(m, "sms", "cpa"))
+        self.assertEqual(frase_da_acao({"frase_id": 2}, "sms", "cpa"), {"frase_id": 2})
+
+
 if __name__ == "__main__":
     unittest.main()

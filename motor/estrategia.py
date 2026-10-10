@@ -138,7 +138,51 @@ def _acao(a, onde: str, erros: list) -> dict | None:
     acao = {"canal": a["canal"], "modo": modo, "numeros": numeros or None, "contatos": filtro}
     if personas:
         acao["personas"] = [int(p) for p in personas]
+    if a.get("mensagem") not in (None, "", {}):
+        msg = _mensagem(a["mensagem"], f"{onde}/{a['canal']}", erros)
+        if msg is not None:
+            acao["mensagem"] = msg
     return acao
+
+
+def _frase(v):
+    """Texto próprio (até 2000) ou frase do playbook {"frase_id": n}; None se não for nenhum dos dois."""
+    if isinstance(v, str) and v.strip():
+        return v.strip()[:2000]
+    if isinstance(v, dict) and set(v) == {"frase_id"} and str(v["frase_id"]).strip().isdigit():
+        return {"frase_id": int(str(v["frase_id"]).strip())}
+    return None
+
+
+def _mensagem(v, onde: str, erros: list):
+    """Frase da ação do dia. Texto, {"frase_id": n} ou, quando o canal só se define na rodada (persona_1/2)
+    ou a ação é do CPC, um mapa por canal e/ou estágio: {"whatsapp": …, "sms": …, "cpa": …, "cpb": …}."""
+    f = _frase(v)
+    if f is not None:
+        return f
+    if isinstance(v, dict) and "frase_id" in v:
+        erros.append(f"{onde}: frase do playbook inválida (ignorada)")
+        return None
+    if isinstance(v, dict):
+        mapa = {}
+        for k, x in v.items():
+            chave = k if k in ("cpa", "cpb") else canal_padrao(k)
+            fx = _frase(x)
+            if (chave in CANAIS or chave in ("cpa", "cpb")) and fx is not None:
+                mapa[chave] = fx
+            else:
+                erros.append(f"{onde}: frase '{k}' ignorada")
+        if mapa:
+            return mapa
+    erros.append(f"{onde}: frase inválida (ignorada)")
+    return None
+
+
+def frase_da_acao(msg, canal: str, estagio: str):
+    """Frase que vale para a linha: a da ação (ou do canal/estágio no mapa); None se a ação não tiver."""
+    if msg is None or _frase(msg) is not None:
+        return msg
+    return msg.get(canal) or msg.get(estagio)
 
 
 def _sem_repetir(acoes: list, onde: str, erros: list) -> list:

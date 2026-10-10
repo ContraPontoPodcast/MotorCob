@@ -39,7 +39,7 @@ from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
                            ingerir_ocorrencias, salvar_escolhas)
 from motor.acoes import agregar as agregar_acoes, sem_ocorrencia, totais as totais_acoes
-from motor.estrategia import validar_estrategia
+from motor.estrategia import frase_da_acao, validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor.fila import MOTIVOS, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
@@ -517,10 +517,13 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         eid_ = regua.estrategia_de(e_.cluster_atual) if e_ else None
         l["estrategia_id"] = eid_ if eid_ is not None else ""
         l["estrategia"] = (nomes_e.get(eid_) or f"estratégia {eid_}") if eid_ is not None else "Playbook MotorCob"
-        # frase do canal para o estágio, definida na estratégia (sai numa coluna do arquivo do canal)
-        msgs = regua.para(e_.cluster_atual).dados.get("mensagens") if e_ else None
-        texto = ((msgs or {}).get(estagio_da_linha(l)) or {}).get(l["canal"])
-        if isinstance(texto, dict):
+        # frase da ação do dia na esteira (sai numa coluna do arquivo do canal); sem frase na ação, vale a
+        # frase antiga por estágio × canal da estratégia (definicao.mensagens), se houver
+        texto = frase_da_acao(l.pop("frase_acao", None), l["canal"], estagio_da_linha(l))
+        if texto is None:
+            msgs = regua.para(e_.cluster_atual).dados.get("mensagens") if e_ else None
+            texto = ((msgs or {}).get(estagio_da_linha(l)) or {}).get(l["canal"])
+        if isinstance(texto, dict):     # frase do playbook desativada ou apagada: sai sem frase
             texto = playbook.get(texto.get("frase_id"))
         l["mensagem"] = montar_mensagem(texto, clientes.get(l["id_cliente"]), parcelas.get(l["id_cliente"]), hoje) \
             if texto else ""
