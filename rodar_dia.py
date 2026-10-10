@@ -302,7 +302,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
               ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
               na_carga=None, compartilhado=None, personas_usuario=None, demais_ativo=True, calendario=None,
-              retornos_canal=None, regras_retorno=None):
+              retornos_canal=None, regras_retorno=None, frases=None):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
     atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
     na_carga: base/na_carga.csv — quem está na carga do dia (só esses recebem ação hoje).
@@ -322,6 +322,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     retornos_canal: [motor.retorno_canal.Registro] — status dos fornecedores por número/e-mail (DLR,
              bounce, lido, clique). Só mexe na qualidade do contato: número morto, em pausa ou bloqueado
              sai do canal e o próximo contato do cliente assume; não mexe na esteira nem no CPC.
+    frases: playbook de frases da empresa ([{id, canal, texto, ativo}] da tabela frases); a estratégia
+             aponta uma frase com {"frase_id": n} e o texto vem daqui (frase desativada não sai).
     regras_retorno: regras de renitência do credor ({canal: {...}}, credores.regras_retorno); o que faltar
              usa a sugestão do MotorCob."""
     regua = carregar_regua(regua_json) if regua_json else carregar_regua()
@@ -509,6 +511,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                                   motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto,
                                   ultima_cpc=ultima_cpc)
     nomes_e = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
+    playbook = {f.get("id"): f.get("texto") for f in _ler_lista(frases) if f.get("ativo") is not False and f.get("texto")}
     for l in fila:
         e_ = estados.get(l["id_cliente"])
         eid_ = regua.estrategia_de(e_.cluster_atual) if e_ else None
@@ -517,6 +520,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         # frase do canal para o estágio, definida na estratégia (sai numa coluna do arquivo do canal)
         msgs = regua.para(e_.cluster_atual).dados.get("mensagens") if e_ else None
         texto = ((msgs or {}).get(estagio_da_linha(l)) or {}).get(l["canal"])
+        if isinstance(texto, dict):
+            texto = playbook.get(texto.get("frase_id"))
         l["mensagem"] = montar_mensagem(texto, clientes.get(l["id_cliente"]), parcelas.get(l["id_cliente"]), hoje) \
             if texto else ""
     perfil = _perfil_contatos(contatos, flags, ativos if ativos is not None else set(clientes))

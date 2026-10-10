@@ -1,0 +1,8 @@
+canal;estagio;nome;texto
+whatsapp;localizacao;Boas-vindas cliente novo;Olá! Temos uma condição especial para regularizar seu débito de {saldo}. Responda esta mensagem para ver as opções.
+sms;localizacao;SMS cliente novo;Temos uma proposta para o seu débito de {saldo}, em atraso há {dias_atraso} dias. Fale conosco: {link}
+whatsapp;cpa;Negociação CPC A;Que bom falar com você! Para o débito de {saldo}, temos parcelamento e desconto à vista. Qual opção prefere?
+sms;preventivo;Lembrete de parcela;Lembrete: sua parcela de {valor_parcela} vence em {vencimento}. Mantenha seu acordo em dia.
+whatsapp;quebra;Parcela em aberto;Identificamos a parcela de {valor_parcela} com vencimento em {vencimento} em aberto. Podemos ajudar a regularizar?
+email;giro;E-mail não CPC;Seu débito de {saldo} continua em aberto há {dias_atraso} dias. Acesse {link} e veja as condições disponíveis.
+agente_voz;cpa;Roteiro agente virtual CPC;Olá, aqui é da assessoria. Sobre o débito de {saldo}, posso apresentar as condições de pagamento?

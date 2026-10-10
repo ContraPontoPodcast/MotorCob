@@ -262,6 +262,9 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                     erros.append(f"{nome}/mensagens/{est}: canal '{canal}' desconhecido (ignorado)")
                 elif isinstance(texto, str) and texto.strip():
                     msgs.setdefault(est, {})[canal] = texto.strip()[:2000]
+                elif isinstance(texto, dict) and str(texto.get("frase_id") or "").strip().isdigit():
+                    # frase do playbook da empresa (tabela frases): o texto vem de lá na rodada
+                    msgs.setdefault(est, {})[canal] = {"frase_id": int(str(texto["frase_id"]).strip())}
         saida["mensagens"] = msgs
     r = definicao.get("recencia_horas")
     if r not in (None, ""):
