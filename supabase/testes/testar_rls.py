@@ -34,6 +34,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261025000001_permissoes_usuario.sql
     psql -d sb -f supabase/migrations/20261026000001_funcoes_sem_anon.sql
     psql -d sb -f supabase/migrations/20261027000001_ultimo_acesso.sql
+    psql -d sb -f supabase/migrations/20261028000001_tela_usuarios.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -349,6 +350,14 @@ checar("anônimo não chama pode()", False, "select public.pode('ver_auditoria')
 checar("login atualiza o último acesso do perfil", True, f"update auth.users set last_sign_in_at='2026-10-10 09:00-03' where id='{u['oper']}'; select to_char(ultimo_acesso at time zone 'America/Sao_Paulo','DD/MM HH24:MI') from public.perfis where id='{u['oper']}'", valor="10/10 09:00")
 checar("Admin vê o último acesso dos usuários da empresa", True, f"select count(ultimo_acesso) from public.perfis where id='{u['oper']}'", "authenticated", u["admina"], 1)
 checar("login não entra na auditoria", True, "select count(*) from public.auditoria where mudou ? 'ultimo_acesso'", "service_role", 0)
+# tela Usuários do site: catálogo ordenado, acessos do perfil (convite) e do usuário com os nomes que o site usa
+checar("catálogo tem a ordem que o site usa", True, "select string_agg(codigo, ',' order by ordem) from (select * from public.permissoes_catalogo order by ordem limit 2) c", "authenticated", u["oper"], "baixar_listas,baixar_relatorios")
+checar("convite: acessos do perfil Operação na empresa", True, "select string_agg(codigo||':'||origem, ',') from public.permissoes_do_papel(papel => 'operacao') where permitido", "authenticated", u["admina"], "baixar_listas:padrao,reenquadrar:perfil")
+checar("convite: Admin sempre com gerenciar usuários", True, "select permitido from public.permissoes_do_papel(papel => 'admin') where codigo='gerenciar_usuarios'", "authenticated", u["admina"], "t")
+checar("quem não gerencia usuários não lê acessos de perfil", True, "select count(*) from public.permissoes_do_papel(papel => 'operacao')", "authenticated", u["oper"], 0)
+checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
+checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 12)
+checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
