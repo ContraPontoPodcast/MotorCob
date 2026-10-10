@@ -1,6 +1,7 @@
 # Publica a imagem do motor no Artifact Registry do Google Cloud a cada push no main (a VM baixa às 05:20,
 # ou na hora com: sudo systemctl start motorcob-atualizar). Sem chave guardada: Workload Identity Federation.
-# Só roda depois de configurar as variáveis GCP_PROJETO, GCP_WIF_PROVIDER e GCP_SA_CI (docs/NUVEM_GCP.md).
+# Projeto, provedor WIF e conta de serviço não são segredos: ficam aqui (variáveis GCP_* do repositório, se
+# existirem, têm prioridade).
 name: imagem
 on:
   push:
@@ -14,10 +15,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publicar:
-    if: vars.GCP_WIF_PROVIDER != ''
     runs-on: ubuntu-latest
     env:
-      IMAGEM: southamerica-east1-docker.pkg.dev/${{ vars.GCP_PROJETO }}/motorcob/motor
+      IMAGEM: southamerica-east1-docker.pkg.dev/${{ vars.GCP_PROJETO || 'motorcob' }}/motorcob/motor
     steps:
       - uses: actions/checkout@v5
       - name: Montar a imagem
@@ -28,8 +28,8 @@ jobs:
             --entrypoint sh -w /tmp "$IMAGEM:latest" -c 'python3 -m unittest discover -s /app/tests -t /app -q'
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_SA_CI }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER || 'projects/1066520898298/locations/global/workloadIdentityPools/github/providers/github' }}
+          service_account: ${{ vars.GCP_SA_CI || 'motorcob-ci@motorcob.iam.gserviceaccount.com' }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Publicar
         run: |
