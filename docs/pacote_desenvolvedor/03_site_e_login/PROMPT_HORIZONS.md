@@ -25,7 +25,12 @@ SEÇÕES (fundo alternando branco e #F5F5F7)
    (até 112px); texto "O MotorCob usa seus agentes de IA para decidir, para cada cliente da carteira, quem acionar,
    por qual canal e em qual telefone. Todo dia. E eles aprendem com cada ocorrência." (trecho "quem acionar, por
    qual canal e em qual telefone." em #1D1D1F 600); botões "Agendar uma conversa" (vai a #contato) e "Ver a
-   plataforma" (vai a #produto); linha: 100004817 → atraso recente → D+3 → WhatsApp → (11) 9••••-••17 → CPC · vira Hot.
+   plataforma" (vai a #produto). Abaixo, cartão #F5F5F7 raio 18 (até 980px) com o título 13px 600 cinza "Como o
+   MotorCob decide um cliente, antes do primeiro disparo do dia" e 6 etapas lado a lado ligadas por uma linha fina
+   (ponto 9px em cada), rótulo 12px #6E6E73 em cima e valor 15px 600: Cliente 100004817 · Momento Atraso recente ·
+   Dia na régua D+3 · Canal escolhido WhatsApp · Telefone Hot (11) 9••••-••17 · Resultado CPC · vira Hot (verde
+   #248A3D, ponto #34C759). Nota 12px: "Dados fictícios. O MotorCob mostra só o ID do cliente, nunca CPF ou telefone
+   completo." No celular, etapas em lista vertical (rótulo à esquerda, valor à direita).
 2. Provocações (#F5F5F7): "Sua operação ainda começa com PROCV." / "O telefone certo existe. Você só não sabe qual
    é." / "Resultado no fim do mês é tarde demais." Até 84px. Cada frase passa de #C7C7CC para #1D1D1F quando chega
    a 62% da altura da tela; a segunda parte de cada uma fica #6E6E73. Com prefers-reduced-motion, já escuras.

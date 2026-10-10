@@ -30,7 +30,12 @@ altura 52 px. Logo (símbolo versão escura, 24 px) + "MotorCob" branco 15/600. 
 Fundo alternando branco e `#F5F5F7`. Títulos 700, espaçamento de letra −0,035em, sem itálico, sem caixa-alta.
 1. **Abertura** (centralizada): "Inteligência de contato para cobrança" · **"Pare de adivinhar."** · texto
    "O MotorCob usa seus agentes de IA…" · botões "Agendar uma conversa" (principal, rola até o contato) e
-   "Ver a plataforma" (secundário, rola até Produto) · linha da decisão com dados fictícios.
+   "Ver a plataforma" (secundário, rola até Produto) · **cartão "Como o MotorCob decide um cliente, antes do
+   primeiro disparo do dia"** (fundo `#F5F5F7`, raio 18, até 980 px): 6 etapas ligadas por uma linha, cada uma
+   com rótulo 12 px cinza e valor 15/600 — Cliente 100004817 · Momento Atraso recente · Dia na régua D+3 · Canal
+   escolhido WhatsApp · Telefone Hot (11) 9••••-••17 · Resultado CPC · vira Hot (verde `#248A3D`, ponto `#34C759`) —
+   e a nota "Dados fictícios. O MotorCob mostra só o ID do cliente, nunca CPF ou telefone completo." No celular as
+   etapas viram lista vertical (rótulo à esquerda, valor à direita).
 2. **Provocações** (fundo cinza): três frases que passam de `#C7C7CC` para `#1D1D1F` ao chegar a 62% da altura
    da tela (o trecho final fica `#6E6E73`). Com `prefers-reduced-motion`, já aparecem escuras.
 3. **Apresentamos MotorCob** + "Da carga à ação, com inteligência." + **prévia da Lista do dia** (`#lista-site`):
