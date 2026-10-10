@@ -19,7 +19,7 @@ jobs:
     env:
       IMAGEM: southamerica-east1-docker.pkg.dev/${{ vars.GCP_PROJETO || 'motorcob' }}/motorcob/motor
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Montar a imagem
         run: docker build -t "$IMAGEM:${GITHUB_SHA::12}" -t "$IMAGEM:latest" .
       - name: Testes dentro da imagem (somente leitura, sem privilégios)
