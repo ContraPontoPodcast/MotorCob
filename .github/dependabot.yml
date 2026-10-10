@@ -1,0 +1,7 @@
+# Atualizações de segurança das ações do GitHub (o motor usa só a biblioteca padrão do Python).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

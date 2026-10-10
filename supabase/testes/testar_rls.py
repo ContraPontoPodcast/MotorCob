@@ -30,6 +30,8 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261021000001_persona_maturidade.sql
     psql -d sb -f supabase/migrations/20261022000001_retorno_canal.sql
     psql -d sb -f supabase/migrations/20261023000001_playbook_frases.sql
+    psql -d sb -f supabase/migrations/20261024000001_permissoes_auditoria.sql
+    (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
 """
@@ -285,6 +287,42 @@ checar("resumo por estratégia: B não vê a fila da A", True, "select count(*) 
 checar("planejamento define o calendário do credor", True, f"update public.credores set calendario='{{\"padrao\":{{\"dias_semana\":[0,1,2,3,4]}}}}' where id={CX} returning id", "authenticated", u["plan"], CX)
 checar("operação não altera o calendário", True, f"update public.credores set calendario=null where id={CX} returning id", "authenticated", u["oper"], None)
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
+# permissões por perfil (padrão MotorCob + ajuste do Admin da empresa) e auditoria
+checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas")
+checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 12)
+checar("usuário inativo não tem permissão", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["inativo"], 0)
+checar("planejamento não ajusta permissões", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["plan"])
+checar("Admin libera Reenquadrar para a operação", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["admina"])
+checar("operação A passa a poder reenquadrar", True, "select public.pode('reenquadrar')", "authenticated", u["oper"], "t")
+checar("operação B continua sem (ajuste é por empresa)", True, "select public.pode('reenquadrar')", "authenticated", u["operb"], "f")
+checar("Admin bloqueia frases para o planejamento", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'planejamento','editar_canais',false)", "authenticated", u["admina"])
+checar("planejamento bloqueado não cria frase (vale no banco)", False, f"insert into public.frases (empresa_id,canal,nome,texto) values ({EA},'sms','Teste','Olá')", "authenticated", u["plan"])
+checar("Admin cria frase", True, f"insert into public.frases (empresa_id,canal,nome,texto) values ({EA},'sms','Teste','Olá')", "authenticated", u["admina"])
+checar("Admin não tira de si gerenciar usuários", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'admin','gerenciar_usuarios',false)", "authenticated", u["admina"])
+checar("permissão desconhecida é recusada", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','apagar_tudo',true)", "authenticated", u["admina"])
+checar("Admin A não ajusta a empresa B", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EB},'operacao','reenquadrar',true)", "authenticated", u["admina"])
+checar("B não vê os ajustes da A", True, "select count(*) from public.permissoes_papel", "authenticated", u["operb"], 0)
+_, NOVO, _ = sql("insert into auth.users (email) values ('novo@x.com') returning id")
+sql(f"update public.perfis set empresa_id={EA} where id='{NOVO}'")
+checar("Admin da empresa define o perfil do usuário", True, f"update public.perfis set papel='planejamento' where id='{NOVO}' returning papel", "authenticated", u["admina"], "planejamento")
+checar("Admin da empresa desativa o usuário", True, f"update public.perfis set ativo=false where id='{NOVO}' returning ativo", "authenticated", u["admina"], "f")
+checar("ninguém altera o próprio perfil", False, f"update public.perfis set papel='operacao' where id='{u['admina']}'", "authenticated", u["admina"])
+checar("Admin A não altera usuário da B", True, f"with x as (update public.perfis set ativo=false where id='{u['operb']}' returning 1) select count(*) from x", "authenticated", u["admina"], 0)
+checar("Admin A não muda usuário de empresa", False, f"update public.perfis set empresa_id={EB} where id='{NOVO}'", "authenticated", u["admina"])
+checar("planejamento não altera perfis", True, f"with x as (update public.perfis set ativo=true where id='{NOVO}' returning 1) select count(*) from x", "authenticated", u["plan"], 0)
+checar("Admin libera gerenciar usuários para a gestão", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'gestao','gerenciar_usuarios',true)", "authenticated", u["admina"])
+checar("gestão com permissão reativa usuário", True, f"update public.perfis set ativo=true where id='{NOVO}' returning ativo", "authenticated", u["gest"], "t")
+checar("só Admin cria Admin", False, f"update public.perfis set papel='admin' where id='{NOVO}'", "authenticated", u["gest"])
+checar("Admin vê a auditoria da empresa", True, "select count(*) > 0 from public.auditoria where tabela='perfis' and empresa_id=" + str(EA), "authenticated", u["admina"], "t")
+checar("auditoria registra antes e depois", True, f"select mudou->'papel'->>'depois' from public.auditoria where tabela='perfis' and registro='{NOVO}' and mudou ? 'papel'", "authenticated", u["admina"], "planejamento")
+checar("auditoria de perfis não guarda e-mail", True, "select count(*) from public.auditoria where mudou ? 'email'", "service_role", 0)
+checar("rotina do motor não entra na auditoria", True, "update public.credores set calendario=null where id=" + str(CX) + "; select count(*) from public.auditoria where usuario is null", "service_role", 0)
+checar("operação não vê a auditoria", True, "select count(*) from public.auditoria", "authenticated", u["oper"], 0)
+checar("B não vê a auditoria da A", True, "select count(*) from public.auditoria", "authenticated", u["operb"], 0)
+checar("ninguém grava na auditoria pelo site", False, f"insert into public.auditoria (empresa_id,tabela,acao) values ({EA},'x','INSERT')", "authenticated", u["admina"])
+checar("ninguém apaga a auditoria pelo site", False, "delete from public.auditoria", "authenticated", u["admin"])
+checar("TRUNCATE fechado para o site", False, "truncate public.fila_dia", "authenticated", u["admin"])
+checar("nenhuma regra usa mais o papel fixo", True, "select count(*) from pg_policies where coalesce(qual,'')||coalesce(with_check,'') ~ 'tem_papel'", "service_role", 0)
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

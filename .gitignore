@@ -3,3 +3,9 @@ __pycache__/
 *.pyc
 acoes/
 estado/
+.env
+.env.*
+*.env
+*.pem
+*.key
+supabase/.temp/

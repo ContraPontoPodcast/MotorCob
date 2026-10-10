@@ -6,6 +6,7 @@ motorcob.online (site)  ──login/leitura/upload──>  Supabase (Postgres + 
                                           rotina diária do motor (Python)
 ```
 
+- **Segurança, permissões e pentest:** `docs/SEGURANCA.md`.
 - **Supabase:** banco, login e arquivos. Tabelas e permissões em `supabase/migrations/`
   (aplicar na ordem do nome do arquivo).
 - **Várias empresas clientes no mesmo site:** tabela `empresas`; todo dado tem
