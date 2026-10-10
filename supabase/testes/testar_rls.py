@@ -35,6 +35,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261026000001_funcoes_sem_anon.sql
     psql -d sb -f supabase/migrations/20261027000001_ultimo_acesso.sql
     psql -d sb -f supabase/migrations/20261028000001_tela_usuarios.sql
+    psql -d sb -f supabase/migrations/20261029000001_site_comercial.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -358,6 +359,17 @@ checar("quem não gerencia usuários não lê acessos de perfil", True, "select 
 checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
 checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 12)
 checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
+# página comercial: mídia pública e formulário de contato (visitante só insere)
+checar("bucket site é público", True, "select public from storage.buckets where id='site'", "service_role", "t")
+checar("visitante não grava no bucket site", False, "insert into storage.objects (bucket_id,name) values ('site','x.mp4')", "anon")
+checar("visitante envia contato", True, "insert into public.contatos_site (nome,empresa,email,mensagem,consentimento,origem) values ('Ana Teste','Empresa X','ana@exemplo.invalid','Quero conhecer',true,'home')", "anon")
+checar("contato sem consentimento é recusado", False, "insert into public.contatos_site (nome,email,consentimento) values ('Ana','ana2@exemplo.invalid',false)", "anon")
+checar("e-mail inválido é recusado", False, "insert into public.contatos_site (nome,email,consentimento) values ('Ana','nao-e-email',true)", "anon")
+checar("visitante não lê os contatos", False, "select * from public.contatos_site", "anon")
+checar("usuário de empresa não lê os contatos", True, "select count(*) from public.contatos_site", "authenticated", u["admina"], 0)
+checar("equipe MotorCob lê os contatos", True, "select count(*) from public.contatos_site", "authenticated", u["admin"], 1)
+checar("limite: 3 por e-mail por hora", False, "insert into public.contatos_site (nome,email,consentimento) values ('Ana','ana@exemplo.invalid',true); insert into public.contatos_site (nome,email,consentimento) values ('Ana','ana@exemplo.invalid',true); insert into public.contatos_site (nome,email,consentimento) values ('Ana','ana@exemplo.invalid',true)", "anon")
+checar("visitante não forja a data do contato", True, "insert into public.contatos_site (nome,email,consentimento) values ('Bia','bia@exemplo.invalid',true); select count(*) from public.contatos_site where criado_em < now() - interval '1 day'", "service_role", 0)
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
