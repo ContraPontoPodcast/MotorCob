@@ -361,6 +361,10 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             continue
         conta("com_acao")
         cert_de = {c.contato: c for cs in cands.values() for c in cs}
+        frase_de = {}                          # frase da ação do dia, por canal (a 1ª ação do canal)
+        for a in lista:
+            if a.get("mensagem") is not None:
+                frase_de.setdefault(a["canal"], a["mensagem"])
         for canal, condicao, contatos in blend:
             cfg = rc.canal_cfg(canal)
             if hoje.weekday() == 5 and cfg.get("sabado") is False:
@@ -379,6 +383,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                     "spins_max": cfg.get("tentativas_dia") or (rc["spins_discador_dia"] if canal == "discador" else ""),
                     "janela": f"{jan[0]}-{jan[1]}",
                     "persona": persona_rot,
+                    **({"frase_acao": frase_de[canal]} if canal in frase_de else {}),
                 })
     if sum(sem_contato.values()) and detalhe_de is None:   # com detalhe_de, quem chama explica canal a canal
         alertas.append(f"SEM CONTATO PARA O PASSO DE HOJE: {sum(sem_contato.values())} clientes tinham ação hoje "
