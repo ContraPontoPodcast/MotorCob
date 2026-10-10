@@ -40,10 +40,11 @@ ter crédito de teste do Google.
 4. No fim ele mostra 3 variáveis do GitHub (não são segredos).
 
 ## 3. Publicar a imagem do motor (GitHub)
-1. github.com/ContraPontoPodcast/MotorCob › **Settings › Secrets and variables › Actions › Variables** ›
-   **New repository variable**: crie `GCP_PROJETO`, `GCP_WIF_PROVIDER` e `GCP_SA_CI` com os valores mostrados.
-2. **Actions › imagem › Run workflow**. Ele monta a imagem, roda os testes dentro dela e publica (~3 min).
-   Daí em diante, todo merge no main publica sozinho.
+O workflow `imagem` (`.github/workflows/imagem.yml`) já tem o projeto `motorcob`, o provedor WIF e a conta
+`motorcob-ci` (não são segredos). Todo merge no main monta a imagem, roda os testes dentro dela e publica (~3 min).
+Para publicar na hora: **Actions › imagem › Run workflow**. Se um dia mudar de projeto, crie as variáveis
+`GCP_PROJETO`, `GCP_WIF_PROVIDER` e `GCP_SA_CI` em Settings › Secrets and variables › Actions › Variables (elas
+têm prioridade sobre o que está no arquivo).
 
 ## 4. Conferir que o plantão subiu
 No Cloud Shell:
