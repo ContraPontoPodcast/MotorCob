@@ -342,6 +342,9 @@ de outra pessoa pela certificação e a rotação segue.
   o relógio da esteira segue). Frases: `definicao.mensagens = {estágio: {canal: texto}}` (estágios
   localizacao, cpa, cpb, giro, preventivo, quebra) → coluna `mensagem` nos CSV por canal; variáveis
   {saldo} {dias_atraso} {vencimento} {valor_parcela} {qtd_parcelas_abertas}; as outras ficam para a ferramenta.
+  Playbook de frases da empresa: tabela `frases` (por canal; importada ou criada na página Canais); a célula
+  da estratégia pode ser `{"frase_id": n}` — o texto vem do playbook na rodada (frase desativada não sai).
+  Modelo de importação em `docs/modelo_playbook_frases.csv`.
 - Acordo por estratégia (segmento): `preventivo.ativo` / `quebra.ativo` (desligado: o segmento não entra em
   PRE; na quebra não aciona e volta ao estoque no prazo), `quebra.carencia` (dias depois do vencimento
   sem baixa que ainda não são quebra; a quebra começa no D+carencia+1), `quebra.dias_para_estoque` e os

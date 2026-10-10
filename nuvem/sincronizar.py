@@ -763,6 +763,10 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             (pasta / "config" / "estrategias.json").write_text(json.dumps(estrategias, ensure_ascii=False, indent=1),
                                                                encoding="utf-8")
         personas_usuario = _personas_usuario(sb, pasta, eid, cid)
+        try:
+            frases = _baixar(sb, pasta, "frases", eid, "id.asc")
+        except ErroSupabase:     # banco sem o playbook de frases
+            frases = []
         for obrig in ("base/clientes.csv", "base/contatos.csv"):
             if not (pasta / obrig).exists():
                 raise RuntimeError(f"falta a base de {nome}: envie a carga geral pelo site (Enviar arquivos)")
@@ -781,7 +785,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 personas_usuario=personas_usuario,
                                 demais_ativo=u.get("demais_ativo") is not False,
                                 calendario=u.get("calendario"), retornos_canal=reg_canal,
-                                regras_retorno=u.get("regras_retorno"))
+                                regras_retorno=u.get("regras_retorno"), frases=frases)
         _guardar_compartilhado(pasta_emp, u, r, data)
 
         if aviso_layout:
@@ -971,7 +975,7 @@ def _vigia_arq(dados: Path, emp: dict) -> Path:
 
 
 CONFIG_ORQUESTRACAO = ("clusters", "estrategias", "segmentos_carteira", "personas_usuario", "canais_empresa",
-                       "credores", "mapeamento_arquivos", "ocorrencia_codigos", "canal_codigos")
+                       "credores", "mapeamento_arquivos", "ocorrencia_codigos", "canal_codigos", "frases")
 
 
 def _ultima_mudanca(sb: Supabase, tabela: str, empresa_id) -> dict:

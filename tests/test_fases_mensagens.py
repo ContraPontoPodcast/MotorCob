@@ -14,7 +14,7 @@ CAB = "COD_CLIENTE;CONTRATO;CPF;SALDO_DEVEDOR;DT_VENCIMENTO;PRODUTO;UF;TEL1;WHAT
 HOJE = date(2026, 9, 2)
 
 
-def _rodar(definicao):
+def _rodar(definicao, frases=None):
     tmp = Path(tempfile.mkdtemp())
     (tmp / "bruto").mkdir(parents=True)
     (tmp / "bruto" / "carga_2026-09-01.csv").write_text(
@@ -23,7 +23,7 @@ def _rodar(definicao):
     estr = [{"id": 7, "nome": "Teste", "padrao": True, "definicao": definicao}]
     return rodar_dia.rodar_dia(tmp / "base" / "clientes.csv", tmp / "base" / "contatos.csv", tmp / "ret", HOJE,
                                pasta_estado=tmp / "estado", pasta_saida=tmp / "saida", estrategias=estr,
-                               out=lambda *a: None)
+                               frases=frases, out=lambda *a: None)
 
 
 PASSO = {"localizacao": {"passos": {"1": [{"canal": "whatsapp", "modo": "sempre"}]}}}
@@ -63,10 +63,22 @@ class TestMensagens(unittest.TestCase):
         self.assertEqual((r["saida"] / "ids" / "whatsapp.csv").read_text(encoding="utf-8").splitlines()[0],
                          "id_cliente;contato")
 
+    def test_frase_do_playbook(self):
+        defin = {**PASSO, "mensagens": {"localizacao": {"whatsapp": {"frase_id": "12"}}}}
+        playbook = [{"id": 12, "canal": "whatsapp", "nome": "Boas-vindas", "texto": "Saldo {saldo}. {link}",
+                     "ativo": True}]
+        r = _rodar(defin, playbook)
+        self.assertEqual([l["mensagem"] for l in r["fila"]], ["Saldo R$ 1.234,50. {link}"])
+        r = _rodar(defin, [{**playbook[0], "ativo": False}])                # frase desativada não sai
+        self.assertEqual([l["mensagem"] for l in r["fila"]], [""])
+        self.assertEqual(r["fila"][0]["canal"], "whatsapp")                 # a ação sai mesmo sem frase
+
     def test_validacao_das_frases(self):
         over, erros = validar_estrategia({"mensagens": {"cpa": {"sms": "Pague {valor_parcela}", "fax": "x"},
                                                         "desconhecido": {"sms": "y"}}})
         self.assertEqual(over["mensagens"], {"cpa": {"sms": "Pague {valor_parcela}"}})
+        over, _ = validar_estrategia({"mensagens": {"cpb": {"whatsapp": {"frase_id": 3}}}})
+        self.assertEqual(over["mensagens"], {"cpb": {"whatsapp": {"frase_id": 3}}})
         self.assertEqual(len(erros), 2)
 
 
