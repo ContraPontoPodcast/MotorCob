@@ -31,7 +31,7 @@ Grade: permissões nas linhas (agrupadas por `grupo`: Operação, Gestão, Confi
 colunas (Admin, Planejamento, Operação, Gestão).
 - Dados: `from('permissoes_catalogo').select('*').order('ordem')` (codigo, grupo, nome, descricao e o padrão em
   `admin`, `planejamento`, `operacao`, `gestao`) + `from('permissoes_papel').select('*').eq('empresa_id', empresa)`.
-- Célula = interruptor. Valor = ajuste da empresa, se houver; senão o padrão. Diferente do padrão → ponto âmbar
+- Célula = interruptor. Valor = ajuste da empresa, se houver; senão o padrão. Diferente do padrão → pontinho laranja (#FF9500)
   pequeno com tooltip "Padrão MotorCob: liberado/bloqueado".
 - Mudar → `upsert` em `permissoes_papel` (`empresa_id, papel, permissao, permitido`; conflito
   `empresa_id,papel,permissao`). Igual ao padrão → `delete` da linha.
@@ -54,7 +54,7 @@ usuário.
 ## 4. Criar senha: `/definir-senha` (convite) e `/redefinir-senha` (esqueci a senha)
 A função `admin-usuarios` manda o convite para `/definir-senha`; o login manda o reset para `/redefinir-senha`.
 Hoje só existe `/nova-senha`: crie as duas rotas usando o mesmo componente (e mantenha `/nova-senha` funcionando).
-- Visual do login novo (fundo preto). Título "Crie sua senha." (convite) ou "Nova senha." (reset).
+- Visual do login novo (tela branca, linha Apple, pasta 03). Título "Crie sua senha." (convite) ou "Nova senha." (reset).
 - Campos Nova senha + Confirmar; regras visíveis: mínimo 12 caracteres, maiúscula, minúscula, número e símbolo;
   indicador de força. Salvar → `auth.updateUser({ password })`.
 - Depois: se o perfil for Admin, segue para o cadastro do autenticador (MFA, pasta 03); senão, `/inicio`.

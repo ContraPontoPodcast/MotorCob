@@ -22,7 +22,7 @@ tem permissão para esta ação. Fale com o Admin da sua empresa."
 Grade: permissões nas linhas, agrupadas por "grupo"; perfis nas colunas (Admin, Planejamento, Operação, Gestão).
 Dados: from('permissoes_catalogo').select('*').order('ordem') e from('permissoes_papel').select('*')
 .eq('empresa_id', empresa). Cada célula é um interruptor: valor do ajuste da empresa se houver, senão o padrão
-(colunas admin/planejamento/operacao/gestao do catálogo). Diferente do padrão → pontinho âmbar com tooltip
+(colunas admin/planejamento/operacao/gestao do catálogo). Diferente do padrão → pontinho laranja #FF9500 com tooltip
 "Padrão MotorCob: liberado/bloqueado". Mudar → upsert em permissoes_papel (empresa_id, papel, permissao,
 permitido; onConflict 'empresa_id,papel,permissao'); igual ao padrão → delete da linha. Admin × gerenciar_usuarios
 e Admin × gerenciar_permissoes travados ligados (cadeado). Botão "Voltar ao padrão MotorCob" com confirmação na
@@ -38,7 +38,7 @@ carteira, personas_usuario Persona, sugestoes Sugestão, empresas Empresa), Aç�
 DELETE Excluiu), Registro. Expandir mostra o campo "mudou" como tabela Campo · Antes · Depois. Exportar CSV.
 
 4. CRIAR SENHA: /definir-senha (convite) e /redefinir-senha (esqueci a senha)
-Crie as duas rotas com o mesmo componente da atual /nova-senha (que continua funcionando), no visual preto do login:
+Crie as duas rotas com o mesmo componente da atual /nova-senha (que continua funcionando), no visual do login (tela branca, linha Apple):
 "Crie sua senha." ou "Nova senha.", campos Nova senha e Confirmar, regras visíveis (mínimo 12, maiúscula,
 minúscula, número, símbolo) com indicador de força → auth.updateUser({ password }). Depois: Admin vai para o
 cadastro do autenticador (MFA); demais vão para /inicio. Link vencido → "Este link expirou. Peça um novo ao Admin
