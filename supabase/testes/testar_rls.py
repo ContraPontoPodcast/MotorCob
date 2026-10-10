@@ -33,6 +33,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261024000001_permissoes_auditoria.sql
     psql -d sb -f supabase/migrations/20261025000001_permissoes_usuario.sql
     psql -d sb -f supabase/migrations/20261026000001_funcoes_sem_anon.sql
+    psql -d sb -f supabase/migrations/20261027000001_ultimo_acesso.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -345,6 +346,9 @@ checar("Admin volta o operador ao padrão do perfil", True, f"with x as (delete 
 checar("operador volta ao padrão", True, "select public.pode('baixar_relatorios')::text || public.pode('reenquadrar')::text", "authenticated", u["oper"], "falsetrue")
 checar("anônimo não chama as funções do banco", False, "select public.minhas_permissoes()", "anon")
 checar("anônimo não chama pode()", False, "select public.pode('ver_auditoria')", "anon")
+checar("login atualiza o último acesso do perfil", True, f"update auth.users set last_sign_in_at='2026-10-10 09:00-03' where id='{u['oper']}'; select to_char(ultimo_acesso at time zone 'America/Sao_Paulo','DD/MM HH24:MI') from public.perfis where id='{u['oper']}'", valor="10/10 09:00")
+checar("Admin vê o último acesso dos usuários da empresa", True, f"select count(ultimo_acesso) from public.perfis where id='{u['oper']}'", "authenticated", u["admina"], 1)
+checar("login não entra na auditoria", True, "select count(*) from public.auditoria where mudou ? 'ultimo_acesso'", "service_role", 0)
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
