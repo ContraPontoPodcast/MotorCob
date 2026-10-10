@@ -82,7 +82,8 @@ Comandos no Cloud Shell (troque `CMD`):
 | Ver o que o motor está fazendo | `journalctl -u motorcob -f` |
 | Atualizar o motor agora (sem esperar 05:20) | `systemctl start motorcob-atualizar` |
 | Reiniciar o plantão | `systemctl restart motorcob` |
-| Parar o plantão | `systemctl stop motorcob` |
+| Pausar o plantão (fica parado mesmo se a VM reiniciar) | `motorcob-pausar` |
+| Religar depois de pausar | `motorcob-retomar` |
 | Rodar o comitê de um mês | `docker exec motorcob scripts/relatorio_mes.sh 2026-10` |
 | Diagnóstico (mesmo do Mac) | `docker exec motorcob scripts/diagnostico.sh` |
 

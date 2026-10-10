@@ -5,6 +5,7 @@
 #   motorcob-atualizar.timer    05:20 todo dia: baixa a imagem nova e reinicia fora de rodada
 #   motorcob-comite.timer       dia 1º às 07:00: relatório do comitê do mês anterior
 #   motorcob-restaurar          comando para trazer os dados do Mac (veja docs/NUVEM_GCP.md)
+#   motorcob-pausar             para o plantão e o mantém parado (mesmo após reiniciar) até restaurar/retomar
 set -euo pipefail
 exec > >(logger -t motorcob-inicio) 2>&1
 
@@ -51,7 +52,8 @@ unset CHAVE
 gcloud auth configure-docker "${IMAGEM%%/*}" --quiet >/dev/null 2>&1
 docker pull -q "$IMAGEM" >/dev/null || docker image inspect "$IMAGEM" >/dev/null   # sem rede: usa a que tem
 docker rm -f motorcob >/dev/null 2>&1 || true
-exec docker run --rm --name motorcob \
+# --init: o motor recebe o pedido de parar (sem ele, o Python como processo 1 ignora e o stop espera o limite)
+exec docker run --rm --init --name motorcob \
   --env-file /run/motorcob/supabase.env \
   --read-only --tmpfs /tmp:rw,size=512m --tmpfs /home/motorcob:rw,size=16m \
   --cap-drop ALL --security-opt no-new-privileges --pids-limit 512 \
@@ -93,10 +95,28 @@ fi
 tar -xzf "$ARQ" -C "$DESTINO" --no-same-owner
 rm -rf "$DESTINO/config"            # na nuvem a chave vem do Secret Manager, nunca de arquivo
 chown -R 10001:10001 "$DESTINO"
+rm -f /var/motorcob/PAUSADO
 systemctl start motorcob
 echo "Dados restaurados em $DESTINO e plantão religado."
 SH
 chmod 750 /usr/local/bin/motorcob-restaurar
+
+cat > /usr/local/bin/motorcob-pausar <<'SH'
+#!/bin/bash
+# Para o plantão e o mantém parado, mesmo se a VM reiniciar. Para voltar: sudo motorcob-retomar
+set -euo pipefail
+touch /var/motorcob/PAUSADO
+systemctl stop motorcob
+echo "Plantão da nuvem pausado."
+SH
+cat > /usr/local/bin/motorcob-retomar <<'SH'
+#!/bin/bash
+set -euo pipefail
+rm -f /var/motorcob/PAUSADO
+systemctl start motorcob
+echo "Plantão da nuvem ligado."
+SH
+chmod 750 /usr/local/bin/motorcob-pausar /usr/local/bin/motorcob-retomar
 
 cat > /etc/systemd/system/motorcob.service <<'UNIT'
 [Unit]
@@ -104,13 +124,14 @@ Description=MotorCob - plantão do motor
 After=docker.service network-online.target var-motorcob.mount
 Wants=network-online.target
 Requires=docker.service
+ConditionPathExists=!/var/motorcob/PAUSADO
 
 [Service]
 ExecStart=/usr/local/bin/motorcob-rodar
-ExecStop=/usr/bin/docker stop -t 300 motorcob
+ExecStop=/usr/bin/docker stop -t 60 motorcob
 Restart=always
 RestartSec=30
-TimeoutStopSec=320
+TimeoutStopSec=90
 
 [Install]
 WantedBy=multi-user.target
@@ -153,5 +174,9 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now motorcob-atualizar.timer motorcob-comite.timer
 systemctl enable motorcob.service
-systemctl restart motorcob.service
-echo "MotorCob: serviço ligado."
+if [ -e /var/motorcob/PAUSADO ]; then
+  echo "MotorCob: pausado (sudo motorcob-retomar ou motorcob-restaurar para ligar)."
+else
+  systemctl restart motorcob.service
+  echo "MotorCob: serviço ligado."
+fi
