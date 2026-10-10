@@ -32,6 +32,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261023000001_playbook_frases.sql
     psql -d sb -f supabase/migrations/20261024000001_permissoes_auditoria.sql
     psql -d sb -f supabase/migrations/20261025000001_permissoes_usuario.sql
+    psql -d sb -f supabase/migrations/20261026000001_funcoes_sem_anon.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -342,6 +343,8 @@ checar("operador não vê acessos de outros", True, f"select count(*) from publi
 checar("acessos por usuário entram na auditoria", True, "select count(*) > 0 from public.auditoria where tabela='permissoes_usuario'", "authenticated", u["admina"], "t")
 checar("Admin volta o operador ao padrão do perfil", True, f"with x as (delete from public.permissoes_usuario where usuario_id='{u['oper']}' returning 1) select count(*) from x", "authenticated", u["admina"], 3)
 checar("operador volta ao padrão", True, "select public.pode('baixar_relatorios')::text || public.pode('reenquadrar')::text", "authenticated", u["oper"], "falsetrue")
+checar("anônimo não chama as funções do banco", False, "select public.minhas_permissoes()", "anon")
+checar("anônimo não chama pode()", False, "select public.pode('ver_auditoria')", "anon")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
