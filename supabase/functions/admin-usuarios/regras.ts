@@ -7,6 +7,12 @@ export type Papel = (typeof PAPEIS)[number];
 export const ACOES = ["listar", "convidar", "desativar", "reativar", "resetar_senha", "alterar_papel"] as const;
 export type Acao = (typeof ACOES)[number];
 
+// catálogo de permissões (igual à view permissoes_catalogo); ADMINISTRACAO só um Admin libera
+export const PERMISSOES = ["baixar_listas", "baixar_relatorios", "baixar_comite", "enviar_arquivos", "reenquadrar",
+  "editar_orquestracao", "editar_credores", "editar_canais", "ver_acessos", "ver_auditoria", "gerenciar_usuarios",
+  "gerenciar_permissoes"] as const;
+export const ADMINISTRACAO = ["ver_acessos", "ver_auditoria", "gerenciar_usuarios", "gerenciar_permissoes"];
+
 export interface Perfil {
   id: string;
   papel: Papel;
@@ -22,6 +28,8 @@ export interface Pedido {
   nome?: string;
   papel?: Papel;
   empresa_id?: number;
+  /** exceções ao perfil, só no convite: {permissao: true|false} */
+  acessos?: Record<string, boolean>;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -47,6 +55,15 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
     const email = typeof c.email === "string" ? c.email.trim().toLowerCase() : "";
     if (!EMAIL.test(email) || email.length > 254) return { erro: "e-mail inválido" };
     pedido.email = email;
+    if (c.acessos !== undefined && c.acessos !== null) {
+      if (typeof c.acessos !== "object" || Array.isArray(c.acessos)) return { erro: "acessos inválidos" };
+      const acessos: Record<string, boolean> = {};
+      for (const [k, v] of Object.entries(c.acessos as Record<string, unknown>)) {
+        if (!(PERMISSOES as readonly string[]).includes(k) || typeof v !== "boolean") return { erro: "acessos inválidos" };
+        acessos[k] = v;
+      }
+      if (Object.keys(acessos).length) pedido.acessos = acessos;
+    }
     if (c.nome !== undefined) {
       if (typeof c.nome !== "string" || c.nome.trim().length > 120) return { erro: "nome inválido" };
       pedido.nome = c.nome.trim() || undefined;
@@ -78,6 +95,13 @@ export function autorizar(quem: Perfil | null, podeGerenciar: boolean, pedido: P
     if (empresaAlvo(quem, pedido) === null) return "informe a empresa";
     if (pedido.acao === "convidar" && pedido.papel === "admin" && quem.papel !== "admin") {
       return "só um Admin cria outro Admin";
+    }
+    const acessos = pedido.acessos ?? {};
+    if (quem.papel !== "admin" && ADMINISTRACAO.some((p) => acessos[p] === true)) {
+      return "só um Admin libera acessos de administração";
+    }
+    if (pedido.papel === "admin" && (acessos.gerenciar_usuarios === false || acessos.gerenciar_permissoes === false)) {
+      return "o Admin não pode perder gerenciar usuários/permissões";
     }
     return null;
   }

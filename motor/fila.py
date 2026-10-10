@@ -539,9 +539,14 @@ def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None):
         if not canal:
             return None
         acao = (regua.dados.get("cpc_acoes") or {}).get(canal)
+        hot = regua.dados.get("cpc_mensagem_hot")
         junto = list(regua.dados.get("cpc_junto") or [])
+        base = [acao] if acao else acoes([canal])
+        if hot is not None and not rotulo.startswith("rotação"):
+            # ainda no canal em que deu CPC (telefone Hot): vale a frase do canal do CPC
+            base = [{**base[0], "mensagem": hot}] + base[1:]
         passo = []
-        for a in ([acao] if acao else acoes([canal])):   # o reforço (junto) acompanha o canal que for
+        for a in base:   # o reforço (junto) acompanha o canal que for
             passo.append(a)
             if isinstance(a, dict) and a.get("modo") in ("sempre", "senao"):
                 passo += junto

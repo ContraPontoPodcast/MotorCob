@@ -126,5 +126,44 @@ class TestFrasePorDia(unittest.TestCase):
         self.assertEqual(frase_da_acao({"frase_id": 2}, "sms", "cpa"), {"frase_id": 2})
 
 
+class TestFraseCpc(unittest.TestCase):
+    """Deu CPC: frase do canal do CPC (Hot) por canal × CPC A/B, e frase de cada canal da ordem de reserva."""
+
+    def _fila(self, definicao, estado="CPA", canal="whatsapp", tentativas=0):
+        from motor.certificacao import Certificacao
+        from motor.cluster import carregar_regras
+        from motor.fila import gerar_fila
+        from motor.marcacao import Cliente, EstadoCliente
+        from motor.regua import carregar_regua
+        regras, _ = carregar_regras([{"codigo": "DG", "condicoes": [], "estrategia_id": 7}])
+        over, erros = validar_estrategia(definicao)
+        self.assertEqual(erros, [])
+        regua = carregar_regua().com_clusters(regras, {7: over})
+        est = {"C1": EstadoCliente("C1", HOJE, "DG", "DG", "2026-09", estado=estado, canal_atual=canal,
+                                   tentativas=tentativas, cluster_versao=regua.versao_clusters)}
+        certs = {("C1", c): Certificacao("C1", c, "telefone", "CERTIFICADO", 0.9) for c in ("11988880001",)}
+        fila, _, _ = gerar_fila(est, {"C1": Cliente("C1", HOJE, 100.0, 10)},
+                                certs, {}, {}, date(2026, 9, 10), regua, [])
+        return fila
+
+    def test_frase_do_canal_do_cpc_por_estagio(self):
+        from motor.estrategia import frase_da_acao
+        d = {"cpc": {"ordem": [{"canal": "sms", "mensagem": "reserva"}],
+                     "mensagem_hot": {"whatsapp": {"cpa": "negociar {saldo}", "cpb": "retomar"}, "sms": "hot sms"}}}
+        l = self._fila(d)[0]
+        self.assertEqual((l["canal"], frase_da_acao(l["frase_acao"], "whatsapp", "cpa")),
+                         ("whatsapp", "negociar {saldo}"))
+        l = self._fila(d, "CPB", tentativas=1)[0]
+        self.assertEqual(frase_da_acao(l["frase_acao"], l["canal"], "cpb"), "retomar")
+        l = self._fila(d, "CPB", tentativas=5)[0]                   # trocou de canal: frase da ordem de reserva
+        self.assertEqual((l["canal"], l["frase_acao"]), ("sms", "reserva"))
+
+    def test_validacao_frase_hot(self):
+        over, erros = validar_estrategia({"cpc": {"mensagem_hot": {"WhatsApp": {"cpa": {"frase_id": "4"}, "x": 1},
+                                                                   "sms": "oi"}}})
+        self.assertEqual(over["cpc_mensagem_hot"], {"whatsapp": {"cpa": {"frase_id": 4}}, "sms": "oi"})
+        self.assertEqual(erros, [])
+
+
 if __name__ == "__main__":
     unittest.main()

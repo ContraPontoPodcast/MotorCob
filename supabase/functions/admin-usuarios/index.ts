@@ -70,8 +70,16 @@ async function executar(quem: Perfil, pedido: Pedido, alvo: Perfil | null): Prom
       const { error: e } = await admin.from("perfis")
         .update({ papel: pedido.papel, empresa_id: empresa, ativo: true }).eq("id", id);
       if (e) throw e;
+      const acessos = Object.entries(pedido.acessos ?? {}).map(([permissao, permitido]) => ({
+        usuario_id: id, permissao, permitido,
+      }));
+      if (acessos.length) {
+        const { error: ea } = await admin.from("permissoes_usuario").upsert(acessos);
+        if (ea) throw ea;
+      }
       await auditar(quem, empresa, "INSERT", id, {
         convite: { antes: null, depois: "enviado" }, papel: { antes: null, depois: pedido.papel },
+        ...(acessos.length ? { acessos: { antes: null, depois: pedido.acessos } } : {}),
       });
       return [200, { ok: true, usuario_id: id }];
     }
