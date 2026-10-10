@@ -78,6 +78,27 @@ ESTAGIOS = [  # (chave, rótulo, pasta): a comunicação de cada canal muda com 
 ]
 
 
+def _reais(v) -> str:
+    return "R$ " + f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def montar_mensagem(texto: str, cliente, parcelas, hoje: date) -> str:
+    """Frase da estratégia com as variáveis que o motor conhece (nenhum dado pessoal):
+    {saldo} {dias_atraso} {vencimento} {valor_parcela} {qtd_parcelas_abertas}. Outra variável
+    (ex.: {nome}, {link}) fica como está, para a ferramenta do canal preencher."""
+    vars_ = {}
+    if cliente is not None:
+        vars_["saldo"] = _reais(cliente.saldo)
+        vars_["dias_atraso"] = str(cliente.atraso_em(hoje))
+    abertas = sorted((p for p in parcelas or [] if p.pago_em is None), key=lambda p: p.vencimento)
+    if abertas:
+        prox = next((p for p in abertas if p.vencimento >= hoje), abertas[0])
+        vars_["vencimento"] = prox.vencimento.strftime("%d/%m/%Y")
+        vars_["valor_parcela"] = _reais(prox.valor)
+        vars_["qtd_parcelas_abertas"] = str(len(abertas))
+    return re.sub(r"\{(\w+)\}", lambda m: vars_.get(m.group(1), m.group(0)), texto)
+
+
 def estagio_da_linha(l: dict) -> str:
     """Estágio da esteira da linha da fila: régua do dia, e no CPC separa CPC A de CPC B."""
     r = l.get("regua") or ""
@@ -160,13 +181,18 @@ def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]]) -> dict[str, lis
                             key=lambda l: (l["id_cliente"], int(l.get("ordem_contato") or 1))):
                 if (l["id_cliente"], l["contato"]) not in vistos:
                     vistos.add((l["id_cliente"], l["contato"]))
-                    pares.append((l["id_cliente"], l["contato"]))
+                    pares.append((l["id_cliente"], l["contato"], l.get("mensagem") or ""))
             if not pares:
                 continue
             nome = f"{canal}_reserva" if condicional else canal
             with open(pasta / f"{nome}.csv", "w", newline="", encoding="utf-8") as f:
-                f.write("id_cliente;contato\n" + "".join(f"{i};{c}\n" for i, c in pares))
-            arquivos[nome] = sorted({i for i, _ in pares})
+                if any(m for _, _, m in pares):   # a estratégia tem frase para este canal: vai na 3ª coluna
+                    w = csv.writer(f, delimiter=";", lineterminator="\n")
+                    w.writerow(["id_cliente", "contato", "mensagem"])
+                    w.writerows(pares)
+                else:
+                    f.write("id_cliente;contato\n" + "".join(f"{i};{c}\n" for i, c, _ in pares))
+            arquivos[nome] = sorted({i for i, _, _ in pares})
     return arquivos
 
 
@@ -488,6 +514,11 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         eid_ = regua.estrategia_de(e_.cluster_atual) if e_ else None
         l["estrategia_id"] = eid_ if eid_ is not None else ""
         l["estrategia"] = (nomes_e.get(eid_) or f"estratégia {eid_}") if eid_ is not None else "Playbook MotorCob"
+        # frase do canal para o estágio, definida na estratégia (sai numa coluna do arquivo do canal)
+        msgs = regua.para(e_.cluster_atual).dados.get("mensagens") if e_ else None
+        texto = ((msgs or {}).get(estagio_da_linha(l)) or {}).get(l["canal"])
+        l["mensagem"] = montar_mensagem(texto, clientes.get(l["id_cliente"]), parcelas.get(l["id_cliente"]), hoje) \
+            if texto else ""
     perfil = _perfil_contatos(contatos, flags, ativos if ativos is not None else set(clientes))
     alertas.append("PERFIL DOS CONTATOS: " + " · ".join(f"{v} {k}" for k, v in perfil.items()))
     for ro in rel_ocorrencias:

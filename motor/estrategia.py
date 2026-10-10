@@ -54,6 +54,7 @@ NUMEROS_FASE = {"localizacao": ("dias_sem_contato_para_ncp",), "giro": ("ciclo_d
                 "quebra": ("dias_para_estoque",), "cpc": ("tentativas_por_canal",), "preventivo": ()}
 
 
+ESTAGIOS_MSG = ("localizacao", "cpa", "cpb", "giro", "preventivo", "quebra")   # estágios das frases
 TOKENS_PERSONA = ("persona_1", "persona_2")   # melhor / 2º melhor canal da persona (motor/persona.py)
 ENRIQUECIMENTO = "enriquecimento"   # ação da esteira: manda o cliente para o bureau nesse dia (não é contato)
 SEM_ACAO = "sem_acao"               # na raia de uma persona: neste dia ela não recebe nada
@@ -191,10 +192,9 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                     erros.append(f"{nome}/{fase}: {k} deve ser inteiro ≥ 1")
                 else:
                     sec[k] = f[k]
-        if fase in ("preventivo", "quebra") and "ativo" in f:
-            # liga/desliga do preventivo e da quebra neste segmento (desligado: sem ação nessa fase)
-            v = f["ativo"]
-            sec["ativo"] = not (v is False or _simples(v) in ("false", "nao", "não", "n", "0", "off", "desligado"))
+        if "ativo" in f:
+            # liga/desliga da fase neste segmento (desligado: sem ação nessa fase)
+            sec["ativo"] = _ligado(f["ativo"])
         if fase == "quebra" and f.get("carencia") not in (None, ""):
             c = f["carencia"]
             c = int(c) if isinstance(c, str) and c.strip().isdigit() else c
@@ -215,6 +215,8 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
             saida["prioridade_contatos"] = pr
     if "cpc" in definicao:
         c = definicao["cpc"] or {}
+        if "ativo" in c:
+            saida["cpc_ativo"] = _ligado(c["ativo"])
         ordem = [_acao(a, f"{nome}/cpc", erros) for a in (c.get("ordem") or [])]
         ordem = [a if isinstance(a, dict) else {"canal": a, "modo": "sempre", "numeros": None, "contatos": {}}
                  for a in ordem if a is not None]
@@ -247,6 +249,20 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                 erros.append(f"{nome}/cpc: {k} deve ser inteiro de 1 a 30 (dias)")
             else:
                 saida[k] = v
+    if isinstance(definicao.get("mensagens"), dict):
+        # frase de cada canal por estágio: {"localizacao": {"whatsapp": "texto"}, "cpa": {...}, ...}
+        msgs = {}
+        for est, por_canal in definicao["mensagens"].items():
+            if est not in ESTAGIOS_MSG or not isinstance(por_canal, dict):
+                erros.append(f"{nome}/mensagens: estágio '{est}' desconhecido (ignorado)")
+                continue
+            for canal, texto in por_canal.items():
+                canal = canal_padrao(canal)
+                if canal not in CANAIS:
+                    erros.append(f"{nome}/mensagens/{est}: canal '{canal}' desconhecido (ignorado)")
+                elif isinstance(texto, str) and texto.strip():
+                    msgs.setdefault(est, {})[canal] = texto.strip()[:2000]
+        saida["mensagens"] = msgs
     r = definicao.get("recencia_horas")
     if r not in (None, ""):
         if not isinstance(r, int) or r < 0:
@@ -254,6 +270,11 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
         else:
             saida["recencia_horas"] = r
     return saida, erros
+
+
+def _ligado(v) -> bool:
+    """Interruptor ON/OFF do site: só desliga com um 'não' explícito."""
+    return not (v is False or _simples(v) in ("false", "nao", "não", "n", "0", "off", "desligado"))
 
 
 def _prioridade(p) -> tuple[dict | None, str | None]:
