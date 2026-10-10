@@ -1,0 +1,51 @@
+# Testes do motor, das regras de acesso (RLS) num Postgres 16 e das regras da função de usuários.
+name: testes
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  motor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install openpyxl==3.1.5   # Excel do comitê e cargas .xlsx (opcional no núcleo)
+      - run: python -m unittest discover -s tests -q
+  banco:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: teste-local
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: teste-local
+      PGDATABASE: sb
+    steps:
+      - uses: actions/checkout@v5
+      - name: Aplicar o banco (imitação do Supabase + migrações, e a última de novo)
+        run: |
+          createdb sb
+          for f in supabase/testes/stub_supabase.sql $(ls supabase/migrations/*.sql | sort); do
+            psql -v ON_ERROR_STOP=1 -q -f "$f" > /dev/null
+          done
+          psql -v ON_ERROR_STOP=1 -q -f "$(ls supabase/migrations/*.sql | sort | tail -1)" > /dev/null
+      - run: python3 supabase/testes/testar_rls.py
+  funcoes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - run: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts

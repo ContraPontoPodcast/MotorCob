@@ -386,6 +386,14 @@ de outra pessoa pela certificação e a rotação segue.
   a rotina do motor (chave service_role) escreve resultados. `supabase/testes/testar_rls.py`
   verifica as permissões por papel e por empresa num Postgres local. Guias: `docs/NUVEM.md` e
   `docs/PROMPT_SITE.md` (prompt para gerar o site).
+- Permissões (migração 20261024): o que cada perfil faz vem de `pode('permissão')` (padrão
+  MotorCob em `permissoes_catalogo` + ajuste do Admin em `permissoes_papel`). **Política nova
+  usa `pode()`, nunca `tem_papel(...)` fixo** (o teste "nenhuma regra usa mais o papel fixo"
+  barra). Permissão nova entra no catálogo da view. Tabela de configuração nova ganha o
+  gatilho `z_auditar`. Gestão de usuários: Edge Function `supabase/functions/admin-usuarios`
+  (service_role só em variável do servidor). Segurança e pentest: `docs/SEGURANCA.md`.
+- Produção recebe o pacote acumulado inteiro (reaplicar uma migração antiga sozinha volta as
+  políticas para o papel fixo; a 20261024 precisa ser a última a rodar).
 
 ## Status de certificação
 CERTIFICADO (certificação + score ≥ 0,7) · PROVAVEL (≥ 0,6) · NAO_CONFIRMADO ·
