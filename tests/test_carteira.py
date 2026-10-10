@@ -262,6 +262,7 @@ class TestPersonasDaEmpresa(unittest.TestCase):
             r = rodar(date(2026, 9, 5))                       # sábado: D+2, sem passo no playbook
             self.assertEqual(r["motivos"], {"sem_passo_hoje": 1})
             self.assertEqual(r["enquadramento"]["A1"]["motivo_hoje"], "sem ação: a esteira não tem passo no D+2")
+            self.assertEqual(r["enquadramento"]["A1"]["motivo_categoria"], "regra_esteira")
             self.assertEqual(r["proximos"][0]["data"], "2026-09-06")      # domingo: sem ações
             self.assertEqual(r["proximos"][1]["sem_acoes"], "domingo, feriado ou dia sem exportação")  # 07/09: feriado
             self.assertEqual(r["proximos"][2]["passos"], {"localizacao D+3": 1})   # terça 08/09
@@ -299,6 +300,8 @@ class TestPersonasDaEmpresa(unittest.TestCase):
             self.assertEqual({(l["id_cliente"], l["passo"], l["canal"]) for l in r["fila"]}, {("A1", "D+1", "sms")})
             self.assertTrue(any(a.startswith("SENÃO AUTOMÁTICO: 1 clientes whatsapp → sms") for a in r["alertas"]))
             self.assertIn("WhatsApp: nenhum número marcado com WhatsApp", r["enquadramento"]["B1"]["motivo_hoje"])
+            self.assertEqual(r["enquadramento"]["B1"]["motivo_categoria"], "sem_contato")
+            self.assertEqual(r["enquadramento"]["A1"]["motivo_categoria"], "com_acao")
             self.assertTrue(any(a.startswith("SEM CONTATO: 1 clientes") for a in r["alertas"]))
             self.assertTrue(r["estados"]["B1"].esteira_pendente)            # o D+1 dele não aconteceu
             self.assertEqual(r["estados"]["A1"].inicio_esteira, date(2026, 9, 2))

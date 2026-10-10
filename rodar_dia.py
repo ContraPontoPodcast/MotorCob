@@ -41,7 +41,7 @@ from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, ca
 from motor.acoes import agregar as agregar_acoes, sem_ocorrencia, totais as totais_acoes
 from motor.estrategia import frase_da_acao, validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
-from motor.fila import MOTIVOS, gerar_fila, lista_enriquecimento, previsao
+from motor.fila import MOTIVOS, categoria_do_motivo, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
 from motor.marcacao import aplicar_pendentes, ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
 from motor.rastreio import carregar_acoes, ler_log_portal
@@ -740,6 +740,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "passo_hoje": passo_hoje.get(k, ""),
             "motivo_hoje": (f"sem ação: sem contato — {detalhe_de[k]}" if k in detalhe_de
                             else _motivo_do_cliente(motivo_de.get(k), e, hoje, regua)),
+            "motivo_categoria": "sem_contato" if k in detalhe_de else categoria_do_motivo(motivo_de.get(k)),
             "persona_usuario": nome_persona.get(publico.get(k), "") if pers_usuario else "",
             "enriq_enviado": enviados_bureau.get(k),
             "enriq_retorno": ultimo_retorno[k].isoformat() if k in ultimo_retorno else None}

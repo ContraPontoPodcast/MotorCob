@@ -795,17 +795,23 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         r["retorno_canal_arquivos"] = info_canal["relatorios"]
         conflito = "empresa_id,credor_id,id_cliente" if cid is not None else "empresa_id,id_cliente"
         enq = r.get("enquadramento") or {}
-        sem_motivo = {k: {c: v for c, v in d.items() if c != "motivo_hoje"} for k, d in enq.items()}
-        for i, tentativa in enumerate((enq, sem_motivo, None)):
+        def sem(*cols):
+            return {k: {c: v for c, v in d.items() if c not in cols} for k, d in enq.items()}
+        tentativas = (enq, sem("motivo_categoria"), sem("motivo_categoria", "motivo_hoje"), None)
+        for i, tentativa in enumerate(tentativas):
             try:
                 sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid,
                                                             tentativa), conflito=conflito)
                 break
             except ErroSupabase as ex:   # banco sem as colunas novas: grava o resto e avisa
-                if i == 2 or not any(c in str(ex) for c in ("estrategia", "persona", "acao_hoje", "na_carga",
-                                                             "passo_hoje", "enriq_", "motivo_hoje")):
+                if i == len(tentativas) - 1 or not any(
+                        c in str(ex) for c in ("estrategia", "persona", "acao_hoje", "na_carga", "passo_hoje",
+                                               "enriq_", "motivo_hoje", "motivo_categoria")):
                     raise
-        if i:
+        if i == 1:
+            r["alertas"].append("BANCO: rode supabase/migrations/20261030000001_motivo_categoria.sql para a "
+                                "Lista do dia agrupar os motivos (com ação, regra da esteira, sem contato, encerrado)")
+        elif i:
             r["alertas"].append("BANCO: rode supabase/atualizar_producao_2026-10.sql para ver onde cada cliente "
                                 "se enquadrou (esteira, persona, ação de hoje e o motivo)")
         n_trilha = publicar_trilha(sb, pasta / "estado", eid, cid)
