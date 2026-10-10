@@ -55,3 +55,19 @@ test("equipe MotorCob gerencia qualquer empresa", () => {
   assert.equal(empresaAlvo(equipe, ped({ acao: "listar", empresa_id: 2 })), 2);
   assert.equal(autorizar(equipe, true, ped({ acao: "listar" }), null), "informe a empresa");
 });
+
+test("acessos no convite", () => {
+  assert.equal(validarPedido({ acao: "convidar", email: "a@b.com", papel: "operacao", acessos: { apagar: true } }).erro,
+    "acessos inválidos");
+  assert.equal(validarPedido({ acao: "convidar", email: "a@b.com", papel: "operacao", acessos: { reenquadrar: "sim" } }).erro,
+    "acessos inválidos");
+  const p = ped({ acao: "convidar", email: "a@b.com", papel: "operacao", acessos: { reenquadrar: true, baixar_listas: false } });
+  assert.deepEqual(p.acessos, { reenquadrar: true, baixar_listas: false });
+  assert.equal(autorizar(admA, true, p, null), null);
+  assert.equal(autorizar(gestA, true, p, null), null);
+  const adm = ped({ acao: "convidar", email: "a@b.com", papel: "operacao", acessos: { ver_auditoria: true } });
+  assert.equal(autorizar(gestA, true, adm, null), "só um Admin libera acessos de administração");
+  assert.equal(autorizar(admA, true, adm, null), null);
+  const tranca = ped({ acao: "convidar", email: "a@b.com", papel: "admin", acessos: { gerenciar_usuarios: false } });
+  assert.equal(autorizar(admA, true, tranca, null), "o Admin não pode perder gerenciar usuários/permissões");
+});

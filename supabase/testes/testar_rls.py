@@ -31,6 +31,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261022000001_retorno_canal.sql
     psql -d sb -f supabase/migrations/20261023000001_playbook_frases.sql
     psql -d sb -f supabase/migrations/20261024000001_permissoes_auditoria.sql
+    psql -d sb -f supabase/migrations/20261025000001_permissoes_usuario.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -323,6 +324,24 @@ checar("ninguém grava na auditoria pelo site", False, f"insert into public.audi
 checar("ninguém apaga a auditoria pelo site", False, "delete from public.auditoria", "authenticated", u["admin"])
 checar("TRUNCATE fechado para o site", False, "truncate public.fila_dia", "authenticated", u["admin"])
 checar("nenhuma regra usa mais o papel fixo", True, "select count(*) from pg_policies where coalesce(qual,'')||coalesce(with_check,'') ~ 'tem_papel'", "service_role", 0)
+# acessos por usuário (exceção ao perfil), definidos pelo Admin no convite ou na página Usuários
+checar("Admin libera Baixar arquivos completos só para um operador", True, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['oper']}','baixar_relatorios',true) returning empresa_id", "authenticated", u["admina"], EA)
+checar("o operador passa a poder", True, "select public.pode('baixar_relatorios')", "authenticated", u["oper"], "t")
+checar("Admin bloqueia Reenquadrar só para esse operador", True, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['oper']}','reenquadrar',false)", "authenticated", u["admina"])
+checar("exceção do usuário vence o ajuste do perfil", True, "select public.pode('reenquadrar')", "authenticated", u["oper"], "f")
+checar("operador vê os próprios acessos efetivos", True, "select string_agg(codigo||':'||origem, ',' order by codigo) from public.permissoes_do_usuario(auth.uid()) where permitido", "authenticated", u["oper"], "baixar_listas:padrao,baixar_relatorios:usuario")
+checar("ninguém muda os próprios acessos", False, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['admina']}','ver_acessos',false)", "authenticated", u["admina"])
+checar("Admin não perde gerenciar usuários nem por exceção", False, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['admina']}','gerenciar_usuarios',false)", "service_role")
+checar("só Admin libera acesso de administração", False, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['oper']}','ver_auditoria',true)", "authenticated", u["gest"])
+checar("gestão (com gerenciar usuários) libera acesso comum", True, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['oper']}','baixar_comite',true)", "authenticated", u["gest"])
+checar("gestão não mexe nos acessos de um Admin", False, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['admina']}','baixar_comite',false)", "authenticated", u["gest"])
+checar("Admin A não define acessos de usuário da B", False, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['operb']}','baixar_relatorios',true)", "authenticated", u["admina"])
+checar("planejamento não define acessos", False, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['gest']}','baixar_relatorios',true)", "authenticated", u["plan"])
+checar("B não vê os acessos da A", True, "select count(*) from public.permissoes_usuario", "authenticated", u["operb"], 0)
+checar("operador não vê acessos de outros", True, f"select count(*) from public.permissoes_do_usuario('{u['plan']}')", "authenticated", u["oper"], 0)
+checar("acessos por usuário entram na auditoria", True, "select count(*) > 0 from public.auditoria where tabela='permissoes_usuario'", "authenticated", u["admina"], "t")
+checar("Admin volta o operador ao padrão do perfil", True, f"with x as (delete from public.permissoes_usuario where usuario_id='{u['oper']}' returning 1) select count(*) from x", "authenticated", u["admina"], 3)
+checar("operador volta ao padrão", True, "select public.pode('baixar_relatorios')::text || public.pode('reenquadrar')::text", "authenticated", u["oper"], "falsetrue")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

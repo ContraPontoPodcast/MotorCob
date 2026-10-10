@@ -168,6 +168,9 @@ def _mensagem(v, onde: str, erros: list):
         for k, x in v.items():
             chave = k if k in ("cpa", "cpb") else canal_padrao(k)
             fx = _frase(x)
+            if fx is None and chave in CANAIS and isinstance(x, dict):
+                # canal × estágio do CPC: {"whatsapp": {"cpa": …, "cpb": …}}
+                fx = {e: _frase(y) for e, y in x.items() if e in ("cpa", "cpb") and _frase(y) is not None} or None
             if (chave in CANAIS or chave in ("cpa", "cpb")) and fx is not None:
                 mapa[chave] = fx
             else:
@@ -182,7 +185,10 @@ def frase_da_acao(msg, canal: str, estagio: str):
     """Frase que vale para a linha: a da ação (ou do canal/estágio no mapa); None se a ação não tiver."""
     if msg is None or _frase(msg) is not None:
         return msg
-    return msg.get(canal) or msg.get(estagio)
+    v = msg.get(canal)
+    if isinstance(v, dict) and _frase(v) is None:
+        v = v.get(estagio)
+    return v or msg.get(estagio)
 
 
 def _sem_repetir(acoes: list, onde: str, erros: list) -> list:
@@ -283,6 +289,11 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                 erros.append(f"{nome}/cpc: tentativas_por_canal deve ser inteiro ≥ 1")
             else:
                 saida["tentativas_por_canal"] = t
+        if c.get("mensagem_hot") not in (None, "", {}):
+            # frase do canal em que o cliente deu CPC (telefone Hot): por canal e, se quiser, CPC A × CPC B
+            hot = _mensagem(c["mensagem_hot"], f"{nome}/cpc/canal do CPC", erros)
+            if hot is not None:
+                saida["cpc_mensagem_hot"] = hot
         for k in ("intervalo_cpa", "intervalo_cpb"):   # acionar a cada N dias (1 = todo dia de lista)
             v = c.get(k)
             if isinstance(v, str) and v.strip().isdigit():
