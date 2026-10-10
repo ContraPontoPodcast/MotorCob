@@ -446,6 +446,18 @@ MOTIVOS = {
     "intervalo_cpc": "CPC: aguardando o intervalo de acionamento da estratégia",
 }
 
+# Grupo de cada motivo na Lista do dia do site: quem tem ação, quem a régua segurou hoje, quem não tem
+# contato para os canais do dia e quem está fora da cobrança.
+CATEGORIAS = {"com_acao": "com_acao", "sem_contato": "sem_contato", "fora_da_carga": "encerrado",
+              "encerrado": "encerrado"}
+
+
+def categoria_do_motivo(motivo) -> str | None:
+    """com_acao | regra_esteira | sem_contato | encerrado (None quando o cliente não foi avaliado)."""
+    if motivo is None:
+        return None
+    return CATEGORIAS.get(motivo, "regra_esteira")
+
 
 def previsao(estados: dict, clientes: dict, hoje: date, regua: Regua, ativos=None, dias: int = 7,
              fora: set = frozenset()) -> list[dict]:

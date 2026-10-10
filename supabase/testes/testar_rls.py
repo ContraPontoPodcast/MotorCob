@@ -36,6 +36,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261027000001_ultimo_acesso.sql
     psql -d sb -f supabase/migrations/20261028000001_tela_usuarios.sql
     psql -d sb -f supabase/migrations/20261029000001_site_comercial.sql
+    psql -d sb -f supabase/migrations/20261030000001_motivo_categoria.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -370,6 +371,12 @@ checar("usuário de empresa não lê os contatos", True, "select count(*) from p
 checar("equipe MotorCob lê os contatos", True, "select count(*) from public.contatos_site", "authenticated", u["admin"], 1)
 checar("limite: 3 por e-mail por hora", False, "insert into public.contatos_site (nome,email,consentimento) values ('Ana','ana@exemplo.invalid',true); insert into public.contatos_site (nome,email,consentimento) values ('Ana','ana@exemplo.invalid',true); insert into public.contatos_site (nome,email,consentimento) values ('Ana','ana@exemplo.invalid',true)", "anon")
 checar("visitante não forja a data do contato", True, "insert into public.contatos_site (nome,email,consentimento) values ('Bia','bia@exemplo.invalid',true); select count(*) from public.contatos_site where criado_em < now() - interval '1 day'", "service_role", 0)
+# Lista do dia agrupada: a rotina grava o grupo do motivo; o site lê grupo e título curto
+checar("rotina grava o grupo do motivo", True, f"update public.estado_cliente set motivo_hoje='sem ação: a esteira não tem passo no D+5', motivo_categoria='regra_esteira' where empresa_id={EB}", "service_role")
+checar("grupo de motivo inválido é recusado", False, f"update public.estado_cliente set motivo_categoria='outro' where empresa_id={EB}", "service_role")
+checar("título do motivo sem o 'sem ação:'", True, f"select string_agg(distinct titulo, ',') from public.motivos_hoje where empresa_id={EB}", "service_role", None, "A esteira não tem passo no D+5")
+checar("B lê o grupo dos próprios motivos", True, "select string_agg(distinct categoria, ',') from public.motivos_hoje", "authenticated", u["operb"], "regra_esteira")
+checar("anônimo não lê os motivos", False, "select * from public.motivos_hoje", "anon")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

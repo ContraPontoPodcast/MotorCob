@@ -109,5 +109,18 @@ class TestDemo(unittest.TestCase):
         self.assertEqual(r["whatsapp_erro"], 0)
 
 
+class TestCategoriaDoMotivo(unittest.TestCase):
+    def test_grupos_da_lista_do_dia(self):
+        from motor.fila import MOTIVOS, categoria_do_motivo
+        self.assertEqual(categoria_do_motivo("com_acao"), "com_acao")
+        self.assertEqual(categoria_do_motivo("sem_contato"), "sem_contato")
+        self.assertEqual(categoria_do_motivo("encerrado"), "encerrado")
+        self.assertEqual(categoria_do_motivo("fora_da_carga"), "encerrado")
+        self.assertEqual(categoria_do_motivo("sem_passo_hoje"), "regra_esteira")
+        self.assertIsNone(categoria_do_motivo(None))
+        grupos = {"com_acao", "regra_esteira", "sem_contato", "encerrado"}
+        self.assertTrue(all(categoria_do_motivo(m) in grupos for m in MOTIVOS))   # todo motivo cai num grupo
+
+
 if __name__ == "__main__":
     unittest.main()
