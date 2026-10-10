@@ -1,0 +1,37 @@
+# Publica a imagem do motor no Artifact Registry do Google Cloud a cada push no main (a VM baixa às 05:20,
+# ou na hora com: sudo systemctl start motorcob-atualizar). Sem chave guardada: Workload Identity Federation.
+# Só roda depois de configurar as variáveis GCP_PROJETO, GCP_WIF_PROVIDER e GCP_SA_CI (docs/NUVEM_GCP.md).
+name: imagem
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: imagem
+  cancel-in-progress: false
+jobs:
+  publicar:
+    if: vars.GCP_WIF_PROVIDER != ''
+    runs-on: ubuntu-latest
+    env:
+      IMAGEM: southamerica-east1-docker.pkg.dev/${{ vars.GCP_PROJETO }}/motorcob/motor
+    steps:
+      - uses: actions/checkout@v5
+      - name: Montar a imagem
+        run: docker build -t "$IMAGEM:${GITHUB_SHA::12}" -t "$IMAGEM:latest" .
+      - name: Testes dentro da imagem (somente leitura, sem privilégios)
+        run: |
+          docker run --rm --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+            --entrypoint sh -w /tmp "$IMAGEM:latest" -c 'python3 -m unittest discover -s /app/tests -t /app -q'
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_CI }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Publicar
+        run: |
+          gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet
+          docker push --all-tags "$IMAGEM"

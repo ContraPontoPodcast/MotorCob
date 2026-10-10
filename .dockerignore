@@ -1,0 +1,14 @@
+.git
+.github
+**/__pycache__
+*.pyc
+saida/
+acoes/
+estado/
+*.env
+.env*
+*.pem
+*.key
+supabase/functions/
+docs/
+exemplos/*.xlsx

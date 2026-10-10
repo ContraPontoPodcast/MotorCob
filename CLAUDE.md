@@ -392,6 +392,10 @@ de outra pessoa pela certificação e a rotação segue.
   barra). Permissão nova entra no catálogo da view. Tabela de configuração nova ganha o
   gatilho `z_auditar`. Gestão de usuários: Edge Function `supabase/functions/admin-usuarios`
   (service_role só em variável do servidor). Segurança e pentest: `docs/SEGURANCA.md`.
+- Nuvem (Google Cloud, São Paulo): `Dockerfile` (o plantão do Mac num contêiner somente leitura, dados em
+  `/dados`, chave por variável de ambiente), `nuvem/gcp/preparar_projeto.sh` (Cloud Shell: registry, Secret
+  Manager, rede sem portas abertas, NAT, WIF do GitHub, disco com snapshot, VM) e `nuvem/gcp/vm_inicio.sh`
+  (serviços na VM). A imagem é publicada pelo workflow `imagem`. Guia: `docs/NUVEM_GCP.md`.
 - Produção recebe o pacote acumulado inteiro (reaplicar uma migração antiga sozinha volta as
   políticas para o papel fixo; a 20261024 precisa ser a última a rodar).
 

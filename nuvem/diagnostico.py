@@ -52,7 +52,7 @@ def main():
 
     print("\n2. Ligação com o site (Supabase)")
     env = dados / "config" / "supabase.env"
-    if not env.exists():
+    if not env.exists() and not os.environ.get("MOTORCOB_SUPABASE_KEY"):
         ruim(f"falta {env}", "Ligue o Mac ao site: cd ~/MotorCob && scripts/configurar_nuvem.sh")
         return fim(problemas)
     ok("configuração encontrada (a chave não é mostrada)")
