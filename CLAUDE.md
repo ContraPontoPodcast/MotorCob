@@ -337,6 +337,11 @@ de outra pessoa pela certificação e a rotação segue.
   novo valem na mesma rodada (`marcacao.aplicar_pendentes`), uma vez só
   (`estado/eventos_aplicados.txt`). Preventivo: janela = maior dia antes do vencimento desenhado
   na estratégia (o site grava "-5", "-3", "0").
+- ON/OFF por fase na estratégia: `localizacao.ativo`, `cpc.ativo` (vira `cpc_ativo`), `giro.ativo`,
+  `preventivo.ativo`, `quebra.ativo` — desligado: o segmento não aciona aquela fase (motivo `fase_desligada`;
+  o relógio da esteira segue). Frases: `definicao.mensagens = {estágio: {canal: texto}}` (estágios
+  localizacao, cpa, cpb, giro, preventivo, quebra) → coluna `mensagem` nos CSV por canal; variáveis
+  {saldo} {dias_atraso} {vencimento} {valor_parcela} {qtd_parcelas_abertas}; as outras ficam para a ferramenta.
 - Acordo por estratégia (segmento): `preventivo.ativo` / `quebra.ativo` (desligado: o segmento não entra em
   PRE; na quebra não aciona e volta ao estoque no prazo), `quebra.carencia` (dias depois do vencimento
   sem baixa que ainda não são quebra; a quebra começa no D+carencia+1), `quebra.dias_para_estoque` e os

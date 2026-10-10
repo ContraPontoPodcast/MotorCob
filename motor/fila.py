@@ -298,6 +298,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         if passo is None:
             if est.estado == "QBR" and rc["quebra"].get("ativo") is False:
                 conta("quebra_desligada")
+            elif fase_desligada(est, rc):
+                conta("fase_desligada")
             elif est.estado in ("CPA", "CPB") and not _intervalo_cpc_ok(est, hoje, rc, ult):
                 conta("intervalo_cpc")
             else:
@@ -426,6 +428,7 @@ MOTIVOS = {
     "sem_passo_hoje": "a esteira não tem passo hoje (ex.: D+2)",
     "quebra_desligada": "acordo quebrado, mas a quebra está desligada na estratégia deste segmento "
                         "(volta ao estoque no prazo definido)",
+    "fase_desligada": "a fase do cliente (cliente novo, CPC ou não CPC) está desligada na estratégia deste segmento",
     "intervalo_48h": "aguardando 48h desde a última ação (localização e Não CPC)",
     "sem_contato": "sem contato para os canais do dia",
     "sem_acao_na_raia": "persona com 'sem ação' hoje",
@@ -472,6 +475,19 @@ def previsao(estados: dict, clientes: dict, hoje: date, regua: Regua, ativos=Non
     return saida
 
 
+def fase_desligada(est, regua) -> str | None:
+    """Fase do cliente desligada na estratégia do segmento (ON/OFF do site)? Devolve o nome da fase."""
+    if est.estado == "LOC" and regua["localizacao"].get("ativo") is False:
+        return "cliente novo"
+    if est.estado in ("CPA", "CPB") and regua.dados.get("cpc_ativo") is False:
+        return "CPC"
+    if est.estado == "NCP" and regua["giro"].get("ativo") is False:
+        return "não CPC"
+    if est.estado == "QBR" and regua["quebra"].get("ativo") is False:
+        return "quebra"
+    return None
+
+
 def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None):
     """(régua, rótulo do passo, ações, data_fixa) ou None. regua já é a do cluster (estratégia)."""
     def acoes(passo):
@@ -489,6 +505,8 @@ def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None):
         if d == 0 and cliente and regua.voz_d0(est.cluster_atual):
             passo.append(regua["preventivo"]["voz_d0_canal"])
         return ("preventivo", "D0" if d == 0 else f"D-{d}", acoes(passo), True) if passo else None
+    if fase_desligada(est, regua):
+        return None
     if not _recencia_ok(est, hoje, regua):
         return None
     if est.estado == "LOC":
