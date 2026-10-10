@@ -11,7 +11,7 @@ ARGS=(--clientes "$DADOS/base/clientes.csv" --carteira "$DADOS/base/contatos.csv
       --estado "$DADOS/estado" --inicio "$INICIO" --fim "$FIM" --saida "$DADOS/saida/comite/$MES")
 [ -f "$DADOS/base/parcelas.csv" ] && ARGS+=(--parcelas "$DADOS/base/parcelas.csv")
 cd "$REPO"
-if [ -f "$DADOS/config/supabase.env" ]; then
+if [ -f "$DADOS/config/supabase.env" ] || [ -n "${MOTORCOB_SUPABASE_KEY:-}" ]; then
   MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar comite --dados "$DADOS" --mes "$MES"
 else
   "$PY" relatorio.py "${ARGS[@]}"

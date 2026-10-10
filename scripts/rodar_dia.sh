@@ -17,19 +17,22 @@ PLANTAO=0
 if [ "${1:-}" = "--vigiar" ]; then VIGIAR=1; shift; fi
 if [ "${1:-}" = "--plantao" ]; then PLANTAO=1; shift; fi
 DATA="${1:-$(date +%F)}"
+# ligado ao site: arquivo do Mac (scripts/configurar_nuvem.sh) ou variáveis de ambiente (servidor na nuvem)
+NUVEM=0
+{ [ -f "$DADOS/config/supabase.env" ] || [ -n "${MOTORCOB_SUPABASE_KEY:-}" ]; } && NUVEM=1
 
 if ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
   echo "ERRO: precisa de Python 3.11 ou mais novo (brew install python@3.12)." >&2
   exit 1
 fi
 if [ "$PLANTAO" = 1 ]; then
-  [ -f "$DADOS/config/supabase.env" ] || { echo "ERRO: --plantao precisa da nuvem configurada (scripts/configurar_nuvem.sh)" >&2; exit 1; }
+  [ "$NUVEM" = 1 ] || { echo "ERRO: --plantao precisa da nuvem configurada (scripts/configurar_nuvem.sh ou MOTORCOB_SUPABASE_URL/KEY)" >&2; exit 1; }
   cd "$REPO"
   export MOTORCOB_DADOS="$DADOS" MOTORCOB_PYTHON="$PY"
   exec "$PY" -m nuvem.sincronizar plantao --dados "$DADOS"
 fi
 if [ "$VIGIAR" = 1 ]; then
-  [ -f "$DADOS/config/supabase.env" ] || { echo "ERRO: --vigiar precisa da nuvem configurada (scripts/configurar_nuvem.sh)" >&2; exit 1; }
+  [ "$NUVEM" = 1 ] || { echo "ERRO: --vigiar precisa da nuvem configurada (scripts/configurar_nuvem.sh ou MOTORCOB_SUPABASE_URL/KEY)" >&2; exit 1; }
   cd "$REPO"
   # sem nada a fazer: sai calado (o plantão chama a cada minuto e na hora do arquivo novo)
   mkdir -p "$DADOS/logs"
@@ -38,7 +41,8 @@ if [ "$VIGIAR" = 1 ]; then
   mkdir -p "$DADOS/logs"
   LOG="$DADOS/logs/vigia_$DATA.log"
   echo "== $(date '+%F %T') carga nova no site" >> "$LOG"
-  git -C "$REPO" pull --ff-only -q 2>>"$LOG" || echo "aviso: não consegui atualizar o motor (git pull)" >> "$LOG"
+  # no Mac o motor se atualiza pelo git; no servidor, pela imagem nova (sem .git)
+  [ -d "$REPO/.git" ] && { git -C "$REPO" pull --ff-only -q 2>>"$LOG" || echo "aviso: não consegui atualizar o motor (git pull)" >> "$LOG"; }
   if MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar vigiar --dados "$DADOS" --data "$DATA" >> "$LOG" 2>&1; then
     echo "Lista do dia publicada no site ($(date '+%T'))." | tee -a "$LOG"
     exit 0
@@ -48,7 +52,7 @@ if [ "$VIGIAR" = 1 ]; then
 fi
 
 for obrigatorio in base/clientes.csv base/contatos.csv; do
-  if [ ! -f "$DADOS/config/supabase.env" ] && [ ! -f "$DADOS/$obrigatorio" ]; then
+  if [ "$NUVEM" = 0 ] && [ ! -f "$DADOS/$obrigatorio" ]; then
     echo "ERRO: falta $DADOS/$obrigatorio" >&2
     exit 1
   fi
@@ -65,10 +69,10 @@ mkdir -p "$DADOS/retornos" "$DADOS/logs"
 LOG="$DADOS/logs/rodar_dia_$DATA.log"
 : > "$LOG"
 cd "$REPO"
-if [ -f "$DADOS/config/supabase.env" ]; then
+if [ "$NUVEM" = 1 ]; then
   # modo nuvem: atualiza o motor (empresas novas chegam por empresas/<slug>.json), baixa o
   # que o site recebeu de cada empresa, roda e publica no site
-  git -C "$REPO" pull --ff-only -q 2>>"$LOG" || echo "aviso: não consegui atualizar o motor (git pull); sigo com a versão atual" | tee -a "$LOG"
+  [ -d "$REPO/.git" ] && { git -C "$REPO" pull --ff-only -q 2>>"$LOG" || echo "aviso: não consegui atualizar o motor (git pull); sigo com a versão atual" | tee -a "$LOG"; }
   if MOTORCOB_DADOS="$DADOS" "$PY" -m nuvem.sincronizar dia --dados "$DADOS" --data "$DATA" 2>&1 | tee -a "$LOG"; then
     echo "Publicado no site. ID + contato por canal também em: $DADOS/empresas/<empresa>/saida/$DATA/ids/" | tee -a "$LOG"
     exit 0
