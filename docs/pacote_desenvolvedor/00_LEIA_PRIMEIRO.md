@@ -28,6 +28,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | 15 | `05_usuarios_permissoes_seguranca/PROMPT_RESETAR_DUAS_ETAPAS.md` | Função admin-usuarios nova + botão "Resetar duas etapas" em Usuários | Supabase + Site | 13º |
 | 16 | `07_workspace/PROMPT_6_MENSAGERIA.md` | Mensageria: lotes do dia (aprovar, pausar, retomar, cancelar), descadastros, modelo de e-mail, modo simulação | Site | 14º |
 | 17 | `08_api/LEIA.md` | API das cargas: SQL 8, função `api` (Verify JWT desligado), tokens em Minha conta e /docs/api | Supabase + Site | 15º |
+| ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
 (o mesmo como prompt para colar no Horizons, com menos de 100 linhas). Use um ou outro.
