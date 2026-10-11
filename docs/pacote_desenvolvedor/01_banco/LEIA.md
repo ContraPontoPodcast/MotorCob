@@ -14,7 +14,5 @@ Rode os dois, nesta ordem. Os dois podem ser rodados mais de uma vez. Resultado 
    "com ação hoje", que já vem `com_acao`).
 
 Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do chat corta o texto em 100 linhas.
-
-No repositório, os dois SQLs são as migrações `supabase/migrations/20261029000001_site_comercial.sql` e
-`supabase/migrations/20261030000001_motivo_categoria.sql`. Imagens, guia do designer e o .zip completo vão
-para o desenvolvedor fora do repositório.
+3. `03_templates_canais.sql` — WhatsApp e RCS passam a usar **template**: a tabela `frases` ganha a coluna
+   `codigo_template` (nome do template aprovado no provedor, até 200 caracteres). Rode antes do prompt de templates.

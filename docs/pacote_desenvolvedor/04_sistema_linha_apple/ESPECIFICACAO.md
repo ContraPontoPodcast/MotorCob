@@ -94,8 +94,13 @@ Demais telas: mesmo padrão, título = nome do item do menu. Datas por extenso (
 Segmentos no controle segmentado. Paleta de canais e ações nos dias como **pílulas sólidas** na cor do canal,
 texto branco 500: WhatsApp `#1F8A4C` · RCS `#3B5BA9` · SMS `#7A4FB0` · E-mail `#A2552B` · Agente virtual `#0E7C86`
 · Discador `#475569` · Enriquecimento `#64748B`. "★ Melhor canal da persona": contorno tracejado `--mc-border-field`.
-Bolinha de frase (ícone balão `MessageCircle`, 18 px) dentro da pílula: **com frase** = branca cheia com o balão na
-cor do canal (tooltip com o nome da frase); **sem frase** = só contorno branco 70%; **desativada** = vermelha `#C62828`.
+Bolinha de mensagem (18 px) dentro da pílula, conforme o canal:
+- **WhatsApp e RCS: template** (ícone `FileText`). Template = frase do canal com `codigo_template` (nome aprovado no
+  provedor). Clicar abre o painel "Escolher template" com busca por nome, código e texto.
+- **SMS e Agente virtual: frase** (ícone `MessageCircle`), painel "Escolher frase" com busca.
+- **Discador, E-mail e Enriquecimento: sem mensagem** — nenhuma bolinha nem campo.
+Estados: com escolha = branca cheia com o ícone na cor do canal (tooltip com o nome); sem = só contorno branco 70%;
+desativada = vermelha `#C62828`. Regra completa (canal do CPC, tela Canais e frases, playbook) em `PROMPT_TEMPLATES.md`.
 Faixas (Cliente novo, Deu CPC, Não CPC, Acordo, Como vai funcionar) como cards recolhíveis; selo "Ligado".
 Dias vazios: tracejado `--mc-border-field`, "solte um canal aqui".
 
