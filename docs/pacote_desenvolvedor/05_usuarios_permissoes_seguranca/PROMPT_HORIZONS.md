@@ -20,13 +20,14 @@ tem permissão para esta ação. Fale com o Admin da sua empresa."
 
 2. PÁGINA PERMISSÕES (/permissoes, só com gerenciar_permissoes)
 Grade: permissões nas linhas, agrupadas por "grupo"; perfis nas colunas (Admin, Planejamento, Operação, Gestão).
+NÃO existe tabela permissoes_padrao: o padrão de cada perfil são as colunas admin/planejamento/operacao/gestao do catálogo.
 Dados: from('permissoes_catalogo').select('*').order('ordem') e from('permissoes_papel').select('*')
 .eq('empresa_id', empresa). Cada célula é um interruptor: valor do ajuste da empresa se houver, senão o padrão
 (colunas admin/planejamento/operacao/gestao do catálogo). Diferente do padrão → pontinho laranja #FF9500 com tooltip
 "Padrão MotorCob: liberado/bloqueado". Mudar → upsert em permissoes_papel (empresa_id, papel, permissao,
 permitido; onConflict 'empresa_id,papel,permissao'); igual ao padrão → delete da linha. Admin × gerenciar_usuarios
 e Admin × gerenciar_permissoes travados ligados (cadeado). Botão "Voltar ao padrão MotorCob" com confirmação na
-própria tela (apaga os ajustes da empresa).
+própria tela (apaga os ajustes da empresa: .delete().eq('empresa_id', empresa), nunca sem esse filtro).
 
 3. PÁGINA AUDITORIA (/auditoria, só com ver_auditoria)
 from('auditoria').select('*').order('quando', {ascending:false}), 50 por página, filtros período/tabela/usuário.
