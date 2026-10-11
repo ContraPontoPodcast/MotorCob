@@ -1,7 +1,7 @@
 // node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { autorizar, empresaAlvo, validarPedido, type Perfil } from "./regras.ts";
+import { aalDoToken, autorizar, empresaAlvo, validarPedido, type Perfil } from "./regras.ts";
 
 const ID = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
 const admA: Perfil = { id: ID(1), papel: "admin", ativo: true, empresa_id: 1, equipe: false };
@@ -70,4 +70,28 @@ test("acessos no convite", () => {
   assert.equal(autorizar(admA, true, adm, null), null);
   const tranca = ped({ acao: "convidar", email: "a@b.com", papel: "admin", acessos: { gerenciar_usuarios: false } });
   assert.equal(autorizar(admA, true, tranca, null), "o Admin não pode perder gerenciar usuários/permissões");
+});
+
+test("resetar duas etapas", () => {
+  const tok = (aal: string) => `x.${btoa(JSON.stringify({ aal })).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_")}.y`;
+  assert.equal(aalDoToken(tok("aal2")), "aal2");
+  assert.equal(aalDoToken(tok("aal1")), "aal1");
+  assert.equal(aalDoToken("lixo"), null);
+  const r = ped({ acao: "resetar_2fa", usuario_id: ID(2) });
+  assert.equal(validarPedido({ acao: "resetar_2fa" }).erro, "usuário inválido");
+  assert.equal(autorizar(admA, true, r, gestA, "aal2"), null);                       // Admin reseta colega
+  assert.match(autorizar(admA, true, r, gestA, "aal1")!, /código de duas etapas/);    // sem código, não
+  assert.match(autorizar(admA, true, r, gestA)!, /código de duas etapas/);
+  assert.match(autorizar(admA, true, { ...r, usuario_id: admA.id }, admA, "aal2")!, /próprio/);  // nem o próprio
+  assert.match(autorizar(admA, true, r, operB, "aal2")!, /outra empresa/);
+  assert.match(autorizar(gestA, true, r, admA, "aal2")!, /só um Admin/);            // Admin só por Admin
+  assert.equal(autorizar(equipe, true, r, admA, "aal2"), null);                       // equipe destrava Admin de cliente
+  assert.match(autorizar(operA, false, r, gestA, "aal2")!, /sem permissão/);
+});
+
+test("ver_faturamento é permissão de administração", () => {
+  assert.ok(validarPedido({ acao: "convidar", email: "a@b.co", papel: "gestao", acessos: { ver_faturamento: true } }).pedido);
+  const p = ped({ acao: "convidar", email: "a@b.co", papel: "gestao", acessos: { ver_faturamento: true } });
+  assert.match(autorizar(gestA, true, p, null)!, /só um Admin libera/);
+  assert.equal(autorizar(admA, true, p, null), null);
 });
