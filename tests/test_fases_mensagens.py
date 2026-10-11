@@ -165,5 +165,30 @@ class TestFraseCpc(unittest.TestCase):
         self.assertEqual(erros, [])
 
 
+class TestTemplatesPorCanal(unittest.TestCase):
+    """WhatsApp e RCS levam template do provedor; discador e e-mail não levam mensagem."""
+
+    def test_whatsapp_com_template_sai_na_coluna_template(self):
+        defin = {"localizacao": {"passos": {"1": [{"canal": "whatsapp", "mensagem": {"frase_id": 5}}]}}}
+        playbook = [{"id": 5, "canal": "whatsapp", "nome": "Boas-vindas", "texto": "Olá, temos uma proposta",
+                     "codigo_template": "boas_vindas_v2", "ativo": True}]
+        r = _rodar(defin, playbook)
+        self.assertEqual([l["mensagem"] for l in r["fila"]], ["boas_vindas_v2"])
+        linhas = (r["saida"] / "ids" / "whatsapp.csv").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(linhas[0], "id_cliente;contato;template")
+        self.assertTrue(linhas[1].endswith(";boas_vindas_v2"))
+        # template desativado: a ação sai sem template
+        r = _rodar(defin, [{**playbook[0], "ativo": False}])
+        self.assertEqual([l["mensagem"] for l in r["fila"]], [""])
+
+    def test_discador_e_email_sem_mensagem(self):
+        for canal in ("discador", "email"):
+            over, erros = validar_estrategia({"localizacao": {"passos": {"1": [{"canal": canal, "mensagem": "Oi"}]}}})
+            self.assertNotIn("mensagem", over["localizacao"]["passos"]["1"][0])
+            self.assertTrue(any("não leva frase nem template" in e for e in erros))
+        defin = {"localizacao": {"passos": {"1": [{"canal": "email"}]}}, "mensagens": {"localizacao": {"email": "Oi"}}}
+        self.assertTrue(all(l["mensagem"] == "" for l in _rodar(defin)["fila"]))
+
+
 if __name__ == "__main__":
     unittest.main()

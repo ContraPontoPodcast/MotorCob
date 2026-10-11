@@ -37,6 +37,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261028000001_tela_usuarios.sql
     psql -d sb -f supabase/migrations/20261029000001_site_comercial.sql
     psql -d sb -f supabase/migrations/20261030000001_motivo_categoria.sql
+    psql -d sb -f supabase/migrations/20261031000001_templates_canais.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -377,6 +378,10 @@ checar("grupo de motivo inválido é recusado", False, f"update public.estado_cl
 checar("título do motivo sem o 'sem ação:'", True, f"select string_agg(distinct titulo, ',') from public.motivos_hoje where empresa_id={EB}", "service_role", None, "A esteira não tem passo no D+5")
 checar("B lê o grupo dos próprios motivos", True, "select string_agg(distinct categoria, ',') from public.motivos_hoje", "authenticated", u["operb"], "regra_esteira")
 checar("anônimo não lê os motivos", False, "select * from public.motivos_hoje", "anon")
+# WhatsApp e RCS com template (nome aprovado no provedor)
+checar("Admin cria template de WhatsApp", True, f"insert into public.frases (empresa_id,canal,nome,texto,codigo_template) values ({EA},'whatsapp','Boas-vindas','Olá, temos uma proposta','boas_vindas_v2')", "authenticated", u["admina"])
+checar("template em branco é recusado", False, f"insert into public.frases (empresa_id,canal,nome,texto,codigo_template) values ({EA},'rcs','Oferta','Oferta','  ')", "authenticated", u["admina"])
+checar("B não vê os templates da A", True, "select count(*) from public.frases where codigo_template is not null", "authenticated", u["operb"], 0)
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

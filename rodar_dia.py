@@ -39,7 +39,7 @@ from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
                            ingerir_ocorrencias, salvar_escolhas)
 from motor.acoes import agregar as agregar_acoes, sem_ocorrencia, totais as totais_acoes
-from motor.estrategia import frase_da_acao, validar_estrategia
+from motor.estrategia import CANAIS_SEM_MENSAGEM, CANAIS_TEMPLATE, frase_da_acao, validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor.fila import MOTIVOS, categoria_do_motivo, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
@@ -176,19 +176,20 @@ def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]]) -> dict[str, lis
     arquivos = {}
     for canal, linhas in por_canal.items():
         for condicional in (False, True):
-            pares, vistos = [], set()
+            pares, vistos, template = [], set(), False
             for l in sorted((l for l in linhas if bool(l["condicao"]) == condicional),
                             key=lambda l: (l["id_cliente"], int(l.get("ordem_contato") or 1))):
                 if (l["id_cliente"], l["contato"]) not in vistos:
                     vistos.add((l["id_cliente"], l["contato"]))
                     pares.append((l["id_cliente"], l["contato"], l.get("mensagem") or ""))
+                    template = template or bool(l.get("template"))
             if not pares:
                 continue
             nome = f"{canal}_reserva" if condicional else canal
             with open(pasta / f"{nome}.csv", "w", newline="", encoding="utf-8") as f:
-                if any(m for _, _, m in pares):   # a estratégia tem frase para este canal: vai na 3ª coluna
+                if any(m for _, _, m in pares):   # frase ou, no WhatsApp/RCS, o template do provedor: 3ª coluna
                     w = csv.writer(f, delimiter=";", lineterminator="\n")
-                    w.writerow(["id_cliente", "contato", "mensagem"])
+                    w.writerow(["id_cliente", "contato", "template" if template else "mensagem"])
                     w.writerows(pares)
                 else:
                     f.write("id_cliente;contato\n" + "".join(f"{i};{c}\n" for i, c, _ in pares))
@@ -511,7 +512,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                                   motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto,
                                   ultima_cpc=ultima_cpc)
     nomes_e = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
-    playbook = {f.get("id"): f.get("texto") for f in _ler_lista(frases) if f.get("ativo") is not False and f.get("texto")}
+    ativas = [f for f in _ler_lista(frases) if f.get("ativo") is not False]
+    playbook = {f.get("id"): f.get("texto") for f in ativas if f.get("texto")}
+    templates = {f.get("id"): f.get("codigo_template") for f in ativas if f.get("codigo_template")}
     for l in fila:
         e_ = estados.get(l["id_cliente"])
         eid_ = regua.estrategia_de(e_.cluster_atual) if e_ else None
@@ -523,6 +526,14 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         if texto is None:
             msgs = regua.para(e_.cluster_atual).dados.get("mensagens") if e_ else None
             texto = ((msgs or {}).get(estagio_da_linha(l)) or {}).get(l["canal"])
+        l["template"] = False
+        if l["canal"] in CANAIS_SEM_MENSAGEM:      # discador e e-mail: sem frase nem template
+            l["mensagem"] = ""
+            continue
+        if l["canal"] in CANAIS_TEMPLATE and isinstance(texto, dict) and texto.get("frase_id") in templates:
+            l["mensagem"] = templates[texto["frase_id"]]   # WhatsApp e RCS: nome do template aprovado no provedor
+            l["template"] = True
+            continue
         if isinstance(texto, dict):     # frase do playbook desativada ou apagada: sai sem frase
             texto = playbook.get(texto.get("frase_id"))
         l["mensagem"] = montar_mensagem(texto, clientes.get(l["id_cliente"]), parcelas.get(l["id_cliente"]), hoje) \

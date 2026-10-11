@@ -57,6 +57,11 @@ NUMEROS_FASE = {"localizacao": ("dias_sem_contato_para_ncp",), "giro": ("ciclo_d
 ESTAGIOS_MSG = ("localizacao", "cpa", "cpb", "giro", "preventivo", "quebra")   # estágios das frases
 TOKENS_PERSONA = ("persona_1", "persona_2")   # melhor / 2º melhor canal da persona (motor/persona.py)
 ENRIQUECIMENTO = "enriquecimento"   # ação da esteira: manda o cliente para o bureau nesse dia (não é contato)
+# O que cada canal leva na ação: WhatsApp e RCS levam um template aprovado no provedor; SMS e agente virtual,
+# uma frase; discador e e-mail não levam mensagem (o enriquecimento/bureau nem é canal de contato).
+CANAIS_TEMPLATE = ("whatsapp", "rcs")
+CANAIS_FRASE = ("sms", "agente_voz")
+CANAIS_SEM_MENSAGEM = ("discador", "email")
 SEM_ACAO = "sem_acao"               # na raia de uma persona: neste dia ela não recebe nada
 CAMPOS_PRIORIDADE = ("ranking", "score", "whatsapp", "rcs", "bureau")
 
@@ -138,7 +143,9 @@ def _acao(a, onde: str, erros: list) -> dict | None:
     acao = {"canal": a["canal"], "modo": modo, "numeros": numeros or None, "contatos": filtro}
     if personas:
         acao["personas"] = [int(p) for p in personas]
-    if a.get("mensagem") not in (None, "", {}):
+    if a.get("mensagem") not in (None, "", {}) and a["canal"] in CANAIS_SEM_MENSAGEM:
+        erros.append(f"{onde}/{a['canal']}: este canal não leva frase nem template (ignorado)")
+    elif a.get("mensagem") not in (None, "", {}):
         msg = _mensagem(a["mensagem"], f"{onde}/{a['canal']}", erros)
         if msg is not None:
             acao["mensagem"] = msg
