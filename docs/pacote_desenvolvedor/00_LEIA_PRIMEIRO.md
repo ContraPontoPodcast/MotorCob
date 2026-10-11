@@ -12,11 +12,12 @@ Faça **na ordem**; cada passo depende do anterior.
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
-| 2 | `01_banco` | 3 SQLs: contato do site, Lista do dia agrupada, templates | Supabase › SQL Editor | Hoje |
+| 2 | `01_banco` | 4 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1) | Supabase › SQL Editor | Hoje |
 | 3 | `03_site_e_login` | Site público em "/", login novo, plataforma em "/inicio", fim do "/cadastro" | Site | 1º |
 | 4 | `04_sistema_linha_apple` | Visual do sistema: menu escuro, telas brancas, Lista do dia nova | Site | 2º |
 | 5 | `05_usuarios_permissoes_seguranca` | Menus por permissão, Permissões, Auditoria, páginas de senha, sessão | Site | 3º |
 | 6 | `04_sistema_linha_apple/PROMPT_TEMPLATES.md` | WhatsApp/RCS com template (busca); discador, e-mail e bureau sem frase | Site | 4º |
+| 7 | `03_site_e_login/PROMPT_SITE_V3_CARROSSEL.md` | Site v3: carrossel com as 6 funções e uma seção por função (Orquestração, Mensageria, Arquivo ou API, Workspace) | Site | 5º |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
 (o mesmo como prompt para colar no Horizons, com menos de 100 linhas). Use um ou outro.
@@ -28,14 +29,15 @@ Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com crit�
   passam pela Edge Function `admin-usuarios`, já publicada.
 - Permissão é garantida no banco (RLS + `pode()`); o site só esconde o que a pessoa não pode usar.
 - Erros em português, sem detalhe técnico. O login nunca diz se um e-mail existe.
-- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 258 testes de acesso).
+- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 300 testes de acesso).
 
 ## Já pronto (não refazer)
 Permissões por perfil e por usuário, auditoria, contatos do site, motivos agrupados da Lista do dia (após o SQL 2)
 · Edge Function `admin-usuarios` · motor no Google Cloud (São Paulo) · Orquestração com frases · tela Usuários com convite.
 
 ## Checklist de aceite
-- [ ] `/` abre o site; cabeçalho escuro; cada atalho (Produto, Lista do dia, Personas, Agentes, Segurança, Contato) rola até a seção.
+- [ ] `/` abre o site; cabeçalho escuro; cada atalho (Plataforma, Orquestração, Mensageria, Personas, Workspace, Segurança, Contato) rola até a seção.
+- [ ] Carrossel #plataforma: 6 slides, setas e pontos funcionam, ‹ desabilitado no 1º e › no último, sem rolagem automática.
 - [ ] "Entrar" → login branco "Entre no MotorCob." → código (Admin) → `/inicio`.
 - [ ] `/cadastro` redireciona para `/login` e o Supabase recusa cadastro novo.
 - [ ] Contato grava em `contatos_site`; o visitante não lê a tabela.

@@ -16,3 +16,10 @@ Rode os dois, nesta ordem. Os dois podem ser rodados mais de uma vez. Resultado 
 Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do chat corta o texto em 100 linhas.
 3. `03_templates_canais.sql` — WhatsApp e RCS passam a usar **template**: a tabela `frases` ganha a coluna
    `codigo_template` (nome do template aprovado no provedor, até 200 caracteres). Rode antes do prompt de templates.
+4. `04_workspace.sql` (mesmo conteúdo de `supabase/migrations/20261101000001_workspace.sql`) — Workspace fase 1:
+   cadastro da empresa (razão social, CNPJ validado, inscrições, endereço, segmento, vendedor, gerente, situação),
+   **`empresa_contatos`**, **`empresa_modulos`** (produtos habilitados; toda empresa nova já nasce com Orquestração),
+   perfil com sobrenome, telefone, setor e foto (`atualizar_meu_perfil`), buckets privados **`fotos`** (2 MB) e
+   **`chamados`** (10 MB), **`chamados`** e **`chamado_mensagens`** com protocolo `MC-AAAA-000000`, nota interna só
+   para a equipe, reabertura quando o cliente responde e `resolver_chamado(id)`, e **`credores.entrada_carga`**
+   (`arquivo` ou `api`, padrão `arquivo`). Pode rodar mais de uma vez. Não muda nada que já está no ar.
