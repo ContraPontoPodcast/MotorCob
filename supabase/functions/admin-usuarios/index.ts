@@ -3,7 +3,7 @@
 // (pode('gerenciar_usuarios')) e por regras.ts. A chave service_role vem só da variável de ambiente do
 // servidor (Supabase › Edge Functions › Secrets) e nunca sai daqui.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { autorizar, empresaAlvo, type Pedido, type Perfil, validarPedido } from "./regras.ts";
+import { aalDoToken, autorizar, empresaAlvo, type Pedido, type Perfil, validarPedido } from "./regras.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -104,6 +104,17 @@ async function executar(quem: Perfil, pedido: Pedido, alvo: Perfil | null): Prom
       await auditar(quem, alvo!.empresa_id, "UPDATE", alvo!.id, { senha: { antes: null, depois: "link de redefinição enviado" } });
       return [200, { ok: true }];
     }
+    case "resetar_2fa": {
+      const { data, error } = await admin.auth.admin.mfa.listFactors({ userId: alvo!.id });
+      if (error) throw error;
+      for (const f of data.factors ?? []) {
+        const { error: e } = await admin.auth.admin.mfa.deleteFactor({ id: f.id, userId: alvo!.id });
+        if (e) throw e;
+      }
+      await auditar(quem, alvo!.empresa_id, "UPDATE", alvo!.id,
+        { duas_etapas: { antes: `${(data.factors ?? []).length} autenticador(es)`, depois: "resetada" } });
+      return [200, { ok: true, removidos: (data.factors ?? []).length }];
+    }
     case "alterar_papel": {
       const { error } = await admin.from("perfis").update({ papel: pedido.papel }).eq("id", alvo!.id);
       if (error) throw error;
@@ -143,7 +154,7 @@ Deno.serve(async (req) => {
     const { data } = await admin.from("perfis").select(campos).eq("id", pedido.usuario_id).maybeSingle();
     alvo = (data as Perfil | null) ?? null;
   }
-  const negado = autorizar(quem as Perfil | null, pode === true, pedido, alvo);
+  const negado = autorizar(quem as Perfil | null, pode === true, pedido, alvo, aalDoToken(token));
   if (negado) return responder({ erro: negado }, negado === "usuário não encontrado" ? 404 : 403, origem);
 
   try {

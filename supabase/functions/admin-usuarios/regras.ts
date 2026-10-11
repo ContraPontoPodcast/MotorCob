@@ -4,14 +4,14 @@
 
 export const PAPEIS = ["admin", "planejamento", "operacao", "gestao"] as const;
 export type Papel = (typeof PAPEIS)[number];
-export const ACOES = ["listar", "convidar", "desativar", "reativar", "resetar_senha", "alterar_papel"] as const;
+export const ACOES = ["listar", "convidar", "desativar", "reativar", "resetar_senha", "alterar_papel", "resetar_2fa"] as const;
 export type Acao = (typeof ACOES)[number];
 
 // catálogo de permissões (igual à view permissoes_catalogo); ADMINISTRACAO só um Admin libera
 export const PERMISSOES = ["baixar_listas", "baixar_relatorios", "baixar_comite", "enviar_arquivos", "reenquadrar",
   "editar_orquestracao", "editar_credores", "editar_canais", "ver_acessos", "ver_auditoria", "gerenciar_usuarios",
-  "gerenciar_permissoes"] as const;
-export const ADMINISTRACAO = ["ver_acessos", "ver_auditoria", "gerenciar_usuarios", "gerenciar_permissoes"];
+  "gerenciar_permissoes", "ver_faturamento"] as const;
+export const ADMINISTRACAO = ["ver_acessos", "ver_auditoria", "gerenciar_usuarios", "gerenciar_permissoes", "ver_faturamento"];
 
 export interface Perfil {
   id: string;
@@ -34,7 +34,7 @@ export interface Pedido {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@<>"']{1,64}@[^\s@<>"']{1,190}\.[a-z]{2,}$/i;
-const PRECISA_ALVO: Acao[] = ["desativar", "reativar", "resetar_senha", "alterar_papel"];
+const PRECISA_ALVO: Acao[] = ["desativar", "reativar", "resetar_senha", "alterar_papel", "resetar_2fa"];
 
 export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string } {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { erro: "pedido inválido" };
@@ -78,15 +78,30 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
 
 const adminEquipe = (p: Perfil) => p.equipe && p.papel === "admin";
 
+/** Nível de verificação da sessão ("aal1" ou "aal2"), lido do token já validado pelo Supabase. */
+export function aalDoToken(token: string): string | null {
+  try {
+    const parte = token.split(".")[1];
+    const json = atob(parte.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(parte.length / 4) * 4, "="));
+    const aal = JSON.parse(json).aal;
+    return typeof aal === "string" ? aal : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Empresa em que o convite/lista vale: a do pedido (só equipe MotorCob escolhe) ou a de quem pede. */
 export function empresaAlvo(quem: Perfil, pedido: Pedido): number | null {
   return adminEquipe(quem) ? (pedido.empresa_id ?? quem.empresa_id) : quem.empresa_id;
 }
 
 /** Devolve o motivo da recusa, ou null se pode. */
-export function autorizar(quem: Perfil | null, podeGerenciar: boolean, pedido: Pedido, alvo: Perfil | null): string | null {
+export function autorizar(quem: Perfil | null, podeGerenciar: boolean, pedido: Pedido, alvo: Perfil | null,
+                          aal: string | null = null): string | null {
   if (!quem || !quem.ativo) return "usuário inativo";
   if (!podeGerenciar) return "sem permissão para gerenciar usuários";
+  // resetar a verificação de outra pessoa exige que quem pede tenha entrado com o código (aal2)
+  if (pedido.acao === "resetar_2fa" && aal !== "aal2") return "entre com o seu código de duas etapas para resetar o de outra pessoa";
   const equipe = adminEquipe(quem);
   if (pedido.acao === "listar" || pedido.acao === "convidar") {
     if (!equipe && pedido.empresa_id !== undefined && pedido.empresa_id !== quem.empresa_id) {

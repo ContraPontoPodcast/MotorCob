@@ -25,6 +25,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | 12 | `07_workspace/PROMPT_3_MINHA_CONTA.md` | Minha conta (dados e foto, permissões, senha, duas etapas, sessões) e Documentação | Site | 10º |
 | 13 | `07_workspace/PROMPT_4_SUPORTE_E_CREDORES.md` | Suporte do cliente (chamado, anexos, conversa) e Arquivo ou API nos credores | Site | 11º |
 | 14 | `07_workspace/PROMPT_5_CONSOLE_EQUIPE.md` | Console MotorCob: empresas, atendimento, fechamento de faturas, fornecedores e rotas | Site | 12º |
+| 15 | `05_usuarios_permissoes_seguranca/PROMPT_RESETAR_DUAS_ETAPAS.md` | Função admin-usuarios nova + botão "Resetar duas etapas" em Usuários | Supabase + Site | 13º |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
 (o mesmo como prompt para colar no Horizons, com menos de 100 linhas). Use um ou outro.
