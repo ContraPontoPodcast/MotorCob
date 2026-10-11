@@ -34,3 +34,5 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
    - **`mensageria_fornecedores`** (Ótima, Zenvia, Infobip, Sinch) e **`mensageria_rotas`** (principal e reserva).
      Credencial de fornecedor NUNCA no banco: só o nome do segredo.
    - Permissão nova **`ver_faturamento`** (padrão: Admin e Gestão). Pode rodar mais de uma vez.
+6. `06_fornecedor_email.sql` (mesmo conteúdo de `supabase/migrations/20261103000001_fornecedor_email.sql`) —
+   cadastra a **Locaweb** como fornecedor de e-mail e cria a rota padrão de e-mail por ela. Rode depois do SQL 5.
