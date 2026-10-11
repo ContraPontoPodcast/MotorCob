@@ -12,7 +12,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
-| 2 | `01_banco` | 6 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail | Supabase › SQL Editor | Hoje |
+| 2 | `01_banco` | 7 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria | Supabase › SQL Editor | Hoje |
 | 3 | `03_site_e_login` | Site público em "/", login novo, plataforma em "/inicio", fim do "/cadastro" | Site | 1º |
 | 4 | `04_sistema_linha_apple` | Visual do sistema: menu escuro, telas brancas, Lista do dia nova | Site | 2º |
 | 5 | `05_usuarios_permissoes_seguranca` | Menus por permissão, Permissões, Auditoria, páginas de senha, sessão | Site | 3º |
@@ -26,6 +26,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | 13 | `07_workspace/PROMPT_4_SUPORTE_E_CREDORES.md` | Suporte do cliente (chamado, anexos, conversa) e Arquivo ou API nos credores | Site | 11º |
 | 14 | `07_workspace/PROMPT_5_CONSOLE_EQUIPE.md` | Console MotorCob: empresas, atendimento, fechamento de faturas, fornecedores e rotas | Site | 12º |
 | 15 | `05_usuarios_permissoes_seguranca/PROMPT_RESETAR_DUAS_ETAPAS.md` | Função admin-usuarios nova + botão "Resetar duas etapas" em Usuários | Supabase + Site | 13º |
+| 16 | `07_workspace/PROMPT_6_MENSAGERIA.md` | Mensageria: lotes do dia (aprovar, pausar, retomar, cancelar), descadastros, modelo de e-mail, modo simulação | Site | 14º |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
 (o mesmo como prompt para colar no Horizons, com menos de 100 linhas). Use um ou outro.
@@ -37,7 +38,7 @@ Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com crit�
   passam pela Edge Function `admin-usuarios`, já publicada.
 - Permissão é garantida no banco (RLS + `pode()`); o site só esconde o que a pessoa não pode usar.
 - Erros em português, sem detalhe técnico. O login nunca diz se um e-mail existe.
-- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 346 testes de acesso).
+- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 378 testes de acesso).
 
 ## Já pronto (não refazer)
 Permissões por perfil e por usuário, auditoria, contatos do site, motivos agrupados da Lista do dia (após o SQL 2)

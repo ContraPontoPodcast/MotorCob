@@ -128,7 +128,8 @@ class SupabaseFalso:
                 if chaves:
                     t[:] = [x for x in t if [x.get(k) for k in chaves] != [l.get(k) for k in chaves]]
                 if "id" not in l and tabela in ("execucoes", "envios", "trilha", "estrategias", "clusters", "sugestoes",
-                                                    "mapeamento_arquivos", "ocorrencia_codigos"):
+                                                    "mapeamento_arquivos", "ocorrencia_codigos",
+                                                    "mensageria_lotes", "mensageria_mensagens"):
                     self.seq += 1
                     l = {"id": self.seq, **l}
                 t.append(l)
@@ -234,6 +235,23 @@ class TestSincronizar(unittest.TestCase):
         self._dia(date(2026, 10, 1))
         self.assertEqual(len([l for l in t["contratos_mes"] if l["competencia"] == "2026-10-01" and l["empresa_id"] == 1]),
                          len(alfa))
+
+    def test_lista_do_dia_vira_lote_da_mensageria_sem_contato_no_banco(self):
+        self.falso.tabelas["empresa_modulos"] = [{"empresa_id": 1, "modulo": "mensageria", "ativo": True,
+                                                  "canais": ["sms", "email"]}]
+        self._dia(date(2026, 9, 25))
+        t = self.falso.tabelas
+        lotes = [l for l in t.get("mensageria_lotes", []) if l["empresa_id"] == 1]
+        sms = (self.dados / "empresas" / "alfa" / "saida" / "2026-09-25" / "ids" / "sms.csv")
+        if not sms.exists():
+            self.skipTest("o exemplo não gerou SMS neste dia")
+        self.assertTrue(lotes)
+        self.assertTrue(all(l["modo"] == "simulado" and l["situacao"] in ("aguardando_aprovacao", "concluido")
+                            for l in lotes))
+        self.assertNotRegex(json.dumps(t.get("mensageria_mensagens", [])), r"\b119\d{8}\b")
+        n = len(t["mensageria_lotes"])
+        self._dia(date(2026, 9, 25))                                   # rodada repetida: não duplica
+        self.assertEqual(len(t["mensageria_lotes"]), n)
 
     def test_empresas_ficam_separadas(self):
         self._dia(date(2026, 9, 25))

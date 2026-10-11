@@ -41,6 +41,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261101000001_workspace.sql
     psql -d sb -f supabase/migrations/20261102000001_faturamento.sql
     psql -d sb -f supabase/migrations/20261103000001_fornecedor_email.sql
+    psql -d sb -f supabase/migrations/20261104000001_mensageria_envios.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -299,7 +300,7 @@ checar("operação não altera o calendário", True, f"update public.credores se
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
 # permissões por perfil (padrão MotorCob + ajuste do Admin da empresa) e auditoria
 checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas")
-checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 13)
+checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 14)
 checar("usuário inativo não tem permissão", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["inativo"], 0)
 checar("planejamento não ajusta permissões", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["plan"])
 checar("Admin libera Reenquadrar para a operação", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["admina"])
@@ -362,7 +363,7 @@ checar("convite: acessos do perfil Operação na empresa", True, "select string_
 checar("convite: Admin sempre com gerenciar usuários", True, "select permitido from public.permissoes_do_papel(papel => 'admin') where codigo='gerenciar_usuarios'", "authenticated", u["admina"], "t")
 checar("quem não gerencia usuários não lê acessos de perfil", True, "select count(*) from public.permissoes_do_papel(papel => 'operacao')", "authenticated", u["oper"], 0)
 checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
-checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 13)
+checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 14)
 checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
 # página comercial: mídia pública e formulário de contato (visitante só insere)
 checar("bucket site é público", True, "select public from storage.buckets where id='site'", "service_role", "t")
@@ -476,6 +477,49 @@ checar("rota padrão de e-mail pela Locaweb", True, "select fornecedor from publ
 checar("Locaweb não entra em rota de SMS", False, "insert into public.mensageria_rotas (canal,prioridade,fornecedor) values ('sms',3,'locaweb')", "authenticated", u["admin"])
 checar("ver_faturamento no catálogo", True, "select admin::text || gestao::text || operacao::text from public.permissoes_catalogo where codigo='ver_faturamento'", "authenticated", u["oper"], "truetruefalse")
 checar("auditoria registra o plano", True, "select count(*) > 0 from public.auditoria where tabela='planos_empresa'", "service_role", None, "t")
+# mensageria: lotes, mensagens sem contato, descadastro por hash, aprovação e modo simulado
+checar("hash do telefone ignora máscara e o 55", True, "select public.hash_destino('sms','+55 (11) 98888-7766') = public.hash_destino('sms','11988887766')", "service_role", None, "t")
+checar("hash do e-mail ignora maiúsculas e espaços", True, "select public.hash_destino('email',' Ana@Empresa.com ') = public.hash_destino('email','ana@empresa.com')", "service_role", None, "t")
+checar("hash bate com o do motor (sha256 hex)", True, "select public.hash_destino('sms','11988887766')", "service_role", None, "07957c85a7805d5b436a6f6d664cba6ecd2d97bd8a87a7f3cd515cf6b6f80294")
+r = sql("set role service_role; insert into public.mensageria_lotes (empresa_id,data,canal,modo,situacao,total) values "
+        f"({EA},(now() at time zone 'America/Sao_Paulo')::date,'sms','simulado','aguardando_aprovacao',3),"
+        f"({EB},(now() at time zone 'America/Sao_Paulo')::date,'sms','simulado','aguardando_aprovacao',1),"
+        f"({EA},'2025-01-02','email','simulado','aguardando_aprovacao',1)")
+assert r[0], r[2]
+_, LA, _ = sql(f"select id from public.mensageria_lotes where empresa_id={EA} and canal='sms'", "service_role")
+_, LB, _ = sql(f"select id from public.mensageria_lotes where empresa_id={EB}", "service_role")
+_, LV, _ = sql(f"select id from public.mensageria_lotes where empresa_id={EA} and canal='email'", "service_role")
+r = sql(f"set role service_role; insert into public.mensageria_mensagens (lote_id,empresa_id,id_cliente,destino_mascara,destino_hash) values ({LA},{EA},'C1','(11) 9••••-••66',public.hash_destino('sms','11988887766'))")
+assert r[0], r[2]
+checar("operação vê os lotes da empresa", True, "select count(*) from public.mensageria_lotes", "authenticated", u["oper"], 2)
+checar("empresa B não vê lote da A", True, "select count(*) from public.mensageria_lotes", "authenticated", u["operb"], 1)
+checar("mensagem não tem contato aberto", True, "select destino_mascara from public.mensageria_mensagens", "authenticated", u["oper"], "(11) 9••••-••66")
+checar("ninguém grava mensagem pelo site", False, f"insert into public.mensageria_mensagens (lote_id,empresa_id,id_cliente,destino_mascara,destino_hash) values ({LA},{EA},'X','x',repeat('a',64))", "authenticated", u["admina"])
+checar("ninguém muda lote direto", False, f"update public.mensageria_lotes set situacao='agendado' where id={LA}", "authenticated", u["admina"])
+checar("operação não aprova lote", False, f"select public.mudar_lote({LA},'aprovar')", "authenticated", u["oper"])
+checar("empresa B não aprova lote da A", False, f"select public.mudar_lote({LA},'aprovar')", "authenticated", u["operb"])
+checar("planejamento aprova o lote", True, f"select public.mudar_lote({LA},'aprovar')", "authenticated", u["plan"], "agendado")
+checar("aprovação registra quem aprovou", True, f"select aprovado_por = '{u['plan']}' from public.mensageria_lotes where id={LA}", "service_role", None, "t")
+checar("não aprova duas vezes", False, f"select public.mudar_lote({LA},'aprovar')", "authenticated", u["plan"])
+checar("pausa o lote agendado", True, f"select public.mudar_lote({LA},'pausar')", "authenticated", u["plan"], "pausado")
+checar("retoma o lote pausado", True, f"select public.mudar_lote({LA},'retomar')", "authenticated", u["plan"], "agendado")
+checar("lote de outro dia não é aprovado", False, f"select public.mudar_lote({LV},'aprovar')", "authenticated", u["plan"])
+checar("cancela o lote de outro dia", True, f"select public.mudar_lote({LV},'cancelar')", "authenticated", u["plan"], "cancelado")
+checar("cancelado não volta", False, f"select public.mudar_lote({LV},'retomar')", "authenticated", u["plan"])
+checar("ação desconhecida é recusada", False, f"select public.mudar_lote({LA},'apagar')", "authenticated", u["plan"])
+checar("cliente não liga o modo real", False, f"insert into public.mensageria_config (empresa_id,modo) values ({EA},'real')", "authenticated", u["admina"])
+checar("cliente desliga a aprovação de lotes", True, f"select public.definir_aprovacao_lotes({EA}, false); select aprovar_lotes::text || modo from public.mensageria_config where empresa_id={EA}", "authenticated", u["plan"], "falsesimulado")
+checar("operação não muda a aprovação", False, f"select public.definir_aprovacao_lotes({EA}, true)", "authenticated", u["oper"])
+checar("descadastro manual guarda só hash e máscara", True, f"select public.descadastrar_destino({EA},'sms','(11) 98888-7766'); select destino_mascara from public.mensageria_descadastros where empresa_id={EA}", "authenticated", u["plan"], "(11) ••••-••66")
+checar("descadastro casa com a mensagem pelo hash", True, f"select count(*) from public.mensageria_mensagens m join public.mensageria_descadastros d using (empresa_id, destino_hash) where m.lote_id={LA}", "authenticated", u["plan"], 1)
+checar("telefone inválido no descadastro é recusado", False, f"select public.descadastrar_destino({EA},'sms','123')", "authenticated", u["plan"])
+checar("e-mail inválido no descadastro é recusado", False, f"select public.descadastrar_destino({EA},'email','ana@')", "authenticated", u["plan"])
+checar("operação não descadastra", False, f"select public.descadastrar_destino({EA},'email','ana@empresa.com')", "authenticated", u["oper"])
+checar("empresa B não vê descadastro da A", True, "select count(*) from public.mensageria_descadastros", "authenticated", u["operb"], 0)
+checar("modelo de e-mail exige permissão de canais", False, f"insert into public.mensageria_modelos_email (empresa_id,remetente_nome,assunto,corpo) values ({EA},'Alfa','Sua fatura','Olá, temos uma condição para você.')", "authenticated", u["oper"])
+checar("planejamento com canais bloqueados não grava o modelo", False, f"insert into public.mensageria_modelos_email (empresa_id,remetente_nome,assunto,corpo) values ({EA},'Alfa','Sua fatura','Olá, temos uma condição para você.')", "authenticated", u["plan"])
+checar("Admin da empresa grava o modelo de e-mail", True, f"insert into public.mensageria_modelos_email (empresa_id,remetente_nome,assunto,corpo) values ({EA},'Alfa','Sua fatura','Olá, temos uma condição para você.')", "authenticated", u["admina"])
+checar("anônimo não vê lotes", False, "select * from public.mensageria_lotes", "anon")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
