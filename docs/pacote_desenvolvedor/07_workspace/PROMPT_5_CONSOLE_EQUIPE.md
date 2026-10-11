@@ -42,14 +42,22 @@ ATENDIMENTO (caixa de entrada em 3 colunas; no celular, uma de cada vez)
   responsavel: eu}. Botão "Assumir" quando sem responsável. Ficha da empresa abaixo: nome, modelo da Orquestração,
   chamados nos últimos 90 dias.
 
-FATURAMENTO (competência = mês anterior, com seletor de mês)
-- Para cada empresa com plano: rpc('previa_fatura', {empresa, competencia}) e a fatura existente em faturas.
-  Tabela: Empresa · Orquestração (valor + "por contrato · 14.230 × R$ 0,35" ou "mensalidade fixa") · Mensageria ·
-  Total · Situação (Prévia, ou o selo da fatura) · ação.
-- Prévia: botão "Fechar fatura" (confirmação com os itens) → rpc('fechar_fatura', {empresa, competencia}).
-  Mês corrente não fecha (o banco recusa: "Só dá para fechar mês que já terminou.").
-- Fatura fechada: "Abrir" mostra os itens e permite atualizar situacao (aberta, paga, vencida, cancelada),
-  paga_em, id_externo, link_boleto e link_nota_fiscal (precisam começar com https://). Valor e itens não mudam.
+FATURAMENTO (competência = mês anterior, com seletor de mês). Fluxo: gerar rascunhos → revisar ajustes → emitir.
+- Passos no topo (1 Medir · 2 Gerar rascunhos · 3 Revisar ajustes · 4 Emitir), o atual em destaque.
+- Botão "Gerar rascunhos de {mês}" → rpc('gerar_rascunhos', {competencia}) (cria só para quem tem plano e ainda
+  não tem fatura; o cliente NÃO vê rascunho). Mês corrente não fecha ("Só dá para fechar mês que já terminou.").
+- Tabela de from('faturas_painel').select('*, empresas(nome), fatura_itens(*), fatura_ajustes(*)')
+  .eq('competencia', mês): Empresa · Orquestração (valor do item + "por contrato · 14.230 × R$ 0,35" ou "mensalidade
+  fixa") · Mensageria · Ajustes (ajustes_total, com sinal) · Total (valor_total) · Vencimento · Situação
+  (situacao_atual: rascunho "Rascunho" cinza, aberta "Em aberto" laranja, vencida "Vencida" vermelho, paga "Paga"
+  verde, cancelada cinza) · "Abrir". Empresas com plano e sem fatura aparecem como "Prévia" (rpc previa_fatura).
+- Abrir (rascunho): itens + ajustes; formulário "Novo ajuste": Tipo (desconto "Desconto", credito "Crédito",
+  cobranca_extra "Cobrança extra"), Valor (R$), Motivo* (aparece na fatura do cliente) → rpc('ajustar_fatura',
+  {fatura, tipo, valor, motivo}) devolve o total novo; cada ajuste com "Remover" → rpc('remover_ajuste', {ajuste}).
+  Botões "Emitir fatura" (confirmação: "O cliente passa a ver esta fatura.") → rpc('emitir_fatura', {fatura}) e
+  "Cancelar rascunho" (update situacao 'cancelada'). Botão no topo "Emitir todos os rascunhos" (um rpc por fatura).
+- Abrir (emitida): itens e ajustes só leitura; atualizar situacao (paga, cancelada), paga_em, id_externo,
+  link_boleto e link_nota_fiscal (começam com https://). Valor, itens e ajustes não mudam depois de emitida.
 - Nota: "Boleto e nota fiscal são emitidos na ferramenta de cobrança; cole aqui o link e o código."
 
 FORNECEDORES

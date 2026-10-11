@@ -57,10 +57,12 @@ FATURAMENTO (com ver_faturamento)
   Valor fixo por mês (R$); Mínimo mensal (só por contrato, opcional); Vencimento (1 a 28). Salvar = upsert em
   planos_empresa (onConflict 'empresa_id'; mensalidade grava orquestracao_minimo 0). Aviso: "Vale a partir do próximo
   fechamento e fica na auditoria." Equipe também edita as tarifas (upsert tarifas_mensageria por item).
-- Faturas: from('faturas').select('*, fatura_itens(*)').eq('empresa_id', empresa).order('competencia',
-  {ascending:false}). Linha: mês por extenso, valor, selo (aberta "Em aberto" laranja, paga "Paga" verde, vencida
-  "Vencida" vermelho, cancelada cinza) + "vence em …"/"paga em …", botões "Boleto" (link_boleto) e "Nota fiscal"
-  (link_nota_fiscal) abrindo em nova aba (desabilitados sem link). Clique na linha abre os itens.
+- Faturas: from('faturas_painel').select('*, fatura_itens(*), fatura_ajustes(*)').eq('empresa_id', empresa)
+  .order('competencia', {ascending:false}) (rascunho só a equipe vê). Linha: mês por extenso, valor_total, selo de
+  situacao_atual (rascunho "Rascunho" cinza, aberta "Em aberto" laranja, vencida "Vencida" vermelho, paga "Paga"
+  verde, cancelada cinza) + "vence em …"/"paga em …", botões "Boleto" (link_boleto) e "Nota fiscal"
+  (link_nota_fiscal) em nova aba (desabilitados sem link). Clique abre itens e ajustes (desconto, crédito ou
+  cobrança extra, com o motivo).
 
 Valores em reais (R$ 1.234,56; preços unitários com até 3 casas). Sem rolagem lateral em 1440, 1024 e 390px.
 ```
