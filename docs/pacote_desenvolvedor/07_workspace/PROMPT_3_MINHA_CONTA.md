@@ -31,8 +31,9 @@ SEGURANÇA
    encerrá-las abaixo."
 2. Verificação em duas etapas: mfa.listFactors(). Ligada: selo verde "Ligada", "Aplicativo autenticador · desde
    {data}", botão "Desligar" (Admin não pode desligar: "Para Admin a verificação é obrigatória."; demais: confirmar
-   com código de 6 dígitos e mfa.unenroll). Desligada: botão "Ligar" → mfa.enroll({factorType:'totp'}), mostrar o
-   QR e a chave para copiar, campo de 6 dígitos → challenge + verify. Sucesso: "Verificação em duas etapas ligada."
+   com código de 6 dígitos e mfa.unenroll). Desligada: botão "Ligar" → antes apague fatores pendentes (listFactors().all com status
+   'unverified' → unenroll), depois mfa.enroll({factorType:'totp', friendlyName:`MotorCob ${data e hora}`}), QR e
+   chave para copiar, código de 6 dígitos → challengeAndVerify; Cancelar = unenroll do pendente. Sucesso: "Verificação em duas etapas ligada."
 3. Sessões: "Este dispositivo" com navegador e sistema (navigator.userAgentData ou userAgent, resumido: "Mac ·
    Safari") e "Ativa agora". Botão secundário "Sair de todos os outros dispositivos" → signOut({scope:'others'})
    e aviso "Pronto. Os outros dispositivos vão pedir login de novo." Botão "Sair deste dispositivo" → signOut().
