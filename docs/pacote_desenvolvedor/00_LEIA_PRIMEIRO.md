@@ -20,6 +20,11 @@ Faça **na ordem**; cada passo depende do anterior.
 | 7 | `03_site_e_login/PROMPT_SITE_V3_CARROSSEL.md` | Site v3: carrossel com as 6 funções e uma seção por função (Orquestração, Mensageria, Arquivo ou API, Workspace) | Site | 5º |
 | 8 | `03_site_e_login/PROMPT_CARROSSEL_ESCURO.md` | Carrossel em bloco escuro | Site | 6º |
 | 9 | `03_site_e_login/PROMPT_SITE_VIVO.md` | Carrossel passa sozinho; Lista do dia e personas com números em movimento (só no site) | Site | 7º |
+| 10 | `07_workspace/PROMPT_1_INICIO_E_MENU.md` | Workspace: início, barra do topo, seletor de empresa, menu do usuário | Site | 8º |
+| 11 | `07_workspace/PROMPT_2_EMPRESA.md` | Empresa: cadastro, contatos, membros, módulos, faturamento | Site | 9º |
+| 12 | `07_workspace/PROMPT_3_MINHA_CONTA.md` | Minha conta (dados e foto, permissões, senha, duas etapas, sessões) e Documentação | Site | 10º |
+| 13 | `07_workspace/PROMPT_4_SUPORTE_E_CREDORES.md` | Suporte do cliente (chamado, anexos, conversa) e Arquivo ou API nos credores | Site | 11º |
+| 14 | `07_workspace/PROMPT_5_CONSOLE_EQUIPE.md` | Console MotorCob: empresas, atendimento, fechamento de faturas, fornecedores e rotas | Site | 12º |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
 (o mesmo como prompt para colar no Horizons, com menos de 100 linhas). Use um ou outro.
