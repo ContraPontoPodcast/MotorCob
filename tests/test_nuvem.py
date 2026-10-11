@@ -219,6 +219,22 @@ class TestSincronizar(unittest.TestCase):
         self.assertIsInstance(linha["saldo"], float)
         self.assertGreaterEqual(linha["dias_atraso"], 0)
 
+    def test_contratos_do_mes_para_o_faturamento(self):
+        self._dia(date(2026, 9, 25))
+        t = self.falso.tabelas
+        alfa = [l for l in t["contratos_mes"] if l["empresa_id"] == 1]
+        self.assertTrue(alfa)
+        self.assertEqual({(l["competencia"], l["credor_id"]) for l in alfa}, {("2026-09-01", 0)})
+        self.assertEqual(len(alfa), len({l["contrato"] for l in alfa}))
+        self.assertNotRegex(json.dumps(alfa), r"\b\d{11}\b")            # nenhum CPF
+        # dias seguintes do mesmo mês não duplicam; o mês seguinte conta de novo
+        n = len(t["contratos_mes"])
+        self._dia(date(2026, 9, 26))
+        self.assertEqual(len(t["contratos_mes"]), n)
+        self._dia(date(2026, 10, 1))
+        self.assertEqual(len([l for l in t["contratos_mes"] if l["competencia"] == "2026-10-01" and l["empresa_id"] == 1]),
+                         len(alfa))
+
     def test_empresas_ficam_separadas(self):
         self._dia(date(2026, 9, 25))
         t = self.falso.tabelas

@@ -23,3 +23,14 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
    **`chamados`** (10 MB), **`chamados`** e **`chamado_mensagens`** com protocolo `MC-AAAA-000000`, nota interna só
    para a equipe, reabertura quando o cliente responde e `resolver_chamado(id)`, e **`credores.entrada_carga`**
    (`arquivo` ou `api`, padrão `arquivo`). Pode rodar mais de uma vez. Não muda nada que já está no ar.
+5. `05_faturamento.sql` (mesmo conteúdo de `supabase/migrations/20261102000001_faturamento.sql`) — faturamento:
+   - **`planos_empresa`**: o modelo da Orquestração de cada empresa, definido na negociação: `por_contrato` (preço por
+     contrato distinto no mês, com mínimo mensal opcional) ou `mensalidade` (valor fixo). Só a equipe grava.
+   - **`tarifas_mensageria`**: preço por mensagem de cada tipo (SMS, e-mail, RCS Basic/Single/Conversacional,
+     WhatsApp). A mensageria é sempre por consumo.
+   - **`contratos_mes`** (a rotina grava) e **`consumo_mensageria`**: medição do mês; view **`consumo_mes`** junta tudo.
+   - **`previa_fatura(empresa, competencia)`**: a conta do mês item a item; **`fechar_fatura(...)`** congela em
+     **`faturas`** e **`fatura_itens`** (só o Admin da equipe). Boleto e nota ficam na ferramenta de cobrança.
+   - **`mensageria_fornecedores`** (Ótima, Zenvia, Infobip, Sinch) e **`mensageria_rotas`** (principal e reserva).
+     Credencial de fornecedor NUNCA no banco: só o nome do segredo.
+   - Permissão nova **`ver_faturamento`** (padrão: Admin e Gestão). Pode rodar mais de uma vez.
