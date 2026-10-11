@@ -1,6 +1,6 @@
-# Workspace no Horizons (5 prompts)
+# Workspace no Horizons (6 prompts)
 
-Rode na ordem, depois dos SQL 4, 5 e 6 (pasta 01_banco). Cada prompt tem menos de 100 linhas e é independente
+Rode na ordem, depois dos SQL 4, 5, 6 e 7 (pasta 01_banco). Cada prompt tem menos de 100 linhas e é independente
 do arquivo: cole o bloco inteiro no Horizons e publique antes do próximo.
 
 1. `PROMPT_1_INICIO_E_MENU.md` — /workspace vira a entrada depois do login; barra do topo escura com seletor de
@@ -13,5 +13,7 @@ do arquivo: cole o bloco inteiro no Horizons e publique antes do próximo.
    Arquivo ou API em cada credor.
 5. `PROMPT_5_CONSOLE_EQUIPE.md` — /console da equipe MotorCob: empresas (nova empresa com convite do Admin),
    atendimento com nota interna e prazo, fechamento das faturas, fornecedores e rotas.
+6. `PROMPT_6_MENSAGERIA.md` — /mensageria: lotes do dia montados pelo motor (aprovar, pausar, retomar,
+   cancelar), histórico, descadastros, modelo de e-mail e a faixa de simulação.
 
 Referência visual: protótipo do Workspace (link na página de prompts). Dados do protótipo são fictícios.

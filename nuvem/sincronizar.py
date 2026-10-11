@@ -740,6 +740,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
         reg_canal, info_canal = retorno_canal.preparar(sb, eid, cid, pasta, regras_de(canais, u.get("regras_retorno")),
                                                        out)
+        from nuvem import mensageria
+        reg_canal = list(reg_canal or []) + mensageria.registros(pasta)   # entregue/inexistente/SAIR dos envios
         segurados = [(e, d) for e, d in baixados if mapeamento.segurado(d)]
         baixados = [(e, d) for e, d in baixados if not mapeamento.segurado(d)]
         if entrada is not None:
@@ -794,6 +796,10 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                 out(f"  faturamento: {n_ct} contratos novos no mês")
         except Exception as e:  # noqa: BLE001
             out(f"  aviso: medição de contratos não gravada ({str(e)[:120]})")
+        try:   # lotes da mensageria (SMS e e-mail) a partir da Lista do dia; nunca derruba a rodada
+            mensageria.criar_lotes(sb, eid, cid, pasta, data, canais, out)
+        except Exception as e:  # noqa: BLE001
+            out(f"  aviso: lotes da mensageria não criados ({str(e)[:120]})")
 
         if aviso_layout:
             r["alertas"] = [aviso_layout] + r["alertas"]
@@ -1173,7 +1179,8 @@ def _atualizar_repo():
 
 def plantao(dados: Path, comando: list[str], sb: Supabase | None = None, out=print, empresa: str | None = None,
             intervalo: float = 5, completo: float = 60, parar=None, dormir=time.sleep, relogio=time.monotonic,
-            versao=_versao_repo, atualizar=_atualizar_repo, a_cada_atualizar: float = 900) -> str:
+            versao=_versao_repo, atualizar=_atualizar_repo, a_cada_atualizar: float = 900,
+            comando_mensageria: list[str] | None = None) -> str:
     """Vigia em tempo real (processo que fica no ar, mantido pelo launchd): a cada `intervalo`
     segundos faz a consulta leve de arquivo novo e, se houver, chama `comando` (rodar_dia.sh
     --vigiar) na hora; a cada `completo` segundos chama o comando de qualquer jeito, para pegar
@@ -1212,6 +1219,8 @@ def plantao(dados: Path, comando: list[str], sb: Supabase | None = None, out=pri
                 out(f"{datetime.now():%F %T} arquivo novo no site: rodando agora")
             ultimo, visto = agora, novo
             subprocess.run(comando, check=False)
+            if comando_mensageria:      # envio dos lotes no horário (não depende de carga nova)
+                subprocess.run(comando_mensageria, check=False)
             if inicio and versao() != inicio:
                 out("motor atualizado: reiniciando o plantão")
                 return "atualizado"
@@ -1298,11 +1307,11 @@ def sincronizar_comite(dados: Path, mes: str, sb: Supabase | None = None, out=pr
     return resultados
 
 
-def _travar(dados: Path, esperar: bool):
-    """Uma rodada por vez (agendamento diário e vigia não se atropelam). Devolve o arquivo
-    travado, ou None se outra rodada estiver em andamento e esperar=False."""
+def _travar(dados: Path, esperar: bool, nome: str = ".rodando.lock"):
+    """Uma rodada por vez (agendamento diário e vigia não se atropelam; a mensageria tem a trava dela).
+    Devolve o arquivo travado, ou None se outra rodada estiver em andamento e esperar=False."""
     import fcntl
-    arq = Path(dados) / "logs" / ".rodando.lock"
+    arq = Path(dados) / "logs" / nome
     arq.parent.mkdir(parents=True, exist_ok=True)
     f = open(arq, "w")
     try:
@@ -1315,7 +1324,7 @@ def _travar(dados: Path, esperar: bool):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("modo", choices=["dia", "comite", "vigiar", "plantao"])
+    ap.add_argument("modo", choices=["dia", "comite", "vigiar", "plantao", "mensageria"])
     ap.add_argument("--checar", action="store_true", help="vigiar: só diz se há carga nova (saída 0) ou não (3)")
     ap.add_argument("--dados", type=Path, default=Path(os.environ.get("MOTORCOB_DADOS", Path.home() / "MotorCob-dados")))
     ap.add_argument("--data", type=date.fromisoformat, default=date.today())
@@ -1326,7 +1335,14 @@ def main():
         if a.modo == "plantao":
             intervalo = float(os.environ.get("MOTORCOB_PLANTAO_SEGUNDOS", "5"))
             plantao(a.dados, [str(RAIZ / "scripts" / "rodar_dia.sh"), "--vigiar"], empresa=a.empresa,
-                    intervalo=intervalo, out=lambda m: print(m, flush=True))
+                    intervalo=intervalo, out=lambda m: print(m, flush=True),
+                    comando_mensageria=[sys.executable, "-m", "nuvem.sincronizar", "mensageria", "--dados", str(a.dados)])
+            return
+        if a.modo == "mensageria":
+            from nuvem import mensageria
+            trava = _travar(a.dados, esperar=False, nome="mensageria.trava")
+            if trava is not None:
+                mensageria.processar(Supabase(*carregar_config(a.dados)), a.dados, out=lambda m: print(m, flush=True))
             return
         if a.modo == "vigiar" and a.checar:
             sys.exit(0 if empresas_com_carga_nova(a.dados, Supabase(*carregar_config(a.dados)), a.empresa, a.data)

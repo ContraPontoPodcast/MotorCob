@@ -10,7 +10,7 @@ export type Acao = (typeof ACOES)[number];
 // catálogo de permissões (igual à view permissoes_catalogo); ADMINISTRACAO só um Admin libera
 export const PERMISSOES = ["baixar_listas", "baixar_relatorios", "baixar_comite", "enviar_arquivos", "reenquadrar",
   "editar_orquestracao", "editar_credores", "editar_canais", "ver_acessos", "ver_auditoria", "gerenciar_usuarios",
-  "gerenciar_permissoes", "ver_faturamento"] as const;
+  "gerenciar_permissoes", "ver_faturamento", "enviar_mensagens"] as const;
 export const ADMINISTRACAO = ["ver_acessos", "ver_auditoria", "gerenciar_usuarios", "gerenciar_permissoes", "ver_faturamento"];
 
 export interface Perfil {

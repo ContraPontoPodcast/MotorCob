@@ -36,3 +36,8 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
    - Permissão nova **`ver_faturamento`** (padrão: Admin e Gestão). Pode rodar mais de uma vez.
 6. `06_fornecedor_email.sql` (mesmo conteúdo de `supabase/migrations/20261103000001_fornecedor_email.sql`) —
    cadastra a **Locaweb** como fornecedor de e-mail e cria a rota padrão de e-mail por ela. Rode depois do SQL 5.
+7. `07_mensageria_envios.sql` (mesmo conteúdo de `supabase/migrations/20261104000001_mensageria_envios.sql`) —
+   Mensageria: lotes do dia por canal (SMS e e-mail), mensagens SEM contato e sem texto (só ID do cliente, destino
+   mascarado e hash), descadastros por hash, modelo de e-mail, aprovação de lote (`mudar_lote`), modo **simulado**
+   (padrão: não fala com fornecedor e não cobra) e a permissão nova **`enviar_mensagens`** (Admin e Planejamento).
+   Pode rodar mais de uma vez.
