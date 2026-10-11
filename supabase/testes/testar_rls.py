@@ -40,6 +40,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261031000001_templates_canais.sql
     psql -d sb -f supabase/migrations/20261101000001_workspace.sql
     psql -d sb -f supabase/migrations/20261102000001_faturamento.sql
+    psql -d sb -f supabase/migrations/20261103000001_fornecedor_email.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -470,6 +471,9 @@ checar("prioridade repetida no mesmo canal é recusada", False, "insert into pub
 checar("fornecedor sem o canal é recusado", False, "insert into public.mensageria_rotas (canal,prioridade,fornecedor) values ('rcs',1,'sinch')", "authenticated", u["admin"])
 checar("cliente não vê rotas nem custos", True, "select count(*) from public.mensageria_rotas", "authenticated", u["admina"], 0)
 checar("segredo_ref não aceita credencial com espaço", False, "update public.mensageria_fornecedores set segredo_ref='Bearer abc 123' where codigo='zenvia'", "authenticated", u["admin"])
+checar("Locaweb é o fornecedor de e-mail", True, "select string_agg(codigo, ',') from public.mensageria_fornecedores where 'email' = any(canais)", "authenticated", u["admin"], "locaweb")
+checar("rota padrão de e-mail pela Locaweb", True, "select fornecedor from public.mensageria_rotas where empresa_id is null and canal='email' and prioridade=1", "authenticated", u["admin"], "locaweb")
+checar("Locaweb não entra em rota de SMS", False, "insert into public.mensageria_rotas (canal,prioridade,fornecedor) values ('sms',3,'locaweb')", "authenticated", u["admin"])
 checar("ver_faturamento no catálogo", True, "select admin::text || gestao::text || operacao::text from public.permissoes_catalogo where codigo='ver_faturamento'", "authenticated", u["oper"], "truetruefalse")
 checar("auditoria registra o plano", True, "select count(*) > 0 from public.auditoria where tabela='planos_empresa'", "service_role", None, "t")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
