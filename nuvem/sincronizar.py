@@ -787,6 +787,13 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 calendario=u.get("calendario"), retornos_canal=reg_canal,
                                 regras_retorno=u.get("regras_retorno"), frases=frases)
         _guardar_compartilhado(pasta_emp, u, r, data)
+        try:   # medição para o faturamento por contrato; nunca derruba a rodada
+            from nuvem import faturamento
+            n_ct = faturamento.publicar_contratos(sb, eid, cid, pasta, data)
+            if n_ct:
+                out(f"  faturamento: {n_ct} contratos novos no mês")
+        except Exception as e:  # noqa: BLE001
+            out(f"  aviso: medição de contratos não gravada ({str(e)[:120]})")
 
         if aviso_layout:
             r["alertas"] = [aviso_layout] + r["alertas"]
