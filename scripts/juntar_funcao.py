@@ -1,13 +1,20 @@
-"""Junta index.ts + regras.ts da função admin-usuarios num arquivo só (para colar no editor do Supabase).
+"""Junta index.ts + regras.ts de uma Edge Function num arquivo só (para colar no editor do Supabase).
 
     python3 scripts/juntar_funcao.py > MotorCob_funcao_admin-usuarios.ts
+    python3 scripts/juntar_funcao.py api > MotorCob_funcao_api.ts
 """
+import sys
 from pathlib import Path
 
-PASTA = Path(__file__).resolve().parent.parent / "supabase" / "functions" / "admin-usuarios"
+NOME = sys.argv[1] if len(sys.argv) > 1 else "admin-usuarios"
+PASTA = Path(__file__).resolve().parent.parent / "supabase" / "functions" / NOME
 regras = (PASTA / "regras.ts").read_text(encoding="utf-8")
 index = (PASTA / "index.ts").read_text(encoding="utf-8")
-linhas = [l for l in index.splitlines() if 'from "./regras.ts"' not in l]
+# o import de ./regras.ts pode ocupar várias linhas: some com ele inteiro
+inicio = next(i for i in range(len(index)) if index.startswith("import ", i) and "./regras.ts" in index[i:index.find(";", i)])
+fim = index.find(";", inicio) + 1
+index = index[:inicio] + index[fim:].lstrip("\n")
+linhas = index.splitlines()
 cab, corpo = [], []
 for l in linhas:
     (cab if not corpo and (l.startswith("//") or l.startswith("import ")) else corpo).append(l)

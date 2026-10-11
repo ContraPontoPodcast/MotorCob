@@ -42,6 +42,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261102000001_faturamento.sql
     psql -d sb -f supabase/migrations/20261103000001_fornecedor_email.sql
     psql -d sb -f supabase/migrations/20261104000001_mensageria_envios.sql
+    psql -d sb -f supabase/migrations/20261105000001_api_tokens.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -300,7 +301,7 @@ checar("operação não altera o calendário", True, f"update public.credores se
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
 # permissões por perfil (padrão MotorCob + ajuste do Admin da empresa) e auditoria
 checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas")
-checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 14)
+checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 15)
 checar("usuário inativo não tem permissão", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["inativo"], 0)
 checar("planejamento não ajusta permissões", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["plan"])
 checar("Admin libera Reenquadrar para a operação", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["admina"])
@@ -363,7 +364,7 @@ checar("convite: acessos do perfil Operação na empresa", True, "select string_
 checar("convite: Admin sempre com gerenciar usuários", True, "select permitido from public.permissoes_do_papel(papel => 'admin') where codigo='gerenciar_usuarios'", "authenticated", u["admina"], "t")
 checar("quem não gerencia usuários não lê acessos de perfil", True, "select count(*) from public.permissoes_do_papel(papel => 'operacao')", "authenticated", u["oper"], 0)
 checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
-checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 14)
+checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 15)
 checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
 # página comercial: mídia pública e formulário de contato (visitante só insere)
 checar("bucket site é público", True, "select public from storage.buckets where id='site'", "service_role", "t")
@@ -520,6 +521,28 @@ checar("modelo de e-mail exige permissão de canais", False, f"insert into publi
 checar("planejamento com canais bloqueados não grava o modelo", False, f"insert into public.mensageria_modelos_email (empresa_id,remetente_nome,assunto,corpo) values ({EA},'Alfa','Sua fatura','Olá, temos uma condição para você.')", "authenticated", u["plan"])
 checar("Admin da empresa grava o modelo de e-mail", True, f"insert into public.mensageria_modelos_email (empresa_id,remetente_nome,assunto,corpo) values ({EA},'Alfa','Sua fatura','Olá, temos uma condição para você.')", "authenticated", u["admina"])
 checar("anônimo não vê lotes", False, "select * from public.mensageria_lotes", "anon")
+# API: tokens com escopo, hash no banco, módulo e permissão
+checar("sem o módulo API não cria token", False, f"select public.criar_token_api({EA},'ERP',array['cargas:enviar'])", "authenticated", u["admina"])
+checar("equipe liga o módulo API", True, f"insert into public.empresa_modulos (empresa_id,modulo) values ({EA},'api') on conflict do nothing", "authenticated", u["admin"])
+checar("operação não cria token", False, f"select public.criar_token_api({EA},'ERP',array['cargas:enviar'])", "authenticated", u["oper"])
+checar("escopo desconhecido é recusado", False, f"select public.criar_token_api({EA},'ERP',array['tudo'])", "authenticated", u["admina"])
+checar("validade fora de 1 a 365 é recusada", False, f"select public.criar_token_api({EA},'ERP',array['lista:ler'],null,0)", "authenticated", u["admina"])
+checar("credor de outra empresa é recusado", False, f"select public.criar_token_api({EA},'ERP',array['lista:ler'],array[{CX}+99999])", "authenticated", u["admina"])
+ok_tok, TOK, err_tok = sql(f"select public.criar_token_api({EA},'ERP Alfa',array['cargas:enviar','lista:ler','cargas:enviar'],array[{CX}],30)", "authenticated", u["admina"])
+checar("Admin cria o token e vê uma vez (mc_ + 64 hex)", True, f"select '{TOK}' ~ '^mc_[0-9a-f]{{64}}$'", "service_role", None, "t")
+checar("banco guarda só o hash do token", True, f"select count(*) from public.api_tokens where hash = encode(sha256(convert_to('{TOK}','UTF8')),'hex') and prefixo = left('{TOK}',11)", "service_role", None, 1)
+checar("escopos sem repetição", True, "select array_to_string(escopos, ',') from public.api_tokens", "service_role", None, "cargas:enviar,lista:ler")
+checar("site não lê o hash", False, "select hash from public.api_tokens", "authenticated", u["admina"])
+checar("Admin vê o prefixo e a validade", True, "select prefixo = left('" + TOK + "',11) from public.api_tokens", "authenticated", u["admina"], "t")
+checar("operação não vê os tokens", True, "select count(*) from public.api_tokens", "authenticated", u["oper"], 0)
+checar("empresa B não vê token da A", True, "select count(*) from public.api_tokens", "authenticated", u["operb"], 0)
+checar("ninguém grava token direto", False, f"insert into public.api_tokens (empresa_id,nome,prefixo,hash,escopos,criado_por,expira_em) values ({EA},'x','mc_00000000',repeat('a',64),array['lista:ler'],'{u['admina']}',now())", "authenticated", u["admina"])
+checar("limite por minuto conta as chamadas", True, "select public.contar_chamada_api((select id from public.api_tokens limit 1)); select public.contar_chamada_api((select id from public.api_tokens limit 1))", "service_role", None, 2)
+checar("site não mexe no contador", False, "select public.contar_chamada_api(1)", "authenticated", u["admina"])
+checar("auditoria registra o token sem o hash", True, "select count(*) from public.auditoria where tabela='api_tokens' and not (mudou ? 'hash')", "service_role", None, 1)
+checar("operação não revoga", False, "select public.revogar_token_api((select id from public.api_tokens limit 1))", "authenticated", u["oper"])
+checar("Admin revoga o token", True, "select public.revogar_token_api((select id from public.api_tokens limit 1)); select (revogado_em is not null)::text from public.api_tokens", "authenticated", u["admina"], "true")
+checar("não revoga duas vezes", False, "select public.revogar_token_api((select id from public.api_tokens limit 1))", "authenticated", u["admina"])
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
