@@ -12,10 +12,11 @@ Faça **na ordem**; cada passo depende do anterior.
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
-| 2 | `01_banco` | 2 SQLs: contato do site + Lista do dia agrupada | Supabase › SQL Editor | Hoje |
+| 2 | `01_banco` | 3 SQLs: contato do site, Lista do dia agrupada, templates | Supabase › SQL Editor | Hoje |
 | 3 | `03_site_e_login` | Site público em "/", login novo, plataforma em "/inicio", fim do "/cadastro" | Site | 1º |
 | 4 | `04_sistema_linha_apple` | Visual do sistema: menu escuro, telas brancas, Lista do dia nova | Site | 2º |
 | 5 | `05_usuarios_permissoes_seguranca` | Menus por permissão, Permissões, Auditoria, páginas de senha, sessão | Site | 3º |
+| 6 | `04_sistema_linha_apple/PROMPT_TEMPLATES.md` | WhatsApp/RCS com template (busca); discador, e-mail e bureau sem frase | Site | 4º |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
 (o mesmo como prompt para colar no Horizons, com menos de 100 linhas). Use um ou outro.
@@ -39,7 +40,8 @@ Permissões por perfil e por usuário, auditoria, contatos do site, motivos agru
 - [ ] `/cadastro` redireciona para `/login` e o Supabase recusa cadastro novo.
 - [ ] Contato grava em `contatos_site`; o visitante não lê a tabela.
 - [ ] Sistema com menu escuro, telas brancas, fonte do sistema; champanhe só no símbolo; sem azul-petróleo nem âmbar.
-- [ ] Lista do dia com os 4 grupos vindos de `motivos_hoje`; Orquestração com canais coloridos e bolinha de frase.
+- [ ] Lista do dia com os 4 grupos vindos de `motivos_hoje`; Orquestração com canais coloridos.
+- [ ] WhatsApp e RCS escolhem template com busca; SMS e Agente virtual, frase; Discador, E-mail e Enriquecimento sem campo.
 - [ ] Operação não vê menus de configuração; Admin vê Usuários, Permissões e Auditoria.
 - [ ] Links de convite e "esqueci a senha" abrem a página de criar senha.
 - [ ] Sem rolagem lateral em 1440, 1024 e 390 px, no Mac e no Windows.

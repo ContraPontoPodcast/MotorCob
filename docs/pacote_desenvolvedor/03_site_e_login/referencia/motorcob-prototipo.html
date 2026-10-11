@@ -522,6 +522,23 @@ body.sem-notas .revisao { display: none }
   .site-claro .decisao li::after { top: 26px; bottom: -14px; left: 4px; right: auto; width: 1px; height: auto }
   .site-claro .decisao li span { font-size: 13px } .site-claro .decisao li b { margin-top: 0; font-size: 14px }
 }
+
+/* seletor de template / frase */
+.claro .dia .acao .fr[data-tipo="template"] svg { fill: none; stroke: currentColor; stroke-width: 2.4 }
+.modal { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.32); display: grid; place-items: center; padding: 16px }
+.modal[hidden] { display: none }
+.modal.claro .caixa { width: min(520px, 100%); max-height: min(640px, 90vh); display: flex; flex-direction: column; background: #FFFFFF; border-radius: 16px; box-shadow: 0 24px 64px -16px rgba(0,0,0,.35); padding: 20px; gap: 14px }
+.claro .m-cab { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start }
+.claro .m-cab h2 { font-size: 20px } .claro .m-cab p { color: var(--mc-label-2); font-size: 13px; margin-top: 2px }
+.claro .m-fechar { width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--mc-fill-2); color: var(--mc-label); font-size: 20px; line-height: 1; cursor: pointer }
+.claro .m-busca { width: 100%; flex: none }
+.claro .m-lista { overflow-y: auto; display: grid; gap: 2px; margin-inline: -8px }
+.claro .m-lista button { text-align: left; border: 0; background: none; border-radius: 10px; padding: 10px 12px; cursor: pointer; display: grid; gap: 2px; font: inherit; color: var(--mc-label) }
+.claro .m-lista button:hover, .claro .m-lista button[aria-selected="true"] { background: var(--mc-fill) }
+.claro .m-lista button[aria-selected="true"] b::after { content: " ✓"; color: var(--mc-green-text) }
+.claro .m-lista b { font-weight: 600; font-size: 15px } .claro .m-lista .cod { font-size: 12px; color: var(--mc-label-2) } .claro .m-lista .pre { font-size: 13px; color: var(--mc-label-2) }
+.claro .m-lista .vazio { color: var(--mc-label-2); padding: 12px }
+.claro .m-rod { display: flex; justify-content: flex-end }
 </style>
 
 <!-- símbolos -->
@@ -704,6 +721,14 @@ body.sem-notas .revisao { display: none }
   </div>
 </div>
 
+<div class="modal claro" id="modalMsg" hidden role="dialog" aria-modal="true" aria-labelledby="mTit">
+  <div class="caixa">
+    <div class="m-cab"><div><h2 id="mTit">Escolher template</h2><p id="mSub">WhatsApp · templates aprovados no provedor</p></div><button type="button" class="m-fechar" id="mFechar" aria-label="Fechar">×</button></div>
+    <label class="busca m-busca" for="mBusca"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="mBusca" placeholder="Buscar por nome ou código" autocomplete="off"></label>
+    <div class="m-lista" id="mLista" role="listbox" aria-label="Resultados"></div>
+    <div class="m-rod"><button type="button" class="btn-secondary" id="mSem">Sem template</button></div>
+  </div>
+</div>
 <button class="btn-secondary" id="notas" type="button" aria-pressed="true" style="position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:60;height:36px;font-size:13px">Notas: ligadas</button>
 
 <script>
@@ -780,7 +805,7 @@ orquestracao: () => `
   <div class="faixa"><button type="button" aria-expanded="false"><span class="tt"><b>Deu CPC · CPC A e CPC B</b><small class="num">Canal do CPC no telefone Hot · reserva WhatsApp › SMS › Discador · 3 tentativas</small></span><span class="liga">Ligado</span>${ICO.seta}</button><div class="corpo"><p class="muted">Frase do canal do CPC por canal e por CPC A/B, ordem de reserva e reforço.</p></div></div>
   <div class="faixa"><button type="button" aria-expanded="false"><span class="tt"><b>Não CPC · ciclo que se repete</b><small class="num">Ciclo de 8 dias × 3 · G-dia1 SMS · G-dia4 Discador</small></span><span class="liga">Ligado</span>${ICO.seta}</button><div class="corpo"><p class="muted">Grade do ciclo, igual à do cliente novo.</p></div></div>
   <div class="faixa"><button type="button" aria-expanded="false"><span class="tt"><b>Clientes em acordo · preventivo e quebra</b><small class="num">Preventivo D-3, D0 · Quebra D+1, D+3 · carência 2 dias</small></span><span class="liga">Ligado</span>${ICO.seta}</button><div class="corpo"><p class="muted">Dias antes do vencimento e depois da quebra.</p></div></div>
-  <div class="faixa"><button type="button" aria-expanded="false"><span class="tt"><b>Como vai funcionar</b><small class="num">5 dias com ação · 2 ações sem frase · 0 avisos</small></span>${ICO.seta}</button><div class="corpo"><p class="muted">Resumo da estratégia em cartões por faixa.</p></div></div>`,
+  <div class="faixa"><button type="button" aria-expanded="false"><span class="tt"><b>Como vai funcionar</b><small class="num">4 dias com ação · 1 sem template · 1 sem frase</small></span>${ICO.seta}</button><div class="corpo"><p class="muted">Resumo da estratégia em cartões por faixa.</p></div></div>`,
 personas: () => `
   <div class="cab"><div><h1>Personas</h1><p class="apoio">O Analista mede o CPC por real gasto em cada canal. Com evidência firme, o Estrategista sugere a mudança.</p></div><div class="acoes"></div></div><div class="personas" id="personas"></div>`,
 cliente: () => `
@@ -811,8 +836,8 @@ const POS = {
     }));
   },
   orquestracao() {
-    const D = [["D+1", [["WhatsApp", "sempre", "boas-vindas"], ["SMS", "senão", "lembrete"]]], ["D+2", null], ["D+3", [["RCS", "sempre", "proposta"], ["SMS", "senão", ""]]], ["D+4", null], ["D+5", [["Agente virtual", "sempre", "primeiro contato"], ["Discador", "reserva", ""]]], ["D+6", null], ["D+7", [["SMS", "sempre", "lembrete"], ["E-mail", "junto", "boleto"]]]];
-    $("#dias").innerHTML = D.map(([d, a]) => a ? `<div class="dia"><div class="d"><span>${d}</span><span>Público geral</span></div>${a.map(([c, m, f], i) => `${i ? `<span class="modo">${m}</span>` : ""}<div class="acao"><span>${c}</span><button type="button" class="fr ${f ? "ok" : ""}" title="${f ? "Frase: " + f : "Sem frase"}" aria-label="Editar frase do dia"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></button></div>`).join("")}</div>` : `<div class="dia vazio"><span class="num">${d}</span>solte um canal aqui</div>`).join("") + `<div class="dia fim"><span class="num">D+8</span>sem CPC → Não CPC</div>`;
+    const D = [["D+1", [["WhatsApp", "sempre", "boas_vindas_v2"], ["SMS", "senão", "Lembrete"]]], ["D+2", null], ["D+3", [["RCS", "sempre", ""], ["SMS", "senão", ""]]], ["D+4", null], ["D+5", [["Agente virtual", "sempre", "Primeiro contato"], ["Discador", "reserva", ""]]], ["D+6", null], ["D+7", [["SMS", "sempre", "Lembrete"], ["E-mail", "junto", ""]]]];
+    $("#dias").innerHTML = D.map(([d, a]) => a ? `<div class="dia"><div class="d"><span>${d}</span><span>Público geral</span></div>${a.map(([c, m, f], i) => `${i ? `<span class="modo">${m}</span>` : ""}<div class="acao"><span>${c}</span>${seloMsg(c, f)}</div>`).join("")}</div>` : `<div class="dia vazio"><span class="num">${d}</span>solte um canal aqui</div>`).join("") + `<div class="dia fim"><span class="num">D+8</span>sem CPC → Não CPC</div>`;
     document.querySelectorAll(".faixa > button").forEach(b => b.addEventListener("click", () => { const f = b.parentElement, ab = f.dataset.aberta !== "true"; f.dataset.aberta = ab; b.setAttribute("aria-expanded", ab) }));
     document.querySelectorAll(".seg").forEach(s => s.addEventListener("click", () => document.querySelectorAll(".seg").forEach(x => x.setAttribute("aria-pressed", x === s))));
   },
@@ -829,6 +854,52 @@ const POS = {
     document.querySelectorAll("#permissoes .tog:not(:disabled)").forEach(t => t.addEventListener("click", () => t.setAttribute("aria-checked", t.getAttribute("aria-checked") !== "true")));
   }
 };
+
+
+/* mensagem de cada canal: template (WhatsApp, RCS), frase (SMS, agente virtual) ou nada (discador, e-mail) */
+const TIPO_MSG = { "WhatsApp": "template", "RCS": "template", "SMS": "frase", "Agente virtual": "frase" };
+const IC_TPL = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>';
+const IC_FRASE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>';
+const BIBLIOTECA = {
+  "WhatsApp": [["boas_vindas_v2", "Boas-vindas", "Olá! Temos uma condição especial para regularizar o seu contrato."], ["proposta_desconto_v3", "Proposta com desconto", "Sua proposta com desconto está disponível até sexta."], ["negociacao_cpc_v2", "Negociação (CPC)", "Podemos seguir com a negociação por aqui?"], ["lembrete_vencimento_v1", "Lembrete de vencimento", "Sua parcela vence em 3 dias."], ["segunda_via_boleto_v1", "Segunda via do boleto", "Aqui está a segunda via do seu boleto."]],
+  "RCS": [["proposta_rcs_v1", "Proposta (cartão rico)", "Proposta com botão para negociar."], ["lembrete_rcs_v2", "Lembrete", "Lembrete com botão de segunda via."], ["oferta_quitacao_rcs_v1", "Oferta de quitação", "Quitação com desconto, válida hoje."]],
+  "SMS": [["", "Lembrete", "Sua parcela vence em breve. Responda 1 para negociar."], ["", "Proposta curta", "Condição especial para quitar. Acesse o link."]],
+  "Agente virtual": [["", "Primeiro contato", "Roteiro de identificação e proposta."], ["", "Retomar negociação", "Roteiro para quem já deu CPC."]]
+};
+function seloMsg(c, f) {
+  const t = TIPO_MSG[c]; if (!t) return "";
+  const nome = t === "template" ? "template" : "frase";
+  return `<button type="button" class="fr ${f ? "ok" : ""}" data-tipo="${t}" data-canal="${c}" data-valor="${f}" title="${f ? (t === "template" ? "Template: " : "Frase: ") + f : "Sem " + nome}" aria-label="${t === "template" ? "Escolher template" : "Escolher frase"} (${c})">${t === "template" ? IC_TPL : IC_FRASE}</button>`;
+}
+let alvoMsg = null;
+function abrirMsg(b) {
+  alvoMsg = b; const t = b.dataset.tipo, c = b.dataset.canal;
+  $("#mTit").textContent = t === "template" ? "Escolher template" : "Escolher frase";
+  $("#mSub").textContent = t === "template" ? `${c} · templates aprovados no provedor` : `${c} · frases da empresa`;
+  $("#mBusca").placeholder = t === "template" ? "Buscar por nome ou código do template" : "Buscar frase";
+  $("#mSem").textContent = t === "template" ? "Sem template" : "Sem frase";
+  $("#mBusca").value = ""; listarMsg(); $("#modalMsg").hidden = false; $("#mBusca").focus();
+}
+function listarMsg() {
+  const c = alvoMsg.dataset.canal, q = $("#mBusca").value.trim().toLowerCase(), atual = alvoMsg.dataset.valor;
+  const itens = (BIBLIOTECA[c] || []).filter(([cod, nome, pre]) => !q || (cod + " " + nome + " " + pre).toLowerCase().includes(q));
+  $("#mLista").innerHTML = itens.length ? itens.map(([cod, nome, pre]) => { const v = cod || nome; return `<button type="button" role="option" aria-selected="${v === atual}" data-v="${v}"><b>${nome}</b>${cod ? `<span class="cod">${cod}</span>` : ""}<span class="pre">${pre}</span></button>` }).join("")
+    : `<p class="vazio">Nenhum resultado para “${q.replace(/[<>&"]/g, "")}”.</p>`;
+  $("#mLista").querySelectorAll("button").forEach(x => x.addEventListener("click", () => marcarMsg(x.dataset.v)));
+}
+function marcarMsg(v) {
+  const b = alvoMsg, t = b.dataset.tipo;
+  b.dataset.valor = v; b.classList.toggle("ok", !!v);
+  b.title = v ? (t === "template" ? "Template: " : "Frase: ") + v : (t === "template" ? "Sem template" : "Sem frase");
+  fecharMsg();
+}
+function fecharMsg() { $("#modalMsg").hidden = true; if (alvoMsg) alvoMsg.focus() }
+document.addEventListener("click", e => { const b = e.target.closest(".dia .fr"); if (b) abrirMsg(b) });
+$("#mBusca").addEventListener("input", listarMsg);
+$("#mFechar").addEventListener("click", fecharMsg);
+$("#mSem").addEventListener("click", () => marcarMsg(""));
+$("#modalMsg").addEventListener("click", e => { if (e.target.id === "modalMsg") fecharMsg() });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#modalMsg").hidden) fecharMsg() });
 
 /* ---------- roteamento ---------- */
 const SITE = ["site"], APP = Object.keys(TELAS);

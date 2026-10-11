@@ -52,8 +52,10 @@ Ordem: com_acao primeiro, depois maior quantidade. Celular: esconda a barra. Bot
 
 ORQUESTRAÇÃO: canais como pílulas SÓLIDAS na cor do canal, texto branco (WhatsApp #1F8A4C, RCS #3B5BA9, SMS
 #7A4FB0, E-mail #A2552B, Agente virtual #0E7C86, Discador #475569, Enriquecimento #64748B), na paleta e nos dias.
-Bolinha de frase (ícone MessageCircle 18px) na pílula: com frase = branca cheia com balão na cor do canal e tooltip
-com o nome da frase; sem frase = contorno branco 70%; desativada = vermelha #C62828. Faixas como cards
+Bolinha de mensagem 18px na pílula: WhatsApp e RCS = TEMPLATE (ícone FileText, busca por nome/código ao
+clicar); SMS e Agente virtual = FRASE (ícone MessageCircle); Discador, E-mail e Enriquecimento SEM bolinha.
+Com escolha = branca cheia com ícone na cor do canal; sem = contorno branco 70%; desativada = vermelha #C62828.
+Detalhes no prompt de templates (PROMPT_TEMPLATES.md). Faixas como cards
 recolhíveis com selo "Ligado"; dia vazio tracejado "solte um canal aqui".
 
 PERSONAS: anel de maturidade 84px (o número é a maturidade, não clientes) na cor da persona (paleta #1F8A4C #A2552B #C62828 #3B5BA9 #7A4FB0 #0E7C86,
