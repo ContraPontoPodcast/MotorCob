@@ -41,3 +41,8 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
    mascarado e hash), descadastros por hash, modelo de e-mail, aprovação de lote (`mudar_lote`), modo **simulado**
    (padrão: não fala com fornecedor e não cobra) e a permissão nova **`enviar_mensagens`** (Admin e Planejamento).
    Pode rodar mais de uma vez.
+8. `08_api_tokens.sql` — tokens da API (ver pasta 08_api).
+9. `09_faturas_revisao.sql` (mesmo conteúdo de `supabase/migrations/20261106000001_faturas_revisao.sql`) — a
+   fatura nasce em **rascunho** (o cliente não vê), a equipe lança **ajustes** (desconto, crédito, cobrança extra,
+   com motivo) e **emite**; `gerar_rascunhos(competencia)` faz o mês inteiro; a view **`faturas_painel`** mostra
+   "vencida" sozinha. Pode rodar mais de uma vez.

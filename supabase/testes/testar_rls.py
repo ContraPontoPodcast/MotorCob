@@ -43,6 +43,7 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261103000001_fornecedor_email.sql
     psql -d sb -f supabase/migrations/20261104000001_mensageria_envios.sql
     psql -d sb -f supabase/migrations/20261105000001_api_tokens.sql
+    psql -d sb -f supabase/migrations/20261106000001_faturas_revisao.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -455,8 +456,26 @@ checar("abaixo do mínimo entra o complemento", True, f"update public.planos_emp
 checar("mensalidade da B é fixa", True, f"select valor from public.previa_fatura({EB},'2025-01-01')", "authenticated", u["admin"], "4900.00")
 checar("cliente não fecha fatura", False, f"select public.fechar_fatura({EA},'2025-01-01')", "authenticated", u["admina"])
 checar("mês corrente não fecha", False, f"select public.fechar_fatura({EA},current_date)", "authenticated", u["admin"])
-checar("equipe fecha a fatura da A", True, f"select public.fechar_fatura({EA},'2025-01-01') > 0", "authenticated", u["admin"], "t")
-checar("fatura congelada com total e vencimento", True, f"select valor_total || ' ' || vencimento || ' ' || modelo from public.faturas where empresa_id={EA}", "authenticated", u["admina"], "1890.00 2025-02-10 por_contrato")
+checar("equipe fecha a fatura da A (rascunho)", True, f"select public.fechar_fatura({EA},'2025-01-01') > 0", "authenticated", u["admin"], "t")
+_, FA, _ = sql(f"select id from public.faturas where empresa_id={EA}", "service_role")
+checar("cliente não vê o rascunho", True, "select count(*) from public.faturas", "authenticated", u["admina"], 0)
+checar("cliente não vê os itens do rascunho", True, "select count(*) from public.fatura_itens", "authenticated", u["admina"], 0)
+checar("rascunho não vira aberta por update direto", False, f"update public.faturas set situacao='aberta' where id={FA}", "authenticated", u["admin"])
+checar("rascunho não vira paga", False, f"update public.faturas set situacao='paga' where id={FA}", "authenticated", u["admin"])
+checar("cliente não ajusta fatura", False, f"select public.ajustar_fatura({FA},'desconto',100,'Cortesia')", "authenticated", u["admina"])
+checar("ajuste de tipo desconhecido é recusado", False, f"select public.ajustar_fatura({FA},'brinde',100,'Cortesia')", "authenticated", u["admin"])
+checar("ajuste sem motivo é recusado", False, f"select public.ajustar_fatura({FA},'desconto',100,' ')", "authenticated", u["admin"])
+checar("desconto de 90 recalcula o total", True, f"select public.ajustar_fatura({FA},'desconto',90,'Implantação: 1º mês com desconto')", "authenticated", u["admin"], "1800.00")
+checar("cobrança extra de 40 soma", True, f"select public.ajustar_fatura({FA},'cobranca_extra',40,'Hora técnica de integração')", "authenticated", u["admin"], "1840.00")
+checar("crédito maior que o total não deixa negativo", True, f"select public.ajustar_fatura({FA},'credito',5000,'Crédito de contrato'); select public.remover_ajuste((select max(id) from public.fatura_ajustes))", "authenticated", u["admin"], "1840.00")
+checar("cliente não emite", False, f"select public.emitir_fatura({FA})", "authenticated", u["admina"])
+checar("equipe emite a fatura", True, f"select public.emitir_fatura({FA}); select situacao from public.faturas where id={FA}", "authenticated", u["admin"], "aberta")
+checar("não emite duas vezes", False, f"select public.emitir_fatura({FA})", "authenticated", u["admin"])
+checar("emitida não aceita ajuste", False, f"select public.ajustar_fatura({FA},'desconto',1,'Tarde demais')", "authenticated", u["admin"])
+checar("emitida não volta a rascunho", False, f"update public.faturas set situacao='rascunho' where id={FA}", "authenticated", u["admin"])
+checar("cliente vê os ajustes depois de emitida", True, "select count(*) from public.fatura_ajustes", "authenticated", u["admina"], 2)
+checar("painel marca vencida sozinho (venceu em 2025)", True, f"select situacao_atual || ' ' || ajustes_total from public.faturas_painel where id={FA}", "authenticated", u["admina"], "vencida -50.00")
+checar("fatura congelada com total e vencimento", True, f"select valor_total || ' ' || vencimento || ' ' || modelo from public.faturas where empresa_id={EA}", "authenticated", u["admina"], "1840.00 2025-02-10 por_contrato")
 checar("itens da fatura visíveis ao admin da empresa", True, "select count(*) from public.fatura_itens", "authenticated", u["admina"], 4)
 checar("mesma competência não fecha duas vezes", False, f"select public.fechar_fatura({EA},'2025-01-01')", "authenticated", u["admin"])
 checar("equipe não muda o valor de fatura fechada", False, f"update public.faturas set valor_total=1 where empresa_id={EA}", "authenticated", u["admin"])
@@ -543,6 +562,9 @@ checar("auditoria registra o token sem o hash", True, "select count(*) from publ
 checar("operação não revoga", False, "select public.revogar_token_api((select id from public.api_tokens limit 1))", "authenticated", u["oper"])
 checar("Admin revoga o token", True, "select public.revogar_token_api((select id from public.api_tokens limit 1)); select (revogado_em is not null)::text from public.api_tokens", "authenticated", u["admina"], "true")
 checar("não revoga duas vezes", False, "select public.revogar_token_api((select id from public.api_tokens limit 1))", "authenticated", u["admina"])
+checar("gerar rascunhos só para quem tem plano e ainda não tem fatura", True, "select public.gerar_rascunhos('2025-01-01')", "authenticated", u["admin"], 1)
+checar("gerar de novo não duplica", True, "select public.gerar_rascunhos('2025-01-01')", "authenticated", u["admin"], 0)
+checar("cliente não gera rascunhos", False, "select public.gerar_rascunhos('2025-01-01')", "authenticated", u["admina"])
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
