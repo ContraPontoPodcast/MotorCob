@@ -32,11 +32,11 @@ e o acesso deve ser **só por convite**. Tirar a página não basta: a API conti
 - Observação: a função manda o convite para `SITE_URL/definir-senha` e o reset para `SITE_URL/redefinir-senha`.
   O site precisa ter essas duas rotas (pasta `05`).
 
-## 6. Storage — mídia da página comercial
+## 6. Storage — imagem de compartilhamento do site
 Depois de rodar o SQL da pasta `01_banco` (cria o bucket público `site`):
-- [ ] **Storage › site › Upload files**: enviar os 4 arquivos de `03_site_comercial_e_login/midia_bucket_site/`
-      na raiz do bucket. URL pública de cada um:
-      `https://jxwppkrkuckfwmphqjva.supabase.co/storage/v1/object/public/site/<arquivo>`
+- [ ] **Storage › site › Upload files**: enviar `03_site_e_login/imagens/og-motorcob.jpg` na raiz do bucket.
+      URL pública: `https://jxwppkrkuckfwmphqjva.supabase.co/storage/v1/object/public/site/og-motorcob.jpg`
+      (o site novo não usa vídeo nem fotos de tela).
 
 ## 7. Conferência rápida (SQL Editor)
 ```sql
