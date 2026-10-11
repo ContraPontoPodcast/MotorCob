@@ -13,8 +13,8 @@ TOKENS (CSS variables globais; nenhuma cor/fonte solta)
 Fonte do sistema (-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui), sem arquivo de fonte e
 sem fonte mono; números com tabular-nums. Remova Inter/Geist e todo #0F4C5C, #103E4B e #E9A23B da interface.
 
-LOGO: troque o quadrado "M" e o "Gestão de contatos" pelo símbolo Rotor (SVG em 04/ESPECIFICACAO.md, versão
-escura no menu) + "MotorCob" 15px 600 branco. Champanhe #C9A35A só dentro do símbolo.
+LOGO: troque o quadrado "M" e o "Gestão de contatos" pelo símbolo Rotor (nunca hélice/pás) + "MotorCob" 15px 600
+branco. Champanhe #C9A35A só dentro do símbolo. No menu escuro, 24px, exatamente: <svg viewBox="0 0 100 100" width="24" height="24" aria-hidden="true"><circle cx="50" cy="50" r="38" fill="none" stroke="#3A3A3C" stroke-width="11"/><path d="M50 12 A38 38 0 0 1 86.1 38.3" fill="none" stroke="#C9A35A" stroke-width="11" stroke-linecap="round"/><path d="M83.6 70 A38 38 0 0 1 30 82.3" fill="none" stroke="#EEEAE2" stroke-width="11" stroke-linecap="round"/><path d="M16.4 67.6 A38 38 0 0 1 22 23.5" fill="none" stroke="#EEEAE2" stroke-width="11" stroke-linecap="round" opacity="0.55"/><circle cx="50" cy="50" r="11" fill="#C9A35A"/></svg>
 
 MENU LATERAL ESCURO (232px, fundo #161617)
 Grupos (rótulo 11px 600 #8E8E93, sem caixa-alta): Operação: Início, Lista do dia, Ações, Painel · Carteira:
@@ -56,7 +56,7 @@ Bolinha de frase (ícone MessageCircle 18px) na pílula: com frase = branca chei
 com o nome da frase; sem frase = contorno branco 70%; desativada = vermelha #C62828. Faixas como cards
 recolhíveis com selo "Ligado"; dia vazio tracejado "solte um canal aqui".
 
-PERSONAS: anel de maturidade 84px na cor da persona (paleta #1F8A4C #A2552B #C62828 #3B5BA9 #7A4FB0 #0E7C86,
+PERSONAS: anel de maturidade 84px (o número é a maturidade, não clientes) na cor da persona (paleta #1F8A4C #A2552B #C62828 #3B5BA9 #7A4FB0 #0E7C86,
 trilho #E5E5EA), pontinho da cor ao lado do nome. Ranking: melhor canal e 2º na cor do canal, demais #C7C7CC;
 valor "29,1% CPC" sem quebrar linha.
 

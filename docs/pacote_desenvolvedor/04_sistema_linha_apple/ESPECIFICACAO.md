@@ -26,7 +26,7 @@ Sai: Inter, Geist, azul-petróleo `#0F4C5C`/`#103E4B` e âmbar `#E9A23B` como co
 Sai o quadrado com "M" e o descritor "Gestão de contatos". Símbolo + "MotorCob" (15/600). No **menu escuro**:
 ```html
 <svg width="24" height="24" viewBox="0 0 100 100" role="img" aria-label="MotorCob">
-  <circle cx="50" cy="50" r="38" fill="none" stroke="#2A2F39" stroke-width="11"/>
+  <circle cx="50" cy="50" r="38" fill="none" stroke="#3A3A3C" stroke-width="11"/>
   <path d="M50 12 A38 38 0 0 1 86.1 38.3" fill="none" stroke="#C9A35A" stroke-width="11" stroke-linecap="round"/>
   <path d="M83.6 70 A38 38 0 0 1 30 82.3" fill="none" stroke="#EEEAE2" stroke-width="11" stroke-linecap="round"/>
   <path d="M16.4 67.6 A38 38 0 0 1 22 23.5" fill="none" stroke="#EEEAE2" stroke-width="11" stroke-linecap="round" opacity=".55"/>
