@@ -66,6 +66,12 @@ with itens(ordem, item, ok, se_falhar) as (values
        to_regclass('public.ciclo_empresa') is not null and to_regclass('public.jornada_clientes_mes') is not null
          and exists (select 1 from pg_proc where proname = 'salvar_frentes'),
        'rodar 19_contratacao_ciclo.sql (depois do 18)'),
+  (26, 'SQL 20 · Suporte com o nome de quem atende',
+       exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'chamado_mensagens' and column_name = 'autor_nome')
+         and exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'chamados' and column_name = 'responsavel_nome'),
+       'rodar 20_suporte_nomes.sql (depois do 19)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),

@@ -880,6 +880,23 @@ checar("cliente não define o motor", False, f"select public.salvar_frentes({EC}
 checar("motor vazio é recusado", False, f"select public.salvar_frentes({EC}, array[]::text[])", "authenticated", u["admin"])
 checar("equipe deixa a empresa só com o MotorCli", True, f"select public.salvar_frentes({EC}, array['motorcli']); select string_agg(frente||'='||ativo, ',' order by frente) from public.empresa_frentes where empresa_id={EC}", "authenticated", u["admin"], "motorcli=true,motorcob=false")
 checar("o motor de decisão fica ligado", True, f"select ativo from public.empresa_modulos where empresa_id={EC} and modulo='orquestracao'", "service_role", None, "t")
+# Suporte: nomes e envio corrigidos (SQL 20)
+sql(f"update public.perfis set nome='Ana Souza' where id='{u['admin']}'")
+sql(f"update public.perfis set nome='Bruno', sobrenome='Lima' where id='{u['oper']}'")
+r = sql(f"set role service_role; insert into public.chamados (empresa_id,motivo,assunto,aberto_por) values ({EA},'acesso','Senha','{u['oper']}') returning id")
+assert r[0], r[2]
+CS = r[1]
+checar("resposta da equipe com autor_nome mandado pelo site (antes falhava)", True, f"insert into public.chamado_mensagens (chamado_id,tipo,texto,autor_nome) values ({CS},'equipe','Olá!','Hacker'); select autor_nome from public.chamado_mensagens where chamado_id={CS} and tipo='equipe'", "authenticated", u["admin"], "Ana S.")
+checar("mensagem do cliente leva o nome curto", True, f"insert into public.chamado_mensagens (chamado_id,tipo,texto) values ({CS},'cliente','Obrigado'); select autor_nome from public.chamado_mensagens where chamado_id={CS} and tipo='cliente'", "authenticated", u["oper"], "Bruno L.")
+checar("ao assumir, o cliente vê quem atende", True, f"update public.chamados set responsavel='{u['admin']}', situacao='em_atendimento' where id={CS}; select responsavel_nome from public.chamados where id={CS}", "authenticated", u["admin"], "Ana S.")
+checar("cliente lê o nome de quem atende", True, f"select responsavel_nome from public.chamados where id={CS}", "authenticated", u["oper"], "Ana S.")
+checar("site não troca o nome do responsável", True, f"update public.chamados set responsavel_nome='Outro' where id={CS}; select responsavel_nome from public.chamados where id={CS}", "authenticated", u["admin"], "Ana S.")
+r = sql(f"set role service_role; insert into public.chamados (empresa_id,motivo,assunto,aberto_por) values ({EA},'acesso','Teste do Master','{u['admin']}') returning id")
+CM = r[1]
+checar("Master que abriu o chamado escreve como cliente nele", True, f"insert into public.chamado_mensagens (chamado_id,tipo,texto) values ({CM},'cliente','Testando o suporte'); select 'ok'", "authenticated", u["admin"], "ok")
+checar("equipe não escreve como cliente em chamado de outro", False, f"insert into public.chamado_mensagens (chamado_id,tipo,texto) values ({CS},'cliente','x')", "authenticated", u["admin"])
+checar("mensagem só com anexo é aceita", True, f"""insert into public.chamado_mensagens (chamado_id,tipo,texto,anexos) values ({CS},'equipe',null,'[{{"caminho":"x"}}]'); select 'ok'""", "authenticated", u["admin"], "ok")
+checar("mensagem vazia sem anexo é recusada", False, f"insert into public.chamado_mensagens (chamado_id,tipo,texto) values ({CS},'equipe','   ')", "authenticated", u["admin"])
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

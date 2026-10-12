@@ -92,5 +92,8 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     ciclo de uso por empresa (dia de corte e vencimento; sem corte = mês fechado, como antes), preço da
     **Jornada** (MotorCli) por cliente acionado no ciclo, prévia e fechamento da fatura pelo ciclo e
     `salvar_frentes` (motor da empresa). Rode junto com o prompt 27 (passo 44).
+20. `20_suporte_nomes.sql` (= `supabase/migrations/20261117000001_suporte_nomes.sql`) — **Suporte**: corrige o
+    erro ao abrir chamado e ao responder pelo Console (campo `autor_nome`), mostra quem assumiu o atendimento
+    (`responsavel_nome`, ex.: "Ana S.") e aceita mensagem só com anexo. Depois cole o prompt 28 (passo 45).
 
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).
