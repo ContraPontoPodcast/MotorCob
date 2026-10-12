@@ -4,7 +4,8 @@ Faça depois do SQL 17 (`17_funil_assistente.sql`). Depois cole o prompt 17 no H
 
 ## 1. Chave da IA nos Secrets do Supabase
 
-1. Em **console.anthropic.com › Settings › API Keys**, crie uma chave só para o Assistente (nome
+1. Em **platform.claude.com** (antigo console.anthropic.com), coloque crédito em **Settings › Billing** e, em
+   **Settings › API Keys**, crie uma chave só para o Assistente (nome
    "MotorCob Assistente"). Pode definir um limite de gasto mensal lá mesmo. Não cole a chave em chat, e-mail,
    no site nem no código.
 2. Supabase › **Edge Functions › Secrets** › **Add new secret**: nome `ANTHROPIC_API_KEY`, valor = a chave. Salve.
