@@ -1,4 +1,4 @@
-# Prompt Horizons — Workspace 21: a imagem certa do avatar e o botão de fechar
+# Prompt Horizons — Workspace 21: a imagem certa do avatar, o botão de fechar e o balão de 7 segundos
 
 Conferido no site publicado: o arquivo `/assistente-motorcob.jpg` é um robô gerado pelo Horizons, não o avatar
 aprovado. A imagem passa a ficar no Storage do Supabase (endereço fixo) e o site só aponta para ela.
@@ -9,7 +9,7 @@ Teste no navegador: https://jxwppkrkuckfwmphqjva.supabase.co/storage/v1/object/p
 deve mostrar o avatar. (Esse bucket é só para imagens públicas do site; nunca coloque arquivo de cliente nele.)
 
 ```text
-Duas correções no avatar do Assistente MotorCob. Não mude a gaveta de conversa, a função assistente, consultas
+Três correções no avatar do Assistente MotorCob. Não mude a gaveta de conversa, a função assistente, consultas
 nem tabelas.
 
 1. IMAGEM: em TODOS os lugares onde o avatar aparece (botão fixo, topo da gaveta, card de resposta do campo
@@ -33,6 +33,10 @@ nem tabelas.
    canto da tela.".
 5. Com a gaveta aberta, o avatar fixo e o "×" ficam escondidos; ao fechar a gaveta, voltam (se não estiverem
    escondidos pelo usuário).
+6. BALÃO "Dúvida? Fala comigo!" COM TEMPORIZADOR: aparece quando o avatar surge (ao carregar a tela, ao fechar a
+   gaveta e ao "Mostrar o Assistente") e some sozinho depois de 7 segundos, com fade de 0,4 s (sem animação se o
+   sistema pedir menos movimento); o avatar continua. Troca de tela dentro do sistema não faz o balão voltar.
+   Isto substitui a regra antiga "o balão some depois da primeira conversa".
 
 Confira em 1440 e 390px: a foto do avatar aprovado (homem de barba e óculos), o "×" sem cobrir o rosto, e a
 escolha lembrada depois de recarregar.
