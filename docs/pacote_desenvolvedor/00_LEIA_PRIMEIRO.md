@@ -50,6 +50,8 @@ Faça **na ordem**; cada passo depende do anterior.
 | 37 | `07_workspace/PROMPT_23_MOTORCX_LOGIN_E_FRENTES.md` | MotorCX: login com escolha da frente, tema por frente, "Trocar para MotorCli" | Site | 35º |
 | 38 | `07_workspace/PROMPT_24_MOTORCLI_JORNADA.md` | MotorCli: produto Jornada (Início, Lista do dia, Enviar arquivos, Carteiras, Momentos da jornada) | Site | 36º |
 | 39 | `07_workspace/PROMPT_25_CONSOLE_FRENTES.md` | Console: ligar as frentes da empresa; Usuários: limitar por frente | Site | 37º |
+| 41 | `07_workspace/PROMPT_26_LOGIN_FRENTE_PELO_LINK.md` | Login abre com a frente que veio no link (`?frente=motorcli`) | Site (motorcob.online) | 38º |
+| 42 | `09_site_motorcli/` (LEIA, parte A e parte B) | Site motorcli.online: projeto NOVO no Horizons, só vitrine; Supabase só para o formulário | Site novo | 39º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
