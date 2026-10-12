@@ -4,7 +4,7 @@
 
 export const PAPEIS = ["admin", "planejamento", "operacao", "gestao"] as const;
 export type Papel = (typeof PAPEIS)[number];
-export const ACOES = ["listar", "convidar", "desativar", "reativar", "resetar_senha", "alterar_papel", "resetar_2fa"] as const;
+export const ACOES = ["listar", "convidar", "desativar", "reativar", "resetar_senha", "alterar_papel", "resetar_2fa", "convidar_equipe"] as const;
 export type Acao = (typeof ACOES)[number];
 
 // catálogo de permissões (igual à view permissoes_catalogo); ADMINISTRACAO só um Admin libera
@@ -31,6 +31,8 @@ export interface Pedido {
   empresa_id?: number;
   /** exceções ao perfil, só no convite: {permissao: true|false} */
   acessos?: Record<string, boolean>;
+  /** só em convidar_equipe: master (Admin da equipe) ou atendimento */
+  funcao?: "master" | "atendimento";
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -51,6 +53,18 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
   if (PRECISA_ALVO.includes(acao)) {
     if (typeof c.usuario_id !== "string" || !UUID.test(c.usuario_id)) return { erro: "usuário inválido" };
     pedido.usuario_id = c.usuario_id;
+  }
+  if (acao === "convidar_equipe") {
+    const email = typeof c.email === "string" ? c.email.trim().toLowerCase() : "";
+    if (!EMAIL.test(email) || email.length > 254) return { erro: "e-mail inválido" };
+    if (c.funcao !== "master" && c.funcao !== "atendimento") return { erro: "função inválida: use master ou atendimento" };
+    pedido.email = email;
+    pedido.funcao = c.funcao;
+    if (c.nome !== undefined) {
+      if (typeof c.nome !== "string" || c.nome.trim().length > 120) return { erro: "nome inválido" };
+      pedido.nome = c.nome.trim() || undefined;
+    }
+    return { pedido };
   }
   if (acao === "convidar") {
     const email = typeof c.email === "string" ? c.email.trim().toLowerCase() : "";
@@ -103,6 +117,11 @@ export function autorizar(quem: Perfil | null, podeGerenciar: boolean, pedido: P
   if (!podeGerenciar) return "sem permissão para gerenciar usuários";
   // resetar a verificação de outra pessoa exige que quem pede tenha entrado com o código (aal2)
   if (pedido.acao === "resetar_2fa" && aal !== "aal2") return "entre com o seu código de duas etapas para resetar o de outra pessoa";
+  if (pedido.acao === "convidar_equipe") {
+    if (!adminEquipe(quem)) return "só um Master da equipe MotorCob convida para a equipe";
+    if (aal !== "aal2") return "entre com o seu código de duas etapas para mudar a equipe";
+    return null;
+  }
   const equipe = adminEquipe(quem);
   if (pedido.acao === "listar" || pedido.acao === "convidar") {
     if (!equipe && pedido.empresa_id !== undefined && pedido.empresa_id !== quem.empresa_id) {

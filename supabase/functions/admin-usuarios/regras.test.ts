@@ -95,3 +95,14 @@ test("ver_faturamento é permissão de administração", () => {
   assert.match(autorizar(gestA, true, p, null)!, /só um Admin libera/);
   assert.equal(autorizar(admA, true, p, null), null);
 });
+
+test("convidar para a equipe MotorCob", () => {
+  assert.equal(validarPedido({ acao: "convidar_equipe", email: "ana@motorcob.online", funcao: "dono" }).erro,
+    "função inválida: use master ou atendimento");
+  assert.equal(validarPedido({ acao: "convidar_equipe", email: "x", funcao: "master" }).erro, "e-mail inválido");
+  const p = ped({ acao: "convidar_equipe", email: "Ana@MotorCob.online", funcao: "atendimento", nome: "Ana" });
+  assert.equal(p.email, "ana@motorcob.online");
+  assert.equal(autorizar(equipe, true, p, null, "aal2"), null);
+  assert.match(autorizar(equipe, true, p, null, "aal1")!, /código de duas etapas/);
+  assert.match(autorizar(admA, true, p, null, "aal2")!, /só um Master/);     // Admin de cliente não
+});

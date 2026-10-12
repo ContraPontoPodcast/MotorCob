@@ -46,3 +46,10 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
    fatura nasce em **rascunho** (o cliente não vê), a equipe lança **ajustes** (desconto, crédito, cobrança extra,
    com motivo) e **emite**; `gerar_rascunhos(competencia)` faz o mês inteiro; a view **`faturas_painel`** mostra
    "vencida" sozinha. Pode rodar mais de uma vez.
+10. `10_equipe_master.sql` (= `supabase/migrations/20261107000001_equipe_master.sql`) — Equipe MotorCob: **Master**
+    (Console inteiro) e **Atendimento** (vê empresas e responde chamados); `definir_funcao_equipe` exige o código de
+    duas etapas; nunca fica sem Master. Depois rode **`TORNAR_MASTER.sql`** com o seu e-mail (uma vez).
+11. `11_saude_sistema.sql` (= `supabase/migrations/20261108000001_saude_sistema.sql`) — `saude_empresas()` para a
+    aba Saúde do Console.
+
+**Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).
