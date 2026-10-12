@@ -12,7 +12,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
-| 2 | `01_banco` | 16 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
+| 2 | `01_banco` | 17 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios, funil com Disparado e Assistente · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
 | 3 | `03_site_e_login` | Site público em "/", login novo, plataforma em "/inicio", fim do "/cadastro" | Site | 1º |
 | 4 | `04_sistema_linha_apple` | Visual do sistema: menu escuro, telas brancas, Lista do dia nova | Site | 2º |
 | 5 | `05_usuarios_permissoes_seguranca` | Menus por permissão, Permissões, Auditoria, páginas de senha, sessão | Site | 3º |
@@ -39,6 +39,10 @@ Faça **na ordem**; cada passo depende do anterior.
 | 26 | `07_workspace/PROMPT_14_LINKS_FUNIL.md` | Funil de cliques dos links rastreados | Site | 24º |
 | 27 | `07_workspace/PROMPT_15_RELATORIOS.md` | Relatórios padrão e montador de relatórios | Site | 25º |
 | 28 | `07_workspace/PROMPT_16_NAVEGACAO_UNICA.md` | Navegação única dentro dos produtos (Workspace continua na entrada, com barra no topo) | Site | 26º |
+| 29 | `08_api/LEIA_ASSISTENTE.md` | Chave da IA nos Secrets do Supabase e função `assistente` (Verify JWT ligado) | Supabase | 27º |
+| 30 | `07_workspace/PROMPT_17_BUSCA_E_ASSISTENTE.md` | Campo único "O que você quer fazer?" (busca e pergunta), avatar e gaveta do Assistente, Console › Assistente | Site | 28º |
+| 31 | `07_workspace/PROMPT_18_MENU_RECOLHIVEL.md` | Menu lateral dos produtos recolhível (só ícones) | Site | 29º |
+| 32 | `07_workspace/PROMPT_19_FUNIL_STATUS.md` | Painel da Mensageria: Disparado, Enviado, sem retorno, e-mail completo e botões "i" | Site | 30º |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
@@ -51,7 +55,7 @@ Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com crit�
   passam pela Edge Function `admin-usuarios`, já publicada.
 - Permissão é garantida no banco (RLS + `pode()`); o site só esconde o que a pessoa não pode usar.
 - Erros em português, sem detalhe técnico. O login nunca diz se um e-mail existe.
-- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 584 testes de acesso).
+- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 599 testes de acesso).
 
 ## Já pronto (não refazer)
 Permissões por perfil e por usuário, auditoria, contatos do site, motivos agrupados da Lista do dia (após o SQL 2)

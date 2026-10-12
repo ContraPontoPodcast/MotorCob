@@ -780,7 +780,7 @@ assert r[0], r[2]
 checar("limpeza apaga textos e links vencidos", True, "select public.limpar_mensageria_90d()", SVC, None, 3)
 checar("depois da limpeza, nenhum texto vencido", True, "select count(*) from public.mensageria_conversa_mensagens where apagar_em < now()", SVC, None, 0)
 # Relatórios: padrões e montador
-checar("dez relatórios padrão para todos", True, "select count(*) from public.relatorios_modelos where empresa_id is null", "authenticated", u["admina"], 10)
+checar("onze relatórios padrão para todos", True, "select count(*) from public.relatorios_modelos where empresa_id is null", "authenticated", u["admina"], 11)
 checar("relatório agrupado: entregabilidade da A no dia", True, f"""select r->>'enviados' from public.rodar_relatorio('envios', null, '{{"empresa":{EA},"de":"2026-10-14","ate":"2026-10-14","campos":[{{"campo":"canal","op":"igual","valor":"rcs"}}]}}', array['data','canal'], '[{{"funcao":"somar","campo":"enviados","nome":"enviados"}}]') r""", "authenticated", u["admina"], "98")
 checar("relatório linha a linha só com as colunas pedidas", True, f"""select string_agg(distinct k, ',') || ' ' || count(distinct r) from public.rodar_relatorio('respostas', array['id_cliente','classe'], '{{"empresa":{EA}}}') r, jsonb_object_keys(r) k""", "authenticated", u["plan"], "classe,id_cliente 2")
 checar("B não enxerga a A pelo relatório (0 linhas)", True, f"""select count(*) from public.rodar_relatorio('envios', null, '{{"empresa":{EA}}}')""", "authenticated", u["operb"], 0)
@@ -798,6 +798,34 @@ checar("rodar um relatório padrão salvo", True, f"""select count(*) > 0 from p
 checar("empresa salva o próprio relatório", True, f"""insert into public.relatorios_modelos (empresa_id,nome,base,agrupar,metricas) values ({EA},'Meu relatório','mensagens',array['situacao'],'[{{"funcao":"contar"}}]'); select count(*) from public.relatorios_modelos where empresa_id={EA}""", "authenticated", u["admina"], 1)
 checar("ninguém altera o relatório padrão (0 linhas)", True, "with x as (update public.relatorios_modelos set nome='X' where empresa_id is null returning 1) select count(*) from x", "authenticated", u["admina"], 0)
 checar("B não vê o relatório salvo da A", True, f"select count(*) from public.relatorios_modelos where empresa_id={EA}", "authenticated", u["operb"], 0)
+# Funil com Disparado separado de Enviado (SQL 17)
+r = sql(f"set role service_role; update public.mensageria_lotes set disparadas=90, enviadas=88, entregues=78, falhas=8, sem_retorno=2 where campanha_id={CP}")
+assert r[0], r[2]
+checar("funil: disparados, enviados, entregues, não entregues e sem retorno", True, f"select disparados||' '||enviados||' '||entregues||' '||nao_entregues||' '||sem_retorno from public.mensageria_funil_status where campanha_id={CP}", "authenticated", u["admina"], "90 88 78 8 2")
+checar("B não vê o funil de status da A", True, f"select count(*) from public.mensageria_funil_status where empresa_id={EA}", "authenticated", u["operb"], 0)
+checar("relatório do funil traz os disparados", True, f"""select r->>'disparados' from public.rodar_relatorio('funil', null, '{{"empresa":{EA},"de":"2026-10-14","ate":"2026-10-14","campos":[{{"campo":"canal","op":"igual","valor":"rcs"}}]}}', array['canal'], '[{{"funcao":"somar","campo":"disparados","nome":"disparados"}}]') r""", "authenticated", u["admina"], "100")
+checar("mensagem aceita a situação disparada", True, f"set role service_role; update public.mensageria_mensagens set situacao='disparada' where id=(select min(id) from public.mensageria_mensagens); select 'ok'", None, None, "ok")
+checar("situação inventada é recusada", False, "set role service_role; update public.mensageria_mensagens set situacao='lida' where id=(select min(id) from public.mensageria_mensagens)")
+checar("bounce inválido é recusado", False, "set role service_role; update public.mensageria_mensagens set bounce='talvez' where id=(select min(id) from public.mensageria_mensagens)")
+# Assistente MotorCob: perguntas (só a função grava; cada um vê as suas; a equipe vê o que ficou sem resposta)
+checar("usuário não grava pergunta direto", False, f"insert into public.assistente_perguntas (usuario_id,pergunta) values ('{u['plan']}','oi')", "authenticated", u["plan"])
+r = sql(f"""set role service_role;
+insert into public.assistente_perguntas (usuario_id,empresa_id,pergunta,resposta,respondida) values
+ ('{u['plan']}',{EA},'como crio uma campanha?','Em Campanhas, clique em Nova campanha.',true),
+ ('{u['plan']}',{EA},'qual a cor do céu?',null,false),
+ ('{u['operb']}',{EB},'onde vejo a fatura?','Em Empresa › Faturamento.',true)""")
+assert r[0], r[2]
+PG = f"(select id from public.assistente_perguntas where pergunta='como crio uma campanha?')"
+checar("cada usuário vê só as próprias perguntas", True, "select count(*) from public.assistente_perguntas", "authenticated", u["plan"], 2)
+checar("B não vê perguntas da A", True, f"select count(*) from public.assistente_perguntas where empresa_id={EA}", "authenticated", u["operb"], 0)
+checar("avaliar a própria resposta", True, f"select public.avaliar_resposta({PG}, 1::smallint); select avaliacao from public.assistente_perguntas where id={PG}", "authenticated", u["plan"], 1)
+checar("não avalia pergunta de outro", False, f"select public.avaliar_resposta({PG}, -1::smallint)", "authenticated", u["operb"])
+checar("nota fora de -1/1 é recusada", False, f"select public.avaliar_resposta({PG}, 5::smallint)", "authenticated", u["plan"])
+checar("equipe vê o que ficou sem resposta", True, "select pergunta from public.assistente_sem_resposta", "authenticated", u["admin"], "qual a cor do céu?")
+checar("cliente não vê a lista sem resposta (0 linhas)", True, "select count(*) from public.assistente_sem_resposta", "authenticated", u["admina"], 0)
+r = sql("set role service_role; update public.assistente_perguntas set criado_em = now() - interval '91 days' where pergunta='qual a cor do céu?'")
+assert r[0], r[2]
+checar("limpeza de 90 dias apaga pergunta antiga", True, "select public.limpar_mensageria_90d(); select count(*) from public.assistente_perguntas", SVC, None, 2)
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

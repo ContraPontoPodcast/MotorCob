@@ -11,6 +11,11 @@ Duas etapas:
 
 Modo "simulado" (padrão): nenhum fornecedor é chamado e nada entra no consumo da fatura. O Simulador
 responde de forma estável pelo hash do destino (~96% entregue, ~3% inexistente, ~1% descadastro no SMS).
+
+Funil (SQL 17): Disparado = o MotorCob entregou à operadora (ou ao provedor de e-mail); Enviado = a operadora confirmou
+o envio ao número; depois Entregue ou Não entregue (DLR). Mensagem que a operadora enviou e não devolveu a DLR fica
+"enviada" (sem retorno final). No e-mail: bounce permanente (conta como não entregue) ou temporário, aberturas,
+cliques e spam (spam vira descadastro com origem "reclamacao"). Banco sem o SQL 17: enviadas = disparadas, como antes.
 MOTORCOB_SIMULAR_QUEDA=zenvia,... simula fornecedor fora do ar para testar a reserva.
 Modo "real" só vale para fornecedor com adaptador em ADAPTADORES_REAIS (entra quando o acesso for liberado).
 
@@ -81,6 +86,11 @@ class Resultado:
     id_externo: str | None = None
     respondeu: bool = False  # o cliente respondeu (SMS: cobra a resposta; RCS conversacional: abre sessão)
     resposta: str | None = None   # texto que o cliente respondeu (vai para o Radar e o atendimento)
+    enviado: bool = True     # a operadora confirmou o envio ao número (False: recusou ao receber)
+    bounce: str | None = None     # e-mail: permanente · temporario
+    abriu: bool = False      # e-mail: abertura (estimada)
+    clicou: bool = False     # e-mail: clique
+    spam: bool = False       # e-mail: marcou como spam
 
 
 class Simulador:
@@ -98,15 +108,24 @@ class Simulador:
             return Resultado("sem_rcs", "aparelho sem RCS (simulado)", ident)
         if canal == "email":
             if n < 15:
-                return Resultado("falhou", "caixa de e-mail inexistente (simulado)", ident)
+                return Resultado("falhou", "caixa de e-mail inexistente (simulado)", ident, bounce="permanente")
             if n < 25:
                 return Resultado("descadastro", "clicou em descadastrar (simulado)", ident)
-        else:
-            if n < 30:
-                return Resultado("falhou", "número inexistente (simulado)", ident)
-            if n < 40:
-                return Resultado("descadastro", "respondeu SAIR (simulado)", ident)
-        respondeu = 40 <= n < (90 if canal == "sms" else 120 if canal == "rcs" else 40)   # ~5% SMS, ~8% RCS
+            if n < 45:
+                return Resultado("falhou", "caixa cheia (simulado)", ident, bounce="temporario")
+            abriu = int(h[26:28], 16) % 100 < 35                              # ~35% abrem
+            clicou = abriu and int(h[28:30], 16) % 100 < 15                    # ~15% de quem abre clica
+            spam = int(h[30:34], 16) % 1000 < 1                                # ~0,1% marcam como spam
+            return Resultado("entregue", None, ident, abriu=abriu, clicou=clicou, spam=spam)
+        if n < 10:
+            return Resultado("falhou", "recusado pela operadora (simulado)", ident, enviado=False)
+        if n < 30:
+            return Resultado("falhou", "número inexistente (simulado)", ident)
+        if n < 40:
+            return Resultado("descadastro", "respondeu SAIR (simulado)", ident)
+        if int(h[26:30], 16) % 100 < 2:                                        # ~2% sem DLR final
+            return Resultado("enviada", "operadora não devolveu o retorno de entrega (simulado)", ident)
+        respondeu = 40 <= n < (90 if canal == "sms" else 120)                 # ~5% SMS, ~8% RCS
         return Resultado("entregue", None, ident, respondeu,
                          RESPOSTAS_SIMULADAS[int(h[20:26], 16) % len(RESPOSTAS_SIMULADAS)] if respondeu else None)
 
@@ -161,6 +180,12 @@ def banco_novo(sb) -> bool:
 def banco_campanhas(sb) -> bool:
     """O banco já tem o SQL 14 (campanhas, centro de custo, listas, fallback)?"""
     return _tabela_nova(lambda: sb.selecionar("mensageria_campanhas", {"id": "eq.0"}) is not None, False)
+
+
+def banco_funil(sb) -> bool:
+    """O banco já tem o SQL 17 (Disparado separado de Enviado e os status do e-mail)?"""
+    return _tabela_nova(lambda: sb.selecionar("mensageria_lotes", {"id": "eq.0", "select": "id,disparadas"})
+                        is not None, False)
 
 
 def plano_rota(sb, empresa_id, canal: str, modo: str) -> list[dict]:
@@ -530,6 +555,7 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         return {}
     novo = banco_novo(sb)
     v14 = novo and banco_campanhas(sb)                 # fallback do RCS e centro de custo
+    v17 = v14 and banco_funil(sb)                      # Disparado × Enviado e status do e-mail
     pastas = _pastas(sb, Path(dados), {l["empresa_id"] for l in lotes})
     resumo = {}
     for lote in lotes:
@@ -539,7 +565,7 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         if dia < hoje:
             sb.atualizar("mensageria_lotes", filtro, {"situacao": "cancelado", "concluido_em": agora.isoformat(),
                                                       "motivo": "não enviado no dia (fora da janela)"})
-            resumo[lid] = {"enviadas": 0, "situacao": "cancelado"}
+            resumo[lid] = {"disparadas": 0, "enviadas": 0, "situacao": "cancelado"}
             continue
         if dia > hoje or not dentro((lote.get("janela_inicio"), lote.get("janela_fim")), agora) \
                 or janela({"sabado": True}, hoje) is None:
@@ -550,7 +576,7 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         if not arq or not arq.exists():
             sb.atualizar("mensageria_lotes", filtro, {"situacao": "cancelado", "concluido_em": agora.isoformat(),
                                                       "motivo": "arquivo do lote não encontrado no servidor"})
-            resumo[lid] = {"enviadas": 0, "situacao": "cancelado"}
+            resumo[lid] = {"disparadas": 0, "enviadas": 0, "situacao": "cancelado"}
             continue
         locais = json.loads(arq.read_text(encoding="utf-8"))
         plano = plano_rota(sb, eid, canal, modo)
@@ -565,7 +591,7 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         if pausa or maximo == 0:
             sb.atualizar("mensageria_lotes", filtro, {"situacao": "pausado", "atualizado_em": agora.isoformat(),
                                                       "motivo": pausa or "orçamento do centro de custo esgotado"})
-            resumo[lid] = {"enviadas": 0, "situacao": "pausado"}
+            resumo[lid] = {"disparadas": 0, "enviadas": 0, "situacao": "pausado"}
             out(f"mensageria: lote {lid} pausado — {pausa or 'orçamento esgotado'}")
             continue
         rodada = min(POR_RODADA, maximo or POR_RODADA)
@@ -579,8 +605,9 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         sessoes = _sessoes_abertas(sb, eid, agora) if canal == "rcs" else set()
         mudadas, retorno, novos_descad, novas_sessoes, respostas = [], [], [], [], []
         contagem, por_item = {}, {}
-        cont = {"enviadas": 0, "entregues": 0, "falhas": 0, "descadastros": 0, "bloqueadas": 0, "respostas": 0,
-                "fallback": 0}
+        cont = {"disparadas": 0, "enviadas": 0, "entregues": 0, "falhas": 0, "descadastros": 0, "bloqueadas": 0,
+                "respostas": 0, "fallback": 0, "sem_retorno": 0, "bounce_temporario": 0, "aberturas": 0, "cliques": 0,
+                "spam": 0}
         motivo_lote, parou = None, False
 
         def contar(f, op, item, n=1):
@@ -647,24 +674,41 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
                 contar(usado, op, item)
             if canal == "sms" and respondeu:
                 contar(usado, op, "sms_resposta")
+            email = canal == "email" and not fallback
             mudadas.append({**base, "situacao": res.situacao, "motivo": res.motivo, "fornecedor": usado,
                             "id_externo": res.id_externo, "tentativas": int(m.get("tentativas") or 0) + 1,
                             "enviado_em": agora.isoformat(),
                             **({"item": item, "operadora": op,
                                 "respondida_em": agora.isoformat() if respondeu else None} if novo else {}),
-                            **({"fallback": fallback} if fallback else {})})
-            cont["enviadas"] += 1
+                            **({"fallback": fallback} if fallback else {}),
+                            **({"bounce": res.bounce,
+                                "aberta_em": agora.isoformat() if email and res.abriu else None,
+                                "clicada_em": agora.isoformat() if email and res.clicou else None,
+                                "spam_em": agora.isoformat() if email and res.spam else None} if v17 else {})})
+            cont["disparadas"] += 1
+            cont["enviadas"] += int(res.enviado or email)        # e-mail: o provedor recebeu = enviado
             cont["respostas"] += int(respondeu)
             if (res.respondeu and res.situacao == "entregue" and not fallback and res.resposta
                     and (canal != "rcs" or conversacional)):
                 respostas.append({"mensagem": m, "texto": res.resposta, "contato": loc["contato"]})
-            cont[{"entregue": "entregues", "falhou": "falhas", "descadastro": "descadastros"}[res.situacao]] += 1
-            retorno.append((loc["contato"], res.situacao))
-            if res.situacao == "descadastro":
+            if res.bounce == "temporario":
+                cont["bounce_temporario"] += 1                   # passageiro: não marca o e-mail como inexistente
+            elif res.situacao == "enviada":
+                cont["sem_retorno"] += 1                         # a operadora não devolveu a DLR final
+            elif res.situacao in ("entregue", "falhou", "descadastro"):
+                cont[{"entregue": "entregues", "falhou": "falhas", "descadastro": "descadastros"}[res.situacao]] += 1
+                cont["entregues"] += int(v17 and res.situacao == "descadastro")   # recebeu e pediu para sair
+                retorno.append((loc["contato"], res.situacao))
+            if email and res.situacao == "entregue":
+                cont["aberturas"] += int(res.abriu)
+                cont["cliques"] += int(res.clicou)
+                cont["spam"] += int(res.spam)
+            if res.situacao == "descadastro" or (email and res.spam):
                 novos_descad.append({"empresa_id": eid, "canal": canal, "destino_hash": m["destino_hash"],
                                      "destino_mascara": m["destino_mascara"],
-                                     "origem": "link" if canal == "email" else "resposta"})
+                                     "origem": "reclamacao" if res.spam else "link" if canal == "email" else "resposta"})
                 descad.add(m["destino_hash"])
+                cont["descadastros"] += int(res.situacao != "descadastro")
         if mudadas:
             sb.inserir("mensageria_mensagens", mudadas, conflito="id")
         if novos_descad:
@@ -686,12 +730,17 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         resta = (len(pend) == rodada or parou) and sb.selecionar(
             "mensageria_mensagens", {"lote_id": f"eq.{lid}", "situacao": "eq.pendente"}, limite=1)
         situacao = "enviando" if resta else "concluido"
-        somar = {k: v for k, v in cont.items() if (novo or k != "respostas") and (k != "fallback" or v)}
+        gravar = dict(cont)
+        if not v17:                                     # banco antigo: "enviadas" era tudo o que saiu
+            gravar["enviadas"] = gravar.pop("disparadas")
+            for k in ("sem_retorno", "bounce_temporario", "aberturas", "cliques", "spam"):
+                gravar.pop(k)
+        somar = {k: v for k, v in gravar.items() if (novo or k != "respostas") and (k != "fallback" or v)}
         sb.atualizar("mensageria_lotes", filtro, {
             **{k: int(lote.get(k) or 0) + v for k, v in somar.items()}, "situacao": situacao,
             "motivo": motivo_lote, "atualizado_em": agora.isoformat(),
             **({"concluido_em": agora.isoformat()} if situacao == "concluido" else {})})
-        if cont["enviadas"] or situacao == "concluido":
-            out(f"mensageria: lote {lid} ({canal}) +{cont['enviadas']} enviadas — {situacao}")
+        if cont["disparadas"] or situacao == "concluido":
+            out(f"mensageria: lote {lid} ({canal}) +{cont['disparadas']} disparadas — {situacao}")
         resumo[lid] = {**cont, "situacao": situacao}
     return resumo
