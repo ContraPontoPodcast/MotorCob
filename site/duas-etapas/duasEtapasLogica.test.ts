@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { cancelarCadastro, chaveEmGrupos, confirmarCodigo, ErroDuasEtapas, iniciarCadastro, limparCodigo, proximoPasso,
+import { cancelarCadastro, chaveEmGrupos, confirmarCodigo, ErroDuasEtapas, esquecerPendente, iniciarCadastro, limparCodigo, proximoPasso,
   traduzir, type ClienteAuth, type Fator } from "./duasEtapasLogica.ts";
 
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -83,6 +83,7 @@ test("próximo passo depois do login", async () => {
 });
 
 test("cadastro limpa o que ficou pela metade e confirma com o código do aplicativo", async () => {
+  esquecerPendente();
   const s = new SupabaseFalso();
   s.fatores.push({ id: "velho", status: "unverified", factor_type: "totp", segredo: "X", nome: "" });   // o que travava
   const c = await iniciarCadastro(s.cliente);
@@ -100,6 +101,7 @@ test("cadastro limpa o que ficou pela metade e confirma com o código do aplicat
 });
 
 test("login de quem já tem autenticador pede só o código", async () => {
+  esquecerPendente();
   const s = new SupabaseFalso();
   const c = await iniciarCadastro(s.cliente);
   await confirmarCodigo(s.cliente, c.fatorId, totp(c.chave));
@@ -110,18 +112,36 @@ test("login de quem já tem autenticador pede só o código", async () => {
   assert.deepEqual(await proximoPasso(s.cliente, true), { etapa: "pronto" });
 });
 
-test("dois cadastros seguidos não colidem e cancelar não deixa nada pela metade", async () => {
+test("tela montada de novo no meio do cadastro mostra o MESMO QR", async () => {
+  esquecerPendente();
   const s = new SupabaseFalso();
   const a = await iniciarCadastro(s.cliente, new Date("2026-10-11T07:00:00Z"));
-  const b = await iniciarCadastro(s.cliente, new Date("2026-10-11T07:00:05Z"));   // ex.: React StrictMode
+  const b = await iniciarCadastro(s.cliente, new Date("2026-10-11T07:00:05Z"));   // remontou (rota, StrictMode)
+  assert.deepEqual(b, a);
+  assert.equal(s.chamadas.filter((c) => c === "enroll").length, 1);
+  await confirmarCodigo(s.cliente, b.fatorId, totp(a.chave));                     // código lido do 1º QR vale
+  assert.equal(s.nivel, "aal2");
+});
+
+test("cadastro velho (mais de 10 min) ou apagado no servidor gera QR novo; cancelar limpa tudo", async () => {
+  esquecerPendente();
+  const s = new SupabaseFalso();
+  const a = await iniciarCadastro(s.cliente, new Date("2026-10-11T07:00:00Z"));
+  const b = await iniciarCadastro(s.cliente, new Date("2026-10-11T07:11:00Z"));
   assert.notEqual(a.fatorId, b.fatorId);
   assert.deepEqual(s.fatores.map((f) => f.id), [b.fatorId]);
-  await cancelarCadastro(s.cliente, b.fatorId);
+  s.fatores = [];                                                                  // reset pelo Admin
+  const c = await iniciarCadastro(s.cliente, new Date("2026-10-11T07:11:30Z"));
+  assert.notEqual(c.fatorId, b.fatorId);
+  await cancelarCadastro(s.cliente, c.fatorId);
   assert.equal(s.fatores.length, 0);
   assert.ok(s.saiu);
+  const d = await iniciarCadastro(s.cliente, new Date("2026-10-11T07:11:40Z"));    // depois de cancelar: novo
+  assert.notEqual(d.fatorId, c.fatorId);
 });
 
 test("mensagens de erro em português com o detalhe guardado", async () => {
+  esquecerPendente();
   const s = new SupabaseFalso();
   const c = await iniciarCadastro(s.cliente);
   s.falharIp = true;
