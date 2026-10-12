@@ -764,6 +764,13 @@ def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
             sb.inserir("jornada_cliente", enq[i:i + 1000])
         n_arq = publicar_arquivos(sb, r["saida"], f"{emp['slug']}/{data.isoformat()}/{u['codigo']}", limpar=True)
         publicar_acoes(sb, eid, r, cid)
+        try:   # medição da Jornada para o faturamento; nunca derruba a rodada
+            from nuvem import faturamento
+            n_cli = faturamento.publicar_clientes_jornada(sb, eid, cid, pasta, data, r["fila"])
+            if n_cli:
+                out(f"  faturamento: {n_cli} clientes novos da jornada no ciclo")
+        except Exception as e:  # noqa: BLE001
+            out(f"  aviso: medição da jornada não gravada ({str(e)[:120]})")
         try:   # lotes da mensageria a partir da Lista do dia; nunca derruba a rodada
             mensageria.criar_lotes(sb, eid, cid, pasta, data, canais, out)
         except Exception as e:  # noqa: BLE001

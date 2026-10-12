@@ -443,8 +443,9 @@ def _consumo_centro(sb, centro_id, dia: date, por_item: dict) -> None:
 
 
 def _consumo(sb, empresa_id, dia: date, por_item: dict) -> None:
-    """Consumo do mês para a fatura (só envio real). rcs_sessao não é cobrado."""
-    comp = dia.replace(day=1).isoformat()
+    """Consumo do ciclo de uso para a fatura (só envio real). rcs_sessao não é cobrado."""
+    from nuvem.faturamento import competencia, corte_da_empresa
+    comp = competencia(dia, corte_da_empresa(sb, empresa_id)).isoformat()
     for item, n in por_item.items():
         if not n or item == "rcs_sessao":
             continue
@@ -457,8 +458,10 @@ def _consumo(sb, empresa_id, dia: date, por_item: dict) -> None:
 
 def _consumo_fornecedor(sb, empresa_id, dia: date, modo: str, contagem: dict) -> None:
     """Soma no mês o que cada fornecedor fez por item e operadora, com o custo do dia (sem custo cadastrado conta
-    à parte; sessão do RCS não custa). contagem: {(fornecedor, operadora, item): n}."""
-    comp = dia.replace(day=1).isoformat()
+    à parte; sessão do RCS não custa). contagem: {(fornecedor, operadora, item): n}. Mesmo ciclo da fatura,
+    para a margem comparar receita e custo do mesmo período."""
+    from nuvem.faturamento import competencia, corte_da_empresa
+    comp = competencia(dia, corte_da_empresa(sb, empresa_id)).isoformat()
     tabela = {}
 
     def gravar():
