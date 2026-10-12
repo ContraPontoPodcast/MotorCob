@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import re
 import tempfile
 import time
 import unittest
@@ -240,7 +241,8 @@ class TestCampanha(unittest.TestCase):
         self.assertTrue(all(l["url_destino"].startswith("https://pague.exemplo.com/b?c=") for l in links))
         local = json.loads((C.pasta_campanhas(self.dados, "alfa") / f"lote_{lote['id']}.json").read_text("utf-8"))
         textos = [v["texto"] for v in local.values()]
-        self.assertTrue(all("https://mcb.one/" in t and "pague.exemplo" not in t and t.endswith(".") for t in textos))
+        curto = re.compile(r"^.+, pague em https://mcb\.one/[0-9A-Za-z]{8}\.$")
+        self.assertTrue(textos and all(curto.match(t) for t in textos))                # link original não aparece
         porta = {l["mensagem_id"]: l["codigo"] for l in links}
         um = next(iter(local.items()))
         self.assertIn(porta[int(um[0])], um[1]["texto"])
