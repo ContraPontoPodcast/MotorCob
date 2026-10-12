@@ -58,6 +58,12 @@ class TestFaturamento(unittest.TestCase):
         self.assertEqual(competencia(date(2026, 10, 20), 21), date(2026, 10, 1))
         self.assertEqual(competencia(date(2026, 10, 21), 21), date(2026, 11, 1))
         self.assertEqual(competencia(date(2026, 12, 25), 21), date(2027, 1, 1))
+        semanal = {"periodicidade": "dias", "ciclo_dias": 7, "inicio": "2026-10-05"}      # ciclo em dias
+        self.assertEqual(competencia(date(2026, 10, 11), semanal), date(2026, 10, 5))
+        self.assertEqual(competencia(date(2026, 10, 12), semanal), date(2026, 10, 12))
+        self.assertEqual(competencia(date(2026, 10, 20), {"periodicidade": "mensal", "dia_corte": 21}),
+                         date(2026, 10, 1))
+        self.assertEqual(competencia(date(2026, 10, 20), {}), date(2026, 10, 1))
         self.assertEqual(corte_da_empresa(SbFalso(15), 1), 15)
         self.assertEqual(corte_da_empresa(SbFalso(), 1), 1)
         self.assertEqual(corte_da_empresa(SbFalso(31), 1), 1)

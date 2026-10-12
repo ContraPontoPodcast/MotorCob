@@ -977,11 +977,18 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
                                                                                "ativo": "eq.true"}) or []}
         except ErroSupabase:     # banco sem o SQL 18
             frentes = set()
+        try:   # módulo do motor de cada frente: orquestracao (MotorCob) e jornada (MotorCli); sem linha = ligado
+            modulos = {m["modulo"]: m.get("ativo") is not False for m in sb.selecionar(
+                "empresa_modulos", {"empresa_id": f"eq.{emp['id']}"}) or []}
+        except ErroSupabase:
+            modulos = {}
+        modulo_da = {"motorcob": "orquestracao", "motorcli": "jornada"}
+        unidades = [u for u in unidades if modulos.get(modulo_da[u.get("frente") or "motorcob"], True)]
         if frentes:
             unidades = [u for u in unidades if (u.get("frente") or "motorcob") in frentes]
-            if not unidades:
-                out("  nenhuma carteira ativa nas frentes da empresa")
-                return {"credores": {}}
+        if not unidades:
+            out("  nenhuma carteira ativa nas frentes da empresa")
+            return {"credores": {}}
     if so_credores is not None and unidades[0]["id"] is not None:
         unidades = [u for u in unidades if u["id"] in so_credores]
     baixados = baixar_entradas(sb, dados, emp["id"], out, unidades,

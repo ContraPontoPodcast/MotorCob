@@ -397,6 +397,9 @@ class TestSincronizar(unittest.TestCase):
         n = len(t["fila_dia"])
         self._dia(date(2026, 10, 13), empresa="beta")
         self.assertEqual(len(t["fila_dia"]), n)
+        # módulo Jornada não contratado: nem a carteira MotorCli roda
+        t["empresa_modulos"] = [{"empresa_id": 2, "modulo": "jornada", "ativo": False}]
+        self.assertEqual(self._dia(date(2026, 10, 13), empresa="beta")["beta"]["credores"], {})
 
     def test_credores_da_empresa_rodam_separados(self):
         """beta com dois credores: cada arquivo vai para o seu; o bureau sem credor vale para os dois."""
