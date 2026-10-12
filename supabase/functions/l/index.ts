@@ -7,11 +7,9 @@ const URL_SB = Deno.env.get("SUPABASE_URL")!;
 const CHAVE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const cab = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer" };
 
-const pagina = (titulo: string, status: number) =>
-  new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">` +
-    `<title>${titulo}</title><body style="font:16px -apple-system,system-ui,sans-serif;display:grid;place-items:center;` +
-    `min-height:90vh;color:#1D1D1F"><p>${titulo}</p></body>`,
-    { status, headers: { ...cab, "Content-Type": "text/html; charset=utf-8" } });
+// o Supabase não serve HTML pelas funções (troca para text/plain): as mensagens vão como texto simples
+const pagina = (texto: string, status: number) =>
+  new Response(texto, { status, headers: { ...cab, "Content-Type": "text/plain; charset=utf-8" } });
 
 Deno.serve(async (req) => {
   const codigo = codigoDoCaminho(new URL(req.url).pathname);
