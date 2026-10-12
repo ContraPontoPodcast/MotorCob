@@ -15,7 +15,9 @@ test("pedido: ações, alvo e forma", () => {
   assert.match(validarPedido({ acao: "pagar", fatura: 3 }).erro!, /forma/);
   assert.match(validarPedido({ acao: "pagar", fatura: 3, recarga: 2, forma: "pix" }).erro!, /fatura ou a recarga/);
   assert.match(validarPedido({ acao: "pagar", forma: "pix" }).erro!, /fatura ou a recarga/);
-  assert.match(validarPedido({ acao: "fatura_emitida" }).erro!, /fatura/);
+  assert.match(validarPedido({ acao: "enviar_fatura" }).erro!, /fatura/);
+  assert.match(validarPedido({ acao: "demonstrativo", recarga: 2 }).erro!, /fatura/);
+  assert.equal(validarPedido({ acao: "enviar_fatura", fatura: 9 }).pedido?.fatura, 9);
   assert.match(validarPedido({ acao: "pagar", fatura: -1, forma: "pix" }).erro!, /inválida/);
   assert.ok(validarPedido({ acao: "recargas_automaticas" }).pedido);
   assert.match(validarPedido({ acao: "apagar" }).erro!, /desconhecida/);

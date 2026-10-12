@@ -14,8 +14,9 @@ Supabase › SQL Editor, na ordem, depois do SQL 22:
 
 1. `01_banco/23_cobranca_stripe_nf.sql`: cobranças, cartão guardado, nota fiscal.
 2. `01_banco/24_retorno_fornecedores.sql`: avisos de entrega e resposta dos fornecedores.
+3. `01_banco/25_emissao_envio_faturas.sql`: emissão em lote e automática, demonstrativo em PDF e envio por e-mail.
 
-Confira com `CONFERENCIA_GERAL.sql` (itens 29 e 30).
+Confira com `CONFERENCIA_GERAL.sql` (itens 29, 30 e 31).
 
 ## 1. Stripe (boleto, Pix e cartão)
 
@@ -62,6 +63,21 @@ R$ 3,45 por boleto pago · Pix 1,19% (convite). Boleto: de R$ 5,00 a R$ 49.999,9
 
 A nota sai sozinha: da fatura, quando o pagamento cai (ou na emissão da fatura, se escolher); da recarga, quando
 ela é paga. Nota com erro aparece no Console com o motivo e o botão "Emitir de novo".
+
+## 2b. Envio das faturas por e-mail (demonstrativo e boleto)
+
+Emitida a fatura (uma a uma, em lote ou automática), o motor pede à função `cobranca` para gerar o demonstrativo em
+PDF, o boleto (PDF do Stripe, separado) e mandar o e-mail aos contatos financeiros da empresa (papel "Financeiro" em
+Empresa › Contatos; sem nenhum, vai para os outros contatos).
+
+1. O e-mail sai pela **Locaweb** (a mesma conta do e-mail da Mensageria). No Supabase › Secrets: `LOCAWEB_TOKEN`
+   (token do SMTP Locaweb) e `FATURA_EMAIL_DE` (remetente confirmado na Locaweb, ex.: `financeiro@seudominio.com.br`).
+2. Os dados do prestador que aparecem no demonstrativo (razão social, CNPJ, endereço) ficam em Console › Faturamento ›
+   Configuração da nota (os mesmos da nota fiscal).
+3. O e-mail leva o link seguro do demonstrativo (vale 30 dias) e o do boleto. Se a Locaweb confirmar que a API aceita
+   anexo, dá para mandar o PDF anexado também; peça essa confirmação ao suporte deles.
+4. Para testar: deixe uma empresa com "Emissão automática" ou emita uma fatura em rascunho pelo Console; em até 1
+   minuto o envio aparece como "E-mail enviado".
 
 ## 3. Fornecedores da Mensageria
 
@@ -134,4 +150,5 @@ vira descadastro. No e-mail, bounce corrige o "entregue" e abertura conta no fun
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Supabase › Edge Functions › Secrets | cobranca, pagamentos-webhook |
 | `FOCUSNFE_TOKEN`, `FOCUSNFE_WEBHOOK_TOKEN` | Supabase › Edge Functions › Secrets | cobranca, pagamentos-webhook |
 | `RETORNO_TOKEN` | Supabase › Secrets **e** segredo `motorcob-fornecedores` | retorno-mensageria e motor |
+| `LOCAWEB_TOKEN`, `FATURA_EMAIL_DE` | Supabase › Edge Functions › Secrets | cobranca (e-mail das faturas) |
 | Zenvia, Infobip, Sinch, Locaweb | Google Cloud › Secret Manager › `motorcob-fornecedores` | motor (envio) |

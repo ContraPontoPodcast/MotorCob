@@ -1,0 +1,339 @@
+<title>Faturamento MotorCX</title>
+<style>
+/* Layout: três vistas do mesmo fluxo (Console emite, cliente recebe o e-mail, cliente abre o PDF); a fatura em PDF é uma folha A4 branca nos dois temas */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
+  --cob: #C9A35A; --azul: #0A64D0; --ok: #1E7A36; --ok-fundo: #E6F4EA; --alerta: #8A5A00; --alerta-fundo: #FFF4D6;
+  --erro: #C4271E; --erro-fundo: #FDECEA;
+  --papel: #FFFFFF; --papel-tinta: #1D1D1F; --papel-2: #5F5F66; --papel-linha: #DADADF; --papel-suave: #F4F4F6;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --ok-fundo: #12301A; --alerta: #F0C35A; --alerta-fundo: #33280A;
+  --erro: #FF6B60; --erro-fundo: #3A1512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --ok-fundo: #12301A; --alerta: #F0C35A; --alerta-fundo: #33280A;
+  --erro: #FF6B60; --erro-fundo: #3A1512; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); margin: 0; padding: 24px 16px 48px; }
+.topo, main { max-width: 1080px; margin: 0 auto; }
+.proto { font-size: 13px; color: var(--tinta-2); margin: 0 0 12px; }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0; }
+h3 { font-size: 15px; margin: 0; }
+.sub { margin: 4px 0 16px; color: var(--tinta-2); max-width: 70ch; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--linha); border-radius: 10px; padding: 3px; margin-bottom: 20px; max-width: 100%; }
+.seg button { border: 0; background: none; color: var(--tinta); border-radius: 8px; padding: 8px 12px; font: 13.5px var(--sans); cursor: pointer; }
+.seg button[aria-selected="true"] { background: var(--painel); box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 600; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cartao { background: var(--painel); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ajuda { color: var(--tinta-2); font-size: 13.5px; margin: 0; }
+.linha { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+.pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.pill.ok { background: var(--ok-fundo); color: var(--ok); }
+.pill.alerta { background: var(--alerta-fundo); color: var(--alerta); }
+.pill.erro { background: var(--erro-fundo); color: var(--erro); }
+.pill.neutro { background: var(--suave); color: var(--tinta-2); }
+.btn { border: 0; border-radius: 980px; padding: 9px 16px; font: 600 14px var(--sans); cursor: pointer; background: var(--tinta); color: var(--painel); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.sec { background: var(--suave); color: var(--tinta); }
+.btn.link { background: none; color: var(--azul); padding: 6px 2px; }
+.botoes { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tabela { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta-2); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+td { padding: 11px 10px; border-bottom: 1px solid var(--linha); vertical-align: middle; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--tinta); }
+select { font: 14px var(--sans); color: var(--tinta); background: var(--painel); border: 1px solid var(--linha); border-radius: 8px; height: 34px; padding: 0 8px; }
+.status { font-size: 13.5px; min-height: 1.2em; margin: 0; }
+.status.ok { color: var(--ok); }
+.regras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.regra { background: var(--suave); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+.regra b { font-size: 14px; }
+.regra span { font-size: 13px; color: var(--tinta-2); }
+/* e-mail */
+.email { max-width: 640px; background: var(--painel); border-radius: 18px; overflow: hidden; }
+.email .env { padding: 14px 20px; border-bottom: 1px solid var(--linha); font-size: 13.5px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; }
+.email .env span:nth-child(odd) { color: var(--tinta-2); }
+.email .corpo { padding: 24px 20px; display: flex; flex-direction: column; gap: 14px; }
+.email .total { font-size: 30px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.anexo { display: flex; gap: 12px; align-items: center; border: 1px solid var(--linha); border-radius: 12px; padding: 10px 12px; }
+.anexo .ic { width: 34px; height: 42px; border-radius: 5px; background: var(--erro); color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: center; flex: none; }
+/* folha A4 */
+.folha-wrap { overflow-x: auto; padding-bottom: 8px; }
+.folha { width: 794px; max-width: none; margin: 0 auto; background: var(--papel); color: var(--papel-tinta); border-radius: 4px; box-shadow: 0 6px 30px rgba(0,0,0,.18); padding: 48px 52px; font-size: 12px; line-height: 1.45; display: flex; flex-direction: column; gap: 18px; }
+.folha h4 { margin: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--papel-2); }
+.folha table { font-size: 11.5px; }
+.folha th { color: var(--papel-2); border-bottom: 1px solid var(--papel-linha); padding: 6px 6px; font-size: 10px; }
+.folha td { border-bottom: 1px solid var(--papel-linha); padding: 6px 6px; }
+.folha .cabec { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.folha .marca { display: flex; gap: 10px; align-items: center; font-weight: 700; font-size: 18px; }
+.folha .doc { text-align: right; }
+.folha .doc b { font-size: 20px; display: block; }
+.folha .partes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.folha .bloco { background: var(--papel-suave); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.folha .resumo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.folha .resumo div { border: 1px solid var(--papel-linha); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.folha .resumo span { color: var(--papel-2); font-size: 10.5px; }
+.folha .resumo b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.folha .sub-linha td { color: var(--papel-2); font-size: 10.5px; padding-top: 0; border-bottom-style: dashed; }
+.folha .tot td { font-weight: 700; font-size: 13px; border-bottom: 0; }
+.folha .cod { font: 11px var(--mono); overflow-wrap: anywhere; }
+.folha .destaque { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; background: var(--papel-suave); border-radius: 10px; padding: 16px 18px; }
+.folha .destaque span { color: var(--papel-2); font-size: 11px; display: block; }
+.folha .destaque b { font-size: 28px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.folha .destaque dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; justify-self: end; }
+.folha .destaque dt { color: var(--papel-2); }
+.folha .destaque dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.folha .grupo td { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--papel-2); font-weight: 700; padding-top: 12px; border-bottom-color: var(--papel-tinta); }
+.folha .nota-pag { margin: 0; color: var(--papel-2); font-size: 11px; }
+.folha .barras canvas { width: 100%; height: 60px; display: block; }
+.folha .rodape { color: var(--papel-2); font-size: 10px; border-top: 1px solid var(--papel-linha); padding-top: 10px; display: flex; justify-content: space-between; gap: 12px; }
+.folha .pag { text-align: center; color: var(--papel-2); font-size: 10px; }
+@media (max-width: 760px) { .regras { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<div class="topo">
+  <p class="proto">Protótipo · emissão das faturas (uma a uma, em lote ou automática), e-mail ao cliente, demonstrativo e boleto em PDFs separados. Empresas, valores e códigos fictícios.</p>
+  <h1>Faturamento MotorCX</h1>
+  <p class="sub">A equipe emite pelo Console ou deixa a emissão automática no fechamento do ciclo. Emitida, a fatura gera dois PDFs, o demonstrativo do uso e o boleto, e vai por e-mail para o financeiro do cliente.</p>
+  <div class="seg" role="tablist" aria-label="Vista">
+    <button type="button" role="tab" id="aba-console" aria-selected="true" data-v="console">Console · Faturas do ciclo</button>
+    <button type="button" role="tab" id="aba-email" aria-selected="false" data-v="email">E-mail ao cliente</button>
+    <button type="button" role="tab" id="aba-pdf" aria-selected="false" data-v="pdf">Demonstrativo (PDF)</button>
+    <button type="button" role="tab" id="aba-boleto" aria-selected="false" data-v="boleto">Boleto (PDF)</button>
+  </div>
+</div>
+
+<main>
+  <!-- ======================= Console ======================= -->
+  <section id="v-console" class="col" role="tabpanel" aria-labelledby="aba-console">
+    <div class="regras">
+      <div class="regra"><b>Uma a uma</b><span>Abra o rascunho, confira, ajuste se precisar e toque em Emitir.</span></div>
+      <div class="regra"><b>Em lote</b><span>Marque as faturas revisadas (ou todas) e toque em Emitir selecionadas.</span></div>
+      <div class="regra"><b>Automática</b><span>Na Contratação da empresa, "Emissão automática": a fatura sai sozinha no dia seguinte ao fim do ciclo.</span></div>
+    </div>
+
+    <div class="cartao">
+      <div class="linha">
+        <h2>Faturas do ciclo · outubro/2026</h2>
+        <div class="botoes">
+          <button type="button" class="btn sec" id="gerar">Gerar rascunhos</button>
+          <button type="button" class="btn" id="emitir" disabled>Emitir selecionadas</button>
+        </div>
+      </div>
+      <div class="tabela"><table>
+        <thead><tr><th><input type="checkbox" id="todas" aria-label="Selecionar todos os rascunhos"></th><th>Empresa</th><th>Ciclo</th><th>Emissão</th><th class="num">Valor</th><th>Situação</th><th>Envio</th></tr></thead>
+        <tbody id="lista"></tbody>
+      </table></div>
+      <p class="status" id="st" role="status"></p>
+      <p class="ajuda">Ao emitir: o demonstrativo em PDF é gerado, o boleto é criado no Stripe (PDF separado) e o e-mail vai para os contatos financeiros da empresa. Se algo falhar (cadastro sem CNPJ, e-mail inválido), a fatura continua emitida e o envio aparece com o motivo e o botão "Enviar de novo".</p>
+    </div>
+  </section>
+
+  <!-- ======================= E-mail ======================= -->
+  <section id="v-email" role="tabpanel" aria-labelledby="aba-email" hidden>
+    <div class="email">
+      <div class="env">
+        <span>De</span><span>MotorCX Financeiro &lt;financeiro@motorcx.exemplo&gt;</span>
+        <span>Para</span><span>financeiro@alfa.exemplo, contas@alfa.exemplo</span>
+        <span>Assunto</span><span>Fatura MotorCX nº 1042 · ciclo 21/09 a 20/10/2026 · vence 25/10</span>
+      </div>
+      <div class="corpo">
+        <p style="margin:0">Olá, equipe da Alfa Serviços de Cobrança.</p>
+        <p style="margin:0">A fatura do ciclo de 21/09/2026 a 20/10/2026 está disponível.</p>
+        <div class="total">R$ 4.812,40</div>
+        <table>
+          <tbody>
+            <tr><td>Orquestração · 12.500 contratos</td><td class="num">R$ 3.104,50</td></tr>
+            <tr><td>Jornada · 1.236 clientes</td><td class="num">R$ 618,00</td></tr>
+            <tr><td>Mensageria · SMS, RCS e e-mail</td><td class="num">R$ 1.321,54</td></tr>
+            <tr><td>Descontos, créditos e cobrança extra</td><td class="num">− R$ 231,64</td></tr>
+          </tbody>
+        </table>
+        <p style="margin:0"><b>Vencimento:</b> 25/10/2026 · boleto, Pix ou cartão.</p>
+        <div class="botoes">
+          <a class="btn" href="https://stripe.com/br" target="_blank" rel="noopener">Pagar agora</a>
+        </div>
+        <div class="anexo"><span class="ic">PDF</span><div style="min-width:0;flex:1"><b>Demonstrativo-MotorCX-1042-out-2026.pdf</b><div class="ajuda">O que foi usado e cobrado no ciclo · 2 páginas</div></div><a class="btn link" href="#" id="ver-pdf">Abrir</a></div>
+        <div class="anexo"><span class="ic" style="background:var(--tinta)">PDF</span><div style="min-width:0;flex:1"><b>Boleto-MotorCX-1042.pdf</b><div class="ajuda">Para pagar no banco · vence 25/10/2026</div></div><a class="btn link" href="#" id="ver-boleto">Abrir</a></div>
+        <p class="ajuda">A nota fiscal de serviço chega em outro e-mail quando o pagamento for confirmado. Dúvidas: Suporte na plataforma.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= PDF ======================= -->
+  <section id="v-pdf" role="tabpanel" aria-labelledby="aba-pdf" hidden>
+    <div class="folha-wrap">
+      <article class="folha" aria-label="Demonstrativo em PDF, página 1 de 2">
+        <div class="cabec">
+          <div class="marca"><svg width="26" height="26" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="38" fill="none" stroke="#2A2F39" stroke-width="11"/><path d="M50 12 A38 38 0 0 1 86.1 38.3" fill="none" stroke="#C9A35A" stroke-width="11" stroke-linecap="round"/><circle cx="50" cy="50" r="11" fill="#C9A35A"/></svg>MotorCX</div>
+          <div class="doc"><span>Demonstrativo da fatura</span><b>nº 1042</b><span>Emitida em 21/10/2026</span></div>
+        </div>
+        <div class="partes">
+          <div class="bloco"><h4>Prestador</h4><b>MotorCX Tecnologia Ltda (exemplo)</b><span>CNPJ 00.000.000/0001-00</span><span>São Paulo · SP</span></div>
+          <div class="bloco"><h4>Cliente</h4><b>Alfa Serviços de Cobrança Ltda</b><span>CNPJ 11.222.333/0001-81</span><span>Av. Paulista, 1000 · Bela Vista · São Paulo · SP · 01310-100</span></div>
+        </div>
+        <div class="destaque">
+          <div><span>Total do ciclo</span><b>R$ 4.812,40</b></div>
+          <dl><dt>Ciclo de uso</dt><dd>21/09 a 20/10/2026</dd><dt>Vencimento</dt><dd>25/10/2026</dd><dt>Frentes</dt><dd>MotorCob + MotorCli</dd></dl>
+        </div>
+
+        <div><h4>Resumo</h4>
+        <table>
+          <tbody>
+            <tr><td>Motor de decisão · Orquestração e Jornada</td><td class="num">R$ 3.722,50</td></tr>
+            <tr><td>Mensageria · SMS, RCS e e-mail</td><td class="num">R$ 1.321,54</td></tr>
+            <tr><td>Ajustes · descontos, créditos e cobrança extra</td><td class="num">− R$ 231,64</td></tr>
+            <tr class="tot"><td>Total</td><td class="num">R$ 4.812,40</td></tr>
+          </tbody>
+        </table></div>
+
+        <div><h4>O que está sendo cobrado</h4>
+        <table>
+          <thead><tr><th>Item</th><th>Como é cobrado</th><th class="num">Quantidade</th><th class="num">Preço</th><th class="num">Valor</th></tr></thead>
+          <tbody>
+            <tr class="grupo"><td colspan="5">Motor de decisão</td></tr>
+            <tr><td>Orquestração (MotorCob)</td><td>Por contrato · escalonado progressivo</td><td class="num">12.500 contratos</td><td class="num">—</td><td class="num">R$ 3.104,50</td></tr>
+            <tr class="sub-linha"><td colspan="4">Até 10.000: 10.000 × R$ 0,2600 = R$ 2.600,00 · acima de 10.000: 2.500 × R$ 0,2018 = R$ 504,50</td><td></td></tr>
+            <tr><td>Jornada (MotorCli)</td><td>Por cliente acionado · flat</td><td class="num">1.236 clientes</td><td class="num">R$ 0,5000</td><td class="num">R$ 618,00</td></tr>
+            <tr class="grupo"><td colspan="5">Mensageria</td></tr>
+            <tr><td>SMS</td><td>Por mensagem · escalonado por faixa</td><td class="num">14.902</td><td class="num">R$ 0,0680</td><td class="num">R$ 1.013,34</td></tr>
+            <tr class="sub-linha"><td colspan="4">Volume na faixa de 10.001 a 50.000 · inclui 311 respostas de clientes</td><td></td></tr>
+            <tr><td>RCS Basic</td><td>Por mensagem · flat</td><td class="num">2.140</td><td class="num">R$ 0,0900</td><td class="num">R$ 192,60</td></tr>
+            <tr><td>RCS Single</td><td>Por mensagem · flat</td><td class="num">410</td><td class="num">R$ 0,1600</td><td class="num">R$ 65,60</td></tr>
+            <tr><td>E-mail</td><td>Por e-mail · flat · mínimo R$ 50,00</td><td class="num">3.820</td><td class="num">R$ 0,0090</td><td class="num">R$ 50,00</td></tr>
+            <tr class="sub-linha"><td colspan="4">Uso de R$ 34,38, abaixo do mínimo do ciclo: cobrado o mínimo</td><td></td></tr>
+            <tr class="grupo"><td colspan="5">Ajustes</td></tr>
+            <tr><td colspan="4">Desconto · implantação (combinado na contratação)</td><td class="num">− R$ 250,00</td></tr>
+            <tr><td colspan="4">Crédito · instabilidade do SMS em 02/10</td><td class="num">− R$ 18,36</td></tr>
+            <tr><td colspan="4">Cobrança extra · carga emergencial fora do horário</td><td class="num">R$ 36,72</td></tr>
+            <tr class="tot"><td colspan="4">Total</td><td class="num">R$ 4.812,40</td></tr>
+          </tbody>
+        </table></div>
+        <p class="nota-pag">Este é o demonstrativo do que foi usado e cobrado. O boleto vem em um PDF separado; Pix e cartão ficam na plataforma, em Empresa › Faturamento.</p>
+        <div class="pag">Página 1 de 2</div>
+      </article>
+
+      <article class="folha" style="margin-top:20px" aria-label="Demonstrativo em PDF, página 2 de 2">
+        <div class="linha"><b>Demonstrativo nº 1042 · detalhamento do uso</b><span style="color:var(--papel-2)">Ciclo 21/09 a 20/10/2026</span></div>
+        <div><h4>Uso por carteira</h4>
+        <table>
+          <thead><tr><th>Carteira</th><th>Frente</th><th class="num">Contratos avaliados</th><th class="num">Clientes na jornada</th><th class="num">Dias com rotina</th></tr></thead>
+          <tbody>
+            <tr><td>Principal</td><td>MotorCob</td><td class="num">8.902</td><td class="num">—</td><td class="num">26</td></tr>
+            <tr><td>Banco X</td><td>MotorCob</td><td class="num">3.598</td><td class="num">—</td><td class="num">22</td></tr>
+            <tr><td>Relacionamento</td><td>MotorCli</td><td class="num">—</td><td class="num">1.236</td><td class="num">30</td></tr>
+          </tbody>
+        </table></div>
+        <h4>Mensageria por canal</h4>
+        <table>
+          <thead><tr><th>Canal</th><th class="num">Disparadas</th><th class="num">Entregues</th><th class="num">Não entregues</th><th class="num">Respostas</th><th class="num">Cobradas</th></tr></thead>
+          <tbody>
+            <tr><td>SMS</td><td class="num">14.591</td><td class="num">13.902</td><td class="num">689</td><td class="num">311</td><td class="num">14.902</td></tr>
+            <tr><td>RCS</td><td class="num">2.550</td><td class="num">2.433</td><td class="num">117</td><td class="num">96</td><td class="num">2.550</td></tr>
+            <tr><td>E-mail</td><td class="num">3.820</td><td class="num">3.611</td><td class="num">209</td><td class="num">—</td><td class="num">3.820</td></tr>
+          </tbody>
+        </table>
+        <p style="margin:0;color:var(--papel-2)">SMS cobrado = disparadas + respostas dos clientes. RCS: mensagens dentro de uma conversa aberta nas últimas 24 h não são cobradas (412 no ciclo).</p>
+        <table>
+          <thead><tr><th>Mensageria por campanha</th><th class="num">SMS</th><th class="num">RCS</th><th class="num">E-mail</th></tr></thead>
+          <tbody>
+            <tr><td>Lista do dia (Orquestração)</td><td class="num">11.208</td><td class="num">1.902</td><td class="num">3.120</td></tr>
+            <tr><td>Campanha "Renegocia Outubro"</td><td class="num">3.383</td><td class="num">648</td><td class="num">700</td></tr>
+          </tbody>
+        </table>
+        <div class="rodape"><span>Nota fiscal de serviço: emitida após o pagamento, enviada por e-mail e disponível em Empresa › Faturamento.</span><span>Página 2 de 2</span></div>
+      </article>
+    </div>
+  </section>
+  <!-- ======================= Boleto ======================= -->
+  <section id="v-boleto" role="tabpanel" aria-labelledby="aba-boleto" hidden>
+    <div class="folha-wrap">
+      <article class="folha boleto" aria-label="Boleto em PDF">
+        <div class="cabec">
+          <div class="marca"><svg width="26" height="26" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="38" fill="none" stroke="#2A2F39" stroke-width="11"/><path d="M50 12 A38 38 0 0 1 86.1 38.3" fill="none" stroke="#C9A35A" stroke-width="11" stroke-linecap="round"/><circle cx="50" cy="50" r="11" fill="#C9A35A"/></svg>MotorCX</div>
+          <div class="doc"><span>Boleto da fatura</span><b>nº 1042</b><span>Gerado pelo Stripe</span></div>
+        </div>
+        <div class="destaque">
+          <div><span>Valor a pagar</span><b>R$ 4.812,40</b></div>
+          <dl><dt>Vencimento</dt><dd>25/10/2026</dd><dt>Pagador</dt><dd>Alfa Serviços de Cobrança Ltda</dd><dt>CNPJ</dt><dd>11.222.333/0001-81</dd></dl>
+        </div>
+        <div class="bloco"><h4>Linha digitável</h4><p class="cod" style="margin:0;font-size:14px">23793.38128 60000.000003 00000.000400 1 98760000481240</p></div>
+        <div class="barras" aria-label="Código de barras de exemplo"><canvas id="barras" width="560" height="60"></canvas></div>
+        <p class="nota-pag">Pague no app do seu banco ou em qualquer agência até o vencimento. O pagamento é confirmado em até 1 dia útil e a fatura aparece como "Paga" na plataforma. O que está sendo cobrado está no demonstrativo, em PDF separado.</p>
+        <div class="rodape"><span>Beneficiário: MotorCX Tecnologia Ltda (exemplo) · recebimento pelo Stripe</span><span>Boleto de exemplo</span></div>
+      </article>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const vistas = ["console", "email", "pdf", "boleto"];
+  function abrir(v) {
+    document.querySelectorAll('[role="tab"]').forEach((b) => b.setAttribute("aria-selected", String(b.dataset.v === v)));
+    vistas.forEach((x) => { $("v-" + x).hidden = x !== v; });
+  }
+  document.querySelectorAll('[role="tab"]').forEach((b) => b.addEventListener("click", () => abrir(b.dataset.v)));
+  $("ver-pdf").addEventListener("click", (e) => { e.preventDefault(); abrir("pdf"); });
+  $("ver-boleto").addEventListener("click", (e) => { e.preventDefault(); abrir("boleto"); });
+
+  const faturas = [
+    { emp: "Alfa Cobrança", ciclo: "21/09 a 20/10", auto: false, valor: 4812.40, sit: "rascunho", envio: "" },
+    { emp: "Beta Jornada", ciclo: "01/10 a 31/10", auto: true, valor: 1288.00, sit: "aguardando", envio: "" },
+    { emp: "Gama Crédito", ciclo: "01/10 a 31/10", auto: false, valor: 2390.15, sit: "rascunho", envio: "" },
+    { emp: "Delta Assessoria", ciclo: "21/09 a 20/10", auto: true, valor: 3120.80, sit: "emitida", envio: "ok" },
+    { emp: "Épsilon Recuperação", ciclo: "21/09 a 20/10", auto: false, valor: 2155.00, sit: "emitida", envio: "erro" },
+  ];
+  const brl = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const el = (tag, txt, cls) => { const e = document.createElement(tag); if (txt != null) e.textContent = txt; if (cls) e.className = cls; return e; };
+
+  function pintar() {
+    const tb = $("lista"); tb.replaceChildren();
+    faturas.forEach((f, i) => {
+      const tr = document.createElement("tr");
+      const c0 = el("td"); if (f.sit === "rascunho") { const cb = el("input"); cb.type = "checkbox"; cb.id = "f" + i; cb.dataset.i = i; cb.setAttribute("aria-label", "Selecionar " + f.emp); c0.appendChild(cb); } tr.appendChild(c0);
+      tr.appendChild(el("td", f.emp)); tr.appendChild(el("td", f.ciclo));
+      const c3 = el("td"); const s = el("select"); s.id = "em" + i; s.setAttribute("aria-label", "Emissão de " + f.emp);
+      [["auto", "Automática"], ["revisar", "Revisar antes"]].forEach(([v, t]) => { const o = el("option", t); o.value = v; o.selected = (v === "auto") === f.auto; s.appendChild(o); });
+      s.addEventListener("change", () => { f.auto = s.value === "auto"; });
+      c3.appendChild(s); tr.appendChild(c3);
+      tr.appendChild(el("td", brl(f.valor), "num"));
+      const c5 = el("td");
+      c5.appendChild(f.sit === "rascunho" ? el("span", "Rascunho", "pill neutro") : f.sit === "aguardando" ? el("span", "Sai sozinha em 01/11", "pill alerta") : el("span", "Emitida", "pill ok"));
+      tr.appendChild(c5);
+      const c6 = el("td");
+      if (f.envio === "ok") c6.appendChild(el("span", "E-mail enviado · demonstrativo · boleto", "pill ok"));
+      else if (f.envio === "erro") { c6.appendChild(el("span", "Sem e-mail do financeiro", "pill erro")); const b = el("button", "Enviar de novo", "btn link"); b.type = "button"; b.addEventListener("click", () => { f.envio = "ok"; pintar(); $("st").className = "status ok"; $("st").textContent = "Fatura de " + f.emp + " enviada."; }); c6.appendChild(b); }
+      else c6.appendChild(el("span", "—", "ajuda"));
+      tr.appendChild(c6);
+      tb.appendChild(tr);
+    });
+    atualizar();
+  }
+  function marcadas() { return [...document.querySelectorAll("#lista input[type=checkbox]:checked")].map((c) => +c.dataset.i); }
+  function atualizar() { const n = marcadas().length; $("emitir").disabled = !n; $("emitir").textContent = n ? "Emitir selecionadas (" + n + ")" : "Emitir selecionadas"; }
+  $("lista").addEventListener("change", (e) => { if (e.target.type === "checkbox") atualizar(); });
+  $("todas").addEventListener("change", (e) => { document.querySelectorAll("#lista input[type=checkbox]").forEach((c) => { c.checked = e.target.checked; }); atualizar(); });
+  $("emitir").addEventListener("click", () => {
+    const ids = marcadas(); ids.forEach((i) => { faturas[i].sit = "emitida"; faturas[i].envio = "ok"; });
+    $("todas").checked = false; pintar();
+    $("st").className = "status ok"; $("st").textContent = ids.length + (ids.length === 1 ? " fatura emitida" : " faturas emitidas") + ". demonstrativo, boleto e e-mail a caminho.";
+  });
+  $("gerar").addEventListener("click", () => { $("st").className = "status ok"; $("st").textContent = "Rascunhos em dia: só entram empresas pós-pagas com ciclo fechado e preço cadastrado."; });
+  pintar();
+
+  // código de barras de exemplo (padrão fixo, não é um boleto de verdade)
+  const cv = $("barras"), c = cv.getContext("2d"); let x = 0, sd = 9;
+  c.fillStyle = "#fff"; c.fillRect(0, 0, cv.width, cv.height); c.fillStyle = "#000";
+  while (x < cv.width - 4) { sd = (sd * 1103515245 + 12345) & 0x7fffffff; const w = 1 + (sd % 3); c.fillRect(x, 0, w, cv.height); x += w + 1 + ((sd >> 4) % 3); }
+})();
+</script>

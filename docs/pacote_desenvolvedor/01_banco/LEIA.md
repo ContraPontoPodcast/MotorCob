@@ -110,5 +110,9 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
 24. `24_retorno_fornecedores.sql` (= `supabase/migrations/20261121000001_retorno_fornecedores.sql`) — **retorno dos
     fornecedores reais** (entrega, falha, resposta, bounce, abertura), sem o contato do cliente. Guia:
     `08_api/LEIA_INTEGRACOES.md`.
+25. `25_emissao_envio_faturas.sql` (= `supabase/migrations/20261122000001_emissao_envio_faturas.sql`) — **emissão
+    das faturas** uma a uma, em lote (`emitir_faturas`) ou **automática** no fim do ciclo (por empresa), e a **fila
+    de envio**: demonstrativo em PDF (bucket privado `faturas`), boleto em PDF separado e e-mail aos contatos
+    financeiros. Depois cole os prompts 32 e 33.
 
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

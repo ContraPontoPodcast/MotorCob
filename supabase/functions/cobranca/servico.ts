@@ -1,9 +1,11 @@
 // Chamadas ao Stripe e ao Focus NFe e gravação no banco, usadas pela função "cobranca" e pela "pagamentos-webhook".
-// As chaves vêm só dos Secrets do Supabase (STRIPE_SECRET_KEY, FOCUSNFE_TOKEN) e nunca saem daqui.
+// As chaves vêm só dos Secrets do Supabase (STRIPE_SECRET_KEY, FOCUSNFE_TOKEN, LOCAWEB_TOKEN) e nunca saem daqui.
 import {
   type Alvo, checkoutCartao, clienteStripe, dadosCobranca, descricaoNota, type Empresa, FOCUS, faltaNaConfig, formStripe,
-  type Gerada, lerGerada, lerNota, type NfConfig, notaFocus, paymentIntent, referenciaNota, STRIPE,
+  type Gerada, lerGerada, lerNota, type NfConfig, notaFocus, paymentIntent, pdfDoBoleto, referenciaNota, STRIPE,
 } from "./regras.ts";
+import { type Dados, emailFatura, montar } from "./demonstrativo.ts";
+import { gerarPdf } from "./demonstrativo_pdf.ts";
 
 // deno-lint-ignore no-explicit-any
 type Banco = any;
@@ -85,7 +87,7 @@ export async function gerarCobranca(db: Banco, alvo: Alvo, forma: "boleto" | "pi
     const g: Gerada = lerGerada(obj);
     const { data: final } = await db.from("cobrancas").update(g).eq("id", linha.id).select("*").single();
     if (alvo.tipo === "fatura" && forma === "boleto" && g.link) {
-      await db.from("faturas").update({ link_boleto: g.link, id_externo: g.id_externo }).eq("id", alvo.id);
+      await db.from("faturas").update({ link_boleto: g.link, id_externo: g.id_externo, boleto_pdf: pdfDoBoleto(obj) }).eq("id", alvo.id);
     }
     if (alvo.tipo === "recarga" && g.link) {
       await db.from("recargas").update({ link_pagamento: g.link, id_externo: g.id_externo, forma }).eq("id", alvo.id);
@@ -176,4 +178,79 @@ export async function atualizarNota(db: Banco, ref: string) {
     await db.from("faturas").update({ link_nota_fiscal: n.link_pdf }).eq("id", linha.fatura_id);
   }
   return n;
+}
+
+// ---------------------------------------------------------------- demonstrativo e envio da fatura
+const DIAS_LINK = 30;
+
+/** Gera (ou regera) o demonstrativo em PDF no bucket privado e devolve o caminho. */
+export async function salvarDemonstrativo(db: Banco, fatura: number) {
+  const { data: d, error } = await db.rpc("demonstrativo_fatura", { fatura });
+  if (error || !d) throw new ErroCobranca(`não foi possível montar o demonstrativo: ${error?.message ?? "sem dados"}`);
+  const dados = d as Dados;
+  const { data: f } = await db.from("faturas").select("empresa_id").eq("id", fatura).single();
+  const caminho = `${f.empresa_id}/${fatura}.pdf`;
+  const pdf = await gerarPdf(montar(dados));
+  const { error: e2 } = await db.storage.from("faturas").upload(caminho, pdf, { contentType: "application/pdf", upsert: true });
+  if (e2) throw new ErroCobranca(`não foi possível guardar o PDF: ${e2.message}`);
+  await db.from("faturas").update({ demonstrativo: caminho }).eq("id", fatura);
+  return { caminho, dados };
+}
+
+export async function linkDemonstrativo(db: Banco, caminho: string, dias = DIAS_LINK) {
+  const { data, error } = await db.storage.from("faturas").createSignedUrl(caminho, dias * 86400);
+  if (error || !data?.signedUrl) throw new ErroCobranca("não foi possível gerar o link do demonstrativo");
+  return data.signedUrl as string;
+}
+
+/** E-mail pela API da Locaweb (a mesma conta do e-mail da Mensageria). */
+export async function enviarEmail(para: string[], assunto: string, html: string, de?: string | null) {
+  const remetente = Deno.env.get("FATURA_EMAIL_DE") || de;
+  if (!remetente) throw new ErroCobranca("cadastre o remetente das faturas (FATURA_EMAIL_DE) nos Secrets do Supabase");
+  const r = await fetch("https://api.smtplw.com.br/v1/messages", {
+    method: "POST",
+    headers: { "x-auth-token": segredo("LOCAWEB_TOKEN"), "Content-Type": "application/json" },
+    body: JSON.stringify({ subject: assuntoAscii(assunto), body: html, to: para, from: remetente,
+                           headers: { "Content-Type": "text/html; charset=utf-8" } }),
+  });
+  if (!r.ok) throw new ErroCobranca(`e-mail recusado pela Locaweb (${r.status}): ${(await r.text()).slice(0, 150)}`);
+}
+
+const assuntoAscii = (s: string) => /^[\x20-\x7e]*$/.test(s) ? s
+  : "=?UTF-8?B?" + btoa(String.fromCharCode(...new TextEncoder().encode(s))) + "?=";
+
+/** Envio da fatura emitida: boleto (se a empresa aceita), nota na emissão (se configurado), demonstrativo e e-mail. */
+export async function enviarFatura(db: Banco, fatura: number, site: string) {
+  const { data: f } = await db.from("faturas")
+    .select("id, empresa_id, situacao, valor_total, vencimento, competencia, boleto_pdf").eq("id", fatura).single();
+  if (!f || !["aberta", "vencida"].includes(f.situacao)) throw new ErroCobranca("só fatura em aberto é enviada");
+  const { data: c } = await db.from("ciclo_empresa").select("formas").eq("empresa_id", f.empresa_id).maybeSingle();
+  const formas: string[] = c?.formas ?? ["boleto", "pix"];
+  let boletoPdf: string | null = f.boleto_pdf;
+  if (formas.includes("boleto") && Number(f.valor_total) >= 5 && !boletoPdf) {
+    const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+    const alvo: Alvo = { tipo: "fatura", id: f.id, empresa_id: f.empresa_id, valor: Number(f.valor_total), vencimento: f.vencimento,
+                         descricao: `Fatura MotorCX nº ${f.id}` };
+    await gerarCobranca(db, alvo, "boleto", { voltar: `${site}/empresa/faturamento`, hoje });
+    boletoPdf = (await db.from("faturas").select("boleto_pdf").eq("id", fatura).single()).data?.boleto_pdf ?? null;
+  }
+  const { data: cfg } = await db.from("nf_config").select("ativo, emitir_quando, email_financeiro").eq("id", 1).single();
+  if (cfg?.ativo && cfg.emitir_quando === "emissao") {
+    try { await emitirNota(db, "fatura", f.id); } catch (e) { console.error("nota", (e as Error).message); }
+  }
+  const { caminho, dados } = await salvarDemonstrativo(db, f.id);
+  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato")
+    .eq("empresa_id", f.empresa_id).not("email", "is", null);
+  const lista = (contatos ?? []) as { email: string; papel_contrato: string }[];
+  const fin = lista.filter((x) => x.papel_contrato === "financeiro").map((x) => x.email.trim().toLowerCase());
+  const para = [...new Set(fin.length ? fin : lista.map((x) => x.email.trim().toLowerCase()))].slice(0, 10);
+  if (!para.length) throw new ErroCobranca("Sem e-mail do financeiro: cadastre em Empresa › Contatos (papel Financeiro)");
+  const s = montar(dados);
+  const { assunto, html } = emailFatura(s, dados.cliente.razao_social, {
+    demonstrativo: await linkDemonstrativo(db, caminho), boleto: boletoPdf, pagar: `${site}/empresa/faturamento`,
+  });
+  await enviarEmail(para, assunto, html, cfg?.email_financeiro);
+  await db.from("faturas").update({ envio: "enviado", envio_motivo: null, enviada_em: new Date().toISOString(),
+                                    enviada_para: para.join(", ").slice(0, 500) }).eq("id", f.id);
+  return { enviada_para: para };
 }

@@ -15,6 +15,7 @@ class ErroSupabase(RuntimeError):
     def __init__(self, status, corpo, url):
         super().__init__(f"Supabase respondeu {status} em {url}: {corpo[:300]}")
         self.status = status
+        self.corpo = corpo
 
 
 class Supabase:

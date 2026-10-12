@@ -1271,6 +1271,7 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
     from nuvem import retornos
     retornos.processar_retornos(sb, dados, agora, out)  # entrega, falha, resposta e bounce dos fornecedores reais
     _recarga_automatica(sb, dados, agora, out)
+    _faturamento(sb, dados, agora, out)
     radar = atendimento.banco_radar(sb)
     if radar:
         atendimento.enviar(sb, dados, agora, out)        # respostas escritas na plataforma
@@ -1290,6 +1291,48 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
                 pass
             marca.write_text(hoje, encoding="utf-8")
     return resumo
+
+
+def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:
+    """Uma vez por dia (depois das 6h): rascunhos dos ciclos que fecharam e emissão das empresas com "Emissão
+    automática". A cada rodada: envia as faturas emitidas que estão na fila (demonstrativo, boleto e e-mail pela
+    função "cobranca"). Banco sem o SQL 25: não faz nada."""
+    agora = agora or datetime.now(timezone.utc)
+    from zoneinfo import ZoneInfo
+    local = agora.astimezone(ZoneInfo("America/Sao_Paulo"))
+    marca = Path(dados) / "faturamento_dia.txt"
+    if local.hour >= 6 and (not marca.exists() or marca.read_text(encoding="utf-8").strip() != local.date().isoformat()):
+        try:
+            mes = local.date().replace(day=1)
+            anterior = (mes - timedelta(days=1)).replace(day=1)
+            n = sum(int(sb.rpc("gerar_rascunhos", {"competencia": c.isoformat()}) or 0) for c in (anterior, mes))
+            e = int(sb.rpc("emitir_automaticas") or 0)
+            if n or e:
+                out(f"faturamento: {n} rascunhos gerados, {e} faturas emitidas sozinhas")
+        except Exception as erro:  # noqa: BLE001 — banco sem o SQL 25 ou fora do ar: tenta amanhã de novo
+            out(f"faturamento: rotina do dia não rodou ({str(erro)[:120]})")
+        marca.parent.mkdir(parents=True, exist_ok=True)
+        marca.write_text(local.date().isoformat(), encoding="utf-8")
+    try:
+        fila = sb.rpc("faturas_para_enviar") or []
+    except Exception:  # noqa: BLE001
+        return
+    for item in fila:
+        fid = item if isinstance(item, int) else (item.get("faturas_para_enviar") if isinstance(item, dict) else item)
+        try:
+            r = sb.funcao("cobranca", {"acao": "enviar_fatura", "fatura": int(fid)}) or {}
+            out(f"faturamento: fatura {fid} enviada para {', '.join(r.get('enviada_para') or [])}")
+        except Exception as erro:  # noqa: BLE001
+            linha = (sb.selecionar("faturas", {"id": f"eq.{fid}"}) or [{}])[0]
+            final = int(linha.get("envio_tentativas") or 0) >= 3 or getattr(erro, "status", 0) == 422
+            motivo = str(getattr(erro, "corpo", "") or erro)
+            try:
+                motivo = json.loads(motivo).get("erro") or motivo
+            except (ValueError, AttributeError):
+                pass
+            sb.atualizar("faturas", {"id": f"eq.{fid}"}, {"envio": "erro" if final else "pendente",
+                                                         "envio_motivo": str(motivo)[:300]})
+            out(f"faturamento: fatura {fid} não foi enviada ({str(motivo)[:120]})")
 
 
 def _recarga_automatica(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:

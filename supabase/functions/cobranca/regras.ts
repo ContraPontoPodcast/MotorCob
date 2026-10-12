@@ -7,7 +7,7 @@ export const FORMAS = ["boleto", "pix", "cartao"] as const;
 export type Forma = (typeof FORMAS)[number];
 
 export interface Pedido {
-  acao: "pagar" | "fatura_emitida" | "emitir_nf" | "recargas_automaticas";
+  acao: "pagar" | "enviar_fatura" | "demonstrativo" | "emitir_nf" | "recargas_automaticas";
   fatura?: number;
   recarga?: number;
   forma?: Forma;
@@ -16,7 +16,7 @@ export interface Pedido {
 export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string } {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { erro: "pedido inválido" };
   const c = corpo as Record<string, unknown>;
-  const acoes = ["pagar", "fatura_emitida", "emitir_nf", "recargas_automaticas"];
+  const acoes = ["pagar", "enviar_fatura", "demonstrativo", "emitir_nf", "recargas_automaticas"];
   if (!acoes.includes(c.acao as string)) return { erro: "ação desconhecida" };
   const p: Pedido = { acao: c.acao as Pedido["acao"] };
   for (const k of ["fatura", "recarga"] as const) {
@@ -26,8 +26,8 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
     }
   }
   if (p.acao === "recargas_automaticas") return { pedido: p };
-  if (p.acao === "fatura_emitida" && !p.fatura) return { erro: "informe a fatura" };
-  if (p.acao !== "fatura_emitida" && !p.fatura === !p.recarga) return { erro: "informe a fatura ou a recarga" };
+  if ((p.acao === "enviar_fatura" || p.acao === "demonstrativo") && (!p.fatura || p.recarga)) return { erro: "informe a fatura" };
+  if (!p.fatura === !p.recarga) return { erro: "informe a fatura ou a recarga" };
   if (p.acao === "pagar") {
     if (!FORMAS.includes(c.forma as Forma)) return { erro: "forma de pagamento inválida: boleto, pix ou cartao" };
     p.forma = c.forma as Forma;
@@ -164,6 +164,12 @@ export function cobrancaAutomatica(alvo: Alvo, cliente: string, cartao: string, 
 }
 
 export interface Gerada { id_externo: string; link: string | null; pix_copia_cola: string | null; boleto_codigo: string | null; expira_em: string | null }
+
+/** PDF do boleto que o Stripe gera (vai separado do demonstrativo). */
+export const pdfDoBoleto = (obj: Record<string, any>): string | null => {
+  const u = obj?.next_action?.boleto_display_details?.pdf;
+  return typeof u === "string" && u.startsWith("https://") ? u : null;
+};
 
 /** O que mostrar ao cliente, a partir do PaymentIntent ou da sessão do Checkout. */
 export function lerGerada(obj: Record<string, any>): Gerada {

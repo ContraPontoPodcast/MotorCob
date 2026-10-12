@@ -1,12 +1,14 @@
 // Edge Function cobranca: gera o boleto, o Pix ou a página do cartão de uma fatura ou recarga (Stripe), dispara a
 // cobrança da fatura emitida, emite a nota fiscal (Focus NFe) e faz a recarga automática no cartão guardado.
 // * O site chama com o login do usuário; quem pode é decidido pelo banco (RLS de faturas e recargas, equipe_pode).
-// * O motor chama { acao: "recargas_automaticas" } de hora em hora com a chave do servidor.
+// * O motor chama com a chave do servidor: { acao: "recargas_automaticas" } de hora em hora e
+//   { acao: "enviar_fatura", fatura } para cada fatura emitida (demonstrativo em PDF, boleto e e-mail).
+// * { acao: "demonstrativo", fatura }: link do PDF para quem vê o faturamento da empresa (gera se ainda não existe).
 // * Publicar com "Verify JWT" DESLIGADO (o login é conferido aqui dentro). Chaves só nos Secrets do Supabase:
 //   STRIPE_SECRET_KEY e FOCUSNFE_TOKEN. Sem elas, a função responde que a integração está sem credencial.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { type Alvo, cobrancaAutomatica, iguais, type Pedido, validarPedido } from "./regras.ts";
-import { ErroCobranca, emitirNota, gerarCobranca, stripe } from "./servico.ts";
+import { ErroCobranca, emitirNota, enviarFatura, gerarCobranca, linkDemonstrativo, salvarDemonstrativo, stripe } from "./servico.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -116,34 +118,33 @@ Deno.serve(async (req) => {
   if (v.erro) return responder({ erro: v.erro }, 400);
   const p = v.pedido!;
   try {
-    if (p.acao === "recargas_automaticas") {
-      if (!(await ehServidor(token))) return responder({ erro: "só o servidor faz a recarga automática" }, 403);
-      return responder({ recargas: await recargasAutomaticas() });
+    if (p.acao === "recargas_automaticas" || p.acao === "enviar_fatura") {
+      if (!(await ehServidor(token))) return responder({ erro: "só o servidor faz esta ação" }, 403);
+      if (p.acao === "recargas_automaticas") return responder({ recargas: await recargasAutomaticas() });
+      try {
+        return responder(await enviarFatura(admin, p.fatura!, SITE));
+      } catch (e) {
+        const motivo = (e as Error).message.slice(0, 300);
+        await admin.from("faturas").update({ envio: "erro", envio_motivo: motivo }).eq("id", p.fatura!);
+        throw e;
+      }
     }
     const { data: u } = await admin.auth.getUser(token);
     if (!u?.user) return responder({ erro: "sessão expirada: entre de novo" }, 401);
     const db = createClient(SUPABASE_URL, ANON, { ...sem, global: { headers: { Authorization: `Bearer ${token}` } } });
     if (p.acao === "pagar") return responder({ cobranca: await pagar(db, p) });
 
+    if (p.acao === "demonstrativo") {
+      const { data: f } = await db.from("faturas").select("id, situacao, demonstrativo").eq("id", p.fatura!).maybeSingle();
+      if (!f || f.situacao === "rascunho") return responder({ erro: "fatura não encontrada" }, 404);   // RLS: só quem vê
+      const caminho = f.demonstrativo ?? (await salvarDemonstrativo(admin, f.id)).caminho;
+      return responder({ url: await linkDemonstrativo(admin, caminho, 1) });
+    }
     const alvo = await alvoDe(db, p);
     const { data: pode } = await db.rpc("equipe_pode", { perm: "emitir_faturas", eid: alvo.empresa_id });
-    if (!pode) return responder({ erro: "sem permissão para emitir cobrança ou nota desta empresa" }, 403);
-    if (p.acao === "emitir_nf") {
-      if (alvo.situacao !== "paga" && alvo.tipo === "recarga") throw new ErroCobranca("a nota da recarga sai depois do pagamento");
-      return responder({ nota: await emitirNota(admin, alvo.tipo, alvo.id) });
-    }
-    // fatura_emitida: boleto já gerado (se a empresa aceita boleto) e, se configurado, a nota na emissão
-    const saida: Record<string, unknown> = {};
-    if ((await ciclo(alvo.empresa_id)).formas.includes("boleto") && alvo.valor >= 5) {
-      try { saida.cobranca = await pagar(db, { ...p, acao: "pagar", forma: "boleto" }); }
-      catch (e) { saida.erro_cobranca = (e as Error).message; }
-    }
-    const { data: cfg } = await admin.from("nf_config").select("ativo, emitir_quando").eq("id", 1).single();
-    if (cfg?.ativo && cfg.emitir_quando === "emissao") {
-      try { saida.nota = await emitirNota(admin, "fatura", alvo.id); }
-      catch (e) { saida.erro_nota = (e as Error).message; }
-    }
-    return responder(saida);
+    if (!pode) return responder({ erro: "sem permissão para emitir a nota desta empresa" }, 403);
+    if (alvo.situacao !== "paga" && alvo.tipo === "recarga") throw new ErroCobranca("a nota da recarga sai depois do pagamento");
+    return responder({ nota: await emitirNota(admin, alvo.tipo, alvo.id) });
   } catch (e) {
     if (e instanceof ErroCobranca) return responder({ erro: e.message }, 422);
     console.error("cobranca", (e as Error).message);

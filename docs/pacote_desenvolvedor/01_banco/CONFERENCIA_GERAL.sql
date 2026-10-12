@@ -92,6 +92,12 @@ with itens(ordem, item, ok, se_falhar) as (values
          and exists (select 1 from information_schema.columns where table_schema = 'public'
                and table_name = 'mensageria_mensagens' and column_name = 'confirmada_em'),
        'rodar 24_retorno_fornecedores.sql (depois do 23)'),
+  (31, 'SQL 25 · Emissão em lote e automática, demonstrativo e envio das faturas',
+       exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'faturas' and column_name = 'envio')
+         and exists (select 1 from pg_proc where proname = 'demonstrativo_fatura')
+         and exists (select 1 from storage.buckets where id = 'faturas' and not public),
+       'rodar 25_emissao_envio_faturas.sql (depois do 24)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),
