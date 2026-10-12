@@ -78,5 +78,10 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     rastreados** (encurtador, cliques e funil). Depois publique a função `l` (`08_api/LEIA_ENCURTADOR_E_RADAR.md`).
 16. `16_relatorios.sql` (= `supabase/migrations/20261113000001_relatorios.sql`) — 10 **relatórios padrão** e o
     **montador** de relatório personalizado (`rodar_relatorio`), sempre com as permissões de quem consulta.
+17. `17_funil_assistente.sql` (= `supabase/migrations/20261114000001_funil_assistente.sql`) — **funil com
+    Disparado** separado de Enviado (sem retorno final, bounces, aberturas, cliques e spam no e-mail; view
+    `mensageria_funil_status` e base de relatório "Funil de envio (status)") e o **Assistente MotorCob** (perguntas
+    guardadas 90 dias, avaliação 👍/👎, lista do que ficou sem resposta para a equipe). Depois publique a função
+    `assistente` (`08_api/LEIA_ASSISTENTE.md`).
 
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

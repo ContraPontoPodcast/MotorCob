@@ -162,7 +162,7 @@ class TestMensageria(unittest.TestCase):
         r = self._processar("10:00")
         lid = self._lote("sms")["id"]
         self.assertEqual(r[lid]["situacao"], "concluido")
-        self.assertEqual(r[lid]["enviadas"], len(self._validos()))
+        self.assertEqual(r[lid]["disparadas"], len(self._validos()))
         self.assertLess(len(self._validos()), 399)                  # a consulta barrou algum número inválido
         msgs = self._msgs("sms")
         self.assertEqual({m["motivo"] for m in msgs if m["situacao"] == "bloqueada"},
@@ -211,7 +211,50 @@ class TestMensageria(unittest.TestCase):
         self.assertEqual(marcas, {"entregue", "inexistente", "bloqueio", "clique"})   # clique: respondeu (Radar)
         self.assertEqual({r.canal for r in regs}, {"sms"})
         conversas = self.sb.t["mensageria_conversas"]
-        self.assertEqual(len(regs), len(self._validos()) + len(conversas))
+        sem_dlr = [m for m in self._msgs("sms") if m["situacao"] == "enviada"]   # sem retorno final: não volta
+        self.assertEqual(len(regs), len(self._validos()) - len(sem_dlr) + len(conversas))
+
+    def test_funil_disparado_enviado_entregue_e_sem_retorno(self):
+        self._criar()
+        self._lote("sms")["situacao"] = "agendado"
+        self._processar()
+        l, msgs = self._lote("sms"), self._msgs("sms")
+        recusadas = [m for m in msgs if m["motivo"] == "recusado pela operadora (simulado)"]
+        sem_dlr = [m for m in msgs if m["situacao"] == "enviada"]
+        self.assertTrue(recusadas and sem_dlr)
+        self.assertEqual(l["disparadas"], len(self._validos()))                  # tudo o que foi à operadora
+        self.assertEqual(l["enviadas"], l["disparadas"] - len(recusadas))       # a operadora confirmou o envio
+        self.assertEqual(l["sem_retorno"], len(sem_dlr))                         # sem DLR final = "enviada"
+        self.assertEqual(l["enviadas"], l["entregues"] + (l["falhas"] - len(recusadas)) + l["sem_retorno"])
+        self.assertEqual(l["entregues"], len([m for m in msgs if m["situacao"] in ("entregue", "descadastro")]))
+        self.assertEqual(l["falhas"], len([m for m in msgs if m["situacao"] == "falhou"]))
+
+    def test_email_bounce_aberturas_cliques_e_spam(self):
+        ids = self.pasta / "saida" / DIA.isoformat() / "ids"
+        (ids / "email.csv").write_text("id_cliente;contato\n" + "\n".join(
+            f"E{n};cliente{n}@exemplo.com" for n in range(1500)) + "\n", encoding="utf-8")
+        self.sb.t["mensageria_modelos_email"] = [{"empresa_id": 1, "remetente_nome": "Alfa", "assunto": "Sua conta",
+                                                  "corpo": "Temos uma condição para você."}]
+        self.sb.t["mensageria_config"] = [{"empresa_id": 1, "modo": "simulado", "aprovar_lotes": False}]
+        self._criar()
+        for _ in range(4):
+            self._processar()
+        l, msgs = self._lote("email"), self._msgs("email")
+        perm = [m for m in msgs if m.get("bounce") == "permanente"]
+        temp = [m for m in msgs if m.get("bounce") == "temporario"]
+        self.assertEqual(l["disparadas"], l["enviadas"])                        # e-mail: provedor recebeu = enviado
+        self.assertEqual((l["falhas"], l["bounce_temporario"]), (len(perm), len(temp)))
+        self.assertTrue(perm and temp and l["aberturas"] and l["cliques"])
+        self.assertLessEqual(l["cliques"], l["aberturas"])
+        self.assertEqual(l["aberturas"], len([m for m in msgs if m.get("aberta_em")]))
+        spam = [m for m in msgs if m.get("spam_em")]
+        self.assertTrue(spam)
+        self.assertEqual(l["spam"], len(spam))
+        origem = {d["destino_hash"]: d.get("origem") for d in self.sb.t["mensageria_descadastros"]}
+        self.assertTrue(all(origem.get(m["destino_hash"]) == "reclamacao" for m in spam))
+        # bounce temporário não marca o e-mail como inexistente na Orquestração
+        marcados = {r.contato for r in M.registros(self.pasta) if r.canal == "email"}
+        self.assertFalse({f"cliente{m['id_cliente'][1:]}@exemplo.com" for m in temp} & marcados)
 
     def test_simulado_nao_cobra_e_real_sem_integracao_nao_envia(self):
         self._criar()
@@ -352,7 +395,7 @@ class TestMensageria(unittest.TestCase):
         self._criar()
         self._lote("sms")["situacao"] = "agendado"
         self._processar()
-        segunda = self._lote("sms")["enviadas"]                   # quem disse SAIR na primeira já fica de fora
+        segunda = self._lote("sms")["disparadas"]                   # quem disse SAIR na primeira já fica de fora
         self.assertEqual(sum(c["quantidade"] for c in self.sb.t["mensageria_consumo_fornecedor"] if c["item"] == "sms"),
                          sum(n.values()) + segunda)
 
