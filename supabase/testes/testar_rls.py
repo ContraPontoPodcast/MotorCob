@@ -46,6 +46,8 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261106000001_faturas_revisao.sql
     psql -d sb -f supabase/migrations/20261107000001_equipe_master.sql
     psql -d sb -f supabase/migrations/20261108000001_saude_sistema.sql
+    psql -d sb -f supabase/migrations/20261109000001_precos_produtos.sql
+    psql -d sb -f supabase/migrations/20261110000001_rotas_margem.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -597,6 +599,75 @@ assert r[0], r[2]
 checar("rotina com erro vira crítico e vem primeiro", True, "select nivel || ' ' || ultima_rotina_erro from public.saude_empresas() limit 1", "authenticated", u["admin"], "critico base sem coluna saldo")
 checar("fatura paga não conta como vencida", True, f"select faturas_vencidas from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 0)
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
+# preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional
+SVC = "service_role"
+checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 10)
+checar("cliente não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", u["admina"])
+checar("Atendimento não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", SUP)
+checar("ninguém grava preço direto na tabela", False, f"insert into public.precos_empresa (empresa_id,item,modelo,preco) values ({EA},'sms','flat',0.01)", "authenticated", u["admin"])
+checar("resposta de SMS não tem preço próprio", False, f"select public.salvar_preco({EA},'sms_resposta','flat',0.01)", "authenticated", u["admin"])
+checar("faixa precisa de duas faixas", False, f"""select public.salvar_preco({EA},'sms','faixa',null,0,'[{{"ate":null,"preco":0.06}}]')""", "authenticated", u["admin"])
+checar("só a última faixa fica aberta", False, f"""select public.salvar_preco({EA},'sms','faixa',null,0,'[{{"ate":null,"preco":0.08}},{{"ate":null,"preco":0.06}}]')""", "authenticated", u["admin"])
+checar("limites das faixas são crescentes e distintos", False, f"""select public.salvar_preco({EA},'sms','faixa',null,0,'[{{"ate":1000,"preco":0.08}},{{"ate":1000,"preco":0.07}},{{"ate":null,"preco":0.06}}]')""", "authenticated", u["admin"])
+checar("Master grava tabela por faixa (fev/2025)", True, f"""select count(*) from (select public.salvar_preco({EA},'sms','faixa',null,0,'[{{"ate":1000,"preco":0.08}},{{"ate":null,"preco":0.06}}]','2025-02-10')) x""", "authenticated", u["admin"], 1)
+r = sql(f"set role service_role; insert into public.consumo_mensageria (empresa_id,competencia,item,quantidade) values ({EA},'2025-02-01','sms',1500),({EA},'2025-02-01','sms_resposta',100),({EA},'2025-03-01','sms',1500),({EA},'2025-03-01','sms_resposta',100)")
+assert r[0], r[2]
+checar("faixa: 1.600 (envios + respostas) passam de 1.000 e tudo sai a 0,06", True, f"select valor from public.previa_fatura({EA},'2025-02-01') where item='sms'", "authenticated", u["admina"], "96.00")
+checar("descrição separa envios e respostas", True, f"select descricao from public.previa_fatura({EA},'2025-02-01') where item='sms'", "authenticated", u["admina"], "SMS · 1500 envios + 100 respostas (faixa acima de 1000)")
+checar("Master grava tabela progressiva com mínimo (mar/2025)", True, f"""select count(*) from (select public.salvar_preco({EA},'sms','progressivo',null,200,'[{{"ate":1000,"preco":0.08}},{{"ate":null,"preco":0.06}}]','2025-03-01')) x""", "authenticated", u["admin"], 1)
+checar("progressiva: 1.000 × 0,08 + 600 × 0,06 = 116", True, f"select valor from public.previa_fatura({EA},'2025-03-01') where item='sms'", "authenticated", u["admina"], "116.00")
+checar("mínimo do SMS completa a diferença", True, f"select valor from public.previa_fatura({EA},'2025-03-01') where item='sms_minimo'", "authenticated", u["admina"], "84.00")
+checar("fevereiro continua com o preço de fevereiro", True, f"select valor from public.previa_fatura({EA},'2025-02-01') where item='sms'", "authenticated", u["admina"], "96.00")
+checar("Orquestração liga e desliga (B desligada)", True, f"update public.empresa_modulos set ativo=false where empresa_id={EB} and modulo='orquestracao'; select public.orquestracao_ligada({EB})::text", "authenticated", u["admin"], "false")
+checar("sem Orquestração, a mensalidade sai da fatura", True, f"select count(*) from public.previa_fatura({EB},'2025-01-01')", "authenticated", u["admin"], 0)
+checar("religada, a mensalidade volta", True, f"update public.empresa_modulos set ativo=true where empresa_id={EB} and modulo='orquestracao'; select valor from public.previa_fatura({EB},'2025-01-01')", "authenticated", u["admin"], "4900.00")
+checar("produto novo entra só com uma linha no catálogo", True, "insert into public.cobranca_itens (codigo,produto,nome,unidade,modulo,ordem) values ('voz_minuto','voz','Agente de voz','minuto','mensageria',50); select count(*) from public.cobranca_itens where produto='voz'", "authenticated", u["admin"], 1)
+checar("cliente não mexe no catálogo", False, "insert into public.cobranca_itens (codigo,produto,nome,unidade) values ('xx','xx','Xx','un')", "authenticated", u["admina"])
+# rotas por % e por operadora, custos e margem
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261110000001_rotas_margem.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+checar("rota antiga vira plano padrão: Zenvia 100%, Infobip reserva", True, "select string_agg(f.fornecedor||':'||f.percentual::int, ',' order by f.ordem_reserva) from public.mensageria_plano_fornecedores f join public.mensageria_planos_rota p on p.id=f.plano_id where p.canal='sms' and p.padrao", "authenticated", u["admin"], "zenvia:100,infobip:0")
+checar("rota própria da A vira plano exclusivo da A", True, f"select p.nome from public.mensageria_rota_empresa r join public.mensageria_planos_rota p on p.id=r.plano_id where r.empresa_id={EA} and r.canal='sms'", "authenticated", u["admin"], "Alfa · SMS")
+checar("custo que estava na rota vira custo vigente", True, "select string_agg(fornecedor||'='||custo, ',' order by fornecedor) from public.mensageria_custos where item='sms'", "authenticated", u["admin"], "infobip=0.04500,zenvia=0.04000")
+checar("cliente não vê planos de rota", True, "select count(*) from public.mensageria_planos_rota", "authenticated", u["admina"], 0)
+checar("Atendimento vê os planos", True, "select (count(*) >= 2)::text from public.mensageria_planos_rota", "authenticated", SUP, "true")
+checar("Atendimento não vê custos", True, "select count(*) from public.mensageria_custos", "authenticated", SUP, 0)
+checar("Atendimento não altera rotas", False, """select public.salvar_plano_rota(null,'X','sms','[{"fornecedor":"zenvia","percentual":100}]')""", "authenticated", SUP)
+checar("soma diferente de 100 é recusada", False, """select public.salvar_plano_rota(null,'X','sms','[{"fornecedor":"zenvia","percentual":60},{"fornecedor":"infobip","percentual":30}]')""", "authenticated", u["admin"])
+checar("sem rota para todas as operadoras é recusado", False, """select public.salvar_plano_rota(null,'X','sms','[{"fornecedor":"zenvia","percentual":100,"operadora":"vivo"}]')""", "authenticated", u["admin"])
+checar("operadora fora do SMS é recusada", False, """select public.salvar_plano_rota(null,'X','email','[{"fornecedor":"locaweb","percentual":100},{"fornecedor":"locaweb","percentual":100,"operadora":"vivo"}]')""", "authenticated", u["admin"])
+checar("fornecedor repetido na mesma operadora é recusado", False, """select public.salvar_plano_rota(null,'X','sms','[{"fornecedor":"zenvia","percentual":50},{"fornecedor":"zenvia","percentual":50}]')""", "authenticated", u["admin"])
+checar("fornecedor sem o canal é recusado no plano", False, """select public.salvar_plano_rota(null,'X','sms','[{"fornecedor":"locaweb","percentual":100}]')""", "authenticated", u["admin"])
+checar("Master cria plano por operadora e torna padrão", True, """select count(*) from (select public.salvar_plano_rota(null,'Por operadora','sms','[{"fornecedor":"zenvia","percentual":100,"operadora":"vivo"},{"fornecedor":"infobip","percentual":60,"operadora":"claro"},{"fornecedor":"sinch","percentual":40,"operadora":"claro"},{"fornecedor":"zenvia","percentual":70},{"fornecedor":"infobip","percentual":30},{"fornecedor":"sinch","percentual":0,"ordem_reserva":2}]',true)) x""", "authenticated", u["admin"], 1)
+checar("um padrão só por canal", True, "select string_agg(nome, ',') from public.mensageria_planos_rota where canal='sms' and padrao", "authenticated", u["admin"], "Por operadora")
+checar("ninguém grava plano direto na tabela", False, "insert into public.mensageria_planos_rota (nome,canal) values ('Y','sms')", "authenticated", u["admin"])
+PO = "(select id from public.mensageria_planos_rota where nome='Por operadora')"
+checar("Master põe a B no plano por operadora", True, f"select public.definir_rota_empresa({EB},'sms',{PO})", "authenticated", u["admin"])
+checar("plano de outro canal é recusado", False, f"select public.definir_rota_empresa({EB},'sms',(select id from public.mensageria_planos_rota where canal='email' limit 1))", "authenticated", u["admin"])
+checar("plano padrão não desativa", False, f"select public.ativar_plano_rota({PO},false)", "authenticated", u["admin"])
+checar("plano em uso não desativa", False, "select public.ativar_plano_rota((select id from public.mensageria_planos_rota where nome='Alfa · SMS'),false)", "authenticated", u["admin"])
+checar("auditoria registra a mudança de rota", True, "select (count(*) > 0)::text from public.auditoria where tabela='mensageria_planos_rota'", SVC, None, "true")
+checar("cliente não muda os parâmetros da margem (0 linhas)", True, "with x as (update public.parametros_margem set impostos_pct=0 returning 1) select count(*) from x", "authenticated", u["admina"], 0)
+checar("Master define impostos de 10%", True, "update public.parametros_margem set impostos_pct=10, mc_meta_pct=40, mc_minimo_pct=20; select impostos_pct from public.parametros_margem", "authenticated", u["admin"], "10.00")
+r = sql(f"""set role service_role;
+insert into public.mensageria_custos (fornecedor,item,custo,vigente_desde) values ('zenvia','sms',0.03,'2025-01-01'),('infobip','sms',0.045,'2025-01-01'),('sinch','sms',0.02,'2025-01-01');
+insert into public.mensageria_consumo_fornecedor (empresa_id,competencia,item,fornecedor,operadora,modo,quantidade,custo) values
+ ({EA},'2025-03-01','sms','zenvia','vivo','real',1000,35),({EA},'2025-03-01','sms','infobip','claro','real',500,22.5),
+ ({EA},'2025-03-01','sms_resposta','zenvia','','real',100,1),({EA},'2025-03-01','consulta_operadora','infobip','','real',1500,7.5),
+ ({EB},'2025-03-01','sms','zenvia','tim','simulado',10,0.3)""")
+assert r[0], r[2]
+checar("cliente não vê a margem", False, "select * from public.margem_mensageria('2025-03-01')", "authenticated", u["admina"])
+checar("Atendimento não vê a margem", False, "select * from public.margem_mensageria('2025-03-01')", "authenticated", SUP)
+checar("margem da A: receita 116 (progressiva), custo 66, impostos 11,60 → 33,1% abaixo da meta", True, f"select receita||' '||custo||' '||mc_pct||' '||situacao from public.margem_mensageria('2025-03-01') where empresa_id={EA}", "authenticated", u["admin"], "116.00 66.00 33.1 abaixo_meta")
+checar("margem conta envios e respostas separados", True, f"select envios||'+'||respostas from public.margem_mensageria('2025-03-01') where empresa_id={EA}", "authenticated", u["admin"], "1500+100")
+checar("margem abre por operadora", True, f"select operadoras->'claro'->>'quantidade' from public.margem_mensageria('2025-03-01') where empresa_id={EA}", "authenticated", u["admin"], "500")
+checar("simulado fica separado do real", True, "select count(*) from public.margem_mensageria('2025-03-01')", "authenticated", u["admin"], 1)
+checar("simulação: plano por operadora levaria a A a 41,7%", True, f"select custo_simulado||' '||mc_simulado_pct from public.simular_plano({EA},'sms',{PO},'2025-03-01')", "authenticated", u["admin"], "56.00 41.7")
+checar("simular plano de outro canal é recusado", False, f"select * from public.simular_plano({EA},'sms',(select id from public.mensageria_planos_rota where canal='email' limit 1),'2025-03-01')", "authenticated", u["admin"])
+checar("site não lê o cache de operadoras (só o motor)", False, "select count(*) from public.mensageria_operadoras", "authenticated", u["admin"])
+checar("site não lê as sessões do RCS (só o motor)", False, "select count(*) from public.mensageria_sessoes_rcs", "authenticated", u["admin"])
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
