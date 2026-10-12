@@ -157,6 +157,7 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 
 <script>
 const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const HOJE = new Date(2026, 9, 12);
 const brl = v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const preco5 = v => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 5 });
@@ -267,7 +268,7 @@ function pintarResumo() {
   const semPreco = visiveis().filter(i => { const p = estado.precos[i.cod]; return !(p && (p.preco || p.faixas.length)); });
   const mods = ["Motor de decisão"].concat(estado.mensageria ? ["Mensageria (" + [...estado.canais].map(c => ({ sms: "SMS", rcs: "RCS", email: "E-mail", whatsapp: "WhatsApp" })[c]).join(", ") + ")"] : [])
     .concat([...document.querySelectorAll('[data-mod]:not([data-mod="mensageria"])')].filter(b => b.getAttribute("aria-checked") === "true").map(b => b.getAttribute("aria-label")));
-  $("resumo").innerHTML = `<dt>Motor</dt><dd>${[...estado.motores].map(m => m === "motorcob" ? "MotorCob" : "MotorCli").join(" + ")}</dd><dt>Módulos</dt><dd>${mods.join(" · ")}</dd><dt>Preços</dt><dd>${visiveis().length - semPreco.length} de ${visiveis().length} definidos</dd><dt>Corte</dt><dd>${$("c-corte").value === "1" ? "mês fechado" : "dia " + $("c-corte").value}</dd>`;
+  $("resumo").innerHTML = `<dt>Motor</dt><dd>${[...estado.motores].map(m => m === "motorcob" ? "MotorCob" : "MotorCli").join(" + ")}</dd><dt>Módulos</dt><dd>${esc(mods.join(" · "))}</dd><dt>Preços</dt><dd>${visiveis().length - semPreco.length} de ${visiveis().length} definidos</dd><dt>Corte</dt><dd>${+$("c-corte").value === 1 ? "mês fechado" : "dia " + (+$("c-corte").value)}</dd>`;
   return semPreco;
 }
 for (let d = 1; d <= 28; d++) {
