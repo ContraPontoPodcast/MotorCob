@@ -14,6 +14,7 @@
   --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
   --azul: #4C9BFF; --ok: #4CC36A; --erro: #FF6B60; color-scheme: dark }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding: 24px 16px 48px; }
 .proto { max-width: 1120px; margin: 0 auto 16px; font-size: 13px; color: var(--tinta-2); }
 .janela { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
@@ -112,7 +113,10 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 
     <section class="secao" aria-labelledby="t3">
       <div class="tit"><span>3</span><h2 id="t3">Módulos</h2></div>
+      <p class="ajuda">Marque o que foi contratado. Orquestração e Jornada são módulos do motor: só ficam liberados se marcados.</p>
       <div class="modulos">
+        <div class="mod" id="mod-orq"><div><b>Orquestração</b><small>MotorCob: Lista do dia, réguas, personas e telefone Hot.</small></div><button type="button" class="chave" role="switch" aria-checked="true" data-mod="orquestracao" aria-label="Orquestração"></button></div>
+        <div class="mod" id="mod-jor"><div><b>Jornada</b><small>MotorCli: Momentos da jornada e lista do dia.</small></div><button type="button" class="chave" role="switch" aria-checked="false" data-mod="jornada" aria-label="Jornada"></button></div>
         <div class="mod"><div><b>Mensageria</b><small>SMS, RCS, e-mail e WhatsApp saindo da plataforma.</small></div><button type="button" class="chave" role="switch" aria-checked="true" data-mod="mensageria" aria-label="Mensageria"></button></div>
         <div class="canais" id="canais">
           <button type="button" class="chip" data-canal="sms" aria-pressed="true">SMS</button>
@@ -133,10 +137,47 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 
     <section class="secao" aria-labelledby="t5">
       <div class="tit"><span>5</span><h2 id="t5">Ciclo de uso</h2></div>
-      <p class="ajuda">O uso conta do dia de corte até a véspera do corte no mês seguinte. A fatura fecha no fim do ciclo.</p>
-      <div class="linha2">
+      <p class="ajuda">De quanto em quanto tempo o uso é fechado. O volume do escalonado e o mínimo valem por ciclo.</p>
+      <div class="seg" role="group" aria-label="Periodicidade">
+        <button type="button" data-per="7" aria-pressed="false">Semanal</button>
+        <button type="button" data-per="15" aria-pressed="false">Quinzenal</button>
+        <button type="button" data-per="mensal" aria-pressed="true">Mensal</button>
+        <button type="button" data-per="outro" aria-pressed="false">Outro</button>
+      </div>
+      <div class="linha2" id="ciclo-mensal">
         <label class="campo">Dia de corte<select id="c-corte"></select></label>
-        <label class="campo">Dia de vencimento<select id="c-venc"></select></label>
+        <span></span>
+      </div>
+      <div class="linha2" id="ciclo-dias" hidden>
+        <label class="campo">Duração do ciclo (dias)<input id="c-dias" inputmode="numeric" value="7"></label>
+        <label class="campo">Início do primeiro ciclo<input id="c-inicio" type="date" value="2026-10-12"></label>
+      </div>
+    </section>
+
+    <section class="secao" aria-labelledby="t6">
+      <div class="tit"><span>6</span><h2 id="t6">Cobrança</h2></div>
+      <div class="motores">
+        <button type="button" class="motor" data-pag="pos" aria-pressed="true"><span><b>Pós-pago</b><small>Usa no ciclo e paga a fatura depois.</small></span><span class="marca" aria-hidden="true">✓</span></button>
+        <button type="button" class="motor" data-pag="pre" aria-pressed="false"><span><b>Pré-pago</b><small>Recarrega um saldo e o uso desconta dele.</small></span><span class="marca" aria-hidden="true">✓</span></button>
+      </div>
+      <p class="grupo-preco">Formas de pagamento aceitas</p>
+      <div class="canais" style="padding:0">
+        <button type="button" class="chip" data-forma="boleto" aria-pressed="true">Boleto</button>
+        <button type="button" class="chip" data-forma="pix" aria-pressed="true">Pix</button>
+        <button type="button" class="chip" data-forma="cartao" aria-pressed="false">Cartão de crédito</button>
+      </div>
+      <div class="linha2" id="pag-pos">
+        <label class="campo">Prazo para pagar a fatura<select id="c-prazo"><option value="5">5 dias após o fechamento</option><option value="10" selected>10 dias após o fechamento</option><option value="15">15 dias após o fechamento</option><option value="30">30 dias após o fechamento</option></select></label>
+        <span></span>
+      </div>
+      <div id="pag-pre" hidden style="display:flex;flex-direction:column;gap:12px">
+        <div class="linha2">
+          <label class="campo">Recarga mínima (R$)<input id="r-min" inputmode="decimal" value="1000"></label>
+          <label class="campo">Avisar quando o saldo ficar abaixo de (R$)<input id="r-aviso" inputmode="decimal" value="200"></label>
+        </div>
+        <label class="campo">Quando o saldo acabar<select id="r-zero"><option value="pausar">Pausar os envios da Mensageria até a próxima recarga</option><option value="continuar">Continuar e descontar da próxima recarga</option></select></label>
+        <div class="mod" style="border:0;padding:0"><div><b>Recarga automática no cartão</b><small>Recarrega o valor mínimo quando o saldo chega no aviso.</small></div><button type="button" class="chave" role="switch" aria-checked="false" id="r-auto" aria-label="Recarga automática"></button></div>
+        <p class="aviso">O cliente recarrega em Empresa › Faturamento › Recarregar: escolhe o valor (a partir da mínima) e a forma de pagamento. O saldo entra quando o pagamento é confirmado.</p>
       </div>
     </section>
   </div>
@@ -183,7 +224,8 @@ const AJUDA = {
   mensalidade: "Valor fixo por ciclo, sem medir o volume."
 };
 const estado = {
-  motores: new Set(["motorcob"]), mensageria: true, canais: new Set(["sms", "rcs", "email"]), aberto: "sms",
+  motores: new Set(["motorcob"]), mods: { orquestracao: true, jornada: false }, per: "mensal", pag: "pos",
+  formas: new Set(["boleto", "pix"]), mensageria: true, canais: new Set(["sms", "rcs", "email"]), aberto: "sms",
   precos: {
     contratos: { modelo: "flat", preco: 0.35, minimo: 1000, faixas: [] },
     sms: { modelo: "faixa", preco: null, minimo: 0, faixas: [{ ate: 100000, preco: 0.075 }, { ate: 500000, preco: 0.068 }, { ate: null, preco: 0.062 }] },
@@ -210,7 +252,8 @@ function resumoPreco(p) {
   return MODELOS[p.modelo] + " · " + p.faixas.length + " faixas" + (p.minimo ? " · mín. " + brl(p.minimo) : "");
 }
 function visiveis() {
-  return ITENS.filter(i => i.motor ? estado.motores.has(i.motor) : estado.mensageria && estado.canais.has(i.canal));
+  return ITENS.filter(i => i.motor ? estado.motores.has(i.motor) && estado.mods[i.motor === "motorcob" ? "orquestracao" : "jornada"]
+                                   : estado.mensageria && estado.canais.has(i.canal));
 }
 function editor(i) {
   const p = estado.precos[i.cod] || (estado.precos[i.cod] = { modelo: "flat", preco: null, minimo: 0, faixas: [] });
@@ -245,40 +288,68 @@ function cicloDe(comp, corte) {
   if (corte === 1) return [new Date(ano, mes, 1), new Date(ano, mes + 1, 0)];
   return [new Date(ano, mes - 1, corte), new Date(ano, mes, corte - 1)];
 }
-function pintarCiclo() {
-  const corte = +$("c-corte").value, venc = +$("c-venc").value;
-  const comp = corte > 1 && HOJE.getDate() >= corte ? new Date(HOJE.getFullYear(), HOJE.getMonth() + 1, 1) : new Date(HOJE.getFullYear(), HOJE.getMonth(), 1);
-  const [ini, fim] = cicloDe(comp, corte);
-  let v = new Date(fim.getFullYear(), fim.getMonth(), venc);
-  if (v <= fim) v = new Date(fim.getFullYear(), fim.getMonth() + 1, venc);
-  const nomeMes = comp.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  $("ciclo").innerHTML = `<div class="ciclo-linha"><span>Competência</span><span>${nomeMes}</span></div><div class="ciclo-linha"><span>Uso</span><span>${data(ini)} a ${data(fim)}</span></div><div class="ciclo-linha"><span>Fatura fecha</span><span>${data(new Date(fim.getFullYear(), fim.getMonth(), fim.getDate() + 1))}</span></div><div class="ciclo-linha"><span>Vence</span><span>${data(v)}</span></div>`;
+function cicloAtual() {
+  if (estado.per === "mensal") {
+    const corte = +$("c-corte").value;
+    const comp = corte > 1 && HOJE.getDate() >= corte ? new Date(HOJE.getFullYear(), HOJE.getMonth() + 1, 1) : new Date(HOJE.getFullYear(), HOJE.getMonth(), 1);
+    const [ini, fim] = cicloDe(comp, corte);
+    return { ini, fim, nome: comp.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) };
+  }
+  const dias = Math.min(Math.max(parseInt($("c-dias").value) || 7, 1), 90);
+  const [a, m, d] = ($("c-inicio").value || "2026-10-12").split("-").map(Number);
+  const base = new Date(a, m - 1, d);
+  const n = Math.max(0, Math.floor((HOJE - base) / 86400000 / dias));
+  const ini = new Date(base.getFullYear(), base.getMonth(), base.getDate() + n * dias);
+  const fim = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate() + dias - 1);
+  return { ini, fim, nome: "ciclo de " + dias + " dias" };
 }
+function pintarCiclo() {
+  const c = cicloAtual(), fecha = new Date(c.fim.getFullYear(), c.fim.getMonth(), c.fim.getDate() + 1);
+  const vence = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + (+$("c-prazo").value));
+  const linha = (a, b) => `<div class="ciclo-linha"><span>${a}</span><span>${b}</span></div>`;
+  $("ciclo").innerHTML = linha("Ciclo", c.nome) + linha("Uso", data(c.ini) + " a " + data(c.fim)) +
+    (estado.pag === "pos" ? linha("Fatura fecha", data(fecha)) + linha("Vence", data(vence))
+                          : linha("Saldo", "R$ 0,00") + linha("Primeira recarga", "a partir de " + brl(num($("r-min").value) || 0)) + linha("Extrato fecha", data(fecha)));
+}
+function num(v) { v = String(v).trim(); if (v.includes(",")) v = v.replace(/\./g, "").replace(",", "."); const n = parseFloat(v); return isNaN(n) ? null : n; }
 function pintar() {
   document.querySelectorAll("[data-motor]").forEach(b => b.setAttribute("aria-pressed", estado.motores.has(b.dataset.motor)));
   const m = [...estado.motores];
   $("aviso-login").textContent = m.length === 2 ? "No login, os usuários escolhem entre MotorCob e MotorCli (dá para limitar cada usuário em Usuários e permissões)."
     : m[0] === "motorcli" ? "No login, todos entram direto no MotorCli. O MotorCob fica fechado para esta empresa." : "No login, todos entram direto no MotorCob. O MotorCli fica fechado para esta empresa.";
   document.querySelector('[data-mod="mensageria"]').setAttribute("aria-checked", estado.mensageria);
+  $("mod-orq").hidden = !estado.motores.has("motorcob"); $("mod-jor").hidden = !estado.motores.has("motorcli");
+  document.querySelector('[data-mod="orquestracao"]').setAttribute("aria-checked", estado.mods.orquestracao);
+  document.querySelector('[data-mod="jornada"]').setAttribute("aria-checked", estado.mods.jornada);
+  document.querySelectorAll("[data-per]").forEach(b => b.setAttribute("aria-pressed", b.dataset.per === estado.per || (estado.per !== "mensal" && b.dataset.per === "outro" && !["7", "15"].includes(estado.per))));
+  $("ciclo-mensal").hidden = estado.per !== "mensal"; $("ciclo-dias").hidden = estado.per === "mensal";
+  document.querySelectorAll("[data-pag]").forEach(b => b.setAttribute("aria-pressed", b.dataset.pag === estado.pag));
+  document.querySelectorAll("[data-forma]").forEach(b => b.setAttribute("aria-pressed", estado.formas.has(b.dataset.forma)));
+  $("pag-pos").hidden = estado.pag !== "pos"; $("pag-pre").hidden = estado.pag !== "pre";
   $("canais").hidden = !estado.mensageria;
   document.querySelectorAll("[data-canal]").forEach(b => b.setAttribute("aria-pressed", estado.canais.has(b.dataset.canal)));
   pintarPrecos(); pintarCiclo(); pintarResumo();
 }
 function pintarResumo() {
   const semPreco = visiveis().filter(i => { const p = estado.precos[i.cod]; return !(p && (p.preco || p.faixas.length)); });
-  const mods = ["Motor de decisão"].concat(estado.mensageria ? ["Mensageria (" + [...estado.canais].map(c => ({ sms: "SMS", rcs: "RCS", email: "E-mail", whatsapp: "WhatsApp" })[c]).join(", ") + ")"] : [])
-    .concat([...document.querySelectorAll('[data-mod]:not([data-mod="mensageria"])')].filter(b => b.getAttribute("aria-checked") === "true").map(b => b.getAttribute("aria-label")));
-  $("resumo").innerHTML = `<dt>Motor</dt><dd>${[...estado.motores].map(m => m === "motorcob" ? "MotorCob" : "MotorCli").join(" + ")}</dd><dt>Módulos</dt><dd>${esc(mods.join(" · "))}</dd><dt>Preços</dt><dd>${visiveis().length - semPreco.length} de ${visiveis().length} definidos</dd><dt>Corte</dt><dd>${+$("c-corte").value === 1 ? "mês fechado" : "dia " + (+$("c-corte").value)}</dd>`;
+  const mods = [].concat(estado.motores.has("motorcob") && estado.mods.orquestracao ? ["Orquestração"] : [],
+                         estado.motores.has("motorcli") && estado.mods.jornada ? ["Jornada"] : []).concat(estado.mensageria ? ["Mensageria (" + [...estado.canais].map(c => ({ sms: "SMS", rcs: "RCS", email: "E-mail", whatsapp: "WhatsApp" })[c]).join(", ") + ")"] : [])
+    .concat([...document.querySelectorAll('[data-mod="api"], [data-mod="enriquecimento"]')].filter(b => b.getAttribute("aria-checked") === "true").map(b => b.getAttribute("aria-label")));
+  $("resumo").innerHTML = `<dt>Motor</dt><dd>${[...estado.motores].map(m => m === "motorcob" ? "MotorCob" : "MotorCli").join(" + ")}</dd><dt>Módulos</dt><dd>${esc(mods.join(" · "))}</dd><dt>Preços</dt><dd>${visiveis().length - semPreco.length} de ${visiveis().length} definidos</dd><dt>Ciclo</dt><dd>${estado.per === "mensal" ? (+$("c-corte").value === 1 ? "mensal, mês fechado" : "mensal, corte dia " + (+$("c-corte").value)) : "a cada " + esc(parseInt($("c-dias").value) || 7) + " dias"}</dd><dt>Cobrança</dt><dd>${estado.pag === "pos" ? "Pós-pago" : "Pré-pago"} · ${[...estado.formas].map(f => ({ boleto: "boleto", pix: "Pix", cartao: "cartão" })[f]).join(", ")}</dd>`;
   return semPreco;
 }
 for (let d = 1; d <= 28; d++) {
   $("c-corte").insertAdjacentHTML("beforeend", `<option value="${d}" ${d === 21 ? "selected" : ""}>${d === 1 ? "Dia 1 (mês fechado)" : "Dia " + d}</option>`);
-  $("c-venc").insertAdjacentHTML("beforeend", `<option value="${d}" ${d === 5 ? "selected" : ""}>Dia ${d}</option>`);
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.motor) { const m = b.dataset.motor; if (estado.motores.has(m) && estado.motores.size === 1) { $("status").className = "status erro"; $("status").textContent = "A empresa precisa de pelo menos um motor."; return; } estado.motores.has(m) ? estado.motores.delete(m) : estado.motores.add(m); $("status").textContent = ""; pintar(); return; }
   if (b.dataset.mod === "mensageria") { estado.mensageria = !estado.mensageria; pintar(); return; }
+  if (b.dataset.mod === "orquestracao" || b.dataset.mod === "jornada") { estado.mods[b.dataset.mod] = !estado.mods[b.dataset.mod]; pintar(); return; }
+  if (b.dataset.per) { estado.per = b.dataset.per === "outro" ? "30" : b.dataset.per; if (estado.per !== "mensal") $("c-dias").value = estado.per; pintar(); return; }
+  if (b.dataset.pag) { estado.pag = b.dataset.pag; pintar(); return; }
+  if (b.dataset.forma) { const f = b.dataset.forma; if (estado.formas.has(f) && estado.formas.size === 1) { $("status").className = "status erro"; $("status").textContent = "Escolha pelo menos uma forma de pagamento."; return; } estado.formas.has(f) ? estado.formas.delete(f) : estado.formas.add(f); pintar(); return; }
+  if (b.id === "r-auto") { const on = b.getAttribute("aria-checked") !== "true"; if (on && !estado.formas.has("cartao")) { $("status").className = "status erro"; $("status").textContent = "Recarga automática precisa do cartão de crédito nas formas aceitas."; return; } b.setAttribute("aria-checked", on); return; }
   if (b.dataset.mod) { b.setAttribute("aria-checked", b.getAttribute("aria-checked") !== "true"); pintarResumo(); return; }
   if (b.dataset.canal) { const c = b.dataset.canal; estado.canais.has(c) ? estado.canais.delete(c) : estado.canais.add(c); pintar(); return; }
   if (b.dataset.abrir) { estado.aberto = estado.aberto === b.dataset.abrir ? null : b.dataset.abrir; pintarPrecos(); return; }
@@ -288,6 +359,8 @@ document.addEventListener("click", e => {
   if (b.id === "salvar") {
     const falta = pintarResumo();
     const st = $("status");
+    const motoresSemModulo = [...estado.motores].filter(m => !estado.mods[m === "motorcob" ? "orquestracao" : "jornada"]);
+    if (motoresSemModulo.length) { st.className = "status erro"; st.textContent = "Marque o módulo do motor contratado: " + motoresSemModulo.map(m => m === "motorcob" ? "Orquestração" : "Jornada").join(" e ") + "."; return; }
     if (falta.length) { st.className = "status erro"; st.textContent = "Falta preço em: " + falta.map(i => i.nome).join(", ") + "."; return; }
     for (const p of Object.values(estado.precos)) if (p.faixas.length) for (let k = 1; k < p.faixas.length - 1; k++) if (!(p.faixas[k].ate > p.faixas[k - 1].ate)) { st.className = "status erro"; st.textContent = "As faixas precisam ter limites crescentes."; return; }
     st.className = "status ok"; st.textContent = "Empresa criada. Convite enviado ao Admin da empresa.";
@@ -295,10 +368,9 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   const t = e.target, p = estado.precos[t.dataset.item];
-  if (t.id === "c-corte" || t.id === "c-venc") { pintarCiclo(); pintarResumo(); return; }
+  if (["c-corte", "c-prazo", "c-dias", "c-inicio", "r-min"].includes(t.id)) { if (t.id === "c-dias") estado.per = String(Math.min(Math.max(parseInt(t.value) || 7, 1), 90)); pintar(); return; }
   if (t.dataset.sim) { estado.sim[t.dataset.sim] = Math.max(0, parseInt(t.value.replace(/\D/g, "")) || 0); pintarPrecos(); return; }
   if (!p) return;
-  const num = v => { v = String(v).trim(); if (v.includes(",")) v = v.replace(/\./g, "").replace(",", "."); const n = parseFloat(v); return isNaN(n) ? null : n; };
   if (t.dataset.campo === "preco") p.preco = num(t.value);
   if (t.dataset.campo === "minimo") p.minimo = num(t.value) || 0;
   if (t.dataset.campo === "ate") p.faixas[+t.dataset.faixa].ate = parseInt(t.value.replace(/\D/g, "")) || null;

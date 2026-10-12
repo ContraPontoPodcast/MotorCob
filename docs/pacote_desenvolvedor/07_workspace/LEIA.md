@@ -1,4 +1,4 @@
-# Workspace no Horizons (prompts 1 a 29)
+# Workspace no Horizons (prompts 1 a 31)
 
 Rode na ordem, depois dos SQL 4, 5, 6 e 7 (pasta 01_banco). Cada prompt tem menos de 100 linhas e é independente
 do arquivo: cole o bloco inteiro no Horizons e publique antes do próximo.
@@ -28,3 +28,5 @@ Depois dos 6 primeiros, os prompts seguem a numeração do arquivo (7 a 25). Os 
 - `PROMPT_27_CONTRATACAO.md` — Console: motor, módulos, preços (flat ou escalonado) e ciclo de uso num lugar só (depois do SQL 19).
 - `PROMPT_28_SUPORTE_NOMES.md` — suporte mostra quem está atendendo e quem escreveu cada mensagem (depois do SQL 20).
 - `PROMPT_29_CORRECAO_CONTRATACAO.md` — correção da tela Contratação (quebrava ao abrir; preços, WhatsApp, números e ciclo).
+- `PROMPT_30_EQUIPE_CARTEIRA.md` — Console: Equipe com papéis, alcance e permissões; Carteiras; login da equipe direto no Console (depois do SQL 21 e da função admin-usuarios nova).
+- `PROMPT_31_CONTRATACAO_V2_RECARGA.md` — Contratação v2: módulos Orquestração e Jornada, preço abre embaixo do item, ciclo em dias, pré/pós-pago e recarga (depois do SQL 22).

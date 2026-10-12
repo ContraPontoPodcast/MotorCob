@@ -72,6 +72,17 @@ with itens(ordem, item, ok, se_falhar) as (values
          and exists (select 1 from information_schema.columns where table_schema = 'public'
                and table_name = 'chamados' and column_name = 'responsavel_nome'),
        'rodar 20_suporte_nomes.sql (depois do 19)'),
+  (27, 'SQL 21 · Equipe com papéis, alcance e carteira',
+       to_regclass('public.permissoes_equipe') is not null
+         and exists (select 1 from pg_proc where proname = 'configurar_equipe')
+         and exists (select 1 from pg_proc where proname = 'definir_responsaveis'),
+       'rodar 21_equipe_carteira.sql (depois do 20)'),
+  (28, 'SQL 22 · Contratação v2: módulos do motor, ciclo em dias, pré-pago e recargas',
+       to_regclass('public.recargas') is not null
+         and exists (select 1 from pg_proc where proname = 'saldo_empresa')
+         and exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'ciclo_empresa' and column_name = 'modelo_pagamento'),
+       'rodar 22_ciclo_pagamento.sql (depois do 21)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),
@@ -86,7 +97,8 @@ with itens(ordem, item, ok, se_falhar) as (values
                                        'fatura_ajustes', 'mensageria_lotes', 'mensageria_mensagens',
                                        'mensageria_descadastros', 'api_tokens', 'api_chamadas',
                                        'empresa_frentes', 'usuario_frentes', 'jornada_cliente',
-                                       'ciclo_empresa', 'jornada_clientes_mes')),
+                                       'ciclo_empresa', 'jornada_clientes_mes',
+                                       'permissoes_equipe', 'recargas')),
        'algum SQL ficou pela metade: rode de novo o da tabela que faltar'),
   (12, 'Anônimo não lê dado de cliente',
        not exists (select 1 from unnest(array['public.chamados', 'public.faturas', 'public.api_tokens']) t

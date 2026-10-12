@@ -95,5 +95,14 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
 20. `20_suporte_nomes.sql` (= `supabase/migrations/20261117000001_suporte_nomes.sql`) — **Suporte**: corrige o
     erro ao abrir chamado e ao responder pelo Console (campo `autor_nome`), mostra quem assumiu o atendimento
     (`responsavel_nome`, ex.: "Ana S.") e aceita mensagem só com anexo. Depois cole o prompt 28 (passo 45).
+21. `21_equipe_carteira.sql` (= `supabase/migrations/20261118000001_equipe_carteira.sql`) — **Equipe MotorCX**:
+    papéis Master, Atendimento e **Comercial**, alcance (todas as empresas ou **só a carteira**: as empresas em
+    que a pessoa é Vendedor ou Gerente da conta) e 12 permissões ajustáveis por pessoa. Empresa criada por um
+    Comercial entra na carteira dele. Depois publique a função `admin-usuarios` nova e cole o prompt 30.
+22. `22_ciclo_pagamento.sql` (= `supabase/migrations/20261119000001_ciclo_pagamento.sql`) — **Contratação v2**:
+    Orquestração (MotorCob) e Jornada (MotorCli) viram módulos marcados na Contratação (quem já tem o MotorCli
+    ganha a Jornada ligada), ciclo de uso **em dias** (semanal, quinzenal ou N dias) além do mensal, prazo de
+    pagamento, **pós ou pré-pago**, formas aceitas (boleto, Pix, cartão), **recargas** e **saldo** do pré-pago.
+    Depois cole o prompt 31.
 
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).
