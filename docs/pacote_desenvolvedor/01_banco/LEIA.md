@@ -104,5 +104,11 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     ganha a Jornada ligada), ciclo de uso **em dias** (semanal, quinzenal ou N dias) além do mensal, prazo de
     pagamento, **pós ou pré-pago**, formas aceitas (boleto, Pix, cartão), **recargas** e **saldo** do pré-pago.
     Depois cole o prompt 31.
+23. `23_cobranca_stripe_nf.sql` (= `supabase/migrations/20261120000001_cobranca_stripe_nf.sql`) — **Cobrança pelo
+    Stripe** (boleto, Pix e cartão com baixa automática da fatura e da recarga, cartão guardado para a recarga
+    automática) e **nota fiscal** (NFS-e nacional pelo Focus NFe). Guia: `08_api/LEIA_INTEGRACOES.md`.
+24. `24_retorno_fornecedores.sql` (= `supabase/migrations/20261121000001_retorno_fornecedores.sql`) — **retorno dos
+    fornecedores reais** (entrega, falha, resposta, bounce, abertura), sem o contato do cliente. Guia:
+    `08_api/LEIA_INTEGRACOES.md`.
 
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

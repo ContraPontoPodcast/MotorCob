@@ -83,6 +83,15 @@ with itens(ordem, item, ok, se_falhar) as (values
          and exists (select 1 from information_schema.columns where table_schema = 'public'
                and table_name = 'ciclo_empresa' and column_name = 'modelo_pagamento'),
        'rodar 22_ciclo_pagamento.sql (depois do 21)'),
+  (29, 'SQL 23 · Cobrança pelo Stripe e nota fiscal',
+       to_regclass('public.cobrancas') is not null and to_regclass('public.notas_fiscais') is not null
+         and exists (select 1 from pg_proc where proname = 'baixar_cobranca'),
+       'rodar 23_cobranca_stripe_nf.sql (depois do 22)'),
+  (30, 'SQL 24 · Retorno dos fornecedores da Mensageria',
+       to_regclass('public.mensageria_eventos') is not null
+         and exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'mensageria_mensagens' and column_name = 'confirmada_em'),
+       'rodar 24_retorno_fornecedores.sql (depois do 23)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),
@@ -98,7 +107,9 @@ with itens(ordem, item, ok, se_falhar) as (values
                                        'mensageria_descadastros', 'api_tokens', 'api_chamadas',
                                        'empresa_frentes', 'usuario_frentes', 'jornada_cliente',
                                        'ciclo_empresa', 'jornada_clientes_mes',
-                                       'permissoes_equipe', 'recargas')),
+                                       'permissoes_equipe', 'recargas', 'cobrancas', 'cobranca_clientes',
+                                       'cobranca_eventos', 'cartoes_salvos', 'nf_config', 'notas_fiscais',
+                                       'mensageria_eventos')),
        'algum SQL ficou pela metade: rode de novo o da tabela que faltar'),
   (12, 'Anônimo não lê dado de cliente',
        not exists (select 1 from unnest(array['public.chamados', 'public.faturas', 'public.api_tokens']) t

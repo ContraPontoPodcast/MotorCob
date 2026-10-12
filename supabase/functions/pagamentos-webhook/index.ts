@@ -20,7 +20,7 @@ async function novo(id: string, provedor: "stripe" | "focusnfe", tipo: string) {
   return !error;
 }
 
-async function stripe(req: Request) {
+async function receberStripe(req: Request) {
   const corpo = await req.text();
   if (!(await assinaturaStripeValida(corpo, req.headers.get("Stripe-Signature"), Deno.env.get("STRIPE_WEBHOOK_SECRET") ?? ""))) {
     return ok({ erro: "assinatura inválida" }, 400);
@@ -58,7 +58,7 @@ async function stripe(req: Request) {
   return ok();
 }
 
-async function focusnfe(req: Request) {
+async function receberFocus(req: Request) {
   const esperado = Deno.env.get("FOCUSNFE_WEBHOOK_TOKEN") ?? "";
   if (!esperado || !iguais(req.headers.get("Authorization") ?? "", esperado)) return ok({ erro: "não autorizado" }, 401);
   const corpo = await req.json().catch(() => ({}));
@@ -71,7 +71,7 @@ async function focusnfe(req: Request) {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return ok({ erro: "use POST" }, 405);
   const caminho = new URL(req.url).pathname;
-  if (caminho.endsWith("/stripe")) return await stripe(req);
-  if (caminho.endsWith("/focusnfe")) return await focusnfe(req);
+  if (caminho.endsWith("/stripe")) return await receberStripe(req);
+  if (caminho.endsWith("/focusnfe")) return await receberFocus(req);
   return ok({ erro: "rota não encontrada: /stripe ou /focusnfe" }, 404);
 });

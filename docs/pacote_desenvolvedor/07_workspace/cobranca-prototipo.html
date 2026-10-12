@@ -1,0 +1,358 @@
+<title>Cobrança MotorCX</title>
+<style>
+/* Layout: três telas do mesmo sistema (cliente pós-pago, cliente pré-pago, Console), trocadas por um controle no topo; coluna única de cartões, lateral de resumo no desktop */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
+  --cob: #C9A35A; --azul: #0A64D0; --ok: #1E7A36; --ok-fundo: #E6F4EA; --alerta: #8A5A00; --alerta-fundo: #FFF4D6;
+  --erro: #C4271E; --erro-fundo: #FDECEA;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --ok-fundo: #12301A; --alerta: #F0C35A; --alerta-fundo: #33280A;
+  --erro: #FF6B60; --erro-fundo: #3A1512; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --ok-fundo: #12301A; --alerta: #F0C35A; --alerta-fundo: #33280A;
+  --erro: #FF6B60; --erro-fundo: #3A1512; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); margin: 0; padding: 24px 16px 48px; }
+.topo, main { max-width: 1080px; margin: 0 auto; }
+.proto { font-size: 13px; color: var(--tinta-2); margin: 0 0 12px; }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0; }
+h3 { font-size: 15px; margin: 0; }
+.sub { margin: 4px 0 16px; color: var(--tinta-2); }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--linha); border-radius: 10px; padding: 3px; margin-bottom: 20px; max-width: 100%; }
+.seg button { border: 0; background: none; color: var(--tinta); border-radius: 8px; padding: 8px 12px; font: 13.5px var(--sans); cursor: pointer; }
+.seg button[aria-selected="true"] { background: var(--painel); box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 600; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.grade { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cartao { background: var(--painel); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ajuda { color: var(--tinta-2); font-size: 13.5px; margin: 0; }
+.valor { font-size: 34px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.linha { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.pill.ok { background: var(--ok-fundo); color: var(--ok); }
+.pill.alerta { background: var(--alerta-fundo); color: var(--alerta); }
+.pill.erro { background: var(--erro-fundo); color: var(--erro); }
+.pill.neutro { background: var(--suave); color: var(--tinta-2); }
+.formas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.forma { border: 1px solid var(--linha); background: var(--painel); color: var(--tinta); border-radius: 14px; padding: 14px; text-align: left; font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.forma small { color: var(--tinta-2); font-size: 12.5px; }
+.forma[aria-pressed="true"] { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; }
+.forma:disabled { opacity: .45; cursor: not-allowed; }
+.detalhe { background: var(--suave); border-radius: 14px; padding: 16px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.detalhe > div { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.codigo { font: 13px/1.5 var(--mono); background: var(--painel); border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px; overflow-wrap: anywhere; user-select: all; }
+.qr { width: 132px; height: 132px; border-radius: 10px; background: #fff; padding: 8px; flex: none; }
+.qr canvas { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+.botoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 0; border-radius: 980px; padding: 9px 16px; font: 600 14px var(--sans); cursor: pointer; background: var(--tinta); color: var(--painel); }
+.btn.sec { background: var(--suave); color: var(--tinta); }
+.btn.link { background: none; color: var(--azul); padding: 9px 4px; }
+.tabela { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta-2); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+td { padding: 11px 10px; border-bottom: 1px solid var(--linha); vertical-align: middle; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.faixa { border-radius: 12px; padding: 10px 14px; font-size: 14px; margin: 0; }
+.faixa.alerta { background: var(--alerta-fundo); color: var(--alerta); }
+.faixa.erro { background: var(--erro-fundo); color: var(--erro); }
+.faixa.ok { background: var(--ok-fundo); color: var(--ok); }
+dl.res { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; font-size: 14px; }
+dl.res dt { color: var(--tinta-2); }
+dl.res dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+label.campo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--tinta-2); min-width: 0; }
+input, select, textarea { font: 15px var(--sans); color: var(--tinta); background: var(--painel); border: 1px solid var(--linha); border-radius: 10px; padding: 0 12px; width: 100%; }
+input, select { height: 42px; }
+textarea { padding: 10px 12px; min-height: 64px; resize: vertical; }
+.campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.campos .largo { grid-column: 1 / -1; }
+.cartao-salvo { display: flex; gap: 12px; align-items: center; }
+.bandeira { width: 44px; height: 30px; border-radius: 6px; background: var(--tinta); color: var(--painel); display: grid; place-items: center; font-size: 11px; font-weight: 800; letter-spacing: .04em; flex: none; }
+.chave { width: 46px; height: 28px; border-radius: 999px; border: 0; background: var(--linha); position: relative; cursor: pointer; flex: none; }
+.chave::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .15s; }
+.chave[aria-checked="true"] { background: var(--ok); }
+.chave[aria-checked="true"]::after { left: 21px; }
+.status { font-size: 13.5px; min-height: 1.2em; margin: 0; }
+.status.ok { color: var(--ok); } .status.erro { color: var(--erro); }
+@media (max-width: 860px) { .grade { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .formas { grid-template-columns: minmax(0, 1fr); } .campos { grid-template-columns: minmax(0, 1fr); } .valor { font-size: 28px; } }
+@media (prefers-reduced-motion: reduce) { .chave::after { transition: none; } }
+</style>
+
+<div class="topo">
+  <p class="proto">Protótipo · cobrança pelo Stripe (boleto, Pix e cartão) e nota fiscal pelo Focus NFe. Empresa, valores e códigos fictícios.</p>
+  <h1>Cobrança MotorCX</h1>
+  <p class="sub">Como o cliente paga, como a recarga entra no saldo e onde a equipe configura a nota fiscal.</p>
+  <div class="seg" role="tablist" aria-label="Tela">
+    <button type="button" role="tab" id="aba-pos" aria-selected="true" data-tela="pos">Cliente · pós-pago</button>
+    <button type="button" role="tab" id="aba-pre" aria-selected="false" data-tela="pre">Cliente · pré-pago</button>
+    <button type="button" role="tab" id="aba-console" aria-selected="false" data-tela="console">Console · Faturamento</button>
+  </div>
+</div>
+
+<main>
+  <!-- ======================= cliente pós-pago ======================= -->
+  <section id="tela-pos" class="grade" role="tabpanel" aria-labelledby="aba-pos">
+    <div class="col">
+      <div class="cartao">
+        <div class="linha"><h2>Fatura de outubro · nº 1042</h2><span class="pill alerta">Em aberto · vence 25/10/2026</span></div>
+        <p class="ajuda">Ciclo de 21/09/2026 a 20/10/2026 · Alfa Serviços de Cobrança Ltda</p>
+        <div class="valor">R$ 4.812,40</div>
+        <h3>Como você quer pagar?</h3>
+        <div class="formas" id="formas-fatura">
+          <button type="button" class="forma" data-forma="boleto" aria-pressed="true"><b>Boleto</b><small>Vence junto com a fatura</small></button>
+          <button type="button" class="forma" data-forma="pix" aria-pressed="false"><b>Pix</b><small>QR Code vale 24 horas</small></button>
+          <button type="button" class="forma" data-forma="cartao" aria-pressed="false"><b>Cartão de crédito</b><small>Página segura do Stripe</small></button>
+        </div>
+        <div class="detalhe" id="det-boleto">
+          <div>
+            <h3>Boleto gerado</h3>
+            <p class="codigo" id="cod-boleto">23793.38128 60000.000003 00000.000400 1 98760000481240</p>
+            <div class="botoes">
+              <button type="button" class="btn" data-copiar="cod-boleto">Copiar código</button>
+              <a class="btn sec" href="https://stripe.com/br" target="_blank" rel="noopener">Abrir boleto (PDF)</a>
+            </div>
+            <p class="ajuda">O pagamento cai em até 1 dia útil e a fatura vira "Paga" sozinha.</p>
+          </div>
+        </div>
+        <div class="detalhe" id="det-pix" hidden>
+          <div class="qr"><canvas id="qr" width="29" height="29" aria-label="QR Code de exemplo"></canvas></div>
+          <div>
+            <h3>Pix copia e cola</h3>
+            <p class="codigo" id="cod-pix">00020101021226880014br.gov.bcb.pix2566qrcode-exemplo.stripe.com/pix/v2/cobv/EXEMPLO520400005303986540548124.405802BR5916MOTORCX EXEMPLO6009SAO PAULO6304ABCD</p>
+            <div class="botoes"><button type="button" class="btn" data-copiar="cod-pix">Copiar código Pix</button></div>
+            <p class="ajuda">Vale até 13/10/2026 às 15:20. Pagou, a tela muda para "Paga" em segundos.</p>
+          </div>
+        </div>
+        <div class="detalhe" id="det-cartao" hidden>
+          <div>
+            <h3>Pagamento com cartão</h3>
+            <p class="ajuda">Você vai para a página segura do Stripe. O número do cartão não passa pelo MotorCX.</p>
+            <div class="botoes"><a class="btn" href="https://stripe.com/br" target="_blank" rel="noopener">Ir para o pagamento</a></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <h2>Faturas anteriores</h2>
+        <div class="tabela"><table>
+          <thead><tr><th>Ciclo</th><th>Situação</th><th class="num">Valor</th><th>Nota fiscal</th></tr></thead>
+          <tbody>
+            <tr><td>21/08 a 20/09/2026</td><td><span class="pill ok">Paga em 23/09 · Pix</span></td><td class="num">R$ 4.390,15</td><td><a href="https://www.nfse.gov.br" target="_blank" rel="noopener">NFS-e nº 318</a></td></tr>
+            <tr><td>21/07 a 20/08/2026</td><td><span class="pill ok">Paga em 26/08 · boleto</span></td><td class="num">R$ 4.102,80</td><td><a href="https://www.nfse.gov.br" target="_blank" rel="noopener">NFS-e nº 291</a></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+    <aside class="col">
+      <div class="cartao">
+        <h3>Dados da cobrança</h3>
+        <dl class="res">
+          <dt>CNPJ</dt><dd>11.222.333/0001-81</dd>
+          <dt>E-mail financeiro</dt><dd>financeiro@alfa.exemplo</dd>
+          <dt>Formas aceitas</dt><dd>Boleto, Pix e cartão</dd>
+        </dl>
+        <p class="ajuda">O boleto e a nota saem com estes dados. Para mudar: Empresa › Cadastro e Contatos.</p>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ======================= cliente pré-pago ======================= -->
+  <section id="tela-pre" class="grade" role="tabpanel" aria-labelledby="aba-pre" hidden>
+    <div class="col">
+      <p class="faixa alerta">Saldo baixo. Recarregue para não parar os envios da Mensageria.</p>
+      <div class="cartao">
+        <div class="linha"><h2>Saldo</h2><span class="pill neutro">Pré-pago · ciclo semanal</span></div>
+        <div class="valor" id="saldo">R$ 86,30</div>
+        <dl class="res">
+          <dt>Recargas pagas</dt><dd id="pagas">R$ 3.000,00</dd>
+          <dt>Uso valorado</dt><dd>R$ 2.913,70</dd>
+          <dt>Aviso de saldo baixo</dt><dd>R$ 100,00</dd>
+        </dl>
+      </div>
+      <div class="cartao">
+        <h2>Recarregar</h2>
+        <div class="campos">
+          <label class="campo" for="rec-valor">Valor (mínimo R$ 500,00)<input id="rec-valor" inputmode="decimal" value="1.000,00"></label>
+          <div class="campo" id="rec-forma-rotulo">Forma
+            <div class="formas" id="formas-recarga" role="group" aria-labelledby="rec-forma-rotulo">
+              <button type="button" class="forma" data-forma="pix" aria-pressed="true"><b>Pix</b></button>
+              <button type="button" class="forma" data-forma="boleto" aria-pressed="false" disabled><b>Boleto</b><small>não liberado</small></button>
+              <button type="button" class="forma" data-forma="cartao" aria-pressed="false"><b>Cartão</b></button>
+            </div>
+          </div>
+        </div>
+        <div class="botoes"><button type="button" class="btn" id="recarregar">Gerar pagamento</button></div>
+        <p class="status" id="rec-status" role="status"></p>
+        <div class="detalhe" id="rec-pix" hidden>
+          <div class="qr"><canvas id="qr2" width="29" height="29" aria-label="QR Code de exemplo"></canvas></div>
+          <div>
+            <h3>Pague com Pix para o saldo entrar</h3>
+            <p class="codigo" id="cod-pix2">00020101021226880014br.gov.bcb.pix2566qrcode-exemplo.stripe.com/pix/v2/cobv/RECARGA52040000530398654071000.005802BR6304EF12</p>
+            <div class="botoes"><button type="button" class="btn" data-copiar="cod-pix2">Copiar código Pix</button><button type="button" class="btn sec" id="simular-pago">Simular pagamento</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="cartao">
+        <h2>Recargas</h2>
+        <div class="tabela"><table>
+          <thead><tr><th>Pedida em</th><th>Forma</th><th class="num">Valor</th><th>Situação</th></tr></thead>
+          <tbody id="recargas">
+            <tr><td>06/10/2026</td><td>Cartão · automática</td><td class="num">R$ 500,00</td><td><span class="pill ok">Paga</span> <a href="https://www.nfse.gov.br" target="_blank" rel="noopener">NFS-e nº 331</a></td></tr>
+            <tr><td>28/09/2026</td><td>Pix</td><td class="num">R$ 2.500,00</td><td><span class="pill ok">Paga</span> <a href="https://www.nfse.gov.br" target="_blank" rel="noopener">NFS-e nº 322</a></td></tr>
+            <tr><td>20/09/2026</td><td>Pix</td><td class="num">R$ 1.000,00</td><td><span class="pill neutro">Venceu sem pagamento</span></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+    <aside class="col">
+      <div class="cartao">
+        <h3>Recarga automática</h3>
+        <div class="cartao-salvo">
+          <span class="bandeira">VISA</span>
+          <div style="flex:1;min-width:0"><b>•••• 4242</b><div class="ajuda">Validade 12/2030</div></div>
+          <button type="button" class="chave" role="switch" aria-checked="true" id="auto" aria-label="Recarga automática"></button>
+        </div>
+        <p class="ajuda" id="auto-texto">Quando o saldo chega em R$ 100,00, cobramos R$ 500,00 neste cartão.</p>
+        <p class="ajuda">Para guardar outro cartão, faça uma recarga com cartão e marque "Salvar para as próximas".</p>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ======================= Console ======================= -->
+  <section id="tela-console" class="col" role="tabpanel" aria-labelledby="aba-console" hidden>
+    <div class="cartao">
+      <div class="linha"><h2>Cobranças</h2><span class="ajuda">Stripe · baixa automática</span></div>
+      <div class="tabela"><table>
+        <thead><tr><th>Empresa</th><th>Origem</th><th>Forma</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Alfa Cobrança</td><td>Fatura 1042</td><td>Boleto</td><td class="num">R$ 4.812,40</td><td><span class="pill alerta">Pendente · vence 25/10</span></td><td></td></tr>
+          <tr><td>Beta Jornada</td><td>Recarga 77</td><td>Pix</td><td class="num">R$ 1.000,00</td><td><span class="pill ok">Paga 12/10 14:02</span></td><td></td></tr>
+          <tr><td>Gama Crédito</td><td>Recarga 76 · automática</td><td>Cartão</td><td class="num">R$ 500,00</td><td><span class="pill erro">Recusado: saldo insuficiente</span></td><td><button type="button" class="btn link">Avisar o cliente</button></td></tr>
+          <tr><td>Delta Assessoria</td><td>Recarga 74</td><td>Pix fora do Stripe</td><td class="num">R$ 2.000,00</td><td><span class="pill neutro">Pendente</span></td><td><button type="button" class="btn link">Marcar como paga</button></td></tr>
+        </tbody>
+      </table></div>
+      <p class="ajuda">"Marcar como paga" continua para o pagamento recebido por fora do Stripe; ao marcar, o boleto ou Pix pendente daquela recarga deixa de valer.</p>
+    </div>
+
+    <div class="cartao">
+      <div class="linha"><h2>Notas fiscais</h2><span class="ajuda">NFS-e nacional · Focus NFe</span></div>
+      <div class="tabela"><table>
+        <thead><tr><th>Empresa</th><th>Origem</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Beta Jornada</td><td>Recarga 77</td><td class="num">R$ 1.000,00</td><td><span class="pill neutro">Processando</span></td><td></td></tr>
+          <tr><td>Alfa Cobrança</td><td>Fatura 1031</td><td class="num">R$ 4.390,15</td><td><span class="pill ok">Autorizada nº 318</span></td><td><a href="https://www.nfse.gov.br" target="_blank" rel="noopener">PDF</a></td></tr>
+          <tr><td>Épsilon Recuperação</td><td>Fatura 1029</td><td class="num">R$ 2.155,00</td><td><span class="pill erro">Erro: CEP do tomador inválido</span></td><td><button type="button" class="btn link">Emitir de novo</button></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="cartao">
+      <div class="linha"><h2>Configuração da nota fiscal</h2><span class="pill alerta" id="amb-pill">Homologação (teste)</span></div>
+      <p class="ajuda">Preencha com o contador. Enquanto estiver em Homologação, as notas são de teste e não valem para a Receita.</p>
+      <div class="campos">
+        <label class="campo" for="nf-ativo">Emitir nota<select id="nf-ativo"><option value="sim">Sim</option><option value="nao" selected>Não (desligado)</option></select></label>
+        <label class="campo" for="nf-amb">Ambiente<select id="nf-amb"><option value="homologacao" selected>Homologação (teste)</option><option value="producao">Produção</option></select></label>
+        <label class="campo" for="nf-quando">Quando emitir a nota da fatura<select id="nf-quando"><option value="pagamento" selected>Quando o pagamento cair</option><option value="emissao">Quando a fatura for emitida</option></select></label>
+        <label class="campo" for="nf-cnpj">CNPJ do prestador (só números)<input id="nf-cnpj" inputmode="numeric" placeholder="00000000000000"></label>
+        <label class="campo" for="nf-im">Inscrição municipal<input id="nf-im"></label>
+        <label class="campo" for="nf-mun">Município emissor (código IBGE)<input id="nf-mun" inputmode="numeric" placeholder="3550308 = São Paulo"></label>
+        <label class="campo" for="nf-prest">Município da prestação (código IBGE)<input id="nf-prest" inputmode="numeric"></label>
+        <label class="campo" for="nf-trib">Código de tributação nacional do ISS (6 dígitos)<input id="nf-trib" inputmode="numeric" maxlength="6"></label>
+        <label class="campo" for="nf-simples">Simples Nacional<select id="nf-simples"><option value="1">Não optante</option><option value="2">MEI</option><option value="3">ME/EPP</option></select></label>
+        <label class="campo" for="nf-regime">Regime especial<select id="nf-regime"><option value="0">Nenhum</option><option value="3">Microempresa municipal</option><option value="6">Sociedade de profissionais</option><option value="9">Outros</option></select></label>
+        <label class="campo" for="nf-aliq">Alíquota do ISS (%)<input id="nf-aliq" inputmode="decimal" placeholder="em branco = a do município"></label>
+        <label class="campo" for="nf-ret">Retenção do ISS<select id="nf-ret"><option value="1">Não retido</option><option value="2">Retido pelo tomador</option></select></label>
+        <label class="campo largo" for="nf-desc-f">Descrição na nota da fatura<textarea id="nf-desc-f">Licença de uso da plataforma MotorCX e serviços de mensageria. Ciclo {ciclo}.</textarea></label>
+        <label class="campo largo" for="nf-desc-r">Descrição na nota da recarga<textarea id="nf-desc-r">Créditos pré-pagos de uso da plataforma MotorCX.</textarea></label>
+      </div>
+      <div class="botoes"><button type="button" class="btn" id="nf-salvar">Salvar</button></div>
+      <p class="status" id="nf-status" role="status"></p>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  // abas
+  document.querySelectorAll('[role="tab"]').forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll('[role="tab"]').forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    ["pos", "pre", "console"].forEach((t) => { $("tela-" + t).hidden = t !== b.dataset.tela; });
+  }));
+  // formas de pagamento da fatura
+  $("formas-fatura").addEventListener("click", (e) => {
+    const b = e.target.closest(".forma"); if (!b) return;
+    $("formas-fatura").querySelectorAll(".forma").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    ["boleto", "pix", "cartao"].forEach((f) => { $("det-" + f).hidden = f !== b.dataset.forma; });
+  });
+  $("formas-recarga").addEventListener("click", (e) => {
+    const b = e.target.closest(".forma"); if (!b || b.disabled) return;
+    $("formas-recarga").querySelectorAll(".forma").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  });
+  // copiar
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-copiar]"); if (!b) return;
+    const alvo = $(b.dataset.copiar), texto = alvo.textContent.trim(), rot = b.textContent;
+    const feito = () => { b.textContent = "Copiado"; setTimeout(() => { b.textContent = rot; }, 1600); };
+    const selecionar = () => { const r = document.createRange(); r.selectNodeContents(alvo); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+    try { navigator.clipboard.writeText(texto).then(feito, selecionar); } catch (_) { selecionar(); }
+  });
+  // QR de exemplo (padrão fixo, não é um Pix de verdade)
+  function qr(canvas, semente) {
+    const c = canvas.getContext("2d"), n = 29; let s = semente;
+    c.fillStyle = "#fff"; c.fillRect(0, 0, n, n); c.fillStyle = "#000";
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { s = (s * 1103515245 + 12345) & 0x7fffffff; if (s % 3 === 0) c.fillRect(x, y, 1, 1); }
+    [[0, 0], [n - 7, 0], [0, n - 7]].forEach(([x, y]) => { c.fillStyle = "#000"; c.fillRect(x, y, 7, 7); c.fillStyle = "#fff"; c.fillRect(x + 1, y + 1, 5, 5); c.fillStyle = "#000"; c.fillRect(x + 2, y + 2, 3, 3); });
+  }
+  qr($("qr"), 7); qr($("qr2"), 11);
+  // recarga
+  const brl = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const num = (t) => { t = String(t).replace(/\s/g, ""); if (t.includes(",")) t = t.replace(/\./g, "").replace(",", "."); const v = Number(t); return Number.isFinite(v) ? v : 0; };
+  let saldo = 86.30, pagas = 3000;
+  $("recarregar").addEventListener("click", () => {
+    const v = num($("rec-valor").value), st = $("rec-status");
+    if (v < 500) { st.className = "status erro"; st.textContent = "A recarga mínima é de R$ 500,00."; $("rec-pix").hidden = true; return; }
+    const forma = $("formas-recarga").querySelector('[aria-pressed="true"]').dataset.forma;
+    const tr = document.createElement("tr");
+    [["12/10/2026"], [forma === "pix" ? "Pix" : "Cartão"], [brl(v)]].forEach(([t], i) => { const td = document.createElement("td"); td.textContent = t; if (i === 2) td.className = "num"; tr.appendChild(td); });
+    const td = document.createElement("td"); const p = document.createElement("span"); p.className = "pill alerta"; p.textContent = "Aguardando pagamento"; td.appendChild(p); tr.appendChild(td);
+    tr.id = "rec-nova"; const velha = $("rec-nova"); if (velha) velha.remove();
+    $("recargas").prepend(tr);
+    st.className = "status ok";
+    if (forma === "pix") { $("rec-pix").hidden = false; st.textContent = "Pix gerado. Assim que você pagar, o saldo entra."; }
+    else { $("rec-pix").hidden = true; st.textContent = "Abrimos a página segura do Stripe em outra aba (no sistema real)."; }
+    $("simular-pago").onclick = () => {
+      saldo += v; pagas += v; $("saldo").textContent = brl(saldo); $("pagas").textContent = brl(pagas);
+      p.className = "pill ok"; p.textContent = "Paga"; $("rec-pix").hidden = true;
+      st.textContent = "Pagamento confirmado pelo Stripe. Saldo atualizado e nota fiscal em emissão.";
+      document.querySelector(".faixa.alerta").hidden = saldo > 100;
+    };
+  });
+  $("auto").addEventListener("click", (e) => {
+    const on = e.currentTarget.getAttribute("aria-checked") !== "true";
+    e.currentTarget.setAttribute("aria-checked", String(on));
+    $("auto-texto").textContent = on ? "Quando o saldo chega em R$ 100,00, cobramos R$ 500,00 neste cartão." : "Recarga automática desligada. O cartão fica guardado.";
+  });
+  // nota fiscal
+  $("nf-amb").addEventListener("change", (e) => {
+    const prod = e.target.value === "producao";
+    $("amb-pill").className = "pill " + (prod ? "ok" : "alerta"); $("amb-pill").textContent = prod ? "Produção" : "Homologação (teste)";
+  });
+  $("nf-salvar").addEventListener("click", () => {
+    const st = $("nf-status"), falta = [];
+    if (!/^\d{14}$/.test($("nf-cnpj").value)) falta.push("CNPJ do prestador");
+    if (!/^\d{7}$/.test($("nf-mun").value)) falta.push("município emissor");
+    if (!/^\d{7}$/.test($("nf-prest").value)) falta.push("município da prestação");
+    if (!/^\d{6}$/.test($("nf-trib").value)) falta.push("código de tributação nacional");
+    if ($("nf-ativo").value === "sim" && falta.length) { st.className = "status erro"; st.textContent = "Para ligar a nota, falta: " + falta.join(", ") + "."; return; }
+    st.className = "status ok"; st.textContent = $("nf-ativo").value === "sim" ? "Configuração salva. As próximas notas saem com estes dados." : "Configuração salva. A nota continua desligada.";
+  });
+})();
+</script>
