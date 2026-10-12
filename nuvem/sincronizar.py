@@ -94,13 +94,22 @@ def nome_seguro(nome: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", nome) or "arquivo.csv"
 
 
-def empresas_ativas(sb: Supabase, slug: str | None = None) -> list[dict]:
+def empresas_ativas(sb: Supabase, slug: str | None = None, orquestracao: bool = False) -> list[dict]:
+    """Empresas ativas. orquestracao=True: só as que têm a Orquestração ligada (a rotina do dia não roda para quem
+    desligou; sem a linha do módulo, roda como antes)."""
     filtros = {"ativa": "eq.true"}
     if slug:
         filtros["slug"] = f"eq.{slug}"
     lista = sb.selecionar("empresas", filtros, ordem="slug.asc") or []
     if slug and not lista:
         raise SystemExit(f"empresa '{slug}' não existe ou não está ativa no site")
+    if orquestracao and lista:
+        try:
+            desligadas = {m["empresa_id"] for m in sb.selecionar("empresa_modulos", {
+                "modulo": "eq.orquestracao", "ativo": "eq.false"}) or []}
+        except ErroSupabase:      # banco sem a tabela de módulos
+            desligadas = set()
+        lista = [e for e in lista if e["id"] not in desligadas]
     return lista
 
 
@@ -923,7 +932,7 @@ def sincronizar_dia(dados: Path, data: date, sb: Supabase | None = None, out=pri
     """Roda o dia para cada empresa ativa. Retorna {slug: resultado}; erros ficam em resultado['erro']."""
     sb = sb or Supabase(*carregar_config(dados))
     resultados = {}
-    for emp in empresas_ativas(sb, empresa):
+    for emp in empresas_ativas(sb, empresa, orquestracao=True):
         try:
             resultados[emp["slug"]] = sincronizar_empresa_dia(sb, dados, emp, data, out, pasta_empresas)
         except Exception as ex:  # noqa: BLE001 — uma empresa com erro não para as outras
@@ -1081,7 +1090,7 @@ def ha_arquivo_novo(dados: Path, sb: Supabase, empresa: str | None = None) -> fr
     if not pend and not pedidos:
         return frozenset()
     saida = set()
-    for emp in empresas_ativas(sb, empresa):
+    for emp in empresas_ativas(sb, empresa, orquestracao=True):
         falhou = _falhou(dados, emp)
         saida |= {(emp["id"], c, i) for c, i in pend.get(emp["id"], {}).items() if i > falhou.get(str(c), 0)}
         saida |= {(emp["id"], c, f"pedido {i}") for c, ids in pedidos.get(emp["id"], {}).items() for i in ids}
@@ -1097,7 +1106,7 @@ def empresas_com_carga_nova(dados: Path, sb: Supabase, empresa: str | None = Non
     pend, pedidos = _pendentes_base(sb), _pedidos_pendentes(sb, dados)
     rotina_vale = hoje is not None and _passou_hora_rotina(hoje)
     saida = []
-    for emp in empresas_ativas(sb, empresa):
+    for emp in empresas_ativas(sb, empresa, orquestracao=True):
         falhou = _falhou(dados, emp)
         novos = {c for c, i in pend.get(emp["id"], {}).items() if i > falhou.get(str(c), 0)}
         ja = falhou.get("orquestracao") if isinstance(falhou.get("orquestracao"), dict) else {}

@@ -190,6 +190,16 @@ class TestSincronizar(unittest.TestCase):
         self.falso.fechar()
         self.tmp.cleanup()
 
+    def test_orquestracao_desligada_nao_roda_a_rotina(self):
+        self.falso.tabelas["empresa_modulos"] = [{"empresa_id": 2, "modulo": "orquestracao", "ativo": False},
+                                                 {"empresa_id": 1, "modulo": "orquestracao", "ativo": True}]
+        r = self._dia(date(2026, 9, 25))
+        self.assertEqual(set(r), {"alfa"})
+        self.assertEqual({e["empresa_id"] for e in self.falso.tabelas["execucoes"]}, {1})
+        from nuvem.sincronizar import empresas_com_carga_nova, ha_arquivo_novo
+        self.assertNotIn(2, {e[0] for e in ha_arquivo_novo(self.dados, self.sb)})
+        self.assertNotIn(2, {e["id"] for e in empresas_com_carga_nova(self.dados, self.sb)})
+
     def test_dia_completo_e_idempotente(self):
         r = self._dia(date(2026, 9, 25))["alfa"]
         t, o = self.falso.tabelas, self.falso.objetos

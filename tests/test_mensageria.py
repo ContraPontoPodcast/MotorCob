@@ -26,6 +26,8 @@ class SbFalso:
                 return False
             if op == "in" and str(l.get(k)) not in v.strip("()").split(","):
                 return False
+            if op == "gt" and not str(l.get(k)) > v:
+                return False
         return True
 
     def selecionar(self, tabela, filtros=None, ordem=None, limite=None):
@@ -99,6 +101,10 @@ class TestMensageria(unittest.TestCase):
             return M.processar(self.sb, self.dados, datetime(dia.year, dia.month, dia.day, h, m, tzinfo=SP),
                                out=lambda *a: None)
 
+    def _validos(self):
+        """Números do lote de SMS que a consulta de operadora simulada aceita (fora o descadastrado)."""
+        return [f for n, f in enumerate(self.fones) if n != 5 and M.operadora_simulada(f) != "invalido"]
+
     def _lote(self, canal):
         return next(l for l in self.sb.t["mensageria_lotes"] if l["canal"] == canal)
 
@@ -140,8 +146,11 @@ class TestMensageria(unittest.TestCase):
         r = self._processar("10:00")
         lid = self._lote("sms")["id"]
         self.assertEqual(r[lid]["situacao"], "concluido")
-        self.assertEqual(r[lid]["enviadas"], 399)
+        self.assertEqual(r[lid]["enviadas"], len(self._validos()))
+        self.assertLess(len(self._validos()), 399)                  # a consulta barrou algum número inválido
         msgs = self._msgs("sms")
+        self.assertEqual({m["motivo"] for m in msgs if m["situacao"] == "bloqueada"},
+                         {"descadastrado", "sem frase no dia", "número inválido (consulta de operadora)"})
         self.assertFalse([m for m in msgs if m["situacao"] == "pendente"])
         self.assertEqual({m["fornecedor"] for m in msgs if m["situacao"] != "bloqueada"}, {"zenvia"})
         self.assertGreater(sum(m["situacao"] == "entregue" for m in msgs), 360)
@@ -185,7 +194,7 @@ class TestMensageria(unittest.TestCase):
         marcas = {r.marca for r in regs}
         self.assertEqual(marcas, {"entregue", "inexistente", "bloqueio"})
         self.assertEqual({r.canal for r in regs}, {"sms"})
-        self.assertEqual(len(regs), 399)
+        self.assertEqual(len(regs), len(self._validos()))
 
     def test_simulado_nao_cobra_e_real_sem_integracao_nao_envia(self):
         self._criar()
@@ -206,8 +215,11 @@ class TestMensageria(unittest.TestCase):
         with mock.patch.dict(M.ADAPTADORES_REAIS, {"zenvia": lambda: M.Simulador("zenvia")}):
             self._criar()
             self._processar()
-        c = self.sb.t["consumo_mensageria"]
-        self.assertEqual([(x["item"], x["competencia"], x["quantidade"]) for x in c], [("sms", "2026-10-01", 399)])
+        c = {x["item"]: x for x in self.sb.t["consumo_mensageria"]}
+        self.assertEqual((c["sms"]["competencia"], c["sms"]["quantidade"]), ("2026-10-01", 399))   # sem consulta real
+        respostas = sum(1 for m in self._msgs("sms") if m.get("respondida_em"))
+        self.assertGreater(respostas, 0)
+        self.assertEqual(c["sms_resposta"]["quantidade"], respostas)              # cada resposta é cobrada
 
     def test_email_com_modelo_sai_pela_locaweb(self):
         self.sb.t["mensageria_modelos_email"] = [{"empresa_id": 1, "remetente_nome": "Alfa", "assunto": "Sua conta",
@@ -232,6 +244,254 @@ class TestMensageria(unittest.TestCase):
             M.criar_lotes(self.sb, 1, None, self.pasta, sab, [{"canal": "sms", "sabado": False}], out=lambda *a: None)
         lote = self.sb.t["mensageria_lotes"][-1]
         self.assertEqual(lote["situacao"], "cancelado")
+
+    # ---------------------------------------------------------------- planos de rota por % e custo
+    def _planos(self, proprio=False):
+        self.sb.t["mensageria_fornecedores"].append({"codigo": "sinch", "canais": ["sms"], "ativo": True})
+        self.sb.t["mensageria_planos_rota"] = [
+            {"id": 10, "nome": "Padrão SMS", "canal": "sms", "padrao": True, "ativo": True},
+            {"id": 11, "nome": "Econômico", "canal": "sms", "padrao": False, "ativo": True}]
+        self.sb.t["mensageria_plano_fornecedores"] = [
+            {"plano_id": 10, "fornecedor": "zenvia", "percentual": "70.00", "ordem_reserva": 1},
+            {"plano_id": 10, "fornecedor": "infobip", "percentual": "30.00", "ordem_reserva": 2},
+            {"plano_id": 10, "fornecedor": "sinch", "percentual": "0.00", "ordem_reserva": 3},
+            {"plano_id": 11, "fornecedor": "sinch", "percentual": "100.00", "ordem_reserva": 1}]
+        self.sb.t["mensageria_custos"] = [
+            {"fornecedor": "zenvia", "item": "sms", "custo": "0.04000", "vigente_desde": "2026-09-01"},
+            {"fornecedor": "zenvia", "item": "sms", "custo": "0.03500", "vigente_desde": "2026-10-01"},
+            {"fornecedor": "zenvia", "item": "sms", "custo": "0.01000", "vigente_desde": "2026-11-01"},
+            {"fornecedor": "infobip", "item": "sms", "custo": "0.05000", "vigente_desde": "2026-01-01"}]
+        if proprio:
+            self.sb.t["mensageria_rota_empresa"] = [{"empresa_id": 1, "canal": "sms", "plano_id": 11}]
+        self._criar()
+        self._lote("sms")["situacao"] = "agendado"
+
+    def _por_forn(self):
+        saida = {}
+        for m in self._msgs("sms"):
+            if m.get("fornecedor"):
+                saida[m["fornecedor"]] = saida.get(m["fornecedor"], 0) + 1
+        return saida
+
+    def test_plano_divide_o_trafego_pelo_percentual(self):
+        self._planos()
+        self._processar()
+        n = self._por_forn()
+        self.assertEqual(set(n), {"zenvia", "infobip"})            # sinch com 0% é só reserva
+        self.assertEqual(sum(n.values()), len(self._validos()))
+        self.assertAlmostEqual(n["zenvia"] / sum(n.values()), 0.70, delta=0.06)
+
+    def test_sorteio_e_estavel_e_reserva_vem_depois(self):
+        plano = [{"fornecedor": "zenvia", "percentual": 70.0, "ordem_reserva": 1},
+                 {"fornecedor": "infobip", "percentual": 30.0, "ordem_reserva": 2},
+                 {"fornecedor": "sinch", "percentual": 0.0, "ordem_reserva": 3}]
+        self.assertEqual(M.escolher(plano, "7:42"), M.escolher(plano, "7:42"))
+        for chave in ("1:1", "1:2", "1:3", "9:99"):
+            ordem = M.escolher(plano, chave)
+            self.assertEqual(sorted(ordem), ["infobip", "sinch", "zenvia"])
+            self.assertEqual(ordem[-1], "sinch")
+        self.assertEqual(M.escolher([{"fornecedor": "a", "percentual": 0.0, "ordem_reserva": 2},
+                                     {"fornecedor": "b", "percentual": 0.0, "ordem_reserva": 1}], "x"), ["b", "a"])
+
+    def test_plano_proprio_da_empresa_vale_sobre_o_padrao(self):
+        self._planos(proprio=True)
+        self._processar()
+        self.assertEqual(set(self._por_forn()), {"sinch"})
+
+    def test_fornecedor_fora_do_ar_os_outros_assumem(self):
+        self._planos()
+        with mock.patch.dict(os.environ, {"MOTORCOB_SIMULAR_QUEDA": "zenvia"}):
+            self._processar()
+        self.assertEqual(set(self._por_forn()), {"infobip"})
+        self.assertEqual(self._lote("sms")["situacao"], "concluido")
+
+    def test_fornecedor_desativado_sai_do_plano(self):
+        self._planos()
+        self.sb.t["mensageria_fornecedores"][0]["ativo"] = False             # zenvia desligada
+        self._processar()
+        self.assertEqual(set(self._por_forn()), {"infobip"})
+
+    def test_custo_do_dia_por_fornecedor_vai_para_a_margem(self):
+        self._planos()
+        self.sb.t["mensageria_custos"].pop(3)                                # infobip sem custo cadastrado
+        self._processar()
+        n = self._por_forn()
+        def soma(forn, item, campo):
+            return sum(c[campo] for c in self.sb.t["mensageria_consumo_fornecedor"]
+                       if c["fornecedor"] == forn and c["item"] == item)
+        z = [c for c in self.sb.t["mensageria_consumo_fornecedor"] if c["fornecedor"] == "zenvia" and c["item"] == "sms"]
+        self.assertEqual({(c["competencia"], c["modo"]) for c in z}, {("2026-10-01", "simulado")})
+        self.assertEqual({c["operadora"] for c in z} - {"vivo", "claro", "tim", "oi", "outras"}, set())
+        self.assertEqual(soma("zenvia", "sms", "quantidade"), n["zenvia"])
+        self.assertAlmostEqual(soma("zenvia", "sms", "custo"), n["zenvia"] * 0.035, places=4)   # vigente em 14/10
+        self.assertEqual(soma("infobip", "sms", "quantidade_sem_custo"), n["infobip"])
+        self.assertEqual(soma("infobip", "sms", "custo"), 0)
+        consultas = [c for c in self.sb.t["mensageria_consumo_fornecedor"] if c["item"] == "consulta_operadora"]
+        self.assertEqual(sum(c["quantidade"] for c in consultas), 399)             # uma consulta por número
+        self.assertNotIn("consumo_mensageria", self.sb.t)                    # simulado continua fora da fatura
+        # segunda rodada soma no mês
+        self.sb.t["mensageria_lotes"].clear()
+        self.sb.t["mensageria_mensagens"].clear()
+        self._criar()
+        self._lote("sms")["situacao"] = "agendado"
+        self._processar()
+        segunda = self._lote("sms")["enviadas"]                   # quem disse SAIR na primeira já fica de fora
+        self.assertEqual(sum(c["quantidade"] for c in self.sb.t["mensageria_consumo_fornecedor"] if c["item"] == "sms"),
+                         sum(n.values()) + segunda)
+
+    def test_sem_plano_continua_usando_a_rota_antiga(self):
+        self.assertEqual(M.plano_rota(self.sb, 1, "sms", "simulado"),
+                         [{"fornecedor": "zenvia", "percentual": 100.0, "ordem_reserva": 1, "operadora": None},
+                          {"fornecedor": "infobip", "percentual": 0.0, "ordem_reserva": 2, "operadora": None}])
+
+    def test_banco_sem_o_sql_12_usa_a_rota_antiga(self):
+        from nuvem.supabase_api import ErroSupabase
+        orig = self.sb.selecionar
+
+        def sel(tabela, *a, **k):
+            if tabela.startswith(("mensageria_planos", "mensageria_plano_", "mensageria_rota_empresa",
+                                  "mensageria_custos", "mensageria_consumo_fornecedor")):
+                raise ErroSupabase(404, "relation does not exist", tabela)
+            return orig(tabela, *a, **k)
+        self.sb.selecionar = sel
+        self._criar()
+        self._lote("sms")["situacao"] = "agendado"
+        self._processar()
+        self.assertEqual(set(self._por_forn()), {"zenvia"})
+
+    # ---------------------------------------------------------------- SMS: 160 caracteres e operadora
+    def test_sms_acima_de_160_caracteres_nao_sai(self):
+        ids = self.pasta / "saida" / DIA.isoformat() / "ids"
+        (ids / "sms.csv").write_text("id_cliente;contato;mensagem\nC1;11900000001;" + "a" * 160 +
+                                     "\nC2;11900000002;" + "a" * 161 + "\n", encoding="utf-8")
+        self._criar()
+        motivo = {m["id_cliente"]: m["motivo"] for m in self._msgs("sms")}
+        self.assertEqual(motivo, {"C1": None, "C2": "frase acima de 160 caracteres"})
+
+    def test_rota_por_operadora(self):
+        self._planos()
+        self.sb.t["mensageria_plano_fornecedores"].append(
+            {"plano_id": 10, "operadora": "vivo", "fornecedor": "sinch", "percentual": "100.00", "ordem_reserva": 1})
+        self._processar()
+        enviadas = [m for m in self._msgs("sms") if m.get("fornecedor")]
+        vivo = {m["fornecedor"] for m in enviadas if m["operadora"] == "vivo"}
+        outras = {m["fornecedor"] for m in enviadas if m["operadora"] != "vivo"}
+        self.assertEqual(vivo, {"sinch"})
+        self.assertEqual(outras, {"zenvia", "infobip"})
+        self.assertTrue(any(c["item"] == "sms" and c["operadora"] == "vivo" and c["fornecedor"] == "sinch"
+                            for c in self.sb.t["mensageria_consumo_fornecedor"]))
+
+    def test_operadora_cai_e_as_outras_rotas_assumem(self):
+        self._planos()
+        self.sb.t["mensageria_plano_fornecedores"].append(
+            {"plano_id": 10, "operadora": "vivo", "fornecedor": "sinch", "percentual": "100.00", "ordem_reserva": 1})
+        with mock.patch.dict(os.environ, {"MOTORCOB_SIMULAR_QUEDA": "sinch"}):
+            self._processar()
+        vivo = {m["fornecedor"] for m in self._msgs("sms") if m.get("fornecedor") and m["operadora"] == "vivo"}
+        self.assertTrue(vivo and vivo <= {"zenvia", "infobip"})
+
+    def test_cache_de_operadora_no_envio_real(self):
+        consultas = []
+        def consulta(destino):
+            consultas.append(destino)
+            return "claro"
+        self.sb.t["mensageria_fornecedores"][1]["consulta_operadora"] = True        # infobip consulta
+        self.sb.t["mensageria_config"] = [{"empresa_id": 1, "modo": "real", "aprovar_lotes": False}]
+        with mock.patch.dict(M.ADAPTADORES_REAIS, {"zenvia": lambda: M.Simulador("zenvia")}), \
+                mock.patch.dict(M.CONSULTAS_REAIS, {"infobip": consulta}):
+            self._criar()
+            self._processar()
+            n = len(consultas)
+            self.assertEqual(n, 399)
+            self.assertEqual(len(self.sb.t["mensageria_operadoras"]), 399)
+            self.assertFalse(any(f in json.dumps(self.sb.t["mensageria_operadoras"]) for f in self.fones))  # só hash
+            self.sb.t["mensageria_lotes"].clear()
+            self.sb.t["mensageria_mensagens"].clear()
+            self._criar()
+            self._processar()
+        self.assertEqual(len(consultas), n)                                         # segunda vez: do cache
+
+    # ---------------------------------------------------------------- RCS: Basic, Single e sessão de 24 h
+    def _rcs(self, agente="conversacional", modo="simulado"):
+        ids = self.pasta / "saida" / DIA.isoformat() / "ids"
+        linhas = [f"R{n};{f};Olá, temos uma condição." for n, f in enumerate(self.fones[:300])]
+        linhas.append(f"R900;11977770001;{'b' * 161}")
+        linhas.append("R901;11977770002;Curta mas com card;single")
+        (ids / "rcs.csv").write_text("id_cliente;contato;mensagem;tipo_rcs\n" + "\n".join(linhas) + "\n",
+                                     encoding="utf-8")
+        self.sb.t["empresa_modulos"][0]["canais"] = ["rcs"]
+        self.sb.t["mensageria_fornecedores"].append({"codigo": "pontaltech", "canais": ["rcs"], "ativo": True})
+        self.sb.t["mensageria_rotas"].append({"empresa_id": None, "canal": "rcs", "prioridade": 1,
+                                              "fornecedor": "pontaltech", "ativo": True})
+        self.sb.t["mensageria_config"] = [{"empresa_id": 1, "modo": modo, "aprovar_lotes": False, "rcs_agente": agente}]
+
+    def test_rcs_basic_ate_160_e_single_acima_ou_com_card(self):
+        self._rcs()
+        self._criar()
+        item = {m["id_cliente"]: m["item"] for m in self._msgs("rcs")}
+        self.assertEqual((item["R0"], item["R900"], item["R901"]), ("rcs_basic", "rcs_single", "rcs_single"))
+
+    def test_rcs_conversacional_resposta_vira_sessao_e_24h_sem_custo(self):
+        self._rcs()
+        with mock.patch.dict(M.ADAPTADORES_REAIS, {"pontaltech": lambda: M.Simulador("pontaltech")}):
+            self.sb.t["mensageria_config"][0]["modo"] = "real"
+            self._criar()
+            self._processar()
+            msgs = self._msgs("rcs")
+            conv = [m for m in msgs if m["item"] == "rcs_conversacional"]
+            self.assertTrue(conv)
+            self.assertTrue(all(m["respondida_em"] for m in conv))
+            self.assertEqual(len(self.sb.t["mensageria_sessoes_rcs"]), len(conv))
+            c = {x["item"]: x["quantidade"] for x in self.sb.t["consumo_mensageria"]}
+            self.assertEqual(c["rcs_conversacional"], len(conv))                  # cobrado como Conversacional
+            self.assertEqual(c["rcs_basic"] + c["rcs_conversacional"] + c.get("rcs_single", 0),
+                             sum(1 for m in msgs if m.get("fornecedor")))
+            # no mesmo dia, novo lote para os mesmos números: quem está em sessão não paga
+            self.sb.t["mensageria_lotes"].clear()
+            self.sb.t["mensageria_mensagens"].clear()
+            self._criar()
+            self._processar("11:00")
+        sessao = [m for m in self._msgs("rcs") if m["item"] == "rcs_sessao"]
+        self.assertEqual(len(sessao), len(conv))
+        self.assertNotIn("rcs_sessao", {x["item"] for x in self.sb.t["consumo_mensageria"]})
+        self.assertEqual(sum(c["custo"] for c in self.sb.t["mensageria_consumo_fornecedor"]
+                             if c["item"] == "rcs_sessao"), 0)
+
+    def test_rcs_sessao_vence_em_24h(self):
+        self._rcs()
+        self._criar()
+        self._processar()
+        self.assertTrue(self.sb.t["mensageria_sessoes_rcs"])
+        self.assertEqual(M._sessoes_abertas(self.sb, 1, datetime(2026, 10, 15, 9, 59, tzinfo=SP)) and True, True)
+        self.assertEqual(M._sessoes_abertas(self.sb, 1, datetime(2026, 10, 15, 10, 0, 1, tzinfo=SP)), set())
+
+    def test_rcs_agente_nao_conversacional_ignora_resposta(self):
+        self._rcs(agente="nao_conversacional")
+        self._criar()
+        self._processar()
+        itens = {m["item"] for m in self._msgs("rcs") if m.get("fornecedor")}
+        self.assertEqual(itens, {"rcs_basic", "rcs_single"})
+        self.assertFalse(self.sb.t.get("mensageria_sessoes_rcs"))
+        self.assertFalse(any(m.get("respondida_em") for m in self._msgs("rcs")))
+
+    def test_banco_sem_o_sql_13_nao_cria_rcs_nem_grava_colunas_novas(self):
+        from nuvem.supabase_api import ErroSupabase
+        self._rcs()
+        self.sb.t["empresa_modulos"][0]["canais"] = ["sms", "rcs"]
+        orig = self.sb.selecionar
+
+        def sel(tabela, *a, **k):
+            if tabela in ("mensageria_planos_rota", "mensageria_plano_fornecedores", "mensageria_rota_empresa",
+                          "mensageria_custos", "mensageria_consumo_fornecedor", "mensageria_sessoes_rcs",
+                          "mensageria_operadoras"):
+                raise ErroSupabase(404, "não existe", tabela)
+            return orig(tabela, *a, **k)
+        self.sb.selecionar = sel
+        self._criar()
+        self.assertEqual({l["canal"] for l in self.sb.t["mensageria_lotes"]}, {"sms"})
+        self._processar()
+        self.assertFalse(any("item" in m or "operadora" in m for m in self.sb.t["mensageria_mensagens"]))
+        self.assertNotIn("respostas", self._lote("sms"))
 
 
 if __name__ == "__main__":

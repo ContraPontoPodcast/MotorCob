@@ -52,4 +52,18 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
 11. `11_saude_sistema.sql` (= `supabase/migrations/20261108000001_saude_sistema.sql`) — `saude_empresas()` para a
     aba Saúde do Console.
 
+12. `12_precos_produtos.sql` (= `supabase/migrations/20261109000001_precos_produtos.sql`) — **preços por produto**,
+    cada um cobrado isolado: catálogo **`cobranca_itens`** (Orquestração, SMS, E-mail, RCS Basic/Single/
+    Conversacional, WhatsApp; produto novo = linha nova), **`precos_empresa`** com vigência por mês e modelo
+    `flat`, `faixa` (o volume escolhe a faixa para tudo), `progressivo` (cada faixa no seu preço) ou `mensalidade`,
+    mínimo mensal opcional, e **`salvar_preco(...)`** (só o Master). Resposta de SMS cobra pelo preço do SMS. As telas
+    antigas (`planos_empresa`, `tarifas_mensageria`) continuam funcionando e viram preço do mês. **Orquestração
+    opcional**: desligada, a rotina não roda, a Saúde não cobra e a mensalidade sai da fatura.
+13. `13_rotas_margem.sql` (= `supabase/migrations/20261110000001_rotas_margem.sql`) — **planos de rota** com % do
+    tráfego por fornecedor e, no SMS, **rota por operadora** (Vivo, Claro, TIM, Oi, Outras); plano padrão por canal e
+    plano próprio por empresa; **custos** por fornecedor e item com vigência; **RCS** nos lotes (Basic ≤ 160, Single
+    acima ou com card; agente conversacional abre sessão de 24 h sem custo extra); **respostas de SMS** cobradas;
+    **margem** por empresa e canal (`margem_mensageria`) e simulação de outro plano (`simular_plano`). Custo e margem:
+    só o Master. As rotas antigas viram planos (principal 100%, reservas 0%). Rode depois do 12.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).
