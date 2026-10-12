@@ -38,6 +38,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | 25 | `07_workspace/PROMPT_13_RADAR_ATENDIMENTO.md` | Radar MotorCob e caixa de atendimento das respostas | Site | 23º |
 | 26 | `07_workspace/PROMPT_14_LINKS_FUNIL.md` | Funil de cliques dos links rastreados | Site | 24º |
 | 27 | `07_workspace/PROMPT_15_RELATORIOS.md` | Relatórios padrão e montador de relatórios | Site | 25º |
+| 28 | `07_workspace/PROMPT_16_NAVEGACAO_UNICA.md` | Navegação única: o mesmo menu lateral em todos os produtos, com seletor de produto e de canal | Site | 26º |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
