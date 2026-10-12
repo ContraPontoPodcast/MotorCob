@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install openpyxl==3.1.5   # Excel do comitê e cargas .xlsx (opcional no núcleo)
+      - run: pip install openpyxl==3.1.5 anthropic==1.13.0   # Excel (comitê, cargas .xlsx) e IA do Radar (mesmas versões da imagem)
       - run: python -m unittest discover -s tests -q
   banco:
     runs-on: ubuntu-latest
@@ -48,4 +48,4 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
-      - run: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts supabase/functions/api/regras.test.ts site/duas-etapas/duasEtapasLogica.test.ts
+      - run: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts supabase/functions/api/regras.test.ts supabase/functions/l/regras.test.ts site/duas-etapas/duasEtapasLogica.test.ts

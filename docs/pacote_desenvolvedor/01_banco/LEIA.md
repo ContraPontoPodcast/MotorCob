@@ -66,4 +66,17 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     **margem** por empresa e canal (`margem_mensageria`) e simulação de outro plano (`simular_plano`). Custo e margem:
     só o Master. As rotas antigas viram planos (principal 100%, reservas 0%). Rode depois do 12.
 
+14. `14_mensageria_produtos.sql` (= `supabase/migrations/20261111000001_mensageria_produtos.sql`) — Mensageria por
+    produto: **campanhas** com lista em qualquer layout (o motor sugere, o cliente confirma o layout), **templates**
+    de SMS (160 caracteres) e RCS (categoria Autenticação/Transacional/Marketing; mídia simples, botões, arquivo,
+    rich card, carrossel; variáveis `{{nome}}`), **centros de custo** com orçamento e bloquear/continuar ao estourar,
+    listas de **bloqueio** e **favoritos** (só hash e máscara), **fallback do RCS** (SMS ou WhatsApp) e o **funil**
+    (carregados, higienizados, enviados, entregues, não entregues). Rode depois do 13.
+15. `15_radar_atendimento_links.sql` (= `supabase/migrations/20261112000001_radar_atendimento_links.sql`) — **Radar
+    MotorCob** (classificação das respostas: CPC Negócio, CPC, Alega pagamento, Baixo calão, Desconhece, Judicial),
+    **atendimento** (conversas por número; responder pela plataforma; textos guardados 90 dias) e **links
+    rastreados** (encurtador, cliques e funil). Depois publique a função `l` (`08_api/LEIA_ENCURTADOR_E_RADAR.md`).
+16. `16_relatorios.sql` (= `supabase/migrations/20261113000001_relatorios.sql`) — 10 **relatórios padrão** e o
+    **montador** de relatório personalizado (`rodar_relatorio`), sempre com as permissões de quem consulta.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

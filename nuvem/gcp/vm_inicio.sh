@@ -49,6 +49,12 @@ umask 077
 CHAVE="$(gcloud secrets versions access latest --secret=motorcob-supabase-key)"
 printf 'MOTORCOB_SUPABASE_URL=%s\nMOTORCOB_SUPABASE_KEY=%s\n' "$URL" "$CHAVE" > /run/motorcob/supabase.env
 unset CHAVE
+# opcionais: chave da IA do Radar (segredo motorcob-anthropic-key) e domínio dos links curtos (metadado)
+CHAVE_IA="$(gcloud secrets versions access latest --secret=motorcob-anthropic-key 2>/dev/null || true)"
+[ -n "$CHAVE_IA" ] && printf 'ANTHROPIC_API_KEY=%s\n' "$CHAVE_IA" >> /run/motorcob/supabase.env
+unset CHAVE_IA
+DOMINIO="$(meta motorcob-link-dominio 2>/dev/null || true)"
+[ -n "$DOMINIO" ] && printf 'MOTORCOB_LINK_DOMINIO=%s\n' "$DOMINIO" >> /run/motorcob/supabase.env
 gcloud auth configure-docker "${IMAGEM%%/*}" --quiet >/dev/null 2>&1
 docker pull -q "$IMAGEM" >/dev/null || docker image inspect "$IMAGEM" >/dev/null   # sem rede: usa a que tem
 docker rm -f motorcob >/dev/null 2>&1 || true

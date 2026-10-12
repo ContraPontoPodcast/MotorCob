@@ -1174,6 +1174,29 @@ def vigiar(dados: Path, data: date, sb: Supabase | None = None, out=print, empre
     return resultados
 
 
+def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, out=print) -> dict:
+    """Rodada da mensageria (o plantão chama a cada minuto): campanhas (analisar a lista, montar o envio na hora
+    agendada), envio dos lotes no horário e, uma vez por dia, a limpeza dos arquivos com mais de 90 dias."""
+    from nuvem import atendimento, campanhas, mensageria
+    if mensageria.banco_campanhas(sb):
+        campanhas.analisar(sb, dados, out)
+        campanhas.preparar(sb, dados, agora, out)
+    resumo = mensageria.processar(sb, dados, agora, out)
+    radar = atendimento.banco_radar(sb)
+    if radar:
+        atendimento.enviar(sb, dados, agora, out)        # respostas escritas na plataforma
+    if mensageria.banco_campanhas(sb):
+        campanhas.concluir(sb)
+        marca = Path(dados) / "mensageria_limpeza.txt"
+        hoje = (agora or datetime.now()).date().isoformat()
+        if not marca.exists() or marca.read_text(encoding="utf-8").strip() != hoje:
+            campanhas.limpar(sb, dados, agora, out)
+            if radar:
+                sb.rpc("limpar_mensageria_90d")          # textos de resposta e links com mais de 90 dias
+            marca.write_text(hoje, encoding="utf-8")
+    return resumo
+
+
 def _versao_repo() -> str:
     try:
         return subprocess.run(["git", "-C", str(RAIZ), "rev-parse", "HEAD"], capture_output=True, text=True,
@@ -1351,7 +1374,7 @@ def main():
             from nuvem import mensageria
             trava = _travar(a.dados, esperar=False, nome="mensageria.trava")
             if trava is not None:
-                mensageria.processar(Supabase(*carregar_config(a.dados)), a.dados, out=lambda m: print(m, flush=True))
+                rodar_mensageria(Supabase(*carregar_config(a.dados)), a.dados, out=lambda m: print(m, flush=True))
             return
         if a.modo == "vigiar" and a.checar:
             sys.exit(0 if empresas_com_carga_nova(a.dados, Supabase(*carregar_config(a.dados)), a.empresa, a.data)

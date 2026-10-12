@@ -91,6 +91,9 @@ class Supabase:
                   {"Prefer": "return=minimal"})
 
     # ------------------------------------------------------------ Storage
+    def rpc(self, funcao: str, args: dict | None = None):
+        return self._req("POST", f"/rest/v1/rpc/{funcao}", args or {})
+
     def baixar(self, bucket, caminho) -> bytes:
         return self._req("GET", f"/storage/v1/object/{bucket}/{urllib.parse.quote(caminho)}", bruto=True)
 
