@@ -104,6 +104,24 @@ async function executar(quem: Perfil, pedido: Pedido, alvo: Perfil | null): Prom
       await auditar(quem, alvo!.empresa_id, "UPDATE", alvo!.id, { senha: { antes: null, depois: "link de redefinição enviado" } });
       return [200, { ok: true }];
     }
+    case "convidar_equipe": {
+      const { data, error } = await admin.auth.admin.inviteUserByEmail(pedido.email!, {
+        redirectTo: `${SITE}/definir-senha`,
+        data: pedido.nome ? { nome: pedido.nome } : undefined,
+      });
+      if (error) {
+        if (/already|registered|exists/i.test(error.message)) return [409, { erro: "e-mail já cadastrado" }];
+        throw error;
+      }
+      const papel = pedido.funcao === "master" ? "admin" : "operacao";
+      const { error: e } = await admin.from("perfis")
+        .update({ papel, equipe: true, empresa_id: null, ativo: true }).eq("id", data.user.id);
+      if (e) throw e;
+      await auditar(quem, null, "INSERT", data.user.id, {
+        convite: { antes: null, depois: "enviado" }, equipe: { antes: null, depois: pedido.funcao },
+      });
+      return [200, { ok: true, usuario_id: data.user.id }];
+    }
     case "resetar_2fa": {
       const { data, error } = await admin.auth.admin.mfa.listFactors({ userId: alvo!.id });
       if (error) throw error;

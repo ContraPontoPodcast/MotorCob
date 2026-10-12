@@ -44,6 +44,8 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261104000001_mensageria_envios.sql
     psql -d sb -f supabase/migrations/20261105000001_api_tokens.sql
     psql -d sb -f supabase/migrations/20261106000001_faturas_revisao.sql
+    psql -d sb -f supabase/migrations/20261107000001_equipe_master.sql
+    psql -d sb -f supabase/migrations/20261108000001_saude_sistema.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -565,6 +567,36 @@ checar("não revoga duas vezes", False, "select public.revogar_token_api((select
 checar("gerar rascunhos só para quem tem plano e ainda não tem fatura", True, "select public.gerar_rascunhos('2025-01-01')", "authenticated", u["admin"], 1)
 checar("gerar de novo não duplica", True, "select public.gerar_rascunhos('2025-01-01')", "authenticated", u["admin"], 0)
 checar("cliente não gera rascunhos", False, "select public.gerar_rascunhos('2025-01-01')", "authenticated", u["admina"])
+# equipe MotorCob: Master e Atendimento
+AAL2 = "select set_config('request.jwt.claims', '{\"aal\":\"aal2\"}', false); "
+_, SUP, _ = sql("insert into auth.users (email) values ('suporte@x.com') returning id")
+checar("cliente não define função da equipe", False, AAL2 + f"select public.definir_funcao_equipe('{SUP}','atendimento')", "authenticated", u["admina"])
+checar("Master sem o código de duas etapas não muda a equipe", False, f"select public.definir_funcao_equipe('{SUP}','atendimento')", "authenticated", u["admin"])
+checar("função desconhecida é recusada", False, AAL2 + f"select public.definir_funcao_equipe('{SUP}','dono')", "authenticated", u["admin"])
+checar("Master põe alguém no Atendimento", True, AAL2 + f"select public.definir_funcao_equipe('{SUP}','atendimento')", "authenticated", u["admin"], "atendimento")
+checar("Atendimento é equipe, sem empresa, papel operação", True, f"select equipe::text || coalesce(empresa_id::text,'-') || papel from public.perfis where id='{SUP}'", "service_role", None, "true-operacao")
+_, N_EMP, _ = sql("select count(*) from public.empresas", "service_role")
+checar("Atendimento vê todas as empresas", True, "select count(*) from public.empresas", "authenticated", SUP, N_EMP)
+checar("Atendimento responde chamado", True, f"insert into public.chamado_mensagens (chamado_id,tipo,texto) values ({CH},'equipe','Olhando agora.')", "authenticated", SUP)
+checar("Atendimento não cria empresa", False, "insert into public.empresas (slug,nome) values ('gama2','Gama')", "authenticated", SUP)
+checar("Atendimento não emite fatura", False, "select public.gerar_rascunhos('2025-02-01')", "authenticated", SUP)
+checar("Atendimento não muda a equipe", False, AAL2 + f"select public.definir_funcao_equipe('{u['oper']}','master')", "authenticated", SUP)
+checar("Atendimento vê a lista da equipe", True, "select count(*) from public.listar_equipe()", "authenticated", SUP, 2)
+checar("cliente não vê a lista da equipe", True, "select count(*) from public.listar_equipe()", "authenticated", u["admina"], 0)
+checar("Master promove a Master", True, AAL2 + f"select public.definir_funcao_equipe('{SUP}','master')", "authenticated", u["admin"], "master")
+checar("ninguém muda a própria função", False, AAL2 + f"select public.definir_funcao_equipe('{u['admin']}','atendimento')", "authenticated", u["admin"])
+checar("com dois Masters, um volta ao Atendimento", True, AAL2 + f"select public.definir_funcao_equipe('{SUP}','atendimento')", "authenticated", u["admin"], "atendimento")
+checar("último Master não é rebaixado nem pelo SQL", False, f"update public.perfis set papel='operacao' where id='{u['admin']}'", "service_role")
+checar("último Master não é desativado", False, f"update public.perfis set ativo=false where id='{u['admin']}'", "service_role")
+checar("lista mostra função e duas etapas", True, "select string_agg(funcao || ':' || duas_etapas::text, ',' order by funcao) from public.listar_equipe()", "authenticated", u["admin"], "atendimento:false,master:false")
+# saúde do sistema (Console)
+checar("cliente não vê a saúde do sistema", False, "select * from public.saude_empresas()", "authenticated", u["admina"])
+checar("Atendimento vê a saúde de todas as empresas", True, "select count(*) from public.saude_empresas()", "authenticated", SUP, N_EMP)
+r = sql(f"set role service_role; insert into public.execucoes (empresa_id,data_ref,status,erro,iniciada_em) values ({EB},(now() at time zone 'America/Sao_Paulo')::date,'erro','base sem coluna saldo', now())")
+assert r[0], r[2]
+checar("rotina com erro vira crítico e vem primeiro", True, "select nivel || ' ' || ultima_rotina_erro from public.saude_empresas() limit 1", "authenticated", u["admin"], "critico base sem coluna saldo")
+checar("fatura paga não conta como vencida", True, f"select faturas_vencidas from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 0)
+checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
