@@ -359,6 +359,39 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(list(r), ["beta"])
         self.assertNotIn("erro", r["beta"], r["beta"].get("erro"))
 
+    def test_carteira_motorcli_roda_a_jornada(self):
+        """Carteira da frente MotorCli: mesma rotina, motor da jornada, mesma Lista do dia e lotes."""
+        t, o = self.falso.tabelas, self.falso.objetos
+        t["credores"] = [{"id": 41, "empresa_id": 2, "codigo": "jornada", "nome": "Jornada", "ativo": True,
+                          "frente": "motorcli", "estrategia_id": None}]
+        t["estrategias"] = [{"id": 7, "empresa_id": 2, "nome": "Cobrança", "padrao": True, "frente": "motorcob",
+                             "definicao": {}},
+                            {"id": 8, "empresa_id": 2, "nome": "Jornada sem retenção", "padrao": True,
+                             "frente": "motorcli", "definicao": {"momentos": {"retencao": {"ativo": False}}}}]
+        jor = EX / "jornada"
+        self._envio(6001, 2, "clientes", "clientes.csv", (jor / "clientes.csv").read_bytes(), "2026-10-13", credor=41)
+        self._envio(6002, 2, "contatos", "contatos.csv", (jor / "contatos.csv").read_bytes(), "2026-10-13", credor=41)
+        self._envio(6003, 2, "ocorrencia", "x.csv", b"a;b\n", "2026-10-13", credor=41)
+        r = self._dia(date(2026, 10, 13), empresa="beta")["beta"]
+        self.assertEqual(r["resumo"]["frente"], "motorcli")
+        fila = [l for l in t["fila_dia"] if l.get("credor_id") == 41]
+        self.assertEqual({l["regua"] for l in fila}, {"boas_vindas", "ativacao", "pre_vencimento", "reativacao"})
+        self.assertEqual({l["estrategia"] for l in fila}, {"Jornada sem retenção"})
+        enq = {l["id_cliente"]: l for l in t["jornada_cliente"]}
+        self.assertEqual(enq["CLI006"]["motivo"], "em atraso: fica com a cobrança (MotorCob)")
+        self.assertEqual(enq["CLI004"]["momento"], "")                      # retenção desligada
+        self.assertIn("saidas/beta/2026-10-13/jornada/ids/rcs.csv", o)
+        self.assertTrue({a["regua"] for a in t["acoes_dia"] if a.get("credor_id") == 41})
+        envios = {e["id"]: e for e in t["envios"]}
+        self.assertEqual((envios[6001]["status"], envios[6003]["status"]), ("processado", "erro"))
+        texto = json.dumps({k: t[k] for k in ("fila_dia", "jornada_cliente", "acoes_dia")})
+        self.assertNotRegex(texto, r"\b119\d{8}\b")
+        self.assertNotIn("@exemplo", texto)
+        # mesmo dia de novo: não duplica
+        n = len(t["fila_dia"])
+        self._dia(date(2026, 10, 13), empresa="beta")
+        self.assertEqual(len(t["fila_dia"]), n)
+
     def test_credores_da_empresa_rodam_separados(self):
         """beta com dois credores: cada arquivo vai para o seu; o bureau sem credor vale para os dois."""
         from nuvem.sincronizar import vigiar

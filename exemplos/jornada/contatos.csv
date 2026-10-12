@@ -1,0 +1,11 @@
+id_cliente;contato;tipo;whatsapp
+CLI001;11987650001;telefone;sim
+CLI001;cliente001@exemplo.com.br;email;
+CLI002;11987650002;telefone;nao
+CLI003;11987650003;telefone;sim
+CLI003;cliente003@exemplo.com.br;email;
+CLI004;11987650004;telefone;
+CLI005;cliente005@exemplo.com.br;email;
+CLI006;11987650006;telefone;sim
+CLI007;11987650007;telefone;sim
+CLI008;11987650008;telefone;sim

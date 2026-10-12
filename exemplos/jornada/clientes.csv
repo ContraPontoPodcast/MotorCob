@@ -1,0 +1,9 @@
+id_cliente;data_contratacao;proximo_vencimento;vencimento_pago;ativado;ultima_atividade;dias_atraso;bloqueio
+CLI001;2026-10-12;2026-11-10;nao;nao;;0;
+CLI002;2026-10-09;2026-11-10;nao;nao;;0;
+CLI003;2026-06-01;2026-10-17;nao;sim;2026-10-01;0;
+CLI004;2026-05-01;2026-11-20;nao;sim;2026-09-12;0;
+CLI005;2026-01-10;2026-11-20;nao;sim;2026-07-14;0;
+CLI006;2026-03-01;2026-09-30;nao;sim;2026-09-01;12;
+CLI007;2026-10-12;2026-11-10;nao;nao;;0;opt_out
+CLI008;2026-04-01;2026-10-14;sim;sim;2026-10-10;0;

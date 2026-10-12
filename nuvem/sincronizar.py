@@ -726,7 +726,68 @@ def _layout_automatico(sb: Supabase, pasta: Path, baixados, out):
     return entrada, aviso
 
 
+TIPOS_JORNADA = ("clientes", "contatos")   # cargas que o MotorCli usa (layout do motor/jornada.py)
+
+
+def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
+    """Carteira da frente MotorCli: roda a jornada (rodar_jornada.py) e publica a Lista do dia, o
+    enquadramento (jornada_cliente), as ações (acoes_dia) e os lotes da Mensageria, no mesmo lugar que o MotorCob."""
+    import rodar_jornada
+    from nuvem import mensageria
+    eid, cid, pasta = emp["id"], u["id"], u["pasta"]
+    out(f"  CARTEIRA MotorCli {u['codigo']} ({u.get('nome') or ''})")
+    execucao = sb.inserir("execucoes", {"empresa_id": eid, **_c(cid), "data_ref": data.isoformat(),
+                                        "status": "rodando"}, retornar=True)[0]
+    try:
+        for obrig in ("base/clientes.csv", "base/contatos.csv"):
+            if not (pasta / obrig).exists():
+                raise RuntimeError(f"falta a base da carteira {u['codigo']}: envie clientes e contatos pelo site")
+        canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
+        estrategias = [e for e in _baixar(sb, pasta, "estrategias", eid, "id.asc") if e.get("frente") == "motorcli"]
+        est = next((e for e in estrategias if e.get("id") == u.get("estrategia_id")), None) \
+            or next((e for e in estrategias if e.get("padrao")), None)
+        r = rodar_jornada.rodar_jornada(pasta / "base" / "clientes.csv", pasta / "base" / "contatos.csv", data,
+                                        pasta / "estado", pasta / "saida", definicao=(est or {}).get("definicao"),
+                                        canais=canais, calendario=u.get("calendario"),
+                                        registros_canal=mensageria.registros(pasta),
+                                        regras_retorno=u.get("regras_retorno"), out=out)
+        sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
+        fila = [{"empresa_id": eid, **_c(cid), "data": data.isoformat(), "canal": l["canal"],
+                 "id_cliente": l["id_cliente"], "reserva": False, "regua": l["regua"], "passo": l["passo"],
+                 "tag": l["tag"], "estrategia": (est or {}).get("nome")} for l in r["fila"]]
+        if fila:
+            sb.inserir("fila_dia", fila)
+        sb.apagar("jornada_cliente", {"empresa_id": f"eq.{eid}", **_fc(cid)})
+        enq = [{"empresa_id": eid, "credor_id": cid, "id_cliente": idc, "data": data.isoformat(), **v}
+               for idc, v in r["enquadramento"].items()]
+        for i in range(0, len(enq), 1000):
+            sb.inserir("jornada_cliente", enq[i:i + 1000])
+        n_arq = publicar_arquivos(sb, r["saida"], f"{emp['slug']}/{data.isoformat()}/{u['codigo']}", limpar=True)
+        publicar_acoes(sb, eid, r, cid)
+        try:   # lotes da mensageria a partir da Lista do dia; nunca derruba a rodada
+            mensageria.criar_lotes(sb, eid, cid, pasta, data, canais, out)
+        except Exception as e:  # noqa: BLE001
+            out(f"  aviso: lotes da mensageria não criados ({str(e)[:120]})")
+        for e, destino in baixados:
+            if e["tipo"] in TIPOS_JORNADA:
+                sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "processado", "relatorio": {
+                    "observacao": "carga da jornada recebida", "rejeitados": r["resumo"]["rejeitados"]}})
+            else:
+                sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "erro", "relatorio": {
+                    "erro": "a carteira do MotorCli usa só os arquivos de clientes e de contatos"}})
+        resumo = {**r["resumo"], "credor": u["codigo"], "arquivos": n_arq}
+        sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
+                     {"status": "ok", "terminada_em": agora(), "resumo": resumo, "alertas": r["alertas"]})
+        return {"execucao": execucao["id"], "resumo": resumo, "rodar": r}
+    except Exception as ex:
+        sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
+                     {"status": "erro", "terminada_em": agora(), "erro": str(ex)[:2000]})
+        raise
+
+
 def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrada, out, pasta_emp: Path):
+    if u.get("frente") == "motorcli":
+        return _rodar_jornada(sb, emp, u, data, baixados, out)
     import rodar_dia
     eid, slug, cid, pasta = emp["id"], emp["slug"], u["id"], u["pasta"]
     nome = slug if cid is None else f"{slug}/{u['codigo']}"

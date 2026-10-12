@@ -827,6 +827,34 @@ checar("cliente não vê a lista sem resposta (0 linhas)", True, "select count(*
 r = sql("set role service_role; update public.assistente_perguntas set criado_em = now() - interval '91 days' where pergunta='qual a cor do céu?'")
 assert r[0], r[2]
 checar("limpeza de 90 dias apaga pergunta antiga", True, "select public.limpar_mensageria_90d(); select count(*) from public.assistente_perguntas", SVC, None, 2)
+# MotorCX com duas frentes (SQL 18): MotorCob e MotorCli
+checar("empresa nova nasce com o MotorCob", True, f"select string_agg(frente, ',') from public.empresa_frentes where empresa_id={EA}", None, None, "motorcob")
+checar("cliente não liga frente sozinho", False, f"insert into public.empresa_frentes (empresa_id,frente) values ({EA},'motorcli')", "authenticated", u["admina"])
+checar("equipe liga o MotorCli na A", True, f"insert into public.empresa_frentes (empresa_id,frente) values ({EA},'motorcli'); select 'ok'", "authenticated", u["admin"], "ok")
+checar("A vê as duas frentes", True, "select string_agg(f, ',' order by f) from public.minhas_frentes() f", "authenticated", u["oper"], "motorcli,motorcob")
+checar("B vê só o MotorCob", True, "select string_agg(f, ',') from public.minhas_frentes() f", "authenticated", u["operb"], "motorcob")
+checar("B não escolhe o MotorCli", False, "select public.escolher_frente('motorcli')", "authenticated", u["operb"])
+checar("A escolhe e lembra o MotorCli", True, "select public.escolher_frente('motorcli'); select frente_preferida from public.perfis where id=auth.uid()", "authenticated", u["oper"], "motorcli")
+checar("escolher sem lembrar limpa a preferência", True, "select public.escolher_frente('motorcob', false); select coalesce(frente_preferida,'-') from public.perfis where id=auth.uid()", "authenticated", u["oper"], "-")
+checar("usuário não muda a própria frente_preferida direto", True, f"with x as (update public.perfis set frente_preferida='motorcli' where id='{u['oper']}' returning 1) select count(*) from x", "authenticated", u["oper"], 0)
+checar("admin da A limita a operação ao MotorCob", True, f"insert into public.usuario_frentes (usuario_id,frente) values ('{u['oper']}','motorcob'); select string_agg(f, ',') from public.minhas_frentes() f", "authenticated", u["admina"], "motorcli,motorcob")
+checar("operação limitada vê só o MotorCob", True, "select string_agg(f, ',') from public.minhas_frentes() f", "authenticated", u["oper"], "motorcob")
+checar("admin da A não limita usuário da B", False, f"insert into public.usuario_frentes (usuario_id,frente) values ('{u['operb']}','motorcob')", "authenticated", u["admina"])
+checar("carteira MotorCli na A", True, f"set role service_role; insert into public.credores (empresa_id,codigo,nome,frente) values ({EA},'jornada','Jornada','motorcli'); select 'ok'", None, None, "ok")
+checar("carteira MotorCli na B é recusada (frente desligada)", False, f"set role service_role; insert into public.credores (empresa_id,codigo,nome,frente) values ({EB},'jornada','Jornada','motorcli')")
+r = sql(f"set role service_role; insert into public.estrategias (empresa_id,nome,definicao,padrao,frente) values ({EA},'Jornada padrão','{{}}',true,'motorcli')")
+assert r[0], r[2]
+checar("estratégia padrão do MotorCli convive com a do MotorCob", True, f"select count(*) from public.estrategias where empresa_id={EA} and padrao and frente='motorcli'", "service_role", None, 1)
+checar("segunda padrão na mesma frente é recusada", False, f"set role service_role; insert into public.estrategias (empresa_id,nome,definicao,padrao,frente) values ({EA},'Outra','{{}}',true,'motorcli')")
+checar("carteira MotorCob não usa estratégia do MotorCli", False, f"set role service_role; update public.credores set estrategia_id=(select id from public.estrategias where frente='motorcli' and empresa_id={EA}) where empresa_id={EA} and frente='motorcob'")
+CJ = f"(select id from public.credores where empresa_id={EA} and codigo='jornada')"
+r = sql(f"set role service_role; insert into public.jornada_cliente (empresa_id,credor_id,id_cliente,data,momento,passo,motivo) values ({EA},{CJ},'J1','2026-10-13','boas_vindas','D0','com ação hoje'),({EA},{CJ},'J2','2026-10-13','','','em atraso: fica com a cobrança (MotorCob)')")
+assert r[0], r[2]
+checar("momento inventado é recusado", False, f"set role service_role; insert into public.jornada_cliente (empresa_id,credor_id,id_cliente,data,momento,motivo) values ({EA},{CJ},'J3','2026-10-13','festa','x')")
+checar("A lê o enquadramento da jornada", True, "select count(*) from public.jornada_cliente", "authenticated", u["plan"], 2)
+checar("B não lê a jornada da A", True, "select count(*) from public.jornada_cliente", "authenticated", u["operb"], 0)
+checar("usuário não grava na jornada", False, f"insert into public.jornada_cliente (empresa_id,credor_id,id_cliente,data,motivo) values ({EA},{CJ},'J9','2026-10-13','x')", "authenticated", u["admina"])
+checar("resumo da jornada por momento", True, "select clientes from public.jornada_resumo where momento='boas_vindas'", "authenticated", u["plan"], 1)
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
