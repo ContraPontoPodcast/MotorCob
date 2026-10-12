@@ -1,4 +1,4 @@
-# Workspace no Horizons (prompts 1 a 25)
+# Workspace no Horizons (prompts 1 a 27)
 
 Rode na ordem, depois dos SQL 4, 5, 6 e 7 (pasta 01_banco). Cada prompt tem menos de 100 linhas e é independente
 do arquivo: cole o bloco inteiro no Horizons e publique antes do próximo.
@@ -24,3 +24,5 @@ Depois dos 6 primeiros, os prompts seguem a numeração do arquivo (7 a 25). Os 
 - `PROMPT_23_MOTORCX_LOGIN_E_FRENTES.md` — marca MotorCX, escolha da frente no login e tema por frente (depois do SQL 18).
 - `PROMPT_24_MOTORCLI_JORNADA.md` — as telas do MotorCli (produto Jornada).
 - `PROMPT_25_CONSOLE_FRENTES.md` — ligar as frentes da empresa no Console e limitar usuários por frente.
+- `PROMPT_26_LOGIN_FRENTE_PELO_LINK.md` — o login abre com a frente que veio no link (site motorcli.online).
+- `PROMPT_27_CONTRATACAO.md` — Console: motor, módulos, preços (flat ou escalonado) e ciclo de uso num lugar só (depois do SQL 19).

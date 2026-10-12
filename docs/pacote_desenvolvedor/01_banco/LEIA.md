@@ -88,5 +88,9 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     já existe fica com o MotorCob), frentes por usuário, a escolha do login (`escolher_frente`), carteira e
     estratégia por frente (uma estratégia padrão por frente) e o enquadramento diário da jornada
     (`jornada_cliente`, `jornada_resumo`). Nada muda para quem só usa o MotorCob.
+19. `19_contratacao_ciclo.sql` (= `supabase/migrations/20261116000001_contratacao_ciclo.sql`) — **Contratação**:
+    ciclo de uso por empresa (dia de corte e vencimento; sem corte = mês fechado, como antes), preço da
+    **Jornada** (MotorCli) por cliente acionado no ciclo, prévia e fechamento da fatura pelo ciclo e
+    `salvar_frentes` (motor da empresa). Rode junto com o prompt 27 (passo 44).
 
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

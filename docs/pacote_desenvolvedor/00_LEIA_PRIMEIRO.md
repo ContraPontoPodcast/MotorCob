@@ -12,7 +12,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
-| 2 | `01_banco` | 18 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios, funil com Disparado e Assistente, frentes MotorCob e MotorCli · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
+| 2 | `01_banco` | 19 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios, funil com Disparado e Assistente, frentes MotorCob e MotorCli, contratação e ciclo de uso · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
 | 3 | `03_site_e_login` | Site público em "/", login novo, plataforma em "/inicio", fim do "/cadastro" | Site | 1º |
 | 4 | `04_sistema_linha_apple` | Visual do sistema: menu escuro, telas brancas, Lista do dia nova | Site | 2º |
 | 5 | `05_usuarios_permissoes_seguranca` | Menus por permissão, Permissões, Auditoria, páginas de senha, sessão | Site | 3º |
@@ -52,6 +52,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | 39 | `07_workspace/PROMPT_25_CONSOLE_FRENTES.md` | Console: ligar as frentes da empresa; Usuários: limitar por frente | Site | 37º |
 | 41 | `07_workspace/PROMPT_26_LOGIN_FRENTE_PELO_LINK.md` | Login abre com a frente que veio no link (`?frente=motorcli`) | Site (motorcob.online) | 38º |
 | 42 | `09_site_motorcli/` (LEIA, parte A e parte B) | Site motorcli.online: projeto NOVO no Horizons, só vitrine; Supabase só para o formulário | Site novo | 39º |
+| 43 | `07_workspace/PROMPT_27_CONTRATACAO.md` | Console: Contratação num lugar só (motor, módulos, preço flat ou escalonado de cada item, ciclo de uso); depois do SQL 19 | Site (motorcob.online) | 40º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
@@ -65,7 +66,7 @@ Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com crit�
   passam pela Edge Function `admin-usuarios`, já publicada.
 - Permissão é garantida no banco (RLS + `pode()`); o site só esconde o que a pessoa não pode usar.
 - Erros em português, sem detalhe técnico. O login nunca diz se um e-mail existe.
-- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 622 testes de acesso).
+- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 642 testes de acesso).
 
 ## Já pronto (não refazer)
 Permissões por perfil e por usuário, auditoria, contatos do site, motivos agrupados da Lista do dia (após o SQL 2)
