@@ -37,8 +37,8 @@ permissões nem o conteúdo das telas: só QUAL LAYOUT envolve cada rota e o top
    usa o cabeçalho padrão da Orquestração: título 28px 700 e a linha "{empresa} · Mensageria · {canal} · {data}",
    o selo Simulação/Envio real ao lado do título e o botão principal à direita. O mesmo no Console.
 
-5. AVATAR DO ASSISTENTE também no app-shell: reaproveite o MESMO componente do workspace-shell (botão 64px com
-   /assistente-motorcob.jpg, balão "Dúvida? Fala comigo!" e a mesma gaveta). Sem cobrir o botão principal nem a
+5. AVATAR DO ASSISTENTE também no app-shell: reaproveite o MESMO componente do workspace-shell (botão 64px com a
+   foto do avatar, balão "Dúvida? Fala comigo!" e a mesma gaveta). Sem cobrir o botão principal nem a
    paginação; se cobrir, suba o botão só naquela tela.
 
 6. Workspace: tire "Mensageria" da barra do topo (o produto abre pelo card "Abrir Mensageria ›" do Início).
