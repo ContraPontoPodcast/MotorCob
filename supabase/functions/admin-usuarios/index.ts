@@ -113,9 +113,10 @@ async function executar(quem: Perfil, pedido: Pedido, alvo: Perfil | null): Prom
         if (/already|registered|exists/i.test(error.message)) return [409, { erro: "e-mail já cadastrado" }];
         throw error;
       }
-      const papel = pedido.funcao === "master" ? "admin" : "operacao";
+      const papel = pedido.funcao === "master" ? "admin" : pedido.funcao === "comercial" ? "gestao" : "operacao";
       const { error: e } = await admin.from("perfis")
-        .update({ papel, equipe: true, empresa_id: null, ativo: true }).eq("id", data.user.id);
+        .update({ papel, equipe: true, empresa_id: null, ativo: true,
+                  equipe_alcance: pedido.funcao === "comercial" ? "carteira" : "todas" }).eq("id", data.user.id);
       if (e) throw e;
       await auditar(quem, null, "INSERT", data.user.id, {
         convite: { antes: null, depois: "enviado" }, equipe: { antes: null, depois: pedido.funcao },
@@ -172,7 +173,15 @@ Deno.serve(async (req) => {
     const { data } = await admin.from("perfis").select(campos).eq("id", pedido.usuario_id).maybeSingle();
     alvo = (data as Perfil | null) ?? null;
   }
-  const negado = autorizar(quem as Perfil | null, pode === true, pedido, alvo, aalDoToken(token));
+  let podeEquipe = { convidarAdmin: false, gerenciarEquipe: false };
+  if ((quem as Perfil | null)?.equipe && (quem as Perfil).papel !== "admin") {
+    const [{ data: conv }, { data: ger }] = await Promise.all([
+      comoUsuario.rpc("equipe_pode", { perm: "convidar_admin", eid: pedido.empresa_id ?? null }),
+      comoUsuario.rpc("pode_equipe", { perm: "gerenciar_equipe" }),
+    ]);
+    podeEquipe = { convidarAdmin: conv === true && pedido.empresa_id !== undefined, gerenciarEquipe: ger === true };
+  }
+  const negado = autorizar(quem as Perfil | null, pode === true, pedido, alvo, aalDoToken(token), podeEquipe);
   if (negado) return responder({ erro: negado }, negado === "usuário não encontrado" ? 404 : 403, origem);
 
   try {
