@@ -1268,6 +1268,9 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
         campanhas.analisar(sb, dados, out)
         campanhas.preparar(sb, dados, agora, out)
     resumo = mensageria.processar(sb, dados, agora, out)
+    from nuvem import retornos
+    retornos.processar_retornos(sb, dados, agora, out)  # entrega, falha, resposta e bounce dos fornecedores reais
+    _recarga_automatica(sb, dados, agora, out)
     radar = atendimento.banco_radar(sb)
     if radar:
         atendimento.enviar(sb, dados, agora, out)        # respostas escritas na plataforma
@@ -1279,8 +1282,32 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
             campanhas.limpar(sb, dados, agora, out)
             if radar:
                 sb.rpc("limpar_mensageria_90d")          # textos de resposta e links com mais de 90 dias
+            from nuvem import fornecedores
+            fornecedores.manter_assinaturas(out)         # endereço de retorno cadastrado na Zenvia
+            try:
+                sb.rpc("limpar_eventos_mensageria")      # avisos dos fornecedores já aplicados, depois de 7 dias
+            except Exception:  # noqa: BLE001 — banco ainda sem o SQL 24
+                pass
             marca.write_text(hoje, encoding="utf-8")
     return resumo
+
+
+def _recarga_automatica(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:
+    """De hora em hora: a função "cobranca" recarrega no cartão guardado quem é pré-pago, ligou a recarga
+    automática e ficou abaixo do aviso. Sem a função publicada (ou sem a chave do Stripe), só registra e segue."""
+    marca = Path(dados) / "recarga_automatica.txt"
+    hora = (agora or datetime.now()).strftime("%Y-%m-%dT%H")
+    if marca.exists() and marca.read_text(encoding="utf-8").strip() == hora:
+        return
+    marca.parent.mkdir(parents=True, exist_ok=True)
+    marca.write_text(hora, encoding="utf-8")
+    try:
+        r = sb.funcao("cobranca", {"acao": "recargas_automaticas"}) or {}
+    except Exception as e:  # noqa: BLE001
+        out(f"recarga automática: não rodou ({str(e)[:120]})")
+        return
+    for x in r.get("recargas") or []:
+        out(f"recarga automática: empresa {x.get('empresa')} — {x.get('situacao') or x.get('erro')}")
 
 
 def _versao_repo() -> str:

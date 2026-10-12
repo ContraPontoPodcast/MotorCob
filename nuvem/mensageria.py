@@ -151,6 +151,15 @@ ADAPTADORES_REAIS: dict = {}     # codigo -> classe com .enviar(); entra quando 
 CONSULTAS_REAIS: dict = {}       # codigo -> função(destino) -> operadora; entra com o acesso do fornecedor
 
 
+def _ligar_fornecedores() -> list[str]:
+    """Fornecedores com credencial no servidor entram em modo real (nuvem/fornecedores.py)."""
+    from nuvem import fornecedores
+    return fornecedores.registrar(ADAPTADORES_REAIS, CONSULTAS_REAIS)
+
+
+FORNECEDORES_LIGADOS = _ligar_fornecedores()
+
+
 def adaptador(codigo: str, modo: str):
     if modo == "simulado":
         queda = {c.strip() for c in os.environ.get("MOTORCOB_SIMULAR_QUEDA", "").split(",") if c.strip()}

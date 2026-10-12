@@ -53,6 +53,11 @@ unset CHAVE
 CHAVE_IA="$(gcloud secrets versions access latest --secret=motorcob-anthropic-key 2>/dev/null || true)"
 [ -n "$CHAVE_IA" ] && printf 'ANTHROPIC_API_KEY=%s\n' "$CHAVE_IA" >> /run/motorcob/supabase.env
 unset CHAVE_IA
+# opcional: credenciais dos fornecedores da Mensageria (segredo motorcob-fornecedores, uma linha NOME=valor cada)
+FORN="$(gcloud secrets versions access latest --secret=motorcob-fornecedores 2>/dev/null || true)"
+[ -n "$FORN" ] && printf '%s\n' "$FORN" | tr -d '\r' \
+  | grep -E '^(ZENVIA|INFOBIP|SINCH|LOCAWEB|RETORNO)_[A-Z_]+=[^[:space:]]+$' >> /run/motorcob/supabase.env || true
+unset FORN
 DOMINIO="$(meta motorcob-link-dominio 2>/dev/null || true)"
 [ -n "$DOMINIO" ] && printf 'MOTORCOB_LINK_DOMINIO=%s\n' "$DOMINIO" >> /run/motorcob/supabase.env
 gcloud auth configure-docker "${IMAGEM%%/*}" --quiet >/dev/null 2>&1
