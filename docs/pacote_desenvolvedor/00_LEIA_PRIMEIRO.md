@@ -54,6 +54,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | 42 | `09_site_motorcli/` (LEIA, parte A e parte B) | Site motorcli.online: projeto NOVO no Horizons, só vitrine; Supabase só para o formulário | Site novo | 39º |
 | 43 | `07_workspace/PROMPT_27_CONTRATACAO.md` | Console: Contratação num lugar só (motor, módulos, preço flat ou escalonado de cada item, ciclo de uso); depois do SQL 19 | Site (motorcob.online) | 40º |
 | 44 | `07_workspace/PROMPT_28_SUPORTE_NOMES.md` | Suporte: "Em atendimento · com Ana S." e o nome em cada mensagem; depois do SQL 20 (que corrige o erro ao abrir e responder chamado) | Site (motorcob.online) | 41º |
+| 45 | `07_workspace/PROMPT_29_CORRECAO_CONTRATACAO.md` | Correção: tela Contratação quebrava ("Ops! Ocorreu um erro inesperado"), itens de preço pela chave certa, WhatsApp, números e ciclo | Site (motorcob.online) | 42º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

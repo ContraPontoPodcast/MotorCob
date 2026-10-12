@@ -1,4 +1,4 @@
-# Workspace no Horizons (prompts 1 a 28)
+# Workspace no Horizons (prompts 1 a 29)
 
 Rode na ordem, depois dos SQL 4, 5, 6 e 7 (pasta 01_banco). Cada prompt tem menos de 100 linhas e é independente
 do arquivo: cole o bloco inteiro no Horizons e publique antes do próximo.
@@ -27,3 +27,4 @@ Depois dos 6 primeiros, os prompts seguem a numeração do arquivo (7 a 25). Os 
 - `PROMPT_26_LOGIN_FRENTE_PELO_LINK.md` — o login abre com a frente que veio no link (site motorcli.online).
 - `PROMPT_27_CONTRATACAO.md` — Console: motor, módulos, preços (flat ou escalonado) e ciclo de uso num lugar só (depois do SQL 19).
 - `PROMPT_28_SUPORTE_NOMES.md` — suporte mostra quem está atendendo e quem escreveu cada mensagem (depois do SQL 20).
+- `PROMPT_29_CORRECAO_CONTRATACAO.md` — correção da tela Contratação (quebrava ao abrir; preços, WhatsApp, números e ciclo).
