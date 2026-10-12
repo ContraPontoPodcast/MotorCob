@@ -599,7 +599,8 @@ checar("cliente não vê a saúde do sistema", False, "select * from public.saud
 checar("Atendimento vê a saúde de todas as empresas", True, "select count(*) from public.saude_empresas()", "authenticated", SUP, N_EMP)
 r = sql(f"set role service_role; insert into public.execucoes (empresa_id,data_ref,status,erro,iniciada_em) values ({EB},(now() at time zone 'America/Sao_Paulo')::date,'erro','base sem coluna saldo', now())")
 assert r[0], r[2]
-checar("rotina com erro vira crítico e vem primeiro", True, "select nivel || ' ' || ultima_rotina_erro from public.saude_empresas() limit 1", "authenticated", u["admin"], "critico base sem coluna saldo")
+checar("rotina com erro vira crítico (a qualquer hora)", True, f"select nivel || ' ' || ultima_rotina_erro from public.saude_empresas() where empresa_id = {EB}", "authenticated", u["admin"], "critico base sem coluna saldo")
+checar("crítico vem antes de atenção e ok", True, "select min(case nivel when 'critico' then 0 when 'atencao' then 1 else 2 end) = (array_agg(case nivel when 'critico' then 0 when 'atencao' then 1 else 2 end))[1] from public.saude_empresas()", "authenticated", u["admin"], "t")
 checar("fatura paga não conta como vencida", True, f"select faturas_vencidas from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 0)
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional

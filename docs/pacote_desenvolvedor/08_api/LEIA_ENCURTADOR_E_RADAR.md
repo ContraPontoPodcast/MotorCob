@@ -36,7 +36,7 @@ gcloud compute instances reset motorcob --zone=southamerica-east1-a
 
 ## 3. Chave da IA do Radar (opcional: sem ela, o Radar classifica pelas regras)
 
-1. Em **console.anthropic.com**, crie uma chave de API para o MotorCob (Settings › API Keys). Não cole a chave
+1. Em **platform.claude.com** (antigo console.anthropic.com), coloque crédito em Settings › Billing e crie uma chave de API para o MotorCob (Settings › API Keys). Não cole a chave
    em chat, e-mail ou no site.
 2. No **Cloud Shell** do Google Cloud, rode e cole a chave quando o terminal pedir (ela não aparece na tela):
 
