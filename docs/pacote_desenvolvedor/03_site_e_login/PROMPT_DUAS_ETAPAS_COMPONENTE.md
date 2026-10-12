@@ -1,9 +1,12 @@
 # Prompt Horizons — Duas etapas: componente pronto (substitui o código gerado)
 
 Cole no Horizons e publique. Traz os dois arquivos inteiros; o Horizons só cria os arquivos e liga na página /login.
+Versão 2: se a tela for montada de novo no meio do cadastro, o MESMO QR volta (antes nascia outro e o código lido
+no celular deixava de valer).
 
 ```text
-Substitua TODA a verificação em duas etapas (MFA) do site por estes dois arquivos prontos. Não reescreva o conteúdo
+Substitua TODA a verificação em duas etapas (MFA) do site por estes dois arquivos prontos (versão 2: troque os
+dois arquivos inteiros se já existirem). Não reescreva o conteúdo
 deles: crie exatamente como está abaixo. Apague o código antigo de MFA (telas, guardas, efeitos).
 
 1. Crie src/components/duasEtapasLogica.ts com o conteúdo do bloco LOGICA.
@@ -89,14 +92,23 @@ export async function proximoPasso(sb: ClienteAuth, ehAdmin: boolean, obrigarAdm
   return { etapa: "pronto" };
 }
 
-/** Começa o cadastro: limpa os pela metade e devolve o QR e a chave para mostrar. */
+// Cadastro em andamento, só na memória da página (nunca em localStorage): se a tela for montada de novo no meio
+// do cadastro (rota que re-renderiza, StrictMode, guarda de rota), o MESMO QR volta, em vez de nascer outro que
+// invalidaria o que a pessoa já leu no celular.
+let pendente: { fatorId: string; qr: string; chave: string; criado: number } | null = null;
+const VALIDADE_PENDENTE = 10 * 60 * 1000;   // 10 minutos para ler o QR e digitar o código
+
+/** Começa o cadastro (ou retoma o que está em andamento) e devolve o QR e a chave para mostrar. */
 export async function iniciarCadastro(sb: ClienteAuth, agora = new Date()):
   Promise<{ fatorId: string; qr: string; chave: string }> {
   const fatores = await ok(sb.auth.mfa.listFactors());
-  for (const f of fatores?.all ?? []) {
-    if (f.factor_type === "totp" && f.status !== "verified") {
-      await sb.auth.mfa.unenroll({ factorId: f.id });   // se já sumiu, segue
-    }
+  const abertos = (fatores?.all ?? []).filter((f) => f.factor_type === "totp" && f.status !== "verified");
+  if (pendente && agora.getTime() - pendente.criado < VALIDADE_PENDENTE && abertos.some((f) => f.id === pendente!.fatorId)) {
+    const { fatorId, qr, chave } = pendente;
+    return { fatorId, qr, chave };          // mesma tela de novo: mesmo QR
+  }
+  for (const f of abertos) {
+    await sb.auth.mfa.unenroll({ factorId: f.id });   // cadastros pela metade de outras vezes; se já sumiu, segue
   }
   const nome = `MotorCob ${agora.toISOString().slice(0, 19).replace("T", " ")}`;
   const d = (await ok(sb.auth.mfa.enroll({ factorType: "totp", friendlyName: nome }))) as
@@ -104,7 +116,13 @@ export async function iniciarCadastro(sb: ClienteAuth, agora = new Date()):
   if (!d?.id || !d.totp?.qr_code || !d.totp.secret) {
     throw new ErroDuasEtapas("Não foi possível preparar o autenticador.", "enroll sem QR ou chave");
   }
+  pendente = { fatorId: d.id, qr: d.totp.qr_code, chave: d.totp.secret, criado: agora.getTime() };
   return { fatorId: d.id, qr: d.totp.qr_code, chave: d.totp.secret };
+}
+
+/** Esquece o cadastro em andamento (depois de confirmar ou cancelar). */
+export function esquecerPendente(): void {
+  pendente = null;
 }
 
 /** Só os dígitos; aceita colar "123 456". Devolve null se não tiver 6 dígitos. */
@@ -123,10 +141,12 @@ export async function confirmarCodigo(sb: ClienteAuth, fatorId: string, texto: s
   if (nivel?.currentLevel !== "aal2") {
     throw new ErroDuasEtapas("O código foi aceito, mas a sessão não foi confirmada. Entre de novo.", "aal1 depois do verify");
   }
+  esquecerPendente();
 }
 
 /** Cancelar no meio do cadastro: não deixa autenticador pela metade e sai. */
 export async function cancelarCadastro(sb: ClienteAuth, fatorId?: string): Promise<void> {
+  esquecerPendente();
   if (fatorId) await sb.auth.mfa.unenroll({ factorId: fatorId });
   await sb.auth.signOut();
 }
