@@ -42,7 +42,8 @@ CACHE_OPERADORA_DIAS = 30
 JANELA_PADRAO = ("08:00", "20:00")
 POR_RODADA = 500            # mensagens por lote a cada minuto
 MAX_TENTATIVAS = 3
-MARCA = {"entregue": "entregue", "falhou": "inexistente", "descadastro": "bloqueio"}
+MARCA = {"entregue": "entregue", "falhou": "inexistente", "descadastro": "bloqueio",
+         "clique": "clique", "inexistente": "inexistente"}   # as duas últimas vêm do Radar (respondeu / desconhece)
 
 
 # ------------------------------------------------------------------ destino: normalizar, mascarar, hash
@@ -75,22 +76,26 @@ class ErroFornecedor(Exception):
 
 @dataclass
 class Resultado:
-    situacao: str            # entregue · falhou · descadastro
+    situacao: str            # entregue · falhou · descadastro · sem_rcs (aparelho sem RCS: vai para o fallback)
     motivo: str | None = None
     id_externo: str | None = None
     respondeu: bool = False  # o cliente respondeu (SMS: cobra a resposta; RCS conversacional: abre sessão)
+    resposta: str | None = None   # texto que o cliente respondeu (vai para o Radar e o atendimento)
 
 
 class Simulador:
     def __init__(self, codigo: str, fora_do_ar: bool = False):
         self.codigo, self.fora_do_ar = codigo, fora_do_ar
 
-    def enviar(self, canal: str, destino: str, texto: str, assunto: str | None = None) -> Resultado:
+    def enviar(self, canal: str, destino: str, texto: str, assunto: str | None = None,
+               conteudo: dict | None = None) -> Resultado:
         if self.fora_do_ar:
             raise ErroFornecedor(f"{self.codigo} fora do ar (simulado)")
         h = hash_destino(canal, destino)
         n = int(h[:6], 16) % 1000
         ident = f"sim-{self.codigo}-{h[:12]}"
+        if canal == "rcs" and int(h[12:18], 16) % 100 < 15:          # ~15% dos aparelhos sem RCS
+            return Resultado("sem_rcs", "aparelho sem RCS (simulado)", ident)
         if canal == "email":
             if n < 15:
                 return Resultado("falhou", "caixa de e-mail inexistente (simulado)", ident)
@@ -102,7 +107,18 @@ class Simulador:
             if n < 40:
                 return Resultado("descadastro", "respondeu SAIR (simulado)", ident)
         respondeu = 40 <= n < (90 if canal == "sms" else 120 if canal == "rcs" else 40)   # ~5% SMS, ~8% RCS
-        return Resultado("entregue", None, ident, respondeu)
+        return Resultado("entregue", None, ident, respondeu,
+                         RESPOSTAS_SIMULADAS[int(h[20:26], 16) % len(RESPOSTAS_SIMULADAS)] if respondeu else None)
+
+
+# respostas de mentira para a simulação (sem dado de ninguém)
+RESPOSTAS_SIMULADAS = (
+    "Me manda o boleto", "Me manda o boleto FDP", "Qual o valor pra quitar?", "Consigo parcelar em 6x?",
+    "Manda o pix que eu pago hoje", "Já paguei semana passada", "Isso já foi pago, tenho comprovante",
+    "Não conheço essa pessoa", "Número errado", "Vou falar com meu advogado", "Vou reclamar no Procon",
+    "Sim, sou eu", "Quem fala?", "Estou desempregado, depois eu vejo", "Vai se f***", "Para de me mandar mensagem idiota",
+    "Tem desconto à vista?", "Bom dia, recebi a mensagem",
+)
 
 
 def operadora_simulada(destino: str) -> str:
@@ -140,6 +156,11 @@ def _tabela_nova(consulta, padrao):
 def banco_novo(sb) -> bool:
     """O banco já tem o SQL 13 (RCS, operadora, item e respostas nas mensagens)?"""
     return _tabela_nova(lambda: sb.selecionar("mensageria_planos_rota", {"id": "eq.0"}) is not None, False)
+
+
+def banco_campanhas(sb) -> bool:
+    """O banco já tem o SQL 14 (campanhas, centro de custo, listas, fallback)?"""
+    return _tabela_nova(lambda: sb.selecionar("mensageria_campanhas", {"id": "eq.0"}) is not None, False)
 
 
 def plano_rota(sb, empresa_id, canal: str, modo: str) -> list[dict]:
@@ -273,6 +294,7 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
     if not mod:
         return []
     novo = banco_novo(sb)
+    v14 = novo and banco_campanhas(sb)
     liberados = [c for c in CANAIS if c in (mod[0].get("canais") or []) and (novo or c != "rcs")]
     cfg = (sb.selecionar("mensageria_config", {"empresa_id": f"eq.{empresa_id}"}) or [{}])[0]
     modo, aprovar = cfg.get("modo") or "simulado", cfg.get("aprovar_lotes") is not False
@@ -294,7 +316,9 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
             if modelo:          # única variável: {empresa}; nada do cliente entra no e-mail
                 nome = ((sb.selecionar("empresas", {"id": f"eq.{empresa_id}"}) or [{}])[0].get("nome") or "")
                 modelo = {k: (v.replace("{empresa}", nome) if isinstance(v, str) else v) for k, v in modelo.items()}
-        linhas, locais, vistos = [], {}, set()
+        from nuvem.campanhas import listas_contato, telefone
+        bloqueio, favoritos = listas_contato(sb, empresa_id, canal) if v14 else (set(), set())
+        linhas, locais, vistos, invalidos = [], {}, set(), 0
         with open(arq, encoding="utf-8", newline="") as f:
             for r in csv.DictReader(f, delimiter=";"):
                 idc, contato = (r.get("id_cliente") or "").strip(), (r.get("contato") or "").strip()
@@ -309,7 +333,13 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
                 if canal == "rcs":
                     item = ("rcs_single" if len(texto) > LIMITE_RCS_BASIC
                             or (r.get("tipo_rcs") or "").strip().lower() == "single" else "rcs_basic")
-                motivo = ("descadastrado" if h in descad else
+                fav = h in favoritos
+                formato_ok = fav or canal == "email" or telefone(contato) is not None
+                if v14 and not formato_ok:
+                    invalidos += 1
+                motivo = ("contato inválido na higienização" if v14 and not formato_ok else
+                          "lista de bloqueio" if h in bloqueio else
+                          "descadastrado" if h in descad else
                           "sem frase no dia" if canal != "email" and not texto else
                           f"frase acima de {LIMITE_SMS} caracteres" if canal == "sms" and len(texto) > LIMITE_SMS else
                           "sem modelo de e-mail" if canal == "email" and not modelo else None)
@@ -317,7 +347,7 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
                                "situacao": "bloqueada" if motivo else "pendente", "motivo": motivo,
                                **({"item": item} if novo else {})})
                 if not motivo:
-                    locais[(idc[:80], h)] = {"contato": contato, "texto": texto, "item": item,
+                    locais[(idc[:80], h)] = {"contato": contato, "texto": texto, "item": item, "favorito": fav,
                                              "assunto": (modelo or {}).get("assunto"),
                                              "remetente": (modelo or {}).get("remetente_nome")}
         if not linhas:
@@ -333,7 +363,9 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
         lote = sb.inserir("mensageria_lotes", [{
             "empresa_id": empresa_id, "credor_id": cid, "data": dia.isoformat(), "canal": canal, "modo": modo,
             "situacao": situacao, "total": len(linhas), "bloqueadas": bloq, "janela_inicio": jan[0],
-            "janela_fim": jan[1], "motivo": motivo_lote}], retornar=True)[0]
+            "janela_fim": jan[1], "motivo": motivo_lote,
+            **({"invalidos": invalidos, "centro_custo_id": cfg.get("centro_custo_id")} if v14 else {})}],
+            retornar=True)[0]
         gravadas = sb.inserir("mensageria_mensagens", [{**l, "lote_id": lote["id"], "empresa_id": empresa_id}
                                                        for l in linhas], retornar=True)
         _gravar_json(pasta / "mensageria" / f"lote_{lote['id']}.json",
@@ -347,13 +379,42 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
 
 # ------------------------------------------------------------------ 2. enviar
 def _pastas(sb, dados: Path, empresa_ids: set) -> dict:
-    """{(empresa_id, credor_id 0/id): pasta}"""
+    """{(empresa_id, credor_id 0/id): pasta} e {("campanhas", empresa_id): pasta das campanhas}"""
+    from nuvem.campanhas import pasta_campanhas
     from nuvem.sincronizar import credores
     saida = {}
     for emp in sb.selecionar("empresas", {"id": f"in.({','.join(str(i) for i in sorted(empresa_ids))})"}) or []:
+        saida[("campanhas", emp["id"])] = pasta_campanhas(dados, emp["slug"])
         for u in credores(sb, dados, emp):
             saida[(emp["id"], u["id"] or 0)] = u["pasta"]
     return saida
+
+
+def _orcamento(sb, lote: dict, canal: str) -> tuple[int | None, str | None]:
+    """(máximo de envios que o saldo do centro de custo permite, motivo da pausa). None = sem limite."""
+    cid = lote.get("centro_custo_id")
+    if not cid:
+        return None, None
+    o = (sb.rpc("orcamento_centro_motor", {"centro": cid}) or [{}])[0]
+    if o.get("restante") is None or o.get("ao_estourar") != "bloquear":
+        return None, None
+    restante = float(o["restante"])
+    unit = float(o.get({"sms": "preco_sms", "rcs": "preco_rcs", "email": "preco_email"}.get(canal, "preco_sms")) or 0)
+    if restante <= 0:
+        return 0, "orçamento do centro de custo esgotado"
+    return (int(restante / unit + 1e-9) if unit > 0 else None), None   # 1,00 / 0,10 = 10 (sem erro de arredondamento)
+
+
+def _consumo_centro(sb, centro_id, dia: date, por_item: dict) -> None:
+    comp = dia.replace(day=1).isoformat()
+    for item, n in por_item.items():
+        if not n or item in ("rcs_sessao", "consulta_operadora"):
+            continue
+        chave = {"centro_id": f"eq.{centro_id}", "competencia": f"eq.{comp}", "item": f"eq.{item}"}
+        atual = (sb.selecionar("mensageria_consumo_centro", chave) or [{}])[0]
+        sb.inserir("mensageria_consumo_centro", [{"centro_id": centro_id, "competencia": comp, "item": item,
+                                                  "quantidade": int(atual.get("quantidade") or 0) + n}],
+                   conflito="centro_id,competencia,item")
 
 
 def _consumo(sb, empresa_id, dia: date, por_item: dict) -> None:
@@ -429,6 +490,32 @@ def operadoras(sb, pendentes: list[tuple[str, str]], modo: str, agora: datetime)
     return saida, feitas
 
 
+def _fallback_rcs(sb, empresa_id, modo: str, cfg: dict, lote: dict, loc: dict, chave: str, original: Resultado):
+    """Aparelho sem RCS: SMS (texto do template de fallback, ou o do RCS se couber em 160) ou WhatsApp, conforme a
+    campanha ou a empresa. Devolve (resultado, fornecedor, canal do fallback ou None)."""
+    tipo = loc.get("fallback") or cfg.get("rcs_fallback") or "sms"
+    if tipo == "nenhum":
+        return Resultado("falhou", "aparelho sem RCS (sem fallback)", original.id_externo), None, None
+    texto = (loc.get("fallback_texto") or loc.get("texto") or "").strip()
+    if tipo == "sms" and not loc.get("fallback_texto") and cfg.get("rcs_fallback_template_id"):
+        tpl = (sb.selecionar("mensageria_templates", {"id": f"eq.{cfg['rcs_fallback_template_id']}"}) or [{}])[0]
+        texto = ((tpl.get("conteudo") or {}).get("texto") or texto).strip()
+    if tipo == "sms" and (not texto or len(texto) > LIMITE_SMS):
+        motivo = "sem texto para o SMS" if not texto else "texto do fallback acima de 160 caracteres"
+        return Resultado("falhou", f"aparelho sem RCS e {motivo}", original.id_externo), None, None
+    plano = plano_rota(sb, empresa_id, tipo, modo)
+    if not plano:
+        return Resultado("falhou", f"aparelho sem RCS e sem rota de {tipo} para o fallback", original.id_externo), \
+            None, None
+    erro = None
+    for f in escolher(plano, chave):
+        try:
+            return adaptador(f, modo).enviar(tipo, loc["contato"], texto), f, tipo
+        except ErroFornecedor as e:
+            erro = str(e)
+    return Resultado("falhou", f"fallback {tipo} indisponível: {erro}"[:200], original.id_externo), None, None
+
+
 def _sessoes_abertas(sb, empresa_id, agora: datetime) -> set:
     return {x["destino_hash"] for x in sb.selecionar("mensageria_sessoes_rcs", {
         "empresa_id": f"eq.{empresa_id}", "fim": f"gt.{agora.isoformat()}"}) or []}
@@ -442,6 +529,7 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
     if not lotes:
         return {}
     novo = banco_novo(sb)
+    v14 = novo and banco_campanhas(sb)                 # fallback do RCS e centro de custo
     pastas = _pastas(sb, Path(dados), {l["empresa_id"] for l in lotes})
     resumo = {}
     for lote in lotes:
@@ -456,8 +544,9 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         if dia > hoje or not dentro((lote.get("janela_inicio"), lote.get("janela_fim")), agora) \
                 or janela({"sabado": True}, hoje) is None:
             continue
-        pasta = pastas.get((eid, lote.get("credor_id") or 0))
-        arq = pasta / "mensageria" / f"lote_{lid}.json" if pasta else None
+        campanha = lote.get("campanha_id")
+        pasta = pastas.get(("campanhas", eid)) if campanha else pastas.get((eid, lote.get("credor_id") or 0))
+        arq = (pasta / f"lote_{lid}.json" if campanha else pasta / "mensageria" / f"lote_{lid}.json") if pasta else None
         if not arq or not arq.exists():
             sb.atualizar("mensageria_lotes", filtro, {"situacao": "cancelado", "concluido_em": agora.isoformat(),
                                                       "motivo": "arquivo do lote não encontrado no servidor"})
@@ -472,17 +561,26 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         conversacional = cfg.get("rcs_agente") == "conversacional"
         descad = {d["destino_hash"] for d in sb.selecionar("mensageria_descadastros", {
             "empresa_id": f"eq.{eid}", "canal": f"eq.{canal}"}) or []}
+        maximo, pausa = _orcamento(sb, lote, canal)
+        if pausa or maximo == 0:
+            sb.atualizar("mensageria_lotes", filtro, {"situacao": "pausado", "atualizado_em": agora.isoformat(),
+                                                      "motivo": pausa or "orçamento do centro de custo esgotado"})
+            resumo[lid] = {"enviadas": 0, "situacao": "pausado"}
+            out(f"mensageria: lote {lid} pausado — {pausa or 'orçamento esgotado'}")
+            continue
+        rodada = min(POR_RODADA, maximo or POR_RODADA)
         pend = sb.selecionar("mensageria_mensagens", {"lote_id": f"eq.{lid}", "situacao": "eq.pendente"},
-                             ordem="id.asc", limite=POR_RODADA) or []
+                             ordem="id.asc", limite=rodada) or []
         oper, consultas = {}, {}
         if canal == "sms" and novo:
             oper, consultas = operadoras(sb, [(m["destino_hash"], locais[str(m["id"])]["contato"]) for m in pend
                                               if str(m["id"]) in locais and m["destino_hash"] not in descad],
                                          modo, agora)
         sessoes = _sessoes_abertas(sb, eid, agora) if canal == "rcs" else set()
-        mudadas, retorno, novos_descad, novas_sessoes = [], [], [], []
+        mudadas, retorno, novos_descad, novas_sessoes, respostas = [], [], [], [], []
         contagem, por_item = {}, {}
-        cont = {"enviadas": 0, "entregues": 0, "falhas": 0, "descadastros": 0, "bloqueadas": 0, "respostas": 0}
+        cont = {"enviadas": 0, "entregues": 0, "falhas": 0, "descadastros": 0, "bloqueadas": 0, "respostas": 0,
+                "fallback": 0}
         motivo_lote, parou = None, False
 
         def contar(f, op, item, n=1):
@@ -497,6 +595,8 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
             loc = locais.get(str(m["id"]))
             base = {**m, "atualizado_em": agora.isoformat()}
             op = oper.get(m["destino_hash"])
+            if op == "invalido" and loc and loc.get("favorito"):
+                op = None                                # favorito passa direto pela validação da operadora
             if m["destino_hash"] in descad or not loc or op == "invalido":
                 mudadas.append({**base, "situacao": "bloqueada",
                                 "motivo": ("contato não encontrado no servidor" if not loc else
@@ -508,7 +608,8 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
             res, usado, erro = None, None, None
             for f in escolher(plano, f"{lid}:{m['id']}", op):
                 try:
-                    res = adaptador(f, modo).enviar(canal, loc["contato"], loc["texto"], loc.get("assunto"))
+                    res = adaptador(f, modo).enviar(canal, loc["contato"], loc["texto"], loc.get("assunto"),
+                                                    conteudo=loc.get("conteudo"))
                     usado = f
                     break
                 except ErroFornecedor as e:
@@ -521,8 +622,17 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
                     cont["falhas"] += 1
                 motivo_lote, parou = f"fornecedores indisponíveis: {erro}"[:300], True
                 continue
+            fallback = None
+            if res.situacao == "sem_rcs" and not v14:
+                res = Resultado("falhou", "aparelho sem RCS", res.id_externo)
+            if res.situacao == "sem_rcs":
+                res, usado, fallback = _fallback_rcs(sb, eid, modo, cfg, lote, loc, f"{lid}:{m['id']}", res)
+                if fallback:
+                    cont["fallback"] += 1
             item = loc.get("item") or canal
-            respondeu = res.respondeu and res.situacao == "entregue"
+            if fallback:
+                item = "sms" if fallback == "sms" else "whatsapp_utilidade"
+            respondeu = res.respondeu and res.situacao == "entregue" and not fallback
             if canal == "rcs":
                 if m["destino_hash"] in sessoes:
                     item = "rcs_sessao"                       # dentro das 24 h da conversa: sem custo
@@ -533,16 +643,21 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
                                           "inicio": agora.isoformat(),
                                           "fim": (agora + timedelta(hours=SESSAO_RCS_HORAS)).isoformat()})
                 respondeu = respondeu and conversacional
-            contar(usado, op, item)
+            if usado:
+                contar(usado, op, item)
             if canal == "sms" and respondeu:
                 contar(usado, op, "sms_resposta")
             mudadas.append({**base, "situacao": res.situacao, "motivo": res.motivo, "fornecedor": usado,
                             "id_externo": res.id_externo, "tentativas": int(m.get("tentativas") or 0) + 1,
                             "enviado_em": agora.isoformat(),
                             **({"item": item, "operadora": op,
-                                "respondida_em": agora.isoformat() if respondeu else None} if novo else {})})
+                                "respondida_em": agora.isoformat() if respondeu else None} if novo else {}),
+                            **({"fallback": fallback} if fallback else {})})
             cont["enviadas"] += 1
             cont["respostas"] += int(respondeu)
+            if (res.respondeu and res.situacao == "entregue" and not fallback and res.resposta
+                    and (canal != "rcs" or conversacional)):
+                respostas.append({"mensagem": m, "texto": res.resposta, "contato": loc["contato"]})
             cont[{"entregue": "entregues", "falhou": "falhas", "descadastro": "descadastros"}[res.situacao]] += 1
             retorno.append((loc["contato"], res.situacao))
             if res.situacao == "descadastro":
@@ -556,14 +671,22 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
             sb.inserir("mensageria_descadastros", novos_descad, conflito="empresa_id,canal,destino_hash")
         if novas_sessoes:
             sb.inserir("mensageria_sessoes_rcs", novas_sessoes)
-        _anotar_retorno(pasta, canal, lid, dia, retorno)
+        if respostas:
+            from nuvem import atendimento
+            if atendimento.banco_radar(sb):
+                marcas = atendimento.registrar(sb, eid, canal, lote, respostas, cfg, agora, out)
+                retorno += [(r["contato"], mc) for r, mc in zip(respostas, marcas)]
+        if not campanha:                                # só a Lista do dia volta para a Orquestração
+            _anotar_retorno(pasta, canal, lid, dia, retorno)
         if modo == "real" and por_item:
             _consumo(sb, eid, dia, por_item)
         _consumo_fornecedor(sb, eid, dia, modo, contagem)
-        resta = (len(pend) == POR_RODADA or parou) and sb.selecionar(
+        if lote.get("centro_custo_id") and por_item:
+            _consumo_centro(sb, lote["centro_custo_id"], dia, por_item)
+        resta = (len(pend) == rodada or parou) and sb.selecionar(
             "mensageria_mensagens", {"lote_id": f"eq.{lid}", "situacao": "eq.pendente"}, limite=1)
         situacao = "enviando" if resta else "concluido"
-        somar = cont if novo else {k: v for k, v in cont.items() if k != "respostas"}
+        somar = {k: v for k, v in cont.items() if (novo or k != "respostas") and (k != "fallback" or v)}
         sb.atualizar("mensageria_lotes", filtro, {
             **{k: int(lote.get(k) or 0) + v for k, v in somar.items()}, "situacao": situacao,
             "motivo": motivo_lote, "atualizado_em": agora.isoformat(),

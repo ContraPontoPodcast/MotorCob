@@ -12,7 +12,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
-| 2 | `01_banco` | 13 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
+| 2 | `01_banco` | 16 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
 | 3 | `03_site_e_login` | Site público em "/", login novo, plataforma em "/inicio", fim do "/cadastro" | Site | 1º |
 | 4 | `04_sistema_linha_apple` | Visual do sistema: menu escuro, telas brancas, Lista do dia nova | Site | 2º |
 | 5 | `05_usuarios_permissoes_seguranca` | Menus por permissão, Permissões, Auditoria, páginas de senha, sessão | Site | 3º |
@@ -32,6 +32,12 @@ Faça **na ordem**; cada passo depende do anterior.
 | 19 | `07_workspace/PROMPT_8_PRECOS_E_MODULOS.md` | Preços por produto (único, por faixa, progressiva, mensalidade, mínimo) e Orquestração liga/desliga | Site | 17º |
 | 20 | `07_workspace/PROMPT_9_ROTAS_E_MARGEM.md` | Console: planos de rota (% e operadora), custos e Margem (%MC) com simulação | Site | 18º |
 | 21 | `07_workspace/PROMPT_10_MENSAGERIA_SMS_RCS.md` | Mensageria: RCS, respostas, operadora, agente RCS, limite de 160 | Site | 19º |
+| 22 | `07_workspace/PROMPT_11_MENSAGERIA_PRODUTOS.md` | Mensageria por produto (mesmo UX da Orquestração), painel com funil, campanhas com layout livre | Site | 20º |
+| 23 | `07_workspace/PROMPT_12_TEMPLATES_LISTAS_CUSTO.md` | Templates de SMS e RCS, listas de bloqueio e favoritos, centros de custo, fallback | Site | 21º |
+| 24 | `08_api/LEIA_ENCURTADOR_E_RADAR.md` | Função `l` (encurtador), domínio curto e chave da IA do Radar | Supabase + Cloud | 22º |
+| 25 | `07_workspace/PROMPT_13_RADAR_ATENDIMENTO.md` | Radar MotorCob e caixa de atendimento das respostas | Site | 23º |
+| 26 | `07_workspace/PROMPT_14_LINKS_FUNIL.md` | Funil de cliques dos links rastreados | Site | 24º |
+| 27 | `07_workspace/PROMPT_15_RELATORIOS.md` | Relatórios padrão e montador de relatórios | Site | 25º |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
@@ -44,7 +50,7 @@ Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com crit�
   passam pela Edge Function `admin-usuarios`, já publicada.
 - Permissão é garantida no banco (RLS + `pode()`); o site só esconde o que a pessoa não pode usar.
 - Erros em português, sem detalhe técnico. O login nunca diz se um e-mail existe.
-- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 493 testes de acesso).
+- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 584 testes de acesso).
 
 ## Já pronto (não refazer)
 Permissões por perfil e por usuário, auditoria, contatos do site, motivos agrupados da Lista do dia (após o SQL 2)

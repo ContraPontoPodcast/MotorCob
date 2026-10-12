@@ -18,6 +18,17 @@ class SbFalso:
 
     def __init__(self):
         self.t, self.seq = {}, 0
+        self.arquivos, self.funcoes = {}, {}
+
+    def baixar(self, bucket, caminho):
+        return self.arquivos[f"{bucket}/{caminho}"]
+
+    def apagar_arquivos(self, bucket, caminhos):
+        for c in caminhos:
+            self.arquivos.pop(f"{bucket}/{c}", None)
+
+    def rpc(self, funcao, args=None):
+        return self.funcoes[funcao](**(args or {}))
 
     def _passa(self, l, filtros):
         for k, cond in (filtros or {}).items():
@@ -27,6 +38,10 @@ class SbFalso:
             if op == "in" and str(l.get(k)) not in v.strip("()").split(","):
                 return False
             if op == "gt" and not str(l.get(k)) > v:
+                return False
+            if op == "lt" and not str(l.get(k)) < v:
+                return False
+            if op == "not" and v == "is.null" and l.get(k) is None:
                 return False
         return True
 
@@ -46,7 +61,8 @@ class SbFalso:
                     velho.update(l)
                     saida.append(dict(velho))
                     continue
-            if "id" not in l and tabela in ("mensageria_lotes", "mensageria_mensagens"):
+            if "id" not in l and tabela in ("mensageria_lotes", "mensageria_mensagens", "mensageria_conversas",
+                                            "mensageria_conversa_mensagens"):
                 self.seq += 1
                 l["id"] = self.seq
             t.append(l)
@@ -192,9 +208,10 @@ class TestMensageria(unittest.TestCase):
         self.assertTrue({m["destino_hash"] for m in saiu} <= hashes)
         regs = M.registros(self.pasta)
         marcas = {r.marca for r in regs}
-        self.assertEqual(marcas, {"entregue", "inexistente", "bloqueio"})
+        self.assertEqual(marcas, {"entregue", "inexistente", "bloqueio", "clique"})   # clique: respondeu (Radar)
         self.assertEqual({r.canal for r in regs}, {"sms"})
-        self.assertEqual(len(regs), len(self._validos()))
+        conversas = self.sb.t["mensageria_conversas"]
+        self.assertEqual(len(regs), len(self._validos()) + len(conversas))
 
     def test_simulado_nao_cobra_e_real_sem_integracao_nao_envia(self):
         self._criar()
@@ -433,7 +450,8 @@ class TestMensageria(unittest.TestCase):
 
     def test_rcs_conversacional_resposta_vira_sessao_e_24h_sem_custo(self):
         self._rcs()
-        with mock.patch.dict(M.ADAPTADORES_REAIS, {"pontaltech": lambda: M.Simulador("pontaltech")}):
+        with mock.patch.dict(M.ADAPTADORES_REAIS, {"pontaltech": lambda: M.Simulador("pontaltech"),
+                                                   "zenvia": lambda: M.Simulador("zenvia")}):
             self.sb.t["mensageria_config"][0]["modo"] = "real"
             self._criar()
             self._processar()
@@ -444,8 +462,11 @@ class TestMensageria(unittest.TestCase):
             self.assertEqual(len(self.sb.t["mensageria_sessoes_rcs"]), len(conv))
             c = {x["item"]: x["quantidade"] for x in self.sb.t["consumo_mensageria"]}
             self.assertEqual(c["rcs_conversacional"], len(conv))                  # cobrado como Conversacional
-            self.assertEqual(c["rcs_basic"] + c["rcs_conversacional"] + c.get("rcs_single", 0),
+            fb = [m for m in msgs if m.get("fallback") == "sms"]
+            self.assertTrue(fb)                                                   # ~15% sem RCS foram por SMS
+            self.assertEqual(c["rcs_basic"] + c["rcs_conversacional"] + c.get("rcs_single", 0) + c["sms"],
                              sum(1 for m in msgs if m.get("fornecedor")))
+            self.assertEqual(c["sms"], len(fb))
             # no mesmo dia, novo lote para os mesmos números: quem está em sessão não paga
             self.sb.t["mensageria_lotes"].clear()
             self.sb.t["mensageria_mensagens"].clear()
@@ -469,7 +490,7 @@ class TestMensageria(unittest.TestCase):
         self._rcs(agente="nao_conversacional")
         self._criar()
         self._processar()
-        itens = {m["item"] for m in self._msgs("rcs") if m.get("fornecedor")}
+        itens = {m["item"] for m in self._msgs("rcs") if m.get("fornecedor") and not m.get("fallback")}
         self.assertEqual(itens, {"rcs_basic", "rcs_single"})
         self.assertFalse(self.sb.t.get("mensageria_sessoes_rcs"))
         self.assertFalse(any(m.get("respondida_em") for m in self._msgs("rcs")))
@@ -492,6 +513,113 @@ class TestMensageria(unittest.TestCase):
         self._processar()
         self.assertFalse(any("item" in m or "operadora" in m for m in self.sb.t["mensageria_mensagens"]))
         self.assertNotIn("respostas", self._lote("sms"))
+
+    def test_banco_com_13_e_sem_14_rcs_sem_aparelho_so_falha(self):
+        from nuvem.supabase_api import ErroSupabase
+        self._rcs()
+        orig = self.sb.selecionar
+
+        def sel(tabela, *a, **k):
+            if tabela in ("mensageria_campanhas", "mensageria_listas_contato"):
+                raise ErroSupabase(404, "não existe", tabela)
+            return orig(tabela, *a, **k)
+        self.sb.selecionar = sel
+        self._criar()
+        self._processar()
+        msgs = self._msgs("rcs")
+        self.assertTrue(any(m["motivo"] == "aparelho sem RCS" for m in msgs))
+        self.assertFalse(any("fallback" in m for m in msgs))
+        self.assertNotIn("fallback", self._lote("rcs"))
+
+    # ---------------------------------------------------------------- Radar e atendimento
+    def _rodar(self):
+        self._criar()
+        self._lote("sms")["situacao"] = "agendado"
+        self._processar()
+
+    def test_radar_regras_dao_peso_ao_negocio(self):
+        from nuvem import radar
+        casos = {"Me manda o boleto FDP": "cpc_negocio", "Já paguei, seu idiota": "alega_pagamento",
+                 "Vou procurar meu advogado": "judicial", "Não conheço essa pessoa": "desconhece",
+                 "Sim, sou eu": "cpc", "vsf": "baixo_calao", "Vou no Procon, mas me manda o pix": "cpc_negocio"}
+        for texto, classe in casos.items():
+            self.assertEqual(radar.classificar_regras(texto)["classe"], classe, texto)
+        self.assertEqual(radar.redigir("cpf 529.982.247-25 fone 11987654321 a@b.com"),
+                         "cpf [número] fone [número] [e-mail]")
+
+    def test_respostas_viram_conversas_classificadas(self):
+        self._rodar()
+        conv = self.sb.t["mensageria_conversas"]
+        msgs = self.sb.t["mensageria_conversa_mensagens"]
+        self.assertTrue(conv)
+        self.assertEqual(len(conv), self._lote("sms")["respostas"])
+        self.assertEqual({m["direcao"] for m in msgs}, {"entrada"})
+        self.assertEqual({m["origem_radar"] for m in msgs}, {"regras"})      # simulação: sem custo de IA
+        self.assertTrue({c["classe"] for c in conv} <= set(__import__("nuvem.radar").radar.CLASSES) | {"sem_classe"})
+        self.assertTrue(all(m["apagar_em"].startswith("2027-01-12") for m in msgs))   # 90 dias
+        self.assertNotIn("1190000", json.dumps(conv))                          # só a máscara
+        boleto = [m for m in msgs if "boleto" in m["texto"].lower()]
+        self.assertTrue(all(m["classe"] == "cpc_negocio" for m in boleto))
+        # quem respondeu volta para a Orquestração como contato encontrado ("clique")
+        self.assertEqual(sum(1 for r in M.registros(self.pasta) if r.marca == "clique"),
+                         sum(1 for c in conv if c["classe"] != "desconhece"))
+
+    def test_radar_usa_ia_no_envio_real_e_cai_nas_regras_se_falhar(self):
+        from nuvem import radar
+        chamadas = []
+
+        def ia(textos):
+            chamadas.append(len(textos))
+            return [{"classe": "judicial", "confianca": 0.8, "justificativa": "teste", "origem": "ia"} for _ in textos]
+        self.sb.t["mensageria_config"] = [{"empresa_id": 1, "modo": "real", "aprovar_lotes": False}]
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x"}), mock.patch.object(radar, "_classificar_ia", ia), \
+                mock.patch.dict(M.ADAPTADORES_REAIS, {"zenvia": lambda: M.Simulador("zenvia")}):
+            self._criar()
+            self._processar()
+        self.assertTrue(chamadas and max(chamadas) <= radar.POR_CHAMADA)
+        self.assertEqual({c["classe"] for c in self.sb.t["mensageria_conversas"]}, {"judicial"})
+        # IA fora do formato: regras assumem
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x"}), \
+                mock.patch.object(radar, "_classificar_ia", lambda t: (_ for _ in ()).throw(KeyError("x"))):
+            r = radar.classificar(["me manda o boleto"], out=lambda *a: None)
+        self.assertEqual((r[0]["classe"], r[0]["origem"]), ("cpc_negocio", "regras"))
+
+    def test_radar_desligado_na_empresa_usa_regras(self):
+        from nuvem import radar
+        self.sb.t["mensageria_config"] = [{"empresa_id": 1, "modo": "real", "aprovar_lotes": False, "radar": False}]
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x"}), \
+                mock.patch.object(radar, "_classificar_ia", lambda t: self.fail("não devia chamar a IA")), \
+                mock.patch.dict(M.ADAPTADORES_REAIS, {"zenvia": lambda: M.Simulador("zenvia")}):
+            self._criar()
+            self._processar()
+        self.assertTrue(self.sb.t["mensageria_conversas"])
+
+    def test_resposta_pela_plataforma_sai_pelo_canal(self):
+        from nuvem import atendimento
+        self._rodar()
+        conv = self.sb.t["mensageria_conversas"][0]
+        self.sb.t["mensageria_conversa_mensagens"].append(
+            {"id": 900, "conversa_id": conv["id"], "empresa_id": 1, "direcao": "saida",
+             "texto": "Olá! Segue o link do boleto.", "situacao": "pendente"})
+        hora = lambda h: datetime(2026, 10, 14, h, 0, tzinfo=SP)  # noqa: E731
+        with mock.patch("nuvem.sincronizar.credores", lambda sb, dados, emp: [{"id": None, "pasta": self.pasta}]):
+            self.assertEqual(atendimento.enviar(self.sb, self.dados, hora(21), out=lambda *a: None)["aguardando"], 1)
+            r = atendimento.enviar(self.sb, self.dados, hora(11), out=lambda *a: None)
+        self.assertEqual(r["enviadas"], 1)
+        saida = next(m for m in self.sb.t["mensageria_conversa_mensagens"] if m["id"] == 900)
+        self.assertEqual(saida["situacao"], "enviada")
+        self.assertTrue(any(c["item"] == "sms" and c["quantidade"] >= 1 for c in self.sb.t["mensageria_consumo_fornecedor"]))
+
+    def test_resposta_sem_contato_no_servidor_falha(self):
+        from nuvem import atendimento
+        self._rodar()
+        conv = self.sb.t["mensageria_conversas"][0]
+        (self.pasta / "mensageria" / f"lote_{conv['lote_id']}.json").unlink()
+        self.sb.t["mensageria_conversa_mensagens"].append(
+            {"id": 901, "conversa_id": conv["id"], "empresa_id": 1, "direcao": "saida", "texto": "Oi", "situacao": "pendente"})
+        with mock.patch("nuvem.sincronizar.credores", lambda sb, dados, emp: [{"id": None, "pasta": self.pasta}]):
+            atendimento.enviar(self.sb, self.dados, datetime(2026, 10, 14, 11, 0, tzinfo=SP), out=lambda *a: None)
+        self.assertEqual(next(m for m in self.sb.t["mensageria_conversa_mensagens"] if m["id"] == 901)["situacao"], "falhou")
 
 
 if __name__ == "__main__":

@@ -48,6 +48,9 @@ Pré-requisito: um banco vazio com a imitação do Supabase e as migrações apl
     psql -d sb -f supabase/migrations/20261108000001_saude_sistema.sql
     psql -d sb -f supabase/migrations/20261109000001_precos_produtos.sql
     psql -d sb -f supabase/migrations/20261110000001_rotas_margem.sql
+    psql -d sb -f supabase/migrations/20261111000001_mensageria_produtos.sql
+    psql -d sb -f supabase/migrations/20261112000001_radar_atendimento_links.sql
+    psql -d sb -f supabase/migrations/20261113000001_relatorios.sql
     (função de usuários: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts)
     PGHOST=... PGPORT=... PGUSER=postgres python supabase/testes/testar_rls.py
 Conexão pelas variáveis padrão do psql (PGHOST, PGPORT, PGUSER); banco: PGDATABASE ou 'sb'.
@@ -668,6 +671,133 @@ checar("simulação: plano por operadora levaria a A a 41,7%", True, f"select cu
 checar("simular plano de outro canal é recusado", False, f"select * from public.simular_plano({EA},'sms',(select id from public.mensageria_planos_rota where canal='email' limit 1),'2025-03-01')", "authenticated", u["admin"])
 checar("site não lê o cache de operadoras (só o motor)", False, "select count(*) from public.mensageria_operadoras", "authenticated", u["admin"])
 checar("site não lê as sessões do RCS (só o motor)", False, "select count(*) from public.mensageria_sessoes_rcs", "authenticated", u["admin"])
+# Mensageria por produto: centros de custo, templates, listas, campanhas, funil, arquivos
+checar("Admin da A cria centro de custo com orçamento", True, f"insert into public.mensageria_centros_custo (empresa_id,nome,orcamento_mensal,ao_estourar) values ({EA},'Cobrança SMS',10,'bloquear')", "authenticated", u["admina"])
+checar("operação não cria centro de custo", False, f"insert into public.mensageria_centros_custo (empresa_id,nome) values ({EA},'X')", "authenticated", u["oper"])
+checar("A não cria centro na B", False, f"insert into public.mensageria_centros_custo (empresa_id,nome) values ({EB},'X')", "authenticated", u["admina"])
+CC = "(select id from public.mensageria_centros_custo where nome='Cobrança SMS')"
+r = sql(f"set role service_role; insert into public.mensageria_consumo_centro (centro_id,competencia,item,quantidade) values ({CC},date_trunc('month',current_date)::date,'sms',100)")
+assert r[0], r[2]
+checar("orçamento: 100 SMS a R$ 0,065 (preço do mês) = R$ 6,50, sobra R$ 3,50, abaixo do alerta", True, f"select gasto||' '||restante||' '||alerta from public.orcamento_centro({CC})", "authenticated", u["admina"], "6.50 3.50 false")
+r = sql(f"set role service_role; insert into public.mensageria_consumo_centro (centro_id,competencia,item,quantidade) values ({CC},date_trunc('month',current_date)::date,'sms_resposta',30)")
+assert r[0], r[2]
+checar("resposta de SMS soma no gasto pelo preço do SMS e dispara o alerta", True, f"select gasto||' '||alerta from public.orcamento_centro({CC})", "authenticated", u["admina"], "8.45 true")
+checar("B não vê o orçamento da A", False, f"select * from public.orcamento_centro({CC})", "authenticated", u["operb"])
+checar("site não chama a função do motor", False, f"select * from public.orcamento_centro_motor({CC})", "authenticated", u["admina"])
+checar("motor lê o orçamento", True, f"select ao_estourar from public.orcamento_centro_motor({CC})", SVC, None, "bloquear")
+checar("SMS acima de 160 caracteres sem as variáveis é recusado", False, f"insert into public.mensageria_templates (empresa_id,canal,nome,conteudo) values ({EA},'sms','Longo',jsonb_build_object('texto',repeat('a',161)))", "authenticated", u["admina"])
+checar("template de SMS guarda as variáveis usadas", True, f"""insert into public.mensageria_templates (empresa_id,canal,nome,conteudo) values ({EA},'sms','Lembrete','{{"texto":"Olá {{{{nome}}}}, parcela de {{{{ Valor }}}} vence hoje"}}'); select array_to_string(variaveis, ',') from public.mensageria_templates where nome='Lembrete'""", "authenticated", u["admina"], "nome,valor")
+checar("RCS sem categoria é recusado", False, f"""insert into public.mensageria_templates (empresa_id,canal,nome,conteudo) values ({EA},'rcs','X','{{"texto":"oi"}}')""", "authenticated", u["admina"])
+checar("carrossel com um card só é recusado", False, f"""insert into public.mensageria_templates (empresa_id,canal,nome,categoria,tipo_midia,conteudo) values ({EA},'rcs','X','marketing','carrossel','{{"cards":[{{"titulo":"a"}}]}}')""", "authenticated", u["admina"])
+checar("botão de tipo desconhecido é recusado", False, f"""insert into public.mensageria_templates (empresa_id,canal,nome,categoria,tipo_midia,conteudo) values ({EA},'rcs','X','transacional','botoes','{{"texto":"oi","botoes":[{{"tipo":"pix","rotulo":"Pagar"}}]}}')""", "authenticated", u["admina"])
+checar("mais de 4 botões é recusado", False, f"""insert into public.mensageria_templates (empresa_id,canal,nome,categoria,tipo_midia,conteudo) values ({EA},'rcs','X','transacional','botoes','{{"texto":"oi","botoes":[{{"tipo":"url","rotulo":"1"}},{{"tipo":"url","rotulo":"2"}},{{"tipo":"url","rotulo":"3"}},{{"tipo":"url","rotulo":"4"}},{{"tipo":"url","rotulo":"5"}}]}}')""", "authenticated", u["admina"])
+checar("rich card com botão e variáveis no card", True, f"""insert into public.mensageria_templates (empresa_id,canal,nome,categoria,tipo_midia,conteudo) values ({EA},'rcs','Card','marketing','rich_card','{{"card":{{"titulo":"Oi {{{{nome}}}}","descricao":"Pague {{{{valor}}}}","botoes":[{{"tipo":"url","rotulo":"Pagar","valor":"https://x.com/{{{{contrato}}}}"}}]}}}}'); select array_to_string(variaveis, ',') from public.mensageria_templates where nome='Card'""", "authenticated", u["admina"], "contrato,nome,valor")
+checar("SMS não tem categoria nem mídia", False, f"""insert into public.mensageria_templates (empresa_id,canal,nome,categoria,conteudo) values ({EA},'sms','Y','marketing','{{"texto":"oi"}}')""", "authenticated", u["admina"])
+checar("B não vê templates da A", True, "select count(*) from public.mensageria_templates", "authenticated", u["operb"], 0)
+checar("operação não cria template", False, f"""insert into public.mensageria_templates (empresa_id,canal,nome,conteudo) values ({EA},'sms','Z','{{"texto":"oi"}}')""", "authenticated", u["oper"])
+checar("lista de bloqueio: entram os válidos (2 de 3)", True, f"select public.adicionar_lista_contato({EA},'bloqueio','todos',array['(11) 98888-0001','ana@exemplo.com','123'],'suspeita de fraude')", "authenticated", u["admina"], 2)
+checar("lista guarda só hash e máscara", True, "select count(*) from public.mensageria_listas_contato where destino_mascara like '%0001%' or destino_mascara like 'ana@%'", "authenticated", u["admina"], 0)
+checar("repetido não entra de novo", True, f"select public.adicionar_lista_contato({EA},'bloqueio','todos',array['11988880001'])", "authenticated", u["admina"], 0)
+checar("operação não mexe nas listas", False, f"select public.adicionar_lista_contato({EA},'favorito','sms',array['11988880002'])", "authenticated", u["oper"])
+checar("ninguém grava na lista direto", False, f"insert into public.mensageria_listas_contato (empresa_id,tipo,destino_hash) values ({EA},'favorito',repeat('a',64))", "authenticated", u["admina"])
+checar("remover da lista", True, f"select public.remover_lista_contato({EA},'bloqueio','todos',public.hash_destino('email','ana@exemplo.com')); select count(*) from public.mensageria_listas_contato where empresa_id={EA}", "authenticated", u["admina"], 1)
+checar("planejamento cria campanha", True, f"insert into public.mensageria_campanhas (empresa_id,canal,nome,template_id,centro_custo_id,arquivo_caminho,arquivo_nome) values ({EA},'sms','Outubro',(select id from public.mensageria_templates where nome='Lembrete'),{CC},'alfa/mensageria/1/lista.csv','lista.csv')", "authenticated", u["plan"])
+CP = "(select id from public.mensageria_campanhas where nome='Outubro')"
+checar("campanha não nasce pronta", False, f"insert into public.mensageria_campanhas (empresa_id,canal,nome,situacao) values ({EA},'sms','X','pronta')", "authenticated", u["plan"])
+checar("arquivo de outra empresa é recusado", False, f"insert into public.mensageria_campanhas (empresa_id,canal,nome,arquivo_caminho) values ({EA},'sms','X','beta/mensageria/1/a.csv')", "authenticated", u["plan"])
+checar("template de outra empresa é recusado", False, f"insert into public.mensageria_campanhas (empresa_id,canal,nome,template_id) values ({EB},'sms','X',(select id from public.mensageria_templates where nome='Lembrete'))", "authenticated", u["admin"])
+checar("operação não cria campanha", False, f"insert into public.mensageria_campanhas (empresa_id,canal,nome) values ({EA},'sms','X')", "authenticated", u["oper"])
+checar("confirmar layout antes da análise é recusado", False, f"""select public.confirmar_layout({CP},'{{"telefone":"Celular"}}')""", "authenticated", u["plan"])
+r = sql(f"""set role service_role; update public.mensageria_campanhas set situacao='aguardando_layout', carregados=50, layout_sugerido='{{"colunas":[]}}' where nome='Outubro'""")
+assert r[0], r[2]
+checar("site não grava o layout direto", False, f"""update public.mensageria_campanhas set layout='{{"telefone":"x"}}' where nome='Outubro'""", "authenticated", u["plan"])
+checar("layout sem a coluna de uma variável do template é recusado", False, f"""select public.confirmar_layout({CP},'{{"telefone":"Celular","variaveis":{{"nome":"Nome"}}}}')""", "authenticated", u["plan"])
+checar("layout sem telefone é recusado", False, f"""select public.confirmar_layout({CP},'{{"variaveis":{{"nome":"Nome","valor":"Valor"}}}}')""", "authenticated", u["plan"])
+checar("layout confirmado deixa a campanha pronta", True, f"""select public.confirmar_layout({CP},'{{"telefone":"Celular","id_cliente":"Contrato","variaveis":{{"nome":"Nome","valor":"Valor"}}}}')""", "authenticated", u["plan"], "pronta")
+checar("site troca o nome e o centro de custo antes de agendar", True, f"update public.mensageria_campanhas set nome='Outubro 2' where nome='Outubro'; select nome from public.mensageria_campanhas where id={CP.replace('Outubro', 'Outubro 2')}", "authenticated", u["plan"], "Outubro 2")
+CP = CP.replace("Outubro", "Outubro 2")
+checar("agendar campanha", True, f"select public.agendar_campanha({CP}, now() + interval '1 hour')", "authenticated", u["plan"], "agendada")
+checar("agendada não muda mais pelo site (0 linhas)", True, f"with x as (update public.mensageria_campanhas set nome='Z' where id={CP} returning 1) select count(*) from x", "authenticated", u["plan"], 0)
+checar("B não vê a campanha da A", True, "select count(*) from public.mensageria_campanhas", "authenticated", u["operb"], 0)
+checar("cancelar campanha", True, f"select public.cancelar_campanha({CP})", "authenticated", u["plan"], "cancelada")
+checar("não cancela duas vezes", False, f"select public.cancelar_campanha({CP})", "authenticated", u["plan"])
+r = sql(f"set role service_role; insert into public.mensageria_lotes (empresa_id,credor_id,data,canal,modo,situacao,total,bloqueadas,invalidos,enviadas,entregues,falhas,fallback,campanha_id) values ({EA},0,'2026-10-14','rcs','simulado','concluido',100,12,7,88,80,8,13,{CP}),({EA},0,'2026-10-14','rcs','simulado','concluido',10,0,0,10,10,0,0,null)")
+assert r[0], r[2]
+checar("funil da campanha: carregados, inválidos, bloqueados, enviados, entregues, não entregues, fallback", True, f"select carregados||' '||invalidos||' '||bloqueados||' '||enviados||' '||entregues||' '||nao_entregues||' '||fallback from public.mensageria_funil where campanha_id={CP}", "authenticated", u["admina"], "100 7 5 88 80 8 13")
+checar("Lista do dia e campanha no mesmo dia e canal (dois lotes)", True, f"select count(*) from public.mensageria_funil where empresa_id={EA} and data='2026-10-14' and canal='rcs'", "authenticated", u["admina"], 2)
+checar("B não vê o funil da A", True, f"select count(*) from public.mensageria_funil where empresa_id={EA}", "authenticated", u["operb"], 0)
+checar("cliente escolhe centro de custo e fallback da Lista do dia", True, f"select public.configurar_mensageria({EA},{CC},'whatsapp'); select rcs_fallback from public.mensageria_config where empresa_id={EA}", "authenticated", u["admina"], "whatsapp")
+checar("centro de custo de outra empresa é recusado", False, f"select public.configurar_mensageria({EB},{CC},'sms')", "authenticated", u["admin"])
+checar("planejamento sobe a lista em entradas/alfa/mensageria", True, "insert into storage.objects (bucket_id,name) values ('entradas','alfa/mensageria/2/lista.csv')", "authenticated", u["plan"])
+checar("operação não sobe lista", False, "insert into storage.objects (bucket_id,name) values ('entradas','alfa/mensageria/3/lista.csv')", "authenticated", u["oper"])
+checar("A não sobe lista na pasta da B", False, "insert into storage.objects (bucket_id,name) values ('entradas','beta/mensageria/3/lista.csv')", "authenticated", u["plan"])
+# Radar, atendimento e links rastreados
+LT = f"(select id from public.mensageria_lotes where campanha_id={CP} limit 1)"
+r = sql(f"""set role service_role;
+insert into public.mensageria_conversas (empresa_id,canal,destino_hash,destino_mascara,id_cliente,lote_id,mensagem_id,classe,confianca,nao_lidas)
+values ({EA},'rcs',repeat('a',64),'(11) 9••••-••01','K1',{LT},1,'cpc_negocio',0.95,1),
+       ({EA},'rcs',repeat('b',64),'(11) 9••••-••02','K2',{LT},2,'baixo_calao',0.7,1),
+       ({EB},'sms',repeat('c',64),'(21) 9••••-••03','Z1',null,3,'judicial',0.8,1);
+insert into public.mensageria_conversa_mensagens (conversa_id,empresa_id,direcao,texto,classe)
+select id, empresa_id, 'entrada', case classe when 'cpc_negocio' then 'Me manda o boleto FDP' else 'texto' end, classe
+  from public.mensageria_conversas;
+insert into public.mensageria_links (codigo,empresa_id,lote_id,mensagem_id,campanha_id,canal,id_cliente,url_destino) values
+ ('Ab12Cd34',{EA},{LT},1,{CP},'rcs','K1','https://pague.exemplo.com/1'),('Ef56Gh78',{EA},{LT},2,{CP},'rcs','K2','https://pague.exemplo.com/2'),
+ ('Velho001',{EA},{LT},3,{CP},'rcs','K3','https://pague.exemplo.com/3');
+update public.mensageria_links set apagar_em = now() - interval '1 day' where codigo = 'Velho001'""")
+assert r[0], r[2]
+checar("planejamento (envia mensagens) lê as conversas da A", True, "select count(*) from public.mensageria_conversas", "authenticated", u["plan"], 2)
+checar("operação não lê o texto das respostas", True, "select count(*) from public.mensageria_conversa_mensagens", "authenticated", u["oper"], 0)
+checar("B não lê conversas da A", True, f"select count(*) from public.mensageria_conversas where empresa_id={EA}", "authenticated", u["operb"], 0)
+checar("ninguém grava conversa direto", False, f"insert into public.mensageria_conversa_mensagens (conversa_id,empresa_id,direcao,texto) values ((select min(id) from public.mensageria_conversas),{EA},'saida','x')", "authenticated", u["plan"])
+CV = f"(select id from public.mensageria_conversas where destino_hash=repeat('a',64))"
+checar("responder pela plataforma deixa a mensagem pendente para o motor", True, f"select public.responder_conversa({CV}, 'Segue o boleto, obrigado!'); select situacao from public.mensageria_conversa_mensagens where direcao='saida'", "authenticated", u["plan"], "pendente")
+checar("resposta grava quem respondeu e zera não lidas", True, f"select nao_lidas||' '||(responsavel='{u['plan']}') from public.mensageria_conversas where id={CV}", "authenticated", u["plan"], "0 true")
+checar("operação não responde", False, f"select public.responder_conversa({CV}, 'oi')", "authenticated", u["oper"])
+checar("B não responde conversa da A", False, f"select public.responder_conversa({CV}, 'oi')", "authenticated", u["operb"])
+checar("resposta vazia é recusada", False, f"select public.responder_conversa({CV}, '   ')", "authenticated", u["plan"])
+r = sql(f"set role service_role; update public.mensageria_conversas set canal='sms' where destino_hash=repeat('b',64)")
+assert r[0], r[2]
+CV2 = f"(select id from public.mensageria_conversas where destino_hash=repeat('b',64))"
+checar("resposta de SMS acima de 160 é recusada", False, f"select public.responder_conversa({CV2}, repeat('x',161))", "authenticated", u["plan"])
+r = sql(f"set role service_role; insert into public.mensageria_descadastros (empresa_id,canal,destino_hash,origem) values ({EA},'sms',repeat('b',64),'resposta')")
+assert r[0], r[2]
+checar("quem pediu para sair não recebe resposta", False, f"select public.responder_conversa({CV2}, 'oi')", "authenticated", u["plan"])
+checar("reclassificar a conversa à mão", True, f"select public.atualizar_conversa({CV2}, 'reclassificar', 'desconhece'); select classe from public.mensageria_conversas where id={CV2}", "authenticated", u["plan"], "desconhece")
+checar("classe inventada é recusada", False, f"select public.atualizar_conversa({CV2}, 'reclassificar', 'vip')", "authenticated", u["plan"])
+checar("resolver a conversa", True, f"select public.atualizar_conversa({CV}, 'resolver')", "authenticated", u["plan"], "resolver")
+checar("Radar resume por classe", True, f"select string_agg(classe||'='||conversas, ',' order by classe) from public.radar_resumo where empresa_id={EA}", "authenticated", u["plan"], "cpc_negocio=1,desconhece=1")
+checar("site não chama o registro de clique", False, "select public.registrar_clique('Ab12Cd34','celular')", "authenticated", u["plan"])
+checar("anônimo não chama o registro de clique", False, "select public.registrar_clique('Ab12Cd34','celular')", "anon")
+checar("encurtador registra o clique e devolve o destino", True, "select public.registrar_clique('Ab12Cd34','celular'); select public.registrar_clique('Ab12Cd34','celular'); select public.registrar_clique('Ab12Cd34','robo')", SVC, None, "https://pague.exemplo.com/1")
+checar("link vencido (90 dias) não abre", True, "select coalesce(public.registrar_clique('Velho001','celular'),'nada')", SVC, None, "nada")
+checar("código desconhecido não abre", True, "select coalesce(public.registrar_clique('Zz99Zz99','celular'),'nada')", SVC, None, "nada")
+checar("funil dos links: 3 links, 1 pessoa clicou (robô não conta), 2 cliques, 1 CPC Negócio", True, f"select links||' '||clicaram||' '||cliques||' '||cpc_negocio from public.mensageria_funil_links where campanha_id={CP}", "authenticated", u["admina"], "3 1 2 1")
+checar("B não vê links da A", True, f"select count(*) from public.mensageria_links where empresa_id={EA}", "authenticated", u["operb"], 0)
+checar("limpeza de 90 dias só pelo motor", False, "select public.limpar_mensageria_90d()", "authenticated", u["admin"])
+r = sql("set role service_role; update public.mensageria_conversa_mensagens set apagar_em = now() - interval '1 day' where texto='texto'")
+assert r[0], r[2]
+checar("limpeza apaga textos e links vencidos", True, "select public.limpar_mensageria_90d()", SVC, None, 3)
+checar("depois da limpeza, nenhum texto vencido", True, "select count(*) from public.mensageria_conversa_mensagens where apagar_em < now()", SVC, None, 0)
+# Relatórios: padrões e montador
+checar("dez relatórios padrão para todos", True, "select count(*) from public.relatorios_modelos where empresa_id is null", "authenticated", u["admina"], 10)
+checar("relatório agrupado: entregabilidade da A no dia", True, f"""select r->>'enviados' from public.rodar_relatorio('envios', null, '{{"empresa":{EA},"de":"2026-10-14","ate":"2026-10-14","campos":[{{"campo":"canal","op":"igual","valor":"rcs"}}]}}', array['data','canal'], '[{{"funcao":"somar","campo":"enviados","nome":"enviados"}}]') r""", "authenticated", u["admina"], "98")
+checar("relatório linha a linha só com as colunas pedidas", True, f"""select string_agg(distinct k, ',') || ' ' || count(distinct r) from public.rodar_relatorio('respostas', array['id_cliente','classe'], '{{"empresa":{EA}}}') r, jsonb_object_keys(r) k""", "authenticated", u["plan"], "classe,id_cliente 2")
+checar("B não enxerga a A pelo relatório (0 linhas)", True, f"""select count(*) from public.rodar_relatorio('envios', null, '{{"empresa":{EA}}}')""", "authenticated", u["operb"], 0)
+checar("operação não lê respostas pelo relatório (0 linhas)", True, f"""select count(*) from public.rodar_relatorio('respostas', null, '{{"empresa":{EA}}}')""", "authenticated", u["oper"], 0)
+checar("coluna fora do catálogo é recusada", False, f"""select * from public.rodar_relatorio('mensagens', array['destino_hash'], '{{"empresa":{EA}}}')""", "authenticated", u["admina"])
+checar("injeção pelo nome da coluna é recusada", False, f"""select * from public.rodar_relatorio('mensagens', array['canal; drop table x'], '{{"empresa":{EA}}}')""", "authenticated", u["admina"])
+checar("injeção pelo valor do filtro não passa (0 linhas)", True, f"""select count(*) from public.rodar_relatorio('envios', null, '{{"empresa":{EA},"campos":[{{"campo":"canal","op":"igual","valor":"x'' or ''1''=''1"}}]}}')""", "authenticated", u["admina"], 0)
+checar("agrupar por campo não agrupável é recusado", False, f"""select * from public.rodar_relatorio('mensagens', null, '{{"empresa":{EA}}}', array['id_cliente'])""", "authenticated", u["admina"])
+checar("somar campo de texto é recusado", False, f"""select * from public.rodar_relatorio('mensagens', null, '{{"empresa":{EA}}}', array['canal'], '[{{"funcao":"somar","campo":"motivo"}}]')""", "authenticated", u["admina"])
+checar("ordem com SQL é recusada", False, f"""select * from public.rodar_relatorio('envios', null, '{{"empresa":{EA}}}', null, null, 'data; drop table x')""", "authenticated", u["admina"])
+checar("sem empresa é recusado", False, "select * from public.rodar_relatorio('envios')", "authenticated", u["admina"])
+checar("filtro 'em' e 'contem'", True, f"""select count(*) from public.rodar_relatorio('respostas', null, '{{"empresa":{EA},"campos":[{{"campo":"classe","op":"em","valor":["cpc_negocio","desconhece"]}},{{"campo":"id_cliente","op":"contem","valor":"K"}}]}}')""", "authenticated", u["plan"], 2)
+checar("limite de linhas respeitado", True, f"""select count(*) from public.rodar_relatorio('envios', null, '{{"empresa":{EA}}}', null, null, null, 1)""", "authenticated", u["admina"], 1)
+checar("rodar um relatório padrão salvo", True, f"""select count(*) > 0 from public.relatorios_modelos m, public.rodar_relatorio(m.base, m.colunas, '{{"empresa":{EA}}}'::jsonb, m.agrupar, m.metricas, m.ordem) r where m.nome = 'Respostas por classificação do Radar'""", "authenticated", u["plan"], "t")
+checar("empresa salva o próprio relatório", True, f"""insert into public.relatorios_modelos (empresa_id,nome,base,agrupar,metricas) values ({EA},'Meu relatório','mensagens',array['situacao'],'[{{"funcao":"contar"}}]'); select count(*) from public.relatorios_modelos where empresa_id={EA}""", "authenticated", u["admina"], 1)
+checar("ninguém altera o relatório padrão (0 linhas)", True, "with x as (update public.relatorios_modelos set nome='X' where empresa_id is null returning 1) select count(*) from x", "authenticated", u["admina"], 0)
+checar("B não vê o relatório salvo da A", True, f"select count(*) from public.relatorios_modelos where empresa_id={EA}", "authenticated", u["operb"], 0)
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

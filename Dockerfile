@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tzdata \
  && rm -rf /var/lib/apt/lists/* \
- && pip install --no-cache-dir openpyxl==3.1.5 \
+ && pip install --no-cache-dir openpyxl==3.1.5 anthropic==1.13.0 \
  && useradd --create-home --uid 10001 motorcob \
  && mkdir -p /dados && chown motorcob:motorcob /dados
 
