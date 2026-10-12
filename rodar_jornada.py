@@ -6,7 +6,7 @@ Uso:
 
 Base de clientes: id_cliente;data_contratacao;proximo_vencimento;vencimento_pago;ativado;ultima_atividade
 [;dias_atraso][;bloqueio] (ver motor/jornada.py). Contatos: o mesmo arquivo do MotorCob
-(id_cliente;contato;tipo[;origem][;cpf]) com a coluna opcional whatsapp (sim = número confirmado
+(id_cliente;contato;tipo[;origem][;cpf]) com a coluna opcional whatsapp_valido (sim = número confirmado
 no WhatsApp; sem ela o MotorCli não usa WhatsApp, pelo risco de banimento).
 
 Gera em saida/AAAA-MM-DD/:
@@ -40,7 +40,7 @@ def _whatsapp_confirmados(caminho: Path) -> set[str]:
     ok = set()
     with open(caminho, newline="", encoding="utf-8") as f:
         for l in csv.DictReader(f, delimiter=";"):
-            if jor._simnao(l.get("whatsapp")) and (l.get("tipo") or "").strip().lower() == "telefone":
+            if jor._simnao(l.get("whatsapp_valido") or l.get("whatsapp")) and (l.get("tipo") or "").strip().lower() == "telefone":
                 c = norm.contato(l.get("contato"), "telefone")
                 if c:
                     ok.add(c)
@@ -61,7 +61,13 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
     """Roda o dia do MotorCli. canais: linhas de canais_empresa (canal, ativo); registros_canal:
     retornos de canal e da mensageria (motor.retorno_canal.Registro)."""
     estado_dir, saida_dir = Path(estado_dir), Path(saida_dir)
-    regras = jor.carregar_jornada(regras_json, definicao)
+    aviso = None
+    try:
+        regras = jor.carregar_jornada(regras_json, definicao)
+    except jor.JornadaInvalida as ex:      # estratégia do site com erro: roda o padrão e avisa
+        if not definicao:
+            raise
+        regras, aviso = jor.carregar_jornada(regras_json), f"Estratégia da jornada inválida ({ex}); rodou o padrão."
     regua = carregar_regua().com_calendario(calendario)
     clientes, rej_cli = jor.carregar_clientes_jornada(clientes_csv)
     contatos, pessoa_de, rej_cont = carregar_carteira(contatos_csv)
@@ -88,6 +94,8 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
                     canais_ativos=ativos, certs=certs, restricoes=restricoes,
                     whatsapp_ok=_whatsapp_confirmados(Path(contatos_csv)),
                     melhor=jor.ordem_por_resultado(hit_rate_por_canal(eventos)))
+    if aviso:
+        res.alertas.insert(0, aviso)
     jor.salvar_estado(estado_dir, estado)
     salvar_escolhas(estado_dir, data, res.fila)
 

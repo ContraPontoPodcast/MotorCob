@@ -411,6 +411,29 @@ CONTESTADO (< 0,2) · INVALIDO · DESCONHECIDO (sem evento).
 4. Camada de agentes: Ingestão (quarentena → de-para), Analista, Estrategista, Validador.
 5. Calibração com dados reais: pesos de evidência, limiares, prior por origem, taxas.
 
+## MotorCli (frente de Jornada do Cliente do MotorCX)
+O MotorCX tem duas frentes sobre a mesma plataforma: MotorCob (este playbook de cobrança) e MotorCli
+(jornada do cliente). A carteira do MotorCli é uma linha de `credores` com `frente = 'motorcli'`; a rotina
+(`nuvem/sincronizar.py`) roda `rodar_jornada.py` em vez do `rodar_dia.py` e publica a mesma Lista do dia
+(`fila_dia`, `ids/<canal>.csv`), as ações (`acoes_dia`), o enquadramento (`jornada_cliente`) e os lotes da
+Mensageria. Regras em `regras/jornada.json` (propostas, a validar em comitê; mudar regra = decisão + commit):
+- Momentos, nesta prioridade: pré-vencimento (D-5 a D0; quem pagou sai) · boas-vindas (0 a 2 dias da
+  contratação) · ativação (3 a 30 dias, só quem não ativou) · retenção (30 a 89 dias sem atividade) ·
+  reativação (90 a 365 dias sem atividade).
+- No máximo uma ação por cliente por dia; um passo por vez (o passo perdido sai até o dia do seguinte);
+  recência de 48h entre ações, exceto pré-vencimento; dia sem janela no calendário não gera lista.
+- Cliente com `dias_atraso > 0` fica com a cobrança (MotorCob); bloqueio tira o cliente de tudo.
+- Contato: o de maior nota da certificação (Hot primeiro), sem restrição do canal (retorno de canal e
+  descadastro da Mensageria), nunca o contestado; WhatsApp só com `whatsapp_valido = sim`.
+- Canal "melhor": ordena as opções pela taxa de contato efetivo da carteira quando o canal tem ≥ 200
+  tentativas; sem evidência, a ordem da regra. Sem contato no canal (ou canal desligado): o "senão".
+- Estratégia do site (`estrategias` com `frente = 'motorcli'`): liga/desliga momentos, troca passos e a
+  recência; inválida → roda o padrão e avisa.
+- Base: `id_cliente;data_contratacao;proximo_vencimento;vencimento_pago;ativado;ultima_atividade
+  [;dias_atraso][;bloqueio]` · contatos no mesmo formato da carteira.
+- Comando: `python rodar_jornada.py --clientes exemplos/jornada/clientes.csv --carteira
+  exemplos/jornada/contatos.csv --data 2026-10-13`
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

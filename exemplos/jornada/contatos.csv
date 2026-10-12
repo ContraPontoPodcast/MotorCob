@@ -1,4 +1,4 @@
-id_cliente;contato;tipo;whatsapp
+id_cliente;contato;tipo;whatsapp_valido
 CLI001;11987650001;telefone;sim
 CLI001;cliente001@exemplo.com.br;email;
 CLI002;11987650002;telefone;nao

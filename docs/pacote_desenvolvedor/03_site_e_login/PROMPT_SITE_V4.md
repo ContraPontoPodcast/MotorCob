@@ -1,5 +1,7 @@
 # Prompt Horizons — Site v4: tarja escura de ponta a ponta e textos em dia com a plataforma
 
+> **SUBSTITUÍDO** pelo `PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` (marca MotorCX). Não cole este.
+
 Só o site público (/). Conferido no site publicado: a Mensageria aparece só como "lotes da Lista do dia", o
 Radar, as campanhas, os links rastreados, o funil e o Assistente não aparecem, e há duas promessas que a
 plataforma ainda não cumpre ("leitura" e "boleto e nota fiscal"). Protótipo da tarja: https://claude.ai/artifact/FnXuSWX47wYMEY1HEkD1mz

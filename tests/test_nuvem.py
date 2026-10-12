@@ -387,6 +387,12 @@ class TestSincronizar(unittest.TestCase):
         texto = json.dumps({k: t[k] for k in ("fila_dia", "jornada_cliente", "acoes_dia")})
         self.assertNotRegex(texto, r"\b119\d{8}\b")
         self.assertNotIn("@exemplo", texto)
+        # empresa só MotorCli: a carteira de cobrança não roda
+        t["credores"].append({"id": 42, "empresa_id": 2, "codigo": "principal", "nome": "Principal", "ativo": True,
+                              "frente": "motorcob"})
+        t["empresa_frentes"] = [{"empresa_id": 2, "frente": "motorcob", "ativo": False},
+                                {"empresa_id": 2, "frente": "motorcli", "ativo": True}]
+        self.assertEqual(set(self._dia(date(2026, 10, 13), empresa="beta")["beta"]["credores"]), {"jornada"})
         # mesmo dia de novo: não duplica
         n = len(t["fila_dia"])
         self._dia(date(2026, 10, 13), empresa="beta")

@@ -58,6 +58,10 @@ with itens(ordem, item, ok, se_falhar) as (values
   (23, 'SQL 17 · Funil com Disparado e o Assistente MotorCob',
        to_regclass('public.mensageria_funil_status') is not null and to_regclass('public.assistente_perguntas') is not null,
        'rodar 17_funil_assistente.sql (depois do 16)'),
+  (24, 'SQL 18 · MotorCX com as frentes MotorCob e MotorCli',
+       to_regclass('public.empresa_frentes') is not null and to_regclass('public.jornada_cliente') is not null
+         and exists (select 1 from pg_proc where proname = 'escolher_frente'),
+       'rodar 18_motorcli.sql (depois do 17)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),
@@ -70,7 +74,8 @@ with itens(ordem, item, ok, se_falhar) as (values
                      and c.relname in ('empresa_contatos', 'empresa_modulos', 'chamados', 'chamado_mensagens',
                                        'planos_empresa', 'tarifas_mensageria', 'faturas', 'fatura_itens',
                                        'fatura_ajustes', 'mensageria_lotes', 'mensageria_mensagens',
-                                       'mensageria_descadastros', 'api_tokens', 'api_chamadas')),
+                                       'mensageria_descadastros', 'api_tokens', 'api_chamadas',
+                                       'empresa_frentes', 'usuario_frentes', 'jornada_cliente')),
        'algum SQL ficou pela metade: rode de novo o da tabela que faltar'),
   (12, 'Anônimo não lê dado de cliente',
        not exists (select 1 from unnest(array['public.chamados', 'public.faturas', 'public.api_tokens']) t

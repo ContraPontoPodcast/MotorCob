@@ -964,6 +964,17 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
     entrada = arquivo_entrada(emp, pasta_empresas)
     out(f"EMPRESA {emp['slug']}")
     unidades = credores(sb, dados, emp)
+    if unidades[0]["id"] is not None:   # carteira de frente desligada na empresa não roda
+        try:
+            frentes = {f["frente"] for f in sb.selecionar("empresa_frentes", {"empresa_id": f"eq.{emp['id']}",
+                                                                               "ativo": "eq.true"}) or []}
+        except ErroSupabase:     # banco sem o SQL 18
+            frentes = set()
+        if frentes:
+            unidades = [u for u in unidades if (u.get("frente") or "motorcob") in frentes]
+            if not unidades:
+                out("  nenhuma carteira ativa nas frentes da empresa")
+                return {"credores": {}}
     if so_credores is not None and unidades[0]["id"] is not None:
         unidades = [u for u in unidades if u["id"] in so_credores]
     baixados = baixar_entradas(sb, dados, emp["id"], out, unidades,

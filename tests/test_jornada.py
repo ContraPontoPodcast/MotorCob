@@ -219,6 +219,14 @@ class Rotina(unittest.TestCase):
             self.assertNotIn("CLI004", {l["id_cliente"] for l in r["fila"]})
             self.assertEqual(r["enquadramento"]["CLI004"]["motivo"], jor.M_SEM_CONTATO)
 
+    def test_estrategia_invalida_roda_o_padrao_e_avisa(self):
+        with tempfile.TemporaryDirectory() as t:
+            r = rodar_jornada(EXEMPLOS / "clientes.csv", EXEMPLOS / "contatos.csv", HOJE, Path(t) / "e",
+                              Path(t) / "s", definicao={"momentos": {"ativacao": {"passos": {"99": [{"canal": "sms"}]}}}},
+                              out=lambda *_: None)
+            self.assertEqual(len(r["resumo"]["por_momento"]), 5)
+            self.assertIn("inválida", r["alertas"][0])
+
     def test_feriado_nao_gera(self):
         with tempfile.TemporaryDirectory() as t:
             r = rodar_jornada(EXEMPLOS / "clientes.csv", EXEMPLOS / "contatos.csv", date(2026, 10, 12),

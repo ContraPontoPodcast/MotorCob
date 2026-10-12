@@ -83,5 +83,10 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     `mensageria_funil_status` e base de relatório "Funil de envio (status)") e o **Assistente MotorCob** (perguntas
     guardadas 90 dias, avaliação 👍/👎, lista do que ficou sem resposta para a equipe). Depois publique a função
     `assistente` (`08_api/LEIA_ASSISTENTE.md`).
+18. `18_motorcli.sql` (= `supabase/migrations/20261115000001_motorcli.sql`) — **MotorCX com duas frentes**:
+    MotorCob (Cobrança) e **MotorCli** (Jornada do Cliente). Frentes contratadas por empresa (toda empresa que
+    já existe fica com o MotorCob), frentes por usuário, a escolha do login (`escolher_frente`), carteira e
+    estratégia por frente (uma estratégia padrão por frente) e o enquadramento diário da jornada
+    (`jornada_cliente`, `jornada_resumo`). Nada muda para quem só usa o MotorCob.
 
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

@@ -1,4 +1,4 @@
-# Workspace no Horizons (6 prompts)
+# Workspace no Horizons (prompts 1 a 25)
 
 Rode na ordem, depois dos SQL 4, 5, 6 e 7 (pasta 01_banco). Cada prompt tem menos de 100 linhas e é independente
 do arquivo: cole o bloco inteiro no Horizons e publique antes do próximo.
@@ -17,3 +17,10 @@ do arquivo: cole o bloco inteiro no Horizons e publique antes do próximo.
    cancelar), histórico, descadastros, modelo de e-mail e a faixa de simulação.
 
 Referência visual: protótipo do Workspace (link na página de prompts). Dados do protótipo são fictícios.
+
+Depois dos 6 primeiros, os prompts seguem a numeração do arquivo (7 a 25). Os mais novos:
+
+- `PROMPT_20`, `PROMPT_21` e `PROMPT_22` — correções de navegação, do avatar e de bugs.
+- `PROMPT_23_MOTORCX_LOGIN_E_FRENTES.md` — marca MotorCX, escolha da frente no login e tema por frente (depois do SQL 18).
+- `PROMPT_24_MOTORCLI_JORNADA.md` — as telas do MotorCli (produto Jornada).
+- `PROMPT_25_CONSOLE_FRENTES.md` — ligar as frentes da empresa no Console e limitar usuários por frente.

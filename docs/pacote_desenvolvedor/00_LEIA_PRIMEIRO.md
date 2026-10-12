@@ -12,7 +12,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
-| 2 | `01_banco` | 17 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios, funil com Disparado e Assistente · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
+| 2 | `01_banco` | 18 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios, funil com Disparado e Assistente, frentes MotorCob e MotorCli · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
 | 3 | `03_site_e_login` | Site público em "/", login novo, plataforma em "/inicio", fim do "/cadastro" | Site | 1º |
 | 4 | `04_sistema_linha_apple` | Visual do sistema: menu escuro, telas brancas, Lista do dia nova | Site | 2º |
 | 5 | `05_usuarios_permissoes_seguranca` | Menus por permissão, Permissões, Auditoria, páginas de senha, sessão | Site | 3º |
@@ -43,6 +43,14 @@ Faça **na ordem**; cada passo depende do anterior.
 | 30 | `07_workspace/PROMPT_17_BUSCA_E_ASSISTENTE.md` | Campo único "O que você quer fazer?" (busca e pergunta), avatar e gaveta do Assistente, Console › Assistente | Site | 28º |
 | 31 | `07_workspace/PROMPT_18_MENU_RECOLHIVEL.md` | Menu lateral dos produtos recolhível (só ícones) | Site | 29º |
 | 32 | `07_workspace/PROMPT_19_FUNIL_STATUS.md` | Painel da Mensageria: Disparado, Enviado, sem retorno, e-mail completo e botões "i" | Site | 30º |
+| 33 | `07_workspace/PROMPT_20_CORRECAO_NAVEGACAO.md` | Correção: Mensageria e Console no menu lateral, com "Voltar ao Workspace" e seletor de produto | Site | 31º |
+| 34 | `07_workspace/PROMPT_21_AVATAR_IMAGEM_E_FECHAR.md` | Correção: foto do avatar (bucket `publico`), botão de fechar e balão de 7 segundos | Site | 32º |
+| 35 | `07_workspace/PROMPT_22_CORRECAO_BUGS.md` | Correção: Mensageria, pergunta, empresa, canais e menu | Site | 33º |
+| 36 | `08_api/MotorCob_funcao_assistente.ts` | Função `assistente` atualizada (MotorCX, frentes e a Jornada do MotorCli): colar de novo no editor da função | Supabase | 34º, depois do SQL 18 |
+| 37 | `07_workspace/PROMPT_23_MOTORCX_LOGIN_E_FRENTES.md` | MotorCX: login com escolha da frente, tema por frente, "Trocar para MotorCli" | Site | 35º |
+| 38 | `07_workspace/PROMPT_24_MOTORCLI_JORNADA.md` | MotorCli: produto Jornada (Início, Lista do dia, Enviar arquivos, Carteiras, Momentos da jornada) | Site | 36º |
+| 39 | `07_workspace/PROMPT_25_CONSOLE_FRENTES.md` | Console: ligar as frentes da empresa; Usuários: limitar por frente | Site | 37º |
+| 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
@@ -55,7 +63,7 @@ Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com crit�
   passam pela Edge Function `admin-usuarios`, já publicada.
 - Permissão é garantida no banco (RLS + `pode()`); o site só esconde o que a pessoa não pode usar.
 - Erros em português, sem detalhe técnico. O login nunca diz se um e-mail existe.
-- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 599 testes de acesso).
+- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 622 testes de acesso).
 
 ## Já pronto (não refazer)
 Permissões por perfil e por usuário, auditoria, contatos do site, motivos agrupados da Lista do dia (após o SQL 2)
