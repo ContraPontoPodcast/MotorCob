@@ -303,14 +303,15 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
         if not dest:
             cont["invalidos"] += 1
             linhas_db.append({**_msg(idc, canal, bruto or "—", h, "bloqueada", "contato inválido na higienização"),
-                             "item": canal})   # mesmas chaves em todas as linhas: o insert em lote do PostgREST exige
+                             "item": None})    # mesmas chaves em todas as linhas: o insert em lote do PostgREST exige
             continue
         if h in vistos:
             cont["duplicados"] += 1
             continue
         vistos.add(h)
         variaveis = {v: r[i].strip() for v, i in var_cols.items()}
-        motivo, texto, conteudo, item = None, None, None, canal
+        motivo, texto, conteudo = None, None, None
+        item = None if canal == "rcs" else canal     # RCS: rcs_basic/rcs_single só quando a mensagem sai
         if h in bloqueio:
             motivo = "lista de bloqueio"
         elif h in descad:

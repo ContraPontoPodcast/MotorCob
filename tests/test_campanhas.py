@@ -194,6 +194,8 @@ class TestCampanha(unittest.TestCase):
         C.analisar(self.sb, self.dados, out=lambda *a: None)
         self._confirmar()["layout"]["variaveis"]["contrato"] = "Contrato"
         lote = C.preparar(self.sb, self.dados, AGORA, out=lambda *a: None)[0]
+        gravadas = [m for m in self.sb.t["mensageria_mensagens"] if m["lote_id"] == lote["id"]]
+        self.assertEqual(len({tuple(sorted(m)) for m in gravadas}), 1)   # o PostgREST recusa lote com chaves diferentes
         with mock.patch.object(M, "adaptador", lambda f, modo: Captura(f)):
             self._processar()
         rcs = [cont for canal, cont in enviados if canal == "rcs"]
@@ -203,6 +205,8 @@ class TestCampanha(unittest.TestCase):
         self.assertNotIn("{{", json.dumps(rcs))
         msgs = [m for m in self.sb.t["mensageria_mensagens"] if m["lote_id"] == lote["id"] and m.get("fornecedor")]
         self.assertEqual({m["item"] for m in msgs if not m.get("fallback")}, {"rcs_single"})
+        self.assertTrue({m["item"] for m in self.sb.t["mensageria_mensagens"] if m["lote_id"] == lote["id"]}
+                        <= {None, "sms", "rcs_basic", "rcs_single"})   # check do banco
         self.assertTrue(any(m.get("fallback") == "sms" and m["fornecedor"] == "zenvia" for m in msgs))
         self.assertGreater(next(l for l in self.sb.t["mensageria_lotes"] if l["id"] == lote["id"])["fallback"], 0)
 
