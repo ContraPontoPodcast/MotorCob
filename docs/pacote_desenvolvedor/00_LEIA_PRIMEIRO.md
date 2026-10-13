@@ -68,6 +68,10 @@ Faça **na ordem**; cada passo depende do anterior.
 | 56 | `07_workspace/PROMPT_35_MOTORCLI_ETAPAS_PROSPECCAO.md` | MotorCli: etapas, prospecção (envio de leads, LGPD) e Travas; depois do prompt 24 | Site (motorcob.online) | 53º |
 | 57 | `supabase/migrations/20261124000001_ver_empresa_criada.sql` (SQL 27) | Correção: Master e Comercial voltam a criar empresa pelo Console (erro de RLS em empresas) | Supabase | já |
 | 58 | `supabase/migrations/20261125000001_ciclo_padroes.sql` (SQL 28) | Correção: salvar o ciclo na Contratação com campo vazio (erro "ao_zerar") | Supabase | já |
+| 59 | `supabase/migrations/20261126000001_ajustes_console.sql` (SQL 29) | Situação da empresa, excluir teste, aviso de atendimento, "Recebe faturas" | Supabase | 54º |
+| 60 | função `cobranca` (de novo) | E-mail da fatura para os contatos com "Recebe faturas" | Supabase | 55º |
+| 61 | `07_workspace/PROMPT_36_CONSOLE_AJUSTES.md` | Console: chave liga/desliga única, situação da empresa, aviso de atendimento, plano de rota sem fornecedor | Site (motorcob.online) | 56º |
+| 62 | `07_workspace/PROMPT_37_EMPRESA_FATURAS_SUPORTE.md` | Empresa: "Recebe faturas" nos contatos; Suporte com aviso de resposta | Site (motorcob.online) | 57º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

@@ -128,4 +128,10 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     ciclo na Contratação dava "null value in column ao_zerar"; campo vazio agora mantém o valor gravado ou usa o
     padrão. Rode logo.
 
+29. `29_ajustes_console.sql` (= `supabase/migrations/20261126000001_ajustes_console.sql`) — **ajustes da homologação**:
+    suspender, encerrar e reativar empresa (com motivo; suspensa e encerrada param a rotina), excluir empresa de
+    teste (só Master, com duas etapas, só sem histórico), aviso de atendimento (quem falou por último e o que não
+    foi visto) e "Recebe faturas" em qualquer contato. Depois cole os prompts 36 e 37 e publique de novo a função
+    `cobranca`.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).
