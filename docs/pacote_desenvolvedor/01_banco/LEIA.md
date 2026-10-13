@@ -124,4 +124,8 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     empresa pelo Console dava "new row violates row-level security policy for table empresas" desde o SQL 21. Rode
     logo; não muda quem vê o quê.
 
+28. `28_ciclo_padroes.sql` (= `supabase/migrations/20261125000001_ciclo_padroes.sql`) — **correção**: salvar o
+    ciclo na Contratação dava "null value in column ao_zerar"; campo vazio agora mantém o valor gravado ou usa o
+    padrão. Rode logo.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

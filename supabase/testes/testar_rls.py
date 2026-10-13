@@ -1048,6 +1048,10 @@ checar("Comercial vê a empresa que criou e não as de fora da carteira", True, 
 checar("Admin de cliente continua sem criar empresa", False, "insert into public.empresas (slug,nome) values ('nova-cliente','X') returning slug", "authenticated", u["admina"])
 checar("Admin de cliente continua vendo só a própria empresa", True, "select string_agg(slug, ',') from public.empresas", "authenticated", u["admina"], "alfa")
 checar("Atendimento vê todas as empresas (alcance todas)", True, "select count(*) >= 4 from public.empresas", "authenticated", SUP, "t")
+# Ciclo com campo vazio (SQL 28): vazio vira o padrão ao criar e mantém o gravado ao editar
+checar("salvar ciclo com 'ao zerar' vazio usa o padrão", True, "insert into public.ciclo_empresa (empresa_id, ao_zerar, formas) select id, null, null from public.empresas where slug='nova-master' returning ao_zerar || ',' || array_to_string(formas, '+')", "authenticated", u["admin"], "pausar,boleto+pix")
+checar("editar com campo vazio mantém o valor gravado", True, "update public.ciclo_empresa set ao_zerar='continuar' where empresa_id=(select id from public.empresas where slug='nova-master'); update public.ciclo_empresa set ao_zerar=null where empresa_id=(select id from public.empresas where slug='nova-master') returning ao_zerar", "authenticated", u["admin"], "continuar")
+checar("valor inválido continua recusado", False, "update public.ciclo_empresa set ao_zerar='talvez' where empresa_id=(select id from public.empresas where slug='nova-master')", "authenticated", u["admin"])
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

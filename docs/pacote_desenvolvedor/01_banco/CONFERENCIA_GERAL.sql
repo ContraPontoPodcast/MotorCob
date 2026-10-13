@@ -108,6 +108,9 @@ with itens(ordem, item, ok, se_falhar) as (values
        exists (select 1 from pg_policies where tablename = 'empresas' and policyname = 'empresas_ver'
                and qual like '%pode_ver_empresa_linha%'),
        'rodar o SQL 27 (supabase/migrations/20261124000001_ver_empresa_criada.sql)'),
+  (34, 'SQL 28 · Salvar o ciclo com campo vazio',
+       exists (select 1 from pg_trigger where tgname = 'ciclo_empresa_padroes'),
+       'rodar o SQL 28 (supabase/migrations/20261125000001_ciclo_padroes.sql)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),
