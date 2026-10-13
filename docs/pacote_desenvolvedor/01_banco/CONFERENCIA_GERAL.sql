@@ -104,6 +104,10 @@ with itens(ordem, item, ok, se_falhar) as (values
        and exists (select 1 from pg_constraint where conname = 'jornada_cliente_momento_check'
                    and pg_get_constraintdef(oid) like '%etapa-%'),
        'rodar o SQL 26 (supabase/migrations/20261123000001_etapas_prospeccao.sql)'),
+  (33, 'SQL 27 · Master e Comercial criam empresa pelo Console',
+       exists (select 1 from pg_policies where tablename = 'empresas' and policyname = 'empresas_ver'
+               and qual like '%pode_ver_empresa_linha%'),
+       'rodar o SQL 27 (supabase/migrations/20261124000001_ver_empresa_criada.sql)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),

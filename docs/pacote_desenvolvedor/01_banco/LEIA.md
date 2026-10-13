@@ -120,4 +120,8 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     `estrategias.definicao`, sem tabela nova) e o arquivo de **leads** da prospecção do MotorCli. Depois cole os
     prompts 34 e 35.
 
+27. `27_ver_empresa_criada.sql` (= `supabase/migrations/20261124000001_ver_empresa_criada.sql`) — **correção**: criar
+    empresa pelo Console dava "new row violates row-level security policy for table empresas" desde o SQL 21. Rode
+    logo; não muda quem vê o quê.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).
