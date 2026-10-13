@@ -1035,6 +1035,11 @@ checar("tipo de aviso inventado é recusado", False, "insert into public.mensage
 checar("ninguém do site lê os avisos", False, "select * from public.mensageria_eventos", "authenticated", u["admin"])
 checar("site não limpa os avisos", False, "select public.limpar_eventos_mensageria()", "authenticated", u["admin"])
 checar("Zenvia e Infobip aceitam RCS", True, "select string_agg(codigo, ',' order by codigo) from public.mensageria_fornecedores where 'rcs' = any(canais)", "service_role", None, "infobip,zenvia")
+# Etapas da empresa e prospecção (SQL 26)
+checar("planejamento sobe arquivo de leads da carteira MotorCli", True, f"insert into public.envios (empresa_id,credor_id,tipo,caminho,nome_original) values ({EA},{CJ},'leads','alfa/leads/2026-10-13/leads.csv','leads.csv')", "authenticated", u["plan"])
+checar("tipo de arquivo inventado continua recusado", False, f"insert into public.envios (empresa_id,credor_id,tipo,caminho,nome_original) values ({EA},{CJ},'prospects','alfa/prospects/2026-10-13/p.csv','p.csv')", "authenticated", u["plan"])
+checar("enquadramento aceita etapa da empresa", True, f"insert into public.jornada_cliente (empresa_id,credor_id,id_cliente,data,momento,passo,motivo) values ({EA},{CJ},'L1','2026-10-13','etapa-prospeccao','D0','com ação hoje'); select 1", "service_role", None, 1)
+checar("nome de etapa fora do padrão é recusado", False, f"insert into public.jornada_cliente (empresa_id,credor_id,id_cliente,data,momento,motivo) values ({EA},{CJ},'L2','2026-10-13','etapa-X;drop','x')", "service_role")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

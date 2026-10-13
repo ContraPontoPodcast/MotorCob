@@ -115,4 +115,9 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     de envio**: demonstrativo em PDF (bucket privado `faturas`), boleto em PDF separado e e-mail aos contatos
     financeiros. Depois cole os prompts 32 e 33.
 
+26. `26_etapas_prospeccao.sql` (= `supabase/migrations/20261123000001_etapas_prospeccao.sql`) — **etapas da
+    régua** criadas pela empresa (MotorCob e MotorCli), **orçamento por canal** e **Travas** (tudo dentro de
+    `estrategias.definicao`, sem tabela nova) e o arquivo de **leads** da prospecção do MotorCli. Depois cole os
+    prompts 34 e 35.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

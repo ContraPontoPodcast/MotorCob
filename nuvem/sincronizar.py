@@ -54,7 +54,7 @@ sys.path.insert(0, str(RAIZ))
 
 from nuvem.supabase_api import ErroSupabase, Supabase  # noqa: E402
 
-DESTINO_BASE = {"clientes": "base/clientes.csv", "contatos": "base/contatos.csv",
+DESTINO_BASE = {"clientes": "base/clientes.csv", "contatos": "base/contatos.csv", "leads": "base/leads.csv",
                 "parcelas": "base/parcelas.csv", "portal": "logs/portal.csv"}
 PASTA_DO_TIPO = {"retorno": "retornos", "base": "bruto", "ocorrencia": "ocorrencias",
                  "enriquecimento": "enriquecimento", "incremental": "incremental", "retirada": "retirada",
@@ -384,6 +384,8 @@ def _reavaliar_aguardando(sb, pasta, desta_vez, mapa, r, rel_base, rel_enriq, u)
 
 def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
     nome = destino.name
+    if e["tipo"] == "leads":
+        return "erro", {"erro": "leads são da prospecção do MotorCli: envie o arquivo numa carteira do MotorCli"}
     if e["tipo"] in TIPOS_CANAL:
         rel = (r.get("retorno_canal_arquivos") or {}).get(nome)
         if rel is None:
@@ -726,7 +728,7 @@ def _layout_automatico(sb: Supabase, pasta: Path, baixados, out):
     return entrada, aviso
 
 
-TIPOS_JORNADA = ("clientes", "contatos")   # cargas que o MotorCli usa (layout do motor/jornada.py)
+TIPOS_JORNADA = ("clientes", "contatos", "leads")   # cargas que o MotorCli usa (layout do motor/jornada.py)
 
 
 def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
@@ -750,7 +752,9 @@ def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
                                         pasta / "estado", pasta / "saida", definicao=(est or {}).get("definicao"),
                                         canais=canais, calendario=u.get("calendario"),
                                         registros_canal=mensageria.registros(pasta),
-                                        regras_retorno=u.get("regras_retorno"), out=out)
+                                        regras_retorno=u.get("regras_retorno"), out=out,
+                                        leads_csv=pasta / "base" / "leads.csv",
+                                        frases=_baixar(sb, pasta, "frases", eid, "id.asc"))
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
         fila = [{"empresa_id": eid, **_c(cid), "data": data.isoformat(), "canal": l["canal"],
                  "id_cliente": l["id_cliente"], "reserva": False, "regua": l["regua"], "passo": l["passo"],
@@ -781,7 +785,7 @@ def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
                     "observacao": "carga da jornada recebida", "rejeitados": r["resumo"]["rejeitados"]}})
             else:
                 sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "erro", "relatorio": {
-                    "erro": "a carteira do MotorCli usa só os arquivos de clientes e de contatos"}})
+                    "erro": "a carteira do MotorCli usa só os arquivos de clientes, contatos e leads"}})
         resumo = {**r["resumo"], "credor": u["codigo"], "arquivos": n_arq}
         sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
                      {"status": "ok", "terminada_em": agora(), "resumo": resumo, "alertas": r["alertas"]})

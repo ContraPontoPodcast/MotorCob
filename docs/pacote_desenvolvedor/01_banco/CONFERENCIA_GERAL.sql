@@ -98,6 +98,12 @@ with itens(ordem, item, ok, se_falhar) as (values
          and exists (select 1 from pg_proc where proname = 'demonstrativo_fatura')
          and exists (select 1 from storage.buckets where id = 'faturas' and not public),
        'rodar 25_emissao_envio_faturas.sql (depois do 24)'),
+  (32, 'SQL 26 · Etapas da régua e leads',
+       exists (select 1 from pg_constraint where conname = 'envios_tipo_check'
+               and pg_get_constraintdef(oid) like '%leads%')
+       and exists (select 1 from pg_constraint where conname = 'jornada_cliente_momento_check'
+                   and pg_get_constraintdef(oid) like '%etapa-%'),
+       'rodar o SQL 26 (supabase/migrations/20261123000001_etapas_prospeccao.sql)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),

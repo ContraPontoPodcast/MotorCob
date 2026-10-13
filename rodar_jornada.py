@@ -57,9 +57,11 @@ def _gravar(caminho: Path, linhas: list[dict]):
 
 def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir, regras_json=jor.PADRAO,
                   definicao: dict | None = None, canais: list[dict] | None = None, calendario: dict | None = None,
-                  registros_canal: list | None = None, regras_retorno: dict | None = None, out=print) -> dict:
+                  registros_canal: list | None = None, regras_retorno: dict | None = None, out=print,
+                  leads_csv=None, frases: list[dict] | None = None) -> dict:
     """Roda o dia do MotorCli. canais: linhas de canais_empresa (canal, ativo); registros_canal:
-    retornos de canal e da mensageria (motor.retorno_canal.Registro)."""
+    retornos de canal e da mensageria (motor.retorno_canal.Registro); leads_csv: quem ainda não é cliente
+    (prospecção, só pelas etapas da empresa); frases: tabela frases (texto das ações {"frase_id": n})."""
     estado_dir, saida_dir = Path(estado_dir), Path(saida_dir)
     aviso = None
     try:
@@ -71,6 +73,10 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
     regua = carregar_regua().com_calendario(calendario)
     clientes, rej_cli = jor.carregar_clientes_jornada(clientes_csv)
     contatos, pessoa_de, rej_cont = carregar_carteira(contatos_csv)
+    leads, rej_leads, wa_leads = {}, {}, set()
+    if leads_csv and Path(leads_csv).exists():
+        leads, contatos_leads, wa_leads, rej_leads = jor.carregar_leads(leads_csv)
+        contatos = contatos + [c for c in contatos_leads if c["id_cliente"] not in clientes]
     donos: dict[str, list[str]] = {}
     for c in contatos:
         donos.setdefault(c["contato"], []).append(c["id_cliente"])
@@ -90,13 +96,28 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
         estado_dir.mkdir(parents=True, exist_ok=True)
         antes.write_text(json.dumps({"data": data.isoformat(), "estado": estado}, ensure_ascii=False),
                          encoding="utf-8")
-    res = jor.gerar(clientes, contatos, data, regras, estado, janela_ok=regua.janela(data) is not None,
+    from motor import etapas as ET
+    etapas_estado = ET.carregar_estado(estado_dir)
+    ET.limpar(etapas_estado, set(clientes) | set(leads))
+    janela = regua.janela(data)
+    if regras.get("travas_janela"):        # trava de horário/dias da estratégia (soma restrições ao calendário)
+        from motor.travas import janela_com_travas
+        janela = janela_com_travas(janela, regras["travas_janela"], data, regua.dados["janela"].get("feriados"))
+    res = jor.gerar(clientes, contatos, data, regras, estado, janela_ok=janela is not None,
                     canais_ativos=ativos, certs=certs, restricoes=restricoes,
-                    whatsapp_ok=_whatsapp_confirmados(Path(contatos_csv)),
-                    melhor=jor.ordem_por_resultado(hit_rate_por_canal(eventos)))
+                    whatsapp_ok=_whatsapp_confirmados(Path(contatos_csv)) | wa_leads,
+                    melhor=jor.ordem_por_resultado(hit_rate_por_canal(eventos)),
+                    leads=leads, etapas_estado=etapas_estado)
     if aviso:
         res.alertas.insert(0, aviso)
+    for a in regras.get("avisos_etapas") or []:
+        res.alertas.append(f"ETAPA: {a}")
+    textos = {f.get("id"): f.get("texto") for f in frases or [] if f.get("ativo") is not False and f.get("texto")}
+    for l in res.fila:                       # frase da ação da etapa: texto próprio ou frase do playbook
+        f = l.pop("frase_acao", None)
+        l["mensagem"] = textos.get(f.get("frase_id"), "") if isinstance(f, dict) else (f or "")
     jor.salvar_estado(estado_dir, estado)
+    ET.salvar_estado(estado_dir, etapas_estado)
     salvar_escolhas(estado_dir, data, res.fila)
 
     pasta = saida_dir / data.isoformat()
@@ -111,12 +132,13 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
     resumo = {"data": data.isoformat(), "frente": "motorcli", "clientes": len(clientes),
               "com_acao": sum(res.por_momento.values()), "por_momento": dict(res.por_momento),
               "fila": {c: len(v) for c, v in jor.ids_por_canal(res.fila).items()},
-              "sem_acao": dict(res.motivos), "rejeitados": {**rej_cli, **rej_cont}}
+              "sem_acao": dict(res.motivos), "rejeitados": {**rej_cli, **rej_cont, **rej_leads},
+              "leads": len(leads)}
     pasta.mkdir(parents=True, exist_ok=True)
     (pasta / "resumo.json").write_text(json.dumps(resumo, ensure_ascii=False, indent=1), encoding="utf-8")
     acoes = agregar_acoes(carregar_escolhas(estado_dir), eventos, regua, desde=data - timedelta(days=DIAS_ACOES))
     out(f"  MotorCli {data.isoformat()}: {len(clientes)} clientes · {resumo['com_acao']} com ação · "
-        + " · ".join(f"{jor.CODIGO[m]} {n}" for m, n in sorted(res.por_momento.items())))
+        + " · ".join(f"{jor.CODIGO.get(m, m)} {n}" for m, n in sorted(res.por_momento.items())))
     return {"fila": res.fila, "motivos": res.motivos, "por_momento": res.por_momento,
             "enquadramento": res.enquadramento, "alertas": res.alertas, "acoes": acoes, "saida": pasta,
             "resumo": resumo}

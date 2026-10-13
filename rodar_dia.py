@@ -488,9 +488,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     ativos = None
     if arq_carga.exists():
         ativos = {l.strip() for l in arq_carga.read_text(encoding="utf-8").splitlines()[1:] if l.strip()}
-    recencia = timedelta(hours=regua["recencia_horas"])
-    pausados = {idc for idc, p in pessoa_de.items()
-                if (d := (compartilhado.get("acionados") or {}).get(p)) and hoje - d < recencia}
+    # acionado por outro credor: a pausa (padrão 48h) vale pela trava da estratégia de cada cliente
+    pausados = {idc: d for idc, p in pessoa_de.items()
+                if (d := (compartilhado.get("acionados") or {}).get(p)) and timedelta(0) <= hoje - d < timedelta(days=31)}
     # "Demais clientes" desligado na carteira: quem não caiu em nenhum segmento fica sem ação
     # massiva (acordo segue) e não vai ao bureau
     desligados = set() if demais_ativo else {
@@ -503,14 +503,22 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         if e.inicio_esteira == hoje and e.estado == "LOC":
             e.esteira_pendente, e.inicio_esteira = True, None
     adiados, para_bureau, motivos, motivo_de, detalhe_de, senao_auto = set(), {}, {}, {}, {}, {}
-    ultima_cpc = {}
+    ultima_cpc, historico_acoes = {}, {}
     for (d_, idc_), ls_ in carregar_escolhas(pasta_estado).items():
         if d_ < hoje.isoformat() and any(l.get("regua") == "cpc" and str(l.get("reserva")) != "1" for l in ls_):
             ultima_cpc[idc_] = max(ultima_cpc.get(idc_, date.min), date.fromisoformat(d_))
+        if d_ < hoje.isoformat():        # limite de ações por cliente (trava): canais acionados por dia
+            historico_acoes.setdefault(idc_, []).extend(
+                (date.fromisoformat(d_), c) for c in dict.fromkeys(l.get("canal") for l in ls_ if l.get("canal")))
+    from motor import etapas as ET
+    etapas_estado = ET.carregar_estado(pasta_estado)      # etapas próprias da estratégia (entrou, feitos, saiu)
+    ET.limpar(etapas_estado, set(estados) if ativos is None else (set(estados) & ativos))
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
                                   motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto,
-                                  ultima_cpc=ultima_cpc)
+                                  ultima_cpc=ultima_cpc, etapas_estado=etapas_estado,
+                                  historico_acoes=historico_acoes)
+    ET.salvar_estado(pasta_estado, etapas_estado)
     nomes_e = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
     ativas = [f for f in _ler_lista(frases) if f.get("ativo") is not False]
     playbook = {f.get("id"): f.get("texto") for f in ativas if f.get("texto")}

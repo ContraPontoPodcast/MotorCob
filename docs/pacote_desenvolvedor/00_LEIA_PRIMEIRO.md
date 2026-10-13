@@ -12,7 +12,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
-| 2 | `01_banco` | 25 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios, funil com Disparado e Assistente, frentes MotorCob e MotorCli, contratação e ciclo de uso, suporte com nomes, equipe com carteira, contratação v2 (pré/pós-pago e recargas), cobrança pelo Stripe e nota fiscal, retorno dos fornecedores, emissão e envio das faturas · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
+| 2 | `01_banco` | 26 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios, funil com Disparado e Assistente, frentes MotorCob e MotorCli, contratação e ciclo de uso, suporte com nomes, equipe com carteira, contratação v2 (pré/pós-pago e recargas), cobrança pelo Stripe e nota fiscal, retorno dos fornecedores, emissão e envio das faturas, etapas da régua e leads · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
 | 3 | `03_site_e_login` | Site público em "/", login novo, plataforma em "/inicio", fim do "/cadastro" | Site | 1º |
 | 4 | `04_sistema_linha_apple` | Visual do sistema: menu escuro, telas brancas, Lista do dia nova | Site | 2º |
 | 5 | `05_usuarios_permissoes_seguranca` | Menus por permissão, Permissões, Auditoria, páginas de senha, sessão | Site | 3º |
@@ -63,6 +63,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 51 | `01_banco/25_emissao_envio_faturas.sql` + função `cobranca` nova (passo 50a) | SQL 25: emissão em lote/automática, demonstrativo e envio; publique de novo a função `cobranca` | Supabase | 48º |
 | 52 | `07_workspace/PROMPT_32_PAGAR_FATURA_RECARGA.md` | Cliente: pagar fatura e recarga (boleto, Pix, cartão), demonstrativo, boleto e nota | Site (motorcob.online) | 49º |
 | 53 | `07_workspace/PROMPT_33_CONSOLE_FATURAMENTO.md` | Console: emissão em lote e automática, envio, cobranças, notas e configuração fiscal | Site (motorcob.online) | 50º |
+| 54 | `supabase/migrations/20261123000001_etapas_prospeccao.sql` (SQL 26) | Etapas da empresa e leads da prospecção (tipo de arquivo `leads` e nome da etapa no enquadramento) | Supabase | 51º |
+| 55 | `07_workspace/PROMPT_34_ETAPAS_ORCAMENTO_TRAVAS.md` | Orquestração: etapas da régua (mesma esteira com raias e frases, ciclo), orçamento por canal com prioridade e Travas configuráveis | Site (motorcob.online) | 52º |
+| 56 | `07_workspace/PROMPT_35_MOTORCLI_ETAPAS_PROSPECCAO.md` | MotorCli: etapas, prospecção (envio de leads, LGPD) e Travas; depois do prompt 24 | Site (motorcob.online) | 53º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

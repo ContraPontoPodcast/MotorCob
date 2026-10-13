@@ -32,3 +32,5 @@ Depois dos 6 primeiros, os prompts seguem a numeração do arquivo (7 a 25). Os 
 - `PROMPT_31_CONTRATACAO_V2_RECARGA.md` — Contratação v2: módulos Orquestração e Jornada, preço abre embaixo do item, ciclo em dias, pré/pós-pago e recarga (depois do SQL 22).
 - `PROMPT_32_PAGAR_FATURA_RECARGA.md` — Cliente: pagar fatura e recarga por boleto, Pix ou cartão; demonstrativo, boleto e nota (depois do SQL 23 e 25).
 - `PROMPT_33_CONSOLE_FATURAMENTO.md` — Console: emissão em lote e automática, envio por e-mail, cobranças, notas e configuração fiscal (depois do SQL 23 e 25).
+- `PROMPT_34_ETAPAS_ORCAMENTO_TRAVAS.md` — Orquestração: etapas da régua com a mesma esteira (raias, frases, ciclo), orçamento por canal com prioridade e o painel Travas (depois do SQL 26). Protótipo: `etapas-prototipo.html`.
+- `PROMPT_35_MOTORCLI_ETAPAS_PROSPECCAO.md` — MotorCli: etapas, prospecção com envio de leads (LGPD) e Travas (depois do SQL 26 e dos prompts 24 e 34).

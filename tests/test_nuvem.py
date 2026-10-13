@@ -359,6 +359,39 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(list(r), ["beta"])
         self.assertNotIn("erro", r["beta"], r["beta"].get("erro"))
 
+    def test_carteira_motorcli_com_leads_e_etapa_de_prospeccao(self):
+        """Leads (com base legal) entram pela etapa de prospecção; sem base legal ficam de fora; no banco só o ID."""
+        t, o = self.falso.tabelas, self.falso.objetos
+        t["credores"] = [{"id": 41, "empresa_id": 2, "codigo": "jornada", "nome": "Jornada", "ativo": True,
+                          "frente": "motorcli", "estrategia_id": None}]
+        t["frases"] = [{"id": 9, "empresa_id": 2, "canal": "sms", "texto": "Oferta para você. SAIR para sair", "ativo": True}]
+        t["estrategias"] = [{"id": 8, "empresa_id": 2, "nome": "Jornada", "padrao": True, "frente": "motorcli",
+                             "definicao": {"etapas": [{
+                                 "id": "prospeccao", "nome": "Prospecção", "referencia": {"tipo": "lead"}, "de": 0, "ate": 30,
+                                 "condicoes": [{"campo": "e_cliente", "op": "=", "valor": "não"}],
+                                 "passos": {"0": [{"canal": "sms", "modo": "sempre", "mensagem": {"frase_id": 9}}]},
+                                 "saidas": {"convertido": "padrao", "fim_janela": "sai"}}]}}]
+        jor = EX / "jornada"
+        leads = ("id_lead;data_entrada;origem;base_legal;telefone;email\n"
+                 "LD1;13/10/2026;Site;consentimento;(11) 98888-7001;\n"
+                 "LD2;13/10/2026;Lista;;(11) 98888-7002;\n").encode()
+        self._envio(6101, 2, "clientes", "clientes.csv", (jor / "clientes.csv").read_bytes(), "2026-10-13", credor=41)
+        self._envio(6102, 2, "contatos", "contatos.csv", (jor / "contatos.csv").read_bytes(), "2026-10-13", credor=41)
+        self._envio(6103, 2, "leads", "leads.csv", leads, "2026-10-13", credor=41)
+        r = self._dia(date(2026, 10, 13), empresa="beta")["beta"]
+        self.assertEqual(r["resumo"]["leads"], 1)
+        fila = [l for l in t["fila_dia"] if l.get("credor_id") == 41 and l["regua"] == "etapa-prospeccao"]
+        self.assertEqual([(l["id_cliente"], l["canal"]) for l in fila], [("LD1", "sms")])
+        self.assertEqual({l["id_cliente"]: l["momento"] for l in t["jornada_cliente"]}["LD1"], "etapa-prospeccao")
+        sms = o["saidas/beta/2026-10-13/jornada/ids/sms.csv"].decode()
+        self.assertIn("LD1;11988887001;Oferta para você. SAIR para sair", sms)
+        env = next(e for e in t["envios"] if e["id"] == 6103)
+        self.assertEqual(env["status"], "processado")
+        self.assertTrue(any("base legal" in k for k in env["relatorio"]["rejeitados"]))
+        texto = json.dumps({k: t[k] for k in ("fila_dia", "jornada_cliente", "acoes_dia", "execucoes")})
+        self.assertNotIn("98888-70", texto)
+        self.assertNotRegex(texto, r"\b11988887\d{3}\b")
+
     def test_carteira_motorcli_roda_a_jornada(self):
         """Carteira da frente MotorCli: mesma rotina, motor da jornada, mesma Lista do dia e lotes."""
         t, o = self.falso.tabelas, self.falso.objetos
