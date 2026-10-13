@@ -1,0 +1,60 @@
+{
+  "_comentario": "MotorCli (frente de Jornada do Cliente). Regras propostas, a validar em comitê; mudar regra = decisão + commit. Cada momento tem a faixa de dias em que vale e os passos: dia de referência -> ações. Ação: {canal, senao?}. canal 'melhor' escolhe entre 'opcoes' pelo resultado da persona. Dia de referência: boas_vindas e ativacao = dias desde a contratação; pre_vencimento = dias até o vencimento, negativo (D-5 = -5); retencao e reativacao = dias sem atividade.",
+  "versao": 1,
+  "hierarquia": ["pre_vencimento", "boas_vindas", "ativacao", "retencao", "reativacao"],
+  "recencia_horas": 48,
+  "isentos_recencia": ["pre_vencimento"],
+  "momentos": {
+    "boas_vindas": {
+      "nome": "Boas-vindas",
+      "ativo": true,
+      "de": 0, "ate": 2,
+      "passos": {
+        "0": [{"canal": "email"}, {"canal": "rcs", "senao": "sms"}]
+      }
+    },
+    "ativacao": {
+      "nome": "Ativação",
+      "ativo": true,
+      "de": 3, "ate": 30,
+      "passos": {
+        "3": [{"canal": "melhor", "opcoes": ["rcs", "whatsapp", "sms"], "senao": "email"}],
+        "7": [{"canal": "email"}],
+        "15": [{"canal": "melhor", "opcoes": ["whatsapp", "rcs", "sms"], "senao": "email"}],
+        "30": [{"canal": "agente_voz", "senao": "sms"}]
+      }
+    },
+    "pre_vencimento": {
+      "nome": "Pré-vencimento",
+      "ativo": true,
+      "de": -5, "ate": 0,
+      "passos": {
+        "-5": [{"canal": "rcs", "senao": "sms"}, {"canal": "email"}],
+        "-2": [{"canal": "melhor", "opcoes": ["whatsapp", "sms"], "senao": "email"}],
+        "0": [{"canal": "sms", "senao": "email"}]
+      }
+    },
+    "retencao": {
+      "nome": "Retenção",
+      "ativo": true,
+      "de": 30, "ate": 89,
+      "passos": {
+        "30": [{"canal": "melhor", "opcoes": ["rcs", "whatsapp", "sms"], "senao": "email"}],
+        "45": [{"canal": "email"}],
+        "60": [{"canal": "melhor", "opcoes": ["whatsapp", "rcs", "sms"], "senao": "email"}],
+        "75": [{"canal": "agente_voz", "senao": "sms"}]
+      }
+    },
+    "reativacao": {
+      "nome": "Reativação",
+      "ativo": true,
+      "de": 90, "ate": 365,
+      "passos": {
+        "90": [{"canal": "melhor", "opcoes": ["rcs", "sms"], "senao": "email"}],
+        "120": [{"canal": "email"}],
+        "180": [{"canal": "melhor", "opcoes": ["rcs", "whatsapp", "sms"], "senao": "email"}],
+        "270": [{"canal": "email"}]
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-// Edge Function assistente: o Assistente MotorCob do Workspace (campo "O que você quer fazer?" e o avatar).
+// Edge Function assistente: o Assistente MotorCX do Workspace (campo "O que você quer fazer?" e o avatar).
 // * O site chama com o login do usuário (Authorization: Bearer <token>) e { pergunta, origem, tela, historico }.
 // * CPF, telefone, e-mail e números longos são apagados ANTES de ir ao modelo e ao banco (regras.ts).
 // * Responde com a base de conhecimento da plataforma (conhecimento.ts); não vê carteira nem envios da empresa.

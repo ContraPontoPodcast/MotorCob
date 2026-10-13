@@ -12,7 +12,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
-| 2 | `01_banco` | 17 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios, funil com Disparado e Assistente · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
+| 2 | `01_banco` | 26 SQLs: contato do site, Lista do dia agrupada, templates, workspace (fase 1), faturamento, fornecedor de e-mail, mensageria, tokens da API, revisão das faturas, equipe (Master), saúde do sistema, preços por produto, rotas e margem, mensageria por produto, Radar e links, relatórios, funil com Disparado e Assistente, frentes MotorCob e MotorCli, contratação e ciclo de uso, suporte com nomes, equipe com carteira, contratação v2 (pré/pós-pago e recargas), cobrança pelo Stripe e nota fiscal, retorno dos fornecedores, emissão e envio das faturas, etapas da régua e leads · conferência em CONFERENCIA_GERAL.sql | Supabase › SQL Editor | Hoje |
 | 3 | `03_site_e_login` | Site público em "/", login novo, plataforma em "/inicio", fim do "/cadastro" | Site | 1º |
 | 4 | `04_sistema_linha_apple` | Visual do sistema: menu escuro, telas brancas, Lista do dia nova | Site | 2º |
 | 5 | `05_usuarios_permissoes_seguranca` | Menus por permissão, Permissões, Auditoria, páginas de senha, sessão | Site | 3º |
@@ -43,6 +43,30 @@ Faça **na ordem**; cada passo depende do anterior.
 | 30 | `07_workspace/PROMPT_17_BUSCA_E_ASSISTENTE.md` | Campo único "O que você quer fazer?" (busca e pergunta), avatar e gaveta do Assistente, Console › Assistente | Site | 28º |
 | 31 | `07_workspace/PROMPT_18_MENU_RECOLHIVEL.md` | Menu lateral dos produtos recolhível (só ícones) | Site | 29º |
 | 32 | `07_workspace/PROMPT_19_FUNIL_STATUS.md` | Painel da Mensageria: Disparado, Enviado, sem retorno, e-mail completo e botões "i" | Site | 30º |
+| 33 | `07_workspace/PROMPT_20_CORRECAO_NAVEGACAO.md` | Correção: Mensageria e Console no menu lateral, com "Voltar ao Workspace" e seletor de produto | Site | 31º |
+| 34 | `07_workspace/PROMPT_21_AVATAR_IMAGEM_E_FECHAR.md` | Correção: foto do avatar (bucket `publico`), botão de fechar e balão de 7 segundos | Site | 32º |
+| 35 | `07_workspace/PROMPT_22_CORRECAO_BUGS.md` | Correção: Mensageria, pergunta, empresa, canais e menu | Site | 33º |
+| 36 | `08_api/MotorCob_funcao_assistente.ts` | Função `assistente` atualizada (MotorCX, frentes e a Jornada do MotorCli): colar de novo no editor da função | Supabase | 34º, depois do SQL 18 |
+| 37 | `07_workspace/PROMPT_23_MOTORCX_LOGIN_E_FRENTES.md` | MotorCX: login com escolha da frente, tema por frente, "Trocar para MotorCli" | Site | 35º |
+| 38 | `07_workspace/PROMPT_24_MOTORCLI_JORNADA.md` | MotorCli: produto Jornada (Início, Lista do dia, Enviar arquivos, Carteiras, Momentos da jornada) | Site | 36º |
+| 39 | `07_workspace/PROMPT_25_CONSOLE_FRENTES.md` | Console: ligar as frentes da empresa; Usuários: limitar por frente | Site | 37º |
+| 41 | `07_workspace/PROMPT_26_LOGIN_FRENTE_PELO_LINK.md` | Login abre com a frente que veio no link (`?frente=motorcli`) | Site (motorcob.online) | 38º |
+| 42 | `09_site_motorcli/` (LEIA, parte A e parte B) | Site motorcli.online: projeto NOVO no Horizons, só vitrine; Supabase só para o formulário | Site novo | 39º |
+| 43 | `07_workspace/PROMPT_27_CONTRATACAO.md` | Console: Contratação num lugar só (motor, módulos, preço flat ou escalonado de cada item, ciclo de uso); depois do SQL 19 | Site (motorcob.online) | 40º |
+| 44 | `07_workspace/PROMPT_28_SUPORTE_NOMES.md` | Suporte: "Em atendimento · com Ana S." e o nome em cada mensagem; depois do SQL 20 (que corrige o erro ao abrir e responder chamado) | Site (motorcob.online) | 41º |
+| 45 | `07_workspace/PROMPT_29_CORRECAO_CONTRATACAO.md` | Correção: tela Contratação quebrava ("Ops! Ocorreu um erro inesperado"), itens de preço pela chave certa, WhatsApp, números e ciclo | Site (motorcob.online) | 42º |
+| 46 | `01_banco/21_equipe_carteira.sql` + `05_usuarios_permissoes_seguranca/MotorCob_funcao_admin-usuarios.ts` | SQL 21 (equipe: papéis, alcance, carteira) e a função `admin-usuarios` nova (aceita Comercial): Edge Functions › admin-usuarios › Code › apague tudo › cole › Deploy | Supabase | 43º |
+| 47 | `07_workspace/PROMPT_30_EQUIPE_CARTEIRA.md` | Console: Equipe (papel, alcance, permissões), Carteiras e login da equipe direto no Console | Site (motorcob.online) | 44º |
+| 48 | `01_banco/22_ciclo_pagamento.sql` | SQL 22: Orquestração e Jornada como módulos, ciclo em dias, pré/pós-pago, recargas e saldo | Supabase | 45º |
+| 49 | `07_workspace/PROMPT_31_CONTRATACAO_V2_RECARGA.md` | Contratação v2 (módulos, preço abre embaixo do item, ciclo em dias, cobrança) e recarga do pré-pago | Site (motorcob.online) | 46º |
+| 50 | `08_api/LEIA_INTEGRACOES.md` | SQL 23 e 24, funções `cobranca`, `pagamentos-webhook` e `retorno-mensageria`, credenciais do Stripe, Focus NFe e fornecedores (cada uma no seu cofre) | Supabase + Google Cloud + painéis | 47º |
+| 51 | `01_banco/25_emissao_envio_faturas.sql` + função `cobranca` nova (passo 50a) | SQL 25: emissão em lote/automática, demonstrativo e envio; publique de novo a função `cobranca` | Supabase | 48º |
+| 52 | `07_workspace/PROMPT_32_PAGAR_FATURA_RECARGA.md` | Cliente: pagar fatura e recarga (boleto, Pix, cartão), demonstrativo, boleto e nota | Site (motorcob.online) | 49º |
+| 53 | `07_workspace/PROMPT_33_CONSOLE_FATURAMENTO.md` | Console: emissão em lote e automática, envio, cobranças, notas e configuração fiscal | Site (motorcob.online) | 50º |
+| 54 | `supabase/migrations/20261123000001_etapas_prospeccao.sql` (SQL 26) | Etapas da empresa e leads da prospecção (tipo de arquivo `leads` e nome da etapa no enquadramento) | Supabase | 51º |
+| 55 | `07_workspace/PROMPT_34_ETAPAS_ORCAMENTO_TRAVAS.md` | Orquestração: etapas da régua (mesma esteira com raias e frases, ciclo), orçamento por canal com prioridade e Travas configuráveis | Site (motorcob.online) | 52º |
+| 56 | `07_workspace/PROMPT_35_MOTORCLI_ETAPAS_PROSPECCAO.md` | MotorCli: etapas, prospecção (envio de leads, LGPD) e Travas; depois do prompt 24 | Site (motorcob.online) | 53º |
+| 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
 Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com critérios de aceite) e `PROMPT_HORIZONS.md`
@@ -55,7 +79,7 @@ Cada pasta do site tem `ESPECIFICACAO.md` (para quem programa à mão, com crit�
   passam pela Edge Function `admin-usuarios`, já publicada.
 - Permissão é garantida no banco (RLS + `pode()`); o site só esconde o que a pessoa não pode usar.
 - Erros em português, sem detalhe técnico. O login nunca diz se um e-mail existe.
-- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 599 testes de acesso).
+- Não alterar tabelas, views, políticas ou funções sem falar com o MotorCob (versionadas e com 651 testes de acesso).
 
 ## Já pronto (não refazer)
 Permissões por perfil e por usuário, auditoria, contatos do site, motivos agrupados da Lista do dia (após o SQL 2)

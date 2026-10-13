@@ -15,6 +15,7 @@ class ErroSupabase(RuntimeError):
     def __init__(self, status, corpo, url):
         super().__init__(f"Supabase respondeu {status} em {url}: {corpo[:300]}")
         self.status = status
+        self.corpo = corpo
 
 
 class Supabase:
@@ -93,6 +94,10 @@ class Supabase:
     # ------------------------------------------------------------ Storage
     def rpc(self, funcao: str, args: dict | None = None):
         return self._req("POST", f"/rest/v1/rpc/{funcao}", args or {})
+
+    def funcao(self, nome: str, corpo: dict | None = None):
+        """Chama uma Edge Function com a chave do servidor (ex.: cobranca, recarga automática)."""
+        return self._req("POST", f"/functions/v1/{nome}", corpo or {}, {"Authorization": f"Bearer {self.chave}"})
 
     def baixar(self, bucket, caminho) -> bytes:
         return self._req("GET", f"/storage/v1/object/{bucket}/{urllib.parse.quote(caminho)}", bruto=True)

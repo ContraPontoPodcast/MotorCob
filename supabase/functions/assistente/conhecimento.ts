@@ -1,8 +1,8 @@
-// Base de conhecimento do Assistente MotorCob (o que o modelo pode responder). Mantenha igual ao uso real da
+// Base de conhecimento do Assistente MotorCX (o que o modelo pode responder). Mantenha igual ao uso real da
 // plataforma: tela nova ou regra nova entra aqui no mesmo PR. Nada de preço, chave, endereço interno ou dado pessoal.
-export const CONHECIMENTO = `# Base de conhecimento do Assistente MotorCob
+export const CONHECIMENTO = `# Base de conhecimento do Assistente MotorCX
 
-Referência para responder dúvidas de uso da plataforma MotorCob. Público: usuários de assessorias de cobrança e de credores (perfis Admin, Planejamento, Operação e Gestão) e a equipe MotorCob. Os nomes de menus, telas e botões estão escritos como aparecem na plataforma.
+Referência para responder dúvidas de uso da plataforma MotorCX (frentes MotorCob e MotorCli). Público: usuários de assessorias de cobrança, de credores e de áreas de CX e relacionamento (perfis Admin, Planejamento, Operação e Gestão) e a equipe MotorCX. Os nomes de menus, telas e botões estão escritos como aparecem na plataforma.
 
 Regras de atendimento do assistente:
 
@@ -15,7 +15,9 @@ Regras de atendimento do assistente:
 
 ## Visão geral e login
 
-- O MotorCob tem dois produtos: Orquestração (Lista do dia, réguas e personas) e Mensageria (SMS, RCS, E-mail e WhatsApp). A equipe MotorCob usa também o Console. A integração por API (cargas e Lista do dia pelo sistema da empresa) é explicada em Documentação. Cada empresa vê só os módulos contratados.
+- O MotorCX é a plataforma de inteligência de decisão para a experiência do cliente. Ela tem duas frentes: MotorCob (Cobrança) e MotorCli (Jornada do Cliente). A plataforma, a segurança e a conta são as mesmas; muda o nome, a cor e as telas do produto principal.
+- No MotorCob os produtos são Orquestração (Lista do dia, réguas e personas) e Mensageria (SMS, RCS, E-mail e WhatsApp). No MotorCli, Jornada (momentos da relação com o cliente) e Mensageria. A equipe MotorCX usa também o Console. A integração por API (cargas e Lista do dia pelo sistema da empresa) é explicada em Documentação. Cada empresa vê só as frentes e os módulos contratados.
+- Escolha da frente: quem tem acesso às duas frentes escolhe no login (MotorCob ou MotorCli), com a opção "Lembrar a minha escolha neste navegador". Para trocar depois: menu do usuário › "Trocar para MotorCli" (ou MotorCob). Quem tem só uma frente entra direto nela. O Admin da empresa pode limitar um usuário a uma frente em Usuários e permissões › Frentes; ligar uma frente nova na empresa é com o time comercial.
 - Login: e-mail e senha, depois o código de verificação em duas etapas (para o perfil Admin a verificação em duas etapas é obrigatória). O login nunca informa se um e-mail existe.
 - Primeiro acesso: o convite chega por e-mail e abre a página "Crie sua senha.". "Esqueci a senha" abre a página "Nova senha.". A senha precisa ter pelo menos 12 caracteres; as regras aparecem na tela enquanto você digita. Link vencido: peça um novo ao Admin da sua empresa ou use "Esqueci a senha".
 - A sessão se encerra sozinha depois de 30 minutos sem uso. Um minuto antes aparece o aviso "Sua sessão vai expirar" com o botão "Continuar conectado".
@@ -25,22 +27,22 @@ Regras de atendimento do assistente:
 
 O Workspace (/workspace) é a tela inicial depois do login. Tem uma barra escura no topo com:
 
-- Logo MotorCob e o seletor de empresa. Cliente vê só a própria empresa; a equipe MotorCob vê uma lista com busca de todas as empresas.
-- Links: Início, Empresa, Suporte e, só para a equipe MotorCob, Console MotorCob.
-- À direita, o avatar. Clicar no avatar abre o menu do usuário: Minha conta, Documentação, Sobre o MotorCob e Sair.
+- Símbolo do MotorCX com o nome da frente e o seletor de empresa. Cliente vê só a própria empresa; a equipe MotorCX vê uma lista com busca de todas as empresas.
+- Links: Início, Empresa, Suporte e, só para a equipe MotorCX, Console MotorCX.
+- À direita, o avatar. Clicar no avatar abre o menu do usuário: Minha conta, Documentação, Sobre o MotorCX e Sair.
 
 O Início do Workspace mostra:
 
-1. Saudação e o campo "O que você quer fazer?" (atalho ⌘K no Mac ou Ctrl+K no Windows). É um campo só para buscar e para perguntar: digite o nome de uma tela ou ação (por exemplo "campanha", "faturas", "convidar") e use ↑ ↓ Enter para ir direto; ou escreva uma pergunta (terminando com "?" ou começando com como, onde, o que, por que, qual) e o Assistente MotorCob responde logo abaixo do campo.
+1. Saudação e o campo "O que você quer fazer?" (atalho ⌘K no Mac ou Ctrl+K no Windows). É um campo só para buscar e para perguntar: digite o nome de uma tela ou ação (por exemplo "campanha", "faturas", "convidar") e use ↑ ↓ Enter para ir direto; ou escreva uma pergunta (terminando com "?" ou começando com como, onde, o que, por que, qual) e o Assistente MotorCX responde logo abaixo do campo.
 2. "Para hoje": quantos clientes entram em ação hoje, chamados que o suporte respondeu e aguardam você, e fatura em aberto ou vencida (só para quem vê faturamento). Sem pendências: "Tudo em dia por aqui."
 3. "Seus produtos": um card por módulo. Produto ativo tem o botão "Abrir {produto} ›" (Orquestração abre a Lista do dia; Mensageria abre o último canal usado; Console, só para a equipe, abre a Saúde). Produto não contratado aparece esmaecido com o botão "Quero conhecer", que abre um chamado de interesse comercial.
 
-### Assistente MotorCob
+### Assistente MotorCX
 
 - Onde usar: no campo "O que você quer fazer?" do Início do Workspace (a resposta aparece logo abaixo) ou pelo avatar no canto inferior direito das telas do Workspace ("Dúvida? Fala comigo!"), que abre a conversa numa gaveta à direita. "Continuar a conversa" leva a pergunta do campo para a gaveta.
 - Cada resposta pode trazer o passo a passo e um botão que abre a tela certa. Use 👍 ou 👎 para dizer se ajudou.
 - O Assistente responde sobre o uso da plataforma. Ele não vê a carteira, os clientes, os envios nem as faturas da empresa; para um caso específico, abra um chamado em Suporte.
-- Cada pergunta fica registrada por 90 dias para a equipe MotorCob melhorar as respostas. Não escreva CPF, telefone, e-mail ou nome de devedores: esses dados são apagados antes de a pergunta ser processada.
+- Cada pergunta fica registrada por 90 dias para a equipe MotorCX melhorar as respostas. Não escreva CPF, telefone, e-mail ou nome de devedores: esses dados são apagados antes de a pergunta ser processada.
 - Limite: 30 perguntas por hora por usuário.
 
 ---
@@ -51,19 +53,19 @@ Dentro da Orquestração, da Mensageria e do Console, a navegação é um menu l
 
 Topo do menu, de cima para baixo:
 
-1. Logo MotorCob. O botão ao lado do logo recolhe o menu, deixando só os ícones; clique de novo para expandir.
+1. Símbolo do MotorCX com o nome da frente (MotorCob ou MotorCli). O botão ao lado do logo recolhe o menu, deixando só os ícones; clique de novo para expandir.
 2. "‹ Voltar ao Workspace": volta ao Início do Workspace.
 3. Seletor de empresa (o mesmo do Workspace).
-4. Seletor de produto: Workspace, Orquestração, Mensageria e Console MotorCob (só equipe). Produto sem módulo ativo aparece esmaecido com "Quero conhecer". Trocar de produto leva à tela inicial dele.
+4. Seletor de produto: Workspace, Orquestração, Mensageria e Console MotorCX (só equipe). Produto sem módulo ativo aparece esmaecido com "Quero conhecer". Trocar de produto leva à tela inicial dele.
 5. Só na Mensageria: o controle de canal SMS · RCS · E-mail · WhatsApp. Canal não liberado aparece desabilitado. Trocar o canal mantém a mesma tela no outro canal (por exemplo, de Campanhas do SMS para Campanhas do RCS), e o último canal fica lembrado.
 
 Itens do menu:
 
 - Orquestração: Operação (Início, Lista do dia, Ações, Painel) · Carteira (Clientes, Personas, Credores) · Estratégia (Mapa da Esteira, Orquestração, Comitê) · Dados (Enviar arquivos) · Administração (Canais e frases).
 - Mensageria: Operação (Painel, Campanhas, Lotes do dia) · Atendimento (Respostas, com um selo azul de não lidas) · Conteúdo (Templates no SMS e RCS, ou Modelo de e-mail no E-mail; Listas) · Análise (Relatórios) · Administração (Configurações).
-- Console (só equipe MotorCob): Operação (Saúde, Empresas, Atendimento) · Financeiro (Faturamento, Fornecedores, Margem) · Administração (Equipe).
+- Console (só equipe MotorCX): Operação (Saúde, Empresas, Atendimento) · Financeiro (Faturamento, Fornecedores, Margem) · Administração (Equipe).
 - Grupo fixo no fim, igual nos três produtos: Relatórios · Usuários e permissões · Auditoria. Cada item só aparece para quem tem a permissão.
-- Rodapé do menu: avatar, nome e perfil. Clicar abre o mesmo menu do usuário do Workspace (Minha conta, Documentação, Sobre o MotorCob, Sair).
+- Rodapé do menu: avatar, nome e perfil. Clicar abre o mesmo menu do usuário do Workspace (Minha conta, Documentação, Sobre o MotorCX, Sair).
 
 No celular, o menu abre pelo botão "Menu" na barra do topo.
 
@@ -177,13 +179,44 @@ Cadastro dos canais da empresa (horário de envio e custo) e das mensagens (perm
 
 ---
 
+## Jornada (frente MotorCli)
+
+A Jornada decide, todo dia, qual conversa cada cliente da carteira recebe conforme o momento da relação. Ela aparece no seletor de produto quando a frente atual é o MotorCli. Menu: Operação (Início, Lista do dia, Enviar arquivos) · Configuração (Carteiras, Momentos da jornada, Canais).
+
+### Momentos
+Cada cliente fica em no máximo um momento por dia, nesta prioridade:
+1. Pré-vencimento: de 5 dias antes até o dia do vencimento (passos padrão D-5, D-2 e D0). Quem já pagou o vencimento sai.
+2. Boas-vindas: até 2 dias depois da contratação (D0).
+3. Ativação: de 3 a 30 dias depois da contratação, só para quem não ativou (D+3, D+7, D+15 e D+30).
+4. Retenção: de 30 a 89 dias sem atividade (D+30, D+45, D+60 e D+75).
+5. Reativação: de 90 a 365 dias sem atividade (D+90, D+120, D+180 e D+270).
+Um passo por vez: o passo que caiu num domingo ou feriado sai no próximo dia útil, até a data do passo seguinte. Entre duas ações para o mesmo cliente há uma espera (padrão 48 horas); o pré-vencimento não espera.
+
+### Quem fica de fora
+Cliente com dias de atraso maior que zero fica com a cobrança (MotorCob), não com a Jornada. Também ficam de fora: bloqueado (opt-out, óbito ou judicial), sem momento hoje, passo já feito, espera entre ações e sem contato elegível. O Início da Jornada mostra quantos clientes ficaram de fora por motivo.
+
+### Contato e canal
+O telefone Hot sai primeiro; contato inválido, descadastrado ou de outra pessoa fica de fora. WhatsApp só em número confirmado como WhatsApp na carga (coluna whatsapp_valido = sim). "Melhor canal" escolhe entre os canais do passo pelo resultado da carteira quando já há tentativas suficientes; sem evidência, segue a ordem configurada. Se o canal não tem contato ou está desligado em Canais, vale o "senão" do passo.
+
+### Enviar arquivos (Jornada)
+Dois arquivos por carteira, em CSV com ponto e vírgula (ou .xlsx):
+- Clientes da jornada: id_cliente;data_contratacao;proximo_vencimento;vencimento_pago;ativado;ultima_atividade;dias_atraso;bloqueio. Datas em AAAA-MM-DD ou DD/MM/AAAA; vencimento_pago e ativado com sim ou não.
+- Contatos: id_cliente;contato;tipo;whatsapp_valido (tipo telefone ou email).
+O botão "Baixar modelo" gera o arquivo vazio com o cabeçalho certo. A Lista do dia sai na rodada da manhã.
+
+### Momentos da jornada (estratégias)
+Em Configuração › Momentos da jornada: ligue ou desligue cada momento, mude os passos (dia, canal e "senão") e as horas entre ações. Cada carteira usa a estratégia escolhida em Carteiras ou a padrão da frente. Se uma estratégia tiver erro, a rodada usa o padrão do MotorCli e avisa.
+
+### Lista do dia (Jornada)
+ID do cliente, momento, passo e canal de cada ação de hoje. "Baixar por canal" baixa um arquivo por canal para o seu fornecedor; com a Mensageria contratada, os lotes de SMS, RCS e e-mail são montados sozinhos.
+
 ## Mensageria
 
 Envio de mensagens por SMS, RCS, E-mail e WhatsApp. Abra em Workspace › Seus produtos › Mensageria e escolha o canal no controle do menu. Só aparecem liberados os canais contratados.
 
 Origem das mensagens:
 
-- Lista do dia: o MotorCob monta os lotes sozinho a partir da Lista do dia e envia dentro do horário do canal.
+- Lista do dia: o MotorCX monta os lotes sozinho a partir da Lista do dia e envia dentro do horário do canal.
 - Campanhas: listas enviadas pela própria empresa.
 
 Os envios respeitam o horário do canal, o orçamento do centro de custo, os descadastros e as listas de bloqueio. Domingo nunca envia.
@@ -191,7 +224,7 @@ Os envios respeitam o horário do canal, o orçamento do centro de custo, os des
 ### Simulação e envio real
 
 - Simulação: faixa amarela "Simulação: nenhuma mensagem sai de verdade e nada é cobrado. Os resultados são de teste."
-- Envio real: selo verde "Envio real". Só a equipe MotorCob muda o modo, quando o fornecedor estiver integrado. Envio real entra no consumo e na fatura.
+- Envio real: selo verde "Envio real". Só a equipe MotorCX muda o modo, quando o fornecedor estiver integrado. Envio real entra no consumo e na fatura.
 
 ### Painel
 
@@ -207,7 +240,7 @@ Para criar uma campanha (permissão "Enviar mensagens"):
 
 1. Mensageria › Campanhas › Nova campanha.
 2. Dados: nome, template (no E-mail, o modelo de e-mail), centro de custo (opcional), "Rastrear links" e, no RCS, o que fazer "Se o aparelho não tiver RCS" (configuração da empresa, SMS, WhatsApp ou não enviar).
-3. Lista: arraste o arquivo (.csv, .txt ou .xlsx, até 20 MB). Qualquer layout serve: o MotorCob identifica as colunas e você confirma. Aguarde "Lendo a lista…".
+3. Lista: arraste o arquivo (.csv, .txt ou .xlsx, até 20 MB). Qualquer layout serve: o MotorCX identifica as colunas e você confirma. Aguarde "Lendo a lista…".
 4. Layout: confira o uso de cada coluna (Telefone, E-mail, ID do cliente, uma variável do template ou Ignorar). Variáveis do template sem coluna aparecem em vermelho. Clique em "Confirmar layout".
 5. Envio: veja a prévia do template e escolha "Enviar agora" ou "Agendar" (data e hora).
 
@@ -227,11 +260,11 @@ O detalhe do lote lista cada mensagem (ID do cliente, destino mascarado, situaç
 
 A aprovação de cada lote é ligada por padrão; pode ser desligada em Configurações ("Aprovar cada lote antes do envio"). Desligada, o lote do dia sai sozinho no horário do canal.
 
-### Respostas e Radar MotorCob
+### Respostas e Radar
 
 Caixa de entrada das respostas dos clientes no SMS, RCS e WhatsApp (permissão "Enviar mensagens").
 
-O Radar MotorCob lê cada resposta e mostra a intenção do cliente em seis classes: CPC Negócio, CPC, Alega pagamento, Judicial, Desconhece e Baixo calão. O pedido de negócio pesa mais que o palavrão ("me manda o boleto" com palavrão é CPC Negócio). Cada resposta mostra a classe, a confiança e o motivo ("Por que"), com a origem "IA" ou "Regras". Em simulação, o Radar usa só as regras.
+O Radar lê cada resposta e mostra a intenção do cliente em seis classes: CPC Negócio, CPC, Alega pagamento, Judicial, Desconhece e Baixo calão. O pedido de negócio pesa mais que o palavrão ("me manda o boleto" com palavrão é CPC Negócio). Cada resposta mostra a classe, a confiança e o motivo ("Por que"), com a origem "IA" ou "Regras". Em simulação, o Radar usa só as regras.
 
 Para responder:
 
@@ -250,7 +283,7 @@ Permissão "Editar canais e frases".
 
 - SMS: texto com contador "{n}/160 sem as variáveis". Depois de preencher as variáveis, o SMS acima de 160 caracteres não é enviado.
 - RCS: categoria (Autenticação, Transacional, Marketing) e tipo de mídia: Simples, Botões (1 a 4: Abrir link, Resposta rápida, Ligar), Arquivo (PDF ou imagem até 10 MB), Rich card ou Carrossel (2 a 10 cards). A tela mostra o selo RCS Basic ou RCS Single.
-- "Rastrear links": os links viram endereços curtos do MotorCob para saber quem clicou.
+- "Rastrear links": os links viram endereços curtos do MotorCX para saber quem clicou.
 - E-mail: Mensageria › Modelo de e-mail, com nome do remetente, assunto e texto. A única variável é {empresa}. O rodapé de descadastro é colocado automaticamente.
 
 Para criar um template: Mensageria › Templates › Novo template, preencha e salve. Também há Editar, Duplicar e Arquivar.
@@ -270,13 +303,13 @@ Descadastros (quem respondeu SAIR, clicou no link de descadastro, foi descadastr
 
 - Centros de custo: nome, orçamento do mês (vazio = sem limite), alerta em %, e o que fazer ao acabar o orçamento (Bloquear envios ou Enviar mesmo assim). O gasto é estimado pelos preços do contrato.
 - Centro de custo da Lista do dia e, no RCS, o fallback "Se o aparelho não tiver RCS" (Enviar por SMS, Enviar por WhatsApp, Não enviar) e o template do SMS de fallback (vazio = o texto do RCS, se couber em 160).
-- Agente RCS (Não conversacional ou Conversacional): só leitura para o cliente; a equipe MotorCob altera.
+- Agente RCS (Não conversacional ou Conversacional): só leitura para o cliente; a equipe MotorCX altera.
 - Aprovar cada lote antes do envio.
 - Horário de cada canal (só leitura; altera-se em Canais e frases).
 
 ### Links rastreados (mcob.pro)
 
-Com "Rastrear links" ligado no template ou na campanha, cada link vira um endereço curto do MotorCob no domínio mcob.pro (exemplo: https://mcob.pro/Ab12Cd34). No SMS, o link curto ocupa cerca de 30 dos 160 caracteres. Link inexistente ou vencido mostra "Este link expirou.".
+Com "Rastrear links" ligado no template ou na campanha, cada link vira um endereço curto do MotorCX no domínio mcob.pro (exemplo: https://mcob.pro/Ab12Cd34). No SMS, o link curto ocupa cerca de 30 dos 160 caracteres. Link inexistente ou vencido mostra "Este link expirou.".
 
 O Painel e o detalhe da campanha mostram o funil de engajamento (Enviados, Entregues, Clicaram, Responderam, CPC Negócio), CTR (clicaram ÷ entregues), cliques por hora e aparelho e "Quem clicou" (só o ID do cliente). Cliques de robôs são ignorados.
 
@@ -290,7 +323,7 @@ Funil: Carregado → Higienizado → Disparado → Enviado → Entregue / Não e
 
 - Carregado: linhas recebidas da Lista do dia ou da campanha.
 - Higienizado: válidos para envio, depois de tirar inválidos e bloqueados (lista de bloqueio, descadastro, sem texto).
-- Disparado: o MotorCob entregou a mensagem à operadora, pela rota de SMS da campanha ou pelo agente RCS verificado.
+- Disparado: o MotorCX entregou a mensagem à operadora, pela rota de SMS da campanha ou pelo agente RCS verificado.
 - Enviado: a operadora confirmou o envio ao número.
 - Entregue / Não entregue: retorno de entrega da operadora (DLR). Entregue inclui quem recebeu e pediu para sair.
 - Respostas: clientes que responderam.
@@ -345,8 +378,8 @@ Para montar um relatório:
 
 Workspace › Empresa. Abas:
 
-- Visão geral: dados cadastrais da empresa. Só a equipe MotorCob edita.
-- Contatos: pessoas com quem a MotorCob fala (não precisam de acesso). Quem tem "Gerenciar usuários" edita.
+- Visão geral: dados cadastrais da empresa. Só a equipe MotorCX edita.
+- Contatos: pessoas com quem a MotorCX fala (não precisam de acesso). Quem tem "Gerenciar usuários" edita.
 - Membros: usuários da empresa, com perfil, último acesso e situação. "Convidar membro" e "Gerenciar" levam a Usuários e permissões.
 - Módulos: módulos e canais contratados. Para incluir um módulo, fale com o comercial ("Quero conhecer" abre um chamado).
 - Faturamento (permissão "Ver faturamento"): preços do contrato, consumo do mês por item, próxima fatura estimada e faturas com situação (Em aberto, Vencida, Paga, Cancelada), botões "Boleto" e "Nota fiscal". Clique numa fatura para ver itens e ajustes. Dúvidas sobre valores e contrato: fale com o time comercial ou abra um chamado com o motivo "Faturamento".
@@ -386,7 +419,7 @@ Documentação: menu do usuário › Documentação (/docs), com busca e artigos
 
 ## Suporte
 
-Workspace › Suporte. A tela mostra o prazo de resposta informado pela MotorCob e a lista de chamados (Abertos, Resolvidos, Todos), com protocolo e situação: Aberto, Em atendimento, Aguardando você, Resolvido.
+Workspace › Suporte. A tela mostra o prazo de resposta informado pela MotorCX e a lista de chamados (Abertos, Resolvidos, Todos), com protocolo e situação: Aberto, Em atendimento, Aguardando você, Resolvido.
 
 Para abrir um chamado:
 

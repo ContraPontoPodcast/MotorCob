@@ -54,7 +54,7 @@ sys.path.insert(0, str(RAIZ))
 
 from nuvem.supabase_api import ErroSupabase, Supabase  # noqa: E402
 
-DESTINO_BASE = {"clientes": "base/clientes.csv", "contatos": "base/contatos.csv",
+DESTINO_BASE = {"clientes": "base/clientes.csv", "contatos": "base/contatos.csv", "leads": "base/leads.csv",
                 "parcelas": "base/parcelas.csv", "portal": "logs/portal.csv"}
 PASTA_DO_TIPO = {"retorno": "retornos", "base": "bruto", "ocorrencia": "ocorrencias",
                  "enriquecimento": "enriquecimento", "incremental": "incremental", "retirada": "retirada",
@@ -384,6 +384,8 @@ def _reavaliar_aguardando(sb, pasta, desta_vez, mapa, r, rel_base, rel_enriq, u)
 
 def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
     nome = destino.name
+    if e["tipo"] == "leads":
+        return "erro", {"erro": "leads são da prospecção do MotorCli: envie o arquivo numa carteira do MotorCli"}
     if e["tipo"] in TIPOS_CANAL:
         rel = (r.get("retorno_canal_arquivos") or {}).get(nome)
         if rel is None:
@@ -726,7 +728,77 @@ def _layout_automatico(sb: Supabase, pasta: Path, baixados, out):
     return entrada, aviso
 
 
+TIPOS_JORNADA = ("clientes", "contatos", "leads")   # cargas que o MotorCli usa (layout do motor/jornada.py)
+
+
+def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
+    """Carteira da frente MotorCli: roda a jornada (rodar_jornada.py) e publica a Lista do dia, o
+    enquadramento (jornada_cliente), as ações (acoes_dia) e os lotes da Mensageria, no mesmo lugar que o MotorCob."""
+    import rodar_jornada
+    from nuvem import mensageria
+    eid, cid, pasta = emp["id"], u["id"], u["pasta"]
+    out(f"  CARTEIRA MotorCli {u['codigo']} ({u.get('nome') or ''})")
+    execucao = sb.inserir("execucoes", {"empresa_id": eid, **_c(cid), "data_ref": data.isoformat(),
+                                        "status": "rodando"}, retornar=True)[0]
+    try:
+        for obrig in ("base/clientes.csv", "base/contatos.csv"):
+            if not (pasta / obrig).exists():
+                raise RuntimeError(f"falta a base da carteira {u['codigo']}: envie clientes e contatos pelo site")
+        canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
+        estrategias = [e for e in _baixar(sb, pasta, "estrategias", eid, "id.asc") if e.get("frente") == "motorcli"]
+        est = next((e for e in estrategias if e.get("id") == u.get("estrategia_id")), None) \
+            or next((e for e in estrategias if e.get("padrao")), None)
+        r = rodar_jornada.rodar_jornada(pasta / "base" / "clientes.csv", pasta / "base" / "contatos.csv", data,
+                                        pasta / "estado", pasta / "saida", definicao=(est or {}).get("definicao"),
+                                        canais=canais, calendario=u.get("calendario"),
+                                        registros_canal=mensageria.registros(pasta),
+                                        regras_retorno=u.get("regras_retorno"), out=out,
+                                        leads_csv=pasta / "base" / "leads.csv",
+                                        frases=_baixar(sb, pasta, "frases", eid, "id.asc"))
+        sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
+        fila = [{"empresa_id": eid, **_c(cid), "data": data.isoformat(), "canal": l["canal"],
+                 "id_cliente": l["id_cliente"], "reserva": False, "regua": l["regua"], "passo": l["passo"],
+                 "tag": l["tag"], "estrategia": (est or {}).get("nome")} for l in r["fila"]]
+        if fila:
+            sb.inserir("fila_dia", fila)
+        sb.apagar("jornada_cliente", {"empresa_id": f"eq.{eid}", **_fc(cid)})
+        enq = [{"empresa_id": eid, "credor_id": cid, "id_cliente": idc, "data": data.isoformat(), **v}
+               for idc, v in r["enquadramento"].items()]
+        for i in range(0, len(enq), 1000):
+            sb.inserir("jornada_cliente", enq[i:i + 1000])
+        n_arq = publicar_arquivos(sb, r["saida"], f"{emp['slug']}/{data.isoformat()}/{u['codigo']}", limpar=True)
+        publicar_acoes(sb, eid, r, cid)
+        try:   # medição da Jornada para o faturamento; nunca derruba a rodada
+            from nuvem import faturamento
+            n_cli = faturamento.publicar_clientes_jornada(sb, eid, cid, pasta, data, r["fila"])
+            if n_cli:
+                out(f"  faturamento: {n_cli} clientes novos da jornada no ciclo")
+        except Exception as e:  # noqa: BLE001
+            out(f"  aviso: medição da jornada não gravada ({str(e)[:120]})")
+        try:   # lotes da mensageria a partir da Lista do dia; nunca derruba a rodada
+            mensageria.criar_lotes(sb, eid, cid, pasta, data, canais, out)
+        except Exception as e:  # noqa: BLE001
+            out(f"  aviso: lotes da mensageria não criados ({str(e)[:120]})")
+        for e, destino in baixados:
+            if e["tipo"] in TIPOS_JORNADA:
+                sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "processado", "relatorio": {
+                    "observacao": "carga da jornada recebida", "rejeitados": r["resumo"]["rejeitados"]}})
+            else:
+                sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "erro", "relatorio": {
+                    "erro": "a carteira do MotorCli usa só os arquivos de clientes, contatos e leads"}})
+        resumo = {**r["resumo"], "credor": u["codigo"], "arquivos": n_arq}
+        sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
+                     {"status": "ok", "terminada_em": agora(), "resumo": resumo, "alertas": r["alertas"]})
+        return {"execucao": execucao["id"], "resumo": resumo, "rodar": r}
+    except Exception as ex:
+        sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
+                     {"status": "erro", "terminada_em": agora(), "erro": str(ex)[:2000]})
+        raise
+
+
 def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrada, out, pasta_emp: Path):
+    if u.get("frente") == "motorcli":
+        return _rodar_jornada(sb, emp, u, data, baixados, out)
     import rodar_dia
     eid, slug, cid, pasta = emp["id"], emp["slug"], u["id"], u["pasta"]
     nome = slug if cid is None else f"{slug}/{u['codigo']}"
@@ -903,6 +975,24 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
     entrada = arquivo_entrada(emp, pasta_empresas)
     out(f"EMPRESA {emp['slug']}")
     unidades = credores(sb, dados, emp)
+    if unidades[0]["id"] is not None:   # carteira de frente desligada na empresa não roda
+        try:
+            frentes = {f["frente"] for f in sb.selecionar("empresa_frentes", {"empresa_id": f"eq.{emp['id']}",
+                                                                               "ativo": "eq.true"}) or []}
+        except ErroSupabase:     # banco sem o SQL 18
+            frentes = set()
+        try:   # módulo do motor de cada frente: orquestracao (MotorCob) e jornada (MotorCli); sem linha = ligado
+            modulos = {m["modulo"]: m.get("ativo") is not False for m in sb.selecionar(
+                "empresa_modulos", {"empresa_id": f"eq.{emp['id']}"}) or []}
+        except ErroSupabase:
+            modulos = {}
+        modulo_da = {"motorcob": "orquestracao", "motorcli": "jornada"}
+        unidades = [u for u in unidades if modulos.get(modulo_da[u.get("frente") or "motorcob"], True)]
+        if frentes:
+            unidades = [u for u in unidades if (u.get("frente") or "motorcob") in frentes]
+        if not unidades:
+            out("  nenhuma carteira ativa nas frentes da empresa")
+            return {"credores": {}}
     if so_credores is not None and unidades[0]["id"] is not None:
         unidades = [u for u in unidades if u["id"] in so_credores]
     baixados = baixar_entradas(sb, dados, emp["id"], out, unidades,
@@ -1182,6 +1272,10 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
         campanhas.analisar(sb, dados, out)
         campanhas.preparar(sb, dados, agora, out)
     resumo = mensageria.processar(sb, dados, agora, out)
+    from nuvem import retornos
+    retornos.processar_retornos(sb, dados, agora, out)  # entrega, falha, resposta e bounce dos fornecedores reais
+    _recarga_automatica(sb, dados, agora, out)
+    _faturamento(sb, dados, agora, out)
     radar = atendimento.banco_radar(sb)
     if radar:
         atendimento.enviar(sb, dados, agora, out)        # respostas escritas na plataforma
@@ -1193,8 +1287,74 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
             campanhas.limpar(sb, dados, agora, out)
             if radar:
                 sb.rpc("limpar_mensageria_90d")          # textos de resposta e links com mais de 90 dias
+            from nuvem import fornecedores
+            fornecedores.manter_assinaturas(out)         # endereço de retorno cadastrado na Zenvia
+            try:
+                sb.rpc("limpar_eventos_mensageria")      # avisos dos fornecedores já aplicados, depois de 7 dias
+            except Exception:  # noqa: BLE001 — banco ainda sem o SQL 24
+                pass
             marca.write_text(hoje, encoding="utf-8")
     return resumo
+
+
+def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:
+    """Uma vez por dia (depois das 6h): rascunhos dos ciclos que fecharam e emissão das empresas com "Emissão
+    automática". A cada rodada: envia as faturas emitidas que estão na fila (demonstrativo, boleto e e-mail pela
+    função "cobranca"). Banco sem o SQL 25: não faz nada."""
+    agora = agora or datetime.now(timezone.utc)
+    from zoneinfo import ZoneInfo
+    local = agora.astimezone(ZoneInfo("America/Sao_Paulo"))
+    marca = Path(dados) / "faturamento_dia.txt"
+    if local.hour >= 6 and (not marca.exists() or marca.read_text(encoding="utf-8").strip() != local.date().isoformat()):
+        try:
+            mes = local.date().replace(day=1)
+            anterior = (mes - timedelta(days=1)).replace(day=1)
+            n = sum(int(sb.rpc("gerar_rascunhos", {"competencia": c.isoformat()}) or 0) for c in (anterior, mes))
+            e = int(sb.rpc("emitir_automaticas") or 0)
+            if n or e:
+                out(f"faturamento: {n} rascunhos gerados, {e} faturas emitidas sozinhas")
+        except Exception as erro:  # noqa: BLE001 — banco sem o SQL 25 ou fora do ar: tenta amanhã de novo
+            out(f"faturamento: rotina do dia não rodou ({str(erro)[:120]})")
+        marca.parent.mkdir(parents=True, exist_ok=True)
+        marca.write_text(local.date().isoformat(), encoding="utf-8")
+    try:
+        fila = sb.rpc("faturas_para_enviar") or []
+    except Exception:  # noqa: BLE001
+        return
+    for item in fila:
+        fid = item if isinstance(item, int) else (item.get("faturas_para_enviar") if isinstance(item, dict) else item)
+        try:
+            r = sb.funcao("cobranca", {"acao": "enviar_fatura", "fatura": int(fid)}) or {}
+            out(f"faturamento: fatura {fid} enviada para {', '.join(r.get('enviada_para') or [])}")
+        except Exception as erro:  # noqa: BLE001
+            linha = (sb.selecionar("faturas", {"id": f"eq.{fid}"}) or [{}])[0]
+            final = int(linha.get("envio_tentativas") or 0) >= 3 or getattr(erro, "status", 0) == 422
+            motivo = str(getattr(erro, "corpo", "") or erro)
+            try:
+                motivo = json.loads(motivo).get("erro") or motivo
+            except (ValueError, AttributeError):
+                pass
+            sb.atualizar("faturas", {"id": f"eq.{fid}"}, {"envio": "erro" if final else "pendente",
+                                                         "envio_motivo": str(motivo)[:300]})
+            out(f"faturamento: fatura {fid} não foi enviada ({str(motivo)[:120]})")
+
+
+def _recarga_automatica(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:
+    """De hora em hora: a função "cobranca" recarrega no cartão guardado quem é pré-pago, ligou a recarga
+    automática e ficou abaixo do aviso. Sem a função publicada (ou sem a chave do Stripe), só registra e segue."""
+    marca = Path(dados) / "recarga_automatica.txt"
+    hora = (agora or datetime.now()).strftime("%Y-%m-%dT%H")
+    if marca.exists() and marca.read_text(encoding="utf-8").strip() == hora:
+        return
+    marca.parent.mkdir(parents=True, exist_ok=True)
+    marca.write_text(hora, encoding="utf-8")
+    try:
+        r = sb.funcao("cobranca", {"acao": "recargas_automaticas"}) or {}
+    except Exception as e:  # noqa: BLE001
+        out(f"recarga automática: não rodou ({str(e)[:120]})")
+        return
+    for x in r.get("recargas") or []:
+        out(f"recarga automática: empresa {x.get('empresa')} — {x.get('situacao') or x.get('erro')}")
 
 
 def _versao_repo() -> str:

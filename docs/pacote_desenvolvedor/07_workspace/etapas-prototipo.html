@@ -1,0 +1,800 @@
+<title>Etapas da régua</title>
+<style>
+/* Layout: janela do sistema; à esquerda as etapas da estratégia na ordem de prioridade, à direita o editor da etapa escolhida em seções na ordem em que se pensa a régua */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
+  --cob: #C9A35A; --cli: #8E8E93; --azul: #0A64D0; --ok: #1E7A36; --okf: #E6F4EA; --alerta: #8A5A00; --alertaf: #FFF4D6; --erro: #C4271E;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding: 24px 16px 48px; margin: 0; }
+.proto { max-width: 1180px; margin: 0 auto 14px; font-size: 13px; color: var(--tinta-2); }
+.topo { max-width: 1180px; margin: 0 auto 16px; display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+.topo p { margin: 4px 0 0; color: var(--tinta-2); }
+h2 { font-size: 17px; margin: 0; }
+.frentes { display: inline-flex; background: var(--suave); border-radius: 12px; padding: 4px; gap: 4px; }
+.frentes button { border: 0; background: transparent; color: var(--tinta-2); font: 600 14px var(--sans); padding: 8px 14px; border-radius: 9px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.frentes button[aria-pressed="true"] { background: var(--painel); color: var(--tinta); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.sig { width: 22px; height: 22px; border-radius: 6px; display: inline-grid; place-items: center; color: #fff; font-size: 9px; font-weight: 800; }
+.janela { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start; }
+.lista { background: var(--painel); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 10px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+.lista .cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lista .regra { font-size: 12.5px; color: var(--tinta-2); margin: 0; }
+.etapas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.etapa { display: flex; align-items: center; gap: 10px; border: 1px solid var(--linha); border-radius: 12px; padding: 9px 10px; background: var(--painel); cursor: pointer; }
+.etapa[aria-current="true"] { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; }
+.etapa .pos { font: 600 12px var(--mono); color: var(--tinta-2); width: 18px; text-align: right; font-variant-numeric: tabular-nums; }
+.etapa .bola { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.etapa .txt { flex: 1; min-width: 0; }
+.etapa .txt b { display: block; font-size: 14px; font-weight: 600; }
+.etapa .txt small { color: var(--tinta-2); font-size: 12px; }
+.etapa .ordem { display: flex; flex-direction: column; gap: 2px; }
+.etapa .ordem button { border: 0; background: var(--suave); color: var(--tinta-2); width: 22px; height: 18px; border-radius: 5px; cursor: pointer; font-size: 10px; line-height: 1; }
+.etapa.desligada .txt b, .etapa.desligada .txt small { opacity: .5; }
+.selo { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.selo.padrao { background: var(--suave); color: var(--tinta-2); }
+.selo.sua { background: var(--okf); color: var(--ok); }
+.selo.nova { background: var(--alertaf); color: var(--alerta); }
+.btn { border: 0; border-radius: 999px; padding: 9px 16px; font: 600 14px var(--sans); cursor: pointer; background: var(--tinta); color: var(--painel); }
+.btn.sec { background: var(--suave); color: var(--tinta); }
+.btn.peq { padding: 6px 12px; font-size: 13px; }
+.btn:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.modelos { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--linha); padding-top: 10px; }
+.modelos p { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-2); }
+.modelos button { text-align: left; border: 1px dashed var(--linha); background: transparent; color: var(--tinta); border-radius: 10px; padding: 8px 10px; font: 13.5px var(--sans); cursor: pointer; }
+.modelos button small { display: block; color: var(--tinta-2); font-size: 12px; }
+.editor { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.secao { background: var(--painel); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px; }
+.secao .tit { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.secao .tit span.n { font-size: 12px; font-weight: 700; color: var(--tinta-2); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.ajuda { color: var(--tinta-2); font-size: 13.5px; margin: 0; max-width: 70ch; }
+label.campo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--tinta-2); min-width: 0; }
+input, select { font: 15px var(--sans); color: var(--tinta); background: var(--painel); border: 1px solid var(--linha); border-radius: 10px; height: 40px; padding: 0 10px; width: 100%; min-width: 0; }
+input[type="number"] { font-variant-numeric: tabular-nums; }
+.grade2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grade3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.cond { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, .8fr) minmax(0, 1fr) 32px; gap: 8px; align-items: center; }
+.cond .e { font-size: 12px; color: var(--tinta-2); grid-column: 1 / -1; margin: -2px 0 0 2px; }
+.x { width: 32px; height: 32px; border: 0; border-radius: 8px; background: var(--suave); color: var(--tinta-2); cursor: pointer; font-size: 16px; }
+.estim { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: var(--suave); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; }
+.estim b { font-variant-numeric: tabular-nums; }
+.dias { display: flex; flex-direction: column; gap: 10px; }
+.dia { border: 1px solid var(--linha); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.dia .cabd { display: flex; align-items: center; gap: 8px; }
+.dia .cabd b { font: 600 14px var(--mono); font-variant-numeric: tabular-nums; }
+.dia .cabd input { width: 74px; height: 32px; }
+.dia .cabd .rem { margin-left: auto; font-size: 12.5px; color: var(--tinta-2); background: none; border: 0; cursor: pointer; }
+.acao { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1.4fr) 32px; gap: 8px; align-items: center; }
+.resumo-regua { font: 13px var(--mono); color: var(--tinta-2); background: var(--suave); border-radius: 10px; padding: 8px 10px; overflow-x: auto; white-space: nowrap; }
+.saidas { display: flex; flex-direction: column; }
+.saida { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--linha); }
+.saida:first-child { border-top: 0; }
+.saida .q { display: flex; gap: 10px; align-items: center; }
+.saida .q small { display: block; color: var(--tinta-2); font-size: 12.5px; }
+.chave { width: 42px; height: 26px; border-radius: 999px; border: 0; background: var(--linha); position: relative; cursor: pointer; flex: none; }
+.chave::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .15s; }
+.chave[aria-checked="true"] { background: var(--ok); }
+.chave[aria-checked="true"]::after { left: 19px; }
+.lgpd { border: 1px solid var(--alerta); background: var(--alertaf); color: var(--tinta); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.lgpd b { color: var(--alerta); }
+.lgpd ul { margin: 0; padding-left: 18px; font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; }
+.check input { width: 18px; height: 18px; margin-top: 2px; flex: none; }
+.rodape { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.trava { font-size: 13px; color: var(--tinta-2); background: var(--suave); border-radius: 10px; padding: 10px 12px; margin: 0; }
+.aviso-ok { font-size: 13.5px; color: var(--ok); }
+.travas-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 1px solid var(--linha); border-radius: 12px; padding: 10px; background: var(--suave); color: var(--tinta); font: inherit; cursor: pointer; }
+.travas-item[aria-current="true"] { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; background: var(--painel); }
+.travas-item b { display: block; font-size: 14px; }
+.travas-item small { color: var(--tinta-2); font-size: 12px; }
+.cadeado { width: 26px; height: 26px; border-radius: 8px; background: var(--tinta); color: var(--painel); display: grid; place-items: center; flex: none; }
+.trava-lin { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid var(--linha); align-items: start; }
+.trava-lin:first-of-type { border-top: 0; }
+.trava-lin .desc { color: var(--tinta-2); font-size: 13px; margin: 2px 0 0; max-width: 70ch; }
+.params { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.params label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--tinta-2); min-width: 120px; flex: 1 1 140px; max-width: 220px; }
+.params input, .params select { height: 36px; font-size: 14px; }
+.trava-lin.off .params { opacity: .45; }
+.fixa { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--tinta); color: var(--painel); margin-left: 6px; white-space: nowrap; }
+.radio-lin { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+.radio-lin label { display: flex; gap: 8px; align-items: center; }
+.radio-lin input { width: 18px; height: 18px; }
+
+.paleta { display: flex; flex-direction: column; gap: 8px; background: var(--suave); border-radius: 12px; padding: 10px 12px; position: sticky; top: 0; z-index: 2; }
+.paleta .lin { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.paleta .lin > small { font-size: 11.5px; font-weight: 700; color: var(--tinta-2); text-transform: uppercase; letter-spacing: .04em; margin-right: 4px; }
+.ficha { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 6px 11px; font: 600 13px var(--sans); color: #fff; background: var(--c); cursor: grab; touch-action: none; }
+.ficha.pers { background: var(--painel); color: var(--tinta); border: 1px solid var(--linha); }
+.ficha.pers i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.ficha[aria-pressed="true"] { outline: 3px solid #E0A100; outline-offset: 1px; }
+.ficha .orc { font-size: 10.5px; background: rgba(255,255,255,.25); border-radius: 999px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
+.armado { font-size: 12.5px; color: var(--alerta); }
+.ciclo-ctl { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+.passo { display: inline-flex; align-items: center; border: 1px solid var(--linha); border-radius: 10px; overflow: hidden; }
+.passo button { border: 0; background: var(--suave); width: 30px; height: 32px; cursor: pointer; font-size: 16px; color: var(--tinta); }
+.passo b { min-width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+.esteira { overflow-x: auto; border: 1px solid var(--linha); border-radius: 14px; }
+.grade-e { display: grid; min-width: max-content; }
+.grade-e > div { border-right: 1px solid var(--linha); border-bottom: 1px solid var(--linha); padding: 6px; min-height: 70px; }
+.grade-e .hd { min-height: 0; font: 600 12.5px var(--mono); color: var(--tinta-2); background: var(--suave); text-align: center; position: sticky; top: 0; }
+.grade-e .rot { position: sticky; left: 0; background: var(--painel); z-index: 1; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.grade-e .rot i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
+.grade-e .rot .x { width: 22px; height: 22px; font-size: 13px; margin-left: auto; }
+.cel { display: flex; flex-direction: column; gap: 4px; }
+.cel.vazia { border: 1.5px dashed var(--linha) !important; border-radius: 10px; margin: 2px; color: var(--tinta-2); font-size: 11.5px; align-items: center; justify-content: center; text-align: center; }
+.cel.segue { opacity: .55; font-size: 11.5px; color: var(--tinta-2); }
+.cel.propria { box-shadow: inset 0 0 0 2px var(--c); border-radius: 8px; }
+.cel.alvo { background: var(--alertaf); }
+.cel .mini { display: flex; gap: 4px; justify-content: flex-end; }
+.cel .mini button { border: 0; background: var(--suave); color: var(--tinta-2); border-radius: 6px; font-size: 11px; padding: 2px 6px; cursor: pointer; }
+.fim-ciclo { background: var(--alertaf) !important; color: var(--alerta); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-align: center; }
+.chip { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+.chip .modo { align-self: flex-start; border: 0; background: var(--suave); color: var(--tinta); font: 600 10.5px var(--sans); border-radius: 6px; padding: 1px 6px; cursor: pointer; }
+.chip .corpo { display: flex; align-items: center; gap: 4px; background: var(--c); color: #fff; border-radius: 8px; padding: 4px 6px; font-size: 12px; font-weight: 600; cursor: grab; }
+.chip .corpo span { flex: 1; white-space: nowrap; }
+.chip .corpo button { border: 0; background: transparent; color: #fff; cursor: pointer; padding: 0 2px; font-size: 12px; line-height: 1; }
+.chip .corpo .bal.sem { opacity: .55; }
+.chip[aria-current="true"] .corpo { outline: 2px solid var(--tinta); outline-offset: 1px; }
+.frase-bar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; background: var(--suave); border-radius: 12px; padding: 10px 12px; }
+.frase-bar label { flex: 1 1 260px; }
+.legenda { font-size: 12.5px; color: var(--tinta-2); margin: 0; }
+.funciona { font-size: 13.5px; margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.canais-orc { display: flex; gap: 6px; flex-wrap: wrap; }
+.canais-orc button { border: 1px solid var(--linha); background: var(--painel); color: var(--tinta); border-radius: 999px; padding: 6px 12px; font: 600 13px var(--sans); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.canais-orc button i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.canais-orc button small { font-weight: 500; color: var(--tinta-2); }
+.canais-orc button[aria-pressed="true"] { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; }
+.modo-orc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.opcao { border: 1px solid var(--linha); border-radius: 12px; padding: 12px; display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: 14px; }
+.opcao input { width: 18px; height: 18px; margin-top: 2px; flex: none; }
+.opcao small { display: block; color: var(--tinta-2); font-size: 12.5px; }
+.opcao:has(input:checked) { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; }
+.limites { display: flex; gap: 16px; flex-wrap: wrap; }
+.limites label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.limites input[type="checkbox"] { width: 18px; height: 18px; }
+.limites input[type="number"] { width: 110px; height: 36px; }
+.prio { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--linha); border-radius: 12px; overflow: hidden; }
+.prio li { display: grid; grid-template-columns: 22px 92px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--linha); font-size: 14px; }
+.prio li:first-child { border-top: 0; }
+.prio li input { width: 18px; height: 18px; }
+.prio li .p { font: 600 12px var(--mono); color: var(--tinta-2); }
+.prio li.on .p { color: var(--ok); }
+.prio li.off-par { opacity: .45; }
+.prio li small { display: block; color: var(--tinta-2); font-size: 12px; }
+.prio li .ordem { display: flex; gap: 2px; }
+.prio li .ordem button { border: 0; background: var(--suave); color: var(--tinta-2); width: 24px; height: 22px; border-radius: 5px; cursor: pointer; font-size: 10px; }
+.sim { display: flex; flex-direction: column; gap: 10px; background: var(--suave); border-radius: 12px; padding: 12px 14px; }
+.sim .num { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; }
+.sim .num b { font-size: 20px; display: block; font-variant-numeric: tabular-nums; }
+.barras { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(4px, 1fr); gap: 2px; align-items: end; height: 90px; }
+.barras div { display: flex; flex-direction: column-reverse; height: 100%; }
+.barras span { display: block; }
+.barras-eixo { display: flex; justify-content: space-between; font-size: 11px; color: var(--tinta-2); }
+.leg-b { display: flex; gap: 14px; font-size: 12px; color: var(--tinta-2); }
+.leg-b i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+@media (max-width: 880px) { .modo-orc { grid-template-columns: minmax(0, 1fr); } .prio li { grid-template-columns: 22px 88px minmax(0, 1fr); } .prio li .ordem { grid-column: 3; } }
+@media (max-width: 880px) {
+  .janela { grid-template-columns: minmax(0, 1fr); }
+  .lista { position: static; }
+  .grade3 { grid-template-columns: minmax(0, 1fr); }
+  .cond, .acao { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; }
+  .cond > :nth-child(3), .acao > :nth-child(3) { grid-column: 1 / 3; }
+  .saida { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) { .grade2 { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .chave::after { transition: none; } }
+</style>
+
+<p class="proto">Protótipo para aprovação · estratégia "Régua por persona" · dados de exemplo · nada aqui grava no sistema</p>
+
+<header class="topo">
+  <div>
+    <h1>Etapas da régua</h1>
+    <p>As etapas do MotorCX são um ponto de partida. Crie as suas, com quem entra, como conta os dias, a régua e para onde o cliente vai depois.</p>
+  </div>
+  <div class="frentes" role="group" aria-label="Frente">
+    <button id="f-cob" aria-pressed="true"><span class="sig" style="background:var(--cob)">COB</span>MotorCob</button>
+    <button id="f-cli" aria-pressed="false"><span class="sig" style="background:var(--cli)">CLI</span>MotorCli</button>
+  </div>
+</header>
+
+<main class="janela">
+  <aside class="lista" aria-label="Etapas da estratégia">
+    <div class="cab"><h2>Etapas</h2><button class="btn peq" id="nova">+ Nova etapa</button></div>
+    <p class="regra">O cliente fica na primeira etapa da lista em que ele se encaixa. Use as setas para mudar a prioridade.</p>
+    <ol class="etapas" id="etapas"></ol>
+    <button class="travas-item" id="ir-travas" aria-current="false"><span class="cadeado" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><span><b>Travas</b><small id="travas-resumo"></small></span></button>
+    <div class="modelos" id="modelos"></div>
+  </aside>
+  <section class="editor" id="editor" aria-live="polite"></section>
+</main>
+
+<script>
+const CANAIS = ["RCS", "SMS", "WhatsApp", "E-mail", "Agente virtual", "Discador"];
+const MODOS = ["Sempre", "Senão", "Junto", "Reserva"];
+const CAMPOS = {
+  cob: ["Dias de atraso", "Saldo devedor (R$)", "Produto", "UF", "Persona", "Tem acordo ativo", "Parcelas pagas no acordo", "Coluna da carga: SEGMENTO", "Coluna da carga: PRIORIDADE_CREDOR"],
+  cli: ["É cliente", "Origem do lead", "Consentimento registrado", "Dias desde a contratação", "Dias até o vencimento", "Dias sem atividade", "Produto", "Limite disponível (R$)", "Persona", "Coluna da carga: CANAL_AQUISICAO"]
+};
+const REFS = {
+  cob: ["Dias desde que entrou na etapa", "Dias de atraso", "Dias até o vencimento da parcela", "Dias desde a data da coluna DT_SEGMENTO"],
+  cli: ["Dias desde que entrou na etapa", "Dias desde a entrada do lead", "Dias desde a contratação", "Dias até o vencimento", "Dias sem atividade", "Dias desde a data da coluna DT_EVENTO"]
+};
+const DESTINOS = { cob: ["Volta para o fluxo padrão", "Vai para CPC", "Vai para Preventivo", "Sai da régua"], cli: ["Volta para o fluxo padrão", "Vai para Boas-vindas", "Vai para Retenção", "Sai da régua"] };
+
+const CANAL = {
+  whatsapp: ["WhatsApp", "#1F8A4C"], rcs: ["RCS", "#3B5BA9"], sms: ["SMS", "#7A4FB0"],
+  email: ["E-mail", "#A2552B"], agente_voz: ["Agente virtual", "#0E7C86"], discador: ["Discador", "#475569"]
+};
+const MODO_ROT = { senao: "senão", junto: "+ junto", reserva: "reserva" };
+const PERSONAS = {
+  cob: [{ id: 1, nome: "Digital nativo", cor: "#0E7C86", n: 1840 }, { id: 2, nome: "Só telefone", cor: "#8A5A00", n: 1215 }, { id: 3, nome: "Ticket alto", cor: "#7A4FD0", n: 402 }],
+  cli: [{ id: 11, nome: "Lead digital", cor: "#0A64D0", n: 1530 }, { id: 12, nome: "Lead por indicação", cor: "#1E7A36", n: 788 }]
+};
+const FRASES = {
+  whatsapp: ["Proposta à vista com desconto", "Lembrete da proposta", "Última condição do mês", "Dúvidas? Fale com a gente"],
+  rcs: ["Cartão da proposta com botão", "Cartão da oferta com botão"],
+  sms: ["Lembrete da proposta (160)", "Link da oferta (160)", "Última condição (160)"],
+  email: ["Modelo: Proposta em PDF", "Modelo: Apresentação + link da oferta", "Modelo: Última chamada"],
+  agente_voz: ["Roteiro: Última condição", "Roteiro: Convite para simulação"],
+  discador: []
+};
+const CRIT = {
+  cob: [
+    ["novo", "Cliente novo do dia", "Entrou na etapa hoje"],
+    ["nunca", "Nunca acionado nesta etapa", "Inclui quem ficou fora do orçamento nos dias anteriores"],
+    ["etapa_antigo", "Tempo na etapa: do mais antigo para o mais novo", "", "etapa_novo"],
+    ["etapa_novo", "Tempo na etapa: do mais novo para o mais antigo", "", "etapa_antigo"],
+    ["acao_antiga", "Última ação: da mais antiga para hoje", "Quem está há mais tempo sem receber nada sai primeiro", "acao_recente"],
+    ["acao_recente", "Última ação: da mais recente para a mais antiga", "", "acao_antiga"],
+    ["saldo_maior", "Saldo devedor: do maior para o menor", "", "saldo_menor"],
+    ["saldo_menor", "Saldo devedor: do menor para o maior", "", "saldo_maior"],
+    ["atraso_maior", "Dias de atraso: do maior para o menor", "", "atraso_menor"],
+    ["atraso_menor", "Dias de atraso: do menor para o maior", "", "atraso_maior"],
+    ["hot", "Telefone Hot ou certificado primeiro", "Contato que já respondeu antes"],
+    ["coluna", "Coluna da carga: PRIORIDADE_CREDOR (maior primeiro)", "Qualquer coluna numérica da carga"]
+  ],
+  cli: [
+    ["novo", "Lead ou cliente novo do dia", "Entrou na etapa hoje"],
+    ["nunca", "Nunca acionado nesta etapa", "Inclui quem ficou fora do orçamento nos dias anteriores"],
+    ["etapa_antigo", "Tempo na etapa: do mais antigo para o mais novo", "", "etapa_novo"],
+    ["etapa_novo", "Tempo na etapa: do mais novo para o mais antigo", "", "etapa_antigo"],
+    ["acao_antiga", "Última ação: da mais antiga para hoje", "Quem está há mais tempo sem receber nada sai primeiro", "acao_recente"],
+    ["acao_recente", "Última ação: da mais recente para a mais antiga", "", "acao_antiga"],
+    ["saldo_maior", "Limite disponível: do maior para o menor", "", "saldo_menor"],
+    ["saldo_menor", "Limite disponível: do menor para o maior", "", "saldo_maior"],
+    ["hot", "Já respondeu antes primeiro", "Clicou, respondeu ou abriu algo"],
+    ["coluna", "Coluna da carga: SCORE_PROPENSAO (maior primeiro)", "Qualquer coluna numérica da carga"]
+  ]
+};
+const critPadrao = (on) => CRIT[frente].map(([k]) => [k, on.includes(k)]);
+const orcamento = (modo, qcli, ordemOn, extra = {}) => ({ modo, cli: true, qcli, tel: false, qtel: qcli * 2, fora: "senao",
+  crit: [...ordemOn.map(k => [k, true]), ...CRIT[extra.f || "cob"].map(([k]) => k).filter(k => !ordemOn.includes(k)).map(k => [k, false])], ...extra });
+
+const padraoCob = (nome, sub, cor) => ({ nome, sub, cor, padrao: true, ativa: true });
+const A = (d, c, m, f = "", p = null) => ({ d, c, m, f, p });
+const dados = {
+  cob: [
+    { nome: "Campanha à vista 31–90", sub: "Atraso de 31 a 90 dias · saldo até R$ 5 mil", cor: "#7A4FD0", padrao: false, ativa: true,
+      conds: [["Dias de atraso", "entre", "31 e 90"], ["Saldo devedor (R$)", "menor que", "5000"], ["Tem acordo ativo", "é", "Não"]],
+      ref: "Dias desde que entrou na etapa", de: 0, ate: 20,
+      acoes: [A(1, "whatsapp", "sempre", "Proposta à vista com desconto"), A(1, "sms", "senao", "Lembrete da proposta (160)"), A(1, "email", "junto", "Modelo: Proposta em PDF"),
+              A(1, "email", "sempre", "Modelo: Proposta em PDF", 1), A(1, "rcs", "junto", "Cartão da proposta com botão", 1),
+              A(3, "agente_voz", "sempre", "Roteiro: Última condição"), A(3, "discador", "reserva"),
+              A(3, "sem_acao", "sempre", "", 1),
+              A(5, "rcs", "sempre", "Cartão da proposta com botão"), A(5, "sms", "senao", "Lembrete da proposta (160)"),
+              A(7, "discador", "sempre"), A(7, "discador", "sempre", "", 2)],
+      raias: [1, 2], ciclo: { on: true, dias: 7, vezes: 3 },
+      orc: {
+        whatsapp: orcamento("param", 300, ["novo", "etapa_antigo", "acao_antiga"]),
+        discador: orcamento("param", 250, ["hot", "acao_antiga"], { cli: false, tel: true, qtel: 600 }),
+        agente_voz: orcamento("param", 400, ["novo", "acao_antiga"])
+      },
+      saidas: { "Fez CPC": [true, "Vai para CPC"], "Fechou acordo": [true, "Sai da régua"], "Pagou": [true, "Sai da régua"], "Pediu para sair (opt-out)": [true, "Sai da régua"], "Terminou a janela sem resposta": [true, "Volta para o fluxo padrão"] },
+      estim: 4820 },
+    padraoCob("Quebra de acordo", "Parcela vencida sem pagamento", "#C4271E"),
+    padraoCob("Preventivo", "Parcela do acordo a vencer", "#1E7A36"),
+    padraoCob("CPC (já teve contato)", "CPC A e CPC B", "#0A64D0"),
+    padraoCob("Não CPC (giro)", "Já tentou, sem contato", "#8E8E93"),
+    padraoCob("Cliente novo / não localizado", "Ainda não deu CPC", "#C9A35A")
+  ],
+  cli: [
+    { nome: "Prospecção", sub: "Leads que ainda não são clientes", cor: "#C9A35A", padrao: false, nova: true, ativa: true, prospeccao: true,
+      conds: [["É cliente", "é", "Não"], ["Consentimento registrado", "é", "Sim"], ["Origem do lead", "está em", "Site, Indicação, Evento"]],
+      ref: "Dias desde a entrada do lead", de: 0, ate: 30,
+      acoes: [A(1, "email", "sempre", "Modelo: Apresentação + link da oferta"), A(1, "rcs", "junto", "Cartão da oferta com botão"),
+              A(3, "whatsapp", "sempre", "Dúvidas? Fale com a gente"), A(3, "sms", "senao", "Link da oferta (160)"),
+              A(3, "whatsapp", "sempre", "Dúvidas? Fale com a gente", 12),
+              A(6, "agente_voz", "sempre", "Roteiro: Convite para simulação")],
+      raias: [12], ciclo: { on: true, dias: 10, vezes: 3 },
+      orc: { whatsapp: orcamento("param", 400, ["novo", "acao_antiga"], { f: "cli" }), agente_voz: orcamento("param", 150, ["hot", "novo"], { f: "cli" }) },
+      saidas: { "Virou cliente (contratou)": [true, "Vai para Boas-vindas"], "Respondeu / pediu contato": [true, "Volta para o fluxo padrão"], "Pediu para sair (opt-out)": [true, "Sai da régua"], "Terminou a janela sem resposta": [true, "Sai da régua"] },
+      estim: 2318 },
+    padraoCob("Pré-vencimento", "D-5 até o vencimento", "#1E7A36"),
+    padraoCob("Boas-vindas", "0 a 2 dias da contratação", "#0A64D0"),
+    padraoCob("Ativação", "3 a 30 dias, crédito sem uso", "#7A4FD0"),
+    padraoCob("Retenção", "30 a 89 dias sem atividade", "#8A5A00"),
+    padraoCob("Reativação", "90 a 365 dias sem atividade", "#8E8E93")
+  ]
+};
+const MODELOS = {
+  cob: [["Em branco", "Você define tudo"], ["Pré-judicial", "Pausa a régua e avisa antes do jurídico"], ["Fidelização pós-quitação", "Quem quitou recebe oferta de volta"], ["Campanha sazonal", "Feirão, 13º, fim de ano, com data de início e fim"]],
+  cli: [["Em branco", "Você define tudo"], ["Prospecção", "Leads com consentimento"], ["Aniversário de contrato", "Data da coluna, todo ano"], ["Upgrade de produto", "Quem usa muito e pode subir de plano"]]
+};
+const n = (rot, v, unid, extra) => ({ rot, tipo: "num", v, unid, ...extra });
+const h = (rot, v) => ({ rot, tipo: "hora", v });
+const o = (rot, v, opcoes) => ({ rot, tipo: "sel", v, opcoes });
+const TRAVAS = {
+  cob: [
+    { nome: "Intervalo entre ações do mesmo cliente", desc: "Tempo mínimo entre uma ação e outra para o mesmo cliente nas réguas de massa.", on: true,
+      params: [n("Esperar", 48, "horas"), o("Quem está em CPC", "Segue todo dia (negociação)", ["Segue todo dia (negociação)", "Respeita o intervalo"])] },
+    { nome: "Pausa entre carteiras do mesmo CPF", desc: "Cliente acionado por uma carteira não recebe ação massiva de outra carteira nesse prazo.", on: true,
+      params: [n("Pausa", 48, "horas"), o("Telefone Hot", "Compartilhado entre carteiras", ["Compartilhado entre carteiras", "Cada carteira descobre o seu"])] },
+    { nome: "Horário de envio", desc: "Janela do dia em que as ações saem. Cada canal pode ter uma janela menor em Canais e frases.", on: true,
+      params: [h("De", "08:00"), h("Até", "20:00"), o("Sábado", "Até 14:00", ["Normal", "Até 14:00", "Não aciona"])] },
+    { nome: "Domingos e feriados", desc: "Dias em que nenhuma ação sai.", on: true,
+      params: [o("Domingo", "Não aciona", ["Não aciona", "Só digitais", "Normal"]), o("Feriados", "Nacionais + estaduais da UF do cliente", ["Nacionais", "Nacionais + estaduais da UF do cliente", "Nenhum"])] },
+    { nome: "Limite de ações por cliente", desc: "Teto de acionamentos somando todos os canais.", on: true,
+      params: [n("Por dia", 2, "ações"), n("Por semana", 6, "ações"), n("Por mês", 20, "ações")] },
+    { nome: "Ligações por número", desc: "Tentativas do discador e do agente virtual no mesmo telefone.", on: true,
+      params: [n("Por dia", 3, "tentativas"), n("Intervalo entre tentativas", 2, "horas")] },
+    { nome: "Não Perturbe", desc: "Números cadastrados na lista Não Perturbe.", on: true,
+      params: [o("Quem respeita", "Voz respeita, digitais não", ["Todos os canais", "Voz respeita, digitais não", "Só o discador"])] },
+    { nome: "Freio do WhatsApp", desc: "Se a taxa de bloqueio passar do limite, o WhatsApp só sai para contatos certificados.", on: true,
+      params: [n("Taxa de bloqueio máxima", 3, "%"), n("A partir de", 500, "envios no dia")] },
+    { nome: "Opt-out e descadastro", desc: "Quem pediu para sair não recebe mais nada no canal (ou em todos, se pediu em todos).", fixa: "LGPD e CDC: não dá para desligar" },
+    { nome: "Contato de terceiro", desc: "Número contestado ou marcado como 'não pertence ao cliente' nunca recebe.", fixa: "Cobrar terceiro expõe a empresa (CDC art. 42 e LGPD)" },
+    { nome: "Clientes bloqueados", desc: "Óbito, judicial e reclamação formal não recebem ação.", fixa: "Fica sempre ligada" }
+  ],
+  cli: [
+    { nome: "Intervalo entre ações do mesmo cliente", desc: "Tempo mínimo entre uma ação e outra para o mesmo cliente.", on: true, params: [n("Esperar", 48, "horas"), o("Pré-vencimento", "Não espera", ["Não espera", "Respeita o intervalo"])] },
+    { nome: "Horário de envio", desc: "Janela do dia em que as ações saem.", on: true, params: [h("De", "09:00"), h("Até", "20:00"), o("Sábado", "Normal", ["Normal", "Até 14:00", "Não aciona"])] },
+    { nome: "Domingos e feriados", desc: "Dias em que nenhuma ação sai.", on: true, params: [o("Domingo", "Não aciona", ["Não aciona", "Só digitais", "Normal"]), o("Feriados", "Nacionais", ["Nacionais", "Nacionais + estaduais da UF do cliente", "Nenhum"])] },
+    { nome: "Limite de ações por cliente", desc: "Teto somando todos os canais e etapas.", on: true, params: [n("Por semana", 3, "ações"), n("Por mês", 8, "ações")] },
+    { nome: "Limite para leads", desc: "Prospecção costuma pedir menos insistência que a jornada.", on: true, params: [n("Por semana", 2, "ações"), n("Máximo de dias na prospecção", 30, "dias")] },
+    { nome: "Não Perturbe", desc: "Números cadastrados na lista Não Perturbe.", on: true, params: [o("Quem respeita", "Todos os canais", ["Todos os canais", "Voz respeita, digitais não"])] },
+    { nome: "Freio do WhatsApp", desc: "Se a taxa de bloqueio passar do limite, o WhatsApp para para leads e segue só para clientes.", on: true, params: [n("Taxa de bloqueio máxima", 2, "%"), n("A partir de", 300, "envios no dia")] },
+    { nome: "Opt-out e descadastro", desc: "Quem pediu para sair não recebe mais nada; lead que sai não volta para a prospecção.", fixa: "LGPD: não dá para desligar" },
+    { nome: "Lead sem base legal", desc: "Lead sem consentimento ou legítimo interesse e sem origem registrada não entra.", fixa: "LGPD art. 7º: não dá para desligar" },
+    { nome: "Cliente em atraso", desc: "Cliente em atraso sai da jornada e fica com a cobrança (MotorCob).", fixa: "Regra do MotorCX: evita oferta para quem está devendo" }
+  ]
+};
+let frente = "cob", sel = 0;
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const opts = (lista, v) => lista.map(o => `<option${o === v ? " selected" : ""}>${esc(o)}</option>`).join("");
+
+function nova(nome) {
+  const pros = nome === "Prospecção";
+  const e = { nome: nome === "Em branco" ? "Nova etapa" : nome, sub: "Criada por você", cor: "#0A64D0", padrao: false, nova: true, ativa: false, prospeccao: pros,
+    conds: pros ? [["É cliente", "é", "Não"], ["Consentimento registrado", "é", "Sim"]] : [[CAMPOS[frente][0], "maior que", ""]],
+    ref: pros ? "Dias desde a entrada do lead" : "Dias desde que entrou na etapa", de: 0, ate: 15,
+    acoes: [], raias: [], ciclo: { on: false, dias: 7, vezes: 2 }, orc: {},
+    saidas: frente === "cli"
+      ? { "Virou cliente (contratou)": [pros, "Vai para Boas-vindas"], "Respondeu / pediu contato": [true, "Volta para o fluxo padrão"], "Pediu para sair (opt-out)": [true, "Sai da régua"], "Terminou a janela sem resposta": [true, "Volta para o fluxo padrão"] }
+      : { "Fez CPC": [true, "Vai para CPC"], "Fechou acordo": [true, "Sai da régua"], "Pagou": [true, "Sai da régua"], "Pediu para sair (opt-out)": [true, "Sai da régua"], "Terminou a janela sem resposta": [true, "Volta para o fluxo padrão"] },
+    estim: null };
+  dados[frente].unshift(e); sel = 0; render();
+}
+
+function renderLista() {
+  const l = dados[frente];
+  $("#etapas").innerHTML = l.map((e, i) => `
+    <li class="etapa${e.ativa ? "" : " desligada"}" data-i="${i}" aria-current="${i === sel}" tabindex="0">
+      <span class="pos">${i + 1}</span><span class="bola" style="background:${e.cor}"></span>
+      <span class="txt"><b>${esc(e.nome)}</b><small>${esc(e.sub)}</small></span>
+      <span class="selo ${e.padrao ? "padrao" : e.nova ? "nova" : "sua"}">${e.padrao ? "Padrão" : e.nova ? "Nova" : "Sua"}</span>
+      <span class="ordem"><button data-sobe="${i}" aria-label="Subir prioridade">▲</button><button data-desce="${i}" aria-label="Descer prioridade">▼</button></span>
+    </li>`).join("");
+  const tv = TRAVAS[frente];
+  $("#travas-resumo").textContent = `${tv.filter(t => t.fixa || t.on).length} ligadas · ${tv.filter(t => t.fixa).length} fixas por lei`;
+  $("#ir-travas").setAttribute("aria-current", sel === "travas");
+  $("#modelos").innerHTML = `<p>Começar de um modelo</p>` + MODELOS[frente].map(([n, s]) => `<button data-modelo="${esc(n)}">${esc(n)}<small>${esc(s)}</small></button>`).join("");
+}
+
+function renderPadrao(e) {
+  return `<div class="secao"><div class="tit"><h2>${esc(e.nome)}</h2><span class="selo padrao">Etapa padrão do MotorCX</span></div>
+    <p class="ajuda">As etapas padrão já vêm com a régua do playbook. Você pode editar os dias e canais dela na tela da estratégia, mudar a prioridade aqui, ou desligar para a estratégia.</p>
+    <div class="saida"><div class="q"><button class="chave" role="switch" id="liga-padrao" aria-checked="${e.ativa}" aria-label="Etapa ligada"></button><div>Ligada nesta estratégia<small>Desligada, o cliente que cairia aqui segue para a próxima etapa da lista.</small></div></div></div>
+    <p class="trava">Quem entra e quando sai são regras do motor (CPC, acordo, pagamento, quebra), iguais para todas as empresas. Para outra regra de entrada, crie uma etapa sua acima desta.</p></div>`;
+}
+
+function campoParam(p, ti, pi) {
+  const id = `tp-${ti}-${pi}`;
+  if (p.tipo === "sel") return `<label for="${id}">${esc(p.rot)}<select id="${id}" data-tp="${ti}.${pi}">${opts(p.opcoes, p.v)}</select></label>`;
+  if (p.tipo === "hora") return `<label for="${id}">${esc(p.rot)}<input id="${id}" type="time" value="${p.v}" data-tp="${ti}.${pi}"></label>`;
+  return `<label for="${id}">${esc(p.rot)} (${esc(p.unid)})<input id="${id}" type="number" min="0" value="${p.v}" data-tp="${ti}.${pi}"></label>`;
+}
+function renderTravas() {
+  const tv = TRAVAS[frente];
+  $("#editor").innerHTML = `
+  <div class="secao">
+    <div class="tit"><h2>Travas</h2><span class="ajuda">Valem para todas as etapas desta estratégia</span></div>
+    <p class="ajuda">Você escolhe quais travas valem e os parâmetros de cada uma. Uma etapa pode ter travas próprias (seção 6 da etapa). As que a lei exige ficam sempre ligadas.</p>
+    ${tv.map((t, ti) => `<div class="trava-lin${t.fixa || t.on ? "" : " off"}">
+      ${t.fixa ? `<span class="cadeado" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>`
+               : `<button class="chave" role="switch" data-trava="${ti}" aria-checked="${t.on}" aria-label="${esc(t.nome)}"></button>`}
+      <div><b>${esc(t.nome)}</b>${t.fixa ? `<span class="fixa">Sempre ligada</span>` : ""}
+        <p class="desc">${esc(t.desc)}${t.fixa ? ` ${esc(t.fixa)}.` : ""}</p>
+        ${t.params ? `<div class="params">${t.params.map((p, pi) => campoParam(p, ti, pi)).join("")}</div>` : ""}</div>
+    </div>`).join("")}
+  </div>
+  <div class="secao"><div class="rodape"><span class="aviso-ok" id="salvo" hidden>Travas salvas. Valem a partir da rotina de amanhã.</span><button class="btn" id="salvar-travas">Salvar travas</button></div></div>`;
+}
+
+let armado = null, chipSel = null, canalOrc = null, aviso = "";
+const nomePers = id => (PERSONAS[frente].find(p => p.id === id) || {}).nome || "Persona";
+const corPers = id => (PERSONAS[frente].find(p => p.id === id) || {}).cor || "#888";
+const fmt = n => n.toLocaleString("pt-BR");
+
+function colunas(e) {
+  if (e.ciclo.on) return Array.from({ length: e.ciclo.dias }, (_, i) => i + 1);
+  const fim = Math.min(e.ate, e.de + 30);
+  return Array.from({ length: Math.max(0, fim - e.de + 1) }, (_, i) => e.de + i);
+}
+const rotDia = (e, d) => e.ciclo.on ? `dia ${d}` : d < 0 ? `D${d}` : `D+${d}`;
+const celula = (e, d, p) => e.acoes.map((a, i) => ({ a, i })).filter(x => x.a.d === d && x.a.p === p);
+const canaisUsados = e => Object.keys(CANAL).filter(c => e.acoes.some(a => a.c === c));
+
+function normalizar(e) {
+  const vistos = new Set();
+  e.acoes.forEach(a => {
+    if (a.c === "sem_acao") return;
+    const k = a.d + "|" + a.p;
+    if (!vistos.has(k)) { a.m = "sempre"; vistos.add(k); } else if (a.m === "sempre") a.m = "senao";
+  });
+}
+function addCanal(e, d, p, c, f = "") {
+  const cel = celula(e, d, p).filter(x => x.a.c !== "sem_acao");
+  if (cel.some(x => x.a.c === c)) { aviso = `${CANAL[c][0]} já está no ${rotDia(e, d)}${p == null ? "" : " da raia " + nomePers(p)}.`; return; }
+  e.acoes = e.acoes.filter(a => !(a.d === d && a.p === p && a.c === "sem_acao"));
+  if (p != null && !e.raias.includes(p)) e.raias.push(p);
+  e.acoes.push(A(d, c, cel.length ? "senao" : "sempre", f, p));
+  aviso = "";
+}
+function addPersona(e, d, id) {
+  if (!e.raias.includes(id)) e.raias.push(id);
+  if (d == null) return;
+  if (celula(e, d, id).length) { aviso = `${nomePers(id)} já tem raia própria no ${rotDia(e, d)}.`; return; }
+  celula(e, d, null).forEach(x => e.acoes.push(A(d, x.a.c, x.a.m, x.a.f, id)));
+  aviso = "";
+}
+function aplicar(e, carga, d, p, copiar) {
+  const [t, v] = carga.split(":");
+  if (t === "c") addCanal(e, d, p, v);
+  else if (t === "p") addPersona(e, d, +v);
+  else if (t === "a") {
+    const x = e.acoes[+v]; if (!x) return;
+    if (x.d === d && x.p === p) return;
+    if (!copiar) e.acoes.splice(+v, 1);
+    addCanal(e, d, p, x.c, x.f);
+  }
+  normalizar(e); chipSel = null;
+}
+
+function chip(e, x, pos) {
+  const { a, i } = x, [nome, cor] = CANAL[a.c];
+  return `<div class="chip" aria-current="${chipSel === i}">
+    ${pos ? `<button class="modo" data-modo="${i}" title="Alternar: senão · + junto · reserva">${MODO_ROT[a.m]}</button>` : ""}
+    <div class="corpo" draggable="true" data-arrasta="a:${i}" style="--c:${cor}"><span data-sel-ai="${i}">${nome}</span>
+      ${a.c === "discador" ? "" : `<button class="bal ${a.f ? "com" : "sem"}" data-sel-ai="${i}" title="${esc(a.f || "sem frase")}" aria-label="Frase de ${nome}">💬</button>`}
+      <button data-tira-ai="${i}" aria-label="Tirar ${nome}">×</button></div></div>`;
+}
+function renderCelula(e, d, p) {
+  const k = `${d}|${p == null ? "g" : p}`;
+  const prop = celula(e, d, p);
+  if (p == null) {
+    if (!prop.length) return `<div class="cel vazia" data-cel="${k}">solte um canal aqui</div>`;
+    return `<div class="cel" data-cel="${k}">${prop.map((x, j) => chip(e, x, j)).join("")}</div>`;
+  }
+  const cor = corPers(p);
+  if (prop.some(x => x.a.c === "sem_acao"))
+    return `<div class="cel propria" data-cel="${k}" style="--c:${cor}"><span class="legenda">⦸ sem ação neste dia</span><div class="mini"><button data-segue="${k}">seguir o geral</button></div></div>`;
+  if (prop.length)
+    return `<div class="cel propria" data-cel="${k}" style="--c:${cor}">${prop.map((x, j) => chip(e, x, j)).join("")}<div class="mini"><button data-segue="${k}" title="Apaga a raia da persona neste dia">seguir o geral</button></div></div>`;
+  const ger = celula(e, d, null).map(x => CANAL[x.a.c][0]).join(" · ");
+  return `<div class="cel segue" data-cel="${k}">${ger ? esc(ger) : "—"}<br>segue o geral<div class="mini"><button data-sem="${k}">⦸ sem ação</button></div></div>`;
+}
+
+function renderRegua(e) {
+  const cols = colunas(e), fim = e.ciclo.on;
+  const tpl = `160px repeat(${cols.length}, 132px)${fim ? " 128px" : ""}`;
+  const linhas = [null, ...e.raias];
+  const total = e.ciclo.dias * e.ciclo.vezes, jan = e.ate - e.de + 1;
+  const cicloInfo = !fim ? "" : total > jan
+    ? `A janela da etapa tem ${jan} dias: o ${e.ciclo.vezes}º ciclo para no dia ${jan - e.ciclo.dias * (e.ciclo.vezes - 1)}.`
+    : `${e.ciclo.vezes} ciclos de ${e.ciclo.dias} dias = ${total} dias. Depois, vale a saída "Terminou a janela".`;
+  const sel = chipSel != null ? e.acoes[chipSel] : null;
+  return `
+  <div class="secao">
+    <div class="tit"><h2><span class="n">4</span>Régua</h2><span class="ajuda">O mesmo Desenho da Esteira de hoje: arraste canais e personas para os dias</span></div>
+    <div class="ciclo-ctl" role="radiogroup" aria-label="Repetição">
+      <label class="radio-lin"><input type="radio" name="ciclo" value="0" ${fim ? "" : "checked"}> Não repete (D+${e.de} a D+${e.ate})</label>
+      <label class="radio-lin"><input type="radio" name="ciclo" value="1" ${fim ? "checked" : ""}> Repete em ciclo</label>
+      ${fim ? `<span>Ciclo de <span class="passo"><button data-cic="dias:-1" aria-label="Menos dias">−</button><b>${e.ciclo.dias}</b><button data-cic="dias:1" aria-label="Mais dias">+</button></span> dias, repetido <span class="passo"><button data-cic="vezes:-1" aria-label="Menos vezes">−</button><b>${e.ciclo.vezes}</b><button data-cic="vezes:1" aria-label="Mais vezes">+</button></span> vezes</span>` : ""}
+    </div>
+    ${fim ? `<p class="legenda">${cicloInfo}</p>` : ""}
+    <div class="paleta">
+      <div class="lin"><small>Canais</small>${Object.entries(CANAL).map(([k, [n, c]]) => {
+        const o = e.orc[k]; const b = o && o.modo === "param" ? `<span class="orc">${o.cli ? fmt(o.qcli) : fmt(o.qtel) + " tel"}/dia</span>` : "";
+        return `<button class="ficha" draggable="true" data-arrasta="c:${k}" data-arma="c:${k}" aria-pressed="${armado === "c:" + k}" style="--c:${c}">${n}${b}</button>`; }).join("")}</div>
+      <div class="lin"><small>Personas desta carteira</small>${PERSONAS[frente].map(p => `<button class="ficha pers" draggable="true" data-arrasta="p:${p.id}" data-arma="p:${p.id}" aria-pressed="${armado === "p:" + p.id}" style="--c:${p.cor}"><i></i>${esc(p.nome)} <small>${fmt(p.n)}</small></button>`).join("")}</div>
+      ${armado ? `<span class="armado">Agora toque no dia…</span>` : aviso ? `<span class="armado">${esc(aviso)}</span>` : ""}
+    </div>
+    <div class="esteira"><div class="grade-e" style="grid-template-columns:${tpl}">
+      <div class="hd rot">Raia</div>${cols.map(d => `<div class="hd">${rotDia(e, d)}</div>`).join("")}${fim ? `<div class="hd">↻</div>` : ""}
+      ${linhas.map((p, li) => `
+        <div class="rot" style="--c:${p == null ? "var(--tinta)" : corPers(p)}">${p == null ? "👥 Público geral" : `<i></i>${esc(nomePers(p))}<button class="x" data-tira-raia="${p}" aria-label="Tirar a raia ${esc(nomePers(p))}">×</button>`}</div>
+        ${cols.map(d => renderCelula(e, d, p)).join("")}
+        ${fim ? (li === 0 ? `<div class="fim-ciclo">↻ × ${e.ciclo.vezes}<br>repete o ciclo</div>` : `<div class="fim-ciclo"></div>`) : ""}`).join("")}
+    </div></div>
+    <p class="legenda">Cada dia tem a raia do público geral. Persona colocada num dia recebe só o que está na raia dela; nos dias em que ela não está, segue o geral. O 1º canal do dia é o principal; os seguintes alternam entre senão, + junto e reserva.</p>
+    ${sel ? `<div class="frase-bar"><label class="campo">Frase de ${CANAL[sel.c][0]} · ${rotDia(e, sel.d)} · ${sel.p == null ? "Público geral" : esc(nomePers(sel.p))}
+        <select data-frase="${chipSel}">${opts(["— sem frase", ...FRASES[sel.c]], sel.f || "— sem frase")}</select></label>
+        <button class="btn sec peq" data-fecha-frase>Fechar</button></div>` : ""}
+    <div><b>Como vai funcionar</b><ul class="funciona">${cols.filter(d => e.acoes.some(a => a.d === d)).map(d => {
+      const txt = p => celula(e, d, p).map((x, j) => x.a.c === "sem_acao" ? "sem ação" : (j ? (x.a.m === "senao" ? " senão " : x.a.m === "junto" ? " + " : " · reserva ") : "") + CANAL[x.a.c][0] + (x.a.f ? ` 💬 ${x.a.f}` : "")).join("");
+      return `<li>${rotDia(e, d)} · Público geral: ${esc(txt(null) || "nada")}${e.raias.filter(p => celula(e, d, p).length).map(p => ` · ${esc(nomePers(p))}: ${esc(txt(p))}`).join("")}</li>`; }).join("")}
+      ${fim ? `<li>Repete a cada ${e.ciclo.dias} dias, ${e.ciclo.vezes} vezes.</li>` : ""}</ul></div>
+  </div>`;
+}
+
+// População de exemplo para a simulação do orçamento (dados fictícios, mesma semente por canal)
+function rnd(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+function populacao(e, c) {
+  let h = 7; for (const ch of e.nome + c) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const r = rnd(h), share = { whatsapp: .22, sms: .2, rcs: .15, email: .18, agente_voz: .12, discador: .15 }[c];
+  const N = Math.round((e.estim || 400) * share), L = Math.max(2, Math.min(e.ciclo.on ? e.ciclo.dias * e.ciclo.vezes : e.ate - e.de + 1, 31));
+  return Array.from({ length: N }, (_, id) => {
+    const dEt = r() < .09 ? 0 : 1 + Math.floor(Math.pow(r(), 1.3) * (L - 1));
+    const novo = dEt === 0, nunca = novo || r() < .12;
+    return { id, dEt, novo, nunca, ult: nunca ? null : 1 + Math.floor(r() * Math.min(dEt, 8)),
+      saldo: 300 + r() * 4700, atraso: 31 + Math.floor(r() * 60), hot: r() < .33, col: Math.floor(r() * 5),
+      tels: c === "discador" || c === "agente_voz" ? 1 + Math.floor(r() * 3) : 1 };
+  });
+}
+const ORD = {
+  novo: (a, b) => b.novo - a.novo, nunca: (a, b) => b.nunca - a.nunca,
+  etapa_antigo: (a, b) => b.dEt - a.dEt, etapa_novo: (a, b) => a.dEt - b.dEt,
+  acao_antiga: (a, b) => (b.ult ?? 999) - (a.ult ?? 999), acao_recente: (a, b) => (a.ult ?? 999) - (b.ult ?? 999),
+  saldo_maior: (a, b) => b.saldo - a.saldo, saldo_menor: (a, b) => a.saldo - b.saldo,
+  atraso_maior: (a, b) => b.atraso - a.atraso, atraso_menor: (a, b) => a.atraso - b.atraso,
+  hot: (a, b) => b.hot - a.hot, coluna: (a, b) => b.col - a.col
+};
+function simular(e, c, o) {
+  const pop = populacao(e, c), ks = o.crit.filter(x => x[1]).map(x => x[0]);
+  pop.sort((a, b) => { for (const k of ks) { const v = ORD[k](a, b); if (v) return v; } return a.id - b.id; });
+  let nc = 0, nt = 0;
+  pop.forEach(x => {
+    x.sai = o.modo === "todos" || ((!o.cli || nc < o.qcli) && (!o.tel || nt + x.tels <= o.qtel) && (o.cli || o.tel));
+    if (x.sai) { nc++; nt += x.tels; }
+  });
+  return pop;
+}
+function proximoCanal(e, c) {
+  const alvo = e.acoes.find((a, i) => a.c !== c && e.acoes.some(b => b.c === c && b.d === a.d && b.p === a.p && e.acoes.indexOf(b) < i) && (a.m === "senao" || a.m === "reserva"));
+  return alvo ? CANAL[alvo.c][0] : null;
+}
+function renderOrcamento(e) {
+  const usados = canaisUsados(e);
+  if (!usados.length) return `<div class="secao"><div class="tit"><h2><span class="n">5</span>Orçamento de envio</h2></div><p class="ajuda">Coloque canais na régua para definir o orçamento de cada um.</p></div>`;
+  if (!usados.includes(canalOrc)) canalOrc = usados[0];
+  const c = canalOrc, o = e.orc[c] || (e.orc[c] = orcamento("todos", 500, ["novo", "acao_antiga"], { f: frente }));
+  const quem = e.prospeccao ? "leads" : "clientes";
+  const crit = CRIT[frente], rot = k => (crit.find(x => x[0] === k) || [k, k])[1];
+  let pr = 0;
+  const lis = o.crit.filter(([k]) => crit.some(x => x[0] === k)).map(([k, on], idx) => {
+    const def = crit.find(x => x[0] === k), par = def[3], parOn = par && o.crit.some(x => x[0] === par && x[1]);
+    const n = on ? pr++ : null;
+    return `<li class="${on ? "on" : ""}${!on && parOn ? " off-par" : ""}">
+      <input type="checkbox" data-crit="${k}" ${on ? "checked" : ""} ${!on && parOn ? "disabled" : ""} aria-label="${esc(def[1])}">
+      <span class="p">${on ? "Prioridade " + n : "—"}</span>
+      <span>${esc(def[1])}<small>${!on && parOn ? `Não faz sentido com "${esc(rot(par))}" marcada` : esc(def[2] || "")}</small></span>
+      ${on ? `<span class="ordem"><button data-crit-sobe="${k}" aria-label="Subir">▲</button><button data-crit-desce="${k}" aria-label="Descer">▼</button></span>` : "<span></span>"}</li>`;
+  }).join("");
+  const pop = simular(e, c, o), sai = pop.filter(x => x.sai), fora = pop.length - sai.length;
+  const L = Math.max(...pop.map(x => x.dEt), 0) + 1, bar = Array.from({ length: L }, () => [0, 0]);
+  pop.forEach(x => bar[x.dEt][x.sai ? 0 : 1]++);
+  const mx = Math.max(1, ...bar.map(b => b[0] + b[1])), cor = CANAL[c][1];
+  const jaAc = sai.filter(x => x.ult != null);
+  const prox = proximoCanal(e, c);
+  return `
+  <div class="secao">
+    <div class="tit"><h2><span class="n">5</span>Orçamento de envio</h2><span class="ajuda">Por canal, nesta etapa</span></div>
+    <p class="ajuda">Nem sempre há orçamento para acionar todo mundo. Para cada canal, escolha se envia para todos ou se limita a quantidade e define quem recebe primeiro.</p>
+    <div class="canais-orc">${usados.map(k => { const ok = e.orc[k] && e.orc[k].modo === "param";
+      return `<button data-orc-canal="${k}" aria-pressed="${k === c}" style="--c:${CANAL[k][1]}"><i></i>${CANAL[k][0]} <small>${ok ? (e.orc[k].cli ? fmt(e.orc[k].qcli) : fmt(e.orc[k].qtel) + " tel") + "/dia" : "todos"}</small></button>`; }).join("")}</div>
+    <div class="modo-orc" role="radiogroup" aria-label="Orçamento de ${CANAL[c][0]}">
+      <label class="opcao"><input type="radio" name="orc-modo" value="todos" ${o.modo === "todos" ? "checked" : ""}><span><b>Todos da raia</b><small>Envia para todos que a régua mandar neste canal. As demais configurações não valem.</small></span></label>
+      <label class="opcao"><input type="radio" name="orc-modo" value="param" ${o.modo === "param" ? "checked" : ""}><span><b>Parametrizado</b><small>Limite por dia e a ordem de quem recebe primeiro dentro do orçamento.</small></span></label>
+    </div>
+    ${o.modo === "param" ? `
+    <div class="limites">
+      <label><input type="checkbox" data-orc-lim="cli" ${o.cli ? "checked" : ""}> Até <input type="number" min="1" data-orc-q="qcli" value="${o.qcli}" ${o.cli ? "" : "disabled"} aria-label="Limite de ${quem}"> ${quem} por dia</label>
+      <label><input type="checkbox" data-orc-lim="tel" ${o.tel ? "checked" : ""}> Até <input type="number" min="1" data-orc-q="qtel" value="${o.qtel}" ${o.tel ? "" : "disabled"} aria-label="Limite de telefones"> telefones por dia</label>
+    </div>
+    <p class="legenda">Com os dois marcados, para no que acabar primeiro. Telefones contam cada número acionado (no discador e no agente virtual um cliente pode usar 2 ou 3). O limite soma o público geral e as personas deste canal na etapa.</p>
+    ${!o.cli && !o.tel ? `<p class="armado">Marque ao menos um limite, ou escolha "Todos da raia".</p>` : ""}
+    <div><b>Quem recebe primeiro</b><p class="legenda">Marque os critérios e ponha na ordem. A prioridade 0 sai primeiro; a seguinte desempata a anterior. Empate até o fim: ordem da carga.</p></div>
+    <ol class="prio">${lis}</ol>
+    <label class="campo">Quem ficar fora do orçamento hoje
+      <select data-orc-fora>${opts(["Recebe o canal de baixo do dia (senão / reserva), se tiver", "Não recebe nada hoje; amanhã concorre de novo pela prioridade"], o.fora === "senao" ? "Recebe o canal de baixo do dia (senão / reserva), se tiver" : "Não recebe nada hoje; amanhã concorre de novo pela prioridade")}</select></label>` : ""}
+    <div class="sim" aria-live="polite">
+      <b>Simulação com a carteira de hoje (dados de exemplo)</b>
+      <div class="num"><span><b>${fmt(pop.length)}</b>${quem} com ${CANAL[c][0]} hoje</span><span><b style="color:${cor}">${fmt(sai.length)}</b>saem (${fmt(sai.reduce((s, x) => s + x.tels, 0))} telefones)</span><span><b>${fmt(fora)}</b>ficam fora${fora ? (o.fora === "senao" ? (prox ? ` → vão para ${prox}` : " → sem canal de baixo, não recebem") : " → concorrem amanhã") : ""}</span></div>
+      ${o.modo === "param" && sai.length ? `<p class="legenda">Entre os que saem: ${fmt(sai.filter(x => x.novo).length)} de ${fmt(pop.filter(x => x.novo).length)} novos do dia · ${fmt(sai.filter(x => x.nunca).length)} de ${fmt(pop.filter(x => x.nunca).length)} nunca acionados · na etapa há ${Math.min(...sai.map(x => x.dEt))} a ${Math.max(...sai.map(x => x.dEt))} dias${jaAc.length ? ` · última ação há ${Math.min(...jaAc.map(x => x.ult))} a ${Math.max(...jaAc.map(x => x.ult))} dias` : ""}.</p>` : ""}
+      <div class="barras" role="img" aria-label="Quem sai e quem fica fora por dias na etapa">${bar.map(([s, f], d) => `<div title="${d} dias na etapa: ${s} saem, ${f} ficam fora"><span style="height:${s / mx * 100}%;background:${cor}"></span><span style="height:${f / mx * 100}%;background:var(--linha)"></span></div>`).join("")}</div>
+      <div class="barras-eixo"><span>entrou hoje</span><span>dias na etapa →</span><span>${L - 1} dias</span></div>
+      <div class="leg-b"><span><i style="background:${cor}"></i>saem hoje</span><span><i style="background:var(--linha)"></i>ficam fora</span></div>
+    </div>
+  </div>`;
+}
+
+function renderEditor() {
+  if (sel === "travas") { renderTravas(); return; }
+  const e = dados[frente][sel];
+  if (e.padrao) { $("#editor").innerHTML = renderPadrao(e); return; }
+  const campos = CAMPOS[frente];
+  $("#editor").innerHTML = `
+  <div class="secao">
+    <div class="tit"><h2><span class="n">1</span>Etapa</h2><span class="selo ${e.nova ? "nova" : "sua"}">${e.nova ? "Nova · ainda não salva" : "Criada por você"}</span></div>
+    <div class="grade2">
+      <label class="campo">Nome da etapa<input id="nome" value="${esc(e.nome)}" maxlength="40"></label>
+      <label class="campo">Descrição curta<input id="sub" value="${esc(e.sub)}" maxlength="60"></label>
+    </div>
+  </div>
+  ${e.prospeccao ? `<div class="lgpd" role="note"><b>Prospecção fala com quem ainda não é cliente. A LGPD pede cuidado extra:</b><ul>
+    <li>Só entra lead com <strong>base legal registrada</strong> na carga (consentimento ou legítimo interesse) e a <strong>origem</strong> do lead.</li>
+    <li>Toda mensagem leva a saída ("Responda SAIR"); quem sai não volta para a prospecção.</li>
+    <li>Não Perturbe e lista de bloqueio valem sempre, sem exceção.</li>
+    <li>Lista comprada sem base legal não entra: o motor recusa a carga sem a coluna de consentimento.</li></ul>
+    <label class="check"><input type="checkbox" id="ciente" checked> A empresa confirma que os leads desta etapa têm base legal para contato.</label></div>` : ""}
+  <div class="secao">
+    <div class="tit"><h2><span class="n">2</span>Quem entra</h2></div>
+    <p class="ajuda">Todas as condições precisam valer. Os campos vêm da carga e do que o motor já calcula.</p>
+    <div id="conds" class="dias">${e.conds.map(([c, o, v], i) => `<div class="cond">
+      <select data-cond="${i}" data-k="0" aria-label="Campo">${opts(campos, c)}</select>
+      <select data-cond="${i}" data-k="1" aria-label="Comparação">${opts(["é", "maior que", "menor que", "entre", "está em", "não está em"], o)}</select>
+      <input data-cond="${i}" data-k="2" value="${esc(v)}" aria-label="Valor" placeholder="valor">
+      <button class="x" data-tira-cond="${i}" aria-label="Tirar condição">×</button></div>`).join("")}</div>
+    <div><button class="btn sec peq" id="mais-cond">+ condição</button></div>
+    <div class="estim">${e.estim != null ? `Hoje esta etapa pegaria <b>${fmt(e.estim)}</b> ${e.prospeccao ? "leads" : "clientes"} da carteira.` : `A estimativa aparece quando as condições estiverem completas.`}</div>
+  </div>
+  <div class="secao">
+    <div class="tit"><h2><span class="n">3</span>Como contar os dias</h2></div>
+    <div class="grade3">
+      <label class="campo">Dia de referência<select id="ref">${opts(REFS[frente], e.ref)}</select></label>
+      <label class="campo">Vale do dia<input id="de" type="number" value="${e.de}"></label>
+      <label class="campo">até o dia<input id="ate" type="number" value="${e.ate}"></label>
+    </div>
+    <p class="ajuda">Fora dessa janela o cliente não fica nesta etapa e segue a lista de prioridade.</p>
+  </div>
+  ${renderRegua(e)}
+  ${renderOrcamento(e)}
+  <div class="secao">
+    <div class="tit"><h2><span class="n">6</span>Quando sai e para onde vai</h2></div>
+    <div class="saidas">${Object.entries(e.saidas).map(([q, [on, d]]) => `<div class="saida">
+      <div class="q"><button class="chave" role="switch" data-saida="${esc(q)}" aria-checked="${on}" aria-label="${esc(q)}"></button><div>${esc(q)}</div></div>
+      <select data-dest="${esc(q)}" aria-label="Destino" ${on ? "" : "disabled"}>${opts(DESTINOS[frente], d)}</select></div>`).join("")}</div>
+  </div>
+  <div class="secao">
+    <div class="tit"><h2><span class="n">7</span>Travas</h2></div>
+    <div class="radio-lin" role="radiogroup" aria-label="Travas da etapa">
+      <label><input type="radio" name="tr-modo" value="estrategia" ${e.travasProprias ? "" : "checked"}> Usar as travas da estratégia</label>
+      <label><input type="radio" name="tr-modo" value="propria" ${e.travasProprias ? "checked" : ""}> Travas próprias nesta etapa</label>
+    </div>
+    ${e.travasProprias ? `<p class="ajuda">Esta etapa usa: intervalo de <b>${e.prospeccao ? 72 : 24} h</b> entre ações, até <b>${e.prospeccao ? 1 : 3}</b> ação por dia, horário <b>${e.prospeccao ? "10:00 às 19:00" : "08:00 às 20:00"}</b>. As demais seguem a estratégia; as exigidas por lei valem sempre.</p>
+      <div class="params"><label>Intervalo entre ações (horas)<input type="number" value="${e.prospeccao ? 72 : 24}"></label><label>Ações por dia<input type="number" value="${e.prospeccao ? 1 : 3}"></label><label>De<input type="time" value="${e.prospeccao ? "10:00" : "08:00"}"></label><label>Até<input type="time" value="${e.prospeccao ? "19:00" : "20:00"}"></label></div>`
+      : `<p class="ajuda">${esc(TRAVAS[frente].filter(t => !t.fixa && t.on).map(t => t.nome).join(" · "))}. <button class="btn sec peq" id="ver-travas">Ver travas</button></p>`}
+  </div>
+  <div class="secao">
+    <div class="rodape">
+      <span class="aviso-ok" id="salvo" hidden>Etapa salva. Vale a partir da rotina de amanhã.</span>
+      <button class="btn sec" id="cancelar">Cancelar</button>
+      <button class="btn" id="salvar">${e.ativa ? "Salvar" : "Salvar e ligar"}</button>
+    </div>
+  </div>`;
+}
+
+function render() { renderLista(); renderEditor(); }
+function frenteSel(f) { frente = f; sel = 0; armado = chipSel = canalOrc = null; aviso = ""; $("#f-cob").setAttribute("aria-pressed", f === "cob"); $("#f-cli").setAttribute("aria-pressed", f === "cli"); render(); }
+$("#f-cob").onclick = () => frenteSel("cob");
+$("#f-cli").onclick = () => frenteSel("cli");
+$("#nova").onclick = () => nova("Em branco");
+$("#ir-travas").onclick = () => { sel = "travas"; render(); };
+
+function moverCrit(o, k, dir) {
+  const on = o.crit.filter(x => x[1]), i = on.findIndex(x => x[0] === k), j = i + dir;
+  if (j < 0 || j >= on.length) return;
+  [on[i], on[j]] = [on[j], on[i]];
+  o.crit = [...on, ...o.crit.filter(x => !x[1])];
+}
+const editorAtual = () => sel === "travas" ? null : dados[frente][sel];
+const parseCel = k => { const [d, p] = k.split("|"); return [+d, p === "g" ? null : +p]; };
+
+document.addEventListener("click", ev => {
+  const cel = ev.target.closest("[data-cel]"), e0 = editorAtual();
+  if (armado && cel && !ev.target.closest("button") && e0) { const [d, p] = parseCel(cel.dataset.cel); aplicar(e0, armado, d, p, false); armado = null; render(); return; }
+  const t = ev.target.closest("button, li.etapa, [data-sel-ai]"); if (!t) return;
+  const l = dados[frente], e = e0, d = t.dataset;
+  if (d.sobe !== undefined) { const i = +d.sobe; if (i > 0) { [l[i - 1], l[i]] = [l[i], l[i - 1]]; sel = sel === i ? i - 1 : sel === i - 1 ? i : sel; render(); } ev.stopPropagation(); return; }
+  if (d.desce !== undefined) { const i = +d.desce; if (i < l.length - 1) { [l[i + 1], l[i]] = [l[i], l[i + 1]]; sel = sel === i ? i + 1 : sel === i + 1 ? i : sel; render(); } ev.stopPropagation(); return; }
+  if (t.matches("li.etapa")) { sel = +d.i; armado = chipSel = canalOrc = null; aviso = ""; render(); return; }
+  if (d.trava !== undefined) { const tr = TRAVAS[frente][+d.trava]; tr.on = !tr.on; render(); return; }
+  if (t.id === "salvar-travas") { $("#salvo").hidden = false; return; }
+  if (t.id === "ver-travas") { sel = "travas"; render(); return; }
+  if (d.modelo) { nova(d.modelo); return; }
+  if (t.id === "liga-padrao") { e.ativa = !e.ativa; render(); return; }
+  if (!e) return;
+  if (d.arma) { armado = armado === d.arma ? null : d.arma; aviso = ""; renderEditor(); return; }
+  if (d.modo !== undefined) { const a = e.acoes[+d.modo]; a.m = { senao: "junto", junto: "reserva", reserva: "senao" }[a.m] || "senao"; renderEditor(); return; }
+  if (d.tiraAi !== undefined) { e.acoes.splice(+d.tiraAi, 1); normalizar(e); chipSel = null; render(); return; }
+  if (d.selAi !== undefined) { chipSel = +d.selAi; renderEditor(); return; }
+  if (d.fechaFrase !== undefined) { chipSel = null; renderEditor(); return; }
+  if (d.tiraRaia !== undefined) { const p = +d.tiraRaia; if (confirm(`Tirar a raia ${nomePers(p)} de todos os dias desta etapa?`)) { e.acoes = e.acoes.filter(a => a.p !== p); e.raias = e.raias.filter(x => x !== p); chipSel = null; renderEditor(); } return; }
+  if (d.segue) { const [dd, p] = parseCel(d.segue); e.acoes = e.acoes.filter(a => !(a.d === dd && a.p === p)); chipSel = null; renderEditor(); return; }
+  if (d.sem) { const [dd, p] = parseCel(d.sem); e.acoes.push(A(dd, "sem_acao", "sempre", "", p)); renderEditor(); return; }
+  if (d.cic) { const [k, v] = d.cic.split(":"); const lim = k === "dias" ? [2, 30] : [1, 12]; e.ciclo[k] = Math.min(lim[1], Math.max(lim[0], e.ciclo[k] + +v)); if (k === "dias") e.acoes = e.acoes.filter(a => a.d <= e.ciclo.dias); renderEditor(); return; }
+  if (d.orcCanal) { canalOrc = d.orcCanal; renderEditor(); return; }
+  if (d.critSobe || d.critDesce) { moverCrit(e.orc[canalOrc], d.critSobe || d.critDesce, d.critSobe ? -1 : 1); renderEditor(); return; }
+  if (t.id === "mais-cond") { e.conds.push([CAMPOS[frente][0], "é", ""]); e.estim = null; renderEditor(); return; }
+  if (d.tiraCond !== undefined) { e.conds.splice(+d.tiraCond, 1); renderEditor(); return; }
+  if (d.saida) { const s = e.saidas[d.saida]; s[0] = !s[0]; renderEditor(); return; }
+  if (t.id === "salvar") { e.nova = false; e.ativa = true; if (e.estim == null) e.estim = e.prospeccao ? 2318 : 412; e.sub = $("#sub").value || e.sub; renderLista(); renderEditor(); $("#salvo").hidden = false; return; }
+  if (t.id === "cancelar") { if (e.nova) { l.splice(sel, 1); sel = 0; } render(); }
+});
+document.addEventListener("keydown", ev => { if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("li.etapa")) { ev.preventDefault(); sel = +ev.target.dataset.i; render(); } });
+
+// Arrastar e soltar (computador); no celular, tocar a ficha e depois o dia
+document.addEventListener("dragstart", ev => { const s = ev.target.closest("[data-arrasta]"); if (!s) return; ev.dataTransfer.setData("text/plain", s.dataset.arrasta); ev.dataTransfer.effectAllowed = "copyMove"; });
+document.addEventListener("dragover", ev => { const c = ev.target.closest("[data-cel]"); if (!c) return; ev.preventDefault(); document.querySelectorAll(".cel.alvo").forEach(x => x !== c && x.classList.remove("alvo")); c.classList.add("alvo"); });
+document.addEventListener("dragleave", ev => { const c = ev.target.closest("[data-cel]"); if (c && !c.contains(ev.relatedTarget)) c.classList.remove("alvo"); });
+document.addEventListener("drop", ev => {
+  const c = ev.target.closest("[data-cel]"), e = editorAtual(); if (!c || !e) return;
+  ev.preventDefault(); const [d, p] = parseCel(c.dataset.cel);
+  aplicar(e, ev.dataTransfer.getData("text/plain"), d, p, ev.altKey); render();
+});
+
+document.addEventListener("input", ev => {
+  const t = ev.target, d = t.dataset;
+  if (d.tp) { const [ti, pi] = d.tp.split(".").map(Number); TRAVAS[frente][ti].params[pi].v = t.value; return; }
+  if (t.name === "tr-modo") { dados[frente][sel].travasProprias = t.value === "propria"; renderEditor(); return; }
+  const e = editorAtual(); if (!e || e.padrao) return;
+  if (t.id === "nome") { e.nome = t.value; renderLista(); }
+  else if (t.id === "sub") { e.sub = t.value; renderLista(); }
+  else if (t.id === "ref") e.ref = t.value;
+  else if (d.cond !== undefined) e.conds[+d.cond][+d.k] = t.value;
+  else if (d.dest) e.saidas[d.dest][1] = t.value;
+});
+document.addEventListener("change", ev => {
+  const t = ev.target, d = t.dataset, e = editorAtual(); if (!e || e.padrao) return;
+  if (t.id === "de" || t.id === "ate") { e[t.id] = +t.value; renderEditor(); return; }
+  if (t.name === "ciclo") {
+    const on = t.value === "1";
+    if (on) e.acoes = e.acoes.map(a => ({ ...a, d: a.d - e.de + 1 })).filter(a => a.d >= 1 && a.d <= e.ciclo.dias);
+    else e.acoes = e.acoes.map(a => ({ ...a, d: a.d - 1 + e.de }));
+    e.ciclo.on = on; chipSel = null; renderEditor(); return;
+  }
+  if (d.frase !== undefined) { e.acoes[+d.frase].f = t.value === "— sem frase" ? "" : t.value; renderEditor(); return; }
+  const o = e.orc[canalOrc]; if (!o) return;
+  if (t.name === "orc-modo") { o.modo = t.value; renderEditor(); return; }
+  if (d.orcLim) { o[d.orcLim] = t.checked; renderEditor(); return; }
+  if (d.orcQ) { o[d.orcQ] = Math.max(1, +t.value || 1); renderEditor(); return; }
+  if (d.orcFora !== undefined) { o.fora = t.value.startsWith("Recebe") ? "senao" : "amanha"; renderEditor(); return; }
+  if (d.crit) {
+    const x = o.crit.find(c => c[0] === d.crit); x[1] = t.checked;
+    o.crit = [...o.crit.filter(c => c[1] && c !== x), ...(x[1] ? [x] : []), ...(x[1] ? [] : [x]), ...o.crit.filter(c => !c[1] && c !== x)];
+    renderEditor(); return;
+  }
+});
+render();
+</script>
+

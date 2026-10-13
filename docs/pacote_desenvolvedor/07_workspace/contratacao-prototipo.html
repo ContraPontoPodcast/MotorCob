@@ -1,0 +1,381 @@
+<title>Contratação MotorCX</title>
+<style>
+/* Layout: janela do Console, uma coluna de seções numeradas na ordem em que a equipe preenche; resumo fixo à direita no desktop */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
+  --cob: #C9A35A; --cli: #8E8E93; --azul: #0A64D0; --ok: #1E7A36; --erro: #C4271E;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --erro: #FF6B60; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --erro: #FF6B60; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding: 24px 16px 48px; }
+.proto { max-width: 1120px; margin: 0 auto 16px; font-size: 13px; color: var(--tinta-2); }
+.janela { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; }
+h2 { font-size: 17px; margin: 0; }
+.cab { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.cab p { margin: 4px 0 0; color: var(--tinta-2); }
+.secoes { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.secao { background: var(--painel); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.secao .tit { display: flex; gap: 12px; align-items: baseline; }
+.secao .tit span { font-size: 12px; font-weight: 700; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+.ajuda { color: var(--tinta-2); font-size: 13.5px; margin: 0; }
+label.campo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--tinta-2); min-width: 0; }
+input, select { font: 15px var(--sans); color: var(--tinta); background: var(--painel); border: 1px solid var(--linha); border-radius: 10px; height: 42px; padding: 0 12px; width: 100%; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.linha2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.motores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.motor { display: flex; gap: 12px; align-items: center; text-align: left; border: 1px solid var(--linha); background: var(--painel); color: var(--tinta); border-radius: 14px; padding: 14px; cursor: pointer; font: inherit; }
+.motor[aria-pressed="true"] { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; }
+.motor .sig { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 12px; flex: none; }
+.motor b { display: block; }
+.motor small { color: var(--tinta-2); }
+.motor .marca { margin-left: auto; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--linha); flex: none; display: grid; place-items: center; font-size: 12px; }
+.motor[aria-pressed="true"] .marca { background: var(--tinta); border-color: var(--tinta); color: var(--painel); }
+.aviso { font-size: 13px; color: var(--tinta-2); background: var(--suave); border-radius: 10px; padding: 10px 12px; margin: 0; }
+.modulos { display: flex; flex-direction: column; }
+.mod { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--linha); }
+.mod:first-child { border-top: 0; }
+.mod div { flex: 1; min-width: 0; }
+.mod small { display: block; color: var(--tinta-2); font-size: 13px; }
+.chave { width: 46px; height: 28px; border-radius: 999px; border: 0; background: var(--linha); position: relative; cursor: pointer; flex: none; }
+.chave::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .15s; }
+.chave[aria-checked="true"] { background: var(--ok); }
+.chave[aria-checked="true"]::after { left: 21px; }
+.canais { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 0 12px; }
+.chip { border: 1px solid var(--linha); background: var(--painel); color: var(--tinta); border-radius: 999px; padding: 6px 12px; font: 13px var(--sans); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--tinta); color: var(--painel); border-color: var(--tinta); }
+.grupo-preco { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-2); margin: 6px 0 0; }
+.item { border: 1px solid var(--linha); border-radius: 14px; overflow: hidden; }
+.item > button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--painel); color: var(--tinta); border: 0; font: inherit; text-align: left; cursor: pointer; }
+.item > button div { flex: 1; min-width: 0; }
+.item > button small { display: block; color: var(--tinta-2); font-size: 13px; }
+.resumo-preco { font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.resumo-preco.vazio { color: var(--erro); }
+.editor { border-top: 1px solid var(--linha); padding: 14px; display: flex; flex-direction: column; gap: 12px; background: var(--suave); }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; background: var(--linha); border-radius: 10px; padding: 3px; }
+.seg button { flex: 1 1 auto; border: 0; background: none; color: var(--tinta); border-radius: 8px; padding: 8px 10px; font: 13px var(--sans); cursor: pointer; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--painel); box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 600; }
+.faixas { display: flex; flex-direction: column; gap: 8px; }
+.faixa { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; gap: 8px; align-items: end; }
+.faixa .x { height: 42px; border: 0; background: none; color: var(--tinta-2); font-size: 18px; cursor: pointer; border-radius: 8px; }
+.mais { align-self: flex-start; border: 0; background: none; color: var(--azul); font: 600 14px var(--sans); cursor: pointer; padding: 4px 0; }
+.simula { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.simula label { flex: 1 1 160px; }
+.simula output { font-size: 14px; padding-bottom: 10px; font-variant-numeric: tabular-nums; }
+.lado { position: sticky; top: env(safe-area-inset-top, 0px); display: flex; flex-direction: column; gap: 14px; }
+.cartao { background: var(--painel); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.cartao dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; font-size: 14px; }
+.cartao dt { color: var(--tinta-2); }
+.cartao dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.ciclo-linha { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--linha); font-size: 14px; font-variant-numeric: tabular-nums; }
+.ciclo-linha:first-of-type { border-top: 0; }
+.ciclo-linha span:first-child { color: var(--tinta-2); }
+.btn { border: 0; border-radius: 999px; padding: 12px 18px; font: 600 15px var(--sans); cursor: pointer; background: var(--tinta); color: var(--painel); }
+.btn.claro { background: var(--suave); color: var(--tinta); }
+.status { font-size: 13.5px; margin: 0; }
+.status.ok { color: var(--ok); }
+.status.erro { color: var(--erro); }
+@media (max-width: 900px) { .janela { grid-template-columns: minmax(0, 1fr); } .lado { position: static; } }
+@media (max-width: 560px) { .motores, .linha2 { grid-template-columns: minmax(0, 1fr); } .item > button { flex-wrap: wrap; } .resumo-preco { text-align: left; } }
+@media (prefers-reduced-motion: reduce) { .chave::after { transition: none; } }
+</style>
+
+<p class="proto">Protótipo · Console MotorCX › Empresas › Nova empresa (a mesma tela abre em "Contratação" para editar depois). Dados fictícios.</p>
+
+<div class="janela">
+  <div class="secoes">
+    <div class="cab"><div><h1>Nova empresa</h1><p>Motor, módulos, preços e ciclo de uso num lugar só.</p></div></div>
+
+    <section class="secao" aria-labelledby="t1">
+      <div class="tit"><span>1</span><h2 id="t1">Empresa</h2></div>
+      <div class="linha2">
+        <label class="campo">Nome<input id="e-nome" value="Financeira Exemplo"></label>
+        <label class="campo">Endereço no sistema<input id="e-slug" value="financeira-exemplo"></label>
+      </div>
+    </section>
+
+    <section class="secao" aria-labelledby="t2">
+      <div class="tit"><span>2</span><h2 id="t2">Motor contratado</h2></div>
+      <div class="motores">
+        <button type="button" class="motor" data-motor="motorcob" aria-pressed="true"><span class="sig" style="background:var(--cob)">COB</span><span><b>MotorCob</b><small>Cobrança</small></span><span class="marca" aria-hidden="true">✓</span></button>
+        <button type="button" class="motor" data-motor="motorcli" aria-pressed="false"><span class="sig" style="background:var(--cli)">CLI</span><span><b>MotorCli</b><small>Jornada do Cliente</small></span><span class="marca" aria-hidden="true">✓</span></button>
+      </div>
+      <p class="aviso" id="aviso-login"></p>
+    </section>
+
+    <section class="secao" aria-labelledby="t3">
+      <div class="tit"><span>3</span><h2 id="t3">Módulos</h2></div>
+      <p class="ajuda">Marque o que foi contratado. Orquestração e Jornada são módulos do motor: só ficam liberados se marcados.</p>
+      <div class="modulos">
+        <div class="mod" id="mod-orq"><div><b>Orquestração</b><small>MotorCob: Lista do dia, réguas, personas e telefone Hot.</small></div><button type="button" class="chave" role="switch" aria-checked="true" data-mod="orquestracao" aria-label="Orquestração"></button></div>
+        <div class="mod" id="mod-jor"><div><b>Jornada</b><small>MotorCli: Momentos da jornada e lista do dia.</small></div><button type="button" class="chave" role="switch" aria-checked="false" data-mod="jornada" aria-label="Jornada"></button></div>
+        <div class="mod"><div><b>Mensageria</b><small>SMS, RCS, e-mail e WhatsApp saindo da plataforma.</small></div><button type="button" class="chave" role="switch" aria-checked="true" data-mod="mensageria" aria-label="Mensageria"></button></div>
+        <div class="canais" id="canais">
+          <button type="button" class="chip" data-canal="sms" aria-pressed="true">SMS</button>
+          <button type="button" class="chip" data-canal="rcs" aria-pressed="true">RCS</button>
+          <button type="button" class="chip" data-canal="email" aria-pressed="true">E-mail</button>
+          <button type="button" class="chip" data-canal="whatsapp" aria-pressed="false">WhatsApp</button>
+        </div>
+        <div class="mod"><div><b>API</b><small>Cargas e Lista do dia pelo sistema da empresa.</small></div><button type="button" class="chave" role="switch" aria-checked="false" data-mod="api" aria-label="API"></button></div>
+        <div class="mod"><div><b>Enriquecimento</b><small>Retorno do bureau para novos contatos.</small></div><button type="button" class="chave" role="switch" aria-checked="false" data-mod="enriquecimento" aria-label="Enriquecimento"></button></div>
+      </div>
+    </section>
+
+    <section class="secao" aria-labelledby="t4">
+      <div class="tit"><span>4</span><h2 id="t4">Preços</h2></div>
+      <p class="ajuda">Só aparecem os itens do que foi contratado acima. Toque no item para definir o preço. O volume do escalonado é medido no ciclo de uso.</p>
+      <div id="precos" class="modulos" style="gap:10px"></div>
+    </section>
+
+    <section class="secao" aria-labelledby="t5">
+      <div class="tit"><span>5</span><h2 id="t5">Ciclo de uso</h2></div>
+      <p class="ajuda">De quanto em quanto tempo o uso é fechado. O volume do escalonado e o mínimo valem por ciclo.</p>
+      <div class="seg" role="group" aria-label="Periodicidade">
+        <button type="button" data-per="7" aria-pressed="false">Semanal</button>
+        <button type="button" data-per="15" aria-pressed="false">Quinzenal</button>
+        <button type="button" data-per="mensal" aria-pressed="true">Mensal</button>
+        <button type="button" data-per="outro" aria-pressed="false">Outro</button>
+      </div>
+      <div class="linha2" id="ciclo-mensal">
+        <label class="campo">Dia de corte<select id="c-corte"></select></label>
+        <span></span>
+      </div>
+      <div class="linha2" id="ciclo-dias" hidden>
+        <label class="campo">Duração do ciclo (dias)<input id="c-dias" inputmode="numeric" value="7"></label>
+        <label class="campo">Início do primeiro ciclo<input id="c-inicio" type="date" value="2026-10-12"></label>
+      </div>
+    </section>
+
+    <section class="secao" aria-labelledby="t6">
+      <div class="tit"><span>6</span><h2 id="t6">Cobrança</h2></div>
+      <div class="motores">
+        <button type="button" class="motor" data-pag="pos" aria-pressed="true"><span><b>Pós-pago</b><small>Usa no ciclo e paga a fatura depois.</small></span><span class="marca" aria-hidden="true">✓</span></button>
+        <button type="button" class="motor" data-pag="pre" aria-pressed="false"><span><b>Pré-pago</b><small>Recarrega um saldo e o uso desconta dele.</small></span><span class="marca" aria-hidden="true">✓</span></button>
+      </div>
+      <p class="grupo-preco">Formas de pagamento aceitas</p>
+      <div class="canais" style="padding:0">
+        <button type="button" class="chip" data-forma="boleto" aria-pressed="true">Boleto</button>
+        <button type="button" class="chip" data-forma="pix" aria-pressed="true">Pix</button>
+        <button type="button" class="chip" data-forma="cartao" aria-pressed="false">Cartão de crédito</button>
+      </div>
+      <div class="linha2" id="pag-pos">
+        <label class="campo">Prazo para pagar a fatura<select id="c-prazo"><option value="5">5 dias após o fechamento</option><option value="10" selected>10 dias após o fechamento</option><option value="15">15 dias após o fechamento</option><option value="30">30 dias após o fechamento</option></select></label>
+        <span></span>
+      </div>
+      <div id="pag-pre" hidden style="display:flex;flex-direction:column;gap:12px">
+        <div class="linha2">
+          <label class="campo">Recarga mínima (R$)<input id="r-min" inputmode="decimal" value="1000"></label>
+          <label class="campo">Avisar quando o saldo ficar abaixo de (R$)<input id="r-aviso" inputmode="decimal" value="200"></label>
+        </div>
+        <label class="campo">Quando o saldo acabar<select id="r-zero"><option value="pausar">Pausar os envios da Mensageria até a próxima recarga</option><option value="continuar">Continuar e descontar da próxima recarga</option></select></label>
+        <div class="mod" style="border:0;padding:0"><div><b>Recarga automática no cartão</b><small>Recarrega o valor mínimo quando o saldo chega no aviso.</small></div><button type="button" class="chave" role="switch" aria-checked="false" id="r-auto" aria-label="Recarga automática"></button></div>
+        <p class="aviso">O cliente recarrega em Empresa › Faturamento › Recarregar: escolhe o valor (a partir da mínima) e a forma de pagamento. O saldo entra quando o pagamento é confirmado.</p>
+      </div>
+    </section>
+  </div>
+
+  <aside class="lado" aria-label="Resumo">
+    <div class="cartao">
+      <h2>Ciclo atual</h2>
+      <div id="ciclo"></div>
+    </div>
+    <div class="cartao">
+      <h2>Resumo</h2>
+      <dl id="resumo"></dl>
+      <button type="button" class="btn" id="salvar">Criar empresa</button>
+      <p class="status" id="status" role="status"></p>
+    </div>
+  </aside>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const HOJE = new Date(2026, 9, 12);
+const brl = v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const preco5 = v => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 5 });
+const data = d => d.toLocaleDateString("pt-BR");
+
+const ITENS = [
+  { cod: "contratos", nome: "Orquestração", un: "contrato no ciclo", grupo: "Motor", motor: "motorcob", mensal: true },
+  { cod: "jornada_clientes", nome: "Jornada", un: "cliente acionado no ciclo", grupo: "Motor", motor: "motorcli", mensal: true },
+  { cod: "sms", nome: "SMS", un: "mensagem · respostas somam no volume", grupo: "Mensageria", canal: "sms" },
+  { cod: "email", nome: "E-mail", un: "mensagem", grupo: "Mensageria", canal: "email" },
+  { cod: "rcs_basic", nome: "RCS Basic", un: "mensagem", grupo: "Mensageria", canal: "rcs" },
+  { cod: "rcs_single", nome: "RCS Single", un: "mensagem", grupo: "Mensageria", canal: "rcs" },
+  { cod: "rcs_conversacional", nome: "RCS Conversacional", un: "sessão", grupo: "Mensageria", canal: "rcs" },
+  { cod: "whatsapp_marketing", nome: "WhatsApp marketing", un: "conversa", grupo: "Mensageria", canal: "whatsapp" },
+  { cod: "whatsapp_utilidade", nome: "WhatsApp utilidade", un: "conversa", grupo: "Mensageria", canal: "whatsapp" },
+  { cod: "whatsapp_servico", nome: "WhatsApp serviço", un: "conversa", grupo: "Mensageria", canal: "whatsapp" }
+];
+const MODELOS = { flat: "Flat", faixa: "Escalonado por faixa", progressivo: "Escalonado progressivo", mensalidade: "Mensalidade" };
+const AJUDA = {
+  flat: "Um preço por unidade, qualquer volume.",
+  faixa: "O volume do ciclo escolhe a faixa, e o preço dela vale para todas as unidades.",
+  progressivo: "Cada faixa cobra o seu preço só nas unidades que caem nela.",
+  mensalidade: "Valor fixo por ciclo, sem medir o volume."
+};
+const estado = {
+  motores: new Set(["motorcob"]), mods: { orquestracao: true, jornada: false }, per: "mensal", pag: "pos",
+  formas: new Set(["boleto", "pix"]), mensageria: true, canais: new Set(["sms", "rcs", "email"]), aberto: "sms",
+  precos: {
+    contratos: { modelo: "flat", preco: 0.35, minimo: 1000, faixas: [] },
+    sms: { modelo: "faixa", preco: null, minimo: 0, faixas: [{ ate: 100000, preco: 0.075 }, { ate: 500000, preco: 0.068 }, { ate: null, preco: 0.062 }] },
+    email: { modelo: "flat", preco: 0.004, minimo: 0, faixas: [] },
+    rcs_basic: { modelo: "progressivo", preco: null, minimo: 0, faixas: [{ ate: 50000, preco: 0.12 }, { ate: null, preco: 0.10 }] }
+  },
+  sim: { sms: 250000, rcs_basic: 80000 }
+};
+
+function valor(p, qtd) {
+  if (!p) return null;
+  if (p.modelo === "mensalidade") return { total: p.preco || 0, medio: null };
+  let total = 0;
+  if (p.modelo === "flat") total = qtd * (p.preco || 0);
+  else if (p.modelo === "faixa") { const f = p.faixas.find(f => f.ate === null || qtd <= f.ate) || p.faixas[p.faixas.length - 1]; total = qtd * f.preco; }
+  else { let ant = 0; for (const f of p.faixas) { const lim = f.ate === null ? qtd : Math.min(qtd, f.ate); if (lim > ant) total += (lim - ant) * f.preco; ant = f.ate === null ? qtd : f.ate; if (ant >= qtd) break; } }
+  total = Math.round(total * 100) / 100;
+  return { total: Math.max(total, p.minimo || 0), medio: qtd ? total / qtd : 0, complemento: Math.max((p.minimo || 0) - total, 0) };
+}
+function resumoPreco(p) {
+  if (!p) return "Sem preço";
+  if (p.modelo === "mensalidade") return brl(p.preco || 0) + " por ciclo";
+  if (p.modelo === "flat") return preco5(p.preco || 0) + " cada" + (p.minimo ? " · mín. " + brl(p.minimo) : "");
+  return MODELOS[p.modelo] + " · " + p.faixas.length + " faixas" + (p.minimo ? " · mín. " + brl(p.minimo) : "");
+}
+function visiveis() {
+  return ITENS.filter(i => i.motor ? estado.motores.has(i.motor) && estado.mods[i.motor === "motorcob" ? "orquestracao" : "jornada"]
+                                   : estado.mensageria && estado.canais.has(i.canal));
+}
+function editor(i) {
+  const p = estado.precos[i.cod] || (estado.precos[i.cod] = { modelo: "flat", preco: null, minimo: 0, faixas: [] });
+  const mods = Object.keys(MODELOS).filter(m => m !== "mensalidade" || i.mensal);
+  let h = `<div class="seg" role="group" aria-label="Modelo de preço">${mods.map(m => `<button type="button" data-modelo="${m}" data-item="${i.cod}" aria-pressed="${p.modelo === m}">${MODELOS[m]}</button>`).join("")}</div><p class="ajuda">${AJUDA[p.modelo]}</p>`;
+  if (p.modelo === "flat" || p.modelo === "mensalidade") {
+    h += `<div class="linha2"><label class="campo">${p.modelo === "flat" ? "Preço por " + i.un.split(" ")[0] + " (R$)" : "Valor por ciclo (R$)"}<input id="p-${i.cod}-preco" inputmode="decimal" value="${p.preco ?? ""}" data-campo="preco" data-item="${i.cod}"></label>`;
+    h += p.modelo === "flat" ? `<label class="campo">Mínimo por ciclo (R$)<input id="p-${i.cod}-min" inputmode="decimal" value="${p.minimo || ""}" placeholder="sem mínimo" data-campo="minimo" data-item="${i.cod}"></label></div>` : `</div>`;
+  } else {
+    if (p.faixas.length < 2) p.faixas = [{ ate: 100000, preco: 0 }, { ate: null, preco: 0 }];
+    h += `<div class="faixas">${p.faixas.map((f, k) => `<div class="faixa"><label class="campo">${k === p.faixas.length - 1 ? "Acima de " + (p.faixas[k - 1]?.ate ?? 0).toLocaleString("pt-BR") : "Até (quantidade)"}<input id="f-${i.cod}-${k}-ate" inputmode="numeric" value="${f.ate ?? ""}" ${f.ate === null ? "disabled" : ""} data-faixa="${k}" data-campo="ate" data-item="${i.cod}"></label><label class="campo">Preço (R$)<input id="f-${i.cod}-${k}-preco" inputmode="decimal" value="${f.preco}" data-faixa="${k}" data-campo="fpreco" data-item="${i.cod}"></label>${p.faixas.length > 2 && f.ate !== null ? `<button type="button" class="x" data-tira="${k}" data-item="${i.cod}" aria-label="Tirar faixa">×</button>` : "<span></span>"}</div>`).join("")}</div><button type="button" class="mais" data-mais="${i.cod}">+ Faixa</button>`;
+    h += `<label class="campo">Mínimo por ciclo (R$)<input id="p-${i.cod}-min" inputmode="decimal" value="${p.minimo || ""}" placeholder="sem mínimo" data-campo="minimo" data-item="${i.cod}"></label>`;
+  }
+  if (p.modelo !== "mensalidade") {
+    const q = estado.sim[i.cod] ?? 10000, v = valor(p, q);
+    h += `<div class="simula"><label class="campo">Simular volume no ciclo<input id="s-${i.cod}" inputmode="numeric" value="${q}" data-sim="${i.cod}"></label><output>${v ? brl(v.total) + (q ? " · média " + preco5(v.medio) : "") + (v.complemento ? " · inclui " + brl(v.complemento) + " de mínimo" : "") : ""}</output></div>`;
+  }
+  return h;
+}
+function pintarPrecos() {
+  const vs = visiveis();
+  let grupo = "", h = "";
+  for (const i of vs) {
+    if (i.grupo !== grupo) { grupo = i.grupo; h += `<p class="grupo-preco">${grupo}</p>`; }
+    const p = estado.precos[i.cod], aberto = estado.aberto === i.cod;
+    h += `<div class="item"><button type="button" data-abrir="${i.cod}" aria-expanded="${aberto}"><div><b>${i.nome}</b><small>por ${i.un}</small></div><span class="resumo-preco ${p && (p.preco || p.faixas.length) ? "" : "vazio"}">${p && (p.preco || p.faixas.length) ? resumoPreco(p) : "Sem preço"}</span></button>${aberto ? `<div class="editor">${editor(i)}</div>` : ""}</div>`;
+  }
+  $("precos").innerHTML = h || `<p class="ajuda">Escolha um motor ou ligue a Mensageria para definir preços.</p>`;
+}
+function cicloDe(comp, corte) {
+  const ano = comp.getFullYear(), mes = comp.getMonth();
+  if (corte === 1) return [new Date(ano, mes, 1), new Date(ano, mes + 1, 0)];
+  return [new Date(ano, mes - 1, corte), new Date(ano, mes, corte - 1)];
+}
+function cicloAtual() {
+  if (estado.per === "mensal") {
+    const corte = +$("c-corte").value;
+    const comp = corte > 1 && HOJE.getDate() >= corte ? new Date(HOJE.getFullYear(), HOJE.getMonth() + 1, 1) : new Date(HOJE.getFullYear(), HOJE.getMonth(), 1);
+    const [ini, fim] = cicloDe(comp, corte);
+    return { ini, fim, nome: comp.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) };
+  }
+  const dias = Math.min(Math.max(parseInt($("c-dias").value) || 7, 1), 90);
+  const [a, m, d] = ($("c-inicio").value || "2026-10-12").split("-").map(Number);
+  const base = new Date(a, m - 1, d);
+  const n = Math.max(0, Math.floor((HOJE - base) / 86400000 / dias));
+  const ini = new Date(base.getFullYear(), base.getMonth(), base.getDate() + n * dias);
+  const fim = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate() + dias - 1);
+  return { ini, fim, nome: "ciclo de " + dias + " dias" };
+}
+function pintarCiclo() {
+  const c = cicloAtual(), fecha = new Date(c.fim.getFullYear(), c.fim.getMonth(), c.fim.getDate() + 1);
+  const vence = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + (+$("c-prazo").value));
+  const linha = (a, b) => `<div class="ciclo-linha"><span>${a}</span><span>${b}</span></div>`;
+  $("ciclo").innerHTML = linha("Ciclo", c.nome) + linha("Uso", data(c.ini) + " a " + data(c.fim)) +
+    (estado.pag === "pos" ? linha("Fatura fecha", data(fecha)) + linha("Vence", data(vence))
+                          : linha("Saldo", "R$ 0,00") + linha("Primeira recarga", "a partir de " + brl(num($("r-min").value) || 0)) + linha("Extrato fecha", data(fecha)));
+}
+function num(v) { v = String(v).trim(); if (v.includes(",")) v = v.replace(/\./g, "").replace(",", "."); const n = parseFloat(v); return isNaN(n) ? null : n; }
+function pintar() {
+  document.querySelectorAll("[data-motor]").forEach(b => b.setAttribute("aria-pressed", estado.motores.has(b.dataset.motor)));
+  const m = [...estado.motores];
+  $("aviso-login").textContent = m.length === 2 ? "No login, os usuários escolhem entre MotorCob e MotorCli (dá para limitar cada usuário em Usuários e permissões)."
+    : m[0] === "motorcli" ? "No login, todos entram direto no MotorCli. O MotorCob fica fechado para esta empresa." : "No login, todos entram direto no MotorCob. O MotorCli fica fechado para esta empresa.";
+  document.querySelector('[data-mod="mensageria"]').setAttribute("aria-checked", estado.mensageria);
+  $("mod-orq").hidden = !estado.motores.has("motorcob"); $("mod-jor").hidden = !estado.motores.has("motorcli");
+  document.querySelector('[data-mod="orquestracao"]').setAttribute("aria-checked", estado.mods.orquestracao);
+  document.querySelector('[data-mod="jornada"]').setAttribute("aria-checked", estado.mods.jornada);
+  document.querySelectorAll("[data-per]").forEach(b => b.setAttribute("aria-pressed", b.dataset.per === estado.per || (estado.per !== "mensal" && b.dataset.per === "outro" && !["7", "15"].includes(estado.per))));
+  $("ciclo-mensal").hidden = estado.per !== "mensal"; $("ciclo-dias").hidden = estado.per === "mensal";
+  document.querySelectorAll("[data-pag]").forEach(b => b.setAttribute("aria-pressed", b.dataset.pag === estado.pag));
+  document.querySelectorAll("[data-forma]").forEach(b => b.setAttribute("aria-pressed", estado.formas.has(b.dataset.forma)));
+  $("pag-pos").hidden = estado.pag !== "pos"; $("pag-pre").hidden = estado.pag !== "pre";
+  $("canais").hidden = !estado.mensageria;
+  document.querySelectorAll("[data-canal]").forEach(b => b.setAttribute("aria-pressed", estado.canais.has(b.dataset.canal)));
+  pintarPrecos(); pintarCiclo(); pintarResumo();
+}
+function pintarResumo() {
+  const semPreco = visiveis().filter(i => { const p = estado.precos[i.cod]; return !(p && (p.preco || p.faixas.length)); });
+  const mods = [].concat(estado.motores.has("motorcob") && estado.mods.orquestracao ? ["Orquestração"] : [],
+                         estado.motores.has("motorcli") && estado.mods.jornada ? ["Jornada"] : []).concat(estado.mensageria ? ["Mensageria (" + [...estado.canais].map(c => ({ sms: "SMS", rcs: "RCS", email: "E-mail", whatsapp: "WhatsApp" })[c]).join(", ") + ")"] : [])
+    .concat([...document.querySelectorAll('[data-mod="api"], [data-mod="enriquecimento"]')].filter(b => b.getAttribute("aria-checked") === "true").map(b => b.getAttribute("aria-label")));
+  $("resumo").innerHTML = `<dt>Motor</dt><dd>${[...estado.motores].map(m => m === "motorcob" ? "MotorCob" : "MotorCli").join(" + ")}</dd><dt>Módulos</dt><dd>${esc(mods.join(" · "))}</dd><dt>Preços</dt><dd>${visiveis().length - semPreco.length} de ${visiveis().length} definidos</dd><dt>Ciclo</dt><dd>${estado.per === "mensal" ? (+$("c-corte").value === 1 ? "mensal, mês fechado" : "mensal, corte dia " + (+$("c-corte").value)) : "a cada " + esc(parseInt($("c-dias").value) || 7) + " dias"}</dd><dt>Cobrança</dt><dd>${estado.pag === "pos" ? "Pós-pago" : "Pré-pago"} · ${[...estado.formas].map(f => ({ boleto: "boleto", pix: "Pix", cartao: "cartão" })[f]).join(", ")}</dd>`;
+  return semPreco;
+}
+for (let d = 1; d <= 28; d++) {
+  $("c-corte").insertAdjacentHTML("beforeend", `<option value="${d}" ${d === 21 ? "selected" : ""}>${d === 1 ? "Dia 1 (mês fechado)" : "Dia " + d}</option>`);
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.motor) { const m = b.dataset.motor; if (estado.motores.has(m) && estado.motores.size === 1) { $("status").className = "status erro"; $("status").textContent = "A empresa precisa de pelo menos um motor."; return; } estado.motores.has(m) ? estado.motores.delete(m) : estado.motores.add(m); $("status").textContent = ""; pintar(); return; }
+  if (b.dataset.mod === "mensageria") { estado.mensageria = !estado.mensageria; pintar(); return; }
+  if (b.dataset.mod === "orquestracao" || b.dataset.mod === "jornada") { estado.mods[b.dataset.mod] = !estado.mods[b.dataset.mod]; pintar(); return; }
+  if (b.dataset.per) { estado.per = b.dataset.per === "outro" ? "30" : b.dataset.per; if (estado.per !== "mensal") $("c-dias").value = estado.per; pintar(); return; }
+  if (b.dataset.pag) { estado.pag = b.dataset.pag; pintar(); return; }
+  if (b.dataset.forma) { const f = b.dataset.forma; if (estado.formas.has(f) && estado.formas.size === 1) { $("status").className = "status erro"; $("status").textContent = "Escolha pelo menos uma forma de pagamento."; return; } estado.formas.has(f) ? estado.formas.delete(f) : estado.formas.add(f); pintar(); return; }
+  if (b.id === "r-auto") { const on = b.getAttribute("aria-checked") !== "true"; if (on && !estado.formas.has("cartao")) { $("status").className = "status erro"; $("status").textContent = "Recarga automática precisa do cartão de crédito nas formas aceitas."; return; } b.setAttribute("aria-checked", on); return; }
+  if (b.dataset.mod) { b.setAttribute("aria-checked", b.getAttribute("aria-checked") !== "true"); pintarResumo(); return; }
+  if (b.dataset.canal) { const c = b.dataset.canal; estado.canais.has(c) ? estado.canais.delete(c) : estado.canais.add(c); pintar(); return; }
+  if (b.dataset.abrir) { estado.aberto = estado.aberto === b.dataset.abrir ? null : b.dataset.abrir; pintarPrecos(); return; }
+  if (b.dataset.modelo) { const p = estado.precos[b.dataset.item]; p.modelo = b.dataset.modelo; if (p.modelo === "flat" || p.modelo === "mensalidade") p.faixas = []; else p.preco = null; if (p.modelo === "mensalidade") p.minimo = 0; pintarPrecos(); pintarResumo(); return; }
+  if (b.dataset.mais) { const p = estado.precos[b.dataset.mais]; const ult = p.faixas[p.faixas.length - 2]; p.faixas.splice(p.faixas.length - 1, 0, { ate: (ult?.ate || 0) * 2 || 100000, preco: p.faixas[p.faixas.length - 1].preco }); pintarPrecos(); return; }
+  if (b.dataset.tira) { estado.precos[b.dataset.item].faixas.splice(+b.dataset.tira, 1); pintarPrecos(); return; }
+  if (b.id === "salvar") {
+    const falta = pintarResumo();
+    const st = $("status");
+    const motoresSemModulo = [...estado.motores].filter(m => !estado.mods[m === "motorcob" ? "orquestracao" : "jornada"]);
+    if (motoresSemModulo.length) { st.className = "status erro"; st.textContent = "Marque o módulo do motor contratado: " + motoresSemModulo.map(m => m === "motorcob" ? "Orquestração" : "Jornada").join(" e ") + "."; return; }
+    if (falta.length) { st.className = "status erro"; st.textContent = "Falta preço em: " + falta.map(i => i.nome).join(", ") + "."; return; }
+    for (const p of Object.values(estado.precos)) if (p.faixas.length) for (let k = 1; k < p.faixas.length - 1; k++) if (!(p.faixas[k].ate > p.faixas[k - 1].ate)) { st.className = "status erro"; st.textContent = "As faixas precisam ter limites crescentes."; return; }
+    st.className = "status ok"; st.textContent = "Empresa criada. Convite enviado ao Admin da empresa.";
+  }
+});
+document.addEventListener("change", e => {
+  const t = e.target, p = estado.precos[t.dataset.item];
+  if (["c-corte", "c-prazo", "c-dias", "c-inicio", "r-min"].includes(t.id)) { if (t.id === "c-dias") estado.per = String(Math.min(Math.max(parseInt(t.value) || 7, 1), 90)); pintar(); return; }
+  if (t.dataset.sim) { estado.sim[t.dataset.sim] = Math.max(0, parseInt(t.value.replace(/\D/g, "")) || 0); pintarPrecos(); return; }
+  if (!p) return;
+  if (t.dataset.campo === "preco") p.preco = num(t.value);
+  if (t.dataset.campo === "minimo") p.minimo = num(t.value) || 0;
+  if (t.dataset.campo === "ate") p.faixas[+t.dataset.faixa].ate = parseInt(t.value.replace(/\D/g, "")) || null;
+  if (t.dataset.campo === "fpreco") p.faixas[+t.dataset.faixa].preco = num(t.value) ?? 0;
+  pintarPrecos(); pintarResumo();
+});
+pintar();
+</script>

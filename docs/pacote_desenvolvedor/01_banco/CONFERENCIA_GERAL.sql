@@ -58,6 +58,52 @@ with itens(ordem, item, ok, se_falhar) as (values
   (23, 'SQL 17 · Funil com Disparado e o Assistente MotorCob',
        to_regclass('public.mensageria_funil_status') is not null and to_regclass('public.assistente_perguntas') is not null,
        'rodar 17_funil_assistente.sql (depois do 16)'),
+  (24, 'SQL 18 · MotorCX com as frentes MotorCob e MotorCli',
+       to_regclass('public.empresa_frentes') is not null and to_regclass('public.jornada_cliente') is not null
+         and exists (select 1 from pg_proc where proname = 'escolher_frente'),
+       'rodar 18_motorcli.sql (depois do 17)'),
+  (25, 'SQL 19 · Contratação: ciclo de uso e preço da Jornada',
+       to_regclass('public.ciclo_empresa') is not null and to_regclass('public.jornada_clientes_mes') is not null
+         and exists (select 1 from pg_proc where proname = 'salvar_frentes'),
+       'rodar 19_contratacao_ciclo.sql (depois do 18)'),
+  (26, 'SQL 20 · Suporte com o nome de quem atende',
+       exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'chamado_mensagens' and column_name = 'autor_nome')
+         and exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'chamados' and column_name = 'responsavel_nome'),
+       'rodar 20_suporte_nomes.sql (depois do 19)'),
+  (27, 'SQL 21 · Equipe com papéis, alcance e carteira',
+       to_regclass('public.permissoes_equipe') is not null
+         and exists (select 1 from pg_proc where proname = 'configurar_equipe')
+         and exists (select 1 from pg_proc where proname = 'definir_responsaveis'),
+       'rodar 21_equipe_carteira.sql (depois do 20)'),
+  (28, 'SQL 22 · Contratação v2: módulos do motor, ciclo em dias, pré-pago e recargas',
+       to_regclass('public.recargas') is not null
+         and exists (select 1 from pg_proc where proname = 'saldo_empresa')
+         and exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'ciclo_empresa' and column_name = 'modelo_pagamento'),
+       'rodar 22_ciclo_pagamento.sql (depois do 21)'),
+  (29, 'SQL 23 · Cobrança pelo Stripe e nota fiscal',
+       to_regclass('public.cobrancas') is not null and to_regclass('public.notas_fiscais') is not null
+         and exists (select 1 from pg_proc where proname = 'baixar_cobranca'),
+       'rodar 23_cobranca_stripe_nf.sql (depois do 22)'),
+  (30, 'SQL 24 · Retorno dos fornecedores da Mensageria',
+       to_regclass('public.mensageria_eventos') is not null
+         and exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'mensageria_mensagens' and column_name = 'confirmada_em'),
+       'rodar 24_retorno_fornecedores.sql (depois do 23)'),
+  (31, 'SQL 25 · Emissão em lote e automática, demonstrativo e envio das faturas',
+       exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'faturas' and column_name = 'envio')
+         and exists (select 1 from pg_proc where proname = 'demonstrativo_fatura')
+         and exists (select 1 from storage.buckets where id = 'faturas' and not public),
+       'rodar 25_emissao_envio_faturas.sql (depois do 24)'),
+  (32, 'SQL 26 · Etapas da régua e leads',
+       exists (select 1 from pg_constraint where conname = 'envios_tipo_check'
+               and pg_get_constraintdef(oid) like '%leads%')
+       and exists (select 1 from pg_constraint where conname = 'jornada_cliente_momento_check'
+                   and pg_get_constraintdef(oid) like '%etapa-%'),
+       'rodar o SQL 26 (supabase/migrations/20261123000001_etapas_prospeccao.sql)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),
@@ -70,7 +116,12 @@ with itens(ordem, item, ok, se_falhar) as (values
                      and c.relname in ('empresa_contatos', 'empresa_modulos', 'chamados', 'chamado_mensagens',
                                        'planos_empresa', 'tarifas_mensageria', 'faturas', 'fatura_itens',
                                        'fatura_ajustes', 'mensageria_lotes', 'mensageria_mensagens',
-                                       'mensageria_descadastros', 'api_tokens', 'api_chamadas')),
+                                       'mensageria_descadastros', 'api_tokens', 'api_chamadas',
+                                       'empresa_frentes', 'usuario_frentes', 'jornada_cliente',
+                                       'ciclo_empresa', 'jornada_clientes_mes',
+                                       'permissoes_equipe', 'recargas', 'cobrancas', 'cobranca_clientes',
+                                       'cobranca_eventos', 'cartoes_salvos', 'nf_config', 'notas_fiscais',
+                                       'mensageria_eventos')),
        'algum SQL ficou pela metade: rode de novo o da tabela que faltar'),
   (12, 'Anônimo não lê dado de cliente',
        not exists (select 1 from unnest(array['public.chamados', 'public.faturas', 'public.api_tokens']) t

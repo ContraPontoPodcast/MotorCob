@@ -1,4 +1,4 @@
-// Regras do Assistente MotorCob (sem rede, testáveis com node --test).
+// Regras do Assistente MotorCX (sem rede, testáveis com node --test).
 // * O pedido é validado e todo texto do usuário passa por anonimizar() antes de ir ao modelo ou ao banco:
 //   CPF, CNPJ, telefone, e-mail e números longos viram marcadores. O Assistente nunca vê dado de devedor.
 // * A resposta do modelo só pode apontar para uma das ações da lista ACOES (o rótulo do botão é daqui, não do
@@ -138,7 +138,7 @@ export function montarMensagens(historico: Mensagem[], pergunta: string, tela: s
 
 export const SEM_RESPOSTA: Resposta = {
   respondida: false,
-  texto: "Ainda não sei responder isso. Abra um chamado que o time MotorCob responde para você.",
+  texto: "Ainda não sei responder isso. Abra um chamado que o time MotorCX responde para você.",
   passos: [],
   acao: { id: "abrir_chamado", rotulo: ACOES.abrir_chamado },
 };
@@ -160,7 +160,7 @@ export function montarResposta(saida: unknown): Resposta {
   };
 }
 
-export const INSTRUCOES = `Você é o Assistente MotorCob, a ajuda dentro da plataforma MotorCob (orquestração de cobrança e mensageria).
+export const INSTRUCOES = `Você é o Assistente MotorCX, a ajuda dentro da plataforma MotorCX (frentes MotorCob, de cobrança, e MotorCli, de jornada do cliente).
 Responda só sobre como usar a plataforma, com base na BASE DE CONHECIMENTO abaixo. Português do Brasil, tom cordial e direto, sem markdown.
 
 Regras:

@@ -56,7 +56,8 @@ class Regua:
         j = self.janela(dia)
         if j is not None:
             return j
-        for eid in self.calendarios:
+        for eid in dict.fromkeys([*self.calendarios, *(e for e, o in self.estrategias.items()
+                                                         if isinstance(o, dict) and o.get("travas_janela"))]):
             if eid in self.estrategias:
                 j = self.para_estrategia(eid).janela(dia)
                 if j is not None:
@@ -92,7 +93,7 @@ class Regua:
                 dados["janela"] = {**dados["janela"], **self.calendarios[eid]}
             # a cópia não reaplica estratégia: para() sempre é chamado na régua da empresa
             nova = replace(self, dados=dados, _cache={}, estrategias={}, estrategia_padrao=None, calendarios={})
-            if eid in self.calendarios and self.dias_lista is not None:
+            if (eid in self.calendarios or dados.get("travas_janela")) and self.dias_lista is not None:
                 nova = replace(nova, dias_lista=tuple(d for d in self.dias_lista if nova.janela(d) is not None))
             self._cache[eid] = nova
         return self._cache[eid]
@@ -145,14 +146,26 @@ class Regua:
         """Janela de acionamento do dia, ou None (dia sem exportação: fora dos dias da semana do
         calendário, feriado nacional ou data sem ação). Padrão: segunda a sábado, sem feriados."""
         j = self.dados["janela"]
+        tj = self.dados.get("travas_janela")
         iso, dsem = dia.isoformat(), dia.weekday()
-        if iso not in (j.get("com_acao") or []):
-            if dsem not in j.get("dias_semana", (0, 1, 2, 3, 4, 5)):
+        # travas da estratégia: os dias e feriados da trava substituem o padrão do playbook; se o
+        # calendário da carteira também definiu, vale o mais restrito
+        dias = j.get("dias_semana")
+        if tj:
+            dias = tj["dias_semana"] if dias is None else [d for d in dias if d in tj["dias_semana"]]
+        feriado = j.get("respeita_feriados")
+        if tj:
+            feriado = tj["respeita_feriados"] if feriado is None else (feriado or tj["respeita_feriados"])
+        if iso not in (j.get("com_acao") or []) or tj:
+            if dsem not in (dias if dias is not None else (0, 1, 2, 3, 4, 5)):
                 return None
-            if j.get("respeita_feriados", True) and iso in j["feriados"]:
+            if (feriado if feriado is not None else True) and iso in j["feriados"]:
                 return None
             if iso in (j.get("sem_acao") or []):
                 return None
+        if tj:                                   # horário da trava (sempre dentro de 08:00–20:00)
+            h = tj["domingo"] if dsem == 6 else tj["sabado"] if dsem == 5 else tj["seg_sex"]
+            return (h[0], h[1])
         if dsem == 6:
             return tuple(j.get("domingo") or j["sabado"])
         return tuple(j["sabado"] if dsem == 5 else j["seg_sex"])

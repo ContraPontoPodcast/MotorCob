@@ -281,6 +281,22 @@ class TestMensageria(unittest.TestCase):
         self.assertGreater(respostas, 0)
         self.assertEqual(c["sms_resposta"]["quantidade"], respostas)              # cada resposta é cobrada
 
+    def test_pre_pago_sem_saldo_pausa_o_envio_real(self):
+        self.sb.t["mensageria_config"] = [{"empresa_id": 1, "modo": "real", "aprovar_lotes": False}]
+        saldo = {"pre_pago": True, "saldo": 0, "pausar_envios": True}
+        self.sb.funcoes["saldo_empresa"] = lambda empresa: [saldo]
+        with mock.patch.dict(M.ADAPTADORES_REAIS, {"zenvia": lambda: M.Simulador("zenvia")}):
+            self._criar()
+            self._processar()
+            self.assertEqual(self._lote("sms")["situacao"], "pausado")
+            self.assertIn("saldo pré-pago esgotado", self._lote("sms")["motivo"])
+            self.assertNotIn("consumo_mensageria", self.sb.t)
+            # "continuar mesmo sem saldo": o saldo fica negativo e o lote sai
+            saldo["pausar_envios"] = False
+            self._lote("sms")["situacao"] = "agendado"
+            self._processar()
+        self.assertTrue(self.sb.t.get("consumo_mensageria"))
+
     def test_email_com_modelo_sai_pela_locaweb(self):
         self.sb.t["mensageria_modelos_email"] = [{"empresa_id": 1, "remetente_nome": "Alfa", "assunto": "Sua conta",
                                                   "corpo": "Temos uma condição para você."}]

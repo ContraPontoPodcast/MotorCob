@@ -83,5 +83,41 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     `mensageria_funil_status` e base de relatório "Funil de envio (status)") e o **Assistente MotorCob** (perguntas
     guardadas 90 dias, avaliação 👍/👎, lista do que ficou sem resposta para a equipe). Depois publique a função
     `assistente` (`08_api/LEIA_ASSISTENTE.md`).
+18. `18_motorcli.sql` (= `supabase/migrations/20261115000001_motorcli.sql`) — **MotorCX com duas frentes**:
+    MotorCob (Cobrança) e **MotorCli** (Jornada do Cliente). Frentes contratadas por empresa (toda empresa que
+    já existe fica com o MotorCob), frentes por usuário, a escolha do login (`escolher_frente`), carteira e
+    estratégia por frente (uma estratégia padrão por frente) e o enquadramento diário da jornada
+    (`jornada_cliente`, `jornada_resumo`). Nada muda para quem só usa o MotorCob.
+19. `19_contratacao_ciclo.sql` (= `supabase/migrations/20261116000001_contratacao_ciclo.sql`) — **Contratação**:
+    ciclo de uso por empresa (dia de corte e vencimento; sem corte = mês fechado, como antes), preço da
+    **Jornada** (MotorCli) por cliente acionado no ciclo, prévia e fechamento da fatura pelo ciclo e
+    `salvar_frentes` (motor da empresa). Rode junto com o prompt 27 (passo 44).
+20. `20_suporte_nomes.sql` (= `supabase/migrations/20261117000001_suporte_nomes.sql`) — **Suporte**: corrige o
+    erro ao abrir chamado e ao responder pelo Console (campo `autor_nome`), mostra quem assumiu o atendimento
+    (`responsavel_nome`, ex.: "Ana S.") e aceita mensagem só com anexo. Depois cole o prompt 28 (passo 45).
+21. `21_equipe_carteira.sql` (= `supabase/migrations/20261118000001_equipe_carteira.sql`) — **Equipe MotorCX**:
+    papéis Master, Atendimento e **Comercial**, alcance (todas as empresas ou **só a carteira**: as empresas em
+    que a pessoa é Vendedor ou Gerente da conta) e 12 permissões ajustáveis por pessoa. Empresa criada por um
+    Comercial entra na carteira dele. Depois publique a função `admin-usuarios` nova e cole o prompt 30.
+22. `22_ciclo_pagamento.sql` (= `supabase/migrations/20261119000001_ciclo_pagamento.sql`) — **Contratação v2**:
+    Orquestração (MotorCob) e Jornada (MotorCli) viram módulos marcados na Contratação (quem já tem o MotorCli
+    ganha a Jornada ligada), ciclo de uso **em dias** (semanal, quinzenal ou N dias) além do mensal, prazo de
+    pagamento, **pós ou pré-pago**, formas aceitas (boleto, Pix, cartão), **recargas** e **saldo** do pré-pago.
+    Depois cole o prompt 31.
+23. `23_cobranca_stripe_nf.sql` (= `supabase/migrations/20261120000001_cobranca_stripe_nf.sql`) — **Cobrança pelo
+    Stripe** (boleto, Pix e cartão com baixa automática da fatura e da recarga, cartão guardado para a recarga
+    automática) e **nota fiscal** (NFS-e nacional pelo Focus NFe). Guia: `08_api/LEIA_INTEGRACOES.md`.
+24. `24_retorno_fornecedores.sql` (= `supabase/migrations/20261121000001_retorno_fornecedores.sql`) — **retorno dos
+    fornecedores reais** (entrega, falha, resposta, bounce, abertura), sem o contato do cliente. Guia:
+    `08_api/LEIA_INTEGRACOES.md`.
+25. `25_emissao_envio_faturas.sql` (= `supabase/migrations/20261122000001_emissao_envio_faturas.sql`) — **emissão
+    das faturas** uma a uma, em lote (`emitir_faturas`) ou **automática** no fim do ciclo (por empresa), e a **fila
+    de envio**: demonstrativo em PDF (bucket privado `faturas`), boleto em PDF separado e e-mail aos contatos
+    financeiros. Depois cole os prompts 32 e 33.
+
+26. `26_etapas_prospeccao.sql` (= `supabase/migrations/20261123000001_etapas_prospeccao.sql`) — **etapas da
+    régua** criadas pela empresa (MotorCob e MotorCli), **orçamento por canal** e **Travas** (tudo dentro de
+    `estrategias.definicao`, sem tabela nova) e o arquivo de **leads** da prospecção do MotorCli. Depois cole os
+    prompts 34 e 35.
 
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

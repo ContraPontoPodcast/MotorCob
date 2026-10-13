@@ -22,7 +22,9 @@ from .certificacao import Certificacao, Evento
 from .marcacao import ESTADOS_MASSIVOS, Cliente, EstadoCliente, dia_na_carga, dias_de_esteira, proximo_canal
 from .estrategia import ENRIQUECIMENTO, SEM_ACAO, normalizar, passa, raia, resolver
 from .persona import resolver_tokens
+from . import etapas as ET
 from . import normalizacao as norm
+from . import travas as TV
 from .regua import CANAIS_VOZ, Regua
 
 FORA = {"INVALIDO", "CONTESTADO"}
@@ -112,6 +114,8 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
         elif canal == "whatsapp":          # WhatsApp em fixo só se o número tiver WhatsApp marcado
             cands = [c for c in cands if norm.celular(c.contato) or flags.get(c.contato, {}).get("whatsapp_valido")]
         respeitar = cfg.get("respeitar_nao_perturbe")
+        if regua.dados.get("nao_perturbe_todos"):     # trava "Não Perturbe: todos os canais"
+            respeitar = True
         if canal in CANAIS_VOZ if respeitar is None else respeitar:
             cands = [c for c in cands if not sinais.get(c.contato, {}).get("nao_perturbe")]
         if canal == "whatsapp":
@@ -232,7 +236,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                sinais: dict[tuple[str, str], dict] | None = None, ativos: set[str] | None = None,
                pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None,
                para_bureau: dict | None = None, motivos: dict | None = None, motivo_de: dict | None = None,
-               detalhe_de: dict | None = None, senao_auto: dict | None = None, ultima_cpc: dict | None = None):
+               detalhe_de: dict | None = None, senao_auto: dict | None = None, ultima_cpc: dict | None = None,
+               etapas_estado: dict | None = None, historico_acoes: dict | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -248,13 +253,29 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     motivo_de: recebe {id_cliente: motivo}; detalhe_de: {id_cliente: por que ficou sem contato}.
     senao_auto: recebe {"whatsapp → sms": clientes} de quem saiu pelo senão automático.
     ultima_cpc: {id_cliente: data da última ação de CPC exportada} — intervalo do CPC A/B da estratégia.
+    etapas_estado: estado das etapas próprias da estratégia (motor/etapas.py, <estado>/etapas.json); só na
+              rodada de verdade (None = as etapas próprias não valem, ex.: dias passados recalculados).
     pausados: acionados por outro credor nas últimas 48h (ou é a vez dele) — sem ação massiva
-              hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`.
+              hoje (acordo segue). Quem tinha ação hoje e ficou de fora vai para `adiados`. Pode ser
+              {id_cliente: data em que outro credor acionou}: aí vale a pausa da trava da estratégia.
+    historico_acoes: {id_cliente: [(data, canal)]} das ações exportadas antes de hoje (limite de ações
+              por cliente da trava; sem histórico, só o limite do dia vale).
     """
     alertas = []
     taxa, envios = taxa_bloqueio_whatsapp(eventos or [], hoje, regua)
     w = regua["whatsapp"]
     freio = envios >= w["minimo_envios_para_freio"] and taxa > w["limite_taxa_bloqueio"]
+
+    def freio_de(rc):                    # a trava da estratégia pode ter outro limite de bloqueio
+        wr = rc["whatsapp"]
+        return envios >= wr["minimo_envios_para_freio"] and taxa > wr["limite_taxa_bloqueio"]
+
+    def pausado(idc, rc):
+        if isinstance(pausados, dict):
+            d = pausados.get(idc)
+            h = rc.dados.get("pausa_carteiras_horas", rc["recencia_horas"])
+            return d is not None and (hoje - d).days * 24 < h
+        return idc in pausados
     if freio:
         alertas.append(f"FREIO WHATSAPP: taxa de bloqueio {taxa:.1%} em {envios} envios > "
                        f"{w['limite_taxa_bloqueio']:.0%}; WhatsApp só para contatos certificados")
@@ -269,43 +290,19 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     for (idc, contato), s in (sinais or {}).items():
         sinais_por[idc][contato] = s
 
-    fila, disponiveis = [], {}
+    fila, disponiveis, pendentes = [], {}, []
     sem_contato = defaultdict(int)
     prioridade = {e: i + 1 for i, e in enumerate(regua["hierarquia"])}
-    for idc, est in estados.items():
-        rc = regua.para(est.cluster_atual)
-        sin = sinais_por.get(idc, {})
-        cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio, sin)
-        disp = _disponiveis_cpc(cands, est, flags, sin, rc)
-        disponiveis[idc] = disp
-        def conta(m, idc=idc):
-            if motivos is not None:
-                motivos[m] = motivos.get(m, 0) + 1
-            if motivo_de is not None:
-                motivo_de[idc] = m
-        if est.estado in ("BLQ", "LIQ", "COL"):
-            conta("encerrado")
-            continue
-        if ativos is not None and idc not in ativos:
-            conta("fora_da_carga")
-            continue
-        janela = rc.janela(hoje)            # calendário da estratégia do cliente (ou do credor)
-        if janela is None:
-            conta("domingo_feriado")
-            continue
-        ult = (ultima_cpc or {}).get(idc)
-        passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp, ult)
-        if passo is None:
-            if est.estado == "QBR" and rc["quebra"].get("ativo") is False:
-                conta("quebra_desligada")
-            elif fase_desligada(est, rc):
-                conta("fase_desligada")
-            elif est.estado in ("CPA", "CPB") and not _intervalo_cpc_ok(est, hoje, rc, ult):
-                conta("intervalo_cpc")
-            else:
-                conta("sem_passo_hoje" if _recencia_ok(est, hoje, rc) or est.estado in ("PRE", "QBR")
-                      else "intervalo_48h")
-            continue
+
+    def registrar(m, idc):
+        if motivos is not None:
+            motivos[m] = motivos.get(m, 0) + 1
+        if motivo_de is not None:
+            motivo_de[idc] = m
+
+    def montar(idc, est, rc, cands, sin, passo, janela, excluir, primeira):
+        """Linhas do dia de um cliente -> (motivo, linhas, detalhe). excluir: canais tirados pelo
+        orçamento (o canal de baixo assume). primeira: registra bureau e senão automático só uma vez."""
         nome_regua, rotulo, acoes, data_fixa = passo
         minha = (publico or {}).get(idc)
         propria, geral = raia(acoes, minha)
@@ -314,11 +311,15 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         tentativas = [propria, geral] if propria else [geral]
         if any(a["canal"] == SEM_ACAO for a in propria):
             tentativas = [[a for a in propria if a["canal"] != SEM_ACAO]]
-        blend, tinha = [], False
+        if hoje.weekday() == 6 and rc.dados.get("domingo_so_digitais"):
+            excluir = set(excluir) | set(CANAIS_VOZ)     # trava: domingo só canais digitais
+        if excluir:
+            tentativas = [[a for a in t if a["canal"] not in excluir] for t in tentativas]
+        blend, tinha, lista, persona_rot = [], False, [], ""
         for lista in tentativas:
             enriq = [a for a in lista if a["canal"] == ENRIQUECIMENTO]
             lista = [a for a in lista if a["canal"] != ENRIQUECIMENTO]
-            if enriq and para_bureau is not None:
+            if enriq and para_bureau is not None and primeira:
                 para_bureau[idc] = f"esteira {nome_regua} {rotulo}"
             if not lista:
                 if enriq:
@@ -326,13 +327,14 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                 continue
             tinha = True
             lista, persona_rot = resolver_tokens(lista, rc.persona, idc, hoje, set(cands))
+            lista = [a for a in lista if a["canal"] not in excluir]
             blend = resolver(lista, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
             if blend:
                 break
         if tinha and not blend and rc.dados.get("senao_automatico", True):
             # senão automático: nenhum canal do dia tem contato → substituto do playbook
             # (WhatsApp/RCS → SMS, agente virtual → discador), em vez de deixar sem ação
-            tentados = {a["canal"] for t in tentativas for a in t}
+            tentados = {a["canal"] for t in tentativas for a in t} | set(excluir)
             auto = []
             for c in dict.fromkeys(a["canal"] for t in tentativas for a in t):
                 sub = rc["substituto"].get(c) or rc["reserva"].get(c)
@@ -341,30 +343,29 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                                  "contatos": {}})
             if auto:
                 blend = resolver(auto, lambda a: contatos_da_acao(a, cands, est, flags, sin, rc))
-                if blend and senao_auto is not None:
-                    senao_auto[f"{'+'.join(sorted(tentados - {ENRIQUECIMENTO}))} → {blend[0][0]}"] = \
-                        senao_auto.get(f"{'+'.join(sorted(tentados - {ENRIQUECIMENTO}))} → {blend[0][0]}", 0) + 1
+                if blend and senao_auto is not None and primeira:
+                    k = f"{'+'.join(sorted(tentados - {ENRIQUECIMENTO}))} → {blend[0][0]}"
+                    senao_auto[k] = senao_auto.get(k, 0) + 1
         if not tinha:
-            conta("bureau_hoje" if idc in (para_bureau or {}) else "sem_acao_na_raia")
-            continue
+            return ("bureau_hoje" if idc in (para_bureau or {}) else "sem_acao_na_raia"), [], None
         if not blend:
-            sem_contato[nome_regua] += 1
-            conta("sem_contato")
-            if detalhe_de is not None:
-                detalhe_de[idc] = por_que_sem_contato([a["canal"] for t in tentativas for a in t], cands,
-                                                      certs_por.get(idc, []), flags, rc, est.cluster_atual)
-            continue
-        if blend and idc in pausados and est.estado in ESTADOS_MASSIVOS:
-            if adiados is not None:
-                adiados.add(idc)
-            conta("outro_credor")
-            continue
-        conta("com_acao")
+            detalhe = por_que_sem_contato([a["canal"] for t in tentativas for a in t], cands,
+                                          certs_por.get(idc, []), flags, rc, est.cluster_atual) \
+                if detalhe_de is not None else None
+            return "sem_contato", [], (nome_regua, detalhe)
+        if pausado(idc, rc) and est.estado in ESTADOS_MASSIVOS:
+            return "outro_credor", [], None
+        resta = TV.limite_restante(rc.dados.get("limite_acoes"), (historico_acoes or {}).get(idc), hoje)
+        if resta is not None:                  # trava: limite de ações por cliente (dia, semana, mês)
+            if resta <= 0:
+                return "limite_acoes", [], None
+            blend = blend[:resta]
         cert_de = {c.contato: c for cs in cands.values() for c in cs}
         frase_de = {}                          # frase da ação do dia, por canal (a 1ª ação do canal)
         for a in lista:
             if a.get("mensagem") is not None:
                 frase_de.setdefault(a["canal"], a["mensagem"])
+        linhas = []
         for canal, condicao, contatos in blend:
             cfg = rc.canal_cfg(canal)
             if hoje.weekday() == 5 and cfg.get("sabado") is False:
@@ -373,7 +374,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             if cfg.get("janela_inicio") and cfg.get("janela_fim"):  # nunca amplia a janela geral
                 jan = (max(janela[0], cfg["janela_inicio"]), min(janela[1], cfg["janela_fim"]))
             for ordem, contato in enumerate(contatos, 1):
-                fila.append({
+                linhas.append({
                     "data": hoje.isoformat(), "id_cliente": idc, "tag": est.tag, "estado": est.estado,
                     "cluster": est.cluster_atual, "prioridade": prioridade.get(est.estado, 9), "regua": nome_regua, "passo": rotulo,
                     "canal": canal, "contato": contato, "ordem_contato": ordem,
@@ -385,6 +386,113 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                     "persona": persona_rot,
                     **({"frase_acao": frase_de[canal]} if canal in frase_de else {}),
                 })
+        return "com_acao", linhas, None
+
+    def travas_da_etapa(etapa, linhas):
+        """Travas próprias da etapa: ações por dia e horário (só encurtam o da estratégia)."""
+        linhas = ET.cortar_canais(linhas, etapa.travas.get("limite_dia"))
+        for l in linhas:
+            l["janela"] = ET.janela_da_etapa(l["janela"], etapa.travas)
+        return linhas
+
+    def concluir(idc, res, escolha):
+        motivo, linhas, detalhe = res
+        if motivo == "sem_contato":
+            sem_contato[detalhe[0]] += 1
+            if detalhe_de is not None:
+                detalhe_de[idc] = detalhe[1]
+        if motivo == "outro_credor" and adiados is not None:
+            adiados.add(idc)
+        registrar(motivo, idc)
+        if motivo == "com_acao":
+            if escolha is not None:
+                ET.marcar_feito(escolha)
+            fila.extend(linhas)
+    for idc, est in estados.items():
+        rc = regua.para(est.cluster_atual)
+        sin = sinais_por.get(idc, {})
+        cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio_de(rc), sin)
+        disp = _disponiveis_cpc(cands, est, flags, sin, rc)
+        disponiveis[idc] = disp
+        def conta(m, idc=idc):
+            registrar(m, idc)
+        eventos_et = set()
+        if etapas_estado is not None:
+            st_et = etapas_estado.setdefault(idc, {"etapas": {}})
+            eventos_et = ET.eventos_cob(st_et.get("estado_motor"), est.estado)
+            st_et["estado_motor"] = est.estado
+        if est.estado in ("BLQ", "LIQ", "COL"):
+            if etapas_estado is not None and rc.dados.get("etapas"):
+                ET.so_eventos(rc.dados["etapas"], eventos_et, etapas_estado, idc, hoje)   # saída por pagamento/acordo
+            conta("encerrado")
+            continue
+        if ativos is not None and idc not in ativos:
+            conta("fora_da_carga")
+            continue
+        janela = rc.janela(hoje)            # calendário da estratégia do cliente (ou do credor)
+        if janela is None:
+            conta("domingo_feriado")
+            continue
+        ult = (ultima_cpc or {}).get(idc)
+        escolha = None
+        if etapas_estado is not None and rc.dados.get("etapas"):
+            cli = clientes.get(idc)
+            campos = {**((cli.atributos or {}) if cli else {}), "fase": ET.FASE_DO_ESTADO.get(est.estado, ""),
+                      "estado": est.estado}
+            if cli:
+                campos.update(saldo=cli.saldo, dias_atraso=cli.atraso_em(hoje), qtd_contratos=cli.qtd_contratos)
+            abertas = [p.vencimento for p in (parcelas or {}).get(idc, []) if getattr(p, "pago_em", None) is None]
+            datas = {"vencimento": min(abertas) if abertas else None}
+            escolha = ET.escolher(rc.dados["etapas"], rc.dados["ordem_etapas"], ET.FASE_DO_ESTADO.get(est.estado),
+                                  campos, datas, eventos_et, etapas_estado, idc, hoje)
+            if escolha == ET.FORA:
+                conta("saiu_da_regua")
+                continue
+            if escolha is not None:
+                if escolha.passo is None:
+                    conta("etapa_sem_passo")
+                    continue
+                if not _recencia_ok(est, hoje, rc, escolha.etapa.travas.get("recencia_horas")):
+                    conta("intervalo_48h")
+                    continue
+        if escolha is not None:
+            passo = (f"etapa-{escolha.etapa.id}", escolha.rotulo,
+                     normalizar(escolha.etapa.passos[escolha.passo], rc), False)
+        else:
+            passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp, ult)
+        if passo is None:
+            if est.estado == "QBR" and rc["quebra"].get("ativo") is False:
+                conta("quebra_desligada")
+            elif fase_desligada(est, rc):
+                conta("fase_desligada")
+            elif est.estado in ("CPA", "CPB") and not _intervalo_cpc_ok(est, hoje, rc, ult):
+                conta("intervalo_cpc")
+            else:
+                conta("sem_passo_hoje" if _recencia_ok(est, hoje, rc) or est.estado in ("PRE", "QBR")
+                      else "intervalo_48h")
+            continue
+        res = montar(idc, est, rc, cands, sin, passo, janela, set(), True)
+        if escolha is not None and escolha.etapa.travas and res[0] == "com_acao":
+            res = ("com_acao", travas_da_etapa(escolha.etapa, res[1]), None)
+        orc = escolha.etapa.orcamento if escolha is not None else None
+        if orc and res[0] == "com_acao":
+            # etapa com orçamento por canal: as linhas esperam o corte (ET.aplicar_orcamento)
+            cli = clientes.get(idc)
+            info = ET.info_prioridade(escolha, hoje, est.ultima_massiva, cli.saldo if cli else None,
+                                      cli.atraso_em(hoje) if cli else None,
+                                      bool(est.contato_localizador or est.candidatos_hot),
+                                      (cli.atributos or {}) if cli else {})
+            refaz = (lambda excl, idc=idc, est=est, rc=rc, cands=cands, sin=sin, passo=passo, janela=janela,
+                     et=escolha.etapa: travas_da_etapa(et, montar(idc, est, rc, cands, sin, passo, janela, excl, False)[1]))
+            pendentes.append(ET.Pendente(idc, escolha, info, refaz, res[1]))
+            continue
+        concluir(idc, res, escolha)
+    ET.aplicar_orcamento(pendentes, alertas)
+    for p in pendentes:
+        if p.cortado:
+            registrar("sem_orcamento", p.idc)
+        else:
+            concluir(p.idc, ("com_acao", p.linhas, None), p.escolha)
     if sum(sem_contato.values()) and detalhe_de is None:   # com detalhe_de, quem chama explica canal a canal
         alertas.append(f"SEM CONTATO PARA O PASSO DE HOJE: {sum(sem_contato.values())} clientes tinham ação hoje "
                        f"({', '.join(f'{k} {v}' for k, v in sorted(sem_contato.items()))}), mas nenhum contato "
@@ -420,12 +528,12 @@ def _intervalo_cpc_ok(est: EstadoCliente, hoje: date, regua: Regua, ultima: date
     return ultima is None or (hoje - ultima).days >= n
 
 
-def _recencia_ok(est: EstadoCliente, hoje: date, regua: Regua) -> bool:
+def _recencia_ok(est: EstadoCliente, hoje: date, regua: Regua, horas: int | None = None) -> bool:
     """48h entre ações nas réguas massivas (localização e Não CPC). Quem deu CPC (CPC A/B) está em
     negociação: segue todo dia de lista no canal do CPC, sem esperar as 48h."""
-    if est.estado in ("CPA", "CPB"):
+    if est.estado in ("CPA", "CPB") and not regua.dados.get("recencia_cpc"):
         return True
-    return est.ultima_massiva is None or (hoje - est.ultima_massiva).days * 24 >= regua["recencia_horas"]
+    return est.ultima_massiva is None or (hoje - est.ultima_massiva).days * 24 >= (horas or regua["recencia_horas"])
 
 
 MOTIVOS = {
@@ -444,6 +552,10 @@ MOTIVOS = {
     "encerrado": "bloqueados, liquidados ou em cobrança encerrada",
     "domingo_feriado": "domingo, feriado ou dia sem exportação no calendário",
     "intervalo_cpc": "CPC: aguardando o intervalo de acionamento da estratégia",
+    "etapa_sem_passo": "em uma etapa da empresa, sem passo hoje",
+    "saiu_da_regua": "saiu da régua pela regra de uma etapa da empresa",
+    "sem_orcamento": "ficou fora do orçamento do canal na etapa (concorre de novo amanhã)",
+    "limite_acoes": "atingiu o limite de ações por cliente (trava da estratégia)",
 }
 
 # Grupo de cada motivo na Lista do dia do site: quem tem ação, quem a régua segurou hoje, quem não tem

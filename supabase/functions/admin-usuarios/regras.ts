@@ -31,8 +31,8 @@ export interface Pedido {
   empresa_id?: number;
   /** exceções ao perfil, só no convite: {permissao: true|false} */
   acessos?: Record<string, boolean>;
-  /** só em convidar_equipe: master (Admin da equipe) ou atendimento */
-  funcao?: "master" | "atendimento";
+  /** só em convidar_equipe: master (Admin da equipe), atendimento ou comercial */
+  funcao?: "master" | "atendimento" | "comercial";
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -57,7 +57,9 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
   if (acao === "convidar_equipe") {
     const email = typeof c.email === "string" ? c.email.trim().toLowerCase() : "";
     if (!EMAIL.test(email) || email.length > 254) return { erro: "e-mail inválido" };
-    if (c.funcao !== "master" && c.funcao !== "atendimento") return { erro: "função inválida: use master ou atendimento" };
+    if (c.funcao !== "master" && c.funcao !== "atendimento" && c.funcao !== "comercial") {
+      return { erro: "função inválida: use master, atendimento ou comercial" };
+    }
     pedido.email = email;
     pedido.funcao = c.funcao;
     if (c.nome !== undefined) {
@@ -93,6 +95,14 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
 
 const adminEquipe = (p: Perfil) => p.equipe && p.papel === "admin";
 
+/** O que o banco diz sobre quem pede, quando é da equipe e não é Master (pode_equipe / equipe_pode). */
+export interface PodeEquipe {
+  /** convidar o Admin e listar usuários da empresa do pedido (na carteira de quem pede) */
+  convidarAdmin: boolean;
+  /** convidar e mudar pessoas da equipe (nunca um Master) */
+  gerenciarEquipe: boolean;
+}
+
 /** Nível de verificação da sessão ("aal1" ou "aal2"), lido do token já validado pelo Supabase. */
 export function aalDoToken(token: string): string | null {
   try {
@@ -107,13 +117,29 @@ export function aalDoToken(token: string): string | null {
 
 /** Empresa em que o convite/lista vale: a do pedido (só equipe MotorCob escolhe) ou a de quem pede. */
 export function empresaAlvo(quem: Perfil, pedido: Pedido): number | null {
-  return adminEquipe(quem) ? (pedido.empresa_id ?? quem.empresa_id) : quem.empresa_id;
+  return quem.equipe ? (pedido.empresa_id ?? quem.empresa_id) : quem.empresa_id;
 }
 
 /** Devolve o motivo da recusa, ou null se pode. */
 export function autorizar(quem: Perfil | null, podeGerenciar: boolean, pedido: Pedido, alvo: Perfil | null,
-                          aal: string | null = null): string | null {
+                          aal: string | null = null,
+                          podeEquipe: PodeEquipe = { convidarAdmin: false, gerenciarEquipe: false }): string | null {
   if (!quem || !quem.ativo) return "usuário inativo";
+  // equipe que não é Master: só o que a permissão dela libera, na empresa da carteira
+  if (quem.equipe && !adminEquipe(quem)) {
+    if (pedido.acao === "convidar_equipe") {
+      if (!podeEquipe.gerenciarEquipe) return "sem permissão para gerenciar a equipe";
+      if (pedido.funcao === "master") return "só um Master convida outro Master";
+      if (aal !== "aal2") return "entre com o seu código de duas etapas para mudar a equipe";
+      return null;
+    }
+    if (pedido.acao === "listar" || pedido.acao === "convidar") {
+      if (pedido.empresa_id === undefined) return "informe a empresa";
+      if (!podeEquipe.convidarAdmin) return "sem permissão para convidar usuários desta empresa";
+      return null;
+    }
+    return "só um Master altera usuários de clientes";
+  }
   if (!podeGerenciar) return "sem permissão para gerenciar usuários";
   // resetar a verificação de outra pessoa exige que quem pede tenha entrado com o código (aal2)
   if (pedido.acao === "resetar_2fa" && aal !== "aal2") return "entre com o seu código de duas etapas para resetar o de outra pessoa";

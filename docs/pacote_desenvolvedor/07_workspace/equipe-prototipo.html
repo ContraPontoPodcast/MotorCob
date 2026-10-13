@@ -1,0 +1,226 @@
+<title>Equipe MotorCX</title>
+<style>
+/* Layout: Console com abas no topo; lista da equipe à esquerda e o editor da pessoa à direita (empilha no celular) */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
+  --ouro: #C9A35A; --cinza: #8E8E93; --azul: #0A64D0; --ok: #1E7A36; --alerta: #A05A00; --erro: #C4271E; --escuro: #1D1D1F;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --alerta: #E0A040; --erro: #FF6B60; --escuro: #2C2C2E; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --ok: #4CC36A; --alerta: #E0A040; --erro: #FF6B60; --escuro: #2C2C2E; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding: 24px 16px 48px; }
+.wrap { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.proto { font-size: 13px; color: var(--tinta-2); margin: 0; }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+h2 { font-size: 17px; margin: 0; }
+.selo { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 10px; background: var(--ouro); color: #1D1D1F; }
+.sub { color: var(--tinta-2); margin: 2px 0 0; }
+.abas { display: flex; gap: 4px; background: var(--linha); padding: 3px; border-radius: 12px; width: fit-content; max-width: 100%; flex-wrap: wrap; }
+.abas button { border: 0; background: none; color: var(--tinta); padding: 8px 14px; border-radius: 9px; font: 14px var(--sans); cursor: pointer; }
+.abas button[aria-selected="true"] { background: var(--painel); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.duas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: start; }
+.painel { background: var(--painel); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.topo-lista { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.btn { border: 0; border-radius: 999px; padding: 10px 16px; font: 600 14px var(--sans); cursor: pointer; background: var(--tinta); color: var(--painel); }
+.btn.claro { background: var(--suave); color: var(--tinta); }
+.pessoa { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; border: 1px solid transparent; background: none; width: 100%; text-align: left; color: var(--tinta); font: inherit; cursor: pointer; }
+.pessoa:hover { background: var(--suave); }
+.pessoa[aria-current="true"] { border-color: var(--tinta); }
+.ini { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px; background: var(--suave); flex: none; }
+.pessoa div { flex: 1; min-width: 0; }
+.pessoa small { display: block; color: var(--tinta-2); font-size: 13px; }
+.chip { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 9px; background: var(--suave); color: var(--tinta-2); white-space: nowrap; }
+.chip.ouro { background: var(--ouro); color: #1D1D1F; }
+.chip.ok { color: var(--ok); }
+.chip.alerta { color: var(--alerta); }
+label.campo { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--tinta-2); min-width: 0; }
+input, select { font: 15px var(--sans); color: var(--tinta); background: var(--painel); border: 1px solid var(--linha); border-radius: 10px; height: 42px; padding: 0 12px; width: 100%; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.linha2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.alcance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.alcance button { text-align: left; border: 1px solid var(--linha); background: var(--painel); color: var(--tinta); border-radius: 14px; padding: 12px 14px; font: inherit; cursor: pointer; }
+.alcance button[aria-pressed="true"] { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; }
+.alcance small { display: block; color: var(--tinta-2); font-size: 13px; }
+.grupo { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-2); margin: 4px 0 -4px; }
+.perm { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--linha); }
+.perm div { flex: 1; min-width: 0; }
+.perm small { display: block; color: var(--tinta-2); font-size: 13px; }
+.perm .dif { color: var(--alerta); font-size: 12px; font-weight: 600; }
+.chave { width: 46px; height: 28px; border-radius: 999px; border: 0; background: var(--linha); position: relative; cursor: pointer; flex: none; }
+.chave::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .15s; }
+.chave[aria-checked="true"] { background: var(--ok); }
+.chave[aria-checked="true"]::after { left: 21px; }
+.chave:disabled { opacity: .45; cursor: not-allowed; }
+.nota { font-size: 13px; color: var(--tinta-2); background: var(--suave); border-radius: 10px; padding: 10px 12px; margin: 0; }
+.tabela { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tabela th { text-align: left; font-size: 12px; color: var(--tinta-2); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--linha); }
+.tabela td { padding: 10px; border-bottom: 1px solid var(--linha); vertical-align: middle; }
+.tabela select { height: 36px; font-size: 14px; }
+.rolagem { overflow-x: auto; }
+.sig { display: inline-grid; place-items: center; width: 30px; height: 22px; border-radius: 6px; color: #fff; font-size: 10px; font-weight: 800; margin-right: 4px; }
+.status { font-size: 13.5px; margin: 0; }
+.status.ok { color: var(--ok); }
+.console { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; }
+.menu { background: var(--escuro); color: #fff; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.menu b { font-size: 15px; margin-bottom: 8px; }
+.menu span { padding: 8px 10px; border-radius: 9px; color: #D1D1D6; font-size: 14px; }
+.menu span.on { background: rgba(255,255,255,.12); color: #fff; }
+.menu span.off { opacity: .35; text-decoration: line-through; }
+.fluxo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.passo { background: var(--suave); border-radius: 14px; padding: 14px; font-size: 14px; }
+.passo b { display: block; margin-bottom: 4px; }
+@media (max-width: 900px) { .duas, .console, .fluxo { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .linha2, .alcance { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .chave::after { transition: none; } }
+</style>
+
+<div class="wrap">
+  <p class="proto">Protótipo · Console MotorCX › Equipe. Pessoas e empresas fictícias.</p>
+  <div>
+    <h1>Console MotorCX <span class="selo">Master</span></h1>
+    <p class="sub">Equipe MotorCX · quem acessa o Console, o que pode fazer e quais contas vê</p>
+  </div>
+  <div class="abas" role="tablist">
+    <button type="button" role="tab" aria-selected="true" data-aba="equipe">Equipe</button>
+    <button type="button" role="tab" aria-selected="false" data-aba="carteiras">Carteiras</button>
+    <button type="button" role="tab" aria-selected="false" data-aba="visao">Visão do comercial</button>
+    <button type="button" role="tab" aria-selected="false" data-aba="login">Login da equipe</button>
+  </div>
+
+  <section id="aba-equipe" class="duas">
+    <div class="painel">
+      <div class="topo-lista"><h2>Equipe</h2><button type="button" class="btn" id="convidar">Convidar</button></div>
+      <div id="lista"></div>
+    </div>
+    <div class="painel" id="editor"></div>
+  </section>
+
+  <section id="aba-carteiras" class="painel" hidden>
+    <div class="topo-lista"><h2>Carteiras</h2><span class="chip" id="resumo-carteira"></span></div>
+    <p class="nota">Cada empresa tem um Vendedor e um Gerente da conta. Quem tem alcance "Só a carteira" vê apenas as empresas em que aparece aqui. Trocar o nome passa a conta na hora.</p>
+    <div class="rolagem"><table class="tabela" id="tabela-carteiras"></table></div>
+  </section>
+
+  <section id="aba-visao" class="painel" hidden>
+    <div class="topo-lista"><h2>Como a Paula (Comercial) vê o Console</h2><span class="chip">Só a carteira · 3 empresas</span></div>
+    <div class="console">
+      <nav class="menu" aria-label="Menu do Console"><b>Console MotorCX</b><span class="on">Empresas</span><span>Saúde</span><span>Faturamento</span><span>Atendimento</span><span class="off">Fornecedores</span><span class="off">Margem</span><span class="off">Equipe</span></nav>
+      <div class="painel" style="padding:0;gap:10px">
+        <div class="rolagem"><table class="tabela" id="tabela-visao"></table></div>
+        <p class="nota">As outras 5 empresas não aparecem, e o banco nem devolve os dados delas. Itens riscados no menu: sem permissão.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="aba-login" class="painel" hidden>
+    <h2>Login da equipe</h2>
+    <div class="fluxo">
+      <div class="passo"><b>1. Entra com e-mail, senha e código</b>Duas etapas obrigatórias para toda a equipe.</div>
+      <div class="passo"><b>2. Vai direto para o Console</b>Sem a tela "Escolha a frente": a equipe cuida das empresas, não opera uma frente.</div>
+      <div class="passo"><b>3. A frente vem da empresa</b>Ao abrir uma empresa, ela abre no MotorCob ou no MotorCli conforme o contratado. Com as duas, um seletor dentro da empresa.</div>
+    </div>
+    <p class="nota">Cliente continua igual: uma frente entra direto; duas, escolhe no login ou entra pela frente do link.</p>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const PERMS = [
+  ["Empresas", "ver_empresas", "Ver empresas e Saúde", "Cadastro, Saúde e chamados das empresas do alcance"],
+  ["Empresas", "criar_empresa", "Criar empresa", "A empresa nova entra na carteira de quem criou"],
+  ["Empresas", "convidar_admin", "Convidar o Admin do cliente", "Envia o convite e reenvia o link"],
+  ["Empresas", "pausar_empresa", "Pausar ou reativar empresa", "Muda a situação para suspensa ou ativa"],
+  ["Contratação", "editar_contratacao", "Editar contratação", "Motor, módulos, canais e ciclo de uso"],
+  ["Contratação", "editar_precos", "Editar preços", "Flat, escalonado, mínimo e vigência"],
+  ["Financeiro", "ver_faturamento", "Ver faturamento", "Prévia, faturas e consumo do ciclo"],
+  ["Financeiro", "emitir_faturas", "Ajustar e emitir faturas", "Descontos, créditos e emissão do rascunho"],
+  ["Financeiro", "ver_margem", "Ver margem", "Custo dos fornecedores e margem por cliente"],
+  ["Atendimento", "responder_chamados", "Responder chamados", "Assumir, responder e resolver"],
+  ["Atendimento", "acessar_mensageria", "Entrar na Mensageria do cliente", "Ver campanhas e lotes para ajudar o cliente"],
+  ["Equipe", "gerenciar_equipe", "Gerenciar a equipe", "Convidar pessoas, mudar papel, alcance e permissões"]
+];
+const PADRAO = {
+  master: Object.fromEntries(PERMS.map(p => [p[1], true])),
+  atendimento: { ver_empresas: true, responder_chamados: true, acessar_mensageria: true },
+  comercial: { ver_empresas: true, criar_empresa: true, convidar_admin: true, ver_faturamento: true }
+};
+const PAPEL = { master: "Master", atendimento: "Atendimento", comercial: "Comercial" };
+const ALCANCE_PADRAO = { master: "todas", atendimento: "todas", comercial: "carteira" };
+const equipe = [
+  { id: 1, nome: "Marcos G.", email: "marcos@motorcx.exemplo", papel: "master", alcance: "todas", extra: {}, dupla: true },
+  { id: 2, nome: "Ana S.", email: "ana@motorcx.exemplo", papel: "atendimento", alcance: "todas", extra: {}, dupla: true },
+  { id: 3, nome: "Paula R.", email: "paula@motorcx.exemplo", papel: "comercial", alcance: "carteira", extra: { editar_precos: true }, dupla: true },
+  { id: 4, nome: "Diego M.", email: "diego@motorcx.exemplo", papel: "comercial", alcance: "carteira", extra: {}, dupla: false }
+];
+const empresas = [
+  { nome: "Financeira Aurora", f: ["cob"], vend: 3, ger: 2 },
+  { nome: "Banco Horizonte", f: ["cob", "cli"], vend: 3, ger: 2 },
+  { nome: "Varejo Lume", f: ["cli"], vend: 3, ger: null },
+  { nome: "Assessoria Prisma", f: ["cob"], vend: 4, ger: 2 },
+  { nome: "Telecom Vértice", f: ["cli"], vend: 4, ger: null },
+  { nome: "Crédito Norte", f: ["cob"], vend: null, ger: 2 },
+  { nome: "Fintech Rio", f: ["cob", "cli"], vend: 1, ger: null },
+  { nome: "Educa Mais", f: ["cli"], vend: null, ger: null }
+];
+let sel = 3;
+const pode = (p, perm) => perm in p.extra ? p.extra[perm] : !!(PADRAO[p.papel][perm]);
+const carteira = id => empresas.filter(e => e.vend === id || e.ger === id);
+const iniciais = n => n.split(" ").map(x => x[0]).join("").slice(0, 2);
+
+function pintarLista() {
+  $("lista").innerHTML = equipe.map(p => `<button type="button" class="pessoa" data-pessoa="${p.id}" aria-current="${p.id === sel}"><span class="ini">${esc(iniciais(p.nome))}</span><div><b>${esc(p.nome)}</b><small>${esc(p.email)}</small></div><span class="chip ${p.papel === "master" ? "ouro" : ""}">${PAPEL[p.papel]}</span><span class="chip">${p.alcance === "todas" ? "Todas" : carteira(p.id).length + " contas"}</span></button>`).join("");
+}
+function pintarEditor() {
+  const p = equipe.find(x => x.id === sel);
+  let grupo = "", perms = "";
+  for (const [g, chave, nome, desc] of PERMS) {
+    if (g !== grupo) { grupo = g; perms += `<p class="grupo">${g}</p>`; }
+    const v = pode(p, chave), dif = chave in p.extra && p.extra[chave] !== !!PADRAO[p.papel][chave];
+    const travada = p.papel === "master";
+    perms += `<div class="perm"><div><b>${nome}</b><small>${desc}</small>${dif ? '<span class="dif">diferente do padrão do papel</span>' : ""}</div><button type="button" class="chave" role="switch" aria-checked="${v}" data-perm="${chave}" aria-label="${nome}" ${travada ? "disabled" : ""}></button></div>`;
+  }
+  $("editor").innerHTML = `
+    <div class="topo-lista"><div><h2>${esc(p.nome)}</h2><p class="sub">${esc(p.email)} · duas etapas ${p.dupla ? '<span class="chip ok">ligadas</span>' : '<span class="chip alerta">pendente</span>'}</p></div></div>
+    <div class="linha2"><label class="campo">Papel<select id="papel">${Object.entries(PAPEL).map(([k, v]) => `<option value="${k}" ${k === p.papel ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label class="campo">Carteira<input id="carteira-qtd" value="${p.alcance === "todas" ? "Todas as empresas" : carteira(p.id).length + " empresas (vendedor ou gerente)"}" readonly></label></div>
+    <p class="grupo">Alcance</p>
+    <div class="alcance"><button type="button" data-alcance="todas" aria-pressed="${p.alcance === "todas"}"><b>Todas as empresas</b><small>Vê o Console inteiro dentro das permissões.</small></button><button type="button" data-alcance="carteira" aria-pressed="${p.alcance === "carteira"}"><b>Só a carteira</b><small>Só as empresas em que é Vendedor ou Gerente.</small></button></div>
+    ${p.papel === "master" ? '<p class="nota">Master tem tudo e vê todas as empresas. Sempre existe pelo menos um Master.</p>' : ""}
+    ${perms}
+    <div class="topo-lista"><button type="button" class="btn claro" id="padrao">Voltar ao padrão do papel</button><button type="button" class="btn" id="salvar">Salvar</button></div>
+    <p class="status" id="st" role="status"></p>`;
+}
+function pintarCarteiras() {
+  const opc = (atual, papeis) => `<option value="">Sem responsável</option>` + equipe.filter(p => papeis.includes(p.papel)).map(p => `<option value="${p.id}" ${p.id === atual ? "selected" : ""}>${esc(p.nome)}</option>`).join("");
+  $("tabela-carteiras").innerHTML = `<thead><tr><th>Empresa</th><th>Frentes</th><th>Vendedor</th><th>Gerente da conta</th></tr></thead><tbody>${empresas.map((e, i) => `<tr><td>${esc(e.nome)}</td><td>${e.f.map(f => `<span class="sig" style="background:${f === "cob" ? "var(--ouro)" : "var(--cinza)"}">${f.toUpperCase()}</span>`).join("")}</td><td><select data-emp="${i}" data-campo="vend" aria-label="Vendedor de ${esc(e.nome)}">${opc(e.vend, ["comercial", "master"])}</select></td><td><select data-emp="${i}" data-campo="ger" aria-label="Gerente de ${esc(e.nome)}">${opc(e.ger, ["atendimento", "comercial", "master"])}</select></td></tr>`).join("")}</tbody>`;
+  const sem = empresas.filter(e => !e.vend && !e.ger).length;
+  $("resumo-carteira").textContent = sem ? sem + " empresa sem responsável" : "Todas com responsável";
+}
+function pintarVisao() {
+  $("tabela-visao").innerHTML = `<thead><tr><th>Empresa</th><th>Frentes</th><th>Papel da Paula</th><th>Pode</th></tr></thead><tbody>${carteira(3).map(e => `<tr><td>${esc(e.nome)}</td><td>${e.f.map(f => `<span class="sig" style="background:${f === "cob" ? "var(--ouro)" : "var(--cinza)"}">${f.toUpperCase()}</span>`).join("")}</td><td>${e.vend === 3 ? "Vendedor" : "Gerente"}</td><td>Ver · editar preços · ver faturamento</td></tr>`).join("")}</tbody>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.aba) { document.querySelectorAll("[data-aba]").forEach(x => x.setAttribute("aria-selected", x === b)); ["equipe", "carteiras", "visao", "login"].forEach(a => $("aba-" + a).hidden = a !== b.dataset.aba); if (b.dataset.aba === "carteiras") pintarCarteiras(); if (b.dataset.aba === "visao") pintarVisao(); return; }
+  if (b.dataset.pessoa) { sel = +b.dataset.pessoa; pintarLista(); pintarEditor(); return; }
+  const p = equipe.find(x => x.id === sel);
+  if (b.dataset.perm) { const k = b.dataset.perm, novo = !pode(p, k); if (novo === !!PADRAO[p.papel][k]) delete p.extra[k]; else p.extra[k] = novo; pintarEditor(); return; }
+  if (b.dataset.alcance) { if (p.papel === "master") return; p.alcance = b.dataset.alcance; pintarLista(); pintarEditor(); return; }
+  if (b.id === "padrao") { p.extra = {}; p.alcance = ALCANCE_PADRAO[p.papel]; pintarLista(); pintarEditor(); return; }
+  if (b.id === "salvar") { $("st").className = "status ok"; $("st").textContent = "Salvo. Vale no próximo carregamento da página dessa pessoa."; return; }
+  if (b.id === "convidar") { equipe.push({ id: equipe.length + 1, nome: "Nova pessoa", email: "convite@motorcx.exemplo", papel: "comercial", alcance: "carteira", extra: {}, dupla: false }); sel = equipe.length; pintarLista(); pintarEditor(); }
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.id === "papel") { const p = equipe.find(x => x.id === sel); p.papel = t.value; p.extra = {}; p.alcance = ALCANCE_PADRAO[p.papel]; pintarLista(); pintarEditor(); }
+  if (t.dataset.emp) { empresas[+t.dataset.emp][t.dataset.campo] = t.value ? +t.value : null; pintarCarteiras(); pintarLista(); }
+});
+pintarLista(); pintarEditor(); pintarCarteiras(); pintarVisao();
+</script>

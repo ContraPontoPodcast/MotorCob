@@ -98,11 +98,28 @@ test("ver_faturamento é permissão de administração", () => {
 
 test("convidar para a equipe MotorCob", () => {
   assert.equal(validarPedido({ acao: "convidar_equipe", email: "ana@motorcob.online", funcao: "dono" }).erro,
-    "função inválida: use master ou atendimento");
+    "função inválida: use master, atendimento ou comercial");
   assert.equal(validarPedido({ acao: "convidar_equipe", email: "x", funcao: "master" }).erro, "e-mail inválido");
   const p = ped({ acao: "convidar_equipe", email: "Ana@MotorCob.online", funcao: "atendimento", nome: "Ana" });
   assert.equal(p.email, "ana@motorcob.online");
   assert.equal(autorizar(equipe, true, p, null, "aal2"), null);
   assert.match(autorizar(equipe, true, p, null, "aal1")!, /código de duas etapas/);
   assert.match(autorizar(admA, true, p, null, "aal2")!, /só um Master/);     // Admin de cliente não
+});
+
+test("comercial da equipe: só o que a permissão libera, na carteira", () => {
+  const com = { id: "c0000000-0000-4000-8000-000000000009", papel: "gestao", ativo: true, empresa_id: null, equipe: true } as const;
+  const conv = ped({ acao: "convidar", email: "admin@cliente.com", papel: "admin", empresa_id: 7 });
+  assert.match(autorizar(com, false, conv, null)!, /sem permissão para convidar/);
+  assert.equal(autorizar(com, false, conv, null, null, { convidarAdmin: true, gerenciarEquipe: false }), null);
+  const semEmpresa = ped({ acao: "convidar", email: "admin@cliente.com", papel: "admin" });
+  assert.match(autorizar(com, false, semEmpresa, null, null, { convidarAdmin: true, gerenciarEquipe: false })!, /informe a empresa/);
+  const eq = ped({ acao: "convidar_equipe", email: "novo@motorcx.com", funcao: "comercial" });
+  assert.match(autorizar(com, false, eq, null, "aal2")!, /gerenciar a equipe/);
+  assert.equal(autorizar(com, false, eq, null, "aal2", { convidarAdmin: false, gerenciarEquipe: true }), null);
+  const master = ped({ acao: "convidar_equipe", email: "novo@motorcx.com", funcao: "master" });
+  assert.match(autorizar(com, false, master, null, "aal2", { convidarAdmin: false, gerenciarEquipe: true })!, /só um Master/);
+  const alvo = { id: "a0000000-0000-4000-8000-000000000001", papel: "operacao", ativo: true, empresa_id: 7, equipe: false } as const;
+  assert.match(autorizar(com, false, ped({ acao: "desativar", usuario_id: alvo.id }), alvo, null,
+    { convidarAdmin: true, gerenciarEquipe: true })!, /só um Master/);
 });

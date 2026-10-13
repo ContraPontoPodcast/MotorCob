@@ -328,12 +328,24 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
                     # frase do playbook da empresa (tabela frases): o texto vem de lá na rodada
                     msgs.setdefault(est, {})[canal] = {"frase_id": int(str(texto["frase_id"]).strip())}
         saida["mensagens"] = msgs
+    if "etapas" in definicao:
+        # etapas próprias da empresa (motor/etapas.py): mesma régua (raias de persona, frases) por dia
+        from .etapas import acoes_da_estrategia, validar as validar_etapas
+        etapas, ordem, avisos = validar_etapas(definicao, "cob", nome, acoes_da_estrategia)
+        erros += avisos
+        saida["etapas"], saida["ordem_etapas"] = etapas, ordem
     r = definicao.get("recencia_horas")
     if r not in (None, ""):
         if not isinstance(r, int) or r < 0:
             erros.append(f"{nome}: recencia_horas deve ser inteiro ≥ 0")
         else:
             saida["recencia_horas"] = r
+    if "travas" in definicao:
+        # travas configuráveis (motor/travas.py): valem por cima do playbook, dentro das faixas de segurança
+        from .travas import ler as ler_travas
+        travas, avisos = ler_travas(definicao, "cob", nome)
+        erros += avisos
+        saida.update(travas)
     return saida, erros
 
 

@@ -151,6 +151,15 @@ ADAPTADORES_REAIS: dict = {}     # codigo -> classe com .enviar(); entra quando 
 CONSULTAS_REAIS: dict = {}       # codigo -> função(destino) -> operadora; entra com o acesso do fornecedor
 
 
+def _ligar_fornecedores() -> list[str]:
+    """Fornecedores com credencial no servidor entram em modo real (nuvem/fornecedores.py)."""
+    from nuvem import fornecedores
+    return fornecedores.registrar(ADAPTADORES_REAIS, CONSULTAS_REAIS)
+
+
+FORNECEDORES_LIGADOS = _ligar_fornecedores()
+
+
 def adaptador(codigo: str, modo: str):
     if modo == "simulado":
         queda = {c.strip() for c in os.environ.get("MOTORCOB_SIMULAR_QUEDA", "").split(",") if c.strip()}
@@ -430,6 +439,17 @@ def _orcamento(sb, lote: dict, canal: str) -> tuple[int | None, str | None]:
     return (int(restante / unit + 1e-9) if unit > 0 else None), None   # 1,00 / 0,10 = 10 (sem erro de arredondamento)
 
 
+def _sem_saldo(sb, empresa_id) -> str | None:
+    """Pré-pago com o saldo zerado e "pausar" escolhido: o motivo da pausa. Banco sem o SQL 22: nunca pausa."""
+    try:
+        s = (sb.rpc("saldo_empresa", {"empresa": empresa_id}) or [{}])[0]
+    except Exception:  # noqa: BLE001
+        return None
+    if s.get("pre_pago") and s.get("pausar_envios"):
+        return "saldo pré-pago esgotado: recarregue em Empresa › Faturamento"
+    return None
+
+
 def _consumo_centro(sb, centro_id, dia: date, por_item: dict) -> None:
     comp = dia.replace(day=1).isoformat()
     for item, n in por_item.items():
@@ -443,8 +463,9 @@ def _consumo_centro(sb, centro_id, dia: date, por_item: dict) -> None:
 
 
 def _consumo(sb, empresa_id, dia: date, por_item: dict) -> None:
-    """Consumo do mês para a fatura (só envio real). rcs_sessao não é cobrado."""
-    comp = dia.replace(day=1).isoformat()
+    """Consumo do ciclo de uso para a fatura (só envio real). rcs_sessao não é cobrado."""
+    from nuvem.faturamento import ciclo_da_empresa, competencia
+    comp = competencia(dia, ciclo_da_empresa(sb, empresa_id)).isoformat()
     for item, n in por_item.items():
         if not n or item == "rcs_sessao":
             continue
@@ -457,8 +478,10 @@ def _consumo(sb, empresa_id, dia: date, por_item: dict) -> None:
 
 def _consumo_fornecedor(sb, empresa_id, dia: date, modo: str, contagem: dict) -> None:
     """Soma no mês o que cada fornecedor fez por item e operadora, com o custo do dia (sem custo cadastrado conta
-    à parte; sessão do RCS não custa). contagem: {(fornecedor, operadora, item): n}."""
-    comp = dia.replace(day=1).isoformat()
+    à parte; sessão do RCS não custa). contagem: {(fornecedor, operadora, item): n}. Mesmo ciclo da fatura,
+    para a margem comparar receita e custo do mesmo período."""
+    from nuvem.faturamento import ciclo_da_empresa, competencia
+    comp = competencia(dia, ciclo_da_empresa(sb, empresa_id)).isoformat()
     tabela = {}
 
     def gravar():
@@ -588,6 +611,8 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         descad = {d["destino_hash"] for d in sb.selecionar("mensageria_descadastros", {
             "empresa_id": f"eq.{eid}", "canal": f"eq.{canal}"}) or []}
         maximo, pausa = _orcamento(sb, lote, canal)
+        if not pausa and modo == "real":
+            pausa = _sem_saldo(sb, eid)
         if pausa or maximo == 0:
             sb.atualizar("mensageria_lotes", filtro, {"situacao": "pausado", "atualizado_em": agora.isoformat(),
                                                       "motivo": pausa or "orçamento do centro de custo esgotado"})
