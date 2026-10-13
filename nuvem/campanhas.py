@@ -302,7 +302,8 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
                                                                                          (re.sub(r"\D", "", bruto) if fav else None))
         if not dest:
             cont["invalidos"] += 1
-            linhas_db.append(_msg(idc, canal, bruto or "—", h, "bloqueada", "contato inválido na higienização"))
+            linhas_db.append({**_msg(idc, canal, bruto or "—", h, "bloqueada", "contato inválido na higienização"),
+                             "item": canal})   # mesmas chaves em todas as linhas: o insert em lote do PostgREST exige
             continue
         if h in vistos:
             cont["duplicados"] += 1

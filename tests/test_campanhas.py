@@ -123,6 +123,7 @@ class TestCampanha(unittest.TestCase):
         msgs = [m for m in self.sb.t["mensageria_mensagens"] if m["lote_id"] == lote["id"]]
         motivos = {m["id_cliente"]: m["motivo"] for m in msgs}
         self.assertEqual(motivos["K900"], "contato inválido na higienização")
+        self.assertEqual(len({tuple(sorted(m)) for m in msgs}), 1)     # o PostgREST recusa lote com chaves diferentes
         self.assertEqual(motivos["K902"], "lista de bloqueio")
         self.assertEqual(motivos["K904"], "frase acima de 160 caracteres")
         self.assertIsNone(motivos["K903"])                               # favorito fixo passou
