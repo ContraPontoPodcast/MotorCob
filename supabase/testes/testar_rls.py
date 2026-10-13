@@ -1040,6 +1040,14 @@ checar("planejamento sobe arquivo de leads da carteira MotorCli", True, f"insert
 checar("tipo de arquivo inventado continua recusado", False, f"insert into public.envios (empresa_id,credor_id,tipo,caminho,nome_original) values ({EA},{CJ},'prospects','alfa/prospects/2026-10-13/p.csv','p.csv')", "authenticated", u["plan"])
 checar("enquadramento aceita etapa da empresa", True, f"insert into public.jornada_cliente (empresa_id,credor_id,id_cliente,data,momento,passo,motivo) values ({EA},{CJ},'L1','2026-10-13','etapa-prospeccao','D0','com ação hoje'); select 1", "service_role", None, 1)
 checar("nome de etapa fora do padrão é recusado", False, f"insert into public.jornada_cliente (empresa_id,credor_id,id_cliente,data,momento,motivo) values ({EA},{CJ},'L2','2026-10-13','etapa-X;drop','x')", "service_role")
+# Criar empresa e receber a linha de volta (SQL 27): o site faz insert … select
+checar("Master cria empresa e recebe a linha", True, "insert into public.empresas (slug,nome) values ('nova-master','Nova') returning slug", "authenticated", u["admin"], "nova-master")
+sql(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['admin']}', false); select public.configurar_equipe('{COM}','carteira','{{\"ver_empresas\": null}}')")
+checar("Comercial cria empresa e recebe a linha (entra na carteira dele)", True, "insert into public.empresas (slug,nome) values ('nova-comercial','Nova C') returning slug", "authenticated", COM, "nova-comercial")
+checar("Comercial vê a empresa que criou e não as de fora da carteira", True, "select bool_or(slug = 'nova-comercial') and not bool_or(slug in ('beta', 'nova-master')) from public.empresas", "authenticated", COM, "t")
+checar("Admin de cliente continua sem criar empresa", False, "insert into public.empresas (slug,nome) values ('nova-cliente','X') returning slug", "authenticated", u["admina"])
+checar("Admin de cliente continua vendo só a própria empresa", True, "select string_agg(slug, ',') from public.empresas", "authenticated", u["admina"], "alfa")
+checar("Atendimento vê todas as empresas (alcance todas)", True, "select count(*) >= 4 from public.empresas", "authenticated", SUP, "t")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

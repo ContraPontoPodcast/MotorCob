@@ -66,6 +66,7 @@ Faça **na ordem**; cada passo depende do anterior.
 | 54 | `supabase/migrations/20261123000001_etapas_prospeccao.sql` (SQL 26) | Etapas da empresa e leads da prospecção (tipo de arquivo `leads` e nome da etapa no enquadramento) | Supabase | 51º |
 | 55 | `07_workspace/PROMPT_34_ETAPAS_ORCAMENTO_TRAVAS.md` | Orquestração: etapas da régua (mesma esteira com raias e frases, ciclo), orçamento por canal com prioridade e Travas configuráveis | Site (motorcob.online) | 52º |
 | 56 | `07_workspace/PROMPT_35_MOTORCLI_ETAPAS_PROSPECCAO.md` | MotorCli: etapas, prospecção (envio de leads, LGPD) e Travas; depois do prompt 24 | Site (motorcob.online) | 53º |
+| 57 | `supabase/migrations/20261124000001_ver_empresa_criada.sql` (SQL 27) | Correção: Master e Comercial voltam a criar empresa pelo Console (erro de RLS em empresas) | Supabase | já |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
