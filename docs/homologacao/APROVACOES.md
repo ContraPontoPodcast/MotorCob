@@ -90,7 +90,7 @@ Protótipos: `bloco5-repaginada-prototipo.html` (glossário, nomes, antes e depo
 
 Aprovado:
 1. **Glossário** "O que significa", sempre acessível (menu Ajuda e "?" no topo); todo (i) leva ao termo.
-2. **Mantêm o nome** (com (i)): **Fallback**, **MC** e **%MC**, **Auditoria**.
+2. **Mantêm o nome** (com (i)): **Fallback**, **MC** e **%MC**, **Auditoria**, **DLR (Delivery Report)** — só SMS e RCS; WhatsApp tem status, e-mail tem bounce.
 3. **Ajuda pelo tempo de casa do usuário**: até 15 dias = explicações abertas ("Primeiros dias"); 16 a 30 dias = (i)
    discreto; depois de 30 dias = desligada. Glossário sempre disponível; a pessoa religa a ajuda em Minha conta.
 4. Princípios: um nome por conceito; nenhum código interno nem erro técnico cru na tela.
