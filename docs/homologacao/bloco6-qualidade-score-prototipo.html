@@ -261,7 +261,7 @@ ul.simples li{margin:3px 0}
           <label class="op"><input type="radio" name="cob" value="embutido"><div><b>Embutido no SMS</b><span>Sem cobrança separada; o SMS sai por um preço maior.</span></div></label>
         </div>
         <div class="form" style="margin-top:14px" id="precos"></div>
-        <div class="decisao" id="dec3" style="margin-top:12px" hidden><b>Falta decidir:</b> no "Embutido no SMS", o número represado entra na fatura como SMS (pelo preço maior) ou não entra? As duas formas funcionam; a fatura mostra a linha "Score de Entrega · represados" com a quantidade de qualquer jeito.</div>
+        <p class="nota" id="dec3" hidden>No SMS inteligente, o número represado não é cobrado. O unitário é maior, mas o custo da campanha cai porque menos números saem (ver o custo unitário efetivo em Economia do Score).</p>
       </div>
       <div class="cartao">
         <h3>Como aparece na fatura (exemplo de um mês)</h3>
@@ -314,6 +314,19 @@ ul.simples li{margin:3px 0}
       </div>
 
       <div class="kpis" id="eco-kpis"></div>
+
+      <div class="cartao">
+        <h3>Custo unitário efetivo · simulador da campanha inteligente</h3>
+        <p class="sub">O SMS inteligente tem preço unitário maior, mas só é cobrado o que sai. Dividindo o total da campanha pelo mailing carregado chega-se ao custo real de cada número.</p>
+        <div class="form">
+          <div class="campo"><label for="ci-mail">Mailing carregado</label><input type="number" id="ci-mail" min="1" value="18420" style="width:auto"></div>
+          <div class="campo"><label for="ci-rep">Represados pelo filtro (%)</label><input type="number" id="ci-rep" min="0" max="100" step="0.1" value="12"></div>
+          <div class="campo"><label for="ci-pad">SMS padrão (R$)</label><input type="number" id="ci-pad" min="0" step="0.001" value="0.055"></div>
+          <div class="campo"><label for="ci-int">SMS inteligente (R$)</label><input type="number" id="ci-int" min="0" step="0.001" value="0.060"></div>
+        </div>
+        <div class="rolar" style="margin-top:14px"><table class="tab" id="ci-tab"></table></div>
+        <div class="prev" style="margin-top:12px" id="ci-res"></div>
+      </div>
 
       <div class="duas">
         <div class="cartao">
@@ -533,7 +546,7 @@ ul.simples li{margin:3px 0}
   });
 
   // ---------------- contratação
-  const precos = { analisado: [["Preço por número analisado", 0.004, 0.006]], represado: [["Preço por número represado", 0.012, 0.018]], embutido: [["Preço do SMS com Score", 0.062, 0.075]] };
+  const precos = { analisado: [["Preço por número analisado", 0.004, 0.006]], represado: [["Preço por número represado", 0.012, 0.018]], embutido: [["Preço do SMS inteligente", 0.058, 0.060]] };
   function contrato() {
     const m = document.querySelector('input[name="cob"]:checked').value;
     document.getElementById("precos").innerHTML = precos[m].map(([l, mi, ta], i) =>
@@ -543,7 +556,7 @@ ul.simples li{margin:3px 0}
     const mail = 18420, rep = 2210, env = mail - rep, sms = 0.055;
     const linhas = m === "analisado" ? [["SMS Padrão · enviados", env, sms], ["Score de Entrega · números analisados", mail, 0.006], ["Score de Entrega · represados (informativo)", rep, 0]]
       : m === "represado" ? [["SMS Padrão · enviados", env, sms], ["Score de Entrega · represados", rep, 0.018]]
-      : [["SMS Padrão com Score · enviados", env, 0.075], ["Score de Entrega · represados (informativo)", rep, 0]];
+      : [["SMS inteligente · enviados", env, 0.060], ["Score de Entrega · represados (não cobrados)", rep, 0]];
     const tot = linhas.reduce((s, [, q, p]) => s + q * p, 0);
     const semScore = mail * sms;
     document.getElementById("fatura").innerHTML = `<thead><tr><th>Item</th><th class="n">Quantidade</th><th class="n">Preço</th><th class="n">Valor</th></tr></thead><tbody>` +
@@ -572,6 +585,10 @@ ul.simples li{margin:3px 0}
       : nFora
       ? `<b>${n(tot - nFora)} números serão enviados · ${n(nFora)} não serão enviados (${fora.join(", ")}).</b><br><span style="color:var(--texto2)">No retorno, quem ficou de fora aparece como ${fora.map(k => `"${nomeDe[k]}"`).join(" e ")}, com a faixa de cada número.</span>`
       : `<b>${n(tot)} números serão enviados.</b><br><span style="color:var(--texto2)">O Score só classifica: a faixa de cada número vem no retorno.</span>`;
+    if (marcadas.length) {
+      const r = custoEfetivo(tot, nFora / tot * 100, 0.055, 0.060);
+      document.getElementById("camp-prev").innerHTML += `<div class="linha" style="margin-top:8px"><span class="pil ${r.com <= r.sem ? "ok" : "erro"}">Custo unitário efetivo ${brl(r.unit, 4)}</span><span style="color:var(--texto2)">SMS inteligente ${brl(0.060, 4)} × ${n(r.env)} enviados = ${brl(r.com)} · sem a inteligência ${brl(r.sem)} (${brl(0.055, 4)} por número)</span></div>`;
+    }
     document.getElementById("camp-ok").disabled = !marcadas.length;
   }
   const cxTodos = document.getElementById("cx-todos");
@@ -615,7 +632,7 @@ ul.simples li{margin:3px 0}
     const m = document.querySelector('input[name="cob"]:checked').value;
     const env = c.mail - c.rep;
     const sem = c.mail * SMS;
-    const com = m === "analisado" ? env * SMS + c.mail * 0.006 : m === "represado" ? env * SMS + c.rep * 0.018 : env * 0.075;
+    const com = m === "analisado" ? env * SMS + c.mail * 0.006 : m === "represado" ? env * SMS + c.rep * 0.018 : env * 0.060;
     const bruto = c.rep * SMS;
     const custo = com - env * SMS;
     return { env, sem, com, bruto, custo, liq: sem - com, perdidas: Math.round(c.rep * c.pRep) };
@@ -671,6 +688,31 @@ ul.simples li{margin:3px 0}
     `<p class="nota" style="margin:0">Entrega real do controle em outubro (amostra de 1.312 números).</p>`;
   document.querySelectorAll('input[name="cob"]').forEach(r => r.addEventListener("change", economia));
   economia();
+
+  // ---------------- custo unitário efetivo
+  function custoEfetivo(mail, repPct, pad, intel) {
+    const rep = Math.round(mail * repPct / 100), env = mail - rep;
+    const sem = mail * pad, com = env * intel;
+    return { rep, env, sem, com, unit: com / mail, eco: sem ? 1 - com / sem : 0, equilibrio: intel ? (1 - pad / intel) * 100 : 0 };
+  }
+  function simulador() {
+    const v = id => parseFloat(document.getElementById(id).value) || 0;
+    const mail = Math.max(1, Math.round(v("ci-mail"))), pad = v("ci-pad"), intel = v("ci-int");
+    const r = custoEfetivo(mail, v("ci-rep"), pad, intel);
+    const b4 = x => brl(x, 4);
+    document.getElementById("ci-tab").innerHTML = `<thead><tr><th>Passo</th><th class="n">Números</th><th class="n">Preço</th><th class="n">Total</th></tr></thead><tbody>
+      <tr><td>Mailing carregado</td><td class="n">${n(mail)}</td><td class="n"></td><td class="n"></td></tr>
+      <tr><td>Represados pelo filtro (não saem, não são cobrados)</td><td class="n">${n(r.rep)}</td><td class="n">—</td><td class="n">—</td></tr>
+      <tr><td>Enviados × SMS inteligente</td><td class="n">${n(r.env)}</td><td class="n">${b4(intel)}</td><td class="n"><b>${brl(r.com)}</b></td></tr>
+      <tr><td>Sem a inteligência: mailing inteiro × SMS padrão</td><td class="n">${n(mail)}</td><td class="n">${b4(pad)}</td><td class="n">${brl(r.sem)}</td></tr>
+      <tr><td><b>Custo unitário efetivo</b> = total da campanha inteligente ÷ mailing carregado</td><td class="n"></td><td class="n"><b>${b4(r.unit)}</b></td><td class="n"></td></tr></tbody>`;
+    const ok = r.com <= r.sem;
+    document.getElementById("ci-res").innerHTML = `<div class="linha"><span class="pil ${ok ? "ok" : "erro"}">${ok ? "Mais barato" : "Mais caro"}</span>
+      <b style="font-size:17px">${b4(r.unit)} por número, contra ${b4(pad)} sem a inteligência · ${ok ? "economia" : "aumento"} de ${pct(Math.abs(r.eco * 100))}</b></div>
+      <p class="nota">A conta fecha a favor do cliente quando o filtro represa mais de <b>${pct(r.equilibrio)}</b> do mailing (1 − SMS padrão ÷ SMS inteligente). Abaixo disso, o SMS inteligente sai mais caro, e a tela mostra em vermelho.</p>`;
+  }
+  ["ci-mail", "ci-rep", "ci-pad", "ci-int"].forEach(id => document.getElementById(id).addEventListener("input", simulador));
+  simulador();
 
   atualizar();
 })();
