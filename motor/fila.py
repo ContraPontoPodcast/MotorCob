@@ -361,10 +361,12 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                 return "limite_acoes", [], None
             blend = blend[:resta]
         cert_de = {c.contato: c for cs in cands.values() for c in cs}
-        frase_de = {}                          # frase da ação do dia, por canal (a 1ª ação do canal)
+        frase_de, produto_de = {}, {}          # frase e produto da ação do dia, por canal (a 1ª ação do canal)
         for a in lista:
             if a.get("mensagem") is not None:
                 frase_de.setdefault(a["canal"], a["mensagem"])
+            if a.get("produto"):
+                produto_de.setdefault(a["canal"], a["produto"])
         linhas = []
         for canal, condicao, contatos in blend:
             cfg = rc.canal_cfg(canal)
@@ -385,6 +387,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                     "janela": f"{jan[0]}-{jan[1]}",
                     "persona": persona_rot,
                     **({"frase_acao": frase_de[canal]} if canal in frase_de else {}),
+                    **({"produto": produto_de[canal]} if canal in produto_de else {}),
                 })
         return "com_acao", linhas, None
 

@@ -243,3 +243,13 @@ class TestSemRepetir(unittest.TestCase):
         self.assertEqual(canais, [("whatsapp", ()), ("sms", ()), ("sms", (7,))])
         self.assertTrue(any("sms repetido no mesmo dia" in e for e in erros))
 
+
+class TestProdutoDaAcao(unittest.TestCase):
+    def test_produto_do_canal_vai_para_a_acao_e_de_outro_canal_e_ignorado(self):
+        from motor.estrategia import _acao
+        erros = []
+        self.assertEqual(_acao({"canal": "sms", "produto": "SMS_OTP"}, "x", erros)["produto"], "sms_otp")
+        self.assertNotIn("produto", _acao({"canal": "sms", "produto": "rcs_basic"}, "y", erros))
+        self.assertNotIn("produto", _acao({"canal": "discador", "produto": "sms_otp"}, "z", erros))
+        self.assertEqual(len(erros), 2)
+        self.assertIn("não é do canal", erros[0])

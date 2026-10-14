@@ -143,6 +143,14 @@ def _acao(a, onde: str, erros: list) -> dict | None:
     acao = {"canal": a["canal"], "modo": modo, "numeros": numeros or None, "contatos": filtro}
     if personas:
         acao["personas"] = [int(p) for p in personas]
+    produto = _simples(a.get("produto"))
+    if produto and a["canal"] in ("sms", "rcs", "whatsapp", "email"):
+        if produto == a["canal"] or produto.startswith(a["canal"] + "_"):
+            acao["produto"] = produto         # rota vendida (ex.: sms_otp); a Mensageria confere a contratação
+        else:
+            erros.append(f"{onde}/{a['canal']}: produto '{a.get('produto')}' não é do canal (vale o padrão do canal)")
+    elif produto:
+        erros.append(f"{onde}/{a['canal']}: este canal não tem produto da Mensageria (ignorado)")
     if a.get("mensagem") not in (None, "", {}) and a["canal"] in CANAIS_SEM_MENSAGEM:
         erros.append(f"{onde}/{a['canal']}: este canal não leva frase nem template (ignorado)")
     elif a.get("mensagem") not in (None, "", {}):

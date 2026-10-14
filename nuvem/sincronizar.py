@@ -464,6 +464,22 @@ def _baixar(sb: Supabase, pasta: Path, tabela: str, empresa_id, ordem: str) -> l
     return linhas
 
 
+AJUSTES_CANAL = ("ativo", "janela_inicio", "janela_fim", "sabado", "capacidade_dia", "tentativas_dia",
+                 "respeitar_nao_perturbe", "produto_padrao")
+
+
+def canais_da_carteira(sb: Supabase, canais: list[dict], empresa_id, credor_id) -> list[dict]:
+    """Regra do canal da carteira (SQL 30): fica no canal da empresa; a carteira herda e sobrescreve só o que
+    ajustou em credor_canais. Banco sem a tabela ou carteira sem ajuste: o canal da empresa como está."""
+    if credor_id is None:
+        return canais
+    from nuvem.mensageria import _tabela_nova
+    ajustes = {a["canal"]: a.get("ajustes") or {} for a in _tabela_nova(lambda: sb.selecionar(
+        "credor_canais", {"empresa_id": f"eq.{empresa_id}", "credor_id": f"eq.{credor_id}"}) or [], [])}
+    return [{**c, **{k: v for k, v in ajustes.get(c.get("canal"), {}).items() if k in AJUSTES_CANAL}}
+            for c in canais]
+
+
 def chave_sugestao(s: dict) -> str:
     return f'{s["persona"]}|{s["fase"]}|{s["dia"]}|{s["de"]}|{s["para"]}'
 
@@ -744,7 +760,7 @@ def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
         for obrig in ("base/clientes.csv", "base/contatos.csv"):
             if not (pasta / obrig).exists():
                 raise RuntimeError(f"falta a base da carteira {u['codigo']}: envie clientes e contatos pelo site")
-        canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
+        canais = canais_da_carteira(sb, _baixar(sb, pasta, "canais_empresa", eid, "canal.asc"), eid, cid)
         estrategias = [e for e in _baixar(sb, pasta, "estrategias", eid, "id.asc") if e.get("frente") == "motorcli"]
         est = next((e for e in estrategias if e.get("id") == u.get("estrategia_id")), None) \
             or next((e for e in estrategias if e.get("padrao")), None)
@@ -818,7 +834,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         if entrada is None and any(tem(d) for d in PASTAS_CARTEIRA + ("ocorrencias", "enriquecimento")):
             entrada, aviso_layout = _layout_automatico(sb, pasta, baixados, out)
         entrada, mapa = mapeamento.aplicar(sb, eid, cid, pasta, entrada, repo, out)
-        canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
+        canais = canais_da_carteira(sb, _baixar(sb, pasta, "canais_empresa", eid, "canal.asc"), eid, cid)
         reg_canal, info_canal = retorno_canal.preparar(sb, eid, cid, pasta, regras_de(canais, u.get("regras_retorno")),
                                                        out)
         from nuvem import mensageria

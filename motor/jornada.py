@@ -383,7 +383,8 @@ def _linhas_etapa(acoes: list, idc: str, ativos: set, contatos_de, certs, restri
                 linhas.append({"id_cliente": idc, "canal": canal, "contato": contato, "regua": f"etapa-{etapa_id}",
                                "passo": rot, "tag": f"CLI-ET-{etapa_id}-{rot}", "condicao": "", "ordem_contato": 1,
                                "cluster": "", "estado": "ET", "persona": "",
-                               **({"frase_acao": a["mensagem"]} if a.get("mensagem") is not None else {})})
+                               **({"frase_acao": a["mensagem"]} if a.get("mensagem") is not None else {}),
+                               **({"produto": a["produto"]} if a.get("produto") else {})})
                 foi = True
         if foi and modo != "junto":
             cadeia_foi = True
@@ -625,12 +626,15 @@ def gerar(clientes: dict[str, ClienteJornada], contatos: list[dict], hoje: date,
 
 
 def ids_por_canal(fila: list[dict]) -> dict[str, list[dict]]:
-    """ids/<canal>.csv: id_cliente;contato[;mensagem] (o formato que a Mensageria transforma em lote)."""
+    """ids/<canal>.csv: id_cliente;contato[;mensagem][;produto] (o formato que a Mensageria transforma em lote)."""
     por: dict[str, list[dict]] = {}
     com_frase = {l["canal"] for l in fila if l.get("mensagem")}
+    com_produto = {l["canal"] for l in fila if l.get("produto")}
     for l in fila:
         linha = {"id_cliente": l["id_cliente"], "contato": l["contato"]}
         if l["canal"] in com_frase:       # frase da ação da etapa (a Mensageria usa a coluna mensagem)
             linha["mensagem"] = l.get("mensagem") or ""
+        if l["canal"] in com_produto:     # produto da ação (ex.: sms_otp); vazio = padrão do canal
+            linha["produto"] = l.get("produto") or ""
         por.setdefault(l["canal"], []).append(linha)
     return por

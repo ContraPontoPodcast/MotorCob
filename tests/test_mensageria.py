@@ -466,6 +466,126 @@ class TestMensageria(unittest.TestCase):
         vivo = {m["fornecedor"] for m in self._msgs("sms") if m.get("fornecedor") and m["operadora"] == "vivo"}
         self.assertTrue(vivo and vivo <= {"zenvia", "infobip"})
 
+    # ---------------------------------------------------------------- bloco 2: produto, negociação por operadora
+    def _produto(self, produto="sms_otp", blocos=None, contratados=None):
+        """Lista do dia com a coluna produto, catálogo do SQL 30 e a rota própria do produto."""
+        ids = self.pasta / "saida" / DIA.isoformat() / "ids"
+        linhas = [f"C{n};{f};Seu código é 1234;{produto}" for n, f in enumerate(self.fones)]
+        (ids / "sms.csv").write_text("id_cliente;contato;mensagem;produto\n" + "\n".join(linhas) + "\n",
+                                     encoding="utf-8")
+        self.sb.t["cobranca_itens"] = [
+            {"codigo": "sms", "canal": "sms", "padrao_canal": True},
+            {"codigo": "sms_otp", "canal": "sms", "padrao_canal": False},
+            {"codigo": "email", "canal": "email", "padrao_canal": True},
+            {"codigo": "voz_minuto", "canal": None, "padrao_canal": False}]
+        self.sb.t["mensageria_fornecedores"].append({"codigo": "sinch", "canais": ["sms"], "ativo": True})
+        self.sb.t["mensageria_planos_rota"] = [
+            {"id": 10, "nome": "Padrão SMS", "canal": "sms", "padrao": True, "ativo": True, "item": None},
+            {"id": 20, "nome": "Rota SMS OTP", "canal": "sms", "padrao": False, "ativo": True, "item": "sms_otp",
+             "tipo": "operadora"}]
+        self.sb.t["mensageria_plano_fornecedores"] = [
+            {"plano_id": 10, "fornecedor": "zenvia", "percentual": "70.00", "ordem_reserva": 1},
+            {"plano_id": 10, "fornecedor": "infobip", "percentual": "30.00", "ordem_reserva": 2}] + [
+            {"plano_id": 20, "operadora": o, "fornecedor": f, "percentual": pc, "ordem_reserva": 1}
+            for o, f, pc in (blocos or [])]
+        if contratados is not None:
+            self.sb.t["empresa_produtos"] = [{"empresa_id": 1, "item": i, "ativo": True} for i in contratados]
+        self._criar()
+        self._lote("sms")["situacao"] = "agendado"
+
+    def test_custos_negociados_vigencia_inteira_operadora_e_encerrada(self):
+        self.sb.t["mensageria_custos"] = [
+            {"fornecedor": "zenvia", "item": "sms_otp", "operadora": None, "custo": "0.040", "vigente_desde": "2026-09-01"},
+            {"fornecedor": "zenvia", "item": "sms_otp", "operadora": "vivo", "custo": "0.030", "vigente_desde": "2026-10-01"},
+            {"fornecedor": "zenvia", "item": "sms_otp", "operadora": "outras", "custo": "0.045", "vigente_desde": "2026-10-01"},
+            {"fornecedor": "infobip", "item": "sms_otp", "operadora": None, "custo": "0.050", "vigente_desde": "2026-01-01"},
+            {"fornecedor": "infobip", "item": "sms_otp", "operadora": None, "custo": None, "encerrada": True,
+             "vigente_desde": "2026-10-10"},
+            {"fornecedor": "sinch", "item": "sms_otp", "operadora": "claro", "custo": "0.028", "vigente_desde": "2026-11-01"}]
+        neg = M.custos_negociados(self.sb, "sms_otp", DIA)
+        self.assertEqual(neg, {"zenvia": {"vivo": 0.03, "outras": 0.045}})   # o flat de setembro não vale mais
+        self.assertEqual(M.custo_da_operadora(neg, "zenvia", "vivo"), 0.03)
+        self.assertEqual(M.custo_da_operadora(neg, "zenvia", "oi"), 0.045)        # Oi entra em "outras"
+        self.assertIsNone(M.custo_da_operadora(neg, "zenvia", "claro"))          # sem preço da Claro: sem custo
+        self.assertIsNone(M.custo_da_operadora(neg, "infobip", "vivo"))          # negociação encerrada
+        self.assertEqual(M.custos(self.sb, "sms_otp", DIA), {})                  # nenhum flat vigente
+        self.assertEqual(M.custos_negociados(self.sb, "sms_otp", date(2026, 9, 15)),
+                         {"zenvia": {"": 0.04}, "infobip": {"": 0.05}})
+
+    def test_rota_do_produto_claro_por_um_fornecedor_e_demais_50_50(self):
+        self._produto(blocos=[("claro", "sinch", "100.00"), (None, "zenvia", "50.00"), (None, "infobip", "50.00")])
+        self.sb.t["mensageria_custos"] = [
+            {"fornecedor": "sinch", "item": "sms_otp", "operadora": "claro", "custo": "0.028", "vigente_desde": "2026-10-01"},
+            {"fornecedor": "zenvia", "item": "sms_otp", "operadora": None, "custo": "0.033", "vigente_desde": "2026-10-01"},
+            {"fornecedor": "infobip", "item": "sms_otp", "operadora": "vivo", "custo": "0.031", "vigente_desde": "2026-10-01"},
+            {"fornecedor": "infobip", "item": "sms_otp", "operadora": "tim", "custo": "0.032", "vigente_desde": "2026-10-01"},
+            {"fornecedor": "infobip", "item": "sms_otp", "operadora": "outras", "custo": "0.036", "vigente_desde": "2026-10-01"}]
+        self._processar()
+        enviadas = [m for m in self._msgs("sms") if m.get("fornecedor")]
+        self.assertEqual({m["item"] for m in self._msgs("sms")}, {"sms_otp"})
+        self.assertEqual({m["fornecedor"] for m in enviadas if m["operadora"] == "claro"}, {"sinch"})
+        demais = [m["fornecedor"] for m in enviadas if m["operadora"] != "claro"]
+        self.assertEqual(set(demais), {"zenvia", "infobip"})
+        self.assertAlmostEqual(demais.count("zenvia") / len(demais), 0.5, delta=0.08)
+        precos = {("sinch", "claro"): 0.028, ("infobip", "vivo"): 0.031, ("infobip", "tim"): 0.032,
+                  ("infobip", "oi"): 0.036, ("infobip", "outras"): 0.036}
+        for c in self.sb.t["mensageria_consumo_fornecedor"]:
+            if c["item"] != "sms_otp":
+                continue
+            unit = 0.033 if c["fornecedor"] == "zenvia" else precos[(c["fornecedor"], c["operadora"])]
+            self.assertEqual(c["quantidade_sem_custo"], 0)
+            self.assertAlmostEqual(c["custo"], c["quantidade"] * unit, places=4)
+
+    def test_operadora_sem_bloco_e_sem_demais_usa_a_rota_do_canal(self):
+        self._produto(blocos=[("claro", "sinch", "100.00")])
+        self._processar()
+        enviadas = [m for m in self._msgs("sms") if m.get("fornecedor")]
+        self.assertEqual({m["fornecedor"] for m in enviadas if m["operadora"] == "claro"}, {"sinch"})
+        self.assertEqual({m["fornecedor"] for m in enviadas if m["operadora"] != "claro"}, {"zenvia", "infobip"})
+
+    def test_produto_sem_rota_propria_usa_a_rota_do_canal(self):
+        self._produto(blocos=[])
+        self._processar()
+        self.assertEqual(set(self._por_forn()), {"zenvia", "infobip"})
+
+    def test_produto_nao_contratado_fica_bloqueado(self):
+        self._produto(blocos=[(None, "zenvia", "100.00")], contratados=["sms"])
+        msgs = self._msgs("sms")
+        self.assertEqual({m["motivo"] for m in msgs}, {"produto não contratado", "descadastrado"})
+        self.assertEqual(self._lote("sms")["bloqueadas"], self._lote("sms")["total"])
+        self.sb.t["mensageria_lotes"].clear()
+        self.sb.t["mensageria_mensagens"].clear()
+        self.sb.t["empresa_produtos"].append({"empresa_id": 1, "item": "sms_otp", "ativo": True})
+        self._criar()
+        self.assertFalse([m for m in self._msgs("sms") if m["motivo"] == "produto não contratado"])
+
+    def test_item_do_envio_acao_carteira_catalogo_canal(self):
+        cat = {"sms": {"canal": "sms", "padrao_canal": True}, "sms_otp": {"canal": "sms"},
+               "sms_marketing": {"canal": "sms"}, "rcs_basic": {"canal": "rcs", "padrao_canal": True}}
+        self.assertEqual(M.item_do_envio("sms", "sms_otp", {"produto_padrao": "sms_marketing"}, cat), "sms_otp")
+        self.assertEqual(M.item_do_envio("sms", "", {"produto_padrao": "sms_marketing"}, cat), "sms_marketing")
+        self.assertEqual(M.item_do_envio("sms", "rcs_basic", None, cat), "sms")           # produto de outro canal
+        self.assertEqual(M.item_do_envio("sms", "sms_bet", None, cat), "sms")             # fora do catálogo
+        self.assertEqual(M.item_do_envio("rcs", None, None, cat), "rcs_basic")
+        self.assertEqual(M.item_do_envio("email", None, None, {}), "email")               # banco sem o SQL 30
+        self.assertEqual(M.item_do_envio("sms", "sms_otp", None, {}), "sms")
+        self.assertEqual((M.canal_do_item("sms_otp"), M.canal_do_item("whatsapp_utilidade"),
+                          M.canal_do_item("email_com_anexo"), M.canal_do_item("voz_minuto")),
+                         ("sms", "whatsapp", "email", "voz_minuto"))
+
+    def test_regra_do_canal_da_carteira_sobrescreve_so_o_ajustado(self):
+        from nuvem.sincronizar import canais_da_carteira
+        self.sb.t["credor_canais"] = [{"empresa_id": 1, "credor_id": 7, "canal": "sms",
+                                       "ajustes": {"janela_fim": "18:00", "produto_padrao": "sms_otp", "x": 1}}]
+        canais = [{"canal": "sms", "janela_inicio": "08:00", "janela_fim": "20:00", "sabado": True},
+                  {"canal": "email", "janela_inicio": "08:00", "janela_fim": "20:00"}]
+        saida = canais_da_carteira(self.sb, canais, 1, 7)
+        self.assertEqual(saida[0], {"canal": "sms", "janela_inicio": "08:00", "janela_fim": "18:00", "sabado": True,
+                                    "produto_padrao": "sms_otp"})
+        self.assertEqual(saida[1], canais[1])
+        self.assertEqual(canais_da_carteira(self.sb, canais, 1, None), canais)
+        self.assertEqual(canais_da_carteira(self.sb, canais, 1, 8), canais)
+
     def test_cache_de_operadora_no_envio_real(self):
         consultas = []
         def consulta(destino):

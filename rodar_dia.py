@@ -181,19 +181,21 @@ def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]]) -> dict[str, lis
                             key=lambda l: (l["id_cliente"], int(l.get("ordem_contato") or 1))):
                 if (l["id_cliente"], l["contato"]) not in vistos:
                     vistos.add((l["id_cliente"], l["contato"]))
-                    pares.append((l["id_cliente"], l["contato"], l.get("mensagem") or ""))
+                    pares.append((l["id_cliente"], l["contato"], l.get("mensagem") or "", l.get("produto") or ""))
                     template = template or bool(l.get("template"))
             if not pares:
                 continue
             nome = f"{canal}_reserva" if condicional else canal
+            frase, produto = any(p[2] for p in pares), any(p[3] for p in pares)
             with open(pasta / f"{nome}.csv", "w", newline="", encoding="utf-8") as f:
-                if any(m for _, _, m in pares):   # frase ou, no WhatsApp/RCS, o template do provedor: 3ª coluna
+                if frase or produto:   # frase ou template do provedor: 3ª coluna; produto da ação (sms_otp…): 4ª
                     w = csv.writer(f, delimiter=";", lineterminator="\n")
-                    w.writerow(["id_cliente", "contato", "template" if template else "mensagem"])
-                    w.writerows(pares)
+                    w.writerow(["id_cliente", "contato", "template" if template else "mensagem"]
+                               + (["produto"] if produto else []))
+                    w.writerows(p if produto else p[:3] for p in pares)
                 else:
-                    f.write("id_cliente;contato\n" + "".join(f"{i};{c}\n" for i, c, _ in pares))
-            arquivos[nome] = sorted({i for i, _, _ in pares})
+                    f.write("id_cliente;contato\n" + "".join(f"{i};{c}\n" for i, c, _, _ in pares))
+            arquivos[nome] = sorted({p[0] for p in pares})
     return arquivos
 
 
