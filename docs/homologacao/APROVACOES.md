@@ -118,5 +118,15 @@ Aprovado:
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
 2. Pendências anteriores: confirmar o SQL 26, prompts 53 e 54 e o passo 41 (MotorCli Jornada); salvar de novo a
    Contratação da empresa criada pela metade e convidar o Admin dela.
-3. Bloco 2: SQL 30 e prompts (a gerar).
-4. Blocos 3, 4 e 5 (a gerar depois das aprovações).
+3. Merge da PR dos blocos 2 a 5 (branch `claude/geracao-blocos-2-5`, empilhada sobre a 108). Tudo já gerado e testado
+   (RLS 882 ok, motor 383 ok); nada foi rodado no site nem no banco. Ordem (passos 63 a 71 do `00_LEIA_PRIMEIRO`):
+   a. Conferir a mistura de operadoras do Teleco do mês (vem semeada com agosto/2026; dá para editar depois).
+   b. SQL 30 → prompts 38, 39 e 40 (Produtos e preços, Fornecedores e rotas, Administrativo/produto/canal/comitê).
+   c. SQL 31 → prompts 41 e 42 (Orquestração por carteira e Mapa da Esteira).
+   d. SQL 32 → senha no painel do Supabase (12+, letras e números) → prompts 43, 44 e 45 (glossário e ajuda,
+      paleta, menus e nomes).
+   e. Publicar de novo a função `assistente` (`python3 scripts/juntar_funcao.py assistente`) e atualizar o motor na
+      nuvem (`systemctl start motorcob-atualizar`).
+   f. `CONFERENCIA_GERAL.sql`: itens 17, 18 e 19 devem dar OK.
+4. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
+   do cliente (antes herdaria pelo papel Planejamento).
