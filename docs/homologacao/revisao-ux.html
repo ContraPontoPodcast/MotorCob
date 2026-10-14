@@ -77,8 +77,8 @@ a:focus-visible{outline:2px solid var(--txt);outline-offset:2px}
   <h1>Revisão de UX dos blocos 1 a 6</h1>
   <p class="sub">Leitura de ponta a ponta de tudo que foi aprovado até o bloco 6: Console, Mensageria, Cobrança, Jornada e Score de Entrega. Cada achado diz onde aparece, o que muda e se já foi aplicado no protótipo. Nada aqui foi rodado no site ou no banco.</p>
   <div class="resumo">
-    <div><b>14</b><span>achados no total</span></div>
-    <div><b>3</b><span>já aplicados nos protótipos</span></div>
+    <div><b>15</b><span>achados no total</span></div>
+    <div><b>5</b><span>aplicados ou decididos</span></div>
     <div><b>5</b><span>prioridade alta</span></div>
     <div><b>2</b><span>decisões abertas</span></div>
   </div>
@@ -90,12 +90,12 @@ a:focus-visible{outline:2px solid var(--txt);outline-offset:2px}
     <p><span class="pill p-alta">Alta</span> muda o entendimento ou evita erro de operação. Resolver antes de liberar para clientes.</p>
     <p><span class="pill p-media">Média</span> deixa o sistema consistente entre as áreas. Resolver no mesmo ciclo.</p>
     <p><span class="pill p-baixa">Baixa</span> acabamento. Pode entrar depois da primeira entrega.</p>
-    <p><span class="pill p-ok">Aplicado</span> já está no protótipo atualizado e no branch <code>claude/geracao-bloco-6</code>.</p>
+    <p><span class="pill p-ok">Aplicado</span> ou <span class="pill p-ok">Decidido</span> já está no protótipo atualizado e no branch <code>claude/geracao-bloco-6</code>.</p>
   </div>
 </section>
 
 <section>
-  <h2>Já aplicado</h2>
+  <h2>Aplicado ou decidido</h2>
   <div class="lista">
     <div class="item"><div class="num">01</div><div class="corpo">
       <div class="topo"><h3>Protótipos 2 e 3 estavam desatualizados</h3><span class="pill p-ok">Aplicado</span></div>
@@ -114,6 +114,17 @@ a:focus-visible{outline:2px solid var(--txt);outline-offset:2px}
       <div class="tags"><span class="tag msg">Mensageria · fornecedores</span></div>
       <dl class="muda"><dt>Antes</dt><dd>"Plano de rota" no produto e "mistura" em outra seção.</dd>
       <dt>Agora</dt><dd>Uma seção <b>Rotas</b>: primeiro a rota padrão de cada canal, depois a rota de cada produto, que vale primeiro. A mistura de operadoras fica logo abaixo do total da rota.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">13</div><div class="corpo">
+      <div class="topo"><h3>Carga, lista e mailing para a mesma coisa</h3><span class="pill p-ok">Aplicado</span></div>
+      <div class="tags"><span class="tag msg">Mensageria</span><span class="tag cob">Cobrança</span><span class="tag jor">Jornada</span></div>
+      <dl class="muda"><dt>Agora</dt><dd><b>Lista da campanha</b> na Mensageria (o que o cliente sobe ou manda pela API numa campanha) e <b>carga</b> na Cobrança e na Jornada (a carteira do credor). "Mailing" sai das telas e fica no glossário como nome antigo, para quem buscar por ele. Aplicado no SQL 33, no Assistente, nos prompts 46 a 48 e no protótipo do bloco 6.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">15</div><div class="corpo">
+      <div class="topo"><h3>Economia do Score para quem não contratou</h3><span class="pill p-ok">Decidido</span></div>
+      <div class="tags"><span class="tag msg">Mensageria · Economia do Score</span></div>
+      <dl class="muda"><dt>Decisão</dt><dd>Mostrar como vitrine. Sem simulação: a tela usa só números reais do cliente, os SMS que não chegaram no período e quanto ele pagou por eles, e explica como o Score reduz esse valor, com o botão "Pedir proposta do Score".</dd>
+      <dt>Situação</dt><dd>No protótipo do bloco 6 (Economia do Score › Ver no protótipo › Cliente sem o Score). Banco e prompt depois da aprovação da tela.</dd></dl>
     </div></div>
   </div>
 </section>
@@ -171,11 +182,6 @@ a:focus-visible{outline:2px solid var(--txt);outline-offset:2px}
       <div class="topo"><h3>Tabelas no celular</h3><span class="pill p-media">Média</span></div>
       <div class="onde">Campanhas, qualidade dos fornecedores, Economia do Score</div>
       <dl class="muda"><dt>Proposta</dt><dd>Abaixo de 600 px cada linha vira um cartão com os 3 campos principais e "ver detalhes".</dd></dl>
-    </div></div>
-    <div class="item"><div class="num">13</div><div class="corpo">
-      <div class="topo"><h3>Termos e posições soltas</h3><span class="pill p-baixa">Baixa</span></div>
-      <div class="onde">Várias telas</div>
-      <dl class="muda"><dt>Proposta</dt><dd>Trocar "mailing" por "lista de contatos" nas telas do cliente. Mostrar a Economia do Score como vitrine (sem números do cliente) para quem ainda não contratou.</dd></dl>
     </div></div>
   </div>
 </section>

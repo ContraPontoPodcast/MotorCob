@@ -67,6 +67,7 @@ input[type=number]{width:84px;font-variant-numeric:tabular-nums}
 .pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
 .pil.tec{background:var(--tec-f);color:var(--tec);font-family:var(--mono);font-weight:500}
 .duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.eco-pilha{display:flex;flex-direction:column;gap:16px}
 .i{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--info);color:var(--info);font-size:10px;font-weight:700;cursor:help;vertical-align:1px}
 .btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:#fff}
 :root[data-theme="dark"] .btn{color:#1D1D1F}
@@ -177,7 +178,7 @@ ul.simples li{margin:3px 0}
     <!-- ======================= PAINEL ======================= -->
     <section data-p="painel">
       <div class="cab">
-        <div><h2>Qualidade dos fornecedores</h2><p>No SMS, o % entregue reflete a qualidade do mailing. Aqui o fornecedor é medido pela velocidade e pela DLR.</p></div>
+        <div><h2>Qualidade dos fornecedores</h2><p>No SMS, o % entregue reflete a qualidade da lista. Aqui o fornecedor é medido pela velocidade e pela DLR.</p></div>
         <div class="filtros">
           <select id="f-canal" aria-label="Canal"><option>SMS</option><option>RCS</option></select>
           <select id="f-periodo" aria-label="Período"><option>Últimas 24 h</option><option>Últimos 7 dias</option></select>
@@ -197,7 +198,7 @@ ul.simples li{margin:3px 0}
         <h3>Fornecedor × operadora</h3>
         <p class="sub">Tempos em mediana e nos 10% mais lentos (p90). "Sem DLR" = enviado há mais de 30 min sem retorno.</p>
         <div class="rolar"><table class="tab" id="tab-forn"></table></div>
-        <p class="nota">Comparação justa de entrega: dentro do mesmo lote a rota sorteia o tráfego, então os fornecedores recebem a mesma qualidade de mailing. A coluna "Entregue no lote" compara só esse recorte.</p>
+        <p class="nota">Comparação justa de entrega: dentro do mesmo lote a rota sorteia o tráfego, então os fornecedores recebem a mesma qualidade de lista. A coluna "Entregue no lote" compara só esse recorte.</p>
       </div>
 
       <div class="cartao">
@@ -296,7 +297,7 @@ ul.simples li{margin:3px 0}
         <h3>Forma de cobrança</h3>
         <p class="sub">Uma por contrato. O preço segue a régua de mínimo e tabela do produto.</p>
         <div class="opcoes" id="opcoes">
-          <label class="op"><input type="radio" name="cob" value="analisado" checked><div><b>Por número analisado</b><span>Todo o mailing passa pelo Score e cada número é cobrado.</span></div></label>
+          <label class="op"><input type="radio" name="cob" value="analisado" checked><div><b>Por número analisado</b><span>Toda a lista passa pelo Score e cada número é cobrado.</span></div></label>
           <label class="op"><input type="radio" name="cob" value="represado"><div><b>Só pelos represados</b><span>Cobra apenas os números que o filtro segurou.</span></div></label>
         </div>
         <div class="form" style="margin-top:14px" id="precos"></div>
@@ -357,10 +358,48 @@ ul.simples li{margin:3px 0}
         <div class="filtros">
           <div class="campo"><label for="eco-ini">De</label><input type="date" id="eco-ini" value="2026-05-01"></div>
           <div class="campo"><label for="eco-fim">Até</label><input type="date" id="eco-fim" value="2026-10-14"></div>
-          <div class="campo"><label for="eco-vista">Campanha</label><select id="eco-vista"><option value="geral">Todas do período</option></select></div>
+          <div class="campo" id="eco-vista-campo"><label for="eco-vista">Campanha</label><select id="eco-vista"><option value="geral">Todas do período</option></select></div>
+          <div class="campo"><label for="eco-demo">Ver no protótipo</label><select id="eco-demo"><option value="com">Cliente com o Score</option><option value="sem">Cliente sem o Score (vitrine)</option></select></div>
         </div>
       </div>
 
+      <div id="eco-vitrine" class="eco-pilha" hidden>
+        <div class="cartao resumo">
+          <div class="res-bloco">
+            <span class="res-rot" id="vit-rot">SMS que não chegaram</span>
+            <b class="res-num" id="vit-num"></b>
+            <span class="res-sub" id="vit-sub"></span>
+          </div>
+          <div class="res-bloco">
+            <span class="res-rot">Pago por esses SMS</span>
+            <b class="res-num" id="vit-valor"></b>
+            <span class="res-sub" id="vit-valor-sub"></span>
+          </div>
+          <p class="res-conta">Números reais das suas campanhas, pelo retorno das operadoras (DLR). Nada aqui é estimativa.</p>
+        </div>
+        <div class="duas">
+          <div class="cartao">
+            <h3>Como o Score de Entrega reduz esse valor</h3>
+            <ol style="margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px">
+              <li>Cada número da lista recebe uma faixa pelo histórico de entrega da Mensageria: Alto, Médio, Baixo ou Sem histórico.</li>
+              <li>Antes de agendar, a prévia mostra quantos números há em cada faixa e você marca quais recebem.</li>
+              <li>Os números que ficam de fora não são enviados nem cobrados como SMS.</li>
+            </ol>
+          </div>
+          <div class="cartao">
+            <h3>O que aparece aqui com o Score</h3>
+            <ul style="margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px">
+              <li>Economia líquida no período e por campanha, já descontado o preço do Score.</li>
+              <li>Custo unitário efetivo: total pago ÷ números da lista.</li>
+              <li>Prova pelo grupo de controle: entrega real de cada faixa.</li>
+            </ul>
+            <div class="linha" style="margin-top:14px"><button class="btn" type="button" id="vit-pedir">Pedir proposta do Score</button></div>
+            <p class="nota" id="vit-msg" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+
+      <div id="eco-com" class="eco-pilha">
       <div class="cartao resumo">
         <div class="res-bloco">
           <span class="res-rot" id="eco-frase-rot">Economia líquida</span>
@@ -394,6 +433,7 @@ ul.simples li{margin:3px 0}
         <p class="sub">Clique numa campanha para ver só ela no topo.</p>
         <div class="rolar"><table class="tab" id="eco-tab"></table></div>
         <p class="nota" id="eco-modo"></p>
+      </div>
       </div>
     </section>
 
@@ -606,7 +646,7 @@ ul.simples li{margin:3px 0}
     document.getElementById("fatura").innerHTML = `<thead><tr><th>Item</th><th class="n">Quantidade</th><th class="n">Preço</th><th class="n">Valor</th></tr></thead><tbody>` +
       linhas.map(([l, q, p]) => `<tr><td>${l}</td><td class="n">${n(q)}</td><td class="n">${p ? brl(p, 4) : "—"}</td><td class="n">${p ? brl(q * p) : "—"}</td></tr>`).join("") +
       `<tr><td><b>Total</b></td><td></td><td></td><td class="n"><b>${brl(tot)}</b></td></tr></tbody>` +
-      `<caption style="caption-side:bottom;text-align:left;padding-top:8px;color:var(--texto2);font-size:12.5px">Sem o Score, o mesmo mailing custaria ${brl(semScore)} ao cliente em SMS. Exemplo fictício.</caption>`;
+      `<caption style="caption-side:bottom;text-align:left;padding-top:8px;color:var(--texto2);font-size:12.5px">Sem o Score, a mesma lista custaria ${brl(semScore)} ao cliente em SMS. Exemplo fictício.</caption>`;
   }
   document.querySelectorAll('input[name="cob"]').forEach(r => r.addEventListener("change", contrato));
   contrato();
@@ -631,7 +671,7 @@ ul.simples li{margin:3px 0}
     document.getElementById("camp-faixas").innerHTML = Object.entries(FX).map(([k, v], i) => `
       <label class="fx-card"><input type="checkbox" data-fx="${k}" id="fx-${i}" ${marcadas.has(k) ? "checked" : ""} ${v ? "" : "disabled"}>
         <span class="fx-nome"><i style="background:${COR[k]}"></i>${k}${k === "Sem histórico" ? ' <span class="i" title="Número que ainda não passou pela Mensageria: o Score não tem como classificar.">i</span>' : ""}</span>
-        <b>${n(v)}</b><em>${pct(v / tot * 100)} do mailing · entrega real ${pct(CTRL[k] * 100)}</em></label>`).join("");
+        <b>${n(v)}</b><em>${pct(v / tot * 100)} da lista · entrega real ${pct(CTRL[k] * 100)}</em></label>`).join("");
     document.querySelectorAll("#camp-faixas input").forEach(c => c.addEventListener("change", () => {
       c.checked ? marcadas.add(c.dataset.fx) : marcadas.delete(c.dataset.fx); campanha();
     }));
@@ -726,7 +766,7 @@ ul.simples li{margin:3px 0}
     document.getElementById("eco-frase").innerHTML = t.liq >= 0
       ? `Cada <b>R$ 1,00</b> pago no Score evitou <b>${brl(ret)}</b> em SMS para números de baixa entrega.`
       : `Neste período o Score custou mais do que economizou: poucos números represados para o preço contratado.`;
-    document.getElementById("eco-tab").innerHTML = `<thead><tr><th>Campanha</th><th>Data</th><th class="n">Mailing</th><th class="n">Represados</th><th class="n">Sem o Score</th><th class="n">Com o Score</th><th class="n">Economia líquida</th></tr></thead><tbody>` +
+    document.getElementById("eco-tab").innerHTML = `<thead><tr><th>Campanha</th><th>Data</th><th class="n">Lista</th><th class="n">Represados</th><th class="n">Sem o Score</th><th class="n">Com o Score</th><th class="n">Economia líquida</th></tr></thead><tbody>` +
       per.map(c => { const r = contaCamp(c); const sel = c.nome === ecoSel;
         return `<tr data-camp="${c.nome}" style="cursor:pointer${sel ? ";background:var(--area-ativo)" : ""}" tabindex="0"><td>${c.nome}</td><td>${c.data}</td><td class="n">${n(c.mail)}</td><td class="n">${n(c.rep)}</td><td class="n">${brl(r.sem)}</td><td class="n">${brl(r.com)}</td><td class="n" style="color:${r.liq >= 0 ? "var(--ok)" : "var(--erro)"};font-weight:600">${brl(r.liq)}</td></tr>`; }).join("") +
       `</tbody>`;
@@ -735,7 +775,7 @@ ul.simples li{margin:3px 0}
       tr.addEventListener("click", ir); tr.addEventListener("keydown", e => { if (e.key === "Enter") ir(); });
     });
     const modo = document.querySelector('input[name="cob"]:checked');
-    document.getElementById("eco-modo").textContent = `Conta feita com a forma de cobrança do contrato: "${modo.closest("label").querySelector("b").textContent}" (troque na tela Contratação para comparar). "Sem o Score" = o mailing inteiro como SMS Padrão a ${brl(SMS, 4)}.`;
+    document.getElementById("eco-modo").textContent = `Conta feita com a forma de cobrança do contrato: "${modo.closest("label").querySelector("b").textContent}" (troque na tela Contratação para comparar). "Sem o Score" = a lista inteira como SMS Padrão a ${brl(SMS, 4)}.`;
     // gráfico
     const svg = document.getElementById("eco-graf"); const W = 520, H = 220, L = 56, R = 10, T = 12, B = 28;
     const mesesPer = MESES.filter(m => per.some(c => c.mes === m));
@@ -761,6 +801,24 @@ ul.simples li{margin:3px 0}
     `<p class="nota" style="margin:0">Entrega real do controle em outubro (amostra de 1.312 números). Pela taxa do Baixo, cerca de 4 em cada 100 represados chegariam.</p>`;
   document.querySelectorAll('input[name="cob"]').forEach(r => r.addEventListener("change", () => { economia(); campanha(); }));
   economia();
+  // Vitrine: cliente sem o Score vê o que já pagou por SMS que não chegaram (dados reais dele, exemplo fictício aqui)
+  const VIT = { enviados: 212400, naoEntregues: 27830, preco: 0.054 };
+  function vitrine() {
+    const sem = document.getElementById("eco-demo").value === "sem";
+    document.getElementById("eco-vitrine").hidden = !sem;
+    document.getElementById("eco-com").hidden = sem;
+    document.getElementById("eco-vista-campo").hidden = sem;
+    const per = `${fmtData(document.getElementById("eco-ini").value)} a ${fmtData(document.getElementById("eco-fim").value)}`;
+    document.getElementById("vit-rot").textContent = `SMS que não chegaram · ${per}`;
+    document.getElementById("vit-num").textContent = n(VIT.naoEntregues);
+    document.getElementById("vit-sub").textContent = `${pct(VIT.naoEntregues / VIT.enviados * 100)} dos ${n(VIT.enviados)} SMS enviados no período.`;
+    document.getElementById("vit-valor").textContent = brl(VIT.naoEntregues * VIT.preco);
+    document.getElementById("vit-valor-sub").textContent = `${n(VIT.naoEntregues)} × ${brl(VIT.preco, 4)}, o preço do SMS no seu contrato.`;
+  }
+  document.getElementById("eco-demo").addEventListener("change", vitrine);
+  ["eco-ini", "eco-fim"].forEach(id => document.getElementById(id).addEventListener("change", vitrine));
+  document.getElementById("vit-pedir").addEventListener("click", () => { document.getElementById("vit-msg").textContent = "Pedido enviado ao time comercial. Ele entra em contato pelo e-mail da empresa."; });
+  vitrine();
 
   // ---------------- custo unitário efetivo (real, da campanha escolhida ou do período)
   function custoReal(lista) {
