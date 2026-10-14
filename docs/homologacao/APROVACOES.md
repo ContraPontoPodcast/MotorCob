@@ -66,14 +66,40 @@ Decisões:
 A escrever, depois de aprovados os blocos 3 e 4: SQL 30, testes, ajustes no motor (custo por operadora, produto no envio) e
 prompts do Console, do Workspace e da API.
 
-## Bloco 3 · Orquestração — a prototipar
+## Bloco 3 · Orquestração — protótipo pronto, AGUARDANDO aprovação
 
-Estratégia por carteira, com "copiar de outra carteira"; navegação dos botões da direita; Mapa da Esteira; fases
-padrão com orçamento e prioridade; travas por estratégia e por fase.
+Protótipo: `bloco3-orquestracao-prototipo.html`.
+- Carteira no topo; aviso de estratégia compartilhada entre carteiras (causa do "aparece a estratégia do outro
+  credor": a estratégia fica no segmento, que é da empresa) com "Separar só para esta carteira" / "Editar para as duas".
+- "Copiar de outra carteira" sempre cria cópia independente.
+- Barra única: vistas (Desenho, Etapas e fases, Travas, Visão geral) + estado + Copiar + Mais ▾ + Salvar.
+- Fases do motor com orçamento por canal, prioridade e travas próprias; tabela de travas estratégia × fase.
+- Mapa da Esteira em cartões na ordem da jornada (massivas × acordo), movimento em barras, sem códigos (G1/RE/T1).
+Perguntas em aberto: print dos "botões da direita", se o problema for outro; separar = cópia só na carteira atual.
 
-## Bloco 4 · Console — a prototipar
+## Bloco 4 · Console — incluído no bloco 5 (menus)
 
-Usuários, Permissões e Auditoria saem do Console.
+Usuários, Permissões e Auditoria saem do grupo sem nome do fim de todos os menus: no cliente, Empresa › Pessoas e
+perfis e Empresa › Auditoria; no Console, grupos Clientes · Suporte · Financeiro · Mensageria · Administração (Equipe
+e Auditoria de todas as empresas). Empresas é a primeira tela do Console.
+
+## Bloco 5 · Repaginada da experiência — PARCIALMENTE APROVADO em 14/10/2026
+
+Protótipos: `bloco5-repaginada-prototipo.html` (glossário, nomes, antes e depois, menus, decisões) e
+`bloco5-paletas-prototipo.html` (paletas e ajuda). Revisão das telas: `bloco5-revisao-telas-1.md` e `-2-console.md`.
+
+Aprovado:
+1. **Glossário** "O que significa", sempre acessível (menu Ajuda e "?" no topo); todo (i) leva ao termo.
+2. **Mantêm o nome** (com (i)): **Fallback**, **MC** e **%MC**, **Auditoria**.
+3. **Ajuda pelo tempo de casa do usuário**: até 15 dias = explicações abertas ("Primeiros dias"); 16 a 30 dias = (i)
+   discreto; depois de 30 dias = desligada. Glossário sempre disponível; a pessoa religa a ajuda em Minha conta.
+4. Princípios: um nome por conceito; nenhum código interno nem erro técnico cru na tela.
+
+Em aberto:
+- **Paleta**: dúvida entre A (atual, menu preto), B (clara com petróleo, recomendada), C (escura confortável),
+  D (menu petróleo) e E (quente e suave).
+- Nomes: marca (MotorCX plataforma × áreas), CPC A/B ("em negociação"/"sem resposta"?), "Hot" → "Contato
+  principal"?, regra de senha única, formatos CSV/TXT/XLSX em todo lugar, demais nomes da tabela "Um nome por conceito".
 
 ## Fila para rodar (quando liberar)
 
@@ -81,4 +107,4 @@ Usuários, Permissões e Auditoria saem do Console.
 2. Pendências anteriores: confirmar o SQL 26, prompts 53 e 54 e o passo 41 (MotorCli Jornada); salvar de novo a
    Contratação da empresa criada pela metade e convidar o Admin dela.
 3. Bloco 2: SQL 30 e prompts (a gerar).
-4. Blocos 3 e 4 (a gerar).
+4. Blocos 3, 4 e 5 (a gerar depois das aprovações).

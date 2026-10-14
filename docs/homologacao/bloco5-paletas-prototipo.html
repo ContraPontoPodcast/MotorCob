@@ -1,0 +1,185 @@
+<title>Conforto visual MotorCX</title>
+<style>
+/* Layout: uma tela real da plataforma (menu + Lista do dia) repetida em três paletas; acima, os controles para trocar paleta e nível de ajuda */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5; --azul: #0A64D0;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E; --azul: #4C9BFF; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E; --azul: #4C9BFF; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding-block: 24px 48px; padding-inline: 16px; margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.proto { font-size: 13px; color: var(--tinta-2); }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0; }
+.ajuda { color: var(--tinta-2); margin: 4px 0 0; font-size: 14px; max-width: 78ch; }
+.ctl { display: flex; gap: 18px; flex-wrap: wrap; align-items: end; background: var(--painel); border-radius: 16px; padding: 14px 16px; }
+.ctl .grp { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--tinta-2); }
+.seg { display: inline-flex; background: var(--suave); border-radius: 12px; padding: 4px; gap: 4px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; color: var(--tinta-2); font: 600 13.5px var(--sans); padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--painel); color: var(--tinta); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.nota { background: var(--painel); border-radius: 16px; padding: 16px 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.nota div { font-size: 13.5px; color: var(--tinta-2); }
+.nota div b { color: var(--tinta); }
+.nota div > b:first-child { display: block; margin-bottom: 4px; }
+
+/* ---------- a tela de exemplo, pintada pela paleta escolhida (variáveis --p-*) */
+.app { border-radius: 18px; overflow: hidden; display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 560px; box-shadow: 0 2px 20px rgba(0,0,0,.08);
+  background: var(--p-fundo); color: var(--p-texto); font-size: 14.5px; }
+.menu { background: var(--p-menu); color: var(--p-menu-texto); padding: 18px 12px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--p-menu-borda); }
+.menu .marca { font-weight: 700; font-size: 16px; padding: 4px 10px 14px; letter-spacing: -.01em; }
+.menu .marca span { color: var(--p-acento-forte); }
+.menu a { display: block; padding: 8px 10px; border-radius: 9px; color: inherit; text-decoration: none; font-size: 14px; opacity: .85; }
+.menu a.ativo { background: var(--p-menu-ativo); color: var(--p-menu-ativo-texto); opacity: 1; font-weight: 600; }
+.menu .sec { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .55; padding: 14px 10px 4px; }
+.conteudo { padding: 22px 26px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.conteudo h3 { font-size: 22px; margin: 0; letter-spacing: -.01em; color: var(--p-titulo); }
+.conteudo .sub { color: var(--p-texto-2); font-size: 13.5px; margin: 2px 0 0; }
+.topo2 { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.b1 { border: 0; border-radius: 10px; padding: 9px 16px; font: 600 14px var(--sans); background: var(--p-acento); color: var(--p-acento-texto); cursor: pointer; }
+.b2 { border: 1px solid var(--p-borda); border-radius: 10px; padding: 8px 14px; font: 600 14px var(--sans); background: var(--p-cartao); color: var(--p-texto); cursor: pointer; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kpi { background: var(--p-cartao); border: 1px solid var(--p-borda); border-radius: 14px; padding: 14px; }
+.kpi small { color: var(--p-texto-2); font-size: 12.5px; display: flex; gap: 6px; align-items: center; }
+.kpi b { font-size: 24px; display: block; margin-top: 4px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--p-titulo); }
+.kpi .dica { font-size: 12px; color: var(--p-texto-2); margin-top: 6px; line-height: 1.4; }
+.tab { background: var(--p-cartao); border: 1px solid var(--p-borda); border-radius: 14px; overflow: hidden; }
+.tab table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tab th { text-align: left; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--p-texto-2); padding: 10px 14px; border-bottom: 1px solid var(--p-borda); font-weight: 700; }
+.tab td { color: var(--p-texto); padding: 11px 14px; border-bottom: 1px solid var(--p-borda); }
+.tab tr:last-child td { border-bottom: 0; }
+.tab td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.pill { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--p-pill); color: var(--p-pill-texto); white-space: nowrap; }
+.pill.ok { background: var(--p-ok-f); color: var(--p-ok); }
+.pill.al { background: var(--p-al-f); color: var(--p-al); }
+.ponto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: 1px; }
+/* (i) */
+.i { width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--p-i-borda); color: var(--p-i); font: 600 11px/15px var(--sans); text-align: center; background: transparent; cursor: pointer; padding: 0; flex: none; position: relative; }
+.i:hover, .i[aria-expanded="true"] { color: var(--p-acento-forte); border-color: var(--p-acento-forte); }
+.balao { position: absolute; z-index: 3; top: 24px; left: -8px; width: 270px; background: var(--p-balao); color: var(--p-balao-texto); border-radius: 12px; padding: 12px 13px; font: 400 13px/1.45 var(--sans); text-align: left; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.balao b { display: block; margin-bottom: 3px; font-size: 13.5px; }
+.balao a { color: inherit; text-decoration: underline; display: inline-block; margin-top: 6px; font-weight: 600; }
+.modo-desligada .i { display: none; }
+.modo-discreta .dica { display: none; }
+.modo-aprendiz .i { border-color: var(--p-acento-forte); color: var(--p-acento-forte); }
+.faixa-aprendiz { display: none; border-radius: 12px; padding: 10px 12px; font-size: 13px; background: var(--p-al-f); color: var(--p-al); }
+.modo-aprendiz .faixa-aprendiz { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+.faixa-aprendiz button { border: 0; background: none; color: inherit; font: 600 13px var(--sans); text-decoration: underline; cursor: pointer; }
+
+/* paletas */
+.pal-atual { --p-fundo: #F5F5F7; --p-menu: #161617; --p-menu-texto: #F5F5F7; --p-menu-borda: #161617; --p-menu-ativo: #3A3A3C; --p-menu-ativo-texto: #FFFFFF;
+  --p-cartao: #FFFFFF; --p-borda: #E5E5EA; --p-texto: #1D1D1F; --p-texto-2: #6E6E73; --p-titulo: #1D1D1F; --p-acento: #1D1D1F; --p-acento-texto: #FFFFFF; --p-acento-forte: #0F4C5C;
+  --p-pill: #F2F2F7; --p-pill-texto: #3A3A3C; --p-ok: #1E7A36; --p-ok-f: #E6F4EA; --p-al: #8A5A00; --p-al-f: #FFF4D6; --p-i: #8E8E93; --p-i-borda: #C7C7CC; --p-balao: #1D1D1F; --p-balao-texto: #F5F5F7; }
+.pal-clara { --p-fundo: #F6F7F8; --p-menu: #FFFFFF; --p-menu-texto: #3C4650; --p-menu-borda: #E4E7EA; --p-menu-ativo: #E6F0F2; --p-menu-ativo-texto: #0F4C5C;
+  --p-cartao: #FFFFFF; --p-borda: #E4E7EA; --p-texto: #2B3239; --p-texto-2: #66717C; --p-titulo: #1F262C; --p-acento: #0F4C5C; --p-acento-texto: #FFFFFF; --p-acento-forte: #0F6B7F;
+  --p-pill: #EEF2F4; --p-pill-texto: #3C4650; --p-ok: #1E6B3A; --p-ok-f: #E5F2EA; --p-al: #7A5200; --p-al-f: #FBF1D9; --p-i: #8A949E; --p-i-borda: #C9D0D6; --p-balao: #FFFFFF; --p-balao-texto: #2B3239; }
+.pal-clara .balao { border: 1px solid #E4E7EA; }
+.pal-petro { --p-fundo: #F4F6F7; --p-menu: #12404C; --p-menu-texto: #D5E4E8; --p-menu-borda: #12404C; --p-menu-ativo: #1E5866; --p-menu-ativo-texto: #FFFFFF;
+  --p-cartao: #FFFFFF; --p-borda: #E2E7EA; --p-texto: #2B3239; --p-texto-2: #66717C; --p-titulo: #1F262C; --p-acento: #0F4C5C; --p-acento-texto: #FFFFFF; --p-acento-forte: #0F6B7F;
+  --p-pill: #EEF2F4; --p-pill-texto: #3C4650; --p-ok: #1E6B3A; --p-ok-f: #E5F2EA; --p-al: #7A5200; --p-al-f: #FBF1D9; --p-i: #8A949E; --p-i-borda: #C9D0D6; --p-balao: #12404C; --p-balao-texto: #F1F6F7; }
+.pal-areia { --p-fundo: #F7F5F2; --p-menu: #FBFAF8; --p-menu-texto: #4A4540; --p-menu-borda: #E8E3DC; --p-menu-ativo: #ECE6DD; --p-menu-ativo-texto: #2E2A26;
+  --p-cartao: #FFFFFF; --p-borda: #E8E3DC; --p-texto: #35312D; --p-texto-2: #75706A; --p-titulo: #26231F; --p-acento: #2F5D62; --p-acento-texto: #FFFFFF; --p-acento-forte: #2F5D62;
+  --p-pill: #F1EDE7; --p-pill-texto: #4A4540; --p-ok: #2E6B3E; --p-ok-f: #E6F0E6; --p-al: #7A5200; --p-al-f: #F8EED8; --p-i: #8F8880; --p-i-borda: #D3CCC3; --p-balao: #FFFFFF; --p-balao-texto: #35312D; }
+.pal-areia .balao { border: 1px solid #E8E3DC; }
+.pal-petro .menu .marca span, .pal-atual .menu .marca span { color: #8FD0DD; }
+.pal-escura { --p-fundo: #16191C; --p-menu: #1D2125; --p-menu-texto: #C9CED3; --p-menu-borda: #262B30; --p-menu-ativo: #24343A; --p-menu-ativo-texto: #8FD0DD;
+  --p-cartao: #1F2428; --p-borda: #2C3237; --p-texto: #D7DCE0; --p-texto-2: #9AA3AB; --p-titulo: #ECEFF1; --p-acento: #4E9AAB; --p-acento-texto: #0E1A1E; --p-acento-forte: #8FD0DD;
+  --p-pill: #2A3035; --p-pill-texto: #C9CED3; --p-ok: #7FD39A; --p-ok-f: #1C3325; --p-al: #F0C25E; --p-al-f: #3A2F14; --p-i: #8E979F; --p-i-borda: #48515A; --p-balao: #2A3035; --p-balao-texto: #ECEFF1; }
+
+@media (max-width: 860px) {
+  .app { grid-template-columns: minmax(0, 1fr); } .menu { display: none; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .nota { grid-template-columns: minmax(0, 1fr); }
+  .tab { overflow-x: auto; }
+}
+</style>
+
+<div class="wrap">
+  <div class="proto">Protótipo para decisão · números fictícios · a mesma tela em três paletas e três níveis de ajuda</div>
+  <div>
+    <h1>Conforto visual da plataforma</h1>
+    <p class="ajuda">Compare a mesma tela (Lista do dia) nas três paletas e escolha também quanto de ajuda aparece. O preto continua na marca e no site; a pergunta é o que o cliente vê o dia inteiro dentro da plataforma.</p>
+  </div>
+  <div class="ctl">
+    <div class="grp">Paleta
+      <div class="seg" id="pal"><button aria-pressed="false" data-p="atual">A · Atual (menu preto)</button><button aria-pressed="true" data-p="clara">B · Clara com petróleo</button><button aria-pressed="false" data-p="escura">C · Escura confortável</button><button aria-pressed="false" data-p="petro">D · Menu petróleo</button><button aria-pressed="false" data-p="areia">E · Quente e suave</button></div></div>
+    <div class="grp">Ajuda na tela
+      <div class="seg" id="modo"><button aria-pressed="false" data-m="aprendiz">Até 15 dias de casa</button><button aria-pressed="true" data-m="discreta">16 a 30 dias</button><button aria-pressed="false" data-m="desligada">Depois de 30 dias</button></div></div>
+  </div>
+
+  <div class="app pal-clara modo-discreta" id="app">
+    <nav class="menu" aria-label="Menu">
+      <div class="marca">Motor<span>CX</span></div>
+      <a href="#" onclick="return false">Início</a>
+      <a href="#" onclick="return false">Mapa da Esteira</a>
+      <a href="#" onclick="return false" class="ativo">Lista do dia</a>
+      <a href="#" onclick="return false">Orquestração</a>
+      <div class="sec">Mensageria</div>
+      <a href="#" onclick="return false">Campanhas</a>
+      <a href="#" onclick="return false">Respostas</a>
+      <div class="sec">Resultados</div>
+      <a href="#" onclick="return false">Comitê</a>
+      <a href="#" onclick="return false">Relatórios</a>
+    </nav>
+    <main class="conteudo">
+      <div class="faixa-aprendiz"><span>Você está no modo <b>Primeiros dias</b>: as explicações aparecem abertas. Vale nos seus primeiros 15 dias.</span><button id="sairAprendiz">Já conheço, esconder</button></div>
+      <div class="topo2">
+        <div><h3>Lista do dia</h3><p class="sub">Quem recebe o quê hoje · Banco Alfa · rotina das 06:12</p></div>
+        <div style="display:flex;gap:8px"><button class="b2">Exportar</button><button class="b1">Enviar para os canais</button></div>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><small>Clientes com ação hoje <button class="i" data-t="acao" aria-label="O que é">i</button></small><b>10.020</b><p class="dica">Clientes que a régua mandou acionar hoje, em pelo menos um canal.</p></div>
+        <div class="kpi"><small>Em CPC <button class="i" data-t="cpc" aria-label="O que é">i</button></small><b>1.980</b><p class="dica">Falaram com a pessoa certa recentemente; recebem no canal em que responderam.</p></div>
+        <div class="kpi"><small>Não CPC · 2º ciclo <button class="i" data-t="ciclo" aria-label="O que é">i</button></small><b>1.220</b><p class="dica">Segunda volta da régua de quem ainda não foi localizado.</p></div>
+        <div class="kpi"><small>Fora do orçamento <button class="i" data-t="orc" aria-label="O que é">i</button></small><b>310</b><p class="dica">Passaram do limite do canal hoje; amanhã concorrem de novo.</p></div>
+      </div>
+      <div class="tab"><table>
+        <thead><tr><th>Fase</th><th>Passo</th><th>Canal</th><th class="n">Clientes</th><th>Situação</th></tr></thead>
+        <tbody>
+          <tr><td>Cliente novo</td><td>3º dia</td><td><span class="ponto" style="background:#1F8A4C"></span>WhatsApp</td><td class="n">2.860</td><td><span class="pill ok">pronto</span></td></tr>
+          <tr><td>Cliente novo</td><td>5º dia</td><td><span class="ponto" style="background:#0E7C86"></span>Agente virtual</td><td class="n">2.310</td><td><span class="pill ok">pronto</span></td></tr>
+          <tr><td>Não CPC</td><td>2º ciclo · dia 1</td><td><span class="ponto" style="background:#1F8A4C"></span>WhatsApp</td><td class="n">940</td><td><span class="pill al">310 fora do orçamento</span></td></tr>
+          <tr><td>CPC</td><td>2ª tentativa</td><td><span class="ponto" style="background:#3B5BA9"></span>RCS</td><td class="n">300</td><td><span class="pill">aguardando horário</span></td></tr>
+          <tr><td>Quebra de acordo</td><td>1º dia</td><td><span class="ponto" style="background:#7A4FB0"></span>SMS</td><td class="n">90</td><td><span class="pill ok">pronto</span></td></tr>
+        </tbody>
+      </table></div>
+    </main>
+  </div>
+
+  <div class="nota">
+    <div><b>Paleta</b>D mantém a cor da marca no menu, sem o peso do preto. E é mais quente, para quem acha o cinza frio. Minha recomendação continua a <b>B</b>: fundo claro levemente acinzentado (não branco puro), menu claro, texto em grafite em vez de preto puro e uma cor só de destaque, o petróleo, para botões e o item ativo. Vermelho, âmbar e verde aparecem só quando há algo a dizer. A <b>C</b> fica como opção "escuro" para quem prefere, sem preto puro. O preto continua no logo e no site.</div>
+    <div><b>Ajuda pelo tempo de casa (decidido)</b>Até 15 dias: explicações abertas embaixo dos números. De 16 a 30 dias: só o (i) discreto, que abre ao clicar. Depois de 30 dias: sem (i). Em qualquer fase, o glossário fica no menu <b>Ajuda › O que significa</b> e no "?" do topo, e a pessoa religa a ajuda em Minha conta.</div>
+    <div><b>Para não cansar a vista</b>Contraste suficiente sem ser máximo (grafite sobre cinza-claro), uma família de fonte, tamanhos consistentes, números alinhados, muito espaço entre blocos e no máximo uma cor forte por área. Usuário escolhe Claro, Escuro ou "igual ao computador" em Minha conta.</div>
+  </div>
+</div>
+
+<script>
+const TXT = {
+  acao: ["Clientes com ação hoje", "Quantos clientes a régua mandou acionar hoje, somando todos os canais. Um cliente com WhatsApp e SMS conta uma vez."],
+  cpc: ["CPC · contato com a pessoa certa", "O cliente respondeu ou atendeu e é ele mesmo. A partir daí, o próximo contato vai no mesmo canal e no mesmo telefone."],
+  ciclo: ["Não CPC · ciclos", "Quem não foi localizado até o prazo entra num ciclo de dias que se repete algumas vezes. 2º ciclo = segunda volta da régua."],
+  orc: ["Fora do orçamento", "O canal tem limite por dia nesta fase. Quem passou do limite recebe o canal de baixo, se houver, ou concorre de novo amanhã pela prioridade."]
+};
+const app = document.getElementById("app");
+let aberto = null;
+function fechar() { if (aberto) { aberto.querySelector(".balao")?.remove(); aberto.setAttribute("aria-expanded", "false"); aberto = null; } }
+document.querySelectorAll(".i").forEach(b => b.addEventListener("click", e => {
+  e.stopPropagation();
+  if (aberto === b) { fechar(); return; }
+  fechar();
+  const [t, d] = TXT[b.dataset.t];
+  const bl = document.createElement("span"); bl.className = "balao"; bl.innerHTML = `<b>${t}</b>${d}<br><a href="#" onclick="return false">Ver no glossário</a>`;
+  b.appendChild(bl); b.setAttribute("aria-expanded", "true"); aberto = b;
+}));
+document.addEventListener("click", fechar);
+document.addEventListener("keydown", e => { if (e.key === "Escape") fechar(); });
+const grupo = (id, attr, fn) => document.querySelectorAll(`#${id} button`).forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(`#${id} button`).forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset[attr]); }));
+grupo("pal", "p", p => { app.classList.remove("pal-atual", "pal-clara", "pal-escura", "pal-petro", "pal-areia"); app.classList.add("pal-" + p); });
+const setModo = m => { app.classList.remove("modo-discreta", "modo-aprendiz", "modo-desligada"); app.classList.add("modo-" + m); fechar(); };
+grupo("modo", "m", setModo);
+document.getElementById("sairAprendiz").addEventListener("click", () => document.querySelector('#modo [data-m="discreta"]').click());
+</script>
