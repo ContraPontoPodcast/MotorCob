@@ -316,15 +316,9 @@ ul.simples li{margin:3px 0}
       <div class="kpis" id="eco-kpis"></div>
 
       <div class="cartao">
-        <h3>Custo unitário efetivo · simulador da campanha inteligente</h3>
-        <p class="sub">O SMS inteligente tem preço unitário maior, mas só é cobrado o que sai. Dividindo o total da campanha pelo mailing carregado chega-se ao custo real de cada número.</p>
-        <div class="form">
-          <div class="campo"><label for="ci-mail">Mailing carregado</label><input type="number" id="ci-mail" min="1" value="18420" style="width:auto"></div>
-          <div class="campo"><label for="ci-rep">Represados pelo filtro (%)</label><input type="number" id="ci-rep" min="0" max="100" step="0.1" value="12"></div>
-          <div class="campo"><label for="ci-pad">SMS padrão (R$)</label><input type="number" id="ci-pad" min="0" step="0.001" value="0.055"></div>
-          <div class="campo"><label for="ci-int">SMS inteligente (R$)</label><input type="number" id="ci-int" min="0" step="0.001" value="0.060"></div>
-        </div>
-        <div class="rolar" style="margin-top:14px"><table class="tab" id="ci-tab"></table></div>
+        <h3 id="ci-tit">Custo unitário efetivo</h3>
+        <p class="sub">Valores reais do que foi faturado. O SMS inteligente tem preço unitário maior, mas só o que saiu é cobrado: o total da campanha dividido pelo mailing carregado dá o custo real de cada número.</p>
+        <div class="rolar"><table class="tab" id="ci-tab"></table></div>
         <div class="prev" style="margin-top:12px" id="ci-res"></div>
       </div>
 
@@ -586,8 +580,8 @@ ul.simples li{margin:3px 0}
       ? `<b>${n(tot - nFora)} números serão enviados · ${n(nFora)} não serão enviados (${fora.join(", ")}).</b><br><span style="color:var(--texto2)">No retorno, quem ficou de fora aparece como ${fora.map(k => `"${nomeDe[k]}"`).join(" e ")}, com a faixa de cada número.</span>`
       : `<b>${n(tot)} números serão enviados.</b><br><span style="color:var(--texto2)">O Score só classifica: a faixa de cada número vem no retorno.</span>`;
     if (marcadas.length) {
-      const r = custoEfetivo(tot, nFora / tot * 100, 0.055, 0.060);
-      document.getElementById("camp-prev").innerHTML += `<div class="linha" style="margin-top:8px"><span class="pil ${r.com <= r.sem ? "ok" : "erro"}">Custo unitário efetivo ${brl(r.unit, 4)}</span><span style="color:var(--texto2)">SMS inteligente ${brl(0.060, 4)} × ${n(r.env)} enviados = ${brl(r.com)} · sem a inteligência ${brl(r.sem)} (${brl(0.055, 4)} por número)</span></div>`;
+      const env = tot - nFora, com = env * 0.060, sem = tot * 0.055, r = { env, com, sem, unit: com / tot };
+      document.getElementById("camp-prev").innerHTML += `<div class="linha" style="margin-top:8px"><span class="pil ${r.com <= r.sem ? "ok" : "erro"}">Custo unitário efetivo desta campanha ${brl(r.unit, 4)}</span><span style="color:var(--texto2)">SMS inteligente ${brl(0.060, 4)} × ${n(r.env)} enviados = ${brl(r.com)} · sem a inteligência ${brl(r.sem)} (${brl(0.055, 4)} por número)</span></div>`;
     }
     document.getElementById("camp-ok").disabled = !marcadas.length;
   }
@@ -679,6 +673,7 @@ ul.simples li{margin:3px 0}
       g += `<text x="${x + w / 2}" y="${H - 9}" font-size="11" text-anchor="middle" fill="var(--texto2)">${MESES[i]}</text>`;
       if (i === vals.length - 1) g += `<text x="${x + w / 2}" y="${y0 - 5}" font-size="11" text-anchor="middle" fill="var(--texto)" font-weight="600">${brl(v, 0)}</text>`; });
     svg.innerHTML = g;
+    custoUnitario();
   }
   const ecoVista = document.getElementById("eco-vista");
   CAMP.forEach(c => ecoVista.insertAdjacentHTML("beforeend", `<option value="${c.nome}">${c.nome} · ${c.data}</option>`));
@@ -689,30 +684,30 @@ ul.simples li{margin:3px 0}
   document.querySelectorAll('input[name="cob"]').forEach(r => r.addEventListener("change", economia));
   economia();
 
-  // ---------------- custo unitário efetivo
-  function custoEfetivo(mail, repPct, pad, intel) {
-    const rep = Math.round(mail * repPct / 100), env = mail - rep;
-    const sem = mail * pad, com = env * intel;
-    return { rep, env, sem, com, unit: com / mail, eco: sem ? 1 - com / sem : 0, equilibrio: intel ? (1 - pad / intel) * 100 : 0 };
+  // ---------------- custo unitário efetivo (real, da campanha escolhida ou do período)
+  function custoReal(lista) {
+    const mail = lista.reduce((t, c) => t + c.mail, 0), rep = lista.reduce((t, c) => t + c.rep, 0), env = mail - rep;
+    const com = lista.reduce((t, c) => t + contaCamp(c).com, 0), sem = mail * SMS;
+    return { mail, rep, env, com, sem, unit: com / mail, eco: 1 - com / sem };
   }
-  function simulador() {
-    const v = id => parseFloat(document.getElementById(id).value) || 0;
-    const mail = Math.max(1, Math.round(v("ci-mail"))), pad = v("ci-pad"), intel = v("ci-int");
-    const r = custoEfetivo(mail, v("ci-rep"), pad, intel);
-    const b4 = x => brl(x, 4);
+  function custoUnitario() {
+    const lista = ecoSel === "geral" ? CAMP : CAMP.filter(c => c.nome === ecoSel);
+    const r = custoReal(lista), b4 = x => brl(x, 4);
+    const m = document.querySelector('input[name="cob"]:checked').value;
+    const linhaCobr = m === "embutido" ? `<tr><td>Enviados × SMS inteligente</td><td class="n">${n(r.env)}</td><td class="n">${b4(0.060)}</td><td class="n"><b>${brl(r.com)}</b></td></tr>`
+      : m === "analisado" ? `<tr><td>Enviados × SMS padrão + mailing × Score por número analisado</td><td class="n">${n(r.env)} + ${n(r.mail)}</td><td class="n">${b4(SMS)} + ${b4(0.006)}</td><td class="n"><b>${brl(r.com)}</b></td></tr>`
+      : `<tr><td>Enviados × SMS padrão + represados × Score</td><td class="n">${n(r.env)} + ${n(r.rep)}</td><td class="n">${b4(SMS)} + ${b4(0.018)}</td><td class="n"><b>${brl(r.com)}</b></td></tr>`;
+    document.getElementById("ci-tit").textContent = ecoSel === "geral" ? "Custo unitário efetivo · últimos 6 meses" : `Custo unitário efetivo · ${ecoSel}`;
     document.getElementById("ci-tab").innerHTML = `<thead><tr><th>Passo</th><th class="n">Números</th><th class="n">Preço</th><th class="n">Total</th></tr></thead><tbody>
-      <tr><td>Mailing carregado</td><td class="n">${n(mail)}</td><td class="n"></td><td class="n"></td></tr>
-      <tr><td>Represados pelo filtro (não saem, não são cobrados)</td><td class="n">${n(r.rep)}</td><td class="n">—</td><td class="n">—</td></tr>
-      <tr><td>Enviados × SMS inteligente</td><td class="n">${n(r.env)}</td><td class="n">${b4(intel)}</td><td class="n"><b>${brl(r.com)}</b></td></tr>
-      <tr><td>Sem a inteligência: mailing inteiro × SMS padrão</td><td class="n">${n(mail)}</td><td class="n">${b4(pad)}</td><td class="n">${brl(r.sem)}</td></tr>
-      <tr><td><b>Custo unitário efetivo</b> = total da campanha inteligente ÷ mailing carregado</td><td class="n"></td><td class="n"><b>${b4(r.unit)}</b></td><td class="n"></td></tr></tbody>`;
+      <tr><td>Mailing carregado</td><td class="n">${n(r.mail)}</td><td class="n"></td><td class="n"></td></tr>
+      <tr><td>Represados pelo filtro (não saíram)</td><td class="n">${n(r.rep)}</td><td class="n">—</td><td class="n">—</td></tr>
+      ${linhaCobr}
+      <tr><td><b>Custo unitário efetivo</b> = total da campanha inteligente ÷ mailing carregado</td><td class="n"></td><td class="n"><b>${b4(r.unit)}</b></td><td class="n"></td></tr>
+      <tr><td>Se o mesmo mailing saísse sem a inteligência (× SMS padrão)</td><td class="n">${n(r.mail)}</td><td class="n">${b4(SMS)}</td><td class="n">${brl(r.sem)}</td></tr></tbody>`;
     const ok = r.com <= r.sem;
     document.getElementById("ci-res").innerHTML = `<div class="linha"><span class="pil ${ok ? "ok" : "erro"}">${ok ? "Mais barato" : "Mais caro"}</span>
-      <b style="font-size:17px">${b4(r.unit)} por número, contra ${b4(pad)} sem a inteligência · ${ok ? "economia" : "aumento"} de ${pct(Math.abs(r.eco * 100))}</b></div>
-      <p class="nota">A conta fecha a favor do cliente quando o filtro represa mais de <b>${pct(r.equilibrio)}</b> do mailing (1 − SMS padrão ÷ SMS inteligente). Abaixo disso, o SMS inteligente sai mais caro, e a tela mostra em vermelho.</p>`;
+      <b style="font-size:17px">${b4(r.unit)} por número, contra ${b4(SMS)} sem a inteligência · ${ok ? "economia" : "aumento"} de ${pct(Math.abs(r.eco * 100))}</b></div>`;
   }
-  ["ci-mail", "ci-rep", "ci-pad", "ci-int"].forEach(id => document.getElementById(id).addEventListener("input", simulador));
-  simulador();
 
   atualizar();
 })();
