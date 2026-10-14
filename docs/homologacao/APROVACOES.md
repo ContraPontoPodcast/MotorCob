@@ -113,6 +113,28 @@ Aprovado:
 
 **Todos os blocos (1 a 5) aprovados.** Próximo passo: gerar SQL, testes, ajustes no motor e prompts.
 
+## Bloco 6 · Qualidade dos fornecedores e Score de Entrega — APROVADO em 14/10/2026
+
+Protótipo: `bloco6-qualidade-score-prototipo.html`.
+- **Qualidade dos fornecedores** (Console): no SMS o fornecedor é medido pela velocidade (aceite e DLR, mediana e
+  p90), por DLR que não volta e por alertas, não pelo % entregue (que reflete o mailing). Comparação de entrega
+  só dentro do mesmo lote.
+- **Função Técnico** na equipe: vê qualidade e detalhe técnico (código original, horários, fallback), configura o
+  filtro de inteligência e os nomes devolvidos. Atende chamados.
+- **Fake DLR não é implementado.** No lugar, o **Score de Entrega**, contratado e declarado: o número fora das
+  faixas não sai e volta ao cliente com um nome de "não enviado", nunca com status de operadora.
+- **Modelo estatístico** por número (hash): histórico de toda a Mensageria (decisão do usuário; recomendação de
+  cláusula de base legal no contrato), peso maior para o recente (meia-vida), falha permanente pesa mais, base da
+  operadora para pouco histórico. Janela menor (30 dias). Fornecedores com DLR ruim podem ser tirados da análise.
+- Faixas **Alto, Médio, Baixo e Sem histórico** (nome mantido, com (i)). Quarentena. Sem regra por DDD.
+- **Grupo de controle** (amostra sorteada que sai mesmo assim) para provar o Score.
+- **Nomes devolvidos editáveis pelo Técnico**, com trava contra nomes que imitam status de operadora.
+- **Cobrança**: por número analisado ou só pelos represados; o SMS fica sempre no preço padrão (a opção de SMS
+  inteligente mais caro foi retirada).
+- **Campanha**: caixas Todos · Alto · Médio · Baixo · Sem histórico.
+- **Economia do Score** (cliente): período com data inicial e final, por campanha; economia líquida e **custo
+  unitário efetivo** (total pago ÷ mailing carregado) com valores faturados, sem simulação.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -128,5 +150,7 @@ Aprovado:
    e. Publicar de novo a função `assistente` (`python3 scripts/juntar_funcao.py assistente`) e atualizar o motor na
       nuvem (`systemctl start motorcob-atualizar`).
    f. `CONFERENCIA_GERAL.sql`: itens 17, 18 e 19 devem dar OK.
-4. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
+4. Bloco 6 (branch `claude/geracao-bloco-6`, empilhada sobre a dos blocos 2 a 5): SQL 33 → prompts 46, 47 e 48 →
+   função `assistente` de novo → motor na nuvem (passos 72 a 74). Conferência: item 20 OK.
+5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).
