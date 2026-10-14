@@ -186,7 +186,7 @@ ul.simples li{margin:3px 0}
       <div class="duas">
         <div class="cartao">
           <h3>Modelo</h3>
-          <p class="sub">Probabilidade de entrega por número, com peso maior para o que é recente e uma base por operadora e DDD para quem tem pouco histórico.</p>
+          <p class="sub">Probabilidade de entrega por número, com peso maior para o que é recente e uma base pela operadora para quem tem pouco histórico.</p>
           <div class="form">
             <div class="campo"><label for="m-janela">Janela (dias)</label><input type="number" id="m-janela" min="7" max="180" value="30"></div>
             <div class="campo"><label for="m-meia">Meia-vida do peso (dias)</label><input type="number" id="m-meia" min="1" max="90" value="10"></div>
@@ -217,14 +217,9 @@ ul.simples li{margin:3px 0}
         </div>
 
         <div class="cartao">
-          <h3>Regras por DDD</h3>
-          <p class="sub">Aplicar o filtro só em alguns DDDs, ou aplicar em todos menos alguns.</p>
-          <div class="linha">
-            <div class="campo"><label for="ddd-modo">Modo</label>
-              <select id="ddd-modo"><option value="todos">Aplicar em todos</option><option value="so">Aplicar só nos DDDs</option><option value="menos" selected>Aplicar em todos, menos</option></select></div>
-            <div class="campo" style="flex:1"><label for="ddd-lista">DDDs (separados por vírgula)</label><input type="text" id="ddd-lista" value="11, 21"></div>
-          </div>
-          <div class="campo" style="margin-top:12px"><label for="quar">Quarentena: depois de quantos dias um número Baixo volta a ser tentado</label><input type="number" id="quar" min="1" max="180" value="45"></div>
+          <h3>Quarentena</h3>
+          <p class="sub">Número na faixa Baixo fica fora dos envios por um tempo e depois volta a ser tentado.</p>
+          <div class="campo"><label for="quar">Dias até um número Baixo voltar a ser tentado</label><input type="number" id="quar" min="1" max="180" value="45"></div>
         </div>
       </div>
 
@@ -234,7 +229,7 @@ ul.simples li{margin:3px 0}
         <div class="rolar"><table class="tab" id="tab-hist"></table></div>
         <div class="linha" style="margin-top:10px">
           <button class="btn sec" type="button" id="add-hist">+ Tentativa</button>
-          <div class="campo"><label for="base-op">Base da operadora e DDD (%)</label><input type="number" id="base-op" min="1" max="99" value="82"></div>
+          <div class="campo"><label for="base-op">Base da operadora (%)</label><input type="number" id="base-op" min="1" max="99" value="82"></div>
         </div>
         <div class="prev" style="margin-top:12px" id="resultado"></div>
       </div>
@@ -521,7 +516,6 @@ ul.simples li{margin:3px 0}
   const NOMES = [
     ["baixo", "Faixa Baixo · não enviado", "Não enviado · baixa propensão de entrega"],
     ["sem", "Sem histórico · não enviado (se a campanha excluir)", "Não enviado · número sem histórico"],
-    ["ddd", "Fora pelo DDD", "Não enviado · regra regional da rota"],
     ["quar", "Em quarentena", "Não enviado · aguardando nova tentativa"]
   ];
   const PROIBIDOS = ["entregue", "enviado com sucesso", "delivered", "delivrd", "undeliv", "expired", "accepted", "dlr", "aceito pela operadora", "recebido"];
