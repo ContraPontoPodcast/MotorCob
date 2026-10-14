@@ -71,24 +71,36 @@ button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
 .faixa-aprendiz button { border: 0; background: none; color: inherit; font: 600 13px var(--sans); text-decoration: underline; cursor: pointer; }
 
 /* paletas */
+.pal-musgo { --p-fundo: #F5F6F3; --p-menu: #FFFFFF; --p-menu-texto: #3D4540; --p-menu-borda: #E2E5DF; --p-menu-ativo: #E7EEE6; --p-menu-ativo-texto: #2F5A3B;
+  --p-cartao: #FFFFFF; --p-borda: #E2E5DF; --p-texto: #2E3430; --p-texto-2: #69716B; --p-titulo: #222824; --p-acento: #3A6B47; --p-acento-texto: #FFFFFF; --p-acento-forte: #2F5A3B;
+  --p-pill: #EEF1EC; --p-pill-texto: #3D4540; --p-ok: #2B6B3C; --p-ok-f: #E4F0E4; --p-al: #7A5200; --p-al-f: #F8EED8; --p-i: #8C948E; --p-i-borda: #CBD1CB; --p-balao: #FFFFFF; --p-balao-texto: #2E3430; }
+.pal-esmeralda { --p-fundo: #F4F5F5; --p-menu: #FFFFFF; --p-menu-texto: #3B4242; --p-menu-borda: #E1E5E4; --p-menu-ativo: #E2F1EB; --p-menu-ativo-texto: #156B50;
+  --p-cartao: #FFFFFF; --p-borda: #E1E5E4; --p-texto: #2C3333; --p-texto-2: #677070; --p-titulo: #202626; --p-acento: #1A7A5A; --p-acento-texto: #FFFFFF; --p-acento-forte: #156B50;
+  --p-pill: #ECF0EF; --p-pill-texto: #3B4242; --p-ok: #1E6B45; --p-ok-f: #E2F1E8; --p-al: #7A5200; --p-al-f: #F8EED8; --p-i: #8A9393; --p-i-borda: #C9D0CF; --p-balao: #FFFFFF; --p-balao-texto: #2C3333; }
+.pal-ouro { --p-fundo: #F7F5F1; --p-menu: #FFFFFF; --p-menu-texto: #47423A; --p-menu-borda: #E8E2D8; --p-menu-ativo: #F2EADB; --p-menu-ativo-texto: #6E5222;
+  --p-cartao: #FFFFFF; --p-borda: #E8E2D8; --p-texto: #332F29; --p-texto-2: #746D62; --p-titulo: #26231E; --p-acento: #7D5F26; --p-acento-texto: #FFFFFF; --p-acento-forte: #8A6A2E;
+  --p-pill: #F2EEE7; --p-pill-texto: #47423A; --p-ok: #2E6B3E; --p-ok-f: #E6F0E6; --p-al: #8A4B00; --p-al-f: #F8EBD8; --p-i: #938B7E; --p-i-borda: #D5CDBF; --p-balao: #FFFFFF; --p-balao-texto: #332F29; }
+.pal-pinho { --p-fundo: #F4F6F5; --p-menu: #1F3A33; --p-menu-texto: #D3E2DC; --p-menu-borda: #1F3A33; --p-menu-ativo: #2C5047; --p-menu-ativo-texto: #FFFFFF;
+  --p-cartao: #FFFFFF; --p-borda: #E0E6E3; --p-texto: #2C3330; --p-texto-2: #67716C; --p-titulo: #202623; --p-acento: #2C5E50; --p-acento-texto: #FFFFFF; --p-acento-forte: #2C5E50;
+  --p-pill: #ECF1EE; --p-pill-texto: #3B4440; --p-ok: #1E6B3A; --p-ok-f: #E4F1E7; --p-al: #7A5200; --p-al-f: #F8EED8; --p-i: #8A9490; --p-i-borda: #C9D1CD; --p-balao: #1F3A33; --p-balao-texto: #EEF4F1; }
+.pal-pinho .menu .marca span { color: #9FD3BE; }
+.pal-musgo .balao, .pal-esmeralda .balao, .pal-ouro .balao { border: 1px solid var(--p-borda); }
+.pal-escura { --p-fundo: #171A19; --p-menu: #1E2221; --p-menu-texto: #C9D0CD; --p-menu-borda: #272C2A; --p-menu-ativo: #23362F; --p-menu-ativo-texto: #9FD3BE;
+  --p-cartao: #1F2423; --p-borda: #2C3230; --p-texto: #D7DDDA; --p-texto-2: #9AA4A0; --p-titulo: #ECF0EE; --p-acento: #5FAE8C; --p-acento-texto: #0E1A16; --p-acento-forte: #9FD3BE;
+  --p-pill: #2A302E; --p-pill-texto: #C9D0CD; --p-ok: #7FD39A; --p-ok-f: #1C3325; --p-al: #F0C25E; --p-al-f: #3A2F14; --p-i: #8E9894; --p-i-borda: #48514D; --p-balao: #2A302E; --p-balao-texto: #ECF0EE; }
+/* lado a lado */
+.grade4 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.mini { display: flex; flex-direction: column; gap: 6px; cursor: pointer; border: 0; background: none; padding: 0; text-align: left; font: inherit; color: var(--tinta); }
+.mini .moldura { height: 300px; overflow: hidden; border-radius: 14px; position: relative; }
+.mini .moldura .app { transform: scale(.42); transform-origin: top left; width: 238%; pointer-events: none; min-height: 700px; }
+.mini b { font-size: 14px; } .mini small { color: var(--tinta-2); font-size: 12.5px; }
+.mini[aria-pressed="true"] .moldura { outline: 3px solid var(--azul); outline-offset: 2px; }
+@media (max-width: 860px) { .grade4 { grid-template-columns: minmax(0, 1fr); } }
+
 .pal-atual { --p-fundo: #F5F5F7; --p-menu: #161617; --p-menu-texto: #F5F5F7; --p-menu-borda: #161617; --p-menu-ativo: #3A3A3C; --p-menu-ativo-texto: #FFFFFF;
   --p-cartao: #FFFFFF; --p-borda: #E5E5EA; --p-texto: #1D1D1F; --p-texto-2: #6E6E73; --p-titulo: #1D1D1F; --p-acento: #1D1D1F; --p-acento-texto: #FFFFFF; --p-acento-forte: #0F4C5C;
   --p-pill: #F2F2F7; --p-pill-texto: #3A3A3C; --p-ok: #1E7A36; --p-ok-f: #E6F4EA; --p-al: #8A5A00; --p-al-f: #FFF4D6; --p-i: #8E8E93; --p-i-borda: #C7C7CC; --p-balao: #1D1D1F; --p-balao-texto: #F5F5F7; }
-.pal-clara { --p-fundo: #F6F7F8; --p-menu: #FFFFFF; --p-menu-texto: #3C4650; --p-menu-borda: #E4E7EA; --p-menu-ativo: #E6F0F2; --p-menu-ativo-texto: #0F4C5C;
-  --p-cartao: #FFFFFF; --p-borda: #E4E7EA; --p-texto: #2B3239; --p-texto-2: #66717C; --p-titulo: #1F262C; --p-acento: #0F4C5C; --p-acento-texto: #FFFFFF; --p-acento-forte: #0F6B7F;
-  --p-pill: #EEF2F4; --p-pill-texto: #3C4650; --p-ok: #1E6B3A; --p-ok-f: #E5F2EA; --p-al: #7A5200; --p-al-f: #FBF1D9; --p-i: #8A949E; --p-i-borda: #C9D0D6; --p-balao: #FFFFFF; --p-balao-texto: #2B3239; }
-.pal-clara .balao { border: 1px solid #E4E7EA; }
-.pal-petro { --p-fundo: #F4F6F7; --p-menu: #12404C; --p-menu-texto: #D5E4E8; --p-menu-borda: #12404C; --p-menu-ativo: #1E5866; --p-menu-ativo-texto: #FFFFFF;
-  --p-cartao: #FFFFFF; --p-borda: #E2E7EA; --p-texto: #2B3239; --p-texto-2: #66717C; --p-titulo: #1F262C; --p-acento: #0F4C5C; --p-acento-texto: #FFFFFF; --p-acento-forte: #0F6B7F;
-  --p-pill: #EEF2F4; --p-pill-texto: #3C4650; --p-ok: #1E6B3A; --p-ok-f: #E5F2EA; --p-al: #7A5200; --p-al-f: #FBF1D9; --p-i: #8A949E; --p-i-borda: #C9D0D6; --p-balao: #12404C; --p-balao-texto: #F1F6F7; }
-.pal-areia { --p-fundo: #F7F5F2; --p-menu: #FBFAF8; --p-menu-texto: #4A4540; --p-menu-borda: #E8E3DC; --p-menu-ativo: #ECE6DD; --p-menu-ativo-texto: #2E2A26;
-  --p-cartao: #FFFFFF; --p-borda: #E8E3DC; --p-texto: #35312D; --p-texto-2: #75706A; --p-titulo: #26231F; --p-acento: #2F5D62; --p-acento-texto: #FFFFFF; --p-acento-forte: #2F5D62;
-  --p-pill: #F1EDE7; --p-pill-texto: #4A4540; --p-ok: #2E6B3E; --p-ok-f: #E6F0E6; --p-al: #7A5200; --p-al-f: #F8EED8; --p-i: #8F8880; --p-i-borda: #D3CCC3; --p-balao: #FFFFFF; --p-balao-texto: #35312D; }
-.pal-areia .balao { border: 1px solid #E8E3DC; }
-.pal-petro .menu .marca span, .pal-atual .menu .marca span { color: #8FD0DD; }
-.pal-escura { --p-fundo: #16191C; --p-menu: #1D2125; --p-menu-texto: #C9CED3; --p-menu-borda: #262B30; --p-menu-ativo: #24343A; --p-menu-ativo-texto: #8FD0DD;
-  --p-cartao: #1F2428; --p-borda: #2C3237; --p-texto: #D7DCE0; --p-texto-2: #9AA3AB; --p-titulo: #ECEFF1; --p-acento: #4E9AAB; --p-acento-texto: #0E1A1E; --p-acento-forte: #8FD0DD;
-  --p-pill: #2A3035; --p-pill-texto: #C9CED3; --p-ok: #7FD39A; --p-ok-f: #1C3325; --p-al: #F0C25E; --p-al-f: #3A2F14; --p-i: #8E979F; --p-i-borda: #48515A; --p-balao: #2A3035; --p-balao-texto: #ECEFF1; }
+.pal-atual .menu .marca span { color: #C9A35A; }
 
 @media (max-width: 860px) {
   .app { grid-template-columns: minmax(0, 1fr); } .menu { display: none; }
@@ -101,16 +113,16 @@ button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
   <div class="proto">Protótipo para decisão · números fictícios · a mesma tela em três paletas e três níveis de ajuda</div>
   <div>
     <h1>Conforto visual da plataforma</h1>
-    <p class="ajuda">Compare a mesma tela (Lista do dia) nas três paletas e escolha também quanto de ajuda aparece. O preto continua na marca e no site; a pergunta é o que o cliente vê o dia inteiro dentro da plataforma.</p>
+    <p class="ajuda">Compare a mesma tela (Lista do dia) em cinco paletas e escolha também quanto de ajuda aparece. O preto continua na marca e no site; a pergunta é o que o cliente vê o dia inteiro dentro da plataforma.</p>
   </div>
   <div class="ctl">
     <div class="grp">Paleta
-      <div class="seg" id="pal"><button aria-pressed="false" data-p="atual">A · Atual (menu preto)</button><button aria-pressed="true" data-p="clara">B · Clara com petróleo</button><button aria-pressed="false" data-p="escura">C · Escura confortável</button><button aria-pressed="false" data-p="petro">D · Menu petróleo</button><button aria-pressed="false" data-p="areia">E · Quente e suave</button></div></div>
+      <div class="seg" id="pal"><button aria-pressed="false" data-p="atual">Atual (menu preto)</button><button aria-pressed="true" data-p="musgo">1 · Musgo</button><button aria-pressed="false" data-p="esmeralda">2 · Esmeralda</button><button aria-pressed="false" data-p="ouro">3 · Dourado MotorCob</button><button aria-pressed="false" data-p="pinho">4 · Menu verde-pinho</button><button aria-pressed="false" data-p="escura">5 · Escura</button></div></div>
     <div class="grp">Ajuda na tela
       <div class="seg" id="modo"><button aria-pressed="false" data-m="aprendiz">Até 15 dias de casa</button><button aria-pressed="true" data-m="discreta">16 a 30 dias</button><button aria-pressed="false" data-m="desligada">Depois de 30 dias</button></div></div>
   </div>
 
-  <div class="app pal-clara modo-discreta" id="app">
+  <div class="app pal-musgo modo-discreta" id="app">
     <nav class="menu" aria-label="Menu">
       <div class="marca">Motor<span>CX</span></div>
       <a href="#" onclick="return false">Início</a>
@@ -149,14 +161,20 @@ button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
     </main>
   </div>
 
+  <div><h2>As cinco lado a lado</h2><p class="ajuda" style="margin-top:2px">Fora dos tons das concorrentes: sem azul, sem preto com roxo, sem laranja. Clique numa para ver grande acima.</p></div>
+  <div class="grade4" id="grade"></div>
   <div class="nota">
-    <div><b>Paleta</b>D mantém a cor da marca no menu, sem o peso do preto. E é mais quente, para quem acha o cinza frio. Minha recomendação continua a <b>B</b>: fundo claro levemente acinzentado (não branco puro), menu claro, texto em grafite em vez de preto puro e uma cor só de destaque, o petróleo, para botões e o item ativo. Vermelho, âmbar e verde aparecem só quando há algo a dizer. A <b>C</b> fica como opção "escuro" para quem prefere, sem preto puro. O preto continua no logo e no site.</div>
+    <div><b>Paleta</b>Todas fogem do azul da Ótima, do preto com roxo e do laranja da Pontaltech, e usam uma cor só de destaque. Minha recomendação é a <b>1 · Musgo</b> para o dia a dia (a que menos cansa) ou a <b>3 · Dourado</b> se quiser amarrar com o dourado que a área Cobrança já usa. A escura fica como opção de cada pessoa. O preto continua no logo e no site.</div>
     <div><b>Ajuda pelo tempo de casa (decidido)</b>Até 15 dias: explicações abertas embaixo dos números. De 16 a 30 dias: só o (i) discreto, que abre ao clicar. Depois de 30 dias: sem (i). Em qualquer fase, o glossário fica no menu <b>Ajuda › O que significa</b> e no "?" do topo, e a pessoa religa a ajuda em Minha conta.</div>
     <div><b>Para não cansar a vista</b>Contraste suficiente sem ser máximo (grafite sobre cinza-claro), uma família de fonte, tamanhos consistentes, números alinhados, muito espaço entre blocos e no máximo uma cor forte por área. Usuário escolhe Claro, Escuro ou "igual ao computador" em Minha conta.</div>
   </div>
 </div>
 
 <script>
+const PALS = ["atual", "musgo", "esmeralda", "ouro", "pinho", "escura"];
+const DESC = { musgo: ["1 · Musgo", "Verde acinzentado, calmo, fundo levemente quente"], esmeralda: ["2 · Esmeralda", "Verde mais vivo e limpo, fundo neutro"],
+  ouro: ["3 · Dourado MotorCob", "O dourado que já marca a área Cobrança, em tom fechado"], pinho: ["4 · Menu verde-pinho", "Menu escuro na cor da marca, sem o peso do preto"],
+  escura: ["5 · Escura", "Para quem prefere tela escura, sem preto puro"] };
 const TXT = {
   acao: ["Clientes com ação hoje", "Quantos clientes a régua mandou acionar hoje, somando todos os canais. Um cliente com WhatsApp e SMS conta uma vez."],
   cpc: ["CPC · contato com a pessoa certa", "O cliente respondeu ou atendeu e é ele mesmo. A partir daí, o próximo contato vai no mesmo canal e no mesmo telefone."],
@@ -178,8 +196,19 @@ document.addEventListener("click", fechar);
 document.addEventListener("keydown", e => { if (e.key === "Escape") fechar(); });
 const grupo = (id, attr, fn) => document.querySelectorAll(`#${id} button`).forEach(b => b.addEventListener("click", () => {
   document.querySelectorAll(`#${id} button`).forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset[attr]); }));
-grupo("pal", "p", p => { app.classList.remove("pal-atual", "pal-clara", "pal-escura", "pal-petro", "pal-areia"); app.classList.add("pal-" + p); });
+grupo("pal", "p", p => { PALS.forEach(x => app.classList.remove("pal-" + x)); app.classList.add("pal-" + p); document.querySelectorAll(".mini").forEach(m => m.setAttribute("aria-pressed", m.dataset.p === p)); });
 const setModo = m => { app.classList.remove("modo-discreta", "modo-aprendiz", "modo-desligada"); app.classList.add("modo-" + m); fechar(); };
 grupo("modo", "m", setModo);
 document.getElementById("sairAprendiz").addEventListener("click", () => document.querySelector('#modo [data-m="discreta"]').click());
+
+const g = document.getElementById("grade");
+Object.entries(DESC).forEach(([p, [t, d]]) => {
+  const b = document.createElement("button"); b.className = "mini"; b.dataset.p = p; b.setAttribute("aria-pressed", p === "musgo");
+  const c = app.cloneNode(true); c.removeAttribute("id"); PALS.forEach(x => c.classList.remove("pal-" + x)); c.classList.add("pal-" + p);
+  c.querySelectorAll("button").forEach(x => x.tabIndex = -1);
+  const m = document.createElement("div"); m.className = "moldura"; m.appendChild(c);
+  b.appendChild(m); b.insertAdjacentHTML("beforeend", `<b>${t}</b><small>${d}</small>`);
+  b.addEventListener("click", () => { document.querySelector(`#pal [data-p="${p}"]`).click(); app.scrollIntoView({ behavior: "smooth" }); });
+  g.appendChild(b);
+});
 </script>

@@ -66,7 +66,7 @@ Decisões:
 A escrever, depois de aprovados os blocos 3 e 4: SQL 30, testes, ajustes no motor (custo por operadora, produto no envio) e
 prompts do Console, do Workspace e da API.
 
-## Bloco 3 · Orquestração — protótipo pronto, AGUARDANDO aprovação
+## Bloco 3 · Orquestração — APROVADO em 14/10/2026 ("Ok! Somente a paleta")
 
 Protótipo: `bloco3-orquestracao-prototipo.html`.
 - Carteira no topo; aviso de estratégia compartilhada entre carteiras (causa do "aparece a estratégia do outro
@@ -75,7 +75,7 @@ Protótipo: `bloco3-orquestracao-prototipo.html`.
 - Barra única: vistas (Desenho, Etapas e fases, Travas, Visão geral) + estado + Copiar + Mais ▾ + Salvar.
 - Fases do motor com orçamento por canal, prioridade e travas próprias; tabela de travas estratégia × fase.
 - Mapa da Esteira em cartões na ordem da jornada (massivas × acordo), movimento em barras, sem códigos (G1/RE/T1).
-Perguntas em aberto: print dos "botões da direita", se o problema for outro; separar = cópia só na carteira atual.
+Separar estratégia compartilhada = cópia só na carteira atual (recomendação aceita).
 
 ## Bloco 4 · Console — incluído no bloco 5 (menus)
 
@@ -83,7 +83,7 @@ Usuários, Permissões e Auditoria saem do grupo sem nome do fim de todos os men
 perfis e Empresa › Auditoria; no Console, grupos Clientes · Suporte · Financeiro · Mensageria · Administração (Equipe
 e Auditoria de todas as empresas). Empresas é a primeira tela do Console.
 
-## Bloco 5 · Repaginada da experiência — PARCIALMENTE APROVADO em 14/10/2026
+## Bloco 5 · Repaginada da experiência — APROVADO em 14/10/2026, exceto a paleta
 
 Protótipos: `bloco5-repaginada-prototipo.html` (glossário, nomes, antes e depois, menus, decisões) e
 `bloco5-paletas-prototipo.html` (paletas e ajuda). Revisão das telas: `bloco5-revisao-telas-1.md` e `-2-console.md`.
@@ -95,11 +95,15 @@ Aprovado:
    discreto; depois de 30 dias = desligada. Glossário sempre disponível; a pessoa religa a ajuda em Minha conta.
 4. Princípios: um nome por conceito; nenhum código interno nem erro técnico cru na tela.
 
-Em aberto:
-- **Paleta**: dúvida entre A (atual, menu preto), B (clara com petróleo, recomendada), C (escura confortável),
-  D (menu petróleo) e E (quente e suave).
-- Nomes: marca (MotorCX plataforma × áreas), CPC A/B ("em negociação"/"sem resposta"?), "Hot" → "Contato
-  principal"?, regra de senha única, formatos CSV/TXT/XLSX em todo lugar, demais nomes da tabela "Um nome por conceito".
+5. Decisões de nome aceitas como recomendado: **MotorCX = plataforma** (áreas Cobrança e Jornada do Cliente);
+   CPC A/B → **"CPC · em negociação" / "CPC · sem resposta"**; "Hot" → **"Contato principal"**; **uma regra de senha**
+   (12+ caracteres, letra e número) em todas as telas; **CSV, TXT e XLSX** aceitos em todo lugar; demais nomes da
+   tabela "Um nome por conceito".
+
+Em aberto: **paleta**. Restrição: fugir das cores das concorrentes (Ótima: azul, migrando para preto e roxo;
+Pontaltech: laranja). Opções no protótipo de paletas: 1 Musgo (recomendada), 2 Esmeralda, 3 Dourado MotorCob,
+4 Menu verde-pinho, 5 Escura (opção de cada usuário). As cores dos canais (RCS azul, SMS roxo…) identificam canais,
+não a marca, e podem ser revistas junto.
 
 ## Fila para rodar (quando liberar)
 
