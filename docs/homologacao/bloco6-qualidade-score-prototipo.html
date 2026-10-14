@@ -1,0 +1,542 @@
+<title>Qualidade e Score de Entrega</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Console MotorCX, menu cinza à esquerda + área de trabalho lisa; abas por tela do protótipo.
+   Paleta aprovada no bloco 5 (tema_tokens): base Apple + Mensageria vinho. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --info:#8E8E93; --pilula:#F2F2F7;
+  --area:#7A2E3B; --area-forte:#6B2633; --area-ativo:#F5E6E8; --area-ativo-texto:#63222E;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --tec:#3A3A3C; --tec-f:#ECECF0;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#D07A8A; --area-forte:#DD94A2; --area-ativo:#3A1A20; --area-ativo-texto:#EDB8C2;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210; --tec:#D1D1D6; --tec-f:#2C2C2E;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#D07A8A; --area-forte:#DD94A2; --area-ativo:#3A1A20; --area-ativo-texto:#EDB8C2;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210; --tec:#D1D1D6; --tec-f:#2C2C2E;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto}
+.topo h1{font-size:22px;margin:0 0 4px;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:75ch}
+.aviso{margin-top:10px;font-size:12.5px;color:var(--texto2)}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);gap:0;max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao)}
+@media (max-width:820px){.app{grid-template-columns:1fr;margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+@media (min-width:821px){.app{margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:70ch}
+.etq{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--area);border:1px solid var(--area);border-radius:999px;padding:1px 8px}
+.filtros{display:flex;flex-wrap:wrap;gap:8px}
+select,input[type=number],input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px;min-width:0}
+input[type=number]{width:84px;font-variant-numeric:tabular-nums}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0}
+.cartao h3{margin:0 0 4px;font-size:15px}
+.cartao .sub{margin:0 0 12px;color:var(--texto2);font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.kpi{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:2px}
+.kpi span{color:var(--texto2);font-size:12.5px}
+.kpi b{font-size:24px;font-variant-numeric:tabular-nums}
+.kpi em{font-style:normal;font-size:12px;color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--borda);white-space:nowrap}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.pil.tec{background:var(--tec-f);color:var(--tec);font-family:var(--mono);font-weight:500}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.i{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--info);color:var(--info);font-size:10px;font-weight:700;cursor:help;vertical-align:1px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:#fff}
+:root[data-theme="dark"] .btn{color:#1D1D1F}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn{color:#1D1D1F}}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.nota{font-size:12.5px;color:var(--texto2);margin:8px 0 0}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden;display:flex}
+.barra i{display:block;height:100%}
+.tecnico{border:1px dashed var(--tec);border-radius:12px;padding:14px;background:var(--cartao)}
+.tecnico summary{cursor:pointer;font-weight:600}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+.chave{all:unset;cursor:pointer;width:44px;height:26px;border-radius:999px;background:#D2D2D7;position:relative;flex:none;transition:background .15s}
+.chave::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s}
+.chave[aria-checked="true"]{background:#34C759}.chave[aria-checked="true"]::after{left:20px}
+.chave:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.chave,.chave::after{transition:none}}
+.erro-campo{color:var(--erro);font-size:12.5px}
+.prev{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;background:var(--fundo)}
+.opcoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--borda);border-radius:10px;padding:12px;cursor:pointer;background:var(--cartao)}
+.op:has(input:checked){border-color:var(--area);box-shadow:inset 0 0 0 1px var(--area)}
+.op input{margin-top:3px;accent-color:var(--area)}
+.op b{display:block}
+.op span{color:var(--texto2);font-size:12.5px}
+.svg-graf{width:100%;height:auto;display:block}
+.decisao{background:var(--at-f);color:var(--texto);border-radius:10px;padding:10px 12px;font-size:13px}
+.decisao b{color:var(--at)}
+ul.simples{margin:6px 0 0;padding-left:18px}
+ul.simples li{margin:3px 0}
+</style>
+
+<header class="topo">
+  <span class="etq">Protótipo para aprovação · bloco 6</span>
+  <h1>Qualidade dos fornecedores e Score de Entrega</h1>
+  <p>Painel de entrega por fornecedor, função Técnico, filtro de inteligência na rota (modelo estatístico) e o Score de Entrega como produto vendido à parte.</p>
+  <p class="aviso">Todos os números, fornecedores e clientes desta página são fictícios. Nada aqui grava no banco.</p>
+</header>
+
+<div class="app">
+  <nav class="menu" aria-label="Console">
+    <div class="grupo">Mensageria</div>
+    <button data-t="painel" aria-current="page">Qualidade dos fornecedores<small>Velocidade, DLR e alertas</small></button>
+    <button data-t="filtro">Filtro de inteligência<small>Score de Entrega na rota</small></button>
+    <button data-t="contrato">Contratação<small>Como o Score é cobrado</small></button>
+    <div class="grupo">Plataforma do cliente</div>
+    <button data-t="campanha">Campanha<small>Ligar o Score e ver a prévia</small></button>
+    <div class="grupo">Administração</div>
+    <button data-t="equipe">Equipe · função Técnico<small>O que cada perfil vê</small></button>
+  </nav>
+
+  <main class="trab">
+    <!-- ======================= PAINEL ======================= -->
+    <section data-p="painel">
+      <div class="cab">
+        <div><h2>Qualidade dos fornecedores</h2><p>No SMS, o % entregue reflete a qualidade do mailing. Aqui o fornecedor é medido pela velocidade e pela DLR.</p></div>
+        <div class="filtros">
+          <select id="f-canal" aria-label="Canal"><option>SMS</option><option>RCS</option></select>
+          <select id="f-periodo" aria-label="Período"><option>Últimas 24 h</option><option>Últimos 7 dias</option></select>
+          <select id="f-forn" aria-label="Fornecedor"><option value="">Todos os fornecedores</option></select>
+        </div>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="cartao">
+        <h3>Alertas abertos</h3>
+        <p class="sub">Disparados pelos limites da rota. Aparecem também na Saúde do Console.</p>
+        <div id="alertas" class="duas" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px"></div>
+      </div>
+
+      <div class="cartao">
+        <h3>Fornecedor × operadora</h3>
+        <p class="sub">Tempos em mediana e nos 10% mais lentos (p90). "Sem DLR" = enviado há mais de 30 min sem retorno.</p>
+        <div class="rolar"><table class="tab" id="tab-forn"></table></div>
+        <p class="nota">Comparação justa de entrega: dentro do mesmo lote a rota sorteia o tráfego, então os fornecedores recebem a mesma qualidade de mailing. A coluna "Entregue no lote" compara só esse recorte.</p>
+      </div>
+
+      <div class="cartao">
+        <h3>Tempo até a DLR, por hora</h3>
+        <p class="sub">Mediana em segundos. A linha tracejada é o limite de alerta da rota.</p>
+        <svg id="graf" class="svg-graf" viewBox="0 0 720 220" role="img" aria-label="Tempo até a DLR por hora e por fornecedor"></svg>
+        <div class="linha" id="legenda" style="margin-top:6px;font-size:12.5px"></div>
+      </div>
+
+      <details class="tecnico" id="det-tec" open>
+        <summary>Detalhe técnico <span class="pil tec">só Técnico e Master</span></summary>
+        <p class="nota">Código original do fornecedor, horários de cada retorno e a regra que escolheu o fornecedor. O destino aparece sempre mascarado.</p>
+        <div class="rolar"><table class="tab" id="tab-tec"></table></div>
+      </details>
+    </section>
+
+    <!-- ======================= FILTRO ======================= -->
+    <section data-p="filtro" hidden>
+      <div class="cab">
+        <div><h2>Filtro de inteligência · Score de Entrega</h2><p>Configurado na rota do produto pelo time Técnico. Cada número recebe uma probabilidade de entrega a partir do histórico de tudo o que saiu pela Mensageria.</p></div>
+        <div class="filtros"><select id="rota" aria-label="Rota"><option>Rota SMS Padrão</option><option>Rota SMS OTP</option></select></div>
+      </div>
+
+      <div class="duas">
+        <div class="cartao">
+          <h3>Modelo</h3>
+          <p class="sub">Probabilidade de entrega por número, com peso maior para o que é recente e uma base por operadora e DDD para quem tem pouco histórico.</p>
+          <div class="form">
+            <div class="campo"><label for="m-janela">Janela (dias)</label><input type="number" id="m-janela" min="7" max="180" value="30"></div>
+            <div class="campo"><label for="m-meia">Meia-vida do peso (dias)</label><input type="number" id="m-meia" min="1" max="90" value="10"></div>
+            <div class="campo"><label for="m-perm">Peso da falha permanente</label><input type="number" id="m-perm" min="1" max="5" step="0.5" value="2"></div>
+            <div class="campo"><label for="m-forca">Força da base (tentativas)</label><input type="number" id="m-forca" min="0" max="10" step="0.5" value="2"></div>
+          </div>
+          <p class="nota">Probabilidade = (base × força + entregas ponderadas) ÷ (força + tentativas ponderadas). Peso de cada tentativa = ½ elevado a (idade ÷ meia-vida). Falha "número inexistente" conta com o peso da falha permanente; "aparelho desligado" conta 1.</p>
+        </div>
+
+        <div class="cartao">
+          <h3>Faixas</h3>
+          <p class="sub">A faixa usa a probabilidade e quanto histórico o número tem (tentativas ponderadas).</p>
+          <div class="form">
+            <div class="campo"><label for="fx-alto">Alto: probabilidade ≥ (%)</label><input type="number" id="fx-alto" min="1" max="100" value="70"></div>
+            <div class="campo"><label for="fx-baixo">Baixo: probabilidade &lt; (%)</label><input type="number" id="fx-baixo" min="0" max="99" value="20"></div>
+            <div class="campo"><label for="fx-min">Histórico mínimo para Baixo</label><input type="number" id="fx-min" min="0.5" max="10" step="0.5" value="1.5"></div>
+            <div class="campo"><label for="fx-sem">Sem histórico abaixo de</label><input type="number" id="fx-sem" min="0.1" max="5" step="0.1" value="0.5"></div>
+          </div>
+          <p class="nota">Entre Baixo e Alto fica o Médio. Número com histórico abaixo do mínimo nunca cai em Baixo.</p>
+        </div>
+      </div>
+
+      <div class="duas">
+        <div class="cartao">
+          <h3>Fornecedores que entram na análise</h3>
+          <p class="sub">DLR de fornecedor desmarcado é ignorada no cálculo (não pesa nem a favor nem contra).</p>
+          <div id="forn-analise" style="display:flex;flex-direction:column;gap:10px"></div>
+        </div>
+
+        <div class="cartao">
+          <h3>Regras por DDD</h3>
+          <p class="sub">Aplicar o filtro só em alguns DDDs, ou aplicar em todos menos alguns.</p>
+          <div class="linha">
+            <div class="campo"><label for="ddd-modo">Modo</label>
+              <select id="ddd-modo"><option value="todos">Aplicar em todos</option><option value="so">Aplicar só nos DDDs</option><option value="menos" selected>Aplicar em todos, menos</option></select></div>
+            <div class="campo" style="flex:1"><label for="ddd-lista">DDDs (separados por vírgula)</label><input type="text" id="ddd-lista" value="11, 21"></div>
+          </div>
+          <div class="campo" style="margin-top:12px"><label for="quar">Quarentena: depois de quantos dias um número Baixo volta a ser tentado</label><input type="number" id="quar" min="1" max="180" value="45"></div>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <h3>Testar um número</h3>
+        <p class="sub">Monte um histórico fictício e veja a probabilidade e a faixa com os parâmetros acima.</p>
+        <div class="rolar"><table class="tab" id="tab-hist"></table></div>
+        <div class="linha" style="margin-top:10px">
+          <button class="btn sec" type="button" id="add-hist">+ Tentativa</button>
+          <div class="campo"><label for="base-op">Base da operadora e DDD (%)</label><input type="number" id="base-op" min="1" max="99" value="82"></div>
+        </div>
+        <div class="prev" style="margin-top:12px" id="resultado"></div>
+      </div>
+
+      <div class="cartao">
+        <h3>Nomes devolvidos ao cliente</h3>
+        <p class="sub">Editáveis pelo time Técnico. O código interno não muda (o envio fica como "não enviado pelo filtro"). Nomes que imitam status de operadora são recusados, e toda mudança vai para a Auditoria.</p>
+        <div class="form" id="nomes"></div>
+      </div>
+
+      <div class="linha" style="justify-content:flex-end"><span id="salvo" class="nota" aria-live="polite"></span><button class="btn" type="button" id="salvar-filtro">Salvar filtro da rota</button></div>
+    </section>
+
+    <!-- ======================= CONTRATAÇÃO ======================= -->
+    <section data-p="contrato" hidden>
+      <div class="cab">
+        <div><h2>Contratação · Score de Entrega</h2><p>Console › Empresas › Banco Alfa (exemplo) › Contratação › Mensageria. Produto vendido à parte do SMS.</p></div>
+      </div>
+      <div class="cartao">
+        <div class="linha" style="justify-content:space-between">
+          <div><h3>Score de Entrega</h3><p class="sub" style="margin:0">Liga a chave "Score de Entrega" nas campanhas e na Lista do dia deste cliente.</p></div>
+          <button class="chave" role="switch" aria-checked="true" id="ch-score" aria-label="Score de Entrega contratado"></button>
+        </div>
+      </div>
+      <div class="cartao">
+        <h3>Forma de cobrança</h3>
+        <p class="sub">Uma por contrato. O preço segue a régua de mínimo e tabela do produto.</p>
+        <div class="opcoes" id="opcoes">
+          <label class="op"><input type="radio" name="cob" value="analisado" checked><div><b>Por número analisado</b><span>Todo o mailing passa pelo Score e cada número é cobrado.</span></div></label>
+          <label class="op"><input type="radio" name="cob" value="represado"><div><b>Só pelos represados</b><span>Cobra apenas os números que o filtro segurou.</span></div></label>
+          <label class="op"><input type="radio" name="cob" value="embutido"><div><b>Embutido no SMS</b><span>Sem cobrança separada; o SMS sai por um preço maior.</span></div></label>
+        </div>
+        <div class="form" style="margin-top:14px" id="precos"></div>
+        <div class="decisao" id="dec3" style="margin-top:12px" hidden><b>Falta decidir:</b> no "Embutido no SMS", o número represado entra na fatura como SMS (pelo preço maior) ou não entra? As duas formas funcionam; a fatura mostra a linha "Score de Entrega · represados" com a quantidade de qualquer jeito.</div>
+      </div>
+      <div class="cartao">
+        <h3>Como aparece na fatura (exemplo de um mês)</h3>
+        <div class="rolar"><table class="tab" id="fatura"></table></div>
+      </div>
+    </section>
+
+    <!-- ======================= CAMPANHA ======================= -->
+    <section data-p="campanha" hidden>
+      <div class="cab">
+        <div><span class="etq">Mensageria</span><h2 style="margin-top:6px">Nova campanha · Confirmar envio</h2><p>Plataforma do cliente. A chave só aparece quando o Score de Entrega está contratado.</p></div>
+      </div>
+      <div class="cartao">
+        <div class="linha" style="justify-content:space-between">
+          <div><h3>Score de Entrega <span class="i" title="Probabilidade de entrega de cada número, pelo histórico da Mensageria. Ver no glossário.">i</span></h3>
+            <p class="sub" style="margin:0">Arquivo "cobranca_outubro.xlsx" · 18.420 números válidos · SMS Padrão</p></div>
+          <button class="chave" role="switch" aria-checked="true" id="ch-camp" aria-label="Usar o Score de Entrega"></button>
+        </div>
+        <div id="camp-corpo" style="margin-top:14px;display:flex;flex-direction:column;gap:14px">
+          <div class="barra" id="camp-barra" aria-hidden="true"></div>
+          <div class="kpis" id="camp-faixas"></div>
+          <div class="campo"><label for="camp-acao">O que enviar</label>
+            <select id="camp-acao"><option value="todos">Enviar para todos (só classificar)</option><option value="semBaixo" selected>Não enviar para o Baixo</option><option value="altoMedio">Enviar só para Alto e Médio, sem histórico fica de fora</option></select></div>
+          <div class="prev" id="camp-prev"></div>
+        </div>
+      </div>
+      <div class="linha" style="justify-content:flex-end"><button class="btn sec" type="button">Voltar</button><button class="btn" type="button" id="camp-ok">Agendar envio</button></div>
+      <p class="nota" id="camp-msg" aria-live="polite"></p>
+    </section>
+
+    <!-- ======================= EQUIPE ======================= -->
+    <section data-p="equipe" hidden>
+      <div class="cab">
+        <div><h2>Equipe MotorCob · função Técnico</h2><p>Nova função na equipe interna, ao lado de Master, Comercial, Atendimento e Administrativo.</p></div>
+      </div>
+      <div class="cartao">
+        <h3>O que cada função faz aqui</h3>
+        <div class="rolar"><table class="tab" id="perm"></table></div>
+        <p class="nota">O cliente não vê o painel de fornecedores nem o detalhe técnico. Na tela dele aparecem só os nomes devolvidos pelo filtro e os status traduzidos.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(() => {
+  // ---------------- navegação
+  const telas = [...document.querySelectorAll("[data-p]")];
+  document.querySelectorAll(".menu button").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll(".menu button").forEach(x => x.toggleAttribute("aria-current", x === b));
+    document.querySelectorAll(".menu button").forEach(x => x === b ? x.setAttribute("aria-current", "page") : x.removeAttribute("aria-current"));
+    telas.forEach(t => t.hidden = t.dataset.p !== b.dataset.t);
+  }));
+  const brl = (v, c = 2) => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: c, maximumFractionDigits: c });
+  const n = v => v.toLocaleString("pt-BR");
+  const pct = v => v.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%";
+
+  // ---------------- painel (dados fictícios)
+  const F = [
+    { f: "Fornecedor A", op: "Vivo", disp: 41200, aceite: 1.2, aceiteP90: 3.1, dlr: 14, dlrP90: 48, semDlr: 0.6, ent: 81.4, cor: "#7A2E3B" },
+    { f: "Fornecedor A", op: "Claro", disp: 35800, aceite: 1.3, aceiteP90: 3.4, dlr: 16, dlrP90: 55, semDlr: 0.8, ent: 80.9, cor: "#7A2E3B" },
+    { f: "Fornecedor B", op: "Vivo", disp: 40950, aceite: 0.9, aceiteP90: 2.2, dlr: 21, dlrP90: 140, semDlr: 3.9, ent: 79.8, cor: "#3D6E9E" },
+    { f: "Fornecedor B", op: "TIM", disp: 23400, aceite: 1.0, aceiteP90: 2.6, dlr: 95, dlrP90: 610, semDlr: 11.2, ent: 72.5, cor: "#3D6E9E" },
+    { f: "Fornecedor C", op: "Claro", disp: 18100, aceite: 2.8, aceiteP90: 9.5, dlr: 31, dlrP90: 120, semDlr: 1.4, ent: 80.2, cor: "#8A6A2E" }
+  ];
+  const LIM = { semDlr: 5, dlrP90: 300 };
+  const forns = [...new Set(F.map(x => x.f))];
+  const fSel = document.getElementById("f-forn");
+  forns.forEach(f => fSel.insertAdjacentHTML("beforeend", `<option>${f}</option>`));
+  function estado(x) {
+    if (x.semDlr >= LIM.semDlr * 2 || x.dlrP90 >= LIM.dlrP90 * 2) return ["erro", "Crítico"];
+    if (x.semDlr >= LIM.semDlr || x.dlrP90 >= LIM.dlrP90) return ["at", "Atenção"];
+    return ["ok", "Normal"];
+  }
+  function painel() {
+    const rows = F.filter(x => !fSel.value || x.f === fSel.value);
+    const tot = rows.reduce((s, x) => s + x.disp, 0);
+    const pond = k => rows.reduce((s, x) => s + x[k] * x.disp, 0) / tot;
+    document.getElementById("kpis").innerHTML = [
+      ["Disparados", n(tot), "no período"],
+      ["Aceite pelo fornecedor", pond("aceite").toFixed(1).replace(".", ",") + " s", "mediana ponderada"],
+      ["Tempo até a DLR", Math.round(pond("dlr")) + " s", "mediana ponderada"],
+      ["Sem DLR após 30 min", pct(pond("semDlr")), `limite da rota: ${LIM.semDlr}%`]
+    ].map(([a, b, c]) => `<div class="kpi"><span>${a}</span><b>${b}</b><em>${c}</em></div>`).join("");
+    document.getElementById("tab-forn").innerHTML =
+      `<thead><tr><th>Fornecedor</th><th>Operadora</th><th class="n">Disparados</th><th class="n">Aceite (med · p90)</th><th class="n">DLR (med · p90)</th><th class="n">Sem DLR</th><th class="n">Entregue no lote</th><th>Situação</th></tr></thead><tbody>` +
+      rows.map(x => { const [c, t] = estado(x); return `<tr><td>${x.f}</td><td>${x.op}</td><td class="n">${n(x.disp)}</td><td class="n">${x.aceite.toFixed(1).replace(".", ",")} s · ${x.aceiteP90.toFixed(1).replace(".", ",")} s</td><td class="n">${x.dlr} s · ${x.dlrP90} s</td><td class="n">${pct(x.semDlr)}</td><td class="n">${pct(x.ent)}</td><td><span class="pil ${c}">${t}</span></td></tr>`; }).join("") + "</tbody>";
+    const al = rows.filter(x => estado(x)[0] !== "ok");
+    document.getElementById("alertas").innerHTML = al.length ? al.map(x => {
+      const [c, t] = estado(x);
+      const motivo = x.semDlr >= LIM.semDlr ? `${pct(x.semDlr)} sem DLR após 30 min` : `DLR p90 em ${x.dlrP90} s`;
+      return `<div class="prev" style="display:flex;flex-direction:column;gap:4px"><span class="pil ${c}" style="align-self:flex-start">${t}</span><b>${x.f} · ${x.op}</b><span style="color:var(--texto2);font-size:13px">${motivo} (limite ${x.semDlr >= LIM.semDlr ? LIM.semDlr + "%" : LIM.dlrP90 + " s"}). Desde 14:20.</span></div>`;
+    }).join("") : `<p class="nota">Nenhum alerta aberto para este filtro.</p>`;
+    grafico(rows);
+  }
+  function grafico(rows) {
+    const svg = document.getElementById("graf");
+    const W = 720, H = 220, L = 44, R = 12, T = 12, B = 30;
+    const horas = [...Array(12)].map((_, i) => 8 + i);
+    const series = [...new Set(rows.map(x => x.f))].map(f => {
+      const base = rows.filter(x => x.f === f);
+      const m = base.reduce((s, x) => s + x.dlr * x.disp, 0) / base.reduce((s, x) => s + x.disp, 0);
+      const cor = base[0].cor;
+      const pts = horas.map((h, i) => {
+        const pico = f === "Fornecedor B" && h >= 14 && h <= 16 ? 2.6 : 1;
+        return Math.round(m * pico * (0.85 + 0.3 * Math.abs(Math.sin(i * 1.7 + f.length))));
+      });
+      return { f, cor, pts };
+    });
+    const maxV = Math.max(120, ...series.flatMap(s => s.pts));
+    const topo = Math.ceil(maxV / 50) * 50;
+    const x = i => L + i * (W - L - R) / (horas.length - 1);
+    const y = v => T + (H - T - B) * (1 - v / topo);
+    let s = "";
+    for (let v = 0; v <= topo; v += topo / 4) {
+      s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--borda)" stroke-width="1"/>`;
+      s += `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--texto2)">${Math.round(v)}</text>`;
+    }
+    horas.forEach((h, i) => { if (i % 2 === 0) s += `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="var(--texto2)">${h}h</text>`; });
+    const lim = 60;
+    s += `<line x1="${L}" x2="${W - R}" y1="${y(lim)}" y2="${y(lim)}" stroke="var(--at)" stroke-dasharray="5 4" stroke-width="1.5"/>`;
+    series.forEach(se => {
+      s += `<polyline fill="none" stroke="${se.cor}" stroke-width="2" points="${se.pts.map((v, i) => `${x(i)},${y(v)}`).join(" ")}"/>`;
+      const u = se.pts.length - 1;
+      s += `<circle cx="${x(u)}" cy="${y(se.pts[u])}" r="3.5" fill="${se.cor}"/>`;
+    });
+    svg.innerHTML = s;
+    document.getElementById("legenda").innerHTML = series.map(se => `<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:12px;height:3px;background:${se.cor};display:inline-block;border-radius:2px"></i>${se.f}</span>`).join("") +
+      `<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:12px;border-top:2px dashed var(--at);display:inline-block"></i>Limite de alerta (60 s)</span>`;
+  }
+  document.getElementById("tab-tec").innerHTML =
+    `<thead><tr><th>Envio</th><th>Destino</th><th>Fornecedor</th><th>Rota usada</th><th>Código original</th><th>Aceite</th><th>DLR recebida</th></tr></thead><tbody>` +
+    [["#88412207", "(11) 9••••-••41", "Fornecedor B", "principal · 60%", "DELIVRD", "14:21:03", "14:21:19"],
+     ["#88412208", "(21) 9••••-••07", "Fornecedor B", "principal · 60%", "UNDELIV · 1", "14:21:03", "14:31:44"],
+     ["#88412215", "(31) 9••••-••92", "Fornecedor B", "principal · 60%", "—", "14:21:04", "sem retorno"],
+     ["#88412230", "(41) 9••••-••13", "Fornecedor A", "reserva (B fora)", "DELIVRD", "14:22:10", "14:22:24"]]
+      .map(r => `<tr>${r.map((c, i) => `<td${i === 4 ? ' class="mono"' : ""}>${i === 4 && c !== "—" ? `<span class="pil tec">${c}</span>` : c}</td>`).join("")}</tr>`).join("") + "</tbody>";
+  fSel.addEventListener("change", painel);
+  painel();
+
+  // ---------------- filtro: fornecedores na análise
+  const fa = document.getElementById("forn-analise");
+  [["Fornecedor A", true, "DLR em 99,4% dos envios"], ["Fornecedor B", true, "DLR em 96,1%"], ["Fornecedor C", false, "DLR pouco confiável · desprezado"]].forEach(([f, on, t], i) => {
+    fa.insertAdjacentHTML("beforeend", `<div class="linha" style="justify-content:space-between"><div><b>${f}</b><div class="nota" style="margin:0">${t}</div></div><button class="chave" role="switch" aria-checked="${on}" id="fa-${i}" aria-label="Usar DLR do ${f}"></button></div>`);
+  });
+  document.querySelectorAll(".chave").forEach(c => c.addEventListener("click", () => {
+    c.setAttribute("aria-checked", c.getAttribute("aria-checked") !== "true");
+    c.dispatchEvent(new Event("mudou", { bubbles: true }));
+  }));
+
+  // ---------------- filtro: modelo e teste
+  const hist = [
+    { idade: 2, res: "inexistente" }, { idade: 9, res: "desligado" }, { idade: 21, res: "entregue" }
+  ];
+  const val = id => parseFloat(document.getElementById(id).value) || 0;
+  function score(h, base) {
+    const meia = Math.max(1, val("m-meia")), perm = Math.max(1, val("m-perm")), forca = val("m-forca"), janela = val("m-janela");
+    let e = 0, t = 0;
+    h.filter(x => x.idade <= janela).forEach(x => {
+      const w = Math.pow(0.5, x.idade / meia) * (x.res === "inexistente" ? perm : 1);
+      t += w; if (x.res === "entregue") e += w;
+    });
+    const p = (base / 100 * forca + e) / (forca + t || 1);
+    return { p, t };
+  }
+  function faixa(r) {
+    if (r.t < val("fx-sem")) return ["neutra", "Sem histórico"];
+    if (r.p * 100 >= val("fx-alto")) return ["ok", "Alto"];
+    if (r.p * 100 < val("fx-baixo") && r.t >= val("fx-min")) return ["erro", "Baixo"];
+    return ["at", "Médio"];
+  }
+  function histTab() {
+    document.getElementById("tab-hist").innerHTML = `<thead><tr><th>Há quantos dias</th><th>Resultado</th><th class="n">Peso</th><th></th></tr></thead><tbody>` +
+      hist.map((x, i) => {
+        const w = Math.pow(0.5, x.idade / Math.max(1, val("m-meia"))) * (x.res === "inexistente" ? Math.max(1, val("m-perm")) : 1);
+        const fora = x.idade > val("m-janela");
+        return `<tr><td><input type="number" id="h-d-${i}" min="0" max="365" value="${x.idade}" aria-label="Dias da tentativa ${i + 1}"></td>
+        <td><select id="h-r-${i}" aria-label="Resultado da tentativa ${i + 1}">${[["entregue", "Entregue"], ["desligado", "Não entregue · aparelho desligado"], ["inexistente", "Não entregue · número inexistente"]].map(([v, t]) => `<option value="${v}" ${v === x.res ? "selected" : ""}>${t}</option>`).join("")}</select></td>
+        <td class="n">${fora ? "fora da janela" : w.toFixed(2).replace(".", ",")}</td><td><button class="btn sec" type="button" data-rem="${i}" aria-label="Remover tentativa ${i + 1}">Remover</button></td></tr>`;
+      }).join("") + "</tbody>";
+    hist.forEach((x, i) => {
+      document.getElementById(`h-d-${i}`).addEventListener("change", e => { x.idade = +e.target.value; atualizar(); });
+      document.getElementById(`h-r-${i}`).addEventListener("change", e => { x.res = e.target.value; atualizar(); });
+    });
+    document.querySelectorAll("[data-rem]").forEach(b => b.addEventListener("click", () => { hist.splice(+b.dataset.rem, 1); atualizar(); }));
+  }
+  function atualizar() {
+    histTab();
+    const r = score(hist, val("base-op"));
+    const [c, t] = faixa(r);
+    document.getElementById("resultado").innerHTML = `<div class="linha"><span class="pil ${c}">${t}</span><b style="font-size:18px;font-variant-numeric:tabular-nums">${pct(r.p * 100)}</b><span style="color:var(--texto2)">de probabilidade de entrega · histórico ponderado de ${r.t.toFixed(2).replace(".", ",")} tentativas</span></div><p class="nota">O cliente vê: <b>${t === "Baixo" ? nomeAtual("baixo") : t === "Sem histórico" ? nomeAtual("sem") : "enviado normalmente"}</b></p>`;
+    campanha();
+  }
+  document.getElementById("add-hist").addEventListener("click", () => { hist.push({ idade: 5, res: "desligado" }); atualizar(); });
+  ["m-janela", "m-meia", "m-perm", "m-forca", "fx-alto", "fx-baixo", "fx-min", "fx-sem", "base-op"].forEach(id => document.getElementById(id).addEventListener("input", atualizar));
+
+  // ---------------- nomes editáveis com trava
+  const NOMES = [
+    ["baixo", "Faixa Baixo · não enviado", "Não enviado · baixa propensão de entrega"],
+    ["sem", "Sem histórico · não enviado (se a campanha excluir)", "Não enviado · número sem histórico"],
+    ["ddd", "Fora pelo DDD", "Não enviado · regra regional da rota"],
+    ["quar", "Em quarentena", "Não enviado · aguardando nova tentativa"]
+  ];
+  const PROIBIDOS = ["entregue", "enviado com sucesso", "delivered", "delivrd", "undeliv", "expired", "accepted", "dlr", "aceito pela operadora", "recebido"];
+  function nomeOk(t) {
+    const s = t.trim().toLowerCase();
+    if (s.length < 5 || s.length > 80) return "Use de 5 a 80 caracteres.";
+    if (/^[a-z]{5,8}(\s*·?\s*\d+)?$/.test(s) && s === s.replace(/[^a-z0-9 ·]/g, "")) {
+      if (["delivrd", "undeliv", "expired", "rejectd"].some(c => s.startsWith(c))) return "Parece um código de DLR de operadora.";
+    }
+    const hit = PROIBIDOS.find(p => new RegExp(`(^|[^a-zà-ú])${p}([^a-zà-ú]|$)`).test(s.replace(/não enviado/g, "")));
+    return hit ? `"${hit}" imita status de operadora. Escolha outro nome.` : "";
+  }
+  const nomesEl = document.getElementById("nomes");
+  NOMES.forEach(([k, l, v]) => nomesEl.insertAdjacentHTML("beforeend",
+    `<div class="campo"><label for="nm-${k}">${l}</label><input type="text" id="nm-${k}" value="${v}" maxlength="80"><span class="erro-campo" id="er-${k}" aria-live="polite"></span></div>`));
+  const nomeAtual = k => document.getElementById(`nm-${k}`).value.trim();
+  NOMES.forEach(([k]) => document.getElementById(`nm-${k}`).addEventListener("input", e => {
+    document.getElementById(`er-${k}`).textContent = nomeOk(e.target.value); atualizar();
+  }));
+  document.getElementById("salvar-filtro").addEventListener("click", () => {
+    const erros = NOMES.map(([k]) => nomeOk(nomeAtual(k))).filter(Boolean);
+    document.getElementById("salvo").textContent = erros.length ? "Corrija os nomes marcados em vermelho antes de salvar." : "Filtro salvo na rota (protótipo: nada gravado). A mudança foi registrada na Auditoria.";
+  });
+
+  // ---------------- contratação
+  const precos = { analisado: [["Preço por número analisado", 0.004, 0.006]], represado: [["Preço por número represado", 0.012, 0.018]], embutido: [["Preço do SMS com Score", 0.062, 0.075]] };
+  function contrato() {
+    const m = document.querySelector('input[name="cob"]:checked').value;
+    document.getElementById("precos").innerHTML = precos[m].map(([l, mi, ta], i) =>
+      `<div class="campo"><label for="pr-${i}">${l}</label><input type="text" id="pr-${i}" value="${brl(ta, 4)}"><span class="nota" style="margin:0">Mínimo ${brl(mi, 4)} · Tabela ${brl(ta, 4)}</span></div>`).join("") +
+      `<div class="campo"><label for="pr-sms">SMS Padrão (referência)</label><input type="text" id="pr-sms" value="${brl(0.055, 4)}" disabled></div>`;
+    document.getElementById("dec3").hidden = m !== "embutido";
+    const mail = 18420, rep = 2210, env = mail - rep, sms = 0.055;
+    const linhas = m === "analisado" ? [["SMS Padrão · enviados", env, sms], ["Score de Entrega · números analisados", mail, 0.006], ["Score de Entrega · represados (informativo)", rep, 0]]
+      : m === "represado" ? [["SMS Padrão · enviados", env, sms], ["Score de Entrega · represados", rep, 0.018]]
+      : [["SMS Padrão com Score · enviados", env, 0.075], ["Score de Entrega · represados (informativo)", rep, 0]];
+    const tot = linhas.reduce((s, [, q, p]) => s + q * p, 0);
+    const semScore = mail * sms;
+    document.getElementById("fatura").innerHTML = `<thead><tr><th>Item</th><th class="n">Quantidade</th><th class="n">Preço</th><th class="n">Valor</th></tr></thead><tbody>` +
+      linhas.map(([l, q, p]) => `<tr><td>${l}</td><td class="n">${n(q)}</td><td class="n">${p ? brl(p, 4) : "—"}</td><td class="n">${p ? brl(q * p) : "—"}</td></tr>`).join("") +
+      `<tr><td><b>Total</b></td><td></td><td></td><td class="n"><b>${brl(tot)}</b></td></tr></tbody>` +
+      `<caption style="caption-side:bottom;text-align:left;padding-top:8px;color:var(--texto2);font-size:12.5px">Sem o Score, o mesmo mailing custaria ${brl(semScore)} ao cliente em SMS. Exemplo fictício.</caption>`;
+  }
+  document.querySelectorAll('input[name="cob"]').forEach(r => r.addEventListener("change", contrato));
+  contrato();
+
+  // ---------------- campanha
+  const FX = { Alto: 11280, "Médio": 3920, Baixo: 2210, "Sem histórico": 1010 };
+  const COR = { Alto: "var(--ok)", "Médio": "var(--at)", Baixo: "var(--erro)", "Sem histórico": "var(--info)" };
+  function campanha() {
+    const on = document.getElementById("ch-camp").getAttribute("aria-checked") === "true";
+    document.getElementById("camp-corpo").hidden = !on;
+    const tot = Object.values(FX).reduce((a, b) => a + b, 0);
+    document.getElementById("camp-barra").innerHTML = Object.entries(FX).map(([k, v]) => `<i style="width:${v / tot * 100}%;background:${COR[k]}"></i>`).join("");
+    document.getElementById("camp-faixas").innerHTML = Object.entries(FX).map(([k, v]) => `<div class="kpi"><span><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${COR[k]};margin-right:6px"></i>${k}</span><b>${n(v)}</b><em>${pct(v / tot * 100)} do mailing</em></div>`).join("");
+    const a = document.getElementById("camp-acao").value;
+    const fora = a === "todos" ? 0 : a === "semBaixo" ? FX.Baixo : FX.Baixo + FX["Sem histórico"];
+    const nomeFora = a === "altoMedio" ? `"${nomeAtual("baixo")}" e "${nomeAtual("sem")}"` : `"${nomeAtual("baixo")}"`;
+    document.getElementById("camp-prev").innerHTML = fora
+      ? `<b>${n(tot - fora)} números serão enviados · ${n(fora)} não serão enviados.</b><br><span style="color:var(--texto2)">No retorno da campanha, quem ficou de fora aparece como ${nomeFora}, com a faixa de cada número.</span>`
+      : `<b>${n(tot)} números serão enviados.</b><br><span style="color:var(--texto2)">O Score só classifica: a faixa de cada número vem no retorno.</span>`;
+  }
+  document.getElementById("camp-acao").addEventListener("change", campanha);
+  document.getElementById("ch-camp").addEventListener("mudou", campanha);
+  document.getElementById("camp-ok").addEventListener("click", () => { document.getElementById("camp-msg").textContent = "Campanha agendada (protótipo: nada foi enviado)."; });
+
+  // ---------------- equipe
+  const P = [
+    ["Ver o painel de qualidade", 1, 1, 1, 1, 0],
+    ["Ver o detalhe técnico (código original, horários, rota usada)", 1, 1, 0, 0, 0],
+    ["Configurar o filtro de inteligência na rota", 1, 1, 0, 0, 0],
+    ["Editar os nomes devolvidos ao cliente", 1, 1, 0, 0, 0],
+    ["Escolher os fornecedores que entram na análise", 1, 1, 0, 0, 0],
+    ["Ajustar limites de alerta", 1, 1, 0, 0, 0],
+    ["Contratar o Score e definir a cobrança", 1, 0, 0, 1, 1],
+    ["Atender chamado com o detalhe técnico", 1, 1, 0, 0, 0]
+  ];
+  document.getElementById("perm").innerHTML = `<thead><tr><th>Permissão</th><th>Master</th><th>Técnico</th><th>Atendimento</th><th>Administrativo</th><th>Comercial</th></tr></thead><tbody>` +
+    P.map(([l, ...v]) => `<tr><td style="white-space:normal;min-width:240px">${l}</td>${v.map(x => `<td>${x ? '<span class="pil ok">Sim</span>' : '<span class="pil neutra">Não</span>'}</td>`).join("")}</tr>`).join("") + "</tbody>";
+
+  atualizar();
+})();
+</script>
