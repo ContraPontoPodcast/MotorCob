@@ -72,6 +72,15 @@ Faça **na ordem**; cada passo depende do anterior.
 | 60 | função `cobranca` (de novo) | E-mail da fatura para os contatos com "Recebe faturas" | Supabase | 55º |
 | 61 | `07_workspace/PROMPT_36_CONSOLE_AJUSTES.md` | Console: chave liga/desliga única, situação da empresa, aviso de atendimento, plano de rota sem fornecedor | Site (motorcob.online) | 56º |
 | 62 | `07_workspace/PROMPT_37_EMPRESA_FATURAS_SUPORTE.md` | Empresa: "Recebe faturas" nos contatos; Suporte com aviso de resposta | Site (motorcob.online) | 57º |
+| 63 | `supabase/migrations/20261127000001_produtos_rotas_administrativo.sql` (SQL 30) | Bloco 2: produtos, negociação por operadora, rota por produto, preço mínimo, contratação por produto, canal por carteira, Administrativo (confira antes a mistura do Teleco) | Supabase | 58º |
+| 64 | `07_workspace/PROMPT_38_CONSOLE_PRODUTOS_PRECOS.md` | Console: Produtos e preços; preço entre mínimo e tabela na Contratação | Site (motorcob.online) | 59º |
+| 65 | `07_workspace/PROMPT_39_CONSOLE_FORNECEDORES_ROTAS.md` | Console: fornecedores, negociações, rota de cada produto e mistura de operadoras | Site (motorcob.online) | 60º |
+| 66 | `07_workspace/PROMPT_40_ADMINISTRATIVO_PRODUTO_CANAL_CARTEIRA.md` | Administrativo na equipe, produto na campanha, canal por carteira, comitê por produto | Site (motorcob.online) | 61º |
+| 67 | `supabase/migrations/20261128000001_estrategia_carteira.sql` (SQL 31) | Bloco 3: estratégia por carteira e rótulos legíveis | Supabase | 62º |
+| 68 | `07_workspace/PROMPT_41_ORQUESTRACAO_POR_CARTEIRA.md` e `PROMPT_42_MAPA_DA_ESTEIRA.md` | Orquestração por carteira (barra única, separar/copiar, fases com orçamento e travas) e Mapa da Esteira em cartões | Site (motorcob.online) | 63º |
+| 69 | `supabase/migrations/20261129000001_experiencia_glossario_tema.sql` (SQL 32) + senha no painel (`02_supabase_painel`, item 4) | Bloco 5: ajuda pelo tempo de casa, glossário e cores do tema | Supabase | 64º |
+| 70 | `07_workspace/PROMPT_43_GLOSSARIO_E_AJUDA.md`, `PROMPT_44_TEMA_E_PALETA.md`, `PROMPT_45_MENUS_NOMES_TEXTOS.md` | "O que significa", (i), ajuda por tempo de casa, paleta por área, menus com subtítulo e um nome por conceito | Site (motorcob.online) | 65º |
+| 71 | função `assistente` (de novo: `python3 scripts/juntar_funcao.py assistente`, cole o arquivo inteiro) + motor na nuvem (`systemctl start motorcob-atualizar` depois do merge) | Assistente com os nomes novos; motor com produto, rota por produto, custo por operadora e estratégia por carteira | Supabase + Google Cloud | 66º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

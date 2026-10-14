@@ -134,7 +134,8 @@ with itens(ordem, item, ok, se_falhar) as (values
                                        'ciclo_empresa', 'jornada_clientes_mes',
                                        'permissoes_equipe', 'recargas', 'cobrancas', 'cobranca_clientes',
                                        'cobranca_eventos', 'cartoes_salvos', 'nf_config', 'notas_fiscais',
-                                       'mensageria_eventos')),
+                                       'mensageria_eventos', 'empresa_produtos', 'credor_canais',
+                                       'mensageria_mistura_operadoras', 'glossario', 'tema_tokens')),
        'algum SQL ficou pela metade: rode de novo o da tabela que faltar'),
   (12, 'Anônimo não lê dado de cliente',
        not exists (select 1 from unnest(array['public.chamados', 'public.faturas', 'public.api_tokens']) t
@@ -150,6 +151,20 @@ with itens(ordem, item, ok, se_falhar) as (values
   (15, 'Nenhum autenticador pela metade',
        not exists (select 1 from auth.mfa_factors where status::text = 'unverified' and created_at < now() - interval '1 hour'),
        'apagar os "unverified" antigos (delete from auth.mfa_factors where status = ''unverified'')'),
+  (17, 'Produtos, negociação e rota por produto (SQL 30)',
+       to_regclass('public.empresa_produtos') is not null and to_regclass('public.credor_canais') is not null
+       and to_regclass('public.mensageria_mistura_operadoras') is not null
+       and pg_temp.n('select count(*) from public.cobranca_itens where padrao_canal') >= 3,
+       'rodar o SQL 30 (supabase/migrations/20261127000001_produtos_rotas_administrativo.sql)'),
+  (18, 'Estratégia por carteira e rótulos legíveis (SQL 31)',
+       exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'segmentos_carteira' and column_name = 'estrategia_id')
+       and to_regprocedure('public.rotulo_ciclo(text, text)') is not null,
+       'rodar o SQL 31 (supabase/migrations/20261128000001_estrategia_carteira.sql)'),
+  (19, 'Glossário, ajuda e tema (SQL 32)',
+       to_regclass('public.glossario') is not null and to_regclass('public.tema_tokens') is not null
+       and pg_temp.n('select count(*) from public.glossario') >= 40,
+       'rodar o SQL 32 (supabase/migrations/20261129000001_experiencia_glossario_tema.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

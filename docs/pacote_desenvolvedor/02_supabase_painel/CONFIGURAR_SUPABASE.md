@@ -21,7 +21,9 @@ e o acesso deve ser **só por convite**. Tirar a página não basta: a API conti
       (pasta `05`).
 
 ## 4. Senha e proteção de login
-- [ ] **Password requirements**: mínimo 12 caracteres, com maiúscula, minúscula, número e símbolo.
+- [ ] **Password requirements** (Authentication › Providers › Email): **Minimum password length = 12** e
+      **Password requirements = Letters and digits**. É a regra única aprovada no bloco 5 (12+ caracteres, letra e
+      número), a mesma que as telas mostram (prompt 45).
 - [ ] **Leaked password protection** ligado (se o plano permitir).
 - [ ] **Attack Protection**: ligar CAPTCHA (Cloudflare Turnstile) no login e no "esqueci a senha" (opcional nesta
       etapa; se ligar, o login do site precisa enviar o token do captcha).
