@@ -1170,6 +1170,26 @@ for est_, cic_ in (("NCP", "G1"), ("NCP", "G3"), ("NCP", "RE"), ("CPB", "T2"), (
     checar(f"rótulo {est_}/{cic_} igual no banco e no motor", True, f"select public.rotulo_estado('{est_}')||' | '||public.rotulo_ciclo('{est_}','{cic_}')", None, None, f"{RT.rotulo_estado(est_)} | {RT.rotulo_ciclo(est_, cic_)}".strip())
 for p_ in ("G2-dia3", "C1-D5", "CPC A · negociação", "CPC B · T3", "rotação → sms", "D+4", "D-1"):
     checar(f"passo '{p_}' legível igual no banco e no motor", True, f"select public.rotulo_passo('{p_}')", None, None, RT.rotulo_passo(p_))
+# Repaginada: ajuda pelo tempo de casa, glossário e tema (SQL 32)
+for d_, pref_, esperado_ in ((1, "automatica", "aberta"), (15, "automatica", "aberta"), (16, "automatica", "discreta"),
+                             (30, "automatica", "discreta"), (31, "automatica", "desligada"),
+                             (200, "aberta", "aberta"), (2, "desligada", "desligada")):
+    checar(f"ajuda no {d_}º dia de casa ({pref_}) = {esperado_}", True,
+           f"select public.modo_ajuda(date '2026-10-14' - {d_ - 1}, '{pref_}', date '2026-10-14')", None, None, esperado_)
+checar("pessoa nova começa com a ajuda aberta e tema claro", True, "select modo||','||tema from public.minha_ajuda()", "authenticated", u["oper"], "aberta,claro")
+checar("pessoa desliga a ajuda e escolhe o tema escuro em Minha conta", True, "select public.salvar_preferencias('desligada','escuro'); select modo||','||tema from public.minha_ajuda()", "authenticated", u["oper"], "desligada,escuro")
+checar("tema desconhecido é recusado", False, "select public.salvar_preferencias(null,'roxo')", "authenticated", u["oper"])
+checar("religar a ajuda volta ao tempo de casa", True, "select public.salvar_preferencias('automatica'); select modo from public.minha_ajuda()", "authenticated", u["oper"], "aberta")
+checar("glossário tem os 40 termos aprovados", True, "select count(*) from public.glossario", "authenticated", u["oper"], "40")
+checar("busca pelo nome antigo acha o termo novo (Hot → Contato principal)", True, "select string_agg(slug, ',') from public.buscar_glossario('hot')", "authenticated", u["oper"], "contato-principal")
+checar("busca sem acento acha CPC · em negociação", True, "select bool_or(slug='cpc-em-negociacao') from public.buscar_glossario('negociacao')", "authenticated", u["oper"], "t")
+checar("G1 leva ao termo Ciclo", True, "select bool_or(slug='ciclo') from public.buscar_glossario('G1')", "authenticated", u["oper"], "t")
+checar("glossário não abre sem login", False, "select count(*) from public.glossario", "anon")
+checar("cliente não edita o glossário", True, "with x as (update public.glossario set exemplo='x' returning 1) select count(*) from x", "authenticated", u["admina"], "0")
+checar("Master edita o glossário", True, "with x as (update public.glossario set exemplo=exemplo where slug='cpc' returning 1) select count(*) from x", "authenticated", u["admin"], "1")
+checar("cores do tema abrem sem login (tela de login)", True, "select claro from public.tema_tokens where chave='area.mensageria'", "anon", None, "#7A2E3B")
+checar("Administrativo não troca cor do tema", True, "with x as (update public.tema_tokens set claro='#000000' returning 1) select count(*) from x", "authenticated", ADM, "0")
+checar("cor inválida é recusada", False, "update public.tema_tokens set claro='azul' where chave='base.menu'", "authenticated", u["admin"])
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

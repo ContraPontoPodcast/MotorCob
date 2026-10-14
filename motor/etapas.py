@@ -208,8 +208,8 @@ def validar(definicao: dict, frente: str, nome: str = "?", validar_acoes=None) -
     return etapas, ordem, erros
 
 
-NOMES_FASE = {"quebra": "Quebra de acordo", "preventivo": "Preventivo", "cpc": "CPC", "giro": "Não CPC (giro)",
-              "localizacao": "Cliente novo / não localizado"}
+NOMES_FASE = {"quebra": "Acordo · parcela vencida", "preventivo": "Acordo · antes do vencimento", "cpc": "CPC",
+              "giro": "Não CPC", "localizacao": "Cliente novo"}      # nomes do glossário (bloco 5)
 
 
 def validar_fases(definicao: dict, frente: str, nome: str, canais) -> tuple[dict, list[str]]:

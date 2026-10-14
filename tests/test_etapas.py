@@ -492,7 +492,7 @@ class TestFasesDoMotor(unittest.TestCase):
         self.assertEqual(cfg["localizacao"].travas, {"recencia_horas": 72})
         self.assertEqual(cfg["cpc"].travas, {"limite_dia": 3})
         self.assertEqual(len(erros), 1)
-        self.assertIn("Não CPC (giro)", erros[0])                       # nome legível da fase no aviso
+        self.assertIn("Não CPC", erros[0])                       # nome legível da fase no aviso
         self.assertNotIn("fases_cfg", validar_estrategia({"localizacao": {"passos": self.PASSOS}})[0])
 
     def test_orcamento_da_fase_com_prioridade_e_canal_de_baixo(self):

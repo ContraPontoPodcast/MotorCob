@@ -9,7 +9,7 @@
 --    estratégia atual, só nesta carteira) e "Copiar de outra carteira" (cópia com a definição trazida do
 --    editor). A cópia é sempre independente: mudar uma não muda a outra.
 -- 4. Rótulos legíveis para o Mapa da Esteira e a Lista do dia (nenhum código cru na tela):
---    rotulo_estado('NCP') = 'Não CPC (giro)', rotulo_ciclo('NCP','G2') = '2º ciclo',
+--    rotulo_estado('NCP') = 'Não CPC', rotulo_ciclo('NCP','G2') = '2º ciclo',
 --    rotulo_ciclo('NCP','RE') = 'Parado · aguarda enriquecimento', rotulo_passo('CPC B · T1') =
 --    'CPC · sem resposta · 1ª tentativa'. O motor tem o mesmo mapa em motor/rotulos.py.
 -- 5. Orçamento por canal, prioridade e travas próprias das fases do motor ficam na própria estratégia:
@@ -146,13 +146,13 @@ grant execute on function public.separar_estrategia(bigint, bigint, jsonb) to au
 create or replace function public.rotulo_estado(estado text) returns text
 language sql immutable set search_path = public as $$
     select case estado
-        when 'LOC' then 'Cliente novo / não localizado'
+        when 'LOC' then 'Cliente novo'
         when 'CPA' then 'CPC · em negociação'
         when 'CPB' then 'CPC · sem resposta'
-        when 'NCP' then 'Não CPC (giro)'
-        when 'PRE' then 'Preventivo'
+        when 'NCP' then 'Não CPC'
+        when 'PRE' then 'Acordo · antes do vencimento'
         when 'COL' then 'Acordo em dia'
-        when 'QBR' then 'Quebra de acordo'
+        when 'QBR' then 'Acordo · parcela vencida'
         when 'LIQ' then 'Quitado'
         when 'BLQ' then 'Bloqueado'
         when 'ET' then 'Etapa própria'

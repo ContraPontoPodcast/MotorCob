@@ -1,12 +1,13 @@
-"""Rótulos legíveis do motor (bloco 3): nenhum código cru (G1, RE, T1, CPA…) na tela.
+"""Rótulos legíveis do motor (blocos 3 e 5): nenhum código cru (G1, RE, T1, CPA…) na tela; os nomes são os do
+glossário aprovado ("O que significa").
 
 Mesmo mapa das funções do banco rotulo_estado, rotulo_ciclo e rotulo_passo (SQL 31); o teste de RLS
 confere que os dois dão o mesmo resultado.
 """
 import re
 
-ESTADOS = {"LOC": "Cliente novo / não localizado", "CPA": "CPC · em negociação", "CPB": "CPC · sem resposta",
-           "NCP": "Não CPC (giro)", "PRE": "Preventivo", "COL": "Acordo em dia", "QBR": "Quebra de acordo",
+ESTADOS = {"LOC": "Cliente novo", "CPA": "CPC · em negociação", "CPB": "CPC · sem resposta", "NCP": "Não CPC",
+           "PRE": "Acordo · antes do vencimento", "COL": "Acordo em dia", "QBR": "Acordo · parcela vencida",
            "LIQ": "Quitado", "BLQ": "Bloqueado", "ET": "Etapa própria"}
 
 
