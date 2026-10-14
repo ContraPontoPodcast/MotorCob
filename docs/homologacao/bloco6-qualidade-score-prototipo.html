@@ -123,6 +123,7 @@ ul.simples li{margin:3px 0}
     <button data-t="contrato">Contratação<small>Como o Score é cobrado</small></button>
     <div class="grupo">Plataforma do cliente</div>
     <button data-t="campanha">Campanha<small>Ligar o Score e ver a prévia</small></button>
+    <button data-t="economia">Economia do Score<small>Quanto o Score fez você economizar</small></button>
     <div class="grupo">Administração</div>
     <button data-t="equipe">Equipe · função Técnico<small>O que cada perfil vê</small></button>
   </nav>
@@ -297,6 +298,45 @@ ul.simples li{margin:3px 0}
       <p class="nota" id="camp-msg" aria-live="polite"></p>
     </section>
 
+    <!-- ======================= ECONOMIA ======================= -->
+    <section data-p="economia" hidden>
+      <div class="cab">
+        <div><span class="etq">Mensageria</span><h2 style="margin-top:6px">Economia do Score</h2><p>Quanto o cliente deixou de gastar com números de baixa entrega, já descontado o que pagou pelo Score. Visão geral e por campanha.</p></div>
+        <div class="filtros">
+          <select id="eco-vista" aria-label="Visão"><option value="geral">Geral · últimos 6 meses</option></select>
+        </div>
+      </div>
+
+      <div class="cartao" style="display:flex;flex-direction:column;gap:6px">
+        <span style="color:var(--texto2);font-size:13px" id="eco-frase-rot">Economia líquida no período</span>
+        <b style="font-size:34px;font-variant-numeric:tabular-nums;color:var(--ok)" id="eco-liq"></b>
+        <span id="eco-frase" style="font-size:15px"></span>
+      </div>
+
+      <div class="kpis" id="eco-kpis"></div>
+
+      <div class="duas">
+        <div class="cartao">
+          <h3>Economia líquida por mês</h3>
+          <p class="sub">SMS que não precisaram sair menos o custo do Score no mês.</p>
+          <svg id="eco-graf" class="svg-graf" viewBox="0 0 520 220" role="img" aria-label="Economia líquida por mês"></svg>
+        </div>
+        <div class="cartao">
+          <h3>Prova do Score · grupo de controle</h3>
+          <p class="sub">1% dos números de cada faixa sai mesmo assim, sorteado, para medir a entrega real. É o que mostra que o filtro acerta.</p>
+          <div id="eco-controle" style="display:flex;flex-direction:column;gap:10px"></div>
+          <p class="nota">O controle é configurado na rota pelo Técnico (de 0% a 5%). Os números de controle são cobrados como SMS normal.</p>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <h3>Por campanha</h3>
+        <p class="sub">Clique numa campanha para ver só ela no topo.</p>
+        <div class="rolar"><table class="tab" id="eco-tab"></table></div>
+        <p class="nota" id="eco-modo"></p>
+      </div>
+    </section>
+
     <!-- ======================= EQUIPE ======================= -->
     <section data-p="equipe" hidden>
       <div class="cab">
@@ -305,7 +345,7 @@ ul.simples li{margin:3px 0}
       <div class="cartao">
         <h3>O que cada função faz aqui</h3>
         <div class="rolar"><table class="tab" id="perm"></table></div>
-        <p class="nota">O cliente não vê o painel de fornecedores nem o detalhe técnico. Na tela dele aparecem só os nomes devolvidos pelo filtro e os status traduzidos.</p>
+        <p class="nota">O cliente não vê o painel de fornecedores nem o detalhe técnico. Na tela dele aparecem os nomes devolvidos pelo filtro, os status traduzidos e a Economia do Score (geral e por campanha). Comercial e Master veem a Economia de cada cliente no Console, para usar na renovação.</p>
       </div>
     </section>
   </main>
@@ -541,7 +581,7 @@ ul.simples li{margin:3px 0}
   cxFaixas.forEach(c => c.addEventListener("change", () => { sincTodos(); campanha(); }));
   sincTodos();
   document.getElementById("ch-camp").addEventListener("mudou", campanha);
-  document.getElementById("camp-ok").addEventListener("click", () => { document.getElementById("camp-msg").textContent = "Campanha agendada (protótipo: nada foi enviado)."; });
+  document.getElementById("camp-ok").addEventListener("click", () => { document.getElementById("camp-msg").textContent = "Campanha agendada (protótipo: nada foi enviado). Depois do envio, o resultado aparece em Economia do Score."; });
 
   // ---------------- equipe
   const P = [
@@ -556,6 +596,81 @@ ul.simples li{margin:3px 0}
   ];
   document.getElementById("perm").innerHTML = `<thead><tr><th>Permissão</th><th>Master</th><th>Técnico</th><th>Atendimento</th><th>Administrativo</th><th>Comercial</th></tr></thead><tbody>` +
     P.map(([l, ...v]) => `<tr><td style="white-space:normal;min-width:240px">${l}</td>${v.map(x => `<td>${x ? '<span class="pil ok">Sim</span>' : '<span class="pil neutra">Não</span>'}</td>`).join("")}</tr>`).join("") + "</tbody>";
+
+
+  // ---------------- economia do Score (dados fictícios)
+  const CAMP = [
+    { nome: "Cobrança outubro · lote 1", data: "02/10", mes: "out", mail: 18420, rep: 2210, pRep: 0.041 },
+    { nome: "Lembrete de vencimento", data: "06/10", mes: "out", mail: 9800, rep: 640, pRep: 0.052 },
+    { nome: "Cobrança setembro", data: "03/09", mes: "set", mail: 17950, rep: 2480, pRep: 0.038 },
+    { nome: "Renegociação ticket alto", data: "15/09", mes: "set", mail: 4200, rep: 210, pRep: 0.061 },
+    { nome: "Cobrança agosto", data: "04/08", mes: "ago", mail: 17100, rep: 2690, pRep: 0.036 },
+    { nome: "Cobrança julho", data: "03/07", mes: "jul", mail: 16300, rep: 2950, pRep: 0.033 },
+    { nome: "Cobrança junho", data: "05/06", mes: "jun", mail: 15800, rep: 3120, pRep: 0.035 },
+    { nome: "Cobrança maio", data: "06/05", mes: "mai", mail: 15200, rep: 3310, pRep: 0.031 }
+  ];
+  const MESES = ["mai", "jun", "jul", "ago", "set", "out"];
+  const SMS = 0.055;
+  function contaCamp(c) {
+    const m = document.querySelector('input[name="cob"]:checked').value;
+    const env = c.mail - c.rep;
+    const sem = c.mail * SMS;
+    const com = m === "analisado" ? env * SMS + c.mail * 0.006 : m === "represado" ? env * SMS + c.rep * 0.018 : env * 0.075;
+    const bruto = c.rep * SMS;
+    const custo = com - env * SMS;
+    return { env, sem, com, bruto, custo, liq: sem - com, perdidas: Math.round(c.rep * c.pRep) };
+  }
+  let ecoSel = "geral";
+  function economia() {
+    const lista = ecoSel === "geral" ? CAMP : CAMP.filter(c => c.nome === ecoSel);
+    const t = lista.reduce((a, c) => { const r = contaCamp(c); for (const k in r) a[k] = (a[k] || 0) + r[k]; a.rep = (a.rep || 0) + c.rep; a.mail = (a.mail || 0) + c.mail; return a; }, {});
+    const ret = t.custo > 0 ? t.bruto / t.custo : 0;
+    document.getElementById("eco-frase-rot").textContent = ecoSel === "geral" ? "Economia líquida nos últimos 6 meses" : `Economia líquida · ${ecoSel}`;
+    const liqEl = document.getElementById("eco-liq");
+    liqEl.textContent = brl(t.liq);
+    liqEl.style.color = t.liq >= 0 ? "var(--ok)" : "var(--erro)";
+    document.getElementById("eco-frase").innerHTML = t.liq >= 0
+      ? `Cada <b>R$ 1,00</b> pago no Score evitou <b>${brl(ret)}</b> em SMS para números de baixa entrega.`
+      : `Neste período o Score custou mais do que economizou: poucos números represados para o preço contratado.`;
+    document.getElementById("eco-kpis").innerHTML = [
+      ["Números represados", n(t.rep), `${pct(t.rep / t.mail * 100)} do mailing`],
+      ["SMS que não precisaram sair", brl(t.bruto), `${n(t.rep)} × ${brl(SMS, 4)}`],
+      ["Custo do Score", brl(t.custo), "o que foi pago a mais pelo Score"],
+      ["Entregas que se perderam (estimativa)", `≈ ${n(t.perdidas)}`, `${pct(t.perdidas / t.rep * 100)} dos represados, pelo grupo de controle`]
+    ].map(([a, b, c]) => `<div class="kpi"><span>${a}</span><b>${b}</b><em>${c}</em></div>`).join("");
+    document.getElementById("eco-tab").innerHTML = `<thead><tr><th>Campanha</th><th>Data</th><th class="n">Mailing</th><th class="n">Represados</th><th class="n">Sem o Score</th><th class="n">Com o Score</th><th class="n">Economia líquida</th></tr></thead><tbody>` +
+      CAMP.map(c => { const r = contaCamp(c); const sel = c.nome === ecoSel;
+        return `<tr data-camp="${c.nome}" style="cursor:pointer${sel ? ";background:var(--area-ativo)" : ""}" tabindex="0"><td>${c.nome}</td><td>${c.data}</td><td class="n">${n(c.mail)}</td><td class="n">${n(c.rep)}</td><td class="n">${brl(r.sem)}</td><td class="n">${brl(r.com)}</td><td class="n" style="color:${r.liq >= 0 ? "var(--ok)" : "var(--erro)"};font-weight:600">${brl(r.liq)}</td></tr>`; }).join("") +
+      `</tbody>`;
+    document.querySelectorAll("#eco-tab tr[data-camp]").forEach(tr => {
+      const ir = () => { ecoSel = ecoSel === tr.dataset.camp ? "geral" : tr.dataset.camp; document.getElementById("eco-vista").value = ecoSel; economia(); };
+      tr.addEventListener("click", ir); tr.addEventListener("keydown", e => { if (e.key === "Enter") ir(); });
+    });
+    const modo = document.querySelector('input[name="cob"]:checked');
+    document.getElementById("eco-modo").textContent = `Conta feita com a forma de cobrança do contrato: "${modo.closest("label").querySelector("b").textContent}" (troque na tela Contratação para comparar). "Sem o Score" = o mailing inteiro como SMS Padrão a ${brl(SMS, 4)}.`;
+    // gráfico
+    const svg = document.getElementById("eco-graf"); const W = 520, H = 220, L = 56, R = 10, T = 12, B = 28;
+    const vals = MESES.map(m => CAMP.filter(c => c.mes === m).reduce((s, c) => s + contaCamp(c).liq, 0));
+    const max = Math.max(50, ...vals.map(Math.abs)); const topo = Math.ceil(max / 50) * 50; const minV = Math.min(0, ...vals);
+    const baixo = minV < 0 ? -Math.ceil(-minV / 50) * 50 : 0;
+    const y = v => T + (H - T - B) * (topo - v) / (topo - baixo);
+    const bw = (W - L - R) / MESES.length;
+    let g = "";
+    for (let v = baixo; v <= topo; v += (topo - baixo) / 4) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--borda)"/><text x="${L - 6}" y="${y(v) + 4}" font-size="11" text-anchor="end" fill="var(--texto2)">${Math.round(v)}</text>`;
+    vals.forEach((v, i) => { const x = L + i * bw + bw * 0.2, w = bw * 0.6; const y0 = y(Math.max(0, v)), h = Math.abs(y(v) - y(0));
+      g += `<rect x="${x}" y="${y0}" width="${w}" height="${Math.max(1, h)}" rx="3" fill="${v >= 0 ? "var(--ok)" : "var(--erro)"}"/>`;
+      g += `<text x="${x + w / 2}" y="${H - 9}" font-size="11" text-anchor="middle" fill="var(--texto2)">${MESES[i]}</text>`;
+      if (i === vals.length - 1) g += `<text x="${x + w / 2}" y="${y0 - 5}" font-size="11" text-anchor="middle" fill="var(--texto)" font-weight="600">${brl(v, 0)}</text>`; });
+    svg.innerHTML = g;
+  }
+  const ecoVista = document.getElementById("eco-vista");
+  CAMP.forEach(c => ecoVista.insertAdjacentHTML("beforeend", `<option value="${c.nome}">${c.nome} · ${c.data}</option>`));
+  ecoVista.addEventListener("change", () => { ecoSel = ecoVista.value; economia(); });
+  document.getElementById("eco-controle").innerHTML = [["Alto", 91.6, "ok"], ["Médio", 58.2, "at"], ["Baixo", 3.9, "erro"], ["Sem histórico", 71.0, "neutra"]].map(([f, v, c]) =>
+    `<div style="display:grid;grid-template-columns:110px 1fr 56px;gap:10px;align-items:center"><span class="pil ${c}" style="justify-self:start">${f}</span><div class="barra"><i style="width:${v}%;background:${c === "neutra" ? "var(--info)" : `var(--${c})`}"></i></div><b style="text-align:right;font-variant-numeric:tabular-nums">${pct(v)}</b></div>`).join("") +
+    `<p class="nota" style="margin:0">Entrega real do controle em outubro (amostra de 1.312 números).</p>`;
+  document.querySelectorAll('input[name="cob"]').forEach(r => r.addEventListener("change", economia));
+  economia();
 
   atualizar();
 })();
