@@ -58,10 +58,11 @@ def no_controle(destino_hash: str, campanha_id, pct: float) -> bool:
     return x < pct / 100
 
 
-def classificar(sb, hashes: list[str], item: str) -> dict:
-    """{hash: (faixa, probabilidade)} pelo banco (score_entrega), em pedaços."""
-    saida = {}
-    unicos = list(dict.fromkeys(hashes))
+def classificar(sb, hashes: list[str], item: str, cache: dict | None = None) -> dict:
+    """{hash: (faixa, probabilidade)} pelo banco (score_entrega), em pedaços. O que já está no cache (prévia da
+    campanha) não é calculado de novo."""
+    saida = {h: tuple(v) for h, v in (cache or {}).items()}
+    unicos = [h for h in dict.fromkeys(hashes) if h not in saida]
     for i in range(0, len(unicos), LOTE_RPC):
         for r in sb.rpc("score_entrega", {"hashes": unicos[i:i + LOTE_RPC], "item_produto": item}) or []:
             saida[r["destino_hash"]] = (r["faixa"], float(r["probabilidade"]))
@@ -82,7 +83,52 @@ def nomes(sb) -> dict:
     return {**NOMES_PADRAO, **{n["faixa"]: n["texto"] for n in sb.selecionar("mensageria_score_nomes") or []}}
 
 
-def aplicar(sb, campanha: dict, item: str, linhas: list[dict], locais: dict) -> dict:
+def _arq_cache(pasta, campanha_id):
+    from pathlib import Path
+    return Path(pasta) / f"score_{campanha_id}.json"
+
+
+def guardar_cache(pasta, campanha_id, res: dict) -> None:
+    """Classificação da prévia, só com hashes, ao lado dos lotes da campanha no servidor (limpa com eles)."""
+    import json
+    arq = _arq_cache(pasta, campanha_id)
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    arq.write_text(json.dumps({h: list(v) for h, v in res.items()}), encoding="utf-8")
+
+
+def ler_cache(pasta, campanha_id) -> dict:
+    import json
+    arq = _arq_cache(pasta, campanha_id)
+    try:
+        return {h: tuple(v) for h, v in json.loads(arq.read_text(encoding="utf-8")).items()}
+    except (OSError, ValueError):
+        return {}
+
+
+def previa(sb, empresa_id, item: str, hashes: list[str], res: dict, dia) -> dict:
+    """Quantos números caem em cada faixa e os preços que valem, para a tela calcular o custo unitário efetivo de
+    qualquer combinação de faixas antes de agendar."""
+    faixas = {f: 0 for f in FAIXAS}
+    for h in hashes:
+        faixas[res.get(h, ("sem", None))[0]] += 1
+    contrato = (sb.selecionar("empresa_score", {"empresa_id": f"eq.{empresa_id}", "ativo": "eq.true"}) or [{}])[0]
+    cobranca = contrato.get("cobranca") or "analisado"
+    comp = dia.replace(day=1).isoformat()
+
+    def unit(it, qtd):
+        try:
+            v = sb.rpc("preco_unitario", {"empresa": empresa_id, "it": it, "qtd": max(qtd, 1), "competencia": comp})
+        except Exception:  # noqa: BLE001 — sem preço cadastrado: a tela mostra só as quantidades
+            return None
+        return float(v) if v is not None else None
+
+    return {"faixas": faixas, "analisados": len(hashes), "cobranca": cobranca,
+            "preco_sms": unit(item, len(hashes)),
+            "preco_score": unit("score_represado" if cobranca == "represado" else "score_analisado", len(hashes)),
+            "calculado_em": dia.isoformat()}
+
+
+def aplicar(sb, campanha: dict, item: str, linhas: list[dict], locais: dict, cache: dict | None = None) -> dict:
     """Aplica o Score às linhas pendentes da campanha (altera linhas e locais). Toda linha ganha as mesmas chaves
     (o insert em lote do PostgREST exige). Devolve a contagem: analisados, represados e controle."""
     faixas_ok = set(campanha.get("score_faixas") or [])
@@ -93,7 +139,7 @@ def aplicar(sb, campanha: dict, item: str, linhas: list[dict], locais: dict) -> 
     if not faixas_ok or not pend:
         return cont
     cfg, nome = configuracao(sb, item), nomes(sb)
-    res = classificar(sb, [l["destino_hash"] for l in pend], item)
+    res = classificar(sb, [l["destino_hash"] for l in pend], item, cache)
     for l in pend:
         fx, p = res.get(l["destino_hash"], ("sem", None))
         l.update(score_faixa=fx, score_prob=round(p, 4) if p is not None else None)

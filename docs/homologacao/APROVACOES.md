@@ -131,7 +131,9 @@ Protótipo: `bloco6-qualidade-score-prototipo.html`.
 - **Nomes devolvidos editáveis pelo Técnico**, com trava contra nomes que imitam status de operadora.
 - **Cobrança**: por número analisado ou só pelos represados; o SMS fica sempre no preço padrão (a opção de SMS
   inteligente mais caro foi retirada).
-- **Campanha**: caixas Todos · Alto · Médio · Baixo · Sem histórico.
+- **Campanha**: caixas Todos · Alto · Médio · Baixo · Sem histórico. **Prévia antes de agendar** (pela plataforma):
+  divisão do mailing por faixa e custo unitário efetivo da campanha. Pela API segue direto e o resultado aparece
+  depois, na Economia do Score.
 - **Economia do Score** (cliente): período com data inicial e final, por campanha; economia líquida e **custo
   unitário efetivo** (total pago ÷ mailing carregado) com valores faturados, sem simulação.
 

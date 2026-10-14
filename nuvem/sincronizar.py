@@ -1292,6 +1292,7 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
     from nuvem import atendimento, campanhas, mensageria
     if mensageria.banco_campanhas(sb):
         campanhas.analisar(sb, dados, out)
+        campanhas.previas(sb, dados, agora, out)      # prévia do Score antes de agendar (SQL 33)
         campanhas.preparar(sb, dados, agora, out)
     resumo = mensageria.processar(sb, dados, agora, out)
     from nuvem import retornos

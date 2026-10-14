@@ -89,6 +89,37 @@ class TestScoreNaCampanha(TestCampanha):
         itens = {c["item"]: c["quantidade"] for c in self.sb.t["consumo_mensageria"]}
         self.assertEqual(itens, {"score_represado": 10})
 
+    def test_previa_antes_de_agendar_e_o_envio_usa_a_mesma_classificacao(self):
+        chamadas = []
+        fx = {M.hash_destino("sms", f): ("baixo", 0.05) if i % 5 == 0 else ("alto", 0.9) for i, f in enumerate(self.fones)}
+
+        def score_entrega(hashes, item_produto):
+            chamadas.append(len(hashes))
+            return [{"destino_hash": h, "faixa": fx.get(h, ("sem", 0.8))[0], "probabilidade": fx.get(h, ("sem", 0.8))[1]}
+                    for h in hashes]
+        self.sb.funcoes["score_entrega"] = score_entrega
+        self.sb.funcoes["score_config_do_item"] = lambda item_produto: {**SC.PADRAO, "controle_pct": 0}
+        self.sb.funcoes["preco_unitario"] = lambda empresa, it, qtd, competencia: {"sms": 0.055, "score_analisado": 0.004}[it]
+        self.sb.t["empresa_score"] = [{"empresa_id": 1, "ativo": True, "cobranca": "analisado"}]
+        C.analisar(self.sb, self.dados, out=lambda *a: None)
+        c = self._confirmar()
+        c["situacao"] = "calculando_previa"                     # o banco põe aqui ao confirmar as colunas
+        self.assertEqual(C.preparar(self.sb, self.dados, AGORA, out=lambda *a: None), [])   # nada sai antes da prévia
+        self.assertEqual(C.previas(self.sb, self.dados, AGORA, out=lambda *a: None), 1)
+        pv = c["score_previa"]
+        self.assertEqual(c["situacao"], "pronta")
+        self.assertEqual(pv["faixas"]["baixo"], 10)
+        self.assertEqual(sum(pv["faixas"].values()), pv["analisados"])
+        self.assertEqual((pv["preco_sms"], pv["preco_score"], pv["cobranca"]), (0.055, 0.004, "analisado"))
+        self.assertFalse(any(m.get("lote_id") for m in self.sb.t.get("mensageria_mensagens", [])))   # nada gravado
+        # o cliente escolhe as faixas e agenda: o envio usa a classificação da prévia, sem chamar o banco de novo
+        n = len(chamadas)
+        c.update(situacao="agendada", score_faixas=["alto", "sem"])
+        lote = C.preparar(self.sb, self.dados, AGORA, out=lambda *a: None)[0]
+        self.assertEqual(len(chamadas), n)
+        msgs = [m for m in self.sb.t["mensageria_mensagens"] if m["lote_id"] == lote["id"]]
+        self.assertEqual(sum(1 for m in msgs if m["filtro"] == "score"), pv["faixas"]["baixo"] + pv["faixas"]["medio"])
+
     def test_sem_score_na_campanha_nada_muda(self):
         msgs = self._score(None)
         self.assertFalse([m for m in msgs if m.get("filtro")])

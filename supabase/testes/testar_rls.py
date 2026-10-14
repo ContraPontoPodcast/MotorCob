@@ -1245,6 +1245,20 @@ checar("Master contrata o Score (só pelos represados)", True, f"insert into pub
 r = sql(f"set role service_role; insert into public.mensageria_campanhas (empresa_id,canal,nome,score_faixas) values ({EA},'sms','Campanha score','{{alto,medio,sem}}') returning id")
 assert r[0], r[2]
 CS = r[1].splitlines()[-1]
+# prévia do Score antes de agendar (só campanha pela plataforma)
+TPL = f"(select min(id) from public.mensageria_templates where empresa_id={EA} and canal='sms')"
+def _campanha(nome_, origem_):
+    r_ = sql(f"set role service_role; insert into public.mensageria_campanhas (empresa_id,canal,nome,situacao,origem,template_id) values ({EA},'sms','{nome_}','aguardando_layout','{origem_}',{TPL}) returning id")
+    assert r_[0], r_[2]
+    return r_[1]
+CPV, CAPI = _campanha("Com prévia", "arquivo"), _campanha("Pela API", "api")
+LAY = """'{"telefone":"Celular","id_cliente":"Contrato","variaveis":{"nome":"Nome","valor":"Valor"}}'"""
+checar("com o Score contratado, confirmar as colunas leva à prévia", True, f"select public.confirmar_layout({CPV},{LAY})", "authenticated", u["admina"], "calculando_previa")
+checar("campanha pela API não espera prévia", True, f"select public.confirmar_layout({CAPI},{LAY})", "authenticated", u["admina"], "pronta")
+checar("não agenda antes da prévia", False, f"select public.agendar_campanha({CPV})", "authenticated", u["admina"])
+sql(f"""set role service_role; update public.mensageria_campanhas set situacao='pronta', score_previa='{{"faixas":{{"alto":8,"medio":1,"baixo":2,"sem":1}},"analisados":12}}' where id={CPV}""")
+checar("sem nenhuma faixa marcada é recusado", False, f"select public.agendar_campanha({CPV}, null, '{{}}')", "authenticated", u["admina"])
+checar("agenda com as faixas escolhidas na prévia", True, f"select public.agendar_campanha({CPV}, null, '{{alto,sem}}'); select array_to_string(score_faixas, ',') from public.mensageria_campanhas where id={CPV}", "authenticated", u["admina"], "alto,sem")
 checar("faixa desconhecida é recusada", False, f"set role service_role; update public.mensageria_campanhas set score_faixas='{{otimo}}' where id={CS}")
 r = sql(f"set role service_role; insert into public.mensageria_lotes (empresa_id,data,canal,modo,situacao,total,campanha_id) values ({EA},'2026-10-12','sms','real','concluido',10,{CS}) returning id")
 assert r[0], r[2]

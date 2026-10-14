@@ -16,6 +16,8 @@
 --    score_analisado e score_represado. Campanha escolhe as faixas que recebem (mensageria_campanhas.score_faixas).
 -- 6. Leituras: qualidade_fornecedores, qualidade_por_hora, alertas_qualidade, detalhe_tecnico_envios,
 --    controle_score e economia_score (economia líquida e custo unitário efetivo, com valores faturados).
+-- 7. Prévia do Score antes de agendar, para campanha pela plataforma (situação 'calculando_previa' e score_previa);
+--    agendar_campanha recebe as faixas escolhidas. Campanha pela API segue direto.
 -- Rode depois do SQL 32. Pode rodar mais de uma vez.
 
 -- ================================================================ 1. função Técnico
@@ -604,3 +606,85 @@ insert into public.glossario (slug, grupo, termo, definicao, exemplo, antes, ord
     ('economia-do-score', 'Financeiro', 'Economia do Score',
      'Quanto a campanha deixou de gastar em SMS para números de baixa entrega, já descontado o que foi pago pelo Score.', '', '', 419)
 on conflict (slug) do nothing;
+
+-- ================================================================ prévia do Score antes de agendar (plataforma)
+-- Campanha pela plataforma com o Score contratado: ao confirmar as colunas ela vai para 'calculando_previa'; o
+-- motor classifica o mailing (mesmos números que vão sair) e grava score_previa (quantos por faixa e os preços);
+-- só então fica 'pronta' e o cliente escolhe as faixas, vê o custo unitário efetivo e agenda. Campanha pela API
+-- segue direto: o Score é aplicado no envio e o resultado aparece depois, em Economia do Score.
+alter table public.mensageria_campanhas drop constraint if exists mensageria_campanhas_situacao_check;
+alter table public.mensageria_campanhas add constraint mensageria_campanhas_situacao_check
+    check (situacao in ('analisando', 'aguardando_layout', 'calculando_previa', 'pronta', 'agendada', 'em_andamento',
+                        'concluida', 'cancelada', 'erro'));
+alter table public.mensageria_campanhas add column if not exists score_previa jsonb
+    check (score_previa is null or jsonb_typeof(score_previa) = 'object');
+comment on column public.mensageria_campanhas.score_previa is
+    'Prévia do Score: {"faixas": {"alto": n, "medio": n, "baixo": n, "sem": n}, "analisados": n, "preco_sms": x, '
+    '"preco_score": y, "cobranca": "analisado"|"represado", "calculado_em": "..."}';
+
+create or replace function public.confirmar_layout(campanha bigint, layout jsonb) returns text
+language plpgsql security definer set search_path = public as $$
+declare
+    c public.mensageria_campanhas;
+    faltam text;
+    proxima text;
+begin
+    select * into c from public.mensageria_campanhas where id = campanha;
+    if c.id is null or c.empresa_id not in (select public.minhas_empresas()) or not public.pode('enviar_mensagens') then
+        raise exception 'campanha não encontrada';
+    end if;
+    if c.situacao not in ('aguardando_layout', 'pronta') then
+        raise exception 'o layout só é confirmado antes do envio';
+    end if;
+    if c.canal = 'email' and coalesce(layout ->> 'email', '') = '' then
+        raise exception 'escolha a coluna do e-mail';
+    end if;
+    if c.canal <> 'email' and coalesce(layout ->> 'telefone', '') = '' then
+        raise exception 'escolha a coluna do telefone';
+    end if;
+    select string_agg(v, ', ') into faltam
+      from unnest((select t.variaveis from public.mensageria_templates t where t.id = c.template_id)) v
+     where coalesce(layout -> 'variaveis' ->> v, '') = '';
+    if faltam is not null then
+        raise exception 'o template usa variáveis sem coluna: %', faltam;
+    end if;
+    proxima := case when c.origem = 'arquivo' and exists (select 1 from public.empresa_score s
+                                                          where s.empresa_id = c.empresa_id and s.ativo)
+                    then 'calculando_previa' else 'pronta' end;
+    update public.mensageria_campanhas
+       set layout = confirmar_layout.layout, situacao = proxima, score_previa = null
+     where id = campanha;
+    return proxima;
+end $$;
+revoke execute on function public.confirmar_layout(bigint, jsonb) from public, anon;
+grant execute on function public.confirmar_layout(bigint, jsonb) to authenticated;
+
+drop function if exists public.agendar_campanha(bigint, timestamptz);
+create or replace function public.agendar_campanha(campanha bigint, quando timestamptz default null,
+                                                   faixas text[] default null) returns text
+language plpgsql security definer set search_path = public as $$
+declare c public.mensageria_campanhas;
+begin
+    select * into c from public.mensageria_campanhas where id = campanha;
+    if c.id is null or c.empresa_id not in (select public.minhas_empresas()) or not public.pode('enviar_mensagens') then
+        raise exception 'campanha não encontrada';
+    end if;
+    if c.situacao = 'calculando_previa' then
+        raise exception 'aguarde a prévia do Score de Entrega (leva alguns minutos)';
+    end if;
+    if c.situacao <> 'pronta' then
+        raise exception 'confirme o layout antes de agendar';
+    end if;
+    if c.template_id is null then
+        raise exception 'escolha o template';
+    end if;
+    if faixas is not null and cardinality(faixas) = 0 then
+        raise exception 'marque pelo menos uma faixa do Score para enviar';
+    end if;
+    update public.mensageria_campanhas
+       set situacao = 'agendada', agendada_para = coalesce(quando, now()), score_faixas = faixas
+     where id = campanha;
+    return 'agendada';
+end $$;
+revoke execute on function public.agendar_campanha(bigint, timestamptz, text[]) from public, anon;
+grant execute on function public.agendar_campanha(bigint, timestamptz, text[]) to authenticated;

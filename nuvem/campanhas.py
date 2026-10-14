@@ -260,7 +260,33 @@ def preparar(sb, dados: Path, agora: datetime | None = None, out=print) -> list[
     return criados
 
 
-def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
+def previas(sb, dados: Path, agora: datetime | None = None, out=print) -> int:
+    """Prévia do Score de Entrega antes de agendar (campanha pela plataforma): classifica os mesmos números que vão
+    sair, grava quantos caem em cada faixa e os preços (score_previa) e guarda a classificação no servidor para o
+    envio usar a mesma. Depois a campanha fica 'pronta' para o cliente escolher as faixas e agendar."""
+    from nuvem import score as SC
+    agora = (agora or datetime.now(M.SP)).astimezone(M.SP)
+    feitas = 0
+    for c in sb.selecionar("mensageria_campanhas", {"situacao": "eq.calculando_previa"}, ordem="id.asc") or []:
+        filtro = {"id": f"eq.{c['id']}"}
+        try:
+            linhas, produto, slug_emp = _montar(sb, dados, c, agora, out, previa=True)
+            pend = [l["destino_hash"] for l in linhas if l["situacao"] == "pendente"]
+            res = SC.classificar(sb, pend, produto)
+            SC.guardar_cache(pasta_campanhas(dados, slug_emp), c["id"], res)
+            sb.atualizar("mensageria_campanhas", filtro, {
+                "situacao": "pronta", "erro": None,
+                "score_previa": SC.previa(sb, c["empresa_id"], produto, pend, res, agora.date())})
+            feitas += 1
+        except Exception as e:  # noqa: BLE001
+            sb.atualizar("mensageria_campanhas", filtro,
+                         {"situacao": "erro", "erro": f"não deu para calcular a prévia do Score: {e}"[:500]})
+    if feitas:
+        out(f"score de entrega: {feitas} prévia(s) de campanha calculada(s)")
+    return feitas
+
+
+def _montar(sb, dados: Path, c: dict, agora: datetime, out, previa: bool = False):
     eid, canal, lay = c["empresa_id"], c["canal"], c.get("layout") or {}
     emp = _empresa(sb, eid)
     tpl = (sb.selecionar("mensageria_templates", {"id": f"eq.{c['template_id']}"}) or [None])[0] \
@@ -355,10 +381,13 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
             if fb_tpl:
                 loc["fallback_texto"] = preencher(fb_tpl["conteudo"].get("texto", ""), variaveis).strip()
             locais[(idc, h)] = loc
+    if previa:                                  # só a lista higienizada, para a prévia do Score
+        return linhas_db, produto, emp["slug"]
     score = None
     if c.get("score_faixas"):                   # Score de Entrega: só as faixas escolhidas recebem (nuvem/score.py)
         from nuvem import score as SC
-        score = SC.aplicar(sb, c, produto, linhas_db, locais)
+        cache = SC.ler_cache(pasta_campanhas(dados, emp["slug"]), c["id"])   # a mesma classificação da prévia
+        score = SC.aplicar(sb, c, produto, linhas_db, locais, cache)
     jan = M.janela(canais_cfg.get(canal), agora.date()) or M.JANELA_PADRAO
     situacao = "agendado" if locais else "concluido"
     lote = sb.inserir("mensageria_lotes", [{
@@ -420,6 +449,7 @@ def limpar(sb, dados: Path, agora: datetime | None = None, out=print) -> int:
         sb.atualizar("mensageria_campanhas", {"id": f"eq.{c['id']}"}, {"arquivo_caminho": None})
         n += 1
     for arq in list(Path(dados).glob("empresas/*/mensageria_campanhas/lote_*.json")) + \
+            list(Path(dados).glob("empresas/*/mensageria_campanhas/score_*.json")) + \
             list(Path(dados).glob("empresas/**/mensageria/lote_*.json")):
         if datetime.fromtimestamp(arq.stat().st_mtime, M.SP) < limite:
             arq.unlink()
