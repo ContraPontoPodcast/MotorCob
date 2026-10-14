@@ -325,7 +325,7 @@ grant execute on function public.score_entrega(text[], text, timestamptz) to ser
 -- ================================================================ 5. contratação e campanha
 insert into public.cobranca_itens (codigo, produto, nome, unidade, modulo, ordem, descricao) values
     ('score_analisado', 'score', 'Score de Entrega · por número analisado', 'número', 'mensageria', 60,
-     'todo o mailing passa pelo Score'),
+     'toda a lista passa pelo Score'),
     ('score_represado', 'score', 'Score de Entrega · por número represado', 'número', 'mensageria', 61,
      'cobra só os números que o filtro segurou')
 on conflict (codigo) do nothing;
@@ -358,7 +358,7 @@ create table if not exists public.empresa_score (
     atualizado_por uuid default auth.uid() references auth.users (id)
 );
 comment on table public.empresa_score is
-    'Score de Entrega contratado: cobrança por número analisado (todo o mailing) ou só pelos represados.';
+    'Score de Entrega contratado: cobrança por número analisado (toda a lista) ou só pelos represados.';
 alter table public.empresa_score enable row level security;
 drop policy if exists ver on public.empresa_score;
 create policy ver on public.empresa_score for select to authenticated
@@ -520,8 +520,8 @@ language sql stable security definer set search_path = public as $$
     select case when qtd > 0 then (select v.valor from public.valor_item(empresa, it, qtd, competencia) v) / qtd end
 $$;
 
--- Economia do Score por campanha, com valores faturados: sem o Score (mailing analisado × SMS) e com o Score
--- (enviados × SMS + Score pela forma contratada). custo unitário efetivo = com ÷ mailing analisado.
+-- Economia do Score por campanha, com valores faturados: sem o Score (lista analisada × SMS) e com o Score
+-- (enviados × SMS + Score pela forma contratada). custo unitário efetivo = com ÷ lista analisada.
 create or replace function public.economia_score(empresa bigint, de date, ate date)
 returns table (campanha_id bigint, nome text, dia date, analisados bigint, represados bigint, enviados bigint,
                preco_sms numeric, total_sem numeric, total_com numeric, economia numeric, custo_unitario numeric)
@@ -592,6 +592,9 @@ end $$;
 
 -- ================================================================ glossário "O que significa" (termos do bloco 6)
 insert into public.glossario (slug, grupo, termo, definicao, exemplo, antes, ordem) values
+    ('lista-da-campanha', 'Mensageria', 'Lista da campanha',
+     'Arquivo (ou envio por API) com os contatos de uma campanha da Mensageria. Na Cobrança e na Jornada o nome é carga.',
+     '18.420 números na lista; 16.210 enviados depois do Score.', 'Mailing', 414),
     ('score-de-entrega', 'Mensageria', 'Score de Entrega',
      'Probabilidade de cada número receber a mensagem, calculada pelo histórico da Mensageria. Separa os números em Alto, Médio, Baixo e Sem histórico; a campanha escolhe quais faixas recebem.',
      'Baixo = número que só teve "não entregue" nos últimos dias.', 'Filtro de inteligência', 415),
@@ -601,7 +604,7 @@ insert into public.glossario (slug, grupo, termo, definicao, exemplo, antes, ord
      'Pequena amostra sorteada dos números fora das faixas da campanha que sai mesmo assim, para medir a entrega real de cada faixa. É cobrada como SMS normal.',
      '1% dos números de score Baixo.', '', 417),
     ('custo-unitario-efetivo', 'Financeiro', 'Custo unitário efetivo',
-     'Total pago na campanha com o Score dividido pelo mailing carregado. Mostra quanto custou, de fato, cada número da lista.',
+     'Total pago na campanha com o Score dividido pelo lista carregada. Mostra quanto custou, de fato, cada número da lista.',
      'R$ 1.002,07 ÷ 18.420 números = R$ 0,0544 por número.', '', 418),
     ('economia-do-score', 'Financeiro', 'Economia do Score',
      'Quanto a campanha deixou de gastar em SMS para números de baixa entrega, já descontado o que foi pago pelo Score.', '', '', 419)
@@ -609,7 +612,7 @@ on conflict (slug) do nothing;
 
 -- ================================================================ prévia do Score antes de agendar (plataforma)
 -- Campanha pela plataforma com o Score contratado: ao confirmar as colunas ela vai para 'calculando_previa'; o
--- motor classifica o mailing (mesmos números que vão sair) e grava score_previa (quantos por faixa e os preços);
+-- motor classifica a lista (mesmos números que vão sair) e grava score_previa (quantos por faixa e os preços);
 -- só então fica 'pronta' e o cliente escolhe as faixas, vê o custo unitário efetivo e agenda. Campanha pela API
 -- segue direto: o Score é aplicado no envio e o resultado aparece depois, em Economia do Score.
 alter table public.mensageria_campanhas drop constraint if exists mensageria_campanhas_situacao_check;

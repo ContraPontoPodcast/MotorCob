@@ -14,7 +14,7 @@ Menu do Técnico: Empresas, Saúde, Atendimento, Qualidade dos fornecedores, Fil
 
 ## 2. Mensageria › Qualidade dos fornecedores (permissão ver_qualidade)
 Topo: Canal (SMS · RCS), período com "De" e "Até" (data e hora; padrão: últimas 24 h), Fornecedor.
-Texto abaixo do título: "No SMS, o % entregue reflete a qualidade do mailing. Aqui o fornecedor é medido pela
+Texto abaixo do título: "No SMS, o % entregue reflete a qualidade da lista. Aqui o fornecedor é medido pela
 velocidade e pela DLR."
 - Cartões: Disparados · Aceite pelo fornecedor (mediana) · Tempo até a DLR (mediana) · Sem DLR após N min.
 - Alertas abertos: rpc alertas_qualidade(canal) → (fornecedor, operadora, nivel 'atencao'|'critico', motivo).
@@ -22,7 +22,7 @@ velocidade e pela DLR."
 - Tabela fornecedor × operadora: rpc qualidade_fornecedores(de, ate, canal) → Disparados, Aceite (med · p90),
   DLR (med · p90) em segundos, Sem DLR %, Entregue no lote %, Situação (Normal/Atenção/Crítico pelos limites de
   mensageria_alertas_config). Nota: "Dentro do mesmo lote a rota sorteia o tráfego: a coluna Entregue no lote
-  compara fornecedores com a mesma qualidade de mailing."
+  compara fornecedores com a mesma qualidade de lista."
 - Gráfico de linhas "Tempo até a DLR, por hora": rpc qualidade_por_hora(de, ate, canal), uma linha por
   fornecedor e a linha tracejada do limite.
 - Limites de alerta (botão "Limites", só com configurar_score): edita mensageria_alertas_config (minutos sem DLR,

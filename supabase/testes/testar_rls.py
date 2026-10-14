@@ -1180,7 +1180,7 @@ checar("pessoa nova começa com a ajuda aberta e tema claro", True, "select modo
 checar("pessoa desliga a ajuda e escolhe o tema escuro em Minha conta", True, "select public.salvar_preferencias('desligada','escuro'); select modo||','||tema from public.minha_ajuda()", "authenticated", u["oper"], "desligada,escuro")
 checar("tema desconhecido é recusado", False, "select public.salvar_preferencias(null,'roxo')", "authenticated", u["oper"])
 checar("religar a ajuda volta ao tempo de casa", True, "select public.salvar_preferencias('automatica'); select modo from public.minha_ajuda()", "authenticated", u["oper"], "aberta")
-checar("glossário tem os 40 termos aprovados (bloco 5) e os 5 do Score (bloco 6)", True, "select count(*) from public.glossario", "authenticated", u["oper"], "45")
+checar("glossário tem os 40 termos aprovados (bloco 5) e os 6 do Score e da lista (bloco 6)", True, "select count(*) from public.glossario", "authenticated", u["oper"], "46")
 checar("busca pelo nome antigo acha o termo novo (Hot → Contato principal)", True, "select string_agg(slug, ',') from public.buscar_glossario('hot')", "authenticated", u["oper"], "contato-principal")
 checar("busca sem acento acha CPC · em negociação", True, "select bool_or(slug='cpc-em-negociacao') from public.buscar_glossario('negociacao')", "authenticated", u["oper"], "t")
 checar("G1 leva ao termo Ciclo", True, "select bool_or(slug='ciclo') from public.buscar_glossario('G1')", "authenticated", u["oper"], "t")

@@ -11,7 +11,7 @@ Com o Score contratado (empresa_score ativo), rpc confirmar_layout devolve 'calc
   texto "Leva alguns minutos. Você pode sair: a campanha fica salva." Recarregue a campanha a cada 15 s.
 - Quando ficar 'pronta' com score_previa preenchido (faixas {alto, medio, baixo, sem}, analisados, preco_sms,
   preco_score, cobranca), mostre no passo de confirmar o cartão "Score de Entrega" com (i) e a chave ligada:
-  · barra dividida pelas 4 faixas e um quadro por faixa (quantidade e % do mailing);
+  · barra dividida pelas 4 faixas e um quadro por faixa (quantidade e % da lista);
   · "O que enviar": caixas Todos · Alto · Médio · Baixo · Sem histórico ("Sem histórico" com (i): "Número que
     ainda não passou pela Mensageria: o Score não tem como classificar"). Padrão: Alto, Médio e Sem histórico.
     Todos marca/desmarca as quatro; desmarcar uma desmarca Todos. Nenhuma marcada: aviso vermelho e "Agendar
@@ -39,7 +39,7 @@ preco_sms, total_sem, total_com, economia, custo_unitario.
 - Gráfico de barras da economia líquida por mês do período.
 - "Prova do Score": rpc controle_score(empresa, de, ate) → barra por faixa com a taxa de entrega real do grupo
   de controle.
-- Tabela por campanha (Campanha, Data, Mailing, Represados, Sem o Score, Com o Score, Economia líquida); clicar
+- Tabela por campanha (Campanha, Data, Lista, Represados, Sem o Score, Com o Score, Economia líquida); clicar
   numa linha filtra o cartão para aquela campanha.
 Valores em R$ (2 casas; unitários com 4). Nenhuma simulação: só o que foi faturado.
 

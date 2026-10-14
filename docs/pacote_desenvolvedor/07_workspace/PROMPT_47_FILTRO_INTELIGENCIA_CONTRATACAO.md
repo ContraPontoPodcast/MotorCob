@@ -24,7 +24,7 @@ própria mostra os valores da padrão e o botão "Configurar só esta rota" (ins
 Botão "Salvar filtro da rota" (cor da área).
 
 ## 2. Empresas › empresa › Contratação › Score de Entrega (permissão contratar_score)
-Chave "Score de Entrega" + forma de cobrança (duas opções): "Por número analisado" (todo o mailing) ou
+Chave "Score de Entrega" + forma de cobrança (duas opções): "Por número analisado" (toda a lista) ou
 "Só pelos represados". Grava empresa_score (empresa_id, ativo, cobranca 'analisado'|'represado').
 Preço: rpc salvar_preco(empresa, 'score_analisado' ou 'score_represado', 'flat', preço, …) com a régua de mínimo
 e tabela do item. Texto fixo: "O SMS segue com o preço padrão do contrato; o Score é cobrado à parte."
