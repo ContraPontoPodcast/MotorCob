@@ -458,11 +458,14 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                 if not _recencia_ok(est, hoje, rc, escolha.etapa.travas.get("recencia_horas")):
                     conta("intervalo_48h")
                     continue
+        fcfg = None if escolha is not None else \
+            (rc.dados.get("fases_cfg") or {}).get(ET.FASE_DO_ESTADO.get(est.estado))   # travas/orçamento da fase
+        horas_fase = fcfg.travas.get("recencia_horas") if fcfg else None
         if escolha is not None:
             passo = (f"etapa-{escolha.etapa.id}", escolha.rotulo,
                      normalizar(escolha.etapa.passos[escolha.passo], rc), False)
         else:
-            passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp, ult)
+            passo = _passo_do_dia(est, clientes.get(idc), hoje, rc, disp, ult, horas_fase)
         if passo is None:
             if est.estado == "QBR" and rc["quebra"].get("ativo") is False:
                 conta("quebra_desligada")
@@ -471,15 +474,19 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             elif est.estado in ("CPA", "CPB") and not _intervalo_cpc_ok(est, hoje, rc, ult):
                 conta("intervalo_cpc")
             else:
-                conta("sem_passo_hoje" if _recencia_ok(est, hoje, rc) or est.estado in ("PRE", "QBR")
+                conta("sem_passo_hoje" if _recencia_ok(est, hoje, rc, horas_fase) or est.estado in ("PRE", "QBR")
                       else "intervalo_48h")
             continue
         res = montar(idc, est, rc, cands, sin, passo, janela, set(), True)
+        if fcfg is not None:
+            entrou = est.giro_inicio if est.estado == "NCP" else \
+                (est.inicio_esteira or est.safra) if est.estado == "LOC" else None
+            escolha = ET.Escolha(fcfg, 0, None, {"entrou": entrou.isoformat()} if entrou else {}, hoje)
         if escolha is not None and escolha.etapa.travas and res[0] == "com_acao":
             res = ("com_acao", travas_da_etapa(escolha.etapa, res[1]), None)
         orc = escolha.etapa.orcamento if escolha is not None else None
         if orc and res[0] == "com_acao":
-            # etapa com orçamento por canal: as linhas esperam o corte (ET.aplicar_orcamento)
+            # etapa (ou fase do motor) com orçamento por canal: as linhas esperam o corte (ET.aplicar_orcamento)
             cli = clientes.get(idc)
             info = ET.info_prioridade(escolha, hoje, est.ultima_massiva, cli.saldo if cli else None,
                                       cli.atraso_em(hoje) if cli else None,
@@ -620,7 +627,7 @@ def fase_desligada(est, regua) -> str | None:
     return None
 
 
-def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None):
+def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None, recencia_horas=None):
     """(régua, rótulo do passo, ações, data_fixa) ou None. regua já é a do cluster (estratégia)."""
     def acoes(passo):
         return normalizar(passo, regua)
@@ -639,7 +646,7 @@ def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None):
         return ("preventivo", "D0" if d == 0 else f"D-{d}", acoes(passo), True) if passo else None
     if fase_desligada(est, regua):
         return None
-    if not _recencia_ok(est, hoje, regua):
+    if not _recencia_ok(est, hoje, regua, recencia_horas):
         return None
     if est.estado == "LOC":
         d = dia_na_carga(est, hoje, regua)      # o dia da 1ª lista é o D+1; só anda em dia de lista

@@ -1091,6 +1091,10 @@ assert r.returncode == 0, r.stderr
 _, ADM, _ = sql("insert into auth.users (email) values ('administrativo@x.com') returning id")
 checar("Master torna alguém Administrativo", True, AAL2 + f"select public.definir_funcao_equipe('{ADM}','administrativo')", "authenticated", u["admin"], "administrativo")
 checar("Administrativo aparece na lista da equipe com as permissões dele", True, f"select funcao||','||(permissoes->>'gerenciar_fornecedores')||','||(permissoes->>'gerenciar_equipe') from public.listar_equipe() where id='{ADM}'", "authenticated", u["admin"], "administrativo,true,false")
+checar("Master continua editando a Orquestração", True, f"insert into public.estrategias (empresa_id,nome) values ({EA},'master edita') returning 1", "authenticated", u["admin"], "1")
+checar("Administrativo não cria estratégia do cliente", False, f"insert into public.estrategias (empresa_id,nome) values ({EA},'adm tenta')", "authenticated", ADM)
+checar("Administrativo não altera estratégia do cliente", True, f"with x as (update public.estrategias set descricao='x' where empresa_id={EA} returning 1) select count(*) from x", "authenticated", ADM, "0")
+checar("Administrativo não ganha papel de Planejamento do cliente", True, "select public.tem_papel('admin','planejamento')", "authenticated", ADM, "f")
 checar("Administrativo cria produto", True, "select public.salvar_produto('sms_bet','sms','SMS Bet','mensagem',0.06,0.075,'mercado de bets')", "authenticated", ADM, "sms_bet")
 checar("tabela abaixo do mínimo é recusada", False, "select public.salvar_produto('sms_x','sms','SMS X','mensagem',0.06,0.05)", "authenticated", ADM)
 checar("Comercial não cria produto", False, "select public.salvar_produto('sms_y','sms','SMS Y','mensagem',0.06,0.07)", "authenticated", COM)
@@ -1132,6 +1136,40 @@ checar("carteira sobrescreve a janela do canal", True, f"insert into public.cred
 checar("carteira não muda o que não pode", False, f"update public.credor_canais set ajustes='{{\"custo\": 1}}' where credor_id={CP} and canal='sms'", "authenticated", u["plan"])
 checar("operação não muda a regra do canal da carteira", True, f"with x as (delete from public.credor_canais where credor_id={CP} returning 1) select count(*) from x", "authenticated", u["oper"], 0)
 checar("comitê por produto abre para o cliente", True, "select count(*) >= 0 from public.comite_produtos", "authenticated", u["admina"], "t")
+# Orquestração por carteira e rótulos legíveis (SQL 31)
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261128000001_estrategia_carteira.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+r = sql(f"set role service_role; insert into public.estrategias (empresa_id,nome,definicao) values ({EA},'Estratégia S31','{{\"giro\": {{\"ciclo_dias\": 8}}}}') returning id")
+assert r[0], r[2]
+E31 = r[1].splitlines()[-1]
+r = sql(f"set role service_role; insert into public.clusters (empresa_id,ordem,codigo,nome,estrategia_id) values ({EA},90,'S31','Segmento S31',{E31}) returning id")
+assert r[0], r[2]
+S31 = r[1].splitlines()[-1]
+BX = f"(select id from public.credores where empresa_id={EA} and codigo='banco-x')"
+checar("segmento de todas as carteiras: estratégia compartilhada aparece com o nome da outra carteira", True, f"select estrategia_id={E31} and not estrategia_propria and compartilhada_com like '%Banco X%' from public.segmentos_em_uso where cluster_id={S31} and credor_id={CP}", "authenticated", u["plan"], "t")
+checar("operação não separa estratégia", False, f"select public.separar_estrategia({S31},{CP})", "authenticated", u["oper"])
+checar("Administrativo não separa estratégia do cliente", False, f"select public.separar_estrategia({S31},{CP})", "authenticated", ADM)
+r = sql(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.separar_estrategia({S31},{CP})")
+assert r[0], r[2]
+NOVA = r[1].splitlines()[-1]
+checar("separar só para esta carteira: cópia própria com a mesma definição", True, f"select s.estrategia_propria and s.compartilhada_com is null and e.definicao = (select definicao from public.estrategias where id={E31}) from public.segmentos_em_uso s join public.estrategias e on e.id=s.estrategia_id where s.cluster_id={S31} and s.credor_id={CP} and s.estrategia_id={NOVA}", "authenticated", u["plan"], "t")
+checar("a outra carteira continua com a estratégia do segmento e com o segmento", True, f"select estrategia_id={E31} and vinculado and em_uso from public.segmentos_em_uso where cluster_id={S31} and credor_id={BX}", "authenticated", u["plan"], "t")
+r = sql(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.separar_estrategia({S31},{BX},'{{\"giro\": {{\"ciclo_dias\": 5}}}}')")
+assert r[0], r[2]
+COPIA = r[1].splitlines()[-1]
+checar("copiar de outra carteira cria outra cópia independente com a definição trazida", True, f"select definicao->'giro'->>'ciclo_dias' from public.estrategias where id={COPIA} and id=(select estrategia_id from public.segmentos_em_uso where cluster_id={S31} and credor_id={BX})", "authenticated", u["plan"], "5")
+checar("a cópia de uma carteira não muda a da outra", True, f"select (select definicao->'giro'->>'ciclo_dias' from public.estrategias where id={NOVA})", "authenticated", u["plan"], "8")
+checar("estratégia de outra empresa não entra na carteira", False, f"update public.segmentos_carteira set estrategia_id=(select id from public.estrategias where empresa_id={EB} limit 1) where cluster_id={S31} and credor_id={CP}", "service_role")
+checar("carteira fora do segmento é recusada", False, f"select public.separar_estrategia({S31},(select id from public.credores where empresa_id={EB} limit 1))", "authenticated", u["plan"])
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from motor import rotulos as RT  # noqa: E402
+for est_, cic_ in (("NCP", "G1"), ("NCP", "G3"), ("NCP", "RE"), ("CPB", "T2"), ("LOC", "L0"), ("LOC", "L4"),
+                   ("QBR", "D2"), ("PRE", "D0"), ("PRE", "D-3"), ("CPA", ""), ("XYZ", "Q9")):
+    checar(f"rótulo {est_}/{cic_} igual no banco e no motor", True, f"select public.rotulo_estado('{est_}')||' | '||public.rotulo_ciclo('{est_}','{cic_}')", None, None, f"{RT.rotulo_estado(est_)} | {RT.rotulo_ciclo(est_, cic_)}".strip())
+for p_ in ("G2-dia3", "C1-D5", "CPC A · negociação", "CPC B · T3", "rotação → sms", "D+4", "D-1"):
+    checar(f"passo '{p_}' legível igual no banco e no motor", True, f"select public.rotulo_passo('{p_}')", None, None, RT.rotulo_passo(p_))
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

@@ -89,6 +89,29 @@ $$;
 revoke all on function public.cuida_fornecedores(), public.cuida_produtos() from public, anon;
 grant execute on function public.cuida_fornecedores(), public.cuida_produtos() to authenticated;
 
+-- O Administrativo (papel planejamento na equipe) não faz Orquestração, cargas, canais nem usuários do
+-- cliente: sem isso, pode() e tem_papel() dariam a ele o que o Planejamento do cliente faz.
+create or replace function public.pode(perm text) returns boolean
+language sql stable security definer set search_path = public as $$
+    select coalesce((
+        select case when p.equipe and p.papel = 'admin' then true
+                    when p.equipe and p.papel = 'planejamento'
+                         and perm in ('enviar_arquivos', 'reenquadrar', 'editar_orquestracao', 'editar_credores',
+                                      'editar_canais', 'gerenciar_usuarios', 'gerenciar_permissoes') then false
+                    when p.papel = 'admin' and perm in ('gerenciar_usuarios', 'gerenciar_permissoes') then true
+                    else coalesce((select pu.permitido from public.permissoes_usuario pu
+                                   where pu.usuario_id = p.id and pu.permissao = perm),
+                                  (select pp.permitido from public.permissoes_papel pp
+                                   where pp.empresa_id = p.empresa_id and pp.papel = p.papel and pp.permissao = perm),
+                                  public.permissao_padrao(p.papel, perm)) end
+        from public.perfis p where p.id = auth.uid() and p.ativo), false)
+$$;
+create or replace function public.tem_papel(variadic papeis public.papel[]) returns boolean
+language sql stable security definer set search_path = public as $$
+    select coalesce((select p.papel = any (papeis) and not (p.equipe and p.papel = 'planejamento')
+                     from public.perfis p where p.id = auth.uid() and p.ativo), false)
+$$;
+
 -- ================================================================ 2. produtos (catálogo)
 -- canal de um item: pelo prefixo do código (os produtos sempre começam pelo canal)
 create or replace function public.canal_do_item(it text) returns text

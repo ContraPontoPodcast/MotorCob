@@ -342,6 +342,12 @@ def validar_estrategia(definicao: dict, nome: str = "?") -> tuple[dict, list[str
         etapas, ordem, avisos = validar_etapas(definicao, "cob", nome, acoes_da_estrategia)
         erros += avisos
         saida["etapas"], saida["ordem_etapas"] = etapas, ordem
+    # fases do motor com orçamento por canal, prioridade e travas próprias (definicao.<fase>.orcamento/travas)
+    from .etapas import validar_fases
+    fases_cfg, avisos = validar_fases(definicao, "cob", nome, CANAIS)
+    erros += avisos
+    if fases_cfg:
+        saida["fases_cfg"] = fases_cfg
     r = definicao.get("recencia_horas")
     if r not in (None, ""):
         if not isinstance(r, int) or r < 0:

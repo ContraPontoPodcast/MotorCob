@@ -530,6 +530,18 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(cod(22), ["TD"])                   # VE pausado na 22; UM é só da 21
         self.assertEqual(cod(23), ["TD"])                   # VE não vinculado à 23
 
+    def test_estrategia_propria_da_carteira_vale_sobre_a_do_segmento(self):
+        from nuvem.sincronizar import baixar_clusters
+        t = self.falso.tabelas
+        t["clusters"] = [{"id": 1, "empresa_id": 2, "ordem": 10, "codigo": "VE", "ativo": True, "credor_id": None,
+                          "condicoes": [], "estrategia_id": 7}]
+        t["segmentos_carteira"] = [{"empresa_id": 2, "cluster_id": 1, "credor_id": 21, "ativo": True,
+                                    "estrategia_id": 9},
+                                   {"empresa_id": 2, "cluster_id": 1, "credor_id": 22, "ativo": True}]
+        est = lambda cid: [c["estrategia_id"] for c in baixar_clusters(self.sb, self.dados / "x", 2, cid)]  # noqa: E731
+        self.assertEqual(est(21), [9])                      # separada só para a carteira 21
+        self.assertEqual(est(22), [7])                      # a 22 segue com a do segmento
+
     def test_vigia_refaz_a_lista_quando_a_orquestracao_muda(self):
         from nuvem.sincronizar import empresas_com_carga_nova, vigiar
         t = self.falso.tabelas

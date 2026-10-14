@@ -590,16 +590,21 @@ def segmento_vale(c: dict, cid, vinculos: dict) -> bool:
 
 
 def baixar_clusters(sb: Supabase, pasta: Path, empresa_id, cid=None) -> list[dict]:
-    """Regras de cluster ativas que valem nesta carteira; cópia em config/clusters.json (auditoria)."""
+    """Regras de cluster ativas que valem nesta carteira; cópia em config/clusters.json (auditoria).
+    Estratégia própria da carteira no segmento (segmentos_carteira.estrategia_id, SQL 31) vale sobre a do
+    segmento: duas carteiras com o mesmo segmento podem ter estratégias diferentes."""
     regras = sb.selecionar("clusters", {"empresa_id": f"eq.{empresa_id}", "ativo": "eq.true"},
                            ordem="ordem.asc,codigo.asc") or []
-    vinculos = {}
+    vinculos, propria = {}, {}
     try:
         for l in sb.selecionar("segmentos_carteira", {"empresa_id": f"eq.{empresa_id}"}) or []:
             vinculos.setdefault(l["cluster_id"], {})[l["credor_id"]] = bool(l.get("ativo", True))
+            if l["credor_id"] == cid and l.get("estrategia_id"):
+                propria[l["cluster_id"]] = l["estrategia_id"]
     except ErroSupabase:   # banco sem a tabela: regra antiga
         pass
-    regras = [c for c in regras if segmento_vale(c, cid, vinculos)]
+    regras = [{**c, "estrategia_id": propria.get(c.get("id"), c.get("estrategia_id"))} for c in regras
+              if segmento_vale(c, cid, vinculos)]
     (pasta / "config").mkdir(parents=True, exist_ok=True)
     (pasta / "config" / "clusters.json").write_text(json.dumps(regras, ensure_ascii=False, indent=1),
                                                     encoding="utf-8")
@@ -1109,7 +1114,8 @@ def _vigia_arq(dados: Path, emp: dict) -> Path:
 
 
 CONFIG_ORQUESTRACAO = ("clusters", "estrategias", "segmentos_carteira", "personas_usuario", "canais_empresa",
-                       "credores", "mapeamento_arquivos", "ocorrencia_codigos", "canal_codigos", "frases")
+                       "credores", "mapeamento_arquivos", "ocorrencia_codigos", "canal_codigos", "frases",
+                       "credor_canais")
 
 
 def _ultima_mudanca(sb: Supabase, tabela: str, empresa_id) -> dict:
@@ -1124,7 +1130,7 @@ def _ultima_mudanca(sb: Supabase, tabela: str, empresa_id) -> dict:
         if not quando:
             continue
         chave = l.get("credor_id") if tabela in ("segmentos_carteira", "personas_usuario", "mapeamento_arquivos",
-                                                 "ocorrencia_codigos") else \
+                                                 "ocorrencia_codigos", "credor_canais") else \
             (l.get("id") if tabela == "credores" else None)
         por[chave] = max(por.get(chave, ""), quando)
     return por
