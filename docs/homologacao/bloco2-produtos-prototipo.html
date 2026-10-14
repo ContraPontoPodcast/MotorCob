@@ -2,18 +2,18 @@
 <style>
 /* Layout: janela do sistema com abas no topo (Console, Empresa, Campanha, Comitê, Perfis); cada aba é uma tela real do MotorCob preenchida com dados de exemplo */
 :root {
-  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
-  --azul: #0A64D0; --azulf: #E8F1FC; --ok: #1E7A36; --okf: #E6F4EA; --alerta: #8A5A00; --alertaf: #FFF4D6; --erro: #C4271E; --errof: #FDECEA;
+  --bg: #F8F8F9; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
+  --azul: #7A2E3B; --azulf: #F5E6E8; --area-forte: #6B2633; --area-txt: #63222E; --ok: #1E7A36; --okf: #E6F4EA; --alerta: #8A5A00; --alertaf: #FFF4D6; --erro: #C4271E; --errof: #FDECEA;
   --sms: #0A84FF; --wa: #25A55F; --rcs: #8E5CD9; --email: #C77700;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
-  --azul: #4C9BFF; --azulf: #13253D; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715; color-scheme: dark } }
+  --azul: #D07A8A; --azulf: #3A1A20; --area-forte: #D07A8A; --area-txt: #EDB8C2; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
-  --azul: #4C9BFF; --azulf: #13253D; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715; color-scheme: dark }
+  --azul: #D07A8A; --azulf: #3A1A20; --area-forte: #D07A8A; --area-txt: #EDB8C2; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715; color-scheme: dark }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding-block: 24px 48px; padding-inline: 16px; margin: 0; }
@@ -32,7 +32,8 @@ h3 { font-size: 14px; margin: 0; }
 .abas button[aria-selected="true"] { color: var(--tinta); border-color: var(--tinta); }
 .secao { background: var(--painel); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .tit { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.btn { border: 0; border-radius: 999px; padding: 8px 15px; font: 600 13.5px var(--sans); cursor: pointer; background: var(--tinta); color: var(--painel); }
+.btn { border: 0; border-radius: 999px; padding: 8px 15px; font: 600 13.5px var(--sans); cursor: pointer; background: var(--azul); color: #fff; }
+.btn:active { background: var(--area-forte); }
 .btn.sec { background: var(--suave); color: var(--tinta); }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
@@ -143,7 +144,7 @@ label.campo input, label.campo select { width: 100%; }
   <div class="proto">Protótipo para aprovação · dados de exemplo (empresa, preços e custos fictícios) · nada aqui grava no banco</div>
   <div class="topo">
     <div>
-      <h1>Produtos da Mensageria</h1>
+      <p class="nota-revisao" style="margin:0 0 10px;padding:8px 12px;border-radius:10px;background:var(--suave);font-size:12.5px;color:var(--tinta-2)">Atualizado na revisão de UX (14/10): nomes do glossário e paleta do bloco 5 (cor da área (vinho, Mensageria) só no botão principal, item ativo e destaques).</p><h1>Produtos da Mensageria</h1>
       <p>Cada canal tem seus produtos, com rota, custo, preço de tabela e preço mínimo. A empresa contrata os que quiser; só o que está ligado aparece na campanha e passa na API.</p>
     </div>
     <div>
@@ -176,18 +177,23 @@ label.campo input, label.campo select { width: 100%; }
       <button class="btn" id="novoProd">Novo produto</button>
     </div>
     <div id="avisoCat"></div>
-    <div class="mix" id="mix"></div>
     <div class="rolagem"><table id="tabCat">
       <thead><tr><th>Produto</th><th>Unidade</th><th>Rota</th><th class="n">Custo previsto</th><th class="n">Realizado</th><th class="n">Mínimo</th><th class="n">Tabela</th><th class="n">MC no mínimo</th><th>Situação</th></tr></thead>
       <tbody></tbody>
     </table></div>
-    <p class="ajuda">Custo previsto = composição do plano de rota (% de cada fornecedor × custo dele). No SMS, o custo é calculado por operadora (Vivo, Claro, TIM, Outras), ponderado pela mistura acima, mais a consulta de operadora. Clique no custo para ver a conta. Realizado = o que a fatura dos fornecedores mostrou no mês anterior, envio a envio. MC no mínimo = (mínimo − custo previsto − impostos) ÷ mínimo, com impostos de 14,25% (Console › Margem). Abaixo da MC mínima de 20% o selo fica âmbar. Mudança de preço vale a partir do mês seguinte e fica na Auditoria.</p>
+    <p class="ajuda">Custo previsto = composição da rota (% de cada fornecedor × custo dele). No SMS, o custo é calculado por operadora (Vivo, Claro, TIM, Outras), ponderado pela mistura de operadoras (em Fornecedores e rotas), mais a consulta de operadora. Clique no custo para ver a conta. Realizado = o que a fatura dos fornecedores mostrou no mês anterior, envio a envio. MC no mínimo = (mínimo − custo previsto − impostos) ÷ mínimo, com impostos de 14,25% (Console › Margem). Abaixo da MC mínima de 20% o selo fica âmbar. Mudança de preço vale a partir do mês seguinte e fica na Auditoria.</p>
   </section>
 
   <!-- ============ FORNECEDORES E ROTAS ============ -->
   <section class="secao" data-painel="fornec" hidden>
     <div class="tit"><div>
-      <h2>Rota do produto</h2>
+      <h2>Rotas</h2>
+      <div class="rota-padrao" style="margin:6px 0 10px;padding:10px 12px;border:1px solid var(--linha);border-radius:12px;font-size:13px">
+        <b>Rota padrão de cada canal</b> · vale para produto sem rota própria e para operadora sem bloco na rota do produto<br>
+        <span style="color:var(--tinta-2)">SMS: Zenvia 70% · Infobip 30% &nbsp;·&nbsp; RCS: Zenvia 60% · Infobip 40% &nbsp;·&nbsp; WhatsApp: Zenvia 100% &nbsp;·&nbsp; E-mail: Locaweb 100%</span>
+        <button type="button" class="lnk" style="font-family:var(--sans);margin-left:6px">Editar</button>
+      </div>
+      <h3 style="margin:4px 0">Rota de cada produto <span style="font-weight:400;color:var(--tinta-2);font-size:13px">(vale primeiro)</span></h3>
       <p class="ajuda">Escolha o produto e diga como foi a negociação: <b>flat</b> (um custo por fornecedor, para qualquer operadora) ou <b>por operadora</b> (custo de cada fornecedor em cada operadora). Depois componha a rota com um ou mais fornecedores. Fornecedor que ainda não existe pode ser cadastrado aqui mesmo.</p>
     </div>
       <label class="campo" style="min-width:240px">Produto<select id="rotaProd"></select></label></div>
@@ -199,6 +205,7 @@ label.campo input, label.campo select { width: 100%; }
     <div id="rotaAviso"></div>
     <div id="rotaOps" class="rotaops"></div>
     <div id="rotaTotal"></div>
+    <div class="mix" id="mix"></div>
   </section>
   <section class="secao" data-painel="fornec" hidden>
     <div class="tit"><div>
@@ -243,7 +250,7 @@ label.campo input, label.campo select { width: 100%; }
           <tr><td>Janela</td><td>09:00–19:00</td><td>10:00–18:00 <span class="selo al">sobrescrito</span></td></tr>
           <tr><td>Remetente / shortcode</td><td>29123</td><td><span class="selo ne">herdado</span></td></tr>
           <tr><td>Limite por dia</td><td>Todos da raia</td><td>Parametrizado · 20 mil <span class="selo al">sobrescrito</span></td></tr>
-          <tr><td>Plano de rota</td><td>do produto</td><td><span class="selo ne">herdado</span></td></tr>
+          <tr><td>Rota</td><td>do produto</td><td><span class="selo ne">herdado</span></td></tr>
         </tbody>
       </table></div>
     </div>
@@ -310,7 +317,7 @@ label.campo input, label.campo select { width: 100%; }
 <div class="modal-fundo" id="modalForn" hidden>
   <form class="modal" id="formForn">
     <h2>Novo fornecedor</h2>
-    <p class="ajuda" style="margin:0">Qualquer fornecedor do mercado. Depois de criar, faça a negociação de cada produto (flat ou por operadora) e inclua no plano de rota.</p>
+    <p class="ajuda" style="margin:0">Qualquer fornecedor do mercado. Depois de criar, faça a negociação de cada produto (flat ou por operadora) e inclua na rota.</p>
     <div class="grade2">
       <label class="campo">Nome<input id="fNome" value="Pontaltech" required minlength="2"></label>
       <label class="campo">Código<input id="fCod" value="pontaltech" pattern="[a-z0-9_]{2,30}" required></label>
@@ -318,7 +325,7 @@ label.campo input, label.campo select { width: 100%; }
     <div class="campo">Canais que ele atende
       <div class="canaisck"><label><input type="checkbox" id="fc_sms" checked> SMS</label><label><input type="checkbox" id="fc_email"> E-mail</label><label><input type="checkbox" id="fc_rcs"> RCS</label><label><input type="checkbox" id="fc_whatsapp"> WhatsApp</label></div></div>
     <label class="campo">Nome do segredo da credencial (opcional)<input id="fSeg" placeholder="ex.: PONTALTECH_API_KEY"></label>
-    <div class="aviso az"><div>A chave de acesso nunca é digitada aqui: ela vai só para o cofre de segredos (Google Cloud). Até o envio real ser integrado, o fornecedor fica "simulado": entra no plano de rota e no custo previsto, e o motor usa a reserva no envio.</div></div>
+    <div class="aviso az"><div>A chave de acesso nunca é digitada aqui: ela vai só para o cofre de segredos (Google Cloud). Até o envio real ser integrado, o fornecedor fica "simulado": entra na rota e no custo previsto, e o motor usa a reserva no envio.</div></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button type="button" class="btn sec" id="cancForn">Cancelar</button>
       <button class="btn">Criar e configurar</button>
@@ -607,7 +614,7 @@ function catalogo() {
       const m = mc(p.min, p.custo);
       const forns = fornsDe(p);
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td><b>${p.nome}</b><br><span class="cod">${p.cod}</span></td><td>${p.uni}</td>
+      tr.innerHTML = `<td><b>${p.nome}</b></td><td>${p.uni}</td>
         <td><button class="lnk rota" data-cod="${p.cod}">${forns.length ? forns.join(" + ") : "montar rota"}</button>${completa(p) ? "" : ' <span class="selo er">incompleta</span>'}</td>
         <td class="n">${completa(p) ? `<button class="lnk" aria-expanded="false">${brl(p.custo)} ▾</button>` : '<span class="cod">—</span>'}</td>
         <td class="n">${p.real == null ? '<span class="cod">sem envio</span>' : brl(p.real) + (p.real > p.custo * 1.05 ? ' <span class="selo al">acima</span>' : "")}</td>
