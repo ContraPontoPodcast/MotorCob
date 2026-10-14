@@ -355,6 +355,10 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
             if fb_tpl:
                 loc["fallback_texto"] = preencher(fb_tpl["conteudo"].get("texto", ""), variaveis).strip()
             locais[(idc, h)] = loc
+    score = None
+    if c.get("score_faixas"):                   # Score de Entrega: só as faixas escolhidas recebem (nuvem/score.py)
+        from nuvem import score as SC
+        score = SC.aplicar(sb, c, produto, linhas_db, locais)
     jan = M.janela(canais_cfg.get(canal), agora.date()) or M.JANELA_PADRAO
     situacao = "agendado" if locais else "concluido"
     lote = sb.inserir("mensageria_lotes", [{
@@ -365,6 +369,8 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
         "motivo": None if locais else "nada a enviar: todos bloqueados na higienização"}], retornar=True)[0]
     gravadas = sb.inserir("mensageria_mensagens", [{**x, "lote_id": lote["id"], "empresa_id": eid} for x in linhas_db],
                           retornar=True) if linhas_db else []
+    if score and modo == "real":                # o Score entra no consumo do mês pela forma contratada
+        M._consumo(sb, eid, agora.date(), SC.itens_de_cobranca(sb, eid, score))
     links = [{"codigo": cod, "empresa_id": eid, "lote_id": lote["id"], "mensagem_id": m["id"], "campanha_id": c["id"],
               "canal": canal, "id_cliente": m["id_cliente"], "url_destino": url[:2000]}
              for m in gravadas if m["situacao"] == "pendente"
@@ -378,6 +384,9 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
                  {**cont, "situacao": "em_andamento" if locais else "concluida"})
     out(f"campanha {c['id']} ({canal}): {len(locais)} para enviar, {cont['invalidos']} inválidos, "
         f"{cont['duplicados']} repetidos, {cont['bloqueados']} bloqueados")
+    if score:
+        out(f"  score de entrega: {score['analisados']} analisados, {score['represados']} represados, "
+            f"{score['controle']} no grupo de controle")
     return lote
 
 

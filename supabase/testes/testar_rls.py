@@ -605,7 +605,7 @@ checar("fatura paga não conta como vencida", True, f"select faturas_vencidas fr
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional
 SVC = "service_role"
-checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 16)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30)
+checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 18)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33)
 checar("cliente não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", u["admina"])
 checar("Atendimento não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", SUP)
 checar("ninguém grava preço direto na tabela", False, f"insert into public.precos_empresa (empresa_id,item,modelo,preco) values ({EA},'sms','flat',0.01)", "authenticated", u["admin"])
@@ -1190,6 +1190,78 @@ checar("Master edita o glossário", True, "with x as (update public.glossario se
 checar("cores do tema abrem sem login (tela de login)", True, "select claro from public.tema_tokens where chave='area.mensageria'", "anon", None, "#7A2E3B")
 checar("Administrativo não troca cor do tema", True, "with x as (update public.tema_tokens set claro='#000000' returning 1) select count(*) from x", "authenticated", ADM, "0")
 checar("cor inválida é recusada", False, "update public.tema_tokens set claro='azul' where chave='base.menu'", "authenticated", u["admin"])
+# Qualidade dos fornecedores, função Técnico e Score de Entrega (SQL 33)
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261130000001_score_entrega_qualidade.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+_, TEC, _ = sql("insert into auth.users (email) values ('tecnico@x.com') returning id")
+checar("Master torna alguém Técnico", True, AAL2 + f"select public.definir_funcao_equipe('{TEC}','tecnico')", "authenticated", u["admin"], "tecnico")
+checar("Técnico aparece na equipe com as permissões dele", True, f"select funcao||','||(permissoes->>'ver_detalhe_tecnico')||','||(permissoes->>'contratar_score')||','||(permissoes->>'gerenciar_equipe') from public.listar_equipe() where id='{TEC}'", "authenticated", u["admin"], "tecnico,true,false,false")
+checar("Técnico configura o filtro de inteligência", True, "with x as (update public.mensageria_score_config set janela_dias=30 where plano_id is null returning 1) select count(*) from x", "authenticated", TEC, "1")
+checar("Comercial não configura o filtro", True, "with x as (update public.mensageria_score_config set janela_dias=40 returning 1) select count(*) from x", "authenticated", COM, "0")
+checar("Atendimento não configura o filtro", True, "with x as (update public.mensageria_score_config set janela_dias=40 returning 1) select count(*) from x", "authenticated", SUP, "0")
+checar("quarentena maior que a janela é recusada", False, "update public.mensageria_score_config set quarentena_dias=60 where plano_id is null", "authenticated", TEC)
+checar("nome que imita status de operadora é recusado", False, "update public.mensageria_score_nomes set texto='Entregue' where faixa='baixo'", "authenticated", TEC)
+checar("nome com código de DLR é recusado", False, "update public.mensageria_score_nomes set texto='UNDELIV pelo filtro' where faixa='baixo'", "authenticated", TEC)
+checar("Técnico edita o nome devolvido ao cliente", True, "with x as (update public.mensageria_score_nomes set texto='Número com baixa chance de entrega' where faixa='baixo' returning 1) select count(*) from x", "authenticated", TEC, "1")
+checar("cliente lê os nomes devolvidos", True, "select texto from public.mensageria_score_nomes where faixa='baixo'", "authenticated", u["admina"], "Número com baixa chance de entrega")
+checar("cliente não edita os nomes", True, "with x as (update public.mensageria_score_nomes set texto='Qualquer outro nome' returning 1) select count(*) from x", "authenticated", u["admina"], "0")
+# histórico fictício: A = 3 falhas permanentes recentes, B = 2 entregas, C = nunca saiu
+FSMS = "(select min(codigo) from public.mensageria_fornecedores where 'sms' = any(canais))"
+HA, HB, HC = "a" * 64, "b" * 64, "c" * 64
+r = sql(f"set role service_role; insert into public.mensageria_lotes (empresa_id,data,canal,modo,situacao,total) values ({EA},'2026-10-10','sms','real','concluido',5) returning id")
+assert r[0], r[2]
+LS = r[1].splitlines()[-1]
+r = sql(f"set role service_role; insert into public.mensageria_mensagens (lote_id,empresa_id,id_cliente,destino_mascara,destino_hash,fornecedor,operadora,situacao,motivo,enviado_em,atualizado_em,dlr_em) values "
+        f"({LS},{EA},'X1','(11) 9••••-••01','{HA}',{FSMS},'vivo','falhou','número inexistente','2026-10-13 12:00','2026-10-13 12:00','2026-10-13 12:00'),"
+        f"({LS},{EA},'X2','(11) 9••••-••01','{HA}',{FSMS},'vivo','falhou','número inexistente','2026-10-11 12:00','2026-10-11 12:00','2026-10-11 12:00'),"
+        f"({LS},{EA},'X3','(11) 9••••-••01','{HA}',{FSMS},'vivo','falhou','aparelho desligado','2026-10-06 12:00','2026-10-06 12:00','2026-10-06 12:00'),"
+        f"({LS},{EA},'X4','(11) 9••••-••02','{HB}',{FSMS},'claro','entregue',null,'2026-10-13 12:00','2026-10-13 12:00','2026-10-13 12:00'),"
+        f"({LS},{EA},'X5','(11) 9••••-••02','{HB}',{FSMS},'claro','entregue',null,'2026-10-09 12:00','2026-10-09 12:00','2026-10-09 12:00')")
+assert r[0], r[2]
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from nuvem import score as SCO  # noqa: E402
+cfg_ = {**SCO.PADRAO}
+esperado_ = []
+for h_, hist_ in ((HA, [(1, "falhou", True), (3, "falhou", True), (8, "falhou", False)]),
+                  (HB, [(1, "entregue", False), (5, "entregue", False)]), (HC, [])):
+    p_, t_, u_ = SCO.probabilidade(hist_, cfg_)
+    esperado_.append(f"{SCO.faixa(p_, t_, u_, cfg_)}:{p_:.2f}")
+SCORE_Q = f"select string_agg(faixa||':'||round(probabilidade,2), ',' order by destino_hash) from public.score_entrega(array['{HA}','{HB}','{HC}'], 'sms', '2026-10-14 12:00')"
+checar("Score de Entrega no banco igual ao do motor (baixo, alto, sem histórico)", True, "set role service_role; " + SCORE_Q, None, None, ",".join(esperado_))
+checar("cliente não chama o Score direto", False, SCORE_Q, "authenticated", u["admina"])
+checar("Técnico tira um fornecedor da análise e a DLR dele deixa de contar", True,
+       f"insert into public.mensageria_score_fornecedores (fornecedor, considerar) values ({FSMS}, false) on conflict (fornecedor) do update set considerar=false; set role service_role; " + SCORE_Q.replace("string_agg(faixa||':'||round(probabilidade,2), ',' order by destino_hash)", "string_agg(faixa, ',' order by destino_hash)"),
+       "authenticated", TEC, "sem,sem,sem")
+sql(f"delete from public.mensageria_score_fornecedores")
+# contratação e campanha
+checar("Técnico não contrata o Score", False, f"insert into public.empresa_score (empresa_id,cobranca) values ({EA},'represado')", "authenticated", TEC)
+checar("Comercial contrata o Score para empresa da carteira dele", True, f"insert into public.empresa_score (empresa_id,cobranca) values ({NC},'analisado') returning cobranca", "authenticated", COM, "analisado")
+checar("Comercial não contrata fora da carteira", False, f"insert into public.empresa_score (empresa_id,cobranca) values ({EA},'analisado')", "authenticated", COM)
+checar("cobrança desconhecida é recusada", False, f"insert into public.empresa_score (empresa_id,cobranca) values ({EB},'embutido')", "authenticated", u["admin"])
+checar("campanha com Score sem contrato é recusada", False, f"set role service_role; insert into public.mensageria_campanhas (empresa_id,canal,nome,score_faixas) values ({EB},'sms','Teste score','{{alto,medio}}')")
+checar("Master contrata o Score (só pelos represados)", True, f"insert into public.empresa_score (empresa_id,cobranca) values ({EA},'represado') returning cobranca", "authenticated", u["admin"], "represado")
+r = sql(f"set role service_role; insert into public.mensageria_campanhas (empresa_id,canal,nome,score_faixas) values ({EA},'sms','Campanha score','{{alto,medio,sem}}') returning id")
+assert r[0], r[2]
+CS = r[1].splitlines()[-1]
+checar("faixa desconhecida é recusada", False, f"set role service_role; update public.mensageria_campanhas set score_faixas='{{otimo}}' where id={CS}")
+r = sql(f"set role service_role; insert into public.mensageria_lotes (empresa_id,data,canal,modo,situacao,total,campanha_id) values ({EA},'2026-10-12','sms','real','concluido',10,{CS}) returning id")
+assert r[0], r[2]
+LC = r[1].splitlines()[-1]
+r = sql("set role service_role; insert into public.mensageria_mensagens (lote_id,empresa_id,id_cliente,destino_mascara,destino_hash,situacao,score_faixa,filtro,score_controle) select "
+        f"{LC},{EA},'S'||g,'(11) 9••••-••'||lpad(g::text,2,'0'),md5(g::text)||md5(g::text),case when g<=2 then 'bloqueada' else 'entregue' end,case when g<=2 then 'baixo' else 'alto' end,case when g<=2 then 'score' end,false from generate_series(1,10) g")
+assert r[0], r[2]
+checar("Economia do Score: analisados, represados e enviados da campanha", True, f"select analisados||','||represados||','||enviados from public.economia_score({EA},'2026-10-01','2026-10-31') where campanha_id={CS}", "authenticated", u["admina"], "10,2,8")
+checar("Economia do Score de outra empresa é recusada", False, f"select * from public.economia_score({EA},'2026-10-01','2026-10-31')", "authenticated", u["operb"])
+checar("cliente vê o grupo de controle da empresa dele", True, f"select count(*) >= 0 from public.controle_score({EA},'2026-10-01','2026-10-31')", "authenticated", u["admina"], "t")
+# qualidade e detalhe técnico
+checar("Técnico vê a qualidade dos fornecedores", True, f"select count(*) >= 1 from public.qualidade_fornecedores('2026-10-01','2026-10-15','sms')", "authenticated", TEC, "t")
+checar("cliente não vê a qualidade dos fornecedores", False, "select * from public.qualidade_fornecedores('2026-10-01','2026-10-15','sms')", "authenticated", u["admina"])
+checar("Comercial não vê a qualidade dos fornecedores", False, "select * from public.qualidade_fornecedores('2026-10-01','2026-10-15','sms')", "authenticated", COM)
+checar("Técnico vê o detalhe técnico", True, "select count(*) >= 1 from public.detalhe_tecnico_envios('2026-10-01','2026-10-15')", "authenticated", TEC, "t")
+checar("Atendimento não vê o detalhe técnico", False, "select * from public.detalhe_tecnico_envios('2026-10-01','2026-10-15')", "authenticated", SUP)
+checar("alertas de qualidade abrem para o Técnico", True, "select count(*) >= 0 from public.alertas_qualidade('sms')", "authenticated", TEC, "t")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

@@ -97,6 +97,21 @@ class TestRetornos(unittest.TestCase):
         self.assertEqual(r["descartados"], 1)
         self.assertFalse([e for e in self.sb.t["mensageria_eventos"] if e["processado_em"] is None])
 
+    def test_dlr_guarda_quando_voltou_e_o_codigo_original(self):
+        self._enviar()
+        msgs = [m for m in self._msgs("sms") if m["situacao"] == "enviada"]
+        for m in self.sb.t["mensageria_mensagens"]:
+            m.setdefault("dlr_em", None)                     # banco com o SQL 33
+        a, b = msgs[0], msgs[1]
+        self._evento(evento_id="1", id_externo=a["id_externo"], tipo="entregue", fornecedor=a["fornecedor"],
+                     codigo="DELIVRD", ocorrido_em="2026-10-14T10:00:20-03:00")
+        self._evento(evento_id="2", id_externo=b["id_externo"], tipo="falhou", motivo="número inexistente",
+                     fornecedor=b["fornecedor"], ocorrido_em="2026-10-14T10:05:00-03:00")
+        self._aplicar()
+        por_id = {m["id"]: m for m in self._msgs("sms")}
+        self.assertEqual((por_id[a["id"]]["dlr_em"], por_id[a["id"]]["dlr_codigo"]), ("2026-10-14T10:00:20-03:00", "DELIVRD"))
+        self.assertEqual(por_id[b["id"]]["dlr_codigo"], "número inexistente")
+
     def test_resposta_casa_pelo_hash_cobra_e_sair_descadastra(self):
         self._enviar()
         m1, m2 = self._msgs("sms")[0], self._msgs("sms")[1]
