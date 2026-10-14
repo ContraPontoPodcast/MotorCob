@@ -83,7 +83,7 @@ Usuários, Permissões e Auditoria saem do grupo sem nome do fim de todos os men
 perfis e Empresa › Auditoria; no Console, grupos Clientes · Suporte · Financeiro · Mensageria · Administração (Equipe
 e Auditoria de todas as empresas). Empresas é a primeira tela do Console.
 
-## Bloco 5 · Repaginada da experiência — APROVADO em 14/10/2026, exceto a paleta
+## Bloco 5 · Repaginada da experiência — APROVADO em 14/10/2026 (inclusive a paleta)
 
 Protótipos: `bloco5-repaginada-prototipo.html` (glossário, nomes, antes e depois, menus, decisões) e
 `bloco5-paletas-prototipo.html` (paletas e ajuda). Revisão das telas: `bloco5-revisao-telas-1.md` e `-2-console.md`.
@@ -100,10 +100,18 @@ Aprovado:
    (12+ caracteres, letra e número) em todas as telas; **CSV, TXT e XLSX** aceitos em todo lugar; demais nomes da
    tabela "Um nome por conceito".
 
-Em aberto: **paleta**. Restrição: fugir das cores das concorrentes (Ótima: azul, migrando para preto e roxo;
-Pontaltech: laranja). Opções no protótipo de paletas: 1 Musgo (recomendada), 2 Esmeralda, 3 Dourado MotorCob,
-4 Menu verde-pinho, 5 Escura (opção de cada usuário). As cores dos canais (RCS azul, SMS roxo…) identificam canais,
-não a marca, e podem ser revistas junto.
+6. **Paleta — APROVADA em 14/10/2026** (`bloco5-paleta-areas-prototipo.html`; insumos: `bloco5-cores-concorrentes.html`,
+   `bloco5-laboratorio-cores.html`). Base Apple igual em todas as áreas + uma cor de destaque por área:
+   - base: menu cinza-claro #EEEFF1, conteúdo #F8F8F9, cartões #FFFFFF, bordas #E3E4E8, texto #1D1D1F / #6E6E73;
+   - **Cobrança: dourado/ocre #8A6A2E** · **Jornada do Cliente: verde musgo #4F6B3A** · **Mensageria: vinho/bordô #7A2E3B**;
+   - a cor da área só no botão principal, item ativo do menu, etiqueta da área e filete do título;
+   - fixos: verde = pronto, âmbar = atenção, vermelho = erro, e as cores dos canais;
+   - fundo **liso** nas telas de trabalho; **halo** suave na cor da área só no login, Início e telas vazias;
+   - modo escuro opcional por pessoa (Minha conta); preto só no logo e no site.
+   Fora das cores ocupadas pelos concorrentes (azul, roxo, laranja, vermelho, amarelo, menta/turquesa, preto como base).
+   Cores em variáveis (tema): trocar depois é mudar uma tabela.
+
+**Todos os blocos (1 a 5) aprovados.** Próximo passo: gerar SQL, testes, ajustes no motor e prompts.
 
 ## Fila para rodar (quando liberar)
 
