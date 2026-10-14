@@ -97,6 +97,11 @@ code,.mono{font-family:var(--mono);font-size:12.5px}
 .op b{display:block}
 .op span{color:var(--texto2);font-size:12.5px}
 .svg-graf{width:100%;height:auto;display:block}
+.enviar{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.enviar legend{font-size:12.5px;color:var(--texto2);padding:0;margin-bottom:6px;width:100%}
+.enviar label{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--borda);border-radius:10px;padding:8px 12px;cursor:pointer;background:var(--cartao);font-weight:500}
+.enviar label:has(input:checked){border-color:var(--area);box-shadow:inset 0 0 0 1px var(--area)}
+.enviar input{accent-color:var(--area);width:16px;height:16px;margin:0}
 .decisao{background:var(--at-f);color:var(--texto);border-radius:10px;padding:10px 12px;font-size:13px}
 .decisao b{color:var(--at)}
 ul.simples{margin:6px 0 0;padding-left:18px}
@@ -277,8 +282,14 @@ ul.simples li{margin:3px 0}
         <div id="camp-corpo" style="margin-top:14px;display:flex;flex-direction:column;gap:14px">
           <div class="barra" id="camp-barra" aria-hidden="true"></div>
           <div class="kpis" id="camp-faixas"></div>
-          <div class="campo"><label for="camp-acao">O que enviar</label>
-            <select id="camp-acao"><option value="todos">Enviar para todos (só classificar)</option><option value="semBaixo" selected>Não enviar para o Baixo</option><option value="altoMedio">Enviar só para Alto e Médio, sem histórico fica de fora</option></select></div>
+          <fieldset class="enviar" id="camp-acao">
+            <legend>O que enviar</legend>
+            <label><input type="checkbox" id="cx-todos" value="todos"> Todos</label>
+            <label><input type="checkbox" id="cx-alto" value="Alto" checked> Alto</label>
+            <label><input type="checkbox" id="cx-medio" value="Médio" checked> Médio</label>
+            <label><input type="checkbox" id="cx-baixo" value="Baixo"> Baixo</label>
+            <label><input type="checkbox" id="cx-sem" value="Sem histórico" checked> Sem histórico</label>
+          </fieldset>
           <div class="prev" id="camp-prev"></div>
         </div>
       </div>
@@ -512,14 +523,23 @@ ul.simples li{margin:3px 0}
     const tot = Object.values(FX).reduce((a, b) => a + b, 0);
     document.getElementById("camp-barra").innerHTML = Object.entries(FX).map(([k, v]) => `<i style="width:${v / tot * 100}%;background:${COR[k]}"></i>`).join("");
     document.getElementById("camp-faixas").innerHTML = Object.entries(FX).map(([k, v]) => `<div class="kpi"><span><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${COR[k]};margin-right:6px"></i>${k}</span><b>${n(v)}</b><em>${pct(v / tot * 100)} do mailing</em></div>`).join("");
-    const a = document.getElementById("camp-acao").value;
-    const fora = a === "todos" ? 0 : a === "semBaixo" ? FX.Baixo : FX.Baixo + FX["Sem histórico"];
-    const nomeFora = a === "altoMedio" ? `"${nomeAtual("baixo")}" e "${nomeAtual("sem")}"` : `"${nomeAtual("baixo")}"`;
-    document.getElementById("camp-prev").innerHTML = fora
-      ? `<b>${n(tot - fora)} números serão enviados · ${n(fora)} não serão enviados.</b><br><span style="color:var(--texto2)">No retorno da campanha, quem ficou de fora aparece como ${nomeFora}, com a faixa de cada número.</span>`
+    const marcadas = Object.keys(FX).filter(k => document.querySelector(`#camp-acao input[value="${k}"]`).checked);
+    const fora = Object.keys(FX).filter(k => !marcadas.includes(k));
+    const nFora = fora.reduce((s, k) => s + FX[k], 0);
+    const nomeDe = { Baixo: nomeAtual("baixo"), "Sem histórico": nomeAtual("sem"), Alto: "Não enviado · faixa Alto fora da campanha", "Médio": "Não enviado · faixa Médio fora da campanha" };
+    document.getElementById("camp-prev").innerHTML = !marcadas.length
+      ? `<b style="color:var(--erro)">Marque pelo menos uma faixa para enviar.</b>`
+      : nFora
+      ? `<b>${n(tot - nFora)} números serão enviados · ${n(nFora)} não serão enviados (${fora.join(", ")}).</b><br><span style="color:var(--texto2)">No retorno, quem ficou de fora aparece como ${fora.map(k => `"${nomeDe[k]}"`).join(" e ")}, com a faixa de cada número.</span>`
       : `<b>${n(tot)} números serão enviados.</b><br><span style="color:var(--texto2)">O Score só classifica: a faixa de cada número vem no retorno.</span>`;
+    document.getElementById("camp-ok").disabled = !marcadas.length;
   }
-  document.getElementById("camp-acao").addEventListener("change", campanha);
+  const cxTodos = document.getElementById("cx-todos");
+  const cxFaixas = [...document.querySelectorAll('#camp-acao input:not(#cx-todos)')];
+  const sincTodos = () => { cxTodos.checked = cxFaixas.every(c => c.checked); };
+  cxTodos.addEventListener("change", () => { cxFaixas.forEach(c => c.checked = cxTodos.checked); campanha(); });
+  cxFaixas.forEach(c => c.addEventListener("change", () => { sincTodos(); campanha(); }));
+  sincTodos();
   document.getElementById("ch-camp").addEventListener("mudou", campanha);
   document.getElementById("camp-ok").addEventListener("click", () => { document.getElementById("camp-msg").textContent = "Campanha agendada (protótipo: nada foi enviado)."; });
 
