@@ -137,6 +137,16 @@ Protótipo: `bloco6-qualidade-score-prototipo.html`.
 - **Economia do Score** (cliente): período com data inicial e final, por campanha; economia líquida e **custo
   unitário efetivo** (total pago ÷ mailing carregado) com valores faturados, sem simulação.
 
+## Revisão de UX · decisões de 14/10/2026
+
+- **Economia do Score para quem não contratou:** vitrine ("Deixa como vitrine"). Só números reais do cliente
+  (SMS que não chegaram no período e quanto pagou por eles), sem simulação, e o pedido de proposta. Tela no
+  protótipo do bloco 6; banco e prompt depois da aprovação da tela.
+- **Um nome para a lista de contatos** ("define o que for melhor"): *lista da campanha* na Mensageria, *carga* na
+  Cobrança e na Jornada. "Mailing" sai das telas e fica no glossário como nome antigo. Aplicado no SQL 33, no
+  Assistente e nos prompts 46 a 48.
+- **Mistura de operadoras** ("pode fazer"): no fim da aba Rotas, como o prompt 39. Protótipo do bloco 2 ajustado.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
