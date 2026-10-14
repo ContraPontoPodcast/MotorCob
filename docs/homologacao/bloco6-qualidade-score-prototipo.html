@@ -71,6 +71,7 @@ input[type=number]{width:84px;font-variant-numeric:tabular-nums}
 :root[data-theme="dark"] .btn{color:#1D1D1F}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn{color:#1D1D1F}}
 .btn:active{background:var(--area-forte)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.sec{background:var(--pilula);color:var(--texto)}
 .btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--area);outline-offset:2px}
 .linha{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
@@ -109,6 +110,17 @@ code,.mono{font-family:var(--mono);font-size:12.5px}
 .res-sub{font-size:14px}
 .res-conta{grid-column:1/-1;margin:0;padding-top:12px;border-top:1px solid var(--borda);color:var(--texto2);font-size:13px;font-variant-numeric:tabular-nums}
 .res-conta b{color:var(--texto)}
+.passos{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;counter-reset:p}
+.passos li{counter-increment:p;display:flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border-radius:999px;background:var(--pilula);color:var(--texto2);font-size:13px}
+.passos li::before{content:counter(p);display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--cartao);border:1px solid var(--borda);font-size:12px;font-weight:600}
+.passos li.feito{color:var(--texto)}
+.passos li.feito::before{content:"✓";background:var(--ok-f);color:var(--ok);border-color:transparent}
+.passos li.atual{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.passos li.atual::before{background:var(--area);color:#fff;border-color:transparent}
+.progresso{height:6px;border-radius:999px;background:var(--pilula);overflow:hidden;margin-top:6px}
+.progresso i{display:block;height:100%;width:40%;background:var(--area);border-radius:999px;animation:corre 1.4s ease-in-out infinite}
+@keyframes corre{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+@media (prefers-reduced-motion:reduce){.progresso i{animation:none;width:60%}}
 .decisao{background:var(--at-f);color:var(--texto);border-radius:10px;padding:10px 12px;font-size:13px}
 .decisao b{color:var(--at)}
 ul.simples{margin:6px 0 0;padding-left:18px}
@@ -273,12 +285,27 @@ ul.simples li{margin:3px 0}
     <!-- ======================= CAMPANHA ======================= -->
     <section data-p="campanha" hidden>
       <div class="cab">
-        <div><span class="etq">Mensageria</span><h2 style="margin-top:6px">Nova campanha · Confirmar envio</h2><p>Plataforma do cliente. A chave só aparece quando o Score de Entrega está contratado.</p></div>
+        <div><span class="etq">Mensageria</span><h2 style="margin-top:6px">Nova campanha · Cobrança outubro</h2><p>Plataforma do cliente, com o Score de Entrega contratado. Arquivo "cobranca_outubro.xlsx".</p></div>
+        <div class="campo"><label for="demo-estado">Ver no protótipo</label>
+          <select id="demo-estado"><option value="calc">1 · Calculando a prévia</option><option value="pronta" selected>2 · Prévia pronta</option><option value="api">Campanha pela API</option></select></div>
       </div>
-      <div class="cartao">
+      <ol class="passos" aria-label="Etapas da campanha">
+        <li class="feito">Arquivo</li><li class="feito">Colunas</li><li class="atual" id="passo-previa">Prévia do Score</li><li>Agendar</li>
+      </ol>
+      <div class="cartao" id="camp-calc" hidden>
+        <h3>Calculando a prévia do Score de Entrega…</h3>
+        <p class="sub">Estamos classificando os 18.420 números válidos do arquivo pelo histórico de entrega. Leva alguns minutos. Você pode sair: a campanha fica salva e a prévia aparece aqui.</p>
+        <div class="progresso" role="progressbar" aria-label="Calculando a prévia"><i></i></div>
+        <p class="nota">Enquanto isso, o botão Agendar fica desabilitado.</p>
+      </div>
+      <div class="cartao" id="camp-api" hidden>
+        <h3>Campanha recebida pela API</h3>
+        <p class="sub">Pela API não há prévia: a campanha segue direto para o envio, o Score é aplicado na hora e o resultado (represados, economia e custo unitário efetivo) aparece em Economia do Score depois do envio.</p>
+      </div>
+      <div class="cartao" id="camp-pronta">
         <div class="linha" style="justify-content:space-between">
           <div><h3>Score de Entrega <span class="i" title="Probabilidade de entrega de cada número, pelo histórico da Mensageria. Ver no glossário.">i</span></h3>
-            <p class="sub" style="margin:0">Arquivo "cobranca_outubro.xlsx" · 18.420 números válidos · SMS Padrão</p></div>
+            <p class="sub" style="margin:0">Prévia calculada às 09:42 · 18.420 números válidos · SMS Padrão. É esta classificação que vai ser usada no envio.</p></div>
           <button class="chave" role="switch" aria-checked="true" id="ch-camp" aria-label="Usar o Score de Entrega"></button>
         </div>
         <div id="camp-corpo" style="margin-top:14px;display:flex;flex-direction:column;gap:14px">
@@ -295,7 +322,7 @@ ul.simples li{margin:3px 0}
           <div class="prev" id="camp-prev"></div>
         </div>
       </div>
-      <div class="linha" style="justify-content:flex-end"><button class="btn sec" type="button">Voltar</button><button class="btn" type="button" id="camp-ok">Agendar envio</button></div>
+      <div class="linha" style="justify-content:flex-end" id="camp-botoes"><button class="btn sec" type="button">Voltar</button><button class="btn" type="button" id="camp-ok">Agendar envio</button></div>
       <p class="nota" id="camp-msg" aria-live="polite"></p>
     </section>
 
@@ -703,6 +730,20 @@ ul.simples li{margin:3px 0}
     document.getElementById("ci-conta").innerHTML = `<b>${n(r.mail)}</b> carregados · <b>${n(r.rep)}</b> represados · <b>${n(r.env)}</b> enviados · total pago <b>${brl(r.com)}</b> ÷ ${n(r.mail)} = <b>${b4(r.unit)}</b> por número · sem o Score seriam ${brl(r.sem)}`;
   }
 
+
+  // ---------------- etapas da campanha no protótipo (calculando / prévia pronta / API)
+  function estadoCampanha() {
+    const e = document.getElementById("demo-estado").value;
+    document.getElementById("camp-calc").hidden = e !== "calc";
+    document.getElementById("camp-pronta").hidden = e !== "pronta";
+    document.getElementById("camp-api").hidden = e !== "api";
+    document.getElementById("camp-botoes").hidden = e === "api";
+    document.getElementById("camp-ok").disabled = e === "calc" || (e === "pronta" && !document.querySelectorAll('#camp-acao input:not(#cx-todos):checked').length);
+    document.getElementById("passo-previa").textContent = e === "api" ? "Sem prévia (API)" : "Prévia do Score";
+  }
+  document.getElementById("demo-estado").addEventListener("change", estadoCampanha);
+  document.querySelectorAll("#camp-acao input").forEach(c => c.addEventListener("change", estadoCampanha));
+  estadoCampanha();
 
   atualizar();
 })();
