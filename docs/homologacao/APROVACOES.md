@@ -1,0 +1,84 @@
+# Homologação — aprovações e fila para rodar
+
+Nada desta lista foi rodado no site ou no banco de produção. A regra combinada (14/10/2026): primeiro
+prototipar e aprovar todos os blocos, guardar aqui, e só depois rodar tudo na ordem da fila no fim deste arquivo.
+
+## Bloco 1 · Correções rápidas do Console — pronto, aguardando merge
+
+PR 108 (SQL 29, função `cobranca` reempacotada e prompts 36 e 37), com os testes verdes:
+- chave liga/desliga única em todo o Console;
+- suspender, encerrar e reativar empresa (com motivo) e excluir empresa de teste (só Master);
+- avisos do Atendimento (cliente respondeu, contador) e do Suporte no Workspace;
+- "Recebe faturas" em qualquer contato da empresa;
+- plano de rota mostrando fornecedores inativos e a mensagem quando ninguém tem o canal.
+
+## Bloco 2 · Produtos da Mensageria, fornecedores, rotas e perfil Administrativo — APROVADO em 14/10/2026
+
+Protótipo aprovado: `bloco2-produtos-prototipo.html` (nesta pasta).
+
+Decisões:
+1. **Produto = rota que se vende.** Catálogo por canal, por exemplo:
+   - SMS: OTP, Short, Marketing (e novos, como SMS Bet);
+   - WhatsApp: Utilidade, Serviço, Marketing;
+   - RCS: Basic, Single, Conversacional;
+   - E-mail: com e sem anexo.
+
+   Cada produto tem código da API, unidade, preço mínimo e preço de tabela. O Administrativo e o Master criam produtos.
+2. **Fornecedores.**
+   - Cadastro aberto para qualquer fornecedor do mercado, feito pelo Administrativo e pelo Master, com edição depois.
+   - A credencial nunca é digitada no site: só o nome do segredo.
+   - Sem integração, o fornecedor fica "simulado" e o motor usa a reserva no envio.
+3. **Negociação por fornecedor e produto.**
+   - **Flat:** um custo para qualquer operadora.
+   - **Por operadora:** escolhe as operadoras (Vivo, Claro, TIM, Outras) e o custo de cada uma.
+   - **Custo zero ou vazio é proibido** (trava no site e no banco).
+4. **Rota do produto.**
+   - **Preço flat:** composição com um ou mais fornecedores e % do tráfego.
+   - **Por operadora:** blocos por operadora marcada, mais o bloco opcional **Demais operadoras**, que reúne as não marcadas. Ex.: Claro 100% Pontaltech; demais 50% Sinch e 50% Zenvia.
+   - Operadora sem bloco e sem "Demais" vai para a rota de reserva do canal.
+   - Cada bloco soma 100%.
+   - Fornecedor sem custo para aquele produto ou operadora trava a rota.
+   - **Rota incompleta não pode ser contratada.**
+   - O custo digitado na rota grava na negociação do fornecedor, e vice-versa.
+   - Pode cadastrar fornecedor novo de dentro da rota.
+5. **Custo previsto.**
+   - Na rota flat, é a composição.
+   - Na rota por operadora, é a mistura pelo market share de celulares da Teleco (dados Anatel), editável, com fonte e mês, mais a consulta de operadora.
+   - O realizado continua envio a envio, pelo fornecedor e pela operadora que levaram a mensagem.
+   - A tela mostra também o custo pela mistura real do mês anterior e o pior caso.
+6. **Preço.**
+   - O Comercial negocia entre o mínimo e a tabela.
+   - Abaixo do mínimo, só o Administrativo ou o Master, com motivo obrigatório (vai para a Auditoria).
+   - A MC no mínimo aparece na tabela.
+7. **Contratação por produto.**
+   - Ligar o produto o libera na campanha e na API.
+   - A campanha escolhe canal e produto.
+   - A API recebe `produto`; se o produto não estiver contratado, responde 422 `produto_nao_contratado`; sem `produto`, vale o padrão do canal.
+8. **Regra do canal no canal da empresa.**
+   - O credor herda a regra e pode sobrescrever, com selo e o botão "voltar ao padrão".
+   - As travas da estratégia só restringem.
+9. **Comitê:** % do gasto × % dos CPCs por produto, com índice e custo por CPC.
+10. **Perfil Administrativo.**
+    - Responsável por: ativação da empresa (Implantação → Ativa), suspender, encerrar e reativar, faturamento, NF, produtos e preços, preço abaixo do mínimo, e fornecedores com custos e rotas.
+    - Não acessa Orquestração nem Equipe. Na Auditoria, vê só preços, fornecedores e faturas.
+    - O Master continua com tudo.
+
+A escrever, depois de aprovados os blocos 3 e 4: SQL 30, testes, ajustes no motor (custo por operadora, produto no envio) e
+prompts do Console, do Workspace e da API.
+
+## Bloco 3 · Orquestração — a prototipar
+
+Estratégia por carteira, com "copiar de outra carteira"; navegação dos botões da direita; Mapa da Esteira; fases
+padrão com orçamento e prioridade; travas por estratégia e por fase.
+
+## Bloco 4 · Console — a prototipar
+
+Usuários, Permissões e Auditoria saem do Console.
+
+## Fila para rodar (quando liberar)
+
+1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
+2. Pendências anteriores: confirmar o SQL 26, prompts 53 e 54 e o passo 41 (MotorCli Jornada); salvar de novo a
+   Contratação da empresa criada pela metade e convidar o Admin dela.
+3. Bloco 2: SQL 30 e prompts (a gerar).
+4. Blocos 3 e 4 (a gerar).
