@@ -147,4 +147,9 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     casa, glossário "O que significa" com os 40 termos e cores do tema. Depois ajuste a senha no painel
     (`02_supabase_painel`, item 4) e cole os prompts 43, 44 e 45.
 
+33. `supabase/migrations/20261130000001_score_entrega_qualidade.sql` (SQL 33) — **bloco 6**: função **Técnico** na
+    equipe, qualidade dos fornecedores (velocidade, DLR, sem DLR, alertas, detalhe técnico), **Score de Entrega**
+    (filtro de inteligência por rota, fornecedores na análise, nomes devolvidos, grupo de controle), contratação do
+    Score e **Economia do Score**. Depois cole os prompts 46, 47 e 48.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

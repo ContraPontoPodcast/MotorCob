@@ -135,7 +135,8 @@ with itens(ordem, item, ok, se_falhar) as (values
                                        'permissoes_equipe', 'recargas', 'cobrancas', 'cobranca_clientes',
                                        'cobranca_eventos', 'cartoes_salvos', 'nf_config', 'notas_fiscais',
                                        'mensageria_eventos', 'empresa_produtos', 'credor_canais',
-                                       'mensageria_mistura_operadoras', 'glossario', 'tema_tokens')),
+                                       'mensageria_mistura_operadoras', 'glossario', 'tema_tokens',
+                                       'mensageria_score_config', 'mensageria_score_nomes', 'empresa_score')),
        'algum SQL ficou pela metade: rode de novo o da tabela que faltar'),
   (12, 'Anônimo não lê dado de cliente',
        not exists (select 1 from unnest(array['public.chamados', 'public.faturas', 'public.api_tokens']) t
@@ -165,6 +166,10 @@ with itens(ordem, item, ok, se_falhar) as (values
        to_regclass('public.glossario') is not null and to_regclass('public.tema_tokens') is not null
        and pg_temp.n('select count(*) from public.glossario') >= 40,
        'rodar o SQL 32 (supabase/migrations/20261129000001_experiencia_glossario_tema.sql)'),
+  (20, 'Qualidade, Técnico e Score de Entrega (SQL 33)',
+       to_regclass('public.mensageria_score_config') is not null and to_regclass('public.empresa_score') is not null
+       and to_regprocedure('public.score_entrega(text[], text, timestamptz)') is not null,
+       'rodar o SQL 33 (supabase/migrations/20261130000001_score_entrega_qualidade.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

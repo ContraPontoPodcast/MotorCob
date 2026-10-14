@@ -82,6 +82,12 @@ A ajuda acompanha o tempo de casa de cada pessoa: até 15 dias as explicações 
 
 ---
 
+## Score de Entrega e Economia do Score
+
+O Score de Entrega (contratado à parte) dá a cada número uma faixa pelo histórico da Mensageria: Alto, Médio, Baixo e Sem histórico. Na campanha, o cliente marca as faixas que recebem (Todos, Alto, Médio, Baixo, Sem histórico); os números fora não são enviados e voltam no retorno com o nome da faixa. Uma pequena amostra sai mesmo assim (grupo de controle) para provar a entrega real de cada faixa. Cobrança: por número analisado ou só pelos represados; o SMS segue no preço padrão. Em Mensageria › Economia do Score o cliente vê, por período e por campanha, a economia líquida e o custo unitário efetivo (total pago ÷ mailing carregado) comparado ao SMS padrão.
+
+---
+
 ## Orquestração
 
 A Orquestração decide, todo dia, qual ação cada cliente da carga recebe e por qual canal. O fluxo é: a empresa envia a carga do credor → o MotorCob gera a Lista do dia (um contato por cliente em cada canal) → a empresa devolve a ocorrência dizendo se cada cliente deu CPC → o contato que deu CPC vira o contato principal e as próximas ações saem por ele.

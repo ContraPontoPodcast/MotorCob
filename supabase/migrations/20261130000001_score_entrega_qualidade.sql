@@ -587,3 +587,20 @@ begin
                         for each row execute function public.auditar()', t);
     end loop;
 end $$;
+
+-- ================================================================ glossário "O que significa" (termos do bloco 6)
+insert into public.glossario (slug, grupo, termo, definicao, exemplo, antes, ordem) values
+    ('score-de-entrega', 'Mensageria', 'Score de Entrega',
+     'Probabilidade de cada número receber a mensagem, calculada pelo histórico da Mensageria. Separa os números em Alto, Médio, Baixo e Sem histórico; a campanha escolhe quais faixas recebem.',
+     'Baixo = número que só teve "não entregue" nos últimos dias.', 'Filtro de inteligência', 415),
+    ('sem-historico', 'Mensageria', 'Sem histórico',
+     'Número que ainda não passou pela Mensageria (ou não passa há muito tempo): o Score não tem como classificar.', '', 'Neutro', 416),
+    ('grupo-de-controle', 'Mensageria', 'Grupo de controle',
+     'Pequena amostra sorteada dos números fora das faixas da campanha que sai mesmo assim, para medir a entrega real de cada faixa. É cobrada como SMS normal.',
+     '1% dos números de score Baixo.', '', 417),
+    ('custo-unitario-efetivo', 'Financeiro', 'Custo unitário efetivo',
+     'Total pago na campanha com o Score dividido pelo mailing carregado. Mostra quanto custou, de fato, cada número da lista.',
+     'R$ 1.002,07 ÷ 18.420 números = R$ 0,0544 por número.', '', 418),
+    ('economia-do-score', 'Financeiro', 'Economia do Score',
+     'Quanto a campanha deixou de gastar em SMS para números de baixa entrega, já descontado o que foi pago pelo Score.', '', '', 419)
+on conflict (slug) do nothing;

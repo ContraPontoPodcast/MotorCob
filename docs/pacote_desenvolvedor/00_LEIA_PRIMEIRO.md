@@ -81,6 +81,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 69 | `supabase/migrations/20261129000001_experiencia_glossario_tema.sql` (SQL 32) + senha no painel (`02_supabase_painel`, item 4) | Bloco 5: ajuda pelo tempo de casa, glossário e cores do tema | Supabase | 64º |
 | 70 | `07_workspace/PROMPT_43_GLOSSARIO_E_AJUDA.md`, `PROMPT_44_TEMA_E_PALETA.md`, `PROMPT_45_MENUS_NOMES_TEXTOS.md` | "O que significa", (i), ajuda por tempo de casa, paleta por área, menus com subtítulo e um nome por conceito | Site (motorcob.online) | 65º |
 | 71 | função `assistente` (de novo: `python3 scripts/juntar_funcao.py assistente`, cole o arquivo inteiro) + motor na nuvem (`systemctl start motorcob-atualizar` depois do merge) | Assistente com os nomes novos; motor com produto, rota por produto, custo por operadora e estratégia por carteira | Supabase + Google Cloud | 66º |
+| 72 | `supabase/migrations/20261130000001_score_entrega_qualidade.sql` (SQL 33) | Bloco 6: função Técnico, qualidade dos fornecedores, Score de Entrega e Economia do Score | Supabase | 67º |
+| 73 | `07_workspace/PROMPT_46_QUALIDADE_FORNECEDORES.md`, `PROMPT_47_FILTRO_INTELIGENCIA_CONTRATACAO.md`, `PROMPT_48_SCORE_CAMPANHA_ECONOMIA.md` | Console: qualidade, Técnico, filtro de inteligência e contratação do Score; cliente: campanha com faixas e Economia do Score | Site (motorcob.online) | 68º |
+| 74 | função `assistente` (de novo) + motor na nuvem | Assistente com o Score; motor aplica o Score nas campanhas e guarda a DLR | Supabase + Google Cloud | 69º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
