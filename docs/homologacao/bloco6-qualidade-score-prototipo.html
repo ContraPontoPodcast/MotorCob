@@ -26,6 +26,7 @@
   --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210; --tec:#D1D1D6; --tec-f:#2C2C2E;
   color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45}
 .topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto}
 .topo h1{font-size:22px;margin:0 0 4px;text-wrap:balance}
@@ -121,6 +122,31 @@ code,.mono{font-family:var(--mono);font-size:12.5px}
 .progresso i{display:block;height:100%;width:40%;background:var(--area);border-radius:999px;animation:corre 1.4s ease-in-out infinite}
 @keyframes corre{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 @media (prefers-reduced-motion:reduce){.progresso i{animation:none;width:60%}}
+.camp-corpo{margin-top:16px;display:flex;flex-direction:column;gap:14px}
+.res-campanha{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px 28px;padding:14px 16px;border-radius:12px;background:var(--fundo);border:1px solid var(--borda)}
+.res-campanha .rot{color:var(--texto2);font-size:13px;display:block}
+.res-campanha .grande{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15;display:block}
+.res-campanha .med{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;display:block}
+.res-campanha .det{font-size:13.5px}
+.res-campanha .risco{grid-column:1/-1;font-size:13px;color:var(--texto2);border-top:1px solid var(--borda);padding-top:10px}
+.fx-topo{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.fx-titulo{font-weight:600}
+.fx-acoes{margin-left:auto;display:flex;gap:14px}
+.link{all:unset;cursor:pointer;color:var(--area);font-weight:600;font-size:13px}
+.link:focus-visible{outline:2px solid var(--area);outline-offset:2px;border-radius:4px}
+.fx-grade{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.fx-grade{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.fx-card{position:relative;display:flex;flex-direction:column;gap:2px;border:1px solid var(--borda);border-radius:12px;padding:12px 12px 12px 14px;background:var(--cartao);cursor:pointer;min-width:0}
+.fx-card input{position:absolute;top:12px;right:12px;width:18px;height:18px;margin:0;accent-color:var(--area);z-index:1}
+.fx-card:has(input:checked){border-color:var(--area);box-shadow:inset 0 0 0 1px var(--area)}
+.fx-card:has(input:not(:checked)) b,.fx-card:has(input:not(:checked)) .fx-nome{opacity:.55}
+.fx-card:has(input:disabled){cursor:not-allowed;opacity:.5}
+.fx-card:focus-within{outline:2px solid var(--area);outline-offset:2px}
+.fx-nome{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);padding-right:24px}
+.fx-nome i{width:9px;height:9px;border-radius:50%;flex:none}
+.fx-card b{font-size:24px;font-variant-numeric:tabular-nums}
+.fx-card em{font-style:normal;font-size:12px;color:var(--texto2)}
+.barra-acao{position:sticky;bottom:env(safe-area-inset-bottom,0px);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--fundo);padding-block:10px;border-top:1px solid var(--borda);z-index:2}
 .decisao{background:var(--at-f);color:var(--texto);border-radius:10px;padding:10px 12px;font-size:13px}
 .decisao b{color:var(--at)}
 ul.simples{margin:6px 0 0;padding-left:18px}
@@ -289,40 +315,38 @@ ul.simples li{margin:3px 0}
         <div class="campo"><label for="demo-estado">Ver no protótipo</label>
           <select id="demo-estado"><option value="calc">1 · Calculando a prévia</option><option value="pronta" selected>2 · Prévia pronta</option><option value="api">Campanha pela API</option></select></div>
       </div>
-      <ol class="passos" aria-label="Etapas da campanha">
+      <ol class="passos" aria-label="Etapas da campanha" style="margin-bottom:12px">
         <li class="feito">Arquivo</li><li class="feito">Colunas</li><li class="atual" id="passo-previa">Prévia do Score</li><li>Agendar</li>
       </ol>
       <div class="cartao" id="camp-calc" hidden>
         <h3>Calculando a prévia do Score de Entrega…</h3>
-        <p class="sub">Estamos classificando os 18.420 números válidos do arquivo pelo histórico de entrega. Leva alguns minutos. Você pode sair: a campanha fica salva e a prévia aparece aqui.</p>
+        <p class="sub">Estamos classificando os 18.420 números válidos do arquivo pelo histórico de entrega. Tempo estimado: cerca de 2 minutos.</p>
         <div class="progresso" role="progressbar" aria-label="Calculando a prévia"><i></i></div>
-        <p class="nota">Enquanto isso, o botão Agendar fica desabilitado.</p>
+        <p class="nota">Pode sair desta tela: a campanha fica salva e avisamos você no sino do topo quando a prévia ficar pronta. Até lá, o agendamento fica bloqueado.</p>
       </div>
       <div class="cartao" id="camp-api" hidden>
         <h3>Campanha recebida pela API</h3>
         <p class="sub">Pela API não há prévia: a campanha segue direto para o envio, o Score é aplicado na hora e o resultado (represados, economia e custo unitário efetivo) aparece em Economia do Score depois do envio.</p>
       </div>
       <div class="cartao" id="camp-pronta">
-        <div class="linha" style="justify-content:space-between">
-          <div><h3>Score de Entrega <span class="i" title="Probabilidade de entrega de cada número, pelo histórico da Mensageria. Ver no glossário.">i</span></h3>
-            <p class="sub" style="margin:0">Prévia calculada às 09:42 · 18.420 números válidos · SMS Padrão. É esta classificação que vai ser usada no envio.</p></div>
+        <div style="display:flex;gap:16px;justify-content:space-between;align-items:flex-start">
+          <div style="flex:1;min-width:0"><h3>Score de Entrega <span class="i" title="Probabilidade de entrega de cada número, pelo histórico da Mensageria. Ver no glossário.">i</span></h3>
+            <p class="sub" style="margin:0">18.420 números válidos · SMS Padrão · prévia de hoje às 09:42, <b>válida até amanhã às 09:42</b>. Se o envio sair depois disso, recalculamos e avisamos você.</p></div>
           <button class="chave" role="switch" aria-checked="true" id="ch-camp" aria-label="Usar o Score de Entrega"></button>
         </div>
-        <div id="camp-corpo" style="margin-top:14px;display:flex;flex-direction:column;gap:14px">
+        <div id="camp-corpo" class="camp-corpo">
+          <div class="res-campanha" id="camp-res"></div>
           <div class="barra" id="camp-barra" aria-hidden="true"></div>
-          <div class="kpis" id="camp-faixas"></div>
-          <fieldset class="enviar" id="camp-acao">
-            <legend>O que enviar</legend>
-            <label><input type="checkbox" id="cx-todos" value="todos"> Todos</label>
-            <label><input type="checkbox" id="cx-alto" value="Alto" checked> Alto</label>
-            <label><input type="checkbox" id="cx-medio" value="Médio" checked> Médio</label>
-            <label><input type="checkbox" id="cx-baixo" value="Baixo"> Baixo</label>
-            <label><input type="checkbox" id="cx-sem" value="Sem histórico" checked> Sem histórico <span class="i" title="Número que ainda não passou pela Mensageria: o Score não tem como classificar. Ver no glossário.">i</span></label>
-          </fieldset>
-          <div class="prev" id="camp-prev"></div>
+          <div class="fx-topo">
+            <span class="fx-titulo">Quem recebe a campanha</span>
+            <span id="camp-sugerido"></span>
+            <span class="fx-acoes"><button type="button" class="link" id="fx-todas">Marcar todas</button><button type="button" class="link" id="fx-sugerido">Voltar ao sugerido</button></span>
+          </div>
+          <div class="fx-grade" id="camp-faixas" role="group" aria-label="Faixas que recebem a campanha"></div>
+          <p class="nota" id="camp-retorno" style="margin:0"></p>
         </div>
       </div>
-      <div class="linha" style="justify-content:flex-end" id="camp-botoes"><button class="btn sec" type="button">Voltar</button><button class="btn" type="button" id="camp-ok">Agendar envio</button></div>
+      <div class="barra-acao" id="camp-botoes"><span id="camp-resumo-botao" class="nota" style="margin:0"></span><span class="linha"><button class="btn sec" type="button">Voltar</button><button class="btn" type="button" id="camp-ok">Agendar envio</button></span></div>
       <p class="nota" id="camp-msg" aria-live="polite"></p>
     </section>
 
@@ -587,38 +611,60 @@ ul.simples li{margin:3px 0}
   document.querySelectorAll('input[name="cob"]').forEach(r => r.addEventListener("change", contrato));
   contrato();
 
-  // ---------------- campanha
+  // ---------------- campanha (prévia do Score)
   const FX = { Alto: 11280, "Médio": 3920, Baixo: 2210, "Sem histórico": 1010 };
   const COR = { Alto: "var(--ok)", "Médio": "var(--at)", Baixo: "var(--erro)", "Sem histórico": "var(--info)" };
+  const CTRL = { Alto: 0.916, "Médio": 0.582, Baixo: 0.039, "Sem histórico": 0.71 };   // entrega real do grupo de controle
+  const SUGERIDO = ["Alto", "Médio", "Sem histórico"];
+  const SMS_PAD = 0.055;
+  let marcadas = new Set(SUGERIDO);
   function campanha() {
     const on = document.getElementById("ch-camp").getAttribute("aria-checked") === "true";
     document.getElementById("camp-corpo").hidden = !on;
     const tot = Object.values(FX).reduce((a, b) => a + b, 0);
-    document.getElementById("camp-barra").innerHTML = Object.entries(FX).map(([k, v]) => `<i style="width:${v / tot * 100}%;background:${COR[k]}"></i>`).join("");
-    document.getElementById("camp-faixas").innerHTML = Object.entries(FX).map(([k, v]) => `<div class="kpi"><span><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${COR[k]};margin-right:6px"></i>${k}</span><b>${n(v)}</b><em>${pct(v / tot * 100)} do mailing</em></div>`).join("");
-    const marcadas = Object.keys(FX).filter(k => document.querySelector(`#camp-acao input[value="${k}"]`).checked);
-    const fora = Object.keys(FX).filter(k => !marcadas.includes(k));
-    const nFora = fora.reduce((s, k) => s + FX[k], 0);
-    const nomeDe = { Baixo: nomeAtual("baixo"), "Sem histórico": nomeAtual("sem"), Alto: "Não enviado · faixa Alto fora da campanha", "Médio": "Não enviado · faixa Médio fora da campanha" };
-    document.getElementById("camp-prev").innerHTML = !marcadas.length
-      ? `<b style="color:var(--erro)">Marque pelo menos uma faixa para enviar.</b>`
-      : nFora
-      ? `<b>${n(tot - nFora)} números serão enviados · ${n(nFora)} não serão enviados (${fora.join(", ")}).</b><br><span style="color:var(--texto2)">No retorno, quem ficou de fora aparece como ${fora.map(k => `"${nomeDe[k]}"`).join(" e ")}, com a faixa de cada número.</span>`
-      : `<b>${n(tot)} números serão enviados.</b><br><span style="color:var(--texto2)">O Score só classifica: a faixa de cada número vem no retorno.</span>`;
-    if (marcadas.length) {
-      const m = document.querySelector('input[name="cob"]:checked').value;
-      const env = tot - nFora, score = m === "analisado" ? tot * 0.006 : nFora * 0.018;
-      const com = env * 0.055 + score, sem = tot * 0.055, r = { env, com, sem, unit: com / tot };
-      document.getElementById("camp-prev").innerHTML += `<div class="linha" style="margin-top:8px"><span class="pil ${r.com <= r.sem ? "ok" : "erro"}">Custo unitário efetivo desta campanha ${brl(r.unit, 4)}</span><span style="color:var(--texto2)">contra ${brl(0.055, 4)} do SMS padrão · total ${brl(r.com)} em vez de ${brl(r.sem)}</span></div>`;
+    const ok = document.getElementById("camp-ok");
+    if (!on) {
+      ok.textContent = `Agendar ${n(tot)} SMS`; ok.disabled = false;
+      document.getElementById("camp-resumo-botao").textContent = "Score desligado: todos os números saem.";
+      return;
     }
-    document.getElementById("camp-ok").disabled = !marcadas.length;
+    document.getElementById("camp-faixas").innerHTML = Object.entries(FX).map(([k, v], i) => `
+      <label class="fx-card"><input type="checkbox" data-fx="${k}" id="fx-${i}" ${marcadas.has(k) ? "checked" : ""} ${v ? "" : "disabled"}>
+        <span class="fx-nome"><i style="background:${COR[k]}"></i>${k}${k === "Sem histórico" ? ' <span class="i" title="Número que ainda não passou pela Mensageria: o Score não tem como classificar.">i</span>' : ""}</span>
+        <b>${n(v)}</b><em>${pct(v / tot * 100)} do mailing · entrega real ${pct(CTRL[k] * 100)}</em></label>`).join("");
+    document.querySelectorAll("#camp-faixas input").forEach(c => c.addEventListener("change", () => {
+      c.checked ? marcadas.add(c.dataset.fx) : marcadas.delete(c.dataset.fx); campanha();
+    }));
+    document.getElementById("camp-barra").innerHTML = Object.entries(FX).map(([k, v]) =>
+      `<i style="width:${v / tot * 100}%;background:${COR[k]};opacity:${marcadas.has(k) ? 1 : .22}"></i>`).join("");
+    const sug = SUGERIDO.length === marcadas.size && SUGERIDO.every(k => marcadas.has(k));
+    document.getElementById("camp-sugerido").innerHTML = sug ? '<span class="pil ok">Combinação sugerida</span>' : '<span class="pil neutra">Combinação própria</span>';
+    document.getElementById("fx-sugerido").hidden = sug;
+    const fora = Object.keys(FX).filter(k => !marcadas.has(k));
+    const nFora = fora.reduce((t, k) => t + FX[k], 0), env = tot - nFora;
+    const m = document.querySelector('input[name="cob"]:checked').value;
+    const score = m === "analisado" ? tot * 0.006 : nFora * 0.018;
+    const com = env * SMS_PAD + score, sem = tot * SMS_PAD, eco = sem - com, unit = com / tot;
+    const perdidas = Math.round(fora.reduce((t, k) => t + FX[k] * CTRL[k], 0));
+    const res = document.getElementById("camp-res");
+    if (!marcadas.size) {
+      res.innerHTML = `<div><span class="rot">Nenhuma faixa marcada</span><span class="det" style="color:var(--erro)">Marque pelo menos uma faixa para agendar.</span></div>`;
+    } else {
+      res.innerHTML = `
+        <div><span class="rot">Esta campanha</span><span class="grande">${brl(com)}</span>
+          <span class="det" style="color:${eco >= 0 ? "var(--ok)" : "var(--erro)"}">${eco >= 0 ? "economia de" : "custa a mais"} <b>${brl(Math.abs(eco))}</b> em relação ao envio sem o Score (${brl(sem)})</span></div>
+        <div><span class="rot">Custo unitário efetivo</span><span class="med">${brl(unit, 4)}</span>
+          <span class="det">contra ${brl(SMS_PAD, 4)} do SMS padrão</span></div>
+        <div class="risco">${nFora ? `${n(nFora)} números não serão enviados (${fora.join(", ")}). Pela entrega real do grupo de controle, cerca de <b>${n(perdidas)}</b> deles receberiam a mensagem.` : "Todos os números saem: o Score só classifica, e a faixa de cada número vem no retorno."}</div>`;
+    }
+    const nomeDe = { Baixo: nomeAtual("baixo"), "Sem histórico": nomeAtual("sem"), Alto: "Não enviado · faixa Alto fora da campanha", "Médio": "Não enviado · faixa Médio fora da campanha" };
+    document.getElementById("camp-retorno").textContent = nFora ? `No retorno, os não enviados aparecem como ${fora.map(k => `"${nomeDe[k]}"`).join(" e ")}.` : "";
+    ok.disabled = !marcadas.size;
+    ok.textContent = marcadas.size ? `Agendar ${n(env)} SMS` : "Agendar envio";
+    document.getElementById("camp-resumo-botao").textContent = marcadas.size ? `${n(env)} enviados · ${n(nFora)} não enviados · ${brl(com)}` : "";
   }
-  const cxTodos = document.getElementById("cx-todos");
-  const cxFaixas = [...document.querySelectorAll('#camp-acao input:not(#cx-todos)')];
-  const sincTodos = () => { cxTodos.checked = cxFaixas.every(c => c.checked); };
-  cxTodos.addEventListener("change", () => { cxFaixas.forEach(c => c.checked = cxTodos.checked); campanha(); });
-  cxFaixas.forEach(c => c.addEventListener("change", () => { sincTodos(); campanha(); }));
-  sincTodos();
+  document.getElementById("fx-todas").addEventListener("click", () => { marcadas = new Set(Object.keys(FX).filter(k => FX[k])); campanha(); });
+  document.getElementById("fx-sugerido").addEventListener("click", () => { marcadas = new Set(SUGERIDO); campanha(); });
   document.getElementById("ch-camp").addEventListener("mudou", campanha);
   document.getElementById("camp-ok").addEventListener("click", () => { document.getElementById("camp-msg").textContent = "Campanha agendada (protótipo: nada foi enviado). Depois do envio, o resultado aparece em Economia do Score."; });
 
@@ -738,11 +784,11 @@ ul.simples li{margin:3px 0}
     document.getElementById("camp-pronta").hidden = e !== "pronta";
     document.getElementById("camp-api").hidden = e !== "api";
     document.getElementById("camp-botoes").hidden = e === "api";
-    document.getElementById("camp-ok").disabled = e === "calc" || (e === "pronta" && !document.querySelectorAll('#camp-acao input:not(#cx-todos):checked').length);
+    if (e === "calc") document.getElementById("camp-ok").disabled = true; else campanha();
+    document.getElementById("camp-botoes").querySelector("#camp-resumo-botao").hidden = e !== "pronta";
     document.getElementById("passo-previa").textContent = e === "api" ? "Sem prévia (API)" : "Prévia do Score";
   }
   document.getElementById("demo-estado").addEventListener("change", estadoCampanha);
-  document.querySelectorAll("#camp-acao input").forEach(c => c.addEventListener("change", estadoCampanha));
   estadoCampanha();
 
   atualizar();

@@ -2,21 +2,21 @@
 <style>
 /* Layout: janela do sistema com duas telas (Orquestração e Mapa da Esteira); na Orquestração, carteira no topo, segmentos à esquerda, barra de ferramentas única e o conteúdo da aba escolhida */
 :root {
-  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
-  --azul: #0A64D0; --azulf: #E8F1FC; --ok: #1E7A36; --okf: #E6F4EA; --alerta: #8A5A00; --alertaf: #FFF4D6; --erro: #C4271E; --errof: #FDECEA;
-  --petroleo: #0F4C5C; --petro-1: #E3EEF0; --petro-2: #B7D1D6; --petro-3: #6F9EA8; --petro-4: #2F6C79;
+  --bg: #F8F8F9; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
+  --azul: #8A6A2E; --azulf: #F3ECDD; --area-forte: #7A5C24; --area-txt: #6B4F1C; --ok: #1E7A36; --okf: #E6F4EA; --alerta: #8A5A00; --alertaf: #FFF4D6; --erro: #C4271E; --errof: #FDECEA;
+  --petroleo: #8E8E93; --petro-1: #E3EEF0; --petro-2: #B7D1D6; --petro-3: #6F9EA8; --petro-4: #2F6C79;
   --wa: #1F8A4C; --rcs: #3B5BA9; --sms: #7A4FB0; --email: #A2552B; --av: #0E7C86; --disc: #475569;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
-  --azul: #4C9BFF; --azulf: #13253D; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715;
-  --petroleo: #7FC4D2; --petro-1: #12262B; --petro-2: #1D4049; --petro-3: #2F6573; --petro-4: #4E93A2; color-scheme: dark } }
+  --azul: #C9A35E; --azulf: #3A2F1A; --area-forte: #C9A35E; --area-txt: #E6CC97; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715;
+  --petroleo: #A1A1A6; --petro-1: #12262B; --petro-2: #1D4049; --petro-3: #2F6573; --petro-4: #4E93A2; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
-  --azul: #4C9BFF; --azulf: #13253D; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715;
-  --petroleo: #7FC4D2; --petro-1: #12262B; --petro-2: #1D4049; --petro-3: #2F6573; --petro-4: #4E93A2; color-scheme: dark }
+  --azul: #C9A35E; --azulf: #3A2F1A; --area-forte: #C9A35E; --area-txt: #E6CC97; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715;
+  --petroleo: #A1A1A6; --petro-1: #12262B; --petro-2: #1D4049; --petro-3: #2F6573; --petro-4: #4E93A2; color-scheme: dark }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding-block: 24px 48px; padding-inline: 16px; margin: 0; }
@@ -31,7 +31,8 @@ h3 { font-size: 14px; margin: 0; }
 .abas button[aria-selected="true"] { color: var(--tinta); border-color: var(--tinta); }
 .secao { background: var(--painel); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .tit { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.btn { border: 0; border-radius: 999px; padding: 8px 15px; font: 600 13.5px var(--sans); cursor: pointer; background: var(--tinta); color: var(--painel); white-space: nowrap; }
+.btn { border: 0; border-radius: 999px; padding: 8px 15px; font: 600 13.5px var(--sans); cursor: pointer; background: var(--azul); color: #fff; white-space: nowrap; }
+.btn:active { background: var(--area-forte); }
 .btn.sec { background: var(--suave); color: var(--tinta); }
 .btn.peq { padding: 6px 12px; font-size: 12.5px; }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -166,7 +167,7 @@ td.n2, th.n2 { text-align: right; font-variant-numeric: tabular-nums; }
   <div class="proto">Protótipo para aprovação · carteiras, segmentos e números fictícios · nada aqui grava no banco</div>
   <div class="tit">
     <div>
-      <h1>Orquestração por carteira</h1>
+      <p class="nota-revisao" style="margin:0 0 10px;padding:8px 12px;border-radius:10px;background:var(--suave);font-size:12.5px;color:var(--tinta-2)">Atualizado na revisão de UX (14/10): nomes do glossário e paleta do bloco 5 (cor da área (dourado/ocre, Cobrança) só no botão principal, item ativo e destaques).</p><h1>Orquestração por carteira</h1>
       <p class="ajuda">Bloco 3 da homologação: cada carteira com a sua estratégia, barra de ações organizada, fases do motor com orçamento, prioridade e travas próprias, e o Mapa da Esteira mais legível.</p>
     </div>
   </div>
@@ -324,16 +325,16 @@ const estDe = (c, s) => SEGS[c].find(x => x[0] === s)[2];
 // fases do motor + etapas da empresa, com orçamento, prioridade e travas por fase
 const FASES = [
   { id: "ticket-alto", nome: "Renegociação ticket alto", tipo: "sua", sub: "saldo > R$ 10 mil", canais: ["whatsapp", "agente"] },
-  { id: "quebra", nome: "Quebra de acordo", tipo: "padrao", sub: "parcela vencida, D+1 a D+5", canais: ["whatsapp", "sms"] },
-  { id: "preventivo", nome: "Preventivo", tipo: "padrao", sub: "D-3 a D0 da parcela", canais: ["whatsapp", "sms", "email"] },
-  { id: "cpc", nome: "CPC", tipo: "padrao", sub: "deu CPC · telefone Hot", canais: ["whatsapp", "rcs", "agente", "discador"] },
-  { id: "giro", nome: "Não CPC (giro)", tipo: "padrao", sub: "ciclo de 8 dias × 3", canais: ["whatsapp", "agente", "sms"] },
-  { id: "localizacao", nome: "Cliente novo / não localizado", tipo: "padrao", sub: "D+1 até virar Não CPC", canais: ["whatsapp", "rcs", "sms", "email", "agente", "discador"] }
+  { id: "quebra", nome: "Acordo · parcela vencida", tipo: "padrao", sub: "parcela vencida, D+1 a D+5", canais: ["whatsapp", "sms"] },
+  { id: "preventivo", nome: "Acordo · antes do vencimento", tipo: "padrao", sub: "D-3 a D0 da parcela", canais: ["whatsapp", "sms", "email"] },
+  { id: "cpc", nome: "CPC", tipo: "padrao", sub: "deu CPC · contato principal", canais: ["whatsapp", "rcs", "agente", "discador"] },
+  { id: "giro", nome: "Não CPC", tipo: "padrao", sub: "ciclos de 8 dias × 3", canais: ["whatsapp", "agente", "sms"] },
+  { id: "localizacao", nome: "Cliente novo", tipo: "padrao", sub: "D+1 até virar Não CPC", canais: ["whatsapp", "rcs", "sms", "email", "agente", "discador"] }
 ];
 const ligada = { "ticket-alto": true, quebra: true, preventivo: true, cpc: true, giro: true, localizacao: true };
 const PRIOS = [["novo", "Cliente novo do dia"], ["nunca", "Nunca acionado nesta fase"], ["etapa_antigo", "Tempo na fase: do mais antigo para o mais novo"], ["etapa_novo", "Tempo na fase: do mais novo para o mais antigo"],
   ["acao_antiga", "Última ação: da mais antiga para hoje"], ["acao_recente", "Última ação: da mais recente para a mais antiga"], ["saldo_maior", "Maior saldo primeiro"], ["saldo_menor", "Menor saldo primeiro"],
-  ["atraso_maior", "Maior atraso primeiro"], ["atraso_menor", "Menor atraso primeiro"], ["hot", "Telefone Hot ou certificado primeiro"]];
+  ["atraso_maior", "Maior atraso primeiro"], ["atraso_menor", "Menor atraso primeiro"], ["hot", "Contato principal ou certificado primeiro"]];
 const OPOSTO = { etapa_antigo: "etapa_novo", etapa_novo: "etapa_antigo", acao_antiga: "acao_recente", acao_recente: "acao_antiga", saldo_maior: "saldo_menor", saldo_menor: "saldo_maior", atraso_maior: "atraso_menor", atraso_menor: "atraso_maior" };
 const orc = {   // orcamento[fase][canal]
   localizacao: { whatsapp: { modo: "param", clientes: 3000, telefones: null, prio: ["novo", "saldo_maior"], fora: "senao" }, discador: { modo: "param", clientes: null, telefones: 1800, prio: ["hot", "atraso_menor"], fora: "amanha" } },
@@ -393,8 +394,8 @@ function desenho() {
     <p class="ajuda" style="margin:0">O Desenho da esteira continua igual ao de hoje (arrastar canais, raias de persona, frases). Muda só o que está em volta: a carteira no topo, a barra de ações única e o aviso de estratégia compartilhada.</p>
     <div class="faixa"><div class="cab"><h3>Cliente novo · ainda não deu CPC</h3><span class="selo ne">vira Não CPC no D+8</span></div>
       <div class="dias">${dia("D+1", [["whatsapp"], ["sms", "senão"]])}${dia("D+3", [["rcs"], ["sms", "senão"], ["email", "+ junto"]])}${dia("D+5", [["agente"], ["discador", "reserva"]])}${dia("D+7", [["sms"], ["email", "+ junto"]])}</div></div>
-    <div class="faixa"><div class="cab"><h3>Deu CPC · CPC A e CPC B</h3><span class="selo ne">3 tentativas por canal</span></div>
-      <div class="dias">${dia("Hot", [["whatsapp"]])}${dia("Reserva 1", [["rcs"]])}${dia("Reserva 2", [["agente"]])}${dia("Reserva 3", [["discador"]])}</div></div>
+    <div class="faixa"><div class="cab"><h3>Deu CPC · em negociação e sem resposta</h3><span class="selo ne">3 tentativas por canal</span></div>
+      <div class="dias">${dia("1º canal · contato principal", [["whatsapp"]])}${dia("2º canal", [["rcs"]])}${dia("3º canal", [["agente"]])}${dia("4º canal", [["discador"]])}</div></div>
     <div class="faixa"><div class="cab"><h3>Não CPC · ciclo que se repete</h3><span class="selo ne">8 dias × 3</span></div>
       <div class="dias">${dia("dia 1", [["whatsapp"]])}${dia("dia 5", [["agente"]])}</div></div>`;
 }
@@ -521,13 +522,13 @@ document.getElementById("fCopiar").addEventListener("submit", e => {
 const ETAPAS = [
   { id: "ent", nm: "Entrada", sub: "novos na carga", cli: 2140, saldo: 9.1, e: 2140, s: 0, hoje: 2140 },
   { id: "loc", nm: "Cliente novo", sub: "ainda sem CPC", cli: 9820, saldo: 41.2, e: 2140, s: 2310, hoje: 6120 },
-  { id: "ncp", nm: "Não CPC", sub: "giro", cli: 4310, saldo: 19.8, e: 1180, s: 640, hoje: 1530 },
-  { id: "cpa", nm: "CPC A", sub: "negociando", cli: 1120, saldo: 6.3, e: 820, s: 690, hoje: 1120 },
-  { id: "cpb", nm: "CPC B", sub: "tentativas", cli: 860, saldo: 4.4, e: 410, s: 380, hoje: 610 },
-  { id: "pre", nm: "Preventivo", sub: "antes do vencimento", cli: 640, saldo: 3.1, e: 290, s: 240, hoje: 420 },
-  { id: "col", nm: "Acordo em dia", sub: "colchão", cli: 1310, saldo: 7.6, e: 360, s: 130, hoje: 0 },
-  { id: "qbr", nm: "Quebra", sub: "parcela vencida", cli: 220, saldo: 1.2, e: 95, s: 60, hoje: 220 },
-  { id: "liq", nm: "Liquidado", sub: "quitou", cli: 410, saldo: 0, e: 140, s: 0, hoje: 0 }
+  { id: "ncp", nm: "Não CPC", sub: "em ciclos", cli: 4310, saldo: 19.8, e: 1180, s: 640, hoje: 1530 },
+  { id: "cpa", nm: "CPC · em negociação", sub: "proposta no canal do CPC", cli: 1120, saldo: 6.3, e: 820, s: 690, hoje: 1120 },
+  { id: "cpb", nm: "CPC · sem resposta", sub: "novas tentativas", cli: 860, saldo: 4.4, e: 410, s: 380, hoje: 610 },
+  { id: "pre", nm: "Acordo · antes do vencimento", sub: "D-3 a D0", cli: 640, saldo: 3.1, e: 290, s: 240, hoje: 420 },
+  { id: "col", nm: "Acordo em dia", sub: "sem parcela vencida", cli: 1310, saldo: 7.6, e: 360, s: 130, hoje: 0 },
+  { id: "qbr", nm: "Acordo · parcela vencida", sub: "D+1 a D+5", cli: 220, saldo: 1.2, e: 95, s: 60, hoje: 220 },
+  { id: "liq", nm: "Quitado", sub: "pagou a dívida", cli: 410, saldo: 0, e: 140, s: 0, hoje: 0 }
 ];
 const FLUXOS = [["loc", "ncp", 1180, "ruim"], ["loc", "cpa", 640, "bom"], ["ncp", "cpa", 180, "bom"], ["cpa", "col", 290, "bom"], ["cpa", "cpb", 410, "neutro"],
   ["cpb", "ncp", 0, "ruim"], ["col", "pre", 290, "neutro"], ["pre", "col", 210, "bom"], ["pre", "qbr", 95, "ruim"], ["qbr", "col", 60, "bom"], ["col", "liq", 140, "bom"], ["loc", "blq", 120, "ruim"], ["ent", "loc", 2140, "neutro"]];
@@ -558,7 +559,7 @@ function mapa() {
   const passos = { loc: [["D+1", 2140], ["D+3", 2860], ["D+5", 2310], ["D+7", 2510]], ncp: [["1º ciclo", 1640], ["2º ciclo", 1220], ["3º ciclo", 920], ["Parado · aguarda enriquecimento", 530]], cpa: [["1ª tentativa", 520], ["2ª tentativa", 380], ["3ª tentativa", 220]], cpb: [["1ª tentativa", 420], ["2ª tentativa", 260], ["3ª tentativa", 180]], pre: [["D-3", 260], ["D-1", 210], ["D0", 170]], qbr: [["D+1", 90], ["D+3", 80], ["D+5", 50]], col: [["Em dia", 1310]], liq: [["Quitado", 410]], ent: [["Hoje", 2140]] }[e.id];
   const canais = { loc: [["WhatsApp", 2820], ["SMS", 1610], ["Agente virtual", 1040], ["Discador", 650]], ncp: [["WhatsApp", 940], ["Agente virtual", 590]], cpa: [["WhatsApp", 610], ["RCS", 300], ["Agente virtual", 210]], cpb: [["Agente virtual", 380], ["Discador", 230]], pre: [["WhatsApp", 260], ["SMS", 160]], qbr: [["WhatsApp", 140], ["SMS", 80]] }[e.id] || [];
   const pm = Math.max(...passos.map(p => p[1])), cm = Math.max(1, ...canais.map(p => p[1]));
-  document.getElementById("detalhe").innerHTML = `<div><h3 style="margin-bottom:6px">Por passo</h3>${e.id === "ncp" ? '<p class="ajuda" style="margin:0 0 6px">O Não CPC roda em ciclos (aqui, 8 dias repetidos 3 vezes). 1º ciclo = primeira volta da régua; depois do último, o cliente para e espera um novo enriquecimento. Antes aparecia como G1, G2, G3 e RE.</p>' : ""}${passos.map(([p, q]) => `<div class="etb"><span>${p}</span><span class="t"><i style="width:${q / pm * 100}%"></i></span><span class="q">${q.toLocaleString("pt-BR")}</span></div>`).join("")}</div>
+  document.getElementById("detalhe").innerHTML = `<div><h3 style="margin-bottom:6px">Por passo</h3>${e.id === "ncp" ? '<p class="ajuda" style="margin:0 0 6px">O Não CPC roda em ciclos (aqui, 8 dias repetidos 3 vezes). 1º ciclo = primeira volta da régua; depois do último, o cliente para e espera um novo enriquecimento.</p>' : ""}${passos.map(([p, q]) => `<div class="etb"><span>${p}</span><span class="t"><i style="width:${q / pm * 100}%"></i></span><span class="q">${q.toLocaleString("pt-BR")}</span></div>`).join("")}</div>
     ${e.id === "ncp" ? '<div class="aviso al"><span><b>530 clientes parados</b> esperando novo enriquecimento: envie o retorno do bureau para eles voltarem ao giro.</span></div>' : ""}
     ${canais.length ? `<div><h3 style="margin-bottom:6px">Canal de hoje</h3>${canais.map(([p, q]) => `<div class="etb"><span>${p}</span><span class="t"><i style="width:${q / cm * 100}%"></i></span><span class="q">${q.toLocaleString("pt-BR")}</span></div>`).join("")}</div>` : ""}`;
 }
