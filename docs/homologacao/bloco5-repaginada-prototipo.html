@@ -1,0 +1,320 @@
+<title>Repaginada da plataforma</title>
+<style>
+/* Layout: guia da repaginada em abas (glossário que o cliente verá, um nome por conceito, antes e depois por tela, menus e decisões), na paleta B recomendada */
+:root {
+  --fundo: #F6F7F8; --cartao: #FFFFFF; --texto: #2B3239; --texto-2: #66717C; --titulo: #1F262C; --borda: #E4E7EA; --suave: #EEF2F4;
+  --acento: #0F4C5C; --acento-2: #0F6B7F; --acento-f: #E6F0F2; --ok: #1E6B3A; --ok-f: #E5F2EA; --al: #7A5200; --al-f: #FBF1D9; --er: #A8321F; --er-f: #F8E6E2;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --fundo: #16191C; --cartao: #1F2428; --texto: #D7DCE0; --texto-2: #9AA3AB; --titulo: #ECEFF1; --borda: #2C3237; --suave: #2A3035;
+  --acento: #4E9AAB; --acento-2: #8FD0DD; --acento-f: #24343A; --ok: #7FD39A; --ok-f: #1C3325; --al: #F0C25E; --al-f: #3A2F14; --er: #F08A78; --er-f: #3A1F1A; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --fundo: #16191C; --cartao: #1F2428; --texto: #D7DCE0; --texto-2: #9AA3AB; --titulo: #ECEFF1; --borda: #2C3237; --suave: #2A3035;
+  --acento: #4E9AAB; --acento-2: #8FD0DD; --acento-f: #24343A; --ok: #7FD39A; --ok-f: #1C3325; --al: #F0C25E; --al-f: #3A2F14; --er: #F08A78; --er-f: #3A1F1A; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--fundo); color: var(--texto); font: 15px/1.5 var(--sans); padding-block: 24px 48px; padding-inline: 16px; margin: 0; }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.proto { font-size: 13px; color: var(--texto-2); }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; color: var(--titulo); text-wrap: balance; }
+h2 { font-size: 18px; margin: 0; color: var(--titulo); text-wrap: balance; }
+h3 { font-size: 15px; margin: 0; color: var(--titulo); }
+.ajuda { color: var(--texto-2); margin: 4px 0 0; font-size: 14px; max-width: 78ch; }
+.abas { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--borda); }
+.abas button { border: 0; background: none; color: var(--texto-2); font: 600 14px var(--sans); padding: 10px 12px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.abas button[aria-selected="true"] { color: var(--acento); border-color: var(--acento); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--acento-2); outline-offset: 2px; }
+.secao { background: var(--cartao); border: 1px solid var(--borda); border-radius: 16px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.busca { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.busca input { font: 15px var(--sans); color: var(--texto); background: var(--cartao); border: 1px solid var(--borda); border-radius: 10px; height: 40px; padding: 0 12px; flex: 1; min-width: 200px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chips button { border: 1px solid var(--borda); background: var(--cartao); color: var(--texto-2); border-radius: 999px; padding: 5px 11px; font: 600 12.5px var(--sans); cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--acento-f); color: var(--acento); border-color: transparent; }
+.gloss { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.termo { border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; scroll-margin-top: 16px; }
+.termo:target { border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento) inset; }
+.termo .cab { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.termo b { color: var(--titulo); font-size: 15px; }
+.termo .grp { font-size: 11.5px; color: var(--texto-2); white-space: nowrap; }
+.termo p { margin: 0; font-size: 14px; }
+.termo .ex { font-size: 13px; color: var(--texto-2); }
+.termo .ant { font-size: 12px; color: var(--texto-2); }
+.termo .ant s { text-decoration-color: var(--er); }
+.rolagem { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--texto-2); padding: 8px 10px; border-bottom: 1px solid var(--borda); font-weight: 700; }
+td { padding: 10px; border-bottom: 1px solid var(--borda); vertical-align: top; color: var(--texto); }
+td .velho { color: var(--texto-2); font-size: 13.5px; }
+td .velho span { display: inline-block; background: var(--er-f); color: var(--er); border-radius: 6px; padding: 1px 6px; margin: 2px 3px 2px 0; font-size: 12.5px; }
+td .novo { color: var(--ok); font-weight: 700; }
+.selo { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.p1 { background: var(--er-f); color: var(--er); } .p2 { background: var(--al-f); color: var(--al); } .p3 { background: var(--suave); color: var(--texto-2); }
+.tela { border: 1px solid var(--borda); border-radius: 12px; overflow: hidden; }
+.tela > summary { cursor: pointer; padding: 12px 14px; font-weight: 700; color: var(--titulo); display: flex; justify-content: space-between; gap: 8px; list-style: none; }
+.tela > summary::-webkit-details-marker { display: none; }
+.tela > summary::after { content: "▾"; color: var(--texto-2); }
+.tela[open] > summary::after { content: "▴"; }
+.tela .itens { display: flex; flex-direction: column; border-top: 1px solid var(--borda); }
+.item { display: grid; grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--borda); font-size: 14px; }
+.item:last-child { border-bottom: 0; }
+.item .antes { color: var(--texto-2); }
+.item .antes code { font: 12.5px var(--mono); background: var(--er-f); color: var(--er); padding: 1px 5px; border-radius: 5px; }
+.item .depois { color: var(--texto); }
+.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.menu { border: 1px solid var(--borda); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 2px; }
+.menu .g { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--texto-2); padding: 12px 8px 4px; }
+.menu .g:first-of-type { padding-top: 4px; }
+.menu .m { padding: 7px 8px; border-radius: 8px; display: flex; flex-direction: column; }
+.menu .m b { font-size: 14px; font-weight: 600; color: var(--titulo); }
+.menu .m small { font-size: 12.5px; color: var(--texto-2); }
+.menu .m.novo { background: var(--acento-f); }
+.menu .m.novo b::after { content: " · mudou"; font-weight: 600; font-size: 11px; color: var(--acento); }
+.dec { border: 1px solid var(--borda); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.dec .ops { display: flex; gap: 8px; flex-wrap: wrap; }
+.dec .ops span { border: 1px solid var(--borda); border-radius: 10px; padding: 6px 10px; font-size: 13.5px; }
+.dec .ops span.rec { border-color: var(--acento); color: var(--acento); font-weight: 600; }
+.regra { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.regra div { border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; font-size: 14px; }
+.regra div b { display: block; color: var(--titulo); margin-bottom: 4px; }
+@media (max-width: 820px) {
+  .gloss, .cols2, .regra { grid-template-columns: minmax(0, 1fr); }
+  .item { grid-template-columns: 30px minmax(0, 1fr); } .item .depois { grid-column: 2; }
+}
+</style>
+
+<div class="wrap">
+  <div class="proto">Protótipo para aprovação · bloco 5 da homologação · baseado na revisão das telas publicadas em 14/10/2026 · paleta B</div>
+  <div>
+    <h1>Repaginada da plataforma</h1>
+    <p class="ajuda">Uma pessoa que entrou hoje na operação tem de entender cada tela sem perguntar. Para isso: um nome só para cada coisa, nenhuma sigla interna na tela, um (i) discreto nos conceitos e um glossário único que todos os (i) usam.</p>
+  </div>
+  <div class="regra">
+    <div><b>1 · Um nome por conceito</b>O mesmo estado aparecia com até quatro nomes. Cada conceito passa a ter um nome, igual em todas as telas, relatórios e exportações.</div>
+    <div><b>2 · Nada de código na tela</b>G1, RE, CPA, TAG, "pendente", "fim_janela", erros do banco e mensagens de servidor viram frases que dizem o que aconteceu e o que fazer.</div>
+    <div><b>3 · Ajuda pelo tempo de casa</b>Até 15 dias: explicações abertas. De 16 a 30: (i) discreto. Depois de 30: desligada (religa em Minha conta). Glossário sempre no menu Ajuda.</div>
+  </div>
+
+  <div class="abas" role="tablist">
+    <button role="tab" aria-selected="true" data-a="gloss">Glossário (o que o cliente vê)</button>
+    <button role="tab" aria-selected="false" data-a="nomes">Um nome por conceito</button>
+    <button role="tab" aria-selected="false" data-a="telas">Antes e depois, tela a tela</button>
+    <button role="tab" aria-selected="false" data-a="menus">Menus</button>
+    <button role="tab" aria-selected="false" data-a="dec">Decisões</button>
+  </div>
+
+  <!-- ========== GLOSSÁRIO ========== -->
+  <section class="secao" data-p="gloss">
+    <div><h2>O que significa</h2><p class="ajuda">Página nova, aberta pelo menu Ajuda e por todo (i). Cada termo tem um endereço próprio, então o (i) leva direto ao termo.</p></div>
+    <div class="busca"><input id="q" placeholder="Buscar termo (ex.: CPC, ciclo, reserva)" aria-label="Buscar termo"><div class="chips" id="grupos"></div></div>
+    <div class="gloss" id="gloss"></div>
+    <p class="ajuda" id="vazio" hidden>Nenhum termo encontrado. Tente outra palavra ou fale com o suporte.</p>
+  </section>
+
+  <!-- ========== NOMES ========== -->
+  <section class="secao" data-p="nomes" hidden>
+    <div><h2>Um nome por conceito</h2><p class="ajuda">À esquerda, como aparece hoje em telas diferentes; à direita, o nome único proposto.</p></div>
+    <div class="rolagem"><table><thead><tr><th>Conceito</th><th>Hoje aparece como</th><th>Passa a ser</th></tr></thead><tbody id="tabNomes"></tbody></table></div>
+  </section>
+
+  <!-- ========== TELAS ========== -->
+  <section class="secao" data-p="telas" hidden>
+    <div><h2>Antes e depois, tela a tela</h2><p class="ajuda">Os pontos principais da revisão. <span class="selo p1">P1</span> confunde ou impede o uso · <span class="selo p2">P2</span> atrapalha · <span class="selo p3">P3</span> acabamento. A lista completa fica no arquivo de aprovações.</p></div>
+    <div id="telas" style="display:flex;flex-direction:column;gap:10px"></div>
+  </section>
+
+  <!-- ========== MENUS ========== -->
+  <section class="secao" data-p="menus" hidden>
+    <div><h2>Menus com subtítulo</h2><p class="ajuda">Cada item ganha uma linha dizendo para que serve. Usuários, Permissões e Auditoria saem do grupo sem nome no fim de todos os menus (bloco 4): a empresa cuida das suas pessoas em Empresa; a equipe MotorCob vê tudo pelo Console.</p></div>
+    <div class="cols2">
+      <div class="menu"><h3 style="padding:0 8px 6px">Plataforma (cliente)</h3>
+        <span class="g">Operação</span>
+        <div class="m"><b>Início</b><small>Resumo de hoje: carga, Lista do dia e alertas</small></div>
+        <div class="m novo"><b>Lista do dia</b><small>Quem recebe o quê hoje, por canal (antes "Fila")</small></div>
+        <div class="m"><b>Mapa da Esteira</b><small>Em que fase está cada cliente e quem se moveu</small></div>
+        <div class="m"><b>Clientes</b><small>Histórico de um cliente, passo a passo</small></div>
+        <div class="m novo"><b>Enviar arquivos</b><small>Cargas, pagamentos e retornos do credor (antes "Cargas e retornos")</small></div>
+        <span class="g">Estratégia</span>
+        <div class="m"><b>Orquestração</b><small>Régua de cada segmento: canais, dias e regras</small></div>
+        <div class="m novo"><b>Segmentos</b><small>Grupos de clientes por regra (antes "Clusters")</small></div>
+        <div class="m"><b>Personas</b><small>Perfis que respondem melhor aos mesmos canais</small></div>
+        <div class="m novo"><b>Canais e mensagens</b><small>Horários, limites e textos de cada canal (antes "Canais e frases")</small></div>
+        <span class="g">Mensageria</span>
+        <div class="m"><b>Campanhas</b><small>Envios avulsos a partir de uma lista</small></div>
+        <div class="m"><b>Respostas</b><small>O que os clientes responderam, já classificado</small></div>
+        <div class="m novo"><b>Modelos de mensagem</b><small>Textos-padrão aprovados (antes "Templates")</small></div>
+        <span class="g">Resultados</span>
+        <div class="m"><b>Indicadores</b><small>CPC, acordos e custo por resultado</small></div>
+        <div class="m"><b>Comitê</b><small>Arquivos para a reunião com o credor</small></div>
+        <div class="m"><b>Relatórios</b><small>Relatórios prontos e montados por você</small></div>
+        <span class="g">Empresa</span>
+        <div class="m"><b>Dados e contatos</b><small>Cadastro e quem recebe as faturas</small></div>
+        <div class="m novo"><b>Pessoas e perfis</b><small>Quem acessa e o que cada perfil pode fazer (junta Membros, Usuários e Permissões)</small></div>
+        <div class="m novo"><b>Auditoria</b><small>Quem mudou o quê, nesta empresa (sai do grupo sem nome do fim do menu)</small></div>
+        <div class="m"><b>Faturas</b><small>Faturas, boletos e notas</small></div>
+        <div class="m"><b>Suporte</b><small>Chamados com a equipe MotorCob</small></div>
+        <span class="g">Ajuda</span>
+        <div class="m novo"><b>O que significa</b><small>Glossário de todos os termos da plataforma</small></div>
+      </div>
+      <div class="menu"><h3 style="padding:0 8px 6px">Console (equipe MotorCob)</h3>
+        <span class="g">Clientes</span>
+        <div class="m novo"><b>Empresas</b><small>Primeira tela do Console; dentro de cada empresa: Contratação, Pessoas e Faturas</small></div>
+        <div class="m"><b>Saúde</b><small>Empresas com rotina falhando, cargas ou lotes parados</small></div>
+        <div class="m"><b>Carteiras</b><small>Quem é vendedor e gerente de cada conta</small></div>
+        <span class="g">Suporte</span>
+        <div class="m"><b>Atendimento</b><small>Chamados dos clientes e perguntas ao Assistente</small></div>
+        <span class="g">Financeiro</span>
+        <div class="m"><b>Faturamento</b><small>Rascunhos, emissão, cobranças e nota fiscal</small></div>
+        <div class="m"><b>Margem (MC)</b><small>Quanto sobra por empresa e canal; (i) explica MC e %MC</small></div>
+        <span class="g">Mensageria</span>
+        <div class="m novo"><b>Produtos e preços</b><small>Catálogo, preço mínimo e de tabela (bloco 2)</small></div>
+        <div class="m novo"><b>Fornecedores e rotas</b><small>Negociações e composição de cada rota (bloco 2)</small></div>
+        <span class="g">Administração</span>
+        <div class="m"><b>Equipe MotorCob</b><small>Pessoas do time interno e seus perfis</small></div>
+        <div class="m novo"><b>Auditoria</b><small>Alterações de todas as empresas (sai do grupo sem nome)</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== DECISÕES ========== -->
+  <section class="secao" data-p="dec" hidden>
+    <div><h2>Decisões que só você pode tomar</h2><p class="ajuda">A revisão encontrou pontos que são escolha de negócio, não de texto.</p></div>
+    <div class="dec" style="border-color:var(--ok)"><h3>Já decidido (14/10)</h3>
+      <p class="ajuda" style="margin:0">Glossário aprovado. Mantêm o nome: <b>Fallback</b>, <b>MC</b> e <b>%MC</b> (com (i)), <b>Auditoria</b>.
+      Ajuda por tempo de casa: <b>até 15 dias</b> Primeiros dias (explicações abertas) · <b>16 a 30 dias</b> Discreta ((i) cinza) · <b>depois de 30 dias</b> Desligada.
+      O glossário fica sempre no menu <b>Ajuda › O que significa</b> e no ícone "?" do topo, e cada pessoa pode religar a ajuda em Minha conta.</p></div>
+    <div class="dec"><h3>1 · Marca dentro da plataforma</h3><p class="ajuda" style="margin:0">Hoje a mesma tela diz MotorCob, MotorCX e MotorCli ("Console MotorCX", "Equipe MotorCob", "Suporte MotorCX").</p>
+      <div class="ops"><span class="rec">MotorCX = a plataforma · Cobrança e Jornada do Cliente = as áreas (recomendado)</span><span>Tudo MotorCob</span><span>Manter como está</span></div></div>
+    <div class="dec"><h3>2 · CPC A e CPC B</h3><p class="ajuda" style="margin:0">Pelo motor: CPC A = acabou de falar com a pessoa certa e recebe a negociação no mesmo canal; CPC B = depois do CPC, não respondeu à negociação e o MotorCob tenta de novo e troca de canal. Sugestão de nome na tela:</p>
+      <div class="ops"><span class="rec">"CPC · em negociação" e "CPC · sem resposta" (recomendado)</span><span>Manter "CPC A" e "CPC B" com (i)</span></div></div>
+    <div class="dec"><h3>3 · Telefone Hot</h3>
+      <div class="ops"><span class="rec">"Contato principal" (recomendado)</span><span>Manter "Hot" com (i)</span></div></div>
+    <div class="dec"><h3>4 · Regras de senha</h3><p class="ajuda" style="margin:0">Hoje três telas pedem regras diferentes.</p>
+      <div class="ops"><span class="rec">12+ caracteres, com letra e número, igual em todas (recomendado)</span><span>12+ com maiúscula, minúscula, número e símbolo</span></div></div>
+    <div class="dec"><h3>5 · Formatos de arquivo</h3><p class="ajuda" style="margin:0">Carteiras aceita CSV, TXT e XLSX; Enviar arquivos só CSV.</p>
+      <div class="ops"><span class="rec">Aceitar CSV, TXT e XLSX nos dois (recomendado)</span><span>Só CSV nos dois</span></div></div>
+  </section>
+</div>
+
+<script>
+const G = [
+  ["Fases da cobrança", "Cliente novo", "Chegou na carga e ainda não falamos com ele. A régua usa um telefone de cada vez até alguém atender.", "Exemplo: 3º dia = terceiro dia desde que o cliente entrou.", "Localização, LOC, L0–L8, Novo, Não localizado"],
+  ["Fases da cobrança", "CPC", "Contato com a Pessoa Certa: falamos com o próprio cliente, não com terceiro nem caixa postal.", "Uma resposta do cliente no WhatsApp conta como CPC.", ""],
+  ["Fases da cobrança", "CPC · em negociação", "O cliente acabou de dar CPC. O próximo contato é a proposta, no mesmo canal e no contato principal.", "", "CPC A, CPA, Negociação"],
+  ["Fases da cobrança", "CPC · sem resposta", "Já deu CPC, mas não respondeu à proposta. O MotorCob tenta algumas vezes e depois troca de canal.", "1ª tentativa, 2ª tentativa… no mesmo canal.", "CPC B, CPB, Tentativas, T1–T3"],
+  ["Fases da cobrança", "Não CPC", "Quem não foi localizado no prazo. Entra numa régua que se repete em ciclos.", "Ciclo de 8 dias, repetido 3 vezes.", "Giro, NCP, Não localizado"],
+  ["Fases da cobrança", "Ciclo", "Uma volta completa da régua do Não CPC. Depois do último ciclo o cliente para e espera um novo enriquecimento.", "2º ciclo = segunda volta.", "G1, G2, G3"],
+  ["Fases da cobrança", "Parado · aguarda enriquecimento", "Terminou os ciclos sem contato. Volta quando o bureau devolver telefones ou e-mails novos.", "", "RE"],
+  ["Fases da cobrança", "Acordo · antes do vencimento", "Lembretes nos dias que antecedem a parcela do acordo.", "D-3 = três dias antes do vencimento.", "Preventivo, PRE"],
+  ["Fases da cobrança", "Acordo em dia", "Acordo ativo, sem parcela vencida. Não recebe cobrança.", "", "Colchão, COL"],
+  ["Fases da cobrança", "Acordo · parcela vencida", "A parcela venceu e não foi paga depois da carência. Se passar do prazo, o acordo é desfeito.", "", "Quebra, QBR"],
+  ["Fases da cobrança", "Quitado", "Pagou a dívida. Sai de todas as ações.", "", "Liquidado, LIQ"],
+  ["Fases da cobrança", "Bloqueado", "Nunca recebe ação: óbito, processo judicial, reclamação ou pedido para não ser contatado.", "", "BLQ, Opt-out/óbito"],
+  ["Régua e estratégia", "Régua", "A sequência de dias e canais de uma fase: o que sai em cada dia.", "1º dia WhatsApp; 3º dia RCS, senão SMS.", ""],
+  ["Régua e estratégia", "Segmento", "Grupo de clientes definido por regras (saldo, atraso, colunas da carga). Cada segmento tem a sua estratégia.", "", "Cluster"],
+  ["Régua e estratégia", "Segmento padrão", "Quando não há segmento seu, o MotorCob agrupa por faixa de valor (alto, médio, baixo) e de atraso (1, 2, 3).", "A1 = valor alto, pouco atraso.", "A1…B3"],
+  ["Régua e estratégia", "Estratégia", "O conjunto de régua, etapas, orçamento e travas usado por um segmento numa carteira.", "", ""],
+  ["Régua e estratégia", "Junto, senão e reserva", "Junto: vai junto com o canal de cima. Senão: só se o de cima não puder ser usado. Reserva: só se o de cima não conseguir contato no dia.", "", "+ junto, → senão, / reserva"],
+  ["Régua e estratégia", "Persona e raia", "Persona: grupo que responde melhor aos mesmos canais. Raia: régua própria de uma persona em certos dias.", "", ""],
+  ["Régua e estratégia", "Travas", "Limites que protegem o cliente: horário, intervalo entre ações, máximo por dia e Não Perturbe.", "", ""],
+  ["Régua e estratégia", "Orçamento do canal", "Máximo de clientes ou telefones por dia num canal. Quem passa do limite recebe o canal de baixo ou concorre amanhã.", "", "Fora do orçamento"],
+  ["Régua e estratégia", "Reenquadrar", "Recalcula agora segmento, persona e fase de cada cliente e refaz a Lista do dia, sem esperar a rotina.", "", ""],
+  ["Operação", "Carteira", "O conjunto de dívidas de um credor. Cada carteira tem sua carga, estratégia e Lista do dia.", "", "Credor"],
+  ["Operação", "Carga", "Arquivo (ou envio por API) com a carteira. A geral substitui a anterior; a incremental soma.", "", "Base, base bruta"],
+  ["Operação", "Rotina", "Processamento automático diário que lê as cargas e gera a Lista do dia.", "Roda às 06:00.", ""],
+  ["Operação", "Lista do dia", "Quem será acionado hoje, por canal, e por que quem ficou de fora ficou de fora.", "", "Fila, Ações de hoje"],
+  ["Operação", "Contato principal", "O telefone ou e-mail em que o cliente já atendeu ou que o credor indicou como preferido. Vai sempre primeiro.", "", "Hot, HOT, telefone Hot"],
+  ["Operação", "Enriquecimento", "Busca de telefones e e-mails novos num bureau de dados.", "", "Oxigenado, bureau"],
+  ["Operação", "Safra", "Mês em que o cliente entrou na carteira.", "set/26", ""],
+  ["Mensageria", "Lote", "Mensagens de um canal disparadas num dia, pela Lista do dia ou por campanha.", "", "Lotes de hoje"],
+  ["Mensageria", "Disparado, enviado e entregue", "Disparado: saiu do MotorCob. Enviado: o fornecedor aceitou. Entregue: chegou ao destino — no SMS e no RCS, pela DLR; no WhatsApp, pelo status de entrega; no e-mail, quando o provedor aceita (se não chegar, volta como bounce).", "", ""],
+  ["Mensageria", "DLR (Delivery Report)", "Relatório de entrega que a operadora devolve para cada SMS ou RCS: entregue, não entregue, expirado. Só existe em SMS e RCS; WhatsApp tem status de entrega e leitura, e e-mail tem bounce.", "Ex.: DLR \"não entregue\" = número inexistente ou aparelho desligado por muito tempo.", ""],
+  ["Mensageria", "Bounce", "Aviso de que o e-mail não chegou. Permanente: o endereço não existe (não tentamos de novo). Temporário: caixa cheia ou servidor fora (tentamos depois).", "", ""],
+  ["Mensageria", "Fallback", "Canal alternativo usado quando o principal não entrega.", "Ex.: SMS se o RCS não chegar.", ""],
+  ["Mensageria", "Modelo de mensagem", "Texto-padrão aprovado, com campos que o MotorCob preenche (ex.: {{nome}}).", "", "Template, frase"],
+  ["Mensageria", "Simulação e envio real", "Simulação não envia nem cobra; serve para testar. Envio real sai de verdade e entra na fatura.", "", ""],
+  ["Mensageria", "Produto", "O tipo de mensagem que você contrata e paga (ex.: SMS OTP, WhatsApp Utilidade). Cada produto tem a sua rota.", "", ""],
+  ["Financeiro", "Ciclo de faturamento", "Período em que o uso é somado para virar uma fatura.", "Mensal, fechando todo dia 1.", "Ciclo de uso, competência"],
+  ["Financeiro", "Pré-pago e recarga", "No pré-pago a empresa compra saldo (recarga) e cada envio desconta dele.", "", ""],
+  ["Financeiro", "MC e %MC · margem de contribuição", "Receita menos impostos e custo dos fornecedores. %MC é essa sobra em % da receita.", "%MC = (receita − impostos − custo) ÷ receita", ""],
+  ["Operação", "Auditoria", "Registro de quem mudou o quê e quando: preços, estratégias, usuários, faturas.", "", ""]
+];
+const N = [
+  ["Fase de quem ainda não falamos", ["Localização", "Cliente novo", "Novo", "Não localizado", "LOC"], "Cliente novo"],
+  ["Fase de quem não foi localizado no prazo", ["Não CPC", "Giro", "Não CPC (giro)", "Não localizado", "NCP"], "Não CPC"],
+  ["Voltas da régua do Não CPC", ["G1", "G2", "G3", "G-dia3"], "1º ciclo, 2º ciclo… · dia 3 do ciclo"],
+  ["Parado esperando bureau", ["RE"], "Parado · aguarda enriquecimento"],
+  ["CPC recente", ["CPC A", "Negociação", "CPA"], "CPC · em negociação"],
+  ["CPC sem resposta", ["CPC B", "Tentativas", "CPB", "T1"], "CPC · sem resposta · 1ª tentativa"],
+  ["Acordo em dia", ["Colchão", "Acordo", "COL"], "Acordo em dia"],
+  ["Antes do vencimento", ["Preventivo", "Acordo · preventivo", "PRE"], "Acordo · antes do vencimento"],
+  ["Parcela vencida", ["Quebra", "Acordo · quebra", "QBR"], "Acordo · parcela vencida"],
+  ["Grupo de clientes", ["Cluster", "Segmento"], "Segmento"],
+  ["Momento do cliente", ["Fase", "Etapa", "Estágio", "Momento", "Faixa"], "Fase (do motor) e Etapa (sua)"],
+  ["Dono das dívidas", ["Credor", "Carteira"], "Carteira"],
+  ["Contato preferido", ["HOT", "Hot", "telefone Hot", "contato HOT"], "Contato principal"],
+  ["Lista de hoje", ["Lista do dia", "Fila", "Ações de hoje"], "Lista do dia"],
+  ["Texto-padrão", ["Templates", "Modelo de e-mail", "Modelos de mensagem", "Frases"], "Modelos de mensagem"],
+  ["Não chegou", ["Não entregues", "Falhas", "Falhou"], "Não entregues"],
+  ["Pessoas com acesso", ["Membros", "Usuários da empresa", "Usuários e permissões", "Equipe e usuários"], "Pessoas e perfis"],
+  ["O que a pessoa pode fazer", ["Papel", "Perfil", "Função", "Acessos"], "Perfil"],
+  ["Chefe da conta do cliente", ["Admin", "Administrador", "administrador"], "Administrador"],
+  ["Robô de voz", ["Agente virtual", "agente de voz", "Voz"], "Agente virtual"],
+  ["Área da plataforma", ["Frente", "COB", "CLI", "MotorCli"], "Área: Cobrança ou Jornada do Cliente"],
+  ["Canal alternativo", ["Fallback", "senão (na Documentação)"], "Fallback (com (i))"]
+];
+const T = [
+  ["Lista do dia", [["p1", 'Motivos curtos: <code>sem ação na raia</code>, <code>só bureau</code>, <code>demais desligado</code>', "Persona sem ação hoje · Só enriquecimento hoje · Demais clientes desligado"],
+    ["p2", '"clientes <code>oxigenados</code> hoje"', '"clientes que ganharam contato novo hoje"'],
+    ["p2", '"Lista anterior à separação por estratégia. Rode Reenquadrar…"', '"Esta lista foi gerada antes da divisão por fase. Clique em Reenquadrar agora para dividi-la."']]],
+  ["Reenquadrar agora", [["p1", '"O MotorCob ainda não pegou o pedido: confira se o <code>Mac está ligado e a vigia ativa (scripts/diagnostico.sh)</code>"', '"O pedido está demorando mais que o normal. Aguarde alguns minutos; se continuar, fale com o suporte."'],
+    ["p1", '"Erro ao reenquadrar: <code>{erro técnico}</code>"', '"Não conseguimos reenquadrar agora. Tente de novo em alguns minutos." + Ver detalhe técnico (recolhido)']]],
+  ["Mapa da Esteira e Clientes", [["p1", 'Passos <code>G1</code> <code>G2</code> <code>RE</code>, <code>T1</code>', "1º ciclo · 2º ciclo · Parado · aguarda enriquecimento · 1ª tentativa"],
+    ["p1", 'Linha do tempo do cliente mostra a TAG <code>S260801-A1-CPB-WA-T2</code>', '"CPC · sem resposta · 2ª tentativa no WhatsApp · segmento A1 · entrou em ago/26"'],
+    ["p2", '"Colchão" como nome de fase', '"Acordo em dia"']]],
+  ["Orquestração", [["p1", 'Resumo do Não CPC: <code>G-dia3 WhatsApp › SMS</code>', '"Dia 3 do ciclo: WhatsApp, depois SMS"'],
+    ["p1", '"Chave desligada = o evento não é tratado (<code>fim_janela</code> sem destino…)"', '"Se desligar, nada acontece nesse evento. Sem destino em Terminou a janela, o cliente volta ao fluxo padrão."'],
+    ["p1", '"O <code>id</code> da etapa não pode ser…"', '"Esse nome é reservado. Escolha outro nome para a etapa."'],
+    ["p2", 'Selos <code>Sua</code> / <code>off</code>', "Personalizada / Desligada"]]],
+  ["Enviar arquivos", [["p1", 'Status <code>pendente</code> <code>processado</code> <code>erro</code>', "Na fila · Processado · Com erro · Aguardando confirmar colunas"],
+    ["p1", 'Erro do processamento exibido cru', 'Frase do que houve + "Ver detalhes"'],
+    ["p2", 'Tipo <code>Base</code>', "Carga geral"]]],
+  ["Mensageria", [["p1", 'Etiqueta "Envio real" / "Simulação" sem explicação', "(i): Simulação não envia nem cobra; Envio real sai e entra na fatura"],
+    ["p1", '"Confirme o <code>layout</code>"', '"Confira as colunas"'],
+    ["p1", '"Template de SMS do <code>fallback</code>" sem explicação', '"SMS de fallback (se o RCS não chegar)" + (i)'],
+    ["p1", 'Motivo do lote: código do fornecedor (<code>UNDELIV</code>)', '"Número inexistente", "Aparelho desligado"…'],
+    ["p2", '"Favoritos"', '"Números de teste e da equipe"']]],
+  ["Empresa e Contratação", [["p1", '"Falha ao salvar o preço do X: <code>{mensagem do banco}</code>"', '"Não conseguimos salvar os preços. Tente de novo; se repetir, abra um chamado." + detalhe recolhido'],
+    ["p1", '<code>Flat</code> · <code>Escalonado</code> · <code>Competência</code> · <code>Dia de corte</code>', "Preço único · Preço por faixa · Mês de referência · Dia de fechamento"],
+    ["p2", 'Link para "Empresa › Cadastro e Contatos" (aba que não existe)', 'Link para "Empresa › Dados e contatos"']]],
+  ["Console", [["p1", '<code>MC</code> / <code>%MC</code> sem explicação', 'Mantém MC / %MC + (i) com a conta'],
+    ["p1", 'NFS-e: "Regime de apuração <code>1 / 2 / 3</code>"', "Nomes oficiais do regime"],
+    ["p1", 'Auditoria: campo <code>segredo_ref</code>, <code>true/false</code>, ID cru', 'Nome do campo em português, Sim/Não, nome do registro'],
+    ["p1", 'Saúde: "Rotina com erro: <code>{mensagem do servidor}</code>"', '"A rotina de hoje falhou. Abra um chamado para Tecnologia." + detalhe recolhido'],
+    ["p2", 'Status <code>ok</code> / <code>erro</code> / <code>rodando</code>', "Concluída / Com erro / Em andamento"],
+    ["p2", 'Equipe: botão "Sair e entrar"', '"Confirmar código"']]],
+  ["Login e conta", [["p2", '"Escolha a <code>frente</code>."', '"Escolha a área: Cobrança ou Jornada do Cliente."'],
+    ["p2", '"Não foi possível verificar o segundo fator."', '"Código incorreto ou vencido. Use o código que aparece agora no aplicativo."'],
+    ["p1", "Regras de senha diferentes em três telas", "Uma regra só, mostrada igual nas três"]]]
+];
+const grupos = ["Todos", ...new Set(G.map(g => g[0]))];
+let grp = "Todos";
+const slug = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+function gloss() {
+  const q = slug(document.getElementById("q").value.trim());
+  const l = G.filter(g => (grp === "Todos" || g[0] === grp) && (!q || slug(g.join(" ")).includes(q)));
+  document.getElementById("gloss").innerHTML = l.map(([gr, t, d, ex, ant]) => `<div class="termo" id="${slug(t)}"><div class="cab"><b>${t}</b><span class="grp">${gr}</span></div><p>${d}</p>${ex ? `<span class="ex">${ex}</span>` : ""}${ant ? `<span class="ant">Antes: <s>${ant}</s></span>` : ""}</div>`).join("");
+  document.getElementById("vazio").hidden = l.length > 0;
+}
+document.getElementById("grupos").innerHTML = grupos.map(g => `<button aria-pressed="${g === grp}" data-g="${g}">${g}</button>`).join("");
+document.querySelectorAll("#grupos button").forEach(b => b.addEventListener("click", () => { grp = b.dataset.g; document.querySelectorAll("#grupos button").forEach(x => x.setAttribute("aria-pressed", x === b)); gloss(); }));
+document.getElementById("q").addEventListener("input", gloss);
+document.getElementById("tabNomes").innerHTML = N.map(([c, v, n]) => `<tr><td>${c}</td><td class="velho">${v.map(x => `<span>${x}</span>`).join("")}</td><td class="novo">${n}</td></tr>`).join("");
+document.getElementById("telas").innerHTML = T.map(([t, it], i) => `<details class="tela" ${i < 2 ? "open" : ""}><summary><span>${t}</span><span style="display:flex;gap:4px">${["p1", "p2", "p3"].map(p => { const n = it.filter(x => x[0] === p).length; return n ? `<span class="selo ${p}">${n} ${p.toUpperCase()}</span>` : ""; }).join("")}</span></summary>
+  <div class="itens">${it.map(([p, a, d]) => `<div class="item"><span class="selo ${p}" style="align-self:start">${p.toUpperCase()}</span><span class="antes">${a}</span><span class="depois">→ ${d}</span></div>`).join("")}</div></details>`).join("");
+document.querySelectorAll(".abas button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".abas button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("[data-p]").forEach(s => s.hidden = s.dataset.p !== b.dataset.a);
+}));
+gloss();
+</script>

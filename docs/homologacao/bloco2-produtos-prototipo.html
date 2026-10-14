@@ -1,0 +1,799 @@
+<title>Produtos da Mensageria</title>
+<style>
+/* Layout: janela do sistema com abas no topo (Console, Empresa, Campanha, Comitê, Perfis); cada aba é uma tela real do MotorCob preenchida com dados de exemplo */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
+  --azul: #0A64D0; --azulf: #E8F1FC; --ok: #1E7A36; --okf: #E6F4EA; --alerta: #8A5A00; --alertaf: #FFF4D6; --erro: #C4271E; --errof: #FDECEA;
+  --sms: #0A84FF; --wa: #25A55F; --rcs: #8E5CD9; --email: #C77700;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --azulf: #13253D; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --azulf: #13253D; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding-block: 24px 48px; padding-inline: 16px; margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.proto { font-size: 13px; color: var(--tinta-2); }
+.topo { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0; text-wrap: balance; }
+h3 { font-size: 14px; margin: 0; }
+.topo p, .ajuda { color: var(--tinta-2); margin: 4px 0 0; font-size: 13.5px; max-width: 75ch; }
+.seg { display: inline-flex; background: var(--suave); border-radius: 12px; padding: 4px; gap: 4px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; color: var(--tinta-2); font: 600 13.5px var(--sans); padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--painel); color: var(--tinta); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.abas { display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--linha); }
+.abas button { border: 0; background: none; color: var(--tinta-2); font: 600 14px var(--sans); padding: 10px 12px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.abas button[aria-selected="true"] { color: var(--tinta); border-color: var(--tinta); }
+.secao { background: var(--painel); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.tit { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.btn { border: 0; border-radius: 999px; padding: 8px 15px; font: 600 13.5px var(--sans); cursor: pointer; background: var(--tinta); color: var(--painel); }
+.btn.sec { background: var(--suave); color: var(--tinta); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+input, select { font: 14px var(--sans); color: var(--tinta); background: var(--painel); border: 1px solid var(--linha); border-radius: 9px; height: 36px; padding: 0 9px; min-width: 0; }
+input.num { font-variant-numeric: tabular-nums; text-align: right; width: 104px; font-family: var(--mono); font-size: 13px; }
+input.baixo { border-color: var(--erro); background: var(--errof); }
+.rolagem { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: left; font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-2); padding: 6px 8px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+td { padding: 9px 8px; border-bottom: 1px solid var(--linha); vertical-align: middle; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.canal td { background: var(--suave); font-weight: 700; font-size: 13px; padding: 7px 8px; }
+.cod { font: 12px var(--mono); color: var(--tinta-2); }
+.ponto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+.selo { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+.selo.ok { background: var(--okf); color: var(--ok); }
+.selo.al { background: var(--alertaf); color: var(--alerta); }
+.selo.er { background: var(--errof); color: var(--erro); }
+.selo.ne { background: var(--suave); color: var(--tinta-2); }
+.selo.az { background: var(--azulf); color: var(--azul); }
+.aviso { border-radius: 12px; padding: 10px 12px; font-size: 13.5px; display: flex; gap: 10px; align-items: flex-start; }
+.aviso.al { background: var(--alertaf); color: var(--alerta); }
+.aviso.er { background: var(--errof); color: var(--erro); }
+.aviso.az { background: var(--azulf); color: var(--azul); }
+.aviso b { color: inherit; }
+.chave { width: 44px; height: 26px; border-radius: 999px; border: 0; background: #D2D2D7; position: relative; cursor: pointer; flex: none; transition: background .15s; }
+.chave::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: left .15s; }
+.chave[aria-checked="true"] { background: #34C759; }
+.chave[aria-checked="true"]::after { left: 20px; }
+.chave:disabled { opacity: .4; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .chave, .chave::after { transition: none; } }
+.canais { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.cc { border: 1px solid var(--linha); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cc .cab { display: flex; align-items: center; gap: 8px; }
+.prod { display: grid; grid-template-columns: 44px minmax(0, 1fr) 112px; gap: 10px; align-items: center; padding-top: 10px; border-top: 1px solid var(--linha); }
+.prod .nome b { display: block; font-size: 14px; }
+.prod .nome small { color: var(--tinta-2); font-size: 12px; }
+.prod .info { grid-column: 2 / -1; font-size: 12px; color: var(--tinta-2); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: -4px; }
+.prod.off .nome, .prod.off input { opacity: .45; }
+.motivo { grid-column: 2 / -1; display: flex; gap: 8px; }
+.motivo input { flex: 1; }
+.duas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.cod-bloco { font: 12.5px/1.55 var(--mono); background: var(--suave); border-radius: 12px; padding: 12px 14px; overflow-x: auto; white-space: pre; margin: 0; }
+.barra { display: grid; grid-template-columns: 150px minmax(0, 1fr) 70px; gap: 10px; align-items: center; font-size: 13px; }
+.barra .trilhos { display: flex; flex-direction: column; gap: 3px; }
+.barra .t { height: 9px; border-radius: 5px; background: var(--suave); position: relative; overflow: hidden; }
+.barra .t i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; }
+.legenda { display: flex; gap: 16px; font-size: 12.5px; color: var(--tinta-2); flex-wrap: wrap; }
+.legenda span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.lnk { border: 0; background: none; color: var(--azul); font: 13px var(--mono); cursor: pointer; padding: 0; font-variant-numeric: tabular-nums; }
+tr.det td { background: var(--suave); }
+.comp { display: flex; flex-direction: column; gap: 6px; max-width: 640px; font-size: 13px; }
+.comp .lin { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 150px 90px; gap: 10px; align-items: center; }
+.comp .lin .n { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12px; }
+.comp .t { height: 8px; border-radius: 4px; background: var(--linha); position: relative; overflow: hidden; }
+.comp .t i { position: absolute; inset: 0 auto 0 0; background: var(--azul); }
+.comp .tot { border-top: 1px solid var(--linha); padding-top: 6px; font-weight: 700; }
+.mix { border: 1px solid var(--linha); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.mix .ops { display: grid; grid-template-columns: repeat(4, minmax(0, 110px)) minmax(0, 1fr); gap: 10px; align-items: end; }
+.comp .op { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px dashed var(--linha); }
+@media (max-width: 820px) { .mix .ops { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mix .fonte { grid-column: 1 / -1; } }
+.neg { display: grid; grid-template-columns: minmax(0, 180px) minmax(0, 220px) auto; gap: 12px; align-items: end; }
+.opsneg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.opneg { border: 1px solid var(--linha); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; }
+.opneg input { grid-column: 1 / -1; width: 100%; }
+.opneg.off b { opacity: .45; }
+.rotaops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rotaops.um { grid-template-columns: minmax(0, 640px); }
+.rl { grid-template-columns: minmax(0, 1fr) 64px 14px 112px 32px !important; }
+.rl.cabl { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-2); }
+.rl.cabl .n { text-align: right; }
+.modal.largo { width: min(760px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+.negcard { border: 1px solid var(--linha); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.negcard .cab { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.rl .nota { grid-column: 1 / -1; font-size: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: -2px; }
+.opchip.demais { border-style: dashed; }
+.opchips { display: flex; gap: 8px; flex-wrap: wrap; }
+.opchip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--linha); border-radius: 999px; padding: 6px 12px; color: var(--tinta); font-size: 14px; cursor: pointer; }
+.opchip input { width: auto; height: auto; }
+.rl { display: grid; grid-template-columns: minmax(0, 1fr) 64px 14px 110px 32px; gap: 8px; align-items: center; }
+.rl .n, .rlpe .n { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
+.rlpe { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn.peq { padding: 6px 12px; font-size: 12.5px; }
+.x { width: 32px; height: 32px; border: 0; border-radius: 8px; background: var(--suave); color: var(--tinta-2); cursor: pointer; font-size: 16px; }
+.estim { background: var(--suave); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; }
+@media (max-width: 820px) { .neg, .rotaops { grid-template-columns: minmax(0, 1fr); } .opsneg { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.canaisck { display: flex; gap: 14px; flex-wrap: wrap; color: var(--tinta); font-size: 14px; }
+.canaisck input { width: auto; height: auto; }
+.matriz td:not(:first-child), .matriz th:not(:first-child) { text-align: center; }
+.sim { color: var(--ok); font-weight: 700; }
+.nao { color: var(--tinta-2); }
+.heranca { display: flex; flex-direction: column; gap: 8px; }
+.nivel { border: 1px solid var(--linha); border-radius: 12px; padding: 10px 12px; display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+.nivel small { color: var(--tinta-2); display: block; font-size: 12px; }
+.seta { text-align: center; color: var(--tinta-2); font-size: 12px; }
+.modal-fundo { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; z-index: 5; }
+.modal { background: var(--painel); border-radius: 18px; padding: 20px; width: min(520px, 100%); display: flex; flex-direction: column; gap: 12px; }
+.grade2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+label.campo { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--tinta-2); min-width: 0; }
+label.campo input, label.campo select { width: 100%; }
+@media (max-width: 820px) {
+  .canais, .duas, .grade2 { grid-template-columns: minmax(0, 1fr); }
+  .barra { grid-template-columns: 110px minmax(0, 1fr) 56px; }
+}
+</style>
+
+<div class="wrap">
+  <div class="proto">Protótipo para aprovação · dados de exemplo (empresa, preços e custos fictícios) · nada aqui grava no banco</div>
+  <div class="topo">
+    <div>
+      <h1>Produtos da Mensageria</h1>
+      <p>Cada canal tem seus produtos, com rota, custo, preço de tabela e preço mínimo. A empresa contrata os que quiser; só o que está ligado aparece na campanha e passa na API.</p>
+    </div>
+    <div>
+      <div class="ajuda" style="margin:0 0 4px">Ver como</div>
+      <div class="seg" id="perfil" role="group" aria-label="Perfil">
+        <button aria-pressed="false" data-p="comercial">Comercial</button>
+        <button aria-pressed="true" data-p="administrativo">Administrativo</button>
+        <button aria-pressed="false" data-p="master">Master</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="abas" role="tablist">
+    <button role="tab" aria-selected="true" data-aba="catalogo">Console › Produtos e preços</button>
+    <button role="tab" aria-selected="false" data-aba="fornec">Console › Fornecedores e rotas</button>
+    <button role="tab" aria-selected="false" data-aba="contratacao">Empresa › Contratação</button>
+    <button role="tab" aria-selected="false" data-aba="regra">Regra do canal</button>
+    <button role="tab" aria-selected="false" data-aba="campanha">Campanha e API</button>
+    <button role="tab" aria-selected="false" data-aba="comite">Comitê</button>
+    <button role="tab" aria-selected="false" data-aba="perfis">Perfis</button>
+  </div>
+
+  <!-- ============ CATÁLOGO ============ -->
+  <section class="secao" data-painel="catalogo">
+    <div class="tit">
+      <div>
+        <h2>Produtos e preços</h2>
+        <p class="ajuda">Tabela única do MotorCob. O preço de tabela é o que entra na contratação; o mínimo é o piso que o Comercial pode negociar. Custo vem do fornecedor da rota (Console › Fornecedores).</p>
+      </div>
+      <button class="btn" id="novoProd">Novo produto</button>
+    </div>
+    <div id="avisoCat"></div>
+    <div class="mix" id="mix"></div>
+    <div class="rolagem"><table id="tabCat">
+      <thead><tr><th>Produto</th><th>Unidade</th><th>Rota</th><th class="n">Custo previsto</th><th class="n">Realizado</th><th class="n">Mínimo</th><th class="n">Tabela</th><th class="n">MC no mínimo</th><th>Situação</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="ajuda">Custo previsto = composição do plano de rota (% de cada fornecedor × custo dele). No SMS, o custo é calculado por operadora (Vivo, Claro, TIM, Outras), ponderado pela mistura acima, mais a consulta de operadora. Clique no custo para ver a conta. Realizado = o que a fatura dos fornecedores mostrou no mês anterior, envio a envio. MC no mínimo = (mínimo − custo previsto − impostos) ÷ mínimo, com impostos de 14,25% (Console › Margem). Abaixo da MC mínima de 20% o selo fica âmbar. Mudança de preço vale a partir do mês seguinte e fica na Auditoria.</p>
+  </section>
+
+  <!-- ============ FORNECEDORES E ROTAS ============ -->
+  <section class="secao" data-painel="fornec" hidden>
+    <div class="tit"><div>
+      <h2>Rota do produto</h2>
+      <p class="ajuda">Escolha o produto e diga como foi a negociação: <b>flat</b> (um custo por fornecedor, para qualquer operadora) ou <b>por operadora</b> (custo de cada fornecedor em cada operadora). Depois componha a rota com um ou mais fornecedores. Fornecedor que ainda não existe pode ser cadastrado aqui mesmo.</p>
+    </div>
+      <label class="campo" style="min-width:240px">Produto<select id="rotaProd"></select></label></div>
+    <div class="campo" id="tipoBox">Tipo da negociação
+      <div class="seg" id="rotaTipo" role="group" aria-label="Tipo da negociação">
+        <button type="button" data-t="flat" aria-pressed="false">Preço flat</button>
+        <button type="button" data-t="op" aria-pressed="false">Por operadora</button></div></div>
+    <div id="opsEscolha"></div>
+    <div id="rotaAviso"></div>
+    <div id="rotaOps" class="rotaops"></div>
+    <div id="rotaTotal"></div>
+  </section>
+  <section class="secao" data-painel="fornec" hidden>
+    <div class="tit"><div>
+      <h2>Fornecedores</h2>
+      <p class="ajuda">Cadastro de fornecedores e onde cada um está nas rotas, com o custo negociado.</p>
+    </div><button class="btn" id="novoForn">Novo fornecedor</button></div>
+    <div id="listaForn" class="rolagem"></div>
+  </section>
+
+  <!-- ============ CONTRATAÇÃO ============ -->
+  <section class="secao" data-painel="contratacao" hidden>
+    <div class="tit">
+      <div>
+        <h2>Mensageria · Financeira Horizonte (exemplo)</h2>
+        <p class="ajuda">Ligue os produtos que a empresa contratou. Ligar libera o produto na campanha e na API; desligar bloqueia novos envios dele (os já agendados terminam).</p>
+      </div>
+      <button class="btn" id="salvarContr">Salvar contratação</button>
+    </div>
+    <div id="avisoContr"></div>
+    <div class="canais" id="canaisContr"></div>
+  </section>
+
+  <!-- ============ REGRA DO CANAL ============ -->
+  <section class="secao" data-painel="regra" hidden>
+    <div class="tit"><div>
+      <h2>Onde fica a regra do canal</h2>
+      <p class="ajuda">Proposta: a regra mora no canal da empresa e cada credor herda. O credor só sobrescreve o que for diferente, e a tela mostra o que está herdado e o que foi trocado.</p>
+    </div></div>
+    <div class="duas">
+      <div class="heranca">
+        <div class="nivel"><div><b>1 · Canal da empresa</b><small>Empresa › Canais › SMS</small></div><span class="selo az">define o padrão</span></div>
+        <div class="seta">↓ herda</div>
+        <div class="nivel"><div><b>2 · Credor (carteira)</b><small>Orquestração › Credor Banco Alfa › Canais</small></div><span class="selo ne">herda ou sobrescreve</span></div>
+        <div class="seta">↓ só encurta</div>
+        <div class="nivel"><div><b>3 · Travas da estratégia</b><small>Horário e limites só ficam mais restritos, nunca mais largos</small></div><span class="selo ne">mais restrito vence</span></div>
+      </div>
+      <div class="rolagem"><table>
+        <thead><tr><th>Regra do SMS</th><th>Empresa</th><th>Banco Alfa</th></tr></thead>
+        <tbody>
+          <tr><td>Produto padrão da régua</td><td>SMS Short</td><td><span class="selo ne">herdado</span></td></tr>
+          <tr><td>Produto para código e acordo</td><td>SMS OTP</td><td><span class="selo ne">herdado</span></td></tr>
+          <tr><td>Janela</td><td>09:00–19:00</td><td>10:00–18:00 <span class="selo al">sobrescrito</span></td></tr>
+          <tr><td>Remetente / shortcode</td><td>29123</td><td><span class="selo ne">herdado</span></td></tr>
+          <tr><td>Limite por dia</td><td>Todos da raia</td><td>Parametrizado · 20 mil <span class="selo al">sobrescrito</span></td></tr>
+          <tr><td>Plano de rota</td><td>do produto</td><td><span class="selo ne">herdado</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="aviso az"><div><b>Por que no canal:</b> hoje cada credor repete a mesma configuração e uma mudança (ex.: novo shortcode) precisa ser feita em todos. Com herança, muda-se uma vez e só os credores com exceção ficam diferentes, com o selo "sobrescrito" e o botão "Voltar ao padrão da empresa".</div></div>
+  </section>
+
+  <!-- ============ CAMPANHA E API ============ -->
+  <section class="secao" data-painel="campanha" hidden>
+    <div class="tit"><div>
+      <h2>Campanha e API identificam o produto</h2>
+      <p class="ajuda">Toda mensagem sai com o produto. Assim o custo, a rota, o preço e o relatório do comitê ficam certos por tipo.</p>
+    </div></div>
+    <div class="duas">
+      <div class="cc">
+        <h3>Nova campanha · passo Canal</h3>
+        <label class="campo">Canal<select id="campCanal"></select></label>
+        <label class="campo">Produto<select id="campProd"></select></label>
+        <div id="campInfo" class="ajuda" style="margin:0"></div>
+        <p class="ajuda" style="margin:0">Na régua, cada ação também escolhe o produto (padrão: o produto padrão do canal). Produto não contratado aparece cinza com "não contratado".</p>
+      </div>
+      <div class="cc">
+        <h3>API · POST /mensagens</h3>
+<pre class="cod-bloco">{
+  "canal": "sms",
+  "produto": "sms_otp",
+  "destino": "+55119…",
+  "texto": "Seu código é 482913"
+}</pre>
+        <p class="ajuda" style="margin:0">Sem <span class="cod">produto</span>: vale o produto padrão do canal. Produto não contratado:</p>
+<pre class="cod-bloco">422 {"erro": "produto_nao_contratado",
+     "mensagem": "SMS Marketing não está na contratação da empresa"}</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMITÊ ============ -->
+  <section class="secao" data-painel="comite" hidden>
+    <div class="tit"><div>
+      <h2>Comitê · onde o dinheiro vira contato</h2>
+      <p class="ajuda">Setembro/2026 · Financeira Horizonte (exemplo). Para cada produto, a fatia do gasto e a fatia dos CPCs (contato com a pessoa certa). Índice acima de 1 = traz mais CPC do que custa.</p>
+    </div></div>
+    <div class="legenda"><span style="--c: var(--tinta-2)">% do gasto</span><span style="--c: var(--ok)">% dos CPCs</span></div>
+    <div id="comite" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div class="rolagem"><table id="tabComite">
+      <thead><tr><th>Produto</th><th class="n">Envios</th><th class="n">Gasto</th><th class="n">% gasto</th><th class="n">CPCs</th><th class="n">% CPC</th><th class="n">Custo por CPC</th><th class="n">Índice</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <!-- ============ PERFIS ============ -->
+  <section class="secao" data-painel="perfis" hidden>
+    <div class="tit"><div>
+      <h2>Perfil Administrativo</h2>
+      <p class="ajuda">Novo perfil da equipe MotorCob. Cuida da ativação da empresa, do faturamento e da nota fiscal. O Master continua podendo tudo.</p>
+    </div></div>
+    <div class="rolagem"><table class="matriz">
+      <thead><tr><th>Permissão</th><th>Master</th><th>Administrativo</th><th>Comercial</th></tr></thead>
+      <tbody id="matriz"></tbody>
+    </table></div>
+    <p class="ajuda">O Administrativo não vê Orquestração nem Equipe; na Auditoria vê só preços, fornecedores e faturas. A ativação passa a ser dele: Implantação → Ativa só com contratação completa (preços, ciclo, contato que recebe fatura).</p>
+  </section>
+</div>
+
+<div class="modal-fundo" id="modalForn" hidden>
+  <form class="modal" id="formForn">
+    <h2>Novo fornecedor</h2>
+    <p class="ajuda" style="margin:0">Qualquer fornecedor do mercado. Depois de criar, faça a negociação de cada produto (flat ou por operadora) e inclua no plano de rota.</p>
+    <div class="grade2">
+      <label class="campo">Nome<input id="fNome" value="Pontaltech" required minlength="2"></label>
+      <label class="campo">Código<input id="fCod" value="pontaltech" pattern="[a-z0-9_]{2,30}" required></label>
+    </div>
+    <div class="campo">Canais que ele atende
+      <div class="canaisck"><label><input type="checkbox" id="fc_sms" checked> SMS</label><label><input type="checkbox" id="fc_email"> E-mail</label><label><input type="checkbox" id="fc_rcs"> RCS</label><label><input type="checkbox" id="fc_whatsapp"> WhatsApp</label></div></div>
+    <label class="campo">Nome do segredo da credencial (opcional)<input id="fSeg" placeholder="ex.: PONTALTECH_API_KEY"></label>
+    <div class="aviso az"><div>A chave de acesso nunca é digitada aqui: ela vai só para o cofre de segredos (Google Cloud). Até o envio real ser integrado, o fornecedor fica "simulado": entra no plano de rota e no custo previsto, e o motor usa a reserva no envio.</div></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn sec" id="cancForn">Cancelar</button>
+      <button class="btn">Criar e configurar</button>
+    </div>
+  </form>
+</div>
+
+<div class="modal-fundo" id="modalEdF" hidden>
+  <div class="modal largo" role="dialog" aria-labelledby="edTit">
+    <div class="tit"><h2 id="edTit">Fornecedor</h2><span id="edEnvio"></span></div>
+    <div class="grade2">
+      <label class="campo">Nome<input id="edNome"></label>
+      <label class="campo">Nome do segredo da credencial<input id="edSeg" placeholder="ex.: PONTALTECH_API_KEY"></label>
+    </div>
+    <div class="campo">Canais que ele atende<div class="canaisck" id="edCanais"></div></div>
+    <div class="tit"><div><h3>Negociações</h3><p class="ajuda" style="margin:2px 0 0">O custo que você negociou com ele em cada produto. É esse custo que entra na rota. Custo zerado não é aceito.</p></div></div>
+    <div id="edNegs" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div class="rlpe"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="edAddProd" aria-label="Produto para negociar"></select><button type="button" class="btn sec peq" id="edAdd">+ Negociar produto</button></div></div>
+    <div id="edErro"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn" id="edFechar">Concluir</button></div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modalNovo" hidden>
+  <form class="modal" id="formNovo">
+    <h2>Novo produto</h2>
+    <p class="ajuda" style="margin:0">O produto é a rota que você vende (ex.: SMS Bet). Depois de criar, você negocia com os fornecedores e escolhe quem compõe a rota; o custo sai dessa composição. Só fica contratável com a rota completa. O código vai para a API e não muda depois.</p>
+    <div class="grade2">
+      <label class="campo">Canal<select id="nCanal"><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option><option value="rcs">RCS</option><option value="email">E-mail</option></select></label>
+      <label class="campo">Nome<input id="nNome" value="SMS Bet" required minlength="2"></label>
+      <label class="campo">Código (API)<input id="nCod" value="sms_bet" pattern="[a-z0-9_]{2,40}" required></label>
+      <label class="campo">Unidade<input id="nUni" value="mensagem" required></label>
+      <label class="campo">Mínimo (R$)<input id="nMin" class="num" value="0,0600" style="width:100%"></label>
+      <label class="campo">Tabela (R$)<input id="nTab" class="num" value="0,0750" style="width:100%"></label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn sec" id="cancNovo">Cancelar</button>
+      <button class="btn">Criar produto</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const CANAIS = {
+  sms: { nome: "SMS", cor: "var(--sms)", rotas: ["Plano OTP", "Plano Short", "Plano Marketing"] },
+  whatsapp: { nome: "WhatsApp", cor: "var(--wa)", rotas: ["WhatsApp · API oficial"] },
+  rcs: { nome: "RCS", cor: "var(--rcs)", rotas: ["RCS · agente verificado"] },
+  email: { nome: "E-mail", cor: "var(--email)", rotas: ["E-mail · transacional", "E-mail · com anexo (limite 2 MB)"] }
+};
+// Cada produto é uma rota: o plano dele diz quais fornecedores levam o tráfego (no SMS, por operadora).
+// O custo de cada linha vem da negociação com o fornecedor (flat ou por operadora). Valores fictícios.
+let produtos = [
+  { cod: "sms_otp", canal: "sms", nome: "SMS OTP", desc: "códigos e confirmação de acordo", uni: "mensagem", cons: .0015, real: .0561, min: .085, tab: .10 },
+  { cod: "sms_short", canal: "sms", nome: "SMS Short", desc: "régua e lembretes", uni: "mensagem", cons: .0015, real: .0338, min: .05, tab: .065 },
+  { cod: "sms_marketing", canal: "sms", nome: "SMS Marketing", desc: "ofertas e campanhas", uni: "mensagem", cons: 0, real: null, min: .045, tab: .055 },
+  { cod: "whatsapp_utilidade", canal: "whatsapp", nome: "WhatsApp Utilidade", desc: "boleto, lembrete, confirmação", uni: "conversa", real: .045, min: .07, tab: .09 },
+  { cod: "whatsapp_servico", canal: "whatsapp", nome: "WhatsApp Serviço", desc: "resposta ao cliente em 24 h", uni: "conversa", real: .004, min: .03, tab: .04 },
+  { cod: "whatsapp_marketing", canal: "whatsapp", nome: "WhatsApp Marketing", desc: "oferta de renegociação ativa", uni: "conversa", real: null, min: .48, tab: .55 },
+  { cod: "rcs_basic", canal: "rcs", nome: "RCS Basic", desc: "texto até 160 caracteres", uni: "mensagem", real: .0449, min: .07, tab: .085 },
+  { cod: "rcs_single", canal: "rcs", nome: "RCS Single", desc: "cartão rico com botão", uni: "mensagem", real: null, min: .13, tab: .16 },
+  { cod: "rcs_conversacional", canal: "rcs", nome: "RCS Conversacional", desc: "sessão de 24 h", uni: "sessão", real: null, min: .22, tab: .27 },
+  { cod: "email_sem_anexo", canal: "email", nome: "E-mail sem anexo", desc: "aviso e link de pagamento", uni: "mensagem", real: .0012, min: .004, tab: .006 },
+  { cod: "email_com_anexo", canal: "email", nome: "E-mail com anexo", desc: "boleto ou termo em PDF", uni: "mensagem", real: .0031, min: .008, tab: .012 }
+];
+const INFO = { Sinch: { canais: ["sms"], integ: "real" }, Zenvia: { canais: ["sms", "rcs", "whatsapp"], integ: "real" },
+  Infobip: { canais: ["sms", "rcs", "whatsapp"], integ: "real" }, Locaweb: { canais: ["email"], integ: "real" } };
+// Rota de cada produto. flat: [[fornecedor, % do tráfego, custo]]. op: operadoras atendidas e, em cada uma, [[fornecedor, %, custo nessa operadora]].
+// Valores fictícios.
+const ROTAS = {
+  sms_otp: { tipo: "op", ops: { vivo: [["Sinch", 70, .051], ["Zenvia", 30, .054]], claro: [["Sinch", 100, .049]], tim: [["Zenvia", 100, .054]], outras: [["Infobip", 100, .058]] } },
+  sms_short: { tipo: "op", ops: { vivo: [["Zenvia", 50, .031], ["Infobip", 50, .033]], claro: [["Sinch", 100, .027]], tim: [["Zenvia", 50, .031], ["Infobip", 50, .033]], outras: [["Infobip", 100, .033]] } },
+  sms_marketing: { tipo: "flat", flat: [["Infobip", 60, .025], ["Zenvia", 40, .027]] },
+  whatsapp_utilidade: { tipo: "flat", flat: [["Zenvia", 50, .046], ["Infobip", 50, .044]] }, whatsapp_servico: { tipo: "flat", flat: [["Zenvia", 100, .004]] },
+  whatsapp_marketing: { tipo: "flat", flat: [["Zenvia", 100, .36]] },
+  rcs_basic: { tipo: "flat", flat: [["Zenvia", 60, .043], ["Infobip", 40, .048]] }, rcs_single: { tipo: "flat", flat: [["Zenvia", 60, .088], ["Infobip", 40, .094]] },
+  rcs_conversacional: { tipo: "flat", flat: [["Zenvia", 100, .16]] },
+  email_sem_anexo: { tipo: "flat", flat: [["Locaweb", 100, .0012]] }, email_com_anexo: { tipo: "flat", flat: [["Locaweb", 100, .003]] }
+};
+// SMS por operadora: a mistura prevista é o market share (Teleco/Anatel), editável; o realizado usa a mistura real.
+const OPS = { vivo: "Vivo", claro: "Claro", tim: "TIM", outras: "Outras" };
+const MIX = { vivo: 37.8, claro: 33.0, tim: 22.0, outras: 7.2 };
+const MIX_REAL = { vivo: 41.2, claro: 29.6, tim: 24.1, outras: 5.1 };   // exemplo: mês anterior da empresa
+let mixFonte = "Teleco (dados Anatel) · agosto/2026 · celulares";
+const CONSULTA = .0015;   // consulta de operadora por mensagem (só rota por operadora)
+const rotaDe = p => ROTAS[p.cod] ||= { tipo: "flat", flat: [] };
+// "demais" = bloco único para todas as operadoras sem bloco próprio (ex.: Claro só Pontaltech; demais 50% Sinch e 50% Zenvia)
+const opsDe = p => rotaDe(p).tipo === "op" ? [...Object.keys(OPS).filter(o => o in rotaDe(p).ops), ...("demais" in rotaDe(p).ops ? ["demais"] : [])] : ["todas"];
+const foraDe = p => Object.keys(OPS).filter(o => !(o in rotaDe(p).ops));
+const nomeOp = o => o === "todas" ? "Composição" : o === "demais" ? "Demais operadoras" : OPS[o];
+const pesoBruto = (p, o, mix) => o === "demais" ? foraDe(p).reduce((s, x) => s + mix[x], 0) : mix[o];
+const peso = (p, o, mix = MIX) => { if (o === "todas") return 100; const t = opsDe(p).reduce((s, x) => s + pesoBruto(p, x, mix), 0); return t ? pesoBruto(p, o, mix) / t * 100 : 0; };
+const linhasDe = (p, o) => o === "todas" ? rotaDe(p).flat : rotaDe(p).ops[o];
+// Negociação: NEG[fornecedor][produto] = { modo: "flat", custo } | { modo: "op", ops: { vivo: custo, ... } }. Nunca zero.
+const NEG = {};
+for (const [cod, r] of Object.entries(ROTAS)) {     // monta as negociações de exemplo a partir das rotas e tira o custo das linhas
+  const lin = r.tipo === "op" ? Object.entries(r.ops).flatMap(([o, l]) => l.map(x => [o, x])) : r.flat.map(x => ["todas", x]);
+  for (const [o, x] of lin) {
+    const n = (NEG[x[0]] ||= {});
+    if (o === "todas") n[cod] = { modo: "flat", custo: x[2] }; else { n[cod] ||= { modo: "op", ops: {} }; n[cod].ops[o] = x[2]; }
+    x.length = 2;
+  }
+}
+const negDe = (f, cod) => NEG[f]?.[cod];
+const custoLinha = (p, o, f) => { const n = negDe(f, p.cod); if (!n) return null;
+  if (n.modo === "flat") return n.custo; if (o === "todas") return null;
+  if (o === "demais") { const fo = foraDe(p), t = fo.reduce((s, x) => s + MIX[x], 0);
+    return fo.length && fo.every(x => n.ops[x] > 0) ? fo.reduce((s, x) => s + MIX[x] / t * n.ops[x], 0) : null; }
+  return n.ops[o] ?? null; };
+const linhasCusto = (p, o) => linhasDe(p, o).map(([f, pc]) => [f, pc, custoLinha(p, o, f)]);
+const somaComp = c => c.reduce((s, [, pc, v]) => s + pc / 100 * v, 0);
+const consDe = p => rotaDe(p).tipo === "op" ? CONSULTA : 0;
+const custoOp = (p, o) => somaComp(linhasCusto(p, o).map(([f, pc, c]) => [f, pc, c || 0])) + consDe(p);
+const previsto = (p, mix = MIX) => opsDe(p).reduce((s, o) => s + peso(p, o, mix) / 100 * custoOp(p, o), 0);
+const completa = p => opsDe(p).length > 0 && opsDe(p).every(o => { const l = linhasDe(p, o); return l.length && l.reduce((s, x) => s + x[1], 0) === 100 && linhasCusto(p, o).every(x => x[2] > 0); });
+const piorCaso = p => Math.max(0, ...opsDe(p).flatMap(o => linhasCusto(p, o).map(x => x[2] || 0))) + consDe(p);
+const fornsDe = p => [...new Set(opsDe(p).flatMap(o => linhasDe(p, o).map(x => x[0])))];
+function montarRotas() {
+  for (const p of produtos) { p.porOp = Object.fromEntries(opsDe(p).map(o => [o, linhasCusto(p, o).map(([f, pc, c]) => [f, pc, c || 0])])); p.cons = consDe(p); p.custo = previsto(p); }
+}
+const IMP = .1425, MC_MIN = .20;
+// contratação de exemplo
+const contr = {
+  sms_otp: { on: true, preco: .095 }, sms_short: { on: true, preco: .058 }, sms_marketing: { on: false, preco: .055 },
+  whatsapp_utilidade: { on: true, preco: .08 }, whatsapp_servico: { on: true, preco: .035 }, whatsapp_marketing: { on: false, preco: .55 },
+  rcs_basic: { on: true, preco: .085 }, rcs_single: { on: false, preco: .16 }, rcs_conversacional: { on: false, preco: .27 },
+  email_sem_anexo: { on: true, preco: .005 }, email_com_anexo: { on: true, preco: .0065, motivo: "Volume 2 mi/mês, aprovado em 02/10" }
+};
+let perfil = "administrativo";
+const podeAbaixo = () => perfil !== "comercial";
+const podeCatalogo = () => perfil !== "comercial";
+const brl = (v, d = 4) => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const lerNum = s => { const v = parseFloat(String(s).replace(/\./g, "").replace(",", ".")); return isNaN(v) ? null : v; };
+const fmtIn = v => v.toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const mc = (p, c) => p > 0 ? (p * (1 - IMP) - c) / p : 0;
+const pct = v => (v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%";
+
+let rotaP = "sms_short", novoFornPara = null;
+function listaFornecedores() {
+  document.getElementById("novoForn").disabled = !podeCatalogo();
+  document.getElementById("listaForn").innerHTML = `<table><thead><tr><th>Fornecedor</th><th>Canais</th><th>Envio</th><th>Está nas rotas</th><th></th></tr></thead><tbody>
+    ${Object.keys(INFO).map(f => { const em = produtos.filter(p => fornsDe(p).includes(f)); return `<tr><td><b>${f}</b></td><td>${INFO[f].canais.map(c => CANAIS[c].nome).join(", ")}</td>
+      <td>${INFO[f].integ === "real" ? '<span class="selo ok">integrado</span>' : '<span class="selo al">simulado · aguardando integração</span>'}</td>
+      <td>${em.length ? em.map(p => `<button class="lnk ir" data-cod="${p.cod}">${p.nome}</button>`).join(", ") : '<span class="cod">nenhuma</span>'}</td>
+      <td><button class="btn sec peq ed" data-f="${f}" ${podeCatalogo() ? "" : "disabled"}>Editar</button></td></tr>`; }).join("")}</tbody></table>`;
+  document.querySelectorAll("#listaForn .ed").forEach(b => b.addEventListener("click", () => abrirEdF(b.dataset.f)));
+  document.querySelectorAll("#listaForn .ir").forEach(b => b.addEventListener("click", () => { rotaP = b.dataset.cod; tudo(); }));
+}
+function fornecedores() {
+  listaFornecedores();
+  const ed = podeCatalogo();
+  const sr = document.getElementById("rotaProd");
+  sr.innerHTML = Object.keys(CANAIS).map(k => `<optgroup label="${CANAIS[k].nome}">${produtos.filter(p => p.canal === k).map(p => `<option value="${p.cod}" ${p.cod === rotaP ? "selected" : ""}>${p.nome}${completa(p) ? "" : " · rota a montar"}</option>`).join("")}</optgroup>`).join("");
+  const pr = produtos.find(x => x.cod === rotaP), r = rotaDe(pr), ehSms = pr.canal === "sms";
+  document.getElementById("tipoBox").hidden = !ehSms;
+  document.querySelectorAll("#rotaTipo button").forEach(b => { b.setAttribute("aria-pressed", b.dataset.t === r.tipo); b.disabled = !ed; });
+  // operadoras atendidas (só por operadora)
+  document.getElementById("opsEscolha").innerHTML = r.tipo === "op" ? `<div class="campo">Operadoras desta rota
+    <div class="opchips">${Object.keys(OPS).map(o => `<label class="opchip"><input type="checkbox" data-o="${o}" ${o in r.ops ? "checked" : ""} ${ed ? "" : "disabled"}> ${OPS[o]}</label>`).join("")}
+      <label class="opchip demais"><input type="checkbox" data-o="demais" ${"demais" in r.ops ? "checked" : ""} ${ed ? "" : "disabled"}> Demais operadoras <span class="cod">(as não marcadas, num bloco só)</span></label></div></div>` : "";
+  document.querySelectorAll("#opsEscolha input").forEach(i => i.addEventListener("change", () => { if (i.checked) r.ops[i.dataset.o] = []; else delete r.ops[i.dataset.o]; tudo(); }));
+  const fora = r.tipo === "op" && !("demais" in r.ops) ? foraDe(pr) : [];
+  document.getElementById("rotaAviso").innerHTML =
+    (completa(pr) ? "" : `<div class="aviso al"><div><b>Rota de ${pr.nome} incompleta.</b> ${r.tipo === "op" ? "Cada operadora marcada" : "A composição"} precisa de pelo menos um fornecedor com custo, somando 100%. Sem rota completa o produto não pode ser contratado.</div></div>`) +
+    (fora.length && r.tipo === "op" ? `<div class="aviso az"><div>Esta rota não atende ${fora.map(o => OPS[o]).join(", ")}: números dessas operadoras vão para a rota de reserva do canal. O custo previsto considera só as operadoras marcadas.</div></div>` : "");
+  const ops = document.getElementById("rotaOps"); ops.innerHTML = "";
+  ops.classList.toggle("um", r.tipo !== "op");
+  const elegiveis = Object.keys(INFO).filter(f => INFO[f].canais.includes(pr.canal));
+  for (const o of opsDe(pr)) {
+    const linhas = linhasDe(pr, o), soma = linhas.reduce((s, l) => s + l[1], 0);
+    const d = document.createElement("div"); d.className = "cc";
+    d.innerHTML = `<div class="cab"><h3>${nomeOp(o)}</h3><span class="cod">${o === "todas" ? (ehSms ? "preço flat · qualquer operadora" : CANAIS[pr.canal].nome) : o === "demais" ? (foraDe(pr).length ? foraDe(pr).map(x => OPS[x]).join(", ") + " · " + pesoBruto(pr, o, MIX).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "% da base" : "nenhuma operadora sobrando") : MIX[o].toLocaleString("pt-BR") + "% da base"}</span>
+      <span class="selo ${soma === 100 ? "ok" : "er"}" style="margin-left:auto">${soma}%</span></div>
+      ${linhas.length ? `<div class="rl cabl"><span>Fornecedor</span><span>% do tráfego</span><span></span><span class="n">Custo${o === "todas" || o === "demais" ? "" : " na " + OPS[o]} (R$)</span><span></span></div>` : '<p class="ajuda" style="margin:0">Nenhum fornecedor ainda. Use "+ Fornecedor".</p>'}
+      ${linhas.map(([f, pc], i) => { const c = custoLinha(pr, o, f), n = negDe(f, pr.cod);
+        const soOp = o === "todas" && n?.modo === "op";
+        const nota = soOp ? '<span class="selo er">negociado só por operadora</span>' : !c ? '<span class="selo er">custo obrigatório (maior que zero)</span>'
+          : (o !== "todas" && n.modo === "flat") ? '<span class="cod">flat do fornecedor · vale para todas as operadoras</span>'
+          : (o === "demais") ? '<span class="cod">média do custo por operadora dele em ' + foraDe(pr).map(x => OPS[x]).join(", ") + '</span>' : "";
+        return `<div class="rl">
+        <select data-i="${i}" ${ed ? "" : "disabled"} aria-label="Fornecedor">${[...new Set([f, ...elegiveis])].map(x => `<option ${x === f ? "selected" : ""}>${x}</option>`).join("")}<option value="__novo">+ Cadastrar novo fornecedor…</option></select>
+        <input class="num pc" data-i="${i}" value="${pc}" ${ed ? "" : "disabled"} aria-label="% do tráfego" style="width:64px"><span class="cod">%</span>
+        <input class="num cu${c > 0 ? "" : " baixo"}" data-i="${i}" value="${c > 0 ? fmtIn(c) : ""}" placeholder="0,0000" ${ed && !soOp ? "" : "disabled"} aria-label="Custo">
+        <button class="x" data-i="${i}" ${ed ? "" : "disabled"} aria-label="Tirar">×</button>
+        ${nota ? `<div class="nota">${nota} <button class="lnk edl" data-f="${f}">editar ${f}</button></div>` : ""}</div>`; }).join("")}
+      <div class="rlpe"><button class="btn sec peq" ${ed ? "" : "disabled"}>+ Fornecedor</button>
+        <span class="n">${o === "todas" ? "custo da composição" : "custo na operadora"} <b>${brl(custoOp(pr, o))}</b>${o !== "todas" ? ' <span class="cod">(inclui consulta ' + brl(CONSULTA) + ')</span>' : ""}</span></div>`;
+    d.querySelectorAll("select").forEach(x => x.addEventListener("change", () => {
+      if (x.value === "__novo") { novoFornPara = { linhas, i: +x.dataset.i }; abrirNovoForn(pr.canal); x.value = linhas[+x.dataset.i][0]; return; }
+      linhas[+x.dataset.i][0] = x.value; tudo(); }));
+    d.querySelectorAll("input.pc").forEach(x => x.addEventListener("change", () => { const v = lerNum(x.value); if (v !== null && v >= 0 && v <= 100) linhas[+x.dataset.i][1] = v; tudo(); }));
+    d.querySelectorAll("input.cu").forEach(x => x.addEventListener("change", () => {
+      const v = lerNum(x.value), f = linhas[+x.dataset.i][0];
+      if (v === null || v <= 0) { x.classList.add("baixo"); x.value = ""; x.placeholder = "maior que zero"; return; }
+      gravarNeg(f, pr.cod, o, v); tudo(); }));
+    d.querySelectorAll(".edl").forEach(b => b.addEventListener("click", () => abrirEdF(b.dataset.f)));
+    d.querySelectorAll(".x").forEach(x => x.addEventListener("click", () => { linhas.splice(+x.dataset.i, 1); tudo(); }));
+    d.querySelector(".rlpe .btn").addEventListener("click", () => {
+      const livre = elegiveis.find(f => !linhas.some(l => l[0] === f)) || elegiveis[0];
+      linhas.push([livre, linhas.length ? 0 : 100]); tudo(); });
+    ops.appendChild(d);
+  }
+  document.getElementById("rotaTotal").innerHTML = `<div class="estim">Custo previsto de <b>${pr.nome}</b>${r.tipo === "op" ? " pela mistura de operadoras" : ""}: <b>${completa(pr) ? brl(pr.custo) : "rota incompleta"}</b> · mínimo ${brl(pr.min)} · tabela ${brl(pr.tab)}${completa(pr) ? " · MC no mínimo " + pct(mc(pr.min, pr.custo)) : ""}</div>`;
+}
+// grava o custo digitado na rota na negociação do fornecedor (flat continua flat; por operadora grava a operadora)
+function gravarNeg(f, cod, o, v) {
+  const n = negDe(f, cod), tab = (NEG[f] ||= {});
+  if (o === "todas") tab[cod] = { modo: "flat", custo: v };
+  else if (n?.modo === "flat") n.custo = v;
+  else if (o === "demais") { tab[cod] ||= { modo: "op", ops: {} }; foraDe(produtos.find(x => x.cod === cod)).forEach(x => tab[cod].ops[x] = v); }
+  else { tab[cod] ||= { modo: "op", ops: {} }; tab[cod].ops[o] = v; }
+}
+let edF = null;
+function abrirEdF(f) { edF = f; document.getElementById("modalEdF").hidden = false; desenharEdF(); }
+function desenharEdF() {
+  const f = edF, inf = INFO[f], negs = NEG[f] ||= {};
+  document.getElementById("edTit").textContent = f;
+  document.getElementById("edEnvio").innerHTML = inf.integ === "real" ? '<span class="selo ok">integrado</span>' : '<span class="selo al">simulado · aguardando integração</span>';
+  document.getElementById("edNome").value = f;
+  document.getElementById("edSeg").value = inf.seg || "";
+  document.getElementById("edCanais").innerHTML = Object.keys(CANAIS).map(c => `<label><input type="checkbox" data-c="${c}" ${inf.canais.includes(c) ? "checked" : ""}> ${CANAIS[c].nome}</label>`).join("");
+  document.querySelectorAll("#edCanais input").forEach(i => i.addEventListener("change", () => {
+    inf.canais = Object.keys(CANAIS).filter(c => document.querySelector(`#edCanais input[data-c="${c}"]`).checked); desenharEdF(); tudo(); }));
+  const box = document.getElementById("edNegs"); box.innerHTML = "";
+  const cods = Object.keys(negs).filter(c => produtos.some(p => p.cod === c));
+  if (!cods.length) box.innerHTML = '<p class="ajuda" style="margin:0">Nenhum produto negociado ainda. Escolha o produto abaixo e clique em "+ Negociar produto".</p>';
+  for (const cod of cods) {
+    const p = produtos.find(x => x.cod === cod), n = negs[cod], ehSms = p.canal === "sms";
+    const d = document.createElement("div"); d.className = "negcard";
+    d.innerHTML = `<div class="cab"><b>${p.nome}</b><span class="cod">${CANAIS[p.canal].nome} · por ${p.uni}</span>
+        ${ehSms ? `<div class="seg" style="margin-left:auto"><button type="button" data-m="flat" aria-pressed="${n.modo === "flat"}">Flat</button><button type="button" data-m="op" aria-pressed="${n.modo === "op"}">Por operadora</button></div>` : '<span style="margin-left:auto"></span>'}
+        <button type="button" class="x rm" aria-label="Tirar negociação">×</button></div>
+      ${n.modo === "flat" ? `<label class="campo" style="max-width:220px">Custo (R$)<input class="num v${n.custo > 0 ? "" : " baixo"}" data-o="" value="${n.custo > 0 ? fmtIn(n.custo) : ""}" placeholder="maior que zero" style="width:100%"></label>`
+        : `<div class="opsneg">${Object.keys(OPS).map(o => { const tem = o in n.ops; return `<div class="opneg${tem ? "" : " off"}">
+          <button type="button" class="chave" role="switch" aria-checked="${tem}" data-o="${o}" aria-label="${OPS[o]}"></button><b>${OPS[o]}</b>
+          <input class="num v${tem && !(n.ops[o] > 0) ? " baixo" : ""}" data-o="${o}" value="${tem && n.ops[o] > 0 ? fmtIn(n.ops[o]) : ""}" placeholder="${tem ? "maior que zero" : "—"}" ${tem ? "" : "disabled"} aria-label="Custo ${OPS[o]}"></div>`; }).join("")}</div>`}`;
+    d.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+      if (b.dataset.m === n.modo) return;
+      negs[cod] = b.dataset.m === "flat" ? { modo: "flat", custo: Math.max(0, ...Object.values(n.ops || {})) } : { modo: "op", ops: n.custo ? Object.fromEntries(Object.keys(OPS).map(o => [o, n.custo])) : {} };
+      desenharEdF(); tudo(); }));
+    d.querySelectorAll(".chave").forEach(b => b.addEventListener("click", () => { const o = b.dataset.o; if (o in n.ops) delete n.ops[o]; else n.ops[o] = 0; desenharEdF(); tudo(); }));
+    d.querySelectorAll("input.v").forEach(i => i.addEventListener("change", () => {
+      const v = lerNum(i.value);
+      if (v === null || v <= 0) { i.classList.add("baixo"); i.value = ""; document.getElementById("edErro").innerHTML = '<div class="aviso er"><div><b>Custo precisa ser maior que zero.</b> Fornecedor com custo zerado não entra em rota.</div></div>'; return; }
+      document.getElementById("edErro").innerHTML = "";
+      if (i.dataset.o) n.ops[i.dataset.o] = v; else n.custo = v; desenharEdF(); tudo(); }));
+    d.querySelector(".rm").addEventListener("click", () => { delete negs[cod]; desenharEdF(); tudo(); });
+    box.appendChild(d);
+  }
+  const livres = produtos.filter(p => inf.canais.includes(p.canal) && !negs[p.cod]);
+  document.getElementById("edAddProd").innerHTML = livres.length ? livres.map(p => `<option value="${p.cod}">${p.nome}</option>`).join("") : '<option value="">Todos os produtos dos canais dele já estão negociados</option>';
+  document.getElementById("edAdd").disabled = !livres.length;
+}
+function irRota(cod) {
+  rotaP = cod;
+  document.querySelector('[data-aba="fornec"]').click(); tudo();
+  document.querySelector('[data-painel="fornec"]').scrollIntoView({ behavior: "smooth" });
+}
+function tudo() { montarRotas(); fornecedores(); catalogo(); contratacao(); campanha(); }
+
+function painelMix() {
+  const ed = podeCatalogo(), box = document.getElementById("mix");
+  const soma = Object.values(MIX).reduce((a, b) => a + b, 0);
+  box.innerHTML = `<div class="tit"><div><h3>Mistura de operadoras do SMS (para o custo previsto)</h3>
+    <p class="ajuda">Market share de celulares por operadora. Atualize quando a Teleco publicar o mês novo; vale para todos os produtos de SMS a partir da gravação.</p></div>
+    <span class="selo ${Math.abs(soma - 100) < .05 ? "ok" : "er"}">soma ${soma.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span></div>
+    <div class="ops">${Object.keys(OPS).map(o => `<label class="campo">${OPS[o]} (%)<input class="num" id="mix_${o}" value="${MIX[o].toLocaleString("pt-BR")}" ${ed ? "" : "disabled"} style="width:100%"></label>`).join("")}
+    <label class="campo fonte">Fonte e mês de referência<input id="mixFonte" value="${mixFonte}" ${ed ? "" : "disabled"}></label></div>
+    ${Math.abs(soma - 100) < .05 ? "" : '<div class="aviso er"><div>A soma precisa dar 100%. "Outras" = 100% − Vivo − Claro − TIM.</div></div>'}`;
+  Object.keys(OPS).forEach(o => document.getElementById("mix_" + o).addEventListener("change", e => {
+    const v = lerNum(e.target.value); if (v !== null && v >= 0 && v <= 100) MIX[o] = v;
+    produtos.forEach(x => x.custo = previsto(x)); catalogo(); contratacao(); fornecedores();
+  }));
+  document.getElementById("mixFonte").addEventListener("change", e => { mixFonte = e.target.value; });
+}
+
+function catalogo() {
+  painelMix();
+  const tb = document.querySelector("#tabCat tbody"); tb.innerHTML = "";
+  const ed = podeCatalogo();
+  document.getElementById("novoProd").disabled = !ed;
+  document.getElementById("avisoCat").innerHTML = ed ? "" :
+    '<div class="aviso al"><div>O Comercial vê a tabela, mas só o <b>Administrativo</b> e o <b>Master</b> mudam preço mínimo, preço de tabela e criam produtos.</div></div>';
+  for (const k of Object.keys(CANAIS)) {
+    tb.insertAdjacentHTML("beforeend", `<tr class="canal"><td colspan="9"><span class="ponto" style="background:${CANAIS[k].cor}"></span>${CANAIS[k].nome}</td></tr>`);
+    for (const p of produtos.filter(x => x.canal === k)) {
+      const m = mc(p.min, p.custo);
+      const forns = fornsDe(p);
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td><b>${p.nome}</b><br><span class="cod">${p.cod}</span></td><td>${p.uni}</td>
+        <td><button class="lnk rota" data-cod="${p.cod}">${forns.length ? forns.join(" + ") : "montar rota"}</button>${completa(p) ? "" : ' <span class="selo er">incompleta</span>'}</td>
+        <td class="n">${completa(p) ? `<button class="lnk" aria-expanded="false">${brl(p.custo)} ▾</button>` : '<span class="cod">—</span>'}</td>
+        <td class="n">${p.real == null ? '<span class="cod">sem envio</span>' : brl(p.real) + (p.real > p.custo * 1.05 ? ' <span class="selo al">acima</span>' : "")}</td>
+        <td class="n"><input class="num" data-k="min" value="${fmtIn(p.min)}" ${ed ? "" : "disabled"} aria-label="Mínimo de ${p.nome}"></td>
+        <td class="n"><input class="num" data-k="tab" value="${fmtIn(p.tab)}" ${ed ? "" : "disabled"} aria-label="Tabela de ${p.nome}"></td>
+        <td class="n">${completa(p) ? pct(m) : "—"}</td>
+        <td>${!completa(p) ? '<span class="selo er">sem rota</span>' : p.tab < p.min ? '<span class="selo er">tabela abaixo do mínimo</span>' : m < MC_MIN ? '<span class="selo al">MC baixa</span>' : '<span class="selo ok">ok</span>'}</td>`;
+      tr.querySelectorAll("input").forEach(i => i.addEventListener("change", () => {
+        const v = lerNum(i.value); if (v !== null && v >= 0) p[i.dataset.k] = v; catalogo(); contratacao();
+      }));
+      tr.querySelector(".rota").addEventListener("click", () => irRota(p.cod));
+      const det = document.createElement("tr"); det.hidden = true; det.className = "det";
+      const linhaF = ([f, pc, c]) => `<div class="lin"><span>${f}</span><span class="t"><i style="width:${pc}%"></i></span><span class="n">${pc}% × ${brl(c)}</span><span class="n">${brl(pc / 100 * c)}</span></div>`;
+      det.innerHTML = rotaDe(p).tipo === "op" ? `<td colspan="9"><div class="comp"><b>Composição da rota ${p.nome} · por operadora</b>
+        ${opsDe(p).map(o => `<div class="op"><div class="lin"><span><b>${nomeOp(o)}</b></span><span></span><span class="n">custo na operadora</span><span class="n"><b>${brl(custoOp(p, o))}</b></span></div>${p.porOp[o].map(linhaF).join("")}</div>`).join("")}
+        <div class="lin"><span>Consulta de operadora</span><span></span><span class="n">por mensagem</span><span class="n">${brl(p.cons || 0)}</span></div>
+        <div class="lin tot"><span>Custo previsto</span><span></span><span class="n">pela mistura ${opsDe(p).map(o => nomeOp(o) + " " + peso(p, o).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%").join(" · ")}</span><span class="n">${brl(p.custo)}</span></div>
+        <div class="ajuda" style="margin:0">Com a mistura real do mês anterior da empresa (${opsDe(p).map(o => nomeOp(o) + " " + peso(p, o, MIX_REAL).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%").join(" · ")}): ${brl(previsto(p, MIX_REAL))}. Pior caso (fornecedor mais caro em todas): ${brl(piorCaso(p))} · MC no mínimo: ${pct(mc(p.min, piorCaso(p)))}</div></div></td>`
+      : `<td colspan="9"><div class="comp"><b>Composição da rota ${p.nome}</b>
+        ${p.porOp.todas.map(linhaF).join("")}
+        <div class="lin tot"><span>Custo previsto</span><span></span><span></span><span class="n">${brl(p.custo)}</span></div>
+        <div class="ajuda" style="margin:0">Pior caso (fornecedor mais caro, quando a reserva assume): ${brl(piorCaso(p))} · MC no mínimo nesse caso: ${pct(mc(p.min, piorCaso(p)))}</div></div></td>`;
+      tr.querySelector(".lnk:not(.rota)")?.addEventListener("click", e => { det.hidden = !det.hidden; e.currentTarget.setAttribute("aria-expanded", !det.hidden); });
+      tb.appendChild(tr); tb.appendChild(det);
+    }
+  }
+}
+
+function contratacao() {
+  const box = document.getElementById("canaisContr"); box.innerHTML = "";
+  let bloqueado = 0;
+  for (const k of Object.keys(CANAIS)) {
+    const cc = document.createElement("div"); cc.className = "cc";
+    const lig = produtos.filter(p => p.canal === k && contr[p.cod]?.on).length;
+    cc.innerHTML = `<div class="cab"><span class="ponto" style="background:${CANAIS[k].cor}"></span><h3>${CANAIS[k].nome}</h3><span class="selo ${lig ? "ok" : "ne"}" style="margin-left:auto">${lig ? lig + " contratado" + (lig > 1 ? "s" : "") : "não contratado"}</span></div>`;
+    for (const p of produtos.filter(x => x.canal === k)) {
+      const c = contr[p.cod] ||= { on: false, preco: p.tab };
+      const semRota = !completa(p);
+      const baixo = c.on && c.preco < p.min;
+      if (baixo && (!podeAbaixo() || !(c.motivo || "").trim())) bloqueado++;
+      const d = document.createElement("div"); d.className = "prod" + (c.on ? "" : " off");
+      d.innerHTML = `<button class="chave" role="switch" aria-checked="${c.on}" aria-label="${p.nome}" ${semRota && !c.on ? "disabled title='Rota incompleta'" : ""}></button>
+        <div class="nome"><b>${p.nome}</b><small>${p.desc} · por ${p.uni}</small></div>
+        <input class="num${baixo ? " baixo" : ""}" value="${fmtIn(c.preco)}" ${c.on ? "" : "disabled"} aria-label="Preço de ${p.nome}">
+        <div class="info">${semRota ? '<span class="selo er">rota incompleta · não contrata</span>' : ""} mín. ${brl(p.min)} · tabela ${brl(p.tab)} · MC ${pct(mc(c.preco, p.custo))}
+          ${baixo ? (podeAbaixo() ? '<span class="selo er">abaixo do mínimo</span>' : '<span class="selo er">abaixo do mínimo · só Administrativo ou Master</span>') : ""}</div>`;
+      if (baixo && podeAbaixo()) {
+        const m = document.createElement("div"); m.className = "motivo";
+        m.innerHTML = `<input placeholder="Motivo do preço abaixo do mínimo (obrigatório)" value="${c.motivo || ""}" aria-label="Motivo">`;
+        m.querySelector("input").addEventListener("input", e => { c.motivo = e.target.value; avisoContr(); });
+        m.querySelector("input").addEventListener("change", contratacao);
+        d.appendChild(m);
+      }
+      d.querySelector(".chave").addEventListener("click", () => { c.on = !c.on; contratacao(); campanha(); });
+      d.querySelector("input.num").addEventListener("change", e => { const v = lerNum(e.target.value); if (v !== null && v >= 0) c.preco = v; contratacao(); });
+      cc.appendChild(d);
+    }
+    box.appendChild(cc);
+  }
+  avisoContr();
+}
+function avisoContr() {
+  let falta = 0, semPerm = 0;
+  for (const p of produtos) { const c = contr[p.cod]; if (c?.on && c.preco < p.min) { if (!podeAbaixo()) semPerm++; else if (!(c.motivo || "").trim() || c.motivo.trim().length < 3) falta++; } }
+  const el = document.getElementById("avisoContr");
+  el.innerHTML = semPerm ? `<div class="aviso er"><div><b>${semPerm} preço${semPerm > 1 ? "s" : ""} abaixo do mínimo.</b> O Comercial não salva abaixo do piso: suba o preço ou peça para o Administrativo aprovar.</div></div>`
+    : falta ? `<div class="aviso al"><div><b>Informe o motivo</b> de cada preço abaixo do mínimo. Fica na Auditoria com o seu nome.</div></div>` : "";
+  document.getElementById("salvarContr").disabled = !!(semPerm || falta);
+}
+
+function campanha() {
+  const sc = document.getElementById("campCanal"), sp = document.getElementById("campProd");
+  const atual = sc.value || "sms";
+  sc.innerHTML = Object.keys(CANAIS).map(k => `<option value="${k}" ${k === atual ? "selected" : ""}>${CANAIS[k].nome}</option>`).join("");
+  const lista = produtos.filter(p => p.canal === sc.value);
+  sp.innerHTML = lista.map(p => `<option value="${p.cod}" ${contr[p.cod]?.on ? "" : "disabled"}>${p.nome}${contr[p.cod]?.on ? "" : " · não contratado"}</option>`).join("");
+  const prim = lista.find(p => contr[p.cod]?.on); if (prim) sp.value = prim.cod;
+  infoCamp();
+}
+function infoCamp() {
+  const p = produtos.find(x => x.cod === document.getElementById("campProd").value);
+  document.getElementById("campInfo").innerHTML = p ? `Rota: <b>${fornsDe(p).join(" + ")}</b> · preço ${brl(contr[p.cod].preco)} por ${p.uni} · código na API <span class="cod">${p.cod}</span>` : "Nenhum produto deste canal está contratado.";
+}
+
+const COMITE = [
+  ["SMS OTP", "var(--sms)", 42000, 3990, 1680], ["SMS Short", "var(--sms)", 610000, 35380, 7930],
+  ["WhatsApp Utilidade", "var(--wa)", 98000, 7840, 9310], ["WhatsApp Serviço", "var(--wa)", 31000, 1085, 2480],
+  ["RCS Basic", "var(--rcs)", 120000, 10200, 2160], ["E-mail sem anexo", "var(--email)", 520000, 2600, 1040],
+  ["E-mail com anexo", "var(--email)", 180000, 1170, 900]
+];
+function comite() {
+  const g = COMITE.reduce((s, r) => s + r[3], 0), c = COMITE.reduce((s, r) => s + r[4], 0);
+  const box = document.getElementById("comite"); box.innerHTML = "";
+  const tb = document.querySelector("#tabComite tbody"); tb.innerHTML = "";
+  for (const [n, cor, env, gasto, cpc] of [...COMITE].sort((a, b) => b[4] / b[3] - a[4] / a[3])) {
+    const pg = gasto / g, pc = cpc / c, ind = pc / pg;
+    box.insertAdjacentHTML("beforeend", `<div class="barra"><span><span class="ponto" style="background:${cor}"></span>${n}</span>
+      <div class="trilhos"><div class="t"><i style="width:${pg * 100}%;background:var(--tinta-2)"></i></div><div class="t"><i style="width:${pc * 100}%;background:var(--ok)"></i></div></div>
+      <span class="selo ${ind >= 1.2 ? "ok" : ind >= .8 ? "ne" : "al"}" style="text-align:center">${ind.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}×</span></div>`);
+    tb.insertAdjacentHTML("beforeend", `<tr><td>${n}</td><td class="n">${env.toLocaleString("pt-BR")}</td><td class="n">${brl(gasto, 2)}</td><td class="n">${pct(pg)}</td><td class="n">${cpc.toLocaleString("pt-BR")}</td><td class="n">${pct(pc)}</td><td class="n">${brl(gasto / cpc, 2)}</td><td class="n">${ind.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td></tr>`);
+  }
+  tb.insertAdjacentHTML("beforeend", `<tr><td><b>Total</b></td><td class="n">${COMITE.reduce((s, r) => s + r[2], 0).toLocaleString("pt-BR")}</td><td class="n"><b>${brl(g, 2)}</b></td><td class="n">100%</td><td class="n"><b>${c.toLocaleString("pt-BR")}</b></td><td class="n">100%</td><td class="n">${brl(g / c, 2)}</td><td class="n">1</td></tr>`);
+}
+
+const MATRIZ = [
+  ["Criar e editar empresa, contratação e módulos", 1, 0, 1],
+  ["Ativar empresa (Implantação → Ativa)", 1, 1, 0],
+  ["Suspender, encerrar e reativar empresa", 1, 1, 0],
+  ["Faturamento: fechar, emitir e reenviar fatura", 1, 1, 0],
+  ["Nota fiscal: emitir, cancelar e reemitir", 1, 1, 0],
+  ["Tabela de produtos: criar produto, mínimo e tabela", 1, 1, 0],
+  ["Preço abaixo do mínimo (com motivo)", 1, 1, 0],
+  ["Preço entre o mínimo e a tabela", 1, 1, 1],
+  ["Fornecedores: cadastrar, editar, negociar custos e montar rotas", 1, 1, 0],
+  ["Orquestração e estratégias", 1, 0, 0],
+  ["Equipe, permissões e auditoria completa", 1, 0, 0],
+  ["Excluir empresa de teste", 1, 0, 0]
+];
+function matriz() {
+  document.getElementById("matriz").innerHTML = MATRIZ.map(([t, ...v]) => `<tr><td>${t}</td>${v.map(x => `<td class="${x ? "sim" : "nao"}">${x ? "✓" : "—"}</td>`).join("")}</tr>`).join("");
+}
+
+document.querySelectorAll(".abas button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".abas button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("[data-painel]").forEach(p => p.hidden = p.dataset.painel !== b.dataset.aba);
+}));
+document.querySelectorAll("#perfil button").forEach(b => b.addEventListener("click", () => {
+  perfil = b.dataset.p;
+  document.querySelectorAll("#perfil button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  catalogo(); contratacao(); fornecedores();
+}));
+document.getElementById("campCanal").addEventListener("change", campanha);
+document.getElementById("campProd").addEventListener("change", infoCamp);
+document.getElementById("salvarContr").addEventListener("click", e => { e.target.textContent = "Salvo"; setTimeout(() => e.target.textContent = "Salvar contratação", 1500); });
+
+const modal = document.getElementById("modalNovo");
+document.getElementById("novoProd").addEventListener("click", () => { modal.hidden = false; document.getElementById("nNome").focus(); });
+document.getElementById("cancNovo").addEventListener("click", () => modal.hidden = true);
+document.getElementById("formNovo").addEventListener("submit", e => {
+  e.preventDefault();
+  const cod = document.getElementById("nCod").value.trim();
+  if (produtos.some(p => p.cod === cod)) { document.getElementById("nCod").setCustomValidity("Código já existe"); document.getElementById("nCod").reportValidity(); return; }
+  produtos.push({ cod, canal: document.getElementById("nCanal").value, nome: document.getElementById("nNome").value.trim(), desc: "produto novo",
+    uni: document.getElementById("nUni").value.trim(), real: null, min: lerNum(document.getElementById("nMin").value) || 0, tab: lerNum(document.getElementById("nTab").value) || 0 });
+  modal.hidden = true; montarRotas(); irRota(cod);
+});
+document.getElementById("nCod").addEventListener("input", e => e.target.setCustomValidity(""));
+
+const mForn = document.getElementById("modalForn");
+function abrirNovoForn(canal) {
+  ["sms", "email", "rcs", "whatsapp"].forEach(c => document.getElementById("fc_" + c).checked = c === (canal || "sms"));
+  mForn.hidden = false; document.getElementById("fNome").focus();
+}
+document.getElementById("novoForn").addEventListener("click", () => { novoFornPara = null; abrirNovoForn(); });
+document.getElementById("cancForn").addEventListener("click", () => { mForn.hidden = true; novoFornPara = null; });
+document.getElementById("formForn").addEventListener("submit", e => {
+  e.preventDefault();
+  const nome = document.getElementById("fNome").value.trim();
+  if (INFO[nome]) { document.getElementById("fNome").setCustomValidity("Já existe"); document.getElementById("fNome").reportValidity(); return; }
+  INFO[nome] = { canais: ["sms", "email", "rcs", "whatsapp"].filter(c => document.getElementById("fc_" + c).checked), integ: "simulado" };
+  INFO[nome].seg = document.getElementById("fSeg").value.trim(); NEG[nome] = {};
+  if (novoFornPara) novoFornPara.linhas[novoFornPara.i][0] = nome;
+  novoFornPara = null; mForn.hidden = true; tudo(); abrirEdF(nome);
+});
+document.getElementById("fNome").addEventListener("input", e => e.target.setCustomValidity(""));
+document.getElementById("edAdd").addEventListener("click", () => {
+  const cod = document.getElementById("edAddProd").value; if (!cod) return;
+  NEG[edF][cod] = { modo: "flat", custo: 0 }; desenharEdF(); tudo();
+});
+document.getElementById("edFechar").addEventListener("click", () => {
+  const sem = Object.entries(NEG[edF] || {}).filter(([, n]) => n.modo === "flat" ? !(n.custo > 0) : !Object.keys(n.ops).length || Object.values(n.ops).some(v => !(v > 0)));
+  if (sem.length) { document.getElementById("edErro").innerHTML = `<div class="aviso er"><div><b>Falta custo em ${sem.map(([c]) => produtos.find(p => p.cod === c).nome).join(", ")}.</b> Preencha um valor maior que zero ou tire a negociação.</div></div>`; return; }
+  const novo = document.getElementById("edNome").value.trim(); INFO[edF].seg = document.getElementById("edSeg").value.trim();
+  if (novo && novo !== edF && !INFO[novo]) {     // renomear: leva negociações e rotas junto
+    INFO[novo] = INFO[edF]; delete INFO[edF]; NEG[novo] = NEG[edF]; delete NEG[edF];
+    Object.values(ROTAS).forEach(r => (r.tipo === "op" ? Object.values(r.ops).flat() : r.flat).forEach(l => { if (l[0] === edF) l[0] = novo; }));
+  }
+  document.getElementById("edErro").innerHTML = ""; document.getElementById("modalEdF").hidden = true; tudo();
+});
+document.getElementById("rotaProd").addEventListener("change", e => { rotaP = e.target.value; fornecedores(); });
+document.querySelectorAll("#rotaTipo button").forEach(b => b.addEventListener("click", () => {
+  const p = produtos.find(x => x.cod === rotaP), r = rotaDe(p);
+  if (b.dataset.t === r.tipo) return;
+  if (b.dataset.t === "op") { r.tipo = "op"; r.ops = r.ops || Object.fromEntries(Object.keys(OPS).map(o => [o, (r.flat || []).map(l => [...l])])); }
+  else { r.tipo = "flat"; r.flat = r.flat || []; }
+  tudo();
+}));
+montarRotas(); fornecedores(); catalogo(); contratacao(); campanha(); comite(); matriz();
+</script>

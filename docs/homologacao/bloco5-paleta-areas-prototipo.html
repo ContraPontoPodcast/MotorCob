@@ -1,0 +1,153 @@
+<title>Um sistema, três áreas</title>
+<style>
+/* Layout: uma tela real da plataforma (menu + Lista do dia) repetida em três paletas; acima, os controles para trocar paleta e nível de ajuda */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5; --azul: #0A64D0;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E; --azul: #4C9BFF; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E; --azul: #4C9BFF; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding-block: 24px 48px; padding-inline: 16px; margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.proto { font-size: 13px; color: var(--tinta-2); }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0; }
+.ajuda { color: var(--tinta-2); margin: 4px 0 0; font-size: 14px; max-width: 78ch; }
+.ctl { display: flex; gap: 18px; flex-wrap: wrap; align-items: end; background: var(--painel); border-radius: 16px; padding: 14px 16px; }
+.ctl .grp { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--tinta-2); }
+.seg { display: inline-flex; background: var(--suave); border-radius: 12px; padding: 4px; gap: 4px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; color: var(--tinta-2); font: 600 13.5px var(--sans); padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--painel); color: var(--tinta); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.nota { background: var(--painel); border-radius: 16px; padding: 16px 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.nota div { font-size: 13.5px; color: var(--tinta-2); }
+.nota div b { color: var(--tinta); }
+.nota div > b:first-child { display: block; margin-bottom: 4px; }
+
+/* ---------- a tela de exemplo, pintada pela paleta escolhida (variáveis --p-*) */
+.app { border-radius: 18px; overflow: hidden; display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 560px; box-shadow: 0 2px 20px rgba(0,0,0,.08);
+  background: var(--p-fundo); color: var(--p-texto); font-size: 14.5px; }
+.menu { background: var(--p-menu); color: var(--p-menu-texto); padding: 18px 12px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--p-menu-borda); }
+.menu .marca { font-weight: 700; font-size: 16px; padding: 4px 10px 14px; letter-spacing: -.01em; }
+.menu .marca span { color: var(--p-acento-forte); }
+.menu a { display: block; padding: 8px 10px; border-radius: 9px; color: inherit; text-decoration: none; font-size: 14px; opacity: .85; }
+.menu a.ativo { background: var(--p-menu-ativo); color: var(--p-menu-ativo-texto); opacity: 1; font-weight: 600; }
+.menu .sec { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .55; padding: 14px 10px 4px; }
+.conteudo { padding: 22px 26px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.conteudo h3 { font-size: 22px; margin: 0; letter-spacing: -.01em; color: var(--p-titulo); }
+.conteudo .sub { color: var(--p-texto-2); font-size: 13.5px; margin: 2px 0 0; }
+.topo2 { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.b1 { border: 0; border-radius: 10px; padding: 9px 16px; font: 600 14px var(--sans); background: var(--p-acento); color: var(--p-acento-texto); cursor: pointer; }
+.b2 { border: 1px solid var(--p-borda); border-radius: 10px; padding: 8px 14px; font: 600 14px var(--sans); background: var(--p-cartao); color: var(--p-texto); cursor: pointer; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kpi { background: var(--p-cartao); border: 1px solid var(--p-borda); border-radius: 14px; padding: 14px; }
+.kpi small { color: var(--p-texto-2); font-size: 12.5px; display: flex; gap: 6px; align-items: center; }
+.kpi b { font-size: 24px; display: block; margin-top: 4px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--p-titulo); }
+.kpi .dica { font-size: 12px; color: var(--p-texto-2); margin-top: 6px; line-height: 1.4; }
+.tab { background: var(--p-cartao); border: 1px solid var(--p-borda); border-radius: 14px; overflow: hidden; }
+.tab table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tab th { text-align: left; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--p-texto-2); padding: 10px 14px; border-bottom: 1px solid var(--p-borda); font-weight: 700; }
+.tab td { color: var(--p-texto); padding: 11px 14px; border-bottom: 1px solid var(--p-borda); }
+.tab tr:last-child td { border-bottom: 0; }
+.tab td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.pill { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--p-pill); color: var(--p-pill-texto); white-space: nowrap; }
+.pill.ok { background: var(--p-ok-f); color: var(--p-ok); }
+.pill.al { background: var(--p-al-f); color: var(--p-al); }
+.ponto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: 1px; }
+/* (i) */
+.i { width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--p-i-borda); color: var(--p-i); font: 600 11px/15px var(--sans); text-align: center; background: transparent; cursor: pointer; padding: 0; flex: none; position: relative; }
+.i:hover, .i[aria-expanded="true"] { color: var(--p-acento-forte); border-color: var(--p-acento-forte); }
+.balao { position: absolute; z-index: 3; top: 24px; left: -8px; width: 270px; background: var(--p-balao); color: var(--p-balao-texto); border-radius: 12px; padding: 12px 13px; font: 400 13px/1.45 var(--sans); text-align: left; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.balao b { display: block; margin-bottom: 3px; font-size: 13.5px; }
+.balao a { color: inherit; text-decoration: underline; display: inline-block; margin-top: 6px; font-weight: 600; }
+.modo-desligada .i { display: none; }
+.modo-discreta .dica { display: none; }
+.modo-aprendiz .i { border-color: var(--p-acento-forte); color: var(--p-acento-forte); }
+.faixa-aprendiz { display: none; border-radius: 12px; padding: 10px 12px; font-size: 13px; background: var(--p-al-f); color: var(--p-al); }
+.modo-aprendiz .faixa-aprendiz { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+.faixa-aprendiz button { border: 0; background: none; color: inherit; font: 600 13px var(--sans); text-decoration: underline; cursor: pointer; }
+
+.base { --p-fundo: #F8F8F9; --p-menu: #EEEFF1; --p-menu-texto: #3A3A3C; --p-menu-borda: #E3E4E8; --p-cartao: #FFFFFF; --p-borda: #E5E5EA; --p-texto: #1D1D1F; --p-texto-2: #6E6E73; --p-titulo: #1D1D1F;
+  --p-acento-texto: #FFFFFF; --p-pill: #F2F2F7; --p-pill-texto: #3A3A3C; --p-ok: #1E7A36; --p-ok-f: #E6F4EA; --p-al: #8A5A00; --p-al-f: #FFF4D6; --p-i: #8E8E93; --p-i-borda: #C7C7CC; --p-balao: #FFFFFF; --p-balao-texto: #1D1D1F; }
+.area-cob { --p-acento: #8A6A2E; --p-acento-forte: #7A5C24; --p-menu-ativo: #F3ECDD; --p-menu-ativo-texto: #6B4F1C; }
+.area-cli { --p-acento: #9C5038; --p-acento-forte: #8A4430; --p-menu-ativo: #F6E9E3; --p-menu-ativo-texto: #7E3F2C; }
+.area-cli.musgo { --p-acento: #4F6B3A; --p-acento-forte: #445C32; --p-menu-ativo: #EAEFE3; --p-menu-ativo-texto: #3D5330; }
+.area-msg { --p-acento: #7A2E3B; --p-acento-forte: #6B2633; --p-menu-ativo: #F5E6E8; --p-menu-ativo-texto: #63222E; }
+.area-neutra { --p-acento: #1D1D1F; --p-acento-forte: #1D1D1F; --p-menu-ativo: #E8E8ED; --p-menu-ativo-texto: #1D1D1F; }
+.app .marca span { color: var(--p-acento); }
+.app.menu-branco { --p-menu: #FFFFFF; --p-fundo: #F5F5F7; }
+.app.halo .conteudo { background-image: radial-gradient(55% 40% at 88% 0%, color-mix(in srgb, var(--p-acento) 13%, transparent), transparent 70%); }
+.areas { display: flex; gap: 6px; padding: 4px 10px 12px; flex-wrap: wrap; }
+.areas span { font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 3px 9px; background: var(--p-pill); color: var(--p-texto-2); }
+.areas span.on { background: var(--p-acento); color: #fff; }
+.faixa-area { height: 3px; border-radius: 3px; background: var(--p-acento); width: 48px; }
+.opcoes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.op { background: var(--painel); border-radius: 14px; padding: 14px; font-size: 13.5px; color: var(--tinta-2); display: flex; flex-direction: column; gap: 6px; }
+.op b { color: var(--tinta); font-size: 14.5px; }
+.op .v { font-weight: 700; font-size: 12px; }
+.op.rec { outline: 2px solid #2F6B4A; }
+.v.bom { color: #1E7A36; } .v.mal { color: #C4271E; } .v.meio { color: #8A5A00; }
+.tres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.mini .moldura { height: 290px; overflow: hidden; border-radius: 14px; }
+.mini .moldura .app { transform: scale(.4); transform-origin: top left; width: 250%; pointer-events: none; min-height: 720px; }
+.mini b { display: block; margin-top: 6px; } .mini small { color: var(--tinta-2); font-size: 12.5px; }
+@media (max-width: 900px) { .opcoes, .tres { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<div class="wrap">
+  <div class="proto">Proposta para decisão · telas fictícias</div>
+  <div><h1>Um sistema, três áreas</h1>
+    <p class="ajuda">As quatro ideias que você teve, lado a lado, e a que eu recomendo: a base calma no estilo Apple (que é a de hoje), igual em tudo, com a cor de cada área só no detalhe, como o Google faz com Gmail, Drive e Agenda.</p></div>
+  <div class="opcoes">
+    <div class="op"><b>Tudo como hoje</b><span>Menu preto, botões pretos, petróleo em algumas telas.</span><span class="v meio">Sem trabalho, mas o preto pesa e as telas já misturam duas linguagens.</span></div>
+    <div class="op"><b>Estilo Apple</b><span>Fundo cinza-claro, branco, grafite, uma cor de destaque discreta.</span><span class="v bom">Calmo, não cansa, é a base de hoje sem o preto pesado.</span></div>
+    <div class="op"><b>Uma experiência por módulo</b><span>Orquestração, Jornada e Mensageria com layouts próprios.</span><span class="v mal">Com rotatividade, cada pessoa reaprende a cada área. Custa caro manter.</span></div>
+    <div class="op rec"><b>Apple na base + cor por área (recomendado)</b><span>Mesmo layout, componentes e textos; muda só a cor de destaque da área.</span><span class="v bom">Aprende uma vez, usa em tudo; e a pessoa sabe "onde está" pela cor.</span></div>
+  </div>
+  <div class="ctl"><div class="grp">Cor da Jornada<div class="seg" id="jor"><button aria-pressed="false" data-j="terra">Terracota</button><button aria-pressed="true" data-j="musgo">Verde musgo</button></div></div><div class="grp">Fundo<div class="seg" id="fun"><button aria-pressed="true" data-f="liso">Liso</button><button aria-pressed="false" data-f="halo">Halo</button></div></div><div class="grp">Menu<div class="seg" id="men"><button aria-pressed="true" data-m="cinza">Cinza</button><button aria-pressed="false" data-m="branco">Branco</button></div></div><div class="grp">Ver como
+    <div class="seg" id="sel"><button aria-pressed="true" data-a="cob">Cobrança · Orquestração</button><button aria-pressed="false" data-a="cli">Jornada do Cliente</button><button aria-pressed="false" data-a="msg">Mensageria</button><button aria-pressed="false" data-a="neutra">Sem cor de área (hoje)</button></div></div></div>
+  <div id="palco"></div>
+  <div><h2>As três áreas lado a lado</h2><p class="ajuda" style="margin-top:2px">Mesma tela, mesma posição de tudo. Só o destaque muda: dourado na Cobrança (o que a marca já usa), verde musgo na Jornada, vinho na Mensageria. Nenhuma é azul, roxo ou laranja. Troque a cor da Jornada no seletor acima para comparar terracota e musgo.</p></div>
+  <div class="tres" id="tres"></div>
+  <div class="nota">
+    <div><b>O que é igual em todas as áreas</b>Menu, posição dos botões, cartões, tabelas, (i), glossário, avisos (verde = pronto, âmbar = atenção, vermelho = erro) e as cores dos canais.</div>
+    <div><b>O que muda por área</b>Só a cor de destaque: botão principal, item ativo do menu, a marca da área no topo e o filete abaixo do título. Na Mensageria aparece vinho; na Cobrança, dourado.</div>
+    <div><b>Por que não layouts diferentes</b>Com equipes que trocam com frequência, cada formato novo é mais treinamento e mais chamado no suporte. A cor orienta sem exigir reaprender.</div>
+  </div>
+</div>
+
+<script>
+const AREAS = {
+  cob: ["Cobrança", "Orquestração", "Régua de cada segmento: canais, dias e regras", [["Segmentos em uso", "6"], ["Clientes na régua", "18.280"], ["Com ação hoje", "10.020"], ["Fora do orçamento", "310"]],
+    [["Veículos", "Cliente novo", "3º dia", "WhatsApp", "2.860"], ["Cartão", "Não CPC", "2º ciclo · dia 1", "WhatsApp", "940"], ["Veículos", "CPC · sem resposta", "2ª tentativa", "RCS", "300"]], ["Início", "Mapa da Esteira", "Lista do dia", "Orquestração", "Segmentos", "Personas"], 3],
+  cli: ["Jornada do Cliente", "Jornada", "Momentos do cliente: boas-vindas, ativação, retenção", [["Momentos ativos", "5"], ["Clientes na jornada", "42.110"], ["Com ação hoje", "3.870"], ["Convertidos no mês", "1.240"]],
+    [["Boas-vindas", "Novo contrato", "dia 1", "E-mail", "1.120"], ["Ativação", "Sem uso", "dia 7", "WhatsApp", "860"], ["Retenção", "Renovação", "D-15", "SMS", "430"]], ["Início", "Jornada", "Momentos", "Lista do dia", "Personas"], 1],
+  msg: ["Mensageria", "Campanhas", "Envios avulsos a partir de uma lista", [["Campanhas no mês", "14"], ["Disparados", "210.400"], ["Entregues", "96,1%"], ["Respostas", "8.320"]],
+    [["Renegociação out", "Concluída", "12/10", "SMS", "80.000"], ["Lembrete boleto", "Enviando", "hoje", "WhatsApp", "12.400"], ["Pesquisa NPS", "Agendada", "16/10", "E-mail", "30.000"]], ["Painel", "Campanhas", "Lotes do dia", "Respostas", "Modelos de mensagem"], 1],
+};
+AREAS.neutra = AREAS.cob;
+const COR = { "WhatsApp": "#1F8A4C", "RCS": "#3B5BA9", "SMS": "#7A4FB0", "E-mail": "#A2552B" };
+let jor = "musgo", fun = "liso", men = "cinza";
+function tela(a) {
+  const [area, tit, sub, kpis, linhas, menu, ativo] = AREAS[a];
+  return `<div class="app base area-${a}${a === "cli" && jor === "musgo" ? " musgo" : ""}${fun === "halo" ? " halo" : ""}${men === "branco" ? " menu-branco" : ""}"><nav class="menu" aria-label="Menu"><div class="marca">Motor<span>CX</span></div>
+    <div class="areas">${["Cobrança", "Jornada do Cliente", "Mensageria"].map(x => `<span class="${x === area && a !== "neutra" ? "on" : ""}">${x === "Jornada do Cliente" ? "Jornada" : x}</span>`).join("")}</div>
+    ${menu.map((m, i) => `<a href="#" onclick="return false" class="${i === ativo ? "ativo" : ""}">${m}</a>`).join("")}</nav>
+    <main class="conteudo"><div class="topo2"><div><h3>${tit}</h3><p class="sub">${sub}</p><div class="faixa-area" style="margin-top:8px"></div></div>
+      <div style="display:flex;gap:8px"><button class="b2" tabindex="-1">Exportar</button><button class="b1" tabindex="-1">${a === "msg" ? "Nova campanha" : a === "cli" ? "Novo momento" : "Salvar"}</button></div></div>
+    <div class="kpis">${kpis.map(([k, v]) => `<div class="kpi"><small>${k}</small><b>${v}</b></div>`).join("")}</div>
+    <div class="tab"><table><tbody>${linhas.map(l => `<tr><td>${l[0]}</td><td>${l[1]}</td><td>${l[2]}</td><td><span class="ponto" style="background:${COR[l[3]]}"></span>${l[3]}</td><td class="n">${l[4]}</td></tr>`).join("")}</tbody></table></div></main></div>`;
+}
+function mostrar(a) { document.getElementById("palco").innerHTML = tela(a); document.querySelectorAll("#sel button").forEach(b => b.setAttribute("aria-pressed", b.dataset.a === a)); }
+document.querySelectorAll("#sel button").forEach(b => b.addEventListener("click", () => mostrar(b.dataset.a)));
+document.getElementById("tres").innerHTML = [["cob", "Cobrança · dourado"], ["cli", "Jornada do Cliente · terracota"], ["msg", "Mensageria · vinho"]].map(([a, t]) => `<div class="mini"><div class="moldura">${tela(a)}</div><b>${t}</b></div>`).join("");
+function tres() { document.getElementById("tres").innerHTML = [["cob", "Cobrança · dourado"], ["cli", "Jornada do Cliente · " + (jor === "musgo" ? "verde musgo" : "terracota")], ["msg", "Mensageria · vinho"]].map(([a, t]) => `<div class="mini"><div class="moldura">${tela(a)}</div><b>${t}</b></div>`).join(""); }
+["fun", "men"].forEach(id => document.querySelectorAll(`#${id} button`).forEach(b => b.addEventListener("click", () => {
+  if (id === "fun") fun = b.dataset.f; else men = b.dataset.m;
+  document.querySelectorAll(`#${id} button`).forEach(x => x.setAttribute("aria-pressed", x === b)); tres(); mostrar(document.querySelector("#sel [aria-pressed=true]").dataset.a); })));
+document.querySelectorAll("#jor button").forEach(b => b.addEventListener("click", () => { jor = b.dataset.j; document.querySelectorAll("#jor button").forEach(x => x.setAttribute("aria-pressed", x === b)); tres(); mostrar(document.querySelector("#sel [aria-pressed=true]").dataset.a); }));
+tres(); mostrar("cob");
+</script>
