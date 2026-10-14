@@ -1,0 +1,202 @@
+<title>Revisão de UX MotorCX</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: coluna de leitura única; cada achado é uma linha com prioridade, onde aparece e o que muda. Paleta do bloco 5. */
+:root{
+  --menu:#EEEFF1; --bg:#F8F8F9; --card:#FFFFFF; --borda:#E3E4E8;
+  --txt:#1D1D1F; --sub:#6E6E73;
+  --cob:#8A6A2E; --jor:#4F6B3A; --msg:#7A2E3B;
+  --alta:#9A3B2E; --altabg:#F7E9E6; --media:#8A6A2E; --mediabg:#F5EEDF; --baixa:#5C6670; --baixabg:#ECEEF1;
+  --ok:#3F6B3A; --okbg:#E7EFE4;
+  --f-txt:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --menu:#1A1B1E; --bg:#141517; --card:#1D1E21; --borda:#2E3035; --txt:#ECECEE; --sub:#A1A1A6;
+  --cob:#C9A35E; --jor:#8DB07A; --msg:#D07A8A;
+  --alta:#E79A8C; --altabg:#3A2420; --media:#D6B370; --mediabg:#33291A; --baixa:#AEB6BF; --baixabg:#25282C;
+  --ok:#94C08A; --okbg:#1F2C1D; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1A1B1E; --bg:#141517; --card:#1D1E21; --borda:#2E3035; --txt:#ECECEE; --sub:#A1A1A6;
+  --cob:#C9A35E; --jor:#8DB07A; --msg:#D07A8A;
+  --alta:#E79A8C; --altabg:#3A2420; --media:#D6B370; --mediabg:#33291A; --baixa:#AEB6BF; --baixabg:#25282C;
+  --ok:#94C08A; --okbg:#1F2C1D; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font:15px/1.6 var(--f-txt)}
+.pg{max-width:880px;margin:0 auto;padding-block:40px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:40px}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.25}
+h1{font-size:28px;font-weight:600}
+h2{font-size:19px;font-weight:600;padding-bottom:8px;border-bottom:2px solid var(--txt)}
+h3{font-size:16px;font-weight:600}
+p{margin:0;max-width:68ch}
+.sub{color:var(--sub)}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--sub)}
+header{display:grid;gap:12px}
+.resumo{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--borda);border:1px solid var(--borda);border-radius:8px;overflow:hidden}
+.resumo div{background:var(--card);padding:14px 16px;display:grid;gap:2px}
+.resumo b{font:600 24px/1.1 var(--f-txt);font-variant-numeric:tabular-nums}
+.resumo span{font-size:13px;color:var(--sub)}
+section{display:grid;gap:16px}
+.lista{display:grid;gap:0;border:1px solid var(--borda);border-radius:8px;background:var(--card);overflow:hidden}
+.item{display:grid;grid-template-columns:44px 1fr;gap:4px 14px;padding:18px 18px;border-top:1px solid var(--borda)}
+.item:first-child{border-top:0}
+.num{font:500 13px/1.6 var(--f-mono);color:var(--sub);font-variant-numeric:tabular-nums}
+.corpo{display:grid;gap:8px;min-width:0}
+.topo{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px}
+.pill{font:500 11px/1 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;padding:5px 7px;border-radius:4px;white-space:nowrap}
+.p-alta{color:var(--alta);background:var(--altabg)}
+.p-media{color:var(--media);background:var(--mediabg)}
+.p-baixa{color:var(--baixa);background:var(--baixabg)}
+.p-ok{color:var(--ok);background:var(--okbg)}
+.onde{font-size:13px;color:var(--sub)}
+.muda{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:14px}
+.muda dt{color:var(--sub);font-weight:500}
+.muda dd{margin:0;min-width:0}
+code,.mono{font-family:var(--f-mono);font-size:13px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--borda);color:var(--sub)}
+.tag.cob{color:var(--cob);border-color:currentColor}
+.tag.jor{color:var(--jor);border-color:currentColor}
+.tag.msg{color:var(--msg);border-color:currentColor}
+.tab-wrap{overflow-x:auto;border:1px solid var(--borda);border-radius:8px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-top:1px solid var(--borda);vertical-align:top}
+th{border-top:0;font:500 12px/1.4 var(--f-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--sub);background:var(--menu)}
+.nota{background:var(--menu);border-radius:8px;padding:14px 16px;display:grid;gap:6px;font-size:14px}
+ol.passos{margin:0;padding-left:20px;display:grid;gap:6px;max-width:68ch}
+a{color:inherit;text-decoration-color:var(--sub);text-underline-offset:2px}
+a:focus-visible{outline:2px solid var(--txt);outline-offset:2px}
+@media (max-width:520px){.item{grid-template-columns:1fr}.num{line-height:1}h1{font-size:24px}}
+</style>
+
+<div class="pg">
+<header>
+  <div class="eyebrow">MotorCX · homologação · 14/10/2026</div>
+  <h1>Revisão de UX dos blocos 1 a 6</h1>
+  <p class="sub">Leitura de ponta a ponta de tudo que foi aprovado até o bloco 6: Console, Mensageria, Cobrança, Jornada e Score de Entrega. Cada achado diz onde aparece, o que muda e se já foi aplicado no protótipo. Nada aqui foi rodado no site ou no banco.</p>
+  <div class="resumo">
+    <div><b>14</b><span>achados no total</span></div>
+    <div><b>3</b><span>já aplicados nos protótipos</span></div>
+    <div><b>5</b><span>prioridade alta</span></div>
+    <div><b>2</b><span>decisões abertas</span></div>
+  </div>
+</header>
+
+<section>
+  <h2>Como ler</h2>
+  <div class="nota">
+    <p><span class="pill p-alta">Alta</span> muda o entendimento ou evita erro de operação. Resolver antes de liberar para clientes.</p>
+    <p><span class="pill p-media">Média</span> deixa o sistema consistente entre as áreas. Resolver no mesmo ciclo.</p>
+    <p><span class="pill p-baixa">Baixa</span> acabamento. Pode entrar depois da primeira entrega.</p>
+    <p><span class="pill p-ok">Aplicado</span> já está no protótipo atualizado e no branch <code>claude/geracao-bloco-6</code>.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Já aplicado</h2>
+  <div class="lista">
+    <div class="item"><div class="num">01</div><div class="corpo">
+      <div class="topo"><h3>Protótipos 2 e 3 estavam desatualizados</h3><span class="pill p-ok">Aplicado</span></div>
+      <div class="tags"><span class="tag msg">Mensageria · bloco 2</span><span class="tag cob">Cobrança · bloco 3</span></div>
+      <dl class="muda"><dt>Antes</dt><dd>Paleta azul antiga e nomes de fase anteriores ao glossário (G1, G2, G3, RE).</dd>
+      <dt>Agora</dt><dd>Paleta do bloco 5 (cor da área só no botão principal, item ativo, tag e linha do título) e nomes do glossário aprovado: CPC · em negociação, CPC · sem resposta, Acordo · antes do vencimento, Acordo · parcela vencida, Quitado.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">02</div><div class="corpo">
+      <div class="topo"><h3>Código interno aparecia no catálogo de produtos</h3><span class="pill p-ok">Aplicado</span></div>
+      <div class="tags"><span class="tag msg">Mensageria · produtos</span></div>
+      <dl class="muda"><dt>Antes</dt><dd>Cada linha mostrava o código técnico do produto abaixo do nome.</dd>
+      <dt>Agora</dt><dd>Só o nome. O código continua no banco e nas telas do Técnico.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">03</div><div class="corpo">
+      <div class="topo"><h3>Rotas em dois lugares, com dois nomes</h3><span class="pill p-ok">Aplicado</span></div>
+      <div class="tags"><span class="tag msg">Mensageria · fornecedores</span></div>
+      <dl class="muda"><dt>Antes</dt><dd>"Plano de rota" no produto e "mistura" em outra seção.</dd>
+      <dt>Agora</dt><dd>Uma seção <b>Rotas</b>: primeiro a rota padrão de cada canal, depois a rota de cada produto, que vale primeiro. A mistura de operadoras fica logo abaixo do total da rota.</dd></dl>
+    </div></div>
+  </div>
+</section>
+
+<section>
+  <h2>A fazer</h2>
+  <div class="lista">
+    <div class="item"><div class="num">04</div><div class="corpo">
+      <div class="topo"><h3>Um nome por conceito</h3><span class="pill p-alta">Alta</span></div>
+      <div class="onde">Console, Mensageria, campanhas, Economia do Score</div>
+      <dl class="muda"><dt>Problema</dt><dd>O mesmo recurso aparece como score, filtro de inteligência e propensão; os números barrados aparecem como represados, filtrados e não enviados.</dd>
+      <dt>Proposta</dt><dd><b>Score de Entrega</b> em todo lugar. Para o cliente, <b>não enviados</b>; <b>represados</b> só no Console, para o time interno. O nome editável pelo Técnico continua valendo só para o rótulo devolvido na rota.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">05</div><div class="corpo">
+      <div class="topo"><h3>Primeiros dias do Score sem histórico</h3><span class="pill p-alta">Alta</span></div>
+      <div class="onde">Prévia da campanha, Economia do Score</div>
+      <dl class="muda"><dt>Problema</dt><dd>Na largada a maioria dos números cai em Sem histórico. A prévia parece quebrada e a economia aparece perto de zero.</dd>
+      <dt>Proposta</dt><dd>Estado vazio explicando que o histórico se forma com os envios pela Mensageria, com a data em que a janela fica completa. Não esconder a faixa nem inventar estimativa.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">06</div><div class="corpo">
+      <div class="topo"><h3>Um só padrão para processos demorados</h3><span class="pill p-alta">Alta</span></div>
+      <div class="onde">Importação de arquivo, cálculo da prévia, enriquecimento, sincronização</div>
+      <dl class="muda"><dt>Problema</dt><dd>Cada tela avisa de um jeito: texto solto, barra, ou nada. O sino de avisos citado na prévia ainda não existe.</dd>
+      <dt>Proposta</dt><dd>Um componente de progresso com etapa atual, tempo estimado e "pode sair desta tela". Ao terminar, aviso no sino. O sino precisa ser desenhado num protótipo próprio antes de entrar no prompt.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">07</div><div class="corpo">
+      <div class="topo"><h3>Um só modelo de salvar</h3><span class="pill p-alta">Alta</span></div>
+      <div class="onde">Preços (Score, SMS, produtos), configurações do Score, rotas</div>
+      <dl class="muda"><dt>Problema</dt><dd>Preço editado direto na tabela salva sem revisão. Um clique errado muda cobrança de cliente.</dd>
+      <dt>Proposta</dt><dd>Edição em painel lateral, resumo do que muda (de → para) e confirmação. Aviso ao sair com alteração não salva.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">08</div><div class="corpo">
+      <div class="topo"><h3>Confirmação em ações irreversíveis</h3><span class="pill p-alta">Alta</span></div>
+      <div class="onde">Agendar campanha, cancelar campanha, trocar função de usuário, remover fornecedor do Score</div>
+      <dl class="muda"><dt>Proposta</dt><dd>Confirmação dentro da tela dizendo o efeito concreto ("12.340 mensagens serão enviadas em 15/10 às 9h"). O botão repete o verbo da ação.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">09</div><div class="corpo">
+      <div class="topo"><h3>Somente leitura com motivo, em vez de esconder</h3><span class="pill p-media">Média</span></div>
+      <div class="onde">Todas as telas com permissão por função</div>
+      <dl class="muda"><dt>Problema</dt><dd>Quem não pode editar simplesmente não vê o botão e acha que a função não existe.</dd>
+      <dt>Proposta</dt><dd>Campo visível e travado, com a frase "Só Administrativo altera preços". Esconder só o que é sigiloso.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">10</div><div class="corpo">
+      <div class="topo"><h3>Cores das faixas confundem com erro e alerta</h3><span class="pill p-media">Média</span></div>
+      <div class="onde">Score de Entrega, prévia, qualidade dos fornecedores</div>
+      <dl class="muda"><dt>Problema</dt><dd>Baixo em vermelho e Médio em amarelo leem como erro e alerta do sistema.</dd>
+      <dt>Proposta</dt><dd>Escala própria de uma só cor, do forte (Alto) ao claro (Baixo), e Sem histórico em cinza com o ícone (i). Vermelho e amarelo ficam só para erro e alerta.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">11</div><div class="corpo">
+      <div class="topo"><h3>Valores com 4 casas decimais</h3><span class="pill p-media">Média</span></div>
+      <div class="onde">Economia do Score, preços por número analisado</div>
+      <dl class="muda"><dt>Proposta</dt><dd>Para o cliente, preço por mil números (R$ 4,20 / mil). As 4 casas ficam no Console e no banco.</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">12</div><div class="corpo">
+      <div class="topo"><h3>Tabelas no celular</h3><span class="pill p-media">Média</span></div>
+      <div class="onde">Campanhas, qualidade dos fornecedores, Economia do Score</div>
+      <dl class="muda"><dt>Proposta</dt><dd>Abaixo de 600 px cada linha vira um cartão com os 3 campos principais e "ver detalhes".</dd></dl>
+    </div></div>
+    <div class="item"><div class="num">13</div><div class="corpo">
+      <div class="topo"><h3>Termos e posições soltas</h3><span class="pill p-baixa">Baixa</span></div>
+      <div class="onde">Várias telas</div>
+      <dl class="muda"><dt>Proposta</dt><dd>Trocar "mailing" por "lista de contatos" nas telas do cliente. Mostrar a Economia do Score como vitrine (sem números do cliente) para quem ainda não contratou.</dd></dl>
+    </div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Decisões abertas</h2>
+  <div class="tab-wrap"><table>
+    <thead><tr><th>#</th><th>Tema</th><th>Situação</th><th>Precisa de</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">14</td><td>Validade de 24 h da prévia</td><td>Está no protótipo do bloco 6, ainda não no motor nem no prompt 48</td><td>Aprovação para gerar</td></tr>
+      <tr><td class="mono">06</td><td>Sino de avisos</td><td>Citado na prévia, sem desenho</td><td>Protótipo próprio</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Próximos passos</h2>
+  <ol class="passos">
+    <li>Protótipo de padrões comuns: processo demorado com sino, painel de edição com confirmação, somente leitura com motivo, tabela em cartão, escala de cores das faixas e estado vazio do Score.</li>
+    <li>Aprovação dos padrões e registro em <code>docs/homologacao/APROVACOES.md</code>.</li>
+    <li>Ajuste dos prompts do Horizons e da geração (SQL, motor, testes) que usam esses padrões.</li>
+  </ol>
+</section>
+</div>
