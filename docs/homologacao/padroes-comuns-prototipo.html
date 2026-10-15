@@ -250,7 +250,7 @@ code{font-family:var(--mono);font-size:12.5px}
           </ul></div>
           <div class="regra"><b>O que vai para o sino</b><ul>
             <li>Fim de processo longo (pronto ou com erro), com o link para abrir.</li>
-            <li>Algo que precisa da pessoa: prévia perto de vencer, saldo do pré-pago acabando.</li>
+            <li>Algo que precisa da pessoa: envios pausados por saldo do pré-pago.</li>
             <li>Alerta de qualidade só para quem cuida (Técnico e Master).</li>
             <li>Não vai: confirmação de ação que a própria pessoa acabou de fazer (isso é o aviso na tela).</li>
           </ul></div>
@@ -503,7 +503,7 @@ code{font-family:var(--mono);font-size:12.5px}
   // ---------- sino
   const avisos = [
     { id: 1, novo: false, tit: "Prévia pronta · Renegociação outubro", txt: "12.940 números classificados. Revise as faixas antes de agendar.", acao: "Abrir prévia" },
-    { id: 2, novo: true, tit: "A prévia de Renegociação outubro vence em 2 h", txt: "Depois disso o Score é recalculado antes de agendar.", acao: "Abrir prévia" },
+    { id: 2, novo: true, tit: "Envios pausados", txt: "Saldo pré-pago esgotado: recarregue em Empresa › Faturamento.", acao: "Abrir faturamento" },
     { id: 3, novo: false, tit: "Importação com aviso · Acordos setembro", txt: "312 linhas sem telefone válido ficaram de fora.", acao: "Ver linhas" }
   ];
   function sino() {
