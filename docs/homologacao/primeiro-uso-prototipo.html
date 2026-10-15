@@ -201,7 +201,7 @@ code{font-family:var(--mono);font-size:12.5px}
           <div class="tela-conta" id="ct-1">
             <h3>Crie sua senha</h3>
             <div class="campo"><label for="ct-senha">Senha</label><input type="password" id="ct-senha" autocomplete="new-password" placeholder="Pelo menos 12 caracteres"></div>
-            <ul class="req" id="ct-req"><li data-r="tam">12 caracteres ou mais</li><li data-r="mai">Uma maiúscula</li><li data-r="min">Uma minúscula</li><li data-r="num">Um número</li><li data-r="sim">Um símbolo</li></ul>
+            <ul class="req" id="ct-req"><li data-r="tam">12 caracteres ou mais</li><li data-r="let">Uma letra</li><li data-r="num">Um número</li></ul>
             <div><button class="btn" id="ct-ok1" disabled>Continuar</button></div>
           </div>
           <div class="tela-conta" id="ct-2" hidden>
@@ -223,7 +223,7 @@ code{font-family:var(--mono);font-size:12.5px}
       <div class="regra"><b>Regras</b><ul>
         <li>E-mail com o nome de quem convidou (ou "a equipe MotorCob"), a empresa, o papel e a validade do link.</li>
         <li>Validade do link: 24 horas. É uma configuração do Supabase (Authentication › validade do link por e-mail), conferida antes de publicar.</li>
-        <li>Requisitos da senha marcados enquanto digita, em vez de erro só no fim.</li>
+        <li>Requisitos da senha marcados enquanto digita, em vez de erro só no fim. Regra única aprovada no bloco 5: 12 caracteres ou mais, com letra e número.</li>
         <li>Admin: 3 passos (o código é obrigatório). Outros papéis: 2 passos; o código fica opcional em Minha conta.</li>
         <li>Link vencido: "Este convite venceu. Peça outro a {quem convidou}." com o nome, não só "link inválido".</li>
       </ul></div>
@@ -360,7 +360,7 @@ code{font-family:var(--mono);font-size:12.5px}
   botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
 
   // ---------- conta
-  const REQ = { tam: s => s.length >= 12, mai: s => /[A-Z]/.test(s), min: s => /[a-z]/.test(s), num: s => /\d/.test(s), sim: s => /[^A-Za-z0-9]/.test(s) };
+  const REQ = { tam: s => s.length >= 12, let: s => /[A-Za-zÀ-ÿ]/.test(s), num: s => /\d/.test(s) };
   const passoConta = n => {
     [1, 2, 3].forEach(i => $("ct-" + i).hidden = i !== n);
     [...$("ct-passos").children].forEach((li, i) => { li.className = i + 1 < n ? "feito" : i + 1 === n ? "atual" : ""; });
