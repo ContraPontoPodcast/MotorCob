@@ -1,0 +1,418 @@
+<title>Relatórios MotorCX</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: MotorCX, menu cinza à esquerda (Console e Cliente) + área de trabalho lisa. Paleta do bloco 5; Console e
+   Empresa usam o grafite neutro. Edição sempre no painel lateral, com resumo antes de salvar. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#1D1D1F; --area-forte:#000000; --area-ativo:#E8E8ED; --area-ativo-texto:#1D1D1F; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --veu:rgba(0,0,0,.25); --sombra:0 10px 30px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:80ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--texto);border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao);
+  margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+@media (max-width:820px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+section[data-p]{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:74ch}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.cartao-cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.peq{padding:5px 11px;font-size:13px}
+.btn.perigo{background:var(--erro);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px;min-width:0}
+input[type=text]{font-variant-numeric:tabular-nums}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap;vertical-align:middle}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.trava{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);background:var(--pilula);border-radius:9px;padding:6px 11px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13.5px}
+.dl dt{color:var(--texto2)}.dl dd{margin:0}
+.abas{display:flex;gap:4px;flex-wrap:wrap}
+.abas button{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;color:var(--texto2);background:var(--pilula)}
+.abas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.abas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.abas b{margin-left:4px}
+.confirma{border:1px solid var(--texto);border-radius:12px;padding:14px 16px;background:var(--pilula);display:flex;flex-direction:column;gap:10px}
+.confirma p{margin:0}
+.grande{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden;display:flex}
+.barra i{display:block;height:100%}
+/* gaveta */
+.veu{position:fixed;inset:0;background:var(--veu);z-index:40}
+.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--cartao);border-left:1px solid var(--borda);box-shadow:var(--sombra);z-index:41;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.gaveta header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--borda)}
+.gaveta header h3{margin:0;font-size:16px}
+.gaveta .corpo{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.gaveta footer{padding:12px 18px;border-top:1px solid var(--borda);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+.gaveta footer .nota{margin-right:auto}
+.faixa-l{display:grid;grid-template-columns:1fr 1fr 110px;gap:8px;align-items:center}
+.faixa-l.mud input{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mudancas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mudancas li{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.mudancas s{color:var(--texto2)}
+.op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--borda);border-radius:10px;padding:10px 12px;cursor:pointer}
+.op:has(input:checked){border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.op b{display:block}.op span{font-size:12.5px;color:var(--texto2)}
+.alerta{border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.alerta.at{background:var(--at-f)}
+/* celular */
+.resp{container-type:inline-size}
+@container (max-width:600px){
+  .tab.cartoes thead{display:none}
+  .tab.cartoes,.tab.cartoes tbody{display:block}
+  .tab.cartoes tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 2px;border-bottom:1px solid var(--borda)}
+  .tab.cartoes td{border:0;padding:0;white-space:normal}
+  .tab.cartoes td.c1{font-weight:600}
+  .tab.cartoes td.c2{grid-column:2;grid-row:1;justify-self:end}
+  .tab.cartoes td.c3{grid-column:1;color:var(--texto2);font-size:13px}
+  .tab.cartoes td.c4{grid-column:2;grid-row:2;justify-self:end;font-weight:600}
+  .tab.cartoes td.x{display:none}
+}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{all:unset;cursor:pointer;font-size:13px;padding:5px 11px;border-radius:999px;border:1px solid var(--borda);background:var(--cartao);color:var(--texto)}
+.chip[aria-pressed="true"]{background:var(--area);color:var(--sobre-area);border-color:var(--area)}
+.chip:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.chip.x::after{content:" ×";color:inherit;opacity:.7}
+.perg{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.perg button{all:unset;cursor:pointer;border:1px solid var(--borda);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px;background:var(--cartao)}
+.perg button:hover{border-color:var(--texto2)}
+.perg button:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.perg b{font-size:14.5px}
+.perg span{font-size:12.5px;color:var(--texto2)}
+.perg small{font-size:11.5px;color:var(--texto2);margin-top:4px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px}
+.kpi span{font-size:12px;color:var(--texto2)}
+.kpi b{font-size:22px;font-variant-numeric:tabular-nums}
+.kpi small{font-size:12px;color:var(--texto2)}
+.kpi small.sobe{color:var(--ok)} .kpi small.desce{color:var(--erro)}
+.grafico{width:100%;height:auto;display:block}
+.grafico .eixo{stroke:var(--borda)} .grafico text{fill:var(--texto2);font-size:11px;font-family:var(--sans)}
+.grafico .l1{stroke:var(--texto);fill:none;stroke-width:2} .grafico .l2{stroke:var(--texto2);fill:none;stroke-width:2;stroke-dasharray:5 4}
+.legenda{display:flex;gap:16px;font-size:12px;color:var(--texto2)}
+.legenda i{display:inline-block;width:18px;height:0;border-top:2px solid var(--texto);vertical-align:middle;margin-right:6px}
+.legenda i.l2{border-top:2px dashed var(--texto2)}
+.tab tfoot td{font-weight:700;border-top:2px solid var(--borda);border-bottom:0}
+.passos{display:flex;gap:6px;flex-wrap:wrap;counter-reset:p}
+.passos li{list-style:none;font-size:13px;font-weight:600;padding:5px 12px;border-radius:999px;background:var(--pilula);color:var(--texto2)}
+.passos li[aria-current="step"]{background:var(--area);color:var(--sobre-area)}
+.passos{padding:0;margin:0}
+.base{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.base label{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;gap:10px;cursor:pointer}
+.base label:has(input:checked){border-color:var(--area);box-shadow:inset 0 0 0 1px var(--area)}
+.base b{display:block}
+.base span{font-size:12.5px;color:var(--texto2)}
+.mostrar{display:flex;flex-direction:column;gap:6px}
+.mostrar label{display:flex;gap:8px;align-items:flex-start}
+.mostrar small{display:block;color:var(--texto2);font-size:12px}
+.filtro{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px dashed var(--borda);border-radius:10px;padding:8px 10px}
+.filtro b{font-size:12.5px;color:var(--texto2);font-weight:600;margin-right:4px}
+select,input[type=text],input[type=email]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:7px 9px;min-width:0}
+.proc{display:flex;flex-direction:column;gap:6px}
+.proc li{list-style:none;font-size:13.5px;display:flex;gap:8px;align-items:center}
+.proc li::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--borda);flex:none}
+.proc li.feito::before{background:var(--ok)} .proc li.agora::before{background:var(--at)}
+.proc{padding:0;margin:0}
+.sino{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;max-width:420px}
+.sino b{font-size:13.5px} .sino span{font-size:12.5px;color:var(--texto2)}
+.antes{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px}
+.antes div{border-radius:10px;padding:10px 12px;background:var(--menu)}
+.antes div:first-child{background:var(--erro-f)}
+.antes b{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2);margin-bottom:4px}
+@media (max-width:600px){.antes{grid-template-columns:1fr}}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Revisão de UX</span>
+  <h1>Relatórios e montador</h1>
+  <p>Os relatórios da Mensageria hoje falam a língua do banco ("Envios (sintético)", "Contar distintos de", "Campanha (código)") e só contam: não mostram taxa nem comparação. Proposta: relatórios por pergunta, taxas e comparação com o período anterior, montador em três passos com palavras do dia a dia, exportação grande em segundo plano e envio por e-mail. Empresas, campanhas e números fictícios.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Telas">
+    <div class="grupo">Cliente · Mensageria</div>
+    <button data-ir="inicio" aria-current="page">Relatórios<small>Por pergunta e os da empresa</small></button>
+    <button data-ir="aberto">Relatório aberto<small>Taxas, comparação e gráfico</small></button>
+    <button data-ir="montar">Montar relatório<small>Três passos, prévia ao vivo</small></button>
+    <button data-ir="exportar">Exportar e enviar<small>Arquivo grande e e-mail</small></button>
+  </nav>
+
+  <main class="trab">
+    <!-- ===================== INÍCIO ===================== -->
+    <section data-p="inicio">
+      <div class="cab"><div><h2>Relatórios</h2>
+        <p>Os prontos aparecem como perguntas, agrupados pelo assunto. Abaixo, os que a empresa salvou, com quem criou.</p></div>
+        <button class="btn" data-ir2="montar">Montar relatório</button></div>
+
+      <div class="antes"><div><b>Hoje</b>"Entregabilidade por dia e canal" · base "Envios (sintético)" · categorias Entrega, Higienização, Analítico.</div>
+        <div><b>Proposta</b>"Quanto foi entregue, dia a dia?" · com taxa de entrega e comparação com o período anterior.</div></div>
+
+      <div class="linha"><input type="text" aria-label="Buscar relatório" placeholder="Buscar: entrega, cliques, descadastro…" style="flex:1;min-width:200px"></div>
+
+      <h3 style="margin:4px 0 0">Entrega</h3>
+      <div class="perg">
+        <button data-ir2="aberto"><b>Quanto foi entregue, dia a dia?</b><span>Enviadas, entregues e taxa de entrega por dia e canal.</span><small>Mais usado</small></button>
+        <button data-ir2="aberto"><b>Como foi cada campanha?</b><span>Lista carregada, enviadas, entregues, respostas e descadastros por campanha.</span></button>
+        <button data-ir2="aberto"><b>Como cada operadora entregou?</b><span>Vivo, Claro, TIM e outras: entregues e falhas.</span></button>
+        <button data-ir2="aberto"><b>Por que mensagens não saíram?</b><span>Bloqueio, número inválido, descadastro, fora do horário.</span></button>
+        <button data-ir2="aberto"><b>Quanto o Score evitou de envio?</b><span>Por faixa do Score: enviadas, represadas e entregues. Só com o Score contratado.</span></button>
+      </div>
+      <h3 style="margin:4px 0 0">Respostas e links</h3>
+      <div class="perg">
+        <button data-ir2="aberto"><b>Quem respondeu e o que disse?</b><span>Conversas por classificação do Radar (CPC Negócio, Alega pagamento…).</span></button>
+        <button data-ir2="aberto"><b>Quem clicou nos links?</b><span>Pessoas e cliques por campanha e aparelho (sem robôs).</span></button>
+        <button data-ir2="aberto"><b>Qual o melhor horário?</b><span>Cliques e respostas por hora do dia.</span></button>
+        <button data-ir2="aberto"><b>Quem pediu para sair?</b><span>Descadastros por canal e campanha, com a taxa.</span></button>
+      </div>
+      <h3 style="margin:4px 0 0">Custo e conferência</h3>
+      <div class="perg">
+        <button data-ir2="aberto"><b>Quanto cada centro de custo usou?</b><span>Quantidade por item e mês, com o orçamento.</span></button>
+        <button data-ir2="aberto"><b>Lista de mensagens, uma a uma</b><span>Para conferência: ID do cliente, destino mascarado, situação e motivo.</span></button>
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-cab"><h3>Da empresa</h3><div class="abas" role="group" aria-label="Quais"><button aria-pressed="true">Todos · 3</button><button aria-pressed="false">Meus · 1</button></div></div>
+        <div class="resp"><table class="tab cartoes"><thead><tr><th>Nome</th><th>Sobre</th><th>Criado por</th><th>Envio por e-mail</th><th></th></tr></thead><tbody>
+          <tr><td class="c1">Fechamento semanal da carteira A</td><td class="c3">Entrega · por campanha</td><td class="c2">Você</td><td class="c4"><span class="pil ok">Toda segunda, 8h</span></td><td class="x"><button class="link">Abrir</button> · <button class="link">Editar</button></td></tr>
+          <tr><td class="c1">Respostas CPC por produto</td><td class="c3">Respostas · por produto e classe</td><td class="c2">Marina (Gestão)</td><td class="c4"><span class="pil neutra">Não</span></td><td class="x"><button class="link">Abrir</button> · <button class="link">Duplicar</button></td></tr>
+          <tr><td class="c1">Opt-out do mês</td><td class="c3">Descadastros · por canal</td><td class="c2">Rafael (Admin)</td><td class="c4"><span class="pil ok">Dia 1, 8h</span></td><td class="x"><button class="link">Abrir</button> · <button class="link">Duplicar</button></td></tr>
+        </tbody></table></div>
+        <p class="nota">Edita e apaga quem criou e o Admin; os outros abrem e duplicam. Salvar "Só para mim" deixa o relatório fora da lista dos colegas.</p>
+      </div>
+
+      <div class="regra"><b>Regras</b><ul>
+        <li>Nomes em forma de pergunta; a base técnica não aparece. Busca pelo nome e pela descrição.</li>
+        <li>Relatório que depende de algo não contratado (Score, Radar) aparece com cadeado e "Disponível com o Score de Entrega", como a vitrine aprovada.</li>
+        <li>Os relatórios nunca mostram telefone, e-mail, nome nem CPF: só o ID do cliente e o destino mascarado.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== ABERTO ===================== -->
+    <section data-p="aberto" hidden>
+      <div class="cab"><div><h2>Quanto foi entregue, dia a dia?</h2>
+        <p>Filtros simples no topo; números grandes com taxa e comparação; gráfico e tabela com total.</p></div>
+        <div class="linha"><button class="btn sec" data-ir2="exportar">Exportar</button><button class="btn sec" data-ir2="exportar">Enviar por e-mail</button><button class="btn sec" data-ir2="montar">Ajustar</button></div></div>
+
+      <div class="cartao">
+        <div class="linha">
+          <div class="campo"><label for="per">Período</label><select id="per"><option>Hoje</option><option selected>Últimos 7 dias</option><option>Últimos 30 dias</option><option>Este mês</option><option>Mês passado</option><option>Escolher datas…</option></select></div>
+          <div class="campo"><label>Comparar com</label><div class="abas" role="group" aria-label="Comparar com"><button aria-pressed="true" id="cmp-ant">7 dias anteriores</button><button aria-pressed="false" id="cmp-nada">Não comparar</button></div></div>
+        </div>
+        <div class="filtro"><b>Canal</b><div class="chips" role="group" aria-label="Canal"><button class="chip" aria-pressed="true">Todos</button><button class="chip" aria-pressed="false">SMS</button><button class="chip" aria-pressed="false">RCS</button><button class="chip" aria-pressed="false">WhatsApp</button><button class="chip" aria-pressed="false">E-mail</button></div></div>
+        <div class="filtro"><b>Campanha</b><button class="chip x" aria-pressed="true">Regularize · outubro</button><button class="chip x" aria-pressed="true">Lista do dia</button><button class="chip">+ campanha</button>
+          <b style="margin-left:10px">Produto</b><button class="chip">Todos</button></div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><span>Enviadas</span><b>148.320</b><small class="sobe">+12% que os 7 dias anteriores</small></div>
+        <div class="kpi"><span>Entregues</span><b>139.207</b><small class="sobe">+14%</small></div>
+        <div class="kpi"><span>Taxa de entrega</span><b>93,9%</b><small class="sobe">+1,6 ponto</small></div>
+        <div class="kpi"><span>Taxa de resposta</span><b>4,2%</b><small class="desce">−0,3 ponto</small></div>
+      </div>
+      <p class="nota">Taxa de entrega = entregues ÷ enviadas. Taxa de resposta = respostas ÷ entregues. Variação em pontos percentuais para taxas e em % para quantidades. Toque no "i" de cada número para ver a conta.</p>
+
+      <div class="cartao">
+        <div class="cartao-cab"><h3>Entregues por dia</h3><div class="legenda"><span><i></i>Este período</span><span id="leg2"><i class="l2"></i>7 dias anteriores</span></div></div>
+        <svg class="grafico" viewBox="0 0 640 200" role="img" aria-label="Entregues por dia: sobe de 17,8 mil para 22,4 mil; o período anterior ficou entre 15 e 18 mil">
+          <line class="eixo" x1="40" y1="170" x2="630" y2="170"/><line class="eixo" x1="40" y1="20" x2="630" y2="20"/><line class="eixo" x1="40" y1="95" x2="630" y2="95"/>
+          <text x="2" y="24">25 mil</text><text x="2" y="99">17,5 mil</text><text x="2" y="174">10 mil</text>
+          <polyline class="l1" points="60,92 150,84 240,100 330,70 420,62 510,58 600,44"/>
+          <polyline class="l2" id="l2" points="60,120 150,112 240,126 330,104 420,100 510,96 600,110"/>
+          <text x="48" y="190">09/10</text><text x="138" y="190">10/10</text><text x="228" y="190">11/10</text><text x="318" y="190">12/10</text><text x="408" y="190">13/10</text><text x="498" y="190">14/10</text><text x="588" y="190">15/10</text>
+        </svg>
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-cab"><h3>Por dia e canal</h3><span class="nota">14 linhas · ordenar tocando no título da coluna</span></div>
+        <div class="rolar"><table class="tab"><thead><tr><th>Dia</th><th>Canal</th><th class="n">Enviadas</th><th class="n">Entregues</th><th class="n">Taxa de entrega</th><th class="n">Respostas</th><th class="n">Taxa de resposta</th></tr></thead>
+          <tbody>
+            <tr><td>15/10</td><td>SMS</td><td class="n">18.420</td><td class="n">17.391</td><td class="n">94,4%</td><td class="n">712</td><td class="n">4,1%</td></tr>
+            <tr><td>15/10</td><td>WhatsApp</td><td class="n">5.110</td><td class="n">5.004</td><td class="n">97,9%</td><td class="n">398</td><td class="n">8,0%</td></tr>
+            <tr><td>14/10</td><td>SMS</td><td class="n">17.980</td><td class="n">16.870</td><td class="n">93,8%</td><td class="n">655</td><td class="n">3,9%</td></tr>
+            <tr><td>14/10</td><td>WhatsApp</td><td class="n">4.870</td><td class="n">4.766</td><td class="n">97,9%</td><td class="n">371</td><td class="n">7,8%</td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="2">Total do período</td><td class="n">148.320</td><td class="n">139.207</td><td class="n">93,9%</td><td class="n">5.847</td><td class="n">4,2%</td></tr></tfoot></table></div>
+        <p class="nota">Na tela, até 1.000 linhas; o total do rodapé é do período inteiro. Taxas do total são recalculadas (não é a média das linhas).</p>
+      </div>
+
+      <div class="regra"><b>Regras</b><ul>
+        <li>Campanha e produto escolhidos pelo nome (lista com busca), nunca pelo código.</li>
+        <li>Comparação com o período imediatamente anterior, do mesmo tamanho. Seta verde/vermelha só quando a variação é boa/ruim para o negócio (descadastro subindo é vermelho).</li>
+        <li>Sem dados: "Nada no período. Tente outro período ou tire um filtro." — com o botão "Últimos 30 dias".</li>
+        <li>No celular, os números grandes em duas colunas, o gráfico em largura total e a tabela rola dentro do quadro.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== MONTAR ===================== -->
+    <section data-p="montar" hidden>
+      <div class="cab"><div><h2>Montar relatório</h2>
+        <p>Três passos com palavras do dia a dia. A prévia de 200 linhas atualiza a cada escolha.</p></div></div>
+      <ol class="passos" aria-label="Passos"><li aria-current="step">1. Sobre o quê</li><li>2. O que mostrar</li><li>3. Filtros e salvar</li></ol>
+
+      <div class="cartao">
+        <h3>1. Sobre o quê?</h3>
+        <div class="base" role="radiogroup" aria-label="Sobre o quê">
+          <label><input type="radio" name="b" checked><div><b>Envios do dia</b><span>Totais por dia, canal e campanha: carregadas, enviadas, entregues, respostas.</span></div></label>
+          <label><input type="radio" name="b"><div><b>Cada mensagem</b><span>Uma linha por mensagem: situação, motivo, operadora, faixa do Score.</span></div></label>
+          <label><input type="radio" name="b"><div><b>Respostas</b><span>Conversas com a classificação do Radar.</span></div></label>
+          <label><input type="radio" name="b"><div><b>Cliques</b><span>Cada clique de pessoa nos links rastreados.</span></div></label>
+          <label><input type="radio" name="b"><div><b>Descadastros</b><span>Quem pediu para não receber mais.</span></div></label>
+          <label><input type="radio" name="b"><div><b>Consumo</b><span>Quantidade por item e centro de custo.</span></div></label>
+        </div>
+      </div>
+
+      <div class="duas">
+        <div class="cartao">
+          <h3>2. O que mostrar</h3>
+          <div class="campo"><label>Separar por</label><div class="chips" role="group" aria-label="Separar por">
+            <button class="chip" aria-pressed="true">Dia</button><button class="chip" aria-pressed="false">Semana</button><button class="chip" aria-pressed="false">Mês</button><button class="chip" aria-pressed="true">Canal</button><button class="chip" aria-pressed="false">Campanha</button><button class="chip" aria-pressed="false">Produto</button><button class="chip" aria-pressed="false">Centro de custo</button></div></div>
+          <div class="campo"><label>Números</label>
+            <div class="mostrar">
+              <label><input type="checkbox" checked> Enviadas</label>
+              <label><input type="checkbox" checked> Entregues</label>
+              <label><input type="checkbox" checked> Taxa de entrega <small>entregues ÷ enviadas</small></label>
+              <label><input type="checkbox"> Respostas</label>
+              <label><input type="checkbox"> Taxa de resposta <small>respostas ÷ entregues</small></label>
+              <label><input type="checkbox"> Descadastros e taxa de descadastro</label>
+            </div></div>
+          <p class="nota">Em "Cada mensagem", sem separar, vira lista linha a linha: as colunas são marcadas e arrastadas para ordenar. "Pessoas diferentes" aparece no lugar de "Contar distintos de ID do cliente".</p>
+        </div>
+        <div class="cartao">
+          <h3>3. Filtros e salvar</h3>
+          <div class="filtro"><b>Canal é</b><button class="chip x" aria-pressed="true">SMS</button><button class="chip x" aria-pressed="true">WhatsApp</button></div>
+          <div class="filtro"><b>Campanha</b><button class="chip">qualquer</button></div>
+          <button class="btn sec peq" type="button" style="align-self:flex-start">+ Filtro</button>
+          <p class="nota">Cada filtro mostra os valores que existem (lista com busca). Operadores só quando fazem sentido: "é", "não é", "contém", "maior que", "está vazio".</p>
+          <div class="campo"><label for="nm">Nome</label><input type="text" id="nm" value="Entrega SMS e WhatsApp por dia"></div>
+          <div class="campo"><label>Quem vê</label><div class="abas" role="group" aria-label="Quem vê"><button aria-pressed="true">Toda a empresa</button><button aria-pressed="false">Só para mim</button></div></div>
+          <p class="nota">O período não fica salvo: escolhe-se ao abrir.</p>
+          <div class="linha"><button class="btn" id="salvar">Salvar relatório</button></div>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-cab"><h3>Prévia</h3><span class="nota">200 primeiras linhas · últimos 7 dias</span></div>
+        <div class="rolar"><table class="tab"><thead><tr><th>Dia</th><th>Canal</th><th class="n">Enviadas</th><th class="n">Entregues</th><th class="n">Taxa de entrega</th></tr></thead>
+          <tbody><tr><td>15/10</td><td>SMS</td><td class="n">18.420</td><td class="n">17.391</td><td class="n">94,4%</td></tr><tr><td>15/10</td><td>WhatsApp</td><td class="n">5.110</td><td class="n">5.004</td><td class="n">97,9%</td></tr><tr><td>14/10</td><td>SMS</td><td class="n">17.980</td><td class="n">16.870</td><td class="n">93,8%</td></tr></tbody></table></div>
+      </div>
+
+      <div class="regra"><b>Regras</b><ul>
+        <li>Novos campos: produto, faixa do Score, centro de custo e campanha pelo nome. Semana e mês como agrupamento de data.</li>
+        <li>Taxas calculadas pelo banco sobre o grupo (não média de taxas).</li>
+        <li>Erro vira frase: "Não dá para separar por ID do cliente: escolha outra opção" no lugar do erro do banco.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== EXPORTAR ===================== -->
+    <section data-p="exportar" hidden>
+      <div class="cab"><div><h2>Exportar e enviar por e-mail</h2>
+        <p>Arquivo pequeno baixa na hora; grande vai para segundo plano e avisa no sino. O envio por e-mail manda o resumo e um link para a plataforma.</p></div></div>
+      <div class="duas">
+        <div class="cartao">
+          <h3>Exportar</h3>
+          <div class="campo"><label>Formato</label><div class="abas" role="group" aria-label="Formato"><button aria-pressed="true">Excel (.xlsx)</button><button aria-pressed="false">CSV</button></div></div>
+          <p class="nota">Este relatório tem 312.480 linhas no período. Até 50 mil, baixa na hora; acima, o arquivo é preparado e o link chega no sino (vale 7 dias).</p>
+          <ol class="proc"><li class="feito">Consultando o período</li><li class="agora">Montando o arquivo · 180 mil de 312 mil linhas</li><li>Pronto para baixar</li></ol>
+          <p class="nota">Pode sair desta tela. Quando terminar, o aviso chega no sino.</p>
+          <div class="sino"><b>Arquivo pronto: Lista de mensagens · 01 a 15/10</b><span>312.480 linhas · Excel · baixar até 22/10</span></div>
+        </div>
+        <div class="cartao">
+          <h3>Enviar por e-mail</h3>
+          <div class="campo"><label>Quando</label><div class="abas" role="group" aria-label="Quando"><button aria-pressed="false">Todo dia</button><button aria-pressed="true">Toda semana</button><button aria-pressed="false">Todo mês</button></div></div>
+          <div class="linha"><div class="campo"><label for="dia">Dia</label><select id="dia"><option>Segunda</option><option>Sexta</option></select></div><div class="campo"><label for="hr">Hora</label><select id="hr"><option>8h</option><option>12h</option><option>18h</option></select></div>
+            <div class="campo"><label for="pp">Período do relatório</label><select id="pp"><option>Semana anterior</option></select></div></div>
+          <div class="campo"><label>Para (usuários da empresa)</label><div class="chips"><button class="chip x" aria-pressed="true">Você</button><button class="chip x" aria-pressed="true">Marina (Gestão)</button><button class="chip">+ pessoa</button></div></div>
+          <div class="email" style="border:1px solid var(--borda);border-radius:10px;padding:12px;font-size:13px">
+            <b>Assunto:</b> Fechamento semanal da carteira A · 06 a 12/10<br>
+            Enviadas 148.320 (+12%) · Entregues 93,9% · Respostas 4,2%.<br>
+            <u>Abrir o relatório na plataforma</u>
+          </div>
+          <p class="nota">O e-mail leva só os números do topo e o link (entra com login); o arquivo não vai anexado. Quem sai da empresa deixa de receber.</p>
+          <div class="linha"><button class="btn" id="agendar">Agendar envio</button></div>
+        </div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Só usuários ativos da empresa que podem ver os relatórios recebem. Nada de e-mail externo.</li>
+        <li>Agendamento aparece na lista "Da empresa" com o horário; pausar ou apagar pelo mesmo menu.</li>
+      </ul></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3200); };
+  const telas = [...document.querySelectorAll("section[data-p]")], botoes = [...document.querySelectorAll(".menu button")];
+  const ir = p => { telas.forEach(s => s.hidden = s.dataset.p !== p); botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); window.scrollTo({ top: 0 }); };
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+  document.querySelectorAll("[data-ir2]").forEach(b => b.addEventListener("click", () => ir(b.dataset.ir2)));
+  document.querySelectorAll(".chips .chip:not(.x), .abas").forEach(() => {});
+  document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+    if (c.classList.contains("x")) { c.remove(); return; }
+    c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") === "true" ? "false" : "true");
+  }));
+  document.querySelectorAll(".abas").forEach(g => g.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    g.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+  })));
+  $("cmp-nada").addEventListener("click", () => { $("l2").style.display = "none"; $("leg2").hidden = true; });
+  $("cmp-ant").addEventListener("click", () => { $("l2").style.display = ""; $("leg2").hidden = false; });
+  $("salvar").addEventListener("click", () => toast("Relatório salvo para toda a empresa."));
+  $("agendar").addEventListener("click", () => toast("Envio agendado: toda segunda, 8h, para 2 pessoas."));
+})();
+</script>
