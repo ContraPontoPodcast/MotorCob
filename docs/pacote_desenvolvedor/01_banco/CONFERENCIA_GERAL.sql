@@ -194,6 +194,11 @@ with itens(ordem, item, ok, se_falhar) as (values
        and to_regprocedure('public.lancar_acordo(bigint, bigint[], integer, date, text[], numeric, text, boolean)') is not null
        and pg_temp.n('select count(*) from information_schema.columns where table_schema = ''public'' and table_name = ''cobrancas'' and column_name = ''parcela_id''') = 1,
        'rodar o SQL 38 (supabase/migrations/20261205000001_acordos_fatura.sql)'),
+  (26, 'Relatórios por pergunta, foto da carteira, exportação e envio (SQL 39)',
+       to_regclass('public.carteira_fotos') is not null and to_regclass('public.relatorio_exportacoes') is not null
+       and to_regclass('public.relatorio_envios') is not null
+       and pg_temp.n('select count(*) from public.relatorios_modelos where empresa_id is null') = 21,
+       'rodar o SQL 39 (supabase/migrations/20261206000001_relatorios_v2.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

@@ -126,3 +126,8 @@ class Supabase:
     def enviar(self, bucket, caminho, conteudo: bytes, tipo="text/csv"):
         self._req("POST", f"/storage/v1/object/{bucket}/{urllib.parse.quote(caminho)}", conteudo,
                   {"Content-Type": tipo, "x-upsert": "true"}, bruto=True)
+
+    def link_assinado(self, bucket, caminho, segundos: int) -> str:
+        """Link temporário para baixar um arquivo de bucket privado (o site mostra; vence sozinho)."""
+        r = self._req("POST", f"/storage/v1/object/sign/{bucket}/{urllib.parse.quote(caminho)}", {"expiresIn": segundos})
+        return self.url + "/storage/v1" + r["signedURL"]

@@ -98,6 +98,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 86 | `supabase/migrations/20261205000001_acordos_fatura.sql` (SQL 38) | Acordo de pagamento de fatura vencida: até 12 parcelas, desconto ou acréscimo com motivo, quebra com 10 dias | Supabase | 81º |
 | 87 | funções `cobranca`, `pagamentos-webhook` e `assistente` de novo (`python3 scripts/juntar_funcao.py cobranca` / `pagamentos-webhook` / `assistente`) | Pagar parcela (Pix, boleto, cartão), e-mail do acordo, lembrete da parcela, nota fiscal da parcela paga; Assistente sabe do acordo | Supabase | 82º |
 | 88 | `07_workspace/PROMPT_57_ACORDO_CONSOLE.md` e `PROMPT_58_ACORDO_CLIENTE.md` + motor na nuvem | Console: lançar e acompanhar acordos; cliente: faixa do acordo e parcelas em Faturamento | Site + Google Cloud | 83º |
+| 89 | `supabase/migrations/20261206000001_relatorios_v2.sql` (SQL 39) | Relatórios por pergunta, taxas, Orquestração, foto diária da carteira, exportação até 1 milhão e envio por e-mail | Supabase | 84º |
+| 90 | função nova `relatorios` (`python3 scripts/juntar_funcao.py relatorios`, Verify JWT desligado) + função `assistente` de novo | E-mail do relatório agendado (mesmos Secrets do e-mail das faturas; remetente opcional RELATORIO_EMAIL_DE) | Supabase | 85º |
+| 91 | `07_workspace/PROMPT_59_RELATORIOS.md` e `PROMPT_60_MONTADOR_ORQUESTRACAO.md` + motor na nuvem | Relatórios no menu, perguntas, comparação, montador em 3 passos, exportação, envio por e-mail, Orquestração e Jornada | Site + Google Cloud | 86º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

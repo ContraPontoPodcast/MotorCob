@@ -1299,11 +1299,14 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
     retornos.processar_retornos(sb, dados, agora, out)  # entrega, falha, resposta e bounce dos fornecedores reais
     _recarga_automatica(sb, dados, agora, out)
     _faturamento(sb, dados, agora, out)
-    from nuvem import avisos
+    from nuvem import avisos, relatorios
     if (agora or datetime.now(timezone.utc)).minute % 10 == 0:
         avisos.qualidade(sb, out)                         # alerta de fornecedor no sino do Técnico (SQL 34)
         avisos.implantacao(sb, out)                       # empresa nova parada e envio real sem resposta (SQL 35)
         avisos.atendimento(sb, out)                       # Judicial, espera acima da meta, CPC Negócio sem dono (SQL 36)
+        relatorios.enviar(sb, out)                        # relatórios agendados por e-mail (SQL 39)
+    relatorios.exportar(sb, out)                          # um arquivo grande por rodada (SQL 39)
+    _foto_carteira(sb, dados, agora, out)
     radar = atendimento.banco_radar(sb)
     if radar:
         atendimento.enviar(sb, dados, agora, out)        # respostas escritas na plataforma
@@ -1318,12 +1321,26 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
             from nuvem import fornecedores
             fornecedores.manter_assinaturas(out)         # endereço de retorno cadastrado na Zenvia
             avisos.limpar(sb, agora)                     # avisos do sino com mais de 90 dias
+            relatorios.expirar(sb, out)                  # arquivos de relatório com mais de 7 dias
             try:
                 sb.rpc("limpar_eventos_mensageria")      # avisos dos fornecedores já aplicados, depois de 7 dias
             except Exception:  # noqa: BLE001 — banco ainda sem o SQL 24
                 pass
             marca.write_text(hoje, encoding="utf-8")
     return resumo
+
+
+def _foto_carteira(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:
+    """Uma vez por dia, a partir das 20h de São Paulo (depois das rotinas do dia): a foto da carteira (SQL 39)."""
+    from zoneinfo import ZoneInfo
+    from nuvem import relatorios
+    local = (agora or datetime.now(timezone.utc)).astimezone(ZoneInfo("America/Sao_Paulo"))
+    marca = Path(dados) / "carteira_foto.txt"
+    if local.hour < 20 or (marca.exists() and marca.read_text(encoding="utf-8").strip() == local.date().isoformat()):
+        return
+    relatorios.foto(sb, out)
+    marca.parent.mkdir(parents=True, exist_ok=True)
+    marca.write_text(local.date().isoformat(), encoding="utf-8")
 
 
 def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:

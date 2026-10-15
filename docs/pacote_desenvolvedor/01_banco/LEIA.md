@@ -181,4 +181,11 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     `baixar_cobranca` (SQL 23) e a régua do SQL 37: não rode o 23 nem o 37 de novo depois dele. Depois: funções
     `cobranca` e `pagamentos-webhook` de novo e prompts 57 e 58.
 
+39. `supabase/migrations/20261206000001_relatorios_v2.sql` (SQL 39) — **Relatórios**: bases com nomes do dia a dia e
+    por produto (Mensageria, Orquestração, Jornada); taxas e razões calculadas sobre o grupo, semana e mês, total para
+    o rodapé e a comparação; quem pode cada base (empresa, módulo contratado); foto diária da carteira (90 dias e o
+    fechamento de cada mês para sempre); relatórios salvos "Toda a empresa" ou "Só para mim" (editam quem criou e o
+    Admin); exportação grande em segundo plano até 1 milhão de linhas; envio por e-mail agendado. Os relatórios
+    prontos viram 21 perguntas (os salvos pelas empresas ficam). Depois: função `relatorios`, prompts 59 e 60.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

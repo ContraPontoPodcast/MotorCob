@@ -246,7 +246,7 @@ Protótipo: `acordo-fatura-prototipo.html`.
   só sem parcela paga, parcela mínima de R$ 5,00 e 1ª em até 30 dias, sem nota duplicada, faixa "em dia" só no
   Início e em Faturamento.
 
-## Relatórios e montador — em aprovação (15/10/2026)
+## Relatórios e montador — APROVADO em 15/10/2026
 
 Protótipo: `relatorios-prototipo.html`.
 - Aprovado: envio por e-mail agendado, só para usuários da empresa, com os números do topo e um link, sem anexo ("Ok").
@@ -260,6 +260,12 @@ Protótipo: `relatorios-prototipo.html`.
   Jornada do MotorCli. Tela aprovada em 15/10/2026 ("Acredito que seja isso por hora"). Pendente: foto diária da
   carteira (explicado como funcionaria na prática; aguardando decisão). A Jornada do MotorCli vai ter uma revisão
   própria, como a da Cobrança.
+- **Foto diária da carteira** ("Tá perfeito"): totais por situação, segmento, safra e etapa, todo dia por 90 dias e o
+  fechamento de cada mês para sempre; base "Evolução da carteira" e o relatório "Como a carteira evoluiu mês a mês?".
+- Na geração: o filtro Estratégia usa a estratégia atual do segmento na carteira (as ações da régua não guardam a
+  estratégia do dia); a foto é tirada uma vez por dia a partir das 20h; o envio por e-mail vale para relatório
+  salvo (o pronto é salvo antes de agendar).
+- Gerado: SQL 39, função `relatorios`, motor (`nuvem/relatorios.py`), testes e prompts 59 e 60.
 
 ## Fila para rodar (quando liberar)
 
@@ -287,5 +293,7 @@ Protótipo: `relatorios-prototipo.html`.
    Conferência: item 24 OK.
    Depois, acordo de pagamento: SQL 38 → funções `cobranca`, `pagamentos-webhook` e `assistente` de novo → prompts
    57 e 58 → motor na nuvem (passos 86 a 88). Conferência: itens 9 (16 permissões) e 25 OK.
+   Depois, relatórios: SQL 39 → função nova `relatorios` e `assistente` de novo → prompts 59 e 60 → motor na nuvem
+   (passos 89 a 91). Conferência: item 26 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).
