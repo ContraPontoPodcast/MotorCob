@@ -1,0 +1,291 @@
+<title>Acordo de fatura MotorCX</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: MotorCX, menu cinza à esquerda (Console e Cliente) + área de trabalho lisa. Paleta do bloco 5; Console e
+   Empresa usam o grafite neutro. Edição sempre no painel lateral, com resumo antes de salvar. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#1D1D1F; --area-forte:#000000; --area-ativo:#E8E8ED; --area-ativo-texto:#1D1D1F; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --veu:rgba(0,0,0,.25); --sombra:0 10px 30px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:80ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--texto);border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao);
+  margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+@media (max-width:820px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+section[data-p]{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:74ch}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.cartao-cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.peq{padding:5px 11px;font-size:13px}
+.btn.perigo{background:var(--erro);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px;min-width:0}
+input[type=text]{font-variant-numeric:tabular-nums}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap;vertical-align:middle}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.trava{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);background:var(--pilula);border-radius:9px;padding:6px 11px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13.5px}
+.dl dt{color:var(--texto2)}.dl dd{margin:0}
+.abas{display:flex;gap:4px;flex-wrap:wrap}
+.abas button{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;color:var(--texto2);background:var(--pilula)}
+.abas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.abas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.abas b{margin-left:4px}
+.confirma{border:1px solid var(--texto);border-radius:12px;padding:14px 16px;background:var(--pilula);display:flex;flex-direction:column;gap:10px}
+.confirma p{margin:0}
+.grande{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden;display:flex}
+.barra i{display:block;height:100%}
+/* gaveta */
+.veu{position:fixed;inset:0;background:var(--veu);z-index:40}
+.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--cartao);border-left:1px solid var(--borda);box-shadow:var(--sombra);z-index:41;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.gaveta header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--borda)}
+.gaveta header h3{margin:0;font-size:16px}
+.gaveta .corpo{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.gaveta footer{padding:12px 18px;border-top:1px solid var(--borda);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+.gaveta footer .nota{margin-right:auto}
+.faixa-l{display:grid;grid-template-columns:1fr 1fr 110px;gap:8px;align-items:center}
+.faixa-l.mud input{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mudancas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mudancas li{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.mudancas s{color:var(--texto2)}
+.op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--borda);border-radius:10px;padding:10px 12px;cursor:pointer}
+.op:has(input:checked){border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.op b{display:block}.op span{font-size:12.5px;color:var(--texto2)}
+.alerta{border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.alerta.at{background:var(--at-f)}
+/* celular */
+.resp{container-type:inline-size}
+@container (max-width:600px){
+  .tab.cartoes thead{display:none}
+  .tab.cartoes,.tab.cartoes tbody{display:block}
+  .tab.cartoes tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 2px;border-bottom:1px solid var(--borda)}
+  .tab.cartoes td{border:0;padding:0;white-space:normal}
+  .tab.cartoes td.c1{font-weight:600}
+  .tab.cartoes td.c2{grid-column:2;grid-row:1;justify-self:end}
+  .tab.cartoes td.c3{grid-column:1;color:var(--texto2);font-size:13px}
+  .tab.cartoes td.c4{grid-column:2;grid-row:2;justify-self:end;font-weight:600}
+  .tab.cartoes td.x{display:none}
+}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+</style>
+<style>
+.parcelas{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13.5px}
+.parcelas th,.parcelas td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--borda)}
+.parcelas th{font-size:12px;color:var(--texto2);font-weight:600}
+.parcelas .n{text-align:right}
+.email{border:1px solid var(--borda);border-radius:12px;background:var(--cartao);overflow:hidden}
+.email .de{padding:10px 16px;border-bottom:1px solid var(--borda);font-size:12.5px;color:var(--texto2);display:flex;flex-direction:column;gap:2px}
+.email .corpo-e{padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.email .corpo-e p{margin:0}
+.faixa{border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
+.faixa.acordo{border:1px solid var(--at);background:var(--at-f)}
+.passos-ac{list-style:none;margin:0;padding:0;display:flex;gap:4px}
+.passos-ac li{flex:1;height:8px;border-radius:999px;background:var(--pilula)}
+.passos-ac li.paga{background:var(--ok)}
+.passos-ac li.vence{background:var(--at)}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Acordo de fatura vencida</span>
+  <h1>Acordo de pagamento</h1>
+  <p>Quando o cliente com fatura vencida fecha um acordo, a equipe lança no Console: quais faturas entram, desconto ou acréscimo, em quantas parcelas e quando vencem. O cliente é informado por e-mail e no sino, vê as parcelas no Faturamento e paga cada uma por Pix, boleto ou cartão. Empresas e valores fictícios.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Telas">
+    <div class="grupo">Console</div>
+    <button data-ir="lancar" aria-current="page">Lançar acordo<small>Faturas, parcelas e aviso ao cliente</small></button>
+    <button data-ir="acomp">Acompanhar acordos<small>Parcelas, atraso e quebra</small></button>
+    <div class="grupo">Cliente</div>
+    <button data-ir="email">E-mail do acordo<small>O que o cliente recebe</small></button>
+    <button data-ir="cliente">Faturamento com acordo<small>Parcelas e pagar</small></button>
+  </nav>
+
+  <main class="trab">
+    <!-- ===================== LANÇAR ===================== -->
+    <section data-p="lancar">
+      <div class="cab"><div><h2>Lançar acordo · Alfa Recuperação</h2>
+        <p>Abre pela aba Vencidas ("Lançar acordo") ou pela empresa. Tudo fica no painel até "Lançar"; antes, o resumo com as parcelas e o que o cliente vai receber.</p></div></div>
+
+      <div class="duas">
+        <div class="cartao">
+          <h3>Faturas que entram no acordo</h3>
+          <label class="op"><input type="checkbox" class="ft" data-v="2210.40" checked><div><b>Agosto · R$ 2.210,40</b><span>Venceu em 20/09 · 25 dias de atraso</span></div></label>
+          <label class="op"><input type="checkbox" class="ft" data-v="1980.00" checked><div><b>Setembro · R$ 1.980,00</b><span>Venceu em 10/10 · 5 dias de atraso</span></div></label>
+          <p class="nota">Só faturas em aberto ou vencidas. Fatura em acordo sai de "Vencidas" e não gera lembrete nem bloqueio.</p>
+        </div>
+        <div class="cartao">
+          <h3>Condições</h3>
+          <div class="linha">
+            <div class="campo" style="max-width:150px"><label for="ac-ajuste">Desconto (R$)</label><input type="text" id="ac-ajuste" value="190,40"></div>
+            <div class="campo" style="max-width:120px"><label for="ac-n">Parcelas</label><select id="ac-n"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>6</option><option>12</option></select></div>
+            <div class="campo" style="max-width:160px"><label for="ac-1">1ª parcela</label><select id="ac-1"><option value="2026-10-20">20/10/2026</option><option value="2026-10-25">25/10/2026</option></select></div>
+          </div>
+          <div class="campo"><label for="ac-mot">Motivo do desconto (o cliente não vê)</label><input type="text" id="ac-mot" value="Pagamento em 3 vezes negociado com o financeiro"></div>
+          <div class="campo"><label>Formas aceitas</label><div class="linha"><label><input type="checkbox" checked> Pix</label><label><input type="checkbox" checked> Boleto</label><label><input type="checkbox"> Cartão</label></div></div>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-cab"><h3>Resumo</h3><span class="pil neutra" id="ac-tot"></span></div>
+        <div class="rolar"><table class="parcelas"><thead><tr><th>Parcela</th><th>Vencimento</th><th class="n">Valor</th></tr></thead><tbody id="ac-parc"></tbody></table></div>
+        <label class="linha" style="gap:8px"><input type="checkbox" checked id="ac-inf"> Informar o cliente agora: e-mail para quem recebe faturas e aviso no sino</label>
+        <div class="linha"><button class="btn" id="ac-btn">Lançar acordo</button></div>
+        <div id="ac-conf"></div>
+      </div>
+
+      <div class="regra"><b>Regras</b><ul>
+        <li>As faturas do acordo ficam "Em acordo" e saem das vencidas: param lembretes e bloqueio. Se a empresa estava inadimplente, o acesso volta enquanto o acordo estiver em dia.</li>
+        <li>Cada parcela é uma cobrança própria, com Pix, boleto ou cartão, lembrete e nota fiscal quando paga.</li>
+        <li>Parcela vencida segue a mesma régua da fatura: lembrete no dia seguinte e com 5 dias. Com 10 dias de atraso, o acordo é quebrado: o que falta volta a ser cobrado e a empresa fica inadimplente de novo.</li>
+        <li>Pagas todas as parcelas, o acordo fica Quitado e as faturas, Pagas (via acordo).</li>
+        <li>Desconto ou acréscimo pedem motivo e ficam na Auditoria.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== ACOMPANHAR ===================== -->
+    <section data-p="acomp" hidden>
+      <div class="cab"><div><h2>Acordos</h2>
+        <p>Em Faturas, aba "Acordos": cada acordo com as parcelas, a próxima e o atraso. "Cancelar acordo" volta as faturas para em aberto.</p></div></div>
+      <div class="cartao resp">
+        <table class="tab cartoes"><thead><tr><th>Empresa</th><th>Situação</th><th>Parcelas</th><th class="n">Valor</th><th>Próxima</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="c1">Alfa Recuperação</td><td class="c2"><span class="pil ok">Em dia</span></td><td class="c3"><ul class="passos-ac" aria-label="1 de 3 pagas"><li class="paga"></li><li></li><li></li></ul> 1 de 3 pagas</td><td class="n c4">R$ 4.000,00</td><td class="x">20/11 · R$ 1.333,33</td><td class="x"><button class="link">Ver</button></td></tr>
+            <tr><td class="c1">Beta Crédito</td><td class="c2"><span class="pil at">Parcela vencida há 4 dias</span></td><td class="c3"><ul class="passos-ac" aria-label="1 de 2 pagas, 1 vencida"><li class="paga"></li><li class="vence"></li></ul> 1 de 2 pagas</td><td class="n c4">R$ 890,00</td><td class="x">quebra em 6 dias</td><td class="x"><button class="link">Ver</button></td></tr>
+            <tr><td class="c1">Gama Serviços</td><td class="c2"><span class="pil neutra">Quitado</span></td><td class="c3"><ul class="passos-ac" aria-label="2 de 2 pagas"><li class="paga"></li><li class="paga"></li></ul> 2 de 2 pagas</td><td class="n c4">R$ 3.100,00</td><td class="x">—</td><td class="x"><button class="link">Ver</button></td></tr>
+          </tbody></table>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Situações: Em dia · Parcela vencida (com os dias e quando quebra) · Quebrado · Quitado · Cancelado.</li>
+        <li>Cancelar acordo pede confirmação com o efeito: "As faturas voltam a vencidas e a régua de lembretes e bloqueio volta a contar."</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== E-MAIL ===================== -->
+    <section data-p="email" hidden>
+      <div class="cab"><div><h2>E-mail do acordo</h2>
+        <p>Sai para quem recebe faturas quando o acordo é lançado com "Informar o cliente". O mesmo resumo aparece no sino.</p></div></div>
+      <div class="email" style="max-width:600px">
+        <div class="de"><span><b>De:</b> MotorCX &lt;financeiro@motorcob.online&gt;</span><span><b>Assunto:</b> Acordo de pagamento registrado · 3 parcelas de R$ 1.333,33</span></div>
+        <div class="corpo-e">
+          <p>Olá, equipe da Alfa Recuperação.</p>
+          <p>Registramos o acordo de pagamento das faturas de agosto e setembro (R$ 4.190,40), com desconto de R$ 190,40.</p>
+          <table class="parcelas"><thead><tr><th>Parcela</th><th>Vencimento</th><th class="n">Valor</th></tr></thead>
+            <tbody><tr><td>1ª</td><td>20/10/2026</td><td class="n">R$ 1.333,34</td></tr><tr><td>2ª</td><td>20/11/2026</td><td class="n">R$ 1.333,33</td></tr><tr><td>3ª</td><td>20/12/2026</td><td class="n">R$ 1.333,33</td></tr></tbody></table>
+          <p>O acesso e os envios ficam liberados enquanto as parcelas estiverem em dia. Cada parcela pode ser paga por Pix ou boleto em Empresa › Faturamento.</p>
+          <div><button class="btn" type="button" tabindex="-1">Pagar a 1ª parcela</button></div>
+          <p class="nota">Se uma parcela ficar 10 dias em atraso, o acordo é desfeito e o valor que falta volta a ser cobrado.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== CLIENTE ===================== -->
+    <section data-p="cliente" hidden>
+      <div class="faixa acordo"><span><b>Acordo de pagamento em dia.</b> Próxima parcela: R$ 1.333,33 em 20/11. O acesso fica liberado enquanto as parcelas estiverem em dia.</span><button class="btn peq" type="button">Pagar agora</button></div>
+      <div class="cab"><div><h2>Faturamento</h2><p>O acordo aparece antes da fatura do mês, com as parcelas e a forma de pagar cada uma.</p></div></div>
+      <div class="cartao resp">
+        <div class="cartao-cab"><h3>Acordo de pagamento · faturas de agosto e setembro</h3><span class="pil ok">Em dia</span></div>
+        <table class="tab cartoes"><thead><tr><th>Parcela</th><th>Situação</th><th>Vencimento</th><th class="n">Valor</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="c1">1ª de 3</td><td class="c2"><span class="pil ok">Paga</span></td><td class="c3">20/10/2026 · paga em 19/10</td><td class="n c4">R$ 1.333,34</td><td class="x"><button class="link">Nota fiscal</button></td></tr>
+            <tr><td class="c1">2ª de 3</td><td class="c2"><span class="pil neutra">Vence em 36 dias</span></td><td class="c3">20/11/2026</td><td class="n c4">R$ 1.333,33</td><td class="x"><button class="btn sec peq">Pagar</button></td></tr>
+            <tr><td class="c1">3ª de 3</td><td class="c2"><span class="pil neutra">A vencer</span></td><td class="c3">20/12/2026</td><td class="n c4">R$ 1.333,33</td><td class="x"></td></tr>
+          </tbody></table>
+        <p class="nota">Desconto de R$ 190,40 sobre R$ 4.190,40. Se uma parcela ficar 10 dias em atraso, o acordo é desfeito.</p>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3200); };
+  const brl = v => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const telas = [...document.querySelectorAll("section[data-p]")], botoes = [...document.querySelectorAll(".menu button")];
+  const ir = p => { telas.forEach(s => s.hidden = s.dataset.p !== p); botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); };
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+  const num = s => parseFloat((s || "0").replace(/\./g, "").replace(",", ".")) || 0;
+  function calc() {
+    const base = [...document.querySelectorAll(".ft:checked")].reduce((s, c) => s + +c.dataset.v, 0);
+    const total = Math.max(0, base - num($("ac-ajuste").value)), n = +$("ac-n").value;
+    const cent = Math.round(total * 100), parte = Math.floor(cent / n), resto = cent - parte * n;
+    const d0 = new Date($("ac-1").value + "T12:00:00");
+    $("ac-parc").innerHTML = Array.from({ length: n }, (_, i) => {
+      const d = new Date(d0); d.setMonth(d.getMonth() + i);
+      return `<tr><td>${i + 1}ª de ${n}</td><td>${d.toLocaleDateString("pt-BR")}</td><td class="n">${brl((parte + (i === 0 ? resto : 0)) / 100)}</td></tr>`;
+    }).join("");
+    $("ac-tot").textContent = `${brl(base)} em aberto · ${brl(total)} no acordo`;
+    $("ac-btn").disabled = !base || !n;
+    return { base, total, n };
+  }
+  ["ac-ajuste", "ac-n", "ac-1"].forEach(id => $(id).addEventListener("input", calc));
+  document.querySelectorAll(".ft").forEach(c => c.addEventListener("change", calc));
+  calc();
+  $("ac-btn").addEventListener("click", () => {
+    const { total, n } = calc();
+    $("ac-btn").hidden = true;
+    $("ac-conf").innerHTML = `<div class="confirma"><p><b>Lançar o acordo de ${brl(total)} em ${n} parcela${n > 1 ? "s" : ""} para a Alfa Recuperação?</b> As faturas de agosto e setembro ficam "Em acordo", a empresa é liberada enquanto as parcelas estiverem em dia${$("ac-inf").checked ? " e o e-mail com as parcelas sai para quem recebe faturas" : ""}.</p>
+      <div class="linha"><button class="btn" id="ac-ok">Lançar acordo de ${brl(total)}</button><button class="btn sec" id="ac-volta">Voltar</button></div></div>`;
+    $("ac-ok").focus();
+    $("ac-ok").addEventListener("click", () => { $("ac-conf").innerHTML = ""; $("ac-btn").hidden = false; toast("Acordo lançado. Cliente informado por e-mail e no sino; ficou na Auditoria."); });
+    $("ac-volta").addEventListener("click", () => { $("ac-conf").innerHTML = ""; $("ac-btn").hidden = false; });
+  });
+})();
+</script>
