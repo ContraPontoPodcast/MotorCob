@@ -187,6 +187,7 @@ input[type=text]{font-variant-numeric:tabular-nums}
         <li>Ajuste (desconto, crédito, cobrança extra) entra pelo painel lateral; remover pede confirmação.</li>
         <li>Vencida: lembrete por e-mail no dia seguinte ao vencimento e de novo depois de 5 dias, para quem recebe faturas. No 7º dia, o aviso "o acesso será bloqueado em 3 dias".</li>
         <li>Com <b>10 dias de atraso</b>, a empresa fica <b>Inadimplente</b>: o acesso é bloqueado e os envios param. Faturamento e Suporte continuam abertos para pagar. Quando o pagamento confirma, tudo volta sozinho.</li>
+        <li>Só o <b>Master</b> libera a inadimplente com a fatura ainda em aberto: "Liberar mesmo com fatura em aberto", com motivo e prazo (padrão 7 dias, até 30). Até o prazo a rotina não bloqueia de novo; passou sem pagar, bloqueia. Cliente e equipe são avisados.</li>
         <li>No celular, cada linha vira cartão: empresa, situação, mês e valor.</li>
       </ul></div>
     </section>
@@ -384,7 +385,22 @@ input[type=text]{font-variant-numeric:tabular-nums}
     $("ft-conf").innerHTML = ""; topo();
   }
   function topo() {
-    if (aba !== "rascunho") { $("ft-sel").textContent = aba === "vencida" ? "Lembrete automático no dia seguinte ao vencimento e depois de 5 dias." : ""; $("ft-acao").innerHTML = aba === "vencida" ? '<button class="btn sec peq" id="ft-lemb">Reenviar lembrete</button>' : ""; const l = $("ft-lemb"); if (l) l.addEventListener("click", () => toast("Lembrete reenviado para quem recebe faturas.")); return; }
+    if (aba !== "rascunho") {
+      $("ft-sel").textContent = aba === "vencida" ? "Lembrete automático no dia seguinte ao vencimento e depois de 5 dias." : "";
+      $("ft-acao").innerHTML = aba === "vencida" ? '<span class="linha" style="gap:8px"><button class="btn sec peq" id="ft-lemb">Reenviar lembrete</button><button class="btn peq" id="ft-lib">Liberar Alfa Recuperação</button></span>' : "";
+      const l = $("ft-lemb"); if (l) l.addEventListener("click", () => toast("Lembrete reenviado para quem recebe faturas."));
+      const lb = $("ft-lib"); if (lb) lb.addEventListener("click", () => {
+        $("ft-conf").innerHTML = `<div class="confirma"><p><b>Liberar a Alfa Recuperação mesmo com a fatura de agosto em aberto (R$ 2.210,40)?</b> O acesso e os envios voltam até a data abaixo; se não pagar até lá, bloqueia de novo. Só o Master libera.</p>
+          <div class="linha"><div class="campo" style="min-width:220px;flex:1"><label for="lib-mot">Motivo</label><input type="text" id="lib-mot" placeholder="Ex.: pagamento agendado pelo financeiro"></div>
+          <div class="campo"><label for="lib-ate">Até</label><select id="lib-ate"><option>7 dias · 22/10</option><option>15 dias · 30/10</option><option>30 dias · 14/11</option></select></div></div>
+          <div class="linha"><button class="btn" id="lib-ok" disabled>Liberar até 22/10</button><button class="btn sec" id="lib-volta">Voltar</button></div></div>`;
+        $("lib-mot").addEventListener("input", e => $("lib-ok").disabled = e.target.value.trim().length < 5);
+        $("lib-ate").addEventListener("change", e => $("lib-ok").textContent = "Liberar até " + e.target.value.split("· ")[1]);
+        $("lib-ok").addEventListener("click", () => { $("ft-conf").innerHTML = ""; toast("Alfa Recuperação liberada. Cliente e equipe avisados no sino."); });
+        $("lib-volta").addEventListener("click", () => $("ft-conf").innerHTML = "");
+      });
+      return;
+    }
     const total = [...sel].reduce((s, i) => s + FT.rascunho[i][2], 0);
     $("ft-sel").textContent = sel.size ? `${sel.size} selecionada${sel.size > 1 ? "s" : ""} · ${brl(total)}` : "Nenhuma selecionada";
     $("ft-acao").innerHTML = `<button class="btn peq" id="ft-emitir" ${sel.size ? "" : "disabled"}>Emitir ${sel.size || ""}</button>`;
