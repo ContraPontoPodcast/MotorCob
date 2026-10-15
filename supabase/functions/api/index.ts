@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
   const { data: n } = await admin.rpc("contar_chamada_api", { token: t.id });
   if ((n as number) > LIMITE_MINUTO) return erro(`limite de ${LIMITE_MINUTO} chamadas por minuto`, 429, { "Retry-After": "60" });
   const { data: emp } = await admin.from("empresas").select("id, slug, ativa, situacao").eq("id", t.empresa_id).single();
-  if (!emp?.ativa || ["suspensa", "encerrada"].includes(emp.situacao)) return erro("empresa sem acesso à API", 403);
+  if (!emp?.ativa || ["suspensa", "encerrada", "inadimplente"].includes(emp.situacao)) return erro("empresa sem acesso à API", 403);
   const { data: mod } = await admin.from("empresa_modulos").select("ativo").eq("empresa_id", emp.id).eq("modulo", "api").maybeSingle();
   if (!mod?.ativo) return erro("o módulo API não está ativo nesta empresa", 403);
   await admin.from("api_tokens").update({ ultimo_uso: new Date().toISOString() }).eq("id", t.id);

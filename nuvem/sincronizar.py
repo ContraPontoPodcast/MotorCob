@@ -1344,6 +1344,7 @@ def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -
                 out(f"faturamento: {n} rascunhos gerados, {e} faturas emitidas sozinhas")
         except Exception as erro:  # noqa: BLE001 — banco sem o SQL 25 ou fora do ar: tenta amanhã de novo
             out(f"faturamento: rotina do dia não rodou ({str(erro)[:120]})")
+        _inadimplencia(sb, out)
         marca.parent.mkdir(parents=True, exist_ok=True)
         marca.write_text(local.date().isoformat(), encoding="utf-8")
     try:
@@ -1366,6 +1367,29 @@ def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -
             sb.atualizar("faturas", {"id": f"eq.{fid}"}, {"envio": "erro" if final else "pendente",
                                                          "envio_motivo": str(motivo)[:300]})
             out(f"faturamento: fatura {fid} não foi enviada ({str(motivo)[:120]})")
+
+
+def _inadimplencia(sb: Supabase, out=print) -> None:
+    """Uma vez por dia (SQL 37): lembretes por e-mail da fatura vencida (no dia seguinte, 5 dias depois e o aviso de
+    bloqueio no 7º dia) e a inadimplência: 10 dias de atraso bloqueiam o acesso e param os envios; quem pagou volta.
+    Banco sem o SQL 37: não faz nada."""
+    try:
+        pendentes = sb.rpc("lembretes_para_enviar") or []
+    except Exception:  # noqa: BLE001
+        return
+    for item in pendentes:
+        try:
+            r = sb.funcao("cobranca", {"acao": "lembrar_fatura", "fatura": int(item["fatura_id"]), "tipo": item["tipo"]}) or {}
+            if r.get("enviado_para"):
+                out(f"faturamento: lembrete {item['tipo']} da fatura {item['fatura_id']} enviado")
+        except Exception as erro:  # noqa: BLE001 — sem e-mail cadastrado ou fora do ar: tenta amanhã
+            out(f"faturamento: lembrete da fatura {item['fatura_id']} não saiu ({str(erro)[:120]})")
+    try:
+        n = int(sb.rpc("atualizar_inadimplencia") or 0)
+        if n:
+            out(f"faturamento: {n} mudança(s) de inadimplência (bloqueio, aviso ou liberação)")
+    except Exception as erro:  # noqa: BLE001
+        out(f"faturamento: inadimplência não atualizada ({str(erro)[:120]})")
 
 
 def _recarga_automatica(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:

@@ -167,4 +167,10 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     internas, histórico e transferência; respostas rápidas (nenhuma vem pronta); meta de primeira resposta opcional;
     avisos de Judicial e de espera; painel do Radar e desempenho por pessoa (Admin e Gestão). Depois: prompts 53 e 54.
 
+37. `supabase/migrations/20261204000001_faturas_contratacao.sql` (SQL 37) — **Faturas e Contratação**: preço novo vale
+    a partir do próximo ciclo (`salvar_preco_vigencia`; "neste ciclo" só com motivo); lembretes da fatura vencida
+    (dia seguinte, 5 e 7 dias) e **inadimplência com 10 dias** (acesso bloqueado, envios parados, volta sozinho ao
+    pagar); permissão do cliente **Pagar faturas**; resumo da emissão, estimativa do ciclo, extrato e duração do
+    saldo. Depois: funções `cobranca` e `api` de novo e prompts 55 e 56.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

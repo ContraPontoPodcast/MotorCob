@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { brl, detalheFaixas, emailFatura, linhaDoItem, montar } from "./demonstrativo.ts";
+import { brl, detalheFaixas, emailFatura, emailLembrete, linhaDoItem, montar } from "./demonstrativo.ts";
 import { EXEMPLO } from "./demonstrativo_exemplo.ts";
 
 test("valores em reais e negativos com sinal", () => {
@@ -51,4 +51,16 @@ test("e-mail com os dois PDFs separados e tudo escapado", () => {
   assert.match(html, /Boleto \(PDF\)/);
   assert.match(html, /d\.pdf\?t=1&amp;u=2/);
   assert.doesNotMatch(emailFatura(s, "A", { demonstrativo: "https://x", boleto: null, pagar: "https://p" }).html, /Boleto \(PDF\)/);
+});
+
+test("lembretes de fatura vencida: assunto e o aviso do bloqueio", () => {
+  const f = { numero: 812, ciclo: "09/2026", total: "R$ 4.812,90", vencimento: "20/10/2026", bloqueio: "29/10/2026" };
+  const d1 = emailLembrete("d1", f, "Financeira <Horizonte>", "https://motorcob.online/empresa/faturamento");
+  assert.equal(d1.assunto, "Fatura MotorCX nº 812 venceu em 20/10");
+  assert.match(d1.html, /Financeira &lt;Horizonte&gt;/);
+  assert.match(d1.html, /desconsidere/);
+  assert.match(emailLembrete("d5", f, "X", "u").html, /Com 10 dias de atraso/);
+  const d7 = emailLembrete("d7", f, "X", "u");
+  assert.equal(d7.assunto, "Fatura MotorCX nº 812: o acesso será bloqueado em 3 dias");
+  assert.match(d7.html, /até 29\/10\/2026/);
 });

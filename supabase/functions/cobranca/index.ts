@@ -8,7 +8,7 @@
 //   STRIPE_SECRET_KEY e FOCUSNFE_TOKEN. Sem elas, a função responde que a integração está sem credencial.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { type Alvo, cobrancaAutomatica, iguais, type Pedido, validarPedido } from "./regras.ts";
-import { ErroCobranca, emitirNota, enviarFatura, gerarCobranca, linkDemonstrativo, salvarDemonstrativo, stripe } from "./servico.ts";
+import { ErroCobranca, emitirNota, enviarFatura, gerarCobranca, lembrarFatura, linkDemonstrativo, salvarDemonstrativo, stripe } from "./servico.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -118,9 +118,10 @@ Deno.serve(async (req) => {
   if (v.erro) return responder({ erro: v.erro }, 400);
   const p = v.pedido!;
   try {
-    if (p.acao === "recargas_automaticas" || p.acao === "enviar_fatura") {
+    if (p.acao === "recargas_automaticas" || p.acao === "enviar_fatura" || p.acao === "lembrar_fatura") {
       if (!(await ehServidor(token))) return responder({ erro: "só o servidor faz esta ação" }, 403);
       if (p.acao === "recargas_automaticas") return responder({ recargas: await recargasAutomaticas() });
+      if (p.acao === "lembrar_fatura") return responder(await lembrarFatura(admin, p.fatura!, p.tipo!, SITE));
       try {
         return responder(await enviarFatura(admin, p.fatura!, SITE));
       } catch (e) {
@@ -132,7 +133,13 @@ Deno.serve(async (req) => {
     const { data: u } = await admin.auth.getUser(token);
     if (!u?.user) return responder({ erro: "sessão expirada: entre de novo" }, 401);
     const db = createClient(SUPABASE_URL, ANON, { ...sem, global: { headers: { Authorization: `Bearer ${token}` } } });
-    if (p.acao === "pagar") return responder({ cobranca: await pagar(db, p) });
+    if (p.acao === "pagar") {
+      // cliente: pagar e recarregar pedem "Pagar faturas" (Admin por padrão); a equipe com emitir_faturas também pode
+      const { data: equipe } = await db.rpc("sou_equipe");
+      const { data: podePagar } = await db.rpc("pode", { perm: "pagar_faturas" });
+      if (!equipe && !podePagar) return responder({ erro: "só quem pode pagar faturas paga ou recarrega (Admin, por padrão)" }, 403);
+      return responder({ cobranca: await pagar(db, p) });
+    }
 
     if (p.acao === "demonstrativo") {
       const { data: f } = await db.from("faturas").select("id, situacao, demonstrativo").eq("id", p.fatura!).maybeSingle();

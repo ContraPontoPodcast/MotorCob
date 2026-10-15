@@ -7,8 +7,9 @@ export const FORMAS = ["boleto", "pix", "cartao"] as const;
 export type Forma = (typeof FORMAS)[number];
 
 export interface Pedido {
-  acao: "pagar" | "enviar_fatura" | "demonstrativo" | "emitir_nf" | "recargas_automaticas";
+  acao: "pagar" | "enviar_fatura" | "demonstrativo" | "emitir_nf" | "recargas_automaticas" | "lembrar_fatura";
   fatura?: number;
+  tipo?: "d1" | "d5" | "d7";
   recarga?: number;
   forma?: Forma;
 }
@@ -16,7 +17,7 @@ export interface Pedido {
 export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string } {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { erro: "pedido inválido" };
   const c = corpo as Record<string, unknown>;
-  const acoes = ["pagar", "enviar_fatura", "demonstrativo", "emitir_nf", "recargas_automaticas"];
+  const acoes = ["pagar", "enviar_fatura", "demonstrativo", "emitir_nf", "recargas_automaticas", "lembrar_fatura"];
   if (!acoes.includes(c.acao as string)) return { erro: "ação desconhecida" };
   const p: Pedido = { acao: c.acao as Pedido["acao"] };
   for (const k of ["fatura", "recarga"] as const) {
@@ -26,6 +27,12 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
     }
   }
   if (p.acao === "recargas_automaticas") return { pedido: p };
+  if (p.acao === "lembrar_fatura") {
+    if (!p.fatura || p.recarga) return { erro: "informe a fatura" };
+    if (!["d1", "d5", "d7"].includes(c.tipo as string)) return { erro: "lembrete inválido: d1, d5 ou d7" };
+    p.tipo = c.tipo as Pedido["tipo"];
+    return { pedido: p };
+  }
   if ((p.acao === "enviar_fatura" || p.acao === "demonstrativo") && (!p.fatura || p.recarga)) return { erro: "informe a fatura" };
   if (!p.fatura === !p.recarga) return { erro: "informe a fatura ou a recarga" };
   if (p.acao === "pagar") {

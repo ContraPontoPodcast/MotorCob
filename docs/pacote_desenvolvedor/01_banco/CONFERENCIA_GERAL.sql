@@ -184,6 +184,11 @@ with itens(ordem, item, ok, se_falhar) as (values
        and to_regclass('public.mensageria_respostas_rapidas') is not null
        and to_regprocedure('public.painel_radar(bigint, date, date)') is not null,
        'rodar o SQL 36 (supabase/migrations/20261203000001_atendimento_radar.sql)'),
+  (24, 'Faturas, vigência do preço e inadimplência (SQL 37)',
+       to_regclass('public.fatura_lembretes') is not null
+       and to_regprocedure('public.salvar_preco_vigencia(bigint, text, text, numeric, numeric, jsonb, text, text, text)') is not null
+       and pg_temp.n('select count(*) from public.permissoes_catalogo where codigo = ''pagar_faturas''') = 1,
+       'rodar o SQL 37 (supabase/migrations/20261204000001_faturas_contratacao.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

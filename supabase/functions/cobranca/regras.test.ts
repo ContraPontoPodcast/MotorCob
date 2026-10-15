@@ -142,3 +142,9 @@ test("quem recebe a fatura: marcados, senão o Financeiro, senão todos", () => 
   assert.deepEqual(destinatariosFatura([]), []);
   assert.equal(destinatariosFatura(Array.from({ length: 15 }, (_, i) => c(`p${i}@x.com`, "financeiro"))).length, 10);
 });
+
+test("lembrete de fatura vencida: fatura e tipo d1, d5 ou d7", () => {
+  assert.deepEqual(validarPedido({ acao: "lembrar_fatura", fatura: 7, tipo: "d5" }).pedido, { acao: "lembrar_fatura", fatura: 7, tipo: "d5" });
+  assert.equal(validarPedido({ acao: "lembrar_fatura", fatura: 7, tipo: "d3" }).erro, "lembrete inválido: d1, d5 ou d7");
+  assert.equal(validarPedido({ acao: "lembrar_fatura", tipo: "d1" }).erro, "informe a fatura");
+});

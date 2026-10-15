@@ -5,7 +5,7 @@ import {
   FOCUS, faltaNaConfig, formStripe,
   type Gerada, lerGerada, lerNota, type NfConfig, notaFocus, paymentIntent, pdfDoBoleto, referenciaNota, STRIPE,
 } from "./regras.ts";
-import { type Dados, emailFatura, montar } from "./demonstrativo.ts";
+import { brl, type Dados, emailFatura, emailLembrete, montar } from "./demonstrativo.ts";
 import { gerarPdf } from "./demonstrativo_pdf.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -253,4 +253,27 @@ export async function enviarFatura(db: Banco, fatura: number, site: string) {
   await db.from("faturas").update({ envio: "enviado", envio_motivo: null, enviada_em: new Date().toISOString(),
                                     enviada_para: para.join(", ").slice(0, 500) }).eq("id", f.id);
   return { enviada_para: para };
+}
+
+/** Lembrete de fatura vencida (motor, uma vez por fatura e tipo). Fatura já paga não recebe nada. */
+export async function lembrarFatura(db: Banco, fatura: number, tipo: "d1" | "d5" | "d7", site: string) {
+  const { data: f } = await db.from("faturas")
+    .select("id, empresa_id, situacao, valor_total, vencimento, competencia").eq("id", fatura).single();
+  if (!f || f.situacao !== "aberta") return { pulou: "fatura não está em aberto" };
+  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato, recebe_faturas")
+    .eq("empresa_id", f.empresa_id).not("email", "is", null);
+  const para = destinatariosFatura((contatos ?? []) as Contato[]);
+  if (!para.length) throw new ErroCobranca("Sem e-mail para o lembrete: em Empresa › Contatos, marque \"Recebe faturas\"");
+  const { data: emp } = await db.from("empresas").select("nome").eq("id", f.empresa_id).single();
+  const { data: cfg } = await db.from("nf_config").select("email_financeiro").eq("id", 1).single();
+  const br = (d: string) => d.slice(0, 10).split("-").reverse().join("/");
+  const bloqueio = new Date(new Date(`${String(f.vencimento).slice(0, 10)}T12:00:00Z`).getTime() + 9 * 86400000)
+    .toISOString().slice(0, 10);
+  const { assunto, html } = emailLembrete(tipo, {
+    numero: f.id, ciclo: String(f.competencia).slice(0, 7).split("-").reverse().join("/"),
+    total: brl(Number(f.valor_total)), vencimento: br(String(f.vencimento)), bloqueio: br(bloqueio),
+  }, emp?.nome ?? "", `${site}/empresa/faturamento`);
+  await enviarEmail(para, assunto, html, cfg?.email_financeiro);
+  await db.from("fatura_lembretes").insert({ fatura_id: f.id, tipo, enviado_para: para.join(", ").slice(0, 500) });
+  return { enviado_para: para };
 }

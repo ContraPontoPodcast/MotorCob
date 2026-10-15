@@ -92,6 +92,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 80 | `07_workspace/PROMPT_51_PRIMEIRO_USO_CLIENTE.md` e `PROMPT_52_CONSOLE_IMPLANTACAO.md` + motor na nuvem | Conta, primeiros passos, faixa da simulação e pedido de envio real, telas vazias; Console › Implantação | Site + Google Cloud | 75º |
 | 81 | `supabase/migrations/20261203000001_atendimento_radar.sql` (SQL 36) | Atendimento: situações, tempos, notas, transferência, respostas rápidas, meta opcional, avisos e painel do Radar | Supabase | 76º |
 | 82 | `07_workspace/PROMPT_53_CAIXA_ATENDIMENTO.md` e `PROMPT_54_RADAR_PAINEL_CONFIG.md` + função `assistente` de novo + motor na nuvem | Caixa única, resposta em grupo com custo, painel do Radar e configuração | Site + Supabase + Google Cloud | 77º |
+| 83 | `supabase/migrations/20261204000001_faturas_contratacao.sql` (SQL 37) | Vigência do preço (próximo ciclo), lembretes e inadimplência, permissão Pagar faturas, extrato e estimativas | Supabase | 78º |
+| 84 | funções `cobranca` e `api` de novo (`python3 scripts/juntar_funcao.py cobranca` / `api`) | Lembrete de fatura vencida por e-mail, permissão de pagar; API recusa empresa inadimplente | Supabase | 79º |
+| 85 | `07_workspace/PROMPT_55_CONTRATACAO_FATURAS_CONSOLE.md` e `PROMPT_56_FATURAMENTO_CLIENTE.md` + motor na nuvem | Contratação por seção com vigência, faturas com resumo da emissão, faturamento do cliente e acesso bloqueado | Site + Google Cloud | 80º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

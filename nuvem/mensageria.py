@@ -538,6 +538,15 @@ def _orcamento(sb, lote: dict, canal: str) -> tuple[int | None, str | None]:
     return (int(restante / unit + 1e-9) if unit > 0 else None), None   # 1,00 / 0,10 = 10 (sem erro de arredondamento)
 
 
+def _bloqueada(sb, empresa_id) -> str | None:
+    """Empresa suspensa, encerrada ou inadimplente (SQL 37) não envia: o motivo da pausa."""
+    emp = (sb.selecionar("empresas", {"id": f"eq.{empresa_id}"}) or [{}])[0]
+    if emp.get("ativa") is False or emp.get("situacao") in ("suspensa", "encerrada", "inadimplente"):
+        return {"inadimplente": "acesso bloqueado por fatura vencida: pague em Empresa › Faturamento",
+                "encerrada": "empresa encerrada"}.get(emp.get("situacao"), "empresa suspensa pela equipe MotorCob")
+    return None
+
+
 def _sem_saldo(sb, empresa_id) -> str | None:
     """Pré-pago com o saldo zerado e "pausar" escolhido: o motivo da pausa. Banco sem o SQL 22: nunca pausa."""
     try:
@@ -710,15 +719,17 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         descad = {d["destino_hash"] for d in sb.selecionar("mensageria_descadastros", {
             "empresa_id": f"eq.{eid}", "canal": f"eq.{canal}"}) or []}
         maximo, pausa = _orcamento(sb, lote, canal)
+        bloq = None
         if not pausa and modo == "real":
-            pausa = _sem_saldo(sb, eid)
+            bloq = _bloqueada(sb, eid)
+            pausa = bloq or _sem_saldo(sb, eid)
         if pausa or maximo == 0:
             sb.atualizar("mensageria_lotes", filtro, {"situacao": "pausado", "atualizado_em": agora.isoformat(),
                                                       "motivo": pausa or "orçamento do centro de custo esgotado"})
             from nuvem import avisos as AV
             AV.criar(sb, "empresa", "Envios pausados", (pausa or "orçamento do centro de custo esgotado").capitalize()
                      + ".", tipo="atencao", empresa_id=eid, link="/empresa/faturamento" if pausa else "/mensageria",
-                     chave=f"pausa:{eid}:{'saldo' if pausa else 'orcamento'}:{agora.date().isoformat()}")
+                     chave=f"pausa:{eid}:{'bloqueio' if bloq else 'saldo' if pausa else 'orcamento'}:{agora.date().isoformat()}")
             resumo[lid] = {"disparadas": 0, "enviadas": 0, "situacao": "pausado"}
             out(f"mensageria: lote {lid} pausado — {pausa or 'orçamento esgotado'}")
             continue

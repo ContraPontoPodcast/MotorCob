@@ -179,3 +179,26 @@ ${linhaDigitavel ? `<p style="font-size:13px;color:#6E6E73">Linha digitável do 
 </div>`;
   return { assunto, html };
 }
+
+/** Lembrete de fatura vencida: d1 (venceu ontem), d5 (5 dias) e d7 (acesso bloqueado em 3 dias). */
+export function emailLembrete(tipo: "d1" | "d5" | "d7", f: { numero: number; ciclo: string; total: string; vencimento: string;
+  bloqueio: string }, cliente: string, pagar: string) {
+  const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  const assunto = {
+    d1: `Fatura MotorCX nº ${f.numero} venceu em ${f.vencimento.slice(0, 5)}`,
+    d5: `Fatura MotorCX nº ${f.numero} vencida há 5 dias`,
+    d7: `Fatura MotorCX nº ${f.numero}: o acesso será bloqueado em 3 dias`,
+  }[tipo];
+  const frase = {
+    d1: `A fatura do ciclo de ${esc(f.ciclo)}, de <b>${esc(f.total)}</b>, venceu em ${esc(f.vencimento)}. Se o pagamento já foi feito, desconsidere este e-mail.`,
+    d5: `A fatura do ciclo de ${esc(f.ciclo)}, de <b>${esc(f.total)}</b>, está vencida desde ${esc(f.vencimento)}. Com 10 dias de atraso, o acesso à plataforma é bloqueado e os envios param até o pagamento.`,
+    d7: `A fatura do ciclo de ${esc(f.ciclo)}, de <b>${esc(f.total)}</b>, continua em aberto. Se não for paga até ${esc(f.bloqueio)}, o acesso à plataforma é bloqueado e os envios param. Faturamento e Suporte continuam abertos para pagar.`,
+  }[tipo];
+  const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1D1D1F;max-width:560px">
+<p>Olá, equipe da ${esc(cliente)}.</p>
+<p>${frase}</p>
+<p><a href="${esc(pagar)}" style="display:inline-block;margin:4px 0;padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;background:#1D1D1F;color:#FFFFFF">Pagar agora</a></p>
+<p style="font-size:13px;color:#6E6E73">Boleto, Pix ou cartão. Quando o pagamento confirma, tudo volta ao normal sozinho. Dúvidas: Suporte na plataforma.</p>
+</div>`;
+  return { assunto, html };
+}

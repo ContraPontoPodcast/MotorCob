@@ -203,6 +203,23 @@ Protótipo: `radar-atendimento-prototipo.html`.
 - Judicial avisa Admin e Gestão; CPC Negócio sem responsável há 10 min avisa a Gestão (opcional).
 - Gerado: SQL 36, motor (`avisos.atendimento`), testes e prompts 53 e 54.
 
+## Faturas e Contratação — APROVADO em 15/10/2026
+
+Protótipo: `faturas-contratacao-prototipo.html`.
+- **Contratação por seção** (Motor e módulos, Ciclo e cobrança, Preços), cada uma com o próprio painel e resumo.
+- **Preço novo vale a partir do próximo ciclo** ("Concordo"); "neste ciclo" é exceção, com motivo. O preço segue
+  guardado por mês: no ciclo em dias, "próximo ciclo" é o próximo mês.
+- **Lembrete por e-mail** no dia seguinte ao vencimento e 5 dias depois ("Ótimo"); no 7º dia, aviso de bloqueio.
+- **10 dias de atraso: bloqueia o acesso e deixa como inadimplente** ("10 dias bloqueia o acesso e deixa como
+  inadimplente"). Salvaguardas aplicadas: Faturamento e Suporte continuam abertos para pagar, envios e API param,
+  e o acesso volta sozinho quando o pagamento confirma.
+- **Estimativas mantidas** ("Mantém"), sempre escritas como estimativa: fim do ciclo (pós-pago) e duração do saldo
+  (pré-pago).
+- **Permissão Pagar faturas**, só Admin por padrão ("Ok").
+- Emissão com total e contatos na confirmação; itens explicados com preço por mil; extrato do pré-pago.
+- Correção junto: a suspensão da equipe também passa a parar os envios da Mensageria (antes só a rotina parava).
+- Gerado: SQL 37, funções `cobranca` (lembrete e permissão) e `api`, motor, testes e prompts 55 e 56.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -225,5 +242,7 @@ Protótipo: `radar-atendimento-prototipo.html`.
    na nuvem (passos 78 a 80). Conferência: item 22 OK.
    Depois, atendimento: SQL 36 → prompts 53 e 54 → função `assistente` de novo → motor na nuvem (passos 81 e 82).
    Conferência: item 23 OK.
+   Depois, faturas: SQL 37 → funções `cobranca` e `api` de novo → prompts 55 e 56 → motor na nuvem (passos 83 a 85).
+   Conferência: item 24 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).
