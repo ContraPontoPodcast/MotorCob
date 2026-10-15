@@ -84,6 +84,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 72 | `supabase/migrations/20261130000001_score_entrega_qualidade.sql` (SQL 33) | Bloco 6: função Técnico, qualidade dos fornecedores, Score de Entrega e Economia do Score | Supabase | 67º |
 | 73 | `07_workspace/PROMPT_46_QUALIDADE_FORNECEDORES.md`, `PROMPT_47_FILTRO_INTELIGENCIA_CONTRATACAO.md`, `PROMPT_48_SCORE_CAMPANHA_ECONOMIA.md` | Console: qualidade, Técnico, filtro de inteligência e contratação do Score; cliente: campanha com faixas e Economia do Score | Site (motorcob.online) | 68º |
 | 74 | função `assistente` (de novo) + motor na nuvem | Assistente com o Score; motor aplica o Score nas campanhas e guarda a DLR | Supabase + Google Cloud | 69º |
+| 75 | `supabase/migrations/20261201000001_padroes_comuns_avisos.sql` (SQL 34) | Padrões comuns: sino de avisos, cores das faixas do Score no tema, histórico do Score em formação | Supabase | 70º |
+| 76 | `07_workspace/PROMPT_49_PADROES_COMUNS.md` e `PROMPT_50_APLICAR_PADROES.md` | Sino, processo demorado, salvar com revisão, confirmação, somente leitura, tabela no celular, faixas do Score e nomes, aplicados nas telas | Site (motorcob.online) | 71º |
+| 77 | motor na nuvem (`systemctl start motorcob-atualizar`) | Motor grava os avisos do sino (lista lida, prévia pronta, erro, envios pausados, alerta de qualidade) | Google Cloud | 72º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

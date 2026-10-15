@@ -148,6 +148,25 @@ Protótipo: `bloco6-qualidade-score-prototipo.html`.
   Assistente e nos prompts 46 a 48.
 - **Mistura de operadoras** ("pode fazer"): no fim da aba Rotas, como o prompt 39. Protótipo do bloco 2 ajustado.
 
+## Padrões comuns — APROVADO em 15/10/2026 ("Ok!!!")
+
+Protótipo: `padroes-comuns-prototipo.html`. Vale para a plataforma e o Console.
+- **Processo demorado** com etapas, linhas lidas, tempo restante e "pode sair desta tela"; ao terminar, aviso no
+  **sino** (fim de processo longo, algo que precisa da pessoa, alerta de qualidade para Técnico e Master).
+- **Salvar com revisão**: painel lateral, campo alterado marcado, resumo de → para antes de salvar e pergunta ao
+  descartar. Ajuste sem efeito financeiro salva direto.
+- **Ações sem volta**: confirmação na própria tela com o efeito em números; o botão repete o verbo e o número.
+- **Somente leitura com o motivo** (papel que pode); esconder só o sigiloso (custo, margem, outra empresa, CPF).
+- **Tabela no celular** vira cartão abaixo de 600 px, com os campos principais e "Ver".
+- **Cores próprias das faixas do Score** (escala de um tom; vermelho e amarelo só para erro e alerta).
+- **Score nos primeiros dias**: aviso com a data em que a janela completa e quanto da lista está Sem histórico,
+  sem estimativa. Ajuste na geração: o Score usa o histórico de toda a Mensageria, então a data é a do início do
+  histórico da Mensageria (não a do primeiro envio de cada empresa, como dizia o texto do protótipo).
+- **Um nome por conceito**: cliente vê "Não enviados" e o Console "Represados"; preço abaixo de R$ 0,10 para o
+  cliente aparece por mil.
+- Gerado: SQL 34 (avisos, cores no tema, score_formacao), motor (`nuvem/avisos.py`), testes e prompts 49 e 50.
+  A validade de 24 h da prévia continua fora (aparece no sino do protótipo só como exemplo; aguarda aprovação).
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -165,5 +184,6 @@ Protótipo: `bloco6-qualidade-score-prototipo.html`.
    f. `CONFERENCIA_GERAL.sql`: itens 17, 18 e 19 devem dar OK.
 4. Bloco 6 (branch `claude/geracao-bloco-6`, empilhada sobre a dos blocos 2 a 5): SQL 33 → prompts 46, 47 e 48 →
    função `assistente` de novo → motor na nuvem (passos 72 a 74). Conferência: item 20 OK.
+   Depois, padrões comuns: SQL 34 → prompts 49 e 50 → motor na nuvem (passos 75 a 77). Conferência: item 21 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).

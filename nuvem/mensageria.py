@@ -715,6 +715,10 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
         if pausa or maximo == 0:
             sb.atualizar("mensageria_lotes", filtro, {"situacao": "pausado", "atualizado_em": agora.isoformat(),
                                                       "motivo": pausa or "orçamento do centro de custo esgotado"})
+            from nuvem import avisos as AV
+            AV.criar(sb, "empresa", "Envios pausados", (pausa or "orçamento do centro de custo esgotado").capitalize()
+                     + ".", tipo="atencao", empresa_id=eid, link="/empresa/faturamento" if pausa else "/mensageria",
+                     chave=f"pausa:{eid}:{'saldo' if pausa else 'orcamento'}:{agora.date().isoformat()}")
             resumo[lid] = {"disparadas": 0, "enviadas": 0, "situacao": "pausado"}
             out(f"mensageria: lote {lid} pausado — {pausa or 'orçamento esgotado'}")
             continue

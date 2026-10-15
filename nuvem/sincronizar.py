@@ -1299,6 +1299,9 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
     retornos.processar_retornos(sb, dados, agora, out)  # entrega, falha, resposta e bounce dos fornecedores reais
     _recarga_automatica(sb, dados, agora, out)
     _faturamento(sb, dados, agora, out)
+    from nuvem import avisos
+    if (agora or datetime.now(timezone.utc)).minute % 10 == 0:
+        avisos.qualidade(sb, out)                         # alerta de fornecedor no sino do Técnico (SQL 34)
     radar = atendimento.banco_radar(sb)
     if radar:
         atendimento.enviar(sb, dados, agora, out)        # respostas escritas na plataforma
@@ -1312,6 +1315,7 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
                 sb.rpc("limpar_mensageria_90d")          # textos de resposta e links com mais de 90 dias
             from nuvem import fornecedores
             fornecedores.manter_assinaturas(out)         # endereço de retorno cadastrado na Zenvia
+            avisos.limpar(sb, agora)                     # avisos do sino com mais de 90 dias
             try:
                 sb.rpc("limpar_eventos_mensageria")      # avisos dos fornecedores já aplicados, depois de 7 dias
             except Exception:  # noqa: BLE001 — banco ainda sem o SQL 24

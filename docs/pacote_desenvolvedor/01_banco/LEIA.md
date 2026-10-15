@@ -152,4 +152,9 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     (filtro de inteligência por rota, fornecedores na análise, nomes devolvidos, grupo de controle), contratação do
     Score e **Economia do Score**. Depois cole os prompts 46, 47 e 48.
 
+34. `supabase/migrations/20261201000001_padroes_comuns_avisos.sql` (SQL 34) — **padrões comuns** da revisão de UX:
+    **sino de avisos** (só o motor grava; cada pessoa vê os seus, os da empresa, os da equipe ou os de qualidade),
+    cores das faixas do Score no tema e `score_formacao` (histórico do Score em formação). Depois cole os prompts
+    49 e 50 e atualize o motor na nuvem.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

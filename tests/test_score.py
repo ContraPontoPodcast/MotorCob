@@ -104,10 +104,15 @@ class TestScoreNaCampanha(TestCampanha):
         C.analisar(self.sb, self.dados, out=lambda *a: None)
         c = self._confirmar()
         c["situacao"] = "calculando_previa"                     # o banco põe aqui ao confirmar as colunas
+        c["criado_por"] = "u-ana"
         self.assertEqual(C.preparar(self.sb, self.dados, AGORA, out=lambda *a: None), [])   # nada sai antes da prévia
         self.assertEqual(C.previas(self.sb, self.dados, AGORA, out=lambda *a: None), 1)
         pv = c["score_previa"]
         self.assertEqual(c["situacao"], "pronta")
+        aviso = self.sb.t["avisos"][-1]                          # o sino de quem criou a campanha avisa
+        self.assertEqual((aviso["para"], aviso["usuario_id"], aviso["tipo"]), ("usuario", "u-ana", "pronto"))
+        self.assertTrue(aviso["titulo"].startswith("Prévia pronta · "))
+        self.assertIn(f"{pv['analisados']} números classificados", aviso["texto"])
         self.assertEqual(pv["faixas"]["baixo"], 10)
         self.assertEqual(sum(pv["faixas"].values()), pv["analisados"])
         self.assertEqual((pv["preco_sms"], pv["preco_score"], pv["cobranca"]), (0.055, 0.004, "analisado"))

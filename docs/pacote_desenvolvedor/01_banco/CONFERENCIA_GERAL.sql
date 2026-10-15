@@ -170,6 +170,10 @@ with itens(ordem, item, ok, se_falhar) as (values
        to_regclass('public.mensageria_score_config') is not null and to_regclass('public.empresa_score') is not null
        and to_regprocedure('public.score_entrega(text[], text, timestamptz)') is not null,
        'rodar o SQL 33 (supabase/migrations/20261130000001_score_entrega_qualidade.sql)'),
+  (21, 'Sino de avisos e padrões comuns (SQL 34)',
+       to_regclass('public.avisos') is not null and to_regprocedure('public.meus_avisos(integer)') is not null
+       and pg_temp.n('select count(*) from public.tema_tokens where chave like ''score.%''') = 8,
+       'rodar o SQL 34 (supabase/migrations/20261201000001_padroes_comuns_avisos.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

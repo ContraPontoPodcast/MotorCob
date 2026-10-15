@@ -117,6 +117,10 @@ class TestCampanha(unittest.TestCase):
         self.assertEqual(C.analisar(self.sb, self.dados, out=lambda *a: None), 1)
         c = self.sb.t["mensageria_campanhas"][0]
         self.assertEqual((c["situacao"], c["carregados"]), ("aguardando_layout", 56))
+        aviso = self.sb.t["avisos"][-1]                          # sem quem criou: vai para a empresa toda
+        self.assertEqual((aviso["para"], aviso["empresa_id"], aviso["titulo"], aviso["link"]),
+                         ("empresa", 1, "Lista lida · Outubro", "/mensageria/sms/campanhas?id=1"))
+        self.assertEqual(aviso["texto"], "56 linhas. Confira as colunas para continuar.")
         self._confirmar()
         lote = C.preparar(self.sb, self.dados, AGORA, out=lambda *a: None)[0]
         self.assertEqual((c["situacao"], c["invalidos"], c["duplicados"], c["bloqueados"]), ("em_andamento", 1, 1, 2))

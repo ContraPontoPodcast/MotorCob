@@ -410,9 +410,10 @@ create policy gravar on public.mensageria_alertas_config for update to authentic
 revoke all on public.mensageria_alertas_config from anon;
 grant select, update on public.mensageria_alertas_config to authenticated;
 
+-- o motor (chave do servidor) também lê, para transformar alerta em aviso no sino (SQL 34)
 create or replace function public.pode_ver_qualidade() returns boolean
 language sql stable security definer set search_path = public as $$
-    select public.admin_equipe() or public.pode_equipe('ver_qualidade')
+    select current_setting('role', true) = 'service_role' or public.admin_equipe() or public.pode_equipe('ver_qualidade')
 $$;
 
 create or replace function public.qualidade_fornecedores(de timestamptz, ate timestamptz, canal_lote text default 'sms')

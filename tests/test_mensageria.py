@@ -291,6 +291,10 @@ class TestMensageria(unittest.TestCase):
             self.assertEqual(self._lote("sms")["situacao"], "pausado")
             self.assertIn("saldo pré-pago esgotado", self._lote("sms")["motivo"])
             self.assertNotIn("consumo_mensageria", self.sb.t)
+            aviso = self.sb.t["avisos"][-1]                      # a empresa fica sabendo pelo sino
+            self.assertEqual((aviso["para"], aviso["tipo"], aviso["titulo"], aviso["link"]),
+                             ("empresa", "atencao", "Envios pausados", "/empresa/faturamento"))
+            self.assertEqual(aviso["chave"], f"pausa:1:saldo:{DIA.isoformat()}")
             # "continuar mesmo sem saldo": o saldo fica negativo e o lote sai
             saldo["pausar_envios"] = False
             self._lote("sms")["situacao"] = "agendado"

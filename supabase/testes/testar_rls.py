@@ -1280,6 +1280,47 @@ checar("Comercial não vê a qualidade dos fornecedores", False, "select * from 
 checar("Técnico vê o detalhe técnico", True, "select count(*) >= 1 from public.detalhe_tecnico_envios('2026-10-01','2026-10-15')", "authenticated", TEC, "t")
 checar("Atendimento não vê o detalhe técnico", False, "select * from public.detalhe_tecnico_envios('2026-10-01','2026-10-15')", "authenticated", SUP)
 checar("alertas de qualidade abrem para o Técnico", True, "select count(*) >= 0 from public.alertas_qualidade('sms')", "authenticated", TEC, "t")
+# SQL 34 · sino de avisos, cores do Score e histórico em formação
+def _aviso(cols, vals):
+    r = sql(f"set role service_role; insert into public.avisos ({cols}) values ({vals}) returning id")
+    assert r[0], r[2]
+    return r[1].splitlines()[-1]
+AV_USU = _aviso("para,empresa_id,usuario_id,titulo", f"'usuario',{EA},'{u['admina']}','Prévia pronta · Teste'")
+AV_EMP = _aviso("para,empresa_id,tipo,titulo", f"'empresa',{EA},'atencao','Saldo pré-pago acabando'")
+AV_EQP = _aviso("para,titulo", "'equipe','Fatura vencida · Alfa'")
+AV_TEC = _aviso("para,tipo,titulo", "'tecnico','erro','Zenvia · vivo: entrega crítica'")
+AV_VEL = _aviso("para,empresa_id,titulo,criado_em", f"'empresa',{EA},'Aviso antigo',now() - interval '91 days'")
+checar("cliente vê o aviso dele e o da empresa", True, "select string_agg(titulo, '|' order by id) from public.meus_avisos()", "authenticated", u["admina"], "Prévia pronta · Teste|Saldo pré-pago acabando")
+checar("aviso de uma pessoa não aparece para outra da mesma empresa", True, f"select count(*) from public.meus_avisos() where id={AV_USU}", "authenticated", u["oper"], 0)
+checar("outra empresa não vê os avisos da Alfa", True, "select count(*) from public.meus_avisos()", "authenticated", u["operb"], 0)
+checar("equipe vê o aviso da equipe e não o da empresa", True, f"select string_agg(id::text, ',' order by id) from public.meus_avisos() where id in ({AV_EMP},{AV_EQP})", "authenticated", u["admin"], AV_EQP)
+checar("Técnico vê o aviso de qualidade", True, f"select count(*) from public.meus_avisos() where id={AV_TEC}", "authenticated", TEC, 1)
+checar("Comercial não vê o aviso de qualidade", True, f"select count(*) from public.meus_avisos() where id={AV_TEC}", "authenticated", COM, 0)
+checar("aviso com mais de 90 dias some", True, f"select count(*) from public.meus_avisos() where id={AV_VEL}", "authenticated", u["admina"], 0)
+checar("contador de avisos novos", True, "select public.avisos_novos()", "authenticated", u["admina"], 2)
+checar("marcar um aviso como lido", True, f"select public.marcar_avisos_lidos(array[{AV_EMP}]::bigint[]); select public.avisos_novos()", "authenticated", u["admina"], 1)
+checar("lido de um não vale para o outro", True, f"select lido from public.meus_avisos() where id={AV_EMP}", "authenticated", u["oper"], "f")
+checar("não marca como lido aviso que não é seu", True, f"select public.marcar_avisos_lidos(array[{AV_TEC}]::bigint[])", "authenticated", u["admina"], 0)
+checar("marcar todos como lidos", True, "select public.marcar_avisos_lidos(); select public.avisos_novos()", "authenticated", u["admina"], 0)
+checar("ninguém lê a tabela de avisos direto", False, "select * from public.avisos", "authenticated", u["admina"])
+checar("ninguém grava aviso pelo site", False, f"insert into public.avisos (para,empresa_id,titulo) values ('empresa',{EA},'Falso')", "authenticated", u["admina"])
+checar("sino fechado para anon", False, "select * from public.meus_avisos()", "anon", None)
+checar("aviso só leva link interno", False, f"set role service_role; insert into public.avisos (para,empresa_id,titulo,link) values ('empresa',{EA},'Teste','https://fora.com')")
+checar("aviso para pessoa exige a pessoa", False, f"set role service_role; insert into public.avisos (para,empresa_id,titulo) values ('usuario',{EA},'Teste')")
+r = sql(f"set role service_role; insert into public.mensageria_lotes (empresa_id,data,canal,modo,situacao,total) values ({EA},current_date,'sms','real','enviando',60) returning id")
+assert r[0], r[2]
+LQ = r[1].splitlines()[-1]
+r = sql("set role service_role; insert into public.mensageria_mensagens (lote_id,empresa_id,id_cliente,destino_mascara,destino_hash,fornecedor,operadora,situacao,enviado_em) select "
+        f"{LQ},{EA},'Q'||g,'(11) 9••••-••00',md5('q'||g)||md5('q'||g),'lentissimo','tim','enviada',now() - interval '45 minutes' from generate_series(1,60) g")
+assert r[0], r[2]
+checar("motor transforma alerta de qualidade em aviso", True, "set role service_role; select public.gerar_avisos_qualidade()", None, None, 1)
+checar("aviso de qualidade não repete no mesmo dia", True, "set role service_role; select public.gerar_avisos_qualidade()", None, None, 0)
+checar("Técnico recebe o aviso de qualidade com o motivo", True, "select tipo||' | '||titulo||' | '||texto from public.meus_avisos() where titulo like 'lentissimo%'", "authenticated", TEC, "erro | lentissimo · tim: entrega crítica | 100.00% sem DLR após 30 min (limite 5.00%)")
+checar("site não gera aviso de qualidade", False, "select public.gerar_avisos_qualidade()", "authenticated", TEC)
+checar("cliente continua sem ver a qualidade", False, "select * from public.qualidade_fornecedores('2026-10-01','2026-10-15','sms')", "authenticated", u["admina"])
+checar("cores das faixas do Score no tema", True, "select string_agg(chave, ',' order by chave) from public.tema_tokens where chave in ('score.alto','score.medio','score.baixo','score.sem')", "anon", None, "score.alto,score.baixo,score.medio,score.sem")
+checar("histórico do Score: início e janela completa", True, "select (inicio is not null and completa_em = inicio + janela_dias)::text from public.score_formacao()", "authenticated", u["admina"], "true")
+checar("histórico do Score fechado para anon", False, "select * from public.score_formacao()", "anon", None)
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
