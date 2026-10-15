@@ -90,6 +90,8 @@ Faça **na ordem**; cada passo depende do anterior.
 | 78 | `supabase/migrations/20261202000001_primeiro_uso.sql` (SQL 35) | Primeiro uso: primeiros passos, pedido de envio real (Suporte em até 1 hora) e implantação no Console | Supabase | 73º |
 | 79 | `02_supabase_painel/CONFIGURAR_SUPABASE.md` item 5b + função `admin-usuarios` de novo (`python3 scripts/juntar_funcao.py admin-usuarios`) | E-mail de convite com a empresa, o papel e quem convidou; link de 24 h | Supabase | 74º |
 | 80 | `07_workspace/PROMPT_51_PRIMEIRO_USO_CLIENTE.md` e `PROMPT_52_CONSOLE_IMPLANTACAO.md` + motor na nuvem | Conta, primeiros passos, faixa da simulação e pedido de envio real, telas vazias; Console › Implantação | Site + Google Cloud | 75º |
+| 81 | `supabase/migrations/20261203000001_atendimento_radar.sql` (SQL 36) | Atendimento: situações, tempos, notas, transferência, respostas rápidas, meta opcional, avisos e painel do Radar | Supabase | 76º |
+| 82 | `07_workspace/PROMPT_53_CAIXA_ATENDIMENTO.md` e `PROMPT_54_RADAR_PAINEL_CONFIG.md` + função `assistente` de novo + motor na nuvem | Caixa única, resposta em grupo com custo, painel do Radar e configuração | Site + Supabase + Google Cloud | 77º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

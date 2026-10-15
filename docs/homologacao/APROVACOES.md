@@ -187,6 +187,22 @@ Protótipo: `primeiro-uso-prototipo.html`.
 - Gerado: SQL 35, e-mail de convite (painel + função `admin-usuarios`), motor (`avisos.implantacao`), testes e
   prompts 51 e 52.
 
+## Radar e caixa de atendimento — APROVADO em 15/10/2026
+
+Protótipo: `radar-atendimento-prototipo.html`.
+- **Caixa única** com SMS, RCS e WhatsApp; abas Abertas, Sem responsável, Minhas e Aguardando cliente; fila por
+  prioridade da classe (CPC Negócio e Alega pagamento primeiro) e tempo de espera.
+- Situações **Nova, Em atendimento, Aguardando cliente e Resolvida**; resposta do cliente reabre.
+- **Notas internas**, **transferência** com aviso no sino, **histórico** da classe corrigida (alimenta a qualidade do
+  Radar), outras conversas do mesmo cliente.
+- **Resposta em grupo** com custo previsto e confirmação.
+- **Meta de primeira resposta: opcional, sem valor padrão** ("Não precisa, pois nem todos vão usar esse recurso").
+  O tempo de espera é corrido (o protótipo dizia "só no horário do canal"; simplificado com a meta opcional).
+- **Desempenho por pessoa só para Admin e Gestão** ("Ok").
+- **Respostas rápidas sem textos prontos** ("Não aplicar"): cada empresa escreve as suas.
+- Judicial avisa Admin e Gestão; CPC Negócio sem responsável há 10 min avisa a Gestão (opcional).
+- Gerado: SQL 36, motor (`avisos.atendimento`), testes e prompts 53 e 54.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -207,5 +223,7 @@ Protótipo: `primeiro-uso-prototipo.html`.
    Depois, padrões comuns: SQL 34 → prompts 49 e 50 → motor na nuvem (passos 75 a 77). Conferência: item 21 OK.
    Depois, primeiro uso: SQL 35 → e-mail de convite no painel e função `admin-usuarios` → prompts 51 e 52 → motor
    na nuvem (passos 78 a 80). Conferência: item 22 OK.
+   Depois, atendimento: SQL 36 → prompts 53 e 54 → função `assistente` de novo → motor na nuvem (passos 81 e 82).
+   Conferência: item 23 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).

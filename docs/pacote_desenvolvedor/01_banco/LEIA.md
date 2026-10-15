@@ -162,4 +162,9 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     responde em até 1 hora e liga ou devolve com o motivo) e `implantacao_empresas` (Console). Depois: e-mail de
     convite (02_supabase_painel, item 5b), função `admin-usuarios` de novo e prompts 51 e 52.
 
+36. `supabase/migrations/20261203000001_atendimento_radar.sql` (SQL 36) — **Radar e caixa de atendimento**: situações
+    Nova, Em atendimento, Aguardando cliente e Resolvida; tempo de espera e de resposta gravados sozinhos; notas
+    internas, histórico e transferência; respostas rápidas (nenhuma vem pronta); meta de primeira resposta opcional;
+    avisos de Judicial e de espera; painel do Radar e desempenho por pessoa (Admin e Gestão). Depois: prompts 53 e 54.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

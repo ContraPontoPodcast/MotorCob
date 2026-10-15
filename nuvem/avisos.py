@@ -66,10 +66,26 @@ def implantacao(sb, out=print) -> int:
     return n
 
 
+def atendimento(sb, out=print) -> int:
+    """Atendimento (SQL 36): resposta Judicial avisa Admin e Gestão; conversa acima do dobro da meta (quando a empresa
+    tem meta) avisa quem atende; CPC Negócio sem responsável há 10 min avisa a Gestão (se ligado). Sem repetir."""
+    try:
+        n = sb.rpc("gerar_avisos_atendimento") or 0
+    except Exception:  # noqa: BLE001 — banco ainda sem o SQL 36
+        return 0
+    if n:
+        out(f"atendimento: {n} aviso(s) novo(s) no sino")
+    return n
+
+
 def limpar(sb, agora: datetime | None = None) -> None:
     """Apaga avisos com mais de 90 dias (o sino já não mostra)."""
     limite = (agora or datetime.now(timezone.utc)) - timedelta(days=90)
     try:
         sb.apagar("avisos", {"criado_em": f"lt.{limite.isoformat()}"})
     except Exception:  # noqa: BLE001 — banco ainda sem o SQL 34
+        pass
+    try:
+        sb.rpc("limpar_atendimento_90d")                 # notas e histórico das conversas (SQL 36)
+    except Exception:  # noqa: BLE001 — banco ainda sem o SQL 36
         pass

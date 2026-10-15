@@ -179,6 +179,11 @@ with itens(ordem, item, ok, se_falhar) as (values
        and to_regprocedure('public.primeiros_passos(bigint)') is not null
        and to_regprocedure('public.ligar_envio_real(bigint)') is not null,
        'rodar o SQL 35 (supabase/migrations/20261202000001_primeiro_uso.sql)'),
+  (23, 'Radar e caixa de atendimento (SQL 36)',
+       to_regclass('public.mensageria_conversa_notas') is not null
+       and to_regclass('public.mensageria_respostas_rapidas') is not null
+       and to_regprocedure('public.painel_radar(bigint, date, date)') is not null,
+       'rodar o SQL 36 (supabase/migrations/20261203000001_atendimento_radar.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

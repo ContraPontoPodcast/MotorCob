@@ -85,10 +85,23 @@ class TestAvisos(unittest.TestCase):
         sb.rpcs["gerar_avisos_implantacao"] = ErroSupabase(404, "sem a função", "rpc")
         self.assertEqual(AV.implantacao(sb, out=saida.append), 0)
 
+    def test_atendimento(self):
+        sb = SbFalso()
+        sb.rpcs["gerar_avisos_atendimento"] = 3
+        saida = []
+        self.assertEqual(AV.atendimento(sb, out=saida.append), 3)
+        self.assertIn("3 aviso(s)", saida[0])
+        sb.rpcs["gerar_avisos_atendimento"] = ErroSupabase(404, "sem a função", "rpc")
+        self.assertEqual(AV.atendimento(sb, out=saida.append), 0)
+
     def test_limpar_apaga_mais_de_90_dias(self):
         sb = SbFalso()
+        chamadas = []
+        sb.rpcs["limpar_atendimento_90d"] = None
+        sb.rpc = lambda f, a=None: chamadas.append(f)
         AV.limpar(sb, datetime(2026, 12, 31, 12, tzinfo=timezone.utc))
         self.assertEqual(sb.apagados, [("avisos", {"criado_em": "lt.2026-10-02T12:00:00+00:00"})])
+        self.assertEqual(chamadas, ["limpar_atendimento_90d"])
 
 
 if __name__ == "__main__":
