@@ -1302,6 +1302,7 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
     from nuvem import avisos
     if (agora or datetime.now(timezone.utc)).minute % 10 == 0:
         avisos.qualidade(sb, out)                         # alerta de fornecedor no sino do Técnico (SQL 34)
+        avisos.implantacao(sb, out)                       # empresa nova parada e envio real sem resposta (SQL 35)
     radar = atendimento.banco_radar(sb)
     if radar:
         atendimento.enviar(sb, dados, agora, out)        # respostas escritas na plataforma

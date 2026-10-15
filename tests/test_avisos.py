@@ -76,6 +76,15 @@ class TestAvisos(unittest.TestCase):
         sb.rpcs["gerar_avisos_qualidade"] = ErroSupabase(404, "sem a função", "rpc")
         self.assertEqual(AV.qualidade(sb, out=saida.append), 0)
 
+    def test_implantacao(self):
+        sb = SbFalso()
+        sb.rpcs["gerar_avisos_implantacao"] = 1
+        saida = []
+        self.assertEqual(AV.implantacao(sb, out=saida.append), 1)
+        self.assertIn("1 aviso(s)", saida[0])
+        sb.rpcs["gerar_avisos_implantacao"] = ErroSupabase(404, "sem a função", "rpc")
+        self.assertEqual(AV.implantacao(sb, out=saida.append), 0)
+
     def test_limpar_apaga_mais_de_90_dias(self):
         sb = SbFalso()
         AV.limpar(sb, datetime(2026, 12, 31, 12, tzinfo=timezone.utc))

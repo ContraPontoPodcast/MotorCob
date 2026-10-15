@@ -174,6 +174,11 @@ with itens(ordem, item, ok, se_falhar) as (values
        to_regclass('public.avisos') is not null and to_regprocedure('public.meus_avisos(integer)') is not null
        and pg_temp.n('select count(*) from public.tema_tokens where chave like ''score.%''') = 8,
        'rodar o SQL 34 (supabase/migrations/20261201000001_padroes_comuns_avisos.sql)'),
+  (22, 'Primeiro uso e pedido de envio real (SQL 35)',
+       to_regclass('public.pedidos_envio_real') is not null
+       and to_regprocedure('public.primeiros_passos(bigint)') is not null
+       and to_regprocedure('public.ligar_envio_real(bigint)') is not null,
+       'rodar o SQL 35 (supabase/migrations/20261202000001_primeiro_uso.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

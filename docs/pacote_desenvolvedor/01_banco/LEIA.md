@@ -157,4 +157,9 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     cores das faixas do Score no tema e `score_formacao` (histórico do Score em formação). Depois cole os prompts
     49 e 50 e atualize o motor na nuvem.
 
+35. `supabase/migrations/20261202000001_primeiro_uso.sql` (SQL 35) — **primeiro uso**: `primeiros_passos` (roteiro do
+    Início, marcado pelo que aconteceu), **pedido de envio real** (o cliente pede, abre chamado para o Suporte, que
+    responde em até 1 hora e liga ou devolve com o motivo) e `implantacao_empresas` (Console). Depois: e-mail de
+    convite (02_supabase_painel, item 5b), função `admin-usuarios` de novo e prompts 51 e 52.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

@@ -168,6 +168,25 @@ Protótipo: `padroes-comuns-prototipo.html`. Vale para a plataforma e o Console.
 - **Prévia do Score sem validade** (15/10, "Não vamos fazer"): a prévia não vence nem é recalculada sozinha antes de
   agendar. Saíram dos protótipos o "válida até" e o aviso de prévia vencendo.
 
+## Primeiro uso do cliente — APROVADO em 15/10/2026 ("Ok para os demais")
+
+Protótipo: `primeiro-uso-prototipo.html`.
+- **Convite e conta**: e-mail com a empresa, o papel, quem convidou e a validade do link (24 h); passos da conta
+  (Admin: senha, código no celular, pronto); requisitos da senha marcados enquanto digita, com a regra aprovada no
+  bloco 5 (12+, letra e número; o protótipo trazia a regra antiga e foi corrigido).
+- **Primeiros passos no Início**, montados pelo que foi contratado e marcados pelo que aconteceu (ninguém marca à
+  mão); só "Convidar a sua equipe" pode ser pulado; dá para ocultar. "Escolher como a carga chega" saiu como passo
+  à parte: a carga já vem por arquivo e o envio da primeira carga (por arquivo ou API) marca o passo.
+- **Pedido de envio real**: o cliente pede depois do teste em simulação; abre chamado para o **Suporte, que
+  responde em até 1 hora** ("Se for do Suporte até uma hora"). Ligam: Master e Atendimento. Pedido sem resposta
+  em 1 hora vira aviso vermelho para a equipe.
+- **Telas vazias** com o primeiro passo e **Console › Implantação** (empresa parada há mais de 7 dias avisa o
+  vendedor).
+- Conflito resolvido: o prompt 3 deixou de dizer "nada de gerar token"; com o módulo API, o card leva a
+  /conta/tokens.
+- Gerado: SQL 35, e-mail de convite (painel + função `admin-usuarios`), motor (`avisos.implantacao`), testes e
+  prompts 51 e 52.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -186,5 +205,7 @@ Protótipo: `padroes-comuns-prototipo.html`. Vale para a plataforma e o Console.
 4. Bloco 6 (branch `claude/geracao-bloco-6`, empilhada sobre a dos blocos 2 a 5): SQL 33 → prompts 46, 47 e 48 →
    função `assistente` de novo → motor na nuvem (passos 72 a 74). Conferência: item 20 OK.
    Depois, padrões comuns: SQL 34 → prompts 49 e 50 → motor na nuvem (passos 75 a 77). Conferência: item 21 OK.
+   Depois, primeiro uso: SQL 35 → e-mail de convite no painel e função `admin-usuarios` → prompts 51 e 52 → motor
+   na nuvem (passos 78 a 80). Conferência: item 22 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).

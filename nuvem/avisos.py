@@ -54,6 +54,18 @@ def qualidade(sb, out=print) -> int:
     return n
 
 
+def implantacao(sb, out=print) -> int:
+    """Implantação (SQL 35): empresa nova parada há mais de 7 dias avisa o vendedor (uma vez por semana) e pedido de
+    envio real sem resposta em 1 hora avisa a equipe (uma vez por pedido)."""
+    try:
+        n = sb.rpc("gerar_avisos_implantacao") or 0
+    except Exception:  # noqa: BLE001 — banco ainda sem o SQL 35
+        return 0
+    if n:
+        out(f"implantação: {n} aviso(s) novo(s) no sino da equipe")
+    return n
+
+
 def limpar(sb, agora: datetime | None = None) -> None:
     """Apaga avisos com mais de 90 dias (o sino já não mostra)."""
     limite = (agora or datetime.now(timezone.utc)) - timedelta(days=90)

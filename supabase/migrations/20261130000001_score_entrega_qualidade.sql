@@ -45,7 +45,9 @@ select * from (values
     ('gerenciar_fornecedores', 'Produtos', 'Fornecedores, negociações e rotas', true, false, false, true, false),
     ('ver_qualidade', 'Técnico', 'Ver a qualidade dos fornecedores', true, true, false, true, true),
     ('ver_detalhe_tecnico', 'Técnico', 'Ver o detalhe técnico dos envios', true, false, false, false, true),
-    ('configurar_score', 'Técnico', 'Configurar o filtro de inteligência e os nomes devolvidos', true, false, false, false, true)
+    ('configurar_score', 'Técnico', 'Configurar o filtro de inteligência e os nomes devolvidos', true, false, false, false, true),
+    -- usada a partir do SQL 35 (primeiro uso): o Suporte liga o envio real pedido pelo cliente
+    ('ligar_envio_real', 'Atendimento', 'Ligar o envio real da Mensageria do cliente', true, true, false, false, false)
 ) as c(permissao, grupo, nome, master, atendimento, comercial, administrativo, tecnico);
 grant select on public.permissoes_equipe_catalogo to authenticated;
 

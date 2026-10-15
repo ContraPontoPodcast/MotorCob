@@ -34,6 +34,24 @@ e o acesso deve ser **só por convite**. Tirar a página não basta: a API conti
 - Observação: a função manda o convite para `SITE_URL/definir-senha` e o reset para `SITE_URL/redefinir-senha`.
   O site precisa ter essas duas rotas (pasta `05`).
 
+## 5b. E-mail de convite e validade do link (primeiro uso, aprovado em 15/10/2026)
+- [ ] **Authentication › Emails › Invite user**: assunto e corpo abaixo. A função `admin-usuarios` manda
+      `empresa_nome`, `papel` e `convidado_por` (e `nome`, quando informado) nos dados do convite.
+      - Assunto: `Você foi convidado para a {{ .Data.empresa_nome }} no MotorCX`
+      - Corpo (HTML simples):
+        ```html
+        <p>Olá{{ if .Data.nome }}, {{ .Data.nome }}{{ end }}.</p>
+        <p>{{ .Data.convidado_por }} criou o seu acesso à <b>{{ .Data.empresa_nome }}</b> no MotorCX, como
+           <b>{{ .Data.papel }}</b>.</p>
+        <p>Para entrar, crie sua senha. Leva poucos minutos.</p>
+        <p><a href="{{ .ConfirmationURL }}">Criar minha conta</a></p>
+        <p style="color:#6E6E73;font-size:13px">O link vale por 24 horas e só funciona uma vez. Se vencer, peça
+           outro a quem convidou você. Se não esperava este convite, ignore este e-mail.</p>
+        ```
+- [ ] **Authentication › validade do link por e-mail** (Email OTP / link expiration): **86400 segundos** (24 h),
+      o prazo que o e-mail promete.
+- Remetente: o domínio de e-mail do MotorCX (SMTP próprio, se configurado). Nada de remetente pessoal.
+
 ## 6. Storage — imagem de compartilhamento do site
 Depois de rodar o SQL da pasta `01_banco` (cria o bucket público `site`):
 - [ ] **Storage › site › Upload files**: enviar `03_site_e_login/imagens/og-motorcob.jpg` na raiz do bucket.

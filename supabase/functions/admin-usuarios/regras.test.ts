@@ -1,7 +1,7 @@
 // node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aalDoToken, autorizar, empresaAlvo, validarPedido, type Perfil } from "./regras.ts";
+import { aalDoToken, autorizar, dadosDoConvite, empresaAlvo, validarPedido, type Perfil } from "./regras.ts";
 
 const ID = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
 const admA: Perfil = { id: ID(1), papel: "admin", ativo: true, empresa_id: 1, equipe: false };
@@ -122,4 +122,12 @@ test("comercial da equipe: só o que a permissão libera, na carteira", () => {
   const alvo = { id: "a0000000-0000-4000-8000-000000000001", papel: "operacao", ativo: true, empresa_id: 7, equipe: false } as const;
   assert.match(autorizar(com, false, ped({ acao: "desativar", usuario_id: alvo.id }), alvo, null,
     { convidarAdmin: true, gerenciarEquipe: true })!, /só um Master/);
+});
+
+test("dados do convite para o e-mail", () => {
+  assert.deepEqual(dadosDoConvite(equipe, "Ana", "Financeira Horizonte", "admin"),
+    { empresa_nome: "Financeira Horizonte", papel: "Admin", convidado_por: "a equipe MotorCob", nome: "Ana" });
+  assert.deepEqual(dadosDoConvite({ ...admA, nome: " Bruno Lima " }, undefined, null, "operacao"),
+    { empresa_nome: "sua empresa", papel: "Operação", convidado_por: "Bruno Lima" });
+  assert.equal(dadosDoConvite(admA, "", "X", "gestao").convidado_por, "o Admin da sua empresa");
 });

@@ -87,6 +87,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 75 | `supabase/migrations/20261201000001_padroes_comuns_avisos.sql` (SQL 34) | Padrões comuns: sino de avisos, cores das faixas do Score no tema, histórico do Score em formação | Supabase | 70º |
 | 76 | `07_workspace/PROMPT_49_PADROES_COMUNS.md` e `PROMPT_50_APLICAR_PADROES.md` | Sino, processo demorado, salvar com revisão, confirmação, somente leitura, tabela no celular, faixas do Score e nomes, aplicados nas telas | Site (motorcob.online) | 71º |
 | 77 | motor na nuvem (`systemctl start motorcob-atualizar`) | Motor grava os avisos do sino (lista lida, prévia pronta, erro, envios pausados, alerta de qualidade) | Google Cloud | 72º |
+| 78 | `supabase/migrations/20261202000001_primeiro_uso.sql` (SQL 35) | Primeiro uso: primeiros passos, pedido de envio real (Suporte em até 1 hora) e implantação no Console | Supabase | 73º |
+| 79 | `02_supabase_painel/CONFIGURAR_SUPABASE.md` item 5b + função `admin-usuarios` de novo (`python3 scripts/juntar_funcao.py admin-usuarios`) | E-mail de convite com a empresa, o papel e quem convidou; link de 24 h | Supabase | 74º |
+| 80 | `07_workspace/PROMPT_51_PRIMEIRO_USO_CLIENTE.md` e `PROMPT_52_CONSOLE_IMPLANTACAO.md` + motor na nuvem | Conta, primeiros passos, faixa da simulação e pedido de envio real, telas vazias; Console › Implantação | Site + Google Cloud | 75º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
