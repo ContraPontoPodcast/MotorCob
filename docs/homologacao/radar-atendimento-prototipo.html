@@ -228,8 +228,8 @@ textarea{resize:vertical;width:100%}
 
       <div class="regra"><b>Regras</b><ul>
         <li>Situações: <b>Nova</b> (sem responsável) · <b>Em atendimento</b> (com responsável) · <b>Aguardando cliente</b> (a última mensagem é nossa) · <b>Resolvida</b>. Resposta nova do cliente reabre e volta para quem atendia.</li>
-        <li>Ordem da fila: CPC Negócio e Alega pagamento primeiro, depois quem espera há mais tempo. Tempo de espera conta só no horário do canal.</li>
-        <li>Espera acima da meta da empresa fica âmbar; acima do dobro, vermelha.</li>
+        <li>Ordem da fila: CPC Negócio e Alega pagamento primeiro, depois quem espera há mais tempo (tempo corrido desde a primeira mensagem do cliente sem resposta).</li>
+        <li>Meta de primeira resposta é opcional e vem desligada. Sem meta, a espera aparece sem cor. Com meta: acima dela, âmbar; acima do dobro, vermelha.</li>
         <li>Responder assume a conversa. Transferir pede o colega e uma nota opcional, e avisa no sino de quem recebe.</li>
         <li>Nota interna só a equipe da empresa vê; nunca vai para o cliente.</li>
         <li>Corrigir a classe guarda quem mudou, quando e de qual para qual; isso alimenta a qualidade do Radar.</li>
@@ -244,7 +244,7 @@ textarea{resize:vertical;width:100%}
         <p>Com um filtro de classe ativo, a mesma resposta vai para várias conversas abertas. Antes de enviar, a tela mostra quantas mensagens saem, por canal, e o custo previsto.</p></div></div>
       <div class="cartao">
         <div class="linha"><span>Filtro ativo:</span><span class="cl">Alega pagamento</span><span class="pil neutra">Abertas · sem resposta nossa</span></div>
-        <div class="campo"><label for="gr-txt">Resposta</label><textarea id="gr-txt" rows="3">Recebemos sua mensagem. Para conferir o pagamento, envie o comprovante respondendo esta mensagem. Obrigado.</textarea></div>
+        <div class="campo"><label for="gr-txt">Resposta</label><textarea id="gr-txt" rows="3">Recebemos sua mensagem e vamos conferir o pagamento.</textarea></div>
         <p class="nota" id="gr-conta"></p>
         <div class="rolar"><table class="tab"><thead><tr><th>Canal</th><th class="n">Conversas</th><th class="n">Preço</th><th class="n">Custo previsto</th></tr></thead>
           <tbody id="gr-tab"></tbody></table></div>
@@ -270,8 +270,8 @@ textarea{resize:vertical;width:100%}
       <div class="kpis">
         <div class="kpi"><span>Respostas recebidas</span><b>1.284</b><em>de 38.910 mensagens entregues (3,3%)</em></div>
         <div class="kpi"><span>CPC Negócio</span><b>212</b><em>16,5% das respostas</em></div>
-        <div class="kpi"><span>Primeira resposta (mediana)</span><b>14 min</b><em>meta da empresa: 15 min</em></div>
-        <div class="kpi"><span>Abertas acima da meta</span><b>9</b><em>4 há mais que o dobro</em></div>
+        <div class="kpi"><span>Primeira resposta (mediana)</span><b>14 min</b><em>sem meta definida</em></div>
+        <div class="kpi"><span>Esperando resposta agora</span><b>9</b><em>a mais antiga há 41 min</em></div>
       </div>
       <div class="duas">
         <div class="cartao">
@@ -299,19 +299,19 @@ textarea{resize:vertical;width:100%}
         <p>Cada empresa define a própria meta de primeira resposta, as respostas rápidas e quem é avisado. Salva com o painel lateral (padrão 2).</p></div></div>
       <div class="duas">
         <div class="cartao">
-          <h3>Meta de primeira resposta</h3>
-          <div class="linha"><div class="campo" style="max-width:140px"><label for="cf-meta">Minutos</label><input type="number" id="cf-meta" value="15" min="5" max="240"></div>
-            <p class="nota" style="max-width:34ch">Conta só no horário do canal. Acima da meta, âmbar; acima do dobro, vermelho.</p></div>
+          <h3>Meta de primeira resposta <span class="pil neutra">opcional</span></h3>
+          <label class="linha" style="gap:8px"><input type="checkbox" id="cf-usar"> Usar meta de primeira resposta</label>
+          <div class="linha" id="cf-meta-box" hidden><div class="campo" style="max-width:140px"><label for="cf-meta">Minutos</label><input type="number" id="cf-meta" value="15" min="5" max="240"></div>
+            <p class="nota" style="max-width:34ch">Acima da meta, âmbar; acima do dobro, vermelho. Sem meta, a espera aparece sem cor.</p></div>
           <h3 style="margin-top:6px">Avisos no sino</h3>
           <label class="linha" style="gap:8px"><input type="checkbox" checked> Judicial: avisar Admin e Gestão na hora</label>
-          <label class="linha" style="gap:8px"><input type="checkbox" checked> Conversa acima do dobro da meta: avisar quem atende</label>
+          <label class="linha" style="gap:8px"><input type="checkbox" id="cf-av-meta" disabled> Conversa acima do dobro da meta: avisar quem atende <span class="nota">(precisa da meta)</span></label>
           <label class="linha" style="gap:8px"><input type="checkbox"> CPC Negócio sem responsável há 10 min: avisar a Gestão</label>
         </div>
         <div class="cartao">
           <h3>Respostas rápidas</h3>
-          <p class="sub">Aparecem acima da caixa de texto, as da classe da conversa primeiro. Podem usar {{id_cliente}}; nunca dados pessoais.</p>
-          <div class="rolar"><table class="tab"><thead><tr><th>Nome</th><th>Classe</th><th>Texto</th></tr></thead><tbody id="cf-rap"></tbody></table></div>
-          <div><button class="btn sec peq" type="button">Nova resposta rápida</button></div>
+          <p class="sub">Aparecem acima da caixa de texto, as da classe da conversa primeiro. Nenhuma vem pronta: cada empresa escreve as suas (com o jurídico dela, quando precisar). Nunca dados pessoais.</p>
+          <div class="vazio-rap" style="border:1px dashed var(--borda);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;align-items:flex-start"><b>Nenhuma resposta rápida ainda</b><span class="nota">Crie a primeira: um nome curto, a classe em que ela aparece primeiro (ou todas) e o texto.</span><button class="btn peq" type="button">Nova resposta rápida</button></div>
         </div>
       </div>
     </section>
@@ -329,7 +329,7 @@ textarea{resize:vertical;width:100%}
 
   const CLASSES = { cpc_negocio: ["CPC Negócio", "neg", 1], alega_pagamento: ["Alega pagamento", "", 2], judicial: ["Judicial", "jud", 3], desconhece: ["Desconhece", "", 4], cpc: ["CPC", "", 5], baixo_calao: ["Baixo calão", "", 6], sem_classe: ["Sem classe", "", 7] };
   $("cx-classe").innerHTML += Object.entries(CLASSES).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join("");
-  const META = 15;
+  let META = null;   // sem meta: a espera aparece sem cor
   const EU = "Você";
   const CONV = [
     { id: 1, msk: "(11) 9••••-••66", cli: "C10233", can: "SMS", cl: "cpc_negocio", conf: .94, esp: 22, resp: null, sit: "nova", nl: 2, camp: "Cobrança outubro",
@@ -343,16 +343,10 @@ textarea{resize:vertical;width:100%}
     { id: 5, msk: "(51) 9••••-••12", cli: "C77401", can: "SMS", cl: "cpc", conf: .76, esp: 0, resp: EU, sit: "aguardando", nl: 0, camp: "Lembrete de parcela",
       msgs: [["sai", "Lembrete: sua parcela vence amanhã.", "08:00 · Enviada"], ["ent", "ok obrigado", "08:15", "Confirma recebimento."], ["sai", "Por nada! Qualquer dúvida, responda aqui.", "08:20 · Enviada · Você"]] }
   ];
-  const RAP = [
-    ["Boleto", "cpc_negocio", "Para receber a proposta e o boleto, acesse o link enviado ou responda com o melhor dia para pagar."],
-    ["Comprovante", "alega_pagamento", "Obrigado. Para conferir o pagamento, envie o comprovante respondendo esta mensagem."],
-    ["Número errado", "desconhece", "Desculpe o incômodo. Vamos tirar este número do cadastro."],
-    ["Advogado", "judicial", "Entendido. Registramos a informação e não enviaremos novas mensagens de cobrança por aqui sem retorno da equipe responsável."],
-    ["Agradecer", "", "Obrigado pelo retorno. Qualquer dúvida, responda aqui."]
-  ];
+  const RAP = [];   // nenhuma vem pronta: cada empresa escreve as suas
   let filtro = "todas", sel = 1, modo = "resp";
   const classe = c => `<span class="cl ${CLASSES[c.cl][1]}">${CLASSES[c.cl][0]} <small>${Math.round(c.conf * 100)}%</small></span>`;
-  const espera = m => m === 0 ? "" : `<span class="esp ${m >= META * 2 ? "erro" : m >= META ? "at" : ""}">esperando ${m} min</span>`;
+  const espera = m => m === 0 ? "" : `<span class="esp ${META && m >= META * 2 ? "erro" : META && m >= META ? "at" : ""}">esperando ${m} min</span>`;
   const passa = c => (filtro === "todas" ? c.sit !== "resolvida" && c.sit !== "aguardando" : filtro === "sem" ? c.sit === "nova" : filtro === "minhas" ? c.resp === EU && c.sit !== "resolvida" : c.sit === "aguardando")
     && (!$("cx-canal").value || c.can === $("cx-canal").value) && (!$("cx-classe").value || c.cl === $("cx-classe").value)
     && (!$("cx-busca").value || c.cli.toLowerCase().includes($("cx-busca").value.toLowerCase()));
@@ -391,7 +385,9 @@ textarea{resize:vertical;width:100%}
   function rapidas() {
     const c = CONV.find(x => x.id === sel);
     const ord = [...RAP].sort((a, b) => (b[1] === c.cl) - (a[1] === c.cl));
-    $("cv-rapidas").innerHTML = modo === "resp" ? ord.slice(0, 4).map(r => `<button type="button" data-t="${r[2]}">${r[0]}</button>`).join("") : "";
+    $("cv-rapidas").innerHTML = modo !== "resp" ? "" : RAP.length ? ord.slice(0, 4).map(r => `<button type="button" data-t="${r[2]}">${r[0]}</button>`).join("")
+      : `<span class="nota">Sem respostas rápidas. <button class="link" type="button" id="cv-criar-rap">Criar em Configurar</button></span>`;
+    const cr = $("cv-criar-rap"); if (cr) cr.addEventListener("click", () => ir("config"));
     $("cv-rapidas").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $("cv-txt").value = b.dataset.t; info(); $("cv-txt").focus(); }));
   }
   function info() {
@@ -443,6 +439,7 @@ textarea{resize:vertical;width:100%}
     .map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="n">${(r[1] / 1284 * 100).toFixed(1).replace(".", ",")}%</td><td class="n">${r[2]} (${(r[2] / r[1] * 100).toFixed(1).replace(".", ",")}%)${r[2] / r[1] > .1 ? ' <span class="pil at">revisar</span>' : ""}</td></tr>`).join("");
 
   // ---------- config
-  $("cf-rap").innerHTML = RAP.map(r => `<tr><td>${r[0]}</td><td>${r[1] ? CLASSES[r[1]][0] : "Todas"}</td><td style="white-space:normal;min-width:240px">${r[2]}</td></tr>`).join("");
+  $("cf-usar").addEventListener("change", e => { $("cf-meta-box").hidden = !e.target.checked; $("cf-av-meta").disabled = !e.target.checked; META = e.target.checked ? +$("cf-meta").value : null; lista(); });
+  $("cf-meta").addEventListener("input", e => { META = +e.target.value || null; lista(); });
 })();
 </script>
