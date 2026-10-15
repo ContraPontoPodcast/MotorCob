@@ -205,10 +205,11 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
 
       <h3 style="margin:4px 0 0">Entrega</h3>
       <div class="perg">
-        <button data-ir2="aberto"><b>Quanto foi entregue, dia a dia?</b><span>Enviadas, entregues e taxa de entrega por dia e canal.</span><small>Mais usado</small></button>
+        <button data-ir2="aberto"><b>Quanto foi entregue, dia a dia?</b><span>Enviadas, entregues, não entregues e as taxas por dia e canal.</span><small>Mais usado</small></button>
         <button data-ir2="aberto"><b>Como foi cada campanha?</b><span>Lista carregada, enviadas, entregues, respostas e descadastros por campanha.</span></button>
         <button data-ir2="aberto"><b>Como cada operadora entregou?</b><span>Vivo, Claro, TIM e outras: entregues e falhas.</span></button>
-        <button data-ir2="aberto"><b>Por que mensagens não saíram?</b><span>Bloqueio, número inválido, descadastro, fora do horário.</span></button>
+        <button data-ir2="aberto"><b>Por que mensagens não saíram ou não foram entregues?</b><span>Bloqueio, número inválido, descadastro, fora do horário e o motivo da falha de entrega por operadora.</span></button>
+        <button data-ir2="aberto"><b>Quantos e-mails voltaram (bounce)?</b><span>Bounce permanente e temporário por dia e campanha, com a taxa.</span></button>
         <button data-ir2="aberto"><b>Quanto o Score evitou de envio?</b><span>Por faixa do Score: enviadas, represadas e entregues. Só com o Score contratado.</span></button>
       </div>
       <h3 style="margin:4px 0 0">Respostas e links</h3>
@@ -252,18 +253,26 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
           <div class="campo"><label for="per">Período</label><select id="per"><option>Hoje</option><option selected>Últimos 7 dias</option><option>Últimos 30 dias</option><option>Este mês</option><option>Mês passado</option><option>Escolher datas…</option></select></div>
           <div class="campo"><label>Comparar com</label><div class="abas" role="group" aria-label="Comparar com"><button aria-pressed="true" id="cmp-ant">7 dias anteriores</button><button aria-pressed="false" id="cmp-nada">Não comparar</button></div></div>
         </div>
-        <div class="filtro"><b>Canal</b><div class="chips" role="group" aria-label="Canal"><button class="chip" aria-pressed="true">Todos</button><button class="chip" aria-pressed="false">SMS</button><button class="chip" aria-pressed="false">RCS</button><button class="chip" aria-pressed="false">WhatsApp</button><button class="chip" aria-pressed="false">E-mail</button></div></div>
+        <div class="filtro"><b>Canal</b><div class="chips" role="group" aria-label="Canal" id="canais"><button class="chip" aria-pressed="true" data-c="todos">Todos</button><button class="chip" aria-pressed="false" data-c="sms">SMS</button><button class="chip" aria-pressed="false" data-c="rcs">RCS</button><button class="chip" aria-pressed="false" data-c="wa">WhatsApp</button><button class="chip" aria-pressed="false" data-c="email">E-mail</button></div></div>
         <div class="filtro"><b>Campanha</b><button class="chip x" aria-pressed="true">Regularize · outubro</button><button class="chip x" aria-pressed="true">Lista do dia</button><button class="chip">+ campanha</button>
           <b style="margin-left:10px">Produto</b><button class="chip">Todos</button></div>
       </div>
 
-      <div class="kpis">
+      <div class="kpis" id="k-todos">
         <div class="kpi"><span>Enviadas</span><b>148.320</b><small class="sobe">+12% que os 7 dias anteriores</small></div>
-        <div class="kpi"><span>Entregues</span><b>139.207</b><small class="sobe">+14%</small></div>
-        <div class="kpi"><span>Taxa de entrega</span><b>93,9%</b><small class="sobe">+1,6 ponto</small></div>
+        <div class="kpi"><span>Entregues</span><b>139.207</b><small class="sobe">+14% · 93,9% das enviadas</small></div>
+        <div class="kpi"><span>Não entregues</span><b>9.113</b><small class="sobe">6,1% das enviadas · −1,6 ponto</small></div>
         <div class="kpi"><span>Taxa de resposta</span><b>4,2%</b><small class="desce">−0,3 ponto</small></div>
       </div>
-      <p class="nota">Taxa de entrega = entregues ÷ enviadas. Taxa de resposta = respostas ÷ entregues. Variação em pontos percentuais para taxas e em % para quantidades. Toque no "i" de cada número para ver a conta.</p>
+      <div class="kpis" id="k-email" hidden>
+        <div class="kpi"><span>E-mails enviados</span><b>24.600</b><small class="sobe">+8% que os 7 dias anteriores</small></div>
+        <div class="kpi"><span>Entregues</span><b>23.247</b><small class="sobe">94,5% dos enviados</small></div>
+        <div class="kpi"><span>Bounce permanente</span><b>984</b><small class="desce">4,0% dos enviados · +0,7 ponto</small></div>
+        <div class="kpi"><span>Bounce temporário</span><b>369</b><small class="sobe">1,5% dos enviados · −0,2 ponto</small></div>
+        <div class="kpi"><span>Aberturas</span><b>7.672</b><small class="sobe">33,0% dos entregues</small></div>
+      </div>
+      <p class="nota" id="n-todos">Taxa de entrega = entregues ÷ enviadas. Taxa de não entrega = não entregues ÷ enviadas. Taxa de resposta = respostas ÷ entregues. Variação em pontos para taxas e em % para quantidades; verde é bom para o negócio (não entregue caindo é verde). Toque no "i" de cada número para ver a conta.</p>
+      <p class="nota" id="n-email" hidden>No e-mail, "não entregue" se divide em bounce permanente (endereço não existe ou foi recusado de vez) e bounce temporário (caixa cheia, servidor fora do ar). Taxa de bounce = bounces ÷ enviados. Bounce permanente subindo fica vermelho: é sinal de lista desatualizada e prejudica a reputação do remetente.</p>
 
       <div class="cartao">
         <div class="cartao-cab"><h3>Entregues por dia</h3><div class="legenda"><span><i></i>Este período</span><span id="leg2"><i class="l2"></i>7 dias anteriores</span></div></div>
@@ -278,14 +287,14 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
 
       <div class="cartao">
         <div class="cartao-cab"><h3>Por dia e canal</h3><span class="nota">14 linhas · ordenar tocando no título da coluna</span></div>
-        <div class="rolar"><table class="tab"><thead><tr><th>Dia</th><th>Canal</th><th class="n">Enviadas</th><th class="n">Entregues</th><th class="n">Taxa de entrega</th><th class="n">Respostas</th><th class="n">Taxa de resposta</th></tr></thead>
+        <div class="rolar"><table class="tab"><thead><tr><th>Dia</th><th>Canal</th><th class="n">Enviadas</th><th class="n">Entregues</th><th class="n">Taxa de entrega</th><th class="n">Não entregues</th><th class="n">Taxa de não entrega</th><th class="n">Respostas</th><th class="n">Taxa de resposta</th></tr></thead>
           <tbody>
-            <tr><td>15/10</td><td>SMS</td><td class="n">18.420</td><td class="n">17.391</td><td class="n">94,4%</td><td class="n">712</td><td class="n">4,1%</td></tr>
-            <tr><td>15/10</td><td>WhatsApp</td><td class="n">5.110</td><td class="n">5.004</td><td class="n">97,9%</td><td class="n">398</td><td class="n">8,0%</td></tr>
-            <tr><td>14/10</td><td>SMS</td><td class="n">17.980</td><td class="n">16.870</td><td class="n">93,8%</td><td class="n">655</td><td class="n">3,9%</td></tr>
-            <tr><td>14/10</td><td>WhatsApp</td><td class="n">4.870</td><td class="n">4.766</td><td class="n">97,9%</td><td class="n">371</td><td class="n">7,8%</td></tr>
+            <tr><td>15/10</td><td>SMS</td><td class="n">18.420</td><td class="n">17.391</td><td class="n">94,4%</td><td class="n">1.029</td><td class="n">5,6%</td><td class="n">712</td><td class="n">4,1%</td></tr>
+            <tr><td>15/10</td><td>WhatsApp</td><td class="n">5.110</td><td class="n">5.004</td><td class="n">97,9%</td><td class="n">106</td><td class="n">2,1%</td><td class="n">398</td><td class="n">8,0%</td></tr>
+            <tr><td>14/10</td><td>SMS</td><td class="n">17.980</td><td class="n">16.870</td><td class="n">93,8%</td><td class="n">1.110</td><td class="n">6,2%</td><td class="n">655</td><td class="n">3,9%</td></tr>
+            <tr><td>14/10</td><td>WhatsApp</td><td class="n">4.870</td><td class="n">4.766</td><td class="n">97,9%</td><td class="n">104</td><td class="n">2,1%</td><td class="n">371</td><td class="n">7,8%</td></tr>
           </tbody>
-          <tfoot><tr><td colspan="2">Total do período</td><td class="n">148.320</td><td class="n">139.207</td><td class="n">93,9%</td><td class="n">5.847</td><td class="n">4,2%</td></tr></tfoot></table></div>
+          <tfoot><tr><td colspan="2">Total do período</td><td class="n">148.320</td><td class="n">139.207</td><td class="n">93,9%</td><td class="n">9.113</td><td class="n">6,1%</td><td class="n">5.847</td><td class="n">4,2%</td></tr></tfoot></table></div>
         <p class="nota">Na tela, até 1.000 linhas; o total do rodapé é do período inteiro. Taxas do total são recalculadas (não é a média das linhas).</p>
       </div>
 
@@ -325,6 +334,8 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
               <label><input type="checkbox" checked> Enviadas</label>
               <label><input type="checkbox" checked> Entregues</label>
               <label><input type="checkbox" checked> Taxa de entrega <small>entregues ÷ enviadas</small></label>
+              <label><input type="checkbox" checked> Não entregues e taxa de não entrega <small>não entregues ÷ enviadas</small></label>
+              <label><input type="checkbox"> Bounce permanente e temporário (e-mail) <small>cada um ÷ enviados</small></label>
               <label><input type="checkbox"> Respostas</label>
               <label><input type="checkbox"> Taxa de resposta <small>respostas ÷ entregues</small></label>
               <label><input type="checkbox"> Descadastros e taxa de descadastro</label>
@@ -346,13 +357,14 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
 
       <div class="cartao">
         <div class="cartao-cab"><h3>Prévia</h3><span class="nota">200 primeiras linhas · últimos 7 dias</span></div>
-        <div class="rolar"><table class="tab"><thead><tr><th>Dia</th><th>Canal</th><th class="n">Enviadas</th><th class="n">Entregues</th><th class="n">Taxa de entrega</th></tr></thead>
-          <tbody><tr><td>15/10</td><td>SMS</td><td class="n">18.420</td><td class="n">17.391</td><td class="n">94,4%</td></tr><tr><td>15/10</td><td>WhatsApp</td><td class="n">5.110</td><td class="n">5.004</td><td class="n">97,9%</td></tr><tr><td>14/10</td><td>SMS</td><td class="n">17.980</td><td class="n">16.870</td><td class="n">93,8%</td></tr></tbody></table></div>
+        <div class="rolar"><table class="tab"><thead><tr><th>Dia</th><th>Canal</th><th class="n">Enviadas</th><th class="n">Entregues</th><th class="n">Taxa de entrega</th><th class="n">Não entregues</th><th class="n">Taxa de não entrega</th></tr></thead>
+          <tbody><tr><td>15/10</td><td>SMS</td><td class="n">18.420</td><td class="n">17.391</td><td class="n">94,4%</td><td class="n">1.029</td><td class="n">5,6%</td></tr><tr><td>15/10</td><td>WhatsApp</td><td class="n">5.110</td><td class="n">5.004</td><td class="n">97,9%</td><td class="n">106</td><td class="n">2,1%</td></tr><tr><td>14/10</td><td>SMS</td><td class="n">17.980</td><td class="n">16.870</td><td class="n">93,8%</td><td class="n">1.110</td><td class="n">6,2%</td></tr></tbody></table></div>
       </div>
 
       <div class="regra"><b>Regras</b><ul>
         <li>Novos campos: produto, faixa do Score, centro de custo e campanha pelo nome. Semana e mês como agrupamento de data.</li>
         <li>Taxas calculadas pelo banco sobre o grupo (não média de taxas).</li>
+        <li>"Não entregues" e a taxa entram por padrão em todo relatório de entrega. No e-mail, aparecem separados em bounce permanente e temporário.</li>
         <li>Erro vira frase: "Não dá para separar por ID do cliente: escolha outra opção" no lugar do erro do banco.</li>
       </ul></div>
     </section>
@@ -378,7 +390,7 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
           <div class="campo"><label>Para (usuários da empresa)</label><div class="chips"><button class="chip x" aria-pressed="true">Você</button><button class="chip x" aria-pressed="true">Marina (Gestão)</button><button class="chip">+ pessoa</button></div></div>
           <div class="email" style="border:1px solid var(--borda);border-radius:10px;padding:12px;font-size:13px">
             <b>Assunto:</b> Fechamento semanal da carteira A · 06 a 12/10<br>
-            Enviadas 148.320 (+12%) · Entregues 93,9% · Respostas 4,2%.<br>
+            Enviadas 148.320 (+12%) · Entregues 93,9% · Não entregues 6,1% · Respostas 4,2%.<br>
             <u>Abrir o relatório na plataforma</u>
           </div>
           <p class="nota">O e-mail leva só os números do topo e o link (entra com login); o arquivo não vai anexado. Quem sai da empresa deixa de receber.</p>
@@ -403,13 +415,19 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
   botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
   document.querySelectorAll("[data-ir2]").forEach(b => b.addEventListener("click", () => ir(b.dataset.ir2)));
   document.querySelectorAll(".chips .chip:not(.x), .abas").forEach(() => {});
-  document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+  document.querySelectorAll(".chip:not(#canais .chip)").forEach(c => c.addEventListener("click", () => {
     if (c.classList.contains("x")) { c.remove(); return; }
     c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") === "true" ? "false" : "true");
   }));
   document.querySelectorAll(".abas").forEach(g => g.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
     g.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
   })));
+  const canais = $("canais");
+  canais.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+    canais.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x === c ? "true" : "false"));
+    const em = c.dataset.c === "email";
+    $("k-todos").hidden = em; $("n-todos").hidden = em; $("k-email").hidden = !em; $("n-email").hidden = !em;
+  }, true));
   $("cmp-nada").addEventListener("click", () => { $("l2").style.display = "none"; $("leg2").hidden = true; });
   $("cmp-ant").addEventListener("click", () => { $("l2").style.display = ""; $("leg2").hidden = false; });
   $("salvar").addEventListener("click", () => toast("Relatório salvo para toda a empresa."));
