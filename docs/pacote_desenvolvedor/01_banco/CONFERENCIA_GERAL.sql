@@ -117,9 +117,9 @@ with itens(ordem, item, ok, se_falhar) as (values
        and exists (select 1 from information_schema.columns where table_schema = 'public'
                    and table_name = 'empresa_contatos' and column_name = 'recebe_faturas'),
        'rodar o SQL 29 (supabase/migrations/20261126000001_ajustes_console.sql)'),
-  (9,  'Permissões no catálogo (15)',
-       pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
-       'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),
+  (9,  'Permissões no catálogo (16)',
+       pg_temp.n('select count(*) from public.permissoes_catalogo') = 16,
+       'rodar os SQL na ordem; o último que mexe no catálogo é o 37'),
   (10, 'Buckets fotos e chamados são privados',
        (select count(*) from storage.buckets where id in ('fotos', 'chamados') and not public) = 2,
        'rodar 04_workspace.sql'),
@@ -189,6 +189,11 @@ with itens(ordem, item, ok, se_falhar) as (values
        and to_regprocedure('public.salvar_preco_vigencia(bigint, text, text, numeric, numeric, jsonb, text, text, text)') is not null
        and pg_temp.n('select count(*) from public.permissoes_catalogo where codigo = ''pagar_faturas''') = 1,
        'rodar o SQL 37 (supabase/migrations/20261204000001_faturas_contratacao.sql)'),
+  (25, 'Acordo de pagamento de fatura vencida (SQL 38)',
+       to_regclass('public.acordos_fatura') is not null and to_regclass('public.acordo_parcelas') is not null
+       and to_regprocedure('public.lancar_acordo(bigint, bigint[], integer, date, text[], numeric, text, boolean)') is not null
+       and pg_temp.n('select count(*) from information_schema.columns where table_schema = ''public'' and table_name = ''cobrancas'' and column_name = ''parcela_id''') = 1,
+       'rodar o SQL 38 (supabase/migrations/20261205000001_acordos_fatura.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

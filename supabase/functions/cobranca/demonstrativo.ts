@@ -202,3 +202,48 @@ export function emailLembrete(tipo: "d1" | "d5" | "d7", f: { numero: number; cic
 </div>`;
   return { assunto, html };
 }
+
+export interface DadosAcordo {
+  numero: number; faturas: string; valor_faturas: string; ajuste: number; ajuste_texto: string; total: string;
+  parcelas: { rotulo: string; vencimento: string; valor: string }[]; formas: string[];
+}
+
+/** E-mail do acordo de pagamento ("Informar o cliente"): faturas, desconto ou acréscimo, parcelas e a regra da quebra. */
+export function emailAcordo(a: DadosAcordo, cliente: string, pagar: string) {
+  const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  const n = a.parcelas.length;
+  const assunto = `Acordo de pagamento registrado · ${n} parcela${n > 1 ? "s" : ""} de ${a.parcelas[n - 1]?.valor ?? a.total}`;
+  const ajuste = a.ajuste < 0 ? `, com desconto de ${esc(a.ajuste_texto)}` : a.ajuste > 0 ? `, com acréscimo de ${esc(a.ajuste_texto)}` : "";
+  const linhas = a.parcelas.map((p) => `<tr><td style="padding:6px 0">${esc(p.rotulo)}</td><td style="padding:6px 0">${esc(p.vencimento)}</td><td style="padding:6px 0;text-align:right;white-space:nowrap">${esc(p.valor)}</td></tr>`).join("");
+  const nomes: Record<string, string> = { pix: "Pix", boleto: "boleto", cartao: "cartão" };
+  const formas = a.formas.map((f) => nomes[f] ?? f);
+  const formasTxt = formas.length > 1 ? `${formas.slice(0, -1).join(", ")} ou ${formas[formas.length - 1]}` : formas[0];
+  const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1D1D1F;max-width:560px">
+<p>Olá, equipe da ${esc(cliente)}.</p>
+<p>Registramos o acordo de pagamento nº ${a.numero} das faturas de ${esc(a.faturas)} (${esc(a.valor_faturas)})${ajuste}. Total do acordo: <b>${esc(a.total)}</b>.</p>
+<table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="color:#6E6E73"><td>Parcela</td><td>Vencimento</td><td style="text-align:right">Valor</td></tr>${linhas}</table>
+<p>O acesso e os envios ficam liberados enquanto as parcelas estiverem em dia. Cada parcela pode ser paga por ${esc(formasTxt ?? "")} em Empresa › Faturamento.</p>
+<p><a href="${esc(pagar)}" style="display:inline-block;margin:4px 0;padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;background:#1D1D1F;color:#FFFFFF">Pagar a 1ª parcela</a></p>
+<p style="font-size:13px;color:#6E6E73">Se uma parcela ficar 10 dias em atraso, o acordo é desfeito e o valor que falta volta a ser cobrado. Dúvidas: Suporte na plataforma.</p>
+</div>`;
+  return { assunto, html };
+}
+
+/** Lembrete da parcela vencida: d1 (venceu ontem) e d5 (5 dias; o acordo é desfeito com 10). */
+export function emailLembreteParcela(tipo: "d1" | "d5", p: { rotulo: string; acordo: number; valor: string; vencimento: string;
+  quebra: string }, cliente: string, pagar: string) {
+  const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  const assunto = tipo === "d1"
+    ? `Parcela ${p.rotulo} do acordo nº ${p.acordo} venceu em ${p.vencimento.slice(0, 5)}`
+    : `Parcela ${p.rotulo} do acordo nº ${p.acordo} vencida há 5 dias`;
+  const frase = tipo === "d1"
+    ? `A parcela ${esc(p.rotulo)} do acordo de pagamento, de <b>${esc(p.valor)}</b>, venceu em ${esc(p.vencimento)}. Se o pagamento já foi feito, desconsidere este e-mail.`
+    : `A parcela ${esc(p.rotulo)} do acordo de pagamento, de <b>${esc(p.valor)}</b>, está vencida desde ${esc(p.vencimento)}. Se não for paga até ${esc(p.quebra)}, o acordo é desfeito, o valor que falta volta a ser cobrado e o acesso é bloqueado.`;
+  const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1D1D1F;max-width:560px">
+<p>Olá, equipe da ${esc(cliente)}.</p>
+<p>${frase}</p>
+<p><a href="${esc(pagar)}" style="display:inline-block;margin:4px 0;padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;background:#1D1D1F;color:#FFFFFF">Pagar a parcela</a></p>
+<p style="font-size:13px;color:#6E6E73">Pix, boleto ou cartão, conforme o acordo. Dúvidas: Suporte na plataforma.</p>
+</div>`;
+  return { assunto, html };
+}

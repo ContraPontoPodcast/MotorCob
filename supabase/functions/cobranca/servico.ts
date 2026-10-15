@@ -3,9 +3,9 @@
 import {
   type Alvo, checkoutCartao, clienteStripe, type Contato, dadosCobranca, descricaoNota, destinatariosFatura, type Empresa,
   FOCUS, faltaNaConfig, formStripe,
-  type Gerada, lerGerada, lerNota, type NfConfig, notaFocus, paymentIntent, pdfDoBoleto, referenciaNota, STRIPE,
+  type Gerada, lerGerada, lerNota, type NfConfig, notaFocus, paymentIntent, pdfDoBoleto, referenciaNota, rotuloParcela, STRIPE,
 } from "./regras.ts";
-import { brl, type Dados, emailFatura, emailLembrete, montar } from "./demonstrativo.ts";
+import { brl, type Dados, emailAcordo, emailFatura, emailLembrete, emailLembreteParcela, montar } from "./demonstrativo.ts";
 import { gerarPdf } from "./demonstrativo_pdf.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -72,7 +72,7 @@ export async function clienteDa(db: Banco, empresa: Empresa, email: string | nul
 /** Gera (ou reaproveita) o boleto, o Pix ou a página do cartão de uma fatura ou recarga. */
 export async function gerarCobranca(db: Banco, alvo: Alvo, forma: "boleto" | "pix" | "cartao", opcoes:
   { voltar: string; guardarCartao?: boolean; hoje: string }) {
-  const col = alvo.tipo === "fatura" ? "fatura_id" : "recarga_id";
+  const col = `${alvo.tipo}_id`;
   const { data: aberta } = await db.from("cobrancas").select("*").eq(col, alvo.id).eq("forma", forma)
     .eq("situacao", "pendente").gt("expira_em", new Date(Date.now() + 10 * 60000).toISOString())
     .order("id", { ascending: false }).limit(1).maybeSingle();
@@ -129,14 +129,14 @@ async function completarIbge(db: Banco, e: Empresa) {
   return e;
 }
 
-/** Emite a NFS-e de uma fatura ou recarga (se a nota estiver ligada). Devolve a linha de notas_fiscais ou null. */
-export async function emitirNota(db: Banco, tipo: "fatura" | "recarga", id: number) {
+/** Emite a NFS-e de uma fatura, recarga ou parcela de acordo (se a nota estiver ligada). Devolve a linha ou null. */
+export async function emitirNota(db: Banco, tipo: "fatura" | "recarga" | "parcela", id: number) {
   const { data: cfg } = await db.from("nf_config").select("*").eq("id", 1).single();
   const c = cfg as NfConfig;
   if (!c?.ativo) return null;
   const falta = faltaNaConfig(c);
   if (falta.length) throw new ErroCobranca(`Nota fiscal sem configuração: ${falta.join(", ")} (Console › Faturamento › Nota fiscal).`);
-  const col = tipo === "fatura" ? "fatura_id" : "recarga_id";
+  const col = `${tipo}_id`;
   const { data: notas } = await db.from("notas_fiscais").select("id, situacao").eq(col, id);
   const lista = (notas ?? []) as { situacao: string }[];
   const ativa = lista.find((n) => n.situacao === "processando" || n.situacao === "autorizada");
@@ -147,6 +147,19 @@ export async function emitirNota(db: Banco, tipo: "fatura" | "recarga", id: numb
     const { data: ciclo } = await db.rpc("ciclo_de", { empresa: f.empresa_id, competencia: f.competencia });
     valor = Number(f.valor_total); empresaId = f.empresa_id;
     descricao = descricaoNota(c.descricao_fatura, Array.isArray(ciclo) ? ciclo[0] : ciclo);
+  } else if (tipo === "parcela") {
+    const { data: p } = await db.from("acordo_parcelas").select("acordo_id, empresa_id, numero, tipo, valor").eq("id", id).single();
+    // fatura do acordo que já teve nota (nota na emissão): a parcela não gera outra
+    const { data: fs } = await db.from("faturas").select("id").eq("acordo_id", p.acordo_id);
+    const ids = ((fs ?? []) as { id: number }[]).map((f) => f.id);
+    if (ids.length) {
+      const { data: ja } = await db.from("notas_fiscais").select("id").in("fatura_id", ids).in("situacao", ["processando", "autorizada"]).limit(1);
+      if ((ja ?? []).length) return null;
+    }
+    const { data: a } = await db.from("acordos_fatura").select("parcelas").eq("id", p.acordo_id).single();
+    valor = Number(p.valor); empresaId = p.empresa_id;
+    descricao = descricaoNota(c.descricao_parcela ?? "Parcela {parcela} do acordo de pagamento nº {acordo}.", null,
+      { rotulo: rotuloParcela(p.numero, a?.parcelas ?? p.numero, p.tipo), acordo: p.acordo_id });
   } else {
     const { data: r } = await db.from("recargas").select("empresa_id, valor").eq("id", id).single();
     valor = Number(r.valor); empresaId = r.empresa_id; descricao = descricaoNota(c.descricao_recarga);
@@ -175,9 +188,12 @@ export async function atualizarNota(db: Banco, ref: string) {
   if (r.status !== 200) return null;
   const n = lerNota(r.corpo, FOCUS[(cfg as NfConfig).ambiente]);
   const { data: linha } = await db.from("notas_fiscais").update({ ...n, atualizada_em: new Date().toISOString() })
-    .eq("referencia", ref).select("fatura_id").maybeSingle();
+    .eq("referencia", ref).select("fatura_id, parcela_id").maybeSingle();
   if (n.situacao === "autorizada" && linha?.fatura_id && n.link_pdf) {
     await db.from("faturas").update({ link_nota_fiscal: n.link_pdf }).eq("id", linha.fatura_id);
+  }
+  if (n.situacao === "autorizada" && linha?.parcela_id && n.link_pdf) {
+    await db.from("acordo_parcelas").update({ link_nota_fiscal: n.link_pdf }).eq("id", linha.parcela_id);
   }
   return n;
 }
@@ -258,8 +274,9 @@ export async function enviarFatura(db: Banco, fatura: number, site: string) {
 /** Lembrete de fatura vencida (motor, uma vez por fatura e tipo). Fatura já paga não recebe nada. */
 export async function lembrarFatura(db: Banco, fatura: number, tipo: "d1" | "d5" | "d7", site: string) {
   const { data: f } = await db.from("faturas")
-    .select("id, empresa_id, situacao, valor_total, vencimento, competencia").eq("id", fatura).single();
+    .select("id, empresa_id, situacao, valor_total, vencimento, competencia, acordo_id").eq("id", fatura).single();
   if (!f || f.situacao !== "aberta") return { pulou: "fatura não está em aberto" };
+  if (f.acordo_id) return { pulou: "fatura está em acordo de pagamento" };
   const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato, recebe_faturas")
     .eq("empresa_id", f.empresa_id).not("email", "is", null);
   const para = destinatariosFatura((contatos ?? []) as Contato[]);
@@ -275,5 +292,68 @@ export async function lembrarFatura(db: Banco, fatura: number, tipo: "d1" | "d5"
   }, emp?.nome ?? "", `${site}/empresa/faturamento`);
   await enviarEmail(para, assunto, html, cfg?.email_financeiro);
   await db.from("fatura_lembretes").insert({ fatura_id: f.id, tipo, enviado_para: para.join(", ").slice(0, 500) });
+  return { enviado_para: para };
+}
+
+// ---------------------------------------------------------------- acordo de pagamento (SQL 38)
+const br = (d: string) => String(d).slice(0, 10).split("-").reverse().join("/");
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+/** "agosto e setembro" (mesmo ano) ou "12/2025 e 01/2026". */
+export function nomesCompetencias(comps: string[]): string {
+  const anos = new Set(comps.map((c) => c.slice(0, 4)));
+  const nomes = comps.map((c) => anos.size === 1 ? MESES[Number(c.slice(5, 7)) - 1] : `${c.slice(5, 7)}/${c.slice(0, 4)}`);
+  return nomes.length > 1 ? `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}` : (nomes[0] ?? "");
+}
+
+async function destinatarios(db: Banco, empresaId: number, oQue: string) {
+  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato, recebe_faturas")
+    .eq("empresa_id", empresaId).not("email", "is", null);
+  const para = destinatariosFatura((contatos ?? []) as Contato[]);
+  if (!para.length) throw new ErroCobranca(`Sem e-mail para ${oQue}: em Empresa › Contatos, marque "Recebe faturas"`);
+  return para;
+}
+
+/** "Informar o cliente": e-mail do acordo para quem recebe faturas (uma vez; o motor reenvia o que faltou). */
+export async function informarAcordo(db: Banco, acordo: number, site: string) {
+  const { data: a } = await db.from("acordos_fatura")
+    .select("id, empresa_id, situacao, valor_faturas, ajuste, valor_total, formas, informado_em").eq("id", acordo).maybeSingle();
+  if (!a || a.situacao !== "ativo") return { pulou: "acordo não está em andamento" };
+  if (a.informado_em) return { pulou: "cliente já informado" };
+  const para = await destinatarios(db, a.empresa_id, "o acordo");
+  const { data: ps } = await db.from("acordo_parcelas").select("numero, tipo, vencimento, valor")
+    .eq("acordo_id", a.id).neq("situacao", "cancelada").order("numero");
+  const { data: fs } = await db.from("faturas").select("competencia").eq("acordo_id", a.id).order("competencia");
+  const { data: emp } = await db.from("empresas").select("nome").eq("id", a.empresa_id).single();
+  const { data: cfg } = await db.from("nf_config").select("email_financeiro").eq("id", 1).single();
+  const lista = (ps ?? []) as { numero: number; tipo: string; vencimento: string; valor: number }[];
+  const { assunto, html } = emailAcordo({
+    numero: a.id, faturas: nomesCompetencias(((fs ?? []) as { competencia: string }[]).map((f) => String(f.competencia))),
+    valor_faturas: brl(Number(a.valor_faturas)), ajuste: Number(a.ajuste), ajuste_texto: brl(Math.abs(Number(a.ajuste))),
+    total: brl(Number(a.valor_total)), formas: a.formas ?? [],
+    parcelas: lista.map((p) => ({ rotulo: rotuloParcela(p.numero, lista.length, p.tipo), vencimento: br(p.vencimento), valor: brl(Number(p.valor)) })),
+  }, emp?.nome ?? "", `${site}/empresa/faturamento`);
+  await enviarEmail(para, assunto, html, cfg?.email_financeiro);
+  await db.from("acordos_fatura").update({ informado_em: new Date().toISOString(), informado_para: para.join(", ").slice(0, 500) })
+    .eq("id", a.id);
+  return { enviado_para: para };
+}
+
+/** Lembrete da parcela vencida (motor, uma vez por parcela e tipo). Parcela paga ou acordo encerrado não recebe nada. */
+export async function lembrarParcela(db: Banco, parcela: number, tipo: "d1" | "d5", site: string) {
+  const { data: p } = await db.from("acordo_parcelas")
+    .select("id, acordo_id, empresa_id, numero, tipo, situacao, valor, vencimento").eq("id", parcela).maybeSingle();
+  if (!p || p.situacao !== "aberta") return { pulou: "parcela não está em aberto" };
+  const { data: a } = await db.from("acordos_fatura").select("situacao, parcelas").eq("id", p.acordo_id).single();
+  if (a?.situacao !== "ativo") return { pulou: "acordo não está em andamento" };
+  const para = await destinatarios(db, p.empresa_id, "o lembrete");
+  const { data: emp } = await db.from("empresas").select("nome").eq("id", p.empresa_id).single();
+  const { data: cfg } = await db.from("nf_config").select("email_financeiro").eq("id", 1).single();
+  const quebra = new Date(new Date(`${String(p.vencimento).slice(0, 10)}T12:00:00Z`).getTime() + 9 * 86400000).toISOString().slice(0, 10);
+  const { assunto, html } = emailLembreteParcela(tipo, {
+    rotulo: rotuloParcela(p.numero, a.parcelas, p.tipo), acordo: p.acordo_id, valor: brl(Number(p.valor)),
+    vencimento: br(p.vencimento), quebra: br(quebra),
+  }, emp?.nome ?? "", `${site}/empresa/faturamento`);
+  await enviarEmail(para, assunto, html, cfg?.email_financeiro);
+  await db.from("parcela_lembretes").insert({ parcela_id: p.id, tipo, enviado_para: para.join(", ").slice(0, 500) });
   return { enviado_para: para };
 }

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import {
-  acaoDoEvento, assinaturaStripeValida, checkoutCartao, clienteStripe, dadosCobranca, descricaoNota, destinatariosFatura, diasBoleto,
+  acaoDoEvento, assinaturaStripeValida, checkoutCartao, clienteStripe, dadosCobranca, descricaoNota, destinatariosFatura, diasBoleto, dividirParcelas, rotuloParcela,
   faltaNaConfig, formStripe, lerGerada, lerNota, type NfConfig, notaFocus, paymentIntent, referenciaNota, validarPedido,
 } from "./regras.ts";
 
@@ -13,8 +13,8 @@ const empresa = { id: 7, nome: "Alfa Cobrança", razao_social: "Alfa Serviços d
 test("pedido: ações, alvo e forma", () => {
   assert.equal(validarPedido({ acao: "pagar", fatura: 3, forma: "pix" }).pedido?.forma, "pix");
   assert.match(validarPedido({ acao: "pagar", fatura: 3 }).erro!, /forma/);
-  assert.match(validarPedido({ acao: "pagar", fatura: 3, recarga: 2, forma: "pix" }).erro!, /fatura ou a recarga/);
-  assert.match(validarPedido({ acao: "pagar", forma: "pix" }).erro!, /fatura ou a recarga/);
+  assert.match(validarPedido({ acao: "pagar", fatura: 3, recarga: 2, forma: "pix" }).erro!, /a recarga ou a parcela/);
+  assert.match(validarPedido({ acao: "pagar", forma: "pix" }).erro!, /a recarga ou a parcela/);
   assert.match(validarPedido({ acao: "enviar_fatura" }).erro!, /fatura/);
   assert.match(validarPedido({ acao: "demonstrativo", recarga: 2 }).erro!, /fatura/);
   assert.equal(validarPedido({ acao: "enviar_fatura", fatura: 9 }).pedido?.fatura, 9);
@@ -147,4 +147,26 @@ test("lembrete de fatura vencida: fatura e tipo d1, d5 ou d7", () => {
   assert.deepEqual(validarPedido({ acao: "lembrar_fatura", fatura: 7, tipo: "d5" }).pedido, { acao: "lembrar_fatura", fatura: 7, tipo: "d5" });
   assert.equal(validarPedido({ acao: "lembrar_fatura", fatura: 7, tipo: "d3" }).erro, "lembrete inválido: d1, d5 ou d7");
   assert.equal(validarPedido({ acao: "lembrar_fatura", tipo: "d1" }).erro, "informe a fatura");
+});
+
+test("acordo: pedidos da parcela e do e-mail do acordo", () => {
+  assert.equal(validarPedido({ acao: "pagar", parcela: 4, forma: "boleto" }).pedido?.parcela, 4);
+  assert.match(validarPedido({ acao: "pagar", parcela: 4, fatura: 2, forma: "pix" }).erro!, /a parcela/);
+  assert.deepEqual(validarPedido({ acao: "lembrar_parcela", parcela: 4, tipo: "d5" }).pedido, { acao: "lembrar_parcela", parcela: 4, tipo: "d5" });
+  assert.equal(validarPedido({ acao: "lembrar_parcela", parcela: 4, tipo: "d7" }).erro, "lembrete inválido: d1 ou d5");
+  assert.equal(validarPedido({ acao: "lembrar_parcela", fatura: 4, tipo: "d1" }).erro, "informe a parcela");
+  assert.equal(validarPedido({ acao: "informar_acordo", acordo: 9 }).pedido?.acordo, 9);
+  assert.equal(validarPedido({ acao: "informar_acordo" }).erro, "informe o acordo");
+  assert.equal(validarPedido({ acao: "informar_acordo", acordo: 9, fatura: 1 }).erro, "informe o acordo");
+  assert.match(validarPedido({ acao: "emitir_nf", parcela: 0 }).erro!, /parcela inválida/);
+});
+
+test("acordo: parcelas em centavos (resto na 1ª), rótulo e texto da nota", () => {
+  assert.deepEqual(dividirParcelas(4000, 3), [1333.34, 1333.33, 1333.33]);
+  assert.deepEqual(dividirParcelas(10, 1), [10]);
+  assert.equal(dividirParcelas(1000.01, 12).reduce((a, b) => Math.round((a + b) * 100) / 100, 0), 1000.01);
+  assert.equal(rotuloParcela(2, 3, "parcela"), "2ª de 3");
+  assert.equal(rotuloParcela(4, 3, "saldo"), "saldo do acordo");
+  assert.equal(descricaoNota("Parcela {parcela} do acordo nº {acordo}.", null, { rotulo: "2ª de 3", acordo: 17 }), "Parcela 2ª de 3 do acordo nº 17.");
+  assert.equal(referenciaNota("parcela", 5, 1), "parcela-5");
 });

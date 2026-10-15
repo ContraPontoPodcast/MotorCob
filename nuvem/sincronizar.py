@@ -1347,6 +1347,7 @@ def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -
         _inadimplencia(sb, out)
         marca.parent.mkdir(parents=True, exist_ok=True)
         marca.write_text(local.date().isoformat(), encoding="utf-8")
+    _informar_acordos(sb, out)
     try:
         fila = sb.rpc("faturas_para_enviar") or []
     except Exception:  # noqa: BLE001
@@ -1372,7 +1373,8 @@ def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -
 def _inadimplencia(sb: Supabase, out=print) -> None:
     """Uma vez por dia (SQL 37): lembretes por e-mail da fatura vencida (no dia seguinte, 5 dias depois e o aviso de
     bloqueio no 7º dia) e a inadimplência: 10 dias de atraso bloqueiam o acesso e param os envios; quem pagou volta.
-    Banco sem o SQL 37: não faz nada."""
+    Acordo de pagamento (SQL 38): lembrete da parcela no dia seguinte e com 5 dias; o banco quebra o acordo com 10
+    dias de atraso (dentro de atualizar_inadimplencia). Banco sem o SQL 37: não faz nada."""
     try:
         pendentes = sb.rpc("lembretes_para_enviar") or []
     except Exception:  # noqa: BLE001
@@ -1385,11 +1387,39 @@ def _inadimplencia(sb: Supabase, out=print) -> None:
         except Exception as erro:  # noqa: BLE001 — sem e-mail cadastrado ou fora do ar: tenta amanhã
             out(f"faturamento: lembrete da fatura {item['fatura_id']} não saiu ({str(erro)[:120]})")
     try:
+        parcelas = sb.rpc("lembretes_parcelas_para_enviar") or []      # acordo de pagamento (SQL 38)
+    except Exception:  # noqa: BLE001 — banco sem o SQL 38
+        parcelas = []
+    for item in parcelas:
+        try:
+            r = sb.funcao("cobranca", {"acao": "lembrar_parcela", "parcela": int(item["parcela_id"]), "tipo": item["tipo"]}) or {}
+            if r.get("enviado_para"):
+                out(f"faturamento: lembrete {item['tipo']} da parcela {item['parcela_id']} enviado")
+        except Exception as erro:  # noqa: BLE001
+            out(f"faturamento: lembrete da parcela {item['parcela_id']} não saiu ({str(erro)[:120]})")
+    try:
         n = int(sb.rpc("atualizar_inadimplencia") or 0)
         if n:
             out(f"faturamento: {n} mudança(s) de inadimplência (bloqueio, aviso ou liberação)")
     except Exception as erro:  # noqa: BLE001
         out(f"faturamento: inadimplência não atualizada ({str(erro)[:120]})")
+
+
+def _informar_acordos(sb: Supabase, out=print) -> None:
+    """A cada rodada (SQL 38): e-mail do acordo de pagamento lançado com "Informar o cliente" que ainda não saiu (o
+    site já tenta na hora; aqui fica a segunda chance). Banco sem o SQL 38: não faz nada."""
+    try:
+        pendentes = sb.rpc("acordos_para_informar") or []
+    except Exception:  # noqa: BLE001
+        return
+    for item in pendentes:
+        aid = item if isinstance(item, int) else (item.get("acordos_para_informar") if isinstance(item, dict) else item)
+        try:
+            r = sb.funcao("cobranca", {"acao": "informar_acordo", "acordo": int(aid)}) or {}
+            if r.get("enviado_para"):
+                out(f"faturamento: e-mail do acordo {aid} enviado")
+        except Exception as erro:  # noqa: BLE001 — sem e-mail cadastrado: a equipe vê o acordo sem "informado"
+            out(f"faturamento: e-mail do acordo {aid} não saiu ({str(erro)[:120]})")
 
 
 def _recarga_automatica(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:

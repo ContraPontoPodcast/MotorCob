@@ -173,4 +173,12 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     pagar); permissão do cliente **Pagar faturas**; resumo da emissão, estimativa do ciclo, extrato e duração do
     saldo. Depois: funções `cobranca` e `api` de novo e prompts 55 e 56.
 
+38. `supabase/migrations/20261205000001_acordos_fatura.sql` (SQL 38) — **Acordo de pagamento**: Master e Administrativo
+    juntam faturas vencidas em até 12 parcelas (desconto ou acréscimo só manual, com motivo que o cliente não vê);
+    as faturas ficam "Em acordo" (sem lembrete nem bloqueio) e a empresa inadimplente é liberada enquanto as parcelas
+    estiverem em dia; cada parcela é uma cobrança própria com lembrete (dia seguinte e 5 dias) e nota fiscal; com 10
+    dias de atraso o acordo quebra, o que falta vira uma cobrança só e a empresa volta a inadimplente. Redefine
+    `baixar_cobranca` (SQL 23) e a régua do SQL 37: não rode o 23 nem o 37 de novo depois dele. Depois: funções
+    `cobranca` e `pagamentos-webhook` de novo e prompts 57 e 58.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

@@ -6,13 +6,16 @@ certa, com os imports externos (jsr:, npm:) reunidos no topo.
     python3 scripts/juntar_funcao.py api > MotorCob_funcao_api.ts
     python3 scripts/juntar_funcao.py assistente > MotorCob_funcao_assistente.ts   (inclui o conhecimento.ts)
     python3 scripts/juntar_funcao.py cobranca > MotorCob_funcao_cobranca.ts       (inclui servico e demonstrativo)
+    python3 scripts/juntar_funcao.py pagamentos-webhook > MotorCob_funcao_pagamentos-webhook.ts
+                                                     (inclui os arquivos de ../cobranca que ele usa)
 """
 import re
 import sys
 from pathlib import Path
 
 NOME = sys.argv[1] if len(sys.argv) > 1 else "admin-usuarios"
-PASTA = Path(__file__).resolve().parent.parent / "supabase" / "functions" / NOME
+FUNCOES = Path(__file__).resolve().parent.parent / "supabase" / "functions"
+PASTA = FUNCOES / NOME
 # um import inteiro, mesmo em várias linhas: import { a, type B } from "origem";
 IMPORT = re.compile(r'^import\s[^;]*?\sfrom\s+"([^"]+)";[ \t]*\n?', re.M | re.S)
 NOMEADO = re.compile(r'^import\s+\{([^}]*)\}\s+from\s+"([^"]+)";?$', re.S)
@@ -22,15 +25,16 @@ externos: dict[str, list[str]] = {}     # origem -> nomes importados (import { .
 outros: list[str] = []                   # import * as X / default: entram como estão, sem repetir
 
 
-def visitar(arquivo: str) -> None:
-    if arquivo in vistos:
+def visitar(caminho: Path) -> None:
+    caminho = caminho.resolve()
+    if caminho in vistos:
         return
-    vistos.add(arquivo)
-    texto = (PASTA / arquivo).read_text(encoding="utf-8")
+    vistos.add(caminho)
+    texto = caminho.read_text(encoding="utf-8")
     for m in IMPORT.finditer(texto):
         origem = m.group(1)
-        if origem.startswith("./"):
-            visitar(origem[2:])
+        if origem.startswith("./") or origem.startswith("../"):     # arquivo local, também de outra função
+            visitar(caminho.parent / origem)
             continue
         trecho = m.group(0).strip()
         n = NOMEADO.match(trecho)
@@ -41,10 +45,11 @@ def visitar(arquivo: str) -> None:
                     lista.append(nome)
         elif trecho not in outros:
             outros.append(trecho)
-    ordem.append((arquivo, IMPORT.sub("", texto).strip("\n")))
+    nome = caminho.relative_to(PASTA) if caminho.is_relative_to(PASTA) else Path("..") / caminho.relative_to(FUNCOES)
+    ordem.append((nome.as_posix(), IMPORT.sub("", texto).strip("\n")))
 
 
-visitar("index.ts")
+visitar(PASTA / "index.ts")
 saida = [f"// Edge Function {NOME} num arquivo só: gerado por scripts/juntar_funcao.py. Não edite aqui; edite os"
          f" arquivos de supabase/functions/{NOME}/ e gere de novo."]
 saida += [f'import {{ {", ".join(nomes)} }} from "{origem}";' for origem, nomes in externos.items()] + outros

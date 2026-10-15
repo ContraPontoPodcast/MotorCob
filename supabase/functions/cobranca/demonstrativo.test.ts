@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { brl, detalheFaixas, emailFatura, emailLembrete, linhaDoItem, montar } from "./demonstrativo.ts";
+import { brl, detalheFaixas, emailAcordo, emailFatura, emailLembrete, emailLembreteParcela, linhaDoItem, montar } from "./demonstrativo.ts";
 import { EXEMPLO } from "./demonstrativo_exemplo.ts";
 
 test("valores em reais e negativos com sinal", () => {
@@ -63,4 +63,27 @@ test("lembretes de fatura vencida: assunto e o aviso do bloqueio", () => {
   const d7 = emailLembrete("d7", f, "X", "u");
   assert.equal(d7.assunto, "Fatura MotorCX nº 812: o acesso será bloqueado em 3 dias");
   assert.match(d7.html, /até 29\/10\/2026/);
+});
+
+test("e-mail do acordo: parcelas, desconto, formas e a regra da quebra (tudo escapado)", () => {
+  const a = { numero: 12, faturas: "agosto e setembro", valor_faturas: "R$ 4.190,40", ajuste: -190.4, ajuste_texto: "R$ 190,40",
+    total: "R$ 4.000,00", formas: ["pix", "boleto"],
+    parcelas: [{ rotulo: "1ª de 3", vencimento: "20/10/2026", valor: "R$ 1.333,34" }, { rotulo: "2ª de 3", vencimento: "20/11/2026", valor: "R$ 1.333,33" },
+               { rotulo: "3ª de 3", vencimento: "20/12/2026", valor: "R$ 1.333,33" }] };
+  const e = emailAcordo(a, "Alfa <Recuperação>", "https://motorcob.online/empresa/faturamento");
+  assert.equal(e.assunto, "Acordo de pagamento registrado · 3 parcelas de R$ 1.333,33");
+  assert.match(e.html, /com desconto de R\$ 190,40/);
+  assert.match(e.html, /Pix ou boleto/);
+  assert.match(e.html, /10 dias em atraso, o acordo é desfeito/);
+  assert.match(e.html, /Alfa &lt;Recuperação&gt;/);
+  assert.equal(emailAcordo({ ...a, ajuste: 0, parcelas: a.parcelas.slice(0, 1) }, "X", "u").assunto, "Acordo de pagamento registrado · 1 parcela de R$ 1.333,34");
+  assert.match(emailAcordo({ ...a, ajuste: 50, ajuste_texto: "R$ 50,00" }, "X", "u").html, /com acréscimo de R\$ 50,00/);
+});
+
+test("lembrete da parcela: d1 e d5 com a data da quebra", () => {
+  const p = { rotulo: "2ª de 3", acordo: 12, valor: "R$ 1.333,33", vencimento: "20/11/2026", quebra: "29/11/2026" };
+  assert.equal(emailLembreteParcela("d1", p, "X", "u").assunto, "Parcela 2ª de 3 do acordo nº 12 venceu em 20/11");
+  const d5 = emailLembreteParcela("d5", p, "X", "u");
+  assert.equal(d5.assunto, "Parcela 2ª de 3 do acordo nº 12 vencida há 5 dias");
+  assert.match(d5.html, /até 29\/11\/2026, o acordo é desfeito/);
 });

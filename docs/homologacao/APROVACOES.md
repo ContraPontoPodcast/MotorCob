@@ -223,6 +223,26 @@ Protótipo: `faturas-contratacao-prototipo.html`.
 - Correção junto: a suspensão da equipe também passa a parar os envios da Mensageria (antes só a rotina parava).
 - Gerado: SQL 37, funções `cobranca` (lembrete e permissão) e `api`, motor, testes e prompts 55 e 56.
 
+## Acordo de pagamento de fatura vencida — APROVADO em 15/10/2026
+
+Protótipo: `acordo-fatura-prototipo.html`.
+- **Quem lança: Master e Administrativo** ("Correto"); o Atendimento e o cliente não lançam.
+- **Ao lançar, a empresa inadimplente é liberada** enquanto as parcelas estiverem em dia, e as faturas do acordo
+  ficam "Em acordo": sem lembrete e sem bloqueio ("Correto").
+- **Parcela segue a régua da fatura**: lembrete no dia seguinte e com 5 dias, aviso no 7º; **com 10 dias de atraso o
+  acordo é quebrado**, o que falta volta a ser cobrado e a empresa fica inadimplente de novo ("Correto"). Na
+  geração, o que falta vira **uma cobrança só** (o saldo do acordo), vencida desde a parcela atrasada; o desconto
+  combinado não é retirado (nenhuma regra automática de juros ou perda de desconto foi aprovada).
+- **Até 12 parcelas** ("Ok"); a 1ª vence de hoje até 30 dias, as outras mês a mês; parcela mínima de R$ 5,00.
+- **Sem juros nem multa automáticos**: só desconto ou acréscimo manual, com motivo que o cliente não vê e que fica na
+  Auditoria ("Perfeito").
+- Cada parcela é uma cobrança própria (Pix, boleto ou cartão, nas formas do acordo) com nota fiscal quando paga
+  (se a fatura já teve nota na emissão, a parcela não gera outra). Todas pagas: acordo Quitado e faturas Pagas
+  (via acordo). "Informar o cliente": aviso no sino na hora e e-mail para quem recebe faturas.
+- **Cancelar acordo** volta as faturas para vencidas; na geração, só sem parcela paga (com parcela paga, o
+  acordo segue até quitar ou quebrar, para não cobrar duas vezes).
+- Gerado: SQL 38, funções `cobranca`, `pagamentos-webhook` e `assistente`, motor, testes e prompts 57 e 58.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -247,5 +267,7 @@ Protótipo: `faturas-contratacao-prototipo.html`.
    Conferência: item 23 OK.
    Depois, faturas: SQL 37 → funções `cobranca` e `api` de novo → prompts 55 e 56 → motor na nuvem (passos 83 a 85).
    Conferência: item 24 OK.
+   Depois, acordo de pagamento: SQL 38 → funções `cobranca`, `pagamentos-webhook` e `assistente` de novo → prompts
+   57 e 58 → motor na nuvem (passos 86 a 88). Conferência: itens 9 (16 permissões) e 25 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).
