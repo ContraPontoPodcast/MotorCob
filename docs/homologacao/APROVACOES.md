@@ -268,6 +268,25 @@ Protótipo: `relatorios-prototipo.html`.
 - Gerado: SQL 39, função `relatorios`, motor (`nuvem/relatorios.py`), testes e prompts 59 e 60.
 - Decisões da geração confirmadas em 15/10/2026 ("Pode seguir").
 
+## Jornada do Cliente (MotorCli) — APROVADO em 15/10/2026 ("Ok")
+
+Protótipo: `jornada-prototipo.html`.
+- Resultado de cada momento pela carga diária (sem dado novo): Boas-vindas = recebeu a 1ª mensagem; Ativação =
+  ativou em até 30 dias da contratação; Pré-vencimento = pagou até o vencimento; Retenção = voltou a usar antes de
+  90 dias sem atividade; Reativação = voltou a usar. Conta para o último canal que acionou o cliente nos 7 dias
+  anteriores. Comparação com o período anterior.
+- "Melhor canal" escolhe pelo resultado do momento (com histórico suficiente; antes disso, como hoje).
+- Prioridade dos momentos editável (padrão Pré-vencimento, Boas-vindas, Ativação, Retenção, Reativação), orçamento
+  por canal em cada momento, mensagem por passo (biblioteca por momento e canal; RCS e WhatsApp pelos templates
+  aprovados), estratégia por carteira (aviso de compartilhada, Separar, Copiar de outra carteira).
+- Cliente em atraso: só mostrar quantos foram para a cobrança (não entra sozinho na carteira de cobrança).
+- Mapa da jornada no Início, movimento entre momentos e Lista do dia sem códigos.
+- Na geração: o resultado só conta episódios que começam ou terminam depois que o motor passou a medir (a base antiga
+  não vira "não" no primeiro dia); pagamento atrasado conta como "não pagou em dia"; o resultado de cada mensagem é o
+  do momento entre quem a recebeu por último; Boas-vindas conta a 1ª ação enviada (a entrega fica na Mensageria).
+- Gerado: SQL 40, motor (`motor/jornada_resultados.py`, prioridade, orçamento e mensagem por passo, melhor canal pelo
+  resultado), testes e prompts 61 e 62.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -296,5 +315,7 @@ Protótipo: `relatorios-prototipo.html`.
    57 e 58 → motor na nuvem (passos 86 a 88). Conferência: itens 9 (16 permissões) e 25 OK.
    Depois, relatórios: SQL 39 → função nova `relatorios` e `assistente` de novo → prompts 59 e 60 → motor na nuvem
    (passos 89 a 91). Conferência: item 26 OK.
+   Depois, Jornada: SQL 40 → função `assistente` de novo → prompts 61 e 62 → motor na nuvem (passos 92 e 93).
+   Conferência: item 27 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).

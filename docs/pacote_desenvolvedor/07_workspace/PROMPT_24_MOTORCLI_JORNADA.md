@@ -1,5 +1,7 @@
 # Prompt Horizons — Workspace 24: as telas do MotorCli (produto Jornada)
 
+> Seções 2 e 3 substituídas pelo prompt 61 e seção 6 pelo prompt 62 (SQL 40).
+
 Rode depois do prompt 23. O motor da jornada já roda na nuvem (`rodar_jornada.py`): toda carteira com a frente
 MotorCli ganha a Lista do dia, o enquadramento de cada cliente (`jornada_cliente`) e os lotes da Mensageria.
 Estas telas só leem e configuram; nada de dado pessoal na tela (só o ID do cliente).

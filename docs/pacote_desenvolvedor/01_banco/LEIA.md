@@ -188,4 +188,10 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     Admin); exportação grande em segundo plano até 1 milhão de linhas; envio por e-mail agendado. Os relatórios
     prontos viram 21 perguntas (os salvos pelas empresas ficam). Depois: função `relatorios`, prompts 59 e 60.
 
+40. `supabase/migrations/20261207000001_jornada_v2.sql` (SQL 40) — **Jornada do Cliente**: resultado de cada momento
+    (`jornada_desfechos`, gravado pelo motor a partir da carga diária: ativou, pagou em dia, voltou a usar) e movimento
+    entre momentos; `mapa_jornada`, `resultado_jornada` e `resultado_frases`; mensagens por momento no catálogo de
+    frases; rótulos sem código e o porquê do melhor canal na Lista do dia; estratégia por carteira (separar e copiar);
+    dois relatórios prontos na aba Jornada. Depois: prompts 61 e 62 e o motor na nuvem.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

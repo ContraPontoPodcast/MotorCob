@@ -853,7 +853,12 @@ begin
 end $$;
 
 -- ================================================================ 6. relatórios prontos, por pergunta
-delete from public.relatorios_modelos where empresa_id is null;
+-- saem só os relatórios prontos antigos (os do SQL 40 em diante ficam, se este for rodado de novo)
+delete from public.relatorios_modelos where empresa_id is null and nome in (
+    'Entregabilidade por dia e canal', 'Desempenho por campanha', 'Entrega por operadora',
+    'Motivos de não envio (higienização)', 'Respostas por classificação do Radar', 'Cliques por campanha e aparelho',
+    'Cliques por hora do dia', 'Descadastros (opt-out)', 'Consumo por centro de custo', 'Mensagens enviadas (analítico)',
+    'Saúde do e-mail');
 insert into public.relatorios_modelos (empresa_id, nome, descricao, categoria, base, colunas, agrupar, metricas, filtros,
                                        ordem, destaque, requer) values
   (null, 'Quanto foi entregue, dia a dia?', 'Enviadas, entregues, não entregues e as taxas por dia e canal.', 'Entrega', 'funil', null,
@@ -926,4 +931,7 @@ insert into public.relatorios_modelos (empresa_id, nome, descricao, categoria, b
    array['data', 'carteira', 'safra', 'segmento', 'clientes', 'pct_localizados', 'custo_por_cpc_descoberto', 'acordos', 'pct_acordo_sobre_cpc_voz', 'pct_acordo_sobre_retorno_digital', 'custo_por_acordo'],
    null, null, '{}', 'data desc', false, null),
   (null, 'Em que momento da jornada estão os clientes?', 'Clientes por momento da jornada, dia a dia.', 'Jornada', 'jornada', null,
-   array['data', 'momento'], '[{"funcao":"somar","campo":"clientes","nome":"clientes","rotulo":"Clientes"}]', '{}', 'data asc', false, null);
+   array['data', 'momento'], '[{"funcao":"somar","campo":"clientes","nome":"clientes","rotulo":"Clientes"}]', '{}', 'data asc', false, null)
+on conflict (empresa_id, nome) do update set descricao = excluded.descricao, categoria = excluded.categoria,
+    base = excluded.base, colunas = excluded.colunas, agrupar = excluded.agrupar, metricas = excluded.metricas,
+    filtros = excluded.filtros, ordem = excluded.ordem, destaque = excluded.destaque, requer = excluded.requer;

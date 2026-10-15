@@ -752,6 +752,28 @@ def _layout_automatico(sb: Supabase, pasta: Path, baixados, out):
 TIPOS_JORNADA = ("clientes", "contatos", "leads")   # cargas que o MotorCli usa (layout do motor/jornada.py)
 
 
+def _desfechos_jornada(sb: Supabase, eid: int, cid: int, data: date) -> list[dict]:
+    """Resultado de cada momento nos últimos 90 dias (SQL 40), para o "melhor canal". Banco sem o SQL 40: nada."""
+    try:
+        return sb.selecionar("jornada_desfechos", {"empresa_id": f"eq.{eid}", "credor_id": f"eq.{cid}",
+                                                   "data": f"gte.{(data - timedelta(days=90)).isoformat()}"}) or []
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _publicar_resultados_jornada(sb: Supabase, eid: int, cid: int, data: date, r: dict, out=print) -> None:
+    """Grava o resultado dos momentos e o movimento do dia (SQL 40); rodada repetida no dia substitui."""
+    try:
+        for tabela, chave in (("jornada_desfechos", "desfechos"), ("jornada_movimento", "movimento")):
+            filtro = {"empresa_id": f"eq.{eid}", "credor_id": f"eq.{cid}", "data": f"eq.{data.isoformat()}"}
+            sb.apagar(tabela, filtro)
+            linhas = [{"empresa_id": eid, "credor_id": cid, "data": data.isoformat(), **l} for l in r.get(chave) or []]
+            if linhas:
+                sb.inserir(tabela, linhas)
+    except Exception as e:  # noqa: BLE001 — banco sem o SQL 40: a rodada segue
+        out(f"  aviso: resultado da jornada não gravado ({str(e)[:120]})")
+
+
 def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
     """Carteira da frente MotorCli: roda a jornada (rodar_jornada.py) e publica a Lista do dia, o
     enquadramento (jornada_cliente), as ações (acoes_dia) e os lotes da Mensageria, no mesmo lugar que o MotorCob."""
@@ -775,20 +797,33 @@ def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
                                         registros_canal=mensageria.registros(pasta),
                                         regras_retorno=u.get("regras_retorno"), out=out,
                                         leads_csv=pasta / "base" / "leads.csv",
-                                        frases=_baixar(sb, pasta, "frases", eid, "id.asc"))
+                                        frases=_baixar(sb, pasta, "frases", eid, "id.asc"),
+                                        desfechos_hist=_desfechos_jornada(sb, eid, cid, data))
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
         fila = [{"empresa_id": eid, **_c(cid), "data": data.isoformat(), "canal": l["canal"],
                  "id_cliente": l["id_cliente"], "reserva": False, "regua": l["regua"], "passo": l["passo"],
-                 "tag": l["tag"], "estrategia": (est or {}).get("nome")} for l in r["fila"]]
+                 "tag": l["tag"], "estrategia": (est or {}).get("nome"),
+                 **({"por_que": l["por_que"]} if l.get("por_que") else {})} for l in r["fila"]]
         if fila:
-            sb.inserir("fila_dia", fila)
+            try:
+                sb.inserir("fila_dia", fila)
+            except ErroSupabase as e:        # banco sem o SQL 40 (coluna por_que): grava sem ela
+                if e.status != 400 or not any("por_que" in f for f in fila):
+                    raise
+                sb.inserir("fila_dia", [{k: v for k, v in f.items() if k != "por_que"} for f in fila])
         sb.apagar("jornada_cliente", {"empresa_id": f"eq.{eid}", **_fc(cid)})
         enq = [{"empresa_id": eid, "credor_id": cid, "id_cliente": idc, "data": data.isoformat(), **v}
                for idc, v in r["enquadramento"].items()]
         for i in range(0, len(enq), 1000):
-            sb.inserir("jornada_cliente", enq[i:i + 1000])
+            try:
+                sb.inserir("jornada_cliente", enq[i:i + 1000])
+            except ErroSupabase as e:        # banco sem o SQL 40 (coluna fase): grava sem ela
+                if e.status != 400:
+                    raise
+                sb.inserir("jornada_cliente", [{k: v for k, v in x.items() if k != "fase"} for x in enq[i:i + 1000]])
         n_arq = publicar_arquivos(sb, r["saida"], f"{emp['slug']}/{data.isoformat()}/{u['codigo']}", limpar=True)
         publicar_acoes(sb, eid, r, cid)
+        _publicar_resultados_jornada(sb, eid, cid, data, r, out)
         try:   # medição da Jornada para o faturamento; nunca derruba a rodada
             from nuvem import faturamento
             n_cli = faturamento.publicar_clientes_jornada(sb, eid, cid, pasta, data, r["fila"])

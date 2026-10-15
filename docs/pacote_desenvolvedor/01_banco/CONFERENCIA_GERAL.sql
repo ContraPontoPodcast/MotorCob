@@ -197,8 +197,13 @@ with itens(ordem, item, ok, se_falhar) as (values
   (26, 'Relatórios por pergunta, foto da carteira, exportação e envio (SQL 39)',
        to_regclass('public.carteira_fotos') is not null and to_regclass('public.relatorio_exportacoes') is not null
        and to_regclass('public.relatorio_envios') is not null
-       and pg_temp.n('select count(*) from public.relatorios_modelos where empresa_id is null') = 21,
+       and pg_temp.n('select count(*) from public.relatorios_modelos where empresa_id is null') >= 21,
        'rodar o SQL 39 (supabase/migrations/20261206000001_relatorios_v2.sql)'),
+  (27, 'Jornada: resultado dos momentos, mensagens e estratégia por carteira (SQL 40)',
+       to_regclass('public.jornada_desfechos') is not null and to_regclass('public.jornada_movimento') is not null
+       and to_regprocedure('public.mapa_jornada(bigint, date, date)') is not null
+       and to_regprocedure('public.copiar_estrategia_jornada(bigint, bigint)') is not null,
+       'rodar o SQL 40 (supabase/migrations/20261207000001_jornada_v2.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

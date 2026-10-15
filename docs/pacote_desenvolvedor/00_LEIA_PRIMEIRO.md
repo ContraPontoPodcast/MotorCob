@@ -101,6 +101,8 @@ Faça **na ordem**; cada passo depende do anterior.
 | 89 | `supabase/migrations/20261206000001_relatorios_v2.sql` (SQL 39) | Relatórios por pergunta, taxas, Orquestração, foto diária da carteira, exportação até 1 milhão e envio por e-mail | Supabase | 84º |
 | 90 | função nova `relatorios` (`python3 scripts/juntar_funcao.py relatorios`, Verify JWT desligado) + função `assistente` de novo | E-mail do relatório agendado (mesmos Secrets do e-mail das faturas; remetente opcional RELATORIO_EMAIL_DE) | Supabase | 85º |
 | 91 | `07_workspace/PROMPT_59_RELATORIOS.md` e `PROMPT_60_MONTADOR_ORQUESTRACAO.md` + motor na nuvem | Relatórios no menu, perguntas, comparação, montador em 3 passos, exportação, envio por e-mail, Orquestração e Jornada | Site + Google Cloud | 86º |
+| 92 | `supabase/migrations/20261207000001_jornada_v2.sql` (SQL 40) + função `assistente` de novo | Jornada: resultado de cada momento, movimento, mensagens por momento, estratégia por carteira, rótulos sem código | Supabase | 87º |
+| 93 | `07_workspace/PROMPT_61_JORNADA_INICIO_LISTA.md` e `PROMPT_62_JORNADA_MOMENTOS_MENSAGENS.md` + motor na nuvem | Início com o mapa da jornada, Lista do dia sem códigos, momentos com prioridade, orçamento e mensagem | Site + Google Cloud | 88º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
