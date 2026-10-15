@@ -246,6 +246,19 @@ Protótipo: `acordo-fatura-prototipo.html`.
   só sem parcela paga, parcela mínima de R$ 5,00 e 1ª em até 30 dias, sem nota duplicada, faixa "em dia" só no
   Início e em Faturamento.
 
+## Relatórios e montador — em aprovação (15/10/2026)
+
+Protótipo: `relatorios-prototipo.html`.
+- Aprovado: envio por e-mail agendado, só para usuários da empresa, com os números do topo e um link, sem anexo ("Ok").
+- Aprovado: relatório salvo editado por quem criou e pelo Admin; os outros abrem e duplicam ("Ok").
+- Aprovado com ajuste: exportação até 50 mil linhas na hora; acima, em segundo plano com aviso no sino e link de 7
+  dias; **limite de 1 milhão de linhas** ("Limitar em 1 milhão de linhas").
+- Aprovado: taxas de resposta, descadastro e clique sobre os entregues ("Correto").
+- Pedido do operador: "Não entregues" com a taxa em todo relatório de entrega; no e-mail, bounce permanente e
+  temporário.
+- Relatórios da Orquestração entram agora ("Entram"): régua, carteira, movimento, acordos, indicadores por safra e
+  Jornada do MotorCli — aguardando aprovação da tela.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.

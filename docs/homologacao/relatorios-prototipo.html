@@ -184,8 +184,9 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
 
 <div class="app">
   <nav class="menu" aria-label="Telas">
-    <div class="grupo">Cliente · Mensageria</div>
+    <div class="grupo">Cliente</div>
     <button data-ir="inicio" aria-current="page">Relatórios<small>Por pergunta e os da empresa</small></button>
+    <button data-ir="orq">Orquestração<small>Régua, carteira e acordos</small></button>
     <button data-ir="aberto">Relatório aberto<small>Taxas, comparação e gráfico</small></button>
     <button data-ir="montar">Montar relatório<small>Três passos, prévia ao vivo</small></button>
     <button data-ir="exportar">Exportar e enviar<small>Arquivo grande e e-mail</small></button>
@@ -195,12 +196,13 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
     <!-- ===================== INÍCIO ===================== -->
     <section data-p="inicio">
       <div class="cab"><div><h2>Relatórios</h2>
-        <p>Os prontos aparecem como perguntas, agrupados pelo assunto. Abaixo, os que a empresa salvou, com quem criou.</p></div>
+        <p>Os prontos aparecem como perguntas, agrupados pelo assunto. Abaixo, os que a empresa salvou, com quem criou. Relatórios sai de dentro da Mensageria e vira item do menu, com uma aba por produto contratado.</p></div>
         <button class="btn" data-ir2="montar">Montar relatório</button></div>
 
       <div class="antes"><div><b>Hoje</b>"Entregabilidade por dia e canal" · base "Envios (sintético)" · categorias Entrega, Higienização, Analítico.</div>
         <div><b>Proposta</b>"Quanto foi entregue, dia a dia?" · com taxa de entrega e comparação com o período anterior.</div></div>
 
+      <div class="abas" role="group" aria-label="Produto"><button aria-pressed="true">Mensageria</button><button aria-pressed="false" data-ir2="orq">Orquestração (MotorCob)</button><button aria-pressed="false" data-ir2="orq">Jornada (MotorCli)</button></div>
       <div class="linha"><input type="text" aria-label="Buscar relatório" placeholder="Buscar: entrega, cliques, descadastro…" style="flex:1;min-width:200px"></div>
 
       <h3 style="margin:4px 0 0">Entrega</h3>
@@ -239,6 +241,80 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
         <li>Nomes em forma de pergunta; a base técnica não aparece. Busca pelo nome e pela descrição.</li>
         <li>Relatório que depende de algo não contratado (Score, Radar) aparece com cadeado e "Disponível com o Score de Entrega", como a vitrine aprovada.</li>
         <li>Os relatórios nunca mostram telefone, e-mail, nome nem CPF: só o ID do cliente e o destino mascarado.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== ORQUESTRAÇÃO ===================== -->
+    <section data-p="orq" hidden>
+      <div class="cab"><div><h2>Relatórios da Orquestração</h2>
+        <p>Mesma tela, mesmos filtros e o mesmo montador, agora com a régua e a carteira. Só aparece para quem tem a Orquestração (MotorCob) ou a Jornada (MotorCli) e pode ver a Orquestração. Os nomes são os da tela (Cliente novo, CPC em negociação, Acordo em dia…), nunca os códigos do motor.</p></div></div>
+      <div class="abas" role="group" aria-label="Produto"><button aria-pressed="false" data-ir2="inicio">Mensageria</button><button aria-pressed="true">Orquestração (MotorCob)</button><button aria-pressed="false">Jornada (MotorCli)</button></div>
+
+      <h3 style="margin:4px 0 0">Régua</h3>
+      <div class="perg">
+        <button><b>Quantos CPCs a régua gerou e quanto custou cada um?</b><span>Acionamentos, retornos, CPCs, taxa de CPC e custo por CPC por canal e fase da régua.</span><small>Mais usado</small></button>
+        <button><b>Qual canal localiza mais cliente novo?</b><span>Primeiros CPCs por canal e quantas ações até o primeiro contato.</span></button>
+        <button><b>Qual segmento e persona respondem melhor?</b><span>Taxa de retorno e de CPC por segmento da carteira e persona.</span></button>
+      </div>
+      <h3 style="margin:4px 0 0">Carteira</h3>
+      <div class="perg">
+        <button><b>Onde está a carteira hoje?</b><span>Clientes e saldo por situação, segmento, safra e etapa.</span></button>
+        <button><b>Como a carteira se moveu?</b><span>De onde para onde: Não CPC → CPC, CPC → Acordo, Acordo → Quitado ou parcela vencida.</span></button>
+      </div>
+      <h3 style="margin:4px 0 0">Acordos e resultado</h3>
+      <div class="perg">
+        <button><b>Os acordos estão sendo pagos?</b><span>Parcelas pagas em dia, quebras, regularização até 5 dias e acordos quitados.</span></button>
+        <button><b>Resultado por safra e segmento</b><span>Os indicadores do playbook: localização, custo por CPC, acordo sobre CPC, custo por acordo.</span></button>
+      </div>
+      <h3 style="margin:4px 0 0">Jornada (MotorCli)</h3>
+      <div class="perg">
+        <button><b>Em que momento da jornada estão os clientes?</b><span>Clientes por momento e motivo, dia a dia.</span></button>
+      </div>
+
+      <div class="cab" style="margin-top:8px"><div><h2>Quantos CPCs a régua gerou?</h2><p>Exemplo aberto · carteira "Banco Alfa · Cartões" · últimos 30 dias, comparado com os 30 anteriores.</p></div></div>
+      <div class="cartao">
+        <div class="filtro"><b>Carteira</b><button class="chip x" aria-pressed="true">Banco Alfa · Cartões</button><button class="chip">+ carteira</button>
+          <b style="margin-left:10px">Estratégia</b><button class="chip">Todas</button><b style="margin-left:10px">Segmento</b><button class="chip">Todos</button><b style="margin-left:10px">Persona</b><button class="chip">Todas</button></div>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><span>Acionamentos</span><b>412.880</b><small class="sobe">+6% que os 30 dias anteriores</small></div>
+        <div class="kpi"><span>Com retorno</span><b>38.410</b><small class="sobe">9,3% dos acionamentos</small></div>
+        <div class="kpi"><span>CPCs</span><b>6.204</b><small class="sobe">1,5% dos acionamentos · +0,2 ponto</small></div>
+        <div class="kpi"><span>Custo por CPC</span><b>R$ 4,87</b><small class="sobe">−R$ 0,41</small></div>
+        <div class="kpi"><span>Ações até o 1º CPC</span><b>7,4</b><small class="desce">+0,3</small></div>
+      </div>
+      <p class="nota">Taxa de retorno = clientes com retorno ÷ acionamentos. Taxa de CPC = CPCs ÷ acionamentos. Custo por CPC = custo das ações ÷ CPCs. Custo pelo preço de cada canal no período.</p>
+      <div class="cartao">
+        <div class="cartao-cab"><h3>Por fase da régua e canal</h3><span class="nota">8 linhas</span></div>
+        <div class="rolar"><table class="tab"><thead><tr><th>Fase</th><th>Canal</th><th class="n">Acionamentos</th><th class="n">Com retorno</th><th class="n">CPCs</th><th class="n">Taxa de CPC</th><th class="n">Custo</th><th class="n">Custo por CPC</th></tr></thead>
+          <tbody>
+            <tr><td>Localização</td><td>SMS</td><td class="n">188.400</td><td class="n">9.920</td><td class="n">1.640</td><td class="n">0,9%</td><td class="n">R$ 10.174</td><td class="n">R$ 6,20</td></tr>
+            <tr><td>Localização</td><td>Discador</td><td class="n">61.300</td><td class="n">7.110</td><td class="n">1.905</td><td class="n">3,1%</td><td class="n">R$ 9.808</td><td class="n">R$ 5,15</td></tr>
+            <tr><td>CPC</td><td>WhatsApp</td><td class="n">42.700</td><td class="n">9.480</td><td class="n">1.322</td><td class="n">3,1%</td><td class="n">R$ 3.416</td><td class="n">R$ 2,58</td></tr>
+            <tr><td>Acordo em dia</td><td>E-mail</td><td class="n">30.120</td><td class="n">2.840</td><td class="n">212</td><td class="n">0,7%</td><td class="n">R$ 151</td><td class="n">R$ 0,71</td></tr>
+          </tbody>
+          <tfoot><tr><td colspan="2">Total</td><td class="n">412.880</td><td class="n">38.410</td><td class="n">6.204</td><td class="n">1,5%</td><td class="n">R$ 30.214</td><td class="n">R$ 4,87</td></tr></tfoot></table></div>
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-cab"><h3>Como a carteira se moveu · últimos 30 dias</h3><span class="nota">Clientes que mudaram de situação</span></div>
+        <div class="rolar"><table class="tab"><thead><tr><th>De</th><th>Para</th><th class="n">Clientes</th><th class="n">% de quem estava em "De"</th></tr></thead>
+          <tbody>
+            <tr><td>Cliente novo</td><td>CPC · em negociação</td><td class="n">3.540</td><td class="n">4,8%</td></tr>
+            <tr><td>Não CPC</td><td>CPC · em negociação</td><td class="n">1.212</td><td class="n">2,1%</td></tr>
+            <tr><td>CPC · em negociação</td><td>Acordo · antes do vencimento</td><td class="n">1.890</td><td class="n">22,6%</td></tr>
+            <tr><td>Acordo em dia</td><td>Quitado</td><td class="n">640</td><td class="n">9,8%</td></tr>
+            <tr><td>Acordo em dia</td><td>Acordo · parcela vencida</td><td class="n">410</td><td class="n">6,3%</td></tr>
+          </tbody></table></div>
+        <p class="nota">No montador, "Movimento da carteira" separa por dia, semana ou mês; o gráfico mostra cada passagem como uma linha.</p>
+      </div>
+
+      <div class="regra"><b>Regras</b><ul>
+        <li>Novas bases no montador: "Ações da régua", "Carteira hoje", "Movimento da carteira", "Indicadores por safra" e, no MotorCli, "Jornada".</li>
+        <li>Filtros próprios: carteira (credor), estratégia, segmento, persona, fase da régua, canal e safra. Situações e fases sempre pelo nome da tela.</li>
+        <li>Sem dado pessoal: contagens e saldo somado; nunca o cliente um a um nestas bases.</li>
+        <li>Quem vê: quem pode ver a Orquestração da carteira (as permissões de hoje). Envio por e-mail, exportação e "quem edita" seguem as regras da Mensageria.</li>
+        <li>"Carteira hoje" é a foto do dia; para comparar no tempo, use "Movimento da carteira" ou "Indicadores por safra".</li>
       </ul></div>
     </section>
 
@@ -321,6 +397,10 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
           <label><input type="radio" name="b"><div><b>Cliques</b><span>Cada clique de pessoa nos links rastreados.</span></div></label>
           <label><input type="radio" name="b"><div><b>Descadastros</b><span>Quem pediu para não receber mais.</span></div></label>
           <label><input type="radio" name="b"><div><b>Consumo</b><span>Quantidade por item e centro de custo.</span></div></label>
+          <label><input type="radio" name="b"><div><b>Ações da régua</b><span>Orquestração: acionamentos, retornos, CPCs e custo por canal, fase, segmento e persona.</span></div></label>
+          <label><input type="radio" name="b"><div><b>Carteira hoje</b><span>Orquestração: clientes e saldo por situação, segmento, safra e etapa.</span></div></label>
+          <label><input type="radio" name="b"><div><b>Movimento da carteira</b><span>Orquestração: clientes que mudaram de situação, de onde para onde.</span></div></label>
+          <label><input type="radio" name="b"><div><b>Indicadores por safra</b><span>Orquestração: os indicadores do playbook por safra e segmento.</span></div></label>
         </div>
       </div>
 
@@ -377,7 +457,7 @@ select,input[type=text],input[type=email]{font:inherit;color:var(--texto);backgr
         <div class="cartao">
           <h3>Exportar</h3>
           <div class="campo"><label>Formato</label><div class="abas" role="group" aria-label="Formato"><button aria-pressed="true">Excel (.xlsx)</button><button aria-pressed="false">CSV</button></div></div>
-          <p class="nota">Este relatório tem 312.480 linhas no período. Até 50 mil, baixa na hora; acima, o arquivo é preparado e o link chega no sino (vale 7 dias).</p>
+          <p class="nota">Este relatório tem 312.480 linhas no período. Até 50 mil, baixa na hora; acima, o arquivo é preparado e o link chega no sino (vale 7 dias). Limite de 1 milhão de linhas por arquivo: acima disso, a tela pede um período menor ou um filtro.</p>
           <ol class="proc"><li class="feito">Consultando o período</li><li class="agora">Montando o arquivo · 180 mil de 312 mil linhas</li><li>Pronto para baixar</li></ol>
           <p class="nota">Pode sair desta tela. Quando terminar, o aviso chega no sino.</p>
           <div class="sino"><b>Arquivo pronto: Lista de mensagens · 01 a 15/10</b><span>312.480 linhas · Excel · baixar até 22/10</span></div>
