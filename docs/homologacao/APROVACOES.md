@@ -286,6 +286,7 @@ Protótipo: `jornada-prototipo.html`.
   do momento entre quem a recebeu por último; Boas-vindas conta a 1ª ação enviada (a entrega fica na Mensageria).
 - Gerado: SQL 40, motor (`motor/jornada_resultados.py`, prioridade, orçamento e mensagem por passo, melhor canal pelo
   resultado), testes e prompts 61 e 62.
+- Decisões da geração confirmadas em 15/10/2026 ("Ok").
 
 ## Fila para rodar (quando liberar)
 
