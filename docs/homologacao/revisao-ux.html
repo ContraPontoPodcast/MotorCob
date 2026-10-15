@@ -78,9 +78,8 @@ a:focus-visible{outline:2px solid var(--txt);outline-offset:2px}
   <p class="sub">Leitura de ponta a ponta de tudo que foi aprovado até o bloco 6: Console, Mensageria, Cobrança, Jornada e Score de Entrega. Cada achado diz onde aparece, o que muda e se já foi aplicado no protótipo. Nada aqui foi rodado no site ou no banco.</p>
   <div class="resumo">
     <div><b>15</b><span>achados no total</span></div>
-    <div><b>5</b><span>aplicados ou decididos</span></div>
-    <div><b>5</b><span>prioridade alta</span></div>
-    <div><b>2</b><span>decisões abertas</span></div>
+    <div><b>14</b><span>aplicados ou aprovados</span></div>
+    <div><b>1</b><span>decisão aberta</span></div>
   </div>
 </header>
 
@@ -130,56 +129,57 @@ a:focus-visible{outline:2px solid var(--txt);outline-offset:2px}
 </section>
 
 <section>
-  <h2>A fazer</h2>
+  <h2>Padrões comuns · aprovados em 15/10</h2>
+  <p class="sub">Protótipo de padrões comuns aprovado. Gerados o SQL 34 (sino de avisos, cores das faixas, histórico do Score), o motor que grava os avisos, os testes e os prompts 49 e 50.</p>
   <div class="lista">
     <div class="item"><div class="num">04</div><div class="corpo">
-      <div class="topo"><h3>Um nome por conceito</h3><span class="pill p-alta">Alta</span></div>
+      <div class="topo"><h3>Um nome por conceito</h3><span class="pill p-ok">Aprovado</span></div>
       <div class="onde">Console, Mensageria, campanhas, Economia do Score</div>
       <dl class="muda"><dt>Problema</dt><dd>O mesmo recurso aparece como score, filtro de inteligência e propensão; os números barrados aparecem como represados, filtrados e não enviados.</dd>
       <dt>Proposta</dt><dd><b>Score de Entrega</b> em todo lugar. Para o cliente, <b>não enviados</b>; <b>represados</b> só no Console, para o time interno. O nome editável pelo Técnico continua valendo só para o rótulo devolvido na rota.</dd></dl>
     </div></div>
     <div class="item"><div class="num">05</div><div class="corpo">
-      <div class="topo"><h3>Primeiros dias do Score sem histórico</h3><span class="pill p-alta">Alta</span></div>
+      <div class="topo"><h3>Primeiros dias do Score sem histórico</h3><span class="pill p-ok">Aprovado</span></div>
       <div class="onde">Prévia da campanha, Economia do Score</div>
       <dl class="muda"><dt>Problema</dt><dd>Na largada a maioria dos números cai em Sem histórico. A prévia parece quebrada e a economia aparece perto de zero.</dd>
       <dt>Proposta</dt><dd>Estado vazio explicando que o histórico se forma com os envios pela Mensageria, com a data em que a janela fica completa. Não esconder a faixa nem inventar estimativa.</dd></dl>
     </div></div>
     <div class="item"><div class="num">06</div><div class="corpo">
-      <div class="topo"><h3>Um só padrão para processos demorados</h3><span class="pill p-alta">Alta</span></div>
+      <div class="topo"><h3>Um só padrão para processos demorados</h3><span class="pill p-ok">Aprovado</span></div>
       <div class="onde">Importação de arquivo, cálculo da prévia, enriquecimento, sincronização</div>
       <dl class="muda"><dt>Problema</dt><dd>Cada tela avisa de um jeito: texto solto, barra, ou nada. O sino de avisos citado na prévia ainda não existe.</dd>
       <dt>Proposta</dt><dd>Um componente de progresso com etapa atual, tempo estimado e "pode sair desta tela". Ao terminar, aviso no sino. O sino precisa ser desenhado num protótipo próprio antes de entrar no prompt.</dd></dl>
     </div></div>
     <div class="item"><div class="num">07</div><div class="corpo">
-      <div class="topo"><h3>Um só modelo de salvar</h3><span class="pill p-alta">Alta</span></div>
+      <div class="topo"><h3>Um só modelo de salvar</h3><span class="pill p-ok">Aprovado</span></div>
       <div class="onde">Preços (Score, SMS, produtos), configurações do Score, rotas</div>
       <dl class="muda"><dt>Problema</dt><dd>Preço editado direto na tabela salva sem revisão. Um clique errado muda cobrança de cliente.</dd>
       <dt>Proposta</dt><dd>Edição em painel lateral, resumo do que muda (de → para) e confirmação. Aviso ao sair com alteração não salva.</dd></dl>
     </div></div>
     <div class="item"><div class="num">08</div><div class="corpo">
-      <div class="topo"><h3>Confirmação em ações irreversíveis</h3><span class="pill p-alta">Alta</span></div>
+      <div class="topo"><h3>Confirmação em ações irreversíveis</h3><span class="pill p-ok">Aprovado</span></div>
       <div class="onde">Agendar campanha, cancelar campanha, trocar função de usuário, remover fornecedor do Score</div>
       <dl class="muda"><dt>Proposta</dt><dd>Confirmação dentro da tela dizendo o efeito concreto ("12.340 mensagens serão enviadas em 15/10 às 9h"). O botão repete o verbo da ação.</dd></dl>
     </div></div>
     <div class="item"><div class="num">09</div><div class="corpo">
-      <div class="topo"><h3>Somente leitura com motivo, em vez de esconder</h3><span class="pill p-media">Média</span></div>
+      <div class="topo"><h3>Somente leitura com motivo, em vez de esconder</h3><span class="pill p-ok">Aprovado</span></div>
       <div class="onde">Todas as telas com permissão por função</div>
       <dl class="muda"><dt>Problema</dt><dd>Quem não pode editar simplesmente não vê o botão e acha que a função não existe.</dd>
       <dt>Proposta</dt><dd>Campo visível e travado, com a frase "Só Administrativo altera preços". Esconder só o que é sigiloso.</dd></dl>
     </div></div>
     <div class="item"><div class="num">10</div><div class="corpo">
-      <div class="topo"><h3>Cores das faixas confundem com erro e alerta</h3><span class="pill p-media">Média</span></div>
+      <div class="topo"><h3>Cores das faixas confundem com erro e alerta</h3><span class="pill p-ok">Aprovado</span></div>
       <div class="onde">Score de Entrega, prévia, qualidade dos fornecedores</div>
       <dl class="muda"><dt>Problema</dt><dd>Baixo em vermelho e Médio em amarelo leem como erro e alerta do sistema.</dd>
       <dt>Proposta</dt><dd>Escala própria de uma só cor, do forte (Alto) ao claro (Baixo), e Sem histórico em cinza com o ícone (i). Vermelho e amarelo ficam só para erro e alerta.</dd></dl>
     </div></div>
     <div class="item"><div class="num">11</div><div class="corpo">
-      <div class="topo"><h3>Valores com 4 casas decimais</h3><span class="pill p-media">Média</span></div>
+      <div class="topo"><h3>Valores com 4 casas decimais</h3><span class="pill p-ok">Aprovado</span></div>
       <div class="onde">Economia do Score, preços por número analisado</div>
       <dl class="muda"><dt>Proposta</dt><dd>Para o cliente, preço por mil números (R$ 4,20 / mil). As 4 casas ficam no Console e no banco.</dd></dl>
     </div></div>
     <div class="item"><div class="num">12</div><div class="corpo">
-      <div class="topo"><h3>Tabelas no celular</h3><span class="pill p-media">Média</span></div>
+      <div class="topo"><h3>Tabelas no celular</h3><span class="pill p-ok">Aprovado</span></div>
       <div class="onde">Campanhas, qualidade dos fornecedores, Economia do Score</div>
       <dl class="muda"><dt>Proposta</dt><dd>Abaixo de 600 px cada linha vira um cartão com os 3 campos principais e "ver detalhes".</dd></dl>
     </div></div>
@@ -192,7 +192,6 @@ a:focus-visible{outline:2px solid var(--txt);outline-offset:2px}
     <thead><tr><th>#</th><th>Tema</th><th>Situação</th><th>Precisa de</th></tr></thead>
     <tbody>
       <tr><td class="mono">14</td><td>Validade de 24 h da prévia</td><td>Está no protótipo do bloco 6, ainda não no motor nem no prompt 48</td><td>Aprovação para gerar</td></tr>
-      <tr><td class="mono">06</td><td>Sino de avisos</td><td>Citado na prévia, sem desenho</td><td>Protótipo próprio</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -200,9 +199,8 @@ a:focus-visible{outline:2px solid var(--txt);outline-offset:2px}
 <section>
   <h2>Próximos passos</h2>
   <ol class="passos">
-    <li>Protótipo de padrões comuns: processo demorado com sino, painel de edição com confirmação, somente leitura com motivo, tabela em cartão, escala de cores das faixas e estado vazio do Score.</li>
-    <li>Aprovação dos padrões e registro em <code>docs/homologacao/APROVACOES.md</code>.</li>
-    <li>Ajuste dos prompts do Horizons e da geração (SQL, motor, testes) que usam esses padrões.</li>
+    <li>Rodar, quando liberar: SQL 34, prompts 49 e 50 e o motor na nuvem (passos 75 a 77 do pacote).</li>
+    <li>Decidir a validade de 24 h da prévia do Score.</li>
   </ol>
 </section>
 </div>
