@@ -257,7 +257,9 @@ Protótipo: `relatorios-prototipo.html`.
 - Pedido do operador: "Não entregues" com a taxa em todo relatório de entrega; no e-mail, bounce permanente e
   temporário.
 - Relatórios da Orquestração entram agora ("Entram"): régua, carteira, movimento, acordos, indicadores por safra e
-  Jornada do MotorCli — aguardando aprovação da tela.
+  Jornada do MotorCli. Tela aprovada em 15/10/2026 ("Acredito que seja isso por hora"). Pendente: foto diária da
+  carteira (explicado como funcionaria na prática; aguardando decisão). A Jornada do MotorCli vai ter uma revisão
+  própria, como a da Cobrança.
 
 ## Fila para rodar (quando liberar)
 
