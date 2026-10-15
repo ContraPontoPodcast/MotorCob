@@ -165,7 +165,8 @@ Protótipo: `padroes-comuns-prototipo.html`. Vale para a plataforma e o Console.
 - **Um nome por conceito**: cliente vê "Não enviados" e o Console "Represados"; preço abaixo de R$ 0,10 para o
   cliente aparece por mil.
 - Gerado: SQL 34 (avisos, cores no tema, score_formacao), motor (`nuvem/avisos.py`), testes e prompts 49 e 50.
-  A validade de 24 h da prévia continua fora (aparece no sino do protótipo só como exemplo; aguarda aprovação).
+- **Prévia do Score sem validade** (15/10, "Não vamos fazer"): a prévia não vence nem é recalculada sozinha antes de
+  agendar. Saíram dos protótipos o "válida até" e o aviso de prévia vencendo.
 
 ## Fila para rodar (quando liberar)
 
