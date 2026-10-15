@@ -1,0 +1,662 @@
+<title>Padrões comuns MotorCX</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Workspace MotorCX, menu cinza à esquerda (um item por padrão) + barra do topo com o sino.
+   Paleta aprovada no bloco 5; cor da área (Mensageria, vinho) só no botão principal, item ativo, tag e linha do título. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --info:#8E8E93; --pilula:#F2F2F7;
+  --area:#7A2E3B; --area-forte:#6B2633; --area-ativo:#F5E6E8; --area-ativo-texto:#63222E; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --fx-alto:#7A2E3B; --fx-alto-t:#FFFFFF; --fx-medio:#B9707D; --fx-medio-t:#FFFFFF; --fx-baixo:#EBCDD2; --fx-baixo-t:#63222E;
+  --fx-sem:#E5E5EA; --fx-sem-t:#3A3A3C;
+  --sombra:0 10px 30px rgba(0,0,0,.12); --veu:rgba(0,0,0,.25);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#D07A8A; --area-forte:#DD94A2; --area-ativo:#3A1A20; --area-ativo-texto:#EDB8C2; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --fx-alto:#D07A8A; --fx-alto-t:#1D1D1F; --fx-medio:#8E4A57; --fx-medio-t:#FFFFFF; --fx-baixo:#4A2229; --fx-baixo-t:#EDB8C2;
+  --fx-sem:#3A3A3C; --fx-sem-t:#D1D1D6; --sombra:0 10px 30px rgba(0,0,0,.6); --veu:rgba(0,0,0,.55);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#D07A8A; --area-forte:#DD94A2; --area-ativo:#3A1A20; --area-ativo-texto:#EDB8C2; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --fx-alto:#D07A8A; --fx-alto-t:#1D1D1F; --fx-medio:#8E4A57; --fx-medio-t:#FFFFFF; --fx-baixo:#4A2229; --fx-baixo-t:#EDB8C2;
+  --fx-sem:#3A3A3C; --fx-sem-t:#D1D1D6; --sombra:0 10px 30px rgba(0,0,0,.6); --veu:rgba(0,0,0,.55);
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:78ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--area);border:1px solid var(--area);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao)}
+@media (max-width:820px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.app{margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.lado{min-width:0;display:flex;flex-direction:column;background:var(--fundo)}
+.barra-topo{display:flex;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--borda);background:var(--cartao);position:relative}
+.barra-topo .emp{font-weight:600}
+.barra-topo .emp small{font-weight:400;color:var(--texto2);margin-left:6px}
+.sino{all:unset;cursor:pointer;margin-left:auto;position:relative;width:34px;height:34px;display:grid;place-items:center;border-radius:9px;color:var(--texto)}
+.sino:hover{background:var(--pilula)}
+.sino:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.sino svg{width:20px;height:20px}
+.sino b{position:absolute;top:2px;right:1px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--area);color:var(--sobre-area);font-size:11px;display:grid;place-items:center}
+.painel-sino{position:absolute;top:calc(100% + 6px);right:12px;width:min(380px,calc(100vw - 32px));background:var(--cartao);border:1px solid var(--borda);border-radius:12px;box-shadow:var(--sombra);z-index:30;display:flex;flex-direction:column;max-height:70vh}
+.painel-sino header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--borda)}
+.painel-sino ul{list-style:none;margin:0;padding:0;overflow:auto}
+.painel-sino li{display:grid;grid-template-columns:10px 1fr;gap:4px 10px;padding:12px 14px;border-bottom:1px solid var(--borda)}
+.painel-sino li:last-child{border-bottom:0}
+.painel-sino li .pt{width:8px;height:8px;border-radius:50%;margin-top:6px;background:transparent}
+.painel-sino li.novo .pt{background:var(--area)}
+.painel-sino li.novo strong{font-weight:700}
+.painel-sino li strong{font-weight:500}
+.painel-sino li p{grid-column:2;margin:0;color:var(--texto2);font-size:13px}
+.painel-sino li .acoes{grid-column:2;display:flex;gap:14px}
+.trab{padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:72ch}
+.etq{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--area);border:1px solid var(--area);border-radius:999px;padding:1px 8px;margin-bottom:6px}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area)}
+.btn:active{background:var(--area-forte)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.perigo{background:var(--erro);color:#fff}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--area);font-weight:600;font-size:13px}
+.linha{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px;min-width:0}
+input[type=text]{font-variant-numeric:tabular-nums}
+input[readonly]{background:var(--pilula);color:var(--texto2)}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.i{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--info);color:var(--info);font-size:10px;font-weight:700;cursor:help;vertical-align:1px}
+.cad{display:inline-block;width:12px;height:12px;vertical-align:-1px;color:var(--texto2)}
+/* processo demorado */
+.proc{border:1px solid var(--borda);border-radius:12px;padding:14px 16px;background:var(--cartao);display:flex;flex-direction:column;gap:10px}
+.proc-topo{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;justify-content:space-between}
+.etapas{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.etapas li{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--texto2);padding:3px 10px 3px 4px;border-radius:999px;background:var(--pilula)}
+.etapas li::before{content:"";width:16px;height:16px;border-radius:50%;border:1px solid var(--borda);background:var(--cartao);flex:none}
+.etapas li.feito{color:var(--texto)}
+.etapas li.feito::before{content:"✓";display:grid;place-items:center;font-size:10px;background:var(--ok-f);color:var(--ok);border-color:transparent}
+.etapas li.atual{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.etapas li.atual::before{background:var(--area);border-color:transparent}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden;display:flex}
+.barra i{display:block;height:100%;background:var(--area);transition:width .4s}
+@media (prefers-reduced-motion:reduce){.barra i{transition:none}}
+.proc .tempo{font-size:13px;color:var(--texto2);font-variant-numeric:tabular-nums}
+/* gaveta */
+.veu{position:fixed;inset:0;background:var(--veu);z-index:40}
+.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);background:var(--cartao);border-left:1px solid var(--borda);box-shadow:var(--sombra);z-index:41;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.gaveta header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--borda)}
+.gaveta header h3{margin:0;font-size:16px}
+.gaveta .corpo{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.gaveta footer{padding:12px 18px;border-top:1px solid var(--borda);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+.gaveta footer .nota{margin-right:auto}
+.preco-linha{display:grid;grid-template-columns:1fr 110px 110px;gap:8px;align-items:center}
+.preco-linha.mud input{border-color:var(--area);box-shadow:inset 0 0 0 1px var(--area)}
+.preco-linha.cab-l{font-size:12px;color:var(--texto2);font-weight:600}
+.mudancas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mudancas li{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.mudancas s{color:var(--texto2)}
+.alerta{border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.alerta.at{background:var(--at-f);color:var(--texto)}
+.alerta.info{background:var(--pilula)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+/* confirmação */
+.confirma{border:1px solid var(--area);border-radius:12px;padding:14px 16px;background:var(--area-ativo);color:var(--texto);display:flex;flex-direction:column;gap:10px}
+.confirma.perigo{border-color:var(--erro);background:var(--erro-f)}
+.confirma p{margin:0}
+/* leitura */
+.trava{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);background:var(--pilula);border-radius:9px;padding:8px 12px}
+/* tabela → cartão */
+.resp{container-type:inline-size}
+.moldura{border:1px solid var(--borda);border-radius:14px;background:var(--cartao);padding:10px;margin:0 auto;width:100%}
+.moldura.cel{max-width:390px}
+.camp-tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.camp-tab th,.camp-tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap}
+.camp-tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.camp-tab .n{text-align:right}
+.camp-tab td.acao .ver{display:none}
+@container (max-width:600px){
+  .camp-tab thead{display:none}
+  .camp-tab,.camp-tab tbody{display:block}
+  .camp-tab tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 4px;border-bottom:1px solid var(--borda)}
+  .camp-tab td{border:0;padding:0;white-space:normal}
+  .camp-tab td.nome{font-weight:600}
+  .camp-tab td.sit{grid-column:2;grid-row:1;justify-self:end}
+  .camp-tab td.data{grid-column:1;color:var(--texto2);font-size:13px}
+  .camp-tab td.env{grid-column:1;text-align:left;font-size:13px}
+  .camp-tab td.extra{display:none}
+  .camp-tab td.acao{grid-column:2;grid-row:2 / span 2;align-self:center;justify-self:end}
+  .camp-tab td.acao .ver{display:inline}
+}
+/* faixas */
+.fx{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.fx.alto{background:var(--fx-alto);color:var(--fx-alto-t)}
+.fx.medio{background:var(--fx-medio);color:var(--fx-medio-t)}
+.fx.baixo{background:var(--fx-baixo);color:var(--fx-baixo-t)}
+.fx.sem{background:var(--fx-sem);color:var(--fx-sem-t)}
+.fx.sem .i{border-color:currentColor;color:currentColor;width:13px;height:13px;font-size:9px}
+.barra-fx{height:22px;border-radius:7px;overflow:hidden;display:flex}
+.barra-fx i{display:block;height:100%}
+.comp{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.comp .lado-a,.comp .lado-b{display:flex;flex-direction:column;gap:8px}
+.legenda{display:flex;flex-wrap:wrap;gap:6px 10px}
+/* frio */
+.frio{border:1px dashed var(--borda);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;background:var(--cartao)}
+.linha-tempo{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--texto2);font-variant-numeric:tabular-nums}
+.linha-tempo .barra{flex:1}
+.qtd{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.qtd div{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.qtd b{font-size:20px;font-variant-numeric:tabular-nums}
+.qtd span{font-size:12.5px;color:var(--texto2)}
+code{font-family:var(--mono);font-size:12.5px}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Padrões comuns</span>
+  <h1>Padrões comuns do MotorCX</h1>
+  <p>Oito padrões que valem para todas as áreas, saídos da revisão de UX dos blocos 1 a 6. Cada tela mostra o padrão funcionando e a regra de quando usar. Todos os números, campanhas e preços são fictícios. Nada aqui grava no banco.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Padrões">
+    <div class="grupo">Andamento</div>
+    <button data-ir="processo" aria-current="page">Processo demorado e sino<small>Importar, prévia, enriquecer</small></button>
+    <div class="grupo">Editar com segurança</div>
+    <button data-ir="salvar">Salvar com revisão<small>Painel lateral e resumo</small></button>
+    <button data-ir="confirmar">Ações sem volta<small>Confirmar com o efeito real</small></button>
+    <button data-ir="leitura">Somente leitura<small>Travado, com o motivo</small></button>
+    <div class="grupo">Leitura</div>
+    <button data-ir="celular">Tabela no celular<small>Linha vira cartão</small></button>
+    <button data-ir="faixas">Cores do Score<small>Escala própria das faixas</small></button>
+    <button data-ir="frio">Score nos primeiros dias<small>Histórico em formação</small></button>
+    <button data-ir="nomes">Um nome por conceito<small>Cliente e Console</small></button>
+  </nav>
+
+  <div class="lado">
+    <div class="barra-topo">
+      <span class="emp">Financeira Horizonte <small>exemplo</small></span>
+      <button class="sino" id="sino" aria-haspopup="true" aria-expanded="false" aria-label="Avisos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+        <b id="sino-n"></b>
+      </button>
+      <div class="painel-sino" id="painel-sino" hidden>
+        <header><strong>Avisos</strong><button class="link" id="sino-lidas">Marcar todas como lidas</button></header>
+        <ul id="sino-lista"></ul>
+      </div>
+    </div>
+
+    <main class="trab">
+
+      <!-- ===================== PROCESSO ===================== -->
+      <section data-p="processo" class="trab" style="padding:0">
+        <div class="cab"><div><span class="etq">Padrão 1</span><h2>Processo demorado e sino de avisos</h2>
+          <p>Um só componente para tudo que leva mais que alguns segundos: importar lista, calcular a prévia do Score, enriquecer telefones, sincronizar. Diz em que etapa está, quanto falta e que dá para sair da tela.</p></div></div>
+
+        <div class="cartao">
+          <h3>Nova campanha · Cobrança novembro</h3>
+          <p class="sub">Arquivo "cobranca_novembro.xlsx" · 18.420 linhas</p>
+          <div class="linha"><button class="btn" id="proc-iniciar">Importar lista</button><button class="btn sec" id="proc-sair" hidden>Sair desta tela</button></div>
+          <div class="proc" id="proc" hidden aria-live="polite">
+            <div class="proc-topo"><strong id="proc-titulo">Importando a lista</strong><span class="tempo" id="proc-tempo"></span></div>
+            <ol class="etapas" id="proc-etapas"></ol>
+            <div class="barra" role="progressbar" aria-label="Andamento" aria-valuemin="0" aria-valuemax="100" id="proc-barra"><i id="proc-i" style="width:0%"></i></div>
+            <p class="nota" id="proc-nota">Pode sair desta tela. Quando terminar, o aviso chega no sino.</p>
+          </div>
+          <div class="alerta info" id="proc-fora" hidden>Você saiu da tela. O processo continua; o sino avisa quando terminar.</div>
+        </div>
+
+        <div class="duas">
+          <div class="regra"><b>Quando usar</b><ul>
+            <li>Qualquer processo acima de 5 segundos. Abaixo disso, só o botão em "Salvando…".</li>
+            <li>Etapas com nome do que está acontecendo, não "Processando".</li>
+            <li>Barra com número real (linhas lidas) quando o motor sabe; sem número, só a etapa.</li>
+            <li>Tempo restante só depois da primeira etapa, quando dá para medir.</li>
+          </ul></div>
+          <div class="regra"><b>O que vai para o sino</b><ul>
+            <li>Fim de processo longo (pronto ou com erro), com o link para abrir.</li>
+            <li>Algo que precisa da pessoa: prévia perto de vencer, saldo do pré-pago acabando.</li>
+            <li>Alerta de qualidade só para quem cuida (Técnico e Master).</li>
+            <li>Não vai: confirmação de ação que a própria pessoa acabou de fazer (isso é o aviso na tela).</li>
+          </ul></div>
+        </div>
+      </section>
+
+      <!-- ===================== SALVAR ===================== -->
+      <section data-p="salvar" class="trab" style="padding:0" hidden>
+        <div class="cab"><div><span class="etq">Padrão 2</span><h2>Salvar com revisão</h2>
+          <p>Nada que mexe em dinheiro ou em regra de envio é editado direto na tabela. A edição abre num painel lateral, mostra o resumo do que muda (de → para) e só então salva.</p></div>
+          <button class="btn" id="ed-abrir">Editar preços</button></div>
+
+        <div class="cartao">
+          <h3>Preços de tabela · Mensageria</h3>
+          <div class="rolar"><table class="tab" id="tab-precos"></table></div>
+          <p class="nota">Mudança de preço vale a partir do mês seguinte e fica na Auditoria.</p>
+        </div>
+
+        <div class="regra"><b>Regras</b><ul>
+          <li>Painel lateral para editar; a tabela atrás continua mostrando o valor atual.</li>
+          <li>Campo alterado fica marcado. O botão diz quantas mudanças há: "Revisar 2 alterações".</li>
+          <li>Resumo antes de salvar, com o valor antigo riscado e a data em que vale.</li>
+          <li>Fechar o painel com alteração pendente pergunta antes de descartar. Sair da página também.</li>
+          <li>Ajuste simples sem efeito financeiro (nome, cor, favorito) salva direto, com "Salvo" na tela.</li>
+        </ul></div>
+      </section>
+
+      <!-- ===================== CONFIRMAR ===================== -->
+      <section data-p="confirmar" class="trab" style="padding:0" hidden>
+        <div class="cab"><div><span class="etq">Padrão 3</span><h2>Ações sem volta</h2>
+          <p>Antes de uma ação que não dá para desfazer, a tela diz o efeito concreto, com números. O botão de confirmar repete o verbo e o número.</p></div></div>
+
+        <div class="duas">
+          <div class="cartao">
+            <h3>Agendar campanha</h3>
+            <p class="sub">Cobrança novembro · 16.210 números depois do Score</p>
+            <div class="linha"><button class="btn" id="cf-agendar">Agendar envio</button></div>
+            <div class="confirma" id="cf-agendar-box" hidden>
+              <p><b>16.210 SMS serão enviados em 03/11 às 09:00</b>, pela rota padrão de SMS. Custo previsto de R$ 875,34.</p>
+              <p class="nota">Até o horário você ainda pode cancelar. Depois que o envio começa, não dá para desfazer.</p>
+              <div class="linha"><button class="btn" id="cf-agendar-ok">Agendar 16.210 SMS</button><button class="btn sec" data-voltar="cf-agendar-box">Voltar</button></div>
+            </div>
+            <p class="nota" id="cf-agendar-msg" aria-live="polite"></p>
+          </div>
+          <div class="cartao">
+            <h3>Cancelar campanha agendada</h3>
+            <p class="sub">Renegociação outubro · agendada para 28/10 às 10:00</p>
+            <div class="linha"><button class="btn sec" id="cf-cancelar">Cancelar campanha</button></div>
+            <div class="confirma perigo" id="cf-cancelar-box" hidden>
+              <p><b>A campanha não será enviada.</b> A prévia do Score e o agendamento são descartados; para enviar de novo, é preciso subir a lista outra vez.</p>
+              <div class="linha"><button class="btn perigo" id="cf-cancelar-ok">Cancelar a campanha</button><button class="btn sec" data-voltar="cf-cancelar-box">Manter agendada</button></div>
+            </div>
+            <p class="nota" id="cf-cancelar-msg" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <div class="cartao">
+          <h3>Onde a confirmação entra</h3>
+          <div class="rolar"><table class="tab">
+            <thead><tr><th>Ação</th><th>O que a confirmação diz</th><th>Botão</th></tr></thead>
+            <tbody>
+              <tr><td>Agendar campanha</td><td>Quantas mensagens, quando, rota e custo previsto</td><td>Agendar 16.210 SMS</td></tr>
+              <tr><td>Cancelar campanha</td><td>Que a prévia e o agendamento se perdem</td><td>Cancelar a campanha</td></tr>
+              <tr><td>Trocar a função de um usuário</td><td>O que ele passa a ver e o que deixa de ver</td><td>Mudar para Técnico</td></tr>
+              <tr><td>Tirar fornecedor do Score</td><td>Que o histórico dele deixa de contar a partir de agora</td><td>Tirar do Score</td></tr>
+              <tr><td>Suspender ou encerrar empresa</td><td>Que os envios param e quem perde o acesso</td><td>Suspender a empresa</td></tr>
+              <tr><td>Emitir fatura</td><td>Valor, vencimento e para quem vai o e-mail</td><td>Emitir R$ 4.812,90</td></tr>
+            </tbody>
+          </table></div>
+          <p class="nota">A confirmação fica dentro da tela, junto do botão. Nada de janela do navegador.</p>
+        </div>
+      </section>
+
+      <!-- ===================== LEITURA ===================== -->
+      <section data-p="leitura" class="trab" style="padding:0" hidden>
+        <div class="cab"><div><span class="etq">Padrão 4</span><h2>Somente leitura, com o motivo</h2>
+          <p>Quem não pode editar vê a mesma tela, com o campo travado e uma frase dizendo quem pode. Assim ninguém acha que a função não existe.</p></div>
+          <div class="campo"><label for="ld-papel">Ver como</label><select id="ld-papel"><option value="adm">Administrativo</option><option value="com" selected>Comercial</option></select></div></div>
+
+        <div class="cartao">
+          <div class="linha" style="justify-content:space-between"><h3>Preços de tabela · Mensageria</h3><span id="ld-acao"></span></div>
+          <div class="rolar"><table class="tab" id="tab-leitura"></table></div>
+          <p class="nota" id="ld-nota"></p>
+        </div>
+
+        <div class="duas">
+          <div class="regra"><b>Travar e explicar</b><ul>
+            <li>Botão de ação trocado por "Só o Administrativo altera preços", com cadeado.</li>
+            <li>Campos de formulário em somente leitura, com a mesma frase no topo do formulário.</li>
+            <li>A frase diz o papel que pode, não "sem permissão".</li>
+          </ul></div>
+          <div class="regra"><b>Esconder só o que é sigiloso</b><ul>
+            <li>Custo do fornecedor e margem: escondidos para quem não é Master ou Administrativo.</li>
+            <li>Dados de outra empresa: nunca aparecem.</li>
+            <li>CPF e nome de devedor: nunca aparecem em tela nenhuma (LGPD).</li>
+          </ul></div>
+        </div>
+      </section>
+
+      <!-- ===================== CELULAR ===================== -->
+      <section data-p="celular" class="trab" style="padding:0" hidden>
+        <div class="cab"><div><span class="etq">Padrão 5</span><h2>Tabela no celular</h2>
+          <p>Abaixo de 600 px de largura, cada linha vira um cartão com os três campos que importam e "Ver". O resto fica no detalhe. Rolagem para o lado só em tabela técnica do Console.</p></div>
+          <div class="campo"><label for="cel-larg">Largura</label><select id="cel-larg"><option value="pc">Computador</option><option value="cel" selected>Celular (390 px)</option></select></div></div>
+
+        <div class="resp"><div class="moldura cel" id="cel-moldura"><div class="resp">
+          <table class="camp-tab">
+            <thead><tr><th>Campanha</th><th>Data</th><th>Situação</th><th class="n">Enviados</th><th class="n">Não enviados</th><th class="n">Entregues</th><th class="n">Custo</th><th></th></tr></thead>
+            <tbody id="cel-corpo"></tbody>
+          </table>
+        </div></div></div>
+
+        <div class="regra"><b>Quais três campos</b><ul>
+          <li>Campanhas: nome, situação, data e enviados.</li>
+          <li>Faturas: competência, valor e situação.</li>
+          <li>Qualidade dos fornecedores: fornecedor, entrega no lote e alerta.</li>
+          <li>Cada tela do prompt diz quais são os três; o resto vai para "Ver".</li>
+        </ul></div>
+      </section>
+
+      <!-- ===================== FAIXAS ===================== -->
+      <section data-p="faixas" class="trab" style="padding:0" hidden>
+        <div class="cab"><div><span class="etq">Padrão 6</span><h2>Cores do Score de Entrega</h2>
+          <p>Hoje Baixo usa o vermelho de erro e Médio o amarelo de alerta. Quem olha a prévia lê "deu problema". A proposta é uma escala própria, de um tom só, e o nome da faixa sempre escrito.</p></div></div>
+
+        <div class="comp">
+          <div class="cartao lado-a">
+            <h3>Antes</h3>
+            <div class="legenda"><span class="pil ok">Alto</span><span class="pil at">Médio</span><span class="pil erro">Baixo</span><span class="pil neutra">Sem histórico</span></div>
+            <div class="barra-fx"><i style="width:52%;background:var(--ok)"></i><i style="width:21%;background:var(--at)"></i><i style="width:9%;background:var(--erro)"></i><i style="width:18%;background:var(--fx-sem)"></i></div>
+            <p class="nota">Verde, amarelo e vermelho já significam pronto, atenção e erro no resto do sistema.</p>
+          </div>
+          <div class="cartao lado-b">
+            <h3>Proposta</h3>
+            <div class="legenda"><span class="fx alto">Alto</span><span class="fx medio">Médio</span><span class="fx baixo">Baixo</span><span class="fx sem">Sem histórico <span class="i" title="Número que ainda não passou pela Mensageria: o Score não tem como classificar.">i</span></span></div>
+            <div class="barra-fx" role="img" aria-label="Alto 52%, Médio 21%, Baixo 9%, Sem histórico 18%"><i style="width:52%;background:var(--fx-alto)"></i><i style="width:21%;background:var(--fx-medio)"></i><i style="width:9%;background:var(--fx-baixo)"></i><i style="width:18%;background:var(--fx-sem)"></i></div>
+            <p class="nota">Do mais forte (mais chance de entregar) ao mais claro. Sem histórico em cinza, com o (i).</p>
+          </div>
+        </div>
+
+        <div class="cartao">
+          <h3>Na prévia da campanha</h3>
+          <div class="rolar"><table class="tab">
+            <thead><tr><th>Faixa</th><th class="n">Números</th><th class="n">% da lista</th><th>Recebe</th></tr></thead>
+            <tbody>
+              <tr><td><span class="fx alto">Alto</span></td><td class="n">9.578</td><td class="n">52,0%</td><td>Sim</td></tr>
+              <tr><td><span class="fx medio">Médio</span></td><td class="n">3.868</td><td class="n">21,0%</td><td>Sim</td></tr>
+              <tr><td><span class="fx baixo">Baixo</span></td><td class="n">1.658</td><td class="n">9,0%</td><td>Não</td></tr>
+              <tr><td><span class="fx sem">Sem histórico <span class="i" title="Número que ainda não passou pela Mensageria.">i</span></span></td><td class="n">3.316</td><td class="n">18,0%</td><td>Sim</td></tr>
+            </tbody>
+          </table></div>
+          <p class="nota">Vermelho e amarelo ficam só para erro e alerta (falha de fornecedor, saldo acabando). As cores entram no tema como tokens <code>score.alto</code>, <code>score.medio</code>, <code>score.baixo</code> e <code>score.sem</code>, com versão clara e escura.</p>
+        </div>
+      </section>
+
+      <!-- ===================== FRIO ===================== -->
+      <section data-p="frio" class="trab" style="padding:0" hidden>
+        <div class="cab"><div><span class="etq">Padrão 7</span><h2>Score nos primeiros dias</h2>
+          <p>Logo que o Score entra, a Mensageria ainda não tem histórico da maioria dos números. Sem aviso, a prévia parece quebrada e a economia fica perto de zero. A tela explica, com data, e não inventa estimativa.</p></div>
+          <div class="campo"><label for="fr-dia">Ver no protótipo</label><select id="fr-dia"><option value="5">5º dia de Score</option><option value="18">18º dia</option><option value="31">Depois de 30 dias</option></select></div></div>
+
+        <div class="cartao">
+          <h3>Prévia · Cobrança novembro</h3>
+          <div class="frio" id="fr-aviso">
+            <strong id="fr-tit"></strong>
+            <p class="nota" id="fr-txt" style="font-size:13.5px;color:var(--texto)"></p>
+            <div class="linha-tempo"><span>08/10</span><div class="barra"><i id="fr-barra" style="width:0%"></i></div><span>07/11</span></div>
+          </div>
+          <div class="barra-fx" id="fr-fx"></div>
+          <div class="qtd" id="fr-qtd"></div>
+          <p class="nota">Sem histórico vem marcado para receber por padrão. Quem decide é o cliente.</p>
+        </div>
+
+        <div class="regra"><b>Regras</b><ul>
+          <li>Aviso aparece enquanto a janela do Score (30 dias) não estiver completa desde o primeiro envio da empresa pela Mensageria.</li>
+          <li>Diz a data em que a janela completa e quanto da lista ficou Sem histórico.</li>
+          <li>Na Economia do Score, o mesmo aviso no topo: "a economia cresce conforme o histórico se forma".</li>
+          <li>Nunca preencher Sem histórico com estimativa de outra base.</li>
+        </ul></div>
+      </section>
+
+      <!-- ===================== NOMES ===================== -->
+      <section data-p="nomes" class="trab" style="padding:0" hidden>
+        <div class="cab"><div><span class="etq">Padrão 8</span><h2>Um nome por conceito</h2>
+          <p>O mesmo conceito tem o mesmo nome em todas as telas. Onde o cliente e o time interno precisam de palavras diferentes, a tabela diz qual vai onde.</p></div></div>
+
+        <div class="cartao">
+          <div class="rolar"><table class="tab">
+            <thead><tr><th>Conceito</th><th>Cliente vê</th><th>Console vê</th><th>Não usar</th></tr></thead>
+            <tbody>
+              <tr><td>Produto que dá a faixa de cada número</td><td>Score de Entrega</td><td>Score de Entrega</td><td>filtro de inteligência, propensão</td></tr>
+              <tr><td>Números que o Score deixou de fora</td><td>Não enviados</td><td>Represados</td><td>filtrados, bloqueados</td></tr>
+              <tr><td>Contatos de uma campanha da Mensageria</td><td>Lista da campanha</td><td>Lista</td><td>mailing, base</td></tr>
+              <tr><td>Carteira que o credor manda</td><td>Carga</td><td>Carga</td><td>base bruta</td></tr>
+              <tr><td>Número sem dados para o Score</td><td>Sem histórico (i)</td><td>Sem histórico</td><td>neutro</td></tr>
+              <tr><td>Preço do Score</td><td>R$ 4,20 por mil números</td><td>R$ 0,0042 por número</td><td>4 casas para o cliente</td></tr>
+              <tr><td>Custo por número da campanha</td><td>Custo unitário efetivo, por mil</td><td>Custo unitário efetivo</td><td>CPM, custo médio</td></tr>
+            </tbody>
+          </table></div>
+          <p class="nota">O nome que volta no retorno da rota, para o sistema do cliente, continua editável pelo Técnico (aprovado no bloco 6). Ele não muda o nome das telas.</p>
+        </div>
+
+        <div class="regra"><b>Valores pequenos</b><ul>
+          <li>Para o cliente, preço unitário abaixo de R$ 0,10 aparece por mil: R$ 54,00 por mil SMS.</li>
+          <li>No Console e no banco continuam 4 casas, que é como o fornecedor cobra.</li>
+        </ul></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="veu" id="veu" hidden></div>
+<aside class="gaveta" id="gaveta" role="dialog" aria-modal="true" aria-labelledby="gv-tit" hidden>
+  <header><h3 id="gv-tit">Editar preços de tabela</h3><button class="link" id="gv-fechar">Fechar</button></header>
+  <div class="corpo" id="gv-editar">
+    <p class="nota">Valores por unidade, como o fornecedor cobra. Vale a partir de 01/11/2026.</p>
+    <div class="preco-linha cab-l"><span>Produto</span><span>Mínimo</span><span>Tabela</span></div>
+    <div id="gv-campos" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+  <div class="corpo" id="gv-revisar" hidden>
+    <p style="margin:0"><b id="gv-rev-tit"></b></p>
+    <ul class="mudancas" id="gv-mud"></ul>
+    <p class="nota">Vale a partir de 01/11/2026 para contratos novos e renovações. Fica registrado na Auditoria.</p>
+  </div>
+  <div class="corpo" id="gv-descartar" hidden>
+    <div class="alerta at"><b id="gv-desc-tit"></b><span>As mudanças que você fez neste painel não foram salvas.</span>
+      <div class="linha"><button class="btn sec" id="gv-continuar">Continuar editando</button><button class="btn perigo" id="gv-desc-ok">Descartar</button></div></div>
+  </div>
+  <footer id="gv-rodape"><span class="nota" id="gv-cont">Nenhuma alteração</span><button class="btn sec" id="gv-voltar" hidden>Voltar a editar</button><button class="btn" id="gv-acao" disabled>Revisar alterações</button></footer>
+</aside>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const brl = (v, c = 4) => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: c, maximumFractionDigits: c });
+  const n = v => v.toLocaleString("pt-BR");
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3200); };
+
+  // ---------- navegação
+  const telas = [...document.querySelectorAll("section[data-p]")];
+  const botoes = [...document.querySelectorAll(".menu button")];
+  function ir(p) {
+    telas.forEach(s => s.hidden = s.dataset.p !== p);
+    botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+    if (p !== "processo" && proc.rodando && !proc.fora) sairDaTela();
+  }
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+
+  // ---------- sino
+  const avisos = [
+    { id: 1, novo: false, tit: "Prévia pronta · Renegociação outubro", txt: "12.940 números classificados. Revise as faixas antes de agendar.", acao: "Abrir prévia" },
+    { id: 2, novo: true, tit: "A prévia de Renegociação outubro vence em 2 h", txt: "Depois disso o Score é recalculado antes de agendar.", acao: "Abrir prévia" },
+    { id: 3, novo: false, tit: "Importação com aviso · Acordos setembro", txt: "312 linhas sem telefone válido ficaram de fora.", acao: "Ver linhas" }
+  ];
+  function sino() {
+    const novos = avisos.filter(a => a.novo).length;
+    $("sino-n").textContent = novos; $("sino-n").hidden = !novos;
+    $("sino").setAttribute("aria-label", novos ? `Avisos, ${novos} novos` : "Avisos");
+    $("sino-lista").innerHTML = avisos.map(a => `<li class="${a.novo ? "novo" : ""}"><span class="pt"></span><strong>${a.tit}</strong><p>${a.txt}</p><div class="acoes"><button class="link">${a.acao}</button></div></li>`).join("");
+  }
+  $("sino").addEventListener("click", e => { e.stopPropagation(); const p = $("painel-sino"); p.hidden = !p.hidden; $("sino").setAttribute("aria-expanded", String(!p.hidden)); });
+  $("sino-lidas").addEventListener("click", () => { avisos.forEach(a => a.novo = false); sino(); });
+  document.addEventListener("click", e => { if (!$("painel-sino").hidden && !$("painel-sino").contains(e.target)) { $("painel-sino").hidden = true; $("sino").setAttribute("aria-expanded", "false"); } });
+  sino();
+
+  // ---------- processo demorado
+  const ETAPAS = ["Recebendo o arquivo", "Lendo as colunas", "Limpando telefones e repetidos", "Calculando a prévia do Score"];
+  const TOTAL = 18420;
+  const proc = { rodando: false, fora: false, passo: 0, linhas: 0, t: null };
+  function desenhaProc() {
+    $("proc-etapas").innerHTML = ETAPAS.map((e, i) => `<li class="${i < proc.passo ? "feito" : i === proc.passo ? "atual" : ""}">${e}</li>`).join("");
+    const pct = Math.min(100, Math.round((proc.passo + proc.linhas / TOTAL) / ETAPAS.length * 100));
+    $("proc-i").style.width = pct + "%"; $("proc-barra").setAttribute("aria-valuenow", pct);
+    const resta = Math.max(1, Math.round((100 - pct) / 100 * 6));
+    $("proc-tempo").textContent = proc.passo === 0 ? "medindo o tempo…" : proc.passo === 2 ? `${n(proc.linhas)} de ${n(TOTAL)} linhas · cerca de ${resta} min` : `cerca de ${resta} min`;
+    $("proc-titulo").textContent = ETAPAS[Math.min(proc.passo, ETAPAS.length - 1)];
+  }
+  function passo() {
+    if (proc.passo === 2 && proc.linhas < TOTAL) { proc.linhas = Math.min(TOTAL, proc.linhas + 3070); }
+    else { proc.passo++; }
+    if (proc.passo >= ETAPAS.length) return fim();
+    desenhaProc();
+  }
+  function fim() {
+    clearInterval(proc.t); proc.rodando = false;
+    $("proc-titulo").textContent = "Prévia pronta"; $("proc-tempo").textContent = "";
+    $("proc-etapas").innerHTML = ETAPAS.map(e => `<li class="feito">${e}</li>`).join(""); $("proc-i").style.width = "100%";
+    $("proc-nota").textContent = "18.420 linhas lidas · 17.904 números válidos · 516 ficaram de fora (telefone inválido ou repetido).";
+    $("proc-sair").hidden = true; $("proc-iniciar").hidden = false; $("proc-iniciar").textContent = "Importar outra lista";
+    avisos.unshift({ id: Date.now(), novo: true, tit: "Prévia pronta · Cobrança novembro", txt: "17.904 números classificados. Revise as faixas antes de agendar.", acao: "Abrir prévia" });
+    sino();
+    if (proc.fora) toast("Prévia pronta · Cobrança novembro. O aviso está no sino.");
+  }
+  function sairDaTela() { proc.fora = true; $("proc").hidden = true; $("proc-sair").hidden = true; $("proc-fora").hidden = false; }
+  $("proc-iniciar").addEventListener("click", () => {
+    Object.assign(proc, { rodando: true, fora: false, passo: 0, linhas: 0 });
+    $("proc").hidden = false; $("proc-fora").hidden = true; $("proc-iniciar").hidden = true; $("proc-sair").hidden = false;
+    $("proc-nota").textContent = "Pode sair desta tela. Quando terminar, o aviso chega no sino.";
+    desenhaProc(); clearInterval(proc.t); proc.t = setInterval(passo, 900);
+  });
+  $("proc-sair").addEventListener("click", sairDaTela);
+
+  // ---------- preços (salvar e leitura)
+  const PRECOS = [
+    { p: "SMS Padrão", min: 0.0480, tab: 0.0540 },
+    { p: "SMS Flash", min: 0.0560, tab: 0.0620 },
+    { p: "RCS básico", min: 0.0710, tab: 0.0790 },
+    { p: "Score de Entrega · por número analisado", min: 0.0036, tab: 0.0042 },
+    { p: "Score de Entrega · por não enviado", min: 0.0180, tab: 0.0210 }
+  ];
+  const CUSTO = [0.0312, 0.0371, 0.0455, 0.0009, 0.0009];
+  function tabelaPrecos(el, comCusto) {
+    el.innerHTML = `<thead><tr><th>Produto</th><th class="n">Mínimo</th><th class="n">Tabela</th>${comCusto ? `<th class="n">Custo previsto</th>` : ""}</tr></thead><tbody>` +
+      PRECOS.map((r, i) => `<tr><td>${r.p}</td><td class="n">${brl(r.min)}</td><td class="n">${brl(r.tab)}</td>${comCusto ? `<td class="n">${brl(CUSTO[i])}</td>` : ""}</tr>`).join("") + "</tbody>";
+  }
+  tabelaPrecos($("tab-precos"), true);
+
+  let rascunho = [];
+  const mudancas = () => PRECOS.flatMap((r, i) => ["min", "tab"].filter(k => rascunho[i][k] !== r[k]).map(k => ({ i, k, de: r[k], para: rascunho[i][k] })));
+  function modo(m) { ["editar", "revisar", "descartar"].forEach(x => $("gv-" + x).hidden = x !== m); $("gv-rodape").hidden = m === "descartar"; $("gaveta").dataset.modo = m; }
+  function rodape() {
+    const q = mudancas().length; const m = $("gaveta").dataset.modo;
+    $("gv-cont").textContent = q ? `${q} ${q === 1 ? "alteração" : "alterações"}` : "Nenhuma alteração";
+    $("gv-voltar").hidden = m !== "revisar";
+    $("gv-acao").disabled = !q;
+    $("gv-acao").textContent = m === "revisar" ? `Salvar ${q} ${q === 1 ? "alteração" : "alterações"}` : q ? `Revisar ${q} ${q === 1 ? "alteração" : "alterações"}` : "Revisar alterações";
+  }
+  function campos() {
+    $("gv-campos").innerHTML = PRECOS.map((r, i) => `<div class="preco-linha" id="pl${i}"><label for="pm${i}">${r.p}</label>
+      <input type="text" inputmode="decimal" id="pm${i}" data-i="${i}" data-k="min" value="${rascunho[i].min.toFixed(4).replace(".", ",")}" aria-label="Mínimo de ${r.p}">
+      <input type="text" inputmode="decimal" id="pt${i}" data-i="${i}" data-k="tab" value="${rascunho[i].tab.toFixed(4).replace(".", ",")}" aria-label="Tabela de ${r.p}"></div>`).join("");
+    $("gv-campos").querySelectorAll("input").forEach(inp => inp.addEventListener("input", () => {
+      const v = parseFloat(inp.value.replace(",", ".")); if (!isNaN(v)) rascunho[inp.dataset.i][inp.dataset.k] = Math.round(v * 10000) / 10000;
+      const i = +inp.dataset.i; $("pl" + i).classList.toggle("mud", rascunho[i].min !== PRECOS[i].min || rascunho[i].tab !== PRECOS[i].tab); rodape();
+    }));
+  }
+  function abrir() { rascunho = PRECOS.map(r => ({ ...r })); campos(); modo("editar"); rodape(); $("veu").hidden = false; $("gaveta").hidden = false; $("pm0").focus(); }
+  function fechar() { $("veu").hidden = true; $("gaveta").hidden = true; $("ed-abrir").focus(); }
+  function pedirFechar() { const q = mudancas().length; if (!q) return fechar(); $("gv-desc-tit").textContent = `Descartar ${q} ${q === 1 ? "alteração" : "alterações"}?`; modo("descartar"); }
+  $("ed-abrir").addEventListener("click", abrir);
+  $("gv-fechar").addEventListener("click", pedirFechar);
+  $("veu").addEventListener("click", pedirFechar);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("gaveta").hidden) pedirFechar(); });
+  $("gv-continuar").addEventListener("click", () => { modo("editar"); rodape(); });
+  $("gv-desc-ok").addEventListener("click", fechar);
+  $("gv-voltar").addEventListener("click", () => { modo("editar"); rodape(); });
+  $("gv-acao").addEventListener("click", () => {
+    const ms = mudancas();
+    if ($("gaveta").dataset.modo === "editar") {
+      $("gv-rev-tit").textContent = `Confira ${ms.length === 1 ? "a alteração" : "as " + ms.length + " alterações"}`;
+      $("gv-mud").innerHTML = ms.map(m => `<li><b>${PRECOS[m.i].p}</b> · ${m.k === "min" ? "mínimo" : "tabela"}<br><s>${brl(m.de)}</s> → <b>${brl(m.para)}</b> <span class="nota" style="display:inline">(${m.para > m.de ? "+" : ""}${((m.para / m.de - 1) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%)</span></li>`).join("");
+      modo("revisar"); rodape();
+    } else {
+      ms.forEach(m => PRECOS[m.i][m.k] = m.para); tabelaPrecos($("tab-precos"), true); leitura(); fechar();
+      toast(`${ms.length} ${ms.length === 1 ? "preço salvo" : "preços salvos"}. Vale a partir de 01/11 e ficou na Auditoria.`);
+    }
+  });
+  window.addEventListener("beforeunload", e => { if (!$("gaveta").hidden && mudancas().length) { e.preventDefault(); e.returnValue = ""; } });
+
+  function leitura() {
+    const adm = $("ld-papel").value === "adm";
+    tabelaPrecos($("tab-leitura"), adm);
+    $("ld-acao").innerHTML = adm ? `<button class="btn" type="button" id="ld-editar">Editar preços</button>`
+      : `<span class="trava"><svg class="cad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Só o Administrativo altera preços</span>`;
+    $("ld-nota").textContent = adm ? "Administrativo vê o custo previsto e edita pelo painel lateral."
+      : "Comercial vê preço mínimo e de tabela para negociar. O custo do fornecedor fica escondido por sigilo, não por falta de função.";
+    const b = $("ld-editar"); if (b) b.addEventListener("click", () => { ir("salvar"); abrir(); });
+  }
+  $("ld-papel").addEventListener("change", leitura); leitura();
+
+  // ---------- confirmações
+  const abreConf = (btn, box) => { $(btn).hidden = true; $(box).hidden = false; $(box).querySelector(".btn").focus(); };
+  document.querySelectorAll("[data-voltar]").forEach(b => b.addEventListener("click", () => { const box = b.dataset.voltar; $(box).hidden = true; const btn = box.replace("-box", ""); $(btn).hidden = false; $(btn).focus(); }));
+  $("cf-agendar").addEventListener("click", () => abreConf("cf-agendar", "cf-agendar-box"));
+  $("cf-cancelar").addEventListener("click", () => abreConf("cf-cancelar", "cf-cancelar-box"));
+  $("cf-agendar-ok").addEventListener("click", () => { $("cf-agendar-box").hidden = true; $("cf-agendar-msg").textContent = "Agendada para 03/11 às 09:00. Dá para cancelar até lá em Campanhas."; });
+  $("cf-cancelar-ok").addEventListener("click", () => { $("cf-cancelar-box").hidden = true; $("cf-cancelar-msg").textContent = "Campanha cancelada. Nenhuma mensagem foi enviada."; });
+
+  // ---------- tabela no celular
+  const CAMP = [
+    ["Cobrança novembro", "03/11", ["at", "Agendada"], 16210, 1658, null, 875.34],
+    ["Renegociação outubro", "28/10", ["neutra", "Prévia pronta"], 0, 0, null, 0],
+    ["Acordos setembro", "22/09", ["ok", "Enviada"], 11402, 980, 10377, 615.71],
+    ["Lembrete de parcela", "15/09", ["ok", "Enviada"], 8320, 412, 7845, 449.28]
+  ];
+  $("cel-corpo").innerHTML = CAMP.map(c => `<tr><td class="nome">${c[0]}</td><td class="data">${c[1]}</td><td class="sit"><span class="pil ${c[2][0]}">${c[2][1]}</span></td>
+    <td class="n env">${c[3] ? n(c[3]) + " enviados" : "—"}</td><td class="n extra">${c[4] ? n(c[4]) : "—"}</td><td class="n extra">${c[5] ? n(c[5]) : "—"}</td>
+    <td class="n extra">${c[6] ? "R$ " + c[6].toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "—"}</td><td class="acao"><button class="link ver">Ver</button></td></tr>`).join("");
+  $("cel-larg").addEventListener("change", e => $("cel-moldura").classList.toggle("cel", e.target.value === "cel"));
+
+  // ---------- Score nos primeiros dias
+  function frio() {
+    const d = +$("fr-dia").value; const LISTA = 17904;
+    const sem = d >= 31 ? 0.17 : d >= 18 ? 0.46 : 0.82;
+    const resto = 1 - sem; const alto = Math.round(LISTA * resto * 0.64), medio = Math.round(LISTA * resto * 0.25), baixo = Math.round(LISTA * resto * 0.11);
+    const semN = LISTA - alto - medio - baixo;
+    $("fr-aviso").hidden = d >= 31;
+    $("fr-tit").textContent = `O Score está formando o histórico · ${d}º dia de 30`;
+    $("fr-txt").textContent = `A sua empresa começou a usar o Score em 08/10. Até 07/11 muitos números ainda não passaram pela Mensageria e aparecem como Sem histórico: nesta lista são ${n(semN)} (${Math.round(sem * 100)}%). Eles saem normalmente se a faixa estiver marcada. A cada envio o histórico cresce e o Score separa mais números.`;
+    $("fr-barra").style.width = Math.min(100, d / 30 * 100) + "%";
+    const f = [["alto", "Alto", alto], ["medio", "Médio", medio], ["baixo", "Baixo", baixo], ["sem", "Sem histórico", semN]];
+    $("fr-fx").innerHTML = f.map(([k, , v]) => `<i style="width:${v / LISTA * 100}%;background:var(--fx-${k})"></i>`).join("");
+    $("fr-fx").setAttribute("role", "img"); $("fr-fx").setAttribute("aria-label", f.map(([, r, v]) => `${r} ${n(v)}`).join(", "));
+    $("fr-qtd").innerHTML = f.map(([k, r, v]) => `<div><span class="fx ${k}" style="align-self:flex-start">${r}${k === "sem" ? ' <span class="i" title="Número que ainda não passou pela Mensageria.">i</span>' : ""}</span><b>${n(v)}</b><span>${(v / LISTA * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% da lista</span></div>`).join("");
+  }
+  $("fr-dia").addEventListener("change", frio); frio();
+})();
+</script>
