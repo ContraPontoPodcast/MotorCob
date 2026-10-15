@@ -242,6 +242,9 @@ Protótipo: `acordo-fatura-prototipo.html`.
 - **Cancelar acordo** volta as faturas para vencidas; na geração, só sem parcela paga (com parcela paga, o
   acordo segue até quitar ou quebrar, para não cobrar duas vezes).
 - Gerado: SQL 38, funções `cobranca`, `pagamentos-webhook` e `assistente`, motor, testes e prompts 57 e 58.
+- Decisões da geração confirmadas em 15/10/2026 ("Perfeito"): saldo único na quebra mantendo o desconto, cancelar
+  só sem parcela paga, parcela mínima de R$ 5,00 e 1ª em até 30 dias, sem nota duplicada, faixa "em dia" só no
+  Início e em Faturamento.
 
 ## Fila para rodar (quando liberar)
 
