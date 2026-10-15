@@ -185,13 +185,15 @@ input[type=text]{font-variant-numeric:tabular-nums}
       <div class="regra"><b>Regras</b><ul>
         <li>Emitir (uma ou várias) pede confirmação com quantas faturas, o total, para quantos contatos vai o e-mail e o vencimento. Depois de emitida, o cliente vê e o e-mail sai; não volta a rascunho.</li>
         <li>Ajuste (desconto, crédito, cobrança extra) entra pelo painel lateral; remover pede confirmação.</li>
-        <li>Vencida: lembrete por e-mail no dia seguinte ao vencimento e de novo depois de 5 dias, para quem recebe faturas. O que acontece depois (suspender envios ou não) é decisão comercial em aberto.</li>
+        <li>Vencida: lembrete por e-mail no dia seguinte ao vencimento e de novo depois de 5 dias, para quem recebe faturas. No 7º dia, o aviso "o acesso será bloqueado em 3 dias".</li>
+        <li>Com <b>10 dias de atraso</b>, a empresa fica <b>Inadimplente</b>: o acesso é bloqueado e os envios param. Faturamento e Suporte continuam abertos para pagar. Quando o pagamento confirma, tudo volta sozinho.</li>
         <li>No celular, cada linha vira cartão: empresa, situação, mês e valor.</li>
       </ul></div>
     </section>
 
     <!-- ===================== PÓS-PAGO (cliente) ===================== -->
     <section data-p="pos" hidden>
+      <div class="faixa-bloq" style="border:1px solid var(--erro);background:var(--erro-f);border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between"><span><b>Exemplo do acesso bloqueado:</b> "A fatura de agosto está vencida há 12 dias. O acesso está bloqueado e os envios estão parados. Pague aqui para liberar; volta sozinho quando o pagamento confirmar."</span><span class="pil erro">Inadimplente</span></div>
       <div class="cab"><div><h2>Faturamento</h2>
         <p>A fatura em aberto primeiro, com como pagar. Abaixo, o mês corrente até agora e cada item explicado na tela, com preço por mil para valores pequenos.</p></div></div>
       <div class="duas">
@@ -233,6 +235,7 @@ input[type=text]{font-variant-numeric:tabular-nums}
         <li>Pagar: Pix com QR e "copia e cola" (24 h), boleto e cartão (página segura do Stripe). Volta do cartão com processo demorado e aviso no sino quando o pagamento confirma.</li>
         <li>Estimativa do mês só aparece a partir do dia 5 e sempre escrita como estimativa.</li>
         <li>Pagar e recarregar pedem a permissão "Pagar faturas" (Admin por padrão); ver o faturamento continua com "Ver faturamento".</li>
+        <li>Inadimplente: o Workspace mostra só Faturamento e Suporte, com a faixa vermelha acima; o resto aparece travado com "Acesso bloqueado por fatura vencida".</li>
       </ul></div>
     </section>
 
@@ -367,7 +370,7 @@ input[type=text]{font-variant-numeric:tabular-nums}
   const FT = {
     rascunho: [["Financeira Horizonte", "Setembro", 4812.90, "3 contatos"], ["Assessoria Rio Claro", "Setembro", 12310.55, "2 contatos"], ["Varejo Sol Nascente", "Setembro", 1980.00, "1 contato"], ["Clínica Bem Viver", "Setembro", 650.00, "1 contato"]],
     aberta: [["Delta Cobranças", "Setembro", 7420.10, "vence 20/10"], ["Gama Serviços", "Setembro", 3315.00, "vence 22/10"]],
-    vencida: [["Alfa Recuperação", "Agosto", 2210.40, "12 dias de atraso · 2 lembretes"], ["Beta Crédito", "Agosto", 890.00, "3 dias de atraso · 1 lembrete"]],
+    vencida: [["Alfa Recuperação", "Agosto", 2210.40, "12 dias de atraso · 2 lembretes · inadimplente desde 30/09"], ["Beta Crédito", "Agosto", 890.00, "3 dias de atraso · 1 lembrete · bloqueia em 7 dias"]],
     paga: [["Financeira Horizonte", "Agosto", 4501.12, "paga em 18/09"]]
   };
   let aba = "rascunho", sel = new Set();
