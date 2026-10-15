@@ -43,5 +43,16 @@ preco_sms, total_sem, total_com, economia, custo_unitario.
   numa linha filtra o cartão para aquela campanha.
 Valores em R$ (2 casas; unitários com 4). Nenhuma simulação: só o que foi faturado.
 
+VITRINE (empresa sem empresa_score ativo): a mesma página, sem o seletor de campanha, mostra só dados reais.
+- rpc vitrine_score(empresa, de, ate) → enviados, nao_entregues, valor_nao_entregues, preco_medio.
+- Cartão: "SMS que não chegaram · {de} a {ate}" = nao_entregues, "{x}% dos {enviados} SMS enviados no período";
+  "Pago por esses SMS" = valor_nao_entregues, "{nao_entregues} × {preco_medio}, o preço do SMS no seu contrato".
+  Rodapé: "Números reais das suas campanhas, pelo retorno das operadoras (DLR). Nada aqui é estimativa."
+- Dois cartões de texto: "Como o Score de Entrega reduz esse valor" (3 passos) e "O que aparece aqui com o
+  Score" (economia líquida, custo unitário efetivo, grupo de controle) com o botão "Pedir proposta do Score":
+  insere em chamados (motivo 'mensageria', assunto 'Proposta do Score de Entrega') e mostra "Pedido enviado ao
+  time comercial. Ele entra em contato pelo e-mail da empresa."
+- Sem SMS no período: "Nenhum SMS enviado neste período." Nunca mostrar economia estimada.
+
 Confira em 1440 e 390 px, claro e escuro.
 ```

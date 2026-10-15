@@ -1269,6 +1269,10 @@ assert r[0], r[2]
 checar("Economia do Score: analisados, represados e enviados da campanha", True, f"select analisados||','||represados||','||enviados from public.economia_score({EA},'2026-10-01','2026-10-31') where campanha_id={CS}", "authenticated", u["admina"], "10,2,8")
 checar("Economia do Score de outra empresa é recusada", False, f"select * from public.economia_score({EA},'2026-10-01','2026-10-31')", "authenticated", u["operb"])
 checar("cliente vê o grupo de controle da empresa dele", True, f"select count(*) >= 0 from public.controle_score({EA},'2026-10-01','2026-10-31')", "authenticated", u["admina"], "t")
+Q_FALHAS = f"(select count(*) from public.mensageria_mensagens m join public.mensageria_lotes l on l.id = m.lote_id where m.empresa_id = {EA} and l.canal = 'sms' and m.situacao = 'falhou' and m.enviado_em >= '2026-10-01' and m.enviado_em < '2026-11-01')"
+checar("vitrine do Score: não entregues = falhas reais de SMS da empresa no período", True, f"select (v.nao_entregues = {Q_FALHAS} and v.enviados >= v.nao_entregues and v.valor_nao_entregues >= 0)::text from public.vitrine_score({EA},'2026-10-01','2026-10-31') v", "authenticated", u["admina"], "true")
+checar("vitrine do Score de outra empresa é recusada", False, f"select * from public.vitrine_score({EA},'2026-10-01','2026-10-31')", "authenticated", u["operb"])
+checar("vitrine do Score fechada para anon", False, f"select * from public.vitrine_score({EA},'2026-10-01','2026-10-31')", "anon", None)
 # qualidade e detalhe técnico
 checar("Técnico vê a qualidade dos fornecedores", True, f"select count(*) >= 1 from public.qualidade_fornecedores('2026-10-01','2026-10-15','sms')", "authenticated", TEC, "t")
 checar("cliente não vê a qualidade dos fornecedores", False, "select * from public.qualidade_fornecedores('2026-10-01','2026-10-15','sms')", "authenticated", u["admina"])

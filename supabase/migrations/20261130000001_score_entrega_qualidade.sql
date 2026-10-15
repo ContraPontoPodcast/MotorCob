@@ -15,7 +15,8 @@
 -- 5. Contratação do Score (empresa_score): por número analisado ou só pelos represados; itens de cobrança
 --    score_analisado e score_represado. Campanha escolhe as faixas que recebem (mensageria_campanhas.score_faixas).
 -- 6. Leituras: qualidade_fornecedores, qualidade_por_hora, alertas_qualidade, detalhe_tecnico_envios,
---    controle_score e economia_score (economia líquida e custo unitário efetivo, com valores faturados).
+--    controle_score e economia_score (economia líquida e custo unitário efetivo, com valores faturados);
+--    vitrine_score para quem não contratou (SMS que não chegaram e quanto custaram, dados reais).
 -- 7. Prévia do Score antes de agendar, para campanha pela plataforma (situação 'calculando_previa' e score_previa);
 --    agendar_campanha recebe as faixas escolhidas. Campanha pela API segue direto.
 -- Rode depois do SQL 32. Pode rodar mais de uma vez.
@@ -562,6 +563,35 @@ begin
       from precos p order by p.dia desc, p.id desc;
 end $$;
 
+-- Vitrine da Economia do Score (cliente sem o Score): só dados reais do período. SMS enviados, quantos não
+-- chegaram (DLR de falha) e quanto a empresa pagou por eles, pelo preço do contrato no mês. Sem simulação.
+create or replace function public.vitrine_score(empresa bigint, de date, ate date)
+returns table (enviados bigint, nao_entregues bigint, valor_nao_entregues numeric, preco_medio numeric)
+language plpgsql stable security definer set search_path = public as $$
+begin
+    if not public.pode_ver_empresa(empresa) then
+        raise exception 'empresa fora do seu acesso';
+    end if;
+    return query
+    with base as (
+        select coalesce(c.produto, l.canal) as item, date_trunc('month', m.enviado_em)::date as mes,
+               count(*) as env, count(*) filter (where m.situacao = 'falhou') as falhas
+          from public.mensageria_mensagens m
+          join public.mensageria_lotes l on l.id = m.lote_id
+          left join public.mensageria_campanhas c on c.id = l.campanha_id
+         where m.empresa_id = vitrine_score.empresa and l.canal = 'sms' and m.enviado_em is not null
+           and m.enviado_em >= de and m.enviado_em < ate + 1
+         group by 1, 2
+    ), valores as (
+        select b.env, b.falhas,
+               b.falhas * coalesce(public.preco_unitario(vitrine_score.empresa, b.item, b.env, b.mes), 0) as valor
+          from base b
+    )
+    select coalesce(sum(v.env), 0)::bigint, coalesce(sum(v.falhas), 0)::bigint, round(coalesce(sum(v.valor), 0), 2),
+           round(sum(v.valor) / nullif(sum(v.falhas), 0), 4)
+      from valores v;
+end $$;
+
 do $$
 declare f text;
 begin
@@ -572,7 +602,8 @@ begin
                              'public.detalhe_tecnico_envios(timestamptz, timestamptz, text, int)',
                              'public.controle_score(bigint, date, date)',
                              'public.preco_unitario(bigint, text, numeric, date)',
-                             'public.economia_score(bigint, date, date)'] loop
+                             'public.economia_score(bigint, date, date)',
+                             'public.vitrine_score(bigint, date, date)'] loop
         execute format('revoke all on function %s from public, anon', f);
         execute format('grant execute on function %s to authenticated', f);
     end loop;
