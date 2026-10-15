@@ -279,12 +279,13 @@ code{font-family:var(--mono);font-size:12.5px}
             <li>Lotes continuam esperando aprovação de quem tem "Enviar mensagens", se a empresa deixou assim.</li>
             <li>A equipe MotorCob confere a rota e o template antes de ligar e avisa no sino.</li>
           </ul>
-          <p class="nota">Prazo de resposta da equipe: a definir pela MotorCob antes de publicar.</p>
+          <p class="nota">O Suporte da MotorCob responde em até 1 hora.</p>
         </div>
       </div>
 
       <div class="regra"><b>Regras</b><ul>
-        <li>O pedido abre um chamado de Mensageria ("Ligar envio real") para a equipe, com os passos já conferidos.</li>
+        <li>O pedido abre um chamado de Mensageria ("Ligar envio real") para o Suporte, com os passos já conferidos. Prazo de resposta: até 1 hora.</li>
+        <li>Pedido sem resposta em 1 hora vira aviso de atraso no sino do Suporte e do Master.</li>
         <li>Só quem tem "Enviar mensagens" pede. Pedido em aberto não pode ser repetido.</li>
         <li>Quando a equipe liga, o aviso chega no sino: "Envio real ligado".</li>
         <li>O banco continua aceitando a mudança para envio real só da equipe.</li>
@@ -343,7 +344,7 @@ code{font-family:var(--mono);font-size:12.5px}
         <li>Entra na lista a empresa criada há menos de 90 dias que ainda tem passo em aberto.</li>
         <li>Parada há mais de 7 dias fica em atenção e gera aviso no sino do responsável (vendedor da carteira).</li>
         <li>"Ligar envio real" pede confirmação com o efeito: "As mensagens da {empresa} passam a sair de verdade e entram na fatura."</li>
-        <li>Quem vê: Master, Comercial da carteira e Atendimento.</li>
+        <li>Quem vê: Master, Comercial da carteira e Atendimento (Suporte). Quem liga o envio real: Master e Atendimento.</li>
       </ul></div>
     </section>
   </main>
@@ -388,7 +389,7 @@ code{font-family:var(--mono);font-size:12.5px}
     tpl:     { g: "mensageria", a: "msg", t: "Criar o primeiro template", d: "O texto da mensagem, com variáveis como {{nome}}.", b: "Criar template" },
     recarga: { g: "mensageria", a: "msg", t: "Fazer a primeira recarga", d: "No pré-pago, cada envio desconta do saldo. Boleto, Pix ou cartão.", b: "Recarregar" },
     teste:   { g: "mensageria", a: "msg", t: "Fazer um envio de teste em simulação", d: "Nada sai para os seus clientes. Serve para conferir texto e números.", b: "Nova campanha" },
-    pedir:   { g: "mensageria", a: "msg", t: "Pedir o envio real", d: "Depois do teste, a equipe MotorCob confere e liga.", b: "Pedir envio real" },
+    pedir:   { g: "mensageria", a: "msg", t: "Pedir o envio real", d: "Depois do teste, o Suporte confere e liga em até 1 hora.", b: "Pedir envio real" },
     real:    { g: "mensageria", a: "msg", t: "Envio real ligado pela equipe MotorCob", d: "Você recebe o aviso no sino quando estiver ligado.", equipeP: true }
   };
   const CEN = {
@@ -439,7 +440,7 @@ code{font-family:var(--mono);font-size:12.5px}
     const f = $("rl-faixa"); f.className = "faixa-sim" + (e === "pedido" ? " pedido" : e === "real" ? " real" : "");
     if (e === "falta") f.innerHTML = `<span><b>Simulação:</b> nada sai para os seus clientes. Falta 1 passo para pedir o envio real.</span><button class="btn peq" disabled>Pedir envio real</button>`;
     else if (e === "pronto") f.innerHTML = `<span><b>Simulação:</b> nada sai para os seus clientes. Tudo pronto para pedir o envio real.</span><button class="btn peq" id="rl-pedir">Pedir envio real</button>`;
-    else if (e === "pedido") f.innerHTML = `<span><b>Envio real pedido em 15/10 às 10:12</b> por Ana. A equipe MotorCob está conferindo; o aviso chega no sino.</span><span class="pil at">Com a equipe MotorCob</span>`;
+    else if (e === "pedido") f.innerHTML = `<span><b>Envio real pedido em 15/10 às 10:12</b> por Ana. O Suporte responde em até 1 hora; o aviso chega no sino.</span><span class="pil at">Com o Suporte</span>`;
     else f.innerHTML = `<span><b>Envio real ligado</b> em 15/10 às 14:30. As mensagens saem de verdade e entram na fatura.</span><span class="pil ok">Envio real</span>`;
     const b = $("rl-pedir");
     if (b) b.addEventListener("click", () => {
@@ -454,7 +455,7 @@ code{font-family:var(--mono);font-size:12.5px}
 
   // ---------- console
   const EMP = [
-    ["Financeira Horizonte", 8, 10, "Ligar o envio real", 0, "Carla (exemplo)", "pedido"],
+    ["Financeira Horizonte", 8, 10, "Ligar o envio real · pedido há 35 min (prazo 1 h)", 0, "Carla (exemplo)", "pedido"],
     ["Assessoria Rio Claro", 4, 10, "Enviar a primeira carga", 9, "Bruno (exemplo)", "parada"],
     ["Clínica Bem Viver", 3, 5, "Criar o token da API", 2, "Carla (exemplo)", "andando"],
     ["Varejo Sol Nascente", 5, 8, "Fazer a primeira recarga", 12, "Bruno (exemplo)", "parada"]
