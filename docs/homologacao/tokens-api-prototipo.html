@@ -1,0 +1,286 @@
+<title>Tokens de API</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: MotorCX, menu cinza à esquerda (Console e Cliente) + área de trabalho lisa. Paleta do bloco 5; Console e
+   Empresa usam o grafite neutro. Edição sempre no painel lateral, com resumo antes de salvar. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#1D1D1F; --area-forte:#000000; --area-ativo:#E8E8ED; --area-ativo-texto:#1D1D1F; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --veu:rgba(0,0,0,.25); --sombra:0 10px 30px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:80ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--texto);border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao);
+  margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+@media (max-width:820px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+section[data-p]{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:74ch}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.cartao-cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.peq{padding:5px 11px;font-size:13px}
+.btn.perigo{background:var(--erro);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px;min-width:0}
+input[type=text]{font-variant-numeric:tabular-nums}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap;vertical-align:middle}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.trava{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);background:var(--pilula);border-radius:9px;padding:6px 11px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13.5px}
+.dl dt{color:var(--texto2)}.dl dd{margin:0}
+.abas{display:flex;gap:4px;flex-wrap:wrap}
+.abas button{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;color:var(--texto2);background:var(--pilula)}
+.abas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.abas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.abas b{margin-left:4px}
+.confirma{border:1px solid var(--texto);border-radius:12px;padding:14px 16px;background:var(--pilula);display:flex;flex-direction:column;gap:10px}
+.confirma p{margin:0}
+.grande{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden;display:flex}
+.barra i{display:block;height:100%}
+/* gaveta */
+.veu{position:fixed;inset:0;background:var(--veu);z-index:40}
+.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--cartao);border-left:1px solid var(--borda);box-shadow:var(--sombra);z-index:41;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.gaveta header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--borda)}
+.gaveta header h3{margin:0;font-size:16px}
+.gaveta .corpo{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.gaveta footer{padding:12px 18px;border-top:1px solid var(--borda);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+.gaveta footer .nota{margin-right:auto}
+.faixa-l{display:grid;grid-template-columns:1fr 1fr 110px;gap:8px;align-items:center}
+.faixa-l.mud input{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mudancas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mudancas li{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.mudancas s{color:var(--texto2)}
+.op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--borda);border-radius:10px;padding:10px 12px;cursor:pointer}
+.op:has(input:checked){border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.op b{display:block}.op span{font-size:12.5px;color:var(--texto2)}
+.alerta{border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.alerta.at{background:var(--at-f)}
+/* celular */
+.resp{container-type:inline-size}
+@container (max-width:600px){
+  .tab.cartoes thead{display:none}
+  .tab.cartoes,.tab.cartoes tbody{display:block}
+  .tab.cartoes tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 2px;border-bottom:1px solid var(--borda)}
+  .tab.cartoes td{border:0;padding:0;white-space:normal}
+  .tab.cartoes td.c1{font-weight:600}
+  .tab.cartoes td.c2{grid-column:2;grid-row:1;justify-self:end}
+  .tab.cartoes td.c3{grid-column:1;color:var(--texto2);font-size:13px}
+  .tab.cartoes td.c4{grid-column:2;grid-row:2;justify-self:end;font-weight:600}
+  .tab.cartoes td.x{display:none}
+}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px}
+.kpi span{font-size:12px;color:var(--texto2)} .kpi b{font-size:22px;font-variant-numeric:tabular-nums} .kpi small{font-size:12px;color:var(--texto2)}
+.tok{font-family:var(--mono);font-size:12.5px}
+.segredo{font-family:var(--mono);font-size:13px;background:var(--fundo);border:1px dashed var(--texto2);border-radius:10px;padding:10px 12px;word-break:break-all}
+.alerta-at{background:var(--at-f);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.alerta-at b{color:var(--at)}
+.escopos{display:flex;flex-direction:column;gap:8px}
+.escopos fieldset{border:1px solid var(--borda);border-radius:10px;padding:8px 12px;margin:0}
+.escopos legend{font-size:12px;color:var(--texto2);padding:0 4px}
+.escopos label{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;padding:3px 0}
+.escopos small{display:block;color:var(--texto2);font-size:12px}
+pre.cod{font-family:var(--mono);font-size:12px;background:var(--fundo);border:1px solid var(--borda);border-radius:10px;padding:10px;overflow-x:auto;margin:0;white-space:pre}
+.barras{display:flex;align-items:flex-end;gap:6px;height:90px;padding-top:6px}
+.barras i{flex:1;background:var(--area);border-radius:4px 4px 0 0;opacity:.85}
+.barras i.e{background:var(--erro)}
+.dias{display:flex;gap:6px;font-size:11px;color:var(--texto2)} .dias span{flex:1;text-align:center}
+.antes{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px}
+.antes div{border-radius:10px;padding:10px 12px;background:var(--menu)}
+.antes div:first-child{background:var(--erro-f)}
+.antes b{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2);margin-bottom:4px}
+@media (max-width:600px){.antes{grid-template-columns:1fr}}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:7px 9px;min-width:0}
+.sino{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;max-width:440px}
+.sino b{font-size:13.5px} .sino span{font-size:12.5px;color:var(--texto2)}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Revisão de UX</span>
+  <h1>Tokens de API</h1>
+  <p>Hoje os tokens ficam em Minha conta, vencem sem aviso, não mostram se estão sendo usados nem por que uma chamada falhou, e para trocar um token o sistema do cliente fica fora do ar até alguém colar o novo. Proposta: Integrações na Empresa, aviso antes de vencer, troca sem parar, uso e erros por token, e o primeiro teste na hora. Empresas e números fictícios.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Telas">
+    <div class="grupo">Cliente · Empresa</div>
+    <button data-ir="lista" aria-current="page">Integrações › API<small>Tokens, uso e vencimento</small></button>
+    <button data-ir="criar">Criar token<small>O que pode, onde, até quando</small></button>
+    <button data-ir="trocar">Trocar token<small>Sem parar o sistema</small></button>
+    <button data-ir="uso">Uso e erros<small>Por que uma chamada falhou</small></button>
+    <div class="grupo">Console</div>
+    <button data-ir="console">Tokens das empresas<small>Visão da equipe</small></button>
+  </nav>
+  <main class="trab">
+    <!-- LISTA -->
+    <section data-p="lista">
+      <div class="cab"><div><h2>Integrações › API</h2><p>Sai de Minha conta: o token é da empresa, não da pessoa. Só quem tem "Gerenciar tokens de API" (Admin, por padrão) vê e mexe.</p></div><button class="btn" data-ir2="criar">Criar token</button></div>
+      <div class="antes"><div><b>Hoje</b>Minha conta › Tokens. Vence sem aviso; "Último uso" é a única pista; trocar = criar outro e revogar, com o sistema parado no meio.</div><div><b>Proposta</b>Empresa › Integrações. Aviso 15 e 3 dias antes, "Trocar token" com os dois valendo juntos por alguns dias, uso e erros de cada token.</div></div>
+      <div class="alerta-at"><b>"ERP Financeiro" vence em 12 dias.</b> Troque antes para o sistema não parar. <button class="link" data-ir2="trocar">Trocar agora</button></div>
+      <div class="cartao resp">
+        <table class="tab cartoes"><thead><tr><th>Nome</th><th>Token</th><th>Pode</th><th>Uso · 7 dias</th><th>Vence</th><th>Situação</th><th></th></tr></thead><tbody>
+          <tr><td class="c1">ERP Financeiro<br><small class="nota">criado por Rafael (Admin)</small></td><td class="x tok">mc_1a2b3c4d…</td><td class="c3">Enviar cargas · Acompanhar cargas · Carteira Banco Alfa</td><td class="c4">1.240 chamadas · <span style="color:var(--erro)">3 erros</span></td><td class="x"><span class="pil at">em 12 dias</span></td><td class="c2"><span class="pil ok">Ativo</span></td><td class="x"><button class="link" data-ir2="uso">Uso</button> · <button class="link" data-ir2="trocar">Trocar</button> · <button class="link">Revogar</button></td></tr>
+          <tr><td class="c1">Discador · Lista do dia<br><small class="nota">criado por Rafael (Admin)</small></td><td class="x tok">mc_9f8e7d6c…</td><td class="c3">Ler a Lista do dia · Todas as carteiras</td><td class="c4">96 chamadas</td><td class="x">em 140 dias</td><td class="c2"><span class="pil ok">Ativo</span></td><td class="x"><button class="link">Uso</button> · <button class="link">Trocar</button> · <button class="link">Revogar</button></td></tr>
+          <tr><td class="c1">ERP Financeiro (antigo)</td><td class="x tok">mc_77aa0b12…</td><td class="c3">Troca em andamento</td><td class="c4">12 chamadas</td><td class="x">para em 3 dias</td><td class="c2"><span class="pil at">Saindo</span></td><td class="x"><button class="link">Parar agora</button></td></tr>
+          <tr><td class="c1">Teste homologação</td><td class="x tok">mc_00c1d2e3…</td><td class="c3">Enviar cargas</td><td class="c4">nunca usado</td><td class="x">venceu 02/10</td><td class="c2"><span class="pil neutra">Vencido</span></td><td class="x">—</td></tr>
+        </tbody></table>
+      </div>
+      <div class="sino"><b>Sino · 15 dias antes</b><span>O token "ERP Financeiro" vence em 15 dias (30/10). Troque antes para o sistema não parar. → Integrações › API</span></div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Aviso no sino para quem criou e para os Admins: 15 dias e 3 dias antes de vencer, e quando um token ativo passa 7 dias sem uso depois de ter sido usado ("o sistema parou de chamar?").</li>
+        <li>"Pode" em palavras: Enviar cargas, Acompanhar cargas, Ler a Lista do dia, e as carteiras.</li>
+        <li>Até 10 tokens ativos (o "Saindo" de uma troca não conta).</li>
+      </ul></div>
+    </section>
+
+    <!-- CRIAR -->
+    <section data-p="criar" hidden>
+      <div class="cab"><div><h2>Criar token</h2><p>Painel de edição, com o resumo antes de criar. O token aparece uma vez só — com um exemplo pronto e um teste na hora.</p></div></div>
+      <div class="duas">
+        <div class="cartao">
+          <div class="campo"><label for="nm">Nome (para quem é)</label><input type="text" id="nm" value="ERP Financeiro"></div>
+          <div class="escopos">
+            <fieldset><legend>Cobrança (MotorCob)</legend>
+              <label><input type="checkbox" checked><span>Enviar cargas<small>base, incremental, retirada, acordo, baixa, ocorrência</small></span></label>
+              <label><input type="checkbox" checked><span>Acompanhar cargas<small>se a carga foi processada e o relatório</small></span></label>
+              <label><input type="checkbox"><span>Ler a Lista do dia<small>o arquivo por canal que o site baixa</small></span></label></fieldset>
+            <fieldset><legend>Jornada (MotorCli)</legend>
+              <label><input type="checkbox"><span>Enviar cargas da Jornada<small>clientes, contatos e leads (hoje só pelo site)</small></span></label></fieldset>
+          </div>
+          <div class="campo"><label for="cart">Carteiras</label><select id="cart"><option>Banco Alfa · Cartões</option><option>Todas as carteiras</option></select></div>
+          <div class="campo"><label>Validade</label><div class="abas" role="group" aria-label="Validade"><button aria-pressed="false">30 dias</button><button aria-pressed="true">90 dias</button><button aria-pressed="false">180 dias</button><button aria-pressed="false">365 dias</button></div></div>
+          <div class="campo"><label for="ip">Só destes endereços IP (opcional)</label><input type="text" id="ip" value="200.155.10.0/24"><small class="nota">Vazio = qualquer endereço. Chamada de outro IP recebe 403 e aparece em Uso e erros.</small></div>
+          <div class="linha"><button class="btn" id="criar">Criar token</button></div>
+        </div>
+        <div class="cartao" id="pronto">
+          <h3>Token criado · copie agora</h3>
+          <div class="segredo">mc_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d</div>
+          <div class="linha"><button class="btn sec peq">Copiar</button><span class="nota">Por segurança, ele não aparece de novo.</span></div>
+          <h3 style="margin-top:6px">Primeira chamada</h3>
+          <pre class="cod">curl -X POST "https://api.motorcob.online/v1/cargas?credor=banco-alfa&amp;tipo=incremental&amp;nome=incremental.csv" \
+  -H "Authorization: Bearer mc_1a2b…" -H "Content-Type: text/csv" \
+  --data-binary @incremental.csv</pre>
+          <div class="linha"><button class="btn sec peq" id="testar">Testar agora</button><span class="nota" id="res-teste">Confere o token e o que ele pode, sem enviar nada.</span></div>
+          <div class="linha"><button class="btn peq">Já copiei</button></div>
+        </div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>"Testar agora" chama GET /v1/teste com o token: responde quem é a empresa, o que o token pode e as carteiras — sem mexer em nada.</li>
+        <li>O exemplo já vem com o código da carteira escolhida.</li>
+        <li>O endereço da API passa a ser api.motorcob.online (hoje aparece o endereço técnico do Supabase).</li>
+      </ul></div>
+    </section>
+
+    <!-- TROCAR -->
+    <section data-p="trocar" hidden>
+      <div class="cab"><div><h2>Trocar token · ERP Financeiro</h2><p>Cria um novo com as mesmas permissões; o antigo continua valendo por alguns dias para dar tempo de colar o novo no sistema.</p></div></div>
+      <div class="cartao">
+        <div class="campo"><label>O antigo continua valendo por</label><div class="abas" role="group" aria-label="Convivência"><button aria-pressed="false">1 dia</button><button aria-pressed="true">7 dias</button><button aria-pressed="false">14 dias</button></div></div>
+        <p class="nota">Mesmo nome, permissões, carteiras e IPs. Validade nova: 90 dias.</p>
+        <div class="linha"><button class="btn" id="trocar-btn">Trocar token</button></div>
+        <div class="alerta-at">Depois de colar o novo, veja em Uso e erros se o antigo parou de ser chamado e use "Parar agora". No fim do prazo ele para sozinho e o sino avisa se ainda estava sendo usado.</div>
+      </div>
+    </section>
+
+    <!-- USO -->
+    <section data-p="uso" hidden>
+      <div class="cab"><div><h2>Uso e erros · ERP Financeiro</h2><p>Para o time técnico do cliente entender uma falha sem abrir chamado. Nada do conteúdo da carga aparece aqui.</p></div></div>
+      <div class="kpis">
+        <div class="kpi"><span>Chamadas · 7 dias</span><b>1.240</b><small>média 177 por dia</small></div>
+        <div class="kpi"><span>Deram certo</span><b>99,8%</b><small>1.237 chamadas</small></div>
+        <div class="kpi"><span>Erros</span><b>3</b><small>2 limite por minuto · 1 carga grande</small></div>
+        <div class="kpi"><span>Último uso</span><b>hoje 09:02</b><small>IP 200.155.10.4</small></div>
+      </div>
+      <div class="cartao"><h3>Chamadas por dia</h3>
+        <div class="barras" aria-label="Chamadas por dia nos últimos 7 dias"><i style="height:60%"></i><i style="height:72%"></i><i style="height:55%"></i><i style="height:90%"></i><i style="height:80%"></i><i style="height:30%"></i><i style="height:100%"></i></div>
+        <div class="dias"><span>09/10</span><span>10/10</span><span>11/10</span><span>12/10</span><span>13/10</span><span>14/10</span><span>15/10</span></div></div>
+      <div class="cartao"><h3>Últimos erros</h3>
+        <div class="resp"><table class="tab cartoes"><thead><tr><th>Quando</th><th>Chamada</th><th>Código</th><th>O que fazer</th></tr></thead><tbody>
+          <tr><td class="c1">15/10 09:01</td><td class="c3">POST /v1/cargas · banco-alfa</td><td class="c2"><span class="pil erro">429</span></td><td class="c4">Mais de 60 chamadas no minuto: espere 60 s e mande de novo.</td></tr>
+          <tr><td class="c1">15/10 09:01</td><td class="c3">POST /v1/cargas · banco-alfa</td><td class="c2"><span class="pil erro">429</span></td><td class="c4">Mais de 60 chamadas no minuto.</td></tr>
+          <tr><td class="c1">12/10 18:40</td><td class="c3">POST /v1/cargas · banco-alfa</td><td class="c2"><span class="pil erro">413</span></td><td class="c4">Arquivo acima de 20 MB: divida em partes.</td></tr>
+        </tbody></table></div>
+      </div>
+      <div class="regra"><b>Regras</b><ul><li>Guarda método, rota, carteira, código, IP e quando — 90 dias. Nunca o arquivo, a URL completa com parâmetros extras nem dado de cliente.</li><li>Cada código tem a frase de "o que fazer" da documentação.</li></ul></div>
+    </section>
+
+    <!-- CONSOLE -->
+    <section data-p="console" hidden>
+      <div class="cab"><div><h2>Console › Integrações</h2><p>A equipe vê os tokens de todas as empresas (nunca o token), o uso e os erros — para ajudar no suporte e agir num incidente.</p></div></div>
+      <div class="cartao resp"><table class="tab cartoes"><thead><tr><th>Empresa</th><th>Tokens ativos</th><th>Chamadas · 7 dias</th><th>Erros</th><th>Vence primeiro</th><th></th></tr></thead><tbody>
+        <tr><td class="c1">Alfa Recuperação</td><td class="c2">2</td><td class="c3">1.336</td><td class="c4">3</td><td class="x"><span class="pil at">em 12 dias</span></td><td class="x"><button class="link">Ver</button></td></tr>
+        <tr><td class="c1">Beta Crédito</td><td class="c2">1</td><td class="c3">0</td><td class="c4"><span style="color:var(--erro)">412 (401)</span></td><td class="x">venceu 10/10</td><td class="x"><button class="link">Ver</button></td></tr>
+      </tbody></table></div>
+      <div class="regra"><b>Regras</b><ul><li>Revogar pela equipe: só o Master, com motivo (vai para a Auditoria e para o sino do Admin da empresa) — para incidente de segurança.</li><li>Empresa com muitos 401 depois do vencimento aparece em destaque: o sistema dela parou.</li></ul></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3200); };
+  const telas = [...document.querySelectorAll("section[data-p]")], botoes = [...document.querySelectorAll(".menu button")];
+  const ir = p => { telas.forEach(s => s.hidden = s.dataset.p !== p); botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); window.scrollTo({ top: 0 }); };
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+  document.querySelectorAll("[data-ir2]").forEach(b => b.addEventListener("click", () => ir(b.dataset.ir2)));
+  document.querySelectorAll(".abas").forEach(g => g.querySelectorAll("button").forEach(b => b.addEventListener("click", () => g.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false")))));
+  $("criar").addEventListener("click", () => toast("Revise: Enviar e acompanhar cargas · Banco Alfa · 90 dias · 1 faixa de IP."));
+  $("testar").addEventListener("click", () => { $("res-teste").textContent = "Funcionou: Alfa Recuperação · Enviar e acompanhar cargas · Banco Alfa · Cartões."; });
+  $("trocar-btn").addEventListener("click", () => toast("Novo token criado. O antigo para em 7 dias (22/10)."));
+})();
+</script>
