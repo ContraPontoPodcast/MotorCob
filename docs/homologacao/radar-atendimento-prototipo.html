@@ -1,0 +1,448 @@
+<title>Radar e atendimento MotorCX</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Workspace MotorCX, menu cinza à esquerda (uma tela por item) + área de trabalho lisa.
+   Paleta do bloco 5, Mensageria em vinho. A caixa é de três colunas: fila, conversa e painel do cliente. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#7A2E3B; --area-forte:#6B2633; --area-ativo:#F5E6E8; --area-ativo-texto:#63222E; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --entrada:#F2F2F7; --saida:#F5E6E8; --nota:#FFF4D6;
+  --veu:rgba(0,0,0,.25);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#D07A8A; --area-forte:#DD94A2; --area-ativo:#3A1A20; --area-ativo-texto:#EDB8C2; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --entrada:#2C2C2E; --saida:#3A1A20; --nota:#332A00; --veu:rgba(0,0,0,.55);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#D07A8A; --area-forte:#DD94A2; --area-ativo:#3A1A20; --area-ativo-texto:#EDB8C2; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --entrada:#2C2C2E; --saida:#3A1A20; --nota:#332A00; --veu:rgba(0,0,0,.55);
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:80ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--area);border:1px solid var(--area);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:210px minmax(0,1fr);max-width:1360px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao);
+  margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1392px){.app{margin-left:auto;margin-right:auto}}
+@media (max-width:900px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+section[data-p]{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:72ch}
+.etq{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--area);border:1px solid var(--area);border-radius:999px;padding:1px 8px;margin-bottom:6px}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.peq{padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,.link:focus-visible,.item:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--area);font-weight:600;font-size:13px}
+.linha{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text],input[type=number],textarea{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:7px 10px;min-width:0}
+textarea{resize:vertical;width:100%}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.pil.area{background:var(--area-ativo);color:var(--area-ativo-texto)}
+.cl{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;border-radius:6px;padding:1px 7px;border:1px solid var(--borda);background:var(--cartao);color:var(--texto);white-space:nowrap}
+.cl.neg{border-color:var(--area);color:var(--area)}
+.cl.jud{border-color:var(--at);color:var(--at)}
+.cl small{font-weight:500;color:var(--texto2)}
+.can{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--texto2);border:1px solid var(--borda);border-radius:4px;padding:0 4px}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--borda);white-space:nowrap}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+/* caixa */
+.caixa{display:grid;grid-template-columns:320px minmax(0,1fr) 260px;border:1px solid var(--borda);border-radius:12px;background:var(--cartao);overflow:hidden;min-height:620px}
+@media (max-width:1180px){.caixa{grid-template-columns:300px minmax(0,1fr)}.caixa .lado-cli{display:none}}
+@media (max-width:760px){.caixa{grid-template-columns:1fr;min-height:0}.caixa.abriu .fila{display:none}.caixa:not(.abriu) .conversa{display:none}}
+.fila{border-right:1px solid var(--borda);display:flex;flex-direction:column;min-width:0}
+.fila-topo{padding:10px;border-bottom:1px solid var(--borda);display:flex;flex-direction:column;gap:8px}
+.abas{display:flex;gap:4px;flex-wrap:wrap}
+.abas button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:999px;color:var(--texto2);background:var(--pilula)}
+.abas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.abas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.abas b{font-weight:700;margin-left:3px}
+.lista{overflow:auto;flex:1}
+.item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 8px;padding:10px 12px;border-bottom:1px solid var(--borda);cursor:pointer}
+.item:hover{background:var(--fundo)}
+.item[aria-selected="true"]{background:var(--area-ativo)}
+.item .q{display:flex;gap:6px;align-items:center;min-width:0}
+.item .msk{font-weight:600;font-variant-numeric:tabular-nums}
+.item .ult{grid-column:1/-1;color:var(--texto2);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .hora{font-size:12px;color:var(--texto2);text-align:right;font-variant-numeric:tabular-nums}
+.item .esp{font-size:12px;font-weight:600}
+.item .esp.at{color:var(--at)}.item .esp.erro{color:var(--erro)}
+.item.nl .msk::after{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--area);margin-left:6px;vertical-align:1px}
+.conversa{display:flex;flex-direction:column;min-width:0}
+.conv-topo{padding:10px 14px;border-bottom:1px solid var(--borda);display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
+.conv-topo .quem{display:flex;flex-direction:column;gap:2px;min-width:0}
+.conv-topo .quem b{font-variant-numeric:tabular-nums}
+.voltar{display:none}
+@media (max-width:760px){.voltar{display:inline}}
+.msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--fundo)}
+.bal{max-width:78%;padding:9px 12px;border-radius:12px;display:flex;flex-direction:column;gap:4px}
+.bal.ent{align-self:flex-start;background:var(--entrada);border-top-left-radius:4px}
+.bal.sai{align-self:flex-end;background:var(--saida);border-top-right-radius:4px}
+.bal.nota{align-self:stretch;max-width:none;background:var(--nota);border:1px dashed var(--at);font-size:13px}
+.bal.evento{align-self:center;background:none;color:var(--texto2);font-size:12px;padding:0}
+.bal .meta{font-size:11.5px;color:var(--texto2);display:flex;gap:8px;flex-wrap:wrap}
+.resp{border-top:1px solid var(--borda);padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+.resp-abas{display:flex;gap:4px}
+.resp-abas button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:8px;color:var(--texto2)}
+.resp-abas button[aria-pressed="true"]{background:var(--pilula);color:var(--texto)}
+.resp.nota-modo textarea{background:var(--nota)}
+.rapidas{display:flex;gap:6px;flex-wrap:wrap}
+.rapidas button{all:unset;cursor:pointer;font-size:12.5px;border:1px solid var(--borda);border-radius:999px;padding:3px 10px;background:var(--cartao)}
+.rapidas button:hover{border-color:var(--area)}
+.rapidas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.resp-rodape{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;font-size:12.5px;color:var(--texto2);font-variant-numeric:tabular-nums}
+.conta.passou{color:var(--erro);font-weight:600}
+.lado-cli{border-left:1px solid var(--borda);padding:14px;display:flex;flex-direction:column;gap:14px;font-size:13px;min-width:0}
+.lado-cli h4{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.lado-cli dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0}
+.lado-cli dt{color:var(--texto2)}
+.lado-cli dd{margin:0}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.hist li{display:flex;justify-content:space-between;gap:8px}
+.menu-pop{position:absolute;z-index:20;background:var(--cartao);border:1px solid var(--borda);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:6px;display:flex;flex-direction:column;min-width:220px}
+.menu-pop button{all:unset;cursor:pointer;padding:7px 10px;border-radius:7px;font-size:13.5px}
+.menu-pop button:hover,.menu-pop button:focus-visible{background:var(--pilula)}
+.rel{position:relative}
+.confirma{border:1px solid var(--area);border-radius:12px;padding:14px 16px;background:var(--area-ativo);display:flex;flex-direction:column;gap:10px}
+.confirma p{margin:0}
+/* painel */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:2px}
+.kpi span{color:var(--texto2);font-size:12.5px}
+.kpi b{font-size:24px;font-variant-numeric:tabular-nums}
+.kpi em{font-style:normal;font-size:12px;color:var(--texto2)}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden}
+.barra i{display:block;height:100%;background:var(--area)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Radar e atendimento</span>
+  <h1>Radar e caixa de atendimento</h1>
+  <p>Hoje a caixa é separada por canal, a conversa só fica aberta ou resolvida e o operador responde em texto livre. A proposta: uma caixa só com todos os canais, fila por prioridade e tempo de espera, quem está atendendo, respostas rápidas, notas internas, transferência e o painel do Radar com o tempo de resposta. Só máscara e ID do cliente aparecem (LGPD). Números e textos fictícios.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Telas">
+    <div class="grupo">Mensageria</div>
+    <button data-ir="caixa" aria-current="page">Caixa de atendimento<small>Todos os canais numa fila</small></button>
+    <button data-ir="grupo">Responder em grupo<small>Com custo previsto</small></button>
+    <button data-ir="painel">Painel do Radar<small>Classes e tempo de resposta</small></button>
+    <button data-ir="config">Configurar<small>Meta, respostas rápidas, avisos</small></button>
+  </nav>
+
+  <main class="trab">
+
+    <!-- ===================== CAIXA ===================== -->
+    <section data-p="caixa">
+      <div class="cab"><div><span class="etq">Mensageria</span><h2>Caixa de atendimento</h2>
+        <p>Uma fila com SMS, RCS e WhatsApp. Ordena por prioridade da classe e pelo tempo de espera. Quem abre uma conversa sem responsável vê "Assumir"; quem já está atendendo aparece para todos.</p></div></div>
+
+      <div class="caixa" id="cx">
+        <div class="fila">
+          <div class="fila-topo">
+            <div class="abas" role="group" aria-label="Fila" id="cx-fila">
+              <button aria-pressed="true" data-f="todas">Abertas<b id="n-todas"></b></button>
+              <button aria-pressed="false" data-f="sem">Sem responsável<b id="n-sem"></b></button>
+              <button aria-pressed="false" data-f="minhas">Minhas<b id="n-minhas"></b></button>
+              <button aria-pressed="false" data-f="aguardando">Aguardando cliente<b id="n-aguardando"></b></button>
+            </div>
+            <div class="linha" style="gap:6px">
+              <select id="cx-canal" aria-label="Canal"><option value="">Todos os canais</option><option>SMS</option><option>RCS</option><option>WhatsApp</option></select>
+              <select id="cx-classe" aria-label="Classe"><option value="">Todas as classes</option></select>
+            </div>
+            <input type="text" id="cx-busca" placeholder="Buscar pelo ID do cliente" aria-label="Buscar pelo ID do cliente">
+          </div>
+          <div class="lista" id="cx-lista" role="listbox" aria-label="Conversas"></div>
+        </div>
+
+        <div class="conversa" id="cx-conv">
+          <div class="conv-topo">
+            <div class="quem"><span class="linha" style="gap:6px"><button class="link voltar" id="cx-voltar">‹ Voltar</button><b id="cv-msk"></b><span class="can" id="cv-can"></span><span id="cv-cl"></span></span>
+              <span class="nota" id="cv-sub"></span></div>
+            <div class="linha" style="gap:6px">
+              <span id="cv-resp"></span>
+              <span class="rel"><button class="btn sec peq" id="cv-mais" aria-haspopup="true" aria-expanded="false">Mais</button>
+                <div class="menu-pop" id="cv-menu" hidden style="right:0;top:calc(100% + 4px)">
+                  <button data-acao="transferir">Transferir para colega</button>
+                  <button data-acao="reclassificar">Corrigir a classe</button>
+                  <button data-acao="aguardando">Marcar "Aguardando cliente"</button>
+                </div></span>
+              <button class="btn peq" id="cv-resolver">Resolver</button>
+            </div>
+          </div>
+          <div class="msgs" id="cv-msgs" aria-live="polite"></div>
+          <div class="resp" id="cv-resp-box">
+            <div class="resp-abas" role="group" aria-label="Tipo"><button aria-pressed="true" data-m="resp">Responder ao cliente</button><button aria-pressed="false" data-m="nota">Nota interna</button></div>
+            <div class="rapidas" id="cv-rapidas" aria-label="Respostas rápidas"></div>
+            <textarea id="cv-txt" rows="3" aria-label="Mensagem" placeholder="Escreva a resposta"></textarea>
+            <div class="resp-rodape"><span id="cv-info"></span><span class="linha" style="gap:10px"><span class="conta" id="cv-conta"></span><button class="btn peq" id="cv-enviar">Enviar</button></span></div>
+          </div>
+        </div>
+
+        <aside class="lado-cli" aria-label="Cliente">
+          <div><h4>Cliente</h4>
+            <dl id="cl-dados"></dl></div>
+          <div><h4>Outras conversas deste cliente</h4><ul class="hist" id="cl-hist"></ul></div>
+          <div><h4>Classe pelo Radar</h4><p class="nota" id="cl-radar"></p></div>
+        </aside>
+      </div>
+
+      <div class="regra"><b>Regras</b><ul>
+        <li>Situações: <b>Nova</b> (sem responsável) · <b>Em atendimento</b> (com responsável) · <b>Aguardando cliente</b> (a última mensagem é nossa) · <b>Resolvida</b>. Resposta nova do cliente reabre e volta para quem atendia.</li>
+        <li>Ordem da fila: CPC Negócio e Alega pagamento primeiro, depois quem espera há mais tempo. Tempo de espera conta só no horário do canal.</li>
+        <li>Espera acima da meta da empresa fica âmbar; acima do dobro, vermelha.</li>
+        <li>Responder assume a conversa. Transferir pede o colega e uma nota opcional, e avisa no sino de quem recebe.</li>
+        <li>Nota interna só a equipe da empresa vê; nunca vai para o cliente.</li>
+        <li>Corrigir a classe guarda quem mudou, quando e de qual para qual; isso alimenta a qualidade do Radar.</li>
+        <li>Judicial avisa no sino de Admin e Gestão na hora. Baixo calão só leva a etiqueta.</li>
+        <li>CPF e nome do cliente nunca aparecem; números no texto chegam mascarados.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== GRUPO ===================== -->
+    <section data-p="grupo" hidden>
+      <div class="cab"><div><span class="etq">Mensageria</span><h2>Responder em grupo</h2>
+        <p>Com um filtro de classe ativo, a mesma resposta vai para várias conversas abertas. Antes de enviar, a tela mostra quantas mensagens saem, por canal, e o custo previsto.</p></div></div>
+      <div class="cartao">
+        <div class="linha"><span>Filtro ativo:</span><span class="cl">Alega pagamento</span><span class="pil neutra">Abertas · sem resposta nossa</span></div>
+        <div class="campo"><label for="gr-txt">Resposta</label><textarea id="gr-txt" rows="3">Recebemos sua mensagem. Para conferir o pagamento, envie o comprovante respondendo esta mensagem. Obrigado.</textarea></div>
+        <p class="nota" id="gr-conta"></p>
+        <div class="rolar"><table class="tab"><thead><tr><th>Canal</th><th class="n">Conversas</th><th class="n">Preço</th><th class="n">Custo previsto</th></tr></thead>
+          <tbody id="gr-tab"></tbody></table></div>
+        <div class="linha"><button class="btn" id="gr-btn">Enviar para 47 conversas</button></div>
+        <div class="confirma" id="gr-conf" hidden>
+          <p><b>47 mensagens serão enviadas agora</b>: 41 SMS e 6 RCS na sessão aberta. Custo previsto de <b>R$ 2,57</b>. As conversas ficam "Aguardando cliente" e com você de responsável.</p>
+          <div class="linha"><button class="btn" id="gr-ok">Enviar 47 mensagens</button><button class="btn sec" id="gr-volta">Voltar</button></div>
+        </div>
+        <p class="nota" id="gr-msg" aria-live="polite"></p>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Até 200 conversas por vez. O envio usa o processo demorado (padrão 1), com o aviso no sino ao terminar.</li>
+        <li>Conversas com o contato descadastrado ficam de fora e aparecem contadas: "3 descadastrados não recebem".</li>
+        <li>Preço pelo contrato: SMS no preço do SMS; RCS dentro da sessão de 24 h no preço da sessão.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== PAINEL ===================== -->
+    <section data-p="painel" hidden>
+      <div class="cab"><div><span class="etq">Mensageria</span><h2>Painel do Radar</h2>
+          <p>O que os clientes estão respondendo e quanto tempo a equipe leva para responder. Conta só respostas de verdade, não as de simulação.</p></div>
+        <div class="campo"><label for="pn-per">Período</label><select id="pn-per"><option>Últimos 7 dias</option><option>Este mês</option></select></div></div>
+      <div class="kpis">
+        <div class="kpi"><span>Respostas recebidas</span><b>1.284</b><em>de 38.910 mensagens entregues (3,3%)</em></div>
+        <div class="kpi"><span>CPC Negócio</span><b>212</b><em>16,5% das respostas</em></div>
+        <div class="kpi"><span>Primeira resposta (mediana)</span><b>14 min</b><em>meta da empresa: 15 min</em></div>
+        <div class="kpi"><span>Abertas acima da meta</span><b>9</b><em>4 há mais que o dobro</em></div>
+      </div>
+      <div class="duas">
+        <div class="cartao">
+          <h3>Respostas por classe</h3>
+          <div class="rolar"><table class="tab"><thead><tr><th>Classe</th><th class="n">Respostas</th><th class="n">%</th><th class="n">Corrigidas pela equipe</th></tr></thead>
+            <tbody id="pn-classes"></tbody></table></div>
+          <p class="nota">"Corrigidas pela equipe" mede onde o Radar mais erra. Acima de 10% a classe fica em atenção para o Técnico revisar.</p>
+        </div>
+        <div class="cartao">
+          <h3>Por quem atende</h3>
+          <div class="rolar"><table class="tab"><thead><tr><th>Pessoa</th><th class="n">Atendidas</th><th class="n">1ª resposta (mediana)</th><th class="n">Resolvidas</th></tr></thead>
+            <tbody>
+              <tr><td>Rita (exemplo)</td><td class="n">418</td><td class="n">9 min</td><td class="n">391</td></tr>
+              <tr><td>Bruno (exemplo)</td><td class="n">377</td><td class="n">16 min</td><td class="n">340</td></tr>
+              <tr><td>Você</td><td class="n">205</td><td class="n">12 min</td><td class="n">188</td></tr>
+            </tbody></table></div>
+          <p class="nota">Só Admin e Gestão veem esta tabela.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== CONFIG ===================== -->
+    <section data-p="config" hidden>
+      <div class="cab"><div><span class="etq">Mensageria</span><h2>Configurar o atendimento</h2>
+        <p>Cada empresa define a própria meta de primeira resposta, as respostas rápidas e quem é avisado. Salva com o painel lateral (padrão 2).</p></div></div>
+      <div class="duas">
+        <div class="cartao">
+          <h3>Meta de primeira resposta</h3>
+          <div class="linha"><div class="campo" style="max-width:140px"><label for="cf-meta">Minutos</label><input type="number" id="cf-meta" value="15" min="5" max="240"></div>
+            <p class="nota" style="max-width:34ch">Conta só no horário do canal. Acima da meta, âmbar; acima do dobro, vermelho.</p></div>
+          <h3 style="margin-top:6px">Avisos no sino</h3>
+          <label class="linha" style="gap:8px"><input type="checkbox" checked> Judicial: avisar Admin e Gestão na hora</label>
+          <label class="linha" style="gap:8px"><input type="checkbox" checked> Conversa acima do dobro da meta: avisar quem atende</label>
+          <label class="linha" style="gap:8px"><input type="checkbox"> CPC Negócio sem responsável há 10 min: avisar a Gestão</label>
+        </div>
+        <div class="cartao">
+          <h3>Respostas rápidas</h3>
+          <p class="sub">Aparecem acima da caixa de texto, as da classe da conversa primeiro. Podem usar {{id_cliente}}; nunca dados pessoais.</p>
+          <div class="rolar"><table class="tab"><thead><tr><th>Nome</th><th>Classe</th><th>Texto</th></tr></thead><tbody id="cf-rap"></tbody></table></div>
+          <div><button class="btn sec peq" type="button">Nova resposta rápida</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3000); };
+  const telas = [...document.querySelectorAll("section[data-p]")], botoes = [...document.querySelectorAll(".menu button")];
+  const ir = p => { telas.forEach(s => s.hidden = s.dataset.p !== p); botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); };
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+
+  const CLASSES = { cpc_negocio: ["CPC Negócio", "neg", 1], alega_pagamento: ["Alega pagamento", "", 2], judicial: ["Judicial", "jud", 3], desconhece: ["Desconhece", "", 4], cpc: ["CPC", "", 5], baixo_calao: ["Baixo calão", "", 6], sem_classe: ["Sem classe", "", 7] };
+  $("cx-classe").innerHTML += Object.entries(CLASSES).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join("");
+  const META = 15;
+  const EU = "Você";
+  const CONV = [
+    { id: 1, msk: "(11) 9••••-••66", cli: "C10233", can: "SMS", cl: "cpc_negocio", conf: .94, esp: 22, resp: null, sit: "nova", nl: 2, camp: "Cobrança outubro",
+      msgs: [["sai", "Financeira Horizonte: há uma condição especial para o seu contrato até sexta. Responda esta mensagem.", "09:12 · Enviada"], ["ent", "quanto fica pra quitar a vista?", "09:40", "Pergunta pelo valor para quitar."], ["ent", "pode mandar o boleto", "09:41", "Pede boleto: quer negociar."]] },
+    { id: 2, msk: "(21) 9••••-••04", cli: "C88120", can: "RCS", cl: "alega_pagamento", conf: .88, esp: 41, resp: "Rita (exemplo)", sit: "atend", nl: 1, camp: "Acordos setembro", sessao: "até 16:05",
+      msgs: [["sai", "Sua parcela vence hoje. Toque para ver a linha digitável.", "10:02 · Enviada"], ["ent", "ja paguei ontem no pix", "10:20", "Diz que já pagou."], ["nota", "Rita: pedi o comprovante pelo telefone, aguardando.", "10:31"]] },
+    { id: 3, msk: "(31) 9••••-••58", cli: "C55012", can: "WhatsApp", cl: "judicial", conf: .91, esp: 8, resp: null, sit: "nova", nl: 1, camp: "Cobrança outubro",
+      msgs: [["sai", "Olá, temos uma proposta para regularizar o seu contrato.", "11:00 · Enviada"], ["ent", "isso ta com meu advogado, processo em andamento", "11:06", "Cita advogado e processo."]] },
+    { id: 4, msk: "(41) 9••••-••77", cli: "C40011", can: "SMS", cl: "desconhece", conf: .82, esp: 3, resp: EU, sit: "atend", nl: 0, camp: "Cobrança outubro",
+      msgs: [["sai", "Financeira Horizonte: há uma condição especial para o seu contrato.", "11:20 · Enviada"], ["ent", "nao conheço essa pessoa, numero errado", "11:24", "Diz que não é a pessoa."]] },
+    { id: 5, msk: "(51) 9••••-••12", cli: "C77401", can: "SMS", cl: "cpc", conf: .76, esp: 0, resp: EU, sit: "aguardando", nl: 0, camp: "Lembrete de parcela",
+      msgs: [["sai", "Lembrete: sua parcela vence amanhã.", "08:00 · Enviada"], ["ent", "ok obrigado", "08:15", "Confirma recebimento."], ["sai", "Por nada! Qualquer dúvida, responda aqui.", "08:20 · Enviada · Você"]] }
+  ];
+  const RAP = [
+    ["Boleto", "cpc_negocio", "Para receber a proposta e o boleto, acesse o link enviado ou responda com o melhor dia para pagar."],
+    ["Comprovante", "alega_pagamento", "Obrigado. Para conferir o pagamento, envie o comprovante respondendo esta mensagem."],
+    ["Número errado", "desconhece", "Desculpe o incômodo. Vamos tirar este número do cadastro."],
+    ["Advogado", "judicial", "Entendido. Registramos a informação e não enviaremos novas mensagens de cobrança por aqui sem retorno da equipe responsável."],
+    ["Agradecer", "", "Obrigado pelo retorno. Qualquer dúvida, responda aqui."]
+  ];
+  let filtro = "todas", sel = 1, modo = "resp";
+  const classe = c => `<span class="cl ${CLASSES[c.cl][1]}">${CLASSES[c.cl][0]} <small>${Math.round(c.conf * 100)}%</small></span>`;
+  const espera = m => m === 0 ? "" : `<span class="esp ${m >= META * 2 ? "erro" : m >= META ? "at" : ""}">esperando ${m} min</span>`;
+  const passa = c => (filtro === "todas" ? c.sit !== "resolvida" && c.sit !== "aguardando" : filtro === "sem" ? c.sit === "nova" : filtro === "minhas" ? c.resp === EU && c.sit !== "resolvida" : c.sit === "aguardando")
+    && (!$("cx-canal").value || c.can === $("cx-canal").value) && (!$("cx-classe").value || c.cl === $("cx-classe").value)
+    && (!$("cx-busca").value || c.cli.toLowerCase().includes($("cx-busca").value.toLowerCase()));
+  function lista() {
+    const cont = { todas: c => c.sit !== "resolvida" && c.sit !== "aguardando", sem: c => c.sit === "nova", minhas: c => c.resp === EU && c.sit !== "resolvida", aguardando: c => c.sit === "aguardando" };
+    Object.entries(cont).forEach(([k, f]) => $("n-" + k).textContent = CONV.filter(f).length);
+    const ls = CONV.filter(passa).sort((a, b) => (CLASSES[a.cl][2] <= 2 ? 0 : 1) - (CLASSES[b.cl][2] <= 2 ? 0 : 1) || b.esp - a.esp);
+    $("cx-lista").innerHTML = ls.length ? ls.map(c => `<div class="item ${c.nl ? "nl" : ""}" role="option" tabindex="0" aria-selected="${c.id === sel}" data-id="${c.id}">
+      <span class="q"><span class="msk">${c.msk}</span><span class="can">${c.can}</span></span><span class="hora">${c.msgs[c.msgs.length - 1][2].slice(0, 5)}</span>
+      <span class="q">${classe(c)}${espera(c.esp)}</span><span class="hora">${c.resp ? (c.resp === EU ? "com você" : c.resp.split(" ")[0]) : '<span class="pil area">Nova</span>'}</span>
+      <span class="ult">${c.msgs.filter(m => m[0] !== "nota").slice(-1)[0][1]}</span></div>`).join("")
+      : `<div style="padding:18px" class="nota">Nenhuma conversa nesta fila. ${filtro === "todas" ? "Tudo respondido por aqui." : ""}</div>`;
+    $("cx-lista").querySelectorAll(".item").forEach(it => {
+      const abrir = () => { sel = +it.dataset.id; const c = CONV.find(x => x.id === sel); c.nl = 0; $("cx").classList.add("abriu"); lista(); conversa(); };
+      it.addEventListener("click", abrir); it.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrir(); } });
+    });
+  }
+  function conversa() {
+    const c = CONV.find(x => x.id === sel);
+    $("cv-msk").textContent = c.msk; $("cv-can").textContent = c.can; $("cv-cl").innerHTML = classe(c);
+    const sitTxt = { nova: "Nova", atend: "Em atendimento", aguardando: "Aguardando cliente", resolvida: "Resolvida" }[c.sit];
+    $("cv-sub").textContent = `ID ${c.cli} · ${c.camp} · ${sitTxt}`;
+    $("cv-resp").innerHTML = c.resp ? `<span class="pil neutra">Com ${c.resp === EU ? "você" : c.resp}</span>` : `<button class="btn sec peq" id="cv-assumir">Assumir</button>`;
+    const a = $("cv-assumir"); if (a) a.addEventListener("click", () => { c.resp = EU; c.sit = "atend"; c.msgs.push(["evento", "Você assumiu a conversa", agora()]); lista(); conversa(); });
+    $("cv-resolver").textContent = c.sit === "resolvida" ? "Reabrir" : "Resolver";
+    $("cv-msgs").innerHTML = c.msgs.map(m => m[0] === "evento" ? `<div class="bal evento">${m[1]} · ${m[2]}</div>`
+      : `<div class="bal ${m[0] === "ent" ? "ent" : m[0] === "sai" ? "sai" : "nota"}">${m[0] === "nota" ? "<b>Nota interna</b> " : ""}<span>${m[1]}</span>
+      <span class="meta"><span>${m[2]}</span>${m[3] ? `<span>Radar: ${m[3]}</span>` : ""}</span></div>`).join("");
+    $("cv-msgs").scrollTop = 1e6;
+    $("cl-dados").innerHTML = `<dt>ID</dt><dd>${c.cli}</dd><dt>Número</dt><dd>${c.msk}</dd><dt>Campanha</dt><dd>${c.camp}</dd><dt>Canal</dt><dd>${c.can}${c.sessao ? ` · sessão ${c.sessao}` : ""}</dd>`;
+    $("cl-hist").innerHTML = c.id === 1 ? `<li><span>RCS · 02/10</span><span class="cl">CPC</span></li><li><span>SMS · 18/09</span><span class="cl">Sem classe</span></li>` : `<li class="nota">Nenhuma outra conversa.</li>`;
+    $("cl-radar").textContent = `${CLASSES[c.cl][0]} com ${Math.round(c.conf * 100)}% de confiança, pela IA. "Corrigir a classe" em Mais.`;
+    rapidas(); info();
+  }
+  const agora = () => new Date().toTimeString().slice(0, 5);
+  function rapidas() {
+    const c = CONV.find(x => x.id === sel);
+    const ord = [...RAP].sort((a, b) => (b[1] === c.cl) - (a[1] === c.cl));
+    $("cv-rapidas").innerHTML = modo === "resp" ? ord.slice(0, 4).map(r => `<button type="button" data-t="${r[2]}">${r[0]}</button>`).join("") : "";
+    $("cv-rapidas").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $("cv-txt").value = b.dataset.t; info(); $("cv-txt").focus(); }));
+  }
+  function info() {
+    const c = CONV.find(x => x.id === sel), t = $("cv-txt").value, lim = c.can === "SMS" ? 160 : 1000;
+    if (modo === "nota") { $("cv-info").textContent = "Só a equipe da empresa vê. Não vai para o cliente."; $("cv-conta").textContent = ""; $("cv-enviar").textContent = "Salvar nota"; $("cv-enviar").disabled = !t.trim(); return; }
+    $("cv-info").textContent = c.can === "SMS" ? "Sai como SMS, no preço do SMS (R$ 0,0540)." : c.can === "RCS" ? `Sessão aberta ${c.sessao}: cobrada como sessão.` : "Janela de atendimento aberta.";
+    $("cv-conta").textContent = `${t.length}/${lim}`; $("cv-conta").classList.toggle("passou", t.length > lim);
+    $("cv-enviar").textContent = "Enviar"; $("cv-enviar").disabled = !t.trim() || t.length > lim;
+  }
+  document.querySelectorAll(".resp-abas button").forEach(b => b.addEventListener("click", () => {
+    modo = b.dataset.m; document.querySelectorAll(".resp-abas button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    $("cv-resp-box").classList.toggle("nota-modo", modo === "nota"); $("cv-txt").placeholder = modo === "nota" ? "Nota para a equipe" : "Escreva a resposta"; rapidas(); info();
+  }));
+  $("cv-txt").addEventListener("input", info);
+  $("cv-enviar").addEventListener("click", () => {
+    const c = CONV.find(x => x.id === sel), t = $("cv-txt").value.trim(); if (!t) return;
+    if (modo === "nota") c.msgs.push(["nota", `${EU}: ${t}`, agora()]);
+    else { c.msgs.push(["sai", t, `${agora()} · Na fila · ${EU}`]); if (!c.resp) c.resp = EU; c.sit = "aguardando"; c.esp = 0; }
+    $("cv-txt").value = ""; lista(); conversa();
+    toast(modo === "nota" ? "Nota salva." : "Resposta na fila. A conversa foi para Aguardando cliente.");
+  });
+  $("cv-resolver").addEventListener("click", () => { const c = CONV.find(x => x.id === sel); c.sit = c.sit === "resolvida" ? "atend" : "resolvida"; c.msgs.push(["evento", c.sit === "resolvida" ? "Resolvida por você" : "Reaberta por você", agora()]); lista(); conversa(); });
+  $("cv-mais").addEventListener("click", e => { e.stopPropagation(); const m = $("cv-menu"); m.hidden = !m.hidden; $("cv-mais").setAttribute("aria-expanded", String(!m.hidden)); });
+  document.addEventListener("click", () => { $("cv-menu").hidden = true; $("cv-mais").setAttribute("aria-expanded", "false"); });
+  $("cv-menu").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    const c = CONV.find(x => x.id === sel);
+    if (b.dataset.acao === "transferir") { c.resp = "Bruno (exemplo)"; c.sit = "atend"; c.msgs.push(["evento", "Você transferiu para Bruno (exemplo) · aviso no sino dele", agora()]); toast("Transferida para Bruno (exemplo)."); }
+    if (b.dataset.acao === "reclassificar") { const de = CLASSES[c.cl][0]; c.cl = "cpc"; c.conf = 1; c.msgs.push(["evento", `Classe corrigida por você: ${de} → CPC`, agora()]); }
+    if (b.dataset.acao === "aguardando") { c.sit = "aguardando"; c.esp = 0; c.msgs.push(["evento", "Marcada como Aguardando cliente", agora()]); }
+    lista(); conversa();
+  }));
+  $("cx-voltar").addEventListener("click", () => $("cx").classList.remove("abriu"));
+  $("cx-fila").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { filtro = b.dataset.f; $("cx-fila").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); lista(); }));
+  ["cx-canal", "cx-classe"].forEach(id => $(id).addEventListener("change", lista));
+  $("cx-busca").addEventListener("input", lista);
+  lista(); conversa();
+
+  // ---------- grupo
+  const grc = () => { const n = $("gr-txt").value.length; $("gr-conta").textContent = `${n}/160 caracteres${n > 160 ? " · passa do limite do SMS" : ""}`; };
+  $("gr-txt").addEventListener("input", grc); grc();
+  $("gr-tab").innerHTML = [["SMS", 41, .054], ["RCS · na sessão", 6, .06]].map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="n">R$ ${r[2].toFixed(4).replace(".", ",")}</td><td class="n">R$ ${(r[1] * r[2]).toFixed(2).replace(".", ",")}</td></tr>`).join("")
+    + `<tr><td><b>Total</b></td><td class="n"><b>47</b></td><td></td><td class="n"><b>R$ 2,57</b></td></tr><tr><td colspan="4" class="nota">3 conversas com o contato descadastrado não recebem.</td></tr>`;
+  $("gr-btn").addEventListener("click", () => { $("gr-btn").hidden = true; $("gr-conf").hidden = false; $("gr-ok").focus(); });
+  $("gr-volta").addEventListener("click", () => { $("gr-conf").hidden = true; $("gr-btn").hidden = false; });
+  $("gr-ok").addEventListener("click", () => { $("gr-conf").hidden = true; $("gr-msg").textContent = "Enviando 47 mensagens. Pode sair desta tela; o aviso chega no sino."; });
+
+  // ---------- painel
+  $("pn-classes").innerHTML = [["CPC Negócio", 212, 4], ["CPC", 401, 6], ["Alega pagamento", 163, 8], ["Desconhece", 248, 14], ["Judicial", 19, 0], ["Baixo calão", 37, 3], ["Sem classe", 204, 21]]
+    .map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="n">${(r[1] / 1284 * 100).toFixed(1).replace(".", ",")}%</td><td class="n">${r[2]} (${(r[2] / r[1] * 100).toFixed(1).replace(".", ",")}%)${r[2] / r[1] > .1 ? ' <span class="pil at">revisar</span>' : ""}</td></tr>`).join("");
+
+  // ---------- config
+  $("cf-rap").innerHTML = RAP.map(r => `<tr><td>${r[0]}</td><td>${r[1] ? CLASSES[r[1]][0] : "Todas"}</td><td style="white-space:normal;min-width:240px">${r[2]}</td></tr>`).join("");
+})();
+</script>
