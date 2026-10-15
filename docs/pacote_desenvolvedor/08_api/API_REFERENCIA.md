@@ -3,9 +3,10 @@
 Para o time de tecnologia do credor ou da assessoria. Com ela, o seu sistema envia a carteira ao MotorCob e lê
 a Lista do dia, sem passar pelo site.
 
-**Endereço:** `https://jxwppkrkuckfwmphqjva.supabase.co/functions/v1/api`
+**Endereço:** `https://api.motorcob.online` (quando o domínio estiver no ar — ver `DOMINIO_API.md`); até lá e como
+reserva, `https://jxwppkrkuckfwmphqjva.supabase.co/functions/v1/api`.
 **Autenticação:** cabeçalho `Authorization: Bearer mc_...` com um token criado em
-*Minha conta › Tokens de API* (o token aparece uma vez só; guarde num cofre de segredos, nunca no código).
+*Empresa › Integrações › API* (o token aparece uma vez só; guarde num cofre de segredos, nunca no código).
 **Limite:** 60 chamadas por minuto por token (acima disso: `429` com `Retry-After: 60`).
 **Credor:** sempre pelo código que aparece em *Credores* (ex.: `banco-x`). O credor precisa estar com
 "Como a carga chega" = **API**.
@@ -17,6 +18,11 @@ a Lista do dia, sem passar pelo site.
 | `cargas:enviar` | `POST /v1/cargas` |
 | `cargas:status` | `GET /v1/cargas/{id}` |
 | `lista:ler` | `GET /v1/lista-do-dia` |
+| `jornada:enviar` | `POST /v1/cargas` nas carteiras da Jornada (tipos `clientes`, `contatos` e `leads`) |
+
+Qualquer token válido pode chamar `GET /v1/teste`: responde a empresa, o que o token pode, as carteiras e quando
+vence, sem mexer em nada. O token pode ser restrito a faixas de IP (ex.: `200.155.10.0/24`); de outro IP, `403`.
+Para trocar sem parar o sistema, use "Trocar token": o antigo continua valendo por 1, 7 ou 14 dias.
 
 O token pode ser limitado a alguns credores e vence em até 365 dias.
 
@@ -70,5 +76,7 @@ Sempre JSON `{ "erro": "texto em português", "documentacao": "..." }`.
 ## Boas práticas
 
 - Um token por sistema (ERP, BI…), com o menor escopo possível. Revogue o que não usa.
-- Troque o token antes de vencer (crie o novo, troque no sistema, revogue o antigo).
+- Troque o token antes de vencer com "Trocar token" (o sino avisa 15 e 3 dias antes); o antigo segue valendo uns
+  dias enquanto você cola o novo.
+- Restrinja o token aos IPs do seu servidor quando possível.
 - Nunca mande CPF, nome ou telefone em parâmetro de URL: os dados vão só no arquivo.

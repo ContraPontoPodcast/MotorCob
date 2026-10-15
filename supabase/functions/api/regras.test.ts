@@ -1,7 +1,8 @@
 // node --experimental-strip-types --test supabase/functions/api/regras.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hojeSP, nomeSeguro, rota, semAcesso, sha256Hex, type Token, tokenDoCabecalho, tokenInvalido, validarCarga,
+import { escopoDaCarga, hojeSP, ipDaRequisicao, ipPermitido, nomeSeguro, rota, rotaRegistro, semAcesso, sha256Hex, type Token,
+  tokenDoCabecalho, tokenInvalido, validarCarga,
   validarLista } from "./regras.ts";
 
 const TOK = "mc_" + "ab12".repeat(16);
@@ -59,4 +60,39 @@ test("lista do dia: credor, data e canal", () => {
   assert.match(validarLista(q("credor=banco-x&canal=pombo"), "2026-10-11").erro!, /canal/);
   assert.match(validarLista(q("credor=banco-x&canal=sms&data=11/10/2026"), "2026-10-11").erro!, /AAAA-MM-DD/);
   assert.equal(hojeSP(new Date("2026-10-12T02:30:00Z")), "2026-10-11");   // 23h30 em São Paulo
+});
+
+test("revisão de UX: rota de teste, cargas da Jornada e escopo pela frente da carteira", () => {
+  assert.deepEqual(rota("GET", "/api/v1/teste"), { nome: "teste" });
+  assert.equal(rotaRegistro(rota("GET", "/api/v1/cargas/123")), "/v1/cargas/{id}");
+  assert.equal(rotaRegistro(null), "/v1/desconhecida");
+  const q = new URLSearchParams({ credor: "fibra-res", tipo: "leads", nome: "leads.csv" });
+  assert.equal(validarCarga(q, 10).tipo, "leads");
+  assert.deepEqual(escopoDaCarga("motorcli", "clientes"), { escopo: "jornada:enviar" });
+  assert.match(escopoDaCarga("motorcli", "incremental").erro!, /Jornada recebe só/);
+  assert.match(escopoDaCarga("motorcob", "leads").erro!, /carteira do MotorCli/);
+  assert.deepEqual(escopoDaCarga("motorcob", "base"), { escopo: "cargas:enviar" });
+  const t = { id: 1, empresa_id: 1, prefixo: "mc_1", escopos: ["cargas:enviar"], credor_ids: null, criado_por: "u",
+              expira_em: "2000-01-01T00:00:00Z", revogado_em: null };
+  assert.match(tokenInvalido(t, new Date())!, /Empresa › Integrações/);
+});
+
+test("restrição por IP (IPv4, IPv6 e sem faixas)", () => {
+  assert.equal(ipPermitido("200.155.10.4", ["200.155.10.0/24"]), true);
+  assert.equal(ipPermitido("200.155.11.4", ["200.155.10.0/24"]), false);
+  assert.equal(ipPermitido("10.0.0.9", ["10.0.0.9/32", "192.168.0.0/16"]), true);
+  assert.equal(ipPermitido("10.0.0.9", ["10.0.0.9"]), true);
+  assert.equal(ipPermitido("2804:14c:1a2b::7", ["2804:14c::/32"]), true);
+  assert.equal(ipPermitido("2804:14d::7", ["2804:14c::/32"]), false);
+  assert.equal(ipPermitido("::ffff:200.155.10.4", ["200.155.10.0/24"]), true);
+  assert.equal(ipPermitido(null, ["200.155.10.0/24"]), false);
+  assert.equal(ipPermitido("200.155.10.4", null), true);
+  assert.equal(ipPermitido("abc", ["200.155.10.0/24"]), false);
+  const h = new Headers({ "x-forwarded-for": "200.155.10.4, 10.1.1.1" });
+  assert.equal(ipDaRequisicao(h), "200.155.10.4");
+  assert.equal(ipDaRequisicao(new Headers({ "x-forwarded-for": "<script>" })), null);
+  const proxy = new Headers({ "x-forwarded-for": "104.16.0.1", "x-motorcob-proxy": "s3gr3d0-longo", "x-ip-original": "200.155.10.4" });
+  assert.equal(ipDaRequisicao(proxy, "s3gr3d0-longo"), "200.155.10.4");          // proxy com o segredo
+  assert.equal(ipDaRequisicao(proxy, "outro-segredo"), "104.16.0.1");             // segredo errado: ignora o cabeçalho
+  assert.equal(ipDaRequisicao(proxy), "104.16.0.1");                              // sem proxy configurado
 });

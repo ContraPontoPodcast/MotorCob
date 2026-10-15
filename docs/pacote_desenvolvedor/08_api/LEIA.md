@@ -1,5 +1,8 @@
 # API das cargas — como publicar
 
+> Revisão de 15/10/2026: depois do SQL 41, publique a função `api` de novo e cole o prompt 63 (a tela sai de Minha
+> conta e vai para Empresa › Integrações). Domínio api.motorcob.online: `DOMINIO_API.md`.
+
 Ordem (uma vez):
 
 1. **SQL 8** — `08_api_tokens.sql` (mesmo conteúdo de `supabase/migrations/20261105000001_api_tokens.sql`):

@@ -1356,6 +1356,7 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
             from nuvem import fornecedores
             fornecedores.manter_assinaturas(out)         # endereço de retorno cadastrado na Zenvia
             avisos.limpar(sb, agora)                     # avisos do sino com mais de 90 dias
+            avisos.api(sb, out)                          # tokens de API vencendo ou parados (SQL 41)
             relatorios.expirar(sb, out)                  # arquivos de relatório com mais de 7 dias
             try:
                 sb.rpc("limpar_eventos_mensageria")      # avisos dos fornecedores já aplicados, depois de 7 dias

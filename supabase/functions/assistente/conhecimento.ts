@@ -406,7 +406,7 @@ Menu do usuário › Minha conta (/conta). Abas:
 - Dados: foto e dados do perfil. O e-mail só o Admin da empresa troca.
 - Permissões: o que o seu perfil pode fazer nesta empresa (só leitura). Quem ajusta é o Admin, em Usuários e permissões.
 - Segurança: senha, verificação em duas etapas e sessões.
-- Tokens de API: ver a seção API.
+- Tokens de API: em Empresa › Integrações › API (ver a seção API).
 
 Para trocar a senha:
 
@@ -475,25 +475,26 @@ Menu lateral › Auditoria (permissão "Ver auditoria"). Registra quem alterou o
 
 ## API
 
-A API permite que o sistema da empresa envie cargas e leia a Lista do dia sem passar pelo site. Requer a permissão "Gerenciar tokens de API" (Admin).
+A API permite que o sistema da empresa envie cargas (da Cobrança e da Jornada) e leia a Lista do dia sem passar pelo site. Fica em Empresa › Integrações › API e requer a permissão "Gerenciar tokens de API" (Admin).
 
 Para criar um token:
 
-1. Minha conta › Tokens de API › Criar token.
-2. Informe o nome (por exemplo, "ERP Financeiro"), os escopos, os credores (vazio = todos) e a validade (30, 90, 180 ou 365 dias).
-3. Copie o token na hora: por segurança, ele não aparece de novo. Guarde num cofre de segredos, nunca no código.
+1. Empresa › Integrações › API › Criar token.
+2. Informe o nome (por exemplo, "ERP Financeiro"), o que ele pode fazer (Enviar cargas, Acompanhar cargas, Ler a Lista do dia, Enviar cargas da Jornada), as carteiras (vazio = todas), a validade (30, 90, 180 ou 365 dias) e, se quiser, os endereços IP permitidos (faixas como 200.155.10.0/24).
+3. Copie o token na hora: por segurança, ele não aparece de novo. Use "Testar agora" para conferir sem mexer em nada. Guarde num cofre de segredos, nunca no código.
 
-Escopos: "Enviar cargas", "Acompanhar cargas" e "Ler a Lista do dia". Limite de 10 tokens ativos por empresa. "Revogar" para o token na hora.
+Trocar token: cria um novo com as mesmas permissões e o antigo continua valendo por 1, 7 (padrão) ou 14 dias, para dar tempo de colar o novo no sistema; "Parar agora" encerra o antigo antes. O sino avisa 15 e 3 dias antes de vencer e quando um token que vinha sendo usado para de ser chamado. "Uso e erros" mostra as chamadas por dia e o motivo de cada erro, sem o conteúdo das cargas. Limite de 10 tokens ativos por empresa. "Revogar" para o token na hora; em incidente de segurança, o Master da MotorCob também pode revogar, com motivo, e o Admin é avisado.
 
 Endpoints:
 
-- Enviar carga (credor, tipo e nome do arquivo; tipos geral, incremental, retirada, acordo, baixa ou ocorrência; CSV, TXT ou XLSX até 20 MB).
+- Enviar carga (carteira, tipo e nome do arquivo; Cobrança: geral, incremental, retirada, acordo, baixa ou ocorrência; Jornada: clientes, contatos ou leads; CSV, TXT ou XLSX até 20 MB).
 - Acompanhar carga: situação pendente, aguardando (layout novo, aguardando mapeamento no site), processado ou erro, com o relatório.
-- Lista do dia: por credor, canal e data; devolve o mesmo CSV que o site baixa.
+- Lista do dia: por carteira, canal e data; devolve o mesmo CSV que o site baixa.
+- Teste: confere o token e responde a empresa, o que ele pode e as carteiras.
 
-Regras: o credor precisa estar com "Como a carga chega" = API (em Credores); limite de 60 chamadas por minuto por token; cada download da Lista do dia fica registrado em Acessos. Nunca mande CPF, nome ou telefone em parâmetro de URL.
+Regras: a carteira precisa estar com "Como a carga chega" = API; limite de 60 chamadas por minuto por token; cada download da Lista do dia fica registrado em Acessos. Nunca mande CPF, nome ou telefone em parâmetro de URL.
 
-A documentação completa (endereço, autenticação, exemplos e códigos de erro) está em Documentação › Integração e API (/docs/api), também acessível pelo link "Ver a documentação da API" em Tokens de API.
+A documentação completa (endereço, autenticação, exemplos e códigos de erro) está em Documentação › Integração e API (/docs/api), também acessível em Integrações › API.
 
 ---
 

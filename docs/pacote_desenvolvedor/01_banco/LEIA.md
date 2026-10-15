@@ -194,4 +194,9 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     frases; rótulos sem código e o porquê do melhor canal na Lista do dia; estratégia por carteira (separar e copiar);
     dois relatórios prontos na aba Jornada. Depois: prompts 61 e 62 e o motor na nuvem.
 
+41. `supabase/migrations/20261208000001_api_v2.sql` (SQL 41) — **Tokens de API**: faixas de IP permitidas, escopo
+    `jornada:enviar` (cargas da Jornada), `trocar_token_api` (o antigo vale mais 1, 7 ou 14 dias), uso e erros por
+    token (`api_registros`, 90 dias, sem o arquivo), avisos de vencimento e de token parado, Console das integrações e
+    revogação pelo Master com motivo. Depois: funções `api` e `assistente` de novo e prompt 63.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

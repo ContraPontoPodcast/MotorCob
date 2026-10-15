@@ -103,6 +103,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 91 | `07_workspace/PROMPT_59_RELATORIOS.md` e `PROMPT_60_MONTADOR_ORQUESTRACAO.md` + motor na nuvem | Relatórios no menu, perguntas, comparação, montador em 3 passos, exportação, envio por e-mail, Orquestração e Jornada | Site + Google Cloud | 86º |
 | 92 | `supabase/migrations/20261207000001_jornada_v2.sql` (SQL 40) + função `assistente` de novo | Jornada: resultado de cada momento, movimento, mensagens por momento, estratégia por carteira, rótulos sem código | Supabase | 87º |
 | 93 | `07_workspace/PROMPT_61_JORNADA_INICIO_LISTA.md` e `PROMPT_62_JORNADA_MOMENTOS_MENSAGENS.md` + motor na nuvem | Início com o mapa da jornada, Lista do dia sem códigos, momentos com prioridade, orçamento e mensagem | Site + Google Cloud | 88º |
+| 94 | `supabase/migrations/20261208000001_api_v2.sql` (SQL 41) | Tokens de API: IP permitido, cargas da Jornada, trocar sem parar, uso e erros, avisos de vencimento, revogação pelo Master | Supabase | 89º |
+| 95 | funções `api` e `assistente` de novo (`python3 scripts/juntar_funcao.py api` / `assistente`) | API: rota /v1/teste, cargas da Jornada, IP, registro de uso; Assistente sabe das Integrações | Supabase | 90º |
+| 96 | `07_workspace/PROMPT_63_INTEGRACOES_API.md` + motor na nuvem; depois, quando liberar o DNS, `08_api/DOMINIO_API.md` | Empresa › Integrações e Console › Integrações; api.motorcob.online | Site + Google Cloud + DNS | 91º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

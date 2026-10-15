@@ -78,6 +78,18 @@ def atendimento(sb, out=print) -> int:
     return n
 
 
+def api(sb, out=print) -> int:
+    """Tokens de API (SQL 41), uma vez por dia: vence em 15 e 3 dias (para quem criou e os Admins), parou de ser
+    usado há 7 dias e token antigo de uma troca que ainda era chamado quando parou."""
+    try:
+        n = sb.rpc("gerar_avisos_api") or 0
+    except Exception:  # noqa: BLE001 — banco ainda sem o SQL 41
+        return 0
+    if n:
+        out(f"api: {n} aviso(s) de token no sino")
+    return n
+
+
 def limpar(sb, agora: datetime | None = None) -> None:
     """Apaga avisos com mais de 90 dias (o sino já não mostra)."""
     limite = (agora or datetime.now(timezone.utc)) - timedelta(days=90)
@@ -88,4 +100,8 @@ def limpar(sb, agora: datetime | None = None) -> None:
     try:
         sb.rpc("limpar_atendimento_90d")                 # notas e histórico das conversas (SQL 36)
     except Exception:  # noqa: BLE001 — banco ainda sem o SQL 36
+        pass
+    try:
+        sb.rpc("limpar_registros_api")                   # uso dos tokens de API com mais de 90 dias (SQL 41)
+    except Exception:  # noqa: BLE001 — banco ainda sem o SQL 41
         pass

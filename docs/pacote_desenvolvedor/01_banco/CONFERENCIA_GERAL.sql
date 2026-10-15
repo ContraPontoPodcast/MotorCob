@@ -204,6 +204,11 @@ with itens(ordem, item, ok, se_falhar) as (values
        and to_regprocedure('public.mapa_jornada(bigint, date, date)') is not null
        and to_regprocedure('public.copiar_estrategia_jornada(bigint, bigint)') is not null,
        'rodar o SQL 40 (supabase/migrations/20261207000001_jornada_v2.sql)'),
+  (28, 'Tokens de API: IP, troca, uso e avisos (SQL 41)',
+       to_regclass('public.api_registros') is not null
+       and to_regprocedure('public.trocar_token_api(bigint, integer)') is not null
+       and to_regprocedure('public.criar_token_api(bigint, text, text[], bigint[], integer, cidr[])') is not null,
+       'rodar o SQL 41 (supabase/migrations/20261208000001_api_v2.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

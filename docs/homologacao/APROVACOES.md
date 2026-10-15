@@ -288,6 +288,20 @@ Protótipo: `jornada-prototipo.html`.
   resultado), testes e prompts 61 e 62.
 - Decisões da geração confirmadas em 15/10/2026 ("Ok").
 
+## Tokens de API — APROVADO em 15/10/2026
+
+Protótipo: `tokens-api-prototipo.html`. Todos os pontos com "Ok":
+1. Tokens saem de Minha conta e vão para Empresa › Integrações.
+2. Trocar token com o antigo valendo junto por 7 dias (opção de 1 ou 14).
+3. Restrição opcional por endereço IP.
+4. Cargas da Jornada (clientes, contatos e leads) pela API.
+5. Master revoga token de cliente em incidente de segurança, com motivo na Auditoria e aviso ao Admin.
+6. Endereço api.motorcob.online: passo a passo em `08_api/DOMINIO_API.md` (proxy com segredo, para a restrição por
+   IP continuar valendo); depende de quem administra o DNS.
+- Na geração: uso e erros guardam método, rota sem parâmetros, carteira, código e IP por 90 dias; avisos 15 e 3 dias
+  antes de vencer (para quem criou e os Admins) e de token que parou de ser chamado; rota `GET /v1/teste`.
+- Gerado: SQL 41, funções `api` e `assistente`, motor (avisos e limpeza), testes e prompt 63.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -318,5 +332,7 @@ Protótipo: `jornada-prototipo.html`.
    (passos 89 a 91). Conferência: item 26 OK.
    Depois, Jornada: SQL 40 → função `assistente` de novo → prompts 61 e 62 → motor na nuvem (passos 92 e 93).
    Conferência: item 27 OK.
+   Depois, Tokens de API: SQL 41 → funções `api` e `assistente` de novo → prompt 63 → motor na nuvem (passos 94 a
+   96). Conferência: item 28 OK. Domínio api.motorcob.online quando o DNS for liberado.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).

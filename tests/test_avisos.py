@@ -101,7 +101,19 @@ class TestAvisos(unittest.TestCase):
         sb.rpc = lambda f, a=None: chamadas.append(f)
         AV.limpar(sb, datetime(2026, 12, 31, 12, tzinfo=timezone.utc))
         self.assertEqual(sb.apagados, [("avisos", {"criado_em": "lt.2026-10-02T12:00:00+00:00"})])
-        self.assertEqual(chamadas, ["limpar_atendimento_90d"])
+        self.assertEqual(chamadas, ["limpar_atendimento_90d", "limpar_registros_api"])
+
+    def test_avisos_dos_tokens_de_api(self):
+        sb = SbFalso()
+        sb.rpc = lambda f, a=None: 2 if f == "gerar_avisos_api" else None
+        saida = []
+        self.assertEqual(AV.api(sb, out=saida.append), 2)
+        self.assertTrue(any("2 aviso(s) de token" in x for x in saida))
+
+        def velho(f, a=None):
+            raise RuntimeError("404")
+        sb.rpc = velho
+        self.assertEqual(AV.api(sb, out=saida.append), 0)
 
 
 if __name__ == "__main__":
