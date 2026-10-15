@@ -42,10 +42,15 @@ contatos) / "Vence em" / "Dias de atraso · lembretes" (fatura_lembretes) / "Pag
 - "Gerar rascunhos" e "Cancelar rascunho" com confirmação ("Cancelar o rascunho de {empresa}? Ele some da lista.").
 - Celular: cada linha vira cartão com empresa, situação, mês e valor.
 
-## 3. Empresa › situação
+## 3. Empresa › situação e liberação pelo Master
 Na lista de empresas e no topo da empresa, "Inadimplente" em vermelho com o motivo (empresas.situacao_motivo).
-É automático: volta para ativa sozinho quando a fatura é paga. Master ainda pode reativar com "Reativar"
-(mudar_situacao_empresa, com confirmação).
+É automático: volta para ativa sozinho quando a fatura é paga. "Reativar" (mudar_situacao_empresa) não vale para
+inadimplente. No lugar, só para o Master (admin_equipe), o botão "Liberar mesmo com fatura em aberto" (na
+empresa e na aba Vencidas): confirmação com a fatura e o valor em aberto, campo "Motivo" (5+ caracteres) e "Até"
+(7 dias · 15 dias · 30 dias; padrão 7) → rpc liberar_inadimplente(empresa, motivo, ate) → devolve a data. Texto:
+"O acesso e os envios voltam até {data}; se não pagar até lá, bloqueia de novo." Botão "Liberar até {data}".
+Os outros veem a etiqueta com cadeado "Só o Master libera empresa inadimplente". Liberada: pílula âmbar
+"Liberada até {empresas.liberada_ate}" no lugar de "Inadimplente".
 
 Confira em 1440 e 390 px, claro e escuro.
 ```

@@ -13,6 +13,9 @@ vencida há mais de 10 dias. O acesso está bloqueado e os envios estão parados
 volta sozinho quando o pagamento confirmar." + botão "Pagar agora". O menu mostra tudo, mas só Faturamento e
 Suporte abrem; as outras telas aparecem travadas com "Acesso bloqueado por fatura vencida". Suspensa ou encerrada:
 mesma faixa com o texto "Acesso suspenso pela equipe MotorCob. Fale com o Suporte."
+Liberada pelo Master (bloqueada = false e liberada_ate preenchida, com fatura vencida): faixa âmbar "Acesso
+liberado pela MotorCob até {liberada_ate}. A fatura continua em aberto: pague até lá para não bloquear de novo."
++ "Pagar agora".
 
 ## 2. Faturamento pós-pago (Empresa › Faturamento; ver_faturamento)
 - Primeiro cartão: a fatura em aberto (faturas_painel, situacao_atual 'aberta' ou 'vencida'): "Fatura de {mês}",

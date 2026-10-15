@@ -4,6 +4,8 @@
 -- 2. Fatura vencida: lembrete por e-mail no dia seguinte ao vencimento e 5 dias depois; no 7º dia, aviso de que o
 --    acesso será bloqueado. Com 10 dias de atraso, a empresa fica INADIMPLENTE (acesso bloqueado, envios parados;
 --    Faturamento e Suporte continuam abertos). Pagou: volta sozinha para ativa.
+--    O Master pode liberar a empresa inadimplente mesmo com a fatura em aberto, com motivo e prazo (até 30 dias);
+--    até o prazo a rotina não bloqueia de novo.
 -- 3. Permissão do cliente "pagar_faturas" (Admin por padrão): pagar fatura e pedir recarga. Ver continua com
 --    "ver_faturamento".
 -- 4. Resumo da emissão em lote, estimativa do ciclo (pós-pago), extrato e duração do saldo (pré-pago).
@@ -65,6 +67,12 @@ alter table public.empresas add constraint empresas_situacao_check
     check (situacao in ('implantacao', 'ativa', 'suspensa', 'encerrada', 'inadimplente'));
 comment on column public.empresas.situacao is
     'implantacao, ativa, suspensa (pela equipe), encerrada ou inadimplente (automático: fatura vencida há 10 dias).';
+
+alter table public.empresas
+    add column if not exists liberada_ate date,
+    add column if not exists liberada_motivo text check (liberada_motivo is null or char_length(liberada_motivo) <= 200);
+comment on column public.empresas.liberada_ate is
+    'Liberação do Master com fatura em aberto: até esta data a inadimplência não bloqueia de novo.';
 
 -- o sistema (motor ou pagamento) muda a situação sem passar pela permissão de pausar
 create or replace function public.carteira_empresa() returns trigger
@@ -176,6 +184,7 @@ begin
                        and f.situacao = 'aberta' and f.vencimento <= (now() at time zone 'America/Sao_Paulo')::date - 10)
                    || ')', 200)
          where x.situacao = 'ativa'
+           and (x.liberada_ate is null or x.liberada_ate < (now() at time zone 'America/Sao_Paulo')::date)
            and exists (select 1 from public.faturas f where f.empresa_id = x.id and f.situacao = 'aberta'
                          and f.vencimento <= (now() at time zone 'America/Sao_Paulo')::date - 10)
         returning x.id, x.nome
@@ -202,6 +211,13 @@ language plpgsql security definer set search_path = public as $$
 begin
     if new.situacao = 'paga' and old.situacao is distinct from 'paga' then
         perform public.liberar_se_em_dia(new.empresa_id);
+        if not exists (select 1 from public.faturas f where f.empresa_id = new.empresa_id and f.situacao = 'aberta'
+                         and f.vencimento < (now() at time zone 'America/Sao_Paulo')::date) then
+            perform set_config('motorcob.sistema', '1', true);
+            update public.empresas set liberada_ate = null, liberada_motivo = null
+             where id = new.empresa_id and liberada_ate is not null;
+            perform set_config('motorcob.sistema', '', true);
+        end if;
     end if;
     return new;
 end $$;
@@ -209,11 +225,82 @@ drop trigger if exists fatura_paga_libera on public.faturas;
 create trigger fatura_paga_libera after update of situacao on public.faturas
     for each row execute function public.fatura_paga_libera();
 
+-- Master: libera a empresa inadimplente mesmo com a fatura em aberto, com motivo e prazo (padrão 7 dias, até 30)
+create or replace function public.liberar_inadimplente(empresa bigint, motivo text, ate date default null)
+returns date
+language plpgsql security definer set search_path = public as $$
+declare
+    hoje date := (now() at time zone 'America/Sao_Paulo')::date;
+    prazo date := coalesce(ate, hoje + 7);
+    m text := nullif(trim(coalesce(motivo, '')), '');
+    nome text;
+begin
+    if not public.admin_equipe() then
+        raise exception 'só o Master libera empresa inadimplente';
+    end if;
+    select e.nome into nome from public.empresas e where e.id = empresa and e.situacao = 'inadimplente';
+    if nome is null then
+        raise exception 'a empresa não está inadimplente';
+    end if;
+    if m is null or char_length(m) < 5 then
+        raise exception 'informe o motivo da liberação';
+    end if;
+    if prazo < hoje or prazo > hoje + 30 then
+        raise exception 'o prazo da liberação vai de hoje até 30 dias';
+    end if;
+    update public.empresas
+       set situacao = 'ativa', ativa = true, liberada_ate = prazo, liberada_motivo = left(m, 200),
+           situacao_motivo = left('Liberada pelo Master até ' || to_char(prazo, 'DD/MM/YYYY') || ': ' || m, 200),
+           situacao_em = now(), situacao_por = auth.uid()
+     where id = empresa;
+    insert into public.avisos (para, empresa_id, tipo, titulo, texto, link)
+    values ('empresa', empresa, 'atencao', 'Acesso liberado pela MotorCob até ' || to_char(prazo, 'DD/MM'),
+            'A fatura continua em aberto. Pague até ' || to_char(prazo, 'DD/MM') || ' para não bloquear de novo.',
+            '/empresa/faturamento'),
+           ('equipe', empresa, 'atencao', left('Inadimplente liberada · ' || nome, 140),
+            left('Até ' || to_char(prazo, 'DD/MM/YYYY') || '. Motivo: ' || m, 400), '/console/faturas');
+    return prazo;
+end $$;
+
+-- reativar inadimplente pela troca de situação comum não vale: é a liberação do Master, com prazo
+create or replace function public.mudar_situacao_empresa(empresa bigint, nova text, motivo text default null)
+returns text
+language plpgsql security definer set search_path = public as $$
+declare
+    atual text;
+    m text := nullif(trim(coalesce(motivo, '')), '');
+begin
+    if not (public.admin_equipe() or public.equipe_pode('pausar_empresa', empresa)) then
+        raise exception 'sem permissão para suspender, encerrar ou reativar esta empresa';
+    end if;
+    if nova not in ('ativa', 'suspensa', 'encerrada') then
+        raise exception 'situação inválida: use ativa, suspensa ou encerrada';
+    end if;
+    select situacao into atual from public.empresas where id = empresa;
+    if atual is null then
+        raise exception 'empresa não encontrada';
+    end if;
+    if atual = 'inadimplente' and nova = 'ativa' then
+        raise exception 'empresa inadimplente: o Master libera com motivo e prazo (Liberar mesmo com fatura em aberto)';
+    end if;
+    if nova in ('suspensa', 'encerrada') and (m is null or length(m) < 3) then
+        raise exception 'informe o motivo';
+    end if;
+    update public.empresas
+       set situacao = nova, ativa = (nova = 'ativa'), situacao_motivo = m, situacao_em = now(),
+           situacao_por = auth.uid()
+     where id = empresa;
+    return nova;
+end $$;
+revoke all on function public.mudar_situacao_empresa(bigint, text, text) from public, anon;
+grant execute on function public.mudar_situacao_empresa(bigint, text, text) to authenticated;
+
 -- o que o site mostra para a empresa bloqueada
 create or replace function public.acesso_da_empresa(empresa bigint)
-returns table (situacao text, bloqueada boolean, motivo text, desde timestamptz)
+returns table (situacao text, bloqueada boolean, motivo text, desde timestamptz, liberada_ate date)
 language sql stable security definer set search_path = public as $$
-    select e.situacao, e.situacao in ('suspensa', 'encerrada', 'inadimplente'), e.situacao_motivo, e.situacao_em
+    select e.situacao, e.situacao in ('suspensa', 'encerrada', 'inadimplente'), e.situacao_motivo, e.situacao_em,
+           e.liberada_ate
       from public.empresas e
      where e.id = empresa and e.id in (select public.minhas_empresas())
 $$;
@@ -382,6 +469,7 @@ begin
     foreach f in array array['public.proximo_ciclo_mes(bigint)',
                              'public.salvar_preco_vigencia(bigint, text, text, numeric, numeric, jsonb, text, text, text)',
                              'public.acesso_da_empresa(bigint)', 'public.resumo_emissao(bigint[])',
+                             'public.liberar_inadimplente(bigint, text, date)',
                              'public.estimativa_ciclo(bigint)', 'public.extrato_saldo(bigint, date, date)',
                              'public.duracao_saldo(bigint)'] loop
         execute format('revoke all on function %s from public, anon', f);

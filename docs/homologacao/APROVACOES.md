@@ -213,6 +213,9 @@ Protótipo: `faturas-contratacao-prototipo.html`.
 - **10 dias de atraso: bloqueia o acesso e deixa como inadimplente** ("10 dias bloqueia o acesso e deixa como
   inadimplente"). Salvaguardas aplicadas: Faturamento e Suporte continuam abertos para pagar, envios e API param,
   e o acesso volta sozinho quando o pagamento confirma.
+- **Liberação pelo Master** com a fatura ainda em aberto ("a liberação do cliente com fatura em aberto pode ocorrer
+  via Master"): com motivo e prazo (padrão 7 dias, até 30); até o prazo a rotina não bloqueia de novo; passou sem
+  pagar, bloqueia. O Administrativo não reativa inadimplente; pagou tudo, a liberação manual deixa de valer.
 - **Estimativas mantidas** ("Mantém"), sempre escritas como estimativa: fim do ciclo (pós-pago) e duração do saldo
   (pré-pago).
 - **Permissão Pagar faturas**, só Admin por padrão ("Ok").
