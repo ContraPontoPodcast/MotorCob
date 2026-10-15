@@ -266,6 +266,7 @@ Protótipo: `relatorios-prototipo.html`.
   estratégia do dia); a foto é tirada uma vez por dia a partir das 20h; o envio por e-mail vale para relatório
   salvo (o pronto é salvo antes de agendar).
 - Gerado: SQL 39, função `relatorios`, motor (`nuvem/relatorios.py`), testes e prompts 59 e 60.
+- Decisões da geração confirmadas em 15/10/2026 ("Pode seguir").
 
 ## Fila para rodar (quando liberar)
 
