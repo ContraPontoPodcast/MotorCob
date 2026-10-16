@@ -362,6 +362,7 @@ label.campo input, label.campo select { width: 100%; }
 </div>
 
 <script>
+const escH = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const CANAIS = {
   sms: { nome: "SMS", cor: "var(--sms)", rotas: ["Plano OTP", "Plano Short", "Plano Marketing"] },
   whatsapp: { nome: "WhatsApp", cor: "var(--wa)", rotas: ["WhatsApp · API oficial"] },
@@ -585,7 +586,7 @@ function painelMix() {
     <p class="ajuda">Market share de celulares por operadora. Atualize quando a Teleco publicar o mês novo; vale para todos os produtos de SMS a partir da gravação.</p></div>
     <span class="selo ${Math.abs(soma - 100) < .05 ? "ok" : "er"}">soma ${soma.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span></div>
     <div class="ops">${Object.keys(OPS).map(o => `<label class="campo">${OPS[o]} (%)<input class="num" id="mix_${o}" value="${MIX[o].toLocaleString("pt-BR")}" ${ed ? "" : "disabled"} style="width:100%"></label>`).join("")}
-    <label class="campo fonte">Fonte e mês de referência<input id="mixFonte" value="${mixFonte}" ${ed ? "" : "disabled"}></label></div>
+    <label class="campo fonte">Fonte e mês de referência<input id="mixFonte" value="${escH(mixFonte)}" ${ed ? "" : "disabled"}></label></div>
     ${Math.abs(soma - 100) < .05 ? "" : '<div class="aviso er"><div>A soma precisa dar 100%. "Outras" = 100% − Vivo − Claro − TIM.</div></div>'}`;
   Object.keys(OPS).forEach(o => document.getElementById("mix_" + o).addEventListener("change", e => {
     const v = lerNum(e.target.value); if (v !== null && v >= 0 && v <= 100) MIX[o] = v;
