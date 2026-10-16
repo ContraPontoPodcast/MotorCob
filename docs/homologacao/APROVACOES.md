@@ -345,6 +345,26 @@ Protótipo: `assistente-prototipo.html`. Todos os pontos aprovados ("Sim, tudo a
 - Gerado: SQL 43, função `assistente` (Sonnet 5.5 em streaming, contexto, custo, teto, chamado), motor
   (`nuvem/assistente.py`: PTAX e aviso de teto), testes e prompts 66 e 67.
 
+## Workspace — APROVADO em 16/10/2026 ("Gostei, mas tiraria a barra lateral esquerda com o menu" → "Ok, pode gerar")
+
+Protótipo: `workspace-prototipo.html`. Aprovado com um ajuste: **sem menu lateral no Workspace** (Início, Empresa,
+Suporte, Minha conta), só a barra clara no topo; o menu lateral claro fica só dentro das áreas.
+1. Início: "Para hoje" com até 5 itens por urgência, só para quem pode agir; "Suas áreas" com o número do dia (de hoje
+   ou de ontem, nunca simulação); área não contratada esmaecida com "Quero conhecer"; as Dicas saem.
+2. Barra do topo: Início · Áreas ▾ · Empresa ▾ · Suporte; dentro das áreas, "‹ Início" e a troca de área no topo do
+   menu. "Escolha a área" só no 1º login. Celular com ☰.
+3. Empresa › Pessoas e perfis: Membros, Usuários e Permissões numa tela só (abas Pessoas e Perfis).
+4. Suporte do cliente: "Resposta até" (1 dia útil; alta: 4 horas úteis), nunca em âmbar para o cliente; "Aguardando
+   você" no topo e no "Para hoje"; fecha sozinho com 7 dias sem resposta, aviso 2 dias antes.
+5. Minha conta numa rota só (/conta, cinco abas); rotas antigas redirecionam; MotorCX em todos os nomes; uma regra de
+   senha (12+, letra e número).
+- Na geração: horário útil = segunda a sexta, 9h às 18h de São Paulo (feriados ainda não descontam); o prazo só existe
+  enquanto a vez é da MotorCX (última mensagem do cliente); o aviso do 5º dia vai para quem abriu o chamado, no assunto
+  "Outros" (o assunto "Suporte" é o da equipe); o fechamento entra como mensagem do "Suporte MotorCX" e responder
+  reabre; o e-mail das outras pessoas em Pessoas só aparece para quem gerencia usuários.
+- Gerado: SQL 44 (para_hoje, numeros_areas, pessoas_empresa, perfis_empresa, prazo_resposta, fechar_chamados_parados),
+  motor (`nuvem/avisos.py`: fechamento diário), testes, conhecimento do Assistente e prompts 68, 69 e 70.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -382,5 +402,7 @@ Protótipo: `assistente-prototipo.html`. Todos os pontos aprovados ("Sim, tudo a
    prompts 64 e 65 → motor na nuvem (passos 97 a 99). Conferência: item 29 OK.
    Depois, Assistente: SQL 43 → função `assistente` de novo → prompts 66 e 67 → motor na nuvem (passos 100 a 102).
    Conferência: item 30 OK. No painel do provedor do modelo, deixe o limite de gasto mensal um pouco acima do teto.
+   Depois, Workspace: SQL 44 → função `assistente` de novo → prompts 68, 69 e 70 → motor na nuvem (passos 103 a 105).
+   Conferência: item 31 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).

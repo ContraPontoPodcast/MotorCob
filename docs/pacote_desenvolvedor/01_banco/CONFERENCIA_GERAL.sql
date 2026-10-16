@@ -219,6 +219,12 @@ with itens(ordem, item, ok, se_falhar) as (values
        and to_regprocedure('public.assistente_painel(integer)') is not null
        and exists (select 1 from public.assistente_config where id = 1),
        'rodar o SQL 43 (supabase/migrations/20261210000001_assistente_v2.sql)'),
+  (31, 'Workspace: Para hoje, números das áreas, Pessoas e perfis, prazo e fechamento de chamados (SQL 44)',
+       to_regprocedure('public.para_hoje(bigint,integer)') is not null
+       and to_regprocedure('public.pessoas_empresa(bigint)') is not null
+       and to_regprocedure('public.prazo_resposta(public.chamados)') is not null
+       and to_regprocedure('public.fechar_chamados_parados()') is not null,
+       'rodar o SQL 44 (supabase/migrations/20261211000001_workspace_v2.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

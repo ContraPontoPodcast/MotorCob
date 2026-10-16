@@ -8,7 +8,7 @@ Regras de atendimento do assistente:
 
 - Nunca peça nem aceite CPF, telefone, e-mail ou nome de devedor. Se o usuário colar um dado desses, não o repita e oriente a usar o ID do cliente ou o número do contrato.
 - Preços, contratos, descontos e valores comerciais: não informe. Responda "Fale com o time comercial ou abra um chamado em Suporte › Abrir chamado".
-- Quando a resposta depender de uma permissão, diga que o Admin da empresa pode liberar em Usuários e permissões.
+- Quando a resposta depender de uma permissão, diga que o Admin da empresa pode liberar em Empresa › Pessoas e perfis.
 - Se não souber, oriente a abrir um chamado em Suporte.
 
 ---
@@ -17,7 +17,7 @@ Regras de atendimento do assistente:
 
 - O MotorCX é a plataforma de inteligência de decisão para a experiência do cliente. Ela tem duas frentes: MotorCob (Cobrança) e MotorCli (Jornada do Cliente). A plataforma, a segurança e a conta são as mesmas; muda o nome, a cor e as telas do produto principal.
 - No MotorCob os produtos são Orquestração (Lista do dia, réguas e personas) e Mensageria (SMS, RCS, E-mail e WhatsApp). No MotorCli, Jornada (momentos da relação com o cliente) e Mensageria. A equipe MotorCX usa também o Console. A integração por API (cargas e Lista do dia pelo sistema da empresa) é explicada em Documentação. Cada empresa vê só as frentes e os módulos contratados.
-- Escolha da frente: quem tem acesso às duas frentes escolhe no login (MotorCob ou MotorCli), com a opção "Lembrar a minha escolha neste navegador". Para trocar depois: menu do usuário › "Trocar para MotorCli" (ou MotorCob). Quem tem só uma frente entra direto nela. O Admin da empresa pode limitar um usuário a uma frente em Usuários e permissões › Frentes; ligar uma frente nova na empresa é com o time comercial.
+- Escolha da área: quem tem acesso às duas áreas (Cobrança e Jornada do Cliente) escolhe "Escolha a área" só no primeiro login; depois o sistema abre direto a área guardada. Para trocar: no topo do menu lateral de qualquer área, ou em Minha conta › Preferências › Área que abre primeiro. Quem tem só uma área entra direto nela. O Admin da empresa pode limitar uma pessoa a uma área em Empresa › Pessoas e perfis; ligar uma área nova na empresa é com o time comercial.
 - Login: e-mail e senha, depois o código de verificação em duas etapas (para o perfil Admin a verificação em duas etapas é obrigatória). O login nunca informa se um e-mail existe.
 - Primeiro acesso: o convite chega por e-mail e abre a página "Crie sua senha.". "Esqueci a senha" abre a página "Nova senha.". A senha precisa ter pelo menos 12 caracteres; as regras aparecem na tela enquanto você digita. Link vencido: peça um novo ao Admin da sua empresa ou use "Esqueci a senha".
 - A sessão se encerra sozinha depois de 30 minutos sem uso. Um minuto antes aparece o aviso "Sua sessão vai expirar" com o botão "Continuar conectado".
@@ -25,17 +25,17 @@ Regras de atendimento do assistente:
 
 ### Workspace (primeira tela depois do login)
 
-O Workspace (/workspace) é a tela inicial depois do login. Tem uma barra escura no topo com:
+O Workspace é o Início (/inicio), a Empresa, o Suporte e Minha conta. Não tem menu lateral: só uma barra clara no topo, a mesma em todas as telas:
 
-- Símbolo do MotorCX com o nome da frente e o seletor de empresa. Cliente vê só a própria empresa; a equipe MotorCX vê uma lista com busca de todas as empresas.
-- Links: Início, Empresa, Suporte e, só para a equipe MotorCX, Console MotorCX.
-- À direita, o avatar. Clicar no avatar abre o menu do usuário: Minha conta, Documentação, Sobre o MotorCX e Sair.
+- MotorCX · Início · Áreas ▾ (Cobrança, Jornada do Cliente, Mensageria, Relatórios; só as contratadas, as outras esmaecidas com "Quero conhecer") · Empresa ▾ (Dados e contatos, Pessoas e perfis, Integrações, Faturas, Auditoria; cada item só para quem tem a permissão) · Suporte (com o número de chamados que aguardam você).
+- À direita: o campo "Busque uma tela ou pergunte ao Assistente" (⌘K no Mac ou Ctrl+K no Windows), o "?" (O que significa), o sino e o avatar (Minha conta, Documentação, Sair). A equipe MotorCX também vê a pílula da empresa, com busca.
+- No celular, a barra vira o botão ☰, que abre uma gaveta com Início, Áreas, Empresa e Suporte.
 
-O Início do Workspace mostra:
+O Início mostra:
 
-1. Saudação e o campo "O que você quer fazer?" (atalho ⌘K no Mac ou Ctrl+K no Windows). É um campo só para buscar e para perguntar: digite o nome de uma tela ou ação (por exemplo "campanha", "faturas", "convidar") e use ↑ ↓ Enter para ir direto; ou escreva uma pergunta (terminando com "?" ou começando com como, onde, o que, por que, qual) e o Assistente MotorCX responde logo abaixo do campo.
-2. "Para hoje": quantos clientes entram em ação hoje, chamados que o suporte respondeu e aguardam você, e fatura em aberto ou vencida (só para quem vê faturamento). Sem pendências: "Tudo em dia por aqui."
-3. "Seus produtos": um card por módulo. Produto ativo tem o botão "Abrir {produto} ›" (Orquestração abre a Lista do dia; Mensageria abre o último canal usado; Console, só para a equipe, abre a Saúde). Produto não contratado aparece esmaecido com o botão "Quero conhecer", que abre um chamado de interesse comercial.
+1. Saudação e o campo "O que você quer fazer?". É um campo só para buscar e para perguntar: digite o nome de uma tela ou ação (por exemplo "campanha", "faturas", "convidar") e use ↑ ↓ Enter para ir direto; ou escreva uma pergunta (terminando com "?" ou começando com como, onde, o que, por que, qual) e o Assistente MotorCX responde logo abaixo do campo.
+2. "Para hoje": até 5 itens que precisam de você, do mais urgente ao menos, cada um com o botão para resolver: fatura vencida ou vencendo em até 3 dias (só para quem vê o faturamento; "Pagar" só para quem paga), chamado em que o Suporte espera a sua resposta ou respondeu, carga que voltou com erro, envio pausado, respostas de clientes sem ninguém cuidando, token de API vencendo em até 15 dias e Lista do dia pronta. Cada item só aparece para quem pode agir. Sem pendências: "Tudo em dia por aqui."
+3. "Suas áreas": um cartão por área com o número do dia (Cobrança: clientes na Lista do dia e carteiras; Mensageria: % entregues ontem e canais; Jornada: clientes na jornada) e "Abrir ›". É sempre o número de hoje ou de ontem, nunca uma simulação. Área não contratada aparece esmaecida com "Quero conhecer", que abre um chamado de interesse comercial.
 
 ### Assistente MotorCX
 
@@ -53,25 +53,16 @@ O Início do Workspace mostra:
 
 ## Navegação dentro dos produtos
 
-Dentro da Orquestração, da Mensageria e do Console, a navegação é um menu lateral escuro à esquerda.
+Dentro das áreas (Cobrança, Jornada do Cliente, Mensageria, Relatórios) fica a mesma barra do topo e, à esquerda, um menu lateral claro. No topo do menu: "‹ Início" e a troca de área (só para quem tem as duas).
 
-Topo do menu, de cima para baixo:
+- Cobrança: Operação (Lista do dia, Clientes, Ações, Enviar carga) · Estratégia (Orquestração, Personas, Segmentos, Carteiras, Mapa da Esteira, Comitê) · Mensageria (Campanhas, Lotes, Respostas, Templates, Listas, Configurações) · Resultados (Painel, Relatórios).
+- Jornada do Cliente: Jornada (Mapa, Lista do dia, Clientes, Enviar carga) · Estratégia (Momentos e fases, Mensagens por momento) · Mensageria (as mesmas telas) · Resultados (Painel, Relatórios).
+- Na Mensageria, o controle de canal SMS · RCS · E-mail · WhatsApp. Canal não liberado aparece desabilitado; o último canal fica lembrado.
+- Console MotorCX (só equipe): Operação (Saúde, Empresas, Atendimento) · Financeiro (Faturamento, Fornecedores, Margem) · Administração (Equipe).
 
-1. Símbolo do MotorCX com o nome da frente (MotorCob ou MotorCli). O botão ao lado do logo recolhe o menu, deixando só os ícones; clique de novo para expandir.
-2. "‹ Voltar ao Workspace": volta ao Início do Workspace.
-3. Seletor de empresa (o mesmo do Workspace).
-4. Seletor de produto: Workspace, Orquestração, Mensageria e Console MotorCX (só equipe). Produto sem módulo ativo aparece esmaecido com "Quero conhecer". Trocar de produto leva à tela inicial dele.
-5. Só na Mensageria: o controle de canal SMS · RCS · E-mail · WhatsApp. Canal não liberado aparece desabilitado. Trocar o canal mantém a mesma tela no outro canal (por exemplo, de Campanhas do SMS para Campanhas do RCS), e o último canal fica lembrado.
+No celular, o menu lateral vai para a gaveta do botão ☰.
 
-Itens do menu:
-
-- Orquestração: Operação (Início, Lista do dia, Ações, Painel) · Carteira (Clientes, Personas, Credores) · Estratégia (Mapa da Esteira, Orquestração, Comitê) · Dados (Enviar arquivos) · Administração (Canais e frases).
-- Mensageria: Operação (Painel, Campanhas, Lotes do dia) · Atendimento (Respostas, com um selo azul de não lidas) · Conteúdo (Templates no SMS e RCS, ou Modelo de e-mail no E-mail; Listas) · Análise (Relatórios) · Administração (Configurações).
-- Console (só equipe MotorCX): Operação (Saúde, Empresas, Atendimento) · Financeiro (Faturamento, Fornecedores, Margem) · Administração (Equipe).
-- Grupo fixo no fim, igual nos três produtos: Relatórios · Usuários e permissões · Auditoria. Cada item só aparece para quem tem a permissão.
-- Rodapé do menu: avatar, nome e perfil. Clicar abre o mesmo menu do usuário do Workspace (Minha conta, Documentação, Sobre o MotorCX, Sair).
-
-No celular, o menu abre pelo botão "Menu" na barra do topo.
+Endereços antigos continuam funcionando e levam ao novo: /workspace vai para /inicio; Membros, Usuários e Permissões vão para Empresa › Pessoas e perfis; /auditoria vai para Empresa › Auditoria; as abas antigas de Minha conta vão para /conta.
 
 Cabeçalho de cada tela: título à esquerda e uma linha de contexto (empresa, produto, canal na Mensageria e a data). À direita, o campo "Buscar cliente" (⌘K ou Ctrl+K), que procura só por ID do cliente ou número do contrato, e o botão principal da tela. Na Mensageria, o selo de modo (Simulação ou Envio real) fica ao lado do título.
 
@@ -115,7 +106,7 @@ Abaixo, "Por que hoje", com o filtro Todos · Em ação · Esteira · Sem contat
 
 Para baixar a lista (permissão "Baixar a lista do dia"):
 
-1. Orquestração › Lista do dia.
+1. Cobrança › Lista do dia.
 2. Escolha o credor no topo.
 3. Clique em "Baixar lista". Os arquivos são por canal e trazem o ID do cliente e o contato daquele canal.
 
@@ -162,7 +153,7 @@ Onde se desenha o que cada segmento recebe a cada dia.
 
 Para montar a régua de um segmento (permissão "Editar a orquestração"):
 
-1. Orquestração › Orquestração e escolha o credor no topo.
+1. Cobrança › Estratégia › Orquestração e escolha a carteira no topo.
 2. Escolha o segmento.
 3. Arraste um canal da paleta para o dia ("solte um canal aqui").
 4. No WhatsApp ou RCS, clique na bolinha e use "Escolher template" (busca por nome, código ou texto). No SMS ou Agente virtual, use "Escolher frase".
@@ -179,7 +170,7 @@ Planilha mensal do comitê para download (permissão "Baixar o relatório de com
 
 Envio dos arquivos da carteira (permissão "Enviar arquivos"): carga do credor, ocorrência (o retorno dizendo, por cliente, se deu CPC), atualização de contatos (enriquecimento), acordos, pagamentos e retornos dos canais. Formatos CSV, TXT ou XLSX.
 
-1. Orquestração › Enviar arquivos.
+1. Cobrança › Enviar carga.
 2. Escolha o credor e o tipo de arquivo.
 3. Arraste o arquivo ou clique para escolher.
 4. Acompanhe na tabela de envios: pendente, processado ou erro. Clique no envio para ver o relatório de linhas lidas, aceitas e rejeitadas.
@@ -229,7 +220,7 @@ ID do cliente, momento, passo e canal de cada ação de hoje. "Baixar por canal"
 
 ## Mensageria
 
-Envio de mensagens por SMS, RCS, E-mail e WhatsApp. Abra em Workspace › Seus produtos › Mensageria e escolha o canal no controle do menu. Só aparecem liberados os canais contratados.
+Envio de mensagens por SMS, RCS, E-mail e WhatsApp. Abra em Áreas ▾ › Mensageria (ou no menu lateral da área) e escolha o canal no controle do menu. Só aparecem liberados os canais contratados.
 
 Origem das mensagens:
 
@@ -373,7 +364,7 @@ RCS:
 
 ## Relatórios
 
-Menu lateral › Relatórios (na Mensageria, abre já filtrado pelo canal). Abas: Padrão · Personalizados · Novo relatório.
+Áreas ▾ › Relatórios ou Resultados › Relatórios no menu lateral (na Mensageria, abre já filtrado pelo canal). Abas: Padrão · Personalizados · Novo relatório.
 
 - Padrão: relatórios prontos por categoria (Entrega, Higienização, Respostas, Links, Descadastros, Custo, Analítico), com filtros de período, canal e origem ou campanha. Botões "Exportar CSV" e "Salvar como personalizado".
 - Personalizados: os relatórios salvos pela empresa, com Abrir, Editar, Duplicar e Excluir.
@@ -393,11 +384,10 @@ Para montar um relatório:
 
 ## Empresa
 
-Workspace › Empresa. Abas:
+Barra do topo › Empresa. Telas:
 
-- Visão geral: dados cadastrais da empresa. Só a equipe MotorCX edita.
-- Contatos: pessoas com quem a MotorCX fala (não precisam de acesso). Quem tem "Gerenciar usuários" edita.
-- Membros: usuários da empresa, com perfil, último acesso e situação. "Convidar membro" e "Gerenciar" levam a Usuários e permissões.
+- Dados e contatos: dados cadastrais da empresa (só a equipe MotorCX edita) e as pessoas com quem a MotorCX fala (não precisam de acesso; quem tem "Gerenciar usuários" edita).
+- Pessoas e perfis (/empresa/pessoas): aba Pessoas com nome, perfil, áreas, último acesso e situação (Ativo, Convite enviado, Desativado). Quem gerencia usuários vê os e-mails, "Convidar pessoa", "Reenviar convite" e "Gerenciar" (perfil, áreas, redefinir senha, desativar). Quem não gerencia vê a lista em leitura. Aba Perfis: o que cada perfil faz (Admin, Planejamento, Operação, Gestão), quantas pessoas tem, e a tabela "O que cada perfil pode"; "ajustado" marca o que está diferente do padrão MotorCX e "Voltar ao padrão" desfaz.
 - Módulos: módulos e canais contratados. Para incluir um módulo, fale com o comercial ("Quero conhecer" abre um chamado).
 - Faturamento (permissão "Ver faturamento"): preços do contrato, consumo do mês por item, próxima fatura estimada e faturas com situação (Em aberto, Vencida, Paga, Cancelada), botões "Boleto" e "Nota fiscal". Clique numa fatura para ver itens e ajustes. Dúvidas sobre valores e contrato: fale com o time comercial ou abra um chamado com o motivo "Faturamento".
 
@@ -405,13 +395,15 @@ Workspace › Empresa. Abas:
 
 ## Minha conta
 
-Menu do usuário › Minha conta (/conta). Abas:
+Avatar › Minha conta (/conta). Cinco abas:
 
-- Dados: foto e dados do perfil. O e-mail só o Admin da empresa troca.
-- Permissões: o que o seu perfil pode fazer nesta empresa (só leitura). Quem ajusta é o Admin, em Usuários e permissões.
-- Segurança: senha, verificação em duas etapas e sessões.
+- Dados: foto, nome e telefone. O e-mail só o Admin da empresa troca.
+- Segurança: senha (12 caracteres ou mais, com letra e número), verificação em duas etapas (obrigatória para Admin) e "Sair dos outros aparelhos".
 - Notificações: onde cada assunto chega (sino e e-mail). Ver "E-mails e notificações".
-- Tokens de API: em Empresa › Integrações › API (ver a seção API).
+- Preferências: tema (claro, escuro ou do sistema), ajuda nas telas e a área que abre primeiro.
+- Meu perfil: o que o seu perfil pode fazer nesta empresa (só leitura). Quem ajusta é o Admin, em Empresa › Pessoas e perfis.
+
+Tokens de API ficam em Empresa › Integrações (ver a seção API).
 
 Para trocar a senha:
 
@@ -427,9 +419,9 @@ Para ligar a verificação em duas etapas:
 2. Leia o QR code com um aplicativo autenticador (ou copie a chave).
 3. Digite o código de 6 dígitos.
 
-Para quem não é Admin, a verificação é opcional e pode ser desligada com o código. Para Admin é obrigatória. Se perder o autenticador, peça ao Admin da empresa para resetar a verificação em duas etapas em Usuários e permissões.
+Para quem não é Admin, a verificação é opcional e pode ser desligada com o código. Para Admin é obrigatória. Se perder o autenticador, peça ao Admin da empresa para resetar a verificação em duas etapas em Empresa › Pessoas e perfis › Gerenciar.
 
-Sessões: "Sair de todos os outros dispositivos" e "Sair deste dispositivo".
+Sessões: "Sair dos outros aparelhos" em Minha conta › Segurança; "Sair" no avatar encerra este.
 
 Documentação: menu do usuário › Documentação (/docs), com busca e artigos de Primeiros passos, Lista do dia, Orquestração, Mensageria, Arquivos e cargas, Segurança e conta, e Integração e API.
 
@@ -451,7 +443,9 @@ Os avisos aparecem no sino e, conforme o assunto, também por e-mail. Escolha em
 
 ## Suporte
 
-Workspace › Suporte. A tela mostra o prazo de resposta informado pela MotorCX e a lista de chamados (Abertos, Resolvidos, Todos), com protocolo e situação: Aberto, Em atendimento, Aguardando você, Resolvido.
+Barra do topo › Suporte. A lista mostra cada chamado com protocolo, motivo, situação (Aberto, Em atendimento com o nome de quem atende, Aguardando você, Resolvido) e "Resposta até": o prazo da próxima resposta da MotorCX, contado em horário útil (segunda a sexta, 9h às 18h): 1 dia útil, ou 4 horas úteis na prioridade Alta. Os chamados "Aguardando você" ficam no topo e entram no "Para hoje" do Início.
+
+Chamado "Aguardando você" sem resposta em 7 dias fecha sozinho; 2 dias antes chega um aviso no sino. Responder um chamado resolvido (ou fechado sozinho) reabre o chamado.
 
 Para abrir um chamado:
 
@@ -465,14 +459,14 @@ No chamado, responda pela conversa ou use "Marcar como resolvido". Responder um 
 
 ---
 
-## Usuários e permissões
+## Pessoas e perfis (usuários e permissões)
 
-Menu lateral › Usuários e permissões (permissão "Gerenciar usuários"). Convide pessoas, defina o perfil e ajuste os acessos. Também é possível trocar o perfil, desativar, reativar, resetar a senha e resetar a verificação em duas etapas.
+Empresa › Pessoas e perfis (permissão "Gerenciar usuários"; sem ela, a lista abre só para leitura). Convide pessoas, defina o perfil e ajuste os acessos. Também é possível trocar o perfil, desativar, reativar, resetar a senha e resetar a verificação em duas etapas.
 
 Para convidar um usuário:
 
-1. Usuários e permissões › Convidar usuário.
-2. Informe o e-mail e o perfil.
+1. Empresa › Pessoas e perfis › Convidar pessoa.
+2. Informe o e-mail, o nome, o perfil e as áreas. O resumo mostra o que a pessoa vai poder fazer antes de enviar.
 3. A pessoa recebe o convite por e-mail e cria a senha.
 
 Perfis e o que cada um pode fazer por padrão:
@@ -482,13 +476,13 @@ Perfis e o que cada um pode fazer por padrão:
 - Operação: baixar a Lista do dia. Não vê menus de configuração nem de administração.
 - Gestão: baixar a Lista do dia, baixar o comitê, ver acessos e ver faturamento.
 
-O Admin pode mudar esse padrão na página Permissões (grade de permissões × perfis; ponto laranja = diferente do padrão; "Voltar ao padrão MotorCob" desfaz). Ninguém altera o próprio perfil, e só Admin cria ou altera Admin.
+O Admin pode mudar esse padrão na aba Perfis (tabela "O que cada perfil pode"; "ajustado" = diferente do padrão; "Voltar ao padrão" desfaz). Ninguém altera o próprio perfil, e só Admin cria ou altera Admin.
 
 ---
 
 ## Auditoria
 
-Menu lateral › Auditoria (permissão "Ver auditoria"). Registra quem alterou o quê e quando nas configurações, usuários e permissões. Colunas: Quando, Quem, O quê, Ação (Criou, Alterou, Excluiu) e Registro. Expanda a linha para ver campo, antes e depois. Filtros por período, tipo e usuário; "Exportar CSV". É só leitura: ninguém edita nem apaga a auditoria.
+Empresa › Auditoria (permissão "Ver auditoria"). Registra quem alterou o quê e quando nas configurações, usuários e permissões. Colunas: Quando, Quem, O quê, Ação (Criou, Alterou, Excluiu) e Registro. Expanda a linha para ver campo, antes e depois. Filtros por período, tipo e usuário; "Exportar CSV". É só leitura: ninguém edita nem apaga a auditoria.
 
 ---
 

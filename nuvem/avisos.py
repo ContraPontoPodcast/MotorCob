@@ -90,6 +90,17 @@ def api(sb, out=print) -> int:
     return n
 
 
+def chamados_parados(sb, out=print) -> dict:
+    """Chamado esperando o cliente: aviso no 5º dia sem resposta e fechamento no 7º (SQL 44)."""
+    try:
+        r = sb.rpc("fechar_chamados_parados") or {}
+    except Exception:  # noqa: BLE001 — banco ainda sem o SQL 44
+        return {}
+    if r.get("avisados") or r.get("fechados"):
+        out(f"suporte: {r.get('avisados', 0)} chamado(s) avisado(s), {r.get('fechados', 0)} fechado(s) sem resposta")
+    return r
+
+
 def limpar(sb, agora: datetime | None = None) -> None:
     """Apaga avisos com mais de 90 dias (o sino já não mostra)."""
     limite = (agora or datetime.now(timezone.utc)) - timedelta(days=90)

@@ -1790,6 +1790,65 @@ checar("aviso de 80% do teto para a equipe, uma vez", True, "set role service_ro
 _sv("update public.assistente_config set teto_mensal_brl = 399.90")
 checar("Painel: chamados, fora do ar e custo à parte", True, f"select ((r->>'perguntas')::int >= 3)::text||'|'||(r->>'viraram_chamado')||'|'||(r->>'fora_do_ar')||'|'||(r->'custo'->>'brl') from public.assistente_painel(30) r", "authenticated", u["admin"], "true|1|1|0.07")
 checar("cliente não vê o Painel do Assistente", False, "select public.assistente_painel(30)", "authenticated", MAD)
+# SQL 44 · Workspace (Início, Pessoas e perfis, Suporte do cliente)
+HJ = "(now() at time zone 'America/Sao_Paulo')::date"
+EW = _sv("insert into public.empresas (slug,nome) values ('omega-ws','Omega Workspace') returning id")
+_, WAD, _ = sql("insert into auth.users (email) values ('admin@omega.exemplo') returning id")
+_, WOP, _ = sql("insert into auth.users (email) values ('oper@omega.exemplo') returning id")
+_, WGE, _ = sql("insert into auth.users (email) values ('gestao@omega.exemplo') returning id")
+_, WCV, _ = sql("insert into auth.users (email) values ('convite@omega.exemplo') returning id")
+sql(f"update auth.users set last_sign_in_at = now() where id in ('{WAD}','{WOP}','{WGE}')")
+_sv(f"""update public.perfis set papel='admin', empresa_id={EW} where id='{WAD}';
+ update public.perfis set papel='operacao', empresa_id={EW}, nome='Otávio', sobrenome='Reis' where id='{WOP}';
+ update public.perfis set papel='gestao', empresa_id={EW} where id='{WGE}';
+ update public.perfis set papel='operacao', empresa_id={EW} where id='{WCV}';
+ insert into public.empresa_frentes (empresa_id,frente) values ({EW},'motorcob') on conflict do nothing;
+ insert into public.empresa_modulos (empresa_id,modulo,canais) values ({EW},'orquestracao','{{}}'),({EW},'mensageria','{{sms,rcs}}')
+   on conflict (empresa_id,modulo) do update set ativo=true, canais=excluded.canais;
+ insert into public.credores (empresa_id,codigo,nome) values ({EW},'alfa','Banco Alfa'),({EW},'beta','Financeira Beta');
+ insert into public.faturas (empresa_id,competencia,valor_total,vencimento,modelo,situacao) values ({EW},'2026-09-01',4380,{HJ}+1,'mensalidade','aberta');
+ insert into public.envios (tipo,caminho,nome_original,enviado_por,empresa_id,credor_id,status,enviado_em) values ('base','omega/x.csv','base_outubro.csv','{WAD}',{EW},(select min(id) from public.credores where empresa_id={EW}),'erro',now() - interval '2 hours');
+ insert into public.mensageria_lotes (empresa_id,data,canal,modo,situacao,motivo) values ({EW},{HJ},'sms','simulado','pausado','Orçamento do dia esgotado.');
+ insert into public.mensageria_lotes (empresa_id,data,canal,modo,situacao,enviadas,entregues) values ({EW},{HJ}-1,'sms','simulado','concluido',1000,962);
+ insert into public.mensageria_conversas (empresa_id,canal,destino_hash,situacao,nao_lidas) values ({EW},'sms',repeat('a',64),'aberta',2),({EW},'sms',repeat('b',64),'aberta',1),({EW},'sms',repeat('c',64),'aberta',0);
+ insert into public.api_tokens (empresa_id,nome,prefixo,hash,escopos,criado_por,expira_em) values ({EW},'ERP Financeiro','mc_0a0b0c0d',repeat('d',64),array['cargas:enviar'],'{WAD}',now() + interval '12 days 2 hours');
+ insert into public.execucoes (empresa_id,data_ref,status,terminada_em) values ({EW},{HJ},'ok',now());
+ insert into public.fila_dia (empresa_id,data,canal,id_cliente,reserva,regua,passo,tag) values ({EW},{HJ},'sms','W1',false,'giro','G1','t'),({EW},{HJ},'sms','W2',false,'giro','G1','t'),({EW},{HJ},'sms','W3',false,'giro','G1','t')""")
+CW = _sv(f"insert into public.chamados (empresa_id,motivo,assunto,aberto_por) values ({EW},'lista_do_dia','Lista do dia sem a carteira Banco Alfa','{WOP}') returning id")
+_sv(f"insert into public.chamado_mensagens (chamado_id,tipo,texto,autor) values ({CW},'equipe','A carga de ontem chegou com 0 linhas. Pode enviar de novo?','{SUP}'); update public.chamados set situacao='aguardando_cliente' where id={CW}")
+checar("Para hoje do Admin: até 5, por urgência", True, "select string_agg(tipo||':'||acao, ',' order by urgencia) from public.para_hoje()", "authenticated", WAD, "fatura:Pagar,carga:Ver,pausa:Ver,respostas:Abrir,token:Trocar")
+checar("Para hoje: fatura em palavras e valor em reais", True, "select titulo||' · '||detalhe from public.para_hoje() where tipo='fatura'", "authenticated", WAD, "Fatura de setembro vence amanhã · R$ 4.380,00")
+checar("Para hoje: respostas sem dono contam só as não lidas", True, "select titulo from public.para_hoje() where tipo='respostas'", "authenticated", WAD, "2 respostas de clientes esperam alguém")
+checar("Para hoje: token vencendo em 12 dias", True, "select titulo from public.para_hoje() where tipo='token'", "authenticated", WAD, 'Token "ERP Financeiro" vence em 12 dias')
+checar("Para hoje da Gestão: vê a fatura, mas não paga", True, "select string_agg(tipo||':'||acao, ',' order by urgencia) from public.para_hoje()", "authenticated", WGE, "fatura:Ver,lista:Baixar")
+checar("Para hoje da Operação: o chamado que espera por ela e a Lista do dia", True, "select string_agg(tipo||':'||urgencia, ',' order by urgencia) from public.para_hoje()", "authenticated", WOP, "chamado:15,lista:60")
+checar("Lista do dia pronta com o número de clientes", True, "select detalhe from public.para_hoje() where tipo='lista'", "authenticated", WOP, "3 clientes")
+checar("Para hoje não mostra a empresa dos outros", True, f"select count(*) from public.para_hoje({EW}) where tipo <> 'chamado'", "authenticated", u["oper"], 0)
+checar("Para hoje: equipe escolhe a empresa", True, f"select count(*) from public.para_hoje({EW}, 3)", "authenticated", u["admin"], 3)
+checar("anon não lê Para hoje", False, "select * from public.para_hoje()", "anon")
+checar("Suas áreas: número do dia e área não contratada sem número", True, "select string_agg(area||':'||contratada||':'||coalesce(numero,'-'), ',' order by area) from public.numeros_areas()", "authenticated", WAD, "cobranca:true:3,jornada:false:-,mensageria:true:96,2%")
+checar("Suas áreas: detalhe da Cobrança e da Mensageria", True, "select string_agg(detalhe, ' | ' order by area) from public.numeros_areas() where contratada", "authenticated", WAD, "na Lista do dia · 3 carteiras | entregues ontem · RCS e SMS")
+checar("Pessoas: lista com convite pendente", True, "select string_agg(papel||':'||situacao, ',' order by papel, situacao) from public.pessoas_empresa()", "authenticated", WAD, "admin:ativo,gestao:ativo,operacao:ativo,operacao:convite")
+checar("Pessoas: Admin vê os e-mails", True, "select count(email) from public.pessoas_empresa()", "authenticated", WAD, 4)
+checar("Pessoas: Operação vê a lista, mas só o próprio e-mail", True, "select count(*)||'|'||count(email) from public.pessoas_empresa()", "authenticated", WOP, "4|1")
+checar("Pessoas: áreas pela frente da empresa", True, f"select array_to_string(areas, ',') from public.pessoas_empresa() where id='{WOP}'", "authenticated", WOP, "cobranca")
+checar("Pessoas: não lista a empresa dos outros", True, f"select count(*) from public.pessoas_empresa({EW}) where id='{WOP}'", "authenticated", u["operb"], 0)
+_sv(f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EW},'gestao','baixar_comite',not public.permissao_padrao('gestao','baixar_comite'))")
+checar("Perfis: pessoas e ajustes fora do padrão", True, "select string_agg(papel||':'||pessoas||':'||ajustes, ',' order by papel) from public.perfis_empresa()", "authenticated", WOP, "admin:1:0,gestao:1:1,operacao:2:0,planejamento:0:0")
+checar("prazo: 1 dia útil (sexta 17h → segunda 17h)", True, "select (public.somar_horas_uteis('2026-10-16 17:00-03', 9) at time zone 'America/Sao_Paulo')::text", "authenticated", WOP, "2026-10-19 17:00:00")
+checar("prazo: alta, 4 horas úteis a partir do sábado", True, "select (public.somar_horas_uteis('2026-10-17 10:00-03', 4) at time zone 'America/Sao_Paulo')::text", "authenticated", WOP, "2026-10-19 13:00:00")
+checar("Resposta até: vazio enquanto espera o cliente", True, f"select (c.prazo_resposta is null)::text from public.chamados c where id={CW}", "authenticated", WOP, "true")
+_sv(f"insert into public.chamado_mensagens (chamado_id,tipo,texto,autor) values ({CW},'cliente','Enviei de novo.','{WOP}')")
+checar("Resposta até: volta quando o cliente responde", True, f"select (c.prazo_resposta > now())::text||'|'||c.situacao from public.chamados c where id={CW}", "authenticated", WOP, "true|em_atendimento")
+checar("site não fecha chamados", False, "select public.fechar_chamados_parados()", "authenticated", u["admin"])
+_sv(f"insert into public.chamado_mensagens (chamado_id,tipo,texto,autor) values ({CW},'equipe','Recebido. Confere agora?','{SUP}'); update public.chamados set situacao='aguardando_cliente', ultima_em=now() - interval '5 days 1 hour' where id={CW}")
+checar("5º dia sem resposta: avisa quem abriu, uma vez", True, "set role service_role; select public.fechar_chamados_parados(); select public.fechar_chamados_parados()->>'avisados'", None, None, 0)
+checar("o aviso vai para quem abriu, fora do Suporte interno", True, f"select assunto||'|'||para||'|'||(usuario_id='{WOP}')::text from public.avisos where chave like 'fecha_chamado:{CW}:%'", "service_role", None, "outros|usuario|true")
+checar("quem abriu vê o aviso no sino", True, f"select count(*) from public.meus_avisos() where link='/suporte/{CW}'", "authenticated", WOP, 1)
+_sv(f"update public.chamados set ultima_em=now() - interval '7 days 1 hour' where id={CW}")
+checar("7º dia: fecha com mensagem do Suporte", True, f"set role service_role; select public.fechar_chamados_parados()->>'fechados'; ", None, None, 1)
+checar("chamado fechado e mensagem registrada", True, f"select c.situacao||'|'||(select count(*) from public.chamado_mensagens m where m.chamado_id=c.id and m.texto like 'Fechamos este chamado%') from public.chamados c where id={CW}", "service_role", None, "resolvido|1")
+checar("responder reabre o chamado fechado", True, f"insert into public.chamado_mensagens (chamado_id,tipo,texto,autor) values ({CW},'cliente','Ainda preciso.','{WOP}'); select situacao from public.chamados where id={CW}", "service_role", None, "em_atendimento")
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")
