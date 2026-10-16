@@ -66,12 +66,19 @@ ${m.corpo}
 </div></div></div></body></html>`;
 }
 
-/** Versão só texto do mesmo e-mail (para registro, testes e provedores que aceitam). */
+/** Versão só texto do mesmo e-mail (para registro, testes e provedores que aceitam). Tira as tags até não sobrar
+ * nenhuma e só depois desfaz as entidades, com &amp; por último (assim "&amp;lt;" vira "&lt;", não "<"). */
 export function textoPlano(html: string): string {
-  return html.replace(/<head>[\s\S]*?<\/head>/i, "").replace(/<a [^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/g, "$2: $1")
-    .replace(/<(br|\/p|\/h1|\/tr|\/div)>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/[ \t]+/g, " ")
-    .split("\n").map((l) => l.trim()).filter(Boolean).join("\n");
+  let t = html.replace(/<head>[\s\S]*?<\/head>/i, "").replace(/<a [^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/g, "$2: $1")
+    .replace(/<(br|\/p|\/h1|\/tr|\/div)>/gi, "\n");
+  let antes: string;
+  do {
+    antes = t;
+    t = t.replace(/<[^<>]*>/g, "");
+  } while (t !== antes);
+  t = t.replace(/[<>]/g, "");
+  return t.replace(/&lt;/g, "‹").replace(/&gt;/g, "›").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&")
+    .replace(/[ \t]+/g, " ").split("\n").map((l) => l.trim()).filter(Boolean).join("\n");
 }
 
 export const assuntoAscii = (s: string) => /^[\x20-\x7e]*$/.test(s) ? s

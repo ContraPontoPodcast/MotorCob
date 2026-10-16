@@ -21,6 +21,9 @@ test("modelo único: marca em texto, frente, título, motivo e rodapé da empres
   assert.doesNotMatch(h, /Não quero mais/);
   const t = textoPlano(pagina({ frente: "A", titulo: "T", corpo: '<p><a href="https://x/y">Abrir</a></p>', motivo: "m" }));
   assert.match(t, /Abrir: https:\/\/x\/y/);
+  const t2 = textoPlano("<p>a &amp;lt;script&amp;gt; &lt;b&gt; <<script>script>x</p>");
+  assert.doesNotMatch(t2, /</);
+  assert.match(t2, /a &lt;script&gt; ‹b›/);
 });
 
 test("remetentes: Secret próprio, legado só do seu tipo e o padrão do domínio", () => {
