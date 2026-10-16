@@ -452,6 +452,7 @@ ul.simples li{margin:3px 0}
 </div>
 
 <script>
+const escH = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 (() => {
   // ---------------- navegação
   const telas = [...document.querySelectorAll("[data-p]")];
@@ -493,7 +494,7 @@ ul.simples li{margin:3px 0}
     ].map(([a, b, c]) => `<div class="kpi"><span>${a}</span><b>${b}</b><em>${c}</em></div>`).join("");
     document.getElementById("tab-forn").innerHTML =
       `<thead><tr><th>Fornecedor</th><th>Operadora</th><th class="n">Disparados</th><th class="n">Aceite (med · p90)</th><th class="n">DLR (med · p90)</th><th class="n">Sem DLR</th><th class="n">Entregue no lote</th><th>Situação</th></tr></thead><tbody>` +
-      rows.map(x => { const [c, t] = estado(x); return `<tr><td>${x.f}</td><td>${x.op}</td><td class="n">${n(x.disp)}</td><td class="n">${x.aceite.toFixed(1).replace(".", ",")} s · ${x.aceiteP90.toFixed(1).replace(".", ",")} s</td><td class="n">${x.dlr} s · ${x.dlrP90} s</td><td class="n">${pct(x.semDlr)}</td><td class="n">${pct(x.ent)}</td><td><span class="pil ${c}">${t}</span></td></tr>`; }).join("") + "</tbody>";
+      rows.map(x => { const [c, t] = estado(x); return `<tr><td>${x.f}</td><td>${x.op}</td><td class="n">${n(x.disp)}</td><td class="n">${x.aceite.toFixed(1).replace(".", ",")} s · ${x.aceiteP90.toFixed(1).replace(".", ",")} s</td><td class="n">${x.dlr} s · ${x.dlrP90} s</td><td class="n">${pct(x.semDlr)}</td><td class="n">${pct(x.ent)}</td><td><span class="pil ${escH(c)}">${escH(t)}</span></td></tr>`; }).join("") + "</tbody>";
     const al = rows.filter(x => estado(x)[0] !== "ok");
     document.getElementById("alertas").innerHTML = al.length ? al.map(x => {
       const [c, t] = estado(x);
@@ -597,7 +598,7 @@ ul.simples li{margin:3px 0}
     histTab();
     const r = score(hist, val("base-op"));
     const [c, t] = faixa(r);
-    document.getElementById("resultado").innerHTML = `<div class="linha"><span class="pil ${c}">${t}</span><b style="font-size:18px;font-variant-numeric:tabular-nums">${pct(r.p * 100)}</b><span style="color:var(--texto2)">de probabilidade de entrega · histórico ponderado de ${r.t.toFixed(2).replace(".", ",")} tentativas</span></div><p class="nota">O cliente vê: <b>${t === "Baixo" ? nomeAtual("baixo") : t === "Sem histórico" ? nomeAtual("sem") : "enviado normalmente"}</b></p>`;
+    document.getElementById("resultado").innerHTML = `<div class="linha"><span class="pil ${c}">${t}</span><b style="font-size:18px;font-variant-numeric:tabular-nums">${pct(r.p * 100)}</b><span style="color:var(--texto2)">de probabilidade de entrega · histórico ponderado de ${r.t.toFixed(2).replace(".", ",")} tentativas</span></div><p class="nota">O cliente vê: <b>${escH(t === "Baixo" ? nomeAtual("baixo") : t === "Sem histórico" ? nomeAtual("sem") : "enviado normalmente")}</b></p>`;
     campanha();
   }
   document.getElementById("add-hist").addEventListener("click", () => { hist.push({ idade: 5, res: "desligado" }); atualizar(); });
