@@ -1,0 +1,204 @@
+<title>Laboratório de cores MotorCX</title>
+<style>
+/* Layout: uma tela real da plataforma (menu + Lista do dia) repetida em três paletas; acima, os controles para trocar paleta e nível de ajuda */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5; --azul: #0A64D0;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E; --azul: #4C9BFF; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E; --azul: #4C9BFF; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding-block: 24px 48px; padding-inline: 16px; margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.proto { font-size: 13px; color: var(--tinta-2); }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0; }
+.ajuda { color: var(--tinta-2); margin: 4px 0 0; font-size: 14px; max-width: 78ch; }
+.ctl { display: flex; gap: 18px; flex-wrap: wrap; align-items: end; background: var(--painel); border-radius: 16px; padding: 14px 16px; }
+.ctl .grp { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--tinta-2); }
+.seg { display: inline-flex; background: var(--suave); border-radius: 12px; padding: 4px; gap: 4px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; color: var(--tinta-2); font: 600 13.5px var(--sans); padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--painel); color: var(--tinta); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.nota { background: var(--painel); border-radius: 16px; padding: 16px 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.nota div { font-size: 13.5px; color: var(--tinta-2); }
+.nota div b { color: var(--tinta); }
+.nota div > b:first-child { display: block; margin-bottom: 4px; }
+
+/* ---------- a tela de exemplo, pintada pela paleta escolhida (variáveis --p-*) */
+.app { border-radius: 18px; overflow: hidden; display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 560px; box-shadow: 0 2px 20px rgba(0,0,0,.08);
+  background: var(--p-fundo); color: var(--p-texto); font-size: 14.5px; }
+.menu { background: var(--p-menu); color: var(--p-menu-texto); padding: 18px 12px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--p-menu-borda); }
+.menu .marca { font-weight: 700; font-size: 16px; padding: 4px 10px 14px; letter-spacing: -.01em; }
+.menu .marca span { color: var(--p-acento-forte); }
+.menu a { display: block; padding: 8px 10px; border-radius: 9px; color: inherit; text-decoration: none; font-size: 14px; opacity: .85; }
+.menu a.ativo { background: var(--p-menu-ativo); color: var(--p-menu-ativo-texto); opacity: 1; font-weight: 600; }
+.menu .sec { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .55; padding: 14px 10px 4px; }
+.conteudo { padding: 22px 26px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.conteudo h3 { font-size: 22px; margin: 0; letter-spacing: -.01em; color: var(--p-titulo); }
+.conteudo .sub { color: var(--p-texto-2); font-size: 13.5px; margin: 2px 0 0; }
+.topo2 { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.b1 { border: 0; border-radius: 10px; padding: 9px 16px; font: 600 14px var(--sans); background: var(--p-acento); color: var(--p-acento-texto); cursor: pointer; }
+.b2 { border: 1px solid var(--p-borda); border-radius: 10px; padding: 8px 14px; font: 600 14px var(--sans); background: var(--p-cartao); color: var(--p-texto); cursor: pointer; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kpi { background: var(--p-cartao); border: 1px solid var(--p-borda); border-radius: 14px; padding: 14px; }
+.kpi small { color: var(--p-texto-2); font-size: 12.5px; display: flex; gap: 6px; align-items: center; }
+.kpi b { font-size: 24px; display: block; margin-top: 4px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--p-titulo); }
+.kpi .dica { font-size: 12px; color: var(--p-texto-2); margin-top: 6px; line-height: 1.4; }
+.tab { background: var(--p-cartao); border: 1px solid var(--p-borda); border-radius: 14px; overflow: hidden; }
+.tab table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tab th { text-align: left; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--p-texto-2); padding: 10px 14px; border-bottom: 1px solid var(--p-borda); font-weight: 700; }
+.tab td { color: var(--p-texto); padding: 11px 14px; border-bottom: 1px solid var(--p-borda); }
+.tab tr:last-child td { border-bottom: 0; }
+.tab td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.pill { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--p-pill); color: var(--p-pill-texto); white-space: nowrap; }
+.pill.ok { background: var(--p-ok-f); color: var(--p-ok); }
+.pill.al { background: var(--p-al-f); color: var(--p-al); }
+.ponto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: 1px; }
+/* (i) */
+.i { width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--p-i-borda); color: var(--p-i); font: 600 11px/15px var(--sans); text-align: center; background: transparent; cursor: pointer; padding: 0; flex: none; position: relative; }
+.i:hover, .i[aria-expanded="true"] { color: var(--p-acento-forte); border-color: var(--p-acento-forte); }
+.balao { position: absolute; z-index: 3; top: 24px; left: -8px; width: 270px; background: var(--p-balao); color: var(--p-balao-texto); border-radius: 12px; padding: 12px 13px; font: 400 13px/1.45 var(--sans); text-align: left; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.balao b { display: block; margin-bottom: 3px; font-size: 13.5px; }
+.balao a { color: inherit; text-decoration: underline; display: inline-block; margin-top: 6px; font-weight: 600; }
+.modo-desligada .i { display: none; }
+.modo-discreta .dica { display: none; }
+.modo-aprendiz .i { border-color: var(--p-acento-forte); color: var(--p-acento-forte); }
+.faixa-aprendiz { display: none; border-radius: 12px; padding: 10px 12px; font-size: 13px; background: var(--p-al-f); color: var(--p-al); }
+.modo-aprendiz .faixa-aprendiz { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+.faixa-aprendiz button { border: 0; background: none; color: inherit; font: 600 13px var(--sans); text-decoration: underline; cursor: pointer; }
+
+.lab { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+.ctl2 { background: var(--painel); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: env(safe-area-inset-top, 0px); }
+.ctl2 label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--tinta-2); }
+.ctl2 label b { color: var(--tinta); font-size: 14px; display: flex; justify-content: space-between; }
+.ctl2 input[type=range] { width: 100%; accent-color: var(--tinta); }
+.faixa-tom { height: 10px; border-radius: 5px; background: linear-gradient(90deg, hsl(0 60% 45%), hsl(30 60% 45%), hsl(60 60% 45%), hsl(90 60% 40%), hsl(120 50% 38%), hsl(150 50% 36%), hsl(180 50% 36%), hsl(210 55% 42%), hsl(240 50% 45%), hsl(270 45% 45%), hsl(300 45% 42%), hsl(330 55% 45%), hsl(360 60% 45%)); position: relative; }
+.faixa-tom i { position: absolute; top: -3px; height: 16px; border: 2px dashed #C4271E; border-radius: 4px; }
+.alerta { font-size: 12.5px; border-radius: 10px; padding: 8px 10px; background: #FDECEA; color: #8C1D16; }
+.ok2 { font-size: 12.5px; border-radius: 10px; padding: 8px 10px; background: #E6F4EA; color: #1E6B3A; }
+.atalhos { display: flex; gap: 6px; flex-wrap: wrap; }
+.atalhos button { border: 1px solid var(--linha); background: var(--painel); color: var(--tinta); border-radius: 999px; padding: 5px 10px; font: 600 12.5px var(--sans); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.atalhos button i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.codigo { font: 12px var(--mono); background: var(--suave); border-radius: 10px; padding: 10px; word-break: break-all; color: var(--tinta); }
+.app.tex-grao .conteudo { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+.app.tex-pontos .conteudo { background-image: radial-gradient(color-mix(in srgb, var(--p-texto) 14%, transparent) 1px, transparent 1.2px); background-size: 18px 18px; }
+.app.tex-grade .conteudo { background-image: linear-gradient(color-mix(in srgb, var(--p-texto) 6%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--p-texto) 6%, transparent) 1px, transparent 1px); background-size: 32px 32px; }
+.app.tex-halo .conteudo { background-image: radial-gradient(60% 45% at 85% 0%, color-mix(in srgb, var(--p-acento) 14%, transparent), transparent 70%); }
+@media (max-width: 900px) { .lab { grid-template-columns: minmax(0, 1fr); } .ctl2 { position: static; } }
+</style>
+
+<div class="wrap">
+  <div class="proto">Laboratório · mexa nos controles e veja a tela mudar na hora · números fictícios</div>
+  <div>
+    <h1>Laboratório de cores</h1>
+    <p class="ajuda">Em vez de escolher entre opções prontas, encontre a cor mexendo. A faixa tracejada em vermelho marca os tons das concorrentes (azul e roxo da Ótima, laranja da Pontaltech). Quando gostar, copie o código da paleta e me mande.</p>
+  </div>
+  <div class="lab">
+    <aside class="ctl2">
+      <div><b style="font-size:14px">Pontos de partida</b><div class="atalhos" id="atalhos" style="margin-top:6px"></div></div>
+      <label><b>Tom da cor de destaque <span id="vTom"></span></b><input type="range" id="tom" min="0" max="359" value="140"><span class="faixa-tom" id="faixa"></span></label>
+      <div id="aviso"></div>
+      <label><b>Intensidade <span id="vSat"></span></b><input type="range" id="sat" min="10" max="80" value="32"></label>
+      <label><b>Profundidade <span id="vLum"></span></b><input type="range" id="lum" min="18" max="45" value="30"></label>
+      <label><b>Fundo <span id="vFundo"></span></b><input type="range" id="fundo" min="-10" max="10" value="2"><span style="display:flex;justify-content:space-between;font-size:11.5px"><span>frio</span><span>neutro</span><span>quente</span></span></label>
+      <div><b style="font-size:14px">Menu</b><div class="seg" id="menu" style="margin-top:6px"><button aria-pressed="true" data-m="claro">Claro</button><button aria-pressed="false" data-m="cor">Na cor</button><button aria-pressed="false" data-m="escuro">Escuro</button></div></div>
+      <div><b style="font-size:14px">Elemento de fundo</b><div class="seg" id="tex" style="margin-top:6px"><button aria-pressed="true" data-x="liso">Liso</button><button aria-pressed="false" data-x="grao">Grão</button><button aria-pressed="false" data-x="pontos">Pontos</button><button aria-pressed="false" data-x="grade">Grade</button><button aria-pressed="false" data-x="halo">Halo</button></div>
+        <p style="font-size:12px;color:var(--tinta-2);margin:6px 0 0">Só no fundo, nunca atrás dos números: os cartões e a tabela continuam lisos.</p></div>
+      <div><b style="font-size:14px">Código da paleta</b><p class="codigo" id="codigo"></p><button class="seg" style="border:0;padding:7px 12px;font:600 13px var(--sans);cursor:pointer;color:var(--tinta)" id="copiar">Copiar código</button></div>
+    </aside>
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+  <div class="app modo-discreta" id="app">
+    <nav class="menu" aria-label="Menu">
+      <div class="marca">Motor<span>CX</span></div>
+      <a href="#" onclick="return false">Início</a>
+      <a href="#" onclick="return false">Mapa da Esteira</a>
+      <a href="#" onclick="return false" class="ativo">Lista do dia</a>
+      <a href="#" onclick="return false">Orquestração</a>
+      <div class="sec">Mensageria</div>
+      <a href="#" onclick="return false">Campanhas</a>
+      <a href="#" onclick="return false">Respostas</a>
+      <div class="sec">Resultados</div>
+      <a href="#" onclick="return false">Comitê</a>
+      <a href="#" onclick="return false">Relatórios</a>
+    </nav>
+    <main class="conteudo">
+      <div class="faixa-aprendiz"><span>Você está no modo <b>Primeiros dias</b>: as explicações aparecem abertas. Vale nos seus primeiros 15 dias.</span><button id="sairAprendiz">Já conheço, esconder</button></div>
+      <div class="topo2">
+        <div><h3>Lista do dia</h3><p class="sub">Quem recebe o quê hoje · Banco Alfa · rotina das 06:12</p></div>
+        <div style="display:flex;gap:8px"><button class="b2">Exportar</button><button class="b1">Enviar para os canais</button></div>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><small>Clientes com ação hoje <button class="i" data-t="acao" aria-label="O que é">i</button></small><b>10.020</b><p class="dica">Clientes que a régua mandou acionar hoje, em pelo menos um canal.</p></div>
+        <div class="kpi"><small>Em CPC <button class="i" data-t="cpc" aria-label="O que é">i</button></small><b>1.980</b><p class="dica">Falaram com a pessoa certa recentemente; recebem no canal em que responderam.</p></div>
+        <div class="kpi"><small>Não CPC · 2º ciclo <button class="i" data-t="ciclo" aria-label="O que é">i</button></small><b>1.220</b><p class="dica">Segunda volta da régua de quem ainda não foi localizado.</p></div>
+        <div class="kpi"><small>Fora do orçamento <button class="i" data-t="orc" aria-label="O que é">i</button></small><b>310</b><p class="dica">Passaram do limite do canal hoje; amanhã concorrem de novo.</p></div>
+      </div>
+      <div class="tab"><table>
+        <thead><tr><th>Fase</th><th>Passo</th><th>Canal</th><th class="n">Clientes</th><th>Situação</th></tr></thead>
+        <tbody>
+          <tr><td>Cliente novo</td><td>3º dia</td><td><span class="ponto" style="background:#1F8A4C"></span>WhatsApp</td><td class="n">2.860</td><td><span class="pill ok">pronto</span></td></tr>
+          <tr><td>Cliente novo</td><td>5º dia</td><td><span class="ponto" style="background:#0E7C86"></span>Agente virtual</td><td class="n">2.310</td><td><span class="pill ok">pronto</span></td></tr>
+          <tr><td>Não CPC</td><td>2º ciclo · dia 1</td><td><span class="ponto" style="background:#1F8A4C"></span>WhatsApp</td><td class="n">940</td><td><span class="pill al">310 fora do orçamento</span></td></tr>
+          <tr><td>CPC</td><td>2ª tentativa</td><td><span class="ponto" style="background:#3B5BA9"></span>RCS</td><td class="n">300</td><td><span class="pill">aguardando horário</span></td></tr>
+          <tr><td>Quebra de acordo</td><td>1º dia</td><td><span class="ponto" style="background:#7A4FB0"></span>SMS</td><td class="n">90</td><td><span class="pill ok">pronto</span></td></tr>
+        </tbody>
+      </table></div>
+    </main>
+  </div>
+      <div class="nota" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <div><b>Dica</b>Olhe a tela por um minuto, não só a cor do botão. A cor de destaque aparece pouco (botão principal, item ativo); o que cansa ou descansa é o fundo e o menu.</div>
+        <div><b>O que fica fixo</b>Verde, âmbar e vermelho dos avisos e as cores dos canais não mudam com a paleta, para que "pronto" e "erro" signifiquem sempre o mesmo.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const app = $("app");
+const PROIBIDO = [[15, 40, "laranja (Pontaltech)"], [195, 250, "azul (Ótima)"], [255, 315, "roxo (Ótima)"]];
+const ATALHOS = [["Musgo", 140, 26, 32, 3, "claro"], ["Esmeralda", 158, 62, 29, 0, "claro"], ["Pinho", 160, 30, 22, 0, "cor"], ["Dourado", 40, 52, 34, 6, "claro"],
+  ["Terracota suave", 10, 38, 36, 5, "claro"], ["Vinho", 345, 40, 30, 3, "claro"], ["Oliva", 75, 30, 32, 4, "claro"], ["Grafite + verde", 150, 40, 30, -2, "escuro"]];
+let menu = "claro";
+function hsl(h, s, l) { return `hsl(${h} ${s}% ${l}%)`; }
+function aplicar() {
+  const h = +$("tom").value, s = +$("sat").value, l = +$("lum").value, f = +$("fundo").value;
+  const fh = f >= 0 ? 40 : 210, fs = Math.abs(f) * 1.6;
+  const v = {
+    "--p-fundo": hsl(fh, fs, 96.5), "--p-cartao": "#FFFFFF", "--p-borda": hsl(fh, fs + 4, 89), "--p-texto": hsl(fh, 8, 19), "--p-texto-2": hsl(fh, 6, 43), "--p-titulo": hsl(fh, 10, 13),
+    "--p-acento": hsl(h, s, l), "--p-acento-texto": "#FFFFFF", "--p-acento-forte": hsl(h, s, Math.max(l - 4, 16)),
+    "--p-pill": hsl(fh, fs + 6, 93), "--p-pill-texto": hsl(fh, 8, 28), "--p-i": hsl(fh, 6, 58), "--p-i-borda": hsl(fh, 8, 80),
+    "--p-ok": "#1E6B3A", "--p-ok-f": "#E5F2EA", "--p-al": "#7A5200", "--p-al-f": "#FBF1D9", "--p-balao": "#FFFFFF", "--p-balao-texto": hsl(fh, 8, 19)
+  };
+  if (menu === "claro") Object.assign(v, { "--p-menu": "#FFFFFF", "--p-menu-texto": hsl(fh, 8, 28), "--p-menu-borda": hsl(fh, fs + 4, 89), "--p-menu-ativo": hsl(h, Math.min(s, 40), 93), "--p-menu-ativo-texto": hsl(h, s, Math.max(l - 6, 16)) });
+  if (menu === "cor") Object.assign(v, { "--p-menu": hsl(h, Math.min(s, 45), Math.max(l - 10, 14)), "--p-menu-texto": hsl(h, 20, 88), "--p-menu-borda": hsl(h, Math.min(s, 45), Math.max(l - 10, 14)), "--p-menu-ativo": hsl(h, Math.min(s, 45), Math.max(l - 2, 22)), "--p-menu-ativo-texto": "#FFFFFF" });
+  if (menu === "escuro") Object.assign(v, { "--p-menu": hsl(fh, 6, 14), "--p-menu-texto": hsl(fh, 6, 82), "--p-menu-borda": hsl(fh, 6, 14), "--p-menu-ativo": hsl(h, Math.min(s, 40), 22), "--p-menu-ativo-texto": hsl(h, 45, 78) });
+  Object.entries(v).forEach(([k, x]) => app.style.setProperty(k, x));
+  app.querySelector(".marca span").style.color = menu === "claro" ? hsl(h, s, l) : hsl(h, 45, 75);
+  $("vTom").textContent = h + "°"; $("vSat").textContent = s + "%"; $("vLum").textContent = l + "%"; $("vFundo").textContent = f > 2 ? "quente" : f < -2 ? "frio" : "neutro";
+  const p = PROIBIDO.find(([a, b]) => h >= a && h <= b);
+  $("aviso").innerHTML = p && s > 18 ? `<div class="alerta">Este tom lembra o ${p[2]}.</div>` : `<div class="ok2">Fora dos tons das concorrentes.</div>`;
+  $("codigo").textContent = `tom ${h} · intensidade ${s} · profundidade ${l} · fundo ${f} · menu ${menu} · fundo ${typeof tex === "undefined" ? "liso" : tex} · destaque ${hsl(h, s, l)}`;
+}
+$("faixa").innerHTML = PROIBIDO.map(([a, b]) => `<i style="left:${a / 360 * 100}%;width:${(b - a) / 360 * 100}%"></i>`).join("");
+["tom", "sat", "lum", "fundo"].forEach(id => $(id).addEventListener("input", aplicar));
+document.querySelectorAll("#menu button").forEach(b => b.addEventListener("click", () => { menu = b.dataset.m; document.querySelectorAll("#menu button").forEach(x => x.setAttribute("aria-pressed", x === b)); aplicar(); }));
+$("atalhos").innerHTML = ATALHOS.map(([n, h, s, l]) => `<button data-n="${n}"><i style="background:${hsl(h, s, l)}"></i>${n}</button>`).join("");
+document.querySelectorAll("#atalhos button").forEach(b => b.addEventListener("click", () => {
+  const [, h, s, l, f, m] = ATALHOS.find(a => a[0] === b.dataset.n);
+  $("tom").value = h; $("sat").value = s; $("lum").value = l; $("fundo").value = f;
+  document.querySelector(`#menu [data-m="${m}"]`).click();
+}));
+let tex = "liso";
+document.querySelectorAll("#tex button").forEach(b => b.addEventListener("click", () => { tex = b.dataset.x; document.querySelectorAll("#tex button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  ["liso", "grao", "pontos", "grade", "halo"].forEach(x => app.classList.remove("tex-" + x)); app.classList.add("tex-" + tex); aplicar(); }));
+$("copiar").addEventListener("click", () => { const t = $("codigo").textContent; navigator.clipboard?.writeText(t).then(() => $("copiar").textContent = "Copiado", () => { const r = document.createRange(); r.selectNodeContents($("codigo")); getSelection().removeAllRanges(); getSelection().addRange(r); }); });
+// ajuda: (i) da tela de exemplo
+const TXT = { acao: "Clientes que a régua mandou acionar hoje.", cpc: "Contato com a pessoa certa.", ciclo: "Segunda volta da régua do Não CPC.", orc: "Passaram do limite do canal hoje." };
+document.querySelectorAll(".i").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); const old = b.querySelector(".balao"); document.querySelectorAll(".balao").forEach(x => x.remove()); if (old) return; const s = document.createElement("span"); s.className = "balao"; s.textContent = TXT[b.dataset.t]; b.appendChild(s); }));
+document.addEventListener("click", () => document.querySelectorAll(".balao").forEach(x => x.remove()));
+aplicar();
+</script>

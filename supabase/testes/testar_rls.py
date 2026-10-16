@@ -605,7 +605,7 @@ checar("fatura paga não conta como vencida", True, f"select faturas_vencidas fr
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional
 SVC = "service_role"
-checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 11)   # 10 do SQL 12 + Jornada (SQL 19)
+checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 16)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30)
 checar("cliente não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", u["admina"])
 checar("Atendimento não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", SUP)
 checar("ninguém grava preço direto na tabela", False, f"insert into public.precos_empresa (empresa_id,item,modelo,preco) values ({EA},'sms','flat',0.01)", "authenticated", u["admin"])
@@ -1082,6 +1082,114 @@ checar("cliente vê que a equipe respondeu", True, "select respostas_novas from 
 checar("cliente abre o chamado e o aviso some", True, f"select public.marcar_chamado_visto({CN}); select respostas_novas from public.atendimento_pendentes()", "authenticated", u["oper"], base_cli)
 checar("cliente de outra empresa não marca chamado alheio", False, f"select public.marcar_chamado_visto({CN})", "authenticated", u["operb"])
 checar("contato pode ser marcado para receber faturas", True, f"insert into public.empresa_contatos (empresa_id,nome,email,recebe_faturas) values ({EA},'Carla','carla@x.com',true) returning recebe_faturas", "authenticated", u["admina"], "t")
+# Produtos, negociação, rota por produto, preço mínimo, Administrativo e regra do canal por carteira (SQL 30)
+# (o teste das rotas acima roda o SQL 12 de novo, que volta canal_do_item ao antigo: o SQL 30 roda outra vez aqui)
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261127000001_produtos_rotas_administrativo.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+_, ADM, _ = sql("insert into auth.users (email) values ('administrativo@x.com') returning id")
+checar("Master torna alguém Administrativo", True, AAL2 + f"select public.definir_funcao_equipe('{ADM}','administrativo')", "authenticated", u["admin"], "administrativo")
+checar("Administrativo aparece na lista da equipe com as permissões dele", True, f"select funcao||','||(permissoes->>'gerenciar_fornecedores')||','||(permissoes->>'gerenciar_equipe') from public.listar_equipe() where id='{ADM}'", "authenticated", u["admin"], "administrativo,true,false")
+checar("Master continua editando a Orquestração", True, f"insert into public.estrategias (empresa_id,nome) values ({EA},'master edita') returning 1", "authenticated", u["admin"], "1")
+checar("Administrativo não cria estratégia do cliente", False, f"insert into public.estrategias (empresa_id,nome) values ({EA},'adm tenta')", "authenticated", ADM)
+checar("Administrativo não altera estratégia do cliente", True, f"with x as (update public.estrategias set descricao='x' where empresa_id={EA} returning 1) select count(*) from x", "authenticated", ADM, "0")
+checar("Administrativo não ganha papel de Planejamento do cliente", True, "select public.tem_papel('admin','planejamento')", "authenticated", ADM, "f")
+checar("Administrativo cria produto", True, "select public.salvar_produto('sms_bet','sms','SMS Bet','mensagem',0.06,0.075,'mercado de bets')", "authenticated", ADM, "sms_bet")
+checar("tabela abaixo do mínimo é recusada", False, "select public.salvar_produto('sms_x','sms','SMS X','mensagem',0.06,0.05)", "authenticated", ADM)
+checar("Comercial não cria produto", False, "select public.salvar_produto('sms_y','sms','SMS Y','mensagem',0.06,0.07)", "authenticated", COM)
+checar("canal do produto não muda", False, "select public.salvar_produto('sms_bet','email','SMS Bet','mensagem',0.06,0.075)", "authenticated", ADM)
+checar("negociação por operadora (só Claro)", True, "select public.salvar_negociacao('sinch','sms_bet','operadora','{\"claro\": 0.027}'); select public.custo_negociado('sinch','sms_bet',current_date,'claro')", "authenticated", ADM, "0.02700")
+checar("custo zerado é recusado", False, "select public.salvar_negociacao('zenvia','sms_bet','flat','{\"flat\": 0}')", "authenticated", ADM)
+checar("negociação flat vale para qualquer operadora", True, "select public.salvar_negociacao('zenvia','sms_bet','flat','{\"flat\": 0.031}'); select public.salvar_negociacao('infobip','sms_bet','flat','{\"flat\": 0.033}'); select public.custo_negociado('zenvia','sms_bet',current_date,'tim')", "authenticated", ADM, "0.03100")
+checar("fornecedor sem o canal não negocia", False, "select public.salvar_negociacao('locaweb','sms_bet','flat','{\"flat\": 0.01}')", "authenticated", ADM)
+checar("Comercial não negocia com fornecedor", False, "select public.salvar_negociacao('zenvia','sms_bet','flat','{\"flat\": 0.02}')", "authenticated", COM)
+checar("cliente não vê custo de fornecedor", True, "select count(*) from public.mensageria_custos", "authenticated", u["admina"], 0)
+checar("negociado só por operadora não entra em rota flat", False, "select public.salvar_rota_produto('sms_bet','flat','[{\"fornecedor\":\"sinch\",\"percentual\":100}]')", "authenticated", ADM)
+checar("fornecedor sem custo na operadora é recusado", False, "select public.salvar_rota_produto('sms_bet','operadora','[{\"fornecedor\":\"sinch\",\"operadora\":\"vivo\",\"percentual\":100}]')", "authenticated", ADM)
+checar("bloco que não soma 100 é recusado", False, "select public.salvar_rota_produto('sms_bet','operadora','[{\"fornecedor\":\"sinch\",\"operadora\":\"claro\",\"percentual\":100},{\"fornecedor\":\"zenvia\",\"percentual\":40}]')", "authenticated", ADM)
+checar("rota Claro pela Sinch e demais 50/50", True, "select public.salvar_rota_produto('sms_bet','operadora','[{\"fornecedor\":\"sinch\",\"operadora\":\"claro\",\"percentual\":100},{\"fornecedor\":\"zenvia\",\"percentual\":50},{\"fornecedor\":\"infobip\",\"percentual\":50}]') > 0", "authenticated", ADM, "t")
+checar("rota completa e com custo previsto", True, "select public.rota_completa('sms_bet') and public.custo_previsto('sms_bet') > 0", "authenticated", ADM, "t")
+checar("catálogo mostra custo previsto e MC no mínimo", True, "select (custo_previsto is not null and mc_no_minimo is not null)::text from public.produtos_catalogo() where codigo='sms_bet'", "authenticated", ADM, "true")
+checar("encerrar negociação de fornecedor que está na rota é recusado", False, "select public.salvar_negociacao('zenvia','sms_bet','encerrar','{}')", "authenticated", ADM)
+checar("mistura de operadoras que não soma 100 é recusada", False, "select public.salvar_mistura_operadoras('{\"vivo\":40,\"claro\":30,\"tim\":20,\"outras\":5}','teste')", "authenticated", ADM)
+checar("mistura de operadoras atualizada", True, "select public.salvar_mistura_operadoras('{\"vivo\":40,\"claro\":30,\"tim\":24,\"outras\":6}','Teleco set/26'); select percentual from public.mensageria_mistura_operadoras where operadora='vivo'", "authenticated", ADM, "40.00")
+NC = "(select id from public.empresas where slug='nova-comercial')"
+checar("Comercial dá preço entre o mínimo e a tabela", True, f"select public.salvar_preco({NC},'sms_bet','flat',0.07) > 0", "authenticated", COM, "t")
+checar("Comercial não dá preço abaixo do mínimo", False, f"select public.salvar_preco({NC},'sms_bet','flat',0.05)", "authenticated", COM)
+checar("abaixo do mínimo sem motivo é recusado", False, f"select public.salvar_preco({EA},'sms_bet','flat',0.05)", "authenticated", ADM)
+checar("Administrativo dá preço abaixo do mínimo com motivo", True, f"select public.salvar_preco({EA},'sms_bet','flat',0.05,0,null,null,'volume de 2 milhões/mês'); select motivo_abaixo from public.precos_empresa where empresa_id={EA} and item='sms_bet'", "authenticated", ADM, "volume de 2 milhões/mês")
+checar("Administrativo não mexe na contratação", False, f"insert into public.empresa_produtos (empresa_id,item) values ({EA},'sms_bet')", "authenticated", ADM)
+checar("produto com rota completa e preço é ligado", True, f"insert into public.empresa_produtos (empresa_id,item) values ({EA},'sms_bet') returning ativo", "authenticated", u["admin"], "t")
+checar("produto sem preço não é ligado", False, f"insert into public.empresa_produtos (empresa_id,item) values ({EA},'sms_marketing')", "authenticated", u["admin"])
+r = sql(f"set role authenticated; select set_config('request.jwt.claim.sub', '{ADM}', false); select public.salvar_produto('sms_z','sms','SMS Z','mensagem',0.06,0.07); select public.salvar_preco({EA},'sms_z','flat',0.07)")
+assert r[0], r[2]
+checar("produto sem rota não é ligado", False, f"insert into public.empresa_produtos (empresa_id,item) values ({EA},'sms_z')", "authenticated", u["admin"])
+checar("cliente vê os produtos liberados do canal", True, f"select bool_or(codigo='sms_bet') and not bool_or(codigo='sms_z') from public.produtos_liberados({EA},'sms')", "authenticated", u["admina"], "t")
+checar("cliente não liga nem desliga produto", True, f"with x as (update public.empresa_produtos set ativo=false where empresa_id={EA} returning 1) select count(*) from x", "authenticated", u["admina"], 0)
+checar("Administrativo suspende empresa (ativação é dele)", True, f"select public.mudar_situacao_empresa((select id from public.empresas where slug='nova-master'), 'suspensa', 'teste do administrativo')", "authenticated", ADM, "suspensa")
+checar("Administrativo não gerencia a equipe", False, AAL2 + f"select public.definir_funcao_equipe('{SUP}','comercial')", "authenticated", ADM)
+r = sql(f"set role service_role; insert into public.canais_empresa (empresa_id,canal,janela_inicio,janela_fim) values ({EA},'sms','09:00','19:00') on conflict (empresa_id,canal) do update set janela_inicio='09:00', janela_fim='19:00'")
+assert r[0], r[2]
+CP = f"(select id from public.credores where empresa_id={EA} and codigo='principal')"
+checar("carteira sobrescreve a janela do canal", True, f"insert into public.credor_canais (empresa_id,credor_id,canal,ajustes) values ({EA},{CP},'sms','{{\"janela_inicio\":\"10:00\"}}'); select janela_inicio||'-'||janela_fim||' '||array_to_string(sobrescritos, ',') from public.canais_credor where credor_id={CP} and canal='sms'", "authenticated", u["plan"], "10:00-19:00 janela_inicio")
+checar("carteira não muda o que não pode", False, f"update public.credor_canais set ajustes='{{\"custo\": 1}}' where credor_id={CP} and canal='sms'", "authenticated", u["plan"])
+checar("operação não muda a regra do canal da carteira", True, f"with x as (delete from public.credor_canais where credor_id={CP} returning 1) select count(*) from x", "authenticated", u["oper"], 0)
+checar("comitê por produto abre para o cliente", True, "select count(*) >= 0 from public.comite_produtos", "authenticated", u["admina"], "t")
+# Orquestração por carteira e rótulos legíveis (SQL 31)
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261128000001_estrategia_carteira.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+r = sql(f"set role service_role; insert into public.estrategias (empresa_id,nome,definicao) values ({EA},'Estratégia S31','{{\"giro\": {{\"ciclo_dias\": 8}}}}') returning id")
+assert r[0], r[2]
+E31 = r[1].splitlines()[-1]
+r = sql(f"set role service_role; insert into public.clusters (empresa_id,ordem,codigo,nome,estrategia_id) values ({EA},90,'S31','Segmento S31',{E31}) returning id")
+assert r[0], r[2]
+S31 = r[1].splitlines()[-1]
+BX = f"(select id from public.credores where empresa_id={EA} and codigo='banco-x')"
+checar("segmento de todas as carteiras: estratégia compartilhada aparece com o nome da outra carteira", True, f"select estrategia_id={E31} and not estrategia_propria and compartilhada_com like '%Banco X%' from public.segmentos_em_uso where cluster_id={S31} and credor_id={CP}", "authenticated", u["plan"], "t")
+checar("operação não separa estratégia", False, f"select public.separar_estrategia({S31},{CP})", "authenticated", u["oper"])
+checar("Administrativo não separa estratégia do cliente", False, f"select public.separar_estrategia({S31},{CP})", "authenticated", ADM)
+r = sql(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.separar_estrategia({S31},{CP})")
+assert r[0], r[2]
+NOVA = r[1].splitlines()[-1]
+checar("separar só para esta carteira: cópia própria com a mesma definição", True, f"select s.estrategia_propria and s.compartilhada_com is null and e.definicao = (select definicao from public.estrategias where id={E31}) from public.segmentos_em_uso s join public.estrategias e on e.id=s.estrategia_id where s.cluster_id={S31} and s.credor_id={CP} and s.estrategia_id={NOVA}", "authenticated", u["plan"], "t")
+checar("a outra carteira continua com a estratégia do segmento e com o segmento", True, f"select estrategia_id={E31} and vinculado and em_uso from public.segmentos_em_uso where cluster_id={S31} and credor_id={BX}", "authenticated", u["plan"], "t")
+r = sql(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.separar_estrategia({S31},{BX},'{{\"giro\": {{\"ciclo_dias\": 5}}}}')")
+assert r[0], r[2]
+COPIA = r[1].splitlines()[-1]
+checar("copiar de outra carteira cria outra cópia independente com a definição trazida", True, f"select definicao->'giro'->>'ciclo_dias' from public.estrategias where id={COPIA} and id=(select estrategia_id from public.segmentos_em_uso where cluster_id={S31} and credor_id={BX})", "authenticated", u["plan"], "5")
+checar("a cópia de uma carteira não muda a da outra", True, f"select (select definicao->'giro'->>'ciclo_dias' from public.estrategias where id={NOVA})", "authenticated", u["plan"], "8")
+checar("estratégia de outra empresa não entra na carteira", False, f"update public.segmentos_carteira set estrategia_id=(select id from public.estrategias where empresa_id={EB} limit 1) where cluster_id={S31} and credor_id={CP}", "service_role")
+checar("carteira fora do segmento é recusada", False, f"select public.separar_estrategia({S31},(select id from public.credores where empresa_id={EB} limit 1))", "authenticated", u["plan"])
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from motor import rotulos as RT  # noqa: E402
+for est_, cic_ in (("NCP", "G1"), ("NCP", "G3"), ("NCP", "RE"), ("CPB", "T2"), ("LOC", "L0"), ("LOC", "L4"),
+                   ("QBR", "D2"), ("PRE", "D0"), ("PRE", "D-3"), ("CPA", ""), ("XYZ", "Q9")):
+    checar(f"rótulo {est_}/{cic_} igual no banco e no motor", True, f"select public.rotulo_estado('{est_}')||' | '||public.rotulo_ciclo('{est_}','{cic_}')", None, None, f"{RT.rotulo_estado(est_)} | {RT.rotulo_ciclo(est_, cic_)}".strip())
+for p_ in ("G2-dia3", "C1-D5", "CPC A · negociação", "CPC B · T3", "rotação → sms", "D+4", "D-1"):
+    checar(f"passo '{p_}' legível igual no banco e no motor", True, f"select public.rotulo_passo('{p_}')", None, None, RT.rotulo_passo(p_))
+# Repaginada: ajuda pelo tempo de casa, glossário e tema (SQL 32)
+for d_, pref_, esperado_ in ((1, "automatica", "aberta"), (15, "automatica", "aberta"), (16, "automatica", "discreta"),
+                             (30, "automatica", "discreta"), (31, "automatica", "desligada"),
+                             (200, "aberta", "aberta"), (2, "desligada", "desligada")):
+    checar(f"ajuda no {d_}º dia de casa ({pref_}) = {esperado_}", True,
+           f"select public.modo_ajuda(date '2026-10-14' - {d_ - 1}, '{pref_}', date '2026-10-14')", None, None, esperado_)
+checar("pessoa nova começa com a ajuda aberta e tema claro", True, "select modo||','||tema from public.minha_ajuda()", "authenticated", u["oper"], "aberta,claro")
+checar("pessoa desliga a ajuda e escolhe o tema escuro em Minha conta", True, "select public.salvar_preferencias('desligada','escuro'); select modo||','||tema from public.minha_ajuda()", "authenticated", u["oper"], "desligada,escuro")
+checar("tema desconhecido é recusado", False, "select public.salvar_preferencias(null,'roxo')", "authenticated", u["oper"])
+checar("religar a ajuda volta ao tempo de casa", True, "select public.salvar_preferencias('automatica'); select modo from public.minha_ajuda()", "authenticated", u["oper"], "aberta")
+checar("glossário tem os 40 termos aprovados", True, "select count(*) from public.glossario", "authenticated", u["oper"], "40")
+checar("busca pelo nome antigo acha o termo novo (Hot → Contato principal)", True, "select string_agg(slug, ',') from public.buscar_glossario('hot')", "authenticated", u["oper"], "contato-principal")
+checar("busca sem acento acha CPC · em negociação", True, "select bool_or(slug='cpc-em-negociacao') from public.buscar_glossario('negociacao')", "authenticated", u["oper"], "t")
+checar("G1 leva ao termo Ciclo", True, "select bool_or(slug='ciclo') from public.buscar_glossario('G1')", "authenticated", u["oper"], "t")
+checar("glossário não abre sem login", False, "select count(*) from public.glossario", "anon")
+checar("cliente não edita o glossário", True, "with x as (update public.glossario set exemplo='x' returning 1) select count(*) from x", "authenticated", u["admina"], "0")
+checar("Master edita o glossário", True, "with x as (update public.glossario set exemplo=exemplo where slug='cpc' returning 1) select count(*) from x", "authenticated", u["admin"], "1")
+checar("cores do tema abrem sem login (tela de login)", True, "select claro from public.tema_tokens where chave='area.mensageria'", "anon", None, "#7A2E3B")
+checar("Administrativo não troca cor do tema", True, "with x as (update public.tema_tokens set claro='#000000' returning 1) select count(*) from x", "authenticated", ADM, "0")
+checar("cor inválida é recusada", False, "update public.tema_tokens set claro='azul' where chave='base.menu'", "authenticated", u["admin"])
 # desempenho: nenhuma política chama pode_ver_empresa por linha
 checar("políticas usam minhas_empresas (uma vez por consulta)", True, "select count(*) from pg_policies where schemaname='public' and qual ~ 'pode_ver_empresa\\(empresa_id\\)'", "service_role", 0)
 print(f"\n{ok_total} passaram, {falhas} falharam")

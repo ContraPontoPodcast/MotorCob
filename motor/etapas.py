@@ -208,6 +208,30 @@ def validar(definicao: dict, frente: str, nome: str = "?", validar_acoes=None) -
     return etapas, ordem, erros
 
 
+NOMES_FASE = {"quebra": "Acordo · parcela vencida", "preventivo": "Acordo · antes do vencimento", "cpc": "CPC",
+              "giro": "Não CPC", "localizacao": "Cliente novo"}      # nomes do glossário (bloco 5)
+
+
+def validar_fases(definicao: dict, frente: str, nome: str, canais) -> tuple[dict, list[str]]:
+    """Orçamento por canal, prioridade e travas próprias das fases do motor (bloco 3), no bloco de cada
+    fase da estratégia: definicao.<fase>.orcamento / definicao.<fase>.travas (mesmo formato das etapas
+    próprias). Devolve {fase: Etapa sem régua} só das fases que definiram algo, e os avisos."""
+    erros: list[str] = []
+    saida = {}
+    if not isinstance(definicao, dict):
+        return saida, erros
+    for fase in FASES[frente]:
+        b = definicao.get(fase)
+        if not isinstance(b, dict) or not (b.get("orcamento") or b.get("travas")):
+            continue
+        onde = f"{nome}/{NOMES_FASE.get(fase, fase)}"
+        orc = _ler_orcamento(b.get("orcamento"), set(canais), onde, erros)
+        travas = _ler_travas_etapa(b.get("travas"), onde, erros)
+        if orc or travas:
+            saida[fase] = Etapa(fase, NOMES_FASE.get(fase, fase), (), "entrada", None, 0, 0, {}, {}, None, orc, travas)
+    return saida, erros
+
+
 def _ler_travas_etapa(bruto, onde: str, erros: list) -> dict:
     """Travas próprias da etapa, dentro das faixas de segurança (motor/travas.py)."""
     from .travas import HORA, MAX_HORA, MIN_HORA, MIN_INTERVALO_H

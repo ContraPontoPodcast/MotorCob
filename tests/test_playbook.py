@@ -338,6 +338,18 @@ class TestOperacao(unittest.TestCase):
             self.assertEqual((pasta / "discador.csv").read_text(),
                              "id_cliente;contato\nC1;11900000010\nC1;11900000011\nC2;11900000002\n")
 
+    def test_exporta_o_produto_da_acao_na_4a_coluna(self):
+        import rodar_dia
+        linhas = [{"id_cliente": "C1", "contato": "11900000001", "condicao": "", "mensagem": "Oi", "produto": "sms_otp"},
+                  {"id_cliente": "C2", "contato": "11900000002", "condicao": "", "mensagem": "Oi"}]
+        with tempfile.TemporaryDirectory() as tmp:
+            pasta = Path(tmp) / "ids"
+            rodar_dia.exportar_ids(pasta, {"sms": linhas, "email": [{**linhas[0], "mensagem": ""}]})
+            self.assertEqual((pasta / "sms.csv").read_text(),
+                             "id_cliente;contato;mensagem;produto\nC1;11900000001;Oi;sms_otp\nC2;11900000002;Oi;\n")
+            self.assertEqual((pasta / "email.csv").read_text(),
+                             "id_cliente;contato;mensagem;produto\nC1;11900000001;;sms_otp\n")
+
     def test_rotina_diaria_e_idempotente(self):
         import rodar_dia
         ex = RAIZ / "exemplos"

@@ -1,0 +1,573 @@
+<title>Orquestração por carteira</title>
+<style>
+/* Layout: janela do sistema com duas telas (Orquestração e Mapa da Esteira); na Orquestração, carteira no topo, segmentos à esquerda, barra de ferramentas única e o conteúdo da aba escolhida */
+:root {
+  --bg: #F5F5F7; --painel: #FFFFFF; --tinta: #1D1D1F; --tinta-2: #6E6E73; --linha: #E3E3E8; --suave: #F2F2F5;
+  --azul: #0A64D0; --azulf: #E8F1FC; --ok: #1E7A36; --okf: #E6F4EA; --alerta: #8A5A00; --alertaf: #FFF4D6; --erro: #C4271E; --errof: #FDECEA;
+  --petroleo: #0F4C5C; --petro-1: #E3EEF0; --petro-2: #B7D1D6; --petro-3: #6F9EA8; --petro-4: #2F6C79;
+  --wa: #1F8A4C; --rcs: #3B5BA9; --sms: #7A4FB0; --email: #A2552B; --av: #0E7C86; --disc: #475569;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --azulf: #13253D; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715;
+  --petroleo: #7FC4D2; --petro-1: #12262B; --petro-2: #1D4049; --petro-3: #2F6573; --petro-4: #4E93A2; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #000000; --painel: #1C1C1E; --tinta: #F5F5F7; --tinta-2: #A1A1A6; --linha: #38383A; --suave: #2C2C2E;
+  --azul: #4C9BFF; --azulf: #13253D; --ok: #4CC36A; --okf: #16301D; --alerta: #F2C14E; --alertaf: #3A2E10; --erro: #FF6B60; --errof: #3A1715;
+  --petroleo: #7FC4D2; --petro-1: #12262B; --petro-2: #1D4049; --petro-3: #2F6573; --petro-4: #4E93A2; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--tinta); font: 15px/1.45 var(--sans); padding-block: 24px 48px; padding-inline: 16px; margin: 0; }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.proto { font-size: 13px; color: var(--tinta-2); }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0; text-wrap: balance; }
+h3 { font-size: 14px; margin: 0; }
+.ajuda { color: var(--tinta-2); margin: 4px 0 0; font-size: 13.5px; max-width: 78ch; }
+.abas { display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--linha); }
+.abas button { border: 0; background: none; color: var(--tinta-2); font: 600 14px var(--sans); padding: 10px 12px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.abas button[aria-selected="true"] { color: var(--tinta); border-color: var(--tinta); }
+.secao { background: var(--painel); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.tit { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.btn { border: 0; border-radius: 999px; padding: 8px 15px; font: 600 13.5px var(--sans); cursor: pointer; background: var(--tinta); color: var(--painel); white-space: nowrap; }
+.btn.sec { background: var(--suave); color: var(--tinta); }
+.btn.peq { padding: 6px 12px; font-size: 12.5px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+input, select { font: 14px var(--sans); color: var(--tinta); background: var(--painel); border: 1px solid var(--linha); border-radius: 9px; height: 36px; padding: 0 9px; min-width: 0; }
+input.num { font-variant-numeric: tabular-nums; text-align: right; width: 84px; font-family: var(--mono); font-size: 13px; }
+.seg { display: inline-flex; background: var(--suave); border-radius: 12px; padding: 4px; gap: 4px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; color: var(--tinta-2); font: 600 13.5px var(--sans); padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--painel); color: var(--tinta); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.selo { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+.selo.ok { background: var(--okf); color: var(--ok); } .selo.al { background: var(--alertaf); color: var(--alerta); }
+.selo.er { background: var(--errof); color: var(--erro); } .selo.ne { background: var(--suave); color: var(--tinta-2); }
+.selo.az { background: var(--azulf); color: var(--azul); }
+.aviso { border-radius: 12px; padding: 12px 14px; font-size: 13.5px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.aviso.al { background: var(--alertaf); color: var(--alerta); } .aviso.az { background: var(--azulf); color: var(--azul); }
+.aviso.ok { background: var(--okf); color: var(--ok); }
+.aviso .acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.cod { font: 12px var(--mono); color: var(--tinta-2); }
+.chave { width: 44px; height: 26px; border-radius: 999px; border: 0; background: #D2D2D7; position: relative; cursor: pointer; flex: none; transition: background .15s; }
+.chave::after { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: left .15s; }
+.chave[aria-checked="true"] { background: #34C759; } .chave[aria-checked="true"]::after { left: 20px; }
+@media (prefers-reduced-motion: reduce) { .chave, .chave::after { transition: none; } }
+label.campo { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--tinta-2); min-width: 0; }
+
+/* ---------- orquestração */
+.carteiras { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.carteiras .rot { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-2); }
+.orq { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; align-items: start; }
+.segs { background: var(--painel); border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.segs .cab { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.sg { border: 1px solid var(--linha); border-radius: 12px; padding: 9px 10px; background: var(--painel); cursor: pointer; text-align: left; font: inherit; color: inherit; display: flex; flex-direction: column; gap: 3px; }
+.sg[aria-current="true"] { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; }
+.sg b { font-size: 14px; } .sg small { color: var(--tinta-2); font-size: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.cabest { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cabest .nome { display: flex; flex-direction: column; gap: 4px; }
+.cabest .nome b { font-size: 20px; letter-spacing: -.01em; }
+.barra { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--linha); border-bottom: 1px solid var(--linha); padding: 10px 0; position: sticky; top: env(safe-area-inset-top, 0px); background: var(--painel); z-index: 2; }
+.barra .dir { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.estado { font-size: 12.5px; color: var(--tinta-2); display: inline-flex; align-items: center; gap: 6px; }
+.estado i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+.estado.sujo i { background: #E9A23B; }
+.menu { position: relative; }
+.menu .lista { position: absolute; right: 0; top: calc(100% + 6px); background: var(--painel); border: 1px solid var(--linha); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; min-width: 270px; z-index: 5; display: flex; flex-direction: column; }
+.menu .lista button { border: 0; background: none; text-align: left; padding: 9px 10px; border-radius: 8px; font: 14px var(--sans); color: var(--tinta); cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.menu .lista button small { color: var(--tinta-2); font-size: 12px; }
+.menu .lista button:hover { background: var(--suave); }
+.menu .lista hr { border: 0; border-top: 1px solid var(--linha); margin: 4px 0; }
+/* régua (mock) */
+.regua { display: flex; flex-direction: column; gap: 12px; }
+.faixa { border: 1px solid var(--linha); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.faixa .cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dias { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.dia { flex: 0 0 140px; border: 1px dashed var(--linha); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 5px; min-height: 84px; }
+.dia .d { font: 600 12px var(--mono); color: var(--tinta-2); }
+.chip { font-size: 12px; font-weight: 600; color: #fff; border-radius: 7px; padding: 3px 7px; display: inline-block; }
+.modo { font-size: 11px; color: var(--tinta-2); }
+/* etapas e fases */
+.ef { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; align-items: start; }
+.lst { display: flex; flex-direction: column; gap: 6px; }
+.it { display: flex; align-items: center; gap: 8px; border: 1px solid var(--linha); border-radius: 12px; padding: 8px 10px; cursor: pointer; background: var(--painel); text-align: left; font: inherit; color: inherit; }
+.it[aria-current="true"] { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; }
+.it .pos { font: 600 12px var(--mono); color: var(--tinta-2); width: 16px; text-align: right; }
+.it .tx { flex: 1; min-width: 0; } .it .tx b { display: block; font-size: 14px; } .it .tx small { color: var(--tinta-2); font-size: 12px; }
+.bloco { border: 1px solid var(--linha); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.bloco .cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.n { font-size: 12px; font-weight: 700; color: var(--tinta-2); margin-right: 6px; }
+.canaisorc { display: flex; gap: 8px; flex-wrap: wrap; }
+.corc { border: 1px solid var(--linha); background: var(--painel); border-radius: 10px; padding: 7px 10px; font: 13px var(--sans); color: var(--tinta); cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.corc[aria-pressed="true"] { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta) inset; }
+.corc i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.prio { display: flex; flex-direction: column; gap: 4px; }
+.pr { display: grid; grid-template-columns: 24px 88px minmax(0, 1fr) 56px; gap: 8px; align-items: center; font-size: 13.5px; padding: 4px 0; }
+.pr.off { color: var(--tinta-2); }
+.pr .p0 { font: 600 11px var(--mono); color: var(--tinta-2); white-space: nowrap; }
+.pr .setas { display: flex; gap: 2px; } .pr .setas button { border: 0; background: var(--suave); border-radius: 5px; width: 24px; height: 22px; cursor: pointer; color: var(--tinta-2); }
+.radios { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.radios label { display: flex; gap: 8px; align-items: flex-start; }
+.radios input, .pr input[type=checkbox] { width: auto; height: auto; margin-top: 3px; }
+.lin2 { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; }
+/* travas */
+.rolagem { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: left; font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-2); padding: 6px 8px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+td { padding: 9px 8px; border-bottom: 1px solid var(--linha); vertical-align: middle; }
+td.n2, th.n2 { text-align: right; font-variant-numeric: tabular-nums; }
+.cel { border: 0; background: none; font: 13px var(--sans); color: var(--tinta-2); cursor: pointer; padding: 4px 8px; border-radius: 8px; text-align: left; }
+.cel.propria { background: var(--azulf); color: var(--azul); font-weight: 600; }
+.cel:hover { background: var(--suave); }
+/* modal */
+.modal-fundo { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; z-index: 9; }
+.modal { background: var(--painel); border-radius: 18px; padding: 20px; width: min(620px, 100%); display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; font-size: 14px; }
+.checks label { display: flex; gap: 8px; align-items: flex-start; } .checks input { width: auto; height: auto; margin-top: 3px; }
+.checks small { color: var(--tinta-2); display: block; font-size: 12px; }
+
+/* ---------- mapa */
+.totais { display: flex; gap: 24px; flex-wrap: wrap; font-size: 13.5px; color: var(--tinta-2); }
+.totais b { display: block; font-size: 22px; color: var(--tinta); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.trilha { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); gap: 18px; }
+.trilha .gr { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.trilha .cards { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 8px; }
+.est .big { font-size: 22px !important; }
+@media (max-width: 1100px) { .trilha { grid-template-columns: minmax(0, 1fr); } .trilha .cards { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } }
+.grupo { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-2); padding: 0 2px; }
+.sep { border-left: 1px dashed var(--linha); margin: 0 auto; }
+.est { border: 1px solid var(--linha); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; text-align: left; font: inherit; color: inherit; background: var(--painel); min-width: 0; }
+.est[aria-pressed="true"] { border-color: #E9A23B; box-shadow: 0 0 0 2px #E9A23B inset; }
+.est .nm { font-size: 13px; font-weight: 700; } .est .sub { font-size: 11.5px; color: var(--tinta-2); }
+.est .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.est .bar { height: 6px; border-radius: 3px; background: var(--suave); overflow: hidden; } .est .bar i { display: block; height: 100%; background: var(--petroleo); }
+.est .mv { display: flex; justify-content: space-between; font-size: 12px; font-variant-numeric: tabular-nums; }
+.est .mv .e { color: var(--ok); } .est .mv .s { color: var(--erro); }
+.est .hoje { font-size: 12px; color: var(--tinta-2); }
+.duas { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; }
+.fluxo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 64px; gap: 10px; align-items: center; font-size: 13.5px; padding: 6px 0; border-bottom: 1px solid var(--linha); }
+.fluxo .t { height: 10px; border-radius: 5px; background: var(--suave); overflow: hidden; } .fluxo .t i { display: block; height: 100%; }
+.fluxo .q { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.bom i { background: var(--ok); } .ruim i { background: var(--erro); } .neutro i { background: var(--petro-3); }
+.legenda { display: flex; gap: 14px; font-size: 12px; color: var(--tinta-2); flex-wrap: wrap; }
+.legenda span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.etb { display: grid; grid-template-columns: 150px minmax(0, 1fr) 70px; gap: 10px; align-items: center; font-size: 13px; padding: 3px 0; }
+.etb .t { height: 10px; border-radius: 5px; background: var(--suave); overflow: hidden; } .etb .t i { display: block; height: 100%; background: var(--petroleo); }
+.etb .q { text-align: right; font-variant-numeric: tabular-nums; }
+.filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+@media (max-width: 900px) {
+  .orq, .ef, .duas { grid-template-columns: minmax(0, 1fr); }
+  .checks { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+
+<div class="wrap">
+  <div class="proto">Protótipo para aprovação · carteiras, segmentos e números fictícios · nada aqui grava no banco</div>
+  <div class="tit">
+    <div>
+      <h1>Orquestração por carteira</h1>
+      <p class="ajuda">Bloco 3 da homologação: cada carteira com a sua estratégia, barra de ações organizada, fases do motor com orçamento, prioridade e travas próprias, e o Mapa da Esteira mais legível.</p>
+    </div>
+  </div>
+  <div class="abas" role="tablist">
+    <button role="tab" aria-selected="true" data-tela="orq">Orquestração</button>
+    <button role="tab" aria-selected="false" data-tela="mapa">Mapa da Esteira</button>
+  </div>
+
+  <!-- ===================== ORQUESTRAÇÃO ===================== -->
+  <div data-t="orq" style="display:flex;flex-direction:column;gap:16px">
+    <div class="carteiras">
+      <span class="rot">Carteira</span>
+      <div class="seg" id="carteiras" role="group" aria-label="Carteira"></div>
+      <span class="ajuda" style="margin:0">Tudo abaixo é desta carteira: segmentos, estratégia, etapas e travas.</span>
+    </div>
+    <div class="orq">
+      <aside class="segs">
+        <div class="cab"><h3>Segmentos</h3><button class="btn sec peq">+ Segmento</button></div>
+        <div id="segs" style="display:flex;flex-direction:column;gap:6px"></div>
+      </aside>
+      <section class="secao">
+        <div class="cabest">
+          <div class="nome"><b id="estNome"></b><span id="estSelos" style="display:flex;gap:6px;flex-wrap:wrap"></span></div>
+        </div>
+        <div id="compart"></div>
+        <div class="barra">
+          <div class="seg" id="vistas" role="tablist" aria-label="Vista">
+            <button aria-pressed="true" data-v="desenho">Desenho da esteira</button>
+            <button aria-pressed="false" data-v="fases">Etapas e fases</button>
+            <button aria-pressed="false" data-v="travas">Travas</button>
+            <button aria-pressed="false" data-v="geral">Visão geral</button>
+          </div>
+          <div class="dir">
+            <span class="estado" id="estado"><i></i>Tudo salvo</span>
+            <button class="btn sec" id="btnCopiar">Copiar de outra carteira</button>
+            <div class="menu">
+              <button class="btn sec" id="btnMais" aria-haspopup="true" aria-expanded="false">Mais ▾</button>
+              <div class="lista" id="menuMais" hidden>
+                <button data-a="playbook">Começar do playbook MotorCob<small>Preenche as faixas com a régua padrão</small></button>
+                <button data-a="personas">Montar esteira pelas personas<small>Cria as raias das personas desta carteira</small></button>
+                <hr>
+                <button data-a="pdf">Imprimir / PDF<small>Só a visão geral, fundo branco</small></button>
+                <button data-a="reenq">Reenquadrar agora<small>Aplica a estratégia salva sem esperar a rotina</small></button>
+              </div>
+            </div>
+            <button class="btn" id="btnSalvar">Salvar</button>
+          </div>
+        </div>
+
+        <!-- desenho -->
+        <div data-v="desenho" class="regua" id="vDesenho"></div>
+
+        <!-- etapas e fases -->
+        <div data-v="fases" hidden>
+          <div class="ef">
+            <div>
+              <div class="tit" style="margin-bottom:8px"><h3>Etapas e fases</h3><button class="btn sec peq">+ Nova etapa</button></div>
+              <p class="ajuda" style="margin:0 0 8px">O cliente fica na primeira da lista em que se encaixa. As fases do motor agora também têm orçamento, prioridade e travas.</p>
+              <div class="lst" id="lstFases"></div>
+            </div>
+            <div id="edFase" style="display:flex;flex-direction:column;gap:12px"></div>
+          </div>
+        </div>
+
+        <!-- travas -->
+        <div data-v="travas" hidden style="display:flex;flex-direction:column;gap:12px">
+          <p class="ajuda" style="margin:0">Linha = trava. A coluna <b>Estratégia</b> vale para todas as fases; clique numa fase para dar a ela um valor próprio (fica azul). As faixas de segurança valem sempre: horário entre 08:00 e 20:00, intervalo mínimo de 12 h, freio do WhatsApp até 5%.</p>
+          <div class="rolagem"><table id="tabTravas"></table></div>
+          <div id="edTrava"></div>
+        </div>
+
+        <!-- visão geral -->
+        <div data-v="geral" hidden>
+          <p class="ajuda">A Visão geral continua como hoje (linha do tempo por faixa, somente leitura). Única mudança: no topo dela aparece a carteira e, por fase, o orçamento e as travas próprias, quando houver.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ===================== MAPA ===================== -->
+  <div data-t="mapa" hidden style="display:flex;flex-direction:column;gap:16px">
+    <section class="secao">
+      <div class="tit">
+        <div><h2>Mapa da Esteira · Banco Alfa (exemplo)</h2>
+          <p class="ajuda">Onde está a base hoje e quem se moveu nos últimos 7 dias. As fases estão na ordem da jornada, da esquerda para a direita.</p></div>
+        <span class="cod">rotina de hoje · 06:12</span>
+      </div>
+      <div class="filtros">
+        <label class="campo">Carteira<select><option>Banco Alfa</option><option>Financeira Beta</option><option>Todas</option></select></label>
+        <div class="campo">Medir por<div class="seg" id="medida"><button aria-pressed="true" data-m="cli">Clientes</button><button aria-pressed="false" data-m="saldo">Saldo</button></div></div>
+        <div class="campo">Movimento<div class="seg" id="periodo"><button aria-pressed="true" data-p="7">7 dias</button><button aria-pressed="false" data-p="30">30 dias</button></div></div>
+        <label class="campo">Segmento<select><option>Todos</option><option>Veículos</option><option>Cartão</option></select></label>
+        <label class="campo">Canal<select><option>Todos</option><option>WhatsApp</option><option>SMS</option></select></label>
+      </div>
+      <div class="totais" id="totais"></div>
+      <div class="trilha" id="trilha"></div>
+      <div class="legenda"><span style="--c: var(--ok)">+ entraram no período</span><span style="--c: var(--erro)">− saíram no período</span><span style="--c: var(--petroleo)">tamanho da fase na base</span></div>
+    </section>
+    <div class="duas">
+      <section class="secao">
+        <div class="tit"><div><h2 id="fxTit">Movimento entre fases</h2><p class="ajuda" id="fxSub">Os maiores fluxos do período, do maior para o menor. Verde = avanço (CPC, acordo, quitação); vermelho = recuo (quebra, virou Não CPC, bloqueio).</p></div></div>
+        <div id="fluxos"></div>
+      </section>
+      <section class="secao">
+        <div class="tit"><div><h2 id="detTit"></h2><p class="ajuda" id="detSub"></p></div></div>
+        <div id="detalhe" style="display:flex;flex-direction:column;gap:12px"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- copiar de outra carteira -->
+<div class="modal-fundo" id="mCopiar" hidden>
+  <form class="modal" id="fCopiar">
+    <h2>Copiar de outra carteira</h2>
+    <p class="ajuda" style="margin:0">Traz uma estratégia de outra carteira como <b>cópia</b> para esta. Depois de copiar, as duas ficam independentes: mudar uma não muda a outra.</p>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+      <label class="campo">Carteira de origem<select id="cOrig"></select></label>
+      <label class="campo">Segmento de origem<select id="cSeg"></select></label>
+    </div>
+    <div class="campo">O que copiar
+      <div class="checks">
+        <label><input type="checkbox" checked> <span>Régua das fases<small>Cliente novo, CPC, Não CPC, acordo</small></span></label>
+        <label><input type="checkbox" checked> <span>Etapas da empresa<small>com quem entra, régua e saídas</small></span></label>
+        <label><input type="checkbox" checked> <span>Orçamento e prioridade<small>por fase e por etapa</small></span></label>
+        <label><input type="checkbox" checked> <span>Travas<small>da estratégia e de cada fase</small></span></label>
+        <label><input type="checkbox" checked> <span>Frases<small>mensagens de cada dia</small></span></label>
+        <label><input type="checkbox"> <span>Raias de personas<small>só as personas que existirem nesta carteira</small></span></label>
+      </div></div>
+    <div class="aviso az"><span>Destino: <b id="cDest"></b>. A cópia entra no editor sem salvar; revise e clique em Salvar.</span></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn sec" id="cCanc">Cancelar</button><button class="btn">Copiar para o editor</button></div>
+  </form>
+</div>
+
+<script>
+const CANAL = { whatsapp: ["WhatsApp", "var(--wa)"], rcs: ["RCS", "var(--rcs)"], sms: ["SMS", "var(--sms)"], email: ["E-mail", "var(--email)"], agente: ["Agente virtual", "var(--av)"], discador: ["Discador", "var(--disc)"] };
+// estratégias (id -> dono); "compartilhada" = mais de uma carteira usa a mesma linha
+let estrategias = {
+  1: { nome: "Veículos · régua padrão", usos: [["alfa", "veiculos"], ["beta", "veiculos"]] },
+  2: { nome: "Cartão · ticket baixo", usos: [["alfa", "cartao"]] },
+  3: { nome: "Cartão · Beta", usos: [["beta", "cartao"]] },
+  4: { nome: "Demais clientes · Alfa", usos: [["alfa", "demais"]] },
+  5: { nome: "Demais clientes · Beta", usos: [["beta", "demais"]] },
+  6: { nome: "Carteira principal", usos: [["principal", "demais"]] }
+};
+const CARTEIRAS = { alfa: "Banco Alfa", beta: "Financeira Beta", principal: "Carteira principal" };
+const SEGS = {
+  alfa: [["veiculos", "Veículos", 1, 18420], ["cartao", "Cartão", 2, 41230], ["demais", "Demais clientes", 4, 6110]],
+  beta: [["veiculos", "Veículos", 1, 9870], ["cartao", "Cartão", 3, 22540], ["demais", "Demais clientes", 5, 3020]],
+  principal: [["demais", "Demais clientes", 6, 1200]]
+};
+let cart = "alfa", seg = "veiculos", vista = "desenho", sujo = false, faseSel = "localizacao", canalOrc = "whatsapp";
+const estDe = (c, s) => SEGS[c].find(x => x[0] === s)[2];
+
+// fases do motor + etapas da empresa, com orçamento, prioridade e travas por fase
+const FASES = [
+  { id: "ticket-alto", nome: "Renegociação ticket alto", tipo: "sua", sub: "saldo > R$ 10 mil", canais: ["whatsapp", "agente"] },
+  { id: "quebra", nome: "Quebra de acordo", tipo: "padrao", sub: "parcela vencida, D+1 a D+5", canais: ["whatsapp", "sms"] },
+  { id: "preventivo", nome: "Preventivo", tipo: "padrao", sub: "D-3 a D0 da parcela", canais: ["whatsapp", "sms", "email"] },
+  { id: "cpc", nome: "CPC", tipo: "padrao", sub: "deu CPC · telefone Hot", canais: ["whatsapp", "rcs", "agente", "discador"] },
+  { id: "giro", nome: "Não CPC (giro)", tipo: "padrao", sub: "ciclo de 8 dias × 3", canais: ["whatsapp", "agente", "sms"] },
+  { id: "localizacao", nome: "Cliente novo / não localizado", tipo: "padrao", sub: "D+1 até virar Não CPC", canais: ["whatsapp", "rcs", "sms", "email", "agente", "discador"] }
+];
+const ligada = { "ticket-alto": true, quebra: true, preventivo: true, cpc: true, giro: true, localizacao: true };
+const PRIOS = [["novo", "Cliente novo do dia"], ["nunca", "Nunca acionado nesta fase"], ["etapa_antigo", "Tempo na fase: do mais antigo para o mais novo"], ["etapa_novo", "Tempo na fase: do mais novo para o mais antigo"],
+  ["acao_antiga", "Última ação: da mais antiga para hoje"], ["acao_recente", "Última ação: da mais recente para a mais antiga"], ["saldo_maior", "Maior saldo primeiro"], ["saldo_menor", "Menor saldo primeiro"],
+  ["atraso_maior", "Maior atraso primeiro"], ["atraso_menor", "Menor atraso primeiro"], ["hot", "Telefone Hot ou certificado primeiro"]];
+const OPOSTO = { etapa_antigo: "etapa_novo", etapa_novo: "etapa_antigo", acao_antiga: "acao_recente", acao_recente: "acao_antiga", saldo_maior: "saldo_menor", saldo_menor: "saldo_maior", atraso_maior: "atraso_menor", atraso_menor: "atraso_maior" };
+const orc = {   // orcamento[fase][canal]
+  localizacao: { whatsapp: { modo: "param", clientes: 3000, telefones: null, prio: ["novo", "saldo_maior"], fora: "senao" }, discador: { modo: "param", clientes: null, telefones: 1800, prio: ["hot", "atraso_menor"], fora: "amanha" } },
+  cpc: { agente: { modo: "param", clientes: 900, telefones: null, prio: ["saldo_maior"], fora: "senao" } },
+  giro: {}, quebra: {}, preventivo: {}, "ticket-alto": {}
+};
+// travas: valor da estratégia e valores próprios por fase
+const TRAVAS = [
+  ["intervalo", "Intervalo entre ações", "48 h", { cpc: "24 h · segue todo dia", localizacao: "72 h" }],
+  ["acoes_dia", "Ações por dia", "2", { cpc: "3", giro: "1" }],
+  ["horario", "Horário", "08:00–20:00 · sáb. até 14:00", { localizacao: "09:00–19:00" }],
+  ["domingo", "Domingo e feriados", "Não aciona", {}],
+  ["limite_semana", "Ações por semana", "6", { giro: "3" }],
+  ["ligacoes", "Tentativas do discador por número", "3 por dia", { cpc: "5 por dia", localizacao: "2 por dia" }],
+  ["nao_perturbe", "Não perturbe", "Voz", {}],
+  ["freio_wa", "Freio do WhatsApp", "3% a partir de 500", {}]
+];
+const COLS = ["ticket-alto", "quebra", "preventivo", "cpc", "giro", "localizacao"];
+const nomeFase = id => FASES.find(f => f.id === id).nome;
+
+function marcarSujo(v = true) { sujo = v; const e = document.getElementById("estado"); e.className = "estado" + (v ? " sujo" : ""); e.innerHTML = `<i></i>${v ? "Alterações não salvas" : "Tudo salvo"}`; }
+
+function carteiras() {
+  document.getElementById("carteiras").innerHTML = Object.entries(CARTEIRAS).map(([k, n]) => `<button aria-pressed="${k === cart}" data-c="${k}">${n}</button>`).join("");
+  document.querySelectorAll("#carteiras button").forEach(b => b.addEventListener("click", () => { cart = b.dataset.c; seg = SEGS[cart][0][0]; tudo(); }));
+}
+function segmentos() {
+  document.getElementById("segs").innerHTML = SEGS[cart].map(([id, nome, est, n]) => {
+    const e = estrategias[est], comp = e.usos.length > 1;
+    return `<button class="sg" data-s="${id}" aria-current="${id === seg}"><b>${nome}</b><small>${n.toLocaleString("pt-BR")} clientes ${comp ? '<span class="selo al">compartilhada</span>' : ""}</small></button>`;
+  }).join("");
+  document.querySelectorAll("#segs .sg").forEach(b => b.addEventListener("click", () => { seg = b.dataset.s; tudo(); }));
+}
+function cabecalho() {
+  const id = estDe(cart, seg), e = estrategias[id], outras = e.usos.filter(([c]) => c !== cart);
+  document.getElementById("estNome").textContent = e.nome;
+  document.getElementById("estSelos").innerHTML = `<span class="selo ne">${CARTEIRAS[cart]} › ${SEGS[cart].find(x => x[0] === seg)[1]}</span>` +
+    (outras.length ? '<span class="selo al">também usada por ' + outras.map(([c]) => CARTEIRAS[c]).join(", ") + "</span>" : '<span class="selo ok">só desta carteira</span>');
+  const box = document.getElementById("compart");
+  box.innerHTML = outras.length ? `<div class="aviso al"><span><b>Esta estratégia é a mesma de ${outras.map(([c]) => CARTEIRAS[c]).join(", ")}.</b> O que você salvar aqui muda lá também. É por isso que, ao editar uma carteira, aparecia a estratégia da outra.</span>
+    <span class="acoes"><button class="btn" id="separar">Separar só para ${CARTEIRAS[cart]}</button><button class="btn sec" id="manter">Editar para as duas</button></span></div>` : "";
+  if (outras.length) {
+    document.getElementById("separar").addEventListener("click", () => {
+      const nid = Math.max(...Object.keys(estrategias).map(Number)) + 1;
+      estrategias[nid] = { nome: e.nome + " · " + CARTEIRAS[cart], usos: [[cart, seg]] };
+      e.usos = e.usos.filter(([c, s]) => !(c === cart && s === seg));
+      SEGS[cart].find(x => x[0] === seg)[2] = nid; tudo();
+      document.getElementById("compart").innerHTML = `<div class="aviso ok"><span><b>Pronto: cópia criada só para ${CARTEIRAS[cart]}.</b> As outras carteiras continuam com a estratégia de antes.</span></div>`;
+    });
+    document.getElementById("manter").addEventListener("click", () => { box.innerHTML = `<div class="aviso az"><span>Editando a estratégia compartilhada: ao salvar, a mudança vale para ${[cart, ...outras.map(o => o[0])].map(c => CARTEIRAS[c]).join(" e ")}.</span></div>`; });
+  }
+}
+// ---- desenho (mock simplificado da régua de hoje)
+function desenho() {
+  const dia = (d, itens) => `<div class="dia"><span class="d">${d}</span>${itens.map(([c, m]) => `${m ? `<span class="modo">${m}</span>` : ""}<span class="chip" style="background:${CANAL[c][1]}">${CANAL[c][0]}</span>`).join("")}</div>`;
+  document.getElementById("vDesenho").innerHTML = `
+    <p class="ajuda" style="margin:0">O Desenho da esteira continua igual ao de hoje (arrastar canais, raias de persona, frases). Muda só o que está em volta: a carteira no topo, a barra de ações única e o aviso de estratégia compartilhada.</p>
+    <div class="faixa"><div class="cab"><h3>Cliente novo · ainda não deu CPC</h3><span class="selo ne">vira Não CPC no D+8</span></div>
+      <div class="dias">${dia("D+1", [["whatsapp"], ["sms", "senão"]])}${dia("D+3", [["rcs"], ["sms", "senão"], ["email", "+ junto"]])}${dia("D+5", [["agente"], ["discador", "reserva"]])}${dia("D+7", [["sms"], ["email", "+ junto"]])}</div></div>
+    <div class="faixa"><div class="cab"><h3>Deu CPC · CPC A e CPC B</h3><span class="selo ne">3 tentativas por canal</span></div>
+      <div class="dias">${dia("Hot", [["whatsapp"]])}${dia("Reserva 1", [["rcs"]])}${dia("Reserva 2", [["agente"]])}${dia("Reserva 3", [["discador"]])}</div></div>
+    <div class="faixa"><div class="cab"><h3>Não CPC · ciclo que se repete</h3><span class="selo ne">8 dias × 3</span></div>
+      <div class="dias">${dia("dia 1", [["whatsapp"]])}${dia("dia 5", [["agente"]])}</div></div>`;
+}
+// ---- etapas e fases
+function fases() {
+  document.getElementById("lstFases").innerHTML = FASES.map((f, i) => {
+    const o = orc[f.id] || {}, nOrc = Object.keys(o).length, nTr = TRAVAS.filter(t => t[3][f.id]).length;
+    return `<button class="it" data-f="${f.id}" aria-current="${f.id === faseSel}"><span class="pos">${i + 1}</span>
+      <span class="tx"><b>${f.nome}</b><small>${f.sub}${nOrc ? " · orçamento em " + nOrc : ""}${nTr ? " · " + nTr + " trava" + (nTr > 1 ? "s" : "") + " própria" + (nTr > 1 ? "s" : "") : ""}</small></span>
+      <span class="selo ${f.tipo === "sua" ? "ok" : "ne"}">${f.tipo === "sua" ? "Sua" : "Padrão"}</span></button>`;
+  }).join("");
+  document.querySelectorAll("#lstFases .it").forEach(b => b.addEventListener("click", () => { faseSel = b.dataset.f; canalOrc = FASES.find(f => f.id === faseSel).canais[0]; fases(); }));
+  const f = FASES.find(x => x.id === faseSel), o = (orc[f.id] ||= {});
+  if (!f.canais.includes(canalOrc)) canalOrc = f.canais[0];
+  const c = o[canalOrc] || { modo: "todos", clientes: null, telefones: null, prio: [], fora: "senao" };
+  const trs = TRAVAS.filter(t => t[3][f.id]);
+  const ed = document.getElementById("edFase");
+  ed.innerHTML = `
+    <div class="bloco"><div class="cab"><h3><span class="n">1</span>${f.nome}</h3>
+      <span style="display:flex;gap:8px;align-items:center"><span class="cod">${ligada[f.id] ? "Ligada" : "Desligada"}</span><button class="chave" role="switch" aria-checked="${ligada[f.id]}" id="lig" aria-label="Ligada"></button></span></div>
+      <p class="ajuda" style="margin:0">${f.tipo === "padrao" ? "Quem entra e quando sai são regras do motor. Régua: no Desenho da esteira. Aqui você define quanto pode mandar por dia, quem recebe primeiro e as travas desta fase." : "Etapa da empresa: quem entra, régua e saídas como hoje; orçamento e travas abaixo."}</p></div>
+    <div class="bloco"><div class="cab"><h3><span class="n">2</span>Orçamento e prioridade por canal</h3></div>
+      <div class="canaisorc">${f.canais.map(k => { const x = o[k]; return `<button class="corc" data-k="${k}" aria-pressed="${k === canalOrc}"><i style="background:${CANAL[k][1]}"></i>${CANAL[k][0]} · ${x && x.modo === "param" ? [x.clientes ? x.clientes.toLocaleString("pt-BR") + " clientes" : "", x.telefones ? x.telefones.toLocaleString("pt-BR") + " tel." : ""].filter(Boolean).join(" / ") + "/dia" : "todos"}</button>`; }).join("")}</div>
+      <div class="radios">
+        <label><input type="radio" name="modo" value="todos" ${c.modo === "todos" ? "checked" : ""}> <span><b>Todos da raia</b> · manda para todos que a régua pedir hoje</span></label>
+        <label><input type="radio" name="modo" value="param" ${c.modo === "param" ? "checked" : ""}> <span><b>Parametrizado</b> · limite por dia e ordem de quem recebe primeiro</span></label>
+      </div>
+      ${c.modo === "param" ? `
+      <div class="lin2">
+        <label class="campo"><span><input type="checkbox" id="limC" ${c.clientes ? "checked" : ""} style="width:auto;height:auto"> Até N clientes por dia</span><input class="num" id="nC" value="${c.clientes || ""}" ${c.clientes ? "" : "disabled"}></label>
+        <label class="campo"><span><input type="checkbox" id="limT" ${c.telefones ? "checked" : ""} style="width:auto;height:auto"> Até N telefones por dia</span><input class="num" id="nT" value="${c.telefones || ""}" ${c.telefones ? "" : "disabled"}></label>
+      </div>
+      <div><h3 style="margin-bottom:4px">Quem recebe primeiro</h3><p class="ajuda" style="margin:0 0 6px">A prioridade 0 sai primeiro; a seguinte desempata. Empate: ordem da carga.</p>
+        <div class="prio" id="prio"></div></div>
+      <div><h3 style="margin-bottom:6px">Quem ficar fora do orçamento hoje</h3>
+        <div class="radios"><label><input type="radio" name="fora" value="senao" ${c.fora === "senao" ? "checked" : ""}> Recebe o canal de baixo do dia (senão / reserva), se tiver</label>
+        <label><input type="radio" name="fora" value="amanha" ${c.fora === "amanha" ? "checked" : ""}> Não recebe nada hoje; amanhã concorre de novo pela prioridade</label></div></div>` : ""}
+    </div>
+    <div class="bloco"><div class="cab"><h3><span class="n">3</span>Travas desta fase</h3><button class="btn sec peq" id="irTravas">Abrir Travas</button></div>
+      ${trs.length ? `<table><tbody>${trs.map(t => `<tr><td>${t[1]}</td><td class="n2"><span class="selo az">${t[3][f.id]}</span></td><td class="cod">estratégia: ${t[2]}</td></tr>`).join("")}</tbody></table>` : '<p class="ajuda" style="margin:0">Usa as travas da estratégia.</p>'}
+      <p class="ajuda" style="margin:0">${f.id === "cpc" ? "Ex.: no CPC o intervalo é de 24 h e segue todo dia, porque o cliente está conversando; no Cliente novo, 72 h para não queimar o número." : "Cada fase pode ter os próprios valores; o que não for trocado segue a estratégia."}</p></div>`;
+  document.getElementById("lig").addEventListener("click", () => { ligada[f.id] = !ligada[f.id]; marcarSujo(); fases(); });
+  ed.querySelectorAll(".corc").forEach(b => b.addEventListener("click", () => { canalOrc = b.dataset.k; fases(); }));
+  ed.querySelectorAll('input[name="modo"]').forEach(r => r.addEventListener("change", () => {
+    o[canalOrc] = r.value === "param" ? { modo: "param", clientes: 500, telefones: null, prio: ["novo"], fora: "senao" } : { modo: "todos" }; if (r.value === "todos") delete o[canalOrc]; marcarSujo(); fases(); }));
+  document.getElementById("irTravas").addEventListener("click", () => mudarVista("travas"));
+  if (c.modo !== "param") return;
+  const cc = o[canalOrc];
+  ed.querySelectorAll('input[name="fora"]').forEach(r => r.addEventListener("change", () => { cc.fora = r.value; marcarSujo(); }));
+  [["limC", "nC", "clientes"], ["limT", "nT", "telefones"]].forEach(([ck, inp, k]) => {
+    document.getElementById(ck).addEventListener("change", e => { cc[k] = e.target.checked ? 500 : null; if (!cc.clientes && !cc.telefones) cc[k] = 500; marcarSujo(); fases(); });
+    document.getElementById(inp).addEventListener("change", e => { const v = parseInt(e.target.value, 10); if (v > 0) cc[k] = v; marcarSujo(); fases(); });
+  });
+  const pr = document.getElementById("prio");
+  const ordem = [...cc.prio, ...PRIOS.map(p => p[0]).filter(p => !cc.prio.includes(p))];
+  pr.innerHTML = ordem.map(k => { const on = cc.prio.includes(k), bloq = !on && cc.prio.includes(OPOSTO[k]); const lbl = PRIOS.find(p => p[0] === k)[1];
+    return `<div class="pr${on ? "" : " off"}"><input type="checkbox" data-k="${k}" ${on ? "checked" : ""} ${bloq ? "disabled" : ""} aria-label="${lbl}">
+      <span class="p0">${on ? "Prioridade " + cc.prio.indexOf(k) : ""}</span><span>${lbl}${bloq ? ` <span class="cod">não faz sentido com «${PRIOS.find(p => p[0] === OPOSTO[k])[1]}»</span>` : ""}</span>
+      <span class="setas">${on ? `<button data-up="${k}" aria-label="Subir">▲</button><button data-dn="${k}" aria-label="Descer">▼</button>` : ""}</span></div>`; }).join("");
+  pr.querySelectorAll("input").forEach(i => i.addEventListener("change", () => { const k = i.dataset.k; if (i.checked) cc.prio.push(k); else cc.prio = cc.prio.filter(x => x !== k); marcarSujo(); fases(); }));
+  pr.querySelectorAll("[data-up],[data-dn]").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.up || b.dataset.dn, i = cc.prio.indexOf(k), j = b.dataset.up ? i - 1 : i + 1;
+    if (j < 0 || j >= cc.prio.length) return; [cc.prio[i], cc.prio[j]] = [cc.prio[j], cc.prio[i]]; marcarSujo(); fases(); }));
+}
+// ---- travas: estratégia × fase
+let travaSel = null;
+function travas() {
+  const t = document.getElementById("tabTravas");
+  t.innerHTML = `<thead><tr><th>Trava</th><th>Estratégia</th>${COLS.map(c => `<th>${nomeFase(c).replace(" / não localizado", "").replace(" (giro)", "")}</th>`).join("")}</tr></thead>
+    <tbody>${TRAVAS.map(([k, nome, val, pf]) => `<tr><td><b>${nome}</b></td><td>${val}</td>${COLS.map(c => `<td><button class="cel${pf[c] ? " propria" : ""}" data-k="${k}" data-c="${c}">${pf[c] || "segue"}</button></td>`).join("")}</tr>`).join("")}</tbody>`;
+  t.querySelectorAll(".cel").forEach(b => b.addEventListener("click", () => { travaSel = [b.dataset.k, b.dataset.c]; editarTrava(); }));
+  editarTrava();
+}
+function editarTrava() {
+  const box = document.getElementById("edTrava");
+  if (!travaSel) { box.innerHTML = ""; return; }
+  const [k, c] = travaSel, tr = TRAVAS.find(x => x[0] === k), atual = tr[3][c];
+  box.innerHTML = `<div class="bloco"><div class="cab"><h3>${tr[1]} · ${nomeFase(c)}</h3><button class="btn sec peq" id="tFechar">Fechar</button></div>
+    <div class="radios"><label><input type="radio" name="tm" value="segue" ${atual ? "" : "checked"}> Segue a estratégia (${tr[2]})</label>
+    <label><input type="radio" name="tm" value="propria" ${atual ? "checked" : ""}> Valor próprio nesta fase</label></div>
+    <div class="lin2"><label class="campo">Valor<input id="tVal" value="${atual || tr[2]}" ${atual ? "" : "disabled"} style="min-width:220px"></label>
+    <span class="ajuda" style="margin:0">${k === "intervalo" ? "Mínimo de 12 h. No CPC dá para escolher \"segue todo dia\"." : k === "horario" ? "Sempre dentro de 08:00–20:00." : k === "freio_wa" ? "Taxa máxima de 5%." : ""}</span></div></div>`;
+  document.getElementById("tFechar").addEventListener("click", () => { travaSel = null; editarTrava(); });
+  box.querySelectorAll('input[name="tm"]').forEach(r => r.addEventListener("change", () => { if (r.value === "segue") delete tr[3][c]; else tr[3][c] = tr[2]; marcarSujo(); travas(); fases(); }));
+  document.getElementById("tVal").addEventListener("change", e => { tr[3][c] = e.target.value; marcarSujo(); travas(); fases(); });
+}
+function mudarVista(v) {
+  vista = v;
+  document.querySelectorAll("#vistas button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v));
+  document.querySelectorAll("section [data-v]").forEach(d => { if (d.tagName !== "BUTTON") d.hidden = d.dataset.v !== v; });
+}
+function tudo() { carteiras(); segmentos(); cabecalho(); desenho(); fases(); travas(); }
+
+document.querySelectorAll("#vistas button").forEach(b => b.addEventListener("click", () => mudarVista(b.dataset.v)));
+const bm = document.getElementById("btnMais"), mm = document.getElementById("menuMais");
+bm.addEventListener("click", () => { mm.hidden = !mm.hidden; bm.setAttribute("aria-expanded", !mm.hidden); });
+mm.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { mm.hidden = true; bm.setAttribute("aria-expanded", false); if (b.dataset.a === "playbook" || b.dataset.a === "personas") marcarSujo(); }));
+document.addEventListener("click", e => { if (!e.target.closest(".menu")) { mm.hidden = true; bm.setAttribute("aria-expanded", false); } });
+document.getElementById("btnSalvar").addEventListener("click", () => marcarSujo(false));
+// copiar
+const mc = document.getElementById("mCopiar");
+function opcoesCopia() {
+  const o = document.getElementById("cOrig"), s = document.getElementById("cSeg");
+  if (!o.value || o.value === cart) o.innerHTML = Object.entries(CARTEIRAS).filter(([k]) => k !== cart).map(([k, n]) => `<option value="${k}">${n}</option>`).join("");
+  s.innerHTML = SEGS[o.value].map(([id, n, est]) => `<option value="${id}">${n} · ${estrategias[est].nome}</option>`).join("");
+  document.getElementById("cDest").textContent = CARTEIRAS[cart] + " › " + SEGS[cart].find(x => x[0] === seg)[1];
+}
+document.getElementById("btnCopiar").addEventListener("click", () => { document.getElementById("cOrig").value = ""; opcoesCopia(); mc.hidden = false; });
+document.getElementById("cOrig").addEventListener("change", opcoesCopia);
+document.getElementById("cCanc").addEventListener("click", () => mc.hidden = true);
+document.getElementById("fCopiar").addEventListener("submit", e => {
+  e.preventDefault(); mc.hidden = true;
+  const id = estDe(cart, seg), est = estrategias[id];
+  if (est.usos.length > 1) {   // copiar nunca escreve na estratégia compartilhada: cria a cópia desta carteira
+    const nid = Math.max(...Object.keys(estrategias).map(Number)) + 1;
+    estrategias[nid] = { nome: est.nome + " · " + CARTEIRAS[cart], usos: [[cart, seg]] };
+    est.usos = est.usos.filter(([c, s]) => !(c === cart && s === seg)); SEGS[cart].find(x => x[0] === seg)[2] = nid;
+  }
+  tudo(); marcarSujo();
+  document.getElementById("compart").innerHTML = `<div class="aviso ok"><span><b>Copiado de ${CARTEIRAS[document.getElementById("cOrig").value]}.</b> Revise e clique em Salvar. A estratégia é só desta carteira.</span></div>`;
+});
+
+// ===================== MAPA =====================
+const ETAPAS = [
+  { id: "ent", nm: "Entrada", sub: "novos na carga", cli: 2140, saldo: 9.1, e: 2140, s: 0, hoje: 2140 },
+  { id: "loc", nm: "Cliente novo", sub: "ainda sem CPC", cli: 9820, saldo: 41.2, e: 2140, s: 2310, hoje: 6120 },
+  { id: "ncp", nm: "Não CPC", sub: "giro", cli: 4310, saldo: 19.8, e: 1180, s: 640, hoje: 1530 },
+  { id: "cpa", nm: "CPC A", sub: "negociando", cli: 1120, saldo: 6.3, e: 820, s: 690, hoje: 1120 },
+  { id: "cpb", nm: "CPC B", sub: "tentativas", cli: 860, saldo: 4.4, e: 410, s: 380, hoje: 610 },
+  { id: "pre", nm: "Preventivo", sub: "antes do vencimento", cli: 640, saldo: 3.1, e: 290, s: 240, hoje: 420 },
+  { id: "col", nm: "Acordo em dia", sub: "colchão", cli: 1310, saldo: 7.6, e: 360, s: 130, hoje: 0 },
+  { id: "qbr", nm: "Quebra", sub: "parcela vencida", cli: 220, saldo: 1.2, e: 95, s: 60, hoje: 220 },
+  { id: "liq", nm: "Liquidado", sub: "quitou", cli: 410, saldo: 0, e: 140, s: 0, hoje: 0 }
+];
+const FLUXOS = [["loc", "ncp", 1180, "ruim"], ["loc", "cpa", 640, "bom"], ["ncp", "cpa", 180, "bom"], ["cpa", "col", 290, "bom"], ["cpa", "cpb", 410, "neutro"],
+  ["cpb", "ncp", 0, "ruim"], ["col", "pre", 290, "neutro"], ["pre", "col", 210, "bom"], ["pre", "qbr", 95, "ruim"], ["qbr", "col", 60, "bom"], ["col", "liq", 140, "bom"], ["loc", "blq", 120, "ruim"], ["ent", "loc", 2140, "neutro"]];
+let medida = "cli", etSel = "loc";
+const nm = id => (ETAPAS.find(e => e.id === id) || { nm: "Bloqueado" }).nm;
+const fmt = v => medida === "cli" ? v.toLocaleString("pt-BR") : "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " mi";
+function mapa() {
+  const base = ETAPAS.filter(e => e.id !== "ent" && e.id !== "liq").reduce((s, e) => s + e[medida], 0);
+  document.getElementById("totais").innerHTML = `<span><b>${fmt(base)}</b>${medida === "cli" ? "clientes" : "saldo"} na esteira</span><span><b>${ETAPAS.reduce((s, e) => s + (e.id === "ent" ? 0 : e.hoje), 0).toLocaleString("pt-BR")}</b>com ação hoje</span><span><b>+2.140</b>entraram em 7 dias</span><span><b>410</b>quitaram em 7 dias</span>`;
+  const max = Math.max(...ETAPAS.map(e => e[medida]));
+  const card = e => `<button class="est" data-e="${e.id}" aria-pressed="${e.id === etSel}"><span class="nm">${e.nm}</span><span class="sub">${e.sub}</span>
+    <span class="big">${fmt(e[medida])}</span><span class="bar"><i style="width:${e[medida] / max * 100}%"></i></span>
+    <span class="mv"><span class="e">+${e.e.toLocaleString("pt-BR")}</span><span class="s">−${e.s.toLocaleString("pt-BR")}</span></span>
+    <span class="hoje">${e.hoje ? e.hoje.toLocaleString("pt-BR") + " com ação hoje" : "sem ação hoje"}</span></button>`;
+  const tr = document.getElementById("trilha");
+  tr.innerHTML = `<div class="gr"><span class="grupo">Réguas massivas · até o CPC</span><div class="cards" style="--n:5">${ETAPAS.slice(0, 5).map(card).join("")}</div></div>
+    <div class="gr"><span class="grupo">Acordo · do preventivo à quitação</span><div class="cards" style="--n:4">${ETAPAS.slice(5).map(card).join("")}</div></div>`;
+  tr.querySelectorAll(".est").forEach(b => b.addEventListener("click", () => { etSel = b.dataset.e; mapa(); }));
+  // fluxos: só os da fase escolhida
+  const fl = FLUXOS.filter(f => f[2] > 0 && (f[0] === etSel || f[1] === etSel)).sort((a, b) => b[2] - a[2]);
+  const fmax = Math.max(1, ...fl.map(f => f[2]));
+  document.getElementById("fxTit").textContent = "Movimento · " + nm(etSel);
+  document.getElementById("fluxos").innerHTML = fl.length ? fl.map(([a, b, q, t]) => `<div class="fluxo ${t}"><span>${a === etSel ? "→ " + nm(b) : "← de " + nm(a)}</span><span class="t"><i style="width:${q / fmax * 100}%"></i></span><span class="q">${q.toLocaleString("pt-BR")}</span></div>`).join("")
+    : '<p class="ajuda">Sem movimento no período.</p>';
+  const e = ETAPAS.find(x => x.id === etSel);
+  document.getElementById("detTit").textContent = e.nm + " · por dentro";
+  document.getElementById("detSub").textContent = "Onde estão os clientes desta fase e por qual canal a régua vai hoje.";
+  const passos = { loc: [["D+1", 2140], ["D+3", 2860], ["D+5", 2310], ["D+7", 2510]], ncp: [["1º ciclo", 1640], ["2º ciclo", 1220], ["3º ciclo", 920], ["Parado · aguarda enriquecimento", 530]], cpa: [["1ª tentativa", 520], ["2ª tentativa", 380], ["3ª tentativa", 220]], cpb: [["1ª tentativa", 420], ["2ª tentativa", 260], ["3ª tentativa", 180]], pre: [["D-3", 260], ["D-1", 210], ["D0", 170]], qbr: [["D+1", 90], ["D+3", 80], ["D+5", 50]], col: [["Em dia", 1310]], liq: [["Quitado", 410]], ent: [["Hoje", 2140]] }[e.id];
+  const canais = { loc: [["WhatsApp", 2820], ["SMS", 1610], ["Agente virtual", 1040], ["Discador", 650]], ncp: [["WhatsApp", 940], ["Agente virtual", 590]], cpa: [["WhatsApp", 610], ["RCS", 300], ["Agente virtual", 210]], cpb: [["Agente virtual", 380], ["Discador", 230]], pre: [["WhatsApp", 260], ["SMS", 160]], qbr: [["WhatsApp", 140], ["SMS", 80]] }[e.id] || [];
+  const pm = Math.max(...passos.map(p => p[1])), cm = Math.max(1, ...canais.map(p => p[1]));
+  document.getElementById("detalhe").innerHTML = `<div><h3 style="margin-bottom:6px">Por passo</h3>${e.id === "ncp" ? '<p class="ajuda" style="margin:0 0 6px">O Não CPC roda em ciclos (aqui, 8 dias repetidos 3 vezes). 1º ciclo = primeira volta da régua; depois do último, o cliente para e espera um novo enriquecimento. Antes aparecia como G1, G2, G3 e RE.</p>' : ""}${passos.map(([p, q]) => `<div class="etb"><span>${p}</span><span class="t"><i style="width:${q / pm * 100}%"></i></span><span class="q">${q.toLocaleString("pt-BR")}</span></div>`).join("")}</div>
+    ${e.id === "ncp" ? '<div class="aviso al"><span><b>530 clientes parados</b> esperando novo enriquecimento: envie o retorno do bureau para eles voltarem ao giro.</span></div>' : ""}
+    ${canais.length ? `<div><h3 style="margin-bottom:6px">Canal de hoje</h3>${canais.map(([p, q]) => `<div class="etb"><span>${p}</span><span class="t"><i style="width:${q / cm * 100}%"></i></span><span class="q">${q.toLocaleString("pt-BR")}</span></div>`).join("")}</div>` : ""}`;
+}
+document.querySelectorAll("#medida button").forEach(b => b.addEventListener("click", () => { medida = b.dataset.m; document.querySelectorAll("#medida button").forEach(x => x.setAttribute("aria-pressed", x === b)); mapa(); }));
+document.querySelectorAll("#periodo button").forEach(b => b.addEventListener("click", () => { document.querySelectorAll("#periodo button").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
+document.querySelectorAll(".abas button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".abas button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("[data-t]").forEach(d => d.hidden = d.dataset.t !== b.dataset.tela);
+}));
+
+tudo(); mudarVista("desenho"); mapa();
+</script>

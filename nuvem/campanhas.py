@@ -291,6 +291,11 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
     cfg = (sb.selecionar("mensageria_config", {"empresa_id": f"eq.{eid}"}) or [{}])[0]
     modo = cfg.get("modo") or "simulado"
     canais_cfg = {x.get("canal"): x for x in sb.selecionar("canais_empresa", {"empresa_id": f"eq.{eid}"}) or []}
+    cat = M.catalogo(sb)
+    produto = M.item_do_envio(canal, c.get("produto"), canais_cfg.get(canal), cat)
+    contratados = M.produtos_contratados(sb, eid)
+    if contratados is not None and produto not in contratados and not (canal == "rcs" and produto == "rcs"):
+        raise ValueError(f"produto {produto} não contratado para a empresa")
     linhas_db, locais, vistos = [], {}, set()
     cont = {"invalidos": 0, "duplicados": 0, "bloqueados": 0}
     for n, r in enumerate(linhas, start=1):
@@ -311,7 +316,7 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
         vistos.add(h)
         variaveis = {v: r[i].strip() for v, i in var_cols.items()}
         motivo, texto, conteudo = None, None, None
-        item = None if canal == "rcs" else canal     # RCS: rcs_basic/rcs_single só quando a mensagem sai
+        item = None if canal == "rcs" else produto   # RCS: rcs_basic/rcs_single só quando a mensagem sai
         if h in bloqueio:
             motivo = "lista de bloqueio"
         elif h in descad:
@@ -328,7 +333,8 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
                 links_por_linha[(idc, h)] = {}
                 conteudo = encurtar(conteudo, links_por_linha[(idc, h)])
             texto = texto_rcs(conteudo)
-            item = "rcs_basic" if tpl["tipo_midia"] == "simples" and len(texto) <= M.LIMITE_RCS_BASIC else "rcs_single"
+            item = produto if produto not in ("rcs", "rcs_basic", "rcs_single") else \
+                "rcs_basic" if tpl["tipo_midia"] == "simples" and len(texto) <= M.LIMITE_RCS_BASIC else "rcs_single"
         elif canal == "email":
             texto = preencher(modelo_email["corpo"], variaveis)
             if rastrear:

@@ -141,6 +141,22 @@ class TestCampanha(unittest.TestCase):
         self.assertEqual(C.concluir(self.sb), 1)
         self.assertEqual(c["situacao"], "concluida")
 
+    def test_campanha_escolhe_o_produto_e_respeita_a_contratacao(self):
+        self.sb.t["cobranca_itens"] = [{"codigo": "sms", "canal": "sms", "padrao_canal": True},
+                                       {"codigo": "sms_otp", "canal": "sms", "padrao_canal": False}]
+        self.sb.t["empresa_produtos"] = [{"empresa_id": 1, "item": "sms", "ativo": True}]
+        C.analisar(self.sb, self.dados, out=lambda *a: None)
+        c = self._confirmar()
+        c["produto"] = "sms_otp"
+        self.assertEqual(C.preparar(self.sb, self.dados, AGORA, out=lambda *a: None), [])
+        self.assertEqual(c["situacao"], "erro")
+        self.assertIn("não contratado", c["erro"])
+        self.sb.t["empresa_produtos"].append({"empresa_id": 1, "item": "sms_otp", "ativo": True})
+        c.update(situacao="agendada", erro=None)
+        lote = C.preparar(self.sb, self.dados, AGORA, out=lambda *a: None)[0]
+        itens = {m["item"] for m in self.sb.t["mensageria_mensagens"] if m["lote_id"] == lote["id"]}
+        self.assertEqual(itens - {None}, {"sms_otp"})
+
     def test_agendada_para_depois_espera(self):
         C.analisar(self.sb, self.dados, out=lambda *a: None)
         self._confirmar()["agendada_para"] = "2026-10-14T15:00:00+00:00"

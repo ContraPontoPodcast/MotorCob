@@ -259,15 +259,112 @@ def _sortear(plano: list[dict], chave: str) -> list[str]:
     return [primeiro] + [f for f in reserva if f != primeiro]
 
 
-def custos(sb, item: str, dia: date) -> dict:
-    """{fornecedor: custo por mensagem vigente no dia}."""
+def custos_negociados(sb, item: str, dia: date) -> dict:
+    """{fornecedor: {"" (flat) ou operadora: custo}} da negociação vigente no dia. A negociação mais recente
+    (vigente_desde <= dia) vale inteira: troca de flat para por operadora não deixa linha velha valendo, e
+    negociação encerrada tira o fornecedor do produto. Banco sem o SQL 30: só o custo flat."""
     linhas = _tabela_nova(lambda: sb.selecionar("mensageria_custos", {"item": f"eq.{item}"}) or [], [])
-    saida, desde = {}, {}
+    desde = {}
     for c in linhas:
         v = str(c["vigente_desde"])[:10]
-        if v <= dia.isoformat() and v >= desde.get(c["fornecedor"], ""):
-            saida[c["fornecedor"]], desde[c["fornecedor"]] = float(c["custo"]), v
-    return saida
+        if v <= dia.isoformat() and v > desde.get(c["fornecedor"], ""):
+            desde[c["fornecedor"]] = v
+    saida = {}
+    for c in linhas:
+        if str(c["vigente_desde"])[:10] != desde.get(c["fornecedor"]):
+            continue
+        if c.get("encerrada"):
+            saida[c["fornecedor"]] = None
+        elif saida.get(c["fornecedor"], {}) is not None and c.get("custo") is not None:
+            saida.setdefault(c["fornecedor"], {})[c.get("operadora") or ""] = float(c["custo"])
+    return {f: v for f, v in saida.items() if v}
+
+
+OPERADORAS_NEGOCIADAS = ("vivo", "claro", "tim")
+
+
+def grupo_operadora(operadora: str | None) -> str | None:
+    """Vivo, Claro e TIM têm preço próprio; qualquer outra (Oi, regionais) entra em "outras"."""
+    if not operadora:
+        return None
+    return operadora if operadora in OPERADORAS_NEGOCIADAS else "outras"
+
+
+def custo_da_operadora(negociado: dict, fornecedor: str, operadora: str | None) -> float | None:
+    """Custo do fornecedor para a operadora do número: o preço dela, senão o flat (None = sem custo)."""
+    tab = negociado.get(fornecedor) or {}
+    for chave in (operadora, grupo_operadora(operadora)):
+        if chave and chave in tab:
+            return tab[chave]
+    return tab.get("")
+
+
+def custos(sb, item: str, dia: date) -> dict:
+    """{fornecedor: custo flat por mensagem vigente no dia}."""
+    return {f: t[""] for f, t in custos_negociados(sb, item, dia).items() if "" in t}
+
+
+def plano_produto(sb, item: str, canal: str, modo: str) -> list[dict]:
+    """Rota própria do produto (SQL 30): por operadora (blocos + "demais", operadora vazia) ou flat. Vazia: o
+    produto usa o plano do canal. Fornecedor desativado sai e os outros dividem o tráfego."""
+    if not item or item == canal:
+        return []
+    ativos = {f["codigo"] for f in sb.selecionar("mensageria_fornecedores", {"ativo": "eq.true"}) or []
+              if canal in (f.get("canais") or [])}
+
+    def ler():
+        p = sb.selecionar("mensageria_planos_rota", {"item": f"eq.{item}", "ativo": "eq.true"}) or []
+        return sb.selecionar("mensageria_plano_fornecedores", {"plano_id": f"eq.{p[0]['id']}"}) or [] if p else []
+
+    itens = [{"fornecedor": i["fornecedor"], "percentual": float(i["percentual"]),
+              "ordem_reserva": int(i.get("ordem_reserva") or 1), "operadora": i.get("operadora") or None}
+             for i in _tabela_nova(ler, [])]
+    if modo == "simulado" and itens and not any(i["fornecedor"] in ativos for i in itens):
+        return []                                 # sem integração: o simulador do plano do canal assume
+    return [i for i in itens if i["fornecedor"] in ativos]
+
+
+def plano_da_mensagem(plano_item: list[dict], plano_canal: list[dict], operadora: str | None) -> list[dict]:
+    """O plano do produto vale se tiver o bloco da operadora do número ou o bloco "demais"; senão, o do canal."""
+    op = grupo_operadora(operadora)
+    if plano_item and (any(p.get("operadora") == op for p in plano_item if op)
+                       or any(not p.get("operadora") for p in plano_item)):
+        return plano_item
+    return plano_canal
+
+
+def canal_do_item(item: str) -> str:
+    """Mesmo critério do banco (canal_do_item do SQL 30): o canal é o prefixo do código do produto."""
+    it = (item or "").strip().lower()
+    if it in ("sms", "sms_resposta", "consulta_operadora") or it.startswith("sms_"):
+        return "sms"
+    for c in ("rcs", "whatsapp"):
+        if it.startswith(c):
+            return c
+    return "email" if it == "email" or it.startswith("email_") else it
+
+
+def catalogo(sb) -> dict:
+    """{código: linha} dos produtos da Mensageria (canal, padrao_canal). Banco sem o SQL 30: vazio."""
+    return {i["codigo"]: i for i in _tabela_nova(lambda: sb.selecionar(
+        "cobranca_itens", {"select": "codigo,canal,padrao_canal"}) or [], []) if i.get("canal")}
+
+
+def produtos_contratados(sb, empresa_id) -> set | None:
+    """Produtos ligados para a empresa; None = a empresa ainda não tem contratação por produto (tudo liberado)."""
+    linhas = _tabela_nova(lambda: sb.selecionar("empresa_produtos", {"empresa_id": f"eq.{empresa_id}"}) or [], [])
+    return {l["item"] for l in linhas if l.get("ativo") is not False} if linhas else None
+
+
+def item_do_envio(canal: str, pedido: str | None, cfg_canal: dict | None, cat: dict) -> str:
+    """Produto da mensagem: o da ação (coluna produto da Lista do dia), senão o padrão da carteira/empresa
+    (regra do canal), senão o padrão do catálogo, senão o próprio canal. Produto de outro canal ou fora do
+    catálogo é ignorado."""
+    for p in (pedido, (cfg_canal or {}).get("produto_padrao")):
+        p = (p or "").strip().lower()
+        if p and canal_do_item(p) == canal and (p in cat or (not cat and p == canal)):
+            return p
+    return next((c for c, i in sorted(cat.items()) if i.get("canal") == canal and i.get("padrao_canal")), canal)
 
 
 # ------------------------------------------------------------------ janela do canal
@@ -333,6 +430,7 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
     cfg = (sb.selecionar("mensageria_config", {"empresa_id": f"eq.{empresa_id}"}) or [{}])[0]
     modo, aprovar = cfg.get("modo") or "simulado", cfg.get("aprovar_lotes") is not False
     canais_cfg = {c.get("canal"): c for c in canais_empresa or []}
+    cat, contratados = (catalogo(sb), produtos_contratados(sb, empresa_id)) if novo else ({}, None)
     criados = []
     for canal in liberados:
         arq = pasta / "saida" / dia.isoformat() / "ids" / f"{canal}.csv"
@@ -363,8 +461,8 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
                     continue                          # mesmo destino duas vezes no dia: um envio só
                 vistos.add(h)
                 texto = (r.get("mensagem") or "").strip() if canal != "email" else (modelo or {}).get("corpo")
-                item = canal
-                if canal == "rcs":
+                item = item_do_envio(canal, r.get("produto"), canais_cfg.get(canal), cat)
+                if canal == "rcs" and item in ("rcs", "rcs_basic", "rcs_single"):
                     item = ("rcs_single" if len(texto) > LIMITE_RCS_BASIC
                             or (r.get("tipo_rcs") or "").strip().lower() == "single" else "rcs_basic")
                 fav = h in favoritos
@@ -376,7 +474,8 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
                           "descadastrado" if h in descad else
                           "sem frase no dia" if canal != "email" and not texto else
                           f"frase acima de {LIMITE_SMS} caracteres" if canal == "sms" and len(texto) > LIMITE_SMS else
-                          "sem modelo de e-mail" if canal == "email" and not modelo else None)
+                          "sem modelo de e-mail" if canal == "email" and not modelo else
+                          "produto não contratado" if contratados is not None and item not in contratados else None)
                 linhas.append({"id_cliente": idc[:80], "destino_mascara": mascarar(canal, contato), "destino_hash": h,
                                "situacao": "bloqueada" if motivo else "pendente", "motivo": motivo,
                                **({"item": item} if novo else {})})
@@ -477,8 +576,8 @@ def _consumo(sb, empresa_id, dia: date, por_item: dict) -> None:
 
 
 def _consumo_fornecedor(sb, empresa_id, dia: date, modo: str, contagem: dict) -> None:
-    """Soma no mês o que cada fornecedor fez por item e operadora, com o custo do dia (sem custo cadastrado conta
-    à parte; sessão do RCS não custa). contagem: {(fornecedor, operadora, item): n}. Mesmo ciclo da fatura,
+    """Soma no mês o que cada fornecedor fez por item e operadora, com o custo do dia negociado para a operadora
+    (senão o flat; sem custo cadastrado conta à parte; sessão do RCS não custa). contagem: {(fornecedor, operadora, item): n}. Mesmo ciclo da fatura,
     para a margem comparar receita e custo do mesmo período."""
     from nuvem.faturamento import ciclo_da_empresa, competencia
     comp = competencia(dia, ciclo_da_empresa(sb, empresa_id)).isoformat()
@@ -487,8 +586,8 @@ def _consumo_fornecedor(sb, empresa_id, dia: date, modo: str, contagem: dict) ->
     def gravar():
         for (f, op, item), n in contagem.items():
             if item not in tabela:
-                tabela[item] = custos(sb, item, dia)
-            unit = 0.0 if item == "rcs_sessao" else tabela[item].get(f)
+                tabela[item] = custos_negociados(sb, item, dia)
+            unit = 0.0 if item == "rcs_sessao" else custo_da_operadora(tabela[item], f, op)
             chave = {"empresa_id": f"eq.{empresa_id}", "competencia": f"eq.{comp}", "item": f"eq.{item}",
                      "fornecedor": f"eq.{f}", "operadora": f"eq.{op}", "modo": f"eq.{modo}"}
             atual = (sb.selecionar("mensageria_consumo_fornecedor", chave) or [{}])[0]
@@ -629,7 +728,7 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
                                          modo, agora)
         sessoes = _sessoes_abertas(sb, eid, agora) if canal == "rcs" else set()
         mudadas, retorno, novos_descad, novas_sessoes, respostas = [], [], [], [], []
-        contagem, por_item = {}, {}
+        contagem, por_item, planos_item = {}, {}, {}
         cont = {"disparadas": 0, "enviadas": 0, "entregues": 0, "falhas": 0, "descadastros": 0, "bloqueadas": 0,
                 "respostas": 0, "fallback": 0, "sem_retorno": 0, "bounce_temporario": 0, "aberturas": 0, "cliques": 0,
                 "spam": 0}
@@ -658,7 +757,12 @@ def processar(sb, dados: Path, agora: datetime | None = None, out=print) -> dict
                 cont["bloqueadas"] += 1
                 continue
             res, usado, erro = None, None, None
-            for f in escolher(plano, f"{lid}:{m['id']}", op):
+            prod = loc.get("item") or canal
+            if prod not in planos_item:
+                planos_item[prod] = plano_produto(sb, prod, canal, modo) if novo else []
+            plano_m = plano_da_mensagem(planos_item[prod], plano, op)
+            op_rota = grupo_operadora(op) if planos_item[prod] and plano_m is planos_item[prod] else op
+            for f in escolher(plano_m, f"{lid}:{m['id']}", op_rota):
                 try:
                     res = adaptador(f, modo).enviar(canal, loc["contato"], loc["texto"], loc.get("assunto"),
                                                     conteudo=loc.get("conteudo"))

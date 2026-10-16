@@ -2,6 +2,7 @@
 
     python3 scripts/juntar_funcao.py > MotorCob_funcao_admin-usuarios.ts
     python3 scripts/juntar_funcao.py api > MotorCob_funcao_api.ts
+    python3 scripts/juntar_funcao.py assistente > MotorCob_funcao_assistente.ts   (inclui o conhecimento.ts)
 """
 import sys
 from pathlib import Path
@@ -18,4 +19,12 @@ linhas = index.splitlines()
 cab, corpo = [], []
 for l in linhas:
     (cab if not corpo and (l.startswith("//") or l.startswith("import ")) else corpo).append(l)
-print("\n".join(cab) + "\n\n// ---- regras.ts\n" + regras + "\n// ---- index.ts\n" + "\n".join(corpo))
+# outros arquivos locais importados pelo index (ex.: conhecimento.ts do Assistente) entram inteiros também
+extras = []
+for l in list(cab):
+    if l.startswith("import ") and '"./' in l:
+        arq = l.split('"./', 1)[1].split('"', 1)[0]
+        extras.append(f"// ---- {arq}\n" + (PASTA / arq).read_text(encoding="utf-8"))
+        cab.remove(l)
+print("\n".join(cab) + "\n\n// ---- regras.ts\n" + regras + "\n" + "\n".join(extras)
+      + "\n// ---- index.ts\n" + "\n".join(corpo))

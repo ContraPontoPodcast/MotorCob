@@ -75,9 +75,16 @@ Sem permissão de edição, uma tela abre só para leitura (campos desabilitados
 
 ---
 
+## O que significa (glossário) e ajuda
+
+O menu Ajuda › O que significa (e o "?" no topo) traz todos os termos da plataforma; todo (i) leva direto ao termo. Nomes que mudaram: Hot → Contato principal; CPC A → CPC · em negociação; CPC B → CPC · sem resposta (1ª, 2ª tentativa…); Localização → Cliente novo; G1, G2, G3 → 1º, 2º, 3º ciclo; RE → Parado · aguarda enriquecimento; Colchão → Acordo em dia; Preventivo → Acordo · antes do vencimento; Quebra → Acordo · parcela vencida; Cluster → Segmento; Templates → Modelos de mensagem; Credor → Carteira. Mantêm o nome: Fallback, MC e %MC, Auditoria e DLR (só SMS e RCS; WhatsApp tem status de entrega e e-mail tem bounce).
+A ajuda acompanha o tempo de casa de cada pessoa: até 15 dias as explicações ficam abertas, de 16 a 30 dias aparece só o (i), depois de 30 dias fica desligada. Em Minha conta a pessoa religa a ajuda e escolhe o tema claro ou escuro. Senha: 12 caracteres ou mais, com letra e número. Arquivos: CSV, TXT e XLSX em todo envio.
+
+---
+
 ## Orquestração
 
-A Orquestração decide, todo dia, qual ação cada cliente da carga recebe e por qual canal. O fluxo é: a empresa envia a carga do credor → o MotorCob gera a Lista do dia (um contato por cliente em cada canal) → a empresa devolve a ocorrência dizendo se cada cliente deu CPC → o contato que deu CPC vira Hot e as próximas ações saem por ele.
+A Orquestração decide, todo dia, qual ação cada cliente da carga recebe e por qual canal. O fluxo é: a empresa envia a carga do credor → o MotorCob gera a Lista do dia (um contato por cliente em cada canal) → a empresa devolve a ocorrência dizendo se cada cliente deu CPC → o contato que deu CPC vira o contato principal e as próximas ações saem por ele.
 
 Vários números e listas são por credor (carteira). Quando a tela pedir, escolha o credor no topo.
 
@@ -114,7 +121,7 @@ Indicadores da carteira por período: localização, custo por CPC, acordos e cu
 
 ### Clientes
 
-Consulta de um cliente pelo ID (ou contrato). A tela "Cliente {ID}" mostra o segmento, a persona, o estado atual (Não localizado, CPC A, CPC B, Acordo, Liquidado, Bloqueado) e o histórico do cliente na esteira. Nunca mostra nome, CPF, telefone ou e-mail.
+Consulta de um cliente pelo ID (ou contrato). A tela "Cliente {ID}" mostra o segmento, a persona, a fase atual (Cliente novo, Não CPC, CPC · em negociação, CPC · sem resposta, Acordo em dia, Acordo · antes do vencimento, Acordo · parcela vencida, Quitado, Bloqueado) e o histórico do cliente na esteira. Nunca mostra nome, CPF, telefone ou e-mail.
 
 ### Personas
 
@@ -131,7 +138,7 @@ Quem tem "Editar credores" cria e edita credores; os demais só veem.
 
 ### Mapa da Esteira
 
-Onde está a base hoje em cada etapa dos acionamentos e quem se moveu entre elas: Entrada, Localização, Não CPC, CPC A, CPC B, Acordo (colchão, preventivo, quebra), Liquidado e Bloqueado. Mede por clientes ou saldo, com filtros.
+Onde está a base hoje em cada etapa dos acionamentos e quem se moveu entre elas: Cliente novo, Não CPC (em ciclos: 1º ciclo, 2º ciclo…, e Parado · aguarda enriquecimento), CPC · em negociação, CPC · sem resposta, Acordo em dia, Acordo · antes do vencimento, Acordo · parcela vencida, Quitado e Bloqueado. Mede por clientes ou saldo, com filtros.
 
 ### Orquestração (tela)
 
@@ -141,7 +148,7 @@ Onde se desenha o que cada segmento recebe a cada dia.
 - Os canais (WhatsApp, RCS, SMS, E-mail, Agente virtual, Discador, Enriquecimento) aparecem como pílulas coloridas.
 - Mensagem por canal: WhatsApp e RCS usam template (aprovado no provedor); SMS e Agente virtual usam frase; Discador, E-mail e Enriquecimento não têm mensagem.
 - A bolinha dentro da pílula indica a mensagem: branca cheia = escolhida; só contorno = sem template ou sem frase; vermelha = a frase ou o template foi desativado.
-- Na faixa "Deu CPC", o contato Hot e o canal do CPC vêm sempre primeiro; a escolha por estágio (CPC A e CPC B) segue a mesma regra.
+- Na faixa "Deu CPC", o contato principal e o canal do CPC vêm sempre primeiro; a escolha por estágio (CPC · em negociação e CPC · sem resposta) segue a mesma regra.
 
 Para montar a régua de um segmento (permissão "Editar a orquestração"):
 
@@ -196,7 +203,7 @@ Um passo por vez: o passo que caiu num domingo ou feriado sai no próximo dia ú
 Cliente com dias de atraso maior que zero fica com a cobrança (MotorCob), não com a Jornada. Também ficam de fora: bloqueado (opt-out, óbito ou judicial), sem momento hoje, passo já feito, espera entre ações e sem contato elegível. O Início da Jornada mostra quantos clientes ficaram de fora por motivo.
 
 ### Contato e canal
-O telefone Hot sai primeiro; contato inválido, descadastrado ou de outra pessoa fica de fora. WhatsApp só em número confirmado como WhatsApp na carga (coluna whatsapp_valido = sim). "Melhor canal" escolhe entre os canais do passo pelo resultado da carteira quando já há tentativas suficientes; sem evidência, segue a ordem configurada. Se o canal não tem contato ou está desligado em Canais, vale o "senão" do passo.
+O contato principal sai primeiro; contato inválido, descadastrado ou de outra pessoa fica de fora. WhatsApp só em número confirmado como WhatsApp na carga (coluna whatsapp_valido = sim). "Melhor canal" escolhe entre os canais do passo pelo resultado da carteira quando já há tentativas suficientes; sem evidência, segue a ordem configurada. Se o canal não tem contato ou está desligado em Canais, vale o "senão" do passo.
 
 ### Enviar arquivos (Jornada)
 Dois arquivos por carteira, em CSV com ponto e vírgula (ou .xlsx):

@@ -134,4 +134,17 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     foi visto) e "Recebe faturas" em qualquer contato. Depois cole os prompts 36 e 37 e publique de novo a função
     `cobranca`.
 
+30. `supabase/migrations/20261127000001_produtos_rotas_administrativo.sql` (SQL 30) — **bloco 2**: produtos da
+    Mensageria (rota vendida, preço mínimo e de tabela), negociação com fornecedores (preço único ou por operadora,
+    custo zero proibido), rota por produto (blocos por operadora + "Demais operadoras"), mistura de operadoras
+    (Teleco, editável), contratação por produto, regra do canal por carteira, comitê por produto e o perfil
+    **Administrativo** na equipe. Antes de rodar, confira a mistura de operadoras do Teleco do mês. Depois cole os
+    prompts 38, 39 e 40.
+31. `supabase/migrations/20261128000001_estrategia_carteira.sql` (SQL 31) — **bloco 3**: estratégia por carteira
+    (separar ou copiar a estratégia compartilhada) e rótulos legíveis (1º ciclo, 1ª tentativa, Parado · aguarda
+    enriquecimento). Depois cole os prompts 41 e 42.
+32. `supabase/migrations/20261129000001_experiencia_glossario_tema.sql` (SQL 32) — **bloco 5**: ajuda pelo tempo de
+    casa, glossário "O que significa" com os 40 termos e cores do tema. Depois ajuste a senha no painel
+    (`02_supabase_painel`, item 4) e cole os prompts 43, 44 e 45.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

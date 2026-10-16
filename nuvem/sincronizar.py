@@ -464,6 +464,22 @@ def _baixar(sb: Supabase, pasta: Path, tabela: str, empresa_id, ordem: str) -> l
     return linhas
 
 
+AJUSTES_CANAL = ("ativo", "janela_inicio", "janela_fim", "sabado", "capacidade_dia", "tentativas_dia",
+                 "respeitar_nao_perturbe", "produto_padrao")
+
+
+def canais_da_carteira(sb: Supabase, canais: list[dict], empresa_id, credor_id) -> list[dict]:
+    """Regra do canal da carteira (SQL 30): fica no canal da empresa; a carteira herda e sobrescreve só o que
+    ajustou em credor_canais. Banco sem a tabela ou carteira sem ajuste: o canal da empresa como está."""
+    if credor_id is None:
+        return canais
+    from nuvem.mensageria import _tabela_nova
+    ajustes = {a["canal"]: a.get("ajustes") or {} for a in _tabela_nova(lambda: sb.selecionar(
+        "credor_canais", {"empresa_id": f"eq.{empresa_id}", "credor_id": f"eq.{credor_id}"}) or [], [])}
+    return [{**c, **{k: v for k, v in ajustes.get(c.get("canal"), {}).items() if k in AJUSTES_CANAL}}
+            for c in canais]
+
+
 def chave_sugestao(s: dict) -> str:
     return f'{s["persona"]}|{s["fase"]}|{s["dia"]}|{s["de"]}|{s["para"]}'
 
@@ -574,16 +590,21 @@ def segmento_vale(c: dict, cid, vinculos: dict) -> bool:
 
 
 def baixar_clusters(sb: Supabase, pasta: Path, empresa_id, cid=None) -> list[dict]:
-    """Regras de cluster ativas que valem nesta carteira; cópia em config/clusters.json (auditoria)."""
+    """Regras de cluster ativas que valem nesta carteira; cópia em config/clusters.json (auditoria).
+    Estratégia própria da carteira no segmento (segmentos_carteira.estrategia_id, SQL 31) vale sobre a do
+    segmento: duas carteiras com o mesmo segmento podem ter estratégias diferentes."""
     regras = sb.selecionar("clusters", {"empresa_id": f"eq.{empresa_id}", "ativo": "eq.true"},
                            ordem="ordem.asc,codigo.asc") or []
-    vinculos = {}
+    vinculos, propria = {}, {}
     try:
         for l in sb.selecionar("segmentos_carteira", {"empresa_id": f"eq.{empresa_id}"}) or []:
             vinculos.setdefault(l["cluster_id"], {})[l["credor_id"]] = bool(l.get("ativo", True))
+            if l["credor_id"] == cid and l.get("estrategia_id"):
+                propria[l["cluster_id"]] = l["estrategia_id"]
     except ErroSupabase:   # banco sem a tabela: regra antiga
         pass
-    regras = [c for c in regras if segmento_vale(c, cid, vinculos)]
+    regras = [{**c, "estrategia_id": propria.get(c.get("id"), c.get("estrategia_id"))} for c in regras
+              if segmento_vale(c, cid, vinculos)]
     (pasta / "config").mkdir(parents=True, exist_ok=True)
     (pasta / "config" / "clusters.json").write_text(json.dumps(regras, ensure_ascii=False, indent=1),
                                                     encoding="utf-8")
@@ -744,7 +765,7 @@ def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
         for obrig in ("base/clientes.csv", "base/contatos.csv"):
             if not (pasta / obrig).exists():
                 raise RuntimeError(f"falta a base da carteira {u['codigo']}: envie clientes e contatos pelo site")
-        canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
+        canais = canais_da_carteira(sb, _baixar(sb, pasta, "canais_empresa", eid, "canal.asc"), eid, cid)
         estrategias = [e for e in _baixar(sb, pasta, "estrategias", eid, "id.asc") if e.get("frente") == "motorcli"]
         est = next((e for e in estrategias if e.get("id") == u.get("estrategia_id")), None) \
             or next((e for e in estrategias if e.get("padrao")), None)
@@ -818,7 +839,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         if entrada is None and any(tem(d) for d in PASTAS_CARTEIRA + ("ocorrencias", "enriquecimento")):
             entrada, aviso_layout = _layout_automatico(sb, pasta, baixados, out)
         entrada, mapa = mapeamento.aplicar(sb, eid, cid, pasta, entrada, repo, out)
-        canais = _baixar(sb, pasta, "canais_empresa", eid, "canal.asc")
+        canais = canais_da_carteira(sb, _baixar(sb, pasta, "canais_empresa", eid, "canal.asc"), eid, cid)
         reg_canal, info_canal = retorno_canal.preparar(sb, eid, cid, pasta, regras_de(canais, u.get("regras_retorno")),
                                                        out)
         from nuvem import mensageria
@@ -1093,7 +1114,8 @@ def _vigia_arq(dados: Path, emp: dict) -> Path:
 
 
 CONFIG_ORQUESTRACAO = ("clusters", "estrategias", "segmentos_carteira", "personas_usuario", "canais_empresa",
-                       "credores", "mapeamento_arquivos", "ocorrencia_codigos", "canal_codigos", "frases")
+                       "credores", "mapeamento_arquivos", "ocorrencia_codigos", "canal_codigos", "frases",
+                       "credor_canais")
 
 
 def _ultima_mudanca(sb: Supabase, tabela: str, empresa_id) -> dict:
@@ -1108,7 +1130,7 @@ def _ultima_mudanca(sb: Supabase, tabela: str, empresa_id) -> dict:
         if not quando:
             continue
         chave = l.get("credor_id") if tabela in ("segmentos_carteira", "personas_usuario", "mapeamento_arquivos",
-                                                 "ocorrencia_codigos") else \
+                                                 "ocorrencia_codigos", "credor_canais") else \
             (l.get("id") if tabela == "credores" else None)
         por[chave] = max(por.get(chave, ""), quando)
     return por

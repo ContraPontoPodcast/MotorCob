@@ -454,3 +454,78 @@ class TestTravasDaEtapa(unittest.TestCase):
         fila, _ = _fila({"etapas": [tk]}, estado_et={})
         self.assertEqual([(l["canal"], l["janela"][:5]) for l in fila], [("email", "10:00")])   # 1 ação, das 10h
         self.assertEqual(ET.janela_da_etapa("08:00-14:00", {"janela": ("10:00", "19:00")}), "10:00-14:00")
+
+
+def _fila_fase(definicao, n=5, dia=D0, ultima=None):
+    """Lista do dia de n clientes em cliente novo (localização), sem etapas próprias."""
+    regras, _ = carregar_regras([{"codigo": "DG", "condicoes": [], "estrategia_id": 7}])
+    over, erros = validar_estrategia(definicao)
+    assert not erros, erros
+    regua = carregar_regua().com_clusters(regras, {7: over}, None, {})
+    est, cli, certs = {}, {}, {}
+    for i in range(n):
+        k = f"C{i}"
+        est[k] = EstadoCliente(k, D0, "DG", "DG", "2026-09", cluster_versao=regua.versao_clusters,
+                               ultima_massiva=ultima)
+        cli[k] = Cliente(k, D0, 1000.0 * (i + 1), 30)
+        for c in (f"1198888000{i}", f"c{i}@exemplo.invalid"):
+            certs[(k, c)] = Certificacao(k, c, "email" if "@" in c else "telefone", "DESCONHECIDO", 0.4)
+    motivos = {}
+    fila, _, _ = gerar_fila(est, cli, certs, {}, {}, dia, regua, [], None, motivos=motivos)
+    return fila, motivos
+
+
+class TestFasesDoMotor(unittest.TestCase):
+    """Bloco 3: as fases do motor com orçamento por canal, prioridade e travas próprias."""
+    PASSOS = {str(d): [{"canal": "email", "modo": "sempre"}, {"canal": "sms", "modo": "senao"}] for d in range(4)}
+
+    def test_validacao_so_das_fases_que_definiram_algo(self):
+        over, erros = validar_estrategia({
+            "localizacao": {"orcamento": {"whatsapp": {"modo": "parametrizado", "clientes": 300,
+                                                       "prioridade": ["novo", "saldo_maior"]}},
+                            "travas": {"intervalo_horas": 72}},
+            "cpc": {"travas": {"acoes_dia": 3}},
+            "giro": {"orcamento": {"fax": {"modo": "parametrizado", "clientes": 1}}}})
+        cfg = over["fases_cfg"]
+        self.assertEqual(sorted(cfg), ["cpc", "localizacao"])
+        self.assertEqual(cfg["localizacao"].orcamento["whatsapp"].clientes, 300)
+        self.assertEqual(cfg["localizacao"].travas, {"recencia_horas": 72})
+        self.assertEqual(cfg["cpc"].travas, {"limite_dia": 3})
+        self.assertEqual(len(erros), 1)
+        self.assertIn("Não CPC", erros[0])                       # nome legível da fase no aviso
+        self.assertNotIn("fases_cfg", validar_estrategia({"localizacao": {"passos": self.PASSOS}})[0])
+
+    def test_orcamento_da_fase_com_prioridade_e_canal_de_baixo(self):
+        fila, motivos = _fila_fase({"localizacao": {"passos": self.PASSOS, "orcamento": {
+            "email": {"modo": "parametrizado", "clientes": 2, "prioridade": ["saldo_maior"]}}}})
+        canal = {l["id_cliente"]: l["canal"] for l in fila}
+        self.assertEqual(canal, {"C4": "email", "C3": "email", "C0": "sms", "C1": "sms", "C2": "sms"})
+        self.assertEqual(motivos, {"com_acao": 5})
+        fila, motivos = _fila_fase({"localizacao": {"passos": self.PASSOS, "orcamento": {
+            "email": {"modo": "parametrizado", "clientes": 1, "prioridade": ["saldo_menor"], "fora": "amanha"}}}})
+        self.assertEqual([(l["id_cliente"], l["canal"]) for l in fila], [("C0", "email")])
+        self.assertEqual(motivos, {"com_acao": 1, "sem_orcamento": 4})
+
+    def test_travas_proprias_da_fase(self):
+        passos = {str(d): [{"canal": "email", "modo": "sempre"}, {"canal": "sms", "modo": "junto"}] for d in range(4)}
+        fila, _ = _fila_fase({"localizacao": {"passos": passos, "travas": {"acoes_dia": 1, "de": "10:00"}}}, n=1)
+        self.assertEqual([(l["canal"], l["janela"][:5]) for l in fila], [("email", "10:00")])
+        # intervalo próprio da fase: 72 h barra quem teve ação há 2 dias (a estratégia, 48 h, deixaria)
+        ontem2 = D0 - timedelta(days=2)
+        fila, motivos = _fila_fase({"localizacao": {"passos": passos}}, n=1, ultima=ontem2)
+        self.assertTrue(fila)
+        fila, motivos = _fila_fase({"localizacao": {"passos": passos, "travas": {"intervalo_horas": 72}}},
+                                   n=1, ultima=ontem2)
+        self.assertEqual((fila, motivos), ([], {"intervalo_48h": 1}))
+
+
+class TestRotulos(unittest.TestCase):
+    def test_nenhum_codigo_cru(self):
+        from motor import rotulos as RT
+        self.assertEqual([RT.rotulo_ciclo("NCP", c) for c in ("G1", "G3", "RE")],
+                         ["1º ciclo", "3º ciclo", "Parado · aguarda enriquecimento"])
+        self.assertEqual((RT.rotulo_ciclo("CPB", "T1"), RT.rotulo_ciclo("QBR", "D2"), RT.rotulo_ciclo("PRE", "D0")),
+                         ("1ª tentativa", "D+2", "D0"))
+        self.assertEqual(RT.rotulo_estado("CPA"), "CPC · em negociação")
+        self.assertEqual(RT.rotulo_passo("G2-dia5"), "2º ciclo · dia 5")
+        self.assertEqual(RT.rotulo_passo("CPC B · T2"), "CPC · sem resposta · 2ª tentativa")
