@@ -1,0 +1,420 @@
+<title>Faturas e Contratação MotorCX</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: MotorCX, menu cinza à esquerda (Console e Cliente) + área de trabalho lisa. Paleta do bloco 5; Console e
+   Empresa usam o grafite neutro. Edição sempre no painel lateral, com resumo antes de salvar. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#1D1D1F; --area-forte:#000000; --area-ativo:#E8E8ED; --area-ativo-texto:#1D1D1F; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --veu:rgba(0,0,0,.25); --sombra:0 10px 30px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:80ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--texto);border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao);
+  margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+@media (max-width:820px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+section[data-p]{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:74ch}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.cartao-cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.peq{padding:5px 11px;font-size:13px}
+.btn.perigo{background:var(--erro);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px;min-width:0}
+input[type=text]{font-variant-numeric:tabular-nums}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap;vertical-align:middle}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.trava{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);background:var(--pilula);border-radius:9px;padding:6px 11px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13.5px}
+.dl dt{color:var(--texto2)}.dl dd{margin:0}
+.abas{display:flex;gap:4px;flex-wrap:wrap}
+.abas button{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;color:var(--texto2);background:var(--pilula)}
+.abas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.abas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.abas b{margin-left:4px}
+.confirma{border:1px solid var(--texto);border-radius:12px;padding:14px 16px;background:var(--pilula);display:flex;flex-direction:column;gap:10px}
+.confirma p{margin:0}
+.grande{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden;display:flex}
+.barra i{display:block;height:100%}
+/* gaveta */
+.veu{position:fixed;inset:0;background:var(--veu);z-index:40}
+.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--cartao);border-left:1px solid var(--borda);box-shadow:var(--sombra);z-index:41;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.gaveta header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--borda)}
+.gaveta header h3{margin:0;font-size:16px}
+.gaveta .corpo{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.gaveta footer{padding:12px 18px;border-top:1px solid var(--borda);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+.gaveta footer .nota{margin-right:auto}
+.faixa-l{display:grid;grid-template-columns:1fr 1fr 110px;gap:8px;align-items:center}
+.faixa-l.mud input{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mudancas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mudancas li{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.mudancas s{color:var(--texto2)}
+.op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--borda);border-radius:10px;padding:10px 12px;cursor:pointer}
+.op:has(input:checked){border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.op b{display:block}.op span{font-size:12.5px;color:var(--texto2)}
+.alerta{border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.alerta.at{background:var(--at-f)}
+/* celular */
+.resp{container-type:inline-size}
+@container (max-width:600px){
+  .tab.cartoes thead{display:none}
+  .tab.cartoes,.tab.cartoes tbody{display:block}
+  .tab.cartoes tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 2px;border-bottom:1px solid var(--borda)}
+  .tab.cartoes td{border:0;padding:0;white-space:normal}
+  .tab.cartoes td.c1{font-weight:600}
+  .tab.cartoes td.c2{grid-column:2;grid-row:1;justify-self:end}
+  .tab.cartoes td.c3{grid-column:1;color:var(--texto2);font-size:13px}
+  .tab.cartoes td.c4{grid-column:2;grid-row:2;justify-self:end;font-weight:600}
+  .tab.cartoes td.x{display:none}
+}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Faturas e Contratação</span>
+  <h1>Faturas e Contratação</h1>
+  <p>Hoje a Contratação salva tudo num botão só e o preço novo vale para o mês corrente, mudando a prévia do cliente para trás sem aviso. A emissão em lote não mostra o total, fatura vencida não tem lembrete, o cliente vê o preço com 4 casas e o pré-pago não tem extrato. A proposta aplica os padrões aprovados e resolve esses pontos. Empresas e valores fictícios.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Telas">
+    <div class="grupo">Console</div>
+    <button data-ir="contr" aria-current="page">Contratação<small>Editar por seção, com vigência</small></button>
+    <button data-ir="fat">Faturas<small>Rascunhos, emissão e vencidas</small></button>
+    <div class="grupo">Cliente · Empresa</div>
+    <button data-ir="pos">Faturamento pós-pago<small>Fatura, itens e o mês até agora</small></button>
+    <button data-ir="pre">Faturamento pré-pago<small>Saldo, extrato e recargas</small></button>
+  </nav>
+
+  <main class="trab">
+
+    <!-- ===================== CONTRATAÇÃO ===================== -->
+    <section data-p="contr">
+      <div class="cab"><div><h2>Contratação · Financeira Horizonte</h2>
+        <p>Cada seção mostra o que está valendo e tem o próprio "Editar", no painel lateral. O resumo antes de salvar diz o que muda e a partir de quando.</p></div>
+        <div class="campo"><label for="ct-papel">Ver como</label><select id="ct-papel"><option value="master">Master</option><option value="adm">Administrativo (só preços)</option><option value="atend">Atendimento</option></select></div></div>
+
+      <div class="duas">
+        <div class="cartao"><div class="cartao-cab"><h3>Motor e módulos</h3><span class="acao-ed" data-sec="modulos"></span></div>
+          <dl class="dl"><dt>Motor</dt><dd>MotorCob (Cobrança)</dd><dt>Módulos</dt><dd>Orquestração · Mensageria (SMS, RCS) · API</dd></dl></div>
+        <div class="cartao"><div class="cartao-cab"><h3>Ciclo e cobrança</h3><span class="acao-ed" data-sec="ciclo"></span></div>
+          <dl class="dl"><dt>Ciclo</dt><dd>Mensal, corte no dia 1</dd><dt>Pagamento</dt><dd>Pós-pago · boleto, Pix e cartão</dd><dt>Emissão</dt><dd>Revisar antes de emitir</dd><dt>Vencimento</dt><dd>10 dias depois da emissão</dd></dl></div>
+      </div>
+      <div class="cartao"><div class="cartao-cab"><h3>Preços</h3><span class="acao-ed" data-sec="precos"></span></div>
+        <div class="rolar"><table class="tab"><thead><tr><th>Item</th><th>Tipo</th><th class="n">Preço</th><th>Desde</th></tr></thead><tbody id="ct-precos"></tbody></table></div>
+        <p class="nota" id="ct-precos-nota">Preço por faixa: cada faixa de volume no mês tem o próprio preço.</p></div>
+
+      <div class="regra"><b>Regras</b><ul>
+        <li>Editar abre o painel da seção. Nada grava até "Salvar"; ao fechar com mudança, pergunta antes de descartar.</li>
+        <li>Preço novo: por padrão, vale a partir do <b>próximo ciclo</b>. "Neste ciclo" existe, mas pede motivo e avisa que a prévia do cliente muda.</li>
+        <li>Abaixo do mínimo: só com motivo e com a permissão "preço abaixo do mínimo".</li>
+        <li>Quem não pode editar vê a seção com "Só Master altera módulos e ciclo" ou "Só Master e Administrativo alteram preços".</li>
+        <li>Nomes: <b>Preço único</b> e <b>Preço por faixa</b> (no lugar de flat e escalonado), <b>Mês de</b> (no lugar de competência).</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== FATURAS (Console) ===================== -->
+    <section data-p="fat" hidden>
+      <div class="cab"><div><h2>Faturas</h2>
+        <p>Abas pelo que precisa de ação. Emissão em lote com o total, quantos e-mails saem e o processo demorado com aviso no sino. Vencida mostra os dias de atraso e o lembrete já enviado.</p></div></div>
+      <div class="abas" role="group" aria-label="Situação" id="ft-abas">
+        <button aria-pressed="true" data-a="rascunho">Rascunhos<b>4</b></button>
+        <button aria-pressed="false" data-a="aberta">Em aberto<b>9</b></button>
+        <button aria-pressed="false" data-a="vencida">Vencidas<b>2</b></button>
+        <button aria-pressed="false" data-a="paga">Pagas</button>
+      </div>
+      <div class="cartao resp">
+        <div class="cartao-cab"><span class="nota" id="ft-sel">Nenhuma selecionada</span><span id="ft-acao"></span></div>
+        <table class="tab cartoes"><thead id="ft-cab"></thead><tbody id="ft-corpo"></tbody></table>
+        <div id="ft-conf"></div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Emitir (uma ou várias) pede confirmação com quantas faturas, o total, para quantos contatos vai o e-mail e o vencimento. Depois de emitida, o cliente vê e o e-mail sai; não volta a rascunho.</li>
+        <li>Ajuste (desconto, crédito, cobrança extra) entra pelo painel lateral; remover pede confirmação.</li>
+        <li>Vencida: lembrete por e-mail no dia seguinte ao vencimento e de novo depois de 5 dias, para quem recebe faturas. No 7º dia, o aviso "o acesso será bloqueado em 3 dias".</li>
+        <li>Com <b>10 dias de atraso</b>, a empresa fica <b>Inadimplente</b>: o acesso é bloqueado e os envios param. Faturamento e Suporte continuam abertos para pagar. Quando o pagamento confirma, tudo volta sozinho.</li>
+        <li>Só o <b>Master</b> libera a inadimplente com a fatura ainda em aberto: "Liberar mesmo com fatura em aberto", com motivo e prazo (padrão 7 dias, até 30). Até o prazo a rotina não bloqueia de novo; passou sem pagar, bloqueia. Cliente e equipe são avisados.</li>
+        <li>No celular, cada linha vira cartão: empresa, situação, mês e valor.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== PÓS-PAGO (cliente) ===================== -->
+    <section data-p="pos" hidden>
+      <div class="faixa-bloq" style="border:1px solid var(--erro);background:var(--erro-f);border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between"><span><b>Exemplo do acesso bloqueado:</b> "A fatura de agosto está vencida há 12 dias. O acesso está bloqueado e os envios estão parados. Pague aqui para liberar; volta sozinho quando o pagamento confirmar."</span><span class="pil erro">Inadimplente</span></div>
+      <div class="cab"><div><h2>Faturamento</h2>
+        <p>A fatura em aberto primeiro, com como pagar. Abaixo, o mês corrente até agora e cada item explicado na tela, com preço por mil para valores pequenos.</p></div></div>
+      <div class="duas">
+        <div class="cartao">
+          <div class="cartao-cab"><h3>Fatura de setembro</h3><span class="pil at">Vence em 5 dias</span></div>
+          <span class="grande">R$ 4.812,90</span>
+          <p class="sub">Vencimento 20/10/2026 · enviada para financeiro@horizonte.exemplo</p>
+          <div class="linha"><button class="btn" type="button">Pagar com Pix</button><button class="btn sec" type="button">Boleto</button><button class="btn sec" type="button">Cartão</button></div>
+          <div class="linha"><button class="link" type="button">Demonstrativo (PDF)</button><button class="link" type="button">Nota fiscal</button></div>
+        </div>
+        <div class="cartao">
+          <div class="cartao-cab"><h3>Outubro até agora</h3><span class="pil neutra">dia 15 de 31</span></div>
+          <span class="grande">R$ 2.318,40</span>
+          <p class="sub">Consumo de 01/10 a 15/10, com os preços do contrato.</p>
+          <p class="nota" id="pos-prev">Estimativa até o fim do mês, no ritmo atual: cerca de R$ 4.790,00. É só uma conta do ritmo; a fatura usa o consumo real.</p>
+        </div>
+      </div>
+      <div class="cartao resp">
+        <h3>Itens de setembro</h3>
+        <table class="tab cartoes"><thead><tr><th>Item</th><th class="n">Quantidade</th><th>Preço</th><th class="n">Valor</th></tr></thead>
+          <tbody>
+            <tr><td class="c1">SMS Padrão</td><td class="n c3">61.420 SMS</td><td class="x">R$ 54,00 por mil até 50 mil · R$ 49,00 por mil acima</td><td class="n c4">R$ 3.259,58</td></tr>
+            <tr><td class="c1">RCS básico</td><td class="n c3">9.880 mensagens</td><td class="x">R$ 79,00 por mil</td><td class="n c4">R$ 780,52</td></tr>
+            <tr><td class="c1">Orquestração</td><td class="n c3">mensalidade</td><td class="x">valor fixo</td><td class="n c4">R$ 950,00</td></tr>
+            <tr><td class="c1">Desconto · negociado em setembro</td><td class="n c3">—</td><td class="x">ajuste</td><td class="n c4">− R$ 177,20</td></tr>
+          </tbody></table>
+        <p class="nota">Preço por faixa: os primeiros 50 mil SMS do mês saem a R$ 54,00 por mil; os 11.420 seguintes, a R$ 49,00 por mil. (50.000 × 0,054 + 11.420 × 0,049 = R$ 3.259,58.)</p>
+      </div>
+      <div class="cartao resp">
+        <h3>Faturas anteriores</h3>
+        <table class="tab cartoes"><thead><tr><th>Mês de</th><th>Situação</th><th>Vencimento</th><th class="n">Valor</th></tr></thead>
+          <tbody>
+            <tr><td class="c1">Agosto</td><td class="c2"><span class="pil ok">Paga</span></td><td class="c3">20/09/2026</td><td class="n c4">R$ 4.501,12</td></tr>
+            <tr><td class="c1">Julho</td><td class="c2"><span class="pil ok">Paga</span></td><td class="c3">20/08/2026</td><td class="n c4">R$ 4.120,77</td></tr>
+          </tbody></table>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Valor unitário abaixo de R$ 0,10 aparece por mil; a conta da faixa fica escrita na tela, não só no PDF.</li>
+        <li>Pagar: Pix com QR e "copia e cola" (24 h), boleto e cartão (página segura do Stripe). Volta do cartão com processo demorado e aviso no sino quando o pagamento confirma.</li>
+        <li>Estimativa do mês só aparece a partir do dia 5 e sempre escrita como estimativa.</li>
+        <li>Pagar e recarregar pedem a permissão "Pagar faturas" (Admin por padrão); ver o faturamento continua com "Ver faturamento".</li>
+        <li>Inadimplente: o Workspace mostra só Faturamento e Suporte, com a faixa vermelha acima; o resto aparece travado com "Acesso bloqueado por fatura vencida".</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== PRÉ-PAGO (cliente) ===================== -->
+    <section data-p="pre" hidden>
+      <div class="cab"><div><h2>Faturamento · pré-pago</h2>
+        <p>Saldo com quanto ainda dura no ritmo atual, extrato do que saiu do saldo por dia e as recargas.</p></div></div>
+      <div class="duas">
+        <div class="cartao">
+          <div class="cartao-cab"><h3>Saldo</h3><span class="pil at">Saldo baixo</span></div>
+          <span class="grande">R$ 612,40</span>
+          <p class="sub">Dura cerca de 3 dias no ritmo dos últimos 7 dias (R$ 198,00 por dia). Com saldo zerado, os envios pausam.</p>
+          <div class="linha"><button class="btn" type="button">Recarregar</button><button class="link" type="button">Recarga automática</button></div>
+        </div>
+        <div class="cartao">
+          <h3>Recargas</h3>
+          <div class="rolar"><table class="tab"><thead><tr><th>Data</th><th>Forma</th><th>Situação</th><th class="n">Valor</th></tr></thead>
+            <tbody><tr><td>01/10</td><td>Pix</td><td><span class="pil ok">Paga</span></td><td class="n">R$ 3.000,00</td></tr>
+              <tr><td>14/09</td><td>Boleto</td><td><span class="pil ok">Paga</span></td><td class="n">R$ 2.000,00</td></tr></tbody></table></div>
+        </div>
+      </div>
+      <div class="cartao resp">
+        <h3>Extrato do saldo</h3>
+        <table class="tab cartoes"><thead><tr><th>Dia</th><th>O que saiu</th><th class="n">Valor</th><th class="n">Saldo</th></tr></thead>
+          <tbody>
+            <tr><td class="c1">15/10</td><td class="c3">3.410 SMS · 220 RCS</td><td class="n c4">− R$ 201,52</td><td class="n x">R$ 612,40</td></tr>
+            <tr><td class="c1">14/10</td><td class="c3">3.180 SMS</td><td class="n c4">− R$ 171,72</td><td class="n x">R$ 813,92</td></tr>
+            <tr><td class="c1">13/10</td><td class="c3">3.550 SMS · 410 RCS</td><td class="n c4">− R$ 224,09</td><td class="n x">R$ 985,64</td></tr>
+            <tr><td class="c1">01/10</td><td class="c3">Recarga por Pix</td><td class="n c4">+ R$ 3.000,00</td><td class="n x">R$ 3.104,10</td></tr>
+          </tbody></table>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Extrato por dia, com o que saiu (quantidade por item) e o saldo depois; a recarga entra como crédito.</li>
+        <li>"Dura cerca de N dias" usa a média dos últimos 7 dias; com menos de 3 dias de uso, não aparece.</li>
+        <li>Saldo baixo e esgotado também avisam no sino (padrão 1).</li>
+      </ul></div>
+    </section>
+  </main>
+</div>
+
+<div class="veu" id="veu" hidden></div>
+<aside class="gaveta" id="gv" role="dialog" aria-modal="true" aria-labelledby="gv-tit" hidden>
+  <header><h3 id="gv-tit">Editar preços</h3><button class="link" id="gv-fechar">Fechar</button></header>
+  <div class="corpo" id="gv-ed">
+    <p class="nota">SMS Padrão · preço por faixa (por mil SMS no mês)</p>
+    <div class="faixa-l nota"><span>De</span><span>Até</span><span>R$ por mil</span></div>
+    <div class="faixa-l" id="fx1"><input type="text" value="0" aria-label="De" readonly><input type="text" value="50.000" aria-label="Até" readonly><input type="text" id="fx1v" value="54,00" aria-label="Preço da faixa 1"></div>
+    <div class="faixa-l" id="fx2"><input type="text" value="50.001" aria-label="De" readonly><input type="text" value="sem limite" aria-label="Até" readonly><input type="text" id="fx2v" value="49,00" aria-label="Preço da faixa 2"></div>
+    <p class="nota">Mínimo do produto: R$ 48,00 por mil. Tabela: R$ 56,00 por mil.</p>
+    <p class="nota" id="gv-erro" style="color:var(--erro)"></p>
+  </div>
+  <div class="corpo" id="gv-rev" hidden>
+    <p style="margin:0"><b>Confira antes de salvar</b></p>
+    <ul class="mudancas" id="gv-mud"></ul>
+    <fieldset style="border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:8px"><legend class="nota" style="margin-bottom:6px">A partir de quando</legend>
+      <label class="op"><input type="radio" name="vig" value="prox" checked><div><b>Próximo ciclo · 01/11/2026</b><span>A fatura de outubro continua com o preço atual.</span></div></label>
+      <label class="op"><input type="radio" name="vig" value="atual"><div><b>Neste ciclo · desde 01/10/2026</b><span>Recalcula a prévia de outubro; o cliente vê o valor mudar. Pede motivo.</span></div></label>
+    </fieldset>
+    <div class="campo" id="gv-mot" hidden><label for="gv-motivo">Motivo (o cliente não vê)</label><input type="text" id="gv-motivo" placeholder="Ex.: renegociação assinada em 10/10"></div>
+  </div>
+  <div class="corpo" id="gv-desc" hidden>
+    <div class="alerta at"><b>Descartar a alteração?</b><span>O que você mudou neste painel não foi salvo.</span>
+      <div class="linha"><button class="btn sec" id="gv-cont">Continuar editando</button><button class="btn perigo" id="gv-descok">Descartar</button></div></div>
+  </div>
+  <footer id="gv-rod"><span class="nota" id="gv-n">Nenhuma alteração</span><button class="btn sec" id="gv-volta" hidden>Voltar a editar</button><button class="btn" id="gv-acao" disabled>Revisar alterações</button></footer>
+</aside>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3200); };
+  const brl = v => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const telas = [...document.querySelectorAll("section[data-p]")], botoes = [...document.querySelectorAll(".menu button")];
+  const ir = p => { telas.forEach(s => s.hidden = s.dataset.p !== p); botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); };
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+
+  // ---------- contratação
+  const escH = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const PRECOS = [["SMS Padrão", "Preço por faixa", "R$ 54,00 por mil até 50 mil · R$ 49,00 por mil acima", "01/08/2026"],
+    ["RCS básico", "Preço único", "R$ 79,00 por mil", "01/08/2026"], ["API", "Preço único", "R$ 300,00 por mês", "01/08/2026"], ["Orquestração", "Preço único", "R$ 950,00 por mês", "01/07/2026"]];
+  const tabPrecos = () => $("ct-precos").innerHTML = PRECOS.map(p => `<tr><td>${escH(p[0])}</td><td>${escH(p[1])}</td><td class="n">${escH(p[2])}</td><td>${escH(p[3])}</td></tr>`).join("");
+  tabPrecos();
+  const CAD = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  function papel() {
+    const p = $("ct-papel").value;
+    document.querySelectorAll(".acao-ed").forEach(s => {
+      const pode = p === "master" || (p === "adm" && s.dataset.sec === "precos");
+      s.innerHTML = pode ? `<button class="btn sec peq" data-ed="${s.dataset.sec}">Editar</button>`
+        : `<span class="trava">${CAD}${s.dataset.sec === "precos" ? "Só Master e Administrativo alteram preços" : "Só Master altera módulos e ciclo"}</span>`;
+    });
+    document.querySelectorAll("[data-ed]").forEach(b => b.addEventListener("click", () => b.dataset.ed === "precos" ? abrir() : toast("No protótipo, só o painel de preços está montado.")));
+  }
+  $("ct-papel").addEventListener("change", papel); papel();
+
+  const ORIG = { fx1v: "54,00", fx2v: "49,00" };
+  const mud = () => Object.keys(ORIG).filter(k => $(k).value.trim() !== ORIG[k]);
+  const num = s => parseFloat(s.replace(".", "").replace(",", "."));
+  function modo(m) { ["ed", "rev", "desc"].forEach(x => $("gv-" + x).hidden = x !== m); $("gv-rod").hidden = m === "desc"; $("gv").dataset.m = m; rod(); }
+  function rod() {
+    const n = mud().length, m = $("gv").dataset.m;
+    const abaixo = Object.keys(ORIG).some(k => num($(k).value) < 48);
+    $("gv-erro").textContent = abaixo ? "Abaixo do mínimo (R$ 48,00 por mil): pede motivo e a permissão de preço abaixo do mínimo." : "";
+    $("gv-n").textContent = n ? `${n} ${n > 1 ? "alterações" : "alteração"}` : "Nenhuma alteração";
+    $("gv-volta").hidden = m !== "rev";
+    const atual = document.querySelector("input[name=vig]:checked").value === "atual";
+    $("gv-mot").hidden = !(m === "rev" && atual);
+    $("gv-acao").textContent = m === "rev" ? `Salvar ${n > 1 ? n + " alterações" : "alteração"}` : n ? `Revisar ${n > 1 ? n + " alterações" : "alteração"}` : "Revisar alterações";
+    $("gv-acao").disabled = !n || (m === "rev" && atual && $("gv-motivo").value.trim().length < 5);
+    Object.keys(ORIG).forEach(k => $(k).parentElement.classList.toggle("mud", $(k).value.trim() !== ORIG[k]));
+  }
+  ["fx1v", "fx2v", "gv-motivo"].forEach(id => $(id).addEventListener("input", rod));
+  document.querySelectorAll("input[name=vig]").forEach(r => r.addEventListener("change", rod));
+  function abrir() { $("fx1v").value = ORIG.fx1v; $("fx2v").value = ORIG.fx2v; $("gv-motivo").value = ""; document.querySelector("input[name=vig][value=prox]").checked = true; $("veu").hidden = false; $("gv").hidden = false; modo("ed"); $("fx1v").focus(); }
+  function fechar() { $("veu").hidden = true; $("gv").hidden = true; }
+  const pedeFechar = () => mud().length ? modo("desc") : fechar();
+  $("gv-fechar").addEventListener("click", pedeFechar); $("veu").addEventListener("click", pedeFechar);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("gv").hidden) pedeFechar(); });
+  $("gv-cont").addEventListener("click", () => modo("ed")); $("gv-descok").addEventListener("click", fechar);
+  $("gv-volta").addEventListener("click", () => modo("ed"));
+  $("gv-acao").addEventListener("click", () => {
+    if ($("gv").dataset.m === "ed") {
+      $("gv-mud").innerHTML = mud().map(k => `<li><b>SMS Padrão</b> · faixa ${k === "fx1v" ? "até 50 mil" : "acima de 50 mil"}<br><s>R$ ${escH(ORIG[k])} por mil</s> → <b>R$ ${escH($(k).value)} por mil</b></li>`).join("");
+      modo("rev");
+    } else {
+      const atual = document.querySelector("input[name=vig]:checked").value === "atual";
+      PRECOS[0][2] = `R$ ${$("fx1v").value} por mil até 50 mil · R$ ${$("fx2v").value} por mil acima`; PRECOS[0][3] = atual ? "01/10/2026" : "01/11/2026 (próximo ciclo)";
+      tabPrecos(); fechar(); toast(atual ? "Preço salvo para este ciclo. A prévia de outubro foi recalculada e ficou na Auditoria." : "Preço salvo. Vale a partir de 01/11 e ficou na Auditoria.");
+    }
+  });
+
+  // ---------- faturas console
+  const FT = {
+    rascunho: [["Financeira Horizonte", "Setembro", 4812.90, "3 contatos"], ["Assessoria Rio Claro", "Setembro", 12310.55, "2 contatos"], ["Varejo Sol Nascente", "Setembro", 1980.00, "1 contato"], ["Clínica Bem Viver", "Setembro", 650.00, "1 contato"]],
+    aberta: [["Delta Cobranças", "Setembro", 7420.10, "vence 20/10"], ["Gama Serviços", "Setembro", 3315.00, "vence 22/10"]],
+    vencida: [["Alfa Recuperação", "Agosto", 2210.40, "12 dias de atraso · 2 lembretes · inadimplente desde 30/09"], ["Beta Crédito", "Agosto", 890.00, "3 dias de atraso · 1 lembrete · bloqueia em 7 dias"]],
+    paga: [["Financeira Horizonte", "Agosto", 4501.12, "paga em 18/09"]]
+  };
+  let aba = "rascunho", sel = new Set();
+  function faturas() {
+    const ls = FT[aba];
+    $("ft-cab").innerHTML = `<tr>${aba === "rascunho" ? '<th><span class="nota">Sel.</span></th>' : ""}<th>Empresa</th><th>Situação</th><th>Mês de</th><th class="n">Valor</th><th>${aba === "rascunho" ? "E-mail para" : "Detalhe"}</th></tr>`;
+    const sit = { rascunho: ["neutra", "Rascunho"], aberta: ["at", "Em aberto"], vencida: ["erro", "Vencida"], paga: ["ok", "Paga"] }[aba];
+    $("ft-corpo").innerHTML = ls.map((f, i) => `<tr>${aba === "rascunho" ? `<td class="x"><input type="checkbox" data-i="${i}" ${sel.has(i) ? "checked" : ""} aria-label="Selecionar ${f[0]}"></td>` : ""}
+      <td class="c1">${f[0]}</td><td class="c2"><span class="pil ${sit[0]}">${sit[1]}</span></td><td class="c3">${f[1]}</td><td class="n c4">${brl(f[2])}</td><td class="x">${f[3]}</td></tr>`).join("");
+    $("ft-corpo").querySelectorAll("input[type=checkbox]").forEach(c => c.addEventListener("change", () => { c.checked ? sel.add(+c.dataset.i) : sel.delete(+c.dataset.i); topo(); }));
+    $("ft-conf").innerHTML = ""; topo();
+  }
+  function topo() {
+    if (aba !== "rascunho") {
+      $("ft-sel").textContent = aba === "vencida" ? "Lembrete automático no dia seguinte ao vencimento e depois de 5 dias." : "";
+      $("ft-acao").innerHTML = aba === "vencida" ? '<span class="linha" style="gap:8px"><button class="btn sec peq" id="ft-lemb">Reenviar lembrete</button><button class="btn peq" id="ft-lib">Liberar Alfa Recuperação</button></span>' : "";
+      const l = $("ft-lemb"); if (l) l.addEventListener("click", () => toast("Lembrete reenviado para quem recebe faturas."));
+      const lb = $("ft-lib"); if (lb) lb.addEventListener("click", () => {
+        $("ft-conf").innerHTML = `<div class="confirma"><p><b>Liberar a Alfa Recuperação mesmo com a fatura de agosto em aberto (R$ 2.210,40)?</b> O acesso e os envios voltam até a data abaixo; se não pagar até lá, bloqueia de novo. Só o Master libera.</p>
+          <div class="linha"><div class="campo" style="min-width:220px;flex:1"><label for="lib-mot">Motivo</label><input type="text" id="lib-mot" placeholder="Ex.: pagamento agendado pelo financeiro"></div>
+          <div class="campo"><label for="lib-ate">Até</label><select id="lib-ate"><option>7 dias · 22/10</option><option>15 dias · 30/10</option><option>30 dias · 14/11</option></select></div></div>
+          <div class="linha"><button class="btn" id="lib-ok" disabled>Liberar até 22/10</button><button class="btn sec" id="lib-volta">Voltar</button></div></div>`;
+        $("lib-mot").addEventListener("input", e => $("lib-ok").disabled = e.target.value.trim().length < 5);
+        $("lib-ate").addEventListener("change", e => $("lib-ok").textContent = "Liberar até " + e.target.value.split("· ")[1]);
+        $("lib-ok").addEventListener("click", () => { $("ft-conf").innerHTML = ""; toast("Alfa Recuperação liberada. Cliente e equipe avisados no sino."); });
+        $("lib-volta").addEventListener("click", () => $("ft-conf").innerHTML = "");
+      });
+      return;
+    }
+    const total = [...sel].reduce((s, i) => s + FT.rascunho[i][2], 0);
+    $("ft-sel").textContent = sel.size ? `${sel.size} selecionada${sel.size > 1 ? "s" : ""} · ${brl(total)}` : "Nenhuma selecionada";
+    $("ft-acao").innerHTML = `<button class="btn peq" id="ft-emitir" ${sel.size ? "" : "disabled"}>Emitir ${sel.size || ""}</button>`;
+    $("ft-emitir").addEventListener("click", () => {
+      const cont = [...sel].reduce((s, i) => s + parseInt(FT.rascunho[i][3]), 0);
+      $("ft-conf").innerHTML = `<div class="confirma"><p><b>${sel.size} fatura${sel.size > 1 ? "s" : ""} serão emitidas, somando ${brl(total)}.</b> O e-mail com o demonstrativo, o boleto e a nota sai para ${cont} contato${cont > 1 ? "s" : ""}. Vencimento em 10 dias. Depois de emitida, a fatura não volta a rascunho.</p>
+        <div class="linha"><button class="btn" id="ft-ok">Emitir ${sel.size} · ${brl(total)}</button><button class="btn sec" id="ft-volta">Voltar</button></div></div>`;
+      $("ft-ok").focus();
+      $("ft-ok").addEventListener("click", () => { toast(`Emitindo ${sel.size} faturas. Pode sair desta tela; o aviso chega no sino.`); [...sel].sort((a, b) => b - a).forEach(i => FT.aberta.unshift([...FT.rascunho.splice(i, 1)[0].slice(0, 3), "vence em 10 dias"])); sel.clear(); faturas(); });
+      $("ft-volta").addEventListener("click", () => $("ft-conf").innerHTML = "");
+    });
+  }
+  $("ft-abas").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { aba = b.dataset.a; sel.clear(); $("ft-abas").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); faturas(); }));
+  faturas();
+})();
+</script>

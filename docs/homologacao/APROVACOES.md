@@ -113,6 +113,238 @@ Aprovado:
 
 **Todos os blocos (1 a 5) aprovados.** Próximo passo: gerar SQL, testes, ajustes no motor e prompts.
 
+## Bloco 6 · Qualidade dos fornecedores e Score de Entrega — APROVADO em 14/10/2026
+
+Protótipo: `bloco6-qualidade-score-prototipo.html`.
+- **Qualidade dos fornecedores** (Console): no SMS o fornecedor é medido pela velocidade (aceite e DLR, mediana e
+  p90), por DLR que não volta e por alertas, não pelo % entregue (que reflete o mailing). Comparação de entrega
+  só dentro do mesmo lote.
+- **Função Técnico** na equipe: vê qualidade e detalhe técnico (código original, horários, fallback), configura o
+  filtro de inteligência e os nomes devolvidos. Atende chamados.
+- **Fake DLR não é implementado.** No lugar, o **Score de Entrega**, contratado e declarado: o número fora das
+  faixas não sai e volta ao cliente com um nome de "não enviado", nunca com status de operadora.
+- **Modelo estatístico** por número (hash): histórico de toda a Mensageria (decisão do usuário; recomendação de
+  cláusula de base legal no contrato), peso maior para o recente (meia-vida), falha permanente pesa mais, base da
+  operadora para pouco histórico. Janela menor (30 dias). Fornecedores com DLR ruim podem ser tirados da análise.
+- Faixas **Alto, Médio, Baixo e Sem histórico** (nome mantido, com (i)). Quarentena. Sem regra por DDD.
+- **Grupo de controle** (amostra sorteada que sai mesmo assim) para provar o Score.
+- **Nomes devolvidos editáveis pelo Técnico**, com trava contra nomes que imitam status de operadora.
+- **Cobrança**: por número analisado ou só pelos represados; o SMS fica sempre no preço padrão (a opção de SMS
+  inteligente mais caro foi retirada).
+- **Campanha**: caixas Todos · Alto · Médio · Baixo · Sem histórico. **Prévia antes de agendar** (pela plataforma):
+  divisão do mailing por faixa e custo unitário efetivo da campanha. Pela API segue direto e o resultado aparece
+  depois, na Economia do Score.
+- **Economia do Score** (cliente): período com data inicial e final, por campanha; economia líquida e **custo
+  unitário efetivo** (total pago ÷ mailing carregado) com valores faturados, sem simulação.
+
+## Revisão de UX · decisões de 14/10/2026
+
+- **Economia do Score para quem não contratou:** vitrine ("Deixa como vitrine"). Só números reais do cliente
+  (SMS que não chegaram no período e quanto pagou por eles), sem simulação, e o pedido de proposta. Tela no
+  protótipo do bloco 6. **Tela APROVADA em 15/10/2026 ("Ok")**: gerados vitrine_score no SQL 33 (com testes) e a
+  seção VITRINE no prompt 48; o pedido de proposta abre um chamado (motivo mensageria).
+- **Um nome para a lista de contatos** ("define o que for melhor"): *lista da campanha* na Mensageria, *carga* na
+  Cobrança e na Jornada. "Mailing" sai das telas e fica no glossário como nome antigo. Aplicado no SQL 33, no
+  Assistente e nos prompts 46 a 48.
+- **Mistura de operadoras** ("pode fazer"): no fim da aba Rotas, como o prompt 39. Protótipo do bloco 2 ajustado.
+
+## Padrões comuns — APROVADO em 15/10/2026 ("Ok!!!")
+
+Protótipo: `padroes-comuns-prototipo.html`. Vale para a plataforma e o Console.
+- **Processo demorado** com etapas, linhas lidas, tempo restante e "pode sair desta tela"; ao terminar, aviso no
+  **sino** (fim de processo longo, algo que precisa da pessoa, alerta de qualidade para Técnico e Master).
+- **Salvar com revisão**: painel lateral, campo alterado marcado, resumo de → para antes de salvar e pergunta ao
+  descartar. Ajuste sem efeito financeiro salva direto.
+- **Ações sem volta**: confirmação na própria tela com o efeito em números; o botão repete o verbo e o número.
+- **Somente leitura com o motivo** (papel que pode); esconder só o sigiloso (custo, margem, outra empresa, CPF).
+- **Tabela no celular** vira cartão abaixo de 600 px, com os campos principais e "Ver".
+- **Cores próprias das faixas do Score** (escala de um tom; vermelho e amarelo só para erro e alerta).
+- **Score nos primeiros dias**: aviso com a data em que a janela completa e quanto da lista está Sem histórico,
+  sem estimativa. Ajuste na geração: o Score usa o histórico de toda a Mensageria, então a data é a do início do
+  histórico da Mensageria (não a do primeiro envio de cada empresa, como dizia o texto do protótipo).
+- **Um nome por conceito**: cliente vê "Não enviados" e o Console "Represados"; preço abaixo de R$ 0,10 para o
+  cliente aparece por mil.
+- Gerado: SQL 34 (avisos, cores no tema, score_formacao), motor (`nuvem/avisos.py`), testes e prompts 49 e 50.
+- **Prévia do Score sem validade** (15/10, "Não vamos fazer"): a prévia não vence nem é recalculada sozinha antes de
+  agendar. Saíram dos protótipos o "válida até" e o aviso de prévia vencendo.
+
+## Primeiro uso do cliente — APROVADO em 15/10/2026 ("Ok para os demais")
+
+Protótipo: `primeiro-uso-prototipo.html`.
+- **Convite e conta**: e-mail com a empresa, o papel, quem convidou e a validade do link (24 h); passos da conta
+  (Admin: senha, código no celular, pronto); requisitos da senha marcados enquanto digita, com a regra aprovada no
+  bloco 5 (12+, letra e número; o protótipo trazia a regra antiga e foi corrigido).
+- **Primeiros passos no Início**, montados pelo que foi contratado e marcados pelo que aconteceu (ninguém marca à
+  mão); só "Convidar a sua equipe" pode ser pulado; dá para ocultar. "Escolher como a carga chega" saiu como passo
+  à parte: a carga já vem por arquivo e o envio da primeira carga (por arquivo ou API) marca o passo.
+- **Pedido de envio real**: o cliente pede depois do teste em simulação; abre chamado para o **Suporte, que
+  responde em até 1 hora** ("Se for do Suporte até uma hora"). Ligam: Master e Atendimento. Pedido sem resposta
+  em 1 hora vira aviso vermelho para a equipe.
+- **Telas vazias** com o primeiro passo e **Console › Implantação** (empresa parada há mais de 7 dias avisa o
+  vendedor).
+- Conflito resolvido: o prompt 3 deixou de dizer "nada de gerar token"; com o módulo API, o card leva a
+  /conta/tokens.
+- Gerado: SQL 35, e-mail de convite (painel + função `admin-usuarios`), motor (`avisos.implantacao`), testes e
+  prompts 51 e 52.
+
+## Radar e caixa de atendimento — APROVADO em 15/10/2026
+
+Protótipo: `radar-atendimento-prototipo.html`.
+- **Caixa única** com SMS, RCS e WhatsApp; abas Abertas, Sem responsável, Minhas e Aguardando cliente; fila por
+  prioridade da classe (CPC Negócio e Alega pagamento primeiro) e tempo de espera.
+- Situações **Nova, Em atendimento, Aguardando cliente e Resolvida**; resposta do cliente reabre.
+- **Notas internas**, **transferência** com aviso no sino, **histórico** da classe corrigida (alimenta a qualidade do
+  Radar), outras conversas do mesmo cliente.
+- **Resposta em grupo** com custo previsto e confirmação.
+- **Meta de primeira resposta: opcional, sem valor padrão** ("Não precisa, pois nem todos vão usar esse recurso").
+  O tempo de espera é corrido (o protótipo dizia "só no horário do canal"; simplificado com a meta opcional).
+- **Desempenho por pessoa só para Admin e Gestão** ("Ok").
+- **Respostas rápidas sem textos prontos** ("Não aplicar"): cada empresa escreve as suas.
+- Judicial avisa Admin e Gestão; CPC Negócio sem responsável há 10 min avisa a Gestão (opcional).
+- Gerado: SQL 36, motor (`avisos.atendimento`), testes e prompts 53 e 54.
+
+## Faturas e Contratação — APROVADO em 15/10/2026
+
+Protótipo: `faturas-contratacao-prototipo.html`.
+- **Contratação por seção** (Motor e módulos, Ciclo e cobrança, Preços), cada uma com o próprio painel e resumo.
+- **Preço novo vale a partir do próximo ciclo** ("Concordo"); "neste ciclo" é exceção, com motivo. O preço segue
+  guardado por mês: no ciclo em dias, "próximo ciclo" é o próximo mês.
+- **Lembrete por e-mail** no dia seguinte ao vencimento e 5 dias depois ("Ótimo"); no 7º dia, aviso de bloqueio.
+- **10 dias de atraso: bloqueia o acesso e deixa como inadimplente** ("10 dias bloqueia o acesso e deixa como
+  inadimplente"). Salvaguardas aplicadas: Faturamento e Suporte continuam abertos para pagar, envios e API param,
+  e o acesso volta sozinho quando o pagamento confirma.
+- **Liberação pelo Master** com a fatura ainda em aberto ("a liberação do cliente com fatura em aberto pode ocorrer
+  via Master"): com motivo e prazo (padrão 7 dias, até 30); até o prazo a rotina não bloqueia de novo; passou sem
+  pagar, bloqueia. O Administrativo não reativa inadimplente; pagou tudo, a liberação manual deixa de valer.
+- **Estimativas mantidas** ("Mantém"), sempre escritas como estimativa: fim do ciclo (pós-pago) e duração do saldo
+  (pré-pago).
+- **Permissão Pagar faturas**, só Admin por padrão ("Ok").
+- Emissão com total e contatos na confirmação; itens explicados com preço por mil; extrato do pré-pago.
+- Correção junto: a suspensão da equipe também passa a parar os envios da Mensageria (antes só a rotina parava).
+- Gerado: SQL 37, funções `cobranca` (lembrete e permissão) e `api`, motor, testes e prompts 55 e 56.
+
+## Acordo de pagamento de fatura vencida — APROVADO em 15/10/2026
+
+Protótipo: `acordo-fatura-prototipo.html`.
+- **Quem lança: Master e Administrativo** ("Correto"); o Atendimento e o cliente não lançam.
+- **Ao lançar, a empresa inadimplente é liberada** enquanto as parcelas estiverem em dia, e as faturas do acordo
+  ficam "Em acordo": sem lembrete e sem bloqueio ("Correto").
+- **Parcela segue a régua da fatura**: lembrete no dia seguinte e com 5 dias, aviso no 7º; **com 10 dias de atraso o
+  acordo é quebrado**, o que falta volta a ser cobrado e a empresa fica inadimplente de novo ("Correto"). Na
+  geração, o que falta vira **uma cobrança só** (o saldo do acordo), vencida desde a parcela atrasada; o desconto
+  combinado não é retirado (nenhuma regra automática de juros ou perda de desconto foi aprovada).
+- **Até 12 parcelas** ("Ok"); a 1ª vence de hoje até 30 dias, as outras mês a mês; parcela mínima de R$ 5,00.
+- **Sem juros nem multa automáticos**: só desconto ou acréscimo manual, com motivo que o cliente não vê e que fica na
+  Auditoria ("Perfeito").
+- Cada parcela é uma cobrança própria (Pix, boleto ou cartão, nas formas do acordo) com nota fiscal quando paga
+  (se a fatura já teve nota na emissão, a parcela não gera outra). Todas pagas: acordo Quitado e faturas Pagas
+  (via acordo). "Informar o cliente": aviso no sino na hora e e-mail para quem recebe faturas.
+- **Cancelar acordo** volta as faturas para vencidas; na geração, só sem parcela paga (com parcela paga, o
+  acordo segue até quitar ou quebrar, para não cobrar duas vezes).
+- Gerado: SQL 38, funções `cobranca`, `pagamentos-webhook` e `assistente`, motor, testes e prompts 57 e 58.
+- Decisões da geração confirmadas em 15/10/2026 ("Perfeito"): saldo único na quebra mantendo o desconto, cancelar
+  só sem parcela paga, parcela mínima de R$ 5,00 e 1ª em até 30 dias, sem nota duplicada, faixa "em dia" só no
+  Início e em Faturamento.
+
+## Relatórios e montador — APROVADO em 15/10/2026
+
+Protótipo: `relatorios-prototipo.html`.
+- Aprovado: envio por e-mail agendado, só para usuários da empresa, com os números do topo e um link, sem anexo ("Ok").
+- Aprovado: relatório salvo editado por quem criou e pelo Admin; os outros abrem e duplicam ("Ok").
+- Aprovado com ajuste: exportação até 50 mil linhas na hora; acima, em segundo plano com aviso no sino e link de 7
+  dias; **limite de 1 milhão de linhas** ("Limitar em 1 milhão de linhas").
+- Aprovado: taxas de resposta, descadastro e clique sobre os entregues ("Correto").
+- Pedido do operador: "Não entregues" com a taxa em todo relatório de entrega; no e-mail, bounce permanente e
+  temporário.
+- Relatórios da Orquestração entram agora ("Entram"): régua, carteira, movimento, acordos, indicadores por safra e
+  Jornada do MotorCli. Tela aprovada em 15/10/2026 ("Acredito que seja isso por hora"). Pendente: foto diária da
+  carteira (explicado como funcionaria na prática; aguardando decisão). A Jornada do MotorCli vai ter uma revisão
+  própria, como a da Cobrança.
+- **Foto diária da carteira** ("Tá perfeito"): totais por situação, segmento, safra e etapa, todo dia por 90 dias e o
+  fechamento de cada mês para sempre; base "Evolução da carteira" e o relatório "Como a carteira evoluiu mês a mês?".
+- Na geração: o filtro Estratégia usa a estratégia atual do segmento na carteira (as ações da régua não guardam a
+  estratégia do dia); a foto é tirada uma vez por dia a partir das 20h; o envio por e-mail vale para relatório
+  salvo (o pronto é salvo antes de agendar).
+- Gerado: SQL 39, função `relatorios`, motor (`nuvem/relatorios.py`), testes e prompts 59 e 60.
+- Decisões da geração confirmadas em 15/10/2026 ("Pode seguir").
+
+## Jornada do Cliente (MotorCli) — APROVADO em 15/10/2026 ("Ok")
+
+Protótipo: `jornada-prototipo.html`.
+- Resultado de cada momento pela carga diária (sem dado novo): Boas-vindas = recebeu a 1ª mensagem; Ativação =
+  ativou em até 30 dias da contratação; Pré-vencimento = pagou até o vencimento; Retenção = voltou a usar antes de
+  90 dias sem atividade; Reativação = voltou a usar. Conta para o último canal que acionou o cliente nos 7 dias
+  anteriores. Comparação com o período anterior.
+- "Melhor canal" escolhe pelo resultado do momento (com histórico suficiente; antes disso, como hoje).
+- Prioridade dos momentos editável (padrão Pré-vencimento, Boas-vindas, Ativação, Retenção, Reativação), orçamento
+  por canal em cada momento, mensagem por passo (biblioteca por momento e canal; RCS e WhatsApp pelos templates
+  aprovados), estratégia por carteira (aviso de compartilhada, Separar, Copiar de outra carteira).
+- Cliente em atraso: só mostrar quantos foram para a cobrança (não entra sozinho na carteira de cobrança).
+- Mapa da jornada no Início, movimento entre momentos e Lista do dia sem códigos.
+- Na geração: o resultado só conta episódios que começam ou terminam depois que o motor passou a medir (a base antiga
+  não vira "não" no primeiro dia); pagamento atrasado conta como "não pagou em dia"; o resultado de cada mensagem é o
+  do momento entre quem a recebeu por último; Boas-vindas conta a 1ª ação enviada (a entrega fica na Mensageria).
+- Gerado: SQL 40, motor (`motor/jornada_resultados.py`, prioridade, orçamento e mensagem por passo, melhor canal pelo
+  resultado), testes e prompts 61 e 62.
+- Decisões da geração confirmadas em 15/10/2026 ("Ok").
+
+## Tokens de API — APROVADO em 15/10/2026
+
+Protótipo: `tokens-api-prototipo.html`. Todos os pontos com "Ok":
+1. Tokens saem de Minha conta e vão para Empresa › Integrações.
+2. Trocar token com o antigo valendo junto por 7 dias (opção de 1 ou 14).
+3. Restrição opcional por endereço IP.
+4. Cargas da Jornada (clientes, contatos e leads) pela API.
+5. Master revoga token de cliente em incidente de segurança, com motivo na Auditoria e aviso ao Admin.
+6. Endereço api.motorcob.online: passo a passo em `08_api/DOMINIO_API.md` (proxy com segredo, para a restrição por
+   IP continuar valendo); depende de quem administra o DNS.
+- Na geração: uso e erros guardam método, rota sem parâmetros, carteira, código e IP por 90 dias; avisos 15 e 3 dias
+  antes de vencer (para quem criou e os Admins) e de token que parou de ser chamado; rota `GET /v1/teste`.
+- Gerado: SQL 41, funções `api` e `assistente`, motor (avisos e limpeza), testes e prompt 63.
+
+## E-mails do sistema — APROVADO em 16/10/2026
+
+Protótipo: `emails-sistema-prototipo.html`. Aprovado como está ("Perfeito"):
+1. Por e-mail, sempre (não dá para desligar): convite, senha, senha alterada, verificação em duas etapas desligada,
+   acesso bloqueado ou liberado, acordo que vai ser ou foi desfeito, token que vence em 3 dias ou foi revogado e envios
+   pausados.
+2. Os demais avisos do sino vão por e-mail só se a pessoa ligar em Minha conta › Notificações (Atendimento já vem
+   ligado para quem cuida da caixa). Mesmo aviso repetido: no máximo 1 e-mail por dia.
+3. Remetentes acesso@, financeiro@, avisos@ e relatorios@motorcob.online, numa conta de envio separada da Mensageria.
+4. Convite e senha também por essa conta, em português (SMTP próprio no Supabase Auth).
+5. Nome MotorCX em texto, sem imagem; rodapé com razão social, CNPJ e endereço preenchidos no Console.
+6. E-mail de contato de fatura que volta de vez fica marcado e os Admins são avisados; sem nenhum contato entregue, a
+   fatura vai para os Admins. A equipe recebe e-mail de chamado novo ou respondido e de contato pelo site.
+- Na geração: cada aviso do sino ganha um assunto pela origem (sem mudar quem grava); o e-mail sai pela fila a cada
+  10 minutos, só de avisos das últimas 24 horas, e os avisos que já existiam não viram e-mail; registro dos envios por
+  180 dias, com o endereço só em hash e mascarado; devolução temporária marca o contato na 3ª seguida; senha alterada
+  e verificação desligada usam os avisos de segurança do próprio Supabase Auth; o link de sair só confirma no clique
+  (programas de e-mail abrem links sozinhos) e o relatório com uma pessoa só na lista é pausado em vez de ficar vazio.
+- Limite conhecido: a API HTTP da Locaweb recebe só o HTML; a versão só texto fica pronta no código para quando a
+  conta aceitar.
+- Gerado: SQL 42, funções `emails` (nova), `cobranca`, `relatorios`, `admin-usuarios` e `assistente`, motor
+  (`nuvem/emails.py`: fila, conferência de SPF/DKIM/DMARC e limpeza), testes, guia `EMAILS_SISTEMA.md` e prompts 64 e 65.
+
+## Assistente — APROVADO em 16/10/2026
+
+Protótipo: `assistente-prototipo.html`. Todos os pontos aprovados ("Sim, tudo aprovado"):
+1. O Assistente recebe perfil, frente, módulos contratados e o nome da tela; nunca carteira, clientes, envios ou valores.
+2. Sugestões: 3 por tela (escritas pela equipe) + as 2 mais perguntadas na empresa.
+3. "Fora do ar" separado de "não sei" (não conta no limite por hora); 👎 com motivo; Minhas perguntas (90 dias).
+4. Passar para o Suporte com a conversa anexada sem dados pessoais e o motivo pela tela.
+5. Respostas da equipe pelo Console (Master e Atendimento), valendo na hora, na Auditoria.
+6. Modelo: trocar o Opus pelo Sonnet 5.5, com a resposta aparecendo enquanto é escrita. Teto de **R$ 399,90 por mês**
+   (custo do provedor em dólar convertido pela cotação); com o teto atingido, só Respostas da equipe e Suporte; aviso
+   ao Master com 80%.
+- Na geração: a cotação é a PTAX de venda do Banco Central do último dia útil (o motor busca uma vez por dia; o Master
+  pode digitar outra); o custo de cada resposta é estimado pelos tokens e pelo preço do modelo que respondeu (o
+  provedor pode trocar de modelo numa recusa); o aviso de teto vai para a equipe com 80% e 100%; "mais perguntadas" só
+  mostra pergunta feita por 3 ou mais pessoas da empresa, respondida, sem 👎 e sem dado pessoal removido; Respostas
+  da equipe recusam dado pessoal e preço no banco; com o teto atingido, a resposta da equipe vale quando a pergunta
+  é parecida o bastante (metade das palavras em comum).
+- Gerado: SQL 43, função `assistente` (Sonnet 5.5 em streaming, contexto, custo, teto, chamado), motor
+  (`nuvem/assistente.py`: PTAX e aviso de teto), testes e prompts 66 e 67.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -128,5 +360,27 @@ Aprovado:
    e. Publicar de novo a função `assistente` (`python3 scripts/juntar_funcao.py assistente`) e atualizar o motor na
       nuvem (`systemctl start motorcob-atualizar`).
    f. `CONFERENCIA_GERAL.sql`: itens 17, 18 e 19 devem dar OK.
-4. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
+4. Bloco 6 (branch `claude/geracao-bloco-6`, empilhada sobre a dos blocos 2 a 5): SQL 33 → prompts 46, 47 e 48 →
+   função `assistente` de novo → motor na nuvem (passos 72 a 74). Conferência: item 20 OK.
+   Depois, padrões comuns: SQL 34 → prompts 49 e 50 → motor na nuvem (passos 75 a 77). Conferência: item 21 OK.
+   Depois, primeiro uso: SQL 35 → e-mail de convite no painel e função `admin-usuarios` → prompts 51 e 52 → motor
+   na nuvem (passos 78 a 80). Conferência: item 22 OK.
+   Depois, atendimento: SQL 36 → prompts 53 e 54 → função `assistente` de novo → motor na nuvem (passos 81 e 82).
+   Conferência: item 23 OK.
+   Depois, faturas: SQL 37 → funções `cobranca` e `api` de novo → prompts 55 e 56 → motor na nuvem (passos 83 a 85).
+   Conferência: item 24 OK.
+   Depois, acordo de pagamento: SQL 38 → funções `cobranca`, `pagamentos-webhook` e `assistente` de novo → prompts
+   57 e 58 → motor na nuvem (passos 86 a 88). Conferência: itens 9 (16 permissões) e 25 OK.
+   Depois, relatórios: SQL 39 → função nova `relatorios` e `assistente` de novo → prompts 59 e 60 → motor na nuvem
+   (passos 89 a 91). Conferência: item 26 OK.
+   Depois, Jornada: SQL 40 → função `assistente` de novo → prompts 61 e 62 → motor na nuvem (passos 92 e 93).
+   Conferência: item 27 OK.
+   Depois, Tokens de API: SQL 41 → funções `api` e `assistente` de novo → prompt 63 → motor na nuvem (passos 94 a
+   96). Conferência: item 28 OK. Domínio api.motorcob.online quando o DNS for liberado.
+   Depois, e-mails do sistema: guia `02_supabase_painel/EMAILS_SISTEMA.md` (conta de envio separada, DNS, Secrets,
+   SMTP e modelos do login) → SQL 42 → funções `emails`, `cobranca`, `relatorios`, `admin-usuarios` e `assistente` →
+   prompts 64 e 65 → motor na nuvem (passos 97 a 99). Conferência: item 29 OK.
+   Depois, Assistente: SQL 43 → função `assistente` de novo → prompts 66 e 67 → motor na nuvem (passos 100 a 102).
+   Conferência: item 30 OK. No painel do provedor do modelo, deixe o limite de gasto mensal um pouco acima do teto.
+5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).

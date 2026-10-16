@@ -147,4 +147,71 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     casa, glossário "O que significa" com os 40 termos e cores do tema. Depois ajuste a senha no painel
     (`02_supabase_painel`, item 4) e cole os prompts 43, 44 e 45.
 
+33. `supabase/migrations/20261130000001_score_entrega_qualidade.sql` (SQL 33) — **bloco 6**: função **Técnico** na
+    equipe, qualidade dos fornecedores (velocidade, DLR, sem DLR, alertas, detalhe técnico), **Score de Entrega**
+    (filtro de inteligência por rota, fornecedores na análise, nomes devolvidos, grupo de controle), contratação do
+    Score e **Economia do Score**. Depois cole os prompts 46, 47 e 48.
+
+34. `supabase/migrations/20261201000001_padroes_comuns_avisos.sql` (SQL 34) — **padrões comuns** da revisão de UX:
+    **sino de avisos** (só o motor grava; cada pessoa vê os seus, os da empresa, os da equipe ou os de qualidade),
+    cores das faixas do Score no tema e `score_formacao` (histórico do Score em formação). Depois cole os prompts
+    49 e 50 e atualize o motor na nuvem.
+
+35. `supabase/migrations/20261202000001_primeiro_uso.sql` (SQL 35) — **primeiro uso**: `primeiros_passos` (roteiro do
+    Início, marcado pelo que aconteceu), **pedido de envio real** (o cliente pede, abre chamado para o Suporte, que
+    responde em até 1 hora e liga ou devolve com o motivo) e `implantacao_empresas` (Console). Depois: e-mail de
+    convite (02_supabase_painel, item 5b), função `admin-usuarios` de novo e prompts 51 e 52.
+
+36. `supabase/migrations/20261203000001_atendimento_radar.sql` (SQL 36) — **Radar e caixa de atendimento**: situações
+    Nova, Em atendimento, Aguardando cliente e Resolvida; tempo de espera e de resposta gravados sozinhos; notas
+    internas, histórico e transferência; respostas rápidas (nenhuma vem pronta); meta de primeira resposta opcional;
+    avisos de Judicial e de espera; painel do Radar e desempenho por pessoa (Admin e Gestão). Depois: prompts 53 e 54.
+
+37. `supabase/migrations/20261204000001_faturas_contratacao.sql` (SQL 37) — **Faturas e Contratação**: preço novo vale
+    a partir do próximo ciclo (`salvar_preco_vigencia`; "neste ciclo" só com motivo); lembretes da fatura vencida
+    (dia seguinte, 5 e 7 dias) e **inadimplência com 10 dias** (acesso bloqueado, envios parados, volta sozinho ao
+    pagar); permissão do cliente **Pagar faturas**; resumo da emissão, estimativa do ciclo, extrato e duração do
+    saldo. Depois: funções `cobranca` e `api` de novo e prompts 55 e 56.
+
+38. `supabase/migrations/20261205000001_acordos_fatura.sql` (SQL 38) — **Acordo de pagamento**: Master e Administrativo
+    juntam faturas vencidas em até 12 parcelas (desconto ou acréscimo só manual, com motivo que o cliente não vê);
+    as faturas ficam "Em acordo" (sem lembrete nem bloqueio) e a empresa inadimplente é liberada enquanto as parcelas
+    estiverem em dia; cada parcela é uma cobrança própria com lembrete (dia seguinte e 5 dias) e nota fiscal; com 10
+    dias de atraso o acordo quebra, o que falta vira uma cobrança só e a empresa volta a inadimplente. Redefine
+    `baixar_cobranca` (SQL 23) e a régua do SQL 37: não rode o 23 nem o 37 de novo depois dele. Depois: funções
+    `cobranca` e `pagamentos-webhook` de novo e prompts 57 e 58.
+
+39. `supabase/migrations/20261206000001_relatorios_v2.sql` (SQL 39) — **Relatórios**: bases com nomes do dia a dia e
+    por produto (Mensageria, Orquestração, Jornada); taxas e razões calculadas sobre o grupo, semana e mês, total para
+    o rodapé e a comparação; quem pode cada base (empresa, módulo contratado); foto diária da carteira (90 dias e o
+    fechamento de cada mês para sempre); relatórios salvos "Toda a empresa" ou "Só para mim" (editam quem criou e o
+    Admin); exportação grande em segundo plano até 1 milhão de linhas; envio por e-mail agendado. Os relatórios
+    prontos viram 21 perguntas (os salvos pelas empresas ficam). Depois: função `relatorios`, prompts 59 e 60.
+
+40. `supabase/migrations/20261207000001_jornada_v2.sql` (SQL 40) — **Jornada do Cliente**: resultado de cada momento
+    (`jornada_desfechos`, gravado pelo motor a partir da carga diária: ativou, pagou em dia, voltou a usar) e movimento
+    entre momentos; `mapa_jornada`, `resultado_jornada` e `resultado_frases`; mensagens por momento no catálogo de
+    frases; rótulos sem código e o porquê do melhor canal na Lista do dia; estratégia por carteira (separar e copiar);
+    dois relatórios prontos na aba Jornada. Depois: prompts 61 e 62 e o motor na nuvem.
+
+41. `supabase/migrations/20261208000001_api_v2.sql` (SQL 41) — **Tokens de API**: faixas de IP permitidas, escopo
+    `jornada:enviar` (cargas da Jornada), `trocar_token_api` (o antigo vale mais 1, 7 ou 14 dias), uso e erros por
+    token (`api_registros`, 90 dias, sem o arquivo), avisos de vencimento e de token parado, Console das integrações e
+    revogação pelo Master com motivo. Depois: funções `api` e `assistente` de novo e prompt 63.
+
+42. `supabase/migrations/20261209000001_emails_sistema.sql` (SQL 42) — **E-mails do sistema**: rodapé e remetentes
+    (`email_config`, só o Master edita), assuntos e preferências de sino e e-mail por pessoa (obrigatórios não
+    desligam), cada aviso do sino com assunto e fila de e-mail (`avisos_para_email`, no máximo 1 por dia do mesmo
+    aviso), registro dos envios sem o endereço (`emails_sistema`, 180 dias), devoluções que marcam o contato de fatura,
+    fatura para os Admins quando nenhum contato recebe, sair sem login e e-mail da equipe para chamado e contato do
+    site. Depois: guia `02_supabase_painel/EMAILS_SISTEMA.md`, funções `emails`, `cobranca`, `relatorios`,
+    `admin-usuarios` e `assistente`, e prompts 64 e 65.
+
+43. `supabase/migrations/20261210000001_assistente_v2.sql` (SQL 43) — **Assistente**: teto do mês em reais (R$ 399,90)
+    com a cotação do dólar (PTAX do Banco Central pelo motor, ou manual pelo Master), situação de cada pergunta
+    (respondida, sem resposta, fora do ar, teto), tema, tokens e custo estimado, 👎 com motivo, sugestões por tela e
+    as mais perguntadas, Respostas da equipe (Master e Atendimento, na Auditoria), contexto da pessoa só para o
+    servidor, chamado aberto pelo Assistente, Painel, fila "Para resolver" e aviso de 80% e 100% do teto. Depois:
+    função `assistente` de novo e prompts 66 e 67.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

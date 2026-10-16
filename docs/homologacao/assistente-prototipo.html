@@ -1,0 +1,392 @@
+<title>Assistente</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: MotorCX, menu cinza à esquerda (Console e Cliente) + área de trabalho lisa. Paleta do bloco 5; Console e
+   Empresa usam o grafite neutro. Edição sempre no painel lateral, com resumo antes de salvar. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#1D1D1F; --area-forte:#000000; --area-ativo:#E8E8ED; --area-ativo-texto:#1D1D1F; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --veu:rgba(0,0,0,.25); --sombra:0 10px 30px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:80ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--texto);border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao);
+  margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+@media (max-width:820px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+section[data-p]{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:74ch}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.cartao-cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.peq{padding:5px 11px;font-size:13px}
+.btn.perigo{background:var(--erro);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px;min-width:0}
+input[type=text]{font-variant-numeric:tabular-nums}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap;vertical-align:middle}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.trava{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);background:var(--pilula);border-radius:9px;padding:6px 11px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13.5px}
+.dl dt{color:var(--texto2)}.dl dd{margin:0}
+.abas{display:flex;gap:4px;flex-wrap:wrap}
+.abas button{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;color:var(--texto2);background:var(--pilula)}
+.abas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.abas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.abas b{margin-left:4px}
+.confirma{border:1px solid var(--texto);border-radius:12px;padding:14px 16px;background:var(--pilula);display:flex;flex-direction:column;gap:10px}
+.confirma p{margin:0}
+.grande{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden;display:flex}
+.barra i{display:block;height:100%}
+/* gaveta */
+.veu{position:fixed;inset:0;background:var(--veu);z-index:40}
+.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--cartao);border-left:1px solid var(--borda);box-shadow:var(--sombra);z-index:41;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.gaveta header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--borda)}
+.gaveta header h3{margin:0;font-size:16px}
+.gaveta .corpo{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.gaveta footer{padding:12px 18px;border-top:1px solid var(--borda);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+.gaveta footer .nota{margin-right:auto}
+.faixa-l{display:grid;grid-template-columns:1fr 1fr 110px;gap:8px;align-items:center}
+.faixa-l.mud input{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mudancas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mudancas li{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.mudancas s{color:var(--texto2)}
+.op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--borda);border-radius:10px;padding:10px 12px;cursor:pointer}
+.op:has(input:checked){border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.op b{display:block}.op span{font-size:12.5px;color:var(--texto2)}
+.alerta{border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.alerta.at{background:var(--at-f)}
+/* celular */
+.resp{container-type:inline-size}
+@container (max-width:600px){
+  .tab.cartoes thead{display:none}
+  .tab.cartoes,.tab.cartoes tbody{display:block}
+  .tab.cartoes tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 2px;border-bottom:1px solid var(--borda)}
+  .tab.cartoes td{border:0;padding:0;white-space:normal}
+  .tab.cartoes td.c1{font-weight:600}
+  .tab.cartoes td.c2{grid-column:2;grid-row:1;justify-self:end}
+  .tab.cartoes td.c3{grid-column:1;color:var(--texto2);font-size:13px}
+  .tab.cartoes td.c4{grid-column:2;grid-row:2;justify-self:end;font-weight:600}
+  .tab.cartoes td.x{display:none}
+}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px}
+.kpi span{font-size:12px;color:var(--texto2)} .kpi b{font-size:22px;font-variant-numeric:tabular-nums} .kpi small{font-size:12px;color:var(--texto2)}
+.tok{font-family:var(--mono);font-size:12.5px}
+.segredo{font-family:var(--mono);font-size:13px;background:var(--fundo);border:1px dashed var(--texto2);border-radius:10px;padding:10px 12px;word-break:break-all}
+.alerta-at{background:var(--at-f);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.alerta-at b{color:var(--at)}
+.escopos{display:flex;flex-direction:column;gap:8px}
+.escopos fieldset{border:1px solid var(--borda);border-radius:10px;padding:8px 12px;margin:0}
+.escopos legend{font-size:12px;color:var(--texto2);padding:0 4px}
+.escopos label{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;padding:3px 0}
+.escopos small{display:block;color:var(--texto2);font-size:12px}
+pre.cod{font-family:var(--mono);font-size:12px;background:var(--fundo);border:1px solid var(--borda);border-radius:10px;padding:10px;overflow-x:auto;margin:0;white-space:pre}
+.barras{display:flex;align-items:flex-end;gap:6px;height:90px;padding-top:6px}
+.barras i{flex:1;background:var(--area);border-radius:4px 4px 0 0;opacity:.85}
+.barras i.e{background:var(--erro)}
+.dias{display:flex;gap:6px;font-size:11px;color:var(--texto2)} .dias span{flex:1;text-align:center}
+.antes{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px}
+.antes div{border-radius:10px;padding:10px 12px;background:var(--menu)}
+.antes div:first-child{background:var(--erro-f)}
+.antes b{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2);margin-bottom:4px}
+@media (max-width:600px){.antes{grid-template-columns:1fr}}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:7px 9px;min-width:0}
+.sino{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;max-width:440px}
+.sino b{font-size:13.5px} .sino span{font-size:12.5px;color:var(--texto2)}
+/* assistente */
+.palco{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:0;border:1px solid var(--borda);border-radius:12px;overflow:hidden;background:var(--cartao);min-height:640px}
+@media (max-width:900px){.palco{grid-template-columns:1fr}.palco .fundo-tela{display:none}}
+.fundo-tela{background:var(--fundo);padding:16px;display:flex;flex-direction:column;gap:10px;opacity:.75}
+.fantasma{background:var(--cartao);border:1px solid var(--borda);border-radius:10px;height:54px}
+.gav{border-left:1px solid var(--borda);display:flex;flex-direction:column;min-width:0;background:var(--cartao)}
+.gav header{padding:12px 14px;border-bottom:1px solid var(--borda);display:flex;gap:10px;align-items:center}
+.ava{width:34px;height:34px;border-radius:50%;background:var(--area);color:var(--sobre-area);display:grid;place-items:center;font-weight:700;font-size:14px;flex:none}
+.gav header b{display:block;font-size:14.5px}.gav header small{color:var(--texto2);font-size:12px}
+.gav header .x{margin-left:auto;display:flex;gap:6px}
+.ctx{margin:10px 14px 0;font-size:12px;color:var(--texto2);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--borda);border-radius:999px;padding:2px 9px;font-size:12px;background:var(--fundo);color:var(--texto)}
+button.chip{cursor:pointer;font:inherit;font-size:12.5px}
+button.chip:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.conv{flex:1;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.eu{align-self:flex-end;background:var(--area);color:var(--sobre-area);border-radius:14px 14px 4px 14px;padding:8px 12px;max-width:85%;font-size:13.5px}
+.ele{align-self:flex-start;background:var(--fundo);border:1px solid var(--borda);border-radius:14px 14px 14px 4px;padding:10px 12px;max-width:92%;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.ele ol{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.ele .acoes{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pilacao{all:unset;cursor:pointer;background:var(--area);color:var(--sobre-area);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600}
+.pilacao.sec{background:var(--pilula);color:var(--texto)}
+.pilacao:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.notinha{font-size:11.5px;color:var(--texto2)}
+.cursor::after{content:"▍";animation:pisca 1s steps(1) infinite;color:var(--texto2)}
+@keyframes pisca{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.cursor::after{animation:none}}
+.aviso-lgpd{align-self:stretch;background:var(--at-f);border-radius:10px;padding:8px 10px;font-size:12.5px}
+.fora{align-self:stretch;background:var(--erro-f);border-radius:10px;padding:8px 10px;font-size:12.5px}
+.joinha{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.joinha button{all:unset;cursor:pointer;border:1px solid var(--borda);border-radius:8px;padding:2px 8px;font-size:13px}
+.joinha button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area);border-color:var(--area)}
+.motivos{display:flex;flex-wrap:wrap;gap:6px}
+.entrada{border-top:1px solid var(--borda);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.entrada .linha2{display:flex;gap:8px;align-items:flex-end}
+.entrada textarea{flex:1;font:inherit;font-size:13.5px;color:var(--texto);background:var(--fundo);border:1px solid var(--borda);border-radius:10px;padding:8px 10px;resize:none;min-height:40px}
+.enviar{all:unset;cursor:pointer;width:34px;height:34px;border-radius:50%;background:var(--area);color:var(--sobre-area);display:grid;place-items:center;font-weight:700}
+.sug{display:flex;flex-direction:column;gap:6px}
+.sug b{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.sug .linha{gap:6px}
+.chamado{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13px;background:var(--cartao)}
+.chamado pre{white-space:pre-wrap;font-family:var(--sans);font-size:12.5px;margin:0;background:var(--fundo);border-radius:8px;padding:8px;color:var(--texto2)}
+.tema{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;font-size:13.5px}
+.tema .barra{grid-column:1 / -1}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Revisão de UX</span>
+  <h1>Assistente</h1>
+  <p>Hoje o Assistente responde só pela base de conhecimento, sem saber quem pergunta nem o que a pessoa contratou. Pode sugerir uma tela que ela nem abre. Quando sai do ar, diz "ainda não sei", e esse erro se mistura com as dúvidas de verdade. A equipe vê só a lista do que não foi respondido: não sabe o volume, o custo nem os temas, e para corrigir a base precisa publicar a função de novo. Proposta: o Assistente sabe o perfil e a tela, a resposta aparece enquanto é escrita, o 👎 pede um motivo, a conversa passa para o Suporte e a equipe completa a base pelo Console. Empresas, pessoas e números fictícios.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Telas">
+    <div class="grupo">Cliente</div>
+    <button data-ir="conversa" aria-current="page">Conversa<small>Contexto, passos, ação</small></button>
+    <button data-ir="casos">Quando não dá<small>Não sei, fora do ar, dado pessoal</small></button>
+    <button data-ir="suporte">Passar para o Suporte<small>Com a conversa junto</small></button>
+    <button data-ir="minhas">Minhas perguntas<small>90 dias</small></button>
+    <div class="grupo">Console</div>
+    <button data-ir="painel">Assistente › Painel<small>Uso, acerto, custo, temas</small></button>
+    <button data-ir="fila">Assistente › Para resolver<small>Sem resposta e 👎</small></button>
+    <button data-ir="base">Assistente › Respostas da equipe<small>Completar a base sem publicar</small></button>
+  </nav>
+  <main class="trab">
+
+    <!-- CONVERSA -->
+    <section data-p="conversa">
+      <div class="cab"><div><h2>Conversa</h2><p>A mesma gaveta de hoje, à direita (tela cheia no celular), aberta pelo avatar ou pelo campo "Busque ou pergunte". O que muda é o que o Assistente sabe e como responde.</p></div></div>
+      <div class="antes"><div><b>Hoje</b>Sabe só o endereço da tela. Responde para qualquer perfil igual. Três sugestões fixas para todo mundo. Três pontinhos até a resposta inteira chegar.</div><div><b>Proposta</b>Sabe o perfil, a frente, os módulos contratados e o nome da tela, nunca os dados da carteira. Sugere perguntas desta tela e as mais feitas. A resposta aparece enquanto é escrita.</div></div>
+      <div class="palco">
+        <div class="fundo-tela" aria-hidden="true"><div class="fantasma" style="height:34px;width:40%"></div><div class="fantasma"></div><div class="fantasma"></div><div class="fantasma" style="height:180px"></div></div>
+        <div class="gav" role="dialog" aria-label="Assistente MotorCX">
+          <header><span class="ava" aria-hidden="true">A</span><div><b>Assistente MotorCX</b><small>Tira dúvidas sobre a plataforma</small></div><div class="x"><button class="link" data-ir2="minhas">Minhas perguntas</button></div></header>
+          <div class="ctx"><span>Você está em</span><span class="chip">Mensageria › Campanhas</span><span class="chip">Planejamento · MotorCob</span></div>
+          <div class="conv" id="conv">
+            <div class="sug">
+              <b>Nesta tela</b>
+              <div class="linha"><button class="chip" data-p-sug="Como agendo uma campanha para amanhã às 9h?">Como agendo para amanhã às 9h?</button><button class="chip">Por que a prévia mostra menos números?</button><button class="chip">O que é Score de Entrega?</button></div>
+              <b>Mais perguntadas na sua empresa</b>
+              <div class="linha"><button class="chip">Como baixo a Lista do dia?</button><button class="chip">O que é Disparado e Enviado?</button></div>
+            </div>
+            <div class="eu">Como agendo uma campanha para amanhã às 9h?</div>
+            <div class="ele" id="resp">
+              <span id="resp-txt">Na própria campanha, no passo Envio, escolha "Agendar" e a data e hora. O envio respeita a janela permitida do canal (SMS das 8h às 20h).</span>
+              <ol id="resp-passos"><li>Mensageria › SMS › Campanhas › abra a campanha.</li><li>Passo Envio › Agendar.</li><li>Escolha amanhã, 09:00 › Revisar › Agendar.</li></ol>
+              <div class="acoes"><button class="pilacao">Abrir Campanhas</button><span class="notinha">só aparece se você tem acesso à tela</span></div>
+              <div class="joinha" role="group" aria-label="Esta resposta ajudou?"><span class="notinha">Ajudou?</span><button aria-pressed="false" data-j="sim">👍</button><button aria-pressed="false" data-j="nao">👎</button></div>
+              <div class="motivos" id="motivos" hidden><span class="notinha">O que faltou?</span><button class="chip">Não respondeu</button><button class="chip">Está errado</button><button class="chip">Difícil de entender</button><button class="chip">Não tenho essa tela</button><button class="chip" data-ir2="suporte">Falar com o Suporte</button></div>
+            </div>
+          </div>
+          <div class="entrada">
+            <div class="linha2"><textarea rows="1" aria-label="Pergunta" placeholder="Pergunte sobre a plataforma"></textarea><button class="enviar" aria-label="Enviar" id="enviar">↑</button></div>
+            <span class="notinha">Não vê dados de clientes. Não escreva CPF, telefone ou e-mail de clientes.</span>
+          </div>
+        </div>
+      </div>
+      <div class="duas"><button class="btn sec" id="ver-escrever">Ver a resposta sendo escrita</button></div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>O Assistente recebe perfil, frente, módulos contratados e o nome da tela. Nunca recebe carteira, clientes, envios ou valores: para um caso específico, diz onde olhar.</li>
+        <li>Tela que a pessoa não pode abrir não vira botão, e a resposta já vem escrita para o perfil dela ("peça ao Admin da sua empresa").</li>
+        <li>"Nesta tela": 3 perguntas por tela, escritas pela equipe. "Mais perguntadas": as 2 mais feitas na empresa nos últimos 30 dias, só as que foram respondidas com 👍 ou sem avaliação.</li>
+        <li>Continua com 30 perguntas por hora por pessoa; erro nosso não conta.</li>
+      </ul></div>
+    </section>
+
+    <!-- CASOS -->
+    <section data-p="casos" hidden>
+      <div class="cab"><div><h2>Quando não dá</h2><p>Três situações diferentes, que hoje aparecem iguais como "Ainda não sei".</p></div></div>
+      <div class="duas">
+        <div class="cartao"><h3>Não sabe</h3>
+          <div class="ele" style="max-width:100%"><span>Ainda não sei responder isso. A equipe MotorCX vê esta pergunta e completa a base.</span><div class="acoes"><button class="pilacao" data-ir2="suporte">Falar com o Suporte</button></div></div>
+          <p class="nota">Vai para Console › Para resolver.</p></div>
+        <div class="cartao"><h3>Fora do ar</h3>
+          <div class="fora">O Assistente está fora do ar agora. Tente de novo em alguns minutos ou fale com o Suporte. <button class="link" data-ir2="suporte">Falar com o Suporte</button></div>
+          <p class="nota">Não entra na lista de "sem resposta", não conta no limite por hora e aparece separado no Painel.</p></div>
+        <div class="cartao"><h3>Escreveu dado pessoal</h3>
+          <div class="eu" style="max-width:100%">O cliente [CPF removido] não recebeu o SMS, por quê?</div>
+          <div class="aviso-lgpd">Tiramos um CPF da sua pergunta antes de enviar. O Assistente não vê clientes: para um caso específico, veja em Clientes › Histórico.</div>
+          <p class="nota">Vale também para telefone, e-mail e CNPJ. O que vai para o Suporte é a versão já sem o dado.</p></div>
+      </div>
+    </section>
+
+    <!-- SUPORTE -->
+    <section data-p="suporte" hidden>
+      <div class="cab"><div><h2>Passar para o Suporte</h2><p>"Falar com o Suporte" abre o chamado já preenchido: o motivo pela tela onde a pessoa estava, o assunto pela pergunta e a conversa anexada (sem dados pessoais). A pessoa revisa antes de enviar.</p></div></div>
+      <div class="cartao" style="max-width:560px">
+        <div class="campo"><label>Motivo</label><select><option>Mensageria</option><option>Acesso</option><option>Lista do dia</option></select></div>
+        <div class="campo"><label>Assunto</label><input type="text" value="Como agendo uma campanha para amanhã às 9h?"></div>
+        <div class="chamado"><b>Conversa com o Assistente (anexada)</b><pre>Tela: Mensageria › Campanhas
+Pergunta: Como agendo uma campanha para amanhã às 9h?
+Resposta: Na própria campanha, no passo Envio, escolha "Agendar"…
+Avaliação: 👎 · Não tenho essa tela</pre><label class="linha" style="font-size:13px"><input type="checkbox" checked> Anexar a conversa</label></div>
+        <div class="linha"><button class="btn" id="abrir-ch">Abrir chamado</button><span class="nota">O Suporte responde em Suporte › Meus chamados e por e-mail.</span></div>
+      </div>
+    </section>
+
+    <!-- MINHAS -->
+    <section data-p="minhas" hidden>
+      <div class="cab"><div><h2>Minhas perguntas</h2><p>As próprias perguntas dos últimos 90 dias, para achar de novo uma resposta. Cada pessoa vê só as suas.</p></div></div>
+      <div class="cartao resp"><table class="tab cartoes"><thead><tr><th>Pergunta</th><th>Tela</th><th>Quando</th><th>Resultado</th></tr></thead><tbody>
+        <tr><td class="c1">Como agendo uma campanha para amanhã às 9h?</td><td class="c3">Mensageria › Campanhas</td><td class="c4">hoje 10:42</td><td class="c2"><span class="pil ok">👍</span></td></tr>
+        <tr><td class="c1">O que é Score de Entrega?</td><td class="c3">Mensageria › Painel</td><td class="c4">ontem</td><td class="c2"><span class="pil neutra">respondida</span></td></tr>
+        <tr><td class="c1">Consigo mudar o remetente do SMS?</td><td class="c3">Mensageria › Configurações</td><td class="c4">12/10</td><td class="c2"><span class="pil at">sem resposta</span></td></tr>
+      </tbody></table></div>
+      <p class="nota">Abrir uma linha mostra a resposta de novo e o botão para a tela. "Perguntar de novo" manda a mesma pergunta (a base pode ter mudado).</p>
+    </section>
+
+    <!-- PAINEL -->
+    <section data-p="painel" hidden>
+      <div class="cab"><div><h2>Console › Assistente › Painel</h2><p>Quanto é usado, quanto acerta, quanto custa e sobre o que perguntam.</p></div>
+        <div class="abas" role="group" aria-label="Período"><button aria-pressed="false">7 dias</button><button aria-pressed="true">30 dias</button><button aria-pressed="false">90 dias</button></div></div>
+      <div class="kpis">
+        <div class="kpi"><span>Perguntas</span><b>2.418</b><small>312 pessoas · 41 empresas</small></div>
+        <div class="kpi"><span>Respondidas</span><b>91%</b><small>218 sem resposta</small></div>
+        <div class="kpi"><span>Aprovação</span><b>87%</b><small>👍 sobre avaliadas (640)</small></div>
+        <div class="kpi"><span>Viraram chamado</span><b>64</b><small>2,6% das perguntas</small></div>
+        <div class="kpi"><span>Custo no mês</span><b>US$ 38</b><small>teto US$ 150 · 25%</small></div>
+        <div class="kpi"><span>Fora do ar</span><b>3</b><small>falhas nossas, à parte</small></div>
+      </div>
+      <div class="duas">
+        <div class="cartao"><h3>Temas mais perguntados</h3>
+          <div class="tema"><span>Campanhas e agendamento</span><b>412</b><div class="barra"><i style="width:82%;background:var(--area)"></i></div></div>
+          <div class="tema"><span>Lista do dia</span><b>366</b><div class="barra"><i style="width:73%;background:var(--area)"></i></div></div>
+          <div class="tema"><span>Status de entrega</span><b>301</b><div class="barra"><i style="width:60%;background:var(--area)"></i></div></div>
+          <div class="tema"><span>Usuários e permissões</span><b>188</b><div class="barra"><i style="width:37%;background:var(--area)"></i></div></div>
+          <p class="nota">Tema = a seção da base que respondeu.</p></div>
+        <div class="cartao"><h3>Telas com mais dúvida sem resposta</h3>
+          <div class="rolar"><table class="tab"><thead><tr><th>Tela</th><th class="n">Perguntas</th><th class="n">Sem resposta</th></tr></thead><tbody>
+            <tr><td>Mensageria › Configurações</td><td class="n">96</td><td class="n" style="color:var(--erro)">31%</td></tr>
+            <tr><td>Orquestração › Comitê</td><td class="n">54</td><td class="n" style="color:var(--erro)">22%</td></tr>
+            <tr><td>Relatórios › Montador</td><td class="n">120</td><td class="n">9%</td></tr>
+          </tbody></table></div></div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Custo vem dos tokens de cada resposta. Com o teto do mês atingido, o Assistente responde só com as Respostas da equipe e "Falar com o Suporte" até virar o mês. O Master recebe aviso com 80%.</li>
+        <li>O Painel não mostra quem perguntou; o Master abre a pergunta na fila, com o nome da empresa.</li>
+      </ul></div>
+    </section>
+
+    <!-- FILA -->
+    <section data-p="fila" hidden>
+      <div class="cab"><div><h2>Console › Assistente › Para resolver</h2><p>Hoje é só uma lista para exportar. Proposta: cada item tem situação e vira ação.</p></div></div>
+      <div class="abas" role="group" aria-label="Situação"><button aria-pressed="true">Novas <b>27</b></button><button aria-pressed="false">Base completada</button><button aria-pressed="false">Viraram chamado</button><button aria-pressed="false">Ignoradas</button></div>
+      <div class="cartao resp"><table class="tab cartoes"><thead><tr><th>Pergunta</th><th>Tela</th><th>Por quê</th><th>Repetiu</th><th></th></tr></thead><tbody>
+        <tr><td class="c1">Consigo mudar o remetente do SMS?</td><td class="c3">Mensageria › Configurações</td><td class="x"><span class="pil at">sem resposta</span></td><td class="c4">14×</td><td class="c2"><button class="link" data-ir2="base">Responder na base</button></td></tr>
+        <tr><td class="c1">Como agendo uma campanha…</td><td class="c3">Mensageria › Campanhas</td><td class="x"><span class="pil erro">👎 Não tenho essa tela</span></td><td class="c4">3×</td><td class="c2"><button class="link">Ver conversa</button></td></tr>
+      </tbody></table></div>
+      <p class="nota">Perguntas parecidas ficam juntas ("Repetiu 14×"). Ações: Responder na base · Ignorar (com motivo) · Ver chamado.</p>
+    </section>
+
+    <!-- BASE -->
+    <section data-p="base" hidden>
+      <div class="cab"><div><h2>Console › Assistente › Respostas da equipe</h2><p>A equipe completa o que falta sem esperar uma publicação da função. A base grande continua no código; estas respostas entram junto, na hora.</p></div><button class="btn" id="nova-resp">Nova resposta</button></div>
+      <div class="duas">
+        <div class="cartao">
+          <div class="campo"><label>Pergunta (como o cliente escreve)</label><input type="text" value="Consigo mudar o remetente do SMS?"></div>
+          <div class="campo"><label>Resposta</label><textarea rows="4" style="font:inherit;border:1px solid var(--borda);border-radius:8px;padding:8px;background:var(--cartao);color:var(--texto)">O remetente do SMS é um número curto da operadora e não muda por empresa. No RCS, o nome e a marca aparecem como remetente depois da aprovação do agente.</textarea></div>
+          <div class="campo"><label>Tela relacionada</label><select><option>Mensageria › Configurações</option></select></div>
+          <div class="linha"><span class="pil neutra">vale para: todos os perfis</span><span class="pil neutra">frente: MotorCob</span></div>
+          <div class="linha"><button class="btn" id="publicar-resp">Publicar</button><button class="btn sec">Testar a pergunta</button></div>
+        </div>
+        <div class="cartao"><h3>Publicadas <span class="pil neutra">12</span></h3>
+          <div class="rolar"><table class="tab"><thead><tr><th>Pergunta</th><th>Usada</th><th>👍</th></tr></thead><tbody>
+            <tr><td>Quanto tempo a Lista do dia fica disponível?</td><td>48×</td><td>96%</td></tr>
+            <tr><td>Posso mandar WhatsApp sem template?</td><td>21×</td><td>90%</td></tr>
+          </tbody></table></div>
+          <p class="nota">Cada resposta fica na Auditoria (quem escreveu, quando, o antes e o depois).</p></div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Quem publica: Master e quem tem "Atendimento" na equipe. Sem preço, desconto ou dado de cliente (a tela recusa CPF, telefone e e-mail).</li>
+        <li>Respostas da equipe têm prioridade sobre a base quando tratam do mesmo assunto. A cada pacote novo, o desenvolvedor passa as mais usadas para a base do código.</li>
+      </ul></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3200); };
+  const telas = [...document.querySelectorAll("section[data-p]")], botoes = [...document.querySelectorAll(".menu button")];
+  const ir = p => { telas.forEach(s => s.hidden = s.dataset.p !== p); botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); window.scrollTo({ top: 0 }); };
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+  document.querySelectorAll("[data-ir2]").forEach(b => b.addEventListener("click", () => ir(b.dataset.ir2)));
+  document.querySelectorAll(".abas").forEach(g => g.querySelectorAll("button").forEach(b => b.addEventListener("click", () => g.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false")))));
+  document.querySelectorAll(".joinha button").forEach(b => b.addEventListener("click", () => {
+    b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    $("motivos").hidden = b.dataset.j !== "nao";
+    if (b.dataset.j === "sim") toast("Obrigado!");
+  }));
+  document.querySelectorAll("#motivos .chip:not([data-ir2])").forEach(b => b.addEventListener("click", () => toast("Obrigado! A equipe vê este motivo.")));
+  const txt = $("resp-txt").textContent;
+  $("ver-escrever").addEventListener("click", () => {
+    const alvo = $("resp-txt"), passos = $("resp-passos");
+    passos.hidden = true; alvo.textContent = ""; alvo.classList.add("cursor");
+    let i = 0; const t = setInterval(() => { i += 3; alvo.textContent = txt.slice(0, i);
+      if (i >= txt.length) { clearInterval(t); alvo.classList.remove("cursor"); passos.hidden = false; } }, 30);
+  });
+  $("abrir-ch").addEventListener("click", () => toast("Chamado aberto com a conversa anexada."));
+  $("publicar-resp").addEventListener("click", () => toast("Publicada. O Assistente já usa esta resposta."));
+  $("enviar").addEventListener("click", () => toast("No protótipo, as respostas são de exemplo."));
+})();
+</script>

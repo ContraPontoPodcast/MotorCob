@@ -18,6 +18,14 @@
 -- Rode depois do SQL 29. Pode rodar mais de uma vez.
 
 -- ================================================================ 1. perfil Administrativo
+-- (quando o SQL 33 já rodou, a view e as funções da equipe são dele, com a função Técnico: nada a fazer aqui)
+do $v$
+begin
+    if exists (select 1 from information_schema.columns where table_schema = 'public'
+               and table_name = 'permissoes_equipe_catalogo' and column_name = 'tecnico') then
+        return;
+    end if;
+    execute $q$
 create or replace view public.permissoes_equipe_catalogo as
 select * from (values
     ('ver_empresas', 'Empresas', 'Ver empresas e Saúde', true, true, true, true),
@@ -35,7 +43,8 @@ select * from (values
     ('editar_produtos', 'Produtos', 'Criar produtos e definir preço mínimo e de tabela', true, false, false, true),
     ('preco_abaixo_minimo', 'Produtos', 'Dar preço abaixo do mínimo (com motivo)', true, false, false, true),
     ('gerenciar_fornecedores', 'Produtos', 'Fornecedores, negociações e rotas', true, false, false, true)
-) as c(permissao, grupo, nome, master, atendimento, comercial, administrativo);
+) as c(permissao, grupo, nome, master, atendimento, comercial, administrativo)$q$;
+end $v$;
 grant select on public.permissoes_equipe_catalogo to authenticated;
 
 create or replace function public.funcao_equipe(papel public.papel) returns text
@@ -48,7 +57,7 @@ create or replace function pg_temp.trocar(assinatura text, de text, para text) r
 language plpgsql as $$
 declare d text := pg_get_functiondef(assinatura::regprocedure);
 begin
-    if position(para in d) > 0 then
+    if position(para in d) > 0 or position('tecnico' in d) > 0 then      -- já aplicado (ou SQL 33 já rodou)
         return;
     end if;
     if position(de in d) = 0 then

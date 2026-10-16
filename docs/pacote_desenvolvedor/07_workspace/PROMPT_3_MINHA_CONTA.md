@@ -38,9 +38,10 @@ SEGURANÇA
    Safari") e "Ativa agora". Botão secundário "Sair de todos os outros dispositivos" → signOut({scope:'others'})
    e aviso "Pronto. Os outros dispositivos vão pedir login de novo." Botão "Sair deste dispositivo" → signOut().
 
-TOKENS DE API: card #F5F5F7 com ícone Code: "Os tokens de API chegam com o módulo API. Com eles, o sistema da sua
-empresa envia cargas e lê a Lista do dia sem passar pelo site." Botão "Quero ser avisado" → abre /suporte/novo com
-motivo 'integracao' e assunto "Interesse na API". Nada de gerar token agora.
+TOKENS DE API: com o módulo API ligado, o card leva para /conta/tokens (tela do pacote 08_api). Sem o módulo:
+card #F5F5F7 com ícone Code: "Os tokens de API chegam com o módulo API. Com eles, o sistema da sua empresa envia
+cargas e lê a Lista do dia sem passar pelo site." Botão "Quero ser avisado" → abre /suporte/novo com motivo
+'integracao' e assunto "Interesse na API".
 
 DOCUMENTAÇÃO (/docs): busca no topo (filtra por título e texto) e 6 cards de categoria: Primeiros passos ·
 Lista do dia · Orquestração · Mensageria · Arquivos e cargas · Segurança e conta. Cada artigo em /docs/{slug},

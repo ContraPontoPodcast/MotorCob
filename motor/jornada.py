@@ -51,6 +51,7 @@ M_FORA = "saiu da régua pela regra de uma etapa da empresa"
 M_LEAD_SEM_ETAPA = "lead fora das condições das etapas de prospecção"
 M_ORCAMENTO = "ficou fora do orçamento do canal na etapa (concorre de novo amanhã)"
 M_LIMITE = "atingiu o limite de ações por cliente (trava da estratégia)"
+M_ORCAMENTO_MOMENTO = "passou do orçamento do canal no momento (concorre de novo amanhã)"
 
 
 class JornadaInvalida(ValueError):
@@ -94,8 +95,13 @@ def validar(d: dict) -> dict:
                     erros.append(f"{m}: passo {dia} com canal inválido {canal!r}")
                 if a.get("senao") and a["senao"] not in CANAIS:
                     erros.append(f"{m}: passo {dia} com 'senão' inválido {a['senao']!r}")
+                if a.get("frase_id") is not None and (not isinstance(a["frase_id"], int) or a["frase_id"] <= 0):
+                    erros.append(f"{m}: passo {dia} com mensagem inválida {a['frase_id']!r}")
             passos[dia] = acoes
         cfg["passos"] = passos
+        orc = cfg.get("orcamento") or {}
+        if not isinstance(orc, dict) or any(c not in CANAIS or not isinstance(v, int) or v < 0 for c, v in orc.items()):
+            erros.append(f"{m}: orçamento por canal inválido (canal: quantidade por dia)")
     if not isinstance(d.get("recencia_horas", 48), int) or d.get("recencia_horas", 48) < 0:
         erros.append("recencia_horas inválida")
     if erros:
@@ -105,12 +111,18 @@ def validar(d: dict) -> dict:
 
 def aplicar_estrategia(base: dict, definicao: dict | None) -> dict:
     """Estratégia do site (estrategias.definicao da frente MotorCli) por cima das regras padrão:
-    {recencia_horas?, momentos: {momento: {ativo?, passos?}}}. A faixa de dias é do padrão."""
+    {recencia_horas?, hierarquia?, momentos: {momento: {ativo?, passos?, orcamento?}}}. A faixa de dias é do
+    padrão. A ação do passo pode levar frase_id (mensagem da biblioteca de frases do momento)."""
     d = copy.deepcopy(base)
     if not definicao:
         return d
     if isinstance(definicao.get("recencia_horas"), int):
         d["recencia_horas"] = definicao["recencia_horas"]
+    h = definicao.get("hierarquia")         # prioridade dos momentos (o de cima vale quando há dois no mesmo dia)
+    if isinstance(h, list) and h:
+        if sorted(h) != sorted(d["hierarquia"]):
+            raise JornadaInvalida("a prioridade precisa ter os cinco momentos, cada um uma vez")
+        d["hierarquia"] = list(h)
     if "etapas" in definicao:     # etapas da empresa (prospecção e outras): motor/etapas.py
         etapas, ordem, avisos = ET.validar(definicao, "cli", "jornada", ET.acoes_da_estrategia)
         d["etapas"], d["ordem_etapas"], d["avisos_etapas"] = etapas, ordem, avisos
@@ -133,6 +145,8 @@ def aplicar_estrategia(base: dict, definicao: dict | None) -> dict:
             d["momentos"][m]["ativo"] = bool(cfg["ativo"])
         if isinstance(cfg.get("passos"), dict) and cfg["passos"]:
             d["momentos"][m]["passos"] = cfg["passos"]
+        if "orcamento" in cfg:                 # orçamento por canal no momento: {canal: ações por dia}
+            d["momentos"][m]["orcamento"] = cfg["orcamento"]
     return validar(d)
 
 
@@ -411,6 +425,16 @@ def gerar(clientes: dict[str, ClienteJornada], contatos: list[dict], hoje: date,
     (carregar_leads), acionado só pelas etapas da empresa; etapas_estado: <estado>/etapas.json."""
     res = Resultado()
     melhor = melhor or (lambda opcoes: list(opcoes))
+    usados: Counter = Counter()                  # ações por (momento, canal) hoje, para o orçamento do momento
+
+    def escolher_melhor(opcoes, momento):
+        """'Melhor canal': pelo resultado do momento (jornada_resultados.melhor_por_resultado devolve (ordem,
+        por_que)) ou, no formato antigo, só a ordem."""
+        try:
+            r = melhor(list(opcoes), momento)
+        except TypeError:
+            r = melhor(list(opcoes))
+        return r if isinstance(r, tuple) else (r, "melhor canal")
     contatos_de: dict[str, list[dict]] = {}
     for c in contatos:
         contatos_de.setdefault(c["id_cliente"], []).append(c)
@@ -442,6 +466,13 @@ def gerar(clientes: dict[str, ClienteJornada], contatos: list[dict], hoje: date,
 
     def anotar(est, linhas):
         est["ultima"] = hoje.isoformat()
+        if linhas:
+            est["canal"] = linhas[0]["canal"]            # para o resultado do momento (motor/jornada_resultados.py)
+            f = linhas[0].get("frase_acao")
+            if isinstance(f, dict) and f.get("frase_id"):
+                est["frase"] = f["frase_id"]               # e o da mensagem
+            else:
+                est.pop("frase", None)
         if regras.get("limite_acoes") or regras.get("limite_leads_semana"):
             hist = [[d, c] for d, c in est.get("hist") or [] if (hoje - date.fromisoformat(d)).days < 31
                     and d != hoje.isoformat()]
@@ -559,23 +590,34 @@ def gerar(clientes: dict[str, ClienteJornada], contatos: list[dict], hoje: date,
             res.motivos[M_RECENCIA] += 1
             res.enquadramento[idc] = {"momento": m, "passo": rot, "motivo": M_RECENCIA}
             continue
-        linhas = []
+        linhas, sem_orcamento = [], False
+        orcamento = regras["momentos"][m].get("orcamento") or {}
         for acao in regras["momentos"][m]["passos"][passo]:
-            opcoes = melhor(acao["opcoes"]) if acao["canal"] == "melhor" else [acao["canal"]]
+            por_que = ""
+            if acao["canal"] == "melhor":
+                opcoes, por_que = escolher_melhor(acao["opcoes"], m)
+            else:
+                opcoes = [acao["canal"]]
             if acao.get("senao"):
                 opcoes = opcoes + [acao["senao"]]
             for canal in opcoes:
                 if canal not in ativos or any(l["canal"] == canal for l in linhas):
                     continue
+                if canal in orcamento and usados[(m, canal)] >= orcamento[canal]:
+                    sem_orcamento = True
+                    continue
                 contato = contato_do_canal(idc, canal, contatos_de, certs, restricoes, whatsapp_ok)
                 if contato:
                     linhas.append({"id_cliente": idc, "canal": canal, "contato": contato, "regua": m,
                                    "passo": rot, "tag": f"CLI-{CODIGO[m]}-{rot}", "condicao": "",
-                                   "ordem_contato": 1, "cluster": "", "estado": CODIGO[m], "persona": ""})
+                                   "ordem_contato": 1, "cluster": "", "estado": CODIGO[m], "persona": "",
+                                   **({"por_que": por_que} if por_que and canal in (acao.get("opcoes") or []) else {}),
+                                   **({"frase_acao": {"frase_id": acao["frase_id"]}} if acao.get("frase_id") else {})})
                     break
         if not linhas:
-            res.motivos[M_SEM_CONTATO] += 1
-            res.enquadramento[idc] = {"momento": m, "passo": rot, "motivo": M_SEM_CONTATO}
+            motivo = M_ORCAMENTO_MOMENTO if sem_orcamento else M_SEM_CONTATO
+            res.motivos[motivo] += 1
+            res.enquadramento[idc] = {"momento": m, "passo": rot, "motivo": motivo}
             continue
         linhas = limitar(est, linhas)
         if not linhas:
@@ -583,6 +625,8 @@ def gerar(clientes: dict[str, ClienteJornada], contatos: list[dict], hoje: date,
             res.enquadramento[idc] = {"momento": m, "passo": rot, "motivo": M_LIMITE}
             continue
         est["momentos"][m] = {"episodio": episodio, "feitos": sorted(set(feitos) | {passo})}
+        for l in linhas:
+            usados[(m, l["canal"])] += 1
         anotar(est, linhas)
         res.fila.extend(linhas)
         res.por_momento[m] += 1

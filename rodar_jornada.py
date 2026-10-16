@@ -58,10 +58,11 @@ def _gravar(caminho: Path, linhas: list[dict]):
 def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir, regras_json=jor.PADRAO,
                   definicao: dict | None = None, canais: list[dict] | None = None, calendario: dict | None = None,
                   registros_canal: list | None = None, regras_retorno: dict | None = None, out=print,
-                  leads_csv=None, frases: list[dict] | None = None) -> dict:
+                  leads_csv=None, frases: list[dict] | None = None, desfechos_hist: list[dict] | None = None) -> dict:
     """Roda o dia do MotorCli. canais: linhas de canais_empresa (canal, ativo); registros_canal:
     retornos de canal e da mensageria (motor.retorno_canal.Registro); leads_csv: quem ainda não é cliente
-    (prospecção, só pelas etapas da empresa); frases: tabela frases (texto das ações {"frase_id": n})."""
+    (prospecção, só pelas etapas da empresa); frases: tabela frases (texto das ações {"frase_id": n});
+    desfechos_hist: jornada_desfechos dos últimos 90 dias (o "melhor canal" escolhe pelo resultado do momento)."""
     estado_dir, saida_dir = Path(estado_dir), Path(saida_dir)
     aviso = None
     try:
@@ -99,6 +100,12 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
     from motor import etapas as ET
     etapas_estado = ET.carregar_estado(estado_dir)
     ET.limpar(etapas_estado, set(clientes) | set(leads))
+    # resultado de cada momento e movimento: compara a carga de hoje com a de ontem (antes das ações de hoje)
+    from motor import jornada_resultados as jr
+    estado_res = jr.carregar(estado_dir, data)
+    desfechos, movimento = jr.calcular(clientes, lambda c: jor.momento_aplicavel(c, regras, data), data,
+                                       estado_res, estado)
+    jr.salvar(estado_dir, estado_res)
     janela = regua.janela(data)
     if regras.get("travas_janela"):        # trava de horário/dias da estratégia (soma restrições ao calendário)
         from motor.travas import janela_com_travas
@@ -106,8 +113,11 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
     res = jor.gerar(clientes, contatos, data, regras, estado, janela_ok=janela is not None,
                     canais_ativos=ativos, certs=certs, restricoes=restricoes,
                     whatsapp_ok=_whatsapp_confirmados(Path(contatos_csv)) | wa_leads,
-                    melhor=jor.ordem_por_resultado(hit_rate_por_canal(eventos)),
+                    melhor=jr.melhor_por_resultado(jr.taxas_por_momento(desfechos_hist or []),
+                                                   jor.ordem_por_resultado(hit_rate_por_canal(eventos))),
                     leads=leads, etapas_estado=etapas_estado)
+    for idc, v in res.enquadramento.items():     # fase do cliente hoje (o mapa conta quem está em cada momento)
+        v["fase"] = (estado_res.get(idc) or {}).get("m", "")
     if aviso:
         res.alertas.insert(0, aviso)
     for a in regras.get("avisos_etapas") or []:
@@ -141,7 +151,10 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
         + " · ".join(f"{jor.CODIGO.get(m, m)} {n}" for m, n in sorted(res.por_momento.items())))
     return {"fila": res.fila, "motivos": res.motivos, "por_momento": res.por_momento,
             "enquadramento": res.enquadramento, "alertas": res.alertas, "acoes": acoes, "saida": pasta,
-            "resumo": resumo}
+            "resumo": resumo,
+            "desfechos": [{"momento": m, "canal": c, "frase_id": f, "desfecho": d, "clientes": n}
+                          for (m, c, f, d), n in sorted(desfechos.items())],
+            "movimento": [{"de": de, "para": para, "clientes": n} for (de, para), n in sorted(movimento.items())]}
 
 
 def main():

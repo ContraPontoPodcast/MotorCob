@@ -3,8 +3,8 @@
 // * Publicar com "Verify JWT" DESLIGADO: quem chama é o Stripe/Focus. Cada aviso é conferido:
 //   - /stripe: assinatura Stripe-Signature com STRIPE_WEBHOOK_SECRET (whsec_...);
 //   - /focusnfe: cabeçalho Authorization igual a FOCUSNFE_WEBHOOK_TOKEN (o mesmo valor cadastrado no gatilho).
-// * O mesmo aviso repetido não faz nada (cobranca_eventos). Pago: fatura "paga" ou recarga no saldo, e a nota fiscal
-//   sai se estiver ligada para "no pagamento".
+// * O mesmo aviso repetido não faz nada (cobranca_eventos). Pago: fatura "paga", recarga no saldo ou parcela de acordo
+//   paga (o banco quita o acordo quando é a última), e a nota fiscal sai se estiver ligada para "no pagamento".
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { acaoDoEvento, assinaturaStripeValida, iguais } from "../cobranca/regras.ts";
 import { atualizarNota, emitirNota, guardarCartao } from "../cobranca/servico.ts";
@@ -44,8 +44,14 @@ async function receberStripe(req: Request) {
       if (b && a.guardarCartao) await guardarCartao(admin, a.guardarCartao, b.empresa_id);
       if (b?.baixou) {
         const { data: cfg } = await admin.from("nf_config").select("ativo, emitir_quando").eq("id", 1).single();
-        if (cfg?.ativo && (cfg.emitir_quando === "pagamento" || b.recarga_id)) {
-          try { await emitirNota(admin, b.fatura_id ? "fatura" : "recarga", b.fatura_id ?? b.recarga_id); }
+        let tipo: "fatura" | "recarga" | "parcela" = b.fatura_id ? "fatura" : "recarga";
+        let id = b.fatura_id ?? b.recarga_id;
+        if (!id) {                                              // parcela de acordo (SQL 38)
+          const { data: c } = await admin.from("cobrancas").select("parcela_id").eq("id_externo", a.baixar).maybeSingle();
+          tipo = "parcela"; id = c?.parcela_id;
+        }
+        if (id && cfg?.ativo && (cfg.emitir_quando === "pagamento" || tipo === "recarga")) {
+          try { await emitirNota(admin, tipo, id); }
           catch (e) { console.error("nota", (e as Error).message); }    // a equipe reemite em Faturamento
         }
       }

@@ -137,6 +137,9 @@ def processar_retornos(sb, dados: Path, agora: datetime | None = None, out=print
         if tipo in ("enviado", "entregue") and not m.get("confirmada_em"):
             novo["confirmada_em"] = quando
             soma(lid, "enviadas")
+        if tipo in ("entregue", "falhou") and "dlr_em" in m and not m.get("dlr_em"):
+            novo["dlr_em"] = quando                  # tempo até a DLR (qualidade dos fornecedores, SQL 33)
+            novo["dlr_codigo"] = (ev.get("codigo") or ev.get("motivo") or tipo)[:60]
         if tipo == "entregue" and m["situacao"] == "enviada":
             novo.update(situacao="entregue", motivo=None)
             soma(lid, "sem_retorno", -1)

@@ -3,7 +3,7 @@
 // (pode('gerenciar_usuarios')) e por regras.ts. A chave service_role vem só da variável de ambiente do
 // servidor (Supabase › Edge Functions › Secrets) e nunca sai daqui.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { aalDoToken, autorizar, empresaAlvo, type Pedido, type Perfil, validarPedido } from "./regras.ts";
+import { aalDoToken, autorizar, dadosConviteEquipe, dadosDoConvite, empresaAlvo, type Pedido, type Perfil, validarPedido } from "./regras.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -58,9 +58,10 @@ async function executar(quem: Perfil, pedido: Pedido, alvo: Perfil | null): Prom
     }
     case "convidar": {
       const empresa = empresaAlvo(quem, pedido);
+      const { data: emp } = await admin.from("empresas").select("nome").eq("id", empresa).maybeSingle();
       const { data, error } = await admin.auth.admin.inviteUserByEmail(pedido.email!, {
         redirectTo: `${SITE}/definir-senha`,
-        data: pedido.nome ? { nome: pedido.nome } : undefined,
+        data: dadosDoConvite(quem, pedido.nome, emp?.nome ?? null, pedido.papel!),
       });
       if (error) {
         if (/already|registered|exists/i.test(error.message)) return [409, { erro: "e-mail já cadastrado" }];
@@ -105,9 +106,10 @@ async function executar(quem: Perfil, pedido: Pedido, alvo: Perfil | null): Prom
       return [200, { ok: true }];
     }
     case "convidar_equipe": {
+      // o mesmo modelo de convite do cliente: empresa, papel e quem convidou nunca chegam em branco (SQL 42)
       const { data, error } = await admin.auth.admin.inviteUserByEmail(pedido.email!, {
         redirectTo: `${SITE}/definir-senha`,
-        data: pedido.nome ? { nome: pedido.nome } : undefined,
+        data: dadosConviteEquipe(quem, pedido.nome),
       });
       if (error) {
         if (/already|registered|exists/i.test(error.message)) return [409, { erro: "e-mail já cadastrado" }];
@@ -163,7 +165,7 @@ Deno.serve(async (req) => {
   const { pedido, erro } = validarPedido(corpo);
   if (!pedido) return responder({ erro }, 400, origem);
 
-  const campos = "id, papel, ativo, empresa_id, equipe";
+  const campos = "id, nome, papel, ativo, empresa_id, equipe";
   const { data: quem } = await admin.from("perfis").select(campos).eq("id", sessao.user.id).maybeSingle();
   // a permissão vem do banco, com o login de quem pede (padrão MotorCob + ajuste do Admin da empresa)
   const comoUsuario = createClient(SUPABASE_URL, ANON, { ...sem, global: { headers: { Authorization: `Bearer ${token}` } } });

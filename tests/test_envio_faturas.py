@@ -53,7 +53,7 @@ class TestEnvio(unittest.TestCase):
         self.assertIn("faturamento: 2 rascunhos gerados, 2 faturas emitidas sozinhas", saida)
         n = len(sb.chamadas)
         _faturamento(sb, self.dados, datetime(2026, 11, 1, 15, 0, tzinfo=timezone.utc), saida.append)
-        self.assertEqual([c for c in sb.chamadas[n:] if c[1] != "faturas_para_enviar"], [])         # só uma vez por dia
+        self.assertEqual([c for c in sb.chamadas[n:] if c[1] not in ("faturas_para_enviar", "acordos_para_informar")], [])         # só uma vez por dia
 
     def test_fila_envia_e_erro_definitivo_ou_tenta_de_novo(self):
         recusa = ErroSupabase(422, json.dumps({"erro": "Sem e-mail do financeiro"}), "u")

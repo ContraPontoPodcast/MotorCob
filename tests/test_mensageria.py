@@ -291,11 +291,26 @@ class TestMensageria(unittest.TestCase):
             self.assertEqual(self._lote("sms")["situacao"], "pausado")
             self.assertIn("saldo pré-pago esgotado", self._lote("sms")["motivo"])
             self.assertNotIn("consumo_mensageria", self.sb.t)
+            aviso = self.sb.t["avisos"][-1]                      # a empresa fica sabendo pelo sino
+            self.assertEqual((aviso["para"], aviso["tipo"], aviso["titulo"], aviso["link"]),
+                             ("empresa", "atencao", "Envios pausados", "/empresa/faturamento"))
+            self.assertEqual(aviso["chave"], f"pausa:1:saldo:{DIA.isoformat()}")
             # "continuar mesmo sem saldo": o saldo fica negativo e o lote sai
             saldo["pausar_envios"] = False
             self._lote("sms")["situacao"] = "agendado"
             self._processar()
         self.assertTrue(self.sb.t.get("consumo_mensageria"))
+
+    def test_empresa_inadimplente_nao_envia(self):
+        self.sb.t["mensageria_config"] = [{"empresa_id": 1, "modo": "real", "aprovar_lotes": False}]
+        self.sb.t["empresas"][0].update(ativa=False, situacao="inadimplente")
+        with mock.patch.dict(M.ADAPTADORES_REAIS, {"zenvia": lambda: M.Simulador("zenvia")}):
+            self._criar()
+            self._processar()
+        self.assertEqual(self._lote("sms")["situacao"], "pausado")
+        self.assertIn("fatura vencida", self._lote("sms")["motivo"])
+        self.assertNotIn("consumo_mensageria", self.sb.t)
+        self.assertEqual(self.sb.t["avisos"][-1]["chave"], f"pausa:1:bloqueio:{DIA.isoformat()}")
 
     def test_email_com_modelo_sai_pela_locaweb(self):
         self.sb.t["mensageria_modelos_email"] = [{"empresa_id": 1, "remetente_nome": "Alfa", "assunto": "Sua conta",

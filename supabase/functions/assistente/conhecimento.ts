@@ -39,10 +39,14 @@ O Início do Workspace mostra:
 
 ### Assistente MotorCX
 
-- Onde usar: no campo "O que você quer fazer?" do Início do Workspace (a resposta aparece logo abaixo) ou pelo avatar no canto inferior direito das telas do Workspace ("Dúvida? Fala comigo!"), que abre a conversa numa gaveta à direita. "Continuar a conversa" leva a pergunta do campo para a gaveta.
-- Cada resposta pode trazer o passo a passo e um botão que abre a tela certa. Use 👍 ou 👎 para dizer se ajudou.
-- O Assistente responde sobre o uso da plataforma. Ele não vê a carteira, os clientes, os envios nem as faturas da empresa; para um caso específico, abra um chamado em Suporte.
-- Cada pergunta fica registrada por 90 dias para a equipe MotorCX melhorar as respostas. Não escreva CPF, telefone, e-mail ou nome de devedores: esses dados são apagados antes de a pergunta ser processada.
+- Onde usar: no campo "O que você quer fazer?" do Início do Workspace (a resposta aparece logo abaixo) ou pelo avatar no canto inferior direito das telas ("Dúvida? Fala comigo!"), que abre a conversa numa gaveta à direita. "Continuar a conversa" leva a pergunta do campo para a gaveta.
+- O Assistente sabe o seu perfil, a frente, os módulos contratados e a tela onde você está, para responder do jeito que vale para você. Ele não vê a carteira, os clientes, os envios, os valores nem as faturas da empresa; para um caso específico, diz onde olhar.
+- A gaveta mostra perguntas sugeridas para a tela atual e as mais perguntadas na empresa. A resposta aparece enquanto é escrita.
+- Cada resposta pode trazer o passo a passo e um botão que abre a tela certa (só aparece se você tem acesso a ela). Use 👍 ou 👎; no 👎, diga o que faltou (não respondeu, está errado, difícil de entender, não tenho essa tela).
+- "Falar com o Suporte" abre um chamado já preenchido, com a conversa anexada sem dados pessoais. Você revisa antes de enviar.
+- Minhas perguntas (na gaveta): as suas perguntas dos últimos 90 dias, para achar de novo uma resposta.
+- Se aparecer "fora do ar", foi uma falha nossa: tente de novo em alguns minutos (não conta no limite). Se aparecer que o Assistente está pausado até o mês que vem, fale com o Suporte.
+- Cada pergunta fica registrada por 90 dias para a equipe MotorCX melhorar as respostas. Não escreva CPF, telefone, e-mail ou nome de devedores: esses dados são apagados antes de a pergunta ser processada, e a gaveta avisa quando isso acontece.
 - Limite: 30 perguntas por hora por usuário.
 
 ---
@@ -79,6 +83,12 @@ Sem permissão de edição, uma tela abre só para leitura (campos desabilitados
 
 O menu Ajuda › O que significa (e o "?" no topo) traz todos os termos da plataforma; todo (i) leva direto ao termo. Nomes que mudaram: Hot → Contato principal; CPC A → CPC · em negociação; CPC B → CPC · sem resposta (1ª, 2ª tentativa…); Localização → Cliente novo; G1, G2, G3 → 1º, 2º, 3º ciclo; RE → Parado · aguarda enriquecimento; Colchão → Acordo em dia; Preventivo → Acordo · antes do vencimento; Quebra → Acordo · parcela vencida; Cluster → Segmento; Templates → Modelos de mensagem; Credor → Carteira. Mantêm o nome: Fallback, MC e %MC, Auditoria e DLR (só SMS e RCS; WhatsApp tem status de entrega e e-mail tem bounce).
 A ajuda acompanha o tempo de casa de cada pessoa: até 15 dias as explicações ficam abertas, de 16 a 30 dias aparece só o (i), depois de 30 dias fica desligada. Em Minha conta a pessoa religa a ajuda e escolhe o tema claro ou escuro. Senha: 12 caracteres ou mais, com letra e número. Arquivos: CSV, TXT e XLSX em todo envio.
+
+---
+
+## Score de Entrega e Economia do Score
+
+O Score de Entrega (contratado à parte) dá a cada número uma faixa pelo histórico da Mensageria: Alto, Médio, Baixo e Sem histórico. Na campanha, o cliente marca as faixas que recebem (Todos, Alto, Médio, Baixo, Sem histórico); os números fora não são enviados e voltam no retorno com o nome da faixa. Uma pequena amostra sai mesmo assim (grupo de controle) para provar a entrega real de cada faixa. Cobrança: por número analisado ou só pelos represados; o SMS segue no preço padrão. Em Mensageria › Economia do Score o cliente vê, por período e por campanha, a economia líquida e o custo unitário efetivo (total pago ÷ lista carregada) comparado ao SMS padrão. O sino no topo da tela mostra os avisos: lista lida, prévia pronta, campanha com erro, envios pausados por saldo e, para o Técnico, alertas de qualidade dos fornecedores. Avisos com mais de 90 dias somem. Processos demorados (importar lista, calcular a prévia) mostram as etapas e avisam no sino quando terminam, então dá para sair da tela. Empresa nova vê no Início os Primeiros passos, montados pelo que foi contratado e marcados sozinhos conforme acontecem (por exemplo, primeira carga, primeiro template, teste em simulação). Toda empresa começa em simulação: nada sai para os clientes. Depois do teste, quem pode enviar mensagens pede o envio real na faixa da Mensageria; o Suporte da MotorCob responde em até 1 hora e o aviso chega no sino. A Caixa de atendimento (Mensageria › Caixa de atendimento) junta as respostas de SMS, RCS e WhatsApp numa fila só, com as abas Abertas, Sem responsável, Minhas e Aguardando cliente; CPC Negócio e Alega pagamento vêm primeiro. Dá para assumir, transferir para um colega, escrever nota interna (o cliente não vê), corrigir a classe do Radar e usar respostas rápidas que a própria empresa escreve em Configurar. A meta de primeira resposta é opcional. O Painel do Radar mostra as respostas por classe, o quanto a equipe corrigiu o Radar e o tempo até a primeira resposta; o desempenho por pessoa só Admin e Gestão veem. Faturamento: preço novo combinado com a MotorCob vale a partir do próximo ciclo. Fatura vencida recebe lembrete por e-mail no dia seguinte ao vencimento e 5 dias depois; no 7º dia vem o aviso de bloqueio; com 10 dias de atraso o acesso é bloqueado e os envios param, mas Faturamento e Suporte continuam abertos e tudo volta sozinho quando o pagamento confirma. A equipe MotorCob (só o Master) pode liberar o acesso por um prazo mesmo com a fatura em aberto; se não for paga até lá, bloqueia de novo. Pagar faturas e recarregar pedem a permissão Pagar faturas (Admin, por padrão). Em Empresa › Faturamento o cliente vê a fatura em aberto, o mês até agora com uma estimativa até o fim do ciclo e, no pré-pago, o extrato do saldo e quanto ele ainda dura no ritmo atual. Fatura vencida pode virar um acordo de pagamento, lançado pela equipe MotorCob (Master ou Administrativo) em até 12 parcelas: as faturas ficam Em acordo, sem lembrete nem bloqueio, e o acesso fica liberado enquanto as parcelas estiverem em dia. Cada parcela é paga em Empresa › Faturamento (Pix, boleto ou cartão, conforme o acordo) e tem nota fiscal. Parcela vencida recebe lembrete no dia seguinte e com 5 dias; com 10 dias de atraso o acordo é desfeito, o que falta volta a ser cobrado de uma vez e o acesso é bloqueado até pagar. Para negociar ou mudar um acordo, o cliente fala com o Suporte. Relatórios fica no menu principal, com uma aba por produto contratado (Mensageria, Orquestração e Jornada). Os relatórios prontos são perguntas, como \"Quanto foi entregue, dia a dia?\" ou \"Quantos CPCs a régua gerou e quanto custou cada um?\", com os números do topo comparados ao período anterior. Taxa de entrega é entregues ÷ enviadas; taxa de não entrega, não entregues ÷ enviadas; resposta, descadastro e clique são calculados sobre as entregues; no e-mail aparecem o bounce permanente e o temporário. No montador são três passos: sobre o quê, o que mostrar e filtros. O relatório salvo pode ser para toda a empresa ou só para quem criou; editam quem criou e o Admin. Exportação: até 50 mil linhas baixa na hora; acima disso o arquivo é preparado em segundo plano, o aviso chega no sino e o link vale 7 dias, com limite de 1 milhão de linhas. O envio por e-mail agendado (todo dia, semana ou mês) vai só para usuários da empresa e leva os números do topo e um link, sem anexo. A Evolução da carteira guarda uma foto por dia por 90 dias e o fechamento de cada mês para sempre; o histórico começa quando a foto foi ligada. Na Jornada (MotorCli), o Início mostra o mapa: cada momento com quantos clientes estão nele, quantos têm ação hoje e o resultado do período — Boas-vindas, quem recebeu a 1ª mensagem; Ativação, quem ativou em até 30 dias; Pré-vencimento, quem pagou até o vencimento; Retenção, quem voltou a usar antes de 90 dias sem atividade; Reativação, quem voltou a usar — e quantos foram para a cobrança por atraso. O resultado vem da própria carga diária e conta para o último canal que acionou o cliente nos 7 dias anteriores; o Melhor canal passa a escolher por esse resultado. Em Momentos e fases a empresa muda a prioridade dos momentos, liga ou desliga cada um, define o orçamento por canal e escolhe a mensagem de cada passo na biblioteca de Mensagens por momento (RCS e WhatsApp usam templates aprovados). Se a estratégia vale para mais de uma carteira, a tela avisa e oferece Separar só para esta carteira.
 
 ---
 
@@ -400,7 +410,8 @@ Menu do usuário › Minha conta (/conta). Abas:
 - Dados: foto e dados do perfil. O e-mail só o Admin da empresa troca.
 - Permissões: o que o seu perfil pode fazer nesta empresa (só leitura). Quem ajusta é o Admin, em Usuários e permissões.
 - Segurança: senha, verificação em duas etapas e sessões.
-- Tokens de API: ver a seção API.
+- Notificações: onde cada assunto chega (sino e e-mail). Ver "E-mails e notificações".
+- Tokens de API: em Empresa › Integrações › API (ver a seção API).
 
 Para trocar a senha:
 
@@ -421,6 +432,20 @@ Para quem não é Admin, a verificação é opcional e pode ser desligada com o 
 Sessões: "Sair de todos os outros dispositivos" e "Sair deste dispositivo".
 
 Documentação: menu do usuário › Documentação (/docs), com busca e artigos de Primeiros passos, Lista do dia, Orquestração, Mensageria, Arquivos e cargas, Segurança e conta, e Integração e API.
+
+---
+
+## E-mails e notificações
+
+Os avisos aparecem no sino e, conforme o assunto, também por e-mail. Escolha em Minha conta › Notificações.
+
+- Obrigatórios (sino e e-mail, não dá para desligar): acesso e segurança (convite, senha, senha alterada, verificação em duas etapas desligada), faturas, bloqueio e acordo (para os Admins e os contatos que recebem faturas), tokens de API que vencem em 3 dias ou foram revogados (para quem criou e os Admins) e envios pausados (para os Admins e Planejamento).
+- Opcionais (e-mail desligado no começo): exportações e listas prontas, atendimento (já vem ligado para quem cuida da caixa), implantação, token que vence em 15 dias ou ficou parado, qualidade (Técnico e Master). Desligar o sino de um assunto opcional esconde esses avisos do sino.
+- Mesmo aviso repetido: no máximo 1 e-mail por dia para a mesma pessoa.
+- Para parar um e-mail opcional sem entrar na plataforma: link "Não quero mais estes e-mails" no rodapé. No relatório agendado, "Sair desta lista".
+- Remetentes: acesso@motorcob.online (login), financeiro@motorcob.online (faturas; responder vai para o financeiro da MotorCX), avisos@motorcob.online e relatorios@motorcob.online. A MotorCX nunca pede senha por e-mail.
+- E-mail de contato que volta: em Empresa › Contatos aparece "E-mail voltou" (endereço que não existe, ou caixa cheia 3 vezes seguidas) e os Admins recebem aviso. Corrija o endereço e a marca some. Sem nenhum contato de fatura entregue, a fatura vai para os Admins.
+- Os e-mails nunca trazem CPF, nome de devedor, telefone ou valor de carteira: só o assunto e um botão para a plataforma.
 
 ---
 
@@ -469,25 +494,26 @@ Menu lateral › Auditoria (permissão "Ver auditoria"). Registra quem alterou o
 
 ## API
 
-A API permite que o sistema da empresa envie cargas e leia a Lista do dia sem passar pelo site. Requer a permissão "Gerenciar tokens de API" (Admin).
+A API permite que o sistema da empresa envie cargas (da Cobrança e da Jornada) e leia a Lista do dia sem passar pelo site. Fica em Empresa › Integrações › API e requer a permissão "Gerenciar tokens de API" (Admin).
 
 Para criar um token:
 
-1. Minha conta › Tokens de API › Criar token.
-2. Informe o nome (por exemplo, "ERP Financeiro"), os escopos, os credores (vazio = todos) e a validade (30, 90, 180 ou 365 dias).
-3. Copie o token na hora: por segurança, ele não aparece de novo. Guarde num cofre de segredos, nunca no código.
+1. Empresa › Integrações › API › Criar token.
+2. Informe o nome (por exemplo, "ERP Financeiro"), o que ele pode fazer (Enviar cargas, Acompanhar cargas, Ler a Lista do dia, Enviar cargas da Jornada), as carteiras (vazio = todas), a validade (30, 90, 180 ou 365 dias) e, se quiser, os endereços IP permitidos (faixas como 200.155.10.0/24).
+3. Copie o token na hora: por segurança, ele não aparece de novo. Use "Testar agora" para conferir sem mexer em nada. Guarde num cofre de segredos, nunca no código.
 
-Escopos: "Enviar cargas", "Acompanhar cargas" e "Ler a Lista do dia". Limite de 10 tokens ativos por empresa. "Revogar" para o token na hora.
+Trocar token: cria um novo com as mesmas permissões e o antigo continua valendo por 1, 7 (padrão) ou 14 dias, para dar tempo de colar o novo no sistema; "Parar agora" encerra o antigo antes. O sino avisa 15 e 3 dias antes de vencer e quando um token que vinha sendo usado para de ser chamado. "Uso e erros" mostra as chamadas por dia e o motivo de cada erro, sem o conteúdo das cargas. Limite de 10 tokens ativos por empresa. "Revogar" para o token na hora; em incidente de segurança, o Master da MotorCob também pode revogar, com motivo, e o Admin é avisado.
 
 Endpoints:
 
-- Enviar carga (credor, tipo e nome do arquivo; tipos geral, incremental, retirada, acordo, baixa ou ocorrência; CSV, TXT ou XLSX até 20 MB).
+- Enviar carga (carteira, tipo e nome do arquivo; Cobrança: geral, incremental, retirada, acordo, baixa ou ocorrência; Jornada: clientes, contatos ou leads; CSV, TXT ou XLSX até 20 MB).
 - Acompanhar carga: situação pendente, aguardando (layout novo, aguardando mapeamento no site), processado ou erro, com o relatório.
-- Lista do dia: por credor, canal e data; devolve o mesmo CSV que o site baixa.
+- Lista do dia: por carteira, canal e data; devolve o mesmo CSV que o site baixa.
+- Teste: confere o token e responde a empresa, o que ele pode e as carteiras.
 
-Regras: o credor precisa estar com "Como a carga chega" = API (em Credores); limite de 60 chamadas por minuto por token; cada download da Lista do dia fica registrado em Acessos. Nunca mande CPF, nome ou telefone em parâmetro de URL.
+Regras: a carteira precisa estar com "Como a carga chega" = API; limite de 60 chamadas por minuto por token; cada download da Lista do dia fica registrado em Acessos. Nunca mande CPF, nome ou telefone em parâmetro de URL.
 
-A documentação completa (endereço, autenticação, exemplos e códigos de erro) está em Documentação › Integração e API (/docs/api), também acessível pelo link "Ver a documentação da API" em Tokens de API.
+A documentação completa (endereço, autenticação, exemplos e códigos de erro) está em Documentação › Integração e API (/docs/api), também acessível em Integrações › API.
 
 ---
 

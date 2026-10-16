@@ -117,9 +117,9 @@ with itens(ordem, item, ok, se_falhar) as (values
        and exists (select 1 from information_schema.columns where table_schema = 'public'
                    and table_name = 'empresa_contatos' and column_name = 'recebe_faturas'),
        'rodar o SQL 29 (supabase/migrations/20261126000001_ajustes_console.sql)'),
-  (9,  'Permissões no catálogo (15)',
-       pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
-       'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),
+  (9,  'Permissões no catálogo (16)',
+       pg_temp.n('select count(*) from public.permissoes_catalogo') = 16,
+       'rodar os SQL na ordem; o último que mexe no catálogo é o 37'),
   (10, 'Buckets fotos e chamados são privados',
        (select count(*) from storage.buckets where id in ('fotos', 'chamados') and not public) = 2,
        'rodar 04_workspace.sql'),
@@ -135,7 +135,8 @@ with itens(ordem, item, ok, se_falhar) as (values
                                        'permissoes_equipe', 'recargas', 'cobrancas', 'cobranca_clientes',
                                        'cobranca_eventos', 'cartoes_salvos', 'nf_config', 'notas_fiscais',
                                        'mensageria_eventos', 'empresa_produtos', 'credor_canais',
-                                       'mensageria_mistura_operadoras', 'glossario', 'tema_tokens')),
+                                       'mensageria_mistura_operadoras', 'glossario', 'tema_tokens',
+                                       'mensageria_score_config', 'mensageria_score_nomes', 'empresa_score')),
        'algum SQL ficou pela metade: rode de novo o da tabela que faltar'),
   (12, 'Anônimo não lê dado de cliente',
        not exists (select 1 from unnest(array['public.chamados', 'public.faturas', 'public.api_tokens']) t
@@ -165,6 +166,59 @@ with itens(ordem, item, ok, se_falhar) as (values
        to_regclass('public.glossario') is not null and to_regclass('public.tema_tokens') is not null
        and pg_temp.n('select count(*) from public.glossario') >= 40,
        'rodar o SQL 32 (supabase/migrations/20261129000001_experiencia_glossario_tema.sql)'),
+  (20, 'Qualidade, Técnico e Score de Entrega (SQL 33)',
+       to_regclass('public.mensageria_score_config') is not null and to_regclass('public.empresa_score') is not null
+       and to_regprocedure('public.score_entrega(text[], text, timestamptz)') is not null,
+       'rodar o SQL 33 (supabase/migrations/20261130000001_score_entrega_qualidade.sql)'),
+  (21, 'Sino de avisos e padrões comuns (SQL 34)',
+       to_regclass('public.avisos') is not null and to_regprocedure('public.meus_avisos(integer)') is not null
+       and pg_temp.n('select count(*) from public.tema_tokens where chave like ''score.%''') = 8,
+       'rodar o SQL 34 (supabase/migrations/20261201000001_padroes_comuns_avisos.sql)'),
+  (22, 'Primeiro uso e pedido de envio real (SQL 35)',
+       to_regclass('public.pedidos_envio_real') is not null
+       and to_regprocedure('public.primeiros_passos(bigint)') is not null
+       and to_regprocedure('public.ligar_envio_real(bigint)') is not null,
+       'rodar o SQL 35 (supabase/migrations/20261202000001_primeiro_uso.sql)'),
+  (23, 'Radar e caixa de atendimento (SQL 36)',
+       to_regclass('public.mensageria_conversa_notas') is not null
+       and to_regclass('public.mensageria_respostas_rapidas') is not null
+       and to_regprocedure('public.painel_radar(bigint, date, date)') is not null,
+       'rodar o SQL 36 (supabase/migrations/20261203000001_atendimento_radar.sql)'),
+  (24, 'Faturas, vigência do preço e inadimplência (SQL 37)',
+       to_regclass('public.fatura_lembretes') is not null
+       and to_regprocedure('public.salvar_preco_vigencia(bigint, text, text, numeric, numeric, jsonb, text, text, text)') is not null
+       and pg_temp.n('select count(*) from public.permissoes_catalogo where codigo = ''pagar_faturas''') = 1,
+       'rodar o SQL 37 (supabase/migrations/20261204000001_faturas_contratacao.sql)'),
+  (25, 'Acordo de pagamento de fatura vencida (SQL 38)',
+       to_regclass('public.acordos_fatura') is not null and to_regclass('public.acordo_parcelas') is not null
+       and to_regprocedure('public.lancar_acordo(bigint, bigint[], integer, date, text[], numeric, text, boolean)') is not null
+       and pg_temp.n('select count(*) from information_schema.columns where table_schema = ''public'' and table_name = ''cobrancas'' and column_name = ''parcela_id''') = 1,
+       'rodar o SQL 38 (supabase/migrations/20261205000001_acordos_fatura.sql)'),
+  (26, 'Relatórios por pergunta, foto da carteira, exportação e envio (SQL 39)',
+       to_regclass('public.carteira_fotos') is not null and to_regclass('public.relatorio_exportacoes') is not null
+       and to_regclass('public.relatorio_envios') is not null
+       and pg_temp.n('select count(*) from public.relatorios_modelos where empresa_id is null') >= 21,
+       'rodar o SQL 39 (supabase/migrations/20261206000001_relatorios_v2.sql)'),
+  (27, 'Jornada: resultado dos momentos, mensagens e estratégia por carteira (SQL 40)',
+       to_regclass('public.jornada_desfechos') is not null and to_regclass('public.jornada_movimento') is not null
+       and to_regprocedure('public.mapa_jornada(bigint, date, date)') is not null
+       and to_regprocedure('public.copiar_estrategia_jornada(bigint, bigint)') is not null,
+       'rodar o SQL 40 (supabase/migrations/20261207000001_jornada_v2.sql)'),
+  (28, 'Tokens de API: IP, troca, uso e avisos (SQL 41)',
+       to_regclass('public.api_registros') is not null
+       and to_regprocedure('public.trocar_token_api(bigint, integer)') is not null
+       and to_regprocedure('public.criar_token_api(bigint, text, text[], bigint[], integer, cidr[])') is not null,
+       'rodar o SQL 41 (supabase/migrations/20261208000001_api_v2.sql)'),
+  (29, 'E-mails do sistema: preferências, fila dos avisos, devoluções e rodapé (SQL 42)',
+       to_regclass('public.emails_sistema') is not null and to_regclass('public.notificacao_preferencias') is not null
+       and to_regprocedure('public.avisos_para_email(integer)') is not null
+       and exists (select 1 from public.email_config where id = 1),
+       'rodar o SQL 42 (supabase/migrations/20261209000001_emails_sistema.sql)'),
+  (30, 'Assistente: teto e cotação, situação e custo por pergunta, sugestões, Respostas da equipe (SQL 43)',
+       to_regclass('public.assistente_respostas') is not null and to_regclass('public.assistente_sugestoes') is not null
+       and to_regprocedure('public.assistente_painel(integer)') is not null
+       and exists (select 1 from public.assistente_config where id = 1),
+       'rodar o SQL 43 (supabase/migrations/20261210000001_assistente_v2.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

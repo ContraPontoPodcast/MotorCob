@@ -1,0 +1,483 @@
+<title>Primeiro uso MotorCX</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Workspace MotorCX, menu cinza à esquerda (uma tela do primeiro uso por item) + área de trabalho lisa.
+   Paleta do bloco 5. Início e conta usam o grafite neutro; cada passo leva a etiqueta da área dele. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#1D1D1F; --area-forte:#000000; --area-ativo:#E8E8ED; --area-ativo-texto:#1D1D1F; --sobre-area:#FFFFFF;
+  --cob:#8A6A2E; --cob-f:#F3ECDD; --jor:#4F6B3A; --jor-f:#EAEFE3; --msg:#7A2E3B; --msg-f:#F5E6E8;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --veu:rgba(0,0,0,.25);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --cob:#C9A35E; --cob-f:#3A2F1A; --jor:#8FB06F; --jor-f:#26301D; --msg:#D07A8A; --msg-f:#3A1A20;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210; --veu:rgba(0,0,0,.55);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --cob:#C9A35E; --cob-f:#3A2F1A; --jor:#8FB06F; --jor-f:#26301D; --msg:#D07A8A; --msg-f:#3A1A20;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210; --veu:rgba(0,0,0,.55);
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:78ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--texto);border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao);
+  margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+@media (max-width:820px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+section[data-p]{display:flex;flex-direction:column;gap:16px}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:72ch}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.peq{padding:6px 11px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text],input[type=password]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:7px 10px;min-width:0}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.tag{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:1px 8px;border:1px solid currentColor;white-space:nowrap}
+.tag.cob{color:var(--cob)}.tag.jor{color:var(--jor)}.tag.msg{color:var(--msg)}.tag.conta{color:var(--texto2)}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden}
+.barra i{display:block;height:100%;background:var(--ok);transition:width .3s}
+@media (prefers-reduced-motion:reduce){.barra i{transition:none}}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap;vertical-align:middle}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.rolar{overflow-x:auto}
+code{font-family:var(--mono);font-size:12.5px}
+/* e-mail e conta */
+.email{border:1px solid var(--borda);border-radius:12px;background:var(--cartao);max-width:560px;overflow:hidden}
+.email .de{padding:10px 16px;border-bottom:1px solid var(--borda);font-size:12.5px;color:var(--texto2);display:flex;flex-direction:column;gap:2px}
+.email .corpo{padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.email .corpo p{margin:0}
+.passos-conta{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.passos-conta li{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);padding:4px 12px 4px 4px;border-radius:999px;background:var(--pilula)}
+.passos-conta li::before{content:attr(data-n);display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--cartao);border:1px solid var(--borda);font-size:11px;font-weight:600}
+.passos-conta li.feito{color:var(--texto)}
+.passos-conta li.feito::before{content:"✓";background:var(--ok-f);color:var(--ok);border-color:transparent}
+.passos-conta li.atual{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.passos-conta li.atual::before{background:var(--area);color:var(--sobre-area);border-color:transparent}
+.tela-conta{max-width:440px;display:flex;flex-direction:column;gap:12px}
+.req{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12.5px;color:var(--texto2)}
+.req li::before{content:"○ ";}
+.req li.ok{color:var(--ok)}
+.req li.ok::before{content:"✓ ";}
+.qr{width:132px;height:132px;border-radius:10px;background:repeating-conic-gradient(var(--texto) 0 25%,var(--cartao) 0 50%) 0 0/22px 22px;border:8px solid var(--cartao);outline:1px solid var(--borda)}
+/* primeiros passos */
+.pp{border:1px solid var(--borda);border-radius:14px;background:var(--cartao);overflow:hidden}
+.pp-topo{padding:16px 18px;display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--borda)}
+.pp-topo h3{margin:0;font-size:17px}
+.pp-prog{display:flex;align-items:center;gap:10px;min-width:220px;flex:1;max-width:360px}
+.pp-prog .barra{flex:1}
+.pp-prog span{font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pp-grupo{padding:6px 18px 4px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);background:var(--fundo);border-bottom:1px solid var(--borda)}
+.pp-item{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--borda)}
+.pp-item:last-child{border-bottom:0}
+.pp-item .ic{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--borda);display:grid;place-items:center;font-size:12px;font-weight:700}
+.pp-item.feito .ic{background:var(--ok-f);border-color:transparent;color:var(--ok)}
+.pp-item.equipe .ic{border-style:dashed}
+.pp-item.prox{background:var(--fundo)}
+.pp-item.prox .ic{border-color:var(--texto)}
+.pp-item b{font-weight:600}
+.pp-item.feito b{color:var(--texto2);text-decoration:line-through;text-decoration-color:var(--borda)}
+.pp-item p{margin:2px 0 0;font-size:13px;color:var(--texto2)}
+.pp-item .acao{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+@media (max-width:620px){.pp-item{grid-template-columns:24px minmax(0,1fr)}.pp-item .acao{grid-column:2;justify-content:flex-start}}
+.pp-rodape{padding:12px 18px;display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;background:var(--fundo)}
+/* simulação */
+.faixa-sim{border:1px solid var(--at);background:var(--at-f);border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.faixa-sim b{color:var(--texto)}
+.faixa-sim.pedido{border-color:var(--borda);background:var(--cartao)}
+.faixa-sim.real{border-color:var(--ok);background:var(--ok-f)}
+.lista-pre{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.lista-pre li{display:flex;gap:10px;align-items:flex-start}
+.lista-pre .ic{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--pilula);color:var(--texto2)}
+.lista-pre .ok .ic{background:var(--ok-f);color:var(--ok)}
+.confirma{border:1px solid var(--texto);border-radius:12px;padding:14px 16px;background:var(--pilula);display:flex;flex-direction:column;gap:10px}
+.confirma p{margin:0}
+/* vazios */
+.vazio{border:1px dashed var(--borda);border-radius:12px;padding:22px 18px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;background:var(--cartao)}
+.vazio h4{margin:0;font-size:15px}
+.vazio p{margin:0;color:var(--texto2);max-width:60ch}
+.vazio .linha{margin-top:4px}
+/* console */
+.camp-tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.camp-tab th,.camp-tab td{text-align:left;padding:10px;border-bottom:1px solid var(--borda);vertical-align:middle}
+.camp-tab th{font-size:12px;color:var(--texto2);font-weight:600;white-space:nowrap}
+.camp-tab .mini{display:flex;align-items:center;gap:8px;min-width:140px}
+.camp-tab .mini .barra{flex:1;min-width:60px}
+.resp{container-type:inline-size}
+@container (max-width:640px){
+  .camp-tab thead{display:none}
+  .camp-tab,.camp-tab tbody{display:block}
+  .camp-tab tr{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:12px 0;border-bottom:1px solid var(--borda)}
+  .camp-tab td{border:0;padding:0}
+  .camp-tab td.emp{font-weight:600}
+  .camp-tab td.sit{grid-column:2;grid-row:1;justify-self:end}
+  .camp-tab td.prog{grid-column:1 / -1}
+  .camp-tab td.prox{grid-column:1;font-size:13px;color:var(--texto2)}
+  .camp-tab td.extra{display:none}
+  .camp-tab td.acao{grid-column:2;grid-row:3;justify-self:end}
+}
+.detalhe{background:var(--fundo)}
+.detalhe td{padding:12px 10px 16px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Primeiro uso</span>
+  <h1>Primeiro uso do cliente</h1>
+  <p>Do convite ao primeiro envio real. Hoje a empresa nova cai no Início com "Tudo em dia por aqui", sem caminho, e não tem como pedir o envio real. A proposta é um roteiro de primeiros passos que se marca sozinho, telas vazias que dizem o que fazer e um pedido de envio real que a equipe acompanha no Console. Empresas e números fictícios. Nada aqui grava no banco.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Telas do primeiro uso">
+    <div class="grupo">Cliente</div>
+    <button data-ir="conta" aria-current="page">Convite e conta<small>E-mail, senha e duas etapas</small></button>
+    <button data-ir="inicio">Início · primeiros passos<small>Roteiro que se marca sozinho</small></button>
+    <button data-ir="real">Simulação e envio real<small>Pedir para ligar o envio</small></button>
+    <button data-ir="vazias">Telas vazias<small>Lista do dia, campanhas, templates</small></button>
+    <div class="grupo">Equipe MotorCob</div>
+    <button data-ir="console">Console · implantação<small>Onde cada cliente parou</small></button>
+  </nav>
+
+  <main class="trab">
+
+    <!-- ===================== CONTA ===================== -->
+    <section data-p="conta">
+      <div class="cab"><div><h2>Convite e conta</h2>
+        <p>O e-mail diz quem convidou, para qual empresa e quanto tempo o link vale. A criação da conta mostra os passos (3 para o Admin, 2 para os outros) e termina no Início, já com os primeiros passos.</p></div></div>
+
+      <div class="duas">
+        <div class="email" aria-label="Exemplo do e-mail de convite">
+          <div class="de"><span><b>De:</b> MotorCX &lt;nao-responda@motorcob.online&gt;</span><span><b>Assunto:</b> Você foi convidado para a Financeira Horizonte no MotorCX</span></div>
+          <div class="corpo">
+            <p>Olá, Ana.</p>
+            <p>A equipe MotorCob criou o acesso da <b>Financeira Horizonte</b> ao MotorCX e convidou você como <b>Admin</b>.</p>
+            <p>Para entrar, crie sua senha e configure o código de segurança no celular. Leva uns 3 minutos.</p>
+            <div><button class="btn" type="button" tabindex="-1">Criar minha conta</button></div>
+            <p class="nota">O link vale por 24 horas e só funciona uma vez. Se vencer, peça outro a quem convidou você. Se não esperava este convite, ignore este e-mail.</p>
+          </div>
+        </div>
+
+        <div class="cartao">
+          <ol class="passos-conta" id="ct-passos"><li data-n="1">Senha</li><li data-n="2">Código no celular</li><li data-n="3">Pronto</li></ol>
+          <div class="tela-conta" id="ct-1">
+            <h3>Crie sua senha</h3>
+            <div class="campo"><label for="ct-senha">Senha</label><input type="password" id="ct-senha" autocomplete="new-password" placeholder="Pelo menos 12 caracteres"></div>
+            <ul class="req" id="ct-req"><li data-r="tam">12 caracteres ou mais</li><li data-r="let">Uma letra</li><li data-r="num">Um número</li></ul>
+            <div><button class="btn" id="ct-ok1" disabled>Continuar</button></div>
+          </div>
+          <div class="tela-conta" id="ct-2" hidden>
+            <h3>Código de segurança no celular</h3>
+            <p class="sub">Como Admin, você entra sempre com a senha e um código de 6 números do aplicativo autenticador (Google Authenticator, Microsoft Authenticator ou outro).</p>
+            <div class="linha" style="align-items:flex-start"><div class="qr" role="img" aria-label="QR code de exemplo"></div>
+              <ol style="margin:0;padding-left:18px;font-size:13.5px;display:flex;flex-direction:column;gap:6px;max-width:30ch"><li>Abra o aplicativo e toque em adicionar.</li><li>Aponte a câmera para o QR code.</li><li>Digite abaixo o código que aparecer.</li></ol></div>
+            <div class="campo" style="max-width:180px"><label for="ct-cod">Código de 6 números</label><input type="text" id="ct-cod" inputmode="numeric" maxlength="6" placeholder="000000"></div>
+            <div class="linha"><button class="btn" id="ct-ok2" disabled>Confirmar código</button></div>
+          </div>
+          <div class="tela-conta" id="ct-3" hidden>
+            <h3>Conta pronta</h3>
+            <p class="sub">Agora é preparar a Financeira Horizonte para o primeiro envio. O Início mostra o caminho, passo a passo, e se marca sozinho conforme você avança.</p>
+            <div><button class="btn" id="ct-ir">Ir para o Início</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="regra"><b>Regras</b><ul>
+        <li>E-mail com o nome de quem convidou (ou "a equipe MotorCob"), a empresa, o papel e a validade do link.</li>
+        <li>Validade do link: 24 horas. É uma configuração do Supabase (Authentication › validade do link por e-mail), conferida antes de publicar.</li>
+        <li>Requisitos da senha marcados enquanto digita, em vez de erro só no fim. Regra única aprovada no bloco 5: 12 caracteres ou mais, com letra e número.</li>
+        <li>Admin: 3 passos (o código é obrigatório). Outros papéis: 2 passos; o código fica opcional em Minha conta.</li>
+        <li>Link vencido: "Este convite venceu. Peça outro a {quem convidou}." com o nome, não só "link inválido".</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== INÍCIO ===================== -->
+    <section data-p="inicio" hidden>
+      <div class="cab"><div><h2>Início · primeiros passos</h2>
+        <p>Enquanto a empresa não estiver pronta, o Início abre com o roteiro do que falta, montado pelo que foi contratado. Cada passo se marca sozinho quando acontece de verdade; ninguém marca à mão.</p></div>
+        <div class="campo"><label for="pp-cen">Ver no protótipo</label><select id="pp-cen">
+          <option value="cobmsg">Cobrança + Mensageria · pós-pago</option>
+          <option value="msgpre">Só Mensageria · pré-pago</option>
+          <option value="jorapi">Jornada (MotorCli) + API</option></select></div></div>
+
+      <div class="pp" id="pp">
+        <div class="pp-topo">
+          <div><h3 id="pp-tit">Primeiros passos da Financeira Horizonte</h3><p class="sub" id="pp-sub"></p></div>
+          <div class="pp-prog"><div class="barra" role="progressbar" aria-label="Primeiros passos" aria-valuemin="0" aria-valuemax="100" id="pp-barra"><i id="pp-i" style="width:0%"></i></div><span id="pp-conta"></span></div>
+        </div>
+        <div id="pp-lista"></div>
+        <div class="pp-rodape"><span class="nota">No protótipo, os botões simulam o passo feito. No sistema, ele se marca pelo que aconteceu.</span><button class="link" id="pp-ocultar">Ocultar primeiros passos</button></div>
+      </div>
+      <div class="cartao" id="pp-oculto" hidden><p style="margin:0">Primeiros passos ocultos. Eles continuam em <b>Ajuda › Primeiros passos</b> até tudo ficar pronto.</p><div><button class="btn sec peq" id="pp-mostrar">Mostrar de novo</button></div></div>
+      <div class="cartao" id="pp-fim" hidden><h3>Tudo pronto para operar</h3><p class="sub">Os primeiros passos saem do Início. O Início volta a mostrar "Para hoje", os seus produtos e as dicas.</p></div>
+
+      <div class="regra"><b>Como cada passo se marca</b><ul>
+        <li>Conta: senha criada e código ligado (Admin).</li>
+        <li>Empresa: alguém marcado em "Recebe faturas" nos Contatos; ao menos um membro convidado além do Admin (pode pular).</li>
+        <li>Cobrança e Jornada: "Como a carga chega" escolhido no credor; primeira carga recebida; primeira Lista do dia gerada.</li>
+        <li>Mensageria: primeiro template ativo; primeiro lote ou campanha em simulação; envio real pedido (passo da equipe) e ligado.</li>
+        <li>Pré-pago: primeira recarga paga. API: primeiro token criado.</li>
+        <li>"Pode pular" só em passo que não trava o envio (convidar a equipe, centro de custo). Passo pulado conta como feito.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== ENVIO REAL ===================== -->
+    <section data-p="real" hidden>
+      <div class="cab"><div><h2>Simulação e envio real</h2>
+        <p>Toda empresa começa em simulação, e só a equipe MotorCob liga o envio real. Hoje o cliente não tem como pedir nem sabe o que falta. A proposta é a faixa da Mensageria dizer isso e ter o botão de pedido.</p></div>
+        <div class="campo"><label for="rl-est">Ver no protótipo</label><select id="rl-est"><option value="falta">Falta um passo</option><option value="pronto" selected>Pronto para pedir</option><option value="pedido">Pedido enviado</option><option value="real">Envio real ligado</option></select></div></div>
+
+      <div class="faixa-sim" id="rl-faixa"></div>
+
+      <div class="duas">
+        <div class="cartao">
+          <h3>Antes de pedir o envio real</h3>
+          <ul class="lista-pre" id="rl-pre"></ul>
+        </div>
+        <div class="cartao">
+          <h3>O que muda no envio real</h3>
+          <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13.5px">
+            <li>As mensagens saem de verdade, pelo fornecedor da rota, e entram na fatura.</li>
+            <li>Lotes continuam esperando aprovação de quem tem "Enviar mensagens", se a empresa deixou assim.</li>
+            <li>A equipe MotorCob confere a rota e o template antes de ligar e avisa no sino.</li>
+          </ul>
+          <p class="nota">O Suporte da MotorCob responde em até 1 hora.</p>
+        </div>
+      </div>
+
+      <div class="regra"><b>Regras</b><ul>
+        <li>O pedido abre um chamado de Mensageria ("Ligar envio real") para o Suporte, com os passos já conferidos. Prazo de resposta: até 1 hora.</li>
+        <li>Pedido sem resposta em 1 hora vira aviso de atraso no sino do Suporte e do Master.</li>
+        <li>Só quem tem "Enviar mensagens" pede. Pedido em aberto não pode ser repetido.</li>
+        <li>Quando a equipe liga, o aviso chega no sino: "Envio real ligado".</li>
+        <li>O banco continua aceitando a mudança para envio real só da equipe.</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== VAZIAS ===================== -->
+    <section data-p="vazias" hidden>
+      <div class="cab"><div><h2>Telas vazias</h2>
+        <p>Na primeira visita, cada tela diz o que vai aparecer ali e qual é o primeiro passo, com um botão só. Nada de tabela vazia sem explicação.</p></div></div>
+
+      <div class="duas">
+        <div class="vazio">
+          <span class="tag cob">Cobrança</span>
+          <h4>Lista do dia</h4>
+          <p>A primeira Lista do dia sai às 6h da manhã seguinte à primeira carga. Ela mostra quem recebe ação hoje, por qual canal e com qual frase.</p>
+          <div class="linha"><button class="btn peq" type="button">Enviar a primeira carga</button><button class="link" type="button">Mandar pela API</button></div>
+        </div>
+        <div class="vazio">
+          <span class="tag msg">Mensageria</span>
+          <h4>Campanhas</h4>
+          <p>Suba uma lista com os contatos, confira as colunas e escolha o template. Em simulação, nada sai para os seus clientes: dá para testar à vontade.</p>
+          <div class="linha"><button class="btn peq" type="button">Nova campanha</button></div>
+        </div>
+        <div class="vazio">
+          <span class="tag msg">Mensageria</span>
+          <h4>Templates</h4>
+          <p>O template é o texto da mensagem, com variáveis como {{nome}} e {{valor}}. Toda campanha e todo lote usam um.</p>
+          <div class="linha"><button class="btn peq" type="button">Criar o primeiro template</button></div>
+        </div>
+        <div class="vazio">
+          <span class="tag jor">Jornada</span>
+          <h4>Jornada do Cliente</h4>
+          <p>Os clientes aparecem aqui depois da primeira carga, já em uma etapa da jornada. A régua padrão vem pronta e pode ser ajustada depois.</p>
+          <div class="linha"><button class="btn peq" type="button">Enviar a primeira carga</button></div>
+        </div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Título com o nome da tela, uma frase do que vai aparecer, uma do que fazer e um botão principal.</li>
+        <li>Filtro sem resultado é outro caso: "Nenhum resultado para este filtro" com "Limpar filtros".</li>
+      </ul></div>
+    </section>
+
+    <!-- ===================== CONSOLE ===================== -->
+    <section data-p="console" hidden>
+      <div class="cab"><div><h2>Console · implantação</h2>
+        <p>A equipe vê, por empresa nova, quantos passos faltam, qual é o próximo e há quantos dias está parada. Pedido de envio real aparece aqui para ligar com confirmação.</p></div></div>
+
+      <div class="cartao resp">
+        <table class="camp-tab">
+          <thead><tr><th>Empresa</th><th>Situação</th><th>Passos</th><th>Próximo passo</th><th>Parada há</th><th>Responsável</th><th></th></tr></thead>
+          <tbody id="cs-corpo"></tbody>
+        </table>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Entra na lista a empresa criada há menos de 90 dias que ainda tem passo em aberto.</li>
+        <li>Parada há mais de 7 dias fica em atenção e gera aviso no sino do responsável (vendedor da carteira).</li>
+        <li>"Ligar envio real" pede confirmação com o efeito: "As mensagens da {empresa} passam a sair de verdade e entram na fatura."</li>
+        <li>Quem vê: Master, Comercial da carteira e Atendimento (Suporte). Quem liga o envio real: Master e Atendimento.</li>
+      </ul></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3000); };
+  const telas = [...document.querySelectorAll("section[data-p]")], botoes = [...document.querySelectorAll(".menu button")];
+  const ir = p => { telas.forEach(s => s.hidden = s.dataset.p !== p); botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); };
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+
+  // ---------- conta
+  const REQ = { tam: s => s.length >= 12, let: s => /[A-Za-zÀ-ÿ]/.test(s), num: s => /\d/.test(s) };
+  const passoConta = n => {
+    [1, 2, 3].forEach(i => $("ct-" + i).hidden = i !== n);
+    [...$("ct-passos").children].forEach((li, i) => { li.className = i + 1 < n ? "feito" : i + 1 === n ? "atual" : ""; });
+  };
+  passoConta(1);
+  $("ct-senha").addEventListener("input", e => {
+    const s = e.target.value; let tudo = true;
+    $("ct-req").querySelectorAll("li").forEach(li => { const ok = REQ[li.dataset.r](s); li.classList.toggle("ok", ok); tudo = tudo && ok; });
+    $("ct-ok1").disabled = !tudo;
+  });
+  $("ct-ok1").addEventListener("click", () => passoConta(2));
+  $("ct-cod").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, ""); $("ct-ok2").disabled = e.target.value.length !== 6; });
+  $("ct-ok2").addEventListener("click", () => passoConta(3));
+  $("ct-ir").addEventListener("click", () => ir("inicio"));
+
+  // ---------- primeiros passos
+  const P = {
+    senha:   { g: "conta", a: "conta", t: "Criar a senha e o código no celular", d: "Feito no convite." },
+    fatura:  { g: "empresa", a: "conta", t: "Dizer quem recebe as faturas", d: "Em Empresa › Contatos, marque \"Recebe faturas\".", b: "Abrir contatos" },
+    equipe:  { g: "empresa", a: "conta", t: "Convidar a sua equipe", d: "Quem vai planejar, operar e acompanhar. Cada um com o próprio acesso.", b: "Convidar membro", pular: true },
+    chega:   { g: "cobranca", a: "cob", t: "Escolher como a carga chega", d: "Por arquivo (CSV, TXT ou XLSX) ou pela API, em cada credor.", b: "Escolher" },
+    carga:   { g: "cobranca", a: "cob", t: "Enviar a primeira carga", d: "A carteira com os clientes e as dívidas. Conferimos as colunas com você.", b: "Enviar carga" },
+    lista:   { g: "cobranca", a: "cob", t: "Ver a primeira Lista do dia", d: "Sai às 6h da manhã seguinte à primeira carga.", espera: "Amanhã às 6h" },
+    cargaJ:  { g: "jornada", a: "jor", t: "Enviar a primeira carga da Jornada", d: "Os clientes entram já em uma etapa; a régua padrão vem pronta.", b: "Enviar carga" },
+    token:   { g: "jornada", a: "jor", t: "Criar o token da API", d: "Para o seu sistema mandar a carga sozinho. Só o Admin cria.", b: "Criar token" },
+    tpl:     { g: "mensageria", a: "msg", t: "Criar o primeiro template", d: "O texto da mensagem, com variáveis como {{nome}}.", b: "Criar template" },
+    recarga: { g: "mensageria", a: "msg", t: "Fazer a primeira recarga", d: "No pré-pago, cada envio desconta do saldo. Boleto, Pix ou cartão.", b: "Recarregar" },
+    teste:   { g: "mensageria", a: "msg", t: "Fazer um envio de teste em simulação", d: "Nada sai para os seus clientes. Serve para conferir texto e números.", b: "Nova campanha" },
+    pedir:   { g: "mensageria", a: "msg", t: "Pedir o envio real", d: "Depois do teste, o Suporte confere e liga em até 1 hora.", b: "Pedir envio real" },
+    real:    { g: "mensageria", a: "msg", t: "Envio real ligado pela equipe MotorCob", d: "Você recebe o aviso no sino quando estiver ligado.", equipeP: true }
+  };
+  const CEN = {
+    cobmsg: { sub: "Cobrança e Mensageria contratadas · pós-pago", passos: ["senha", "fatura", "equipe", "chega", "carga", "lista", "tpl", "teste", "pedir", "real"] },
+    msgpre: { sub: "Mensageria contratada · pré-pago", passos: ["senha", "fatura", "equipe", "tpl", "recarga", "teste", "pedir", "real"] },
+    jorapi: { sub: "Jornada do Cliente (MotorCli) e API contratadas", passos: ["senha", "fatura", "equipe", "token", "cargaJ"] }
+  };
+  const GRUPOS = { conta: "Sua conta", empresa: "Empresa", cobranca: "Cobrança", jornada: "Jornada do Cliente", mensageria: "Mensageria" };
+  const AREA = { conta: ["conta", "Conta"], cob: ["cob", "Cobrança"], jor: ["jor", "Jornada"], msg: ["msg", "Mensageria"] };
+  let feitos = new Set(["senha"]), cen = "cobmsg";
+  function pp() {
+    const lista = CEN[cen].passos, depende = { lista: "carga", real: "pedir", pedir: "teste" };
+    const total = lista.length, n = lista.filter(k => feitos.has(k)).length, prox = lista.find(k => !feitos.has(k));
+    $("pp-sub").textContent = CEN[cen].sub;
+    $("pp-conta").textContent = `${n} de ${total} prontos`;
+    $("pp-i").style.width = (n / total * 100) + "%"; $("pp-barra").setAttribute("aria-valuenow", Math.round(n / total * 100));
+    let html = "", grupo = null;
+    for (const k of lista) {
+      const p = P[k];
+      if (p.g !== grupo) { grupo = p.g; html += `<div class="pp-grupo">${GRUPOS[grupo]}</div>`; }
+      const feito = feitos.has(k), bloq = depende[k] && !feitos.has(depende[k]);
+      let acao = "";
+      if (feito) acao = `<span class="pil ok">Feito</span>`;
+      else if (p.equipeP) acao = feitos.has("pedir") ? `<span class="pil at">Com a equipe MotorCob</span><button class="btn sec peq" data-sim="${k}">Simular: ligado</button>` : `<span class="pil neutra">Depois do pedido</span>`;
+      else if (p.espera) acao = bloq ? `<span class="pil neutra">Depois da carga</span>` : `<span class="pil neutra">${p.espera}</span><button class="btn sec peq" data-sim="${k}">Simular: saiu</button>`;
+      else if (bloq) acao = `<span class="pil neutra">Depois do teste</span>`;
+      else acao = `${p.pular ? `<button class="link" data-pular="${k}">Pular</button>` : ""}<button class="btn ${k === prox ? "" : "sec "}peq" data-sim="${k}">${p.b}</button>`;
+      html += `<div class="pp-item ${feito ? "feito" : ""} ${p.equipeP ? "equipe" : ""} ${k === prox ? "prox" : ""}"><span class="ic" aria-hidden="true">${feito ? "✓" : ""}</span>
+        <div><div class="linha" style="gap:8px"><b>${p.t}</b>${k === prox ? '<span class="pil neutra">Próximo</span>' : ""}</div><p>${p.d}</p></div><div class="acao">${acao}</div></div>`;
+    }
+    $("pp-lista").innerHTML = html;
+    $("pp-lista").querySelectorAll("[data-sim]").forEach(b => b.addEventListener("click", () => { feitos.add(b.dataset.sim); pp(); toast(`Passo pronto: ${P[b.dataset.sim].t}`); }));
+    $("pp-lista").querySelectorAll("[data-pular]").forEach(b => b.addEventListener("click", () => { feitos.add(b.dataset.pular); pp(); }));
+    const tudo = n === total;
+    $("pp").hidden = tudo || $("pp").dataset.oculto === "1"; $("pp-fim").hidden = !tudo;
+    $("pp-oculto").hidden = tudo || $("pp").dataset.oculto !== "1";
+  }
+  $("pp-cen").addEventListener("change", e => { cen = e.target.value; feitos = new Set(["senha"]); $("pp").dataset.oculto = "0"; pp(); });
+  $("pp-ocultar").addEventListener("click", () => { $("pp").dataset.oculto = "1"; pp(); });
+  $("pp-mostrar").addEventListener("click", () => { $("pp").dataset.oculto = "0"; pp(); });
+  pp();
+
+  // ---------- simulação e envio real
+  function real() {
+    const e = $("rl-est").value;
+    const itens = [["Template ativo", e !== "falta"], ["Envio de teste em simulação", e !== "falta"], ["Quem recebe as faturas definido", true]];
+    $("rl-pre").innerHTML = itens.map(([t, ok]) => `<li class="${ok ? "ok" : ""}"><span class="ic">${ok ? "✓" : ""}</span><span>${t}${ok ? "" : ' · <button class="link">Fazer agora</button>'}</span></li>`).join("");
+    const f = $("rl-faixa"); f.className = "faixa-sim" + (e === "pedido" ? " pedido" : e === "real" ? " real" : "");
+    if (e === "falta") f.innerHTML = `<span><b>Simulação:</b> nada sai para os seus clientes. Falta 1 passo para pedir o envio real.</span><button class="btn peq" disabled>Pedir envio real</button>`;
+    else if (e === "pronto") f.innerHTML = `<span><b>Simulação:</b> nada sai para os seus clientes. Tudo pronto para pedir o envio real.</span><button class="btn peq" id="rl-pedir">Pedir envio real</button>`;
+    else if (e === "pedido") f.innerHTML = `<span><b>Envio real pedido em 15/10 às 10:12</b> por Ana. O Suporte responde em até 1 hora; o aviso chega no sino.</span><span class="pil at">Com o Suporte</span>`;
+    else f.innerHTML = `<span><b>Envio real ligado</b> em 15/10 às 14:30. As mensagens saem de verdade e entram na fatura.</span><span class="pil ok">Envio real</span>`;
+    const b = $("rl-pedir");
+    if (b) b.addEventListener("click", () => {
+      f.innerHTML = `<div class="confirma" style="flex:1"><p><b>Pedir à equipe MotorCob para ligar o envio real da Financeira Horizonte?</b> Depois de ligado, as mensagens saem de verdade e entram na fatura. Abre um chamado de Mensageria com os passos conferidos.</p>
+        <div class="linha"><button class="btn peq" id="rl-ok">Pedir envio real</button><button class="btn sec peq" id="rl-volta">Voltar</button></div></div>`;
+      $("rl-ok").focus();
+      $("rl-ok").addEventListener("click", () => { $("rl-est").value = "pedido"; real(); toast("Pedido enviado. O aviso chega no sino quando a equipe ligar."); });
+      $("rl-volta").addEventListener("click", real);
+    });
+  }
+  $("rl-est").addEventListener("change", real); real();
+
+  // ---------- console
+  const EMP = [
+    ["Financeira Horizonte", 8, 10, "Ligar o envio real · pedido há 35 min (prazo 1 h)", 0, "Carla (exemplo)", "pedido"],
+    ["Assessoria Rio Claro", 4, 10, "Enviar a primeira carga", 9, "Bruno (exemplo)", "parada"],
+    ["Clínica Bem Viver", 3, 5, "Criar o token da API", 2, "Carla (exemplo)", "andando"],
+    ["Varejo Sol Nascente", 5, 8, "Fazer a primeira recarga", 12, "Bruno (exemplo)", "parada"]
+  ];
+  const SIT = { pedido: ["at", "Pediu envio real"], parada: ["erro", "Parada"], andando: ["neutra", "Em implantação"] };
+  function console_() {
+    $("cs-corpo").innerHTML = EMP.map((e, i) => `<tr><td class="emp">${e[0]}</td><td class="sit"><span class="pil ${SIT[e[6]][0]}">${SIT[e[6]][1]}</span></td>
+      <td class="prog"><div class="mini"><div class="barra"><i style="width:${e[1] / e[2] * 100}%"></i></div><span class="nota">${e[1]} de ${e[2]}</span></div></td>
+      <td class="prox">${e[3]}</td><td class="extra">${e[4] ? e[4] + " dias" : "hoje"}</td><td class="extra">${e[5]}</td>
+      <td class="acao">${e[6] === "pedido" ? `<button class="btn peq" data-ligar="${i}">Ligar envio real</button>` : `<button class="link" data-ver="${i}">Ver passos</button>`}</td></tr>
+      <tr class="detalhe" id="cs-d${i}" hidden><td colspan="7"></td></tr>`).join("");
+    document.querySelectorAll("[data-ver]").forEach(b => b.addEventListener("click", () => {
+      const d = $("cs-d" + b.dataset.ver); d.hidden = !d.hidden;
+      d.firstElementChild.innerHTML = `<p class="nota">Feitos: senha e código · quem recebe as faturas · equipe convidada${+b.dataset.ver === 3 ? " · template · teste em simulação" : ""}. Falta: <b>${EMP[b.dataset.ver][3].toLowerCase()}</b> e os seguintes.</p>`;
+    }));
+    document.querySelectorAll("[data-ligar]").forEach(b => b.addEventListener("click", () => {
+      const i = +b.dataset.ligar, td = b.parentElement;
+      td.innerHTML = `<div class="confirma" style="min-width:240px"><p style="font-size:13px"><b>As mensagens da ${EMP[i][0]} passam a sair de verdade e entram na fatura.</b> Rota: SMS padrão.</p><div class="linha"><button class="btn peq" id="cs-ok">Ligar envio real</button><button class="btn sec peq" id="cs-volta">Voltar</button></div></div>`;
+      $("cs-ok").addEventListener("click", () => { EMP[i][1] = EMP[i][2]; EMP[i][6] = "andando"; EMP[i][3] = "Tudo pronto"; console_(); toast("Envio real ligado. A empresa recebe o aviso no sino."); });
+      $("cs-volta").addEventListener("click", console_);
+    }));
+  }
+  console_();
+})();
+</script>

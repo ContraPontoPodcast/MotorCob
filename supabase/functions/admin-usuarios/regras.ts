@@ -16,6 +16,7 @@ export const ADMINISTRACAO = ["ver_acessos", "ver_auditoria", "gerenciar_usuario
 
 export interface Perfil {
   id: string;
+  nome?: string | null;
   papel: Papel;
   ativo: boolean;
   empresa_id: number | null;
@@ -176,4 +177,32 @@ export function autorizar(quem: Perfil | null, podeGerenciar: boolean, pedido: P
     return "só um Admin cria ou altera outro Admin";
   }
   return null;
+}
+
+const NOME_PAPEL: Record<Papel, string> = {
+  admin: "Admin", planejamento: "Planejamento", operacao: "Operação", gestao: "Gestão",
+};
+
+/** Dados do convite que o modelo de e-mail do Supabase usa ({{ .Data.empresa_nome }} etc.): para qual empresa,
+ * com qual papel e quem convidou. A equipe MotorCob aparece como "a equipe MotorCob", nunca pelo nome. */
+export function dadosDoConvite(quem: Perfil, nome: string | undefined, empresaNome: string | null,
+                               papel: Papel): Record<string, string> {
+  const dados: Record<string, string> = {
+    empresa_nome: (empresaNome ?? "").trim() || "sua empresa",
+    papel: NOME_PAPEL[papel],
+    convidado_por: quem.equipe ? "a equipe MotorCob" : (quem.nome ?? "").trim() || "o Admin da sua empresa",
+  };
+  if (nome?.trim()) dados.nome = nome.trim();
+  return dados;
+}
+
+/** Convite da equipe MotorCob: o modelo do e-mail é o mesmo do cliente, então os campos vão preenchidos. */
+export function dadosConviteEquipe(quem: Perfil, nome: string | undefined): Record<string, string> {
+  const dados: Record<string, string> = {
+    empresa_nome: "equipe MotorCob",
+    papel: "integrante da equipe",
+    convidado_por: (quem.nome ?? "").trim() || "a equipe MotorCob",
+  };
+  if (nome?.trim()) dados.nome = nome.trim();
+  return dados;
 }

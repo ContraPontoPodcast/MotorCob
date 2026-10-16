@@ -1,10 +1,12 @@
 // Regras da API das cargas (sem rede): rotas, token, escopo, credor e validação dos parâmetros.
 // O banco guarda só o hash do token; quem confere o resto é index.ts, com a chave do servidor.
 
-export const ESCOPOS = ["cargas:enviar", "cargas:status", "lista:ler"] as const;
+export const ESCOPOS = ["cargas:enviar", "cargas:status", "lista:ler", "jornada:enviar"] as const;
 export type Escopo = (typeof ESCOPOS)[number];
 // tipos de carga aceitos (os mesmos de "Enviar arquivos" no site); "geral" é apelido de "base"
 export const TIPOS_CARGA = ["base", "incremental", "retirada", "acordo", "baixa", "ocorrencia"] as const;
+// cargas da Jornada (MotorCli), só em carteira da frente motorcli e com o escopo jornada:enviar (SQL 41)
+export const TIPOS_JORNADA = ["clientes", "contatos", "leads"] as const;
 export const CANAIS_LISTA = ["whatsapp", "rcs", "sms", "email", "agente_voz", "discador"] as const;
 export const LIMITE_MINUTO = 60;
 export const TAMANHO_MAX = 20 * 1024 * 1024; // 20 MB
@@ -19,12 +21,14 @@ export interface Token {
   criado_por: string;
   expira_em: string;
   revogado_em: string | null;
+  ips?: string[] | null;
 }
 
 export type Rota =
   | { nome: "enviar_carga" }
   | { nome: "status_carga"; id: number }
-  | { nome: "lista" };
+  | { nome: "lista" }
+  | { nome: "teste" };
 
 /** Acha a rota pelo pedaço "/v1/..." do caminho (no Supabase o caminho começa com /api). */
 export function rota(metodo: string, caminho: string): Rota | null {
@@ -35,6 +39,7 @@ export function rota(metodo: string, caminho: string): Rota | null {
   const s = p.match(/^\/cargas\/(\d{1,15})$/);
   if (metodo === "GET" && s) return { nome: "status_carga", id: Number(s[1]) };
   if (metodo === "GET" && p === "/lista-do-dia") return { nome: "lista" };
+  if (metodo === "GET" && p === "/teste") return { nome: "teste" };
   return null;
 }
 
@@ -52,7 +57,7 @@ export async function sha256Hex(texto: string): Promise<string> {
 export function tokenInvalido(t: Token | null, agora: Date): string | null {
   if (!t) return "token inválido";
   if (t.revogado_em) return "token revogado";
-  if (new Date(t.expira_em) <= agora) return "token vencido: crie outro em Minha conta › Tokens de API";
+  if (new Date(t.expira_em) <= agora) return "token vencido: crie ou troque o token em Empresa › Integrações";
   return null;
 }
 
@@ -76,8 +81,8 @@ export function validarCarga(q: URLSearchParams, tamanho: number):
   if (!CODIGO.test(credor)) return { erro: "informe o credor pelo código (ex.: ?credor=banco-x)" };
   let tipo = (q.get("tipo") ?? "").toLowerCase();
   if (tipo === "geral") tipo = "base";
-  if (!(TIPOS_CARGA as readonly string[]).includes(tipo)) {
-    return { erro: "tipo inválido: use geral, incremental, retirada, acordo, baixa ou ocorrencia" };
+  if (![...TIPOS_CARGA, ...TIPOS_JORNADA].includes(tipo as never)) {
+    return { erro: "tipo inválido: use geral, incremental, retirada, acordo, baixa ou ocorrencia (Jornada: clientes, contatos ou leads)" };
   }
   const nome = nomeSeguro(q.get("nome") ?? "");
   const ext = nome.includes(".") ? nome.split(".").pop()!.toLowerCase() : "";
@@ -102,4 +107,71 @@ export function validarLista(q: URLSearchParams, hoje: string):
 
 export function hojeSP(agora = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(agora);
+}
+
+/** Escopo que a carga pede, pela frente da carteira: Jornada só aceita clientes, contatos e leads (e vice-versa). */
+export function escopoDaCarga(frente: string, tipo: string): { escopo?: Escopo; erro?: string } {
+  const jornada = (TIPOS_JORNADA as readonly string[]).includes(tipo);
+  if (frente === "motorcli") {
+    return jornada ? { escopo: "jornada:enviar" } : { erro: "carteira da Jornada recebe só clientes, contatos ou leads" };
+  }
+  return jornada ? { erro: "clientes, contatos e leads são cargas da Jornada: use uma carteira do MotorCli" }
+    : { escopo: "cargas:enviar" };
+}
+
+/** IP de quem chamou: o primeiro do X-Forwarded-For, que o Supabase preenche. Atrás do proxy de api.motorcob.online,
+ *  o IP original vem em X-Ip-Original, aceito só com o segredo do proxy (senão qualquer um inventaria o IP). */
+export function ipDaRequisicao(h: Headers, segredoProxy = ""): string | null {
+  const doProxy = segredoProxy && iguais(h.get("x-motorcob-proxy") ?? "", segredoProxy);
+  const ip = doProxy ? (h.get("x-ip-original") ?? "").trim()
+    : (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || (h.get("x-real-ip") ?? "").trim();
+  return /^[0-9a-fA-F:.]{2,45}$/.test(ip) ? ip : null;
+}
+
+function iguais(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+function bytesDoIp(ip: string): number[] | null {
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+    const p = ip.split(".").map(Number);
+    return p.every((x) => x <= 255) ? p : null;
+  }
+  if (!ip.includes(":")) return null;
+  const v4 = ip.match(/^::ffff:(\d{1,3}(\.\d{1,3}){3})$/i);
+  if (v4) return bytesDoIp(v4[1]);
+  const [a, b = ""] = ip.split("::");
+  const grupos = (x: string) => (x ? x.split(":") : []);
+  const ga = grupos(a), gb = grupos(b);
+  if (ip.includes("::") ? ga.length + gb.length > 7 : ga.length !== 8) return null;
+  const todos = [...ga, ...Array(8 - ga.length - gb.length).fill("0"), ...gb];
+  if (todos.some((g) => !/^[0-9a-fA-F]{1,4}$/.test(g))) return null;
+  return todos.flatMap((g) => { const n = parseInt(g, 16); return [n >> 8, n & 255]; });
+}
+
+/** O IP está em alguma das faixas (CIDR)? Sem faixas: qualquer IP vale. */
+export function ipPermitido(ip: string | null, faixas: string[] | null | undefined): boolean {
+  if (!faixas || faixas.length === 0) return true;
+  const b = ip ? bytesDoIp(ip) : null;
+  if (!b) return false;
+  return faixas.some((f) => {
+    const [rede, tam] = f.split("/");
+    const r = bytesDoIp(rede);
+    if (!r || r.length !== b.length) return false;
+    let bits = tam === undefined ? r.length * 8 : Number(tam);
+    for (let i = 0; i < r.length && bits > 0; i++, bits -= 8) {
+      const m = bits >= 8 ? 255 : (255 << (8 - bits)) & 255;
+      if ((r[i] & m) !== (b[i] & m)) return false;
+    }
+    return true;
+  });
+}
+
+/** Rota para o registro de uso (sem parâmetros nem ids). */
+export function rotaRegistro(r: Rota | null): string {
+  if (!r) return "/v1/desconhecida";
+  return { enviar_carga: "/v1/cargas", status_carga: "/v1/cargas/{id}", lista: "/v1/lista-do-dia", teste: "/v1/teste" }[r.nome];
 }

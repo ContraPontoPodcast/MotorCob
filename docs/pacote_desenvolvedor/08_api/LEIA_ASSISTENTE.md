@@ -1,4 +1,7 @@
-# Assistente MotorCob: o que publicar
+# Assistente MotorCX: o que publicar
+
+> Atualizado pela revisão de UX (SQL 43, 16/10/2026): modelo Sonnet 5.5 com a resposta aparecendo enquanto é
+> escrita, teto do mês em reais e Respostas da equipe pelo Console. Prompts 66 e 67.
 
 Faça depois do SQL 17 (`17_funil_assistente.sql`). Depois cole o prompt 17 no Horizons.
 
@@ -11,7 +14,8 @@ Faça depois do SQL 17 (`17_funil_assistente.sql`). Depois cole o prompt 17 no H
 2. Supabase › **Edge Functions › Secrets** › **Add new secret**: nome `ANTHROPIC_API_KEY`, valor = a chave. Salve.
    (`SITE_URL` e `ORIGENS_PERMITIDAS` já existem por causa da função de usuários; o Assistente usa as mesmas.)
 
-Sem a chave, o Assistente funciona, mas sempre responde "Ainda não sei responder isso" com o botão Abrir chamado.
+Sem a chave, o Assistente responde "O Assistente está fora do ar agora" com o botão Falar com o Suporte (e isso não
+entra na lista do que falta na base).
 
 ## 2. Função `assistente`
 
@@ -22,11 +26,19 @@ Sem a chave, o Assistente funciona, mas sempre responde "Ainda não sei responde
 
 ## Como funciona
 
-- Responde com a base de conhecimento da plataforma (telas, passo a passo, status de envio, permissões, LGPD),
-  usando o Claude com esforço baixo. A base fica em cache, por isso cada pergunta custa pouco.
+- Responde com a base de conhecimento da plataforma (telas, passo a passo, status de envio, permissões, LGPD) e as
+  Respostas da equipe, usando o Claude Sonnet 5.5 com esforço baixo e a resposta em partes (o site mostra enquanto
+  chega). A base fica em cache de 1 hora, por isso cada pergunta custa pouco. Se o provedor recusar a pergunta por
+  política, ele mesmo tenta outro modelo (fallback do servidor) e o custo estimado usa o preço do modelo que respondeu.
+- Sabe perfil, frente, módulos contratados e a tela; só sugere telas que a pessoa abre.
+- Custo: cada pergunta guarda os tokens e o custo estimado em dólar; o Console mostra o mês em reais pela cotação
+  (PTAX do Banco Central, atualizada pelo motor; o Master pode digitar outra). Teto padrão: R$ 399,90 por mês. Com o
+  teto atingido, só as Respostas da equipe e o Suporte até virar o mês; a equipe recebe aviso com 80% e 100%.
+  Mantenha também um limite de gasto mensal no painel do provedor, um pouco acima do teto, como segunda trava.
 - Antes de qualquer coisa, CPF, CNPJ, telefone, e-mail e números longos da pergunta viram marcadores. O
   Assistente não vê carteira, clientes, envios nem faturas; para casos específicos, indica abrir chamado.
 - O botão da resposta só pode levar a telas de uma lista fechada (a IA não inventa endereço).
 - Limite de 30 perguntas por hora por usuário. Cada pergunta fica 90 dias em `assistente_perguntas`.
-- Console › Atendimento › Assistente mostra o que ficou sem resposta ou recebeu 👎: é a lista do que falta na base.
-  Para completar a base, peça a atualização do arquivo `conhecimento.ts` (vem num pacote novo) e cole a função de novo.
+- Console › Assistente: Painel (uso, acerto, custo, temas), Para resolver (sem resposta e 👎, perguntas parecidas
+  juntas) e Respostas da equipe, que completam a base na hora, sem publicar a função. A cada pacote novo, as mais
+  usadas passam para o `conhecimento.ts`.

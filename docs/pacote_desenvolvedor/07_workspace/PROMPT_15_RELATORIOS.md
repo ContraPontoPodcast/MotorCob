@@ -1,5 +1,7 @@
 # Prompt Horizons — Workspace 15: Relatórios (padrões de mercado e personalizados)
 
+> **Substituído pelos prompts 59 e 60 (SQL 39).** Não cole este se já tiver rodado o SQL 39.
+
 Rode depois do SQL 16 (`16_relatorios.sql`). Página nova /relatorios, com atalho em cada produto da Mensageria.
 
 ```text

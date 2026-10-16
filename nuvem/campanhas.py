@@ -21,6 +21,7 @@ import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from nuvem import avisos as AV
 from nuvem import mensageria as M
 
 DDDS = {11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35, 37, 38, 41, 42, 43, 44, 45, 46,
@@ -30,6 +31,13 @@ EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
 VARIAVEL = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
 MAX_LINHAS = 500_000
 URL = re.compile(r"https?://[^\s\"'<>]+")
+
+
+def _n(v: int) -> str:
+    """Número no formato brasileiro (18.420)."""
+    return f"{v:,}".replace(",", ".")
+
+
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 
@@ -202,9 +210,13 @@ def analisar(sb, dados: Path, out=print) -> int:
             sb.atualizar("mensageria_campanhas", filtro, {"layout_sugerido": lay, "carregados": len(linhas),
                                                           "situacao": "aguardando_layout", "erro": None})
             out(f"campanha {c['id']}: {len(linhas)} linhas, layout sugerido")
+            AV.para_campanha(sb, c, f"Lista lida · {c.get('nome') or 'campanha'}",
+                             f"{_n(len(linhas))} linhas. Confira as colunas para continuar.")
             n += 1
         except Exception as e:  # noqa: BLE001 — arquivo ruim vira erro na campanha, não derruba o plantão
             sb.atualizar("mensageria_campanhas", filtro, {"situacao": "erro", "erro": f"não deu para ler: {e}"[:500]})
+            AV.para_campanha(sb, c, f"Lista com erro · {c.get('nome') or 'campanha'}",
+                             f"Não deu para ler o arquivo: {e}", tipo="erro")
     return n
 
 
@@ -257,10 +269,44 @@ def preparar(sb, dados: Path, agora: datetime | None = None, out=print) -> list[
         except Exception as e:  # noqa: BLE001
             sb.atualizar("mensageria_campanhas", {"id": f"eq.{c['id']}"},
                          {"situacao": "erro", "erro": f"não deu para montar o envio: {e}"[:500]})
+            AV.para_campanha(sb, c, f"Campanha com erro · {c.get('nome') or 'campanha'}",
+                             f"Não deu para montar o envio: {e}", tipo="erro")
     return criados
 
 
-def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
+def previas(sb, dados: Path, agora: datetime | None = None, out=print) -> int:
+    """Prévia do Score de Entrega antes de agendar (campanha pela plataforma): classifica os mesmos números que vão
+    sair, grava quantos caem em cada faixa e os preços (score_previa) e guarda a classificação no servidor para o
+    envio usar a mesma. Depois a campanha fica 'pronta' para o cliente escolher as faixas e agendar."""
+    from nuvem import score as SC
+    agora = (agora or datetime.now(M.SP)).astimezone(M.SP)
+    feitas = 0
+    for c in sb.selecionar("mensageria_campanhas", {"situacao": "eq.calculando_previa"}, ordem="id.asc") or []:
+        filtro = {"id": f"eq.{c['id']}"}
+        try:
+            linhas, produto, slug_emp = _montar(sb, dados, c, agora, out, previa=True)
+            pend = [l["destino_hash"] for l in linhas if l["situacao"] == "pendente"]
+            res = SC.classificar(sb, pend, produto)
+            SC.guardar_cache(pasta_campanhas(dados, slug_emp), c["id"], res)
+            sb.atualizar("mensageria_campanhas", filtro, {
+                "situacao": "pronta", "erro": None,
+                "score_previa": SC.previa(sb, c["empresa_id"], produto, pend, res, agora.date())})
+            fora = len(linhas) - len(pend)
+            AV.para_campanha(sb, c, f"Prévia pronta · {c.get('nome') or 'campanha'}",
+                             f"{_n(len(pend))} números classificados. Revise as faixas antes de agendar."
+                             + (f" {_n(fora)} ficaram de fora (telefone inválido, repetido ou bloqueado)." if fora else ""))
+            feitas += 1
+        except Exception as e:  # noqa: BLE001
+            sb.atualizar("mensageria_campanhas", filtro,
+                         {"situacao": "erro", "erro": f"não deu para calcular a prévia do Score: {e}"[:500]})
+            AV.para_campanha(sb, c, f"Prévia com erro · {c.get('nome') or 'campanha'}",
+                             f"Não deu para calcular a prévia do Score: {e}", tipo="erro")
+    if feitas:
+        out(f"score de entrega: {feitas} prévia(s) de campanha calculada(s)")
+    return feitas
+
+
+def _montar(sb, dados: Path, c: dict, agora: datetime, out, previa: bool = False):
     eid, canal, lay = c["empresa_id"], c["canal"], c.get("layout") or {}
     emp = _empresa(sb, eid)
     tpl = (sb.selecionar("mensageria_templates", {"id": f"eq.{c['template_id']}"}) or [None])[0] \
@@ -355,6 +401,13 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
             if fb_tpl:
                 loc["fallback_texto"] = preencher(fb_tpl["conteudo"].get("texto", ""), variaveis).strip()
             locais[(idc, h)] = loc
+    if previa:                                  # só a lista higienizada, para a prévia do Score
+        return linhas_db, produto, emp["slug"]
+    score = None
+    if c.get("score_faixas"):                   # Score de Entrega: só as faixas escolhidas recebem (nuvem/score.py)
+        from nuvem import score as SC
+        cache = SC.ler_cache(pasta_campanhas(dados, emp["slug"]), c["id"])   # a mesma classificação da prévia
+        score = SC.aplicar(sb, c, produto, linhas_db, locais, cache)
     jan = M.janela(canais_cfg.get(canal), agora.date()) or M.JANELA_PADRAO
     situacao = "agendado" if locais else "concluido"
     lote = sb.inserir("mensageria_lotes", [{
@@ -365,6 +418,8 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
         "motivo": None if locais else "nada a enviar: todos bloqueados na higienização"}], retornar=True)[0]
     gravadas = sb.inserir("mensageria_mensagens", [{**x, "lote_id": lote["id"], "empresa_id": eid} for x in linhas_db],
                           retornar=True) if linhas_db else []
+    if score and modo == "real":                # o Score entra no consumo do mês pela forma contratada
+        M._consumo(sb, eid, agora.date(), SC.itens_de_cobranca(sb, eid, score))
     links = [{"codigo": cod, "empresa_id": eid, "lote_id": lote["id"], "mensagem_id": m["id"], "campanha_id": c["id"],
               "canal": canal, "id_cliente": m["id_cliente"], "url_destino": url[:2000]}
              for m in gravadas if m["situacao"] == "pendente"
@@ -378,6 +433,9 @@ def _montar(sb, dados: Path, c: dict, agora: datetime, out) -> dict:
                  {**cont, "situacao": "em_andamento" if locais else "concluida"})
     out(f"campanha {c['id']} ({canal}): {len(locais)} para enviar, {cont['invalidos']} inválidos, "
         f"{cont['duplicados']} repetidos, {cont['bloqueados']} bloqueados")
+    if score:
+        out(f"  score de entrega: {score['analisados']} analisados, {score['represados']} represados, "
+            f"{score['controle']} no grupo de controle")
     return lote
 
 
@@ -411,6 +469,7 @@ def limpar(sb, dados: Path, agora: datetime | None = None, out=print) -> int:
         sb.atualizar("mensageria_campanhas", {"id": f"eq.{c['id']}"}, {"arquivo_caminho": None})
         n += 1
     for arq in list(Path(dados).glob("empresas/*/mensageria_campanhas/lote_*.json")) + \
+            list(Path(dados).glob("empresas/*/mensageria_campanhas/score_*.json")) + \
             list(Path(dados).glob("empresas/**/mensageria/lote_*.json")):
         if datetime.fromtimestamp(arq.stat().st_mtime, M.SP) < limite:
             arq.unlink()

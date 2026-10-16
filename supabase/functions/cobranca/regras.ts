@@ -7,33 +7,62 @@ export const FORMAS = ["boleto", "pix", "cartao"] as const;
 export type Forma = (typeof FORMAS)[number];
 
 export interface Pedido {
-  acao: "pagar" | "enviar_fatura" | "demonstrativo" | "emitir_nf" | "recargas_automaticas";
+  acao: "pagar" | "enviar_fatura" | "demonstrativo" | "emitir_nf" | "recargas_automaticas" | "lembrar_fatura"
+    | "lembrar_parcela" | "informar_acordo";
   fatura?: number;
+  tipo?: "d1" | "d5" | "d7";
   recarga?: number;
+  parcela?: number;          // parcela de acordo de pagamento (SQL 38)
+  acordo?: number;
   forma?: Forma;
 }
 
 export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string } {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { erro: "pedido inválido" };
   const c = corpo as Record<string, unknown>;
-  const acoes = ["pagar", "enviar_fatura", "demonstrativo", "emitir_nf", "recargas_automaticas"];
+  const acoes = ["pagar", "enviar_fatura", "demonstrativo", "emitir_nf", "recargas_automaticas", "lembrar_fatura",
+                 "lembrar_parcela", "informar_acordo"];
   if (!acoes.includes(c.acao as string)) return { erro: "ação desconhecida" };
   const p: Pedido = { acao: c.acao as Pedido["acao"] };
-  for (const k of ["fatura", "recarga"] as const) {
+  for (const k of ["fatura", "recarga", "parcela", "acordo"] as const) {
     if (c[k] !== undefined && c[k] !== null) {
       if (!Number.isSafeInteger(c[k]) || (c[k] as number) <= 0) return { erro: `${k} inválida` };
       p[k] = c[k] as number;
     }
   }
+  const alvos = [p.fatura, p.recarga, p.parcela].filter((x) => x !== undefined).length;
   if (p.acao === "recargas_automaticas") return { pedido: p };
-  if ((p.acao === "enviar_fatura" || p.acao === "demonstrativo") && (!p.fatura || p.recarga)) return { erro: "informe a fatura" };
-  if (!p.fatura === !p.recarga) return { erro: "informe a fatura ou a recarga" };
+  if (p.acao === "informar_acordo") return p.acordo && !alvos ? { pedido: p } : { erro: "informe o acordo" };
+  if (p.acao === "lembrar_fatura") {
+    if (!p.fatura || alvos !== 1) return { erro: "informe a fatura" };
+    if (!["d1", "d5", "d7"].includes(c.tipo as string)) return { erro: "lembrete inválido: d1, d5 ou d7" };
+    p.tipo = c.tipo as Pedido["tipo"];
+    return { pedido: p };
+  }
+  if (p.acao === "lembrar_parcela") {
+    if (!p.parcela || alvos !== 1) return { erro: "informe a parcela" };
+    if (!["d1", "d5"].includes(c.tipo as string)) return { erro: "lembrete inválido: d1 ou d5" };
+    p.tipo = c.tipo as Pedido["tipo"];
+    return { pedido: p };
+  }
+  if ((p.acao === "enviar_fatura" || p.acao === "demonstrativo") && (!p.fatura || alvos !== 1)) return { erro: "informe a fatura" };
+  if (alvos !== 1 || p.acordo) return { erro: "informe a fatura, a recarga ou a parcela" };
   if (p.acao === "pagar") {
     if (!FORMAS.includes(c.forma as Forma)) return { erro: "forma de pagamento inválida: boleto, pix ou cartao" };
     p.forma = c.forma as Forma;
   }
   return { pedido: p };
 }
+
+/** Parcelas do acordo em centavos: o resto vai na 1ª (igual ao banco, lancar_acordo). */
+export function dividirParcelas(total: number, n: number): number[] {
+  const cent = Math.round(Number(total) * 100), parte = Math.floor(cent / n);
+  return Array.from({ length: n }, (_, i) => (parte + (i === 0 ? cent - parte * n : 0)) / 100);
+}
+
+/** "2ª de 3" ou "saldo do acordo" (a cobrança única de quando o acordo quebra). */
+export const rotuloParcela = (numero: number, total: number, tipo: string) =>
+  tipo === "saldo" ? "saldo do acordo" : `${numero}ª de ${total}`;
 
 // ---------------------------------------------------------------- Stripe
 /** Corpo application/x-www-form-urlencoded do Stripe: {a: {b: 1}, c: [x]} → a[b]=1&c[0]=x */
@@ -112,7 +141,7 @@ export function diasBoleto(vencimento: string | null | undefined, hoje: string):
 }
 
 export interface Alvo {
-  tipo: "fatura" | "recarga";
+  tipo: "fatura" | "recarga" | "parcela";
   id: number;
   empresa_id: number;
   valor: number;
@@ -251,6 +280,7 @@ export interface NfConfig {
   percentual_aliquota_iss: number | null;
   descricao_fatura: string;
   descricao_recarga: string;
+  descricao_parcela?: string;
 }
 
 export function faltaNaConfig(c: NfConfig): string[] {
@@ -296,10 +326,12 @@ export function notaFocus(c: NfConfig, e: Empresa, email: string, valor: number,
   };
 }
 
-/** Texto da nota: {ciclo} vira "21/09/2026 a 20/10/2026". */
-export function descricaoNota(modelo: string, ciclo?: { inicio: string; fim: string } | null) {
+/** Texto da nota: {ciclo} vira "21/09/2026 a 20/10/2026"; na parcela, {parcela} vira "2ª de 3" e {acordo}, o nº. */
+export function descricaoNota(modelo: string, ciclo?: { inicio: string; fim: string } | null,
+  parcela?: { rotulo: string; acordo: number } | null) {
   const br = (d: string) => d.slice(0, 10).split("-").reverse().join("/");
-  return modelo.replace("{ciclo}", ciclo ? `${br(ciclo.inicio)} a ${br(ciclo.fim)}` : "").trim();
+  return modelo.replace("{ciclo}", ciclo ? `${br(ciclo.inicio)} a ${br(ciclo.fim)}` : "")
+    .replace("{parcela}", parcela?.rotulo ?? "").replace("{acordo}", parcela ? String(parcela.acordo) : "").trim();
 }
 
 /** Resposta do GET /nfsen/{ref} → linha de notas_fiscais. */
@@ -317,16 +349,8 @@ export function lerNota(r: Record<string, any>, base: string) {
   };
 }
 
-export const referenciaNota = (tipo: "fatura" | "recarga", id: number, tentativa: number) =>
+export const referenciaNota = (tipo: "fatura" | "recarga" | "parcela", id: number, tentativa: number) =>
   `${tipo}-${id}${tentativa > 1 ? `-${tentativa}` : ""}`;
 
 export type Contato = { email: string; papel_contrato: string; recebe_faturas?: boolean | null };
 
-/** Quem recebe a fatura: os contatos marcados "Recebe faturas"; sem nenhum marcado, os de papel Financeiro;
- *  sem nenhum dos dois, todos os contatos com e-mail. No máximo 10, sem repetir. */
-export function destinatariosFatura(lista: Contato[]): string[] {
-  const norm = (xs: Contato[]) => xs.map((x) => x.email.trim().toLowerCase()).filter(Boolean);
-  const marcados = norm(lista.filter((x) => x.recebe_faturas));
-  const fin = norm(lista.filter((x) => x.papel_contrato === "financeiro"));
-  return [...new Set(marcados.length ? marcados : fin.length ? fin : norm(lista))].slice(0, 10);
-}

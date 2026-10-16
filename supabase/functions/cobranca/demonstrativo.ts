@@ -1,5 +1,6 @@
 // Demonstrativo da fatura: transforma o que vem de demonstrativo_fatura() em seções prontas para o PDF e para o
 // e-mail (sem rede e sem biblioteca de PDF; testável com node --test). O desenho do PDF fica em demonstrativo_pdf.ts.
+import { pagina, type Rodape } from "../_compartilhado/email.ts";
 
 export interface Item {
   ordem: number; item: string; descricao: string; quantidade: number; preco: number; valor: number;
@@ -159,23 +160,85 @@ export function montar(d: Dados): Secoes {
   };
 }
 
-/** Assunto e corpo do e-mail (HTML com tudo escapado). */
+const motivoFatura = (cliente: string) => `Você recebe porque é contato de faturas da ${cliente} no MotorCX.`;
+
+/** Assunto e corpo do e-mail no modelo único dos e-mails do sistema (HTML com tudo escapado). */
 export function emailFatura(s: Secoes, cliente: string, links: { demonstrativo: string; boleto?: string | null; pagar: string },
-  linhaDigitavel?: string | null) {
+  linhaDigitavel?: string | null, rodape: Rodape | null = null) {
   const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
   const linhas = s.resumo.map(([a, b]) => `<tr><td style="padding:6px 0;color:#1D1D1F">${esc(a)}</td><td style="padding:6px 0;text-align:right;white-space:nowrap">${esc(b)}</td></tr>`).join("");
   const botao = (href: string, texto: string, cheio: boolean) =>
     `<a href="${esc(href)}" style="display:inline-block;margin:4px 8px 4px 0;padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;${cheio ? "background:#1D1D1F;color:#FFFFFF" : "background:#F2F2F5;color:#1D1D1F"}">${esc(texto)}</a>`;
   const assunto = `Fatura MotorCX nº ${s.numero} · ciclo ${s.ciclo} · vence ${s.vencimento.slice(0, 5)}`;
-  const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1D1D1F;max-width:560px">
-<p>Olá, equipe da ${esc(cliente)}.</p>
+  const html = pagina({ frente: "Faturas", titulo: `Fatura nº ${s.numero} · ${s.total}`, motivo: motivoFatura(cliente), rodape, corpo: `<p>Olá, equipe da ${esc(cliente)}.</p>
 <p>A fatura do ciclo de ${esc(s.ciclo)} está disponível.</p>
 <p style="font-size:28px;font-weight:700;margin:8px 0">${esc(s.total)}</p>
 <table style="width:100%;border-collapse:collapse;font-size:14px">${linhas}</table>
 <p><b>Vencimento:</b> ${esc(s.vencimento)} · boleto, Pix ou cartão.</p>
 <p>${botao(links.pagar, "Pagar agora", true)}${botao(links.demonstrativo, "Demonstrativo (PDF)", false)}${links.boleto ? botao(links.boleto, "Boleto (PDF)", false) : ""}</p>
 ${linhaDigitavel ? `<p style="font-size:13px;color:#6E6E73">Linha digitável do boleto: ${esc(linhaDigitavel)}</p>` : ""}
-<p style="font-size:13px;color:#6E6E73">O demonstrativo traz o que foi usado e cobrado no ciclo. A nota fiscal de serviço chega em outro e-mail quando o pagamento for confirmado. Dúvidas: Suporte na plataforma.</p>
-</div>`;
+<p style="font-size:13px;color:#6E6E73">O demonstrativo traz o que foi usado e cobrado no ciclo. A nota fiscal de serviço chega em outro e-mail quando o pagamento for confirmado. Dúvidas: Suporte na plataforma.</p>` });
+  return { assunto, html };
+}
+
+/** Lembrete de fatura vencida: d1 (venceu ontem), d5 (5 dias) e d7 (acesso bloqueado em 3 dias). */
+export function emailLembrete(tipo: "d1" | "d5" | "d7", f: { numero: number; ciclo: string; total: string; vencimento: string;
+  bloqueio: string }, cliente: string, pagar: string, rodape: Rodape | null = null) {
+  const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  const assunto = {
+    d1: `Fatura MotorCX nº ${f.numero} venceu em ${f.vencimento.slice(0, 5)}`,
+    d5: `Fatura MotorCX nº ${f.numero} vencida há 5 dias`,
+    d7: `Fatura MotorCX nº ${f.numero}: o acesso será bloqueado em 3 dias`,
+  }[tipo];
+  const frase = {
+    d1: `A fatura do ciclo de ${esc(f.ciclo)}, de <b>${esc(f.total)}</b>, venceu em ${esc(f.vencimento)}. Se o pagamento já foi feito, desconsidere este e-mail.`,
+    d5: `A fatura do ciclo de ${esc(f.ciclo)}, de <b>${esc(f.total)}</b>, está vencida desde ${esc(f.vencimento)}. Com 10 dias de atraso, o acesso à plataforma é bloqueado e os envios param até o pagamento.`,
+    d7: `A fatura do ciclo de ${esc(f.ciclo)}, de <b>${esc(f.total)}</b>, continua em aberto. Se não for paga até ${esc(f.bloqueio)}, o acesso à plataforma é bloqueado e os envios param. Faturamento e Suporte continuam abertos para pagar.`,
+  }[tipo];
+  const html = pagina({ frente: "Faturas", titulo: assunto, motivo: motivoFatura(cliente), rodape, corpo: `<p>Olá, equipe da ${esc(cliente)}.</p>
+<p>${frase}</p>
+<p><a href="${esc(pagar)}" style="display:inline-block;margin:4px 0;padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;background:#1D1D1F;color:#FFFFFF">Pagar agora</a></p>
+<p style="font-size:13px;color:#6E6E73">Boleto, Pix ou cartão. Quando o pagamento confirma, tudo volta ao normal sozinho. Dúvidas: Suporte na plataforma.</p>` });
+  return { assunto, html };
+}
+
+export interface DadosAcordo {
+  numero: number; faturas: string; valor_faturas: string; ajuste: number; ajuste_texto: string; total: string;
+  parcelas: { rotulo: string; vencimento: string; valor: string }[]; formas: string[];
+}
+
+/** E-mail do acordo de pagamento ("Informar o cliente"): faturas, desconto ou acréscimo, parcelas e a regra da quebra. */
+export function emailAcordo(a: DadosAcordo, cliente: string, pagar: string, rodape: Rodape | null = null) {
+  const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  const n = a.parcelas.length;
+  const assunto = `Acordo de pagamento registrado · ${n} parcela${n > 1 ? "s" : ""} de ${a.parcelas[n - 1]?.valor ?? a.total}`;
+  const ajuste = a.ajuste < 0 ? `, com desconto de ${esc(a.ajuste_texto)}` : a.ajuste > 0 ? `, com acréscimo de ${esc(a.ajuste_texto)}` : "";
+  const linhas = a.parcelas.map((p) => `<tr><td style="padding:6px 0">${esc(p.rotulo)}</td><td style="padding:6px 0">${esc(p.vencimento)}</td><td style="padding:6px 0;text-align:right;white-space:nowrap">${esc(p.valor)}</td></tr>`).join("");
+  const nomes: Record<string, string> = { pix: "Pix", boleto: "boleto", cartao: "cartão" };
+  const formas = a.formas.map((f) => nomes[f] ?? f);
+  const formasTxt = formas.length > 1 ? `${formas.slice(0, -1).join(", ")} ou ${formas[formas.length - 1]}` : formas[0];
+  const html = pagina({ frente: "Faturas", titulo: `Acordo de pagamento nº ${a.numero}`, motivo: motivoFatura(cliente), rodape, corpo: `<p>Olá, equipe da ${esc(cliente)}.</p>
+<p>Registramos o acordo de pagamento nº ${a.numero} das faturas de ${esc(a.faturas)} (${esc(a.valor_faturas)})${ajuste}. Total do acordo: <b>${esc(a.total)}</b>.</p>
+<table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="color:#6E6E73"><td>Parcela</td><td>Vencimento</td><td style="text-align:right">Valor</td></tr>${linhas}</table>
+<p>O acesso e os envios ficam liberados enquanto as parcelas estiverem em dia. Cada parcela pode ser paga por ${esc(formasTxt ?? "")} em Empresa › Faturamento.</p>
+<p><a href="${esc(pagar)}" style="display:inline-block;margin:4px 0;padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;background:#1D1D1F;color:#FFFFFF">Pagar a 1ª parcela</a></p>
+<p style="font-size:13px;color:#6E6E73">Se uma parcela ficar 10 dias em atraso, o acordo é desfeito e o valor que falta volta a ser cobrado. Dúvidas: Suporte na plataforma.</p>` });
+  return { assunto, html };
+}
+
+/** Lembrete da parcela vencida: d1 (venceu ontem) e d5 (5 dias; o acordo é desfeito com 10). */
+export function emailLembreteParcela(tipo: "d1" | "d5", p: { rotulo: string; acordo: number; valor: string; vencimento: string;
+  quebra: string }, cliente: string, pagar: string, rodape: Rodape | null = null) {
+  const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  const assunto = tipo === "d1"
+    ? `Parcela ${p.rotulo} do acordo nº ${p.acordo} venceu em ${p.vencimento.slice(0, 5)}`
+    : `Parcela ${p.rotulo} do acordo nº ${p.acordo} vencida há 5 dias`;
+  const frase = tipo === "d1"
+    ? `A parcela ${esc(p.rotulo)} do acordo de pagamento, de <b>${esc(p.valor)}</b>, venceu em ${esc(p.vencimento)}. Se o pagamento já foi feito, desconsidere este e-mail.`
+    : `A parcela ${esc(p.rotulo)} do acordo de pagamento, de <b>${esc(p.valor)}</b>, está vencida desde ${esc(p.vencimento)}. Se não for paga até ${esc(p.quebra)}, o acordo é desfeito, o valor que falta volta a ser cobrado e o acesso é bloqueado.`;
+  const html = pagina({ frente: "Faturas", titulo: assunto, motivo: motivoFatura(cliente), rodape, corpo: `<p>Olá, equipe da ${esc(cliente)}.</p>
+<p>${frase}</p>
+<p><a href="${esc(pagar)}" style="display:inline-block;margin:4px 0;padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;background:#1D1D1F;color:#FFFFFF">Pagar a parcela</a></p>
+<p style="font-size:13px;color:#6E6E73">Pix, boleto ou cartão, conforme o acordo. Dúvidas: Suporte na plataforma.</p>` });
   return { assunto, html };
 }

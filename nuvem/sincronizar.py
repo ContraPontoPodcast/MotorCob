@@ -752,6 +752,28 @@ def _layout_automatico(sb: Supabase, pasta: Path, baixados, out):
 TIPOS_JORNADA = ("clientes", "contatos", "leads")   # cargas que o MotorCli usa (layout do motor/jornada.py)
 
 
+def _desfechos_jornada(sb: Supabase, eid: int, cid: int, data: date) -> list[dict]:
+    """Resultado de cada momento nos últimos 90 dias (SQL 40), para o "melhor canal". Banco sem o SQL 40: nada."""
+    try:
+        return sb.selecionar("jornada_desfechos", {"empresa_id": f"eq.{eid}", "credor_id": f"eq.{cid}",
+                                                   "data": f"gte.{(data - timedelta(days=90)).isoformat()}"}) or []
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _publicar_resultados_jornada(sb: Supabase, eid: int, cid: int, data: date, r: dict, out=print) -> None:
+    """Grava o resultado dos momentos e o movimento do dia (SQL 40); rodada repetida no dia substitui."""
+    try:
+        for tabela, chave in (("jornada_desfechos", "desfechos"), ("jornada_movimento", "movimento")):
+            filtro = {"empresa_id": f"eq.{eid}", "credor_id": f"eq.{cid}", "data": f"eq.{data.isoformat()}"}
+            sb.apagar(tabela, filtro)
+            linhas = [{"empresa_id": eid, "credor_id": cid, "data": data.isoformat(), **l} for l in r.get(chave) or []]
+            if linhas:
+                sb.inserir(tabela, linhas)
+    except Exception as e:  # noqa: BLE001 — banco sem o SQL 40: a rodada segue
+        out(f"  aviso: resultado da jornada não gravado ({str(e)[:120]})")
+
+
 def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
     """Carteira da frente MotorCli: roda a jornada (rodar_jornada.py) e publica a Lista do dia, o
     enquadramento (jornada_cliente), as ações (acoes_dia) e os lotes da Mensageria, no mesmo lugar que o MotorCob."""
@@ -775,20 +797,33 @@ def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
                                         registros_canal=mensageria.registros(pasta),
                                         regras_retorno=u.get("regras_retorno"), out=out,
                                         leads_csv=pasta / "base" / "leads.csv",
-                                        frases=_baixar(sb, pasta, "frases", eid, "id.asc"))
+                                        frases=_baixar(sb, pasta, "frases", eid, "id.asc"),
+                                        desfechos_hist=_desfechos_jornada(sb, eid, cid, data))
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
         fila = [{"empresa_id": eid, **_c(cid), "data": data.isoformat(), "canal": l["canal"],
                  "id_cliente": l["id_cliente"], "reserva": False, "regua": l["regua"], "passo": l["passo"],
-                 "tag": l["tag"], "estrategia": (est or {}).get("nome")} for l in r["fila"]]
+                 "tag": l["tag"], "estrategia": (est or {}).get("nome"),
+                 **({"por_que": l["por_que"]} if l.get("por_que") else {})} for l in r["fila"]]
         if fila:
-            sb.inserir("fila_dia", fila)
+            try:
+                sb.inserir("fila_dia", fila)
+            except ErroSupabase as e:        # banco sem o SQL 40 (coluna por_que): grava sem ela
+                if e.status != 400 or not any("por_que" in f for f in fila):
+                    raise
+                sb.inserir("fila_dia", [{k: v for k, v in f.items() if k != "por_que"} for f in fila])
         sb.apagar("jornada_cliente", {"empresa_id": f"eq.{eid}", **_fc(cid)})
         enq = [{"empresa_id": eid, "credor_id": cid, "id_cliente": idc, "data": data.isoformat(), **v}
                for idc, v in r["enquadramento"].items()]
         for i in range(0, len(enq), 1000):
-            sb.inserir("jornada_cliente", enq[i:i + 1000])
+            try:
+                sb.inserir("jornada_cliente", enq[i:i + 1000])
+            except ErroSupabase as e:        # banco sem o SQL 40 (coluna fase): grava sem ela
+                if e.status != 400:
+                    raise
+                sb.inserir("jornada_cliente", [{k: v for k, v in x.items() if k != "fase"} for x in enq[i:i + 1000]])
         n_arq = publicar_arquivos(sb, r["saida"], f"{emp['slug']}/{data.isoformat()}/{u['codigo']}", limpar=True)
         publicar_acoes(sb, eid, r, cid)
+        _publicar_resultados_jornada(sb, eid, cid, data, r, out)
         try:   # medição da Jornada para o faturamento; nunca derruba a rodada
             from nuvem import faturamento
             n_cli = faturamento.publicar_clientes_jornada(sb, eid, cid, pasta, data, r["fila"])
@@ -1292,12 +1327,25 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
     from nuvem import atendimento, campanhas, mensageria
     if mensageria.banco_campanhas(sb):
         campanhas.analisar(sb, dados, out)
+        campanhas.previas(sb, dados, agora, out)      # prévia do Score antes de agendar (SQL 33)
         campanhas.preparar(sb, dados, agora, out)
     resumo = mensageria.processar(sb, dados, agora, out)
     from nuvem import retornos
     retornos.processar_retornos(sb, dados, agora, out)  # entrega, falha, resposta e bounce dos fornecedores reais
     _recarga_automatica(sb, dados, agora, out)
     _faturamento(sb, dados, agora, out)
+    from nuvem import avisos, relatorios
+    if (agora or datetime.now(timezone.utc)).minute % 10 == 0:
+        avisos.qualidade(sb, out)                         # alerta de fornecedor no sino do Técnico (SQL 34)
+        avisos.implantacao(sb, out)                       # empresa nova parada e envio real sem resposta (SQL 35)
+        avisos.atendimento(sb, out)                       # Judicial, espera acima da meta, CPC Negócio sem dono (SQL 36)
+        relatorios.enviar(sb, out)                        # relatórios agendados por e-mail (SQL 39)
+        from nuvem import emails
+        from nuvem import assistente as _assistente
+        _assistente.teto(sb, out)                         # 80% e 100% do teto do Assistente no mês (SQL 43)
+        emails.avisos(sb, out)                            # avisos do sino que viram e-mail (SQL 42)
+    relatorios.exportar(sb, out)                          # um arquivo grande por rodada (SQL 39)
+    _foto_carteira(sb, dados, agora, out)
     radar = atendimento.banco_radar(sb)
     if radar:
         atendimento.enviar(sb, dados, agora, out)        # respostas escritas na plataforma
@@ -1311,12 +1359,33 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
                 sb.rpc("limpar_mensageria_90d")          # textos de resposta e links com mais de 90 dias
             from nuvem import fornecedores
             fornecedores.manter_assinaturas(out)         # endereço de retorno cadastrado na Zenvia
+            avisos.limpar(sb, agora)                     # avisos do sino com mais de 90 dias
+            avisos.api(sb, out)                          # tokens de API vencendo ou parados (SQL 41)
+            relatorios.expirar(sb, out)                  # arquivos de relatório com mais de 7 dias
+            from nuvem import emails as _emails
+            _emails.verificar(sb, out)                   # SPF, DKIM e DMARC do domínio dos remetentes (SQL 42)
+            _emails.limpar(sb)                           # registro de e-mails com mais de 180 dias
+            from nuvem import assistente as _assist
+            _assist.cotacao(sb, out)                     # PTAX do Banco Central para o teto do Assistente (SQL 43)
             try:
                 sb.rpc("limpar_eventos_mensageria")      # avisos dos fornecedores já aplicados, depois de 7 dias
             except Exception:  # noqa: BLE001 — banco ainda sem o SQL 24
                 pass
             marca.write_text(hoje, encoding="utf-8")
     return resumo
+
+
+def _foto_carteira(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:
+    """Uma vez por dia, a partir das 20h de São Paulo (depois das rotinas do dia): a foto da carteira (SQL 39)."""
+    from zoneinfo import ZoneInfo
+    from nuvem import relatorios
+    local = (agora or datetime.now(timezone.utc)).astimezone(ZoneInfo("America/Sao_Paulo"))
+    marca = Path(dados) / "carteira_foto.txt"
+    if local.hour < 20 or (marca.exists() and marca.read_text(encoding="utf-8").strip() == local.date().isoformat()):
+        return
+    relatorios.foto(sb, out)
+    marca.parent.mkdir(parents=True, exist_ok=True)
+    marca.write_text(local.date().isoformat(), encoding="utf-8")
 
 
 def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:
@@ -1337,8 +1406,10 @@ def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -
                 out(f"faturamento: {n} rascunhos gerados, {e} faturas emitidas sozinhas")
         except Exception as erro:  # noqa: BLE001 — banco sem o SQL 25 ou fora do ar: tenta amanhã de novo
             out(f"faturamento: rotina do dia não rodou ({str(erro)[:120]})")
+        _inadimplencia(sb, out)
         marca.parent.mkdir(parents=True, exist_ok=True)
         marca.write_text(local.date().isoformat(), encoding="utf-8")
+    _informar_acordos(sb, out)
     try:
         fila = sb.rpc("faturas_para_enviar") or []
     except Exception:  # noqa: BLE001
@@ -1359,6 +1430,58 @@ def _faturamento(sb: Supabase, dados: Path, agora: datetime | None, out=print) -
             sb.atualizar("faturas", {"id": f"eq.{fid}"}, {"envio": "erro" if final else "pendente",
                                                          "envio_motivo": str(motivo)[:300]})
             out(f"faturamento: fatura {fid} não foi enviada ({str(motivo)[:120]})")
+
+
+def _inadimplencia(sb: Supabase, out=print) -> None:
+    """Uma vez por dia (SQL 37): lembretes por e-mail da fatura vencida (no dia seguinte, 5 dias depois e o aviso de
+    bloqueio no 7º dia) e a inadimplência: 10 dias de atraso bloqueiam o acesso e param os envios; quem pagou volta.
+    Acordo de pagamento (SQL 38): lembrete da parcela no dia seguinte e com 5 dias; o banco quebra o acordo com 10
+    dias de atraso (dentro de atualizar_inadimplencia). Banco sem o SQL 37: não faz nada."""
+    try:
+        pendentes = sb.rpc("lembretes_para_enviar") or []
+    except Exception:  # noqa: BLE001
+        return
+    for item in pendentes:
+        try:
+            r = sb.funcao("cobranca", {"acao": "lembrar_fatura", "fatura": int(item["fatura_id"]), "tipo": item["tipo"]}) or {}
+            if r.get("enviado_para"):
+                out(f"faturamento: lembrete {item['tipo']} da fatura {item['fatura_id']} enviado")
+        except Exception as erro:  # noqa: BLE001 — sem e-mail cadastrado ou fora do ar: tenta amanhã
+            out(f"faturamento: lembrete da fatura {item['fatura_id']} não saiu ({str(erro)[:120]})")
+    try:
+        parcelas = sb.rpc("lembretes_parcelas_para_enviar") or []      # acordo de pagamento (SQL 38)
+    except Exception:  # noqa: BLE001 — banco sem o SQL 38
+        parcelas = []
+    for item in parcelas:
+        try:
+            r = sb.funcao("cobranca", {"acao": "lembrar_parcela", "parcela": int(item["parcela_id"]), "tipo": item["tipo"]}) or {}
+            if r.get("enviado_para"):
+                out(f"faturamento: lembrete {item['tipo']} da parcela {item['parcela_id']} enviado")
+        except Exception as erro:  # noqa: BLE001
+            out(f"faturamento: lembrete da parcela {item['parcela_id']} não saiu ({str(erro)[:120]})")
+    try:
+        n = int(sb.rpc("atualizar_inadimplencia") or 0)
+        if n:
+            out(f"faturamento: {n} mudança(s) de inadimplência (bloqueio, aviso ou liberação)")
+    except Exception as erro:  # noqa: BLE001
+        out(f"faturamento: inadimplência não atualizada ({str(erro)[:120]})")
+
+
+def _informar_acordos(sb: Supabase, out=print) -> None:
+    """A cada rodada (SQL 38): e-mail do acordo de pagamento lançado com "Informar o cliente" que ainda não saiu (o
+    site já tenta na hora; aqui fica a segunda chance). Banco sem o SQL 38: não faz nada."""
+    try:
+        pendentes = sb.rpc("acordos_para_informar") or []
+    except Exception:  # noqa: BLE001
+        return
+    for item in pendentes:
+        aid = item if isinstance(item, int) else (item.get("acordos_para_informar") if isinstance(item, dict) else item)
+        try:
+            r = sb.funcao("cobranca", {"acao": "informar_acordo", "acordo": int(aid)}) or {}
+            if r.get("enviado_para"):
+                out(f"faturamento: e-mail do acordo {aid} enviado")
+        except Exception as erro:  # noqa: BLE001 — sem e-mail cadastrado: a equipe vê o acordo sem "informado"
+            out(f"faturamento: e-mail do acordo {aid} não saiu ({str(erro)[:120]})")
 
 
 def _recarga_automatica(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:
