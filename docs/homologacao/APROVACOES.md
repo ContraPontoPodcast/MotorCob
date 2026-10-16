@@ -367,6 +367,8 @@ Suporte, Minha conta), só a barra clara no topo; o menu lateral claro fica só 
 
 ## Fila para rodar (quando liberar)
 
+> Roteiro único desta fila: `docs/pacote_desenvolvedor/TOMBAMENTO.md` (e o artifact "Tombamento MotorCX").
+
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
 2. Pendências anteriores: confirmar o SQL 26, prompts 53 e 54 e o passo 41 (MotorCli Jornada); salvar de novo a
    Contratação da empresa criada pela metade e convidar o Admin dela.

@@ -9,6 +9,9 @@ Ele substitui tudo o que foi enviado antes (tema preto e âmbar, site com vídeo
 
 Faça **na ordem**; cada passo depende do anterior.
 
+> **Do passo 59 ao 105 (homologação de 14 a 16/10/2026): use o roteiro único `TOMBAMENTO.md`**, que agrupa
+> tudo por lugar, publica cada função uma vez só e diz quando pausar e religar o motor.
+
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
