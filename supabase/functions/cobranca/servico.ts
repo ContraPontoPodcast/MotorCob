@@ -1,7 +1,8 @@
 // Chamadas ao Stripe e ao Focus NFe e gravação no banco, usadas pela função "cobranca" e pela "pagamentos-webhook".
 // As chaves vêm só dos Secrets do Supabase (STRIPE_SECRET_KEY, FOCUSNFE_TOKEN, LOCAWEB_TOKEN) e nunca saem daqui.
 import {
-  type Alvo, checkoutCartao, clienteStripe, dadosCobranca, descricaoNota, type Empresa, FOCUS, faltaNaConfig, formStripe,
+  type Alvo, checkoutCartao, clienteStripe, type Contato, dadosCobranca, descricaoNota, destinatariosFatura, type Empresa,
+  FOCUS, faltaNaConfig, formStripe,
   type Gerada, lerGerada, lerNota, type NfConfig, notaFocus, paymentIntent, pdfDoBoleto, referenciaNota, STRIPE,
 } from "./regras.ts";
 import { type Dados, emailFatura, montar } from "./demonstrativo.ts";
@@ -49,10 +50,11 @@ export async function empresaEContato(db: Banco, empresaId: number) {
   const { data: e } = await db.from("empresas")
     .select("id, nome, razao_social, cnpj, cep, logradouro, numero, complemento, bairro, municipio, uf, codigo_ibge")
     .eq("id", empresaId).single();
-  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato")
+  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato, recebe_faturas")
     .eq("empresa_id", empresaId).not("email", "is", null);
-  const lista = (contatos ?? []) as { email: string; papel_contrato: string }[];
-  const email = (lista.find((c) => c.papel_contrato === "financeiro") ?? lista[0])?.email ?? null;
+  const lista = (contatos ?? []) as Contato[];
+  const email = (lista.find((c) => c.recebe_faturas) ?? lista.find((c) => c.papel_contrato === "financeiro")
+    ?? lista[0])?.email ?? null;
   return { empresa: e as Empresa, email };
 }
 
@@ -239,12 +241,10 @@ export async function enviarFatura(db: Banco, fatura: number, site: string) {
     try { await emitirNota(db, "fatura", f.id); } catch (e) { console.error("nota", (e as Error).message); }
   }
   const { caminho, dados } = await salvarDemonstrativo(db, f.id);
-  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato")
+  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato, recebe_faturas")
     .eq("empresa_id", f.empresa_id).not("email", "is", null);
-  const lista = (contatos ?? []) as { email: string; papel_contrato: string }[];
-  const fin = lista.filter((x) => x.papel_contrato === "financeiro").map((x) => x.email.trim().toLowerCase());
-  const para = [...new Set(fin.length ? fin : lista.map((x) => x.email.trim().toLowerCase()))].slice(0, 10);
-  if (!para.length) throw new ErroCobranca("Sem e-mail do financeiro: cadastre em Empresa › Contatos (papel Financeiro)");
+  const para = destinatariosFatura((contatos ?? []) as Contato[]);
+  if (!para.length) throw new ErroCobranca("Sem e-mail para a fatura: em Empresa › Contatos, marque \"Recebe faturas\"");
   const s = montar(dados);
   const { assunto, html } = emailFatura(s, dados.cliente.razao_social, {
     demonstrativo: await linkDemonstrativo(db, caminho), boleto: boletoPdf, pagar: `${site}/empresa/faturamento`,

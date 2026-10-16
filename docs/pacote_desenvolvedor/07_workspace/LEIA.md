@@ -34,3 +34,5 @@ Depois dos 6 primeiros, os prompts seguem a numeração do arquivo (7 a 25). Os 
 - `PROMPT_33_CONSOLE_FATURAMENTO.md` — Console: emissão em lote e automática, envio por e-mail, cobranças, notas e configuração fiscal (depois do SQL 23 e 25).
 - `PROMPT_34_ETAPAS_ORCAMENTO_TRAVAS.md` — Orquestração: etapas da régua com a mesma esteira (raias, frases, ciclo), orçamento por canal com prioridade e o painel Travas (depois do SQL 26). Protótipo: `etapas-prototipo.html`.
 - `PROMPT_35_MOTORCLI_ETAPAS_PROSPECCAO.md` — MotorCli: etapas, prospecção com envio de leads (LGPD) e Travas (depois do SQL 26 e dos prompts 24 e 34).
+- `PROMPT_36_CONSOLE_AJUSTES.md` — Console: chave liga/desliga única, suspender/encerrar/reativar/excluir teste, aviso de atendimento, plano de rota sem fornecedor (depois do SQL 29).
+- `PROMPT_37_EMPRESA_FATURAS_SUPORTE.md` — Empresa: "Recebe faturas" nos contatos; Suporte com aviso de resposta (depois do SQL 29 e da função cobranca nova).

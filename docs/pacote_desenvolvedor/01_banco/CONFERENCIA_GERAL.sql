@@ -111,6 +111,12 @@ with itens(ordem, item, ok, se_falhar) as (values
   (34, 'SQL 28 · Salvar o ciclo com campo vazio',
        exists (select 1 from pg_trigger where tgname = 'ciclo_empresa_padroes'),
        'rodar o SQL 28 (supabase/migrations/20261125000001_ciclo_padroes.sql)'),
+  (35, 'SQL 29 · Situação da empresa, aviso de atendimento e quem recebe a fatura',
+       exists (select 1 from pg_proc where proname = 'mudar_situacao_empresa')
+       and exists (select 1 from pg_proc where proname = 'atendimento_pendentes')
+       and exists (select 1 from information_schema.columns where table_schema = 'public'
+                   and table_name = 'empresa_contatos' and column_name = 'recebe_faturas'),
+       'rodar o SQL 29 (supabase/migrations/20261126000001_ajustes_console.sql)'),
   (9,  'Permissões no catálogo (15)',
        pg_temp.n('select count(*) from public.permissoes_catalogo') = 15,
        'rodar os SQL na ordem; o último que mexe no catálogo é o 8'),
