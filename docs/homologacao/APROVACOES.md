@@ -302,6 +302,29 @@ Protótipo: `tokens-api-prototipo.html`. Todos os pontos com "Ok":
   antes de vencer (para quem criou e os Admins) e de token que parou de ser chamado; rota `GET /v1/teste`.
 - Gerado: SQL 41, funções `api` e `assistente`, motor (avisos e limpeza), testes e prompt 63.
 
+## E-mails do sistema — APROVADO em 16/10/2026
+
+Protótipo: `emails-sistema-prototipo.html`. Aprovado como está ("Perfeito"):
+1. Por e-mail, sempre (não dá para desligar): convite, senha, senha alterada, verificação em duas etapas desligada,
+   acesso bloqueado ou liberado, acordo que vai ser ou foi desfeito, token que vence em 3 dias ou foi revogado e envios
+   pausados.
+2. Os demais avisos do sino vão por e-mail só se a pessoa ligar em Minha conta › Notificações (Atendimento já vem
+   ligado para quem cuida da caixa). Mesmo aviso repetido: no máximo 1 e-mail por dia.
+3. Remetentes acesso@, financeiro@, avisos@ e relatorios@motorcob.online, numa conta de envio separada da Mensageria.
+4. Convite e senha também por essa conta, em português (SMTP próprio no Supabase Auth).
+5. Nome MotorCX em texto, sem imagem; rodapé com razão social, CNPJ e endereço preenchidos no Console.
+6. E-mail de contato de fatura que volta de vez fica marcado e os Admins são avisados; sem nenhum contato entregue, a
+   fatura vai para os Admins. A equipe recebe e-mail de chamado novo ou respondido e de contato pelo site.
+- Na geração: cada aviso do sino ganha um assunto pela origem (sem mudar quem grava); o e-mail sai pela fila a cada
+  10 minutos, só de avisos das últimas 24 horas, e os avisos que já existiam não viram e-mail; registro dos envios por
+  180 dias, com o endereço só em hash e mascarado; devolução temporária marca o contato na 3ª seguida; senha alterada
+  e verificação desligada usam os avisos de segurança do próprio Supabase Auth; o link de sair só confirma no clique
+  (programas de e-mail abrem links sozinhos) e o relatório com uma pessoa só na lista é pausado em vez de ficar vazio.
+- Limite conhecido: a API HTTP da Locaweb recebe só o HTML; a versão só texto fica pronta no código para quando a
+  conta aceitar.
+- Gerado: SQL 42, funções `emails` (nova), `cobranca`, `relatorios`, `admin-usuarios` e `assistente`, motor
+  (`nuvem/emails.py`: fila, conferência de SPF/DKIM/DMARC e limpeza), testes, guia `EMAILS_SISTEMA.md` e prompts 64 e 65.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -334,5 +357,8 @@ Protótipo: `tokens-api-prototipo.html`. Todos os pontos com "Ok":
    Conferência: item 27 OK.
    Depois, Tokens de API: SQL 41 → funções `api` e `assistente` de novo → prompt 63 → motor na nuvem (passos 94 a
    96). Conferência: item 28 OK. Domínio api.motorcob.online quando o DNS for liberado.
+   Depois, e-mails do sistema: guia `02_supabase_painel/EMAILS_SISTEMA.md` (conta de envio separada, DNS, Secrets,
+   SMTP e modelos do login) → SQL 42 → funções `emails`, `cobranca`, `relatorios`, `admin-usuarios` e `assistente` →
+   prompts 64 e 65 → motor na nuvem (passos 97 a 99). Conferência: item 29 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).

@@ -195,3 +195,14 @@ export function dadosDoConvite(quem: Perfil, nome: string | undefined, empresaNo
   if (nome?.trim()) dados.nome = nome.trim();
   return dados;
 }
+
+/** Convite da equipe MotorCob: o modelo do e-mail é o mesmo do cliente, então os campos vão preenchidos. */
+export function dadosConviteEquipe(quem: Perfil, nome: string | undefined): Record<string, string> {
+  const dados: Record<string, string> = {
+    empresa_nome: "equipe MotorCob",
+    papel: "integrante da equipe",
+    convidado_por: (quem.nome ?? "").trim() || "a equipe MotorCob",
+  };
+  if (nome?.trim()) dados.nome = nome.trim();
+  return dados;
+}

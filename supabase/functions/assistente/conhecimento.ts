@@ -406,6 +406,7 @@ Menu do usuário › Minha conta (/conta). Abas:
 - Dados: foto e dados do perfil. O e-mail só o Admin da empresa troca.
 - Permissões: o que o seu perfil pode fazer nesta empresa (só leitura). Quem ajusta é o Admin, em Usuários e permissões.
 - Segurança: senha, verificação em duas etapas e sessões.
+- Notificações: onde cada assunto chega (sino e e-mail). Ver "E-mails e notificações".
 - Tokens de API: em Empresa › Integrações › API (ver a seção API).
 
 Para trocar a senha:
@@ -427,6 +428,20 @@ Para quem não é Admin, a verificação é opcional e pode ser desligada com o 
 Sessões: "Sair de todos os outros dispositivos" e "Sair deste dispositivo".
 
 Documentação: menu do usuário › Documentação (/docs), com busca e artigos de Primeiros passos, Lista do dia, Orquestração, Mensageria, Arquivos e cargas, Segurança e conta, e Integração e API.
+
+---
+
+## E-mails e notificações
+
+Os avisos aparecem no sino e, conforme o assunto, também por e-mail. Escolha em Minha conta › Notificações.
+
+- Obrigatórios (sino e e-mail, não dá para desligar): acesso e segurança (convite, senha, senha alterada, verificação em duas etapas desligada), faturas, bloqueio e acordo (para os Admins e os contatos que recebem faturas), tokens de API que vencem em 3 dias ou foram revogados (para quem criou e os Admins) e envios pausados (para os Admins e Planejamento).
+- Opcionais (e-mail desligado no começo): exportações e listas prontas, atendimento (já vem ligado para quem cuida da caixa), implantação, token que vence em 15 dias ou ficou parado, qualidade (Técnico e Master). Desligar o sino de um assunto opcional esconde esses avisos do sino.
+- Mesmo aviso repetido: no máximo 1 e-mail por dia para a mesma pessoa.
+- Para parar um e-mail opcional sem entrar na plataforma: link "Não quero mais estes e-mails" no rodapé. No relatório agendado, "Sair desta lista".
+- Remetentes: acesso@motorcob.online (login), financeiro@motorcob.online (faturas; responder vai para o financeiro da MotorCX), avisos@motorcob.online e relatorios@motorcob.online. A MotorCX nunca pede senha por e-mail.
+- E-mail de contato que volta: em Empresa › Contatos aparece "E-mail voltou" (endereço que não existe, ou caixa cheia 3 vezes seguidas) e os Admins recebem aviso. Corrija o endereço e a marca some. Sem nenhum contato de fatura entregue, a fatura vai para os Admins.
+- Os e-mails nunca trazem CPF, nome de devedor, telefone ou valor de carteira: só o assunto e um botão para a plataforma.
 
 ---
 

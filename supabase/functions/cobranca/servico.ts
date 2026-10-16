@@ -1,7 +1,8 @@
 // Chamadas ao Stripe e ao Focus NFe e gravação no banco, usadas pela função "cobranca" e pela "pagamentos-webhook".
-// As chaves vêm só dos Secrets do Supabase (STRIPE_SECRET_KEY, FOCUSNFE_TOKEN, LOCAWEB_TOKEN) e nunca saem daqui.
+// As chaves vêm só dos Secrets do Supabase (STRIPE_SECRET_KEY, FOCUSNFE_TOKEN, EMAIL_SISTEMA_TOKEN) e nunca saem daqui.
+import { enviar, type Rodape } from "../_compartilhado/email.ts";
 import {
-  type Alvo, checkoutCartao, clienteStripe, type Contato, dadosCobranca, descricaoNota, destinatariosFatura, type Empresa,
+  type Alvo, checkoutCartao, clienteStripe, type Contato, dadosCobranca, descricaoNota, type Empresa,
   FOCUS, faltaNaConfig, formStripe,
   type Gerada, lerGerada, lerNota, type NfConfig, notaFocus, paymentIntent, pdfDoBoleto, referenciaNota, rotuloParcela, STRIPE,
 } from "./regras.ts";
@@ -221,21 +222,44 @@ export async function linkDemonstrativo(db: Banco, caminho: string, dias = DIAS_
   return data.signedUrl as string;
 }
 
-/** E-mail pela API da Locaweb (a mesma conta do e-mail da Mensageria). */
-export async function enviarEmail(para: string[], assunto: string, html: string, de?: string | null) {
-  const remetente = Deno.env.get("FATURA_EMAIL_DE") || de;
-  if (!remetente) throw new ErroCobranca("cadastre o remetente das faturas (FATURA_EMAIL_DE) nos Secrets do Supabase");
-  const r = await fetch("https://api.smtplw.com.br/v1/messages", {
-    method: "POST",
-    headers: { "x-auth-token": segredo("LOCAWEB_TOKEN"), "Content-Type": "application/json" },
-    body: JSON.stringify({ subject: assuntoAscii(assunto), body: html, to: para, from: remetente,
-                           headers: { "Content-Type": "text/html; charset=utf-8" } }),
-  });
-  if (!r.ok) throw new ErroCobranca(`e-mail recusado pela Locaweb (${r.status}): ${(await r.text()).slice(0, 150)}`);
+export interface Destino { email: string; contato_id: number | null; usuario_id: string | null }
+
+/** Rodapé dos e-mails (razão social, CNPJ, endereço e domínio dos remetentes, SQL 42). */
+export async function rodapeEmail(db: Banco): Promise<Rodape | null> {
+  const { data } = await db.rpc("email_rodape");
+  return (data ?? null) as Rodape | null;
 }
 
-const assuntoAscii = (s: string) => /^[\x20-\x7e]*$/.test(s) ? s
-  : "=?UTF-8?B?" + btoa(String.fromCharCode(...new TextEncoder().encode(s))) + "?=";
+/** Para quem vai a fatura (SQL 42): contatos que recebem faturas e cujo e-mail não voltou; sem nenhum, os Admins
+ * da empresa (e a equipe é avisada). */
+async function destinatarios(db: Banco, empresaId: number, oQue: string): Promise<Destino[]> {
+  const { data, error } = await db.rpc("emails_fatura", { empresa: empresaId });
+  if (error) throw new ErroCobranca(`destinatários de ${oQue}: ${error.message}`);
+  const lista = (data ?? []) as Destino[];
+  if (!lista.length) throw new ErroCobranca(`Sem e-mail para ${oQue}: cadastre em Empresa › Contatos e marque "Recebe faturas"`);
+  return lista;
+}
+
+/** Um e-mail por destinatário pela conta de envio do sistema (remetente financeiro@), cada um registrado em
+ * emails_sistema (as devoluções voltam por lá). Erro só quando nenhum saiu. */
+export async function enviarEmail(db: Banco, destinos: Destino[], tipo: string, empresa: number, assunto: string, html: string,
+                                  rodape: Rodape | null) {
+  const saiu: string[] = [];
+  let ultimo = "";
+  for (const d of destinos) {
+    let provedor: string | null = null, erro: string | null = null;
+    try {
+      provedor = (await enviar({ de: "financeiro", para: d.email, assunto, html, dominio: rodape?.dominio })).id;
+      saiu.push(d.email);
+    } catch (e) {
+      erro = ultimo = String((e as Error).message).slice(0, 300);
+    }
+    await db.rpc("registrar_email_sistema", { empresa, tipo, titulo: assunto, remetente: "financeiro", destino: d.email,
+      usuario: d.usuario_id, contato: d.contato_id, aviso: null, provedor, erro });
+  }
+  if (!saiu.length) throw new ErroCobranca(ultimo || "nenhum e-mail saiu");
+  return saiu;
+}
 
 /** Envio da fatura emitida: boleto (se a empresa aceita), nota na emissão (se configurado), demonstrativo e e-mail. */
 export async function enviarFatura(db: Banco, fatura: number, site: string) {
@@ -252,20 +276,18 @@ export async function enviarFatura(db: Banco, fatura: number, site: string) {
     await gerarCobranca(db, alvo, "boleto", { voltar: `${site}/empresa/faturamento`, hoje });
     boletoPdf = (await db.from("faturas").select("boleto_pdf").eq("id", fatura).single()).data?.boleto_pdf ?? null;
   }
-  const { data: cfg } = await db.from("nf_config").select("ativo, emitir_quando, email_financeiro").eq("id", 1).single();
+  const { data: cfg } = await db.from("nf_config").select("ativo, emitir_quando").eq("id", 1).single();
   if (cfg?.ativo && cfg.emitir_quando === "emissao") {
     try { await emitirNota(db, "fatura", f.id); } catch (e) { console.error("nota", (e as Error).message); }
   }
   const { caminho, dados } = await salvarDemonstrativo(db, f.id);
-  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato, recebe_faturas")
-    .eq("empresa_id", f.empresa_id).not("email", "is", null);
-  const para = destinatariosFatura((contatos ?? []) as Contato[]);
-  if (!para.length) throw new ErroCobranca("Sem e-mail para a fatura: em Empresa › Contatos, marque \"Recebe faturas\"");
+  const destinos = await destinatarios(db, f.empresa_id, "a fatura");
   const s = montar(dados);
+  const rodape = await rodapeEmail(db);
   const { assunto, html } = emailFatura(s, dados.cliente.razao_social, {
     demonstrativo: await linkDemonstrativo(db, caminho), boleto: boletoPdf, pagar: `${site}/empresa/faturamento`,
-  });
-  await enviarEmail(para, assunto, html, cfg?.email_financeiro);
+  }, null, rodape);
+  const para = await enviarEmail(db, destinos, "fatura", f.empresa_id, assunto, html, rodape);
   await db.from("faturas").update({ envio: "enviado", envio_motivo: null, enviada_em: new Date().toISOString(),
                                     enviada_para: para.join(", ").slice(0, 500) }).eq("id", f.id);
   return { enviada_para: para };
@@ -277,20 +299,17 @@ export async function lembrarFatura(db: Banco, fatura: number, tipo: "d1" | "d5"
     .select("id, empresa_id, situacao, valor_total, vencimento, competencia, acordo_id").eq("id", fatura).single();
   if (!f || f.situacao !== "aberta") return { pulou: "fatura não está em aberto" };
   if (f.acordo_id) return { pulou: "fatura está em acordo de pagamento" };
-  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato, recebe_faturas")
-    .eq("empresa_id", f.empresa_id).not("email", "is", null);
-  const para = destinatariosFatura((contatos ?? []) as Contato[]);
-  if (!para.length) throw new ErroCobranca("Sem e-mail para o lembrete: em Empresa › Contatos, marque \"Recebe faturas\"");
+  const destinos = await destinatarios(db, f.empresa_id, "o lembrete");
   const { data: emp } = await db.from("empresas").select("nome").eq("id", f.empresa_id).single();
-  const { data: cfg } = await db.from("nf_config").select("email_financeiro").eq("id", 1).single();
+  const rodape = await rodapeEmail(db);
   const br = (d: string) => d.slice(0, 10).split("-").reverse().join("/");
   const bloqueio = new Date(new Date(`${String(f.vencimento).slice(0, 10)}T12:00:00Z`).getTime() + 9 * 86400000)
     .toISOString().slice(0, 10);
   const { assunto, html } = emailLembrete(tipo, {
     numero: f.id, ciclo: String(f.competencia).slice(0, 7).split("-").reverse().join("/"),
     total: brl(Number(f.valor_total)), vencimento: br(String(f.vencimento)), bloqueio: br(bloqueio),
-  }, emp?.nome ?? "", `${site}/empresa/faturamento`);
-  await enviarEmail(para, assunto, html, cfg?.email_financeiro);
+  }, emp?.nome ?? "", `${site}/empresa/faturamento`, rodape);
+  const para = await enviarEmail(db, destinos, "lembrete_fatura", f.empresa_id, assunto, html, rodape);
   await db.from("fatura_lembretes").insert({ fatura_id: f.id, tipo, enviado_para: para.join(", ").slice(0, 500) });
   return { enviado_para: para };
 }
@@ -305,34 +324,26 @@ export function nomesCompetencias(comps: string[]): string {
   return nomes.length > 1 ? `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}` : (nomes[0] ?? "");
 }
 
-async function destinatarios(db: Banco, empresaId: number, oQue: string) {
-  const { data: contatos } = await db.from("empresa_contatos").select("email, papel_contrato, recebe_faturas")
-    .eq("empresa_id", empresaId).not("email", "is", null);
-  const para = destinatariosFatura((contatos ?? []) as Contato[]);
-  if (!para.length) throw new ErroCobranca(`Sem e-mail para ${oQue}: em Empresa › Contatos, marque "Recebe faturas"`);
-  return para;
-}
-
 /** "Informar o cliente": e-mail do acordo para quem recebe faturas (uma vez; o motor reenvia o que faltou). */
 export async function informarAcordo(db: Banco, acordo: number, site: string) {
   const { data: a } = await db.from("acordos_fatura")
     .select("id, empresa_id, situacao, valor_faturas, ajuste, valor_total, formas, informado_em").eq("id", acordo).maybeSingle();
   if (!a || a.situacao !== "ativo") return { pulou: "acordo não está em andamento" };
   if (a.informado_em) return { pulou: "cliente já informado" };
-  const para = await destinatarios(db, a.empresa_id, "o acordo");
+  const destinos = await destinatarios(db, a.empresa_id, "o acordo");
   const { data: ps } = await db.from("acordo_parcelas").select("numero, tipo, vencimento, valor")
     .eq("acordo_id", a.id).neq("situacao", "cancelada").order("numero");
   const { data: fs } = await db.from("faturas").select("competencia").eq("acordo_id", a.id).order("competencia");
   const { data: emp } = await db.from("empresas").select("nome").eq("id", a.empresa_id).single();
-  const { data: cfg } = await db.from("nf_config").select("email_financeiro").eq("id", 1).single();
+  const rodape = await rodapeEmail(db);
   const lista = (ps ?? []) as { numero: number; tipo: string; vencimento: string; valor: number }[];
   const { assunto, html } = emailAcordo({
     numero: a.id, faturas: nomesCompetencias(((fs ?? []) as { competencia: string }[]).map((f) => String(f.competencia))),
     valor_faturas: brl(Number(a.valor_faturas)), ajuste: Number(a.ajuste), ajuste_texto: brl(Math.abs(Number(a.ajuste))),
     total: brl(Number(a.valor_total)), formas: a.formas ?? [],
     parcelas: lista.map((p) => ({ rotulo: rotuloParcela(p.numero, lista.length, p.tipo), vencimento: br(p.vencimento), valor: brl(Number(p.valor)) })),
-  }, emp?.nome ?? "", `${site}/empresa/faturamento`);
-  await enviarEmail(para, assunto, html, cfg?.email_financeiro);
+  }, emp?.nome ?? "", `${site}/empresa/faturamento`, rodape);
+  const para = await enviarEmail(db, destinos, "acordo", a.empresa_id, assunto, html, rodape);
   await db.from("acordos_fatura").update({ informado_em: new Date().toISOString(), informado_para: para.join(", ").slice(0, 500) })
     .eq("id", a.id);
   return { enviado_para: para };
@@ -345,15 +356,15 @@ export async function lembrarParcela(db: Banco, parcela: number, tipo: "d1" | "d
   if (!p || p.situacao !== "aberta") return { pulou: "parcela não está em aberto" };
   const { data: a } = await db.from("acordos_fatura").select("situacao, parcelas").eq("id", p.acordo_id).single();
   if (a?.situacao !== "ativo") return { pulou: "acordo não está em andamento" };
-  const para = await destinatarios(db, p.empresa_id, "o lembrete");
+  const destinos = await destinatarios(db, p.empresa_id, "o lembrete");
   const { data: emp } = await db.from("empresas").select("nome").eq("id", p.empresa_id).single();
-  const { data: cfg } = await db.from("nf_config").select("email_financeiro").eq("id", 1).single();
+  const rodape = await rodapeEmail(db);
   const quebra = new Date(new Date(`${String(p.vencimento).slice(0, 10)}T12:00:00Z`).getTime() + 9 * 86400000).toISOString().slice(0, 10);
   const { assunto, html } = emailLembreteParcela(tipo, {
     rotulo: rotuloParcela(p.numero, a.parcelas, p.tipo), acordo: p.acordo_id, valor: brl(Number(p.valor)),
     vencimento: br(p.vencimento), quebra: br(quebra),
-  }, emp?.nome ?? "", `${site}/empresa/faturamento`);
-  await enviarEmail(para, assunto, html, cfg?.email_financeiro);
+  }, emp?.nome ?? "", `${site}/empresa/faturamento`, rodape);
+  const para = await enviarEmail(db, destinos, "lembrete_parcela", p.empresa_id, assunto, html, rodape);
   await db.from("parcela_lembretes").insert({ parcela_id: p.id, tipo, enviado_para: para.join(", ").slice(0, 500) });
   return { enviado_para: para };
 }

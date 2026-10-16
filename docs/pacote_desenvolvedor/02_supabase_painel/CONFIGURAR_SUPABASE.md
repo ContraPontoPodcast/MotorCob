@@ -35,6 +35,9 @@ e o acesso deve ser **só por convite**. Tirar a página não basta: a API conti
   O site precisa ter essas duas rotas (pasta `05`).
 
 ## 5b. E-mail de convite e validade do link (primeiro uso, aprovado em 15/10/2026)
+> Modelo do convite atualizado pelos E-mails do sistema (SQL 42): use o de `EMAILS_SISTEMA.md` (passo 5), que também
+> traz o SMTP próprio, a redefinição de senha em português e os avisos de segurança.
+
 - [ ] **Authentication › Emails › Invite user**: assunto e corpo abaixo. A função `admin-usuarios` manda
       `empresa_nome`, `papel` e `convidado_por` (e `nome`, quando informado) nos dados do convite.
       - Assunto: `Você foi convidado para a {{ .Data.empresa_nome }} no MotorCX`

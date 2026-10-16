@@ -354,11 +354,3 @@ export const referenciaNota = (tipo: "fatura" | "recarga" | "parcela", id: numbe
 
 export type Contato = { email: string; papel_contrato: string; recebe_faturas?: boolean | null };
 
-/** Quem recebe a fatura: os contatos marcados "Recebe faturas"; sem nenhum marcado, os de papel Financeiro;
- *  sem nenhum dos dois, todos os contatos com e-mail. No máximo 10, sem repetir. */
-export function destinatariosFatura(lista: Contato[]): string[] {
-  const norm = (xs: Contato[]) => xs.map((x) => x.email.trim().toLowerCase()).filter(Boolean);
-  const marcados = norm(lista.filter((x) => x.recebe_faturas));
-  const fin = norm(lista.filter((x) => x.papel_contrato === "financeiro"));
-  return [...new Set(marcados.length ? marcados : fin.length ? fin : norm(lista))].slice(0, 10);
-}

@@ -1,7 +1,7 @@
 // node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aalDoToken, autorizar, dadosDoConvite, empresaAlvo, validarPedido, type Perfil } from "./regras.ts";
+import { aalDoToken, autorizar, dadosConviteEquipe, dadosDoConvite, empresaAlvo, validarPedido, type Perfil } from "./regras.ts";
 
 const ID = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
 const admA: Perfil = { id: ID(1), papel: "admin", ativo: true, empresa_id: 1, equipe: false };
@@ -130,4 +130,10 @@ test("dados do convite para o e-mail", () => {
   assert.deepEqual(dadosDoConvite({ ...admA, nome: " Bruno Lima " }, undefined, null, "operacao"),
     { empresa_nome: "sua empresa", papel: "Operação", convidado_por: "Bruno Lima" });
   assert.equal(dadosDoConvite(admA, "", "X", "gestao").convidado_por, "o Admin da sua empresa");
+});
+
+test("convite da equipe não chega com campos em branco", () => {
+  const d = dadosConviteEquipe({ ...equipe, nome: "Rafa" }, " Ana ");
+  assert.deepEqual(d, { empresa_nome: "equipe MotorCob", papel: "integrante da equipe", convidado_por: "Rafa", nome: "Ana" });
+  assert.equal(dadosConviteEquipe({ ...equipe, nome: null } as Perfil, undefined).convidado_por, "a equipe MotorCob");
 });

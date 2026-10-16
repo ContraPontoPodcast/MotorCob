@@ -1340,6 +1340,8 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
         avisos.implantacao(sb, out)                       # empresa nova parada e envio real sem resposta (SQL 35)
         avisos.atendimento(sb, out)                       # Judicial, espera acima da meta, CPC Negócio sem dono (SQL 36)
         relatorios.enviar(sb, out)                        # relatórios agendados por e-mail (SQL 39)
+        from nuvem import emails
+        emails.avisos(sb, out)                            # avisos do sino que viram e-mail (SQL 42)
     relatorios.exportar(sb, out)                          # um arquivo grande por rodada (SQL 39)
     _foto_carteira(sb, dados, agora, out)
     radar = atendimento.banco_radar(sb)
@@ -1358,6 +1360,9 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
             avisos.limpar(sb, agora)                     # avisos do sino com mais de 90 dias
             avisos.api(sb, out)                          # tokens de API vencendo ou parados (SQL 41)
             relatorios.expirar(sb, out)                  # arquivos de relatório com mais de 7 dias
+            from nuvem import emails as _emails
+            _emails.verificar(sb, out)                   # SPF, DKIM e DMARC do domínio dos remetentes (SQL 42)
+            _emails.limpar(sb)                           # registro de e-mails com mais de 180 dias
             try:
                 sb.rpc("limpar_eventos_mensageria")      # avisos dos fornecedores já aplicados, depois de 7 dias
             except Exception:  # noqa: BLE001 — banco ainda sem o SQL 24

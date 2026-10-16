@@ -1,5 +1,7 @@
 // Regras do e-mail de relatório agendado (sem rede; testáveis com node --test): números do topo com a comparação
-// com o período anterior e um link para a plataforma. Nada de anexo nem de dado de cliente.
+// com o período anterior e um link para a plataforma, no modelo único dos e-mails do sistema (SQL 42). Nada de
+// anexo nem de dado de cliente.
+import { botao, esc, pagina, type Rodape } from "../_compartilhado/email.ts";
 
 export interface Metrica { funcao: string; nome: string; rotulo?: string; sentido?: "maior_melhor" | "menor_melhor" }
 export interface Linha { rotulo: string; valor: string; variacao: string | null; bom: boolean | null }
@@ -54,17 +56,16 @@ export function linhas(metricas: Metrica[], atual: Record<string, unknown>, ante
 const br = (d: string) => d.slice(0, 10).split("-").reverse().join("/");
 export const periodoTexto = (de: string, ate: string) => de === ate ? br(de) : `${br(de).slice(0, 5)} a ${br(ate)}`;
 
-export function emailResumo(r: { nome: string; empresa: string; periodo: string; comparado: string; linhas: Linha[]; link: string }) {
-  const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+export function emailResumo(r: { nome: string; empresa: string; periodo: string; comparado: string; linhas: Linha[]; link: string;
+                             sair?: string | null; rodape?: Rodape | null }) {
   const cor = (b: boolean | null) => (b === null ? "#6E6E73" : b ? "#1E7A36" : "#B3261E");
-  const tr = r.linhas.map((l) => `<tr><td style="padding:6px 0">${esc(l.rotulo)}</td><td style="padding:6px 0;text-align:right;font-weight:700;white-space:nowrap">${esc(l.valor)}</td><td style="padding:6px 0 6px 12px;text-align:right;white-space:nowrap;color:${cor(l.bom)}">${l.variacao ? esc(l.variacao) : ""}</td></tr>`).join("");
+  const tr = r.linhas.map((l) => `<tr><td style="padding:6px 0;border-bottom:1px solid #EDEDF0">${esc(l.rotulo)}</td><td style="padding:6px 0;border-bottom:1px solid #EDEDF0;text-align:right;font-weight:700;white-space:nowrap">${esc(l.valor)}</td><td style="padding:6px 0 6px 12px;border-bottom:1px solid #EDEDF0;text-align:right;white-space:nowrap;color:${cor(l.bom)}">${l.variacao ? esc(l.variacao) : ""}</td></tr>`).join("");
   const assunto = `${r.nome} · ${r.periodo}`.slice(0, 150);
-  const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1D1D1F;max-width:560px">
-<p>Olá, equipe da ${esc(r.empresa)}.</p>
-<p>Relatório <b>${esc(r.nome)}</b> · ${esc(r.periodo)}. A comparação é com ${esc(r.comparado)}.</p>
+  const corpo = `<p style="margin:0 0 12px">Olá, equipe da ${esc(r.empresa)}. Relatório <b>${esc(r.nome)}</b> · ${esc(r.periodo)}. A comparação é com ${esc(r.comparado)}.</p>
 <table style="width:100%;border-collapse:collapse;font-size:14px">${tr}</table>
-<p><a href="${esc(r.link)}" style="display:inline-block;margin:8px 0;padding:10px 18px;border-radius:980px;text-decoration:none;font-weight:600;background:#1D1D1F;color:#FFFFFF">Abrir o relatório na plataforma</a></p>
-<p style="font-size:13px;color:#6E6E73">Você recebe porque está na lista deste relatório. Para sair, peça a quem o criou ou ao Admin da empresa.</p>
-</div>`;
+<p style="margin:12px 0 0">${botao(r.link, "Abrir o relatório na plataforma")}</p>`;
+  const html = pagina({ frente: "Relatórios", titulo: r.nome, corpo, rodape: r.rodape ?? null,
+    motivo: r.sair ? "Você recebe porque está na lista deste relatório." : "Você recebe porque está na lista deste relatório. Para sair, peça a quem o criou ou ao Admin da empresa.",
+    sair: r.sair ?? null, sairTexto: "Sair desta lista" });
   return { assunto, html };
 }

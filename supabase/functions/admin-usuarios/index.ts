@@ -3,7 +3,7 @@
 // (pode('gerenciar_usuarios')) e por regras.ts. A chave service_role vem só da variável de ambiente do
 // servidor (Supabase › Edge Functions › Secrets) e nunca sai daqui.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { aalDoToken, autorizar, dadosDoConvite, empresaAlvo, type Pedido, type Perfil, validarPedido } from "./regras.ts";
+import { aalDoToken, autorizar, dadosConviteEquipe, dadosDoConvite, empresaAlvo, type Pedido, type Perfil, validarPedido } from "./regras.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -106,9 +106,10 @@ async function executar(quem: Perfil, pedido: Pedido, alvo: Perfil | null): Prom
       return [200, { ok: true }];
     }
     case "convidar_equipe": {
+      // o mesmo modelo de convite do cliente: empresa, papel e quem convidou nunca chegam em branco (SQL 42)
       const { data, error } = await admin.auth.admin.inviteUserByEmail(pedido.email!, {
         redirectTo: `${SITE}/definir-senha`,
-        data: pedido.nome ? { nome: pedido.nome } : undefined,
+        data: dadosConviteEquipe(quem, pedido.nome),
       });
       if (error) {
         if (/already|registered|exists/i.test(error.message)) return [409, { erro: "e-mail já cadastrado" }];

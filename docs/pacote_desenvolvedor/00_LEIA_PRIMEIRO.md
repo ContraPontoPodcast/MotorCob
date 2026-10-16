@@ -106,6 +106,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 94 | `supabase/migrations/20261208000001_api_v2.sql` (SQL 41) | Tokens de API: IP permitido, cargas da Jornada, trocar sem parar, uso e erros, avisos de vencimento, revogação pelo Master | Supabase | 89º |
 | 95 | funções `api` e `assistente` de novo (`python3 scripts/juntar_funcao.py api` / `assistente`) | API: rota /v1/teste, cargas da Jornada, IP, registro de uso; Assistente sabe das Integrações | Supabase | 90º |
 | 96 | `07_workspace/PROMPT_63_INTEGRACOES_API.md` + motor na nuvem; depois, quando liberar o DNS, `08_api/DOMINIO_API.md` | Empresa › Integrações e Console › Integrações; api.motorcob.online | Site + Google Cloud + DNS | 91º |
+| 97 | `02_supabase_painel/EMAILS_SISTEMA.md` (conta de envio, DNS, Secrets, SMTP e modelos do Auth) + `supabase/migrations/20261209000001_emails_sistema.sql` (SQL 42) | E-mails do sistema: remetentes do domínio, conta separada da Mensageria, preferências, avisos por e-mail, devoluções | Locaweb + DNS + Supabase | 92º |
+| 98 | funções `emails` (nova), `cobranca`, `relatorios`, `admin-usuarios` e `assistente` de novo (`python3 scripts/juntar_funcao.py <nome>`) | Modelo único, fila dos avisos, devolução, sair sem login, convite da equipe completo | Supabase | 93º |
+| 99 | `07_workspace/PROMPT_64_NOTIFICACOES.md` e `PROMPT_65_CONSOLE_EMAILS.md` + motor na nuvem | Minha conta › Notificações, Empresa › Contatos (e-mail voltou), página /email/sair, Console › E-mails do sistema | Site + Google Cloud | 94º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 

@@ -199,4 +199,12 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     token (`api_registros`, 90 dias, sem o arquivo), avisos de vencimento e de token parado, Console das integrações e
     revogação pelo Master com motivo. Depois: funções `api` e `assistente` de novo e prompt 63.
 
+42. `supabase/migrations/20261209000001_emails_sistema.sql` (SQL 42) — **E-mails do sistema**: rodapé e remetentes
+    (`email_config`, só o Master edita), assuntos e preferências de sino e e-mail por pessoa (obrigatórios não
+    desligam), cada aviso do sino com assunto e fila de e-mail (`avisos_para_email`, no máximo 1 por dia do mesmo
+    aviso), registro dos envios sem o endereço (`emails_sistema`, 180 dias), devoluções que marcam o contato de fatura,
+    fatura para os Admins quando nenhum contato recebe, sair sem login e e-mail da equipe para chamado e contato do
+    site. Depois: guia `02_supabase_painel/EMAILS_SISTEMA.md`, funções `emails`, `cobranca`, `relatorios`,
+    `admin-usuarios` e `assistente`, e prompts 64 e 65.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

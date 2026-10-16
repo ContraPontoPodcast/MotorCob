@@ -1,16 +1,17 @@
 // Edge Function relatorios: e-mail do relatório agendado (SQL 39). Só o servidor chama (motor, a cada 10 minutos):
 // { acao: "enviar_resumo", envio }. Roda o relatório salvo no período (ontem, a semana ou o mês passado) e no
 // anterior, manda os números do topo e um link para quem ainda pode ver e marca o próximo envio.
-// * Publicar com "Verify JWT" DESLIGADO. Usa os mesmos Secrets do e-mail das faturas (LOCAWEB_TOKEN e o remetente
-//   RELATORIO_EMAIL_DE ou, sem ele, FATURA_EMAIL_DE).
+// * Publicar com "Verify JWT" DESLIGADO. Sai pela conta de envio do sistema (EMAIL_SISTEMA_TOKEN), remetente
+//   relatorios@ do domínio (SQL 42), um e-mail por pessoa com o link "Sair desta lista" (EMAIL_LINK_SEGREDO).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { iguais } from "../cobranca/regras.ts";
-import { enviarEmail } from "../cobranca/servico.ts";
+import { enviar, linksSair, type Rodape } from "../_compartilhado/email.ts";
 import { emailResumo, linhas, type Metrica, periodoTexto, validarPedido } from "./regras.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SITE = Deno.env.get("SITE_URL") ?? "https://motorcob.online";
+const SEGREDO = Deno.env.get("EMAIL_LINK_SEGREDO") ?? "";
 const sem = { auth: { persistSession: false, autoRefreshToken: false } };
 const admin = createClient(SUPABASE_URL, SERVICE, sem);
 const json = (corpo: unknown, status = 200) =>
@@ -42,8 +43,8 @@ async function enviarResumo(id: number) {
   const { data: per } = await admin.rpc("periodo_envio_relatorio", { frequencia: e.frequencia });
   const p = (Array.isArray(per) ? per[0] : per) as { de: string; ate: string; ant_de: string; ant_ate: string };
   const { data: dest } = await admin.rpc("destinatarios_relatorio", { envio: id });
-  const para = ((dest ?? []) as { email: string | null }[]).map((d) => d.email).filter((x): x is string => !!x);
-  if (!para.length) {
+  const pessoas = ((dest ?? []) as { usuario: string; email: string | null }[]).filter((d) => !!d.email);
+  if (!pessoas.length) {
     await admin.rpc("marcar_envio_relatorio", { envio: id, erro: "ninguém da lista pode receber este relatório" });
     return { pulou: "sem destinatário" };
   }
@@ -53,9 +54,26 @@ async function enviarResumo(id: number) {
   const anterior = await total(m.base, { ...base, de: p.ant_de, ate: p.ant_ate }, metricas);
   const ls = linhas(metricas?.length ? metricas : [{ funcao: "contar", nome: "linhas", rotulo: "Linhas" }], atual, anterior);
   const comparado = { dia: "o dia anterior", semana: "a semana anterior", mes: "o mês anterior" }[e.frequencia as string] ?? "o período anterior";
-  const { assunto, html } = emailResumo({ nome: m.nome, empresa: emp?.nome ?? "", periodo: periodoTexto(p.de, p.ate),
-    comparado, linhas: ls, link: `${SITE}/relatorios?modelo=${m.id}` });
-  await enviarEmail(para, assunto, html, Deno.env.get("RELATORIO_EMAIL_DE"));
+  const { data: rod } = await admin.rpc("email_rodape");
+  const rodape = (rod ?? null) as Rodape | null;
+  const para: string[] = [];
+  let ultimo = "";
+  for (const d of pessoas) {
+    const sair = SEGREDO ? await linksSair(SEGREDO, SITE, `${SUPABASE_URL}/functions/v1`, d.usuario, `relatorio:${id}`) : null;
+    const { assunto, html } = emailResumo({ nome: m.nome, empresa: emp?.nome ?? "", periodo: periodoTexto(p.de, p.ate),
+      comparado, linhas: ls, link: `${SITE}/relatorios?modelo=${m.id}`, sair: sair?.pagina ?? null, rodape });
+    let provedor: string | null = null, erro: string | null = null;
+    try {
+      provedor = (await enviar({ de: "relatorios", para: d.email!, assunto, html, dominio: rodape?.dominio,
+                                 responderPara: rodape?.email_suporte ?? null, umClique: sair?.umClique ?? null })).id;
+      para.push(d.email!);
+    } catch (e) {
+      erro = ultimo = String((e as Error).message).slice(0, 300);
+    }
+    await admin.rpc("registrar_email_sistema", { empresa: e.empresa_id, tipo: "relatorio", titulo: assunto, remetente: "relatorios",
+      destino: d.email, usuario: d.usuario, contato: null, aviso: null, provedor, erro });
+  }
+  if (!para.length) throw new Error(ultimo || "nenhum e-mail saiu");
   await admin.rpc("marcar_envio_relatorio", { envio: id, erro: null });
   return { enviado_para: para };
 }

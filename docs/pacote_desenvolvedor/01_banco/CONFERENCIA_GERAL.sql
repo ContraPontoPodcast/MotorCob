@@ -209,6 +209,11 @@ with itens(ordem, item, ok, se_falhar) as (values
        and to_regprocedure('public.trocar_token_api(bigint, integer)') is not null
        and to_regprocedure('public.criar_token_api(bigint, text, text[], bigint[], integer, cidr[])') is not null,
        'rodar o SQL 41 (supabase/migrations/20261208000001_api_v2.sql)'),
+  (29, 'E-mails do sistema: preferências, fila dos avisos, devoluções e rodapé (SQL 42)',
+       to_regclass('public.emails_sistema') is not null and to_regclass('public.notificacao_preferencias') is not null
+       and to_regprocedure('public.avisos_para_email(integer)') is not null
+       and exists (select 1 from public.email_config where id = 1),
+       'rodar o SQL 42 (supabase/migrations/20261209000001_emails_sistema.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import {
-  acaoDoEvento, assinaturaStripeValida, checkoutCartao, clienteStripe, dadosCobranca, descricaoNota, destinatariosFatura, diasBoleto, dividirParcelas, rotuloParcela,
+  acaoDoEvento, assinaturaStripeValida, checkoutCartao, clienteStripe, dadosCobranca, descricaoNota, diasBoleto, dividirParcelas, rotuloParcela,
   faltaNaConfig, formStripe, lerGerada, lerNota, type NfConfig, notaFocus, paymentIntent, referenciaNota, validarPedido,
 } from "./regras.ts";
 
@@ -131,16 +131,6 @@ test("lê a nota do Focus: autorizada com links e erro com a correção", () => 
   assert.equal(e.situacao, "erro");
   assert.equal(e.mensagem, "CNPJ inválido — confira o tomador");
   assert.equal(lerNota({ status: "processando_autorizacao" }, "https://x.y/v2").situacao, "processando");
-});
-
-test("quem recebe a fatura: marcados, senão o Financeiro, senão todos", () => {
-  const c = (email: string, papel = "operacional", recebe = false) => ({ email, papel_contrato: papel, recebe_faturas: recebe });
-  assert.deepEqual(destinatariosFatura([c("a@x.com"), c("B@x.com ", "financeiro"), c("c@x.com", "operacional", true),
-                                        c("d@x.com", "tecnico", true)]), ["c@x.com", "d@x.com"]);
-  assert.deepEqual(destinatariosFatura([c("a@x.com"), c("B@x.com ", "financeiro"), c("b@x.com", "financeiro")]), ["b@x.com"]);
-  assert.deepEqual(destinatariosFatura([c("a@x.com"), c("e@x.com", "legal")]), ["a@x.com", "e@x.com"]);
-  assert.deepEqual(destinatariosFatura([]), []);
-  assert.equal(destinatariosFatura(Array.from({ length: 15 }, (_, i) => c(`p${i}@x.com`, "financeiro"))).length, 10);
 });
 
 test("lembrete de fatura vencida: fatura e tipo d1, d5 ou d7", () => {
