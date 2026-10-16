@@ -148,6 +148,18 @@ select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao)
 .sino{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;max-width:440px}
 .sino b{font-size:13.5px} .sino span{font-size:12.5px;color:var(--texto2)}
 /* workspace */
+.wsbar{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--borda);background:var(--cartao);flex-wrap:wrap}
+.wsbar .marca{font-weight:700;font-size:15px}
+.wsbar nav{display:flex;gap:2px;flex-wrap:wrap}
+.wsbar nav a{padding:6px 10px;border-radius:8px;font-size:13.5px;color:var(--texto2);text-decoration:none;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.wsbar nav a[aria-current="page"]{background:var(--pilula);color:var(--texto);font-weight:600}
+.wsbar nav a .cont{font-size:11px;font-weight:700;background:var(--erro);color:#fff;border-radius:999px;padding:0 6px}
+.wsbar .dir{margin-left:auto;display:flex;gap:8px;align-items:center}
+.wsbar .busca{min-width:220px}
+.ws{border:1px solid var(--borda);border-radius:12px;overflow:hidden;background:var(--fundo)}
+.ws .conteudo{max-width:1040px;margin:0 auto;width:100%}
+.duas{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
+@media (max-width:700px){.wsbar nav,.wsbar .busca{display:none}.wsbar .hamb{display:grid!important}}
 .tab.quebra td,.tab.quebra th{white-space:normal}
 .cob{--area:#8A6A2E;--area-forte:#6E5424;--area-ativo:#F3ECDF;--area-ativo-texto:#5A4419;--sobre-area:#FFFFFF}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .cob{--area:#D9B26B;--area-forte:#E8C688;--area-ativo:#3A2F1C;--area-ativo-texto:#F2DDB0;--sobre-area:#1D1D1F}}
@@ -205,14 +217,14 @@ select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao)
 <div class="topo">
   <span class="selo">Protótipo para aprovação · Revisão de UX</span>
   <h1>Workspace</h1>
-  <p>Hoje o Workspace foi montado aos pedaços, em mais de dez prompts que se corrigem entre si. Tem uma barra escura no topo e outro menu escuro dentro de cada produto, três seletores (empresa, frente e produto), Membros e Usuários e Permissões em lugares diferentes, Minha conta em duas rotas e "MotorCob" escrito onde já é MotorCX. Proposta: uma moldura só, com o menu claro da paleta aprovada, a troca de área no topo do menu, um Início para o dia a dia, Pessoas e perfis num lugar só, o Suporte com prazo à vista e Minha conta numa rota só. Empresas, pessoas e números fictícios.</p>
+  <p>Hoje o Workspace foi montado aos pedaços, em mais de dez prompts que se corrigem entre si. Tem uma barra escura no topo e outro menu escuro dentro de cada produto, três seletores (empresa, frente e produto), Membros e Usuários e Permissões em lugares diferentes, Minha conta em duas rotas e "MotorCob" escrito onde já é MotorCX. Proposta: o Workspace sem menu lateral, só com uma barra clara no topo; o menu lateral claro só dentro das áreas, com a troca de área no topo dele; um Início para o dia a dia, Pessoas e perfis num lugar só, o Suporte com prazo à vista e Minha conta numa rota só. Empresas, pessoas e números fictícios.</p>
 </div>
 
 <div class="app">
   <nav class="menu" aria-label="Telas">
     <div class="grupo">Workspace</div>
     <button data-ir="inicio" aria-current="page">Início<small>O dia a dia, em um olhar</small></button>
-    <button data-ir="moldura">Moldura e navegação<small>Um menu, uma troca de área</small></button>
+    <button data-ir="moldura">Moldura e navegação<small>Topo no Workspace, menu nas áreas</small></button>
     <button data-ir="pessoas">Empresa › Pessoas e perfis<small>Membros, convite e perfis</small></button>
     <button data-ir="suporte">Suporte<small>Chamados do cliente</small></button>
     <button data-ir="conta">Minha conta<small>Uma rota, cinco abas</small></button>
@@ -223,39 +235,32 @@ select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao)
     <!-- INÍCIO -->
     <section data-p="inicio">
       <div class="cab"><div><h2>Início</h2><p>O que a pessoa vê todo dia depois dos primeiros passos: o que precisa dela hoje, os números do dia e o caminho para cada área.</p></div></div>
-      <div class="antes"><div><b>Hoje</b>Saudação, campo, "Para hoje" com 3 tipos de item, cards de produto só com "Abrir" e "Dicas" rotativas. Os primeiros passos somem quando acabam, e o Início fica quase vazio.</div><div><b>Proposta</b>"Para hoje" puxa o que precisa da pessoa (até 5 itens, do mais urgente ao menos). Cada área mostra um número do dia. As dicas saem: a ajuda pelo tempo de casa e o glossário já cobrem isso.</div></div>
-      <div class="casca cob">
-        <aside class="lat" aria-label="Menu (exemplo)">
-          <div class="marca">MotorCX</div>
-          <div class="areas" role="group" aria-label="Área"><button aria-pressed="true">Cobrança</button><button aria-pressed="false">Jornada</button></div>
-          <a aria-current="page">Início</a>
-          <div class="g">Operação</div><a>Lista do dia</a><a>Clientes</a><a>Enviar carga</a>
-          <div class="g">Estratégia</div><a>Orquestração</a><a>Personas</a>
-          <div class="g">Mensageria</div><a>Campanhas</a><a>Respostas <span class="cont">4</span></a>
-          <div class="g">Resultados</div><a>Painel</a><a>Relatórios</a>
-          <div class="pe"><a>Empresa</a><a>Suporte <span class="cont">1</span></a><a>Ajuda</a></div>
-        </aside>
-        <div>
-          <div class="topo2"><div class="busca">Busque uma tela ou pergunte ao Assistente <kbd>⌘K</kbd></div><span class="ic" title="O que significa">?</span><span class="ic" title="Avisos">🔔<span class="p">3</span></span><span class="ic" title="Minha conta">R</span></div>
-          <div class="conteudo">
-            <p class="ola">Bom dia, Rafael</p>
-            <div class="campo-g">O que você quer fazer? Busque ou pergunte<span class="env" aria-hidden="true">↑</span></div>
-            <div class="duas">
-              <div class="cartao"><h3>Para hoje</h3>
-                <div class="hoje">
-                  <div class="it"><i class="ponto" style="background:var(--erro)"></i><span><b>Fatura de setembro vence amanhã</b> · R$ 4.380,00</span><button class="link">Pagar</button></div>
-                  <div class="it"><i class="ponto" style="background:var(--at)"></i><span>O Suporte respondeu o chamado #2041</span><button class="link">Ver</button></div>
-                  <div class="it"><i class="ponto" style="background:var(--at)"></i><span>4 respostas de clientes esperam alguém</span><button class="link">Abrir</button></div>
-                  <div class="it"><i class="ponto" style="background:var(--ok)"></i><span>Lista do dia pronta às 06:12 · 18.420 clientes</span><button class="link">Baixar</button></div>
-                  <div class="it"><i class="ponto" style="background:var(--texto2)"></i><span>Token "ERP Financeiro" vence em 12 dias</span><button class="link">Trocar</button></div>
-                </div></div>
-              <div class="cartao"><h3>Suas áreas</h3>
-                <div class="prods">
-                  <div class="prod"><b>Cobrança</b><span class="num">18.420</span><span>na Lista do dia · 3 carteiras</span><button class="link" style="align-self:flex-start">Abrir ›</button></div>
-                  <div class="prod"><b>Mensageria</b><span class="num">96,2%</span><span>entregues ontem · SMS e RCS</span><button class="link" style="align-self:flex-start">Abrir ›</button></div>
-                  <div class="prod off"><b>Jornada do Cliente</b><span>Boas-vindas, ativação, retenção</span><button class="link" style="align-self:flex-start">Quero conhecer</button></div>
-                </div></div>
-            </div>
+      <div class="antes"><div><b>Hoje</b>Saudação, campo, "Para hoje" com 3 tipos de item, cards de produto só com "Abrir" e "Dicas" rotativas, debaixo de uma barra escura. Os primeiros passos somem quando acabam, e o Início fica quase vazio.</div><div><b>Proposta</b>Sem menu lateral: só uma barra clara no topo. "Para hoje" puxa o que precisa da pessoa (até 5 itens, do mais urgente ao menos), cada área mostra um número do dia e as dicas saem (a ajuda pelo tempo de casa e o glossário já cobrem isso).</div></div>
+      <div class="ws cob">
+        <div class="wsbar">
+          <span class="ic hamb" style="display:none" aria-label="Menu">☰</span>
+          <span class="marca">MotorCX</span>
+          <nav aria-label="Workspace (exemplo)"><a aria-current="page">Início</a><a>Áreas ▾</a><a>Empresa</a><a>Suporte <span class="cont">1</span></a></nav>
+          <div class="dir"><div class="busca">Busque uma tela ou pergunte <kbd>⌘K</kbd></div><span class="ic" title="O que significa">?</span><span class="ic" title="Avisos">🔔<span class="p">3</span></span><span class="ic" title="Minha conta">R</span></div>
+        </div>
+        <div class="conteudo">
+          <p class="ola">Bom dia, Rafael</p>
+          <div class="campo-g">O que você quer fazer? Busque ou pergunte<span class="env" aria-hidden="true">↑</span></div>
+          <div class="duas">
+            <div class="cartao"><h3>Para hoje</h3>
+              <div class="hoje">
+                <div class="it"><i class="ponto" style="background:var(--erro)"></i><span><b>Fatura de setembro vence amanhã</b> · R$ 4.380,00</span><button class="link">Pagar</button></div>
+                <div class="it"><i class="ponto" style="background:var(--at)"></i><span>O Suporte respondeu o chamado #2041</span><button class="link">Ver</button></div>
+                <div class="it"><i class="ponto" style="background:var(--at)"></i><span>4 respostas de clientes esperam alguém</span><button class="link">Abrir</button></div>
+                <div class="it"><i class="ponto" style="background:var(--ok)"></i><span>Lista do dia pronta às 06:12 · 18.420 clientes</span><button class="link">Baixar</button></div>
+                <div class="it"><i class="ponto" style="background:var(--texto2)"></i><span>Token "ERP Financeiro" vence em 12 dias</span><button class="link">Trocar</button></div>
+              </div></div>
+            <div class="cartao"><h3>Suas áreas</h3>
+              <div class="prods">
+                <div class="prod"><b>Cobrança</b><span class="num">18.420</span><span>na Lista do dia · 3 carteiras</span><button class="link" style="align-self:flex-start">Abrir ›</button></div>
+                <div class="prod"><b>Mensageria</b><span class="num">96,2%</span><span>entregues ontem · SMS e RCS</span><button class="link" style="align-self:flex-start">Abrir ›</button></div>
+                <div class="prod off"><b>Jornada do Cliente</b><span>Boas-vindas, ativação, retenção</span><button class="link" style="align-self:flex-start">Quero conhecer</button></div>
+              </div></div>
           </div>
         </div>
       </div>
@@ -268,33 +273,33 @@ select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao)
 
     <!-- MOLDURA -->
     <section data-p="moldura" hidden>
-      <div class="cab"><div><h2>Moldura e navegação</h2><p>Uma moldura para tudo: Workspace, Cobrança, Jornada, Mensageria, Relatórios e Empresa. O Console da equipe usa a mesma, com o próprio menu.</p></div></div>
-      <div class="antes"><div><b>Hoje</b>Barra escura no topo do Workspace e outro menu escuro dentro de cada produto, com "‹ Voltar ao Workspace". Três seletores: empresa, frente ("Trocar para MotorCli" no avatar) e produto. Relatórios em três lugares diferentes.</div><div><b>Proposta</b>Só o menu lateral claro (paleta aprovada), sempre o mesmo. A troca de área fica no topo dele. Mensageria e Relatórios aparecem nas duas áreas. Empresa, Suporte e Ajuda ficam fixos no pé do menu.</div></div>
+      <div class="cab"><div><h2>Moldura e navegação</h2><p>Duas molduras, com o mesmo topo: o Workspace (Início, Empresa, Suporte, Minha conta) sem menu lateral, e as áreas (Cobrança, Jornada, Mensageria, Relatórios) com o menu lateral claro aprovado no bloco 5.</p></div></div>
+      <div class="antes"><div><b>Hoje</b>Barra escura no topo do Workspace e outro menu escuro dentro de cada produto, com "‹ Voltar ao Workspace". Três seletores: empresa, frente ("Trocar para MotorCli" no avatar) e produto. Relatórios em três lugares diferentes.</div><div><b>Proposta</b>Workspace: só a barra clara do topo (Início · Áreas ▾ · Empresa · Suporte). Dentro das áreas: a mesma barra e o menu lateral claro, com a troca de área no topo dele. Mensageria e Relatórios aparecem nas duas áreas.</div></div>
       <div class="duas">
-        <div class="cartao"><h3>Menu · Cobrança</h3>
+        <div class="cartao"><h3>Workspace · barra do topo</h3>
+          <p class="sub">MotorCX · <b>Início</b> · <b>Áreas ▾</b> (Cobrança, Jornada do Cliente, Mensageria, Relatórios; só as contratadas, as outras com "Quero conhecer") · <b>Empresa</b> (Dados e contatos · Pessoas e perfis · Integrações · Faturas · Auditoria) · <b>Suporte</b> · à direita a busca, "?", sino e avatar. Sem menu lateral.</p></div>
+        <div class="cartao"><h3>Menu lateral · Cobrança</h3>
           <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7">
-            <li><b>Início</b></li>
             <li><b>Operação</b>: Lista do dia · Clientes · Ações · Enviar carga</li>
             <li><b>Estratégia</b>: Orquestração · Personas · Segmentos · Carteiras · Mapa da Esteira · Comitê</li>
             <li><b>Mensageria</b>: Campanhas · Lotes · Respostas · Templates · Listas · Configurações</li>
             <li><b>Resultados</b>: Painel · Relatórios</li>
-            <li>No pé: <b>Empresa</b> · <b>Suporte</b> · <b>Ajuda</b></li>
+            <li>No topo do menu: <b>‹ Início</b> e a troca de área</li>
           </ul></div>
-        <div class="cartao"><h3>Menu · Jornada do Cliente</h3>
+        <div class="cartao"><h3>Menu lateral · Jornada do Cliente</h3>
           <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7">
-            <li><b>Início</b></li>
             <li><b>Jornada</b>: Mapa · Lista do dia · Clientes · Enviar carga</li>
             <li><b>Estratégia</b>: Momentos e fases · Mensagens por momento</li>
             <li><b>Mensageria</b>: as mesmas telas</li>
             <li><b>Resultados</b>: Painel · Relatórios</li>
-            <li>No pé: <b>Empresa</b> · <b>Suporte</b> · <b>Ajuda</b></li>
+            <li>No topo do menu: <b>‹ Início</b> e a troca de área</li>
           </ul></div>
       </div>
       <div class="cartao"><h3>Topo de todas as telas</h3>
         <p class="sub">Campo "Busque uma tela ou pergunte ao Assistente" (⌘K) · "?" O que significa · sino · avatar (Minha conta · Documentação · Sair). Para a equipe, entra também a pílula da empresa, com busca. Cliente com uma empresa só não vê seletor.</p></div>
       <div class="regra"><b>Regras</b><ul>
         <li>A troca de área só aparece para quem tem as duas; a escolha fica lembrada. No login, "Escolha a área" só na primeira vez.</li>
-        <li>No celular: menu numa gaveta (botão ☰ no topo), sem barra com rolagem lateral; o avatar do Assistente sobe quando há botão fixo embaixo.</li>
+        <li>No celular: a barra do topo vira ☰ (uma gaveta com Início, Áreas, Empresa e Suporte); dentro das áreas, o menu lateral vai para a mesma gaveta. Sem rolagem lateral; o avatar do Assistente sobe quando há botão fixo embaixo.</li>
         <li>Tudo com o nome MotorCX: "Suporte MotorCX", "Equipe MotorCX", "Padrão MotorCX".</li>
       </ul></div>
     </section>
@@ -374,7 +379,7 @@ select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao)
     <section data-p="rotas" hidden>
       <div class="cab"><div><h2>Rotas e nomes</h2><p>O que muda de endereço. Os endereços antigos continuam funcionando e levam ao novo.</p></div></div>
       <div class="cartao resp"><div class="rolar"><table class="tab quebra rotas"><thead><tr><th>Hoje</th><th>Proposta</th></tr></thead><tbody>
-        <tr><td class="de">/workspace (barra escura) e /inicio</td><td>/inicio, na moldura única</td></tr>
+        <tr><td class="de">/workspace (barra escura) e /inicio</td><td>/inicio, com a barra clara e sem menu lateral</td></tr>
         <tr><td class="de">/empresa/membros · /usuarios · /permissoes</td><td>/empresa/pessoas (abas Pessoas e Perfis)</td></tr>
         <tr><td class="de">/auditoria</td><td>/empresa/auditoria</td></tr>
         <tr><td class="de">/conta · /conta/permissoes · /conta/seguranca · /conta/tokens · /minha-conta/notificacoes</td><td>/conta?aba=dados|seguranca|notificacoes|preferencias|perfil</td></tr>
