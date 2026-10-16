@@ -1,0 +1,463 @@
+<title>E-mails do sistema</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: MotorCX, menu cinza à esquerda (Console e Cliente) + área de trabalho lisa. Paleta do bloco 5; Console e
+   Empresa usam o grafite neutro. Edição sempre no painel lateral, com resumo antes de salvar. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#1D1D1F; --area-forte:#000000; --area-ativo:#E8E8ED; --area-ativo-texto:#1D1D1F; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --veu:rgba(0,0,0,.25); --sombra:0 10px 30px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:80ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--texto);border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao);
+  margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+@media (max-width:820px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+section[data-p]{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:74ch}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.cartao-cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.peq{padding:5px 11px;font-size:13px}
+.btn.perigo{background:var(--erro);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px;min-width:0}
+input[type=text]{font-variant-numeric:tabular-nums}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap;vertical-align:middle}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.trava{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);background:var(--pilula);border-radius:9px;padding:6px 11px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13.5px}
+.dl dt{color:var(--texto2)}.dl dd{margin:0}
+.abas{display:flex;gap:4px;flex-wrap:wrap}
+.abas button{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;color:var(--texto2);background:var(--pilula)}
+.abas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.abas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.abas b{margin-left:4px}
+.confirma{border:1px solid var(--texto);border-radius:12px;padding:14px 16px;background:var(--pilula);display:flex;flex-direction:column;gap:10px}
+.confirma p{margin:0}
+.grande{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden;display:flex}
+.barra i{display:block;height:100%}
+/* gaveta */
+.veu{position:fixed;inset:0;background:var(--veu);z-index:40}
+.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--cartao);border-left:1px solid var(--borda);box-shadow:var(--sombra);z-index:41;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.gaveta header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--borda)}
+.gaveta header h3{margin:0;font-size:16px}
+.gaveta .corpo{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.gaveta footer{padding:12px 18px;border-top:1px solid var(--borda);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+.gaveta footer .nota{margin-right:auto}
+.faixa-l{display:grid;grid-template-columns:1fr 1fr 110px;gap:8px;align-items:center}
+.faixa-l.mud input{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mudancas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mudancas li{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.mudancas s{color:var(--texto2)}
+.op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--borda);border-radius:10px;padding:10px 12px;cursor:pointer}
+.op:has(input:checked){border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.op b{display:block}.op span{font-size:12.5px;color:var(--texto2)}
+.alerta{border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.alerta.at{background:var(--at-f)}
+/* celular */
+.resp{container-type:inline-size}
+@container (max-width:600px){
+  .tab.cartoes thead{display:none}
+  .tab.cartoes,.tab.cartoes tbody{display:block}
+  .tab.cartoes tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 2px;border-bottom:1px solid var(--borda)}
+  .tab.cartoes td{border:0;padding:0;white-space:normal}
+  .tab.cartoes td.c1{font-weight:600}
+  .tab.cartoes td.c2{grid-column:2;grid-row:1;justify-self:end}
+  .tab.cartoes td.c3{grid-column:1;color:var(--texto2);font-size:13px}
+  .tab.cartoes td.c4{grid-column:2;grid-row:2;justify-self:end;font-weight:600}
+  .tab.cartoes td.x{display:none}
+}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px}
+.kpi span{font-size:12px;color:var(--texto2)} .kpi b{font-size:22px;font-variant-numeric:tabular-nums} .kpi small{font-size:12px;color:var(--texto2)}
+.tok{font-family:var(--mono);font-size:12.5px}
+.segredo{font-family:var(--mono);font-size:13px;background:var(--fundo);border:1px dashed var(--texto2);border-radius:10px;padding:10px 12px;word-break:break-all}
+.alerta-at{background:var(--at-f);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.alerta-at b{color:var(--at)}
+.escopos{display:flex;flex-direction:column;gap:8px}
+.escopos fieldset{border:1px solid var(--borda);border-radius:10px;padding:8px 12px;margin:0}
+.escopos legend{font-size:12px;color:var(--texto2);padding:0 4px}
+.escopos label{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;padding:3px 0}
+.escopos small{display:block;color:var(--texto2);font-size:12px}
+pre.cod{font-family:var(--mono);font-size:12px;background:var(--fundo);border:1px solid var(--borda);border-radius:10px;padding:10px;overflow-x:auto;margin:0;white-space:pre}
+.barras{display:flex;align-items:flex-end;gap:6px;height:90px;padding-top:6px}
+.barras i{flex:1;background:var(--area);border-radius:4px 4px 0 0;opacity:.85}
+.barras i.e{background:var(--erro)}
+.dias{display:flex;gap:6px;font-size:11px;color:var(--texto2)} .dias span{flex:1;text-align:center}
+.antes{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px}
+.antes div{border-radius:10px;padding:10px 12px;background:var(--menu)}
+.antes div:first-child{background:var(--erro-f)}
+.antes b{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2);margin-bottom:4px}
+@media (max-width:600px){.antes{grid-template-columns:1fr}}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:7px 9px;min-width:0}
+.sino{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;max-width:440px}
+.sino b{font-size:13.5px} .sino span{font-size:12.5px;color:var(--texto2)}
+/* e-mail: sempre claro, como chega na caixa de entrada */
+.caixa{border:1px solid var(--borda);border-radius:12px;overflow:hidden;background:var(--cartao)}
+.caixa .env{padding:10px 14px;border-bottom:1px solid var(--borda);display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}
+.caixa .env dt{color:var(--texto2)}.caixa .env dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.mailfundo{background:#F2F2F4;padding:18px 12px;color-scheme:light}
+.mail{max-width:560px;margin:0 auto;background:#FFFFFF;color:#1D1D1F;border-radius:12px;overflow:hidden;font-family:var(--sans);font-size:14.5px;line-height:1.5;border:1px solid #E3E4E8}
+.mail .faixa{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 22px;border-bottom:1px solid #E3E4E8}
+.mail .marca{font-weight:700;letter-spacing:-.01em;font-size:16px}
+.mail .frente{font-size:11.5px;font-weight:600;color:#6E6E73;text-transform:uppercase;letter-spacing:.05em}
+.mail .meio{padding:22px;display:flex;flex-direction:column;gap:12px}
+.mail h4{margin:0;font-size:19px;line-height:1.3;text-wrap:balance}
+.mail p{margin:0}
+.mail .grande{font-size:28px}
+.mail .botao{align-self:flex-start;background:#1D1D1F;color:#FFFFFF;border-radius:999px;padding:10px 18px;font-weight:600;text-decoration:none;font-size:14px}
+.mail .caixinha{background:#F5F5F7;border-radius:10px;padding:10px 12px;font-size:13.5px}
+.mail .caixinha.at{background:#FFF4D6}
+.mail .caixinha.erro{background:#FDECEA}
+.mail table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13.5px}
+.mail td{padding:6px 0;border-bottom:1px solid #EDEDF0}
+.mail td.n{text-align:right}
+.mail .sobe{color:#1E7A36;font-weight:600}.mail .desce{color:#B3261E;font-weight:600}
+.mail .pe{padding:14px 22px;border-top:1px solid #E3E4E8;font-size:12px;color:#6E6E73;display:flex;flex-direction:column;gap:4px}
+.mail .pe a{color:#6E6E73}
+.ph{background:#FFF4D6;border-radius:4px;padding:0 4px;font-size:11.5px;color:#8A5A00}
+.mat{width:100%;border-collapse:collapse}
+.mat th,.mat td{padding:9px 8px;border-bottom:1px solid var(--borda);text-align:left;vertical-align:middle}
+.mat th{font-size:12px;color:var(--texto2);font-weight:600}
+.mat td.c{text-align:center;width:72px}
+.mat td small{display:block;color:var(--texto2);font-size:12px}
+.mat input[type=checkbox]{width:18px;height:18px;accent-color:var(--area)}
+.cad{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--texto2)}
+.novo{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--texto);border-radius:999px;padding:0 6px;margin-left:6px;vertical-align:1px}
+.grupo-t td{background:var(--menu);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.abas.mails{gap:6px}
+.tab.quebra td,.tab.quebra th{white-space:normal}
+.tab.quebra td.tok{white-space:nowrap}
+@container (max-width:600px){
+  .tab.pilha thead{display:none}
+  .tab.pilha,.tab.pilha tbody{display:block}
+  .tab.pilha tr{display:flex;flex-direction:column;gap:2px;padding:10px 2px;border-bottom:1px solid var(--borda)}
+  .tab.pilha td{border:0;padding:0;font-size:13px;color:var(--texto2)}
+  .tab.pilha td:first-child{font-size:14px;color:var(--texto);font-weight:600}
+  .tab.pilha tr.grupo-t{padding:0;border:0}.tab.pilha tr.grupo-t td{padding:6px 8px;margin-top:8px}
+  .tab.pilha td:nth-child(2)::before{content:"Quando: "}
+  .tab.pilha td:nth-child(3)::before{content:"Recebe: "}
+  .tab.pilha td:nth-child(4)::before{content:"De: "}
+  .tab.pilha td:nth-child(5)::before{content:"Desligar: "}
+  .tab.pilha tr.grupo-t td::before{content:none}
+}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Revisão de UX</span>
+  <h1>E-mails do sistema</h1>
+  <p>Hoje o sistema manda 7 e-mails, cada um montado de um jeito, sem marca e sem rodapé. A redefinição de senha sai em inglês. Os avisos mais graves, como acesso bloqueado, acordo desfeito ou token revogado, só aparecem no sino: se ninguém entrar, ninguém fica sabendo. Proposta: um modelo único, remetentes do domínio separados da Mensageria, os avisos críticos também por e-mail, a pessoa escolhe o resto, e a equipe vê o que voltou. Empresas, pessoas e números fictícios.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Telas">
+    <div class="grupo">Visão geral</div>
+    <button data-ir="lista" aria-current="page">Todos os e-mails<small>Quem recebe, de quem, quando</small></button>
+    <button data-ir="modelo">Como chegam<small>Modelo único, um por um</small></button>
+    <div class="grupo">Cliente</div>
+    <button data-ir="prefs">Minha conta › Notificações<small>Sino e e-mail, por assunto</small></button>
+    <button data-ir="contatos">Empresa › Contatos<small>Quando o e-mail volta</small></button>
+    <div class="grupo">Console</div>
+    <button data-ir="console">E-mails do sistema<small>Entregas, devoluções, remetentes</small></button>
+  </nav>
+  <main class="trab">
+
+    <!-- TODOS -->
+    <section data-p="lista">
+      <div class="cab"><div><h2>Todos os e-mails</h2><p>Hoje são 7 e-mails. A proposta acrescenta 7, quase todos avisos críticos que hoje só ficam no sino. Cada um diz quem recebe, de qual endereço e se dá para desligar.</p></div></div>
+      <div class="antes"><div><b>Hoje</b>Cada e-mail com um visual, sem marca nem rodapé. A senha sai em inglês, do remetente padrão do Supabase. O convite da equipe chega com o nome da empresa em branco. Bloqueio, acordo desfeito e token revogado só aparecem no sino. Os e-mails do sistema saem pela mesma conta das campanhas da Mensageria.</div><div><b>Proposta</b>Um modelo só, com remetentes do domínio motorcob.online e uma conta separada da Mensageria. O que é crítico vai também por e-mail, sempre. O resto, cada pessoa liga ou desliga em Notificações.</div></div>
+      <div class="cartao resp">
+        <div><table class="tab quebra pilha"><thead><tr><th>E-mail</th><th>Quando</th><th>Quem recebe</th><th>De</th><th>Desligar?</th></tr></thead><tbody>
+          <tr class="grupo-t"><td colspan="5">Acesso e segurança</td></tr>
+          <tr><td>Convite</td><td>Admin ou equipe convida</td><td>A pessoa convidada</td><td class="tok">acesso@</td><td><span class="cad">🔒 sempre</span></td></tr>
+          <tr><td>Redefinir senha <span class="pil at">hoje em inglês</span></td><td>"Esqueci a senha" ou Admin</td><td>A própria pessoa</td><td class="tok">acesso@</td><td><span class="cad">🔒 sempre</span></td></tr>
+          <tr><td>Senha alterada <span class="novo">novo</span></td><td>Logo depois da troca</td><td>A própria pessoa</td><td class="tok">acesso@</td><td><span class="cad">🔒 sempre</span></td></tr>
+          <tr><td>Verificação em duas etapas desligada <span class="novo">novo</span></td><td>Pessoa ou Admin desliga</td><td>A própria pessoa</td><td class="tok">acesso@</td><td><span class="cad">🔒 sempre</span></td></tr>
+          <tr class="grupo-t"><td colspan="5">Faturas</td></tr>
+          <tr><td>Fatura emitida</td><td>Na emissão</td><td>Contatos "Recebe faturas"</td><td class="tok">financeiro@</td><td><span class="cad">pelo contato</span></td></tr>
+          <tr><td>Lembrete de fatura vencida</td><td>1, 5 e 7 dias depois</td><td>Contatos "Recebe faturas"</td><td class="tok">financeiro@</td><td><span class="cad">pelo contato</span></td></tr>
+          <tr><td>Acordo registrado · lembrete de parcela</td><td>No acordo e no atraso</td><td>Contatos "Recebe faturas"</td><td class="tok">financeiro@</td><td><span class="cad">pelo contato</span></td></tr>
+          <tr><td>Acesso bloqueado <span class="novo">novo</span></td><td>No bloqueio por fatura vencida</td><td>Admins + "Recebe faturas"</td><td class="tok">financeiro@</td><td><span class="cad">🔒 sempre</span></td></tr>
+          <tr><td>Acesso liberado <span class="novo">novo</span></td><td>Quando o pagamento entra</td><td>Admins + "Recebe faturas"</td><td class="tok">financeiro@</td><td><span class="cad">🔒 sempre</span></td></tr>
+          <tr><td>Acordo vai ser desfeito / foi desfeito <span class="novo">novo</span></td><td>3 dias antes e no dia</td><td>Admins + "Recebe faturas"</td><td class="tok">financeiro@</td><td><span class="cad">🔒 sempre</span></td></tr>
+          <tr class="grupo-t"><td colspan="5">Avisos da operação</td></tr>
+          <tr><td>Token de API vence em 3 dias · revogado <span class="novo">novo</span></td><td>Igual ao sino</td><td>Quem criou + Admins</td><td class="tok">avisos@</td><td><span class="cad">🔒 sempre</span></td></tr>
+          <tr><td>Envios pausados <span class="novo">novo</span></td><td>Saldo, bloqueio ou orçamento</td><td>Admins + Planejamento</td><td class="tok">avisos@</td><td><span class="cad">🔒 sempre</span></td></tr>
+          <tr><td>Demais avisos do sino</td><td>Exportação pronta, atendimento, implantação…</td><td>Quem já recebe no sino</td><td class="tok">avisos@</td><td>Escolha da pessoa · <b>desligado</b> por padrão</td></tr>
+          <tr class="grupo-t"><td colspan="5">Relatórios</td></tr>
+          <tr><td>Relatório agendado</td><td>No horário marcado</td><td>Quem está na lista</td><td class="tok">relatorios@</td><td>"Sair desta lista" no e-mail</td></tr>
+        </tbody></table></div>
+        <p class="nota">Endereços completos: <span class="tok">acesso@motorcob.online</span>, <span class="tok">financeiro@motorcob.online</span>, <span class="tok">avisos@motorcob.online</span>, <span class="tok">relatorios@motorcob.online</span>. Responder um e-mail de faturas vai para o financeiro da MotorCX; os outros respondem para o suporte.</p>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Crítico é aquilo que para a operação ou mexe em dinheiro e acesso. Esse vai pelo sino <b>e</b> por e-mail, e não dá para desligar.</li>
+        <li>Nenhum e-mail leva CPF, nome de devedor, telefone ou valor de carteira. Leva só o assunto e um botão para a plataforma.</li>
+        <li>Mesmo aviso repetido para a mesma pessoa: no máximo 1 e-mail por dia. O sino continua mostrando todos.</li>
+      </ul></div>
+    </section>
+
+    <!-- MODELO -->
+    <section data-p="modelo" hidden>
+      <div class="cab"><div><h2>Como chegam</h2><p>O mesmo modelo para todos: nome MotorCX em texto, a frente (MotorCob ou MotorCli), o assunto em uma frase, um botão e um rodapé que diz por que a pessoa recebe.</p></div></div>
+      <div class="abas mails" role="group" aria-label="E-mail">
+        <button aria-pressed="true" data-m="convite">Convite</button>
+        <button aria-pressed="false" data-m="senha">Redefinir senha</button>
+        <button aria-pressed="false" data-m="bloqueio">Acesso bloqueado</button>
+        <button aria-pressed="false" data-m="acordo">Acordo vai ser desfeito</button>
+        <button aria-pressed="false" data-m="token">Token vence</button>
+        <button aria-pressed="false" data-m="pausa">Envios pausados</button>
+        <button aria-pressed="false" data-m="relatorio">Relatório</button>
+      </div>
+
+      <div class="caixa" data-mail="convite">
+        <dl class="env"><dt>De</dt><dd>MotorCX &lt;acesso@motorcob.online&gt;</dd><dt>Assunto</dt><dd><b>Rafael convidou você para a Alfa Recuperação no MotorCX</b></dd></dl>
+        <div class="mailfundo"><div class="mail">
+          <div class="faixa"><span class="marca">MotorCX</span><span class="frente">MotorCob</span></div>
+          <div class="meio">
+            <h4>Você foi convidado para a Alfa Recuperação</h4>
+            <p>Rafael (Admin) criou seu acesso como <b>Operação</b>. Crie sua senha para entrar.</p>
+            <a class="botao">Criar minha senha</a>
+            <p class="caixinha">O link vale 24 horas e funciona uma vez. Se não esperava este convite, ignore: nada acontece.</p>
+          </div>
+          <div class="pe"><span>Você recebe porque alguém da Alfa Recuperação criou um acesso com este e-mail.</span><span>MotorCX · motorcob.online · <span class="ph">razão social e CNPJ</span></span></div>
+        </div></div>
+      </div>
+      <div class="caixa" data-mail="senha" hidden>
+        <dl class="env"><dt>De</dt><dd>MotorCX &lt;acesso@motorcob.online&gt;</dd><dt>Assunto</dt><dd><b>Redefinir sua senha do MotorCX</b></dd></dl>
+        <div class="mailfundo"><div class="mail">
+          <div class="faixa"><span class="marca">MotorCX</span><span class="frente">Acesso</span></div>
+          <div class="meio">
+            <h4>Redefinir sua senha</h4>
+            <p>Recebemos um pedido para trocar a senha deste e-mail.</p>
+            <a class="botao">Escolher nova senha</a>
+            <p class="caixinha">O link vale 1 hora. Não pediu? Ignore este e-mail: sua senha continua a mesma.</p>
+          </div>
+          <div class="pe"><span>A MotorCX nunca pede sua senha por e-mail, telefone ou WhatsApp.</span><span>MotorCX · motorcob.online · <span class="ph">razão social e CNPJ</span></span></div>
+        </div></div>
+      </div>
+      <div class="caixa" data-mail="bloqueio" hidden>
+        <dl class="env"><dt>De</dt><dd>MotorCX Financeiro &lt;financeiro@motorcob.online&gt;</dd><dt>Assunto</dt><dd><b>Acesso da Alfa Recuperação bloqueado: fatura nº 1042 vencida</b></dd></dl>
+        <div class="mailfundo"><div class="mail">
+          <div class="faixa"><span class="marca">MotorCX</span><span class="frente">Faturas</span></div>
+          <div class="meio">
+            <h4>O acesso foi bloqueado hoje</h4>
+            <p>A fatura nº 1042, de R$ 4.380,00, venceu em 05/10 e completou 10 dias em aberto. A plataforma fica só para consulta e os envios estão pausados.</p>
+            <p class="caixinha erro">O motor não gera a Lista do dia e a Mensageria não dispara enquanto a fatura estiver em aberto.</p>
+            <a class="botao">Pagar agora</a>
+            <p>Com Pix ou cartão, o acesso volta em minutos. Com boleto, volta quando o banco confirmar. Quer propor um acordo? Responda este e-mail.</p>
+          </div>
+          <div class="pe"><span>Aviso obrigatório: vai para os Admins e os contatos que recebem faturas.</span><span>MotorCX · motorcob.online · <span class="ph">razão social e CNPJ</span></span></div>
+        </div></div>
+      </div>
+      <div class="caixa" data-mail="acordo" hidden>
+        <dl class="env"><dt>De</dt><dd>MotorCX Financeiro &lt;financeiro@motorcob.online&gt;</dd><dt>Assunto</dt><dd><b>Parcela 2/4 em atraso: o acordo será desfeito em 3 dias</b></dd></dl>
+        <div class="mailfundo"><div class="mail">
+          <div class="faixa"><span class="marca">MotorCX</span><span class="frente">Faturas</span></div>
+          <div class="meio">
+            <h4>Pague a parcela 2/4 até 18/10 para manter o acordo</h4>
+            <table><tr><td>Parcela 2/4</td><td class="n">R$ 1.095,00</td></tr><tr><td>Venceu em</td><td class="n">08/10</td></tr><tr><td>Acordo desfeito em</td><td class="n"><b>18/10</b></td></tr></table>
+            <p class="caixinha at">Se o acordo for desfeito, as faturas voltam a valer como vencidas e o acesso é bloqueado.</p>
+            <a class="botao">Pagar a parcela</a>
+          </div>
+          <div class="pe"><span>Aviso obrigatório: vai para os Admins e os contatos que recebem faturas.</span><span>MotorCX · motorcob.online · <span class="ph">razão social e CNPJ</span></span></div>
+        </div></div>
+      </div>
+      <div class="caixa" data-mail="token" hidden>
+        <dl class="env"><dt>De</dt><dd>MotorCX &lt;avisos@motorcob.online&gt;</dd><dt>Assunto</dt><dd><b>O token "ERP Financeiro" vence em 3 dias</b></dd></dl>
+        <div class="mailfundo"><div class="mail">
+          <div class="faixa"><span class="marca">MotorCX</span><span class="frente">Integrações</span></div>
+          <div class="meio">
+            <h4>Troque o token antes de 18/10 para o sistema não parar</h4>
+            <p>O token <b>ERP Financeiro</b> (mc_1a2b…) fez 1.240 chamadas nos últimos 7 dias. Depois do vencimento, ele passa a receber "não autorizado".</p>
+            <a class="botao">Trocar token</a>
+            <p class="nota" style="color:#6E6E73">Ao trocar, os dois tokens valem juntos por alguns dias. O token nunca vai por e-mail.</p>
+          </div>
+          <div class="pe"><span>Aviso obrigatório: vai para quem criou o token e para os Admins da Alfa Recuperação.</span><span>MotorCX · motorcob.online · <span class="ph">razão social e CNPJ</span></span></div>
+        </div></div>
+      </div>
+      <div class="caixa" data-mail="pausa" hidden>
+        <dl class="env"><dt>De</dt><dd>MotorCX &lt;avisos@motorcob.online&gt;</dd><dt>Assunto</dt><dd><b>Envios pausados na Alfa Recuperação: orçamento do mês atingido</b></dd></dl>
+        <div class="mailfundo"><div class="mail">
+          <div class="faixa"><span class="marca">MotorCX</span><span class="frente">Mensageria</span></div>
+          <div class="meio">
+            <h4>Os envios de SMS pararam às 14:20</h4>
+            <p>A carteira Banco Alfa chegou a 100% do orçamento de SMS de outubro. Ficaram 3.200 mensagens de hoje na fila.</p>
+            <a class="botao">Ver orçamento</a>
+          </div>
+          <div class="pe"><span>Aviso obrigatório: vai para os Admins e para Planejamento.</span><span>MotorCX · motorcob.online · <span class="ph">razão social e CNPJ</span></span></div>
+        </div></div>
+      </div>
+      <div class="caixa" data-mail="relatorio" hidden>
+        <dl class="env"><dt>De</dt><dd>MotorCX Relatórios &lt;relatorios@motorcob.online&gt;</dd><dt>Assunto</dt><dd><b>Funil da semana · 06/10 a 12/10</b></dd></dl>
+        <div class="mailfundo"><div class="mail">
+          <div class="faixa"><span class="marca">MotorCX</span><span class="frente">Relatórios</span></div>
+          <div class="meio">
+            <h4>Funil da semana</h4>
+            <table><tr><td>Entregues</td><td class="n">182.400 <span class="sobe">+4,1%</span></td></tr><tr><td>Não entregues</td><td class="n">9.120 <span class="desce">+0,8 p.p.</span></td></tr><tr><td>Acordos</td><td class="n">1.310 <span class="sobe">+6,0%</span></td></tr></table>
+            <a class="botao">Abrir o relatório</a>
+          </div>
+          <div class="pe"><span>Você está na lista deste relatório, criada por Rafael. <a>Sair desta lista</a></span><span>MotorCX · motorcob.online · <span class="ph">razão social e CNPJ</span></span></div>
+        </div></div>
+      </div>
+      <div class="regra"><b>Regras do modelo</b><ul>
+        <li>Nome "MotorCX" em texto, sem imagem de logo: abre igual em qualquer programa de e-mail e não cai no filtro de spam por causa de imagem.</li>
+        <li>Cada e-mail tem também uma versão só texto e é sempre claro, como na caixa de entrada.</li>
+        <li>No rodapé vão o motivo do envio e os dados da empresa (razão social, CNPJ e endereço, preenchidos por você no Console). Nos e-mails que dá para desligar, vai também o link para isso.</li>
+      </ul></div>
+    </section>
+
+    <!-- PREFERÊNCIAS -->
+    <section data-p="prefs" hidden>
+      <div class="cab"><div><h2>Minha conta › Notificações</h2><p>Cada pessoa escolhe onde recebe cada assunto. O cadeado marca o que é obrigatório.</p></div></div>
+      <div class="cartao resp">
+        <div class="rolar"><table class="mat"><thead><tr><th>Assunto</th><th class="c">Sino</th><th class="c">E-mail</th></tr></thead><tbody>
+          <tr><td>Acesso e segurança<small>Convite, senha, verificação em duas etapas</small></td><td class="c"><span class="cad">🔒</span></td><td class="c"><span class="cad">🔒</span></td></tr>
+          <tr><td>Faturas, bloqueio e acordo<small>Admins e contatos que recebem faturas</small></td><td class="c"><span class="cad">🔒</span></td><td class="c"><span class="cad">🔒</span></td></tr>
+          <tr><td>Integrações (tokens de API)<small>Vencimento em 3 dias e revogação</small></td><td class="c"><span class="cad">🔒</span></td><td class="c"><span class="cad">🔒</span></td></tr>
+          <tr><td>Envios pausados<small>Saldo, bloqueio ou orçamento</small></td><td class="c"><span class="cad">🔒</span></td><td class="c"><span class="cad">🔒</span></td></tr>
+          <tr><td>Exportações e listas prontas<small>Arquivo pronto ou com erro</small></td><td class="c"><span class="cad">🔒</span></td><td class="c"><input type="checkbox" aria-label="E-mail: exportações"></td></tr>
+          <tr><td>Atendimento<small>Resposta judicial, conversa transferida, espera acima da meta</small></td><td class="c"><input type="checkbox" checked aria-label="Sino: atendimento"></td><td class="c"><input type="checkbox" checked aria-label="E-mail: atendimento"></td></tr>
+          <tr><td>Qualidade e Score de Entrega<small>Técnico e Master</small></td><td class="c"><input type="checkbox" checked aria-label="Sino: qualidade"></td><td class="c"><input type="checkbox" aria-label="E-mail: qualidade"></td></tr>
+          <tr><td>Implantação<small>Envio real liberado, pedido parado</small></td><td class="c"><input type="checkbox" checked aria-label="Sino: implantação"></td><td class="c"><input type="checkbox" aria-label="E-mail: implantação"></td></tr>
+          <tr><td>Token de API vence em 15 dias ou ficou parado<small>O aviso de 3 dias é obrigatório</small></td><td class="c"><input type="checkbox" checked aria-label="Sino: token 15 dias"></td><td class="c"><input type="checkbox" aria-label="E-mail: token 15 dias"></td></tr>
+        </tbody></table></div>
+        <div class="linha"><button class="btn" id="salvar-prefs">Salvar</button><span class="nota">Só aparecem os assuntos que o seu perfil recebe.</span></div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>O e-mail começa <b>desligado</b> nos assuntos opcionais: ninguém passa a receber e-mail novo sem escolher. A exceção é Atendimento para quem é responsável pela caixa, que já vem ligado (resposta judicial não pode esperar).</li>
+        <li>O link "Não quero mais estes e-mails" do rodapé desliga o assunto direto, sem login, e mostra o que foi desligado.</li>
+      </ul></div>
+    </section>
+
+    <!-- CONTATOS -->
+    <section data-p="contatos" hidden>
+      <div class="cab"><div><h2>Empresa › Contatos</h2><p>Se o e-mail de um contato volta, a fatura não chega. Quem cuida da empresa precisa saber.</p></div></div>
+      <div class="alerta-at"><b>O e-mail de Carla (Financeiro) voltou 2 vezes.</b> A fatura nº 1042 não foi entregue para ela. Confira o endereço. <button class="link">Corrigir</button></div>
+      <div class="cartao resp"><table class="tab cartoes"><thead><tr><th>Nome</th><th>Área</th><th>E-mail</th><th>Recebe faturas</th><th>Situação</th></tr></thead><tbody>
+        <tr><td class="c1">Carla</td><td class="c3">Financeiro</td><td class="x tok">carla@alfa-recuperacao.exemplo</td><td class="x">Sim</td><td class="c2"><span class="pil erro">E-mail voltou</span></td></tr>
+        <tr><td class="c1">Rafael</td><td class="c3">Diretoria</td><td class="x tok">rafael@alfa-recuperacao.exemplo</td><td class="x">Sim</td><td class="c2"><span class="pil ok">Entregue 05/10</span></td></tr>
+        <tr><td class="c1">Bruno</td><td class="c3">Operação</td><td class="x tok">bruno@alfa-recuperacao.exemplo</td><td class="x">Não</td><td class="c2"><span class="pil neutra">—</span></td></tr>
+      </tbody></table></div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Devolução definitiva (endereço não existe) marca "E-mail voltou" na hora e avisa os Admins no sino e por e-mail. A temporária (caixa cheia) só marca depois de 3 vezes seguidas.</li>
+        <li>Se nenhum contato que recebe faturas tem e-mail entregue, a fatura vai para os Admins e o Console vê em destaque.</li>
+        <li>Corrigir o endereço tira a marca, e o próximo e-mail sai normalmente.</li>
+      </ul></div>
+    </section>
+
+    <!-- CONSOLE -->
+    <section data-p="console" hidden>
+      <div class="cab"><div><h2>Console › E-mails do sistema</h2><p>A equipe vê se os e-mails estão chegando, de quais remetentes e o que voltou. Nunca vê o conteúdo de um e-mail.</p></div></div>
+      <div class="kpis">
+        <div class="kpi"><span>Enviados · 7 dias</span><b>1.284</b><small>14 tipos</small></div>
+        <div class="kpi"><span>Entregues</span><b>98,6%</b><small>1.266</small></div>
+        <div class="kpi"><span>Voltaram</span><b style="color:var(--erro)">18</b><small>11 definitivos · 7 temporários</small></div>
+        <div class="kpi"><span>Marcados como spam</span><b>0</b><small>meta: abaixo de 0,1%</small></div>
+      </div>
+      <div class="duas">
+        <div class="cartao">
+          <h3>Remetentes</h3>
+          <div class="rolar"><table class="tab quebra"><thead><tr><th>Endereço</th><th>Domínio verificado</th><th>Envia por</th></tr></thead><tbody>
+            <tr><td class="tok">acesso@</td><td><span class="pil ok">SPF · DKIM · DMARC</span></td><td>Supabase Auth → conta de sistema</td></tr>
+            <tr><td class="tok">financeiro@</td><td><span class="pil ok">SPF · DKIM · DMARC</span></td><td>Conta de sistema</td></tr>
+            <tr><td class="tok">avisos@</td><td><span class="pil ok">SPF · DKIM · DMARC</span></td><td>Conta de sistema</td></tr>
+            <tr><td class="tok">relatorios@</td><td><span class="pil at">DMARC pendente</span></td><td>Conta de sistema</td></tr>
+          </tbody></table></div>
+          <p class="nota">A conta de sistema é separada da conta de envio da Mensageria, para que um problema numa campanha não leve a fatura para o spam.</p>
+        </div>
+        <div class="cartao">
+          <h3>O que voltou</h3>
+          <div class="rolar"><table class="tab quebra"><thead><tr><th>Empresa</th><th>E-mail</th><th>Tipo</th><th>Motivo</th></tr></thead><tbody>
+            <tr><td>Alfa Recuperação</td><td>Fatura emitida</td><td><span class="pil erro">definitivo</span></td><td>endereço não existe</td></tr>
+            <tr><td>Beta Crédito</td><td>Relatório agendado</td><td><span class="pil at">temporário</span></td><td>caixa cheia</td></tr>
+            <tr><td>Gama Cobranças</td><td>Convite</td><td><span class="pil erro">definitivo</span></td><td>domínio não recebe</td></tr>
+          </tbody></table></div>
+          <p class="nota">O endereço aparece só para o Master, e mascarado (c***@alfa…).</p>
+        </div>
+      </div>
+      <div class="cartao">
+        <h3>A equipe também recebe</h3>
+        <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">
+          <li>Chamado novo ou respondido pelo cliente: e-mail para a fila de suporte. <span class="novo">novo</span></li>
+          <li>Contato pelo site (formulário): e-mail para comercial. <span class="novo">novo</span></li>
+          <li>Empresa sem nenhum contato de fatura entregue. <span class="novo">novo</span></li>
+        </ul>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Razão social, CNPJ e endereço do rodapé: Console › Configurações, editáveis só pelo Master.</li>
+        <li>Botão "Enviar teste para mim" em cada tipo, com dados fictícios.</li>
+      </ul></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3200); };
+  const telas = [...document.querySelectorAll("section[data-p]")], botoes = [...document.querySelectorAll(".menu button")];
+  const ir = p => { telas.forEach(s => s.hidden = s.dataset.p !== p); botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); window.scrollTo({ top: 0 }); };
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+  const mails = [...document.querySelectorAll("[data-mail]")];
+  document.querySelectorAll(".abas.mails button").forEach(b => b.addEventListener("click", () => {
+    b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    mails.forEach(m => m.hidden = m.dataset.mail !== b.dataset.m);
+  }));
+  $("salvar-prefs").addEventListener("click", () => toast("Salvo. Atendimento por e-mail ligado; os demais assuntos opcionais seguem só no sino."));
+})();
+</script>
