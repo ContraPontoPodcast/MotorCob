@@ -315,9 +315,10 @@ input[type=text]{font-variant-numeric:tabular-nums}
   botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
 
   // ---------- contratação
+  const escH = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const PRECOS = [["SMS Padrão", "Preço por faixa", "R$ 54,00 por mil até 50 mil · R$ 49,00 por mil acima", "01/08/2026"],
     ["RCS básico", "Preço único", "R$ 79,00 por mil", "01/08/2026"], ["API", "Preço único", "R$ 300,00 por mês", "01/08/2026"], ["Orquestração", "Preço único", "R$ 950,00 por mês", "01/07/2026"]];
-  const tabPrecos = () => $("ct-precos").innerHTML = PRECOS.map(p => `<tr><td>${p[0]}</td><td>${p[1]}</td><td class="n">${p[2]}</td><td>${p[3]}</td></tr>`).join("");
+  const tabPrecos = () => $("ct-precos").innerHTML = PRECOS.map(p => `<tr><td>${escH(p[0])}</td><td>${escH(p[1])}</td><td class="n">${escH(p[2])}</td><td>${escH(p[3])}</td></tr>`).join("");
   tabPrecos();
   const CAD = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
   function papel() {
@@ -358,7 +359,7 @@ input[type=text]{font-variant-numeric:tabular-nums}
   $("gv-volta").addEventListener("click", () => modo("ed"));
   $("gv-acao").addEventListener("click", () => {
     if ($("gv").dataset.m === "ed") {
-      $("gv-mud").innerHTML = mud().map(k => `<li><b>SMS Padrão</b> · faixa ${k === "fx1v" ? "até 50 mil" : "acima de 50 mil"}<br><s>R$ ${ORIG[k]} por mil</s> → <b>R$ ${$(k).value} por mil</b></li>`).join("");
+      $("gv-mud").innerHTML = mud().map(k => `<li><b>SMS Padrão</b> · faixa ${k === "fx1v" ? "até 50 mil" : "acima de 50 mil"}<br><s>R$ ${escH(ORIG[k])} por mil</s> → <b>R$ ${escH($(k).value)} por mil</b></li>`).join("");
       modo("rev");
     } else {
       const atual = document.querySelector("input[name=vig]:checked").value === "atual";
