@@ -39,10 +39,14 @@ O Início do Workspace mostra:
 
 ### Assistente MotorCX
 
-- Onde usar: no campo "O que você quer fazer?" do Início do Workspace (a resposta aparece logo abaixo) ou pelo avatar no canto inferior direito das telas do Workspace ("Dúvida? Fala comigo!"), que abre a conversa numa gaveta à direita. "Continuar a conversa" leva a pergunta do campo para a gaveta.
-- Cada resposta pode trazer o passo a passo e um botão que abre a tela certa. Use 👍 ou 👎 para dizer se ajudou.
-- O Assistente responde sobre o uso da plataforma. Ele não vê a carteira, os clientes, os envios nem as faturas da empresa; para um caso específico, abra um chamado em Suporte.
-- Cada pergunta fica registrada por 90 dias para a equipe MotorCX melhorar as respostas. Não escreva CPF, telefone, e-mail ou nome de devedores: esses dados são apagados antes de a pergunta ser processada.
+- Onde usar: no campo "O que você quer fazer?" do Início do Workspace (a resposta aparece logo abaixo) ou pelo avatar no canto inferior direito das telas ("Dúvida? Fala comigo!"), que abre a conversa numa gaveta à direita. "Continuar a conversa" leva a pergunta do campo para a gaveta.
+- O Assistente sabe o seu perfil, a frente, os módulos contratados e a tela onde você está, para responder do jeito que vale para você. Ele não vê a carteira, os clientes, os envios, os valores nem as faturas da empresa; para um caso específico, diz onde olhar.
+- A gaveta mostra perguntas sugeridas para a tela atual e as mais perguntadas na empresa. A resposta aparece enquanto é escrita.
+- Cada resposta pode trazer o passo a passo e um botão que abre a tela certa (só aparece se você tem acesso a ela). Use 👍 ou 👎; no 👎, diga o que faltou (não respondeu, está errado, difícil de entender, não tenho essa tela).
+- "Falar com o Suporte" abre um chamado já preenchido, com a conversa anexada sem dados pessoais. Você revisa antes de enviar.
+- Minhas perguntas (na gaveta): as suas perguntas dos últimos 90 dias, para achar de novo uma resposta.
+- Se aparecer "fora do ar", foi uma falha nossa: tente de novo em alguns minutos (não conta no limite). Se aparecer que o Assistente está pausado até o mês que vem, fale com o Suporte.
+- Cada pergunta fica registrada por 90 dias para a equipe MotorCX melhorar as respostas. Não escreva CPF, telefone, e-mail ou nome de devedores: esses dados são apagados antes de a pergunta ser processada, e a gaveta avisa quando isso acontece.
 - Limite: 30 perguntas por hora por usuário.
 
 ---

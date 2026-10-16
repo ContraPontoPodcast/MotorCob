@@ -325,6 +325,26 @@ Protótipo: `emails-sistema-prototipo.html`. Aprovado como está ("Perfeito"):
 - Gerado: SQL 42, funções `emails` (nova), `cobranca`, `relatorios`, `admin-usuarios` e `assistente`, motor
   (`nuvem/emails.py`: fila, conferência de SPF/DKIM/DMARC e limpeza), testes, guia `EMAILS_SISTEMA.md` e prompts 64 e 65.
 
+## Assistente — APROVADO em 16/10/2026
+
+Protótipo: `assistente-prototipo.html`. Todos os pontos aprovados ("Sim, tudo aprovado"):
+1. O Assistente recebe perfil, frente, módulos contratados e o nome da tela; nunca carteira, clientes, envios ou valores.
+2. Sugestões: 3 por tela (escritas pela equipe) + as 2 mais perguntadas na empresa.
+3. "Fora do ar" separado de "não sei" (não conta no limite por hora); 👎 com motivo; Minhas perguntas (90 dias).
+4. Passar para o Suporte com a conversa anexada sem dados pessoais e o motivo pela tela.
+5. Respostas da equipe pelo Console (Master e Atendimento), valendo na hora, na Auditoria.
+6. Modelo: trocar o Opus pelo Sonnet 5.5, com a resposta aparecendo enquanto é escrita. Teto de **R$ 399,90 por mês**
+   (custo do provedor em dólar convertido pela cotação); com o teto atingido, só Respostas da equipe e Suporte; aviso
+   ao Master com 80%.
+- Na geração: a cotação é a PTAX de venda do Banco Central do último dia útil (o motor busca uma vez por dia; o Master
+  pode digitar outra); o custo de cada resposta é estimado pelos tokens e pelo preço do modelo que respondeu (o
+  provedor pode trocar de modelo numa recusa); o aviso de teto vai para a equipe com 80% e 100%; "mais perguntadas" só
+  mostra pergunta feita por 3 ou mais pessoas da empresa, respondida, sem 👎 e sem dado pessoal removido; Respostas
+  da equipe recusam dado pessoal e preço no banco; com o teto atingido, a resposta da equipe vale quando a pergunta
+  é parecida o bastante (metade das palavras em comum).
+- Gerado: SQL 43, função `assistente` (Sonnet 5.5 em streaming, contexto, custo, teto, chamado), motor
+  (`nuvem/assistente.py`: PTAX e aviso de teto), testes e prompts 66 e 67.
+
 ## Fila para rodar (quando liberar)
 
 1. Merge da PR 108. Depois: SQL 29 → publicar a função `cobranca` (passo 50b) → prompts 55 e 56.
@@ -360,5 +380,7 @@ Protótipo: `emails-sistema-prototipo.html`. Aprovado como está ("Perfeito"):
    Depois, e-mails do sistema: guia `02_supabase_painel/EMAILS_SISTEMA.md` (conta de envio separada, DNS, Secrets,
    SMTP e modelos do login) → SQL 42 → funções `emails`, `cobranca`, `relatorios`, `admin-usuarios` e `assistente` →
    prompts 64 e 65 → motor na nuvem (passos 97 a 99). Conferência: item 29 OK.
+   Depois, Assistente: SQL 43 → função `assistente` de novo → prompts 66 e 67 → motor na nuvem (passos 100 a 102).
+   Conferência: item 30 OK. No painel do provedor do modelo, deixe o limite de gasto mensal um pouco acima do teto.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).

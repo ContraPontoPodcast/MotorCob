@@ -207,4 +207,11 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     site. Depois: guia `02_supabase_painel/EMAILS_SISTEMA.md`, funções `emails`, `cobranca`, `relatorios`,
     `admin-usuarios` e `assistente`, e prompts 64 e 65.
 
+43. `supabase/migrations/20261210000001_assistente_v2.sql` (SQL 43) — **Assistente**: teto do mês em reais (R$ 399,90)
+    com a cotação do dólar (PTAX do Banco Central pelo motor, ou manual pelo Master), situação de cada pergunta
+    (respondida, sem resposta, fora do ar, teto), tema, tokens e custo estimado, 👎 com motivo, sugestões por tela e
+    as mais perguntadas, Respostas da equipe (Master e Atendimento, na Auditoria), contexto da pessoa só para o
+    servidor, chamado aberto pelo Assistente, Painel, fila "Para resolver" e aviso de 80% e 100% do teto. Depois:
+    função `assistente` de novo e prompts 66 e 67.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

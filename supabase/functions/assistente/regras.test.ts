@@ -1,7 +1,9 @@
 // node --experimental-strip-types --test supabase/functions/assistente/regras.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ACOES, anonimizar, ESQUEMA, montarMensagens, montarResposta, SEM_RESPOSTA, validarPedido } from "./regras.ts";
+import { ACOES, acoesPermitidas, anonimizar, blocoRespostasEquipe, type Contexto, conversaParaChamado, custoUsd, ESQUEMA,
+  MODELO, montarMensagens, montarResposta, motivoDoChamado, respostaDaEquipe, SEM_RESPOSTA, TEMAS, textoContexto, textoParcial,
+  validarPedido } from "./regras.ts";
 
 test("valida o pedido", () => {
   assert.equal(validarPedido(null).erro, "pedido inválido");
@@ -12,8 +14,13 @@ test("valida o pedido", () => {
   assert.equal(validarPedido({ pergunta: "oi", empresa_id: "1;drop" }).erro, "empresa inválida");
   assert.equal(validarPedido({ pergunta: "oi", historico: [{ papel: "sistema", texto: "x" }] }).erro, "histórico inválido");
   assert.deepEqual(validarPedido({ pergunta: "  como   crio uma campanha? ", tela: "/mensageria/sms" }).pedido, {
-    pergunta: "como crio uma campanha?", origem: "busca", tela: "/mensageria/sms", empresa_id: null, historico: [],
+    pergunta: "como crio uma campanha?", origem: "busca", tela: "/mensageria/sms", tela_nome: null, frente: null,
+    empresa_id: null, historico: [], stream: false,
   });
+  const p = validarPedido({ pergunta: "oi", tela_nome: "Mensageria › Campanhas", frente: "motorcli", stream: true }).pedido!;
+  assert.deepEqual([p.tela_nome, p.frente, p.stream], ["Mensageria › Campanhas", "motorcli", true]);
+  assert.equal(validarPedido({ pergunta: "oi", tela_nome: "<b>x</b>" }).erro, "tela inválida");
+  assert.equal(validarPedido({ pergunta: "oi", frente: "outra" }).erro, "frente inválida");
 });
 
 test("histórico guarda só as últimas mensagens", () => {
@@ -59,4 +66,72 @@ test("monta a resposta só com ações conhecidas", () => {
 
 test("o esquema lista todas as ações e 'nenhuma'", () => {
   assert.deepEqual(ESQUEMA.properties.acao.enum, [...Object.keys(ACOES), "nenhuma"]);
+});
+
+const ctx: Contexto = { papel: "operacao", equipe: false, empresa_id: 7, frentes: ["motorcob"], modulos: ["mensageria"],
+  pode: { ver_faturamento: false, gerenciar_usuarios: false, editar_canais: false, gerenciar_api: false } };
+
+test("modelo aprovado e esquema com tema e resposta da equipe", () => {
+  assert.equal(MODELO, "claude-sonnet-5-5");
+  assert.deepEqual(ESQUEMA.properties.tema.enum, [...TEMAS]);
+  assert.deepEqual(ESQUEMA.required, ["respondida", "texto", "passos", "acao", "tema", "resposta_equipe"]);
+});
+
+test("telas que a pessoa pode abrir e o contexto que vai junto", () => {
+  const p = acoesPermitidas(ctx);
+  assert.ok(p.has("abrir_campanhas") && p.has("abrir_chamado") && p.has("abrir_relatorios"));
+  assert.ok(!p.has("abrir_lista_dia") && !p.has("abrir_faturamento") && !p.has("abrir_config_mensageria") && !p.has("abrir_tokens_api"));
+  assert.equal(acoesPermitidas({ ...ctx, equipe: true }).size, Object.keys(ACOES).length);
+  const t = textoContexto(ctx, null, "Mensageria › Campanhas", p);
+  assert.match(t, /^\[Contexto: perfil Operação · frente MotorCob · módulos: Mensageria · tela: Mensageria › Campanhas · telas que pode abrir: /);
+  assert.doesNotMatch(t, /abrir_chamado|abrir_lista_dia/);
+  assert.equal(textoContexto(null, null, null, p), "");
+  const m = montarMensagens([], "como agendo?", "/mensageria/sms", t);
+  assert.match(m[0].content, /^\[Contexto: .*\]\n\[Tela atual: \/mensageria\/sms\]\ncomo agendo\?$/s);
+});
+
+test("resposta respeita as telas permitidas, o tema e as respostas da equipe", () => {
+  const r = montarResposta({ respondida: true, texto: "x", passos: [], acao: "abrir_faturamento", tema: "Empresa", resposta_equipe: 4 },
+    acoesPermitidas(ctx), new Set([4]));
+  assert.equal(r.acao, null);
+  assert.equal(r.tema, "Empresa");
+  assert.equal(r.resposta_equipe, 4);
+  const r2 = montarResposta({ respondida: true, texto: "x", passos: [], acao: "abrir_campanhas", tema: "Inventado", resposta_equipe: 99 },
+    acoesPermitidas(ctx), new Set([4]));
+  assert.deepEqual([r2.acao?.id, r2.tema, r2.resposta_equipe], ["abrir_campanhas", null, null]);
+});
+
+test("custo por resposta pelos tokens (cache de 1 hora incluído)", () => {
+  assert.equal(custoUsd("claude-sonnet-5-5", { input_tokens: 1000, output_tokens: 300, cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 15000 }), 0.008);
+  assert.equal(custoUsd("claude-sonnet-5-5", { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 15000 }), 0.06);
+  assert.equal(custoUsd("modelo-novo", { output_tokens: 1000 }), 0.025);
+});
+
+test("texto parcial do JSON enquanto chega", () => {
+  assert.equal(textoParcial('{"respondida":true,"te'), null);
+  assert.equal(textoParcial('{"respondida":true,"texto":"Na pró'), "Na pró");
+  assert.equal(textoParcial('{"respondida":true,"texto":"Use \\"Agendar\\"\\nd'), 'Use "Agendar"\nd');
+  assert.equal(textoParcial('{"texto":"a\\u00'), "a");
+  assert.equal(textoParcial('{"texto":"a\\u00e7ão","passos":[]}'), "ação");
+  assert.equal(textoParcial('{"texto":"fim\\'), "fim");
+});
+
+test("respostas da equipe: bloco para o modelo e uso sem o modelo no teto", () => {
+  const lista = [{ id: 3, pergunta: "Consigo mudar o remetente do SMS?", resposta: "Não: é um número curto da operadora.",
+    passos: [], acao: "abrir_config_mensageria", tela: "/mensageria", frente: "motorcob" }];
+  assert.match(blocoRespostasEquipe(lista), /^# RESPOSTAS DA EQUIPE\n\n## 3\. Consigo mudar o remetente do SMS\? \(só MotorCob\)\nNão/);
+  assert.equal(blocoRespostasEquipe([]), "");
+  assert.equal(respostaDaEquipe("Dá para mudar o remetente do SMS?", lista, "motorcob")?.id, 3);
+  assert.equal(respostaDaEquipe("Dá para mudar o remetente do SMS?", lista, "motorcli"), null);
+  assert.equal(respostaDaEquipe("Como baixo a Lista do dia?", lista, null), null);
+});
+
+test("chamado: motivo pela tela e conversa sem dado pessoal", () => {
+  assert.equal(motivoDoChamado("/mensageria/sms/campanhas"), "mensageria");
+  assert.equal(motivoDoChamado("/empresa/faturamento"), "faturamento");
+  assert.equal(motivoDoChamado(null), "outro");
+  const c = conversaParaChamado([{ papel: "usuario", texto: "o cliente 123.456.789-09 não recebeu" },
+    { papel: "assistente", texto: "Veja em Clientes." }], "Clientes", "👎 Não respondeu");
+  assert.equal(c, "Tela: Clientes\nPergunta: o cliente [CPF] não recebeu\nResposta: Veja em Clientes.\nAvaliação: 👎 Não respondeu");
 });

@@ -214,6 +214,11 @@ with itens(ordem, item, ok, se_falhar) as (values
        and to_regprocedure('public.avisos_para_email(integer)') is not null
        and exists (select 1 from public.email_config where id = 1),
        'rodar o SQL 42 (supabase/migrations/20261209000001_emails_sistema.sql)'),
+  (30, 'Assistente: teto e cotação, situação e custo por pergunta, sugestões, Respostas da equipe (SQL 43)',
+       to_regclass('public.assistente_respostas') is not null and to_regclass('public.assistente_sugestoes') is not null
+       and to_regprocedure('public.assistente_painel(integer)') is not null
+       and exists (select 1 from public.assistente_config where id = 1),
+       'rodar o SQL 43 (supabase/migrations/20261210000001_assistente_v2.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

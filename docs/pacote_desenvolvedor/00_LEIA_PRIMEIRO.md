@@ -109,6 +109,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 97 | `02_supabase_painel/EMAILS_SISTEMA.md` (conta de envio, DNS, Secrets, SMTP e modelos do Auth) + `supabase/migrations/20261209000001_emails_sistema.sql` (SQL 42) | E-mails do sistema: remetentes do domínio, conta separada da Mensageria, preferências, avisos por e-mail, devoluções | Locaweb + DNS + Supabase | 92º |
 | 98 | funções `emails` (nova), `cobranca`, `relatorios`, `admin-usuarios` e `assistente` de novo (`python3 scripts/juntar_funcao.py <nome>`) | Modelo único, fila dos avisos, devolução, sair sem login, convite da equipe completo | Supabase | 93º |
 | 99 | `07_workspace/PROMPT_64_NOTIFICACOES.md` e `PROMPT_65_CONSOLE_EMAILS.md` + motor na nuvem | Minha conta › Notificações, Empresa › Contatos (e-mail voltou), página /email/sair, Console › E-mails do sistema | Site + Google Cloud | 94º |
+| 100 | `supabase/migrations/20261210000001_assistente_v2.sql` (SQL 43) | Assistente: teto em reais e cotação, custo e situação por pergunta, sugestões, Respostas da equipe, fila e Painel | Supabase | 95º |
+| 101 | função `assistente` de novo (`python3 scripts/juntar_funcao.py assistente`) | Sonnet 5.5 com a resposta aparecendo enquanto é escrita, contexto da pessoa, teto, chamado com a conversa | Supabase | 96º |
+| 102 | `07_workspace/PROMPT_66_ASSISTENTE.md` e `PROMPT_67_CONSOLE_ASSISTENTE.md` + motor na nuvem | Gaveta do Assistente nova e Console › Assistente (Painel, Para resolver, Respostas da equipe) | Site + Google Cloud | 97º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
