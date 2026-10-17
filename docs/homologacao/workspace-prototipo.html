@@ -1,0 +1,410 @@
+<title>Workspace</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: MotorCX, menu cinza à esquerda (Console e Cliente) + área de trabalho lisa. Paleta do bloco 5; Console e
+   Empresa usam o grafite neutro. Edição sempre no painel lateral, com resumo antes de salvar. */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#1D1D1F; --area-forte:#000000; --area-ativo:#E8E8ED; --area-ativo-texto:#1D1D1F; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --veu:rgba(0,0,0,.25); --sombra:0 10px 30px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding-block:20px 8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:80ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--texto);border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1280px;margin:12px auto 40px;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--cartao);
+  margin-left:max(16px,env(safe-area-inset-left,0px));margin-right:max(16px,env(safe-area-inset-right,0px))}
+@media (min-width:1312px){.app{margin-left:auto;margin-right:auto}}
+@media (max-width:820px){.app{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid var(--menu-borda)}}
+.menu{background:var(--menu);border-right:1px solid var(--menu-borda);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.grupo{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 10px 4px}
+.menu button{all:unset;cursor:pointer;display:block;padding:7px 10px;border-radius:8px;color:var(--menu-texto)}
+.menu button small{display:block;font-size:11.5px;color:var(--texto2)}
+.menu button[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.menu button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.trab{background:var(--fundo);padding:20px;min-width:0;display:flex;flex-direction:column;gap:16px}
+section[data-p]{display:flex;flex-direction:column;gap:16px;min-width:0}
+.cab{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:74ch}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.cartao-cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sub{margin:0;color:var(--texto2);font-size:13px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn:active{background:var(--area-forte)}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn.peq{padding:5px 11px;font-size:13px}
+.btn.perigo{background:var(--erro);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.campo label{font-size:12.5px;color:var(--texto2)}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px;min-width:0}
+input[type=text]{font-variant-numeric:tabular-nums}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap;vertical-align:middle}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.trava{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--texto2);background:var(--pilula);border-radius:9px;padding:6px 11px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13.5px}
+.dl dt{color:var(--texto2)}.dl dd{margin:0}
+.abas{display:flex;gap:4px;flex-wrap:wrap}
+.abas button{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;color:var(--texto2);background:var(--pilula)}
+.abas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.abas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.abas b{margin-left:4px}
+.confirma{border:1px solid var(--texto);border-radius:12px;padding:14px 16px;background:var(--pilula);display:flex;flex-direction:column;gap:10px}
+.confirma p{margin:0}
+.grande{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.barra{height:8px;border-radius:999px;background:var(--pilula);overflow:hidden;display:flex}
+.barra i{display:block;height:100%}
+/* gaveta */
+.veu{position:fixed;inset:0;background:var(--veu);z-index:40}
+.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--cartao);border-left:1px solid var(--borda);box-shadow:var(--sombra);z-index:41;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.gaveta header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--borda)}
+.gaveta header h3{margin:0;font-size:16px}
+.gaveta .corpo{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.gaveta footer{padding:12px 18px;border-top:1px solid var(--borda);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+.gaveta footer .nota{margin-right:auto}
+.faixa-l{display:grid;grid-template-columns:1fr 1fr 110px;gap:8px;align-items:center}
+.faixa-l.mud input{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mudancas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mudancas li{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;font-variant-numeric:tabular-nums}
+.mudancas s{color:var(--texto2)}
+.op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--borda);border-radius:10px;padding:10px 12px;cursor:pointer}
+.op:has(input:checked){border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.op b{display:block}.op span{font-size:12.5px;color:var(--texto2)}
+.alerta{border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.alerta.at{background:var(--at-f)}
+/* celular */
+.resp{container-type:inline-size}
+@container (max-width:600px){
+  .tab.cartoes thead{display:none}
+  .tab.cartoes,.tab.cartoes tbody{display:block}
+  .tab.cartoes tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 2px;border-bottom:1px solid var(--borda)}
+  .tab.cartoes td{border:0;padding:0;white-space:normal}
+  .tab.cartoes td.c1{font-weight:600}
+  .tab.cartoes td.c2{grid-column:2;grid-row:1;justify-self:end}
+  .tab.cartoes td.c3{grid-column:1;color:var(--texto2);font-size:13px}
+  .tab.cartoes td.c4{grid-column:2;grid-row:2;justify-self:end;font-weight:600}
+  .tab.cartoes td.x{display:none}
+}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100vw - 32px)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px}
+.kpi span{font-size:12px;color:var(--texto2)} .kpi b{font-size:22px;font-variant-numeric:tabular-nums} .kpi small{font-size:12px;color:var(--texto2)}
+.tok{font-family:var(--mono);font-size:12.5px}
+.segredo{font-family:var(--mono);font-size:13px;background:var(--fundo);border:1px dashed var(--texto2);border-radius:10px;padding:10px 12px;word-break:break-all}
+.alerta-at{background:var(--at-f);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.alerta-at b{color:var(--at)}
+.escopos{display:flex;flex-direction:column;gap:8px}
+.escopos fieldset{border:1px solid var(--borda);border-radius:10px;padding:8px 12px;margin:0}
+.escopos legend{font-size:12px;color:var(--texto2);padding:0 4px}
+.escopos label{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;padding:3px 0}
+.escopos small{display:block;color:var(--texto2);font-size:12px}
+pre.cod{font-family:var(--mono);font-size:12px;background:var(--fundo);border:1px solid var(--borda);border-radius:10px;padding:10px;overflow-x:auto;margin:0;white-space:pre}
+.barras{display:flex;align-items:flex-end;gap:6px;height:90px;padding-top:6px}
+.barras i{flex:1;background:var(--area);border-radius:4px 4px 0 0;opacity:.85}
+.barras i.e{background:var(--erro)}
+.dias{display:flex;gap:6px;font-size:11px;color:var(--texto2)} .dias span{flex:1;text-align:center}
+.antes{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px}
+.antes div{border-radius:10px;padding:10px 12px;background:var(--menu)}
+.antes div:first-child{background:var(--erro-f)}
+.antes b{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2);margin-bottom:4px}
+@media (max-width:600px){.antes{grid-template-columns:1fr}}
+select,input[type=text]{font:inherit;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:7px 9px;min-width:0}
+.sino{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;max-width:440px}
+.sino b{font-size:13.5px} .sino span{font-size:12.5px;color:var(--texto2)}
+/* workspace */
+.wsbar{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--borda);background:var(--cartao);flex-wrap:wrap}
+.wsbar .marca{font-weight:700;font-size:15px}
+.wsbar nav{display:flex;gap:2px;flex-wrap:wrap}
+.wsbar nav a{padding:6px 10px;border-radius:8px;font-size:13.5px;color:var(--texto2);text-decoration:none;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.wsbar nav a[aria-current="page"]{background:var(--pilula);color:var(--texto);font-weight:600}
+.wsbar nav a .cont{font-size:11px;font-weight:700;background:var(--erro);color:#fff;border-radius:999px;padding:0 6px}
+.wsbar .dir{margin-left:auto;display:flex;gap:8px;align-items:center}
+.wsbar .busca{min-width:220px}
+.ws{border:1px solid var(--borda);border-radius:12px;overflow:hidden;background:var(--fundo)}
+.ws .conteudo{max-width:1040px;margin:0 auto;width:100%}
+.duas{grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
+@media (max-width:700px){.wsbar nav,.wsbar .busca{display:none}.wsbar .hamb{display:grid!important}}
+.tab.quebra td,.tab.quebra th{white-space:normal}
+.cob{--area:#8A6A2E;--area-forte:#6E5424;--area-ativo:#F3ECDF;--area-ativo-texto:#5A4419;--sobre-area:#FFFFFF}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .cob{--area:#D9B26B;--area-forte:#E8C688;--area-ativo:#3A2F1C;--area-ativo-texto:#F2DDB0;--sobre-area:#1D1D1F}}
+:root[data-theme="dark"] .cob{--area:#D9B26B;--area-forte:#E8C688;--area-ativo:#3A2F1C;--area-ativo-texto:#F2DDB0;--sobre-area:#1D1D1F}
+.casca{display:grid;grid-template-columns:232px minmax(0,1fr);border:1px solid var(--borda);border-radius:12px;overflow:hidden;min-height:620px;background:var(--fundo)}
+@media (max-width:900px){.casca{grid-template-columns:1fr}.casca .lat{display:none}}
+.lat{background:var(--menu);border-right:1px solid var(--menu-borda);padding:12px 10px;display:flex;flex-direction:column;gap:2px;font-size:13.5px}
+.lat .marca{font-weight:700;font-size:15px;padding:4px 8px 8px}
+.areas{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--cartao);border:1px solid var(--borda);border-radius:10px;padding:3px;margin-bottom:8px}
+.areas button{all:unset;cursor:pointer;text-align:center;font-size:12.5px;font-weight:600;padding:5px 4px;border-radius:7px;color:var(--texto2)}
+.areas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.areas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.lat .g{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 8px 3px}
+.lat a{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:7px;color:var(--menu-texto);text-decoration:none;cursor:pointer}
+.lat a[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.lat a .cont{font-size:11px;font-weight:700;background:var(--erro);color:#fff;border-radius:999px;padding:0 6px}
+.lat .pe{margin-top:auto;border-top:1px solid var(--menu-borda);padding-top:8px}
+.topo2{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--borda);background:var(--cartao)}
+.busca{flex:1;max-width:420px;display:flex;align-items:center;gap:8px;border:1px solid var(--borda);border-radius:9px;padding:6px 10px;color:var(--texto2);font-size:13px;background:var(--fundo)}
+.busca kbd{margin-left:auto;font-family:var(--mono);font-size:11px;border:1px solid var(--borda);border-radius:5px;padding:0 5px}
+.ic{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--borda);background:var(--cartao);font-size:13px;position:relative}
+.ic .p{position:absolute;top:-3px;right:-3px;background:var(--erro);color:#fff;border-radius:999px;font-size:10px;padding:0 4px;font-weight:700}
+.empresa-sel{font-size:12.5px;border:1px solid var(--borda);border-radius:999px;padding:3px 10px;background:var(--pilula)}
+.conteudo{padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.ola{font-size:20px;font-weight:700;margin:0}
+.campo-g{display:flex;align-items:center;gap:10px;border:1px solid var(--borda);border-radius:14px;padding:12px 14px;background:var(--cartao);font-size:15px;color:var(--texto2);box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.campo-g .env{margin-left:auto;width:30px;height:30px;border-radius:50%;background:var(--area);color:var(--sobre-area);display:grid;place-items:center}
+.hoje{display:flex;flex-direction:column}
+.hoje .it{display:grid;grid-template-columns:10px 1fr auto;gap:10px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--borda);font-size:13.5px}
+.hoje .it:last-child{border-bottom:0}
+.hoje .ponto{width:8px;height:8px;border-radius:50%}
+.prods{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.prod{border:1px solid var(--borda);border-radius:12px;padding:12px;background:var(--cartao);display:flex;flex-direction:column;gap:4px}
+.prod b{font-size:14px}.prod span{font-size:12.5px;color:var(--texto2)}
+.prod .num{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.prod.off{opacity:.6}
+.perfil{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.perfil div{border:1px solid var(--borda);border-radius:12px;padding:12px;background:var(--cartao);font-size:13px;display:flex;flex-direction:column;gap:4px}
+.perfil b{font-size:14px}
+.bolha{border-radius:12px;padding:10px 12px;font-size:13.5px;max-width:80%}
+.bolha.cli{align-self:flex-end;background:var(--area-ativo)}
+.bolha.eq{align-self:flex-start;background:var(--pilula)}
+.bolha small{display:block;color:var(--texto2);font-size:11.5px;margin-bottom:2px}
+.linha-t{display:flex;gap:6px;flex-wrap:wrap;font-size:12px}
+.linha-t span{border:1px solid var(--borda);border-radius:999px;padding:2px 9px}
+.linha-t span.f{background:var(--ok-f);color:var(--ok);border-color:transparent}
+.linha-t span.a{background:var(--area);color:var(--sobre-area);border-color:transparent}
+.abas2{display:flex;gap:2px;border-bottom:1px solid var(--borda);overflow-x:auto}
+.abas2 button{all:unset;cursor:pointer;padding:8px 12px;font-size:13.5px;color:var(--texto2);border-bottom:2px solid transparent;white-space:nowrap}
+.abas2 button[aria-selected="true"]{color:var(--texto);font-weight:600;border-bottom-color:var(--area)}
+.abas2 button:focus-visible{outline:2px solid var(--area)}
+.rotas td.de{color:var(--texto2);text-decoration:line-through}
+</style>
+
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Revisão de UX</span>
+  <h1>Workspace</h1>
+  <p>Hoje o Workspace foi montado aos pedaços, em mais de dez prompts que se corrigem entre si. Tem uma barra escura no topo e outro menu escuro dentro de cada produto, três seletores (empresa, frente e produto), Membros e Usuários e Permissões em lugares diferentes, Minha conta em duas rotas e "MotorCob" escrito onde já é MotorCX. Proposta: o Workspace sem menu lateral, só com uma barra clara no topo; o menu lateral claro só dentro das áreas, com a troca de área no topo dele; um Início para o dia a dia, Pessoas e perfis num lugar só, o Suporte com prazo à vista e Minha conta numa rota só. Empresas, pessoas e números fictícios.</p>
+</div>
+
+<div class="app">
+  <nav class="menu" aria-label="Telas">
+    <div class="grupo">Workspace</div>
+    <button data-ir="inicio" aria-current="page">Início<small>O dia a dia, em um olhar</small></button>
+    <button data-ir="moldura">Moldura e navegação<small>Topo no Workspace, menu nas áreas</small></button>
+    <button data-ir="pessoas">Empresa › Pessoas e perfis<small>Membros, convite e perfis</small></button>
+    <button data-ir="suporte">Suporte<small>Chamados do cliente</small></button>
+    <button data-ir="conta">Minha conta<small>Uma rota, cinco abas</small></button>
+    <button data-ir="rotas">Rotas e nomes<small>O que muda de endereço</small></button>
+  </nav>
+  <main class="trab">
+
+    <!-- INÍCIO -->
+    <section data-p="inicio">
+      <div class="cab"><div><h2>Início</h2><p>O que a pessoa vê todo dia depois dos primeiros passos: o que precisa dela hoje, os números do dia e o caminho para cada área.</p></div></div>
+      <div class="antes"><div><b>Hoje</b>Saudação, campo, "Para hoje" com 3 tipos de item, cards de produto só com "Abrir" e "Dicas" rotativas, debaixo de uma barra escura. Os primeiros passos somem quando acabam, e o Início fica quase vazio.</div><div><b>Proposta</b>Sem menu lateral: só uma barra clara no topo. "Para hoje" puxa o que precisa da pessoa (até 5 itens, do mais urgente ao menos), cada área mostra um número do dia e as dicas saem (a ajuda pelo tempo de casa e o glossário já cobrem isso).</div></div>
+      <div class="ws cob">
+        <div class="wsbar">
+          <span class="ic hamb" style="display:none" aria-label="Menu">☰</span>
+          <span class="marca">MotorCX</span>
+          <nav aria-label="Workspace (exemplo)"><a aria-current="page">Início</a><a>Áreas ▾</a><a>Empresa</a><a>Suporte <span class="cont">1</span></a></nav>
+          <div class="dir"><div class="busca">Busque uma tela ou pergunte <kbd>⌘K</kbd></div><span class="ic" title="O que significa">?</span><span class="ic" title="Avisos">🔔<span class="p">3</span></span><span class="ic" title="Minha conta">R</span></div>
+        </div>
+        <div class="conteudo">
+          <p class="ola">Bom dia, Rafael</p>
+          <div class="campo-g">O que você quer fazer? Busque ou pergunte<span class="env" aria-hidden="true">↑</span></div>
+          <div class="duas">
+            <div class="cartao"><h3>Para hoje</h3>
+              <div class="hoje">
+                <div class="it"><i class="ponto" style="background:var(--erro)"></i><span><b>Fatura de setembro vence amanhã</b> · R$ 4.380,00</span><button class="link">Pagar</button></div>
+                <div class="it"><i class="ponto" style="background:var(--at)"></i><span>O Suporte respondeu o chamado #2041</span><button class="link">Ver</button></div>
+                <div class="it"><i class="ponto" style="background:var(--at)"></i><span>4 respostas de clientes esperam alguém</span><button class="link">Abrir</button></div>
+                <div class="it"><i class="ponto" style="background:var(--ok)"></i><span>Lista do dia pronta às 06:12 · 18.420 clientes</span><button class="link">Baixar</button></div>
+                <div class="it"><i class="ponto" style="background:var(--texto2)"></i><span>Token "ERP Financeiro" vence em 12 dias</span><button class="link">Trocar</button></div>
+              </div></div>
+            <div class="cartao"><h3>Suas áreas</h3>
+              <div class="prods">
+                <div class="prod"><b>Cobrança</b><span class="num">18.420</span><span>na Lista do dia · 3 carteiras</span><button class="link" style="align-self:flex-start">Abrir ›</button></div>
+                <div class="prod"><b>Mensageria</b><span class="num">96,2%</span><span>entregues ontem · SMS e RCS</span><button class="link" style="align-self:flex-start">Abrir ›</button></div>
+                <div class="prod off"><b>Jornada do Cliente</b><span>Boas-vindas, ativação, retenção</span><button class="link" style="align-self:flex-start">Quero conhecer</button></div>
+              </div></div>
+          </div>
+        </div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>"Para hoje" vem do sino e das telas: fatura (vencendo em 3 dias ou vencida), chamado com resposta, respostas sem dono, Lista do dia, envio pausado, token vencendo, carga com erro. Mostra até 5, por urgência, e "Tudo em dia por aqui" quando não há nada.</li>
+        <li>Cada item só aparece para quem pode agir (Pagar só para quem vê o faturamento).</li>
+        <li>O número de cada área é o de ontem ou o de hoje, nunca uma simulação. Área não contratada: esmaecida, com "Quero conhecer".</li>
+      </ul></div>
+    </section>
+
+    <!-- MOLDURA -->
+    <section data-p="moldura" hidden>
+      <div class="cab"><div><h2>Moldura e navegação</h2><p>Duas molduras, com o mesmo topo: o Workspace (Início, Empresa, Suporte, Minha conta) sem menu lateral, e as áreas (Cobrança, Jornada, Mensageria, Relatórios) com o menu lateral claro aprovado no bloco 5.</p></div></div>
+      <div class="antes"><div><b>Hoje</b>Barra escura no topo do Workspace e outro menu escuro dentro de cada produto, com "‹ Voltar ao Workspace". Três seletores: empresa, frente ("Trocar para MotorCli" no avatar) e produto. Relatórios em três lugares diferentes.</div><div><b>Proposta</b>Workspace: só a barra clara do topo (Início · Áreas ▾ · Empresa · Suporte). Dentro das áreas: a mesma barra e o menu lateral claro, com a troca de área no topo dele. Mensageria e Relatórios aparecem nas duas áreas.</div></div>
+      <div class="duas">
+        <div class="cartao"><h3>Workspace · barra do topo</h3>
+          <p class="sub">MotorCX · <b>Início</b> · <b>Áreas ▾</b> (Cobrança, Jornada do Cliente, Mensageria, Relatórios; só as contratadas, as outras com "Quero conhecer") · <b>Empresa</b> (Dados e contatos · Pessoas e perfis · Integrações · Faturas · Auditoria) · <b>Suporte</b> · à direita a busca, "?", sino e avatar. Sem menu lateral.</p></div>
+        <div class="cartao"><h3>Menu lateral · Cobrança</h3>
+          <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7">
+            <li><b>Operação</b>: Lista do dia · Clientes · Ações · Enviar carga</li>
+            <li><b>Estratégia</b>: Orquestração · Personas · Segmentos · Carteiras · Mapa da Esteira · Comitê</li>
+            <li><b>Mensageria</b>: Campanhas · Lotes · Respostas · Templates · Listas · Configurações</li>
+            <li><b>Resultados</b>: Painel · Relatórios</li>
+            <li>No topo do menu: <b>‹ Início</b> e a troca de área</li>
+          </ul></div>
+        <div class="cartao"><h3>Menu lateral · Jornada do Cliente</h3>
+          <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7">
+            <li><b>Jornada</b>: Mapa · Lista do dia · Clientes · Enviar carga</li>
+            <li><b>Estratégia</b>: Momentos e fases · Mensagens por momento</li>
+            <li><b>Mensageria</b>: as mesmas telas</li>
+            <li><b>Resultados</b>: Painel · Relatórios</li>
+            <li>No topo do menu: <b>‹ Início</b> e a troca de área</li>
+          </ul></div>
+      </div>
+      <div class="cartao"><h3>Topo de todas as telas</h3>
+        <p class="sub">Campo "Busque uma tela ou pergunte ao Assistente" (⌘K) · "?" O que significa · sino · avatar (Minha conta · Documentação · Sair). Para a equipe, entra também a pílula da empresa, com busca. Cliente com uma empresa só não vê seletor.</p></div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>A troca de área só aparece para quem tem as duas; a escolha fica lembrada. No login, "Escolha a área" só na primeira vez.</li>
+        <li>No celular: a barra do topo vira ☰ (uma gaveta com Início, Áreas, Empresa e Suporte); dentro das áreas, o menu lateral vai para a mesma gaveta. Sem rolagem lateral; o avatar do Assistente sobe quando há botão fixo embaixo.</li>
+        <li>Tudo com o nome MotorCX: "Suporte MotorCX", "Equipe MotorCX", "Padrão MotorCX".</li>
+      </ul></div>
+    </section>
+
+    <!-- PESSOAS -->
+    <section data-p="pessoas" hidden>
+      <div class="cab"><div><h2>Empresa › Pessoas e perfis</h2><p>Membros, a página Usuários e a de Permissões viram uma tela só, com duas abas.</p></div><button class="btn" id="convidar">Convidar pessoa</button></div>
+      <div class="abas2" role="tablist"><button role="tab" aria-selected="true" data-a="pes">Pessoas</button><button role="tab" aria-selected="false" data-a="perf">Perfis</button></div>
+      <div id="a-pes">
+        <div class="cartao resp"><table class="tab cartoes"><thead><tr><th>Nome</th><th>Perfil</th><th>Áreas</th><th>Último acesso</th><th>Situação</th><th></th></tr></thead><tbody>
+          <tr><td class="c1">Rafael Souza<br><small class="nota">rafael@alfa.exemplo</small></td><td class="c3">Admin</td><td class="x">Cobrança · Jornada</td><td class="c4">hoje 08:02</td><td class="c2"><span class="pil ok">Ativo</span></td><td class="x"><button class="link">Gerenciar</button></td></tr>
+          <tr><td class="c1">Carla Lima<br><small class="nota">carla@alfa.exemplo</small></td><td class="c3">Planejamento</td><td class="x">Cobrança</td><td class="c4">ontem</td><td class="c2"><span class="pil ok">Ativo</span></td><td class="x"><button class="link">Gerenciar</button></td></tr>
+          <tr><td class="c1">Bruno Alves<br><small class="nota">bruno@alfa.exemplo</small></td><td class="c3">Operação</td><td class="x">Cobrança</td><td class="c4">—</td><td class="c2"><span class="pil at">Convite enviado</span></td><td class="x"><button class="link">Reenviar convite</button></td></tr>
+        </tbody></table></div>
+        <p class="nota">Gerenciar abre o painel lateral: perfil, áreas, redefinir senha, desativar (com confirmação: "Bruno perde o acesso na hora. O histórico fica.") e os últimos acessos.</p>
+      </div>
+      <div id="a-perf" hidden>
+        <div class="perfil">
+          <div><b>Admin</b><span>Tudo da empresa: pessoas e perfis, faturas, integrações e configurações.</span><span class="nota">2 pessoas · duas etapas obrigatória</span></div>
+          <div><b>Planejamento</b><span>Monta estratégias, campanhas e réguas; envia cargas; vê resultados.</span><span class="nota">3 pessoas</span></div>
+          <div><b>Operação</b><span>Trabalha a Lista do dia e as respostas dos clientes; não muda estratégias.</span><span class="nota">8 pessoas</span></div>
+          <div><b>Gestão</b><span>Acompanha resultados e relatórios; não muda nada na operação.</span><span class="nota">2 pessoas · 1 ajuste</span></div>
+        </div>
+        <div class="cartao"><h3>O que cada perfil pode</h3>
+          <div class="rolar"><table class="tab"><thead><tr><th>Permissão</th><th>Admin</th><th>Planejamento</th><th>Operação</th><th>Gestão</th></tr></thead><tbody>
+            <tr><td>Enviar cargas<small class="nota" style="display:block">Base, incremental, retirada, acordo, baixa</small></td><td>🔒 sim</td><td>sim</td><td>não</td><td>não</td></tr>
+            <tr><td>Ver faturas<small class="nota" style="display:block">Faturas, boletos e notas</small></td><td>🔒 sim</td><td>não</td><td>não</td><td>sim <span class="pil at">ajustado</span></td></tr>
+            <tr><td>Gerenciar tokens de API</td><td>🔒 sim</td><td>não</td><td>não</td><td>não</td></tr>
+          </tbody></table></div>
+          <p class="nota">Cada permissão com uma linha de explicação. "Ajustado" = diferente do padrão MotorCX; "Voltar ao padrão" desfaz.</p></div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>Quem não pode gerenciar pessoas vê a lista em leitura, com o motivo ("Quem convida e ajusta perfis é o Admin").</li>
+        <li>Convidar em 1 painel: e-mail, nome, perfil (com a descrição) e áreas; o resumo antes de enviar diz o que a pessoa vai poder fazer.</li>
+      </ul></div>
+    </section>
+
+    <!-- SUPORTE -->
+    <section data-p="suporte" hidden>
+      <div class="cab"><div><h2>Suporte</h2><p>O lado do cliente: em que pé está cada chamado e quando a resposta deve chegar.</p></div><button class="btn">Abrir chamado</button></div>
+      <div class="duas">
+        <div class="cartao resp"><table class="tab cartoes"><thead><tr><th>Chamado</th><th>Motivo</th><th>Situação</th><th>Resposta até</th></tr></thead><tbody>
+          <tr><td class="c1">#2041 · Lista do dia sem a carteira Banco Alfa<br><span class="pil erro">Nova resposta</span></td><td class="c3">Lista do dia</td><td class="c2"><span class="pil at">Aguardando você</span></td><td class="c4">—</td></tr>
+          <tr><td class="c1">#2038 · Dúvida sobre RCS</td><td class="c3">Mensageria</td><td class="c2"><span class="pil neutra">Em atendimento · Ana</span></td><td class="c4">hoje 17:00</td></tr>
+          <tr><td class="c1">#2012 · Acesso de novo usuário</td><td class="c3">Acesso</td><td class="c2"><span class="pil ok">Resolvido</span></td><td class="c4">—</td></tr>
+        </tbody></table></div>
+        <div class="cartao"><h3>#2041 · Lista do dia sem a carteira Banco Alfa</h3>
+          <div class="linha-t"><span class="f">Aberto 08:10</span><span class="f">Em atendimento 08:40</span><span class="a">Aguardando você</span><span>Resolvido</span></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="bolha cli"><small>Rafael · 08:10</small>A carteira Banco Alfa não apareceu na Lista do dia de hoje.</div>
+            <div class="bolha eq"><small>Ana · Suporte MotorCX · 09:02</small>A carga de ontem chegou com 0 linhas. Pode enviar de novo? Se preferir, mande o arquivo aqui que eu confiro.</div>
+          </div>
+          <textarea rows="2" aria-label="Responder" style="font:inherit;border:1px solid var(--borda);border-radius:8px;padding:8px;background:var(--cartao);color:var(--texto)" placeholder="Responder"></textarea>
+          <div class="linha"><button class="btn peq">Enviar</button><button class="link">Anexar (até 5 · 10 MB)</button><button class="link">Marcar como resolvido</button></div>
+        </div>
+      </div>
+      <div class="regra"><b>Regras</b><ul>
+        <li>"Resposta até" mostra o prazo do motivo e da prioridade (1 dia útil; alta: 4 horas úteis). Passou do prazo: fica âmbar para a equipe, nunca para o cliente.</li>
+        <li>"Aguardando você" sobe para o topo e entra no "Para hoje". Sem resposta do cliente em 7 dias, o chamado fecha sozinho com aviso 2 dias antes.</li>
+      </ul></div>
+    </section>
+
+    <!-- CONTA -->
+    <section data-p="conta" hidden>
+      <div class="cab"><div><h2>Minha conta</h2><p>Uma rota só (/conta) com cinco abas. Tokens saem (já estão em Empresa › Integrações).</p></div></div>
+      <div class="abas2" role="tablist"><button role="tab" aria-selected="true">Dados</button><button role="tab" aria-selected="false">Segurança</button><button role="tab" aria-selected="false">Notificações</button><button role="tab" aria-selected="false">Preferências</button><button role="tab" aria-selected="false">Meu perfil</button></div>
+      <div class="cartao" style="max-width:640px">
+        <dl class="dl"><dt>Dados</dt><dd>Foto, nome, telefone. E-mail só o Admin troca.</dd>
+          <dt>Segurança</dt><dd>Senha (12+, letra e número), verificação em duas etapas (obrigatória para Admin), aparelhos conectados e "Sair dos outros aparelhos".</dd>
+          <dt>Notificações</dt><dd>Sino e e-mail por assunto (aprovado em E-mails do sistema).</dd>
+          <dt>Preferências</dt><dd>Tema (claro, escuro, do sistema), ajuda nas telas (automática, sempre aberta, só o (i), desligada) e a área que abre primeiro.</dd>
+          <dt>Meu perfil</dt><dd>O que o seu perfil pode, em leitura, com "Quem ajusta é o Admin, em Empresa › Pessoas e perfis".</dd></dl>
+      </div>
+    </section>
+
+    <!-- ROTAS -->
+    <section data-p="rotas" hidden>
+      <div class="cab"><div><h2>Rotas e nomes</h2><p>O que muda de endereço. Os endereços antigos continuam funcionando e levam ao novo.</p></div></div>
+      <div class="cartao resp"><div class="rolar"><table class="tab quebra rotas"><thead><tr><th>Hoje</th><th>Proposta</th></tr></thead><tbody>
+        <tr><td class="de">/workspace (barra escura) e /inicio</td><td>/inicio, com a barra clara e sem menu lateral</td></tr>
+        <tr><td class="de">/empresa/membros · /usuarios · /permissoes</td><td>/empresa/pessoas (abas Pessoas e Perfis)</td></tr>
+        <tr><td class="de">/auditoria</td><td>/empresa/auditoria</td></tr>
+        <tr><td class="de">/conta · /conta/permissoes · /conta/seguranca · /conta/tokens · /minha-conta/notificacoes</td><td>/conta?aba=dados|seguranca|notificacoes|preferencias|perfil</td></tr>
+        <tr><td class="de">/relatorios · /mensageria/:canal/relatorios</td><td>/relatorios (filtro por canal dentro)</td></tr>
+        <tr><td class="de">"Trocar para MotorCli" no avatar</td><td>Troca de área no topo do menu</td></tr>
+        <tr><td class="de">Sobre o MotorCob · Console MotorCob · Suporte MotorCob · Padrão MotorCob</td><td>MotorCX em todos</td></tr>
+        <tr><td class="de">"Escolha a frente"</td><td>"Escolha a área" (só na primeira vez)</td></tr>
+        <tr><td class="de">Senha com maiúscula, minúscula e símbolo (página de usuários)</td><td>Uma regra: 12+ caracteres, letra e número</td></tr>
+      </tbody></table></div></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const toast = t => { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3200); };
+  const telas = [...document.querySelectorAll("section[data-p]")], botoes = [...document.querySelectorAll(".menu button")];
+  const ir = p => { telas.forEach(s => s.hidden = s.dataset.p !== p); botoes.forEach(b => b.dataset.ir === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")); window.scrollTo({ top: 0 }); };
+  botoes.forEach(b => b.addEventListener("click", () => ir(b.dataset.ir)));
+  document.querySelectorAll(".areas").forEach(g => g.querySelectorAll("button").forEach(b => b.addEventListener("click", () => g.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false")))));
+  document.querySelectorAll(".abas2").forEach(g => g.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    g.querySelectorAll("button").forEach(x => x.setAttribute("aria-selected", x === b ? "true" : "false"));
+    if (b.dataset.a) { $("a-pes").hidden = b.dataset.a !== "pes"; $("a-perf").hidden = b.dataset.a !== "perf"; }
+  })));
+  $("convidar").addEventListener("click", () => toast("Painel: e-mail, nome, perfil com a descrição e áreas; resumo antes de enviar."));
+})();
+</script>

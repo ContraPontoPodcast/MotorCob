@@ -214,4 +214,10 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
     servidor, chamado aberto pelo Assistente, Painel, fila "Para resolver" e aviso de 80% e 100% do teto. Depois:
     função `assistente` de novo e prompts 66 e 67.
 
+44. `supabase/migrations/20261211000001_workspace_v2.sql` (SQL 44) — **Workspace**: "Para hoje" do Início (até 5
+    itens por urgência, só o que a pessoa pode resolver), número do dia de cada área, Pessoas e perfis (e-mail dos
+    outros só para quem gerencia usuários, convite pendente, ajustes por perfil), "Resposta até" dos chamados em
+    horário útil (coluna calculada `prazo_resposta`) e fechamento dos chamados parados pelo motor (aviso no 5º dia,
+    fecha no 7º). Só funções, nenhuma tabela nova. Depois: função `assistente` de novo e prompts 68, 69 e 70.
+
 **Conferência:** `CONFERENCIA_GERAL.sql` mostra, item por item, o que está OK e o que falta (só lê).

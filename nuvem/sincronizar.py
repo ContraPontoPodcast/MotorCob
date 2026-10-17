@@ -1361,6 +1361,7 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
             fornecedores.manter_assinaturas(out)         # endereço de retorno cadastrado na Zenvia
             avisos.limpar(sb, agora)                     # avisos do sino com mais de 90 dias
             avisos.api(sb, out)                          # tokens de API vencendo ou parados (SQL 41)
+            avisos.chamados_parados(sb, out)             # chamado sem resposta do cliente: avisa e fecha (SQL 44)
             relatorios.expirar(sb, out)                  # arquivos de relatório com mais de 7 dias
             from nuvem import emails as _emails
             _emails.verificar(sb, out)                   # SPF, DKIM e DMARC do domínio dos remetentes (SQL 42)

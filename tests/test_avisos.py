@@ -116,5 +116,20 @@ class TestAvisos(unittest.TestCase):
         self.assertEqual(AV.api(sb, out=saida.append), 0)
 
 
+    def test_chamados_parados(self):
+        sb = SbFalso()
+        sb.rpc = lambda f, a=None: {"avisados": 1, "fechados": 2} if f == "fechar_chamados_parados" else None
+        saida = []
+        self.assertEqual(AV.chamados_parados(sb, out=saida.append), {"avisados": 1, "fechados": 2})
+        self.assertEqual(saida, ["suporte: 1 chamado(s) avisado(s), 2 fechado(s) sem resposta"])
+        sb.rpc = lambda f, a=None: {"avisados": 0, "fechados": 0}
+        AV.chamados_parados(sb, out=saida.append)
+        self.assertEqual(len(saida), 1)                  # nada a contar: nada no log
+
+        def velho(f, a=None):
+            raise RuntimeError("404")
+        sb.rpc = velho
+        self.assertEqual(AV.chamados_parados(sb, out=saida.append), {})
+
 if __name__ == "__main__":
     unittest.main()

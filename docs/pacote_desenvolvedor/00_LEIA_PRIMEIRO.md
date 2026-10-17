@@ -9,6 +9,9 @@ Ele substitui tudo o que foi enviado antes (tema preto e âmbar, site com vídeo
 
 Faça **na ordem**; cada passo depende do anterior.
 
+> **Do passo 59 ao 105 (homologação de 14 a 16/10/2026): use o roteiro único `TOMBAMENTO.md`**, que agrupa
+> tudo por lugar, publica cada função uma vez só e diz quando pausar e religar o motor.
+
 | # | Pasta | O que é | Onde | Quando |
 |---|---|---|---|---|
 | 1 | `02_supabase_painel` | **Segurança urgente**: fechar cadastro aberto, URLs de retorno, MFA | Painel Supabase | Hoje |
@@ -112,6 +115,9 @@ Faça **na ordem**; cada passo depende do anterior.
 | 100 | `supabase/migrations/20261210000001_assistente_v2.sql` (SQL 43) | Assistente: teto em reais e cotação, custo e situação por pergunta, sugestões, Respostas da equipe, fila e Painel | Supabase | 95º |
 | 101 | função `assistente` de novo (`python3 scripts/juntar_funcao.py assistente`) | Sonnet 5.5 com a resposta aparecendo enquanto é escrita, contexto da pessoa, teto, chamado com a conversa | Supabase | 96º |
 | 102 | `07_workspace/PROMPT_66_ASSISTENTE.md` e `PROMPT_67_CONSOLE_ASSISTENTE.md` + motor na nuvem | Gaveta do Assistente nova e Console › Assistente (Painel, Para resolver, Respostas da equipe) | Site + Google Cloud | 97º |
+| 103 | `supabase/migrations/20261211000001_workspace_v2.sql` (SQL 44) | Workspace: Para hoje, número do dia das áreas, Pessoas e perfis, prazo de resposta e fechamento de chamados parados | Supabase | 98º |
+| 104 | função `assistente` de novo (`python3 scripts/juntar_funcao.py assistente`) | O Assistente conhece a navegação nova (barra do topo, áreas, Pessoas e perfis, /conta, prazo do Suporte) | Supabase | 99º |
+| 105 | `07_workspace/PROMPT_68_WORKSPACE_INICIO_NAVEGACAO.md`, `PROMPT_69_PESSOAS_E_MINHA_CONTA.md` e `PROMPT_70_SUPORTE_CLIENTE.md` + motor na nuvem | Workspace sem menu lateral, Início novo, menu das áreas, rotas, Pessoas e perfis, Minha conta e Suporte com prazo | Site + Google Cloud | 100º |
 | 40 | `03_site_e_login/PROMPT_SITE_V5_MOTORCX_A.md` e `_B.md` | Site público MotorCX (substitui o PROMPT_SITE_V4, que não deve ser colado) | Site | quando o domínio sair |
 | ! | `03_site_e_login/PROMPT_DUAS_ETAPAS_COMPONENTE.md` | Duas etapas: componente pronto e testado (código em `site/duas-etapas/` do repositório), substitui as correções anteriores | Site | já |
 
