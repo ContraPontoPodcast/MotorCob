@@ -6,7 +6,7 @@ import { botao, esc, pagina, type Rodape } from "../_compartilhado/email.ts";
 export interface Metrica { funcao: string; nome: string; rotulo?: string; sentido?: "maior_melhor" | "menor_melhor" }
 export interface Linha { rotulo: string; valor: string; variacao: string | null; bom: boolean | null }
 
-export function validarPedido(corpo: unknown): { envio?: number; erro?: string } {
+export function validarEnvio(corpo: unknown): { envio?: number; erro?: string } {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { erro: "pedido inválido" };
   const c = corpo as Record<string, unknown>;
   if (c.acao !== "enviar_resumo") return { erro: "ação desconhecida" };

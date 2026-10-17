@@ -34,7 +34,7 @@ export const cnpjFmt = (c: string | null | undefined) => {
   return d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : (c ?? "");
 };
 
-const NOMES: Record<string, string> = {
+const NOMES_ITENS: Record<string, string> = {
   orquestracao: "Orquestração (MotorCob)", jornada: "Jornada (MotorCli)", sms: "SMS", email: "E-mail",
   rcs_basic: "RCS Basic", rcs_single: "RCS Single", rcs_conversacional: "RCS Conversacional",
   whatsapp_marketing: "WhatsApp Marketing", whatsapp_utilidade: "WhatsApp Utilidade", whatsapp_servico: "WhatsApp Serviço",
@@ -81,7 +81,7 @@ export function detalheFaixas(modelo: string | null | undefined, faixas: Item["f
 
 export function linhaDoItem(i: Item): Linha {
   const base = i.item.replace(/_minimo$/, "");
-  const nome = NOMES[base] ?? i.descricao.split(/ · | \(/)[0];
+  const nome = NOMES_ITENS[base] ?? i.descricao.split(/ · | \(/)[0];
   if (i.item.endsWith("_minimo")) {
     return { item: `Complemento do mínimo · ${nome}`, como: `Mínimo do ciclo ${i.minimo ? brl(i.minimo) : ""}`.trim(),
              quantidade: "", preco: "", valor: brl(i.valor),
