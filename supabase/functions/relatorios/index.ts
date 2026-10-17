@@ -6,7 +6,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { iguais } from "../cobranca/regras.ts";
 import { enviar, linksSair, type Rodape } from "../_compartilhado/email.ts";
-import { emailResumo, linhas, type Metrica, periodoTexto, validarPedido } from "./regras.ts";
+import { emailResumo, linhas, type Metrica, periodoTexto, validarEnvio } from "./regras.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
   if (!token || !(await ehServidor(token))) return json({ erro: "só o servidor faz esta ação" }, 403);
   let corpo: unknown;
   try { corpo = await req.json(); } catch { return json({ erro: "pedido inválido" }, 400); }
-  const v = validarPedido(corpo);
+  const v = validarEnvio(corpo);
   if (v.erro) return json({ erro: v.erro }, 400);
   try {
     return json(await enviarResumo(v.envio!));

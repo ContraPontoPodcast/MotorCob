@@ -1102,6 +1102,16 @@ def _pendentes_base(sb: Supabase) -> dict:
 PEDIDO_TEMPO_MAXIMO = timedelta(minutes=10)
 
 
+def _abrir_trava(arq: Path):
+    """Abre o arquivo de trava. Se o root da VM o criou (motorcob-atualizar faz flock nele antes de reiniciar o
+    plantão), o motor não consegue abrir: como a pasta logs é do motor, troca o arquivo por um dele."""
+    try:
+        return open(arq, "a")
+    except PermissionError:
+        arq.unlink(missing_ok=True)
+        return open(arq, "a")
+
+
 def _rodada_em_andamento(dados: Path | None) -> bool:
     """Alguma rotina segura a trava (logs/.rodando.lock) agora?"""
     if dados is None:
@@ -1110,7 +1120,7 @@ def _rodada_em_andamento(dados: Path | None) -> bool:
     if not arq.exists():
         return False
     import fcntl
-    with open(arq, "a") as f:
+    with _abrir_trava(arq) as f:
         try:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -1651,7 +1661,7 @@ def _travar(dados: Path, esperar: bool, nome: str = ".rodando.lock"):
     import fcntl
     arq = Path(dados) / "logs" / nome
     arq.parent.mkdir(parents=True, exist_ok=True)
-    f = open(arq, "w")
+    f = _abrir_trava(arq)
     try:
         fcntl.flock(f, fcntl.LOCK_EX | (0 if esperar else fcntl.LOCK_NB))
     except BlockingIOError:

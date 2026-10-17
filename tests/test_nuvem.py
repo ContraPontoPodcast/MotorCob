@@ -1112,5 +1112,32 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(nome_seguro("retorno ação 1.csv"), "retorno_a__o_1.csv")
 
 
+class TestTravaDoRoot(unittest.TestCase):
+    def test_trava_criada_pelo_root_e_trocada(self):
+        """motorcob-atualizar (root) cria logs/.rodando.lock; o motor (uid 10001) não abre e a Lista do dia parava."""
+        import builtins
+        import tempfile
+        from unittest import mock
+        from nuvem.sincronizar import _rodada_em_andamento, _travar
+        with tempfile.TemporaryDirectory() as d:
+            dados = Path(d)
+            (dados / "logs").mkdir()
+            (dados / "logs" / ".rodando.lock").write_text("")
+            real, negou = builtins.open, []
+
+            def abrir(arq, *a, **k):
+                if str(arq).endswith(".rodando.lock") and not negou:
+                    negou.append(arq)
+                    raise PermissionError(13, "Permission denied", str(arq))
+                return real(arq, *a, **k)
+            with mock.patch("builtins.open", abrir):
+                trava = _travar(dados, esperar=False)
+            self.assertIsNotNone(trava)
+            self.assertEqual(len(negou), 1)
+            self.assertTrue(_rodada_em_andamento(dados))         # a trava nova vale
+            trava.close()
+            self.assertFalse(_rodada_em_andamento(dados))
+
+
 if __name__ == "__main__":
     unittest.main()

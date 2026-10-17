@@ -1,14 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { emailResumo, linhas, numero, periodoTexto, validarPedido, variacao } from "./regras.ts";
+import { emailResumo, linhas, numero, periodoTexto, validarEnvio, variacao } from "./regras.ts";
 
 const taxa = { funcao: "taxa", nome: "taxa_entrega", rotulo: "Taxa de entrega", sentido: "maior_melhor" as const };
 const nao = { funcao: "somar", nome: "nao_entregues", rotulo: "Não entregues", sentido: "menor_melhor" as const };
 
 test("pedido: só enviar_resumo com o envio", () => {
-  assert.equal(validarPedido({ acao: "enviar_resumo", envio: 4 }).envio, 4);
-  assert.equal(validarPedido({ acao: "enviar_resumo" }).erro, "envio inválido");
-  assert.equal(validarPedido({ acao: "apagar", envio: 4 }).erro, "ação desconhecida");
+  assert.equal(validarEnvio({ acao: "enviar_resumo", envio: 4 }).envio, 4);
+  assert.equal(validarEnvio({ acao: "enviar_resumo" }).erro, "envio inválido");
+  assert.equal(validarEnvio({ acao: "apagar", envio: 4 }).erro, "ação desconhecida");
 });
 
 test("números no formato brasileiro", () => {

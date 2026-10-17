@@ -50,6 +50,18 @@ def visitar(caminho: Path) -> None:
 
 
 visitar(PASTA / "index.ts")
+
+# num arquivo só, dois arquivos não podem declarar o mesmo nome no topo: o Deno recusa iniciar (BOOT_ERROR)
+DECL = re.compile(r'^(?:export\s+)?(?:async\s+)?(?:const|let|var|function\*?|class|enum|interface|type)\s+([A-Za-z_$][\w$]*)', re.M)
+donos: dict[str, list[str]] = {}
+for arquivo, corpo in ordem:
+    for nome in set(DECL.findall(corpo)):
+        donos.setdefault(nome, []).append(arquivo)
+repetidos = {n: a for n, a in donos.items() if len(a) > 1}
+if repetidos:
+    for n, a in sorted(repetidos.items()):
+        print(f"juntar_funcao: '{n}' declarado em {', '.join(a)} (renomeie num deles)", file=sys.stderr)
+    sys.exit(1)
 saida = [f"// Edge Function {NOME} num arquivo só: gerado por scripts/juntar_funcao.py. Não edite aqui; edite os"
          f" arquivos de supabase/functions/{NOME}/ e gere de novo."]
 saida += [f'import {{ {", ".join(nomes)} }} from "{origem}";' for origem, nomes in externos.items()] + outros
