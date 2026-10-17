@@ -17,7 +17,7 @@ Regras: **B a E numa sentada só** (com o plantão pausado, a Lista do dia de am
 5. Supabase › Database › Backups: backup de hoje.
 
 ## B. Abrir a janela (mesmo dia, depois que a Lista do dia sair)
-1. Google Cloud: `sudo motorcob-pausar` (via `gcloud compute ssh motorcob … --command=…`, `06_referencias/NUVEM_GCP.md`).
+1. Google Cloud: `sudo systemctl stop motorcob` (via `gcloud compute ssh motorcob … --command=…`, `06_referencias/NUVEM_GCP.md`).
 2. Supabase › Auth › Providers › Email: senha mínima 12, letras e dígitos; leaked password protection.
 3. Supabase › Edge Functions › Secrets: conferir o remetente de hoje. Se não houver `FATURA_EMAIL_DE`, criar
    `EMAIL_DE_FINANCEIRO` com o endereço que manda as faturas hoje; idem `RELATORIO_EMAIL_DE` / `EMAIL_DE_RELATORIOS`.
@@ -40,7 +40,7 @@ de agosto/2026, editável depois) · SQL 31 `20261128000001_estrategia_carteira`
 ## E. Modelos do login e motor (fecha a janela)
 1. Auth › Templates: convite, redefinir senha, avisos de segurança; validade do link 86400 s (`EMAILS_SISTEMA.md`, passo 5).
 2. GitHub › Actions › imagem: execução verde depois do merge.
-3. Google Cloud: `sudo motorcob-retomar; sudo systemctl start motorcob-atualizar` e conferir o log ("plantão no ar").
+3. Google Cloud: `sudo systemctl start motorcob-atualizar; sudo systemctl start motorcob` e conferir o log ("plantão no ar").
 
 ## F. Site (Horizons, no seu ritmo, em ordem)
 36–37 Console e empresa · 38–40 Produtos, fornecedores, Administrativo · 41–42 Orquestração · 43–45 Glossário, tema,

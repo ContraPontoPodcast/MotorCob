@@ -84,7 +84,9 @@ ANTES="$(docker inspect --format '{{.Image}}' motorcob 2>/dev/null || true)"
 docker pull -q "$IMAGEM" >/dev/null
 DEPOIS="$(docker image inspect --format '{{.Id}}' "$IMAGEM")"
 if [ "$ANTES" != "$DEPOIS" ]; then
-  mkdir -p /var/motorcob/dados/logs
+  install -d -o 10001 -g 10001 -m 700 /var/motorcob/dados/logs
+  # a trava é do motor (uid 10001): criada pelo root, o motor não consegue abrir e a Lista do dia para
+  [ -e /var/motorcob/dados/logs/.rodando.lock ] || install -o 10001 -g 10001 -m 600 /dev/null /var/motorcob/dados/logs/.rodando.lock
   flock -w 1800 /var/motorcob/dados/logs/.rodando.lock systemctl restart motorcob
   logger -t motorcob "motor atualizado para ${DEPOIS:7:12}"
 fi
