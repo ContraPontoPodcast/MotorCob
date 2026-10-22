@@ -47,21 +47,73 @@ test("link de sair assinado: confere só o par certo", async () => {
   assert.equal(await hashEmail(" Ana@X.com "), await hashEmail("ana@x.com"));
 });
 
-test("envio: um destinatário, Reply-To, um clique e o id da mensagem", async () => {
-  let corpo: any = null, cab: any = null;
-  const f = (async (_u: string, i: any) => { corpo = JSON.parse(i.body); cab = i.headers;
-    return new Response(JSON.stringify({ id: "lw-99" }), { status: 201 }); }) as typeof fetch;
-  const r = await enviar({ de: "avisos", para: "ana@x.com", assunto: "Envios pausados", html: "<p>x</p>",
-    responderPara: "suporte@motorcob.online", umClique: "https://f/emails/sair?u=1" }, f, (k) => ({ EMAIL_SISTEMA_TOKEN: "tk" })[k]);
-  assert.equal(r.id, "lw-99");
-  assert.equal(cab["x-auth-token"], "tk");
-  assert.equal(corpo.to, "ana@x.com");
-  assert.equal(corpo.from, "MotorCX <avisos@motorcob.online>");
-  assert.equal(corpo.headers["Reply-To"], "suporte@motorcob.online");
-  assert.equal(corpo.headers["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click");
-  await assert.rejects(enviar({ de: "avisos", para: "a@b.com", assunto: "x", html: "" }, f, () => undefined), /EMAIL_SISTEMA_TOKEN/);
-  const recusa = (async () => new Response("quota", { status: 422 })) as typeof fetch;
-  await assert.rejects(enviar({ de: "avisos", para: "a@b.com", assunto: "x", html: "" }, recusa, () => "tk"), /422/);
+/** Servidor SMTP falso: responde na ordem e guarda o que recebeu. */
+function smtpFalso(respostas: string[]) {
+  const recebido: string[] = [];
+  let fechou = false;
+  const abrir = async (host: string, porta: number) => {
+    recebido.push(`#${host}:${porta}`);
+    return { ler: async () => respostas.shift() ?? "421 acabou", escrever: async (t: string) => { recebido.push(t); },
+      fechar: () => { fechou = true; } };
+  };
+  return { abrir, recebido, fechou: () => fechou };
+}
+const OK = ["220 smtp.hostinger.com", "250-smtp.hostinger.com\n250 AUTH PLAIN LOGIN", "235 ok", "250 ok", "250 ok", "354 vai",
+  "250 ok fila", "221 tchau"];
+const corpoDe = (b64: string) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\r\n/g, "")), (c) => c.charCodeAt(0)));
+
+test("envio pela caixa da Hostinger: login, um destinatário, Reply-To, um clique, só texto + HTML e o Message-ID", async () => {
+  const s = smtpFalso([...OK]);
+  const env = (k: string) => ({ EMAIL_SMTP_USUARIO: "sistema@motorcob.online", EMAIL_SMTP_SENHA: "senha-teste" })[k];
+  const r = await enviar({ de: "relatorios", para: "ana@x.com", assunto: "Relatório da semana · Recuperação",
+    html: "<p>Olá &amp; <a href=\"https://x/y\">Abrir</a></p>", responderPara: "suporte@motorcob.online",
+    umClique: "https://f/emails/sair?u=1" }, s.abrir, env);
+  assert.match(r.id, /^[0-9a-f-]{36}@motorcob\.online$/);
+  assert.equal(s.recebido[0], "#smtp.hostinger.com:465");
+  assert.equal(s.recebido[1], "EHLO motorcob.online\r\n");
+  assert.equal(atob(s.recebido[2].slice(11).trim()), "\0sistema@motorcob.online\0senha-teste");
+  assert.equal(s.recebido[3], "MAIL FROM:<sistema@motorcob.online>\r\n");
+  assert.equal(s.recebido[4], "RCPT TO:<ana@x.com>\r\n");
+  const msg = s.recebido[6];
+  assert.match(msg, /^From: =\?UTF-8\?B\?[^?]+\?= <relatorios@motorcob\.online>\r\n/);
+  assert.match(msg, /\r\nTo: <ana@x\.com>\r\n/);
+  assert.match(msg, /\r\nSubject: =\?UTF-8\?B\?/);
+  assert.match(msg, new RegExp(`\\r\\nMessage-ID: <${r.id}>\\r\\n`));
+  assert.match(msg, /\r\nReply-To: <suporte@motorcob\.online>\r\n/);
+  assert.match(msg, /\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n/);
+  assert.match(msg, /\r\n\.\r\n$/);
+  const partes = [...msg.matchAll(/Content-Type: (text\/\w+); charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=\r\n]+?)\r\n--/g)];
+  assert.deepEqual(partes.map((p) => p[1]), ["text/plain", "text/html"]);
+  assert.equal(corpoDe(partes[0][2]), "Olá & Abrir: https://x/y");
+  assert.match(corpoDe(partes[1][2]), /<a href="https:\/\/x\/y">/);
+  assert.ok(msg.split("\r\n").slice(0, -2).every((l) => l.length <= 998 && !l.startsWith(".")));
+  assert.equal(s.recebido[7], "QUIT\r\n");
+  assert.ok(s.fechou());
+});
+
+test("envio: caixa própria por tipo, host e porta dos Secrets, recusas e cabeçalho forjado", async () => {
+  const s = smtpFalso([...OK]);
+  const env = (m: Record<string, string>) => (k: string) => m[k];
+  const base = { EMAIL_SMTP_USUARIO: "sistema@motorcob.online", EMAIL_SMTP_SENHA: "a" };
+  await enviar({ de: "financeiro", para: "b@c.com", assunto: "Fatura", html: "<p>x</p>" }, s.abrir,
+    env({ ...base, EMAIL_SMTP_USUARIO_FINANCEIRO: "financeiro@motorcob.online", EMAIL_SMTP_SENHA_FINANCEIRO: "b",
+      EMAIL_SMTP_HOST: "smtp.exemplo.com", EMAIL_SMTP_PORTA: "2465" }));
+  assert.equal(s.recebido[0], "#smtp.exemplo.com:2465");
+  assert.equal(atob(s.recebido[2].slice(11).trim()), "\0financeiro@motorcob.online\0b");
+  await assert.rejects(enviar({ de: "avisos", para: "a@b.com", assunto: "x", html: "" }, s.abrir, () => undefined),
+    /EMAIL_SMTP_USUARIO e EMAIL_SMTP_SENHA/);
+  const senha = smtpFalso(["220 oi", "250 ok", "535 5.7.8 Authentication failed"]);
+  await assert.rejects(enviar({ de: "avisos", para: "a@b.com", assunto: "x", html: "" }, senha.abrir, env(base)),
+    (e: Error) => /login.*535/.test(e.message) && !e.message.includes("YQ"));
+  assert.ok(senha.fechou());
+  const rcpt = smtpFalso(["220 oi", "250 ok", "235 ok", "250 ok", "550 no such user"]);
+  await assert.rejects(enviar({ de: "avisos", para: "a@b.com", assunto: "x", html: "" }, rcpt.abrir, env(base)), /destinatário \(550\)/);
+  for (const para of ["a@b.com\r\nBcc: x@y.com", "sem-arroba", "a@b.com>, <c@d.com"]) {
+    await assert.rejects(enviar({ de: "avisos", para, assunto: "x", html: "" }, smtpFalso([...OK]).abrir, env(base)), /inválido/);
+  }
+  const quebra = smtpFalso([...OK]);
+  await enviar({ de: "avisos", para: "a@b.com", assunto: "Linha 1\r\nBcc: x@y.com", html: "" }, quebra.abrir, env(base));
+  assert.doesNotMatch(quebra.recebido[6], /\r\nBcc:/);
 });
 
 test("aviso por e-mail: obrigatório sem link de sair, opcional com", () => {

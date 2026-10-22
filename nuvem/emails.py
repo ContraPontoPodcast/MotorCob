@@ -55,7 +55,7 @@ def conferir_dominio(dominio: str, seletor: str | None, consultar=None) -> dict:
     else:
         dkim = "sem_seletor"
     return {"spf": "ok" if len(spf) == 1 else ("duplicado" if spf else "ausente"),
-            "spf_locaweb": bool(spf) and "locaweb" in spf[0].lower(),
+            "spf_hostinger": bool(spf) and "_spf.mail.hostinger.com" in spf[0].lower(),
             "dkim": dkim, "dmarc": "ok" if dmarc else "ausente", "politica_dmarc": politica}
 
 

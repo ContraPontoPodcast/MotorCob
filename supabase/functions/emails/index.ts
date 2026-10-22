@@ -1,16 +1,14 @@
 // Edge Function emails (SQL 42): os e-mails do sistema que não são fatura nem relatório.
 // * POST { acao: "avisos" } — só o servidor (motor, a cada 10 minutos): pega a fila dos avisos do sino que viram
 //   e-mail (obrigatórios e os ligados pela pessoa) e manda um e-mail por destinatário, no modelo único.
-// * POST /emails/retorno?t=<EMAIL_RETORNO_TOKEN> — webhook da conta de envio do sistema na Locaweb (devolução e
-//   abertura). Contato de fatura que volta fica marcado e os Admins são avisados.
 // * POST { acao: "sair", u, a, t } ou POST /emails/sair?u&a&t (um clique do programa de e-mail) — desliga o e-mail
 //   opcional ou tira a pessoa da lista do relatório, sem login, com o link assinado. GET só confere o link.
 // * POST { acao: "teste", tipo } — Master logado: manda um exemplo (dados fictícios) para o próprio e-mail.
-// Publicar com "Verify JWT" DESLIGADO (webhook e link de sair não têm login). Secrets: EMAIL_SISTEMA_TOKEN,
-// EMAIL_LINK_SEGREDO, EMAIL_RETORNO_TOKEN, SITE_URL, ORIGENS_PERMITIDAS. Nenhum endereço de e-mail vai para o log.
+// Sai pela caixa padrão da Hostinger (SMTP; ver _compartilhado/email.ts). Publicar com "Verify JWT" DESLIGADO (o link
+// de sair não tem login). Secrets: EMAIL_SMTP_USUARIO, EMAIL_SMTP_SENHA, EMAIL_LINK_SEGREDO, SITE_URL,
+// ORIGENS_PERMITIDAS. Nenhum endereço de e-mail vai para o log.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { conferirAssinatura, enviar, linksSair, type Rodape } from "../_compartilhado/email.ts";
-import { iguais, lerCorpo, locaweb } from "../retorno-mensageria/regras.ts";
 import { emailAviso, exemplo, type LinhaFila, opcional, validarPedido, validarSair } from "./regras.ts";
 import { ehServidor } from "../_compartilhado/servidor.ts";
 
@@ -20,7 +18,6 @@ const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SITE = Deno.env.get("SITE_URL") ?? "https://motorcob.online";
 const FUNCOES = `${SUPABASE_URL}/functions/v1`;
 const SEGREDO = Deno.env.get("EMAIL_LINK_SEGREDO") ?? "";
-const RETORNO = Deno.env.get("EMAIL_RETORNO_TOKEN") ?? "";
 const ORIGENS = (Deno.env.get("ORIGENS_PERMITIDAS") ?? SITE).split(",").map((s) => s.trim()).filter(Boolean);
 const sem = { auth: { persistSession: false, autoRefreshToken: false } };
 const admin = createClient(SUPABASE_URL, SERVICE, sem);
@@ -66,26 +63,6 @@ async function filaDeAvisos() {
   return { enviados, erros };
 }
 
-async function retorno(req: Request, url: URL) {
-  const token = url.searchParams.get("t") ?? req.headers.get("x-retorno-token") ?? "";
-  if (!RETORNO || !iguais(token, RETORNO)) return responder({ erro: "não autorizado" }, 401);
-  if (req.method === "GET") return responder({ ok: true });                 // teste do endereço no painel
-  const texto = await req.text();
-  if (texto.length > 1_000_000) return responder({ erro: "aviso grande demais" }, 413);
-  const eventos = locaweb(lerCorpo(texto, req.headers.get("Content-Type")));
-  let aplicados = 0;
-  for (const e of eventos) {
-    const { error } = await admin.rpc("aplicar_retorno_email", { provedor: e.id_externo, evento: e.tipo,
-      bounce: e.bounce ?? null, motivo: e.motivo ?? null });
-    if (error) {
-      console.error("emails retorno", error.message);
-      return responder({ erro: "falha ao gravar" }, 500);                  // a Locaweb tenta de novo
-    }
-    aplicados++;
-  }
-  return responder({ recebidos: aplicados });
-}
-
 async function sair(u: string, a: string, t: string, aplicar: boolean, origem: string | null) {
   if (!(await conferirAssinatura(SEGREDO, u, a, t))) return responder({ erro: "link inválido ou de outro e-mail" }, 400, origem);
   if (!aplicar) return responder({ valido: true }, 200, origem);
@@ -118,7 +95,6 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const origem = req.headers.get("Origin");
   const fim = url.pathname.split("/").filter(Boolean).pop();
-  if (fim === "retorno") return await retorno(req, url);
   if (req.method === "OPTIONS") return responder({}, 204, origem);
   if (fim === "sair") {                                                   // link do e-mail (GET confere, POST aplica)
     const v = validarSair(url.searchParams.get("u"), url.searchParams.get("a"), url.searchParams.get("t"));

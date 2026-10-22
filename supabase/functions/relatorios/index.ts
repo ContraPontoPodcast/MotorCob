@@ -1,7 +1,7 @@
 // Edge Function relatorios: e-mail do relatório agendado (SQL 39). Só o servidor chama (motor, a cada 10 minutos):
 // { acao: "enviar_resumo", envio }. Roda o relatório salvo no período (ontem, a semana ou o mês passado) e no
 // anterior, manda os números do topo e um link para quem ainda pode ver e marca o próximo envio.
-// * Publicar com "Verify JWT" DESLIGADO. Sai pela conta de envio do sistema (EMAIL_SISTEMA_TOKEN), remetente
+// * Publicar com "Verify JWT" DESLIGADO. Sai pela caixa padrão da Hostinger (EMAIL_SMTP_USUARIO/SENHA), remetente
 //   relatorios@ do domínio (SQL 42), um e-mail por pessoa com o link "Sair desta lista" (EMAIL_LINK_SEGREDO).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { enviar, linksSair, type Rodape } from "../_compartilhado/email.ts";
