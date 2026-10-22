@@ -22,8 +22,7 @@ Não saíram.
 ## 3. Remetentes e domínio
 dominio.verificacao: SPF, DKIM, DMARC como pílulas (ok verde · ausente vermelha · duplicado âmbar "dois registros
 SPF: junte em um" · sem_seletor cinza "preencha o seletor DKIM") + "política DMARC: {politica_dmarc}" +
-"conferido em {verificado_em}". Abaixo: "A conta de envio do sistema é separada da conta da Mensageria." e o link
-para o guia (texto, sem abrir arquivo): "Passo a passo: 02_supabase_painel/EMAILS_SISTEMA.md".
+"conferido em {verificado_em}". Abaixo: "A conta de envio do sistema é separada da conta da Mensageria."
 
 ## 4. O que voltou
 voltaram (até 100): Quando · Empresa · E-mail (tipo e titulo) · Situação (voltou_definitivo "definitivo" vermelho ·

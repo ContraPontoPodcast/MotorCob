@@ -11,8 +11,8 @@ from('chamados').select('id,protocolo,assunto,motivo,prioridade,situacao,respons
 visto_cliente_em,criado_em,prazo_resposta') — prazo_resposta é uma coluna calculada do banco.
 Ordem: primeiro "Aguardando você" (situacao = 'aguardando_cliente'), depois os abertos pela data, os resolvidos por
 último. Botão "Abrir chamado" no cabeçalho (o formulário que já existe, /suporte/novo).
-Colunas: Chamado (protocolo · assunto; pílula vermelha "Nova resposta" quando ultima_de = 'equipe' e ultima_em >
-visto_cliente_em) · Motivo (em palavras) · Situação · Resposta até.
+Colunas: Chamado (protocolo · assunto; pílula vermelha "Nova resposta" quando situacao <> 'resolvido', ultima_de = 'equipe' e
+ultima_em > visto_cliente_em) · Motivo (em palavras) · Situação · Resposta até.
 Situação: aberto "Aberto" · em_atendimento "Em atendimento · {responsavel_nome}" · aguardando_cliente "Aguardando
 você" (âmbar) · resolvido "Resolvido" (verde).
 Resposta até: prazo_resposta em "hoje 17:00", "amanhã 11:00" ou "seg 09:00"; vazio → "—". Para o cliente, NUNCA em
