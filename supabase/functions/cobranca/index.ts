@@ -10,11 +10,12 @@
 // * Publicar com "Verify JWT" DESLIGADO (o login é conferido aqui dentro). Chaves só nos Secrets do Supabase:
 //   STRIPE_SECRET_KEY e FOCUSNFE_TOKEN. Sem elas, a função responde que a integração está sem credencial.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { type Alvo, cobrancaAutomatica, iguais, type Pedido, rotuloParcela, validarPedido } from "./regras.ts";
+import { type Alvo, cobrancaAutomatica, type Pedido, rotuloParcela, validarPedido } from "./regras.ts";
 import {
   ErroCobranca, emitirNota, enviarFatura, gerarCobranca, informarAcordo, lembrarFatura, lembrarParcela, linkDemonstrativo,
   salvarDemonstrativo, stripe,
 } from "./servico.ts";
+import { ehServidor } from "../_compartilhado/servidor.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -39,13 +40,6 @@ function cabecalhos(origem: string | null): Record<string, string> {
 }
 const hojeSP = () => new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
 
-/** A chave do servidor (motor): só ela lê cobranca_clientes. */
-async function ehServidor(token: string) {
-  if (iguais(token, SERVICE)) return true;
-  if (token.split(".").length === 3) return false;                       // login de usuário (JWT)
-  const { error } = await createClient(SUPABASE_URL, token, sem).from("cobranca_clientes").select("empresa_id").limit(1);
-  return !error;
-}
 
 async function alvoDe(db: Db, p: Pedido): Promise<Alvo & { situacao: string; formas?: string[] }> {
   if (p.parcela) {
@@ -138,9 +132,9 @@ Deno.serve(async (req) => {
   if (v.erro) return responder({ erro: v.erro }, 400);
   const p = v.pedido!;
   try {
-    if (p.acao === "informar_acordo" && (await ehServidor(token))) return responder(await informarAcordo(admin, p.acordo!, SITE));
+    if (p.acao === "informar_acordo" && (await ehServidor(token, SUPABASE_URL))) return responder(await informarAcordo(admin, p.acordo!, SITE));
     if (["recargas_automaticas", "enviar_fatura", "lembrar_fatura", "lembrar_parcela"].includes(p.acao)) {
-      if (!(await ehServidor(token))) return responder({ erro: "só o servidor faz esta ação" }, 403);
+      if (!(await ehServidor(token, SUPABASE_URL))) return responder({ erro: "só o servidor faz esta ação" }, 403);
       if (p.acao === "recargas_automaticas") return responder({ recargas: await recargasAutomaticas() });
       if (p.acao === "lembrar_fatura") return responder(await lembrarFatura(admin, p.fatura!, p.tipo!, SITE));
       if (p.acao === "lembrar_parcela") return responder(await lembrarParcela(admin, p.parcela!, p.tipo as "d1" | "d5", SITE));
