@@ -12,6 +12,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { conferirAssinatura, enviar, linksSair, type Rodape } from "../_compartilhado/email.ts";
 import { iguais, lerCorpo, locaweb } from "../retorno-mensageria/regras.ts";
 import { emailAviso, exemplo, type LinhaFila, opcional, validarPedido, validarSair } from "./regras.ts";
+import { ehServidor } from "../_compartilhado/servidor.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -37,12 +38,6 @@ async function rodape(): Promise<Rodape | null> {
   return (data ?? null) as Rodape | null;
 }
 
-async function ehServidor(token: string) {
-  if (iguais(token, SERVICE)) return true;
-  if (token.split(".").length === 3) return false;               // JWT de usuário não é servidor
-  const { error } = await createClient(SUPABASE_URL, token, sem).from("emails_sistema").select("id").limit(1);
-  return !error;
-}
 
 async function filaDeAvisos() {
   const { data, error } = await admin.rpc("avisos_para_email", { limite: 200 });
@@ -145,7 +140,7 @@ Deno.serve(async (req) => {
       return await teste(req, p.tipo!, origem);
     }
     const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-    if (!token || !(await ehServidor(token))) return responder({ erro: "só o servidor faz esta ação" }, 403);
+    if (!token || !(await ehServidor(token, SUPABASE_URL))) return responder({ erro: "só o servidor faz esta ação" }, 403);
     return responder(await filaDeAvisos());
   } catch (e) {
     console.error("emails", (e as { code?: string })?.code ?? "erro");

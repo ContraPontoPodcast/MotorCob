@@ -4,9 +4,9 @@
 // * Publicar com "Verify JWT" DESLIGADO. Sai pela conta de envio do sistema (EMAIL_SISTEMA_TOKEN), remetente
 //   relatorios@ do domínio (SQL 42), um e-mail por pessoa com o link "Sair desta lista" (EMAIL_LINK_SEGREDO).
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { iguais } from "../cobranca/regras.ts";
 import { enviar, linksSair, type Rodape } from "../_compartilhado/email.ts";
 import { emailResumo, linhas, type Metrica, periodoTexto, validarEnvio } from "./regras.ts";
+import { ehServidor } from "../_compartilhado/servidor.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -17,12 +17,6 @@ const admin = createClient(SUPABASE_URL, SERVICE, sem);
 const json = (corpo: unknown, status = 200) =>
   new Response(JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
-async function ehServidor(token: string) {
-  if (iguais(token, SERVICE)) return true;
-  if (token.split(".").length === 3) return false;
-  const { error } = await createClient(SUPABASE_URL, token, sem).from("relatorio_envios").select("id").limit(1);
-  return !error;
-}
 
 async function total(base: string, filtros: Record<string, unknown>, metricas: Metrica[] | null) {
   if (!metricas?.length) {
@@ -81,7 +75,7 @@ async function enviarResumo(id: number) {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ erro: "use POST" }, 405);
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token || !(await ehServidor(token))) return json({ erro: "só o servidor faz esta ação" }, 403);
+  if (!token || !(await ehServidor(token, SUPABASE_URL))) return json({ erro: "só o servidor faz esta ação" }, 403);
   let corpo: unknown;
   try { corpo = await req.json(); } catch { return json({ erro: "pedido inválido" }, 400); }
   const v = validarEnvio(corpo);
