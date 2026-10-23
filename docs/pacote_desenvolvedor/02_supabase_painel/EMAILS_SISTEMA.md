@@ -11,6 +11,12 @@ por você no painel de cada serviço.
 | `MotorCX <avisos@motorcob.online>` | avisos do sino que viram e-mail | suporte |
 | `MotorCX Relatórios <relatorios@motorcob.online>` | relatório agendado | suporte |
 
+**Configuração adotada em 23/10/2026:** um remetente só para todas as frentes, `sistema@motorcx.online` (domínio
+motorcx.online, DKIM `hostingermail-a` ativo). Os Secrets `EMAIL_DE_ACESSO`, `EMAIL_DE_FINANCEIRO`, `EMAIL_DE_AVISOS`
+e `EMAIL_DE_RELATORIOS` recebem esse endereço, o Sender email do passo 5 também, e o domínio do Console é
+`motorcx.online`. O nome mostrado continua por tipo (MotorCX, MotorCX Financeiro, MotorCX Relatórios), e as respostas
+de todas as frentes caem em `sistema@`. A tabela acima vale para quem quiser um endereço por frente.
+
 Os e-mails do sistema (relacionamento com quem usa a plataforma) saem pela **caixa padrão da Hostinger**, por SMTP.
 A **Locaweb fica só para os envios em massa da Mensageria** (campanhas): uma reclamação de spam numa campanha não pode
 levar a fatura ou o "Esqueci a senha" para o spam.
@@ -29,7 +35,8 @@ levar a fatura ou o "Esqueci a senha" para o spam.
       mandar e-mail pela Locaweb **com este mesmo domínio**, o `include` da Locaweb entra no **mesmo** registro (dois
       registros `v=spf1` invalidam os dois).
 - [ ] **DKIM**: em hPanel › E-mails › (caixa) › Configurações do DNS, ative o DKIM. A Hostinger cria os registros
-      `hostingermail1._domainkey`, `hostingermail2` e `hostingermail3`. O seletor para o Console é `hostingermail1`.
+      `hostingermail-a._domainkey` (a chave em uso) e `hostingermail-b._domainkey` (a da próxima troca, vazia por
+      enquanto). O seletor para o Console é `hostingermail-a`.
 - [ ] **DMARC**: TXT em `_dmarc.motorcob.online` `v=DMARC1; p=none; rua=mailto:<caixa que recebe os relatórios>`
       (hoje está só `v=DMARC1; p=none`). Depois de 2 a 4 semanas sem falha no Console, troque para `p=quarantine`.
 - O motor confere SPF, DKIM e DMARC uma vez por dia e o Console mostra o resultado.
