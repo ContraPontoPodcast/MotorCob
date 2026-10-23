@@ -1811,7 +1811,7 @@ _sv(f"""update public.perfis set papel='admin', empresa_id={EW} where id='{WAD}'
  insert into public.mensageria_lotes (empresa_id,data,canal,modo,situacao,motivo) values ({EW},{HJ},'sms','simulado','pausado','Orçamento do dia esgotado.');
  insert into public.mensageria_lotes (empresa_id,data,canal,modo,situacao,enviadas,entregues) values ({EW},{HJ}-1,'sms','simulado','concluido',1000,962);
  insert into public.mensageria_conversas (empresa_id,canal,destino_hash,situacao,nao_lidas) values ({EW},'sms',repeat('a',64),'aberta',2),({EW},'sms',repeat('b',64),'aberta',1),({EW},'sms',repeat('c',64),'aberta',0);
- insert into public.api_tokens (empresa_id,nome,prefixo,hash,escopos,criado_por,expira_em) values ({EW},'ERP Financeiro','mc_0a0b0c0d',repeat('d',64),array['cargas:enviar'],'{WAD}',now() + interval '12 days 2 hours');
+ insert into public.api_tokens (empresa_id,nome,prefixo,hash,escopos,criado_por,expira_em) values ({EW},'ERP Financeiro','mc_0a0b0c0d',repeat('d',64),array['cargas:enviar'],'{WAD}',(((now() at time zone 'America/Sao_Paulo')::date + 12) + time '12:00') at time zone 'America/Sao_Paulo');
  insert into public.execucoes (empresa_id,data_ref,status,terminada_em) values ({EW},{HJ},'ok',now());
  insert into public.fila_dia (empresa_id,data,canal,id_cliente,reserva,regua,passo,tag) values ({EW},{HJ},'sms','W1',false,'giro','G1','t'),({EW},{HJ},'sms','W2',false,'giro','G1','t'),({EW},{HJ},'sms','W3',false,'giro','G1','t')""")
 CW = _sv(f"insert into public.chamados (empresa_id,motivo,assunto,aberto_por) values ({EW},'lista_do_dia','Lista do dia sem a carteira Banco Alfa','{WOP}') returning id")
