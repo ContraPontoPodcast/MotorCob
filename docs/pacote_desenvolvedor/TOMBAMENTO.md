@@ -56,10 +56,11 @@ Workspace. Um prompt por vez, conferindo a tela; se o Horizons publica só no bo
 ## H. E-mails do sistema (caixa padrão da Hostinger; a Locaweb fica só para a Mensageria)
 Até aqui os e-mails saem como hoje (faturas e relatórios pela conta atual, com o remetente de hoje; login pelo envio
 atual do Supabase). Os avisos do sino ainda não viram e-mail; a fila só olha as últimas 24 horas, nada se acumula.
-1. Hostinger: caixa padrão + apelidos `acesso@`, `financeiro@`, `avisos@`, `relatorios@` (`02_supabase_painel/EMAILS_SISTEMA.md`, passo 1).
-2. DNS: SPF já está certo; ativar o DKIM da Hostinger (seletor `hostingermail1`) e DMARC com `rua=` (mesmo guia, passo 2).
-3. Supabase › Secrets: `EMAIL_SMTP_USUARIO`, `EMAIL_SMTP_SENHA`, `EMAIL_LINK_SEGREDO`.
+1. Hostinger: remetente único `sistema@motorcx.online` para todas as frentes (`02_supabase_painel/EMAILS_SISTEMA.md`).
+2. DNS de motorcx.online: SPF certo, DKIM ativo (seletor `hostingermail-a`); falta só o `rua=` no DMARC.
+3. Supabase › Secrets: `EMAIL_SMTP_USUARIO`, `EMAIL_SMTP_SENHA`, `EMAIL_LINK_SEGREDO` e `EMAIL_DE_ACESSO`,
+   `EMAIL_DE_FINANCEIRO`, `EMAIL_DE_AVISOS`, `EMAIL_DE_RELATORIOS` = `sistema@motorcx.online`.
 4. Função `emails` (nova, Verify JWT desligado).
 5. Republicar `cobranca` e `relatorios` (só depois do passo 3).
-6. Supabase › Auth › SMTP: `smtp.hostinger.com`, porta 465, a caixa do passo 1, remetente `acesso@motorcob.online`, nome MotorCX.
+6. Supabase › Auth › SMTP: `smtp.hostinger.com`, porta 465, a caixa do passo 1, remetente `sistema@motorcx.online`, nome MotorCX.
 7. Console › E-mails do sistema: rodapé, e-mails da equipe, seletor do DKIM, "Enviar teste para mim", "Esqueci a senha".

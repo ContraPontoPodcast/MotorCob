@@ -28,7 +28,7 @@ class SbFalso:
 DNS = {
     "motorcob.online": ['v=spf1 include:_spf.mail.hostinger.com ~all', "google-site-verification=x"],
     "_dmarc.motorcob.online": ["v=DMARC1; p=quarantine; rua=mailto:dmarc@motorcob.online"],
-    "hostingermail1._domainkey.motorcob.online": ["v=DKIM1; k=rsa; p=MIGfMA0GCSq"],
+    "hostingermail-a._domainkey.motorcob.online": ["v=DKIM1; k=rsa; p=MIGfMA0GCSq"],
 }
 
 
@@ -47,7 +47,7 @@ class TestEmails(unittest.TestCase):
         self.assertEqual(len(msgs), 1)                 # nada enviado: fica quieto
 
     def test_dominio_completo(self):
-        r = EM.conferir_dominio("motorcob.online", "hostingermail1", lambda n: DNS.get(n, []))
+        r = EM.conferir_dominio("motorcob.online", "hostingermail-a", lambda n: DNS.get(n, []))
         self.assertEqual(r, {"spf": "ok", "spf_hostinger": True, "dkim": "ok", "dmarc": "ok", "politica_dmarc": "quarantine"})
 
     def test_dominio_incompleto(self):
