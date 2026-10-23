@@ -227,6 +227,10 @@ with itens(ordem, item, ok, se_falhar) as (values
        and to_regprocedure('public.prazo_resposta(public.chamados)') is not null
        and to_regprocedure('public.fechar_chamados_parados()') is not null,
        'rodar o SQL 44 (supabase/migrations/20261211000001_workspace_v2.sql)'),
+  (32, 'Links do Início sem 404: Lista do dia em /fila, faturas em /console/faturamento (SQL 45)',
+       to_regprocedure('public.corrigir_link_aviso()') is not null
+       and position('/lista-do-dia' in coalesce(pg_get_functiondef(to_regprocedure('public.numeros_areas(bigint)')), '/lista-do-dia')) = 0,
+       'rodar o SQL 45 (supabase/migrations/20261212000001_links_inicio.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,
