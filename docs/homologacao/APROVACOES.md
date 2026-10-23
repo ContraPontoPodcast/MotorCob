@@ -320,8 +320,8 @@ Protótipo: `emails-sistema-prototipo.html`. Aprovado como está ("Perfeito"):
   180 dias, com o endereço só em hash e mascarado; devolução temporária marca o contato na 3ª seguida; senha alterada
   e verificação desligada usam os avisos de segurança do próprio Supabase Auth; o link de sair só confirma no clique
   (programas de e-mail abrem links sozinhos) e o relatório com uma pessoa só na lista é pausado em vez de ficar vazio.
-- Limite conhecido: a API HTTP da Locaweb recebe só o HTML; a versão só texto fica pronta no código para quando a
-  conta aceitar.
+- 22/10/2026: os e-mails do sistema saem pela caixa padrão da Hostinger (SMTP 465, só texto + HTML); a Locaweb fica
+  só para os envios em massa da Mensageria. Devolução cai na caixa; marcar "E-mail voltou" sozinho (IMAP) é fase 2.
 - Gerado: SQL 42, funções `emails` (nova), `cobranca`, `relatorios`, `admin-usuarios` e `assistente`, motor
   (`nuvem/emails.py`: fila, conferência de SPF/DKIM/DMARC e limpeza), testes, guia `EMAILS_SISTEMA.md` e prompts 64 e 65.
 

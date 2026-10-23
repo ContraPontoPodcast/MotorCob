@@ -53,13 +53,13 @@ Workspace. Um prompt por vez, conferindo a tela; se o Horizons publica só no bo
 2. Teste como cliente: Início, Pessoas e perfis, Suporte, Notificações, Assistente.
 3. Depois: DMARC `p=quarantine` (2 a 4 semanas sem falha) e `08_api/DOMINIO_API.md` quando o DNS for liberado.
 
-## H. E-mails do sistema (quando a conta da Locaweb estiver pronta)
+## H. E-mails do sistema (caixa padrão da Hostinger; a Locaweb fica só para a Mensageria)
 Até aqui os e-mails saem como hoje (faturas e relatórios pela conta atual, com o remetente de hoje; login pelo envio
 atual do Supabase). Os avisos do sino ainda não viram e-mail; a fila só olha as últimas 24 horas, nada se acumula.
-1. Locaweb: conta de envio separada, 4 remetentes, token da API (`02_supabase_painel/EMAILS_SISTEMA.md`, passo 1).
-2. DNS: SPF, DKIM (anote o seletor) e DMARC `p=none` (mesmo guia, passo 2).
-3. Supabase › Secrets: `EMAIL_SISTEMA_TOKEN`, `EMAIL_LINK_SEGREDO`, `EMAIL_RETORNO_TOKEN`.
+1. Hostinger: caixa padrão + apelidos `acesso@`, `financeiro@`, `avisos@`, `relatorios@` (`02_supabase_painel/EMAILS_SISTEMA.md`, passo 1).
+2. DNS: SPF já está certo; ativar o DKIM da Hostinger (seletor `hostingermail1`) e DMARC com `rua=` (mesmo guia, passo 2).
+3. Supabase › Secrets: `EMAIL_SMTP_USUARIO`, `EMAIL_SMTP_SENHA`, `EMAIL_LINK_SEGREDO`.
 4. Função `emails` (nova, Verify JWT desligado).
-5. Locaweb: webhook da conta de envio para `…/functions/v1/emails/retorno?t=<EMAIL_RETORNO_TOKEN>`.
-6. Supabase › Auth › SMTP (conta da Locaweb, remetente `acesso@motorcob.online`, nome MotorCX).
+5. Republicar `cobranca` e `relatorios` (só depois do passo 3).
+6. Supabase › Auth › SMTP: `smtp.hostinger.com`, porta 465, a caixa do passo 1, remetente `acesso@motorcob.online`, nome MotorCX.
 7. Console › E-mails do sistema: rodapé, e-mails da equipe, seletor do DKIM, "Enviar teste para mim", "Esqueci a senha".

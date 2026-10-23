@@ -1,4 +1,4 @@
-# E-mails do sistema — conta de envio, domínio, Secrets e modelos do login
+# E-mails do sistema — caixa da Hostinger, domínio, Secrets e modelos do login
 
 Aprovado em 16/10/2026 (`docs/homologacao/emails-sistema-prototipo.html`). Rode **antes** de publicar as funções
 `emails`, `cobranca` e `relatorios` novas (SQL 42 primeiro). Nenhuma senha ou token passa pelo chat: tudo é digitado
@@ -11,43 +11,52 @@ por você no painel de cada serviço.
 | `MotorCX <avisos@motorcob.online>` | avisos do sino que viram e-mail | suporte |
 | `MotorCX Relatórios <relatorios@motorcob.online>` | relatório agendado | suporte |
 
-## 1. Conta de envio do sistema (separada da Mensageria)
-- [ ] Na Locaweb, crie uma **conta de SMTP separada** da que manda as campanhas da Mensageria (uma reclamação de
-      spam numa campanha não pode levar a fatura para o spam).
-- [ ] Cadastre e valide os 4 remetentes acima nessa conta.
-- [ ] Gere o token da API dessa conta. Ele vai **só** para o Secret `EMAIL_SISTEMA_TOKEN` (passo 3).
-- [ ] Em Configurações › Webhook dessa conta: endereço
-      `https://jxwppkrkuckfwmphqjva.supabase.co/functions/v1/emails/retorno?t=<EMAIL_RETORNO_TOKEN>`, com
-      devoluções (bounce) e aberturas ligadas. É o que marca "E-mail voltou" em Empresa › Contatos.
-- O `LOCAWEB_TOKEN` atual continua só para a Mensageria.
+Os e-mails do sistema (relacionamento com quem usa a plataforma) saem pela **caixa padrão da Hostinger**, por SMTP.
+A **Locaweb fica só para os envios em massa da Mensageria** (campanhas): uma reclamação de spam numa campanha não pode
+levar a fatura ou o "Esqueci a senha" para o spam.
 
-## 2. DNS de motorcob.online (quem administra o DNS)
-- [ ] **SPF**: um único registro TXT `v=spf1 ...` no domínio, com o `include` que o painel da Locaweb mostra para a
-      conta de envio (e os de quem mais manda e-mail pelo domínio). Dois registros `v=spf1` invalidam os dois.
-- [ ] **DKIM**: o registro TXT que o painel da Locaweb gera. Anote o **seletor** (a parte antes de `._domainkey`) e
-      preencha em Console › E-mails do sistema › Configurações, para o motor conferir.
-- [ ] **DMARC**: TXT em `_dmarc.motorcob.online`, começando por `v=DMARC1; p=none; rua=mailto:<caixa que recebe os
-      relatórios>`. Depois de 2 a 4 semanas sem falha no Console, troque para `p=quarantine`.
+## 1. Caixa padrão na Hostinger (hPanel › E-mails)
+- [ ] Use a caixa padrão do domínio (ex.: `sistema@motorcob.online`) ou crie uma. Anote o endereço; a senha você
+      digita direto no passo 3, ela não passa pelo chat nem pelo git.
+- [ ] Crie `acesso@`, `financeiro@`, `avisos@` e `relatorios@` como **apelidos (aliases)** dessa caixa. Assim tudo sai
+      pelo mesmo login e as devoluções e respostas caem na mesma caixa. `financeiro@` precisa ser lida por alguém.
+- Se algum remetente precisar ser uma caixa própria (com senha própria), use os Secrets opcionais do passo 3.
+- Limite: confira no plano da Hostinger quantos e-mails por dia a caixa manda; os do sistema são poucos (faturas,
+  relatórios, avisos), mas um lote grande de faturas no mesmo dia conta.
+
+## 2. DNS de motorcob.online (hPanel › Domínios › DNS)
+- [ ] **SPF**: um único TXT `v=spf1 include:_spf.mail.hostinger.com ~all` (já está assim). Quando a Mensageria
+      mandar e-mail pela Locaweb **com este mesmo domínio**, o `include` da Locaweb entra no **mesmo** registro (dois
+      registros `v=spf1` invalidam os dois).
+- [ ] **DKIM**: em hPanel › E-mails › (caixa) › Configurações do DNS, ative o DKIM. A Hostinger cria os registros
+      `hostingermail1._domainkey`, `hostingermail2` e `hostingermail3`. O seletor para o Console é `hostingermail1`.
+- [ ] **DMARC**: TXT em `_dmarc.motorcob.online` `v=DMARC1; p=none; rua=mailto:<caixa que recebe os relatórios>`
+      (hoje está só `v=DMARC1; p=none`). Depois de 2 a 4 semanas sem falha no Console, troque para `p=quarantine`.
 - O motor confere SPF, DKIM e DMARC uma vez por dia e o Console mostra o resultado.
 
 ## 3. Supabase › Edge Functions › Secrets
-- [ ] `EMAIL_SISTEMA_TOKEN` — o token da conta do passo 1.
+- [ ] `EMAIL_SMTP_USUARIO` — o endereço da caixa do passo 1.
+- [ ] `EMAIL_SMTP_SENHA` — a senha dessa caixa (digitada por você só aqui).
 - [ ] `EMAIL_LINK_SEGREDO` — 32 ou mais caracteres aleatórios (gerenciador de senhas). Assina o link "Não quero mais
       estes e-mails"; trocar invalida os links dos e-mails já enviados.
-- [ ] `EMAIL_RETORNO_TOKEN` — outros 32 ou mais caracteres aleatórios; o mesmo valor vai no endereço do webhook.
 - [ ] Já existentes: `SITE_URL=https://motorcob.online` e `ORIGENS_PERMITIDAS=https://motorcob.online`.
-- Opcionais: `EMAIL_DE_ACESSO`, `EMAIL_DE_FINANCEIRO`, `EMAIL_DE_AVISOS`, `EMAIL_DE_RELATORIOS` (endereço completo, se
-  algum remetente for diferente do padrão). `FATURA_EMAIL_DE` e `RELATORIO_EMAIL_DE` ainda valem, cada um só para o
-  seu tipo; podem ser apagados depois que os novos estiverem no ar.
+- Opcionais: `EMAIL_SMTP_HOST` (padrão `smtp.hostinger.com`) e `EMAIL_SMTP_PORTA` (padrão `465`; as Edge Functions
+  bloqueiam 25 e 587). `EMAIL_DE_ACESSO`, `EMAIL_DE_FINANCEIRO`, `EMAIL_DE_AVISOS`, `EMAIL_DE_RELATORIOS` (endereço
+  completo, se algum remetente for diferente de `tipo@motorcob.online`). `EMAIL_SMTP_USUARIO_FINANCEIRO` +
+  `EMAIL_SMTP_SENHA_FINANCEIRO` (idem `_ACESSO`, `_AVISOS`, `_RELATORIOS`) quando aquele remetente for uma caixa
+  própria. `FATURA_EMAIL_DE` e `RELATORIO_EMAIL_DE` ainda valem, cada um só para o seu tipo.
+- `EMAIL_SISTEMA_TOKEN` e `EMAIL_RETORNO_TOKEN` não são mais usados (eram da Locaweb). O `LOCAWEB_TOKEN` continua,
+  só para a Mensageria.
 
-## 4. Funções
-- [ ] Publicar a função nova **`emails`** com **Verify JWT DESLIGADO** (o webhook e o link de sair não têm login):
+## 4. Funções (depois do passo 3: as versões novas exigem `EMAIL_SMTP_USUARIO` e `EMAIL_SMTP_SENHA`)
+- [ ] Publicar **`emails`** com **Verify JWT DESLIGADO** (o link de sair não tem login):
       `python3 scripts/juntar_funcao.py emails`.
-- [ ] Publicar de novo `cobranca`, `relatorios`, `admin-usuarios` e `assistente`.
+- [ ] Publicar de novo `cobranca` e `relatorios` (faturas e relatórios passam a sair pela Hostinger).
+- Até republicar, as versões no ar continuam mandando faturas e relatórios como hoje.
 
-## 5. Login (Supabase Auth) pela mesma conta, em português
+## 5. Login (Supabase Auth) pela mesma caixa, em português
 **Authentication › Emails › SMTP Settings** (Enable custom SMTP):
-- [ ] Host, porta, usuário e senha do SMTP da conta do passo 1 (digitados por você; não vão para o git nem para o chat).
+- [ ] Host `smtp.hostinger.com`, porta `465`, usuário = a caixa do passo 1, senha = a dela (digitados por você).
 - [ ] Sender email `acesso@motorcob.online`, Sender name `MotorCX`.
 
 **Authentication › Emails › Templates** — troque `[RODAPÉ]` pelo mesmo texto que estiver em Console › E-mails do
@@ -90,7 +99,7 @@ sistema (razão social · CNPJ · endereço):
 CPF, nome de devedor, telefone ou valor de carteira. Só o assunto, o essencial e um botão para a plataforma. O
 registro (`emails_sistema`) guarda o endereço apenas como hash e de forma mascarada (c***@alfa…).
 
-## Limite conhecido
-A API HTTP da Locaweb recebe o corpo em HTML. O modelo foi feito para ler bem também em programas que mostram só texto
-(sem imagem, texto curto e um botão). Se a conta passar a aceitar a parte "só texto", ela entra em
-`supabase/functions/_compartilhado/email.ts` (a função `textoPlano` já gera o texto).
+## Devoluções
+Sem webhook: o envelope é a caixa do passo 1, então e-mail que volta (endereço inexistente, caixa cheia) chega nela
+como aviso de não entrega. Confira essa caixa toda semana e corrija o contato em Empresa › Contatos. Marcar "E-mail
+voltou" sozinho (o motor lendo a caixa por IMAP) fica para uma fase 2.

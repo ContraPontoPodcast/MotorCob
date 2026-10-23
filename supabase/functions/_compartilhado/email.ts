@@ -1,8 +1,11 @@
 // E-mails do sistema (SQL 42): o modelo único (nome MotorCX em texto, a frente, um título, o corpo, um rodapé com o
-// motivo do envio e os dados da empresa), os remetentes do domínio e o envio pela conta de sistema da Locaweb,
-// separada da conta das campanhas da Mensageria. Usado pelas funções cobranca, relatorios e emails.
-// Secrets: EMAIL_SISTEMA_TOKEN (sem ele, LOCAWEB_TOKEN), EMAIL_LINK_SEGREDO (links de sair) e, opcionais,
-// EMAIL_DE_ACESSO, EMAIL_DE_FINANCEIRO, EMAIL_DE_AVISOS, EMAIL_DE_RELATORIOS (endereço completo de cada remetente).
+// motivo do envio e os dados da empresa), os remetentes do domínio e o envio pela caixa padrão da Hostinger (SMTP,
+// porta 465). A Locaweb fica só para os envios em massa da Mensageria. Usado pelas funções cobranca, relatorios e emails.
+// Secrets: EMAIL_SMTP_USUARIO e EMAIL_SMTP_SENHA (a caixa padrão), EMAIL_LINK_SEGREDO (links de sair) e, opcionais,
+// EMAIL_SMTP_HOST (smtp.hostinger.com), EMAIL_SMTP_PORTA (465), EMAIL_DE_ACESSO, EMAIL_DE_FINANCEIRO, EMAIL_DE_AVISOS,
+// EMAIL_DE_RELATORIOS (endereço completo de cada remetente) e EMAIL_SMTP_USUARIO_<TIPO>/EMAIL_SMTP_SENHA_<TIPO>
+// (quando um remetente for uma caixa própria em vez de um apelido da caixa padrão).
+import { abrirSmtp, type CanalSmtp, conversaSmtp, montarMensagem } from "./smtp.ts";
 
 export type Remetente = "acesso" | "financeiro" | "avisos" | "relatorios";
 
@@ -81,9 +84,6 @@ export function textoPlano(html: string): string {
     .replace(/[ \t]+/g, " ").split("\n").map((l) => l.trim()).filter(Boolean).join("\n");
 }
 
-export const assuntoAscii = (s: string) => /^[\x20-\x7e]*$/.test(s) ? s
-  : "=?UTF-8?B?" + btoa(String.fromCharCode(...new TextEncoder().encode(s))) + "?=";
-
 export async function hashEmail(e: string): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(e.trim().toLowerCase()));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -117,30 +117,23 @@ export interface Envio {
   responderPara?: string | null; umClique?: string | null; dominio?: string | null;
 }
 
-/** Um e-mail para um destinatário pela conta de sistema (API da Locaweb). Devolve o id da mensagem, que volta
- * nos avisos de devolução. */
-export async function enviar(e: Envio, f: typeof fetch = fetch, env: (k: string) => string | undefined = lerEnv) {
-  const token = env("EMAIL_SISTEMA_TOKEN") || env("LOCAWEB_TOKEN");
-  if (!token) throw new Error("cadastre EMAIL_SISTEMA_TOKEN (conta de envio do sistema) nos Secrets do Supabase");
+/** Um e-mail para um destinatário pela caixa padrão da Hostinger (SMTP). Devolve o Message-ID, que fica no registro
+ * do envio. O "From" é o remetente do tipo (apelido da caixa ou caixa própria); o envelope é a caixa que fez o login,
+ * então as devoluções caem nela. */
+export async function enviar(e: Envio, abrir: (host: string, porta: number) => Promise<CanalSmtp> = abrirSmtp,
+  env: (k: string) => string | undefined = lerEnv) {
+  const T = e.de.toUpperCase();
+  const proprio = env(`EMAIL_SMTP_USUARIO_${T}`) && env(`EMAIL_SMTP_SENHA_${T}`);
+  const usuario = (proprio ? env(`EMAIL_SMTP_USUARIO_${T}`) : env("EMAIL_SMTP_USUARIO"))?.trim();
+  const senha = proprio ? env(`EMAIL_SMTP_SENHA_${T}`) : env("EMAIL_SMTP_SENHA");
+  if (!usuario || !senha) throw new Error("cadastre EMAIL_SMTP_USUARIO e EMAIL_SMTP_SENHA (caixa padrão da Hostinger) nos Secrets do Supabase");
   const de = remetente(e.de, e.dominio, env);
-  const headers: Record<string, string> = { "Content-Type": "text/html; charset=utf-8" };
-  if (e.responderPara) headers["Reply-To"] = e.responderPara;
-  if (e.umClique) {
-    headers["List-Unsubscribe"] = `<${e.umClique}>`;
-    headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
-  }
-  const r = await f("https://api.smtplw.com.br/v1/messages", {
-    method: "POST",
-    headers: { "x-auth-token": token, "Content-Type": "application/json" },
-    body: JSON.stringify({ subject: assuntoAscii(e.assunto.slice(0, 150)), body: e.html, to: e.para, from: de.cabecalho, headers }),
-  });
-  const texto = await r.text();
-  if (!r.ok) throw new Error(`e-mail recusado pela conta de envio (${r.status}): ${texto.slice(0, 150)}`);
-  let id: string | null = null;
-  try {
-    const j = JSON.parse(texto);
-    id = j?.id ?? j?.api_message_id ?? null;
-  } catch { /* sem corpo */ }
-  if (!id) id = (r.headers.get("Location") ?? "").replace(/\/$/, "").split("/").pop() || null;
-  return { id: id ? String(id).slice(0, 120) : null };
+  const dominio = de.email.split("@")[1];
+  const m = montarMensagem({ de: de.email, deNome: de.nome, para: e.para.trim(), assunto: e.assunto, html: e.html,
+    texto: textoPlano(e.html), responderPara: e.responderPara, umClique: e.umClique, dominio });
+  const host = env("EMAIL_SMTP_HOST")?.trim() || "smtp.hostinger.com";
+  const porta = Number(env("EMAIL_SMTP_PORTA") || 465);
+  await conversaSmtp(await abrir(host, porta), { usuario, senha, envelope: usuario, para: e.para.trim(), dados: m.dados,
+    ehlo: dominio });
+  return { id: m.id.slice(0, 120) };
 }

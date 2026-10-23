@@ -1,5 +1,5 @@
 // Chamadas ao Stripe e ao Focus NFe e gravação no banco, usadas pela função "cobranca" e pela "pagamentos-webhook".
-// As chaves vêm só dos Secrets do Supabase (STRIPE_SECRET_KEY, FOCUSNFE_TOKEN, EMAIL_SISTEMA_TOKEN) e nunca saem daqui.
+// As chaves vêm só dos Secrets do Supabase (STRIPE_SECRET_KEY, FOCUSNFE_TOKEN, EMAIL_SMTP_USUARIO, EMAIL_SMTP_SENHA) e nunca saem daqui.
 import { enviar, type Rodape } from "../_compartilhado/email.ts";
 import {
   type Alvo, checkoutCartao, clienteStripe, type Contato, dadosCobranca, descricaoNota, type Empresa,
