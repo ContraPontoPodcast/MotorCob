@@ -51,6 +51,9 @@ Workspace. Um prompt por vez, conferindo a tela; se o Horizons publica só no bo
 ## G. Conferir e completar
 0. SQL 45 (`20261212000001_links_inicio.sql`): links do Início que davam 404 (Lista do dia, carga com erro, envio
    pausado, avisos de fatura). Só SQL Editor; o site não muda.
+0b. SQL 46 (`20261213000001_permissoes_ver.sql`): permissões `ver_clientes` e `ver_painel` (Clientes, Personas e
+   Painel voltam ao menu). Depois, com o protótipo `docs/homologacao/navegacao-prototipo.html` aprovado, prompt 73
+   (navegação por áreas, Onda 1) no Horizons. Auditoria CX/UX em `docs/homologacao/auditoria_navegacao/`.
 1. Console › Fornecedores e rotas: mistura de operadoras do mês.
 2. Teste como cliente: Início, Pessoas e perfis, Suporte, Notificações, Assistente.
 3. Depois: DMARC `p=quarantine` (2 a 4 semanas sem falha) e `08_api/DOMINIO_API.md` quando o DNS for liberado.

@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navegação por áreas</title>
+<style>
+/* Mesmo visual de docs/homologacao/workspace-prototipo.html (tokens, cartões, menu cinza claro). */
+:root{
+  --menu:#EEEFF1; --menu-borda:#E3E4E8; --menu-texto:#3A3A3C;
+  --fundo:#F8F8F9; --cartao:#FFFFFF; --borda:#E3E4E8;
+  --texto:#1D1D1F; --texto2:#6E6E73; --pilula:#F2F2F7;
+  --area:#1D1D1F; --area-forte:#000000; --area-ativo:#E8E8ED; --area-ativo-texto:#1D1D1F; --sobre-area:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E6F4EA; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --veu:rgba(0,0,0,.25); --sombra:0 10px 30px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --menu:#1C1C1E; --menu-borda:#38383A; --menu-texto:#D1D1D6; --fundo:#000000; --cartao:#1C1C1E; --borda:#38383A;
+  --texto:#F5F5F7; --texto2:#A1A1A6; --pilula:#2C2C2E;
+  --area:#F5F5F7; --area-forte:#FFFFFF; --area-ativo:#2C2C2E; --area-ativo-texto:#F5F5F7; --sobre-area:#1D1D1F;
+  --ok:#30D158; --ok-f:#0F2E18; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1210;
+  --veu:rgba(0,0,0,.55); --sombra:0 10px 30px rgba(0,0,0,.6); color-scheme:dark}
+/* cores de área (prompt 44) */
+.cob{--area:#8A6A2E;--area-forte:#6E5424;--area-ativo:#F3ECDF;--area-ativo-texto:#5A4419;--sobre-area:#FFFFFF}
+.jor{--area:#4F6B3A;--area-forte:#3D5429;--area-ativo:#E9F0E3;--area-ativo-texto:#34481F;--sobre-area:#FFFFFF}
+.men{--area:#7A2E3B;--area-forte:#5E222D;--area-ativo:#F5E6E9;--area-ativo-texto:#5A1F2A;--sobre-area:#FFFFFF}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .cob{--area:#D9B26B;--area-forte:#E8C688;--area-ativo:#3A2F1C;--area-ativo-texto:#F2DDB0;--sobre-area:#1D1D1F}
+  :root:not([data-theme="light"]) .jor{--area:#9CC27E;--area-forte:#B5D69B;--area-ativo:#24301C;--area-ativo-texto:#D3E6C2;--sobre-area:#1D1D1F}
+  :root:not([data-theme="light"]) .men{--area:#E3909D;--area-forte:#EEB0BA;--area-ativo:#3A1B21;--area-ativo-texto:#F4CDD3;--sobre-area:#1D1D1F}}
+:root[data-theme="dark"] .cob{--area:#D9B26B;--area-forte:#E8C688;--area-ativo:#3A2F1C;--area-ativo-texto:#F2DDB0;--sobre-area:#1D1D1F}
+:root[data-theme="dark"] .jor{--area:#9CC27E;--area-forte:#B5D69B;--area-ativo:#24301C;--area-ativo-texto:#D3E6C2;--sobre-area:#1D1D1F}
+:root[data-theme="dark"] .men{--area:#E3909D;--area-forte:#EEB0BA;--area-ativo:#3A1B21;--area-ativo-texto:#F4CDD3;--sobre-area:#1D1D1F}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.topo{padding:20px 16px 8px;max-width:1312px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.topo h1{font-size:22px;margin:0;text-wrap:balance}
+.topo p{margin:0;color:var(--texto2);max-width:84ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.ctrl{max-width:1312px;margin:8px auto 0;padding:0 16px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.ctrl .grp{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ctrl .grp>span{font-size:12px;color:var(--texto2)}
+.seg{display:inline-flex;gap:2px;background:var(--pilula);border-radius:9px;padding:2px}
+.seg button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:7px;color:var(--texto2)}
+.seg button[aria-pressed="true"]{background:var(--cartao);color:var(--texto);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg button:focus-visible{outline:2px solid var(--texto);outline-offset:1px}
+.endereco{max-width:1312px;margin:10px auto 0;padding:0 16px}
+.endereco form{display:flex;gap:8px;align-items:center;max-width:620px}
+.endereco input{flex:1;min-width:0;font:13px var(--mono);color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 9px}
+.palco{padding:12px 16px 32px;display:flex;justify-content:center}
+.janela{width:100%;max-width:1280px;container:app/inline-size;transition:max-width .25s}
+.app{position:relative;border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:var(--fundo);min-height:640px;display:flex;flex-direction:column}
+
+/* barra do topo (igual em todas as telas logadas) */
+.wsbar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--borda);background:var(--cartao);position:relative;z-index:5}
+.marca{font-weight:700;font-size:15px;white-space:nowrap}
+.nav-top{display:flex;gap:2px}
+.nav-top button{all:unset;cursor:pointer;padding:6px 10px;border-radius:8px;font-size:13.5px;color:var(--texto2);display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.nav-top button[aria-current="page"]{background:var(--pilula);color:var(--texto);font-weight:600}
+.nav-top button:focus-visible,.hamb:focus-visible{outline:2px solid var(--texto);outline-offset:1px}
+.cont{font-size:11px;font-weight:700;background:var(--erro);color:#fff;border-radius:999px;padding:0 6px}
+.dir{margin-left:auto;display:flex;gap:8px;align-items:center;min-width:0}
+.busca{min-width:0;width:260px;display:flex;align-items:center;gap:8px;border:1px solid var(--borda);border-radius:9px;padding:6px 10px;color:var(--texto2);font-size:13px;background:var(--fundo);white-space:nowrap;overflow:hidden}
+.busca kbd{margin-left:auto;font-family:var(--mono);font-size:11px;border:1px solid var(--borda);border-radius:5px;padding:0 5px}
+.ic{all:unset;box-sizing:border-box;width:32px;height:32px;flex:none;border-radius:50%;display:grid;place-items:center;border:1px solid var(--borda);background:var(--cartao);font-size:13px;position:relative;cursor:pointer}
+.ic .p{position:absolute;top:-3px;right:-3px;background:var(--erro);color:#fff;border-radius:999px;font-size:10px;padding:0 4px;font-weight:700}
+.hamb{display:none}
+.busca-ic{display:none}
+.pop{position:absolute;top:calc(100% + 4px);background:var(--cartao);border:1px solid var(--borda);border-radius:12px;box-shadow:var(--sombra);padding:6px;min-width:260px;z-index:20;display:flex;flex-direction:column;gap:2px}
+.pop button{all:unset;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;font-size:13.5px}
+.pop button:hover,.pop button:focus-visible{background:var(--pilula)}
+.pop button small{font-size:12px;color:var(--texto2)}
+.pop button.off{color:var(--texto2)}
+.pop .tit{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:6px 10px 2px}
+
+/* casca: menu lateral + conteúdo */
+.casca{display:grid;grid-template-columns:236px minmax(0,1fr);flex:1}
+.casca.sem-menu{grid-template-columns:minmax(0,1fr)}
+.lat{background:var(--menu);border-right:1px solid var(--menu-borda);padding:12px 10px;display:flex;flex-direction:column;gap:2px;font-size:13.5px}
+.lat .volta{all:unset;cursor:pointer;font-size:13px;color:var(--texto2);padding:4px 8px}
+.lat .volta:focus-visible{outline:2px solid var(--area)}
+.areas{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--cartao);border:1px solid var(--borda);border-radius:10px;padding:3px;margin:6px 0 4px}
+.areas button{all:unset;cursor:pointer;text-align:center;font-size:12.5px;font-weight:600;padding:5px 4px;border-radius:7px;color:var(--texto2)}
+.areas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
+.areas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
+.area-nome{font-weight:700;font-size:15px;padding:6px 8px 2px;display:flex;align-items:center;gap:8px}
+.area-nome i{width:10px;height:10px;border-radius:3px;background:var(--area)}
+.canais{display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px 2px}
+.canais button{all:unset;cursor:pointer;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--cartao);border:1px solid var(--borda);color:var(--texto2)}
+.canais button[aria-pressed="true"]{background:var(--area);border-color:var(--area);color:var(--sobre-area)}
+.lat .g{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 8px 3px}
+.lat a{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;color:var(--menu-texto);text-decoration:none;cursor:pointer}
+.lat a[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.lat a:focus-visible{outline:2px solid var(--area)}
+.lat a .fora{font-size:11.5px;color:var(--texto2)}
+.lat .pe{margin-top:auto;border-top:1px solid var(--menu-borda);padding-top:8px;font-size:12.5px;color:var(--texto2);padding-left:8px}
+
+.conteudo{padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0;max-width:1200px;width:100%;margin:0 auto}
+.migalha{font-size:12.5px;color:var(--texto2)}
+.cab h2{margin:0;font-size:20px;border-left:3px solid var(--area);padding-left:10px;text-wrap:balance}
+.cab p{margin:4px 0 0 13px;color:var(--texto2);max-width:74ch}
+.rota{font:12px var(--mono);color:var(--texto2);margin-left:13px}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:12px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cartao h3{margin:0;font-size:15px}
+.nota{font-size:12.5px;color:var(--texto2);margin:0}
+.duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:14px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn.sec{background:var(--pilula);color:var(--texto)}
+.btn:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+.link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linha{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)}.pil.at{background:var(--at-f);color:var(--at)}.pil.erro{background:var(--erro-f);color:var(--erro)}.pil.neutra{background:var(--pilula);color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--borda);white-space:nowrap}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px;background:var(--cartao)}
+.kpi span{font-size:12px;color:var(--texto2)} .kpi b{font-size:22px;font-variant-numeric:tabular-nums} .kpi small{font-size:12px;color:var(--texto2)}
+.ola{font-size:20px;font-weight:700;margin:0}
+.campo-g{display:flex;align-items:center;gap:10px;border:1px solid var(--borda);border-radius:14px;padding:12px 14px;background:var(--cartao);font-size:15px;color:var(--texto2)}
+.hoje .it{display:grid;grid-template-columns:10px 1fr auto;gap:10px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--borda);font-size:13.5px}
+.hoje .it:last-child{border-bottom:0}
+.ponto{width:8px;height:8px;border-radius:50%}
+.prods{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.prod{border:1px solid var(--borda);border-radius:12px;padding:12px;background:var(--cartao);display:flex;flex-direction:column;gap:4px}
+.prod span{font-size:12.5px;color:var(--texto2)} .prod .num{font-size:20px;font-weight:700;color:var(--texto)}
+.prod.off{opacity:.6}
+.faixa{border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:var(--erro-f)}
+.faixa b{color:var(--erro)}
+.vazio{display:flex;flex-direction:column;gap:12px;align-items:flex-start;padding:28px 4px;max-width:560px}
+.vazio .grande{font-size:44px;font-weight:700;color:var(--texto2);line-height:1}
+.vazio h2{margin:0;font-size:20px}
+.vazio p{margin:0;color:var(--texto2)}
+.regra{background:var(--menu);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-size:13.5px;max-width:1280px;margin:0 auto 32px}
+.regra b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--texto2)}
+.regra ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.wrap-regra{padding:0 16px}
+
+/* gaveta do celular / tablet */
+.veu{position:absolute;inset:0;background:var(--veu);z-index:30}
+.gaveta{position:absolute;top:0;left:0;bottom:0;width:min(300px,86%);background:var(--menu);border-right:1px solid var(--menu-borda);box-shadow:var(--sombra);z-index:31;overflow:auto;padding:12px 10px;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.gaveta .fechar{all:unset;cursor:pointer;align-self:flex-end;padding:4px 8px;font-size:18px}
+.gaveta .g{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 8px 3px}
+.gaveta a{display:flex;justify-content:space-between;gap:6px;padding:8px;border-radius:7px;color:var(--menu-texto);text-decoration:none;cursor:pointer}
+.gaveta a[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
+.gaveta a.off{color:var(--texto2)}
+.gaveta hr{border:0;border-top:1px solid var(--menu-borda);margin:8px 0;width:100%}
+
+/* um corte só: abaixo de 1024 px vale a gaveta (☰) */
+@container app (max-width:1023px){
+  .nav-top{display:none}
+  .hamb{display:grid}
+  .casca{grid-template-columns:minmax(0,1fr)}
+  .casca>.lat{display:none}
+  .busca{width:200px}
+}
+@container app (max-width:600px){
+  .busca{display:none}
+  .busca-ic{display:grid}
+  .wsbar{gap:8px;padding:10px 12px}
+  .conteudo{padding:14px}
+  .ajuda-ic{display:none}
+}
+</style>
+</head>
+<body>
+<div class="topo">
+  <span class="selo">Protótipo para aprovação · Navegação v2 · 23/10/2026</span>
+  <h1>Navegação por áreas</h1>
+  <p>O menu lateral passa a seguir o endereço da tela, não a frente guardada no navegador. Quatro áreas com menu próprio (Cobrança, Jornada do Cliente, Mensageria e Relatórios) e o Workspace sem menu lateral. Um corte só de largura: abaixo de 1024 px tudo vai para a gaveta ☰. Dados fictícios.</p>
+</div>
+
+<div class="ctrl">
+  <div class="grp"><span>Largura</span><div class="seg" id="seg-largura">
+    <button aria-pressed="true" data-v="1280">Computador</button><button aria-pressed="false" data-v="900">Tablet 900</button><button aria-pressed="false" data-v="390">Celular 390</button></div></div>
+  <div class="grp"><span>Cliente</span><div class="seg" id="seg-cliente">
+    <button aria-pressed="true" data-v="completo">Cobrança + Jornada + Mensageria</button><button aria-pressed="false" data-v="so-cob">Só Cobrança (Mensageria só WhatsApp)</button></div></div>
+  <div class="grp"><span>Perfil</span><div class="seg" id="seg-perfil">
+    <button aria-pressed="true" data-v="admin">Admin</button><button aria-pressed="false" data-v="operacao">Operação</button></div></div>
+  <div class="grp"><span>Bloqueio da empresa</span><div class="seg" id="seg-bloqueio">
+    <button aria-pressed="true" data-v="nao">Não</button><button aria-pressed="false" data-v="inadimplente">Fatura vencida</button><button aria-pressed="false" data-v="suspensa">Suspensa pela equipe</button></div></div>
+  <div class="grp"><span>Atalhos</span>
+    <button class="link" data-ir="/lista-do-dia">Link quebrado (404)</button>
+    <button class="link" data-ir="/comite">Comitê (sem permissão para Operação)</button>
+    <button class="link" data-ir="/mensageria/sms/lotes/4812">Detalhe de lote</button></div>
+</div>
+<div class="endereco"><form id="form-end"><label for="end" class="nota">Endereço</label><input id="end" value="/inicio" spellcheck="false" autocomplete="off"><button class="btn sec" type="submit">Ir</button></form></div>
+
+<div class="palco"><div class="janela" id="janela"><div class="app" id="app"></div></div></div>
+
+<div class="wrap-regra"><div class="regra"><b>Regras desta proposta</b><ul>
+  <li><b>A rota define a área</b> (e, com ela, o menu, a cor e o nome). Uma função só, <code>areaDaRota()</code>, usada pelo menu, pelo tema e pela gaveta. Se a pessoa entra numa tela da Cobrança vindo de qualquer lugar (Áreas ▾, Início, Assistente, ⌘K, link colado), o menu é o da Cobrança.</li>
+  <li><b>Mensageria é área própria</b>: os menus da Cobrança e da Jornada não têm mais o bloco Mensageria; só um atalho "Respostas dos clientes ↗". Dentro de /mensageria/* o menu é só da Mensageria, com o seletor de canal (só os contratados).</li>
+  <li><b>Troca de área</b> fica uma vez só, no topo do menu, com as áreas contratadas + Relatórios. Itens que levam para outra área têm "↗".</li>
+  <li><b>Quem tem uma área só</b> não vê a troca com áreas que não comprou; Áreas ▾ e o Início mostram as outras esmaecidas com "Quero conhecer". Endereço de área não contratada abre a página "Esta área não faz parte do plano".</li>
+  <li><b>404 e sem permissão</b> ficam dentro da moldura (topo visível), com "Ir para o Início", "Voltar" e "Avisar o Suporte". Sem permissão diz quem libera.</li>
+  <li><b>Bloqueio</b>: "Pagar agora" só para quem tem ver_faturamento e pagar_faturas; quem não tem vê o nome de quem paga (Admin), sem link (a Operação não vê a lista de pessoas). Empresa suspensa ou encerrada pela equipe: "Fale com o Suporte", nunca "fatura vencida" nem Pagar.</li>
+  <li><b>Fechado com o CX</b>: troca de área pela rota usa aplicarFrente (só a sessão) e não apaga a "Área que abre primeiro"; Score de Entrega é item único em Resultados; Lotes some no WhatsApp; Canais e frases só com editar_canais; a Jornada não tem Mapa, Clientes nem Painel. Empresa só de Mensageria fica fora desta onda (o banco sempre dá Cobrança a ela).</li>
+</ul></div></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const CANAL = { sms: "SMS", rcs: "RCS", email: "E-mail", whatsapp: "WhatsApp" };
+  const CLIENTES = {
+    completo: { pessoa: "Rafael", empresa: "Alfa Recuperação (exemplo)", areas: ["cobranca", "jornada", "mensageria"], canais: ["sms", "rcs"] },
+    "so-cob": { pessoa: "Lívia", empresa: "Beta Serviços (exemplo)", areas: ["cobranca", "mensageria"], canais: ["whatsapp"] }
+  };
+  const AREA = {
+    cobranca: { nome: "Cobrança", cls: "cob", curto: "Cobrança" },
+    jornada: { nome: "Jornada do Cliente", cls: "jor", curto: "Jornada" },
+    mensageria: { nome: "Mensageria", cls: "men", curto: "Mensageria" },
+    relatorios: { nome: "Relatórios", cls: "", curto: "Relatórios" }
+  };
+  const est = { rota: "/inicio", cliente: "completo", perfil: "admin", bloqueio: "nao", canal: null, pop: null, gaveta: false };
+  const cli = () => CLIENTES[est.cliente];
+  const tem = a => a === "relatorios" ? cli().areas.length > 0 : cli().areas.includes(a);
+  const caminho = r => r.split("?")[0];
+  const param = (r, k) => new URLSearchParams(r.split("?")[1] || "").get(k);
+
+  /* A rota define a área. Lista fechada: o que não está aqui é 404. */
+  const COBRANCA = ["/fila", "/clientes", "/cliente", "/acoes", "/envios", "/orquestracao", "/personas", "/clusters", "/credores", "/canais", "/mapa", "/comite", "/painel", "/estrategias"];
+  const WORKSPACE = ["/inicio", "/empresa", "/conta", "/suporte", "/docs", "/assistente"];
+  const comeca = (p, lista) => lista.some(x => p === x || p.startsWith(x + "/"));
+  function areaDaRota(r) {
+    const p = caminho(r);
+    if (comeca(p, ["/mensageria"])) return "mensageria";
+    if (comeca(p, ["/jornada"])) return "jornada";
+    if (comeca(p, ["/relatorios"])) return "relatorios";
+    if (comeca(p, WORKSPACE)) return "workspace";
+    if (comeca(p, COBRANCA)) return "cobranca";
+    return "404";
+  }
+  const canalDaRota = r => { const m = caminho(r).match(/^\/mensageria\/(sms|rcs|email|whatsapp)(\/|$)/); return m ? m[1] : null; };
+  const canalAtual = () => { const c = canalDaRota(est.rota) || est.canal; return c && cli().canais.includes(c) ? c : cli().canais[0]; };
+  function inicioDaArea(a) {
+    if (a === "cobranca") return "/fila";
+    if (a === "jornada") return "/jornada";
+    if (a === "relatorios") return "/relatorios";
+    return cli().canais.length === 1 ? "/mensageria/" + cli().canais[0] : "/mensageria";
+  }
+
+  /* Menus: [rótulo, rota, opções] */
+  const PERM = { "/canais": "editar_canais", "/envios": "planejar", "/jornada/cargas": "planejar", "/comite": "planejar", "/orquestracao": null };
+  const pode = rota => { const p = PERM[caminho(rota)]; return !p || est.perfil === "admin"; };
+  function menu(a) {
+    const atalho = tem("mensageria") ? [{ g: "Atalho", i: [["Respostas dos clientes", "/mensageria/atendimento"]] }] : [];
+    if (a === "cobranca") return [
+      { g: "Operação", i: [["Lista do dia", "/fila"], ["Clientes", "/clientes"], ["Ações", "/acoes"], ["Enviar carga", "/envios"]] },
+      { g: "Estratégia", i: [["Orquestração", "/orquestracao"], ["Personas", "/personas"], ["Segmentos", "/clusters"], ["Carteiras", "/credores"], ["Canais e frases", "/canais"], ["Mapa da Esteira", "/mapa"], ["Comitê", "/comite"]] },
+      { g: "Resultados", i: [["Painel", "/painel"], ["Relatórios", "/relatorios?produto=orquestracao"]] }, ...atalho];
+    if (a === "jornada") return [
+      { g: "Jornada", i: [["Visão geral", "/jornada"], ["Lista do dia", "/jornada/lista"], ["Enviar carga", "/jornada/cargas"]] },
+      { g: "Estratégia", i: [["Momentos e fases", "/jornada/momentos"], ["Mensagens por momento", "/jornada/mensagens"], ["Carteiras", "/jornada/carteiras"]] },
+      { g: "Resultados", i: [["Relatórios", "/relatorios?produto=jornada"]] }, ...atalho];
+    if (a === "mensageria") { const c = canalAtual(), b = "/mensageria/" + c; return [
+      { g: "Canal " + CANAL[c], i: [["Painel do canal", b], ["Campanhas", b + "/campanhas"], ...(c === "whatsapp" ? [] : [["Lotes", b + "/lotes"]]), ["Templates", b + "/templates"], ["Listas", b + "/listas"], ["Configurações do canal", b + "/config"]] },
+      { g: "Atendimento", i: [["Respostas", "/mensageria/atendimento"], ["Radar", "/mensageria/radar"], ["Configurar atendimento", "/mensageria/config/atendimento"]] },
+      { g: "Resultados", i: [["Score de Entrega", b + "/score"], ["Relatórios", "/relatorios?produto=mensageria"]] }]; }
+    if (a === "relatorios") return [
+      { g: "Por área", i: [["Cobrança", "/relatorios?produto=orquestracao", "cobranca"], ["Jornada do Cliente", "/relatorios?produto=jornada", "jornada"], ["Mensageria", "/relatorios?produto=mensageria", "mensageria"]].filter(x => tem(x[2])) },
+      { g: "Ferramentas", i: [["Montar relatório", "/relatorios/novo"]] }];
+    return [];
+  }
+  function itemAtivo(a) {
+    let melhor = null, tam = -1;
+    menu(a).forEach(g => g.i.forEach(([, r]) => {
+      const p = caminho(r), q = param(r, "produto"), rp = caminho(est.rota);
+      if (areaDaRota(r) !== a) return;
+      if (q && param(est.rota, "produto") !== q) return;
+      if ((rp === p || rp.startsWith(p + "/")) && p.length > tam) { melhor = r; tam = p.length; }
+    }));
+    return melhor;
+  }
+  const NOME_PRODUTO = { orquestracao: "Cobrança", jornada: "Jornada do Cliente", mensageria: "Mensageria" };
+  function produtoRelatorio() {
+    const q = param(est.rota, "produto");
+    if (q && NOME_PRODUTO[q]) return q;
+    return tem("cobranca") ? "orquestracao" : tem("jornada") ? "jornada" : "mensageria";
+  }
+
+  /* ---------- telas ---------- */
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  function cab(t, sub) { return `<div class="cab"><h2>${t}</h2>${sub ? `<p>${sub}</p>` : ""}<div class="rota">${esc(est.rota)}</div></div>`; }
+  function faixa(area) {
+    if (est.bloqueio === "nao" || area === "workspace") return "";
+    if (est.bloqueio === "suspensa") return `<div class="faixa"><span><b>Acesso suspenso pela equipe MotorCX.</b> Fale com o Suporte.</span><button class="btn" data-ir="/suporte/novo?assunto=Acesso suspenso">Falar com o Suporte</button></div>`;
+    const txt = `<b>A fatura de setembro está vencida há mais de 10 dias.</b> O acesso está bloqueado e os envios estão parados.`;
+    // "Pagar agora" exige ver_faturamento E pagar_faturas (no padrão, só o Admin tem as duas)
+    return est.perfil === "admin"
+      ? `<div class="faixa"><span>${txt}</span><button class="btn" data-ir="/empresa/faturamento?fatura=311">Pagar agora</button></div>`
+      : `<div class="faixa"><span>${txt} Quem paga as faturas é Rafael Souza (Admin).</span></div>`;
+  }
+  function telaInicio() {
+    const c = cli();
+    const cards = [["cobranca", "18.420", "na Lista do dia · 3 carteiras", "Lista do dia e réguas"], ["mensageria", "96,2%", "entregues ontem · " + c.canais.map(x => CANAL[x]).join(" e "), "SMS, RCS, e-mail e WhatsApp"], ["jornada", "2.310", "clientes na jornada", "Boas-vindas, ativação, retenção"]]
+      .map(([a, n, d, oferta]) => tem(a)
+        ? `<div class="prod ${AREA[a].cls}"><b>${AREA[a].nome}</b><span class="num">${n}</span><span>${d}</span><button class="link" style="align-self:flex-start" data-ir="${inicioDaArea(a)}">Abrir ›</button></div>`
+        : `<div class="prod off"><b>${AREA[a].nome}</b><span>${oferta}</span><button class="link" style="align-self:flex-start" data-msg="Abre o card de interesse que já existe.">Quero conhecer</button></div>`).join("");
+    const itens = [
+      [est.perfil === "admin", "var(--erro)", "<b>Fatura de setembro vence amanhã</b> · R$ 4.380,00", "Pagar", "/empresa/faturamento?fatura=311"],
+      [true, "var(--at)", "O Suporte respondeu o chamado #2041", "Ver", "/suporte/2041"],
+      [tem("mensageria"), "var(--at)", "Um envio está pausado · " + CANAL[c.canais[0]], "Ver", "/mensageria/" + c.canais[0] + "/lotes"],
+      [tem("cobranca"), "var(--ok)", "Lista do dia pronta às 06:12 · 18.420 clientes", "Baixar", "/fila"]
+    ].filter(x => x[0]).map(([, cor, t, a, l]) => `<div class="it"><i class="ponto" style="background:${cor}"></i><span>${t}</span><button class="link" data-ir="${l}">${a}</button></div>`).join("");
+    return `<p class="ola">Bom dia, ${c.pessoa}</p><div class="campo-g">O que você quer fazer? Busque ou pergunte</div>
+      <div class="duas"><div class="cartao"><h3>Para hoje</h3><div class="hoje">${itens}</div></div>
+      <div class="cartao"><h3>Suas áreas</h3><div class="prods">${cards}</div><p class="nota">Mesma regra do Áreas ▾: contratada = módulo da empresa + área liberada para a pessoa.</p></div></div>`;
+  }
+  function tela404() {
+    return `<div class="vazio"><span class="grande">404</span><h2>Esta página não existe ou mudou de endereço.</h2>
+      <p>Endereço: <code>${esc(est.rota)}</code>. Se você chegou aqui por um botão do MotorCX, avise o Suporte que a gente corrige.</p>
+      <div class="linha"><button class="btn" data-ir="/inicio">Ir para o Início</button><button class="btn sec" data-msg="Volta para a tela anterior (history.back).">Voltar</button><button class="link" data-ir="/suporte/novo?assunto=link">Avisar o Suporte</button></div></div>`;
+  }
+  function telaSemPermissao(area) {
+    const nome = { "/comite": "O Comitê", "/envios": "Enviar carga", "/jornada/cargas": "Enviar carga" }[caminho(est.rota)] || "Esta tela";
+    return `<div class="vazio"><h2>Seu perfil não abre esta tela.</h2>
+      <p>${nome} é do perfil Planejamento ou Admin. Você está como Operação. Quem libera é o Admin da sua empresa, em Empresa › Pessoas e perfis.</p>
+      <div class="linha"><button class="btn" data-ir="/inicio">Ir para o Início</button><button class="link" data-ir="/conta?aba=perfil">Ver o que meu perfil pode</button></div></div>`;
+  }
+  function telaNaoContratada(area) {
+    return `<div class="vazio"><h2>${AREA[area].nome} não faz parte do plano da sua empresa.</h2>
+      <p>Se quiser conhecer, a gente mostra como funciona com os dados da sua operação.</p>
+      <div class="linha"><button class="btn" data-msg="Abre o card de interesse que já existe.">Quero conhecer</button><button class="btn sec" data-ir="/inicio">Ir para o Início</button></div></div>`;
+  }
+  function telaArea(area, rotulo, grupo) {
+    const p = caminho(est.rota);
+    let corpo = "";
+    if (p === "/fila") corpo = `<div class="kpis"><div class="kpi"><span>Na Lista do dia</span><b>18.420</b><small>3 carteiras</small></div><div class="kpi"><span>Prioridade alta</span><b>2.115</b><small>11% da lista</small></div><div class="kpi"><span>Promessas para hoje</span><b>640</b><small>R$ 412 mil</small></div></div>
+      <div class="cartao"><h3>Lista do dia · 23/10</h3><p class="nota">Lista por carteira e faixa, sem nome nem documento de devedor nesta visão.</p><div class="linha"><button class="btn">Baixar lista</button></div></div>`;
+    else if (/\/lotes$/.test(p)) corpo = `<div class="cartao"><div class="rolar"><table class="tab"><thead><tr><th>Lote</th><th>Campanha</th><th class="n">Mensagens</th><th>Situação</th></tr></thead><tbody>
+      ${[[4812, "Lembrete de vencimento D-3", "12.400", '<span class="pil at">Pausado</span>'], [4809, "Acordo · confirmação", "3.180", '<span class="pil ok">Enviado</span>'], [4801, "Boas-vindas", "960", '<span class="pil ok">Enviado</span>']]
+        .map(([id, n, q, s]) => `<tr><td><button class="link" data-ir="${p}/${id}">#${id}</button></td><td>${n}</td><td class="n">${q}</td><td>${s}</td></tr>`).join("")}
+      </tbody></table></div><p class="nota">O link do lote leva para <code>${p}/{id}</code> (hoje leva para /mensageria/lotes/{id} e dá 404).</p></div>`;
+    else if (/\/lotes\/\d+$/.test(p)) corpo = `<div class="cartao"><h3>Lote #${p.split("/").pop()} · Lembrete de vencimento D-3</h3><p class="nota">Pausado às 09:40 · motivo: fatura vencida. 12.400 mensagens · ${CANAL[canalAtual()]}.</p><div class="linha"><button class="btn">Retomar</button><button class="btn sec">Ver mensagens com erro</button></div></div>`;
+    else if (area === "relatorios") { const pr = produtoRelatorio(); corpo = `<div class="cartao"><h3>${NOME_PRODUTO[pr]}${param(est.rota, "canal") ? " · " + CANAL[param(est.rota, "canal")] : ""}</h3><p class="nota">Abre no produto de onde a pessoa veio (o menu manda ?produto=). Sem parâmetro: Cobrança, depois Jornada, depois Mensageria, conforme o contratado. O canal fica na URL.</p></div>`; }
+    else corpo = `<div class="cartao"><h3>${rotulo}</h3><p class="nota">Conteúdo da tela, sem mudança neste protótipo. O que importa aqui é o menu ao lado: ele vem da rota.</p></div>`;
+    return `<div class="migalha">${AREA[area].nome}${grupo ? " › " + grupo : ""} › ${rotulo}</div>${cab(rotulo)}${corpo}`;
+  }
+  const WS_TIT = { "/empresa": "Dados e contatos", "/empresa/pessoas": "Pessoas e perfis", "/empresa/integracoes": "Integrações", "/empresa/faturamento": "Faturas", "/empresa/contratacao": "Contratação", "/empresa/auditoria": "Auditoria", "/suporte": "Suporte", "/suporte/novo": "Abrir chamado", "/conta": "Minha conta" };
+  function telaWorkspace() {
+    const p = caminho(est.rota);
+    if (p === "/inicio") return telaInicio();
+    const t = WS_TIT[p] || (p.startsWith("/suporte/") ? "Chamado #" + p.split("/").pop() : "Tela do Workspace");
+    const abasEmp = p.startsWith("/empresa") ? `<div class="linha">${["/empresa", "/empresa/pessoas", "/empresa/integracoes", "/empresa/faturamento", "/empresa/contratacao", "/empresa/auditoria"].map(r => `<button class="pil ${r === p ? "ok" : "neutra"}" style="border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:600" data-ir="${r}">${WS_TIT[r]}</button>`).join("")}</div>` : "";
+    return `<div class="migalha">${p.startsWith("/empresa") ? "Empresa › " : ""}${t}</div>${cab(t)}${abasEmp}<div class="cartao"><p class="nota">Workspace: só a barra do topo, sem menu lateral. ${p.startsWith("/empresa") ? "As abas são as mesmas do Empresa ▾, na mesma ordem, em todas as telas da Empresa." : ""}</p></div>`;
+  }
+
+  /* ---------- moldura ---------- */
+  function popAreas() {
+    return `<div class="pop" style="left:0">${["cobranca", "jornada", "mensageria", "relatorios"].map(a => tem(a)
+      ? `<button data-ir="${inicioDaArea(a)}">${AREA[a].nome}<small>Abrir ›</small></button>`
+      : `<button class="off" data-msg="Abre o card de interesse que já existe.">${AREA[a].nome}<small>Quero conhecer</small></button>`).join("")}</div>`;
+  }
+  function popEmpresa() {
+    const it = [["/empresa", "Dados e contatos"], ["/empresa/pessoas", "Pessoas e perfis"], ["/empresa/integracoes", "Integrações"], ["/empresa/faturamento", "Faturas"], ["/empresa/contratacao", "Contratação"], ["/empresa/auditoria", "Auditoria"]]
+      .filter(([r]) => est.perfil === "admin" || !["/empresa/faturamento", "/empresa/auditoria", "/empresa/integracoes"].includes(r));
+    return `<div class="pop" style="left:0">${it.map(([r, t]) => `<button data-ir="${r}">${t}</button>`).join("")}</div>`;
+  }
+  function barra(area) {
+    const at = x => (x === "inicio" && caminho(est.rota) === "/inicio") || (x === "areas" && AREA[area]) || (x === "empresa" && caminho(est.rota).startsWith("/empresa")) || (x === "suporte" && caminho(est.rota).startsWith("/suporte")) ? ' aria-current="page"' : "";
+    return `<header class="wsbar">
+      <button class="ic hamb" data-acao="gaveta" aria-label="Abrir menu">☰</button>
+      <span class="marca">MotorCX</span>
+      <nav class="nav-top" aria-label="Principal">
+        <button data-ir="/inicio"${at("inicio")}>Início</button>
+        <span style="position:relative"><button data-acao="pop-areas" aria-expanded="${est.pop === "areas"}"${at("areas")}>${AREA[area] ? AREA[area].curto : "Áreas"} ▾</button>${est.pop === "areas" ? popAreas() : ""}</span>
+        <span style="position:relative"><button data-acao="pop-empresa" aria-expanded="${est.pop === "empresa"}"${at("empresa")}>Empresa ▾</button>${est.pop === "empresa" ? popEmpresa() : ""}</span>
+        <button data-ir="/suporte"${at("suporte")}>Suporte <span class="cont">1</span></button>
+      </nav>
+      <div class="dir"><div class="busca">Busque uma tela ou pergunte <kbd>⌘K</kbd></div>
+        <button class="ic busca-ic" aria-label="Buscar" data-msg="Abre a busca ⌘K em tela cheia.">⌕</button>
+        <button class="ic ajuda-ic" title="O que significa" data-msg="Abre o glossário (O que significa).">?</button>
+        <button class="ic" title="Avisos" data-msg="Sino">🔔<span class="p">3</span></button>
+        <button class="ic" title="Minha conta" data-msg="Minha conta · Documentação · Sair">${cli().pessoa[0]}</button></div>
+    </header>`;
+  }
+  function trocaArea(area) {
+    const lista = ["cobranca", "jornada", "mensageria", "relatorios"].filter(tem);
+    return `<div class="areas" role="group" aria-label="Trocar de área">${lista.map(a => `<button aria-pressed="${a === area}" data-ir="${inicioDaArea(a)}">${AREA[a].curto}</button>`).join("")}</div>`;
+  }
+  function itensMenu(area, tag) {
+    const ativo = itemAtivo(area);
+    return menu(area).map(g => {
+      const its = g.i.filter(([, r]) => pode(r)).map(([t, r]) => {
+        const fora = areaDaRota(r) !== area;
+        return `<a data-ir="${r}"${r === ativo ? ' aria-current="page"' : ""}>${t}${fora ? '<span class="fora" title="Abre outra área">↗</span>' : ""}</a>`;
+      }).join("");
+      return its ? `<div class="g">${g.g}</div>${its}` : "";
+    }).join("");
+  }
+  function canais(area) {
+    if (area !== "mensageria" || cli().canais.length < 2) return "";
+    const c = canalAtual();
+    return `<div class="canais" role="group" aria-label="Canal">${cli().canais.map(x => `<button aria-pressed="${x === c}" data-canal="${x}">${CANAL[x]}</button>`).join("")}</div>`;
+  }
+  function menuLateral(area) {
+    return `<nav class="lat" aria-label="Menu da área">
+      <button class="volta" data-ir="/inicio">‹ Início</button>
+      <div class="area-nome"><i></i>${AREA[area].nome}</div>
+      ${trocaArea(area)}${canais(area)}${itensMenu(area)}
+      <div class="pe">${cli().empresa}</div></nav>`;
+  }
+  function gaveta(area) {
+    const ws = [["/inicio", "Início"], ["/suporte", "Suporte"]];
+    return `<div class="veu" data-acao="fechar"></div><nav class="gaveta" aria-label="Menu">
+      <button class="fechar" data-acao="fechar" aria-label="Fechar">×</button>
+      <a data-ir="/inicio"${caminho(est.rota) === "/inicio" ? ' aria-current="page"' : ""}>Início</a>
+      <div class="g">Áreas</div>
+      ${["cobranca", "jornada", "mensageria", "relatorios"].map(a => tem(a) ? `<a data-ir="${inicioDaArea(a)}"${a === area ? ' aria-current="page"' : ""}>${AREA[a].nome}</a>` : `<a class="off" data-msg="Abre o card de interesse que já existe.">${AREA[a].nome}<span>Quero conhecer</span></a>`).join("")}
+      <div class="g">Empresa</div>
+      <a data-ir="/empresa">Dados e contatos</a><a data-ir="/empresa/pessoas">Pessoas e perfis</a>${est.perfil === "admin" ? '<a data-ir="/empresa/faturamento">Faturas</a>' : ""}
+      <a data-ir="/suporte">Suporte <span class="cont">1</span></a>
+      ${AREA[area] ? `<hr><div class="area-nome"><i></i>${AREA[area].nome}</div>${canais(area)}${itensMenu(area)}` : ""}
+    </nav>`;
+  }
+  function render() {
+    let area = areaDaRota(est.rota);
+    const c = canalDaRota(est.rota); if (c) est.canal = c;
+    // Mensageria com um canal só: /mensageria vai direto para o canal (replace)
+    if (caminho(est.rota) === "/mensageria" && cli().canais.length === 1) est.rota = "/mensageria/" + cli().canais[0];
+    $("end").value = est.rota;
+    let corpo, comMenu = !!AREA[area];
+    if (area === "404") { corpo = tela404(); comMenu = false; }
+    else if (area === "workspace") corpo = telaWorkspace();
+    else if (!tem(area)) { corpo = telaNaoContratada(area); comMenu = false; }
+    else if (c && !cli().canais.includes(c)) corpo = `<div class="vazio"><h2>O canal ${CANAL[c]} não está contratado.</h2><p>Os canais da sua empresa: ${cli().canais.map(x => CANAL[x]).join(", ")}.</p><div class="linha"><button class="btn" data-ir="${inicioDaArea("mensageria")}">Ir para ${CANAL[cli().canais[0]]}</button></div></div>`;
+    else if (!pode(est.rota)) corpo = telaSemPermissao(area);
+    else {
+      let rot = "Tela", grp = "";
+      menu(area).forEach(g => g.i.forEach(([t, r]) => { if (r === itemAtivo(area)) { rot = t; grp = g.g; } }));
+      if (caminho(est.rota) === "/mensageria") rot = "Escolha o canal";
+      if (/\/lotes\/\d+$/.test(caminho(est.rota))) rot = "Detalhe do lote";
+      corpo = telaArea(area, rot, grp);
+    }
+    const app = $("app");
+    app.className = "app " + (AREA[area] ? AREA[area].cls : "");
+    app.innerHTML = barra(area) + `<div class="casca${comMenu ? "" : " sem-menu"}">${comMenu ? menuLateral(area) : ""}<main class="conteudo">${faixa(comMenu ? area : "workspace")}${corpo}</main></div>` + (est.gaveta ? gaveta(comMenu ? area : "workspace") : "");
+  }
+
+  function ir(r) { est.rota = r || "/inicio"; est.pop = null; est.gaveta = false; render(); }
+  let toastT;
+  function aviso(t) { let el = $("toast"); if (!el) { el = document.createElement("div"); el.id = "toast"; el.setAttribute("role", "status"); el.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;max-width:calc(100vw - 32px)"; document.body.appendChild(el); } el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 2800); }
+  document.addEventListener("click", e => {
+    const t = e.target.closest("[data-ir],[data-acao],[data-msg],[data-canal]");
+    if (!t) { if (est.pop) { est.pop = null; render(); } return; }
+    if (t.dataset.ir) return ir(t.dataset.ir);
+    if (t.dataset.canal) { const r = caminho(est.rota), novo = r.replace(/^\/mensageria\/(sms|rcs|email|whatsapp)/, "/mensageria/" + t.dataset.canal); est.canal = t.dataset.canal; return ir(novo === r ? "/mensageria/" + t.dataset.canal : novo.replace(/\/lotes\/\d+$/, "/lotes")); }
+    if (t.dataset.msg) { est.pop = null; render(); return aviso(t.dataset.msg); }
+    const a = t.dataset.acao;
+    if (a === "pop-areas" || a === "pop-empresa") { const k = a.slice(4); est.pop = est.pop === k ? null : k; render(); }
+    if (a === "gaveta") { est.gaveta = true; render(); }
+    if (a === "fechar") { est.gaveta = false; render(); }
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && (est.pop || est.gaveta)) { est.pop = null; est.gaveta = false; render(); } });
+  $("form-end").addEventListener("submit", e => { e.preventDefault(); const v = $("end").value.trim(); ir(v.startsWith("/") ? v : "/" + v); });
+  function seg(id, fn) { $(id).querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset.v); })); }
+  seg("seg-largura", v => { $("janela").style.maxWidth = v + "px"; });
+  seg("seg-cliente", v => { est.cliente = v; est.canal = null; ir("/inicio"); });
+  seg("seg-perfil", v => { est.perfil = v; render(); });
+  seg("seg-bloqueio", v => { est.bloqueio = v; render(); });
+  render();
+})();
+</script>
+</body>
+</html>
