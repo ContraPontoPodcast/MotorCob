@@ -1,4 +1,4 @@
-# Prompt Horizons — 78: correções do teste de 25/10 (Relatórios nas abas, canal da Mensageria, chave, Assistente)
+# Prompt Horizons — 78: correções do teste de 25/10 (Relatórios nas abas, canal da Mensageria, chave, Assistente, ícones e Início)
 
 Teste do dono depois dos prompts 75a, 76 e 75b, conferido no código publicado (bundle de 25/10). Rode depois do 75b.
 
@@ -48,6 +48,20 @@ FileChartColumn · Empresa Building (prédio único, não Building2) · Suporte 
 No Início, os cartões "Suas áreas" hoje usam Wallet (Cobrança), MessageSquare (Mensageria) e Compass (Jornada): troque
 pelo mapa. Mantenha a cor de fundo de cada cartão.
 Aceite: buscar Wallet, Compass, MessageSquare e Building2 nas telas de área não acha nenhum uso como ícone de área.
+
+## 6. Início sem repetição (/inicio)
+Ordem da tela, de cima para baixo: saudação · "Para hoje" · atalhos. Apague o cartão "Suas áreas" inteiro.
+- "Para hoje" no topo, largura total (rpc para_hoje, como hoje). Sem itens: uma linha só, "✓ Tudo em dia por aqui",
+  sem cartão alto vazio.
+- Atalhos: um bloco só, os mesmos ícones do item 5, na ordem Cobrança · Jornada do Cliente · Mensageria · Relatórios ·
+  Empresa · Suporte · Console (só equipe). Cada cartão inteiro é clicável (sem "Abrir ›").
+- Os números que estavam em "Suas áreas" passam para dentro do cartão da área (rpc numeros_areas: numero + detalhe):
+  Cobrança "1.138 na Lista do dia de ontem · 2 carteiras"; Mensageria "Nenhum envio ontem · SMS, RCS, WhatsApp e
+  E-mail" (canais com nome por extenso, nessa ordem, separados por vírgula e "e"); Jornada "N clientes na jornada".
+  Sem número: a descrição curta de hoje. Relatórios, Empresa, Suporte e Console: só nome e descrição.
+- Área não contratada aparece UMA vez, no próprio atalho, esmaecida, com "Não contratada · Quero conhecer" (abre o
+  card de interesse que já existe).
+Aceite: no Início cada área aparece uma vez só; não existe mais o título "Suas áreas".
 ```
 
 ## Também do teste de 25/10 (sem prompt)
