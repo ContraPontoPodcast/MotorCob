@@ -408,3 +408,11 @@ Suporte, Minha conta), só a barra clara no topo; o menu lateral claro fica só 
    Conferência: item 31 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).
+
+## Navegação por áreas (Onda 1) — aprovado em 25/10/2026
+- Protótipo `docs/homologacao/navegacao-prototipo.html`, feito pelos agentes de CX e UX a partir da auditoria do site
+  publicado (`docs/homologacao/auditoria_navegacao/`), aprovado pelo dono.
+- O menu lateral segue a rota (não a frente guardada); Mensageria é área própria; Jornada sem telas da Cobrança;
+  404, sem permissão e área não contratada com saída; um corte de largura em 1024 px; "Pagar agora" só para quem paga.
+- Gerado: SQL 46 (`ver_clientes`, `ver_painel`) e prompt 73. Fora desta onda: tela de tokens (prompt 63), empresa só
+  Mensageria, parâmetros dos links e "MotorCob" → "MotorCX" (Onda 2).
