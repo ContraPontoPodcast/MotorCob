@@ -1,6 +1,6 @@
 # Prompt Horizons — 79: Orquestração com as raias primeiro (e a Estratégia em subabas)
 
-UX, 26/10/2026. Rode depois do 78. Protótipo: `orquestracao-prototipo.html`. Só organização da tela: as regras do bloco 3
+UX, 26/10/2026. Rode depois do 78; o 80 (canais e Fluxo) vem logo depois. Protótipo: `orquestracao-prototipo.html`. Só organização da tela: as regras do bloco 3
 (carteira no topo, aviso de estratégia compartilhada, cópia sempre independente, vistas, Salvar) continuam iguais.
 
 ```text
@@ -9,7 +9,8 @@ raias por dentro. Mude só onde as coisas ficam na tela /orquestracao e as abas 
 devedor.
 Canais nas células das raias: mantenha como hoje a bolinha COLORIDA de cada canal (WhatsApp #1F8A4C, RCS #3B5BA9, SMS
 #7A4FB0, E-mail #A2552B, Agente virtual #0E7C86, Discador #475569, Bureau #64748b) e a ligação entre canais (Sempre,
-Senão, Junto, Reserva), mostrando a palavra entre um canal e o seguinte ("RCS senão SMS"). Nada disso pode virar cinza.
+Senão, Junto, Reserva). Nenhum canal perde a cor própria (Discador e Bureau já são
+cinza-azulados no código: ficam assim). A forma de mostrar a ordem dos canais muda no prompt 80.
 
 ## 1. Abas por grupo (abas-telas, componente que monta a fileira de abas)
 1.1 Hoje a fileira junta as abas de todos os grupos (13 na Cobrança). Passe a desenhar UMA aba por grupo que tem

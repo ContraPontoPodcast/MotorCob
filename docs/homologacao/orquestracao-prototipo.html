@@ -140,7 +140,67 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
 .chs{display:flex;flex-wrap:wrap;gap:3px}
 .ch{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border:1px solid var(--borda);border-radius:6px;padding:1px 5px;white-space:nowrap;background:var(--cartao)}
 .ch i{width:7px;height:7px;border-radius:50%;background:var(--texto2);flex:none}
-.con{font-size:10px;font-weight:600;color:var(--texto3);text-transform:lowercase;padding:0 2px}
+.con{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--texto2);background:var(--fill2);border-radius:999px;padding:1px 7px;white-space:nowrap;line-height:1.5}
+/* ordem dos canais na célula: o 1º em destaque, os outros recuados com o conector antes */
+.ord{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ord .c1{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;white-space:nowrap}
+.ord .c1 i,.ord .cn i,.fn i{width:8px;height:8px;border-radius:50%;flex:none}
+.ord .seq{display:flex;align-items:center;gap:4px;padding-left:9px;border-left:1.5px solid var(--borda);margin-left:3px;font-size:11.5px;white-space:nowrap}
+.ord .cn{display:inline-flex;align-items:center;gap:4px;font-weight:600}
+/* editor: primeiro canal × depois */
+.prim{display:flex;flex-wrap:wrap;gap:5px}
+.prim button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 9px;border-radius:999px;border:1px solid var(--borda);color:var(--texto2)}
+.prim button i{width:8px;height:8px;border-radius:50%}
+.prim button[aria-checked="true"]{border-color:var(--texto);color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.passos{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.passos li{border:1px solid var(--borda);border-radius:10px;padding:7px 8px;display:flex;flex-direction:column;gap:4px}
+.passos .lin{display:flex;align-items:center;gap:6px}
+.passos select{font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--borda);border-radius:7px;background:var(--cartao);color:var(--texto);min-width:0}
+.passos .n{font-size:11px;font-weight:700;color:var(--texto3);width:14px}
+.passos small{font-size:11px;color:var(--texto3);padding-left:20px}
+.passos .mini{all:unset;cursor:pointer;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--texto3);font-size:12px}
+.passos .mini:hover{background:var(--fill);color:var(--texto)}
+.passos .mini[disabled]{opacity:.3;cursor:default}
+.addp{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--texto2);border:1px dashed var(--borda);border-radius:9px;padding:6px 10px;text-align:center}
+.addp:hover{color:var(--texto);border-color:var(--texto3)}
+.edit{max-height:calc(100vh - 40px);overflow:auto}
+/* fluxo */
+.forma{display:inline-flex;background:var(--fill);border-radius:8px;padding:2px;gap:2px}
+.forma button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--texto2);white-space:nowrap}
+.forma button[aria-pressed="true"]{background:var(--texto);color:var(--cartao)}
+.fluxo{padding:12px 20px 28px;display:flex;flex-direction:column;gap:12px}
+.momentos{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.momentos button{all:unset;flex:none;cursor:pointer;display:flex;flex-direction:column;gap:1px;padding:7px 12px;border-radius:10px;border:1px solid var(--borda);font-size:13px;font-weight:600;color:var(--texto2)}
+.momentos button small{font-size:11px;font-weight:500;color:var(--texto3)}
+.momentos button[aria-pressed="true"]{border-color:var(--texto);color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.trilho{display:flex;flex-direction:column;align-items:flex-start;max-width:980px}
+.no{border:1px solid var(--borda);border-radius:12px;background:var(--cartao);padding:10px 12px;min-width:260px;max-width:420px}
+.no.ini{background:var(--fill);border-style:solid;font-size:13px}
+.no.ini b{display:block}
+.no.ini small,.no.fim small{color:var(--texto3);font-size:11.5px}
+.no.vz{border-style:dashed;color:var(--texto3);font-size:12.5px;padding:7px 12px;min-width:0}
+.no.fim{background:var(--fill)}
+.liga{width:2px;height:18px;background:var(--borda);margin-left:24px;position:relative}
+.liga::after{content:"";position:absolute;bottom:-1px;left:-4px;border:5px solid transparent;border-top-color:var(--borda);border-bottom:0}
+.dia-l{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.dia .cab{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.dia .cab b{font-size:13px}
+.dia .cab small{font-size:11.5px;color:var(--texto3)}
+.dia .ed{all:unset;cursor:pointer;font-size:11.5px;font-weight:600;color:var(--texto2)}
+.fns{display:flex;flex-direction:column;gap:4px}
+.fn{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:2px;border:1px solid var(--borda);border-radius:9px;padding:6px 9px;background:var(--cartao)}
+.fn:hover{border-color:var(--texto3)}
+.fn .t{display:flex;align-items:center;gap:6px;font-weight:700;font-size:12.5px}
+.fn .f{font-size:11.5px;color:var(--texto2)}
+.fn.p1{border-width:1.5px}
+.fns .par{display:flex;gap:6px;align-items:stretch;flex-wrap:wrap}
+.fns .par .fn{flex:1;min-width:120px}
+.ramo{display:flex;align-items:center;gap:6px;padding-left:12px;font-size:11px;color:var(--texto3)}
+.desvio{display:flex;flex-direction:column;gap:6px;min-width:200px;max-width:300px}
+.desvio .dv{border:1px dashed var(--texto3);border-radius:10px;padding:7px 10px;background:color-mix(in srgb,var(--fill) 60%,transparent);font-size:12px;display:flex;flex-direction:column;gap:4px;cursor:pointer}
+.desvio .dv b{font-size:11.5px;color:var(--texto2);font-weight:600}
+.saidas{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.saidas span{font-size:12px;border:1px solid var(--borda);border-radius:999px;padding:2px 9px;background:var(--cartao)}
 .bol{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
 .ordem{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .ordem li{display:grid;grid-template-columns:auto auto;gap:4px 8px;align-items:center;justify-content:start;justify-items:start}
@@ -207,6 +267,10 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
   .obar{top:94px;padding:10px 14px 8px}
   .l1,.l2{flex-wrap:wrap}
   .l2 .dir{margin-left:0;width:100%}
+  .no{min-width:0;max-width:100%;width:100%}
+  .dia-l{flex-direction:column;width:100%}
+  .trilho{align-items:stretch}
+  .desvio{max-width:100%;width:100%}
   .vistas{display:none}.vsel{display:block;font:inherit;font-size:13px;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:5px 8px}
   .raias{padding:10px 14px 20px}
   .r .est{width:128px;min-width:128px}
@@ -229,7 +293,7 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
 <div class="ctrl">
   <div class="g"><span>Largura</span><div class="seg" id="s-larg"><button aria-pressed="true" data-v="1440">Computador 1440</button><button aria-pressed="false" data-v="1024">Notebook 1024</button><button aria-pressed="false" data-v="390">Celular 390</button></div></div>
   <div class="g"><span>Tema</span><div class="seg" id="s-tema"><button aria-pressed="true" data-v="">Sistema</button><button aria-pressed="false" data-v="light">Claro</button><button aria-pressed="false" data-v="dark">Escuro</button></div></div>
-  <div class="g"><span>Experimente</span><div class="seg"><button data-acao="demo-seg">Trocar de segmento</button><button data-acao="gaveta">Abrir os detalhes</button><button data-acao="demo-cel">Editar uma célula</button></div></div>
+  <div class="g"><span>Experimente</span><div class="seg"><button data-acao="demo-seg">Trocar de segmento</button><button data-acao="gaveta">Abrir os detalhes</button><button data-acao="demo-cel">Editar uma célula</button><button data-acao="demo-fluxo">Ver como fluxo</button></div></div>
 </div>
 <div class="palco"><div class="janela" id="janela"><div class="app" id="app"></div></div></div>
 <div class="antes"><div class="bx">
@@ -248,7 +312,9 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
     <li>Gaveta "Detalhes do segmento": Quem entra, Carteiras que usam, Ligado em todas, Tirar da carteira.</li>
     <li>"⋯": Copiar de outra carteira, padrão MotorCX, montar pelas personas, todas as carteiras, Reenquadrar, Imprimir.</li>
     <li>Aviso de estratégia compartilhada (regra do bloco 3) fica, numa linha só, acima das raias.</li>
-    <li>As raias começam a ~210 px do topo do cartão em 1440 px.</li></ul></div>
+    <li>As raias começam a ~210 px do topo do cartão em 1440 px.</li>
+    <li>Ordem dos canais: o 1º em destaque; os seguintes recuados com o conector antes (↳ senão, + junto, ↻ reserva, e sempre). No editor: "Primeiro canal" (uma escolha) e "Depois" (passos com conector, canal, reordenar e remover).</li>
+    <li>Raias | Fluxo: os mesmos dados em duas formas. O Fluxo mostra um caminho por momento, dias ligados por setas, dias sem ação recolhidos, persona como desvio e as saídas do momento (regras do motor, só leitura).</li></ul></div>
 </div></div>
 
 <script>
@@ -317,7 +383,7 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
   };
   SEGS.alfa[0].plano.cpca_p = { "Digitais SP": [{ c: ["wa"], f: "Proposta de acordo" }, null, null, null, { c: ["rcs"], f: "Última chance de desconto" }, null, null, null], "Só fixo": [{ c: ["dis"], f: "" }, null, { c: ["ag"], f: "" }, null, null, null, null, null] };
 
-  const est = { cart: "alfa", seg: "curto", vista: "desenho", sujo: false, pop: null, gav: false, cel: null, aviso: true, abertos: { cpca: true }, gaveta: false };
+  const est = { forma: "raias", mom: "novo", cart: "alfa", seg: "curto", vista: "desenho", sujo: false, pop: null, gav: false, cel: null, aviso: true, abertos: { cpca: true }, gaveta: false };
   const seg = () => SEGS[est.cart].find(s => s.id === est.seg) || SEGS[est.cart][0];
 
   /* ---------- moldura ---------- */
@@ -345,7 +411,7 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
         <div class="dir"><span class="estado ${est.sujo ? "at" : "ok"}"><i></i><span>${est.sujo ? "Alterações não salvas" : "Tudo salvo"}</span></span><button class="btn"${est.sujo ? "" : ' aria-disabled="true"'} data-acao="salvar">${I("check", "p")}Salvar</button></div></div>
       <div class="l2"><div class="segs" role="group" aria-label="Segmentos">${SEGS[est.cart].map(x => `<button class="sp" data-seg="${x.id}" aria-pressed="${x.id === s.id}" title="${x.propria ? "Própria desta carteira" : "Estratégia compartilhada com outra carteira"}">${!x.propria ? '<span class="cmp" aria-label="compartilhada"></span>' : ""}${x.nome} <small>${x.cli.toLocaleString("pt-BR")}</small></button>`).join("")}<button class="sp add" data-msg="Abre o formulário de novo segmento (o mesmo de hoje)" aria-label="Novo segmento">+ Novo</button></div>
         <button class="lk" data-acao="gaveta">${I("painel", "p")}Detalhes do segmento</button>
-        <div class="dir"><div class="vistas" role="group" aria-label="Vista">${vistas.map(([k, n]) => `<button data-vista="${k}" aria-pressed="${est.vista === k}">${n}</button>`).join("")}</div>
+        <div class="dir">${est.vista === "desenho" ? `<div class="forma" role="group" aria-label="Ver como"><button data-forma="raias" aria-pressed="${est.forma === "raias"}">Raias</button><button data-forma="fluxo" aria-pressed="${est.forma === "fluxo"}">Fluxo</button></div>` : ""}<div class="vistas" role="group" aria-label="Vista">${vistas.map(([k, n]) => `<button data-vista="${k}" aria-pressed="${est.vista === k}">${n}</button>`).join("")}</div>
           <select class="vsel" data-vsel aria-label="Vista">${vistas.map(([k, n]) => `<option value="${k}"${est.vista === k ? " selected" : ""}>${n}</option>`).join("")}</select>
           <span style="position:relative"><button class="ib bd" data-acao="pop-mais" aria-label="Mais ações">${I("mais", "p")}</button>${popMais}</span></div></div>
     </section>`;
@@ -358,7 +424,8 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
   }
 
   /* ---------- raias ---------- */
-  const chips = (c, v) => `<span class="chs">${c.map((k, j) => (j ? `<span class="con">${MOD_CEL[modoDe(v, j)]}</span>` : "") + `<span class="ch"><i style="background:${COR[k]}"></i>${CAN[k]}</span>`).join("")}</span>`;
+  const CONECTOR = { senao: "↳ senão", junto: "+ junto", reserva: "↻ reserva", sempre: "e sempre" };
+  const chips = (c, v) => `<span class="ord"><span class="c1"><i style="background:${COR[c[0]]}"></i>${CAN[c[0]]}</span>${c.slice(1).map((k, j) => `<span class="seq"><span class="con">${CONECTOR[modoDe(v, j + 1)]}</span><span class="cn"><i style="background:${COR[k]}"></i>${CAN[k]}</span></span>`).join("")}</span>`;
   function celula(e, i, v, persona) {
     const id = `${e}|${i}|${persona || ""}`;
     const sel = est.cel === id ? " sel" : "";
@@ -382,6 +449,50 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
       <p style="margin:0;font-size:12px;color:var(--texto3)">Acordo: D-3 a D+10 em relação ao vencimento de cada parcela. Não CPC: ciclo de 7 dias, repetido 3 vezes. As faixas de segurança valem sempre (08:00–20:00, intervalo mínimo de 12 h, freio do WhatsApp até 5%).</p>
     </div>`;
   }
+  const SAIDAS = {
+    novo: ["contato num canal → CPC A", "sem contato até o dia do giro → Não CPC", "acordo fechado → Acordo"],
+    cpca: ["sem resposta na ação de negociação → CPC B", "acordo fechado → Acordo"],
+    cpcb: ["respondeu → CPC A", "esgotou os canais → Não CPC + re-enriquecimento", "acordo fechado → Acordo"],
+    nao: ["contato num canal → CPC A", "3 ciclos sem contato → aguarda re-enriquecimento"],
+    acordo: ["parcela paga → segue no acordo", "quebra sem pagamento no prazo → volta ao estoque como CPC A", "todas pagas → liquidado"]
+  };
+  function noCanais(v, id) {
+    const passos = v.c.map((k, j) => ({ k, m: j ? modoDe(v, j) : null }));
+    let h = "", fila = [];
+    const fn = (p, j) => `<button class="fn${j === 0 ? " p1" : ""}" data-cel="${id}"><span class="t"><i style="background:${COR[p.k]}"></i>${CAN[p.k]}</span>${j === 0 && v.f ? `<span class="f">${v.f}</span>` : j === 0 ? '<span class="f">sem frase</span>' : ""}</button>`;
+    passos.forEach((p, j) => {
+      if (p.m === "junto") { fila.push(fn(p, j)); return; }
+      if (fila.length) { h += fila.length > 1 ? `<div class="par">${fila.join("")}</div>` : fila[0]; fila = []; }
+      if (j) h += `<div class="ramo"><span class="con">${CONECTOR[p.m]}</span>${{ senao: "se nada acima foi", reserva: "se o de cima não contatar no dia", sempre: "além do que foi acima" }[p.m]}</div>`;
+      fila.push(fn(p, j));
+    });
+    if (fila.length) h += fila.length > 1 ? `<div class="par">${fila.join("")}</div>` : fila[0];
+    return `<div class="fns">${h}</div>`;
+  }
+  function fluxo() {
+    const s = seg(), pl = s.plano, e = ESTAGIOS.find(x => x.id === est.mom), dias = DIAS[e.id];
+    const rs = e.id === "cpca" ? s.raias : [];
+    let corpo = "", vaz = [];
+    const fecha = () => { if (!vaz.length) return; const a = vaz[0], b = vaz[vaz.length - 1]; corpo += `<div class="liga"></div><button class="no vz" data-cel="${e.id}|${a}|" title="Editar o primeiro dia sem ação">${a === b ? `Dia ${a + 1} sem ação` : `Dias ${a + 1}–${b + 1} sem ação`}</button>`; vaz = []; };
+    dias.forEach((d, i) => {
+      const v = pl[e.id][i];
+      if (v === null) return;
+      if (!v.c.length) { vaz.push(i); return; }
+      fecha();
+      const id = `${e.id}|${i}|`;
+      const des = rs.map(r => { const pv = (pl.cpca_p || {})[r.p]; const x = pv && pv[i]; return x ? `<div class="dv" data-cel="${e.id}|${i}|${r.p}"><b>Persona ${r.p} →</b>${x.c.length ? chips(x.c, x) : "⦸ sem ação"}${x.f ? `<span class="fr">${x.f}</span>` : ""}</div>` : ""; }).join("");
+      corpo += `<div class="liga"></div><div class="dia-l"><div class="no dia${est.cel === id ? " sel" : ""}"><div class="cab"><div><b>Dia ${i + 1}</b> <small>${d}</small></div><button class="ed" data-cel="${id}">Editar</button></div>${noCanais(v, id)}</div>${des ? `<div class="desvio">${des}</div>` : ""}</div>`;
+    });
+    fecha();
+    const resto = rs.length ? `<p style="margin:0;font-size:12px;color:var(--texto3)">${rs.map(r => r.p).join(" e ")}: nos dias sem desvio, segue o caminho geral.</p>` : "";
+    return `<div class="fluxo">
+      <div class="momentos" role="group" aria-label="Momento">${ESTAGIOS.map(x => `<button data-mom="${x.id}" aria-pressed="${x.id === e.id}">${x.nome}<small>${x.sub}</small></button>`).join("")}</div>
+      <div class="trilho"><div class="no ini"><b>Entra em ${e.nome}</b><small>${e.sub}${rs.length ? ` · ${rs.length} raia(s) de persona como desvio` : ""}</small></div>${corpo}<div class="liga"></div>
+        <div class="no fim"><b style="font-size:13px">Saídas deste momento</b><small> (regras do motor, só leitura)</small><div class="saidas">${SAIDAS[e.id].map(x => `<span>${x}</span>`).join("")}</div></div></div>
+      ${resto}
+      <p style="margin:0;font-size:12px;color:var(--texto3)">Mesmos dados das raias: editar aqui muda lá. Faixas de segurança valem sempre (08:00–20:00, intervalo mínimo de 12 h, freio do WhatsApp até 5%).</p>
+    </div>`;
+  }
   function editor() {
     if (!est.cel) return "";
     const [e, i, p] = est.cel.split("|"), s = seg();
@@ -389,8 +500,15 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
     const nomeE = ESTAGIOS.find(x => x.id === e).nome;
     return `<div class="edit" id="editor" role="dialog" aria-label="Editar célula" style="top:${est.celTop || 300}px;left:${est.celLeft || 300}px">
       <h4>${nomeE}${p ? " · " + p : ""} · ${DIAS[e][+i]}</h4><p class="sub">${p ? "Raia de persona: vale só para essa persona neste dia." : "Público geral: vale para todos deste momento neste dia."}</p>
-      <span class="lbl">Canais (na ordem)</span><div class="tgl">${Object.entries(CAN).map(([k, n]) => `<button data-can="${k}" aria-pressed="${v.c.includes(k)}"><i class="bol" style="background:${COR[k]}"></i>${n}</button>`).join("")}</div>
-      ${v.c.length ? `<ol class="ordem">${v.c.map((k, j) => `<li><span class="ch"><i style="background:${COR[k]}"></i>${CAN[k]}</span>${j ? `<select data-modo="${j}" aria-label="Como ${CAN[k]} entra" title="${MODOS[modoDe(v, j)][1]}">${Object.entries(MODOS).map(([m, [n]]) => `<option value="${m}"${modoDe(v, j) === m ? " selected" : ""}>${n}</option>`).join("")}</select><small>${MODOS[modoDe(v, j)][1]}</small>` : "<small>primeiro canal</small>"}</li>`).join("")}</ol>` : ""}
+      <span class="lbl">Primeiro canal</span>
+      <div class="prim" role="radiogroup" aria-label="Primeiro canal">${Object.entries(CAN).map(([k, n]) => `<button role="radio" data-prim="${k}" aria-checked="${v.c[0] === k}"><i style="background:${COR[k]}"></i>${n}</button>`).join("")}</div>
+      ${v.c.length ? `<span class="lbl">Depois${v.c.length > 1 ? ` (${v.c.length - 1})` : ""}</span>
+      <ol class="passos">${v.c.slice(1).map((k, j0) => { const j = j0 + 1, m = modoDe(v, j); return `<li><div class="lin"><span class="n">${j + 1}º</span>
+        <select data-passo-mod="${j}" aria-label="Conector do ${j + 1}º canal">${Object.entries(MODOS).map(([mm, [n]]) => `<option value="${mm}"${m === mm ? " selected" : ""}>${n}</option>`).join("")}</select>
+        <select data-passo-can="${j}" aria-label="${j + 1}º canal">${Object.entries(CAN).map(([kk, n]) => `<option value="${kk}"${kk === k ? " selected" : ""}>${n}</option>`).join("")}</select>
+        <span style="flex:1"></span><button class="mini" data-passo-up="${j}" aria-label="Subir"${j === 1 ? " disabled" : ""}>↑</button><button class="mini" data-passo-down="${j}" aria-label="Descer"${j === v.c.length - 1 ? " disabled" : ""}>↓</button><button class="mini" data-passo-del="${j}" aria-label="Remover">✕</button></div>
+        <small>${MODOS[m][0]}: ${MODOS[m][1]}.${v.c.indexOf(k) < j ? " Canal repetido: só o 1º vale." : ""}</small></li>`; }).join("")}</ol>
+      <button class="addp" data-acao="add-passo">+ adicionar canal</button>` : '<p class="sub">Sem canal: ninguém é acionado neste dia.</p>'}
       <span class="lbl">Frase</span><select data-frase><option value="">Sem frase (só o canal)</option>${FRASES.map(f => `<option${v.f === f ? " selected" : ""}>${f}</option>`).join("")}</select>
       <div class="pre">${v.f ? `"${v.f}": Olá! Sua fatura do {credor} está em aberto. Toque para ver as opções.` : "Escolha uma frase para ver a prévia."}</div>
       <div class="acs"><button class="lk" data-acao="sem-acao">⦸ Sem ação neste dia</button><button class="lk" data-acao="copiar-dias">Copiar para os outros dias</button>${p ? '<button class="lk" data-acao="segue-geral">Voltar a seguir o geral</button>' : ""}<span class="esp"></span><button class="btn sec" data-acao="fechar-cel">Fechar</button></div></div>`;
@@ -414,7 +532,7 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
   }
 
   function render() {
-    $("app").innerHTML = lado() + `<section class="cartao" aria-label="Conteúdo">${mbar()}${ctx()}${abas()}${obar()}${aviso()}${est.vista === "desenho" ? desenho() : vistaOutra()}${editor()}</section>` + gaveta();
+    $("app").innerHTML = lado() + `<section class="cartao" aria-label="Conteúdo">${mbar()}${ctx()}${abas()}${obar()}${aviso()}${est.vista === "desenho" ? (est.forma === "fluxo" ? fluxo() : desenho()) : vistaOutra()}${editor()}</section>` + gaveta();
     if (est.cel) posEditor();
   }
   function posEditor() {
@@ -426,6 +544,7 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
     ed.style.left = left + "px"; ed.style.top = top + "px";
   }
   function sujar() { est.sujo = true; }
+  function reindex(v, from) { if (!v.m) return; const m = {}; Object.keys(v.m).forEach(k => { const n = +k; if (n < from) m[n] = v.m[n]; else if (n > from) m[n - 1] = v.m[n]; }); v.m = m; }
   function valorCel() {
     const [e, i, p] = est.cel.split("|"), s = seg();
     if (p) { s.plano.cpca_p[p] = s.plano.cpca_p[p] || Array(8).fill(null); if (!s.plano.cpca_p[p][+i]) s.plano.cpca_p[p][+i] = { c: [], f: "" }; return s.plano.cpca_p[p][+i]; }
@@ -437,9 +556,14 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
     el.innerHTML = `<span>${t}</span>${acao ? `<button data-msg="Pedido enviado · o MotorCX reenquadra em segundos">${acao}</button>` : ""}`; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => el.hidden = true, 3200);
   }
   document.addEventListener("click", ev => {
-    const t = ev.target.closest("[data-acao],[data-msg],[data-cart],[data-seg],[data-vista],[data-cel],[data-can],[data-tog],[data-sw]");
+    const t = ev.target.closest("[data-acao],[data-msg],[data-cart],[data-seg],[data-vista],[data-cel],[data-can],[data-tog],[data-sw],[data-prim],[data-passo-up],[data-passo-down],[data-passo-del],[data-forma],[data-mom]");
     if (!t) { if (est.pop) { est.pop = null; render(); } return; }
     const d = t.dataset;
+    if (d.forma) { est.forma = d.forma; return render(); }
+    if (d.mom) { est.mom = d.mom; est.cel = null; return render(); }
+    if (d.prim) { const v = valorCel(); if (v.c[0] === d.prim) return; const at = v.c.indexOf(d.prim); if (at > 0) { v.c.splice(at, 1); reindex(v, at); } v.c.length ? (v.c[0] = d.prim) : v.c.push(d.prim); sujar(); return render(); }
+    if (d.passoUp || d.passoDown) { const v = valorCel(), j = +(d.passoUp || d.passoDown), k = d.passoUp ? j - 1 : j + 1; if (k < 1 || k >= v.c.length) return; [v.c[j], v.c[k]] = [v.c[k], v.c[j]]; v.m = v.m || {}; [v.m[j], v.m[k]] = [v.m[k], v.m[j]]; sujar(); return render(); }
+    if (d.passoDel) { const v = valorCel(), j = +d.passoDel; v.c.splice(j, 1); reindex(v, j); sujar(); return render(); }
     if (t.closest("#editor") && d.can) { const v = valorCel(); v.c = v.c.includes(d.can) ? v.c.filter(x => x !== d.can) : [...v.c, d.can]; sujar(); return render(); }
     if (d.sw !== undefined) { t.setAttribute("aria-checked", t.getAttribute("aria-checked") === "true" ? "false" : "true"); return; }
     if (d.cel) { est.cel = est.cel === d.cel ? null : d.cel; est.pop = null; return render(); }
@@ -454,6 +578,7 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
     if (a === "fechar-gav") { est.gav = false; return render(); }
     if (a === "salvar") { if (!est.sujo) return; est.sujo = false; est.cel = null; render(); return aviso_("Orquestração salva · o MotorCX reenquadra sozinho em até 1 minuto", "Reenquadrar agora"); }
     if (a === "fechar-cel") { est.cel = null; return render(); }
+    if (a === "add-passo") { const v = valorCel(); const livre = Object.keys(CAN).find(k => !v.c.includes(k)) || "sms"; v.c.push(livre); v.m = v.m || {}; v.m[v.c.length - 1] = "senao"; sujar(); return render(); }
     if (a === "sem-acao") { const v = valorCel(); v.c = []; v.f = ""; sujar(); return render(); }
     if (a === "segue-geral") { const [e, i, p] = est.cel.split("|"); seg().plano.cpca_p[p][+i] = null; est.cel = null; sujar(); return render(); }
     if (a === "copiar-dias") { const [e, i, p] = est.cel.split("|"); const v = valorCel(); if (!p) seg().plano[e] = seg().plano[e].map(x => x === null ? null : { c: v.c.slice(), f: v.f }); sujar(); render(); return aviso_("Copiado para os outros dias da faixa"); }
@@ -462,10 +587,13 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
     if (a === "abrir-todas") { est.abertos = { cpca: true }; return render(); }
     if (a === "fechar-todas") { est.abertos = {}; return render(); }
     if (a === "demo-seg") { const l = SEGS[est.cart]; const i = l.findIndex(x => x.id === est.seg); est.seg = l[(i + 1) % l.length].id; est.cel = null; est.aviso = true; return render(); }
-    if (a === "demo-cel") { est.vista = "desenho"; est.cel = "novo|3|"; render(); document.querySelector('[data-cel="novo|3|"]').scrollIntoView({ block: "center" }); return posEditor(); }
+    if (a === "demo-fluxo") { est.vista = "desenho"; est.forma = "fluxo"; est.mom = "cpca"; est.cel = null; return render(); }
+    if (a === "demo-cel") { est.forma = "raias"; est.vista = "desenho"; est.cel = "novo|3|"; render(); document.querySelector('[data-cel="novo|3|"]').scrollIntoView({ block: "center" }); return posEditor(); }
   });
   document.addEventListener("change", ev => {
     if (ev.target.matches("[data-frase]")) { valorCel().f = ev.target.value; sujar(); render(); }
+    if (ev.target.matches("[data-passo-mod]")) { const v = valorCel(); v.m = v.m || {}; v.m[+ev.target.dataset.passoMod] = ev.target.value; sujar(); render(); }
+    if (ev.target.matches("[data-passo-can]")) { const v = valorCel(); v.c[+ev.target.dataset.passoCan] = ev.target.value; sujar(); render(); }
     if (ev.target.matches("[data-modo]")) { const v = valorCel(); v.m = v.m || {}; v.m[+ev.target.dataset.modo] = ev.target.value; sujar(); render(); }
     if (ev.target.matches("[data-vsel]")) { est.vista = ev.target.value; est.cel = null; render(); }
   });
