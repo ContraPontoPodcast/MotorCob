@@ -7,6 +7,9 @@ UX, 26/10/2026. Rode depois do 78. Protótipo: `orquestracao-prototipo.html`. S�
 NÃO crie, altere ou apague tabelas, views ou políticas. Não mude consultas, rpcs, gravações, regras nem o editor das
 raias por dentro. Mude só onde as coisas ficam na tela /orquestracao e as abas da Cobrança. Nada de CPF ou nome de
 devedor.
+Canais nas células das raias: mantenha como hoje a bolinha COLORIDA de cada canal (WhatsApp #1F8A4C, RCS #3B5BA9, SMS
+#7A4FB0, E-mail #A2552B, Agente virtual #0E7C86, Discador #475569, Bureau #64748b) e a ligação entre canais (Sempre,
+Senão, Junto, Reserva), mostrando a palavra entre um canal e o seguinte ("RCS senão SMS"). Nada disso pode virar cinza.
 
 ## 1. Abas por grupo (abas-telas, componente que monta a fileira de abas)
 1.1 Hoje a fileira junta as abas de todos os grupos (13 na Cobrança). Passe a desenhar UMA aba por grupo que tem

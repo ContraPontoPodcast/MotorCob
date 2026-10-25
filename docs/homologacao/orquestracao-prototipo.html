@@ -139,7 +139,13 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
 .cel.segue{color:var(--texto3);font-style:italic}
 .chs{display:flex;flex-wrap:wrap;gap:3px}
 .ch{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border:1px solid var(--borda);border-radius:6px;padding:1px 5px;white-space:nowrap;background:var(--cartao)}
-.ch i{width:6px;height:6px;border-radius:2px;background:var(--texto2)}
+.ch i{width:7px;height:7px;border-radius:50%;background:var(--texto2);flex:none}
+.con{font-size:10px;font-weight:600;color:var(--texto3);text-transform:lowercase;padding:0 2px}
+.bol{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.ordem{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.ordem li{display:grid;grid-template-columns:auto auto;gap:4px 8px;align-items:center;justify-content:start;justify-items:start}
+.ordem small{grid-column:1/-1;font-size:11px;color:var(--texto3)}
+.ordem select{font:inherit;font-size:12px;padding:2px 6px;border:1px solid var(--borda);border-radius:6px;background:var(--cartao);color:var(--texto)}
 .fr{font-size:11px;color:var(--texto2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
 .r tr.sep td{height:0;border-bottom:2px solid var(--borda)}
 
@@ -271,6 +277,10 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
   /* ---------- dados fictícios ---------- */
   const CARTEIRAS = { alfa: "Banco Alfa · Cartões", beta: "Varejo Beta · Crediário" };
   const CAN = { wa: "WhatsApp", sms: "SMS", rcs: "RCS", em: "E-mail", dis: "Discador", ag: "Agente virtual" };
+  const COR = { wa: "#1F8A4C", rcs: "#3B5BA9", sms: "#7A4FB0", em: "#A2552B", ag: "#0E7C86", dis: "#475569" };
+  const MODOS = { sempre: ["Sempre", "vai se houver contato que passe no filtro"], senao: ["Senão", "só se nada acima (desde o último Sempre) foi"], junto: ["Junto", "vai junto com a ação de cima, se ela foi"], reserva: ["Reserva", "se a de cima foi, só se ela não contatar no dia; se não foi, vai no lugar dela"] };
+  const MOD_CEL = { sempre: "e sempre", senao: "senão", junto: "+ junto", reserva: "reserva" };
+  const modoDe = (v, j) => (v.m && v.m[j]) || "senao";
   const FRASES = ["Lembrete amigável", "Boleto atualizado", "Proposta de acordo", "Última chance de desconto", "Confirmação de acordo", "Parcela vence amanhã"];
   const ESTAGIOS = [
     { id: "novo", nome: "Cliente novo", sub: "dias desde a entrada" },
@@ -285,11 +295,12 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
     const plano = {
       novo: [["wa"], ["sms"], [], ["rcs", "sms"], ["dis"], [], ["wa"], ["em"]],
       cpca: [["wa"], [], ["dis"], [], ["wa"], [], ["sms"], []],
-      cpcb: [["sms"], ["wa"], [], ["ag"], [], ["dis"], [], ["em"]],
+      cpcb: [["sms"], ["wa", "sms"], [], ["ag"], [], ["dis", "wa"], [], ["em"]],
       nao: [["dis"], ["sms"], ["wa"], [], ["rcs"], [], ["em"], null],
       acordo: [["wa"], ["sms"], ["wa", "sms"], ["dis"], ["wa"], [], ["ag"], ["sms"]]
     };
     for (const e of ESTAGIOS) r[e.id] = plano[e.id].map((c, i) => c === null ? null : ({ c: c.slice(), f: c.length ? pick(FRASES, i + e.id.length) : "" }));
+    r.acordo[2].m = { 1: "junto" }; r.cpcb[1].m = { 1: "reserva" }; r.cpcb[5].m = { 1: "sempre" };
     if (seed % 2) { r.novo[2] = { c: ["sms"], f: "Boleto atualizado" }; r.cpca[1] = { c: ["rcs"], f: "Proposta de acordo" }; }
     return r;
   }
@@ -347,14 +358,14 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
   }
 
   /* ---------- raias ---------- */
-  const chips = c => `<span class="chs">${c.map(k => `<span class="ch"><i></i>${CAN[k]}</span>`).join("")}</span>`;
+  const chips = (c, v) => `<span class="chs">${c.map((k, j) => (j ? `<span class="con">${MOD_CEL[modoDe(v, j)]}</span>` : "") + `<span class="ch"><i style="background:${COR[k]}"></i>${CAN[k]}</span>`).join("")}</span>`;
   function celula(e, i, v, persona) {
     const id = `${e}|${i}|${persona || ""}`;
     const sel = est.cel === id ? " sel" : "";
     if (v === null && !persona) return `<td><div class="cel vz" style="cursor:default">·</div></td>`;
     if (persona && v === null) return `<td><button class="cel segue${sel}" data-cel="${id}" title="Segue o público geral">segue o geral</button></td>`;
     if (!v.c.length) return `<td><button class="cel vz${sel}" data-cel="${id}" aria-label="Sem ação neste dia; editar">—</button></td>`;
-    return `<td><button class="cel${sel}" data-cel="${id}">${chips(v.c)}${v.f ? `<span class="fr">${v.f}</span>` : ""}</button></td>`;
+    return `<td><button class="cel${sel}" data-cel="${id}">${chips(v.c, v)}${v.f ? `<span class="fr">${v.f}</span>` : ""}</button></td>`;
   }
   function desenho() {
     const s = seg(), pl = s.plano;
@@ -378,7 +389,8 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
     const nomeE = ESTAGIOS.find(x => x.id === e).nome;
     return `<div class="edit" id="editor" role="dialog" aria-label="Editar célula" style="top:${est.celTop || 300}px;left:${est.celLeft || 300}px">
       <h4>${nomeE}${p ? " · " + p : ""} · ${DIAS[e][+i]}</h4><p class="sub">${p ? "Raia de persona: vale só para essa persona neste dia." : "Público geral: vale para todos deste momento neste dia."}</p>
-      <span class="lbl">Canais (na ordem)</span><div class="tgl">${Object.entries(CAN).map(([k, n]) => `<button data-can="${k}" aria-pressed="${v.c.includes(k)}">${n}</button>`).join("")}</div>
+      <span class="lbl">Canais (na ordem)</span><div class="tgl">${Object.entries(CAN).map(([k, n]) => `<button data-can="${k}" aria-pressed="${v.c.includes(k)}"><i class="bol" style="background:${COR[k]}"></i>${n}</button>`).join("")}</div>
+      ${v.c.length ? `<ol class="ordem">${v.c.map((k, j) => `<li><span class="ch"><i style="background:${COR[k]}"></i>${CAN[k]}</span>${j ? `<select data-modo="${j}" aria-label="Como ${CAN[k]} entra" title="${MODOS[modoDe(v, j)][1]}">${Object.entries(MODOS).map(([m, [n]]) => `<option value="${m}"${modoDe(v, j) === m ? " selected" : ""}>${n}</option>`).join("")}</select><small>${MODOS[modoDe(v, j)][1]}</small>` : "<small>primeiro canal</small>"}</li>`).join("")}</ol>` : ""}
       <span class="lbl">Frase</span><select data-frase><option value="">Sem frase (só o canal)</option>${FRASES.map(f => `<option${v.f === f ? " selected" : ""}>${f}</option>`).join("")}</select>
       <div class="pre">${v.f ? `"${v.f}": Olá! Sua fatura do {credor} está em aberto. Toque para ver as opções.` : "Escolha uma frase para ver a prévia."}</div>
       <div class="acs"><button class="lk" data-acao="sem-acao">⦸ Sem ação neste dia</button><button class="lk" data-acao="copiar-dias">Copiar para os outros dias</button>${p ? '<button class="lk" data-acao="segue-geral">Voltar a seguir o geral</button>' : ""}<span class="esp"></span><button class="btn sec" data-acao="fechar-cel">Fechar</button></div></div>`;
@@ -454,6 +466,7 @@ table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;fo
   });
   document.addEventListener("change", ev => {
     if (ev.target.matches("[data-frase]")) { valorCel().f = ev.target.value; sujar(); render(); }
+    if (ev.target.matches("[data-modo]")) { const v = valorCel(); v.m = v.m || {}; v.m[+ev.target.dataset.modo] = ev.target.value; sujar(); render(); }
     if (ev.target.matches("[data-vsel]")) { est.vista = ev.target.value; est.cel = null; render(); }
   });
   document.addEventListener("keydown", ev => { if (ev.key === "Escape" && (est.pop || est.gav || est.cel)) { est.pop = null; est.gav = false; est.cel = null; render(); } });
