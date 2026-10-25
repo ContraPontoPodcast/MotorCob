@@ -68,7 +68,7 @@ button{font:inherit;color:inherit}
 
 .cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:16px;display:flex;flex-direction:column;min-width:0;position:relative;min-height:758px}
 .ctx{position:sticky;top:0;z-index:20;background:var(--cartao);border-radius:16px 16px 0 0;display:flex;align-items:center;gap:10px;height:44px;padding:0 24px;border-bottom:1px solid var(--borda2);flex:none}
-.ctx .emp{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--borda);border-radius:999px;font-size:12.5px;font-weight:600;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.emp{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--borda);border-radius:999px;font-size:12.5px;font-weight:600;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ctx .emp-cli{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--texto2)}
 .ctx .dir{margin-left:auto;display:flex;align-items:center;gap:8px}
 .busca{all:unset;cursor:pointer;white-space:nowrap;overflow:hidden;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-radius:8px;background:var(--fill);color:var(--texto3);font-size:12.5px;width:280px}
@@ -199,6 +199,77 @@ button{font:inherit;color:inherit}
 .wrap{padding:0 16px}
 
 /* abaixo de 1024 px: trilho vira barra com ☰; abas rolam na horizontal */
+/* caminhos de navegação A · B · C */
+.app.nav-A{grid-template-columns:minmax(0,1fr)}
+.app.nav-B,.app.nav-C{grid-template-columns:220px minmax(0,1fr)}
+.app.nav-B.rec{grid-template-columns:64px minmax(0,1fr)}
+.nav-A .ctx{display:none}
+.topA{grid-column:1/-1;position:sticky;top:10px;z-index:30;display:flex;align-items:center;gap:4px;height:56px;padding:0 12px 0 16px;background:var(--cartao);border:1px solid var(--borda);border-radius:16px}
+.topA .marca{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px;margin-right:14px;white-space:nowrap}
+.topA .marca svg{width:26px;height:26px}
+.topA .areas{display:flex;gap:2px;min-width:0;overflow-x:auto;scrollbar-width:none}
+.topA .ar{all:unset;cursor:pointer;padding:8px 11px;border-radius:8px;font-size:14px;font-weight:600;color:var(--texto2);white-space:nowrap}
+.topA .ar:hover{background:var(--fill);color:var(--texto)}
+.topA .ar[aria-current="page"]{background:var(--fill);color:var(--texto);box-shadow:inset 0 -2px 0 var(--texto)}
+.topA .ar.off{opacity:.45}
+.topA .dir{margin-left:auto;display:flex;align-items:center;gap:6px}
+.topA .busca{width:200px}
+.topA .emp{max-width:190px}
+.topA .emp .nm{white-space:nowrap}
+.topA .ibb{all:unset;cursor:pointer;position:relative;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--texto2)}
+.topA .ibb:hover{background:var(--fill);color:var(--texto)}
+.topA .ibb .b,.lado .b{position:absolute;top:2px;right:1px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--erro);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center}
+.topA .cons{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:6px 10px;border-radius:8px;border:1px solid var(--borda)}
+.lado{position:sticky;top:10px;height:calc(100vh - 20px);max-height:760px;background:var(--cartao);border:1px solid var(--borda);border-radius:16px;display:flex;flex-direction:column;gap:2px;padding:12px 10px;overflow:auto;min-width:0}
+.lado .topo-l{display:flex;align-items:center;gap:8px;padding:2px 4px 10px;margin-bottom:6px;border-bottom:1px solid var(--borda2);min-height:44px}
+.lado .topo-l .marca{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px;flex:1;min-width:0}
+.lado .topo-l .marca svg{width:24px;height:24px;flex:none}
+.lado .topo-l .emp{max-width:none;flex:1;justify-content:space-between}
+.li{all:unset;box-sizing:border-box;cursor:pointer;position:relative;display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:8px;font-size:14px;font-weight:500;color:var(--texto2)}
+.li:hover{background:var(--fill);color:var(--texto)}
+.li[aria-current="page"]{background:var(--fill);color:var(--texto);font-weight:600}
+.li.aberta{color:var(--texto);font-weight:600}
+.li.off{opacity:.45}
+.li .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .ch{color:var(--texto3);transition:transform .15s}
+.li.aberta .ch{transform:rotate(90deg)}
+.li .q{font-size:11.5px;font-weight:500;color:var(--texto3)}
+.li .b{position:static;margin-left:auto}
+.sec{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px 6px 38px;border-radius:8px;font-size:13.5px;color:var(--texto2)}
+.sec:hover{background:var(--fill);color:var(--texto)}
+.sec[aria-current="page"]{color:var(--texto);font-weight:600;background:var(--fill);box-shadow:inset 2px 0 0 var(--texto)}
+.sec .cont{margin-left:auto}
+.lado .gt{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--texto3);padding:12px 10px 4px}
+.lado hr{border:0;border-top:1px solid var(--borda2);width:100%;margin:8px 0}
+.lado .pe{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px 6px 2px;border-top:1px solid var(--borda2)}
+.lado .pe .avatar{margin:0;width:32px;height:32px;flex:none}
+.lado .pe .quem{min-width:0;flex:1;font-size:13px;line-height:1.25}
+.lado .pe .quem small{display:block;color:var(--texto3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec .lado{padding:12px 8px;align-items:center}
+.rec .lado .nm,.rec .lado .ch,.rec .lado .q,.rec .lado .sec,.rec .lado .gt,.rec .lado .pe .quem,.rec .lado .topo-l .marca span{display:none}
+.rec .li{justify-content:center;padding:9px 0}
+.rec .lado .topo-l{justify-content:center;flex-direction:column}
+.recolher{all:unset;cursor:pointer;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--texto3)}
+.recolher:hover{background:var(--fill);color:var(--texto)}
+.migalha{font-size:12.5px;color:var(--texto2);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden}
+.so-mob{display:none}
+.notas{max-width:1280px;margin:10px auto 0;padding:0 16px}
+.notas .nt{background:var(--cartao);border:1px solid var(--borda);border-radius:14px;padding:12px 16px;font-size:13.5px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:6px 18px}
+.notas .nt b{display:block;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--texto2);margin-bottom:2px}
+.notas .rec-b{grid-column:1/-1;border-top:1px solid var(--borda2);padding-top:8px;margin-top:2px}
+@container app (max-width:1360px){
+  .topA .busca{width:auto}
+  .topA .busca .txt,.topA .busca kbd{display:none}
+}
+@container app (max-width:1023px){
+  .topA,.lado{display:none}
+  .app.nav-A,.app.nav-B,.app.nav-C,.app.nav-B.rec{grid-template-columns:minmax(0,1fr)}
+  .nav-A .ctx{display:flex}
+  .so-mob{display:inline-flex}
+  .abas.so-mob{display:flex}
+  .so-desk{display:none}
+  .gaveta .sec{padding-left:44px}
+}
 @container app (max-width:1023px){
   .app{grid-template-columns:minmax(0,1fr);padding:0;gap:0;border-radius:16px}
   .trilho{display:none}
@@ -225,36 +296,94 @@ button{font:inherit;color:inherit}
   .grade{grid-template-columns:1fr}
   .ctx .emp{max-width:170px}
 }
+
+/* C · minimalista: lateral sem cartão, botões só texto, ativo com traço fino */
+.app.nav-C.cmin{grid-template-columns:188px minmax(0,1fr);gap:18px}
+.cmin .lado{background:transparent;border:0;border-radius:0;padding:14px 4px 10px;gap:0}
+.cmin .lado .topo-l{border-bottom:0;margin-bottom:14px;padding-left:10px}
+.cmin .lado .topo-l .marca{font-size:15px}
+.cmin .li{padding:7px 10px;border-radius:0;font-size:13.5px;font-weight:450;color:var(--texto3);gap:11px}
+.cmin .li svg{width:16px;height:16px;stroke-width:1.5;opacity:.75}
+.cmin .li:hover{background:transparent;color:var(--texto)}
+.cmin .li[aria-current="page"]{background:transparent;color:var(--texto);font-weight:600;box-shadow:inset 2px 0 0 var(--texto)}
+.cmin .li[aria-current="page"] svg{opacity:1}
+.cmin .li .b{background:transparent;color:var(--erro);min-width:0;padding:0;font-size:11.5px}
+.cmin .sec{padding:5px 10px 5px 37px;border-radius:0;font-size:13px;color:var(--texto3)}
+.cmin .sec:hover{background:transparent;color:var(--texto)}
+.cmin .sec[aria-current="page"]{background:transparent;box-shadow:inset 2px 0 0 var(--texto)}
+.cmin .lado hr{border:0;margin:10px 0}
+.cmin .lado .gt{font-size:10.5px;padding:6px 10px 4px;letter-spacing:.14em}
+.cmin .lado .pe{border-top:0;padding-left:10px}
+
+/* C · só ícones: lateral de ícones, nome ao passar o mouse; Início com os mesmos ícones como atalhos */
+.app.nav-C.cic{grid-template-columns:44px minmax(0,1fr);gap:12px}
+.cic .lado{overflow:visible;z-index:60;padding:14px 0 10px;align-items:center}
+.cic .lado .topo-l{padding:0;justify-content:center;border:0}
+.cic .lado .topo-l .marca span,.cic .lado .topo-l .emp span,.cic .lado .nm,.cic .lado .q,.cic .lado .ch,.cic .lado .sec,.cic .lado .gt,.cic .lado .pe .quem{display:none}
+.cic .li{justify-content:center;width:36px;height:36px;padding:0;border-radius:9px;margin:2px auto}
+.cic .li svg{width:18px;height:18px;opacity:.8}
+.cic .li[aria-current="page"]{box-shadow:none;background:var(--fill)}
+.cic .li[aria-current="page"]::before{content:"";position:absolute;left:-4px;top:9px;bottom:9px;width:2px;border-radius:2px;background:var(--texto)}
+.cic .li::after{content:attr(title);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);white-space:nowrap;background:#1D1D1F;color:#fff;font-size:12.5px;font-weight:500;padding:6px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:70}
+.cic .li:hover::after{opacity:1}
+.cic .li .b{position:absolute;top:4px;right:2px;font-size:10px}
+.cic .lado .pe{justify-content:center;padding:10px 0 0}
+.atalhos{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.at{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:6px;padding:16px;border:1px solid var(--borda);border-radius:14px;background:var(--cartao)}
+.at:hover{border-color:var(--texto3)}
+.at svg{width:22px;height:22px;color:var(--texto2)}
+.at b{font-size:14.5px}
+.at small{font-size:12px;color:var(--texto3);line-height:1.3}
+.at.off{opacity:.5}
+
+.abrenomes{margin-top:auto !important}
+.cic .abrenomes svg{transform:none}
+.cexp .abrenomes svg{transform:rotate(180deg)}
+.app.nav-C.cexp{grid-template-columns:192px minmax(0,1fr);gap:16px}
+.cexp .li svg{width:20px;height:20px}
+.abrenomes + .pe{margin-top:0}
+.cexp .abrenomes{justify-content:center;width:40px;padding:8px 0}
 </style>
 </head>
 <body>
 <div class="doc">
-  <span class="selo">Protótipo para aprovação · Produto v5 · 25/10/2026</span>
-  <h1>MotorCX · trilho de ícones, cabeçalho de página e abas</h1>
-  <p>Navegação nova no padrão da referência do dono: um trilho fino com Início e uma área por ícone, o conteúdo num grande cartão, um cabeçalho com uma ação só e as seções da área como abas. Um destaque só: o ouro da marca MotorCX. Dados fictícios. Clique no trilho, nas abas e nas subabas; teste o claro, o escuro e o celular.</p>
+  <span class="selo">Protótipo para aprovação · Produto v6 · navegação A · B · C · 25/10/2026</span>
+  <h1>MotorCX · três caminhos de navegação</h1>
+  <p>O trilho de ícones saiu. O resto do v5 continua: cabeçalho de página com uma ação, abas com contador, cartões com paginação, empresa como contexto e Console com abas. O controle "Navegação" troca só a moldura (A, B ou C); as telas e os dados são os mesmos. Um destaque só: o ouro da marca MotorCX. Dados fictícios. Teste o claro, o escuro, o celular e "Quem vê".</p>
 </div>
 <div class="ctrl">
+  <div class="g"><span>Navegação</span><div class="seg" id="s-nav"><button aria-pressed="true" data-v="A">A · Barra superior</button><button aria-pressed="false" data-v="B">B · Menu agrupado</button><button aria-pressed="false" data-v="C">C · Lateral enxuta</button><button aria-pressed="false" data-v="Cm">C · minimalista</button><button aria-pressed="false" data-v="Ci">C · só ícones</button></div></div>
   <div class="g"><span>Largura</span><div class="seg" id="s-larg"><button aria-pressed="true" data-v="1280">Computador</button><button aria-pressed="false" data-v="900">Tablet 900</button><button aria-pressed="false" data-v="390">Celular 390</button></div></div>
   <div class="g"><span>Tema</span><div class="seg" id="s-tema"><button aria-pressed="true" data-v="">Sistema</button><button aria-pressed="false" data-v="light">Claro</button><button aria-pressed="false" data-v="dark">Escuro</button></div></div>
   <div class="g"><span>Quem vê</span><div class="seg" id="s-quem"><button aria-pressed="true" data-v="cliente">Cliente</button><button aria-pressed="false" data-v="equipe">Equipe MotorCX</button></div></div>
   <div class="g"><span>Empresa</span><div class="seg" id="s-emp"><button aria-pressed="true" data-v="alfa">Cobrança + Jornada + Mensageria</button><button aria-pressed="false" data-v="beta">Cobrança + Mensageria (só WhatsApp)</button></div></div>
 </div>
+<div class="notas"><div class="nt" id="nota"></div></div>
 <div class="palco"><div class="janela" id="janela"><div class="app" id="app"></div></div></div>
 <div class="wrap"><div class="regra"><b>Regras desta proposta</b><ul>
-  <li><b>Trilho</b> (64 px, cartão próprio): logo · Início · Cobrança · Jornada do Cliente · Mensageria · Relatórios; na base, Empresa, Suporte, sino, Console (só equipe) e o avatar quadrado com a inicial. Área não contratada aparece esmaecida e abre "não faz parte do plano". O ativo tem fundo claro e um marcador escuro à esquerda (o ouro fica só no botão principal e nas abas).</li>
+  <li><b>Navegação</b>: três caminhos para o dono escolher (veja a nota acima do protótipo). Em todos, a área ativa vem da rota, área não contratada aparece esmaecida e abre "não faz parte do plano", e o Console só aparece para a equipe.</li>
   <li><b>Contexto</b> numa faixa fina no topo do cartão: a empresa (equipe: pílula com troca; cliente: só o nome) à esquerda, e a busca ⌘K e o glossário "?" à direita.</li>
   <li><b>Cabeçalho</b>: rótulo da área em caixa alta, título, subtítulo de uma linha e <b>uma</b> ação principal em ouro. Seletores de contexto (carteira) ficam ao lado, em contorno.</li>
   <li><b>Abas</b> são as seções da área (com ícone e contador). Seções com várias telas têm subabas em pílula logo abaixo (Estratégia: Orquestração, Personas, Segmentos, Carteiras, Canais e frases, Mapa, Comitê). As rotas não mudam.</li>
   <li><b>Listas</b>: barra da seção (rótulo, contagem, busca, grade/lista), cartões em grade com status e metadados, e rodapé fixo de paginação.</li>
-  <li><b>Console</b> (equipe): mesmo trilho, com abas Clientes · Suporte · Financeiro · Mensageria · Administração · Sistema e as telas como subabas; contadores de Atendimento (vermelho) e Implantação (azul). <b>Empresa</b> abre em Visão geral (a ficha), com "Mais ações". <b>Suporte</b> não tem abas: a lista de hoje já ordena por situação.</li>
-  <li><b>Rolagem</b>: a página rola; o trilho fica fixo e a faixa de contexto gruda no topo do cartão. <b>Ouro</b> só no botão principal e nas abas.</li>
-  <li><b>Celular</b> (&lt; 1024 px): o trilho vira ☰ (gaveta com os mesmos itens e nomes); as abas e subabas rolam na horizontal; a grade vira uma coluna.</li>
+  <li><b>Console</b> (equipe): mesma moldura, com abas Clientes · Suporte · Financeiro · Mensageria · Administração · Sistema e as telas como subabas; contadores de Atendimento (vermelho) e Implantação (azul). <b>Empresa</b> abre em Visão geral (a ficha), com "Mais ações". <b>Suporte</b> não tem abas: a lista de hoje já ordena por situação.</li>
+  <li><b>Rolagem</b>: a página rola; a barra (A) ou a lateral (B, C) fica fixa e a faixa de contexto gruda no topo do cartão. <b>Ouro</b> só no botão principal e nas abas.</li>
+  <li><b>Celular</b> (&lt; 1024 px), nos três caminhos: barra com ☰ (gaveta com as áreas e, na área aberta, as seções); as abas e subabas rolam na horizontal; a grade vira uma coluna.</li>
 </ul></div></div>
 
 <script>
 (() => {
   const $ = id => document.getElementById(id);
   const P = {
+    x_inicio:'<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    x_cob:'<circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/>',
+    x_jor:'<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
+    x_msg:'<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
+    x_rel:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 18v-1"/><path d="M12 18v-6"/><path d="M16 18v-3"/>',
+    x_emp:'<rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/>',
+    x_sup:'<path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M21 16v2a4 4 0 0 1-4 4h-5"/>',
+    x_con:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+    x_dupla:'<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
     home:'<path d="M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
     wallet:'<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
     route:'<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
@@ -295,7 +424,7 @@ button{font:inherit;color:inherit}
 
   /* áreas → abas → subabas (rótulo, ícone, contador, rota real, cabeçalho) */
   const AREAS = {
-    cobranca: { nome: "Cobrança", ic: "wallet", desc: "Lista do dia, réguas e carteiras", abas: [
+    cobranca: { nome: "Cobrança", ic: "x_cob", desc: "Lista do dia, réguas e carteiras", abas: [
       { id: "fila", nome: "Lista do dia", ic: "lchk", cont: "18.420", rota: "/fila", t: "Lista do dia", s: "Quem acionar hoje, por qual canal e em que ordem.", a: ["download", "Baixar lista"], carteira: true },
       { id: "clientes", nome: "Clientes", ic: "users", cont: "42.310", rota: "/clientes", t: "Clientes", s: "Em que passo da esteira cada cliente está e qual a próxima ação.", a: ["search", "Buscar cliente"], carteira: true },
       { id: "acoes", nome: "Ações", ic: "zap", cont: "6.204", rota: "/acoes", t: "Ações", s: "O que foi feito hoje e o que voltou de cada canal.", a: ["download", "Exportar"], carteira: true },
@@ -311,7 +440,7 @@ button{font:inherit;color:inherit}
       { id: "resultados", nome: "Resultados", ic: "trend", subs: [
         { id: "painel", nome: "Painel", rota: "/painel", t: "Painel", s: "Os indicadores da operação.", a: ["download", "Exportar"] },
         { id: "rel", nome: "Relatórios ↗", ir: ["relatorios", "cobranca"] } ] } ] },
-    jornada: { nome: "Jornada do Cliente", ic: "route", desc: "Boas-vindas, ativação e retenção", abas: [
+    jornada: { nome: "Jornada do Cliente", ic: "x_jor", desc: "Boas-vindas, ativação e retenção", abas: [
       { id: "visao", nome: "Visão geral", ic: "eye", rota: "/jornada", t: "Jornada do Cliente", s: "Em que momento da jornada estão os seus clientes.", a: ["upload", "Enviar carga"] },
       { id: "lista", nome: "Lista do dia", ic: "lchk", cont: "2.310", rota: "/jornada/lista", t: "Lista do dia", s: "Quem recebe mensagem hoje e por quê.", a: ["download", "Baixar lista"] },
       { id: "cargas", nome: "Cargas", ic: "upload", rota: "/jornada/cargas", t: "Cargas", s: "Clientes, contatos e leads da Jornada.", a: ["upload", "Enviar carga"] },
@@ -319,7 +448,7 @@ button{font:inherit;color:inherit}
         { id: "momentos", nome: "Momentos e fases", rota: "/jornada/momentos", t: "Momentos e fases", s: "As etapas da jornada e quando cada cliente muda.", a: ["plus", "Novo momento"] },
         { id: "mensagens", nome: "Mensagens por momento", rota: "/jornada/mensagens", t: "Mensagens por momento", s: "O que cada momento envia, por canal.", a: ["plus", "Nova mensagem"] },
         { id: "carteiras", nome: "Carteiras", rota: "/jornada/carteiras", t: "Carteiras da Jornada", s: "As carteiras que entram na jornada.", a: ["plus", "Nova carteira"] } ] } ] },
-    mensageria: { nome: "Mensageria", ic: "msg", desc: "Campanhas, lotes e respostas", canal: true, abas: [
+    mensageria: { nome: "Mensageria", ic: "x_msg", desc: "Campanhas, lotes e respostas", canal: true, abas: [
       { id: "campanhas", nome: "Campanhas", ic: "send", cont: "8", rota: "/mensageria/{c}/campanhas", t: "Campanhas", s: "Suba uma lista, escolha o template e acompanhe a entrega.", a: ["plus", "Nova campanha"] },
       { id: "lotes", nome: "Lotes", ic: "layers", cont: "3", rota: "/mensageria/{c}/lotes", t: "Lotes", s: "Cada envio, com a janela, a entrega e o motivo das falhas.", a: ["download", "Exportar"], semWhats: true },
       { id: "respostas", nome: "Respostas", ic: "inbox", cont: "4", alerta: true, subs: [
@@ -334,7 +463,7 @@ button{font:inherit;color:inherit}
       { id: "config", nome: "Configurações", ic: "gear", subs: [
         { id: "canal", nome: "Do canal", rota: "/mensageria/{c}/config", t: "Configurações do canal", s: "Remetente, horários e limites.", a: ["check", "Salvar"] },
         { id: "atend", nome: "Atendimento", rota: "/mensageria/config/atendimento", t: "Configurar atendimento", s: "Filas, horários e respostas prontas.", a: ["check", "Salvar"] } ] } ] },
-    relatorios: { nome: "Relatórios", ic: "chart", desc: "Os números de todas as áreas", abas: [
+    relatorios: { nome: "Relatórios", ic: "x_rel", desc: "Os números de todas as áreas", abas: [
       { id: "cobranca", nome: "Cobrança", ic: "wallet", rota: "/relatorios?produto=orquestracao", t: "Relatórios", s: "Os números de cada área, com o período anterior para comparar.", a: ["plus", "Montar relatório"], precisa: "cobranca" },
       { id: "jornada", nome: "Jornada", ic: "route", rota: "/relatorios?produto=jornada", t: "Relatórios", s: "Os números de cada área, com o período anterior para comparar.", a: ["plus", "Montar relatório"], precisa: "jornada" },
       { id: "mensageria", nome: "Mensageria", ic: "msg", rota: "/relatorios?produto=mensageria", t: "Relatórios", s: "Os números de cada área, com o período anterior para comparar.", a: ["plus", "Montar relatório"], precisa: "mensageria" },
@@ -374,7 +503,7 @@ button{font:inherit;color:inherit}
   };
   const ORDEM = ["cobranca", "jornada", "mensageria", "relatorios"];
 
-  const est = { quem: "cliente", emp: "alfa", area: "inicio", aba: null, sub: null, canal: null, carteira: "", vista: "grade", pag: 1, ipp: 12, pop: null, gaveta: false };
+  const est = { nav: "A", rec: false, quem: "cliente", emp: "alfa", area: "inicio", aba: null, sub: null, canal: null, carteira: "", vista: "grade", pag: 1, ipp: 12, pop: null, gaveta: false };
   const emp = () => EMP[est.emp];
   const tem = a => a === "relatorios" ? true : a === "console" ? est.quem === "equipe" : (["empresa", "suporte", "inicio"].includes(a) || emp().areas.includes(a));
   const canal = () => (est.canal && emp().canais.includes(est.canal)) ? est.canal : emp().canais[0];
@@ -401,20 +530,64 @@ button{font:inherit;color:inherit}
       <button class="avatar" data-msg="${est.quem === "equipe" ? "Equipe MotorCX" : emp().pessoa + " · " + emp().nome} · Minha conta · Documentação · Sair" aria-label="Minha conta">${est.quem === "equipe" ? "M" : emp().pessoa[0]}</button>
     </nav>`;
   }
+  const NOTA = {
+    A: { t: "A · Barra superior com as áreas", pro: "Demo: a mais limpa; o conteúdo usa a largura toda e as áreas ficam visíveis com nome. É a mais perto do que existe hoje (a barra do topo já tem Início · Áreas ▾ · Empresa ▾ · Suporte): menor esforço no Horizons.", contra: "Duas camadas de abas na horizontal (áreas em cima, seções no cartão) podem se confundir. Em 1280 px, com a equipe (empresa + Console), a barra fica cheia; abaixo de 1024 px tudo vai para o ☰." },
+    B: { t: "B · Menu lateral agrupado e recolhível", pro: "Cliente: o caminho inteiro fica visível (área › seção) e é o padrão que o mercado de cobrança conhece (HubSpot, Intercom). Recolhe para ícones.", contra: "É o que mais lembra o menu antigo que o dono rejeitou. As seções aparecem na lateral E pedem as subabas no cartão (Estratégia tem sete telas). Esforço médio: o aside existe, mas vira sanfona." },
+    C: { t: "C · Lateral enxuta com título da área", pro: "Clareza: na vertical só os lugares (áreas, Empresa, Suporte); na horizontal as seções (abas). Uma hierarquia só, com nomes e sem dezenas de itens. Visual de produto moderno (Linear, Notion), bom para demo.", contra: "Ocupa 220 px de largura. Esforço médio: o aside fica, mas encolhe para uma lista curta, e as seções precisam das abas do cartão (o trabalho do 75b, que já está escrito)." }
+  };
+  const REC = "<b>Recomendação do UX</b>C, por clareza: a lateral responde \"onde estou\" e as abas respondem \"o que faço aqui\", sem misturar os dois níveis, e a empresa fica no topo da lateral, separada. Se o dono quiser o máximo de largura e o menor esforço, A é a alternativa boa. B só se ele quiser ver as seções na lateral: é o mais parecido com o menu que ele não gostou.";
+  function nota() {
+    const n = NOTA[est.nav];
+    $("nota").innerHTML = `<div><b>${n.t} · prós</b>${n.pro}</div><div><b>contras</b>${n.contra}</div><div class="rec-b">${REC}</div>`;
+  }
+  const pilEmp = (cls = "") => `<span style="position:relative" class="${cls}"><button class="emp" data-acao="pop-emp" aria-haspopup="menu">${I("building", "p")}<span class="nm" style="overflow:hidden;text-overflow:ellipsis">${emp().nome}</span>${I("down", "p")}</button>${est.pop === "emp" ? `<div class="pop" style="top:34px;left:0"><div class="tit">Empresa em contexto</div>${Object.entries(EMP).map(([k, v]) => `<button data-emp="${k}">${v.nome}${k === est.emp ? "<span>✓</span>" : ""}</button>`).join("")}</div>` : ""}</span>`;
+  const avatarBtn = (st = "") => `<button class="avatar"${st} data-msg="${est.quem === "equipe" ? "Equipe MotorCX" : emp().pessoa + " · " + emp().nome} · Minha conta · Documentação · Sair" aria-label="Minha conta">${est.quem === "equipe" ? "M" : emp().pessoa[0]}</button>`;
+  const LUGARES = () => [["inicio", "Início", "x_inicio"], ...ORDEM.map(k => [k, AREAS[k].nome, AREAS[k].ic])];
+  function navA() {
+    return `<header class="topA"><span class="marca">${LOGO}MotorCX</span>
+      <nav class="areas" aria-label="Áreas">${LUGARES().map(([k, n]) => `<button class="ar${!tem(k) ? " off" : ""}" data-area="${k}"${est.area === k ? ' aria-current="page"' : ""}${!tem(k) ? ' title="Não contratada"' : ""}>${n}</button>`).join("")}</nav>
+      <div class="dir">${est.quem === "equipe" ? pilEmp() : ""}<button class="busca" data-msg="Abre a busca ⌘K">${I("search", "p")}<span class="txt">Buscar ou perguntar</span><kbd>⌘K</kbd></button>
+        <button class="ibb" data-area="suporte" title="Suporte" aria-label="Suporte">${I("buoy")}<span class="b">1</span></button>
+        <button class="ibb" data-area="empresa" title="Empresa" aria-label="Empresa">${I("building")}</button>
+        <button class="ibb" data-msg="Avisos: 3 novos" title="Avisos" aria-label="Avisos">${I("bell")}<span class="b">3</span></button>
+        ${est.quem === "equipe" ? `<button class="cons" data-area="console">Console</button>` : ""}${avatarBtn(' style="width:32px;height:32px;margin:0 0 0 4px"')}</div></header>`;
+  }
+  const li = (k, nome, ic, extra = "", cls = "") => `<button class="li${cls}${!tem(k) ? " off" : ""}" data-area="${k}"${est.area === k && !cls.includes("aberta") ? ' aria-current="page"' : ""} title="${nome}${!tem(k) ? " · não contratada" : ""}">${I(ic)}<span class="nm">${nome}</span>${!tem(k) ? '<span class="q">Quero conhecer</span>' : ""}${extra}</button>`;
+  const secoes = k => abasDe(k).map(x => `<button class="sec" data-area="${k}" data-aba-ir="${x.id}"${est.area === k && abaAtual().id === x.id ? ' aria-current="page"' : ""}>${x.nome}${x.cont ? `<span class="cont${x.alerta ? " alerta" : ""}${x.contAzul ? " azul" : ""}">${x.cont}</span>` : ""}</button>`).join("");
+  const rodapeLado = () => `<div class="pe">${avatarBtn()}<div class="quem">${est.quem === "equipe" ? "Equipe MotorCX" : emp().pessoa}<small>${est.quem === "equipe" ? "Master" : "Admin · " + emp().nome}</small></div></div>`;
+  function navB() {
+    const area = (k, nome, ic, extra = "") => {
+      const aberta = est.area === k && tem(k) && !AREAS[k]?.semAbas && k !== "inicio";
+      return li(k, nome, ic, (aberta || (k !== "inicio" && tem(k) && !AREAS[k]?.semAbas) ? I("chev", "p ch") : "") + extra, aberta ? " aberta" : "") + (aberta && !est.rec ? secoes(k) : "");
+    };
+    return `<nav class="lado" aria-label="Navegação"><div class="topo-l"><span class="marca">${LOGO}<span>MotorCX</span></span><button class="recolher" data-acao="recolher" title="${est.rec ? "Expandir" : "Recolher só em ícones"}" aria-label="Recolher menu">${est.rec ? "›" : "‹"}</button></div>
+      ${LUGARES().map(([k, n, ic]) => area(k, n, ic)).join("")}
+      <hr>${area("empresa", "Empresa", "building")}${area("suporte", "Suporte", "buoy", '<span class="b">1</span>')}${est.quem === "equipe" ? area("console", "Console MotorCX", "shield") : ""}
+      ${rodapeLado()}</nav>`;
+  }
+  function navC() {
+    const subE = (aba, nome) => `<button class="sec" style="padding-left:38px" data-area="empresa" data-aba-ir="${aba}"${est.area === "empresa" && abaAtual().id === aba ? ' aria-current="page"' : ""}>${nome}</button>`;
+    return `<nav class="lado" aria-label="Navegação"><div class="topo-l">${est.quem === "equipe" ? pilEmp() : `<span class="marca">${LOGO}<span>MotorCX</span></span>`}</div>
+      ${LUGARES().map(([k, n, ic]) => li(k, n, ic)).join("")}
+      <hr><div class="gt">Empresa</div>
+      ${est.ic ? li("empresa", "Empresa", "x_emp") : li("empresa", "Visão geral", "building", "", est.area === "empresa" && abaAtual().id !== "visao" ? " aberta" : "") + subE("pessoas", "Pessoas e perfis") + subE("faturas", "Faturas") + subE("integracoes", "Integrações")}
+      <hr>${li("suporte", "Suporte", est.ic ? "x_sup" : "buoy", '<span class="b">1</span>')}${est.quem === "equipe" ? li("console", "Console MotorCX", est.ic ? "x_con" : "shield") : ""}
+      ${est.ic ? `<button class="li abrenomes" data-acao="nomes" title="${est.exp ? "Esconder os nomes" : "Mostrar os nomes"}" aria-label="${est.exp ? "Esconder os nomes" : "Mostrar os nomes"}">${I("x_dupla")}</button>` : ""}${rodapeLado()}</nav>`;
+  }
   function gaveta() {
     const a = (k, nome, ic, extra = "") => `<a data-area="${k}"${est.area === k ? ' aria-current="page"' : ""}${!tem(k) ? ' class="off"' : ""}>${I(ic)}${nome}${!tem(k) ? '<span style="margin-left:auto;font-size:12px;font-weight:500">Quero conhecer</span>' : ""}${extra}</a>`;
     return `<div class="veu" data-acao="fechar"></div><nav class="gaveta" aria-label="Menu">
-      ${a("inicio", "Início", "home")}${ORDEM.map(k => a(k, AREAS[k].nome, AREAS[k].ic)).join("")}<hr>
+      ${a("inicio", "Início", "home")}${ORDEM.map(k => a(k, AREAS[k].nome, AREAS[k].ic) + (est.area === k && tem(k) ? secoes(k) : "")).join("")}<hr>
       ${a("empresa", "Empresa", "building")}${a("suporte", "Suporte", "buoy", '<span class="b">1</span>')}
       ${est.quem === "equipe" ? a("console", "Console MotorCX", "shield") : ""}</nav>`;
   }
 
   /* ---------- faixa de contexto e cabeçalho ---------- */
   function ctx() {
-    const e = est.quem === "equipe"
-      ? `<span style="position:relative"><button class="emp" data-acao="pop-emp" aria-haspopup="menu">${I("building", "p")}${emp().nome}${I("down", "p")}</button>${est.pop === "emp" ? `<div class="pop" style="top:34px;left:0"><div class="tit">Empresa em contexto</div>${Object.entries(EMP).map(([k, v]) => `<button data-emp="${k}">${v.nome}${k === est.emp ? "<span>✓</span>" : ""}</button>`).join("")}</div>` : ""}</span>`
-      : `<span class="emp-cli">${I("building", "p")}${emp().nome}</span>`;
-    return `<div class="ctx">${e}<div class="dir"><button class="busca" data-msg="Abre a busca ⌘K: telas, ações e cliente pelo ID">${I("search", "p")}<span class="txt">Busque uma tela, um cliente ou pergunte</span><kbd>⌘K</kbd></button><button class="ib sem" title="O que significa" data-msg="Abre o glossário (O que significa)">?</button></div></div>`;
+    const empEl = est.quem === "equipe" ? pilEmp() : `<span class="emp-cli">${I("building", "p")}${emp().nome}</span>`;
+    const ar = est.area === "inicio" ? "Início" : AREAS[est.area] ? AREAS[est.area].nome + (AREAS[est.area].semAbas || !tem(est.area) ? "" : " › " + abaAtual().nome) : "";
+    const e = est.nav === "C" ? `<span class="migalha so-desk">${ar}</span>${est.quem === "equipe" ? pilEmp("so-mob") : ""}` : empEl;
+    return `<div class="ctx">${e}<div class="dir"><button class="busca" data-msg="Abre a busca ⌘K: telas, ações e cliente pelo ID">${I("search", "p")}<span class="txt">Busque uma tela, um cliente ou pergunte</span><kbd>⌘K</kbd></button><button class="ib sem" title="O que significa" data-msg="Abre o glossário (O que significa)">?</button>${est.nav !== "A" ? `<button class="ib sem so-desk" data-msg="Avisos: 3 novos" aria-label="Avisos" style="position:relative">${I("bell", "p")}</button>` : ""}</div></div>`;
   }
   function mbar() {
     return `<div class="mbar"><button class="ib sem" data-acao="gaveta" aria-label="Abrir menu">${I("menu")}</button><span class="marca">${LOGO}MotorCX</span><div class="dir"><button class="ib sem" data-msg="Avisos" aria-label="Avisos">${I("bell")}</button><button class="avatar" style="width:32px;height:32px;margin:0" data-msg="Minha conta">${est.quem === "equipe" ? "M" : emp().pessoa[0]}</button></div></div>`;
@@ -430,7 +603,7 @@ button{font:inherit;color:inherit}
   function abas(area) {
     if (AREAS[area].semAbas) return "";
     const at = abaAtual();
-    return `<div class="abas" role="tablist">${abasDe(area).map(x => `<button class="aba" role="tab" data-aba="${x.id}" aria-selected="${x.id === at.id}">${I(x.ic, "p")}${x.nome}${x.cont ? `<span class="cont${x.alerta ? " alerta" : ""}${x.contAzul ? " azul" : ""}">${x.cont}</span>` : ""}</button>`).join("")}</div>
+    return `<div class="abas${est.nav === "B" && !est.rec ? " so-mob" : ""}" role="tablist">${abasDe(area).map(x => `<button class="aba" role="tab" data-aba="${x.id}" aria-selected="${x.id === at.id}">${I(x.ic, "p")}${x.nome}${x.cont ? `<span class="cont${x.alerta ? " alerta" : ""}${x.contAzul ? " azul" : ""}">${x.cont}</span>` : ""}</button>`).join("")}</div>
       ${at.subs ? `<div class="subabas" role="group" aria-label="${at.nome}">${at.subs.map(s => `<button data-sub="${s.id}"${s.ir ? ` data-ir="${s.ir.join(",")}"` : ""} aria-pressed="${!s.ir && s.id === telaAtual().id}">${s.nome}</button>`).join("")}</div>` : ""}`;
   }
   function secbar(rot, qtd, opts = {}) {
@@ -501,7 +674,8 @@ button{font:inherit;color:inherit}
     const card = a => tem(a) ? `<article class="c"><div class="c-top"><span class="av q">${I(AREAS[a].ic)}</span><div style="flex:1"><b>${AREAS[a].nome}</b><div class="c-sub">${AREAS[a].desc}</div></div><button class="mini" data-area="${a}" aria-label="Abrir ${AREAS[a].nome}">${I("chev", "p")}</button></div><hr><div class="meta">${{ cobranca: "<div><span>Lista do dia:</span> 18.420</div><div><span>Carteiras:</span> 3</div>", jornada: "<div><span>Na jornada:</span> 2.310</div><div><span>Momentos:</span> 6</div>", mensageria: `<div><span>Entregue ontem:</span> 96,2%</div><div><span>Canais:</span> ${e.canais.map(c => CANAL[c]).join(" e ")}</div>` }[a]}</div></article>`
       : `<article class="c" style="opacity:.7"><div class="c-top"><span class="av q">${I(AREAS[a].ic)}</span><div style="flex:1"><b>${AREAS[a].nome}</b><div class="c-sub">${AREAS[a].desc}</div></div></div><hr><button class="lk" data-msg="Abre o card de interesse que já existe">Quero conhecer</button></article>`;
     const itens = [["var(--erro)", "<b>Fatura de setembro vence amanhã</b> · R$ 4.380,00", "Pagar", "empresa", "faturas"], ["var(--at)", "O Suporte respondeu o chamado #2041", "Ver", "suporte", "abertos"], ["var(--at)", "4 respostas de clientes esperam alguém", "Abrir", "mensageria", "respostas"], ["var(--ok)", "Lista do dia pronta às 06:12 · 18.420 clientes", "Abrir", "cobranca", "fila"]];
-    return { html: `<div class="corpo" style="padding-top:4px"><div class="c"><div class="c-st"><b>Para hoje</b><span class="cont">${itens.length}</span></div><div class="hoje">${itens.map(([cor, t, a, ar, ab]) => `<div class="it"><i class="ponto" style="background:${cor}"></i><span>${t}</span><button class="lk" data-area="${ar}" data-aba-ir="${ab}">${a}</button></div>`).join("")}</div></div>
+    const atalhos = est.ic ? `<div class="atalhos">${[...ORDEM.map(k => [k, AREAS[k].nome, AREAS[k].ic, AREAS[k].desc || "Os números de cada área"]), ["empresa", "Empresa", "x_emp", "Pessoas, faturas e integrações"], ["suporte", "Suporte", "x_sup", "Seus chamados"], ...(est.quem === "equipe" ? [["console", "Console MotorCX", "x_con", "Clientes, financeiro e equipe"]] : [])].map(([k, n, ic, d]) => `<button class="at${!tem(k) ? " off" : ""}" data-area="${k}">${I(ic)}<b>${n}</b><small>${tem(k) ? d : "Não contratada · Quero conhecer"}</small></button>`).join("")}</div>` : "";
+    return { html: `<div class="corpo" style="padding-top:4px">${atalhos}<div class="c"><div class="c-st"><b>Para hoje</b><span class="cont">${itens.length}</span></div><div class="hoje">${itens.map(([cor, t, a, ar, ab]) => `<div class="it"><i class="ponto" style="background:${cor}"></i><span>${t}</span><button class="lk" data-area="${ar}" data-aba-ir="${ab}">${a}</button></div>`).join("")}</div></div>
       ${secbar("Suas áreas", `${e.areas.length} de 3 contratadas`).replace('class="secbar"', 'class="secbar" style="padding:4px 0 0"')}<div class="grade">${["cobranca", "jornada", "mensageria"].map(card).join("")}</div></div>` };
   }
   function suporte() {
@@ -541,7 +715,10 @@ button{font:inherit;color:inherit}
       html += c.html; pg = c.pager || "";
     }
     requestAnimationFrame(() => { const sel = document.querySelector('.aba[aria-selected="true"]'); if (sel) sel.scrollIntoView({ block: "nearest", inline: "nearest" }); });
-    $("app").innerHTML = trilho() + `<section class="cartao" aria-label="Conteúdo">${mbar()}${ctx()}<div class="rolagem">${html}</div>${pg}</section>` + (est.gaveta ? gaveta() : "");
+    $("app").className = "app nav-" + est.nav + (est.nav === "B" && est.rec ? " rec" : "") + (est.nav === "C" && est.min ? " cmin" : "") + (est.nav === "C" && est.ic ? (est.exp ? " cexp" : " cic") : "");
+    nota();
+    const moldura = est.nav === "A" ? navA() : est.nav === "B" ? navB() : navC();
+    $("app").innerHTML = moldura + `<section class="cartao" aria-label="Conteúdo">${mbar()}${ctx()}<div class="rolagem">${html}</div>${pg}</section>` + (est.gaveta ? gaveta() : "");
   }
 
   function irArea(a, aba) { est.area = a; est.aba = aba || null; est.sub = null; est.pag = 1; est.pop = null; est.gaveta = false; if (a === "relatorios" && aba) est.aba = aba; render(); }
@@ -562,11 +739,14 @@ button{font:inherit;color:inherit}
     if (d.msg) { if (t.getAttribute("aria-disabled") === "true") return aviso(t.title); est.pop = null; render(); return aviso(d.msg); }
     if (d.acao === "pop-emp" || d.acao === "pop-cart") { const k = d.acao.slice(4); est.pop = est.pop === k ? null : k; return render(); }
     if (d.acao === "gaveta") { est.gaveta = true; return render(); }
+    if (d.acao === "recolher") { est.rec = !est.rec; return render(); }
+    if (d.acao === "nomes") { est.exp = !est.exp; return render(); }
     if (d.acao === "fechar") { est.gaveta = false; return render(); }
   });
   document.addEventListener("change", e => { if (e.target.matches("[data-ipp]")) { est.ipp = +e.target.value; est.pag = 1; render(); } });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && (est.pop || est.gaveta)) { est.pop = null; est.gaveta = false; render(); } });
   function seg(id, fn) { $(id).querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset.v); })); }
+  seg("s-nav", v => { est.min = v === "Cm" || v === "Ci"; est.ic = v === "Ci"; est.nav = (v === "Cm" || v === "Ci") ? "C" : v; est.pop = null; render(); });
   seg("s-larg", v => { $("janela").style.maxWidth = v + "px"; });
   seg("s-tema", v => { v ? document.documentElement.setAttribute("data-theme", v) : document.documentElement.removeAttribute("data-theme"); });
   seg("s-quem", v => { est.quem = v; if (v !== "equipe" && est.area === "console") { est.area = "inicio"; est.aba = null; } render(); });

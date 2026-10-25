@@ -12,7 +12,53 @@ Entregas (`.../scratchpad/ux/`):
 - **Valem mais que o resto deste texto onde divergem:** a página rola (não o cartão); o ouro fica só no botão principal e nas abas; o Suporte não tem abas; a Empresa abre em Visão geral.
 - Este documento.
 
-## 1. Arquitetura
+## 0. Decisão final do dono (25/10/2026): lateral só de ícones
+
+Aprovado o modo **"C · só ícones"** do `produto-prototipo.html`. Ele vale mais que o resto deste documento onde
+divergir: o trilho em cartão e os caminhos A e B ficam descartados. O `PROMPT_75B_TRILHO_E_ABAS.md` (99 linhas) foi
+reescrito para ele.
+
+**Lateral fechada (padrão)**
+- Coluna de 44 px, sem cartão, sem borda e sem fundo próprio. Botões de 36 px com ícones lucide de 18 px.
+- Ordem: logo · Início · Cobrança · Jornada do Cliente · Mensageria · Relatórios · espaço · Empresa (um item só, abre `/empresa`) · espaço · Suporte (número em vermelho) · Console MotorCX (só equipe).
+- No pé: botão de mostrar os nomes (ChevronsRight, sem texto) e o avatar.
+
+**Ícones escolhidos pelo dono**
+
+| Item | Ícone lucide |
+|---|---|
+| Início | House |
+| Cobrança | CircleDollarSign |
+| Jornada do Cliente | Route |
+| Mensageria | MessagesSquare |
+| Relatórios | FileChartColumn |
+| Empresa | Building |
+| Suporte | Headset |
+| Console | ShieldCheck |
+| Mostrar/esconder os nomes | ChevronsRight (gira 180° quando aberta) |
+
+**Comportamento**
+- O nome aparece numa dica escura à direita, em portal `z-[70]`.
+- Ativo: fundo neutro claro no botão e traço de 2 px à esquerda.
+- Área não contratada: esmaecida; o clique abre "não faz parte do plano".
+- Com os nomes abertos, a lateral passa a 192 px, em estilo minimalista. A escolha fica no navegador (`mc-lateral-nomes`); o padrão é só ícones.
+
+**Início:** atalhos grandes com os mesmos ícones e nomes, antes do "Para hoje": Cobrança, Jornada do Cliente,
+Mensageria, Relatórios, Empresa, Suporte e Console (equipe). Cada atalho tem uma linha de descrição. Não
+contratada: esmaecido, com "Não contratada · Quero conhecer".
+
+**Continua do v5:**
+- faixa de contexto: migalha "Área › Aba", pílula da empresa para a equipe, ⌘K, "?" e sino;
+- cabeçalho com uma ação em ouro;
+- abas por área, inclusive o Console (6 grupos) e a Visão geral da Empresa;
+- página rolando com a lateral fixa;
+- o ouro só no botão principal e nas abas; a lateral é neutra.
+
+**Celular (< 1024 px):** ☰ com uma gaveta de ícones e nomes, mostrando as seções da área aberta.
+
+**Ordem dos prompts:** 75a → 76 (os dois ainda não foram aplicados no site) → 75b → 77.
+
+## 1. Arquitetura (proposta original, antes da decisão)
 
 **Moldura.** Fundo cinza-claro (`--base-app`) com dois cartões:
 - à esquerda, o **trilho** de 64 px;
