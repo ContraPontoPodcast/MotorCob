@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MotorCX · trilho e abas</title>
+<style>
+/* Linguagem nova: trilho de ícones + cartão de conteúdo + cabeçalho de página + abas. Um destaque só: o ouro MotorCX. */
+:root{
+  --app:#F1F1F3; --cartao:#FFFFFF; --borda:#E6E6EA; --borda2:#EFEFF2; --fill:#F5F5F7; --fill2:#EDEDF0;
+  --texto:#1D1D1F; --texto2:#6E6E73; --texto3:#8E8E93;
+  --destaque:#8A6A2E; --destaque-forte:#6F5424; --destaque-suave:#F4EDE0; --sobre-destaque:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E8F6EC; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --sombra:0 12px 32px rgba(0,0,0,.12); --veu:rgba(0,0,0,.28);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --app:#000000; --cartao:#1C1C1E; --borda:#2C2C2E; --borda2:#2A2A2C; --fill:#2C2C2E; --fill2:#3A3A3C;
+  --texto:#F5F5F7; --texto2:#AEAEB2; --texto3:#8E8E93;
+  --destaque:#D9B26B; --destaque-forte:#E8C688; --destaque-suave:#3A2F1C; --sobre-destaque:#1D1D1F;
+  --ok:#30D158; --ok-f:#12301B; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1412;
+  --sombra:0 12px 32px rgba(0,0,0,.6); --veu:rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --app:#000000; --cartao:#1C1C1E; --borda:#2C2C2E; --borda2:#2A2A2C; --fill:#2C2C2E; --fill2:#3A3A3C;
+  --texto:#F5F5F7; --texto2:#AEAEB2; --texto3:#8E8E93;
+  --destaque:#D9B26B; --destaque-forte:#E8C688; --destaque-suave:#3A2F1C; --sobre-destaque:#1D1D1F;
+  --ok:#30D158; --ok-f:#12301B; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1412;
+  --sombra:0 12px 32px rgba(0,0,0,.6); --veu:rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--app);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.i.p{width:15px;height:15px}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--destaque);outline-offset:2px}
+
+/* cabeçalho do documento de protótipo */
+.doc{max-width:1312px;margin:0 auto;padding:20px 16px 4px;display:flex;flex-direction:column;gap:6px}
+.doc h1{margin:0;font-size:22px}
+.doc p{margin:0;color:var(--texto2);max-width:86ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.ctrl{max-width:1312px;margin:10px auto 0;padding:0 16px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.ctrl .g{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ctrl .g>span{font-size:12px;color:var(--texto2)}
+.seg{display:inline-flex;gap:2px;background:var(--fill2);border-radius:9px;padding:2px}
+.seg button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:7px;color:var(--texto2)}
+.seg button[aria-pressed="true"]{background:var(--cartao);color:var(--texto);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.palco{padding:12px 16px 24px;display:flex;justify-content:center}
+.janela{width:100%;max-width:1280px;container:app/inline-size;transition:max-width .25s}
+
+/* moldura */
+.app{position:relative;display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;padding:10px;background:var(--app);border-radius:20px;border:1px solid var(--borda);min-height:780px;align-items:start}
+.trilho{position:sticky;top:10px;height:calc(100vh - 20px);max-height:760px;background:var(--cartao);border:1px solid var(--borda);border-radius:16px;display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:6px}
+.logo{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;margin-bottom:8px}
+.logo svg{width:30px;height:30px}
+.ri{all:unset;position:relative;cursor:pointer;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;color:var(--texto2)}
+.ri:hover{background:var(--fill);color:var(--texto)}
+.ri[aria-current="page"]{background:var(--fill);color:var(--texto);box-shadow:inset 0 0 0 1px var(--borda)}
+.ri[aria-current="page"]::before{content:"";position:absolute;left:-12px;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--texto)}
+.ri.off{opacity:.38}
+.ri .b{position:absolute;top:3px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--erro);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center}
+.ri .dica{position:absolute;left:52px;top:50%;transform:translateY(-50%);white-space:nowrap;background:var(--texto);color:var(--cartao);font-size:12.5px;font-weight:600;padding:5px 9px;border-radius:8px;pointer-events:none;opacity:0;transition:opacity .12s;z-index:70}
+.ri:hover .dica,.ri:focus-visible .dica{opacity:1}
+.ri .dica small{display:block;font-weight:400;opacity:.75}
+.trilho .esp{flex:1}
+.avatar{all:unset;cursor:pointer;width:36px;height:36px;border-radius:9px;background:var(--texto);color:var(--cartao);display:grid;place-items:center;font-weight:700;margin-top:4px}
+
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:16px;display:flex;flex-direction:column;min-width:0;position:relative;min-height:758px}
+.ctx{position:sticky;top:0;z-index:20;background:var(--cartao);border-radius:16px 16px 0 0;display:flex;align-items:center;gap:10px;height:44px;padding:0 24px;border-bottom:1px solid var(--borda2);flex:none}
+.ctx .emp{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--borda);border-radius:999px;font-size:12.5px;font-weight:600;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctx .emp-cli{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--texto2)}
+.ctx .dir{margin-left:auto;display:flex;align-items:center;gap:8px}
+.busca{all:unset;cursor:pointer;white-space:nowrap;overflow:hidden;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-radius:8px;background:var(--fill);color:var(--texto3);font-size:12.5px;width:280px}
+.busca kbd{margin-left:auto;font-family:var(--mono);font-size:11px;border:1px solid var(--borda);border-radius:5px;padding:0 5px}
+.ib{all:unset;cursor:pointer;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--texto2);border:1px solid var(--borda);background:var(--cartao)}
+.ib:hover{color:var(--texto);background:var(--fill)}
+.ib.sem{border-color:transparent}
+.mbar{display:none}
+
+.rolagem{flex:1;display:flex;flex-direction:column}
+.ph{display:flex;gap:16px;align-items:flex-start;padding:22px 28px 16px}
+.ph .t{min-width:0;flex:1}
+.eyebrow{font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--texto2);margin:0 0 4px}
+.ph h1{margin:0;font-size:24px;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+.ph .sub{margin:4px 0 0;color:var(--texto2);font-size:14px}
+.ph .acoes{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:9px;background:var(--destaque);color:var(--sobre-destaque);font-weight:600;font-size:14px;white-space:nowrap}
+.btn:hover{background:var(--destaque-forte)}
+.btn[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
+.btn.sec{background:var(--cartao);color:var(--texto);border:1px solid var(--borda)}
+.btn.sec:hover{background:var(--fill)}
+.pilsel{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 12px;border:1px solid var(--borda);border-radius:9px;font-size:13.5px;font-weight:600;position:relative}
+.pilsel .lbl{color:var(--texto2);font-weight:500}
+
+.abas{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--borda2);overflow-x:auto;scrollbar-width:none;flex:none}
+.abas::-webkit-scrollbar{display:none}
+.aba{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:12px 10px 11px;color:var(--texto2);font-weight:600;font-size:14px;border-bottom:2px solid transparent;white-space:nowrap}
+.aba:hover{color:var(--texto)}
+.aba[aria-selected="true"]{color:var(--texto);border-bottom-color:var(--destaque)}
+.aba[aria-selected="true"] svg{color:var(--destaque)}
+.cont{font-size:11.5px;font-weight:600;background:var(--fill);color:var(--texto2);border-radius:999px;padding:1px 7px;font-variant-numeric:tabular-nums}
+.cont.alerta{background:var(--erro-f);color:var(--erro)}
+.cont.azul{background:#E8F1FF;color:#0A60D0}
+:root[data-theme="dark"] .cont.azul{background:#11243A;color:#4DA3FF}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .cont.azul{background:#11243A;color:#4DA3FF}}
+.subabas{display:flex;gap:6px;padding:12px 28px 0;flex-wrap:wrap}
+.subabas button{all:unset;flex:none;white-space:nowrap;cursor:pointer;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;color:var(--texto2);border:1px solid var(--borda)}
+.subabas button[aria-pressed="true"]{background:var(--destaque-suave);color:var(--texto);border-color:var(--destaque)}
+.subabas button .fora{font-weight:400}
+
+.secbar{display:flex;align-items:center;gap:12px;padding:18px 28px 14px;flex-wrap:wrap}
+.secbar .rot{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--texto)}
+.secbar .qtd{font-size:13px;color:var(--texto2)}
+.secbar .dir{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.alterna{display:inline-flex;background:var(--fill);border-radius:9px;padding:3px;gap:2px}
+.alterna button{all:unset;cursor:pointer;width:30px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--texto3)}
+.alterna button[aria-pressed="true"]{background:var(--cartao);color:var(--texto);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.canalsel{display:inline-flex;gap:4px;align-items:center}
+.canalsel span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--texto2);margin-right:4px}
+.canalsel button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--borda);color:var(--texto2)}
+.canalsel button[aria-pressed="true"]{border-color:var(--destaque);background:var(--destaque-suave);color:var(--texto)}
+
+.corpo{padding:0 28px 24px;display:flex;flex-direction:column;gap:16px}
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px}
+.c{border:1px solid var(--borda);border-radius:14px;background:var(--cartao);padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.c-top{display:flex;align-items:flex-start;gap:8px}
+.av{width:40px;height:40px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;font-size:14px;background:var(--fill);color:var(--texto2);border:1px solid var(--borda)}
+.av.q{border-radius:12px}
+.chip{display:flex;align-items:center;gap:5px;height:28px;padding:0 8px;border:1px solid var(--borda);border-radius:8px;font-size:13px;font-weight:600;min-width:0;max-width:100%;width:max-content;white-space:nowrap;font-variant-numeric:tabular-nums}
+.chip .tx{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.c-top .meio{min-width:0;flex:1}
+.c-top .acs{display:flex;gap:2px;flex:none;align-self:flex-start}
+.chip .cp{all:unset;cursor:pointer;color:var(--texto3);display:grid}
+.c-sub{font-size:12.5px;color:var(--texto2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini{all:unset;cursor:pointer;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--texto3)}
+.mini:hover{background:var(--fill);color:var(--texto)}
+.mini.bd{border:1px solid var(--borda)}
+.c-st{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)} .pil.at{background:var(--at-f);color:var(--at)} .pil.neu{background:var(--fill);color:var(--texto2)} .pil.erro{background:var(--erro-f);color:var(--erro)}
+.selo-q{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--ok);background:var(--ok-f);border-radius:999px;padding:3px 9px}
+.selo-q i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.selo-q.at{color:var(--at);background:var(--at-f)}
+.c hr{border:0;border-top:1px solid var(--borda2);margin:0}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12.5px}
+.meta div{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta span{color:var(--texto2)}
+.tab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tab th,.tab td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--borda2);white-space:nowrap}
+.tab th{font-size:12px;color:var(--texto2);font-weight:600}
+.tab td.n,.tab th.n{text-align:right}
+.rolar{overflow-x:auto;border:1px solid var(--borda);border-radius:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{border:1px solid var(--borda);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.kpi span{font-size:12px;color:var(--texto2);letter-spacing:.02em} .kpi b{font-size:24px;font-variant-numeric:tabular-nums} .kpi small{font-size:12px;color:var(--texto2)}
+.escolha{border:1px dashed var(--borda);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:12px;align-items:flex-start;background:var(--fill)}
+.escolha h3{margin:0;font-size:16px}
+.escolha p{margin:0;color:var(--texto2)}
+.escolha .linha{display:flex;gap:8px;flex-wrap:wrap}
+.vazio{display:flex;flex-direction:column;gap:10px;align-items:flex-start;padding:24px 0;max-width:560px}
+.vazio h2{margin:0;font-size:18px}
+.vazio p{margin:0;color:var(--texto2)}
+.hoje{display:flex;flex-direction:column}
+.hoje .it{display:grid;grid-template-columns:10px 1fr auto;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--borda2)}
+.hoje .it:last-child{border-bottom:0}
+.ponto{width:8px;height:8px;border-radius:50%}
+.lk{all:unset;cursor:pointer;font-weight:600;font-size:13px;color:var(--destaque);text-decoration:underline;text-underline-offset:3px}
+.barras{display:flex;align-items:flex-end;gap:8px;height:160px;padding:10px 4px 0;border-bottom:1px solid var(--borda)}
+.barras i{flex:1;background:var(--fill2);border-radius:6px 6px 0 0;position:relative}
+.barras i.h{background:var(--destaque)}
+.dias{display:flex;gap:8px;font-size:11px;color:var(--texto2);padding:4px}.dias span{flex:1;text-align:center}
+
+.pager{position:sticky;bottom:0;border-radius:0 0 16px 16px;flex:none;display:flex;align-items:center;gap:12px;padding:12px 28px;border-top:1px solid var(--borda2);background:var(--cartao);flex-wrap:wrap}
+.pager .ipp{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--texto2)}
+.pager select{font:inherit;font-size:13px;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:5px 8px}
+.pager .res{font-size:13px;color:var(--texto2)}
+.pager .dir{margin-left:auto;display:flex;align-items:center;gap:6px}
+.pager .pg{font-size:13px;color:var(--texto2);margin-right:6px}
+.pager .nb{all:unset;cursor:pointer;min-width:32px;height:32px;border-radius:8px;display:grid;place-items:center;border:1px solid var(--borda);font-size:13px;font-weight:600;color:var(--texto2)}
+.pager .nb[aria-current="page"]{border-color:var(--destaque);color:var(--texto);box-shadow:inset 0 0 0 1px var(--destaque)}
+.pager .nb[aria-disabled="true"]{opacity:.4;cursor:default}
+
+.pop{position:absolute;background:var(--cartao);border:1px solid var(--borda);border-radius:12px;box-shadow:var(--sombra);padding:6px;z-index:70;min-width:240px;display:flex;flex-direction:column;gap:2px}
+.pop button{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:8px;font-size:13.5px}
+.pop button:hover{background:var(--fill)}
+.pop .tit{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--texto2);padding:6px 10px 2px}
+.veu{position:absolute;inset:0;background:var(--veu);z-index:60;border-radius:20px}
+.gaveta{position:absolute;top:0;bottom:0;left:0;width:min(300px,86%);background:var(--cartao);z-index:61;border-radius:20px 0 0 20px;padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.gaveta a{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;cursor:pointer;font-weight:600;color:var(--texto)}
+.gaveta a[aria-current="page"]{background:var(--fill);box-shadow:inset 3px 0 0 var(--texto)}
+.gaveta a.off{color:var(--texto3)}
+.gaveta a .b{margin-left:auto;font-size:11px;background:var(--erro);color:#fff;border-radius:999px;padding:0 6px}
+.gaveta hr{border:0;border-top:1px solid var(--borda2);width:100%;margin:6px 0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--texto);color:var(--cartao);padding:10px 16px;border-radius:10px;z-index:90;max-width:calc(100vw - 32px)}
+.regra{max-width:1280px;margin:0 auto 32px;padding:14px 16px;background:var(--cartao);border:1px solid var(--borda);border-radius:14px;font-size:13.5px}
+.regra b{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--texto2)}
+.regra ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.wrap{padding:0 16px}
+
+/* abaixo de 1024 px: trilho vira barra com ☰; abas rolam na horizontal */
+@container app (max-width:1023px){
+  .app{grid-template-columns:minmax(0,1fr);padding:0;gap:0;border-radius:16px}
+  .trilho{display:none}
+  .cartao{border-radius:16px}
+  .ctx{top:52px}
+  .mbar{position:sticky;top:0;z-index:21;background:var(--cartao);border-radius:16px 16px 0 0;display:flex;align-items:center;gap:10px;height:52px;padding:0 12px;border-bottom:1px solid var(--borda2);flex:none}
+  .mbar .marca{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
+  .mbar .marca svg{width:24px;height:24px}
+  .mbar .dir{margin-left:auto;display:flex;gap:6px}
+  .ctx{padding:0 16px}
+  .busca{width:auto}
+  .busca .txt,.busca kbd{display:none}
+  .ph{padding:16px 16px 12px;flex-direction:column}
+  .ph .acoes{justify-content:flex-start}
+  .abas{padding:0 8px}
+  .subabas{padding:10px 16px 0;flex-wrap:nowrap;overflow-x:auto}
+  .secbar{padding:14px 16px 10px}
+  .corpo{padding:0 16px 18px}
+  .pager{padding:10px 16px}
+}
+@container app (max-width:600px){
+  .ph h1{font-size:21px}
+  .pager .ipp .lbl,.pager .pg{display:none}
+  .grade{grid-template-columns:1fr}
+  .ctx .emp{max-width:170px}
+}
+</style>
+</head>
+<body>
+<div class="doc">
+  <span class="selo">Protótipo para aprovação · Produto v5 · 25/10/2026</span>
+  <h1>MotorCX · trilho de ícones, cabeçalho de página e abas</h1>
+  <p>Navegação nova no padrão da referência do dono: um trilho fino com Início e uma área por ícone, o conteúdo num grande cartão, um cabeçalho com uma ação só e as seções da área como abas. Um destaque só: o ouro da marca MotorCX. Dados fictícios. Clique no trilho, nas abas e nas subabas; teste o claro, o escuro e o celular.</p>
+</div>
+<div class="ctrl">
+  <div class="g"><span>Largura</span><div class="seg" id="s-larg"><button aria-pressed="true" data-v="1280">Computador</button><button aria-pressed="false" data-v="900">Tablet 900</button><button aria-pressed="false" data-v="390">Celular 390</button></div></div>
+  <div class="g"><span>Tema</span><div class="seg" id="s-tema"><button aria-pressed="true" data-v="">Sistema</button><button aria-pressed="false" data-v="light">Claro</button><button aria-pressed="false" data-v="dark">Escuro</button></div></div>
+  <div class="g"><span>Quem vê</span><div class="seg" id="s-quem"><button aria-pressed="true" data-v="cliente">Cliente</button><button aria-pressed="false" data-v="equipe">Equipe MotorCX</button></div></div>
+  <div class="g"><span>Empresa</span><div class="seg" id="s-emp"><button aria-pressed="true" data-v="alfa">Cobrança + Jornada + Mensageria</button><button aria-pressed="false" data-v="beta">Cobrança + Mensageria (só WhatsApp)</button></div></div>
+</div>
+<div class="palco"><div class="janela" id="janela"><div class="app" id="app"></div></div></div>
+<div class="wrap"><div class="regra"><b>Regras desta proposta</b><ul>
+  <li><b>Trilho</b> (64 px, cartão próprio): logo · Início · Cobrança · Jornada do Cliente · Mensageria · Relatórios; na base, Empresa, Suporte, sino, Console (só equipe) e o avatar quadrado com a inicial. Área não contratada aparece esmaecida e abre "não faz parte do plano". O ativo tem fundo claro e um marcador escuro à esquerda (o ouro fica só no botão principal e nas abas).</li>
+  <li><b>Contexto</b> numa faixa fina no topo do cartão: a empresa (equipe: pílula com troca; cliente: só o nome) à esquerda, e a busca ⌘K e o glossário "?" à direita.</li>
+  <li><b>Cabeçalho</b>: rótulo da área em caixa alta, título, subtítulo de uma linha e <b>uma</b> ação principal em ouro. Seletores de contexto (carteira) ficam ao lado, em contorno.</li>
+  <li><b>Abas</b> são as seções da área (com ícone e contador). Seções com várias telas têm subabas em pílula logo abaixo (Estratégia: Orquestração, Personas, Segmentos, Carteiras, Canais e frases, Mapa, Comitê). As rotas não mudam.</li>
+  <li><b>Listas</b>: barra da seção (rótulo, contagem, busca, grade/lista), cartões em grade com status e metadados, e rodapé fixo de paginação.</li>
+  <li><b>Console</b> (equipe): mesmo trilho, com abas Clientes · Suporte · Financeiro · Mensageria · Administração · Sistema e as telas como subabas; contadores de Atendimento (vermelho) e Implantação (azul). <b>Empresa</b> abre em Visão geral (a ficha), com "Mais ações". <b>Suporte</b> não tem abas: a lista de hoje já ordena por situação.</li>
+  <li><b>Rolagem</b>: a página rola; o trilho fica fixo e a faixa de contexto gruda no topo do cartão. <b>Ouro</b> só no botão principal e nas abas.</li>
+  <li><b>Celular</b> (&lt; 1024 px): o trilho vira ☰ (gaveta com os mesmos itens e nomes); as abas e subabas rolam na horizontal; a grade vira uma coluna.</li>
+</ul></div></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const P = {
+    home:'<path d="M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    wallet:'<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+    route:'<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
+    msg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    chart:'<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+    building:'<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/>',
+    buoy:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><path d="m4.9 4.9 4.3 4.3M14.8 14.8l4.3 4.3M14.8 9.2l4.3-4.3M4.9 19.1l4.3-4.3"/>',
+    bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+    search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+    grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>',
+    list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    tag:'<path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"/><circle cx="7.5" cy="7.5" r=".6"/>',
+    trend:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',
+    chev:'<path d="m9 18 6-6-6-6"/>', chevl:'<path d="m15 18-6-6 6-6"/>', down:'<path d="m6 9 6 6 6-6"/>',
+    copy:'<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+    download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+    plus:'<path d="M5 12h14M12 5v14"/>', check:'<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+    users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+    lchk:'<path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/>',
+    zap:'<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>', target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+    send:'<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', layers:'<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
+    inbox:'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',
+    file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
+    gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9 7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+    menu:'<path d="M4 6h16M4 12h16M4 18h16"/>', folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+    flag:'<path d="M4 22V4a1 1 0 0 1 1-1h13l-3 5 3 5H5"/>', pay:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>', key:'<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>', eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'
+  };
+  const I = (k, c = "") => `<svg class="i ${c}" viewBox="0 0 24 24" aria-hidden="true">${P[k]}</svg>`;
+  const LOGO = '<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="11" fill="none" style="color:var(--texto)"/><path d="M50 12 A38 38 0 0 1 86.1 38.3" stroke="#C9A35A" stroke-width="11" stroke-linecap="round" fill="none"/><path d="M83.6 70 A38 38 0 0 1 30 82.3" stroke="#8E8E93" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="50" cy="50" r="11" fill="#C9A35A"/></svg>';
+  const CANAL = { sms: "SMS", rcs: "RCS", email: "E-mail", whatsapp: "WhatsApp" };
+  const EMP = {
+    alfa: { nome: "Alfa Recuperação (exemplo)", pessoa: "Rafael", areas: ["cobranca", "jornada", "mensageria"], canais: ["sms", "rcs"] },
+    beta: { nome: "Beta Serviços (exemplo)", pessoa: "Lívia", areas: ["cobranca", "mensageria"], canais: ["whatsapp"] }
+  };
+  const CARTEIRAS = ["Cartão Varejo", "Crédito Pessoal", "Financiamento Auto"];
+
+  /* áreas → abas → subabas (rótulo, ícone, contador, rota real, cabeçalho) */
+  const AREAS = {
+    cobranca: { nome: "Cobrança", ic: "wallet", desc: "Lista do dia, réguas e carteiras", abas: [
+      { id: "fila", nome: "Lista do dia", ic: "lchk", cont: "18.420", rota: "/fila", t: "Lista do dia", s: "Quem acionar hoje, por qual canal e em que ordem.", a: ["download", "Baixar lista"], carteira: true },
+      { id: "clientes", nome: "Clientes", ic: "users", cont: "42.310", rota: "/clientes", t: "Clientes", s: "Em que passo da esteira cada cliente está e qual a próxima ação.", a: ["search", "Buscar cliente"], carteira: true },
+      { id: "acoes", nome: "Ações", ic: "zap", cont: "6.204", rota: "/acoes", t: "Ações", s: "O que foi feito hoje e o que voltou de cada canal.", a: ["download", "Exportar"], carteira: true },
+      { id: "cargas", nome: "Cargas", ic: "upload", rota: "/envios", t: "Cargas", s: "Envie arquivos e acompanhe o processamento.", a: ["upload", "Enviar carga"] },
+      { id: "estrategia", nome: "Estratégia", ic: "target", subs: [
+        { id: "orquestracao", nome: "Orquestração", rota: "/orquestracao", t: "Orquestração", s: "O que cada segmento recebe em cada dia da esteira.", a: ["check", "Salvar"], carteira: true },
+        { id: "personas", nome: "Personas", rota: "/personas", t: "Personas", s: "Grupos de clientes que respondem parecido; o MotorCX escolhe o melhor canal de cada um.", a: ["plus", "Nova persona"], carteira: true },
+        { id: "segmentos", nome: "Segmentos", rota: "/clusters", t: "Segmentos", s: "Como a carteira se divide e em que ordem as regras valem.", a: ["plus", "Novo segmento"] },
+        { id: "carteiras", nome: "Carteiras", rota: "/credores", t: "Carteiras", s: "As carteiras da empresa e como a carga de cada uma chega.", a: ["plus", "Nova carteira"] },
+        { id: "canais", nome: "Canais e frases", rota: "/canais", t: "Canais e frases", s: "Horários, limites e textos de cada canal.", a: ["plus", "Nova frase"] },
+        { id: "mapa", nome: "Mapa da Esteira", rota: "/mapa", t: "Mapa da Esteira", s: "Por onde os clientes passam, dia a dia.", a: ["download", "Exportar"] },
+        { id: "comite", nome: "Comitê", rota: "/comite", t: "Comitê", s: "Os números da semana para a reunião com o credor.", a: ["download", "Baixar apresentação"], carteira: true } ] },
+      { id: "resultados", nome: "Resultados", ic: "trend", subs: [
+        { id: "painel", nome: "Painel", rota: "/painel", t: "Painel", s: "Os indicadores da operação.", a: ["download", "Exportar"] },
+        { id: "rel", nome: "Relatórios ↗", ir: ["relatorios", "cobranca"] } ] } ] },
+    jornada: { nome: "Jornada do Cliente", ic: "route", desc: "Boas-vindas, ativação e retenção", abas: [
+      { id: "visao", nome: "Visão geral", ic: "eye", rota: "/jornada", t: "Jornada do Cliente", s: "Em que momento da jornada estão os seus clientes.", a: ["upload", "Enviar carga"] },
+      { id: "lista", nome: "Lista do dia", ic: "lchk", cont: "2.310", rota: "/jornada/lista", t: "Lista do dia", s: "Quem recebe mensagem hoje e por quê.", a: ["download", "Baixar lista"] },
+      { id: "cargas", nome: "Cargas", ic: "upload", rota: "/jornada/cargas", t: "Cargas", s: "Clientes, contatos e leads da Jornada.", a: ["upload", "Enviar carga"] },
+      { id: "estrategia", nome: "Estratégia", ic: "target", subs: [
+        { id: "momentos", nome: "Momentos e fases", rota: "/jornada/momentos", t: "Momentos e fases", s: "As etapas da jornada e quando cada cliente muda.", a: ["plus", "Novo momento"] },
+        { id: "mensagens", nome: "Mensagens por momento", rota: "/jornada/mensagens", t: "Mensagens por momento", s: "O que cada momento envia, por canal.", a: ["plus", "Nova mensagem"] },
+        { id: "carteiras", nome: "Carteiras", rota: "/jornada/carteiras", t: "Carteiras da Jornada", s: "As carteiras que entram na jornada.", a: ["plus", "Nova carteira"] } ] } ] },
+    mensageria: { nome: "Mensageria", ic: "msg", desc: "Campanhas, lotes e respostas", canal: true, abas: [
+      { id: "campanhas", nome: "Campanhas", ic: "send", cont: "8", rota: "/mensageria/{c}/campanhas", t: "Campanhas", s: "Suba uma lista, escolha o template e acompanhe a entrega.", a: ["plus", "Nova campanha"] },
+      { id: "lotes", nome: "Lotes", ic: "layers", cont: "3", rota: "/mensageria/{c}/lotes", t: "Lotes", s: "Cada envio, com a janela, a entrega e o motivo das falhas.", a: ["download", "Exportar"], semWhats: true },
+      { id: "respostas", nome: "Respostas", ic: "inbox", cont: "4", alerta: true, subs: [
+        { id: "caixa", nome: "Caixa de atendimento", rota: "/mensageria/atendimento", t: "Respostas", s: "As conversas dos clientes, com quem está cuidando de cada uma.", a: ["inbox", "Pegar a próxima"] },
+        { id: "radar", nome: "Radar", rota: "/mensageria/radar", t: "Radar", s: "Como o Radar classificou as respostas.", a: ["download", "Exportar"] } ] },
+      { id: "templates", nome: "Templates", ic: "file", cont: "12", rota: "/mensageria/{c}/templates", t: "Templates", s: "Os modelos aprovados de cada canal.", a: ["plus", "Novo template"] },
+      { id: "listas", nome: "Listas", ic: "users", cont: "5", rota: "/mensageria/{c}/listas", t: "Listas", s: "Os contatos que você sobe para as campanhas.", a: ["upload", "Subir lista"] },
+      { id: "resultados", nome: "Resultados", ic: "trend", subs: [
+        { id: "painel", nome: "Painel do canal", rota: "/mensageria/{c}", t: "Painel do canal", s: "Entrega, cliques e respostas do canal.", a: ["download", "Exportar"] },
+        { id: "score", nome: "Score de Entrega", rota: "/mensageria/{c}/score", t: "Score de Entrega", s: "Quanto o Score fez você economizar.", a: ["download", "Exportar"] },
+        { id: "rel", nome: "Relatórios ↗", ir: ["relatorios", "mensageria"] } ] },
+      { id: "config", nome: "Configurações", ic: "gear", subs: [
+        { id: "canal", nome: "Do canal", rota: "/mensageria/{c}/config", t: "Configurações do canal", s: "Remetente, horários e limites.", a: ["check", "Salvar"] },
+        { id: "atend", nome: "Atendimento", rota: "/mensageria/config/atendimento", t: "Configurar atendimento", s: "Filas, horários e respostas prontas.", a: ["check", "Salvar"] } ] } ] },
+    relatorios: { nome: "Relatórios", ic: "chart", desc: "Os números de todas as áreas", abas: [
+      { id: "cobranca", nome: "Cobrança", ic: "wallet", rota: "/relatorios?produto=orquestracao", t: "Relatórios", s: "Os números de cada área, com o período anterior para comparar.", a: ["plus", "Montar relatório"], precisa: "cobranca" },
+      { id: "jornada", nome: "Jornada", ic: "route", rota: "/relatorios?produto=jornada", t: "Relatórios", s: "Os números de cada área, com o período anterior para comparar.", a: ["plus", "Montar relatório"], precisa: "jornada" },
+      { id: "mensageria", nome: "Mensageria", ic: "msg", rota: "/relatorios?produto=mensageria", t: "Relatórios", s: "Os números de cada área, com o período anterior para comparar.", a: ["plus", "Montar relatório"], precisa: "mensageria" },
+      { id: "arquivos", nome: "Meus arquivos", ic: "folder", cont: "2", rota: "/relatorios?exportacao=", t: "Relatórios", s: "Exportações geradas a partir dos relatórios.", a: ["plus", "Montar relatório"] } ] },
+    empresa: { nome: "Empresa", ic: "building", abas: [
+      { id: "visao", nome: "Visão geral", ic: "building", rota: "/empresa", t: "{empresa}", s: "Ficha da empresa: razão social, CNPJ, endereço e responsáveis.", a: ["check", "Editar empresa"], mais: true },
+      { id: "contatos", nome: "Contatos", ic: "users", rota: "/empresa/contatos", t: "{empresa}", s: "Quem recebe faturas e avisos.", a: ["plus", "Novo contato"], mais: true },
+      { id: "pessoas", nome: "Pessoas e perfis", ic: "users", rota: "/empresa/pessoas", t: "Pessoas e perfis", s: "Quem acessa e o que cada perfil pode.", a: ["plus", "Convidar pessoa"] },
+      { id: "integracoes", nome: "Integrações", ic: "key", rota: "/empresa/integracoes", t: "Integrações", s: "Canais, API e tokens.", a: ["plus", "Criar token"] },
+      { id: "contratacao", nome: "Contratação", ic: "file", rota: "/empresa/contratacao", t: "Contratação", s: "Módulos, canais e preços desta empresa.", a: ["check", "Salvar"], equipe: true },
+      { id: "faturas", nome: "Faturas", ic: "pay", rota: "/empresa/faturamento", t: "Faturas", s: "Faturas, recargas e saldo.", a: ["pay", "Pagar fatura"] },
+      { id: "auditoria", nome: "Auditoria", ic: "eye", rota: "/empresa/auditoria", t: "Auditoria", s: "Quem mudou o quê, e quando.", a: ["download", "Exportar"] } ] },
+    suporte: { nome: "Suporte", ic: "buoy", semAbas: true, abas: [
+      { id: "lista", nome: "Chamados", ic: "inbox", rota: "/suporte", t: "Suporte", s: "Seus chamados e quando a resposta deve chegar. \"Aguardando você\" vem primeiro.", a: ["plus", "Abrir chamado"] } ] },
+    console: { nome: "Console", ic: "shield", equipe: true, abas: [
+      { id: "clientes", nome: "Clientes", ic: "building", cont: "3", contAzul: true, subs: [
+        { id: "empresas", nome: "Empresas", rota: "/console", t: "Empresas", s: "Master · todas as carteiras · 24 empresas", a: ["plus", "Nova empresa"] },
+        { id: "saude", nome: "Saúde", rota: "/console/saude", t: "Saúde", s: "Rotinas e alertas de qualidade de hoje.", a: ["download", "Exportar"] },
+        { id: "implantacao", nome: "Implantação 3", rota: "/console/implantacao", t: "Implantação", s: "Onde cada cliente parou nos primeiros passos.", a: ["download", "Exportar"] },
+        { id: "carteiras", nome: "Carteiras", rota: "/console/carteiras", t: "Carteiras", s: "As carteiras de todas as empresas.", a: ["download", "Exportar"] } ] },
+      { id: "suporte", nome: "Suporte", ic: "buoy", cont: "5", alerta: true, subs: [
+        { id: "atendimento", nome: "Atendimento 5", rota: "/console/atendimento", t: "Atendimento", s: "Chamados dos clientes, com prazo de resposta.", a: ["inbox", "Pegar o próximo"] },
+        { id: "assistente", nome: "Assistente", rota: "/console/assistente", t: "Assistente", s: "Perguntas, respostas da equipe e custo do mês.", a: ["plus", "Nova resposta"] } ] },
+      { id: "financeiro", nome: "Financeiro", ic: "pay", subs: [
+        { id: "faturamento", nome: "Faturamento", rota: "/console/faturamento", t: "Faturamento", s: "Faturas de todas as empresas.", a: ["plus", "Gerar fatura"] },
+        { id: "margem", nome: "Margem", rota: "/console/margem", t: "Margem", s: "Margem de contribuição por produto.", a: ["download", "Exportar"] } ] },
+      { id: "mensageria", nome: "Mensageria", ic: "msg", subs: [
+        { id: "produtos", nome: "Produtos e preços", rota: "/console/produtos", t: "Produtos e preços", s: "O que se vende na Mensageria e por quanto.", a: ["plus", "Novo produto"] },
+        { id: "fornecedores", nome: "Fornecedores e rotas", rota: "/console/fornecedores", t: "Fornecedores e rotas", s: "Por onde cada mensagem sai.", a: ["plus", "Novo fornecedor"] },
+        { id: "qualidade", nome: "Qualidade", rota: "/console/qualidade", t: "Qualidade dos fornecedores", s: "Entrega e falhas por fornecedor.", a: ["download", "Exportar"] },
+        { id: "filtro", nome: "Filtro de inteligência", rota: "/console/filtro-inteligencia", t: "Filtro de inteligência", s: "Detalhe técnico do filtro.", a: ["download", "Exportar"] } ] },
+      { id: "admin", nome: "Administração", ic: "users", subs: [
+        { id: "equipe", nome: "Equipe MotorCX", rota: "/console/equipe", t: "Equipe MotorCX", s: "Quem é da equipe e o que cada um pode.", a: ["plus", "Convidar"] },
+        { id: "auditoria", nome: "Auditoria", rota: "/empresa/auditoria", t: "Auditoria", s: "Todas as empresas.", a: ["download", "Exportar"] } ] },
+      { id: "sistema", nome: "Sistema", ic: "gear", subs: [
+        { id: "emails", nome: "E-mails do sistema", rota: "/console/emails", t: "E-mails do sistema", s: "Os e-mails que a plataforma manda.", a: ["check", "Salvar"] } ] } ] }
+  };
+  const ORDEM = ["cobranca", "jornada", "mensageria", "relatorios"];
+
+  const est = { quem: "cliente", emp: "alfa", area: "inicio", aba: null, sub: null, canal: null, carteira: "", vista: "grade", pag: 1, ipp: 12, pop: null, gaveta: false };
+  const emp = () => EMP[est.emp];
+  const tem = a => a === "relatorios" ? true : a === "console" ? est.quem === "equipe" : (["empresa", "suporte", "inicio"].includes(a) || emp().areas.includes(a));
+  const canal = () => (est.canal && emp().canais.includes(est.canal)) ? est.canal : emp().canais[0];
+  const abasDe = a => AREAS[a].abas.filter(x => (!x.precisa || tem(x.precisa)) && !(x.semWhats && canal() === "whatsapp") && !(x.equipe && est.quem !== "equipe"));
+  function abaAtual() { const l = abasDe(est.area); return l.find(x => x.id === est.aba) || l[0]; }
+  function telaAtual() { const ab = abaAtual(); if (!ab.subs) return ab; return ab.subs.find(s => s.id === est.sub && !s.ir) || ab.subs[0]; }
+  const rota = t => (t.rota || "").replace("{c}", canal());
+
+  /* ---------- trilho ---------- */
+  function trilho() {
+    const item = (a, extra = "") => {
+      const ar = AREAS[a], off = !tem(a);
+      return `<button class="ri${off ? " off" : ""}" data-area="${a}"${est.area === a ? ' aria-current="page"' : ""} aria-label="${ar.nome}${off ? " (não contratada)" : ""}">${I(ar.ic)}${extra}<span class="dica">${ar.nome}${off ? "<small>Não contratada</small>" : ""}</span></button>`;
+    };
+    return `<nav class="trilho" aria-label="Áreas">
+      <div class="logo" title="MotorCX">${LOGO}</div>
+      <button class="ri" data-area="inicio"${est.area === "inicio" ? ' aria-current="page"' : ""} aria-label="Início">${I("home")}<span class="dica">Início</span></button>
+      ${ORDEM.map(a => item(a)).join("")}
+      <div class="esp"></div>
+      ${item("empresa")}
+      ${item("suporte", '<span class="b">1</span>')}
+      <button class="ri" data-msg="Avisos: 3 novos" aria-label="Avisos">${I("bell")}<span class="b">3</span><span class="dica">Avisos</span></button>
+      ${est.quem === "equipe" ? `<button class="ri" data-area="console"${est.area === "console" ? ' aria-current="page"' : ""} aria-label="Console">${I("shield")}<span class="dica">Console MotorCX</span></button>` : ""}
+      <button class="avatar" data-msg="${est.quem === "equipe" ? "Equipe MotorCX" : emp().pessoa + " · " + emp().nome} · Minha conta · Documentação · Sair" aria-label="Minha conta">${est.quem === "equipe" ? "M" : emp().pessoa[0]}</button>
+    </nav>`;
+  }
+  function gaveta() {
+    const a = (k, nome, ic, extra = "") => `<a data-area="${k}"${est.area === k ? ' aria-current="page"' : ""}${!tem(k) ? ' class="off"' : ""}>${I(ic)}${nome}${!tem(k) ? '<span style="margin-left:auto;font-size:12px;font-weight:500">Quero conhecer</span>' : ""}${extra}</a>`;
+    return `<div class="veu" data-acao="fechar"></div><nav class="gaveta" aria-label="Menu">
+      ${a("inicio", "Início", "home")}${ORDEM.map(k => a(k, AREAS[k].nome, AREAS[k].ic)).join("")}<hr>
+      ${a("empresa", "Empresa", "building")}${a("suporte", "Suporte", "buoy", '<span class="b">1</span>')}
+      ${est.quem === "equipe" ? a("console", "Console MotorCX", "shield") : ""}</nav>`;
+  }
+
+  /* ---------- faixa de contexto e cabeçalho ---------- */
+  function ctx() {
+    const e = est.quem === "equipe"
+      ? `<span style="position:relative"><button class="emp" data-acao="pop-emp" aria-haspopup="menu">${I("building", "p")}${emp().nome}${I("down", "p")}</button>${est.pop === "emp" ? `<div class="pop" style="top:34px;left:0"><div class="tit">Empresa em contexto</div>${Object.entries(EMP).map(([k, v]) => `<button data-emp="${k}">${v.nome}${k === est.emp ? "<span>✓</span>" : ""}</button>`).join("")}</div>` : ""}</span>`
+      : `<span class="emp-cli">${I("building", "p")}${emp().nome}</span>`;
+    return `<div class="ctx">${e}<div class="dir"><button class="busca" data-msg="Abre a busca ⌘K: telas, ações e cliente pelo ID">${I("search", "p")}<span class="txt">Busque uma tela, um cliente ou pergunte</span><kbd>⌘K</kbd></button><button class="ib sem" title="O que significa" data-msg="Abre o glossário (O que significa)">?</button></div></div>`;
+  }
+  function mbar() {
+    return `<div class="mbar"><button class="ib sem" data-acao="gaveta" aria-label="Abrir menu">${I("menu")}</button><span class="marca">${LOGO}MotorCX</span><div class="dir"><button class="ib sem" data-msg="Avisos" aria-label="Avisos">${I("bell")}</button><button class="avatar" style="width:32px;height:32px;margin:0" data-msg="Minha conta">${est.quem === "equipe" ? "M" : emp().pessoa[0]}</button></div></div>`;
+  }
+  function cabecalho(eyebrow, t, s, acao, extra = "") {
+    const dis = acao && acao[2] ? ' aria-disabled="true" title="' + acao[2] + '"' : "";
+    return `<header class="ph"><div class="t"><p class="eyebrow">${eyebrow}</p><h1>${t}</h1><p class="sub">${s}</p></div>
+      <div class="acoes">${extra}${acao ? `<button class="btn"${dis} data-msg="${acao[1]}">${I(acao[0])}${acao[1]}</button>` : ""}</div></header>`;
+  }
+  function seletorCarteira() {
+    return `<span style="position:relative"><button class="pilsel" data-acao="pop-cart" aria-haspopup="menu"><span class="lbl">Carteira</span>${est.carteira || "Todas as carteiras"}${I("down", "p")}</button>${est.pop === "cart" ? `<div class="pop" style="top:44px;right:0"><button data-cart="">Todas as carteiras${!est.carteira ? "<span>✓</span>" : ""}</button>${CARTEIRAS.map(c => `<button data-cart="${c}">${c}${est.carteira === c ? "<span>✓</span>" : ""}</button>`).join("")}</div>` : ""}</span>`;
+  }
+  function abas(area) {
+    if (AREAS[area].semAbas) return "";
+    const at = abaAtual();
+    return `<div class="abas" role="tablist">${abasDe(area).map(x => `<button class="aba" role="tab" data-aba="${x.id}" aria-selected="${x.id === at.id}">${I(x.ic, "p")}${x.nome}${x.cont ? `<span class="cont${x.alerta ? " alerta" : ""}${x.contAzul ? " azul" : ""}">${x.cont}</span>` : ""}</button>`).join("")}</div>
+      ${at.subs ? `<div class="subabas" role="group" aria-label="${at.nome}">${at.subs.map(s => `<button data-sub="${s.id}"${s.ir ? ` data-ir="${s.ir.join(",")}"` : ""} aria-pressed="${!s.ir && s.id === telaAtual().id}">${s.nome}</button>`).join("")}</div>` : ""}`;
+  }
+  function secbar(rot, qtd, opts = {}) {
+    return `<div class="secbar"><div><div class="rot">${rot}</div><div class="qtd">${qtd}</div></div><div class="dir">
+      ${opts.canal ? `<div class="canalsel" role="group" aria-label="Canal"><span>Canal</span>${emp().canais.map(c => `<button data-canal="${c}" aria-pressed="${c === canal()}">${CANAL[c]}</button>`).join("")}</div>` : ""}
+      <button class="ib" aria-label="Buscar nesta lista" data-msg="Busca dentro da lista">${I("search", "p")}</button>
+      ${opts.vista ? `<div class="alterna" role="group" aria-label="Exibição"><button data-vista="grade" aria-pressed="${est.vista === "grade"}" aria-label="Grade">${I("grid", "p")}</button><button data-vista="lista" aria-pressed="${est.vista === "lista"}" aria-label="Lista">${I("list", "p")}</button></div>` : ""}
+    </div></div>`;
+  }
+  function pager(total) {
+    const pags = Math.max(1, Math.ceil(total / est.ipp)); if (est.pag > pags) est.pag = pags;
+    const ini = (est.pag - 1) * est.ipp + 1, fim = Math.min(total, est.pag * est.ipp);
+    return `<footer class="pager"><label class="ipp"><span class="lbl">Itens por página</span><select data-ipp aria-label="Itens por página">${[8, 12, 24].map(n => `<option${n === est.ipp ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+      <span class="res">${ini}–${fim} de ${total} resultados</span>
+      <div class="dir"><span class="pg">Página ${est.pag} de ${pags}</span>
+      <button class="nb" data-pag="${est.pag - 1}" aria-label="Anterior"${est.pag === 1 ? ' aria-disabled="true"' : ""}>${I("chevl", "p")}</button>
+      ${Array.from({ length: pags }, (_, i) => `<button class="nb" data-pag="${i + 1}"${i + 1 === est.pag ? ' aria-current="page"' : ""}>${i + 1}</button>`).join("")}
+      <button class="nb" data-pag="${est.pag + 1}" aria-label="Próxima"${est.pag === pags ? ' aria-disabled="true"' : ""}>${I("chev", "p")}</button></div></footer>`;
+  }
+
+  /* ---------- conteúdo ---------- */
+  const PERSONAS = [["Digitais SP", 18.4, 82, 2140, "WhatsApp", 1.92, true], ["Só fixo", 6.1, 64, 3810, "Discador", 4.10, true], ["WhatsApp ativo", 22.7, 88, 5230, "WhatsApp", 1.35, true], ["Atraso curto", 15.2, 79, 4120, "SMS", 2.05, true],
+    ["Atraso longo", 4.8, 58, 6890, "Discador", 5.60, true], ["Acordo quebrado", 11.3, 71, 980, "WhatsApp", 2.70, true], ["Saldo alto", 9.6, 75, 1310, "Agente virtual", 3.20, true], ["Jovens digitais", 20.1, 46, 2760, "RCS", 1.70, true],
+    ["Interior Sul", 12.9, 69, 1890, "SMS", 2.40, true], ["Nordeste móvel", 14.4, 73, 3340, "WhatsApp", 2.10, true], ["E-mail ativo", 7.2, 52, 1460, "E-mail", 0.90, true], ["Sem contato bom", 2.3, 38, 2210, "Bureau", 6.80, false],
+    ["Recém-chegados", 13.7, 41, 1570, "SMS", 2.30, true], ["Reincidentes", 10.5, 77, 2080, "WhatsApp", 2.60, true], ["Saldo baixo", 16.9, 80, 4410, "SMS", 1.10, true], ["Reativação", 5.5, 49, 1190, "E-mail", 1.40, false]];
+  const brl = v => "R$ " + v.toFixed(2).replace(".", ",");
+  const num = n => n.toLocaleString("pt-BR");
+  const ini = s => s.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  function personas() {
+    const total = PERSONAS.length, de = (est.pag - 1) * est.ipp, pag = PERSONAS.slice(de, de + est.ipp);
+    const cards = pag.map(([n, cpc, mat, cli, canalP, custo, ativa], k) => {
+      const cod = "P-" + String(de + k + 1).padStart(2, "0");
+      if (est.vista === "lista") return `<tr><td><b>${n}</b> <span class="c-sub">${cod}</span></td><td class="n">${cpc.toFixed(1).replace(".", ",")}%</td><td>${canalP}</td><td class="n">${num(cli)}</td><td class="n">${brl(custo)}</td><td>${ativa ? '<span class="pil ok">Ativa</span>' : '<span class="pil neu">Inativa</span>'}</td><td><span class="selo-q${mat < 60 ? " at" : ""}"><i></i>${mat < 60 ? "FORMANDO" : "MADURA"}</span></td></tr>`;
+      return `<article class="c"><div class="c-top"><span class="av">${ini(n)}</span><div class="meio"><span class="chip"><button class="cp" data-msg="Código ${cod} copiado" aria-label="Copiar código">${I("copy", "p")}</button><span class="tx">CPC ${cpc.toFixed(1).replace(".", ",")}%</span></span><div class="c-sub">${n}</div></div>
+        <div class="acs"><button class="mini bd" data-msg="Etiquetas da persona" aria-label="Etiquetas">${I("tag", "p")}</button><button class="mini" data-msg="Desempenho por canal" aria-label="Desempenho">${I("trend", "p")}</button><button class="mini" data-msg="Abre a persona ${n}" aria-label="Abrir">${I("chev", "p")}</button></div></div>
+        <div class="c-st">${ativa ? `<span class="pil ok">${I("check", "p")}Ativa</span>` : '<span class="pil neu">Inativa</span>'}<span class="selo-q${mat < 60 ? " at" : ""}" title="Maturidade ${mat} de 100"><i></i>${mat < 60 ? "FORMANDO" : "MADURA"}</span></div><hr>
+        <div class="meta"><div><span>Código:</span> ${cod}</div><div><span>Clientes:</span> ${num(cli)}</div><div><span>Melhor canal:</span> ${canalP}</div><div><span>Custo/CPC:</span> ${brl(custo)}</div><div><span>Maturidade:</span> ${mat}/100</div><div><span>Atualizada:</span> hoje 06:10</div></div></article>`;
+    }).join("");
+    const corpo = est.vista === "lista" ? `<div class="rolar"><table class="tab"><thead><tr><th>Persona</th><th class="n">Taxa CPC</th><th>Melhor canal</th><th class="n">Clientes</th><th class="n">Custo/CPC</th><th>Situação</th><th>Maturidade</th></tr></thead><tbody>${cards}</tbody></table></div>` : `<div class="grade">${cards}</div>`;
+    return { html: secbar("Personas da carteira", `${total} persona(s) · ${est.carteira}`, { vista: true }) + `<div class="corpo">${corpo}</div>`, pager: pager(total) };
+  }
+  const CAMP = [["Lembrete de vencimento D-3", 12400, 96.2, "Enviando", "lembrete-d3"], ["Acordo · confirmação", 3180, 98.1, "Concluída", "acordo-ok"], ["Boas-vindas", 960, 97.4, "Concluída", "boas-vindas"], ["Segunda via do boleto", 5420, 95.0, "Agendada", "segunda-via"],
+    ["Reativação 90 dias", 2210, 91.3, "Concluída", "reativa-90"], ["Promessa vencendo hoje", 1830, 97.9, "Enviando", "promessa-hoje"], ["Pesquisa de satisfação", 740, 0, "Rascunho", "nps-pos"], ["Aviso de negativação", 4100, 94.6, "Pausada", "aviso-neg"]];
+  function campanhas() {
+    const c = canal();
+    const st = s => ({ Enviando: "at", Concluída: "ok", Agendada: "neu", Rascunho: "neu", Pausada: "erro" })[s];
+    const cards = CAMP.map(([n, q, ent, s, tpl], k) => `<article class="c"><div class="c-top"><span class="av q">${I("send")}</span><div class="meio"><span class="chip"><button class="cp" data-msg="Código CMP-${410 + k} copiado" aria-label="Copiar código">${I("copy", "p")}</button><span class="tx">${num(q)} mensagens</span></span><div class="c-sub">${n}</div></div>
+      <div class="acs"><button class="mini bd" data-msg="Etiquetas" aria-label="Etiquetas">${I("tag", "p")}</button><button class="mini" data-msg="Entrega por hora" aria-label="Desempenho">${I("trend", "p")}</button><button class="mini" data-msg="Abre a campanha" aria-label="Abrir">${I("chev", "p")}</button></div></div>
+      <div class="c-st"><span class="pil ${st(s)}">${s}</span>${ent ? `<span class="selo-q${ent < 95 ? " at" : ""}" title="Entregues"><i></i>${ent.toFixed(1).replace(".", ",")}%</span>` : '<span class="pil neu">—</span>'}</div><hr>
+      <div class="meta"><div><span>Canal:</span> ${CANAL[c]}</div><div><span>Código:</span> CMP-${410 + k}</div><div><span>Template:</span> ${tpl}</div><div><span>Início:</span> ${["hoje 09:00", "ontem 14:30", "22/10 10:00", "amanhã 08:00"][k % 4]}</div></div></article>`).join("");
+    return { html: secbar("Campanhas do canal", `${CAMP.length} campanha(s)`, { vista: true, canal: true }) + `<div class="corpo"><div class="grade">${cards}</div></div>`, pager: pager(CAMP.length) };
+  }
+  function listaDoDia() {
+    if (!est.carteira) return { html: `<div class="corpo" style="padding-top:8px"><div class="escolha"><h3>Escolha a carteira</h3><p>A Lista do dia é por carteira. Escolha uma para ver quem acionar hoje.</p><div class="linha">${CARTEIRAS.map(c => `<button class="btn sec" data-cart="${c}">${I("wallet", "p")}${c}</button>`).join("")}</div></div></div>` };
+    const linhas = [[4821733, "Atraso curto", "WhatsApp", "D+3", "R$ 1–5 mil"], [4821802, "Digitais SP", "SMS", "D+5", "até R$ 1 mil"], [4822015, "Acordo quebrado", "Discador", "Quebra +2", "R$ 5–20 mil"], [4822140, "Saldo baixo", "SMS", "D+1", "até R$ 1 mil"], [4822377, "Nordeste móvel", "WhatsApp", "D+8", "R$ 1–5 mil"]];
+    return { html: `<div class="corpo" style="padding-top:8px"><div class="kpis"><div class="kpi"><span>Na Lista do dia</span><b>6.140</b><small>${est.carteira}</small></div><div class="kpi"><span>Prioridade alta</span><b>702</b><small>11% da lista</small></div><div class="kpi"><span>Promessas para hoje</span><b>214</b><small>R$ 138 mil</small></div><div class="kpi"><span>Pronta às</span><b>06:12</b><small>próxima amanhã 06:00</small></div></div>
+      ${secbar("Clientes de hoje", "6.140 cliente(s) · só ID, sem nome nem documento").replace('class="secbar"', 'class="secbar" style="padding:4px 0 0"')}
+      <div class="rolar"><table class="tab"><thead><tr><th>ID do cliente</th><th>Persona</th><th>Canal da vez</th><th>Passo</th><th>Faixa de saldo</th></tr></thead><tbody>${linhas.map(l => `<tr>${l.map(x => `<td>${x}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`, pager: pager(6140) };
+  }
+  function relatorios() {
+    const vals = [42, 55, 48, 61, 58, 72, 66, 70, 64, 78, 81, 75, 83, 88];
+    return { html: `<div class="secbar"><div><div class="rot">${abaAtual().nome}</div><div class="qtd">Últimos 14 dias · comparado com os 14 anteriores</div></div><div class="dir"><button class="btn sec" data-msg="Escolher período">Últimos 14 dias${I("down", "p")}</button><button class="btn sec" data-msg="Exportar">${I("download", "p")}Exportar</button></div></div>
+      <div class="corpo"><div class="kpis"><div class="kpi"><span>Acionados</span><b>184.220</b><small>+6,2% vs período anterior</small></div><div class="kpi"><span>Contato com a pessoa certa</span><b>14,8%</b><small>+1,1 p.p.</small></div><div class="kpi"><span>Promessas</span><b>3.912</b><small>+9,4%</small></div><div class="kpi"><span>Valor recuperado</span><b>R$ 2,41 mi</b><small>+4,0%</small></div></div>
+      <div class="c"><div class="c-st"><b>Promessas por dia</b><span class="pil neu">dados fictícios</span></div><div class="barras">${vals.map((v, i) => `<i class="${i === vals.length - 1 ? "h" : ""}" style="height:${v}%" title="${v * 3} promessas"></i>`).join("")}</div><div class="dias">${vals.map((_, i) => `<span>${12 + i}</span>`).join("")}</div></div></div>` };
+  }
+  function inicio() {
+    const e = emp();
+    const card = a => tem(a) ? `<article class="c"><div class="c-top"><span class="av q">${I(AREAS[a].ic)}</span><div style="flex:1"><b>${AREAS[a].nome}</b><div class="c-sub">${AREAS[a].desc}</div></div><button class="mini" data-area="${a}" aria-label="Abrir ${AREAS[a].nome}">${I("chev", "p")}</button></div><hr><div class="meta">${{ cobranca: "<div><span>Lista do dia:</span> 18.420</div><div><span>Carteiras:</span> 3</div>", jornada: "<div><span>Na jornada:</span> 2.310</div><div><span>Momentos:</span> 6</div>", mensageria: `<div><span>Entregue ontem:</span> 96,2%</div><div><span>Canais:</span> ${e.canais.map(c => CANAL[c]).join(" e ")}</div>` }[a]}</div></article>`
+      : `<article class="c" style="opacity:.7"><div class="c-top"><span class="av q">${I(AREAS[a].ic)}</span><div style="flex:1"><b>${AREAS[a].nome}</b><div class="c-sub">${AREAS[a].desc}</div></div></div><hr><button class="lk" data-msg="Abre o card de interesse que já existe">Quero conhecer</button></article>`;
+    const itens = [["var(--erro)", "<b>Fatura de setembro vence amanhã</b> · R$ 4.380,00", "Pagar", "empresa", "faturas"], ["var(--at)", "O Suporte respondeu o chamado #2041", "Ver", "suporte", "abertos"], ["var(--at)", "4 respostas de clientes esperam alguém", "Abrir", "mensageria", "respostas"], ["var(--ok)", "Lista do dia pronta às 06:12 · 18.420 clientes", "Abrir", "cobranca", "fila"]];
+    return { html: `<div class="corpo" style="padding-top:4px"><div class="c"><div class="c-st"><b>Para hoje</b><span class="cont">${itens.length}</span></div><div class="hoje">${itens.map(([cor, t, a, ar, ab]) => `<div class="it"><i class="ponto" style="background:${cor}"></i><span>${t}</span><button class="lk" data-area="${ar}" data-aba-ir="${ab}">${a}</button></div>`).join("")}</div></div>
+      ${secbar("Suas áreas", `${e.areas.length} de 3 contratadas`).replace('class="secbar"', 'class="secbar" style="padding:4px 0 0"')}<div class="grade">${["cobranca", "jornada", "mensageria"].map(card).join("")}</div></div>` };
+  }
+  function suporte() {
+    const ch = [["#2041", "Lista do dia sem a carteira Cartão Varejo", "Lista do dia", "Aguardando você", "at", "—"], ["#2038", "Dúvida sobre RCS", "Mensageria", "Em atendimento · Ana", "neu", "hoje 17:00"], ["#2033", "Novo usuário sem acesso", "Acesso", "Aberto", "neu", "amanhã 11:00"], ["#2012", "Relatório não chegou por e-mail", "Relatórios", "Resolvido", "ok", "—"]];
+    return { html: secbar("Seus chamados", `${ch.length} chamado(s) · "Aguardando você" primeiro, resolvidos por último`) + `<div class="corpo"><div class="rolar"><table class="tab"><thead><tr><th>Chamado</th><th>Motivo</th><th>Situação</th><th>Resposta até</th></tr></thead><tbody>${ch.map(([n, a, m, st, c, r]) => `<tr><td><b>${n}</b> · ${a}</td><td>${m}</td><td><span class="pil ${c}">${st}</span></td><td>${r}</td></tr>`).join("")}</tbody></table></div><p style="margin:0;color:var(--texto2);font-size:13px">Sem abas: a tela de hoje já ordena por situação. Filtro por situação, se vier, entra no 77.</p></div>` };
+  }
+  function fichaEmpresa() {
+    return { html: `<div class="corpo" style="padding-top:16px"><div class="c"><b>Ficha da empresa</b><hr><div class="meta"><div><span>Razão social:</span> ${emp().nome.replace(" (exemplo)", "")} Ltda.</div><div><span>CNPJ:</span> 00.000.000/0001-00</div><div><span>Segmento:</span> Assessoria de cobrança</div><div><span>Cliente desde:</span> 03/2026</div><div><span>Município:</span> São Paulo · SP</div><div><span>Gerente da conta:</span> equipe MotorCX</div></div></div></div>` };
+  }
+  function generico(t) {
+    return { html: `<div class="corpo" style="padding-top:8px"><div class="c"><b>${t.t}</b><p style="margin:0;color:var(--texto2);font-size:13px">Conteúdo da tela como é hoje, dentro do cartão. Rota: <code>${rota(t)}</code>. O protótipo mostra a moldura; o padrão de lista (grade, lista e paginação) entra pelo prompt 77.</p></div></div>` };
+  }
+
+  function render() {
+    let html = "", pg = "";
+    const a = est.area;
+    if (a === "inicio") {
+      const c = inicio();
+      html = cabecalho("Início", `Bom dia, ${est.quem === "equipe" ? "equipe" : emp().pessoa}`, "Sábado, 25 de outubro · o que precisa de você hoje.", ["upload", "Enviar carga"]) + c.html;
+    } else if (!tem(a)) {
+      html = cabecalho(AREAS[a].nome, `${AREAS[a].nome} não faz parte do plano`, `${AREAS[a].desc}. A gente mostra como funciona com os dados da sua operação.`, ["msg", est.quem === "equipe" ? "Abrir mesmo assim" : "Quero conhecer"]) + `<div class="corpo"><button class="lk" data-area="inicio">Ir para o Início</button></div>`;
+    } else {
+      const t = telaAtual(), ab = abaAtual();
+      const eyebrow = AREAS[a].nome + (ab.subs ? " · " + ab.nome : "") + (AREAS[a].canal ? " · " + CANAL[canal()] : "");
+      let acao = t.a ? [...t.a] : null;
+      if (t.carteira && !est.carteira && acao) acao[2] = "Escolha a carteira primeiro";
+      const extra = (t.carteira ? seletorCarteira() : "") + (ab.mais ? `<button class="btn sec" data-msg="Mais ações (equipe: suspender, liberar, encerrar)">⋯ Mais ações</button>` : "");
+      html = cabecalho(eyebrow, t.t.replace("{empresa}", emp().nome), t.s, acao, extra) + abas(a);
+      let c;
+      if (a === "cobranca" && t.id === "fila") c = listaDoDia();
+      else if (a === "cobranca" && t.id === "personas") c = est.carteira ? personas() : { html: `<div class="corpo" style="padding-top:16px"><div class="escolha"><h3>Escolha a carteira</h3><p>As personas são formadas por carteira.</p><div class="linha">${CARTEIRAS.map(x => `<button class="btn sec" data-cart="${x}">${I("wallet", "p")}${x}</button>`).join("")}</div></div></div>` };
+      else if (a === "mensageria" && t.id === "campanhas") c = campanhas();
+      else if (a === "relatorios" && ab.id !== "arquivos") c = relatorios();
+      else if (a === "suporte") c = suporte();
+      else if (a === "empresa" && ab.id === "visao") c = fichaEmpresa();
+      else c = generico(t);
+      html += c.html; pg = c.pager || "";
+    }
+    requestAnimationFrame(() => { const sel = document.querySelector('.aba[aria-selected="true"]'); if (sel) sel.scrollIntoView({ block: "nearest", inline: "nearest" }); });
+    $("app").innerHTML = trilho() + `<section class="cartao" aria-label="Conteúdo">${mbar()}${ctx()}<div class="rolagem">${html}</div>${pg}</section>` + (est.gaveta ? gaveta() : "");
+  }
+
+  function irArea(a, aba) { est.area = a; est.aba = aba || null; est.sub = null; est.pag = 1; est.pop = null; est.gaveta = false; if (a === "relatorios" && aba) est.aba = aba; render(); }
+  let tt; const aviso = t => { let el = $("toast"); if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); } el.textContent = t; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => el.hidden = true, 2600); };
+  document.addEventListener("click", e => {
+    const t = e.target.closest("[data-area],[data-aba],[data-sub],[data-acao],[data-msg],[data-cart],[data-emp],[data-canal],[data-vista],[data-pag]");
+    if (!t) { if (est.pop) { est.pop = null; render(); } return; }
+    const d = t.dataset;
+    if (d.ir) { const [ar, ab] = d.ir.split(","); return irArea(ar, ab); }
+    if (d.area) { if (!tem(d.area) && d.area !== "inicio") { irArea(d.area); return; } return irArea(d.area, d.abaIr); }
+    if (d.aba) { est.aba = d.aba; est.sub = null; est.pag = 1; return render(); }
+    if (d.sub) { est.sub = d.sub; est.pag = 1; return render(); }
+    if (d.cart !== undefined) { est.carteira = d.cart; est.pop = null; est.pag = 1; return render(); }
+    if (d.emp) { est.emp = d.emp; est.canal = null; est.pop = null; document.querySelectorAll("#s-emp button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === est.emp)); return render(); }
+    if (d.canal) { est.canal = d.canal; return render(); }
+    if (d.vista) { est.vista = d.vista; return render(); }
+    if (d.pag) { if (t.getAttribute("aria-disabled") === "true") return; est.pag = +d.pag; return render(); }
+    if (d.msg) { if (t.getAttribute("aria-disabled") === "true") return aviso(t.title); est.pop = null; render(); return aviso(d.msg); }
+    if (d.acao === "pop-emp" || d.acao === "pop-cart") { const k = d.acao.slice(4); est.pop = est.pop === k ? null : k; return render(); }
+    if (d.acao === "gaveta") { est.gaveta = true; return render(); }
+    if (d.acao === "fechar") { est.gaveta = false; return render(); }
+  });
+  document.addEventListener("change", e => { if (e.target.matches("[data-ipp]")) { est.ipp = +e.target.value; est.pag = 1; render(); } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && (est.pop || est.gaveta)) { est.pop = null; est.gaveta = false; render(); } });
+  function seg(id, fn) { $(id).querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset.v); })); }
+  seg("s-larg", v => { $("janela").style.maxWidth = v + "px"; });
+  seg("s-tema", v => { v ? document.documentElement.setAttribute("data-theme", v) : document.documentElement.removeAttribute("data-theme"); });
+  seg("s-quem", v => { est.quem = v; if (v !== "equipe" && est.area === "console") { est.area = "inicio"; est.aba = null; } render(); });
+  seg("s-emp", v => { est.emp = v; est.canal = null; render(); });
+  render();
+})();
+</script>
+</body>
+</html>
