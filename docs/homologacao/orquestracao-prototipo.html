@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orquestração · raias primeiro</title>
+<style>
+/* Moldura aprovada (C · só ícones) + Orquestração redesenhada: as raias são a tela. Um destaque só: ouro MotorCX. */
+:root{
+  --app:#F1F1F3; --cartao:#FFFFFF; --borda:#E6E6EA; --borda2:#EFEFF2; --fill:#F5F5F7; --fill2:#EDEDF0;
+  --texto:#1D1D1F; --texto2:#6E6E73; --texto3:#8E8E93;
+  --destaque:#8A6A2E; --destaque-forte:#6F5424; --destaque-suave:#F4EDE0; --sobre-destaque:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E8F6EC; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA;
+  --sombra:0 12px 32px rgba(0,0,0,.14); --veu:rgba(0,0,0,.28);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --app:#000000; --cartao:#1C1C1E; --borda:#2C2C2E; --borda2:#2A2A2C; --fill:#2C2C2E; --fill2:#3A3A3C;
+  --texto:#F5F5F7; --texto2:#AEAEB2; --texto3:#8E8E93;
+  --destaque:#D9B26B; --destaque-forte:#E8C688; --destaque-suave:#3A2F1C; --sobre-destaque:#1D1D1F;
+  --ok:#30D158; --ok-f:#12301B; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1412;
+  --sombra:0 12px 32px rgba(0,0,0,.6); --veu:rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --app:#000000; --cartao:#1C1C1E; --borda:#2C2C2E; --borda2:#2A2A2C; --fill:#2C2C2E; --fill2:#3A3A3C;
+  --texto:#F5F5F7; --texto2:#AEAEB2; --texto3:#8E8E93;
+  --destaque:#D9B26B; --destaque-forte:#E8C688; --destaque-suave:#3A2F1C; --sobre-destaque:#1D1D1F;
+  --ok:#30D158; --ok-f:#12301B; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1412;
+  --sombra:0 12px 32px rgba(0,0,0,.6); --veu:rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--app);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45}
+button{font:inherit;color:inherit}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.i.p{width:15px;height:15px}
+:focus-visible{outline:2px solid var(--destaque);outline-offset:2px}
+
+.doc{max-width:1472px;margin:0 auto;padding:18px 16px 4px;display:flex;flex-direction:column;gap:6px}
+.doc h1{margin:0;font-size:21px}
+.doc p{margin:0;color:var(--texto2);max-width:96ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.ctrl{max-width:1472px;margin:8px auto 0;padding:0 16px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.ctrl .g{display:flex;gap:6px;align-items:center}
+.ctrl .g>span{font-size:12px;color:var(--texto2)}
+.seg{display:inline-flex;gap:2px;background:var(--fill2);border-radius:9px;padding:2px}
+.seg button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:7px;color:var(--texto2);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--cartao);color:var(--texto);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.palco{padding:12px 16px 24px;display:flex;justify-content:center}
+.janela{width:100%;max-width:1440px;container:app/inline-size;transition:max-width .25s}
+
+/* moldura C · só ícones */
+.app{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:10px;background:var(--app);border-radius:18px;border:1px solid var(--borda);min-height:860px;align-items:start}
+.lado{position:sticky;top:10px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0;height:calc(100vh - 40px);max-height:840px}
+.logo{width:30px;height:30px;margin-bottom:10px}
+.li{all:unset;position:relative;cursor:pointer;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:var(--texto2)}
+.li:hover{background:var(--fill);color:var(--texto)}
+.li[aria-current="page"]{background:var(--fill2);color:var(--texto)}
+.li[aria-current="page"]::before{content:"";position:absolute;left:-4px;top:9px;bottom:9px;width:2px;border-radius:2px;background:var(--texto)}
+.li::after{content:attr(data-nome);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);white-space:nowrap;background:#1D1D1F;color:#fff;font-size:12.5px;padding:6px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .12s;z-index:70}
+.li:hover::after,.li:focus-visible::after{opacity:1}
+.li .b{position:absolute;top:3px;right:1px;min-width:15px;height:15px;padding:0 4px;border-radius:999px;background:var(--erro);color:#fff;font-size:9.5px;font-weight:700;display:grid;place-items:center}
+.lado .esp{flex:1}
+.lado .gap{height:12px}
+.avatar{all:unset;cursor:pointer;width:30px;height:30px;border-radius:8px;background:var(--texto);color:var(--cartao);display:grid;place-items:center;font-weight:700;font-size:13px;margin-top:6px}
+
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:16px;min-width:0;position:relative;min-height:838px;display:flex;flex-direction:column}
+.ctx{position:sticky;top:0;z-index:30;background:var(--cartao);border-radius:16px 16px 0 0;display:flex;align-items:center;gap:10px;height:44px;padding:0 20px;border-bottom:1px solid var(--borda2)}
+.migalha{font-size:12.5px;color:var(--texto2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctx .dir{margin-left:auto;display:flex;align-items:center;gap:6px}
+.busca{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-radius:8px;background:var(--fill);color:var(--texto3);font-size:12.5px;width:250px;white-space:nowrap;overflow:hidden}
+.busca kbd{margin-left:auto;font-family:var(--mono);font-size:11px;border:1px solid var(--borda);border-radius:5px;padding:0 5px}
+.ib{all:unset;cursor:pointer;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--texto2);position:relative}
+.ib:hover{background:var(--fill);color:var(--texto)}
+.ib.bd{border:1px solid var(--borda)}
+.mbar{display:none}
+
+.abas{display:flex;gap:2px;padding:0 14px;border-bottom:1px solid var(--borda2);overflow-x:auto;scrollbar-width:none}
+.aba{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:11px 10px 10px;color:var(--texto2);font-weight:500;font-size:13.5px;border-bottom:2px solid transparent;white-space:nowrap}
+.aba:hover{color:var(--texto)}
+.aba[aria-selected="true"]{color:var(--texto);font-weight:600;border-bottom-color:var(--destaque)}
+.subabas{display:flex;gap:6px;padding:10px 20px;border-bottom:1px solid var(--borda2);overflow-x:auto;scrollbar-width:none}
+.subabas button{all:unset;flex:none;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 11px;border-radius:999px;color:var(--texto2);border:1px solid var(--borda);white-space:nowrap}
+.subabas button[aria-pressed="true"]{background:var(--destaque-suave);color:var(--texto);border-color:var(--destaque)}
+
+/* barra da Orquestração: 2 linhas, gruda abaixo da faixa de contexto */
+.obar{position:sticky;top:44px;z-index:25;background:var(--cartao);border-bottom:1px solid var(--borda2);padding:10px 20px 8px;display:flex;flex-direction:column;gap:8px}
+.l1,.l2{display:flex;align-items:center;gap:10px;min-width:0}
+.l1 h1{margin:0;font-size:19px;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
+.l1 .dir,.l2 .dir{margin-left:auto;display:flex;align-items:center;gap:8px}
+.sel{all:unset;cursor:pointer;position:relative;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--borda);border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap}
+.sel .lbl{color:var(--texto2);font-weight:500}
+.estado{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.estado i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.estado.ok{background:var(--ok-f);color:var(--ok)} .estado.at{background:var(--at-f);color:var(--at)}
+.btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 15px;border-radius:9px;background:var(--destaque);color:var(--sobre-destaque);font-weight:600;font-size:13.5px;white-space:nowrap}
+.btn:hover{background:var(--destaque-forte)}
+.btn[aria-disabled="true"]{opacity:.45;cursor:default}
+.btn.sec{background:var(--cartao);color:var(--texto);border:1px solid var(--borda)}
+.btn.sec:hover{background:var(--fill)}
+.segs{display:flex;gap:6px;min-width:0;overflow-x:auto;scrollbar-width:none;align-items:center}
+.sp{all:unset;flex:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--borda);font-size:12.5px;font-weight:600;color:var(--texto2);white-space:nowrap}
+.sp small{font-weight:500;color:var(--texto3)}
+.sp[aria-pressed="true"]{background:var(--texto);border-color:var(--texto);color:var(--cartao)}
+.sp[aria-pressed="true"] small{color:var(--cartao);opacity:.75}
+.sp .cmp{width:6px;height:6px;border-radius:50%;background:var(--at)}
+.sp.add{border-style:dashed}
+.lk{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--texto2);white-space:nowrap}
+.lk:hover{color:var(--texto)}
+.vistas{display:inline-flex;background:var(--fill);border-radius:8px;padding:2px;gap:2px}
+.vistas button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--texto2);white-space:nowrap}
+.vistas button[aria-pressed="true"]{background:var(--cartao);color:var(--texto);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.vsel{display:none}
+
+.aviso{margin:10px 20px 0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--at-f);color:var(--texto);border-radius:10px;padding:8px 12px;font-size:13px}
+.aviso b{color:var(--at)}
+.aviso .dir{margin-left:auto;display:flex;gap:8px}
+.aviso .btn{height:28px;font-size:12.5px;padding:0 11px}
+
+/* raias */
+.raias{padding:12px 20px 24px;display:flex;flex-direction:column;gap:8px}
+.leg{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:12px;color:var(--texto2)}
+.leg .dir{margin-left:auto;display:flex;gap:10px}
+.grade{border:1px solid var(--borda);border-radius:12px;overflow:auto;max-width:100%}
+table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:1080px;font-size:12.5px}
+.r th,.r td{border-bottom:1px solid var(--borda2);border-right:1px solid var(--borda2);padding:0;vertical-align:top}
+.r thead th{position:sticky;top:0;background:var(--fill);font-weight:600;color:var(--texto2);font-size:11.5px;padding:7px 8px;text-align:left;white-space:nowrap;z-index:2}
+.r .est{position:sticky;left:0;background:var(--cartao);z-index:1;width:178px;min-width:178px;padding:9px 10px;text-align:left}
+.r thead .est{z-index:3;background:var(--fill)}
+.r .est b{display:block;font-size:13px}
+.r .est small{display:block;color:var(--texto3);font-size:11.5px;line-height:1.3}
+.r .est .tg{all:unset;cursor:pointer;font-size:11.5px;color:var(--texto2);margin-top:4px;display:inline-flex;gap:4px}
+.r tr.persona .est{padding-left:24px;background:var(--fill)}
+.r tr.persona td{background:color-mix(in srgb,var(--fill) 55%,transparent)}
+.r tr.persona .est b{font-weight:600;font-size:12.5px}
+.cel{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:4px;width:100%;min-height:58px;padding:7px 7px}
+.cel:hover{background:var(--fill)}
+.cel.sel{box-shadow:inset 0 0 0 2px var(--destaque)}
+.cel.vz{color:var(--texto3)}
+.cel.segue{color:var(--texto3);font-style:italic}
+.chs{display:flex;flex-wrap:wrap;gap:3px}
+.ch{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border:1px solid var(--borda);border-radius:6px;padding:1px 5px;white-space:nowrap;background:var(--cartao)}
+.ch i{width:6px;height:6px;border-radius:2px;background:var(--texto2)}
+.fr{font-size:11px;color:var(--texto2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+.r tr.sep td{height:0;border-bottom:2px solid var(--borda)}
+
+/* popover de célula, menus, gaveta */
+.pop{position:absolute;z-index:70;background:var(--cartao);border:1px solid var(--borda);border-radius:12px;box-shadow:var(--sombra);padding:6px;min-width:240px;display:flex;flex-direction:column;gap:2px}
+.pop>button{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:8px;font-size:13.5px}
+.pop>button:hover{background:var(--fill)}
+.pop .tit{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--texto3);padding:6px 10px 2px}
+.pop hr{border:0;border-top:1px solid var(--borda2);margin:4px 0}
+.pop.txt{max-width:380px;padding:14px 16px;font-size:13.5px;gap:8px}
+.pop.txt p{margin:0;color:var(--texto2)}
+.edit{position:absolute;z-index:70;width:320px;background:var(--cartao);border:1px solid var(--borda);border-radius:14px;box-shadow:var(--sombra);padding:14px;display:flex;flex-direction:column;gap:10px}
+.edit h4{margin:0;font-size:14px}
+.edit .sub{margin:0;font-size:12px;color:var(--texto2)}
+.edit .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--texto3)}
+.tgl{display:flex;flex-wrap:wrap;gap:5px}
+.tgl button{all:unset;cursor:pointer;font-size:12px;font-weight:600;padding:4px 9px;border-radius:999px;border:1px solid var(--borda);color:var(--texto2)}
+.tgl button[aria-pressed="true"]{background:var(--texto);border-color:var(--texto);color:var(--cartao)}
+.edit select{font:inherit;font-size:13px;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:6px 8px;width:100%}
+.edit .pre{font-size:12.5px;background:var(--fill);border-radius:8px;padding:8px 10px;color:var(--texto2)}
+.edit .acs{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.edit .acs .esp{flex:1}
+.veu{position:absolute;inset:0;background:var(--veu);z-index:60;border-radius:18px}
+.gav{position:absolute;top:0;right:0;bottom:0;width:min(440px,100%);background:var(--cartao);z-index:61;border-radius:0 18px 18px 0;border-left:1px solid var(--borda);display:flex;flex-direction:column}
+.gav header{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--borda2)}
+.gav header h3{margin:0;font-size:16px}
+.gav .corpo{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:16px;flex:1}
+.gav section{display:flex;flex-direction:column;gap:8px}
+.gav .lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--texto3)}
+.cond{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.cond div{background:var(--fill);border-radius:8px;padding:6px 10px}
+.cart{display:flex;align-items:center;gap:10px;border:1px solid var(--borda);border-radius:10px;padding:8px 10px;font-size:13px}
+.cart .dir{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--texto2)}
+.sw{all:unset;cursor:pointer;width:34px;height:20px;border-radius:999px;background:var(--fill2);position:relative;flex:none}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.sw[aria-checked="true"]{background:var(--ok)}
+.sw[aria-checked="true"]::after{transform:translateX(14px)}
+.pil{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pil.ok{background:var(--ok-f);color:var(--ok)} .pil.at{background:var(--at-f);color:var(--at)}
+.gav footer{padding:12px 18px;border-top:1px solid var(--borda2);display:flex;align-items:center;gap:10px}
+.perigo{all:unset;cursor:pointer;color:var(--erro);font-weight:600;font-size:13px}
+.vazio{padding:28px 20px;color:var(--texto2)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--texto);color:var(--cartao);padding:10px 16px;border-radius:10px;z-index:90;max-width:calc(100vw - 32px);display:flex;gap:12px;align-items:center}
+.toast button{all:unset;cursor:pointer;font-weight:700;text-decoration:underline}
+.antes{max-width:1440px;margin:0 auto 32px;padding:0 16px}
+.antes .bx{background:var(--cartao);border:1px solid var(--borda);border-radius:14px;padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px 24px;font-size:13.5px}
+.antes b{display:block;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--texto2);margin-bottom:4px}
+.antes ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+
+@container app (max-width:1023px){
+  .app{grid-template-columns:minmax(0,1fr);padding:0;gap:0;border-radius:16px}
+  .lado{display:none}
+  .mbar{display:flex;align-items:center;gap:10px;height:50px;padding:0 12px;border-bottom:1px solid var(--borda2);position:sticky;top:0;z-index:31;background:var(--cartao);border-radius:16px 16px 0 0}
+  .mbar .marca{font-weight:700;display:flex;gap:8px;align-items:center}
+  .mbar .marca svg{width:22px;height:22px}
+  .mbar .dir{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .ctx{top:50px;padding:0 14px}
+  .busca{width:auto}.busca .txt,.busca kbd{display:none}
+  .obar{top:94px;padding:10px 14px 8px}
+  .l1,.l2{flex-wrap:wrap}
+  .l2 .dir{margin-left:0;width:100%}
+  .vistas{display:none}.vsel{display:block;font:inherit;font-size:13px;color:var(--texto);background:var(--cartao);border:1px solid var(--borda);border-radius:8px;padding:5px 8px}
+  .raias{padding:10px 14px 20px}
+  .r .est{width:128px;min-width:128px}
+  .gav{border-radius:16px}
+  .edit{left:12px!important;right:12px;width:auto}
+}
+@container app (max-width:600px){
+  .l1 .lbl,.estado span{display:none}
+  .l1 h1{font-size:17px}
+  .migalha{display:none}
+}
+</style>
+</head>
+<body>
+<div class="doc">
+  <span class="selo">Protótipo para aprovação · Orquestração · 26/10/2026</span>
+  <h1>Orquestração · as raias primeiro</h1>
+  <p>Mesma regra de negócio, outra organização: a carteira é escolhida uma vez, o segmento vira pílula, o que é de configuração do segmento vai para a gaveta "Detalhes", a explicação vai para o "?", as ações raras vão para o "⋯", e a esteira ocupa a tela logo abaixo de duas linhas de controle. A Cobrança volta a ter 5 abas, com a Estratégia em subabas. Dados fictícios.</p>
+</div>
+<div class="ctrl">
+  <div class="g"><span>Largura</span><div class="seg" id="s-larg"><button aria-pressed="true" data-v="1440">Computador 1440</button><button aria-pressed="false" data-v="1024">Notebook 1024</button><button aria-pressed="false" data-v="390">Celular 390</button></div></div>
+  <div class="g"><span>Tema</span><div class="seg" id="s-tema"><button aria-pressed="true" data-v="">Sistema</button><button aria-pressed="false" data-v="light">Claro</button><button aria-pressed="false" data-v="dark">Escuro</button></div></div>
+  <div class="g"><span>Experimente</span><div class="seg"><button data-acao="demo-seg">Trocar de segmento</button><button data-acao="gaveta">Abrir os detalhes</button><button data-acao="demo-cel">Editar uma célula</button></div></div>
+</div>
+<div class="palco"><div class="janela" id="janela"><div class="app" id="app"></div></div></div>
+<div class="antes"><div class="bx">
+  <div><b>Hoje, antes das raias (print do dono)</b><ul>
+    <li>13 abas numa fileira só (a Estratégia está espalhada).</li>
+    <li>Cabeçalho alto: rótulo, título, subtítulo e mais uma frase.</li>
+    <li>"Buscar cliente", seletor de carteira, "Reenquadrar agora" e "Ver todas as carteiras" soltos.</li>
+    <li>Cartão CARTEIRA com pílulas: a carteira é escolhida duas vezes.</li>
+    <li>Caixa de explicação de duas linhas.</li>
+    <li>Cartão SEGMENTOS e, abaixo, o cartão do segmento (Quem entra, Carteiras que usam, Ligado em todas).</li>
+    <li>Só então a barra das vistas e as raias: mais de uma tela de rolagem.</li></ul></div>
+  <div><b>Proposta</b><ul>
+    <li>Abas: Lista do dia · Clientes · Ações · Cargas · Estratégia · Painel; Estratégia abre as subabas.</li>
+    <li>Linha 1: título, "?", Carteira ▾ (a única), estado e Salvar (ouro).</li>
+    <li>Linha 2: segmentos em pílula (com o nº de clientes), "+", Detalhes, vistas e "⋯".</li>
+    <li>Gaveta "Detalhes do segmento": Quem entra, Carteiras que usam, Ligado em todas, Tirar da carteira.</li>
+    <li>"⋯": Copiar de outra carteira, padrão MotorCX, montar pelas personas, todas as carteiras, Reenquadrar, Imprimir.</li>
+    <li>Aviso de estratégia compartilhada (regra do bloco 3) fica, numa linha só, acima das raias.</li>
+    <li>As raias começam a ~210 px do topo do cartão em 1440 px.</li></ul></div>
+</div></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const P = {
+    casa:'<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    cob:'<circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/>',
+    jor:'<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
+    msg:'<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
+    rel:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 18v-1"/><path d="M12 18v-6"/><path d="M16 18v-3"/>',
+    emp:'<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>',
+    sup:'<path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M21 16v2a4 4 0 0 1-4 4h-5"/>',
+    dupla:'<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
+    search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>', bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    down:'<path d="m6 9 6 6 6-6"/>', chev:'<path d="m9 18 6-6-6-6"/>', mais:'<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+    painel:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/>', ajuda:'<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+    menu:'<path d="M4 6h16M4 12h16M4 18h16"/>', x:'<path d="M18 6 6 18M6 6l12 12"/>', check:'<path d="M20 6 9 17l-5-5"/>',
+    lchk:'<path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/>', users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+    zap:'<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>', upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+    target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>', trend:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>'
+  };
+  const I = (k, c = "") => `<svg class="i ${c}" viewBox="0 0 24 24" aria-hidden="true">${P[k]}</svg>`;
+  const LOGO = '<svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="11" fill="none" style="color:var(--texto)"/><path d="M50 12 A38 38 0 0 1 86.1 38.3" stroke="#C9A35A" stroke-width="11" stroke-linecap="round" fill="none"/><path d="M83.6 70 A38 38 0 0 1 30 82.3" stroke="#8E8E93" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="50" cy="50" r="11" fill="#C9A35A"/></svg>';
+
+  /* ---------- dados fictícios ---------- */
+  const CARTEIRAS = { alfa: "Banco Alfa · Cartões", beta: "Varejo Beta · Crediário" };
+  const CAN = { wa: "WhatsApp", sms: "SMS", rcs: "RCS", em: "E-mail", dis: "Discador", ag: "Agente virtual" };
+  const FRASES = ["Lembrete amigável", "Boleto atualizado", "Proposta de acordo", "Última chance de desconto", "Confirmação de acordo", "Parcela vence amanhã"];
+  const ESTAGIOS = [
+    { id: "novo", nome: "Cliente novo", sub: "dias desde a entrada" },
+    { id: "cpca", nome: "CPC A", sub: "deu CPC · em negociação" },
+    { id: "cpcb", nome: "CPC B", sub: "deu CPC · sem resposta" },
+    { id: "nao", nome: "Não CPC", sub: "ciclo de 7 dias, 3 vezes" },
+    { id: "acordo", nome: "Acordo", sub: "dias em torno da parcela" }
+  ];
+  const DIAS = { novo: ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"], cpca: ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"], cpcb: ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"], nao: ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "—"], acordo: ["D-3", "D-1", "D0", "D+1", "D+3", "D+5", "D+7", "D+10"] };
+  function base(seed) {
+    const r = {}, pick = (a, i) => a[(i + seed) % a.length];
+    const plano = {
+      novo: [["wa"], ["sms"], [], ["rcs", "sms"], ["dis"], [], ["wa"], ["em"]],
+      cpca: [["wa"], [], ["dis"], [], ["wa"], [], ["sms"], []],
+      cpcb: [["sms"], ["wa"], [], ["ag"], [], ["dis"], [], ["em"]],
+      nao: [["dis"], ["sms"], ["wa"], [], ["rcs"], [], ["em"], null],
+      acordo: [["wa"], ["sms"], ["wa", "sms"], ["dis"], ["wa"], [], ["ag"], ["sms"]]
+    };
+    for (const e of ESTAGIOS) r[e.id] = plano[e.id].map((c, i) => c === null ? null : ({ c: c.slice(), f: c.length ? pick(FRASES, i + e.id.length) : "" }));
+    if (seed % 2) { r.novo[2] = { c: ["sms"], f: "Boleto atualizado" }; r.cpca[1] = { c: ["rcs"], f: "Proposta de acordo" }; }
+    return r;
+  }
+  const SEGS = {
+    alfa: [
+      { id: "curto", nome: "Atraso curto", cli: 6420, quem: ["Dias de atraso ≤ 30", "Saldo até R$ 5 mil"], usam: ["alfa"], propria: true, plano: base(0), raias: [{ p: "Digitais SP", e: "cpca" }, { p: "Só fixo", e: "cpca" }] },
+      { id: "longo", nome: "Atraso longo", cli: 3110, quem: ["Dias de atraso > 30"], usam: ["alfa", "beta"], propria: false, plano: base(1), raias: [] },
+      { id: "demais", nome: "Demais clientes", cli: 470, quem: ["Quem não entrou em nenhum segmento"], usam: ["alfa"], propria: true, plano: base(2), raias: [], demais: true }
+    ],
+    beta: [
+      { id: "longo", nome: "Atraso longo", cli: 1980, quem: ["Dias de atraso > 30"], usam: ["alfa", "beta"], propria: false, plano: base(1), raias: [] },
+      { id: "demais", nome: "Demais clientes", cli: 210, quem: ["Quem não entrou em nenhum segmento"], usam: ["beta"], propria: true, plano: base(3), raias: [], demais: true }
+    ]
+  };
+  SEGS.alfa[0].plano.cpca_p = { "Digitais SP": [{ c: ["wa"], f: "Proposta de acordo" }, null, null, null, { c: ["rcs"], f: "Última chance de desconto" }, null, null, null], "Só fixo": [{ c: ["dis"], f: "" }, null, { c: ["ag"], f: "" }, null, null, null, null, null] };
+
+  const est = { cart: "alfa", seg: "curto", vista: "desenho", sujo: false, pop: null, gav: false, cel: null, aviso: true, abertos: { cpca: true }, gaveta: false };
+  const seg = () => SEGS[est.cart].find(s => s.id === est.seg) || SEGS[est.cart][0];
+
+  /* ---------- moldura ---------- */
+  const lado = () => `<nav class="lado" aria-label="Navegação">${LOGO}
+    ${[["casa", "Início"], ["cob", "Cobrança", 1], ["jor", "Jornada do Cliente"], ["msg", "Mensageria"], ["rel", "Relatórios"]].map(([k, n, at]) => `<button class="li" data-nome="${n}" aria-label="${n}"${at ? ' aria-current="page"' : ""} data-msg="${n}">${I(k)}</button>`).join("")}
+    <div class="gap"></div><button class="li" data-nome="Empresa" aria-label="Empresa" data-msg="Empresa">${I("emp")}</button><div class="gap"></div>
+    <button class="li" data-nome="Suporte" aria-label="Suporte" data-msg="Suporte">${I("sup")}<span class="b">1</span></button>
+    <div class="esp"></div><button class="li" data-nome="Mostrar os nomes" aria-label="Mostrar os nomes" data-msg="Abre a lateral com os nomes (192 px)">${I("dupla")}</button>
+    <button class="avatar" data-msg="Rafael · Admin · Minha conta">R</button></nav>`;
+  const mbar = () => `<div class="mbar"><button class="ib" data-msg="Gaveta com os ícones e os nomes" aria-label="Abrir menu">${I("menu")}</button><span class="marca">${LOGO.replace('class="logo"', "")}MotorCX</span><div class="dir"><button class="ib" aria-label="Avisos" data-msg="Avisos">${I("bell")}</button><button class="avatar" style="margin:0" data-msg="Minha conta">R</button></div></div>`;
+  const ctx = () => `<div class="ctx"><span class="migalha">Cobrança › Estratégia › Orquestração</span><div class="dir"><button class="busca" data-msg="⌘K: telas, ações e cliente pelo ID">${I("search", "p")}<span class="txt">Busque uma tela, um cliente ou pergunte</span><kbd>⌘K</kbd></button><button class="ib" aria-label="Glossário" data-msg="Glossário (O que significa)">?</button><button class="ib" aria-label="Avisos" data-msg="Avisos">${I("bell", "p")}</button></div></div>`;
+  const abas = () => `<div class="abas" role="tablist">${[["lchk", "Lista do dia"], ["users", "Clientes"], ["zap", "Ações"], ["upload", "Cargas"], ["target", "Estratégia", 1], ["trend", "Painel"]].map(([i, n, at]) => `<button class="aba" role="tab" aria-selected="${!!at}" data-msg="${n}">${I(i, "p")}${n}</button>`).join("")}</div>
+    <div class="subabas" role="group" aria-label="Estratégia">${["Orquestração", "Personas", "Segmentos", "Carteiras", "Canais e frases", "Mapa da Esteira", "Comitê"].map((n, i) => `<button aria-pressed="${i === 0}" data-msg="${n}">${n}</button>`).join("")}</div>`;
+
+  /* ---------- barra da Orquestração ---------- */
+  function obar() {
+    const s = seg();
+    const popCart = est.pop === "cart" ? `<div class="pop" style="top:38px;left:0"><div class="tit">Carteira</div>${Object.entries(CARTEIRAS).map(([k, n]) => `<button data-cart="${k}">${n}${k === est.cart ? I("check", "p") : ""}</button>`).join("")}</div>` : "";
+    const popAj = est.pop === "ajuda" ? `<div class="pop txt" style="top:36px;left:0"><b>Como a Orquestração funciona</b><p>Cada cliente da carga cai num segmento. O MotorCX vê em que momento ele está (Cliente novo, CPC A, CPC B, Não CPC, Acordo) e aplica a regra desse momento. Quem deu CPC segue no contato principal e no canal do CPC.</p><p>Tudo aqui é da carteira escolhida: segmentos, estratégia, etapas e travas.</p></div>` : "";
+    const popMais = est.pop === "mais" ? `<div class="pop" style="top:36px;right:0"><button data-msg="Janela: carteira e segmento de origem, o que copiar. Copia sem salvar.">Copiar de outra carteira</button><button data-msg="Padrão MotorCX carregado. Revise e salve.">Começar do padrão MotorCX</button><button data-msg="Monta a esteira a partir das personas desta carteira">Montar esteira pelas personas</button><hr><button data-msg="Matriz segmento × carteira: Em uso · Pausado · —">Ver segmentos em todas as carteiras</button><button data-msg="Pedido enviado · o MotorCX reenquadra em segundos">Reenquadrar agora</button><button data-msg="Imprimir / PDF">Imprimir / PDF</button></div>` : "";
+    const vistas = [["desenho", "Desenho da esteira"], ["etapas", "Etapas e fases"], ["travas", "Travas"], ["visao", "Visão geral"]];
+    return `<section class="obar" aria-label="Controles da Orquestração">
+      <div class="l1"><h1>Orquestração</h1><span style="position:relative"><button class="ib bd" data-acao="pop-ajuda" aria-label="Como funciona" title="Como funciona">${I("ajuda", "p")}</button>${popAj}</span>
+        <span style="position:relative"><button class="sel" data-acao="pop-cart" aria-haspopup="menu"><span class="lbl">Carteira</span>${CARTEIRAS[est.cart]}${I("down", "p")}</button>${popCart}</span>
+        <div class="dir"><span class="estado ${est.sujo ? "at" : "ok"}"><i></i><span>${est.sujo ? "Alterações não salvas" : "Tudo salvo"}</span></span><button class="btn"${est.sujo ? "" : ' aria-disabled="true"'} data-acao="salvar">${I("check", "p")}Salvar</button></div></div>
+      <div class="l2"><div class="segs" role="group" aria-label="Segmentos">${SEGS[est.cart].map(x => `<button class="sp" data-seg="${x.id}" aria-pressed="${x.id === s.id}" title="${x.propria ? "Própria desta carteira" : "Estratégia compartilhada com outra carteira"}">${!x.propria ? '<span class="cmp" aria-label="compartilhada"></span>' : ""}${x.nome} <small>${x.cli.toLocaleString("pt-BR")}</small></button>`).join("")}<button class="sp add" data-msg="Abre o formulário de novo segmento (o mesmo de hoje)" aria-label="Novo segmento">+ Novo</button></div>
+        <button class="lk" data-acao="gaveta">${I("painel", "p")}Detalhes do segmento</button>
+        <div class="dir"><div class="vistas" role="group" aria-label="Vista">${vistas.map(([k, n]) => `<button data-vista="${k}" aria-pressed="${est.vista === k}">${n}</button>`).join("")}</div>
+          <select class="vsel" data-vsel aria-label="Vista">${vistas.map(([k, n]) => `<option value="${k}"${est.vista === k ? " selected" : ""}>${n}</option>`).join("")}</select>
+          <span style="position:relative"><button class="ib bd" data-acao="pop-mais" aria-label="Mais ações">${I("mais", "p")}</button>${popMais}</span></div></div>
+    </section>`;
+  }
+  function aviso() {
+    const s = seg();
+    if (s.propria || !est.aviso) return "";
+    const outra = s.usam.filter(c => c !== est.cart).map(c => CARTEIRAS[c]).join(", ");
+    return `<div class="aviso" role="status"><span><b>Estratégia compartilhada.</b> Também vale na carteira ${outra}. Mudar aqui muda lá.</span><div class="dir"><button class="btn" data-acao="separar">Separar só para esta carteira</button><button class="btn sec" data-acao="fechar-aviso">Editar para as duas</button></div></div>`;
+  }
+
+  /* ---------- raias ---------- */
+  const chips = c => `<span class="chs">${c.map(k => `<span class="ch"><i></i>${CAN[k]}</span>`).join("")}</span>`;
+  function celula(e, i, v, persona) {
+    const id = `${e}|${i}|${persona || ""}`;
+    const sel = est.cel === id ? " sel" : "";
+    if (v === null && !persona) return `<td><div class="cel vz" style="cursor:default">·</div></td>`;
+    if (persona && v === null) return `<td><button class="cel segue${sel}" data-cel="${id}" title="Segue o público geral">segue o geral</button></td>`;
+    if (!v.c.length) return `<td><button class="cel vz${sel}" data-cel="${id}" aria-label="Sem ação neste dia; editar">—</button></td>`;
+    return `<td><button class="cel${sel}" data-cel="${id}">${chips(v.c)}${v.f ? `<span class="fr">${v.f}</span>` : ""}</button></td>`;
+  }
+  function desenho() {
+    const s = seg(), pl = s.plano;
+    const linhas = ESTAGIOS.map(e => {
+      const rs = e.id === "cpca" ? s.raias : [];
+      const aberto = est.abertos[e.id];
+      const head = `<tr><th class="est" scope="row"><b>${e.nome}</b><small>${e.sub}</small>${rs.length ? `<button class="tg" data-tog="${e.id}">${aberto ? "▾" : "▸"} ${rs.length} raia(s) de persona</button>` : `<button class="tg" data-msg="+ raia: escolha uma persona desta carteira">+ raia</button>`}</th>${DIAS[e.id].map((d, i) => celula(e.id, i, pl[e.id][i])).join("")}</tr>`;
+      const pers = aberto ? rs.map(r => `<tr class="persona"><th class="est" scope="row"><b>${r.p}</b><small>persona · nos outros dias segue o geral</small></th>${DIAS[e.id].map((d, i) => celula(e.id, i, (pl.cpca_p || {})[r.p] ? pl.cpca_p[r.p][i] : null, r.p)).join("")}</tr>`).join("") : "";
+      return head + pers;
+    }).join("");
+    return `<div class="raias">
+      <div class="leg"><span>Linhas = momento do cliente · colunas = dia da faixa · em cada célula, o canal e a frase. Clique para editar.</span><div class="dir"><button class="lk" data-acao="abrir-todas">Abrir todas as raias</button><button class="lk" data-acao="fechar-todas">Fechar</button></div></div>
+      <div class="grade"><table class="r"><thead><tr><th class="est">Momento</th>${["Dia 1", "Dia 2", "Dia 3", "Dia 4", "Dia 5", "Dia 6", "Dia 7", "Dia 8"].map(d => `<th>${d}</th>`).join("")}</tr></thead><tbody>${linhas}</tbody></table></div>
+      <p style="margin:0;font-size:12px;color:var(--texto3)">Acordo: D-3 a D+10 em relação ao vencimento de cada parcela. Não CPC: ciclo de 7 dias, repetido 3 vezes. As faixas de segurança valem sempre (08:00–20:00, intervalo mínimo de 12 h, freio do WhatsApp até 5%).</p>
+    </div>`;
+  }
+  function editor() {
+    if (!est.cel) return "";
+    const [e, i, p] = est.cel.split("|"), s = seg();
+    const v = p ? ((s.plano.cpca_p[p] || [])[+i] || { c: [], f: "" }) : s.plano[e][+i];
+    const nomeE = ESTAGIOS.find(x => x.id === e).nome;
+    return `<div class="edit" id="editor" role="dialog" aria-label="Editar célula" style="top:${est.celTop || 300}px;left:${est.celLeft || 300}px">
+      <h4>${nomeE}${p ? " · " + p : ""} · ${DIAS[e][+i]}</h4><p class="sub">${p ? "Raia de persona: vale só para essa persona neste dia." : "Público geral: vale para todos deste momento neste dia."}</p>
+      <span class="lbl">Canais (na ordem)</span><div class="tgl">${Object.entries(CAN).map(([k, n]) => `<button data-can="${k}" aria-pressed="${v.c.includes(k)}">${n}</button>`).join("")}</div>
+      <span class="lbl">Frase</span><select data-frase><option value="">Sem frase (só o canal)</option>${FRASES.map(f => `<option${v.f === f ? " selected" : ""}>${f}</option>`).join("")}</select>
+      <div class="pre">${v.f ? `"${v.f}": Olá! Sua fatura do {credor} está em aberto. Toque para ver as opções.` : "Escolha uma frase para ver a prévia."}</div>
+      <div class="acs"><button class="lk" data-acao="sem-acao">⦸ Sem ação neste dia</button><button class="lk" data-acao="copiar-dias">Copiar para os outros dias</button>${p ? '<button class="lk" data-acao="segue-geral">Voltar a seguir o geral</button>' : ""}<span class="esp"></span><button class="btn sec" data-acao="fechar-cel">Fechar</button></div></div>`;
+  }
+  function gaveta() {
+    if (!est.gav) return "";
+    const s = seg();
+    return `<div class="veu" data-acao="fechar-gav"></div><aside class="gav" role="dialog" aria-label="Detalhes do segmento">
+      <header><h3>${s.nome}</h3>${s.propria ? '<span class="pil ok">Própria desta carteira</span>' : '<span class="pil at">Compartilhada</span>'}<button class="ib" style="margin-left:auto" data-acao="fechar-gav" aria-label="Fechar">${I("x")}</button></header>
+      <div class="corpo">
+        <section><span class="lbl">Quem entra</span><div class="cond">${s.quem.map(q => `<div>${q}</div>`).join("")}</div>${s.demais ? "" : '<button class="lk" data-msg="Abre o formulário do segmento (o mesmo de hoje)">Editar condições ›</button>'}</section>
+        <section><span class="lbl">Carteiras que usam este segmento</span>${Object.entries(CARTEIRAS).map(([k, n]) => `<div class="cart"><input type="checkbox" ${s.usam.includes(k) ? "checked" : ""} aria-label="${n}"> ${n}<div class="dir">${s.usam.includes(k) ? `Em uso <button class="sw" role="switch" aria-checked="true" data-sw aria-label="Em uso em ${n}"></button>` : "não usa"}</div></div>`).join("")}</section>
+        <section><div class="cart">Ligado em todas as carteiras<div class="dir"><button class="sw" role="switch" aria-checked="true" data-sw aria-label="Ligado em todas"></button></div></div><p style="margin:0;font-size:12px;color:var(--texto3)">Desligar aqui desliga o segmento para todas as carteiras.</p></section>
+        <section><span class="lbl">Clientes hoje</span><div style="font-size:13px">${s.cli.toLocaleString("pt-BR")} nesta carteira, na última rotina.</div></section>
+      </div>
+      <footer>${s.demais ? "" : '<button class="perigo" data-msg="Confirmação: o segmento sai desta carteira; o histórico fica.">Tirar da carteira</button>'}<span style="flex:1"></span><button class="btn sec" data-acao="fechar-gav">Fechar</button></footer></aside>`;
+  }
+  function vistaOutra() {
+    const t = { etapas: "Etapas e fases: as fases do motor com orçamento por canal, prioridade e travas próprias (como hoje).", travas: "Travas: tabela estratégia × fase (como hoje).", visao: "Visão geral: a linha do tempo por faixa, só leitura (como hoje)." }[est.vista];
+    return `<div class="vazio">${t}<br><small>O conteúdo das vistas não muda; muda só onde elas ficam.</small></div>`;
+  }
+
+  function render() {
+    $("app").innerHTML = lado() + `<section class="cartao" aria-label="Conteúdo">${mbar()}${ctx()}${abas()}${obar()}${aviso()}${est.vista === "desenho" ? desenho() : vistaOutra()}${editor()}</section>` + gaveta();
+    if (est.cel) posEditor();
+  }
+  function posEditor() {
+    const el = document.querySelector(`[data-cel="${CSS.escape(est.cel)}"]`), ed = $("editor"), app = $("app");
+    if (!el || !ed) return;
+    const a = el.getBoundingClientRect(), b = app.querySelector(".cartao").getBoundingClientRect();
+    let left = a.left - b.left, top = a.bottom - b.top + 6;
+    left = Math.max(12, Math.min(left, b.width - 332));
+    ed.style.left = left + "px"; ed.style.top = top + "px";
+  }
+  function sujar() { est.sujo = true; }
+  function valorCel() {
+    const [e, i, p] = est.cel.split("|"), s = seg();
+    if (p) { s.plano.cpca_p[p] = s.plano.cpca_p[p] || Array(8).fill(null); if (!s.plano.cpca_p[p][+i]) s.plano.cpca_p[p][+i] = { c: [], f: "" }; return s.plano.cpca_p[p][+i]; }
+    return s.plano[e][+i];
+  }
+  let tt;
+  function aviso_(t, acao) {
+    let el = $("toast"); if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    el.innerHTML = `<span>${t}</span>${acao ? `<button data-msg="Pedido enviado · o MotorCX reenquadra em segundos">${acao}</button>` : ""}`; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => el.hidden = true, 3200);
+  }
+  document.addEventListener("click", ev => {
+    const t = ev.target.closest("[data-acao],[data-msg],[data-cart],[data-seg],[data-vista],[data-cel],[data-can],[data-tog],[data-sw]");
+    if (!t) { if (est.pop) { est.pop = null; render(); } return; }
+    const d = t.dataset;
+    if (t.closest("#editor") && d.can) { const v = valorCel(); v.c = v.c.includes(d.can) ? v.c.filter(x => x !== d.can) : [...v.c, d.can]; sujar(); return render(); }
+    if (d.sw !== undefined) { t.setAttribute("aria-checked", t.getAttribute("aria-checked") === "true" ? "false" : "true"); return; }
+    if (d.cel) { est.cel = est.cel === d.cel ? null : d.cel; est.pop = null; return render(); }
+    if (d.tog) { est.abertos[d.tog] = !est.abertos[d.tog]; return render(); }
+    if (d.cart) { est.cart = d.cart; est.seg = SEGS[d.cart][0].id; est.pop = null; est.cel = null; est.aviso = true; return render(); }
+    if (d.seg) { est.seg = d.seg; est.cel = null; est.aviso = true; return render(); }
+    if (d.vista) { est.vista = d.vista; est.cel = null; return render(); }
+    if (d.msg && !d.acao) { est.pop = null; render(); return aviso_(d.msg); }
+    const a = d.acao;
+    if (a && a.startsWith("pop-")) { const k = a.slice(4); est.pop = est.pop === k ? null : k; return render(); }
+    if (a === "gaveta") { est.gav = true; est.pop = null; return render(); }
+    if (a === "fechar-gav") { est.gav = false; return render(); }
+    if (a === "salvar") { if (!est.sujo) return; est.sujo = false; est.cel = null; render(); return aviso_("Orquestração salva · o MotorCX reenquadra sozinho em até 1 minuto", "Reenquadrar agora"); }
+    if (a === "fechar-cel") { est.cel = null; return render(); }
+    if (a === "sem-acao") { const v = valorCel(); v.c = []; v.f = ""; sujar(); return render(); }
+    if (a === "segue-geral") { const [e, i, p] = est.cel.split("|"); seg().plano.cpca_p[p][+i] = null; est.cel = null; sujar(); return render(); }
+    if (a === "copiar-dias") { const [e, i, p] = est.cel.split("|"); const v = valorCel(); if (!p) seg().plano[e] = seg().plano[e].map(x => x === null ? null : { c: v.c.slice(), f: v.f }); sujar(); render(); return aviso_("Copiado para os outros dias da faixa"); }
+    if (a === "separar") { const s = seg(); s.propria = true; s.usam = [est.cart]; est.aviso = false; render(); return aviso_("Nova estratégia criada só para esta carteira · o MotorCX reenquadra em até 1 minuto"); }
+    if (a === "fechar-aviso") { est.aviso = false; return render(); }
+    if (a === "abrir-todas") { est.abertos = { cpca: true }; return render(); }
+    if (a === "fechar-todas") { est.abertos = {}; return render(); }
+    if (a === "demo-seg") { const l = SEGS[est.cart]; const i = l.findIndex(x => x.id === est.seg); est.seg = l[(i + 1) % l.length].id; est.cel = null; est.aviso = true; return render(); }
+    if (a === "demo-cel") { est.vista = "desenho"; est.cel = "novo|3|"; render(); document.querySelector('[data-cel="novo|3|"]').scrollIntoView({ block: "center" }); return posEditor(); }
+  });
+  document.addEventListener("change", ev => {
+    if (ev.target.matches("[data-frase]")) { valorCel().f = ev.target.value; sujar(); render(); }
+    if (ev.target.matches("[data-vsel]")) { est.vista = ev.target.value; est.cel = null; render(); }
+  });
+  document.addEventListener("keydown", ev => { if (ev.key === "Escape" && (est.pop || est.gav || est.cel)) { est.pop = null; est.gav = false; est.cel = null; render(); } });
+  window.addEventListener("resize", () => est.cel && posEditor());
+  function segc(id, fn) { $(id).querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset.v); })); }
+  segc("s-larg", v => { $("janela").style.maxWidth = v + "px"; setTimeout(() => est.cel && posEditor(), 300); });
+  segc("s-tema", v => { v ? document.documentElement.setAttribute("data-theme", v) : document.documentElement.removeAttribute("data-theme"); });
+  render();
+})();
+</script>
+</body>
+</html>
