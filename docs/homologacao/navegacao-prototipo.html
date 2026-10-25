@@ -86,17 +86,40 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
 .casca{display:grid;grid-template-columns:236px minmax(0,1fr);flex:1}
 .casca.sem-menu{grid-template-columns:minmax(0,1fr)}
 .lat{background:var(--menu);border-right:1px solid var(--menu-borda);padding:12px 10px;display:flex;flex-direction:column;gap:2px;font-size:13.5px}
-.lat .volta{all:unset;cursor:pointer;font-size:13px;color:var(--texto2);padding:4px 8px}
-.lat .volta:focus-visible{outline:2px solid var(--area)}
-.areas{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--cartao);border:1px solid var(--borda);border-radius:10px;padding:3px;margin:6px 0 4px}
-.areas button{all:unset;cursor:pointer;text-align:center;font-size:12.5px;font-weight:600;padding:5px 4px;border-radius:7px;color:var(--texto2)}
-.areas button[aria-pressed="true"]{background:var(--area);color:var(--sobre-area)}
-.areas button:focus-visible{outline:2px solid var(--area);outline-offset:1px}
-.area-nome{font-weight:700;font-size:15px;padding:6px 8px 2px;display:flex;align-items:center;gap:8px}
-.area-nome i{width:10px;height:10px;border-radius:3px;background:var(--area)}
-.canais{display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px 2px}
+/* seletor de área (estilo workspace switcher): contexto = empresa no topo, onde estou = seletor, navegação = itens */
+.lat{position:relative}
+.lat-cab{display:flex;align-items:center;gap:4px;padding:0 0 8px;margin:0 0 6px;border-bottom:1px solid var(--menu-borda);position:relative}
+.seletor{all:unset;box-sizing:border-box;cursor:pointer;flex:1;min-width:0;display:flex;align-items:center;gap:10px;height:44px;padding:0 8px;border-radius:10px}
+.seletor:hover,.seletor[aria-expanded="true"]{background:var(--pilula)}
+.seletor:focus-visible{outline:2px solid var(--texto);outline-offset:1px}
+.seletor .nome{flex:1;min-width:0;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--texto)}
+.seletor .chev{color:var(--texto2);font-size:12px}
+.tile{width:28px;height:28px;flex:none;border-radius:8px;display:grid;place-items:center;color:#fff}
+.tile svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tile.p{width:24px;height:24px;border-radius:7px}.tile.p svg{width:14px;height:14px}
+.tile.t-cob{background:#8A6A2E}.tile.t-jor{background:#4F6B3A}.tile.t-men{background:#7A2E3B}.tile.t-rel{background:#3A3A3C}.tile.t-off{background:var(--pilula);color:var(--texto2)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tile.t-cob{background:#A07C38}:root:not([data-theme="light"]) .tile.t-jor{background:#5E7F45}:root:not([data-theme="light"]) .tile.t-men{background:#9A3E4E}:root:not([data-theme="light"]) .tile.t-rel{background:#545458}}
+:root[data-theme="dark"] .tile.t-cob{background:#A07C38}:root[data-theme="dark"] .tile.t-jor{background:#5E7F45}:root[data-theme="dark"] .tile.t-men{background:#9A3E4E}:root[data-theme="dark"] .tile.t-rel{background:#545458}
+.recolher{all:unset;cursor:pointer;width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:var(--texto2)}
+.recolher:hover{background:var(--pilula)}
+.pop-area{position:absolute;top:48px;left:0;width:310px;max-width:calc(100vw - 48px);background:var(--cartao);border:1px solid var(--borda);border-radius:12px;box-shadow:var(--sombra);padding:6px;z-index:25;display:flex;flex-direction:column;gap:2px}
+.pop-area .tit{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:6px 8px 4px}
+.pop-area button{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:7px 8px;border-radius:8px}
+.pop-area button:hover,.pop-area button:focus-visible{background:var(--pilula)}
+.pop-area b{display:block;font-size:13.5px;color:var(--texto)} .pop-area small{display:block;font-size:12px;color:var(--texto2);line-height:1.3}
+.pop-area .ok{color:var(--texto);font-weight:700}
+.pop-area .q{font-size:12px;font-weight:600;color:var(--texto2);white-space:nowrap}
+.pop-area hr{border:0;border-top:1px solid var(--borda);margin:4px 2px;width:auto}
+.pop-area .pe-pop{grid-template-columns:1fr;font-size:13px;color:var(--texto2)}
+.rotulo-canal{display:flex;align-items:center;gap:8px;padding:2px 8px 8px;margin-bottom:4px;border-bottom:1px solid var(--menu-borda)}
+.rotulo-canal>span{font-size:11px;color:var(--texto2);text-transform:uppercase;letter-spacing:.06em}
+.empresa-pil{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--borda);border-radius:999px;font-size:13px;font-weight:600;color:var(--texto);max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empresa-pil svg{width:14px;height:14px;fill:none;stroke:var(--texto2);stroke-width:2;flex:none}
+.empresa-pil:focus-visible{outline:2px solid var(--texto)}
+.console-btn{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:5px 10px;border-radius:8px;border:1px solid var(--borda);color:var(--texto)}
+.canais{display:flex;flex-wrap:wrap;gap:4px}
 .canais button{all:unset;cursor:pointer;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--cartao);border:1px solid var(--borda);color:var(--texto2)}
-.canais button[aria-pressed="true"]{background:var(--area);border-color:var(--area);color:var(--sobre-area)}
+.canais button[aria-pressed="true"]{background:var(--texto);border-color:var(--texto);color:var(--cartao)}
 .lat .g{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--texto2);padding:10px 8px 3px}
 .lat a{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;color:var(--menu-texto);text-decoration:none;cursor:pointer}
 .lat a[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
@@ -113,7 +136,7 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
 .cartao h3{margin:0;font-size:15px}
 .nota{font-size:12.5px;color:var(--texto2);margin:0}
 .duas{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:14px}
-.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--area);color:var(--sobre-area);white-space:nowrap}
+.btn{font:inherit;font-weight:600;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;background:var(--texto);color:var(--cartao);white-space:nowrap}
 .btn.sec{background:var(--pilula);color:var(--texto)}
 .btn:focus-visible,.link:focus-visible{outline:2px solid var(--area);outline-offset:2px}
 .link{all:unset;cursor:pointer;color:var(--texto);font-weight:600;font-size:13px;text-decoration:underline;text-underline-offset:2px}
@@ -156,6 +179,8 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
 .gaveta a{display:flex;justify-content:space-between;gap:6px;padding:8px;border-radius:7px;color:var(--menu-texto);text-decoration:none;cursor:pointer}
 .gaveta a[aria-current="page"]{background:var(--area-ativo);color:var(--area-ativo-texto);font-weight:600}
 .gaveta a.off{color:var(--texto2)}
+.gaveta .recolher{display:none}
+.gaveta .pop-area{width:auto;right:0;max-width:none}
 .gaveta hr{border:0;border-top:1px solid var(--menu-borda);margin:8px 0;width:100%}
 
 /* um corte só: abaixo de 1024 px vale a gaveta (☰) */
@@ -165,6 +190,7 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
   .casca{grid-template-columns:minmax(0,1fr)}
   .casca>.lat{display:none}
   .busca{width:200px}
+  .empresa-pil,.console-btn{display:none}
 }
 @container app (max-width:600px){
   .busca{display:none}
@@ -177,16 +203,20 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
 </head>
 <body>
 <div class="topo">
-  <span class="selo">Protótipo para aprovação · Navegação v2 · 23/10/2026</span>
-  <h1>Navegação por áreas</h1>
-  <p>O menu lateral passa a seguir o endereço da tela, não a frente guardada no navegador. Quatro áreas com menu próprio (Cobrança, Jornada do Cliente, Mensageria e Relatórios) e o Workspace sem menu lateral. Um corte só de largura: abaixo de 1024 px tudo vai para a gaveta ☰. Dados fictícios.</p>
+  <span class="selo">Protótipo para aprovação · Navegação v3 · 25/10/2026</span>
+  <h1>Navegação por áreas · seletor de área</h1>
+  <p>O menu lateral passa a seguir o endereço da tela, não a frente guardada no navegador. Quatro áreas com menu próprio (Cobrança, Jornada do Cliente, Mensageria e Relatórios) e o Workspace sem menu lateral. Um corte só de largura: abaixo de 1024 px tudo vai para a gaveta ☰. <b>v3:</b> a troca de área virou um seletor no topo do menu (quadrado com a cor e o ícone da área + nome + ⌄), a empresa saiu do menu e foi para a barra do topo (só para a equipe), e o botão principal é neutro em todas as áreas. Teste no claro e no escuro. Dados fictícios.</p>
 </div>
 
 <div class="ctrl">
   <div class="grp"><span>Largura</span><div class="seg" id="seg-largura">
     <button aria-pressed="true" data-v="1280">Computador</button><button aria-pressed="false" data-v="900">Tablet 900</button><button aria-pressed="false" data-v="390">Celular 390</button></div></div>
-  <div class="grp"><span>Cliente</span><div class="seg" id="seg-cliente">
-    <button aria-pressed="true" data-v="completo">Cobrança + Jornada + Mensageria</button><button aria-pressed="false" data-v="so-cob">Só Cobrança (Mensageria só WhatsApp)</button></div></div>
+  <div class="grp"><span>Tema</span><div class="seg" id="seg-tema">
+    <button aria-pressed="true" data-v="">Sistema</button><button aria-pressed="false" data-v="light">Claro</button><button aria-pressed="false" data-v="dark">Escuro</button></div></div>
+  <div class="grp"><span>Quem vê</span><div class="seg" id="seg-quem">
+    <button aria-pressed="true" data-v="cliente">Cliente</button><button aria-pressed="false" data-v="equipe">Equipe MotorCX</button></div></div>
+  <div class="grp"><span>Empresa</span><div class="seg" id="seg-cliente">
+    <button aria-pressed="true" data-v="completo">Cobrança + Jornada + Mensageria</button><button aria-pressed="false" data-v="so-cob">Cobrança + Mensageria (só WhatsApp)</button></div></div>
   <div class="grp"><span>Perfil</span><div class="seg" id="seg-perfil">
     <button aria-pressed="true" data-v="admin">Admin</button><button aria-pressed="false" data-v="operacao">Operação</button></div></div>
   <div class="grp"><span>Bloqueio da empresa</span><div class="seg" id="seg-bloqueio">
@@ -203,7 +233,8 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
 <div class="wrap-regra"><div class="regra"><b>Regras desta proposta</b><ul>
   <li><b>A rota define a área</b> (e, com ela, o menu, a cor e o nome). Uma função só, <code>areaDaRota()</code>, usada pelo menu, pelo tema e pela gaveta. Se a pessoa entra numa tela da Cobrança vindo de qualquer lugar (Áreas ▾, Início, Assistente, ⌘K, link colado), o menu é o da Cobrança.</li>
   <li><b>Mensageria é área própria</b>: os menus da Cobrança e da Jornada não têm mais o bloco Mensageria; só um atalho "Respostas dos clientes ↗". Dentro de /mensageria/* o menu é só da Mensageria, com o seletor de canal (só os contratados).</li>
-  <li><b>Troca de área</b> fica uma vez só, no topo do menu, com as áreas contratadas + Relatórios. Itens que levam para outra área têm "↗".</li>
+  <li><b>Seletor de área</b> (v3): no topo do menu, um botão com o quadrado colorido e o ícone da área, o nome e ⌄. Abre uma lista com as áreas liberadas (com descrição e ✓ na atual) e, separadas, as não contratadas. Não parece item de menu: tem cor, ícone em bloco, peso maior e uma linha separando da navegação. Mesmo padrão do seletor de workspace do Linear, Notion e Slack. Itens que levam para outra área têm "↗".</li>
+  <li><b>Empresa é contexto</b> (v3): sai do menu lateral. Equipe: pílula com prédio na barra do topo, ao lado da busca. Cliente: não vê pílula; o nome da empresa fica no menu do avatar e no subtítulo das telas.</li>
   <li><b>Quem tem uma área só</b> não vê a troca com áreas que não comprou; Áreas ▾ e o Início mostram as outras esmaecidas com "Quero conhecer". Endereço de área não contratada abre a página "Esta área não faz parte do plano".</li>
   <li><b>404 e sem permissão</b> ficam dentro da moldura (topo visível), com "Ir para o Início", "Voltar" e "Avisar o Suporte". Sem permissão diz quem libera.</li>
   <li><b>Bloqueio</b>: "Pagar agora" só para quem tem ver_faturamento e pagar_faturas; quem não tem vê o nome de quem paga (Admin), sem link (a Operação não vê a lista de pessoas). Empresa suspensa ou encerrada pela equipe: "Fale com o Suporte", nunca "fatura vencida" nem Pagar.</li>
@@ -224,8 +255,18 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
     mensageria: { nome: "Mensageria", cls: "men", curto: "Mensageria" },
     relatorios: { nome: "Relatórios", cls: "", curto: "Relatórios" }
   };
-  const est = { rota: "/inicio", cliente: "completo", perfil: "admin", bloqueio: "nao", canal: null, pop: null, gaveta: false };
+  const est = { quem: "cliente", rota: "/inicio", cliente: "completo", perfil: "admin", bloqueio: "nao", canal: null, pop: null, gaveta: false };
   const cli = () => CLIENTES[est.cliente];
+  const ICON = {
+    cobranca: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+    jornada: '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
+    mensageria: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    relatorios: '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>'
+  };
+  const PREDIO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg>';
+  const TILE = { cobranca: "t-cob", jornada: "t-jor", mensageria: "t-men", relatorios: "t-rel" };
+  const DESC = { cobranca: "Lista do dia, réguas e carteiras", jornada: "Boas-vindas, ativação e retenção", mensageria: "Campanhas, lotes e respostas", relatorios: "Os números de todas as áreas" };
+  const tile = (a, peq, off) => `<span class="tile ${peq ? "p " : ""}${off ? "t-off" : TILE[a]}" aria-hidden="true"><svg viewBox="0 0 24 24">${ICON[a]}</svg></span>`;
   const tem = a => a === "relatorios" ? cli().areas.length > 0 : cli().areas.includes(a);
   const caminho = r => r.split("?")[0];
   const param = (r, k) => new URLSearchParams(r.split("?")[1] || "").get(k);
@@ -380,16 +421,25 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
         <span style="position:relative"><button data-acao="pop-empresa" aria-expanded="${est.pop === "empresa"}"${at("empresa")}>Empresa ▾</button>${est.pop === "empresa" ? popEmpresa() : ""}</span>
         <button data-ir="/suporte"${at("suporte")}>Suporte <span class="cont">1</span></button>
       </nav>
-      <div class="dir"><div class="busca">Busque uma tela ou pergunte <kbd>⌘K</kbd></div>
+      <div class="dir">${est.quem === "equipe" ? `<span style="position:relative"><button class="empresa-pil" data-acao="pop-emp" aria-label="Empresa em contexto: ${cli().empresa}">${PREDIO}${cli().empresa} ▾</button>${est.pop === "emp" ? `<div class="pop" style="right:0"><div class="tit">Empresa em contexto</div>${Object.entries(CLIENTES).map(([k, v]) => `<button data-emp="${k}">${v.empresa}${k === est.cliente ? "<small>✓</small>" : ""}</button>`).join("")}</div>` : ""}</span><button class="console-btn" data-msg="Abre /console">Console</button>` : ""}<div class="busca">Busque uma tela ou pergunte <kbd>⌘K</kbd></div>
         <button class="ic busca-ic" aria-label="Buscar" data-msg="Abre a busca ⌘K em tela cheia.">⌕</button>
         <button class="ic ajuda-ic" title="O que significa" data-msg="Abre o glossário (O que significa).">?</button>
         <button class="ic" title="Avisos" data-msg="Sino">🔔<span class="p">3</span></button>
-        <button class="ic" title="Minha conta" data-msg="Minha conta · Documentação · Sair">${cli().pessoa[0]}</button></div>
+        <button class="ic" title="Minha conta" data-msg="${est.quem === "equipe" ? "Equipe MotorCX" : cli().pessoa + " · " + cli().empresa} · Minha conta · Documentação · Sair">${cli().pessoa[0]}</button></div>
     </header>`;
   }
-  function trocaArea(area) {
-    const lista = ["cobranca", "jornada", "mensageria", "relatorios"].filter(tem);
-    return `<div class="areas" role="group" aria-label="Trocar de área">${lista.map(a => `<button aria-pressed="${a === area}" data-ir="${inicioDaArea(a)}">${AREA[a].curto}</button>`).join("")}</div>`;
+  function popArea(area) {
+    const todas = ["cobranca", "jornada", "mensageria", "relatorios"];
+    const lib = todas.filter(tem), fora = todas.filter(a => !tem(a));
+    return `<div class="pop-area" role="menu" aria-label="Trocar de área"><div class="tit">Áreas</div>
+      ${lib.map(a => `<button role="menuitem" data-ir="${inicioDaArea(a)}">${tile(a, true)}<span><b>${AREA[a].nome}</b><small>${DESC[a]}</small></span>${a === area ? '<span class="ok" aria-label="atual">✓</span>' : "<span></span>"}</button>`).join("")}
+      ${fora.length ? `<hr><div class="tit">Não contratadas</div>${fora.map(a => `<button role="menuitem" data-msg="${est.quem === "equipe" ? "Equipe: abre a área com o aviso 'Não contratada' (prompt 74)." : "Abre o card de interesse que já existe."}">${tile(a, true, true)}<span><b style="color:var(--texto2)">${AREA[a].nome}</b><small>${DESC[a]}</small></span><span class="q">${est.quem === "equipe" ? "Abrir mesmo assim" : "Quero conhecer"}</span></button>`).join("")}` : ""}
+      <hr><button role="menuitem" class="pe-pop" data-ir="/inicio">‹ Ir para o Início</button></div>`;
+  }
+  function seletor(area) {
+    return `<div class="lat-cab"><button class="seletor" data-acao="pop-area" aria-haspopup="menu" aria-expanded="${est.pop === "area"}" title="Trocar de área">${tile(area)}<span class="nome">${AREA[area].nome}</span><span class="chev" aria-hidden="true">⌄</span></button>
+      <button class="recolher" data-msg="Recolhido: fica só o quadrado da área (o seletor abre à direita) e os ícones dos itens." aria-label="Recolher menu">↤</button>
+      ${est.pop === "area" ? popArea(area) : ""}</div>`;
   }
   function itensMenu(area, tag) {
     const ativo = itemAtivo(area);
@@ -404,26 +454,22 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
   function canais(area) {
     if (area !== "mensageria" || cli().canais.length < 2) return "";
     const c = canalAtual();
-    return `<div class="canais" role="group" aria-label="Canal">${cli().canais.map(x => `<button aria-pressed="${x === c}" data-canal="${x}">${CANAL[x]}</button>`).join("")}</div>`;
+    return `<div class="rotulo-canal"><span>Canal</span><div class="canais" role="group" aria-label="Canal">${cli().canais.map(x => `<button aria-pressed="${x === c}" data-canal="${x}">${CANAL[x]}</button>`).join("")}</div></div>`;
   }
   function menuLateral(area) {
     return `<nav class="lat" aria-label="Menu da área">
-      <button class="volta" data-ir="/inicio">‹ Início</button>
-      <div class="area-nome"><i></i>${AREA[area].nome}</div>
-      ${trocaArea(area)}${canais(area)}${itensMenu(area)}
-      <div class="pe">${cli().empresa}</div></nav>`;
+      ${seletor(area)}${canais(area)}${itensMenu(area)}
+      <div class="pe">${est.quem === "equipe" ? "Equipe MotorCX" : cli().pessoa + " · " + (est.perfil === "admin" ? "Admin" : "Operação")}</div></nav>`;
   }
   function gaveta(area) {
-    const ws = [["/inicio", "Início"], ["/suporte", "Suporte"]];
+    const naArea = !!AREA[area];
+    const topo = `<a data-ir="/inicio"${caminho(est.rota) === "/inicio" ? ' aria-current="page"' : ""}>Início</a>${est.quem === "equipe" ? `<a data-msg="Abre /console">Console MotorCX</a><a data-acao="pop-emp-g"><span style="display:inline-flex;gap:6px;align-items:center">${PREDIO.replace("<svg", '<svg style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2"')}${cli().empresa}</span><span>▾</span></a>` : ""}`;
+    const areas = `<div class="g">Áreas</div>${["cobranca", "jornada", "mensageria", "relatorios"].map(a => tem(a) ? `<a data-ir="${inicioDaArea(a)}">${AREA[a].nome}</a>` : `<a class="off" data-msg="Abre o card de interesse que já existe.">${AREA[a].nome}<span>Quero conhecer</span></a>`).join("")}`;
+    const ws = `<div class="g">Empresa</div><a data-ir="/empresa">Dados e contatos</a><a data-ir="/empresa/pessoas">Pessoas e perfis</a>${est.perfil === "admin" ? '<a data-ir="/empresa/faturamento">Faturas</a>' : ""}<a data-ir="/suporte">Suporte <span class="cont">1</span></a>`;
     return `<div class="veu" data-acao="fechar"></div><nav class="gaveta" aria-label="Menu">
       <button class="fechar" data-acao="fechar" aria-label="Fechar">×</button>
-      <a data-ir="/inicio"${caminho(est.rota) === "/inicio" ? ' aria-current="page"' : ""}>Início</a>
-      <div class="g">Áreas</div>
-      ${["cobranca", "jornada", "mensageria", "relatorios"].map(a => tem(a) ? `<a data-ir="${inicioDaArea(a)}"${a === area ? ' aria-current="page"' : ""}>${AREA[a].nome}</a>` : `<a class="off" data-msg="Abre o card de interesse que já existe.">${AREA[a].nome}<span>Quero conhecer</span></a>`).join("")}
-      <div class="g">Empresa</div>
-      <a data-ir="/empresa">Dados e contatos</a><a data-ir="/empresa/pessoas">Pessoas e perfis</a>${est.perfil === "admin" ? '<a data-ir="/empresa/faturamento">Faturas</a>' : ""}
-      <a data-ir="/suporte">Suporte <span class="cont">1</span></a>
-      ${AREA[area] ? `<hr><div class="area-nome"><i></i>${AREA[area].nome}</div>${canais(area)}${itensMenu(area)}` : ""}
+      ${topo}<hr>
+      ${naArea ? `<div style="position:relative">${seletor(area)}</div>${canais(area)}${itensMenu(area)}<hr>${ws}` : `${areas}${ws}`}
     </nav>`;
   }
   function render() {
@@ -454,19 +500,23 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
   let toastT;
   function aviso(t) { let el = $("toast"); if (!el) { el = document.createElement("div"); el.id = "toast"; el.setAttribute("role", "status"); el.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--texto);color:var(--fundo);padding:10px 16px;border-radius:10px;z-index:60;max-width:calc(100vw - 32px)"; document.body.appendChild(el); } el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 2800); }
   document.addEventListener("click", e => {
-    const t = e.target.closest("[data-ir],[data-acao],[data-msg],[data-canal]");
+    const t = e.target.closest("[data-ir],[data-acao],[data-msg],[data-canal],[data-emp]");
     if (!t) { if (est.pop) { est.pop = null; render(); } return; }
     if (t.dataset.ir) return ir(t.dataset.ir);
+    if (t.dataset.emp) { est.cliente = t.dataset.emp; est.canal = null; est.pop = null; document.querySelectorAll("#seg-cliente button").forEach(x => x.setAttribute("aria-pressed", x.dataset.v === est.cliente)); return render(); }
     if (t.dataset.canal) { const r = caminho(est.rota), novo = r.replace(/^\/mensageria\/(sms|rcs|email|whatsapp)/, "/mensageria/" + t.dataset.canal); est.canal = t.dataset.canal; return ir(novo === r ? "/mensageria/" + t.dataset.canal : novo.replace(/\/lotes\/\d+$/, "/lotes")); }
     if (t.dataset.msg) { est.pop = null; render(); return aviso(t.dataset.msg); }
     const a = t.dataset.acao;
-    if (a === "pop-areas" || a === "pop-empresa") { const k = a.slice(4); est.pop = est.pop === k ? null : k; render(); }
+    if (a === "pop-emp-g") { const ks = Object.keys(CLIENTES); est.cliente = ks[(ks.indexOf(est.cliente) + 1) % ks.length]; est.canal = null; render(); return aviso("Equipe: empresa em contexto trocada para " + cli().empresa); }
+    if (a === "pop-areas" || a === "pop-empresa" || a === "pop-area" || a === "pop-emp") { const k = a.slice(4); est.pop = est.pop === k ? null : k; render(); }
     if (a === "gaveta") { est.gaveta = true; render(); }
     if (a === "fechar") { est.gaveta = false; render(); }
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && (est.pop || est.gaveta)) { est.pop = null; est.gaveta = false; render(); } });
   $("form-end").addEventListener("submit", e => { e.preventDefault(); const v = $("end").value.trim(); ir(v.startsWith("/") ? v : "/" + v); });
   function seg(id, fn) { $(id).querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset.v); })); }
+  seg("seg-tema", v => { if (v) document.documentElement.setAttribute("data-theme", v); else document.documentElement.removeAttribute("data-theme"); });
+  seg("seg-quem", v => { est.quem = v; render(); });
   seg("seg-largura", v => { $("janela").style.maxWidth = v + "px"; });
   seg("seg-cliente", v => { est.cliente = v; est.canal = null; ir("/inicio"); });
   seg("seg-perfil", v => { est.perfil = v; render(); });
