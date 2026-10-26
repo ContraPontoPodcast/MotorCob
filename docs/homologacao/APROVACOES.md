@@ -416,3 +416,16 @@ Suporte, Minha conta), só a barra clara no topo; o menu lateral claro fica só 
   404, sem permissão e área não contratada com saída; um corte de largura em 1024 px; "Pagar agora" só para quem paga.
 - Gerado: SQL 46 (`ver_clientes`, `ver_painel`) e prompt 73. Fora desta onda: tela de tokens (prompt 63), empresa só
   Mensageria, parâmetros dos links e "MotorCob" → "MotorCX" (Onda 2).
+
+## Personas 3C, Propensão a pagamento e Discagem — decisões do dono em 26/10/2026
+Princípio: a ferramenta não limita o cliente. Ela informa, sugere e alerta; quem decide e configura é o cliente.
+- Nome na tela: "Propensão a pagamento" (nunca "Score"). Evidência: Coletando / Prévia / Definida.
+- Tipos de carteira: a lista do MotorCX é sugestão; o cliente cadastra tipos novos, sem limite.
+- "Pagou" = quitação ou pagamento da 1ª parcela. Acordo fechado é promessa de pagamento, não pagamento; só vira
+  pagamento quando a 1ª parcela é paga. A propensão aprende só com pagamentos.
+- Sugestões de frase do motor: sempre aprovadas por uma pessoa; nada é aplicado sozinho.
+- Modo frio entre credores (fase 3): depende da cláusula de compartilhamento no contrato.
+- Horários por UF/DDD: campo configurável pelo cliente, pré-preenchido com a prévia do conhecimento do MotorCX
+  (referência, não orientação jurídica).
+- Chamadas curtas (MP 1.396/2026): monitoramento e alerta com limites configuráveis; corte opcional, desligado por
+  padrão. Acompanhar a regra e tomar as medidas é responsabilidade da operação do cliente.
