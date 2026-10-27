@@ -4,7 +4,6 @@ import json
 import os
 import re
 import tempfile
-import time
 import unittest
 from datetime import date, datetime
 from pathlib import Path
@@ -278,7 +277,7 @@ class TestCampanha(unittest.TestCase):
         lote = C.preparar(self.sb, self.dados, AGORA, out=lambda *a: None)[0]
         arq = C.pasta_campanhas(self.dados, "alfa") / f"lote_{lote['id']}.json"
         self.sb.t["mensageria_campanhas"][0]["criado_em"] = "2026-06-01T00:00:00+00:00"
-        velho = time.time() - 100 * 86400
+        velho = AGORA.timestamp() - 100 * 86400   # relativo à data do teste, não ao relógio de hoje
         os.utime(arq, (velho, velho))
         C.limpar(self.sb, self.dados, AGORA, out=lambda *a: None)
         self.assertFalse(arq.exists())
