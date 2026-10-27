@@ -51,6 +51,35 @@ class TestCarteira(unittest.TestCase):
         self.assertEqual([p["pago_em"] for p in ac], ["2026-09-05", "", ""])   # baixa pagou a 1ª parcela
         self.assertTrue(any(p["id_cliente"] == "X0004" and p["id_acordo"] == "QUITACAO" for p in parc))
 
+    def test_pagamentos_por_cliente_separam_pagamento_de_promessa(self):
+        rel = montar(self.tmp, self.ent)
+        pg = {l["id_cliente"]: l for l in _ler(self.tmp / "base" / "pagamentos.csv")}
+        # 1ª parcela do acordo paga = pagou; quitação = pagou; parcial fora de acordo = não conta
+        self.assertEqual((pg["X0002"]["tipo"], pg["X0002"]["id_acordo"], pg["X0002"]["parcela"], pg["X0002"]["pagou"]),
+                         ("parcela", "AC100", "1", "1"))
+        self.assertEqual((pg["X0004"]["tipo"], pg["X0004"]["pagou"]), ("quitacao", "1"))
+        self.assertEqual((pg["X0001"]["tipo"], pg["X0001"]["valor"], pg["X0001"]["pagou"]), ("parcial", "250.40", "0"))
+        self.assertEqual((rel["pagamentos_registrados"], rel["clientes_que_pagaram"]), (3, 2))
+        # sem CPF nem contato no arquivo
+        self.assertEqual(list(pg["X0002"]), ["id_cliente", "id_contrato", "data", "valor", "tipo", "id_acordo",
+                                             "parcela", "pagou", "arquivo"])
+        # montar de novo (mesmas baixas) reescreve igual, sem duplicar
+        antes = (self.tmp / "base" / "pagamentos.csv").read_text(encoding="utf-8")
+        montar(self.tmp, self.ent)
+        self.assertEqual((self.tmp / "base" / "pagamentos.csv").read_text(encoding="utf-8"), antes)
+
+    def test_acordo_sem_parcela_paga_e_promessa_e_2a_parcela_nao_conta_de_novo(self):
+        (self.tmp / "baixa" / "baixa_2026-09-07.csv").write_text(
+            "COD_CLIENTE;CONTRATO;DT_PAGAMENTO;VALOR_PAGO;TIPO\nX0002;;05/10/2026;100,00;P\n", encoding="utf-8")
+        montar(self.tmp, self.ent)
+        pg = [l for l in _ler(self.tmp / "base" / "pagamentos.csv") if l["id_cliente"] == "X0002"]
+        self.assertEqual([(l["parcela"], l["pagou"]) for l in pg], [("1", "1"), ("2", "0")])
+        (self.tmp / "baixa" / "baixa_2026-09-06.csv").unlink()
+        (self.tmp / "baixa" / "baixa_2026-09-07.csv").unlink()
+        montar(self.tmp, self.ent)
+        # acordo fechado sem nenhuma baixa: não aparece como pagamento
+        self.assertEqual(_ler(self.tmp / "base" / "pagamentos.csv"), [])
+
     def test_geral_nova_substitui_o_estoque(self):
         (self.tmp / "bruto" / "geral_2026-09-10.csv").write_text(
             CAB + "X0003;CT04;10000003387;5.000,00;10/05/2026;VEICULO;MG;31955550003;S;;;;\n", encoding="utf-8")

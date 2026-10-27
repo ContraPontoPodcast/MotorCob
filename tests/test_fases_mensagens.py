@@ -192,3 +192,35 @@ class TestTemplatesPorCanal(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRegistroDaFrase(unittest.TestCase):
+    """A frase que saiu em cada ação fica em estado/escolhas.csv, para medir o que cada uma rende."""
+
+    def _escolhas(self, r):
+        with open(Path(r["saida"]).parent.parent / "estado" / "escolhas.csv", newline="", encoding="utf-8") as f:
+            return list(csv.DictReader(f, delimiter=";"))
+
+    def test_frase_do_playbook_texto_livre_e_sem_frase(self):
+        defin = {**PASSO, "mensagens": {"localizacao": {"whatsapp": {"frase_id": "12"}}}}
+        playbook = [{"id": 12, "canal": "whatsapp", "nome": "Boas-vindas", "texto": "Saldo {saldo}. {link}",
+                     "ativo": True}]
+        e = self._escolhas(_rodar(defin, playbook))[0]
+        self.assertEqual(e["frase_id"], "12")
+        self.assertEqual(len(e["frase_versao"]), 8)
+        # a versão é do texto antes das variáveis: muda se a frase for editada
+        editada = self._escolhas(_rodar(defin, [{**playbook[0], "texto": "Saldo {saldo}! {link}"}]))[0]
+        self.assertNotEqual(editada["frase_versao"], e["frase_versao"])
+        livre = self._escolhas(_rodar({**PASSO, "mensagens": {"localizacao": {"whatsapp": "Oi {saldo}"}}}))[0]
+        self.assertEqual(livre["frase_id"], "0")
+        sem = self._escolhas(_rodar(PASSO))[0]
+        self.assertEqual((sem["frase_id"], sem["frase_versao"]), ("", ""))
+        apagada = self._escolhas(_rodar(defin, [{**playbook[0], "ativo": False}]))[0]   # não saiu frase
+        self.assertEqual((apagada["frase_id"], apagada["frase_versao"]), ("", ""))
+
+    def test_template_do_provedor(self):
+        defin = {**PASSO, "mensagens": {"localizacao": {"whatsapp": {"frase_id": 4}}}}
+        playbook = [{"id": 4, "canal": "whatsapp", "nome": "T", "codigo_template": "cobranca_d1", "ativo": True}]
+        e = self._escolhas(_rodar(defin, playbook))[0]
+        self.assertEqual(e["frase_id"], "4")
+        self.assertTrue(e["frase_versao"])

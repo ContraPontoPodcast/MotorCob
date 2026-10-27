@@ -9,7 +9,7 @@ Empresa nova = arquivo novo, sem código novo.
   (base/clientes.csv e base/contatos.csv).
 - Ocorrência: uma linha por tentativa dizendo se deu CPC ou não. Em geral não traz o
   contato: quem sabe qual contato foi usado é o MotorCob, que guarda em
-  estado/escolhas.csv o que mandou acionar em cada dia (ID, canal e contato).
+  estado/escolhas.csv o que mandou acionar em cada dia (ID, canal, contato e a frase que saiu).
 
 O resultado da ocorrência é traduzido em dois passos: o código da empresa vira um
 resultado genérico (cpc, sem_contato, atendida_sem_cpc, terceiro, invalido, opt_out)
@@ -48,7 +48,7 @@ GENERICOS: dict[str, dict[str, str]] = {
 }
 DIAS_BUSCA_ESCOLHA = 3   # ocorrência de hoje pode ser de uma ação exportada até 3 dias antes
 CAMPOS_ESCOLHA = ("data", "id_cliente", "canal", "contato", "ordem_contato", "reserva", "regua", "cluster",
-                  "estado", "persona")
+                  "estado", "persona", "frase_id", "frase_versao")
 _DATA_NO_NOME = re.compile(r"(20\d{2})-?(\d{2})-?(\d{2})")
 
 
@@ -338,6 +338,7 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
             quita = item.get("tipo") == "quitacao" or (item.get("tipo") != "parcial"
                                                         and item["valor"] >= saldo * 0.99)
             if quita:
+                item["quitou"] = True   # carteira.montar registra o pagamento como quitação
                 for k in ([ct] if ct in alvo else list(alvo)):
                     del alvo[k]
                 rel["pagamentos"]["quitação"] += 1
@@ -663,7 +664,10 @@ def salvar_escolhas(pasta_estado: str | Path, dia: date, fila: list[dict]):
     novas = [{"data": dia.isoformat(), "id_cliente": l["id_cliente"], "canal": l["canal"], "contato": l["contato"],
               "ordem_contato": l["ordem_contato"], "reserva": int(bool(l["condicao"])),
               "regua": l.get("regua") or "", "cluster": l.get("cluster") or "", "estado": l.get("estado") or "",
-              "persona": (l.get("persona") or "").split(" · ")[0]} for l in fila]
+              "persona": (l.get("persona") or "").split(" · ")[0],
+              # frase que saiu na ação (0 = texto livre da esteira; vazio = sem frase) e a versão do texto
+              "frase_id": "" if l.get("frase_id") is None else l["frase_id"],
+              "frase_versao": l.get("frase_versao") or ""} for l in fila]
     tmp = arq.with_suffix(".tmp")
     with open(tmp, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=CAMPOS_ESCOLHA, delimiter=";")

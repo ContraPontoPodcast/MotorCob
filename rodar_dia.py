@@ -17,7 +17,8 @@ Com os arquivos da empresa cliente (base bruta e ocorrências, ver empresas/):
    ids/<canal>.csv       ID do cliente e contato a acionar hoje em cada canal (id_cliente;contato)
                          (<canal>_reserva.csv: só se o canal principal do dia não contatar)
    O que foi mandado acionar fica em --estado/escolhas.csv: é por ele que a ocorrência
-   da empresa (que não traz o contato) é ligada ao número/e-mail usado.
+   da empresa (que não traz o contato) é ligada ao número/e-mail usado. A frase que saiu em cada
+   ação também fica ali (frase_id e frase_versao), para medir o resultado de cada frase.
    fila_do_dia.csv       detalhe completo (régua, passo, TAG, contato escolhido)
    enriquecimento.csv    quem mandar para o bureau · alertas.txt
 
@@ -26,6 +27,7 @@ Para usar o link rastreável, a fila completa pode ir para o disparar.py:
 """
 import argparse
 import csv
+import hashlib
 import json
 import re
 from collections import Counter, defaultdict
@@ -80,6 +82,11 @@ ESTAGIOS = [  # (chave, rótulo, pasta): a comunicação de cada canal muda com 
 
 def _reais(v) -> str:
     return "R$ " + f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def versao_frase(texto: str) -> str:
+    """Impressão curta do texto antes das variáveis: muda quando a frase é editada, não por cliente."""
+    return hashlib.sha1(texto.encode("utf-8")).hexdigest()[:8]
 
 
 def montar_mensagem(texto: str, cliente, parcelas, hoje: date) -> str:
@@ -537,15 +544,21 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             msgs = regua.para(e_.cluster_atual).dados.get("mensagens") if e_ else None
             texto = ((msgs or {}).get(estagio_da_linha(l)) or {}).get(l["canal"])
         l["template"] = False
+        l["frase_id"], l["frase_versao"] = None, ""   # registro da frase (escolhas.csv): mede o que cada uma rende
         if l["canal"] in CANAIS_SEM_MENSAGEM:      # discador e e-mail: sem frase nem template
             l["mensagem"] = ""
             continue
         if l["canal"] in CANAIS_TEMPLATE and isinstance(texto, dict) and texto.get("frase_id") in templates:
             l["mensagem"] = templates[texto["frase_id"]]   # WhatsApp e RCS: nome do template aprovado no provedor
             l["template"] = True
+            l["frase_id"], l["frase_versao"] = texto["frase_id"], versao_frase(l["mensagem"])
             continue
+        fid = 0                         # 0 = texto escrito na própria esteira, fora do playbook
         if isinstance(texto, dict):     # frase do playbook desativada ou apagada: sai sem frase
-            texto = playbook.get(texto.get("frase_id"))
+            fid = texto.get("frase_id")
+            texto = playbook.get(fid)
+        if texto:
+            l["frase_id"], l["frase_versao"] = fid, versao_frase(texto)
         l["mensagem"] = montar_mensagem(texto, clientes.get(l["id_cliente"]), parcelas.get(l["id_cliente"]), hoje) \
             if texto else ""
     perfil = _perfil_contatos(contatos, flags, ativos if ativos is not None else set(clientes))
