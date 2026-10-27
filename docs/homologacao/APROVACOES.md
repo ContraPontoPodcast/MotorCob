@@ -417,8 +417,10 @@ Suporte, Minha conta), só a barra clara no topo; o menu lateral claro fica só 
 - Gerado: SQL 46 (`ver_clientes`, `ver_painel`) e prompt 73. Fora desta onda: tela de tokens (prompt 63), empresa só
   Mensageria, parâmetros dos links e "MotorCob" → "MotorCX" (Onda 2).
 
-## Personas 3C, Propensão a pagamento e Discagem — decisões do dono em 26/10/2026
+## Abordagem da persona, Propensão a pagamento e Discagem — decisões do dono em 26 e 27/10/2026
 Princípio: a ferramenta não limita o cliente. Ela informa, sugere e alerta; quem decide e configura é o cliente.
+- Nome do conceito: **Abordagem** (Contato · Canal · Mensagem). O nome provisório "3C" não é usado em lugar nenhum
+  (conflita com marca existente no mercado). Na tela: "Abordagem · Definida", "Abordagem desta persona".
 - Nome na tela: "Propensão a pagamento" (nunca "Score"). Evidência: Coletando / Prévia / Definida.
 - Tipos de carteira: a lista do MotorCX é sugestão; o cliente cadastra tipos novos, sem limite.
 - "Pagou" = quitação ou pagamento da 1ª parcela. Acordo fechado é promessa de pagamento, não pagamento; só vira
