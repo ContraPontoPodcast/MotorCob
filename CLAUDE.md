@@ -180,6 +180,10 @@ de outra pessoa pela certificação e a rotação segue.
   aplica baixas nas parcelas (informada ou mais antiga em aberto, ≥ 99% = paga), manda o resto
   como quitação/parcial ao estoque, grava base/parcelas.csv (quitação sem acordo = acordo
   "QUITACAO" pago → LIQ) e na_carga = estoque + acordo aberto (salvo retirado depois).
+  base/pagamentos.csv: toda baixa por cliente (parcela de acordo, quitação ou parcial), reescrito
+  inteiro a cada montagem (não duplica). `pagou` = 1 só para quitação (tipo informado ou valor
+  ≥ 99% do saldo) ou 1ª parcela do acordo paga: acordo sem parcela paga é promessa, não
+  pagamento (decisão do dono, 26/10/2026). É o alvo da Propensão a pagamento.
   Layouts `retirada`, `acordo`, `baixa` (e `incremental` opcional) em empresas/<slug>.json.
   Entre credores da mesma empresa (mesmo CPF, `pessoa_de`): `rodar_dia(compartilhado=)`
   recebe Hot (pessoa, contato), WhatsApp válido e acionados (pessoa → data); quem outro credor
@@ -265,8 +269,9 @@ de outra pessoa pela certificação e a rotação segue.
   usuário copia para `personas_usuario`. Atributos calculados para personas/segmentos
   (`rodar_dia.CALCULADAS`): idade (da data de nascimento — que não vira atributo — ou IDADE),
   tem_email, tem_celular, so_fixo, qtd_telefones, tem_whatsapp, tem_rcs, ddd.
-- `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado e persona
-  de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
+- `motor/acoes.py`: ações realizadas. `escolhas.csv` guarda régua, cluster, estado, persona e a
+  frase (`frase_id`: id do playbook, 0 = texto escrito na esteira, vazio = sem frase;
+  `frase_versao`: 8 caracteres do sha1 do texto/template antes das variáveis) de cada ação exportada; `agregar` cruza com os eventos (ação = dia × cliente × canal;
   evento casa com a ação mais recente do mesmo cliente/canal até `DIAS_BUSCA_ESCOLHA` dias
   antes; ocorrência sem ação vai para a régua `fora_da_lista`). Métricas aditivas por
   data × canal × régua × cluster × persona: enviadas, reservas, com_retorno, retornos, cpcs,

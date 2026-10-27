@@ -9,7 +9,10 @@ Pasta do credor (cada tipo numa pasta; o nome do arquivo não importa, a data ve
   baixa/         BAIXA             pagamentos: parcela de acordo, quitação ou parcial
 
 Saída em base/: a base canônica (converter_base) e parcelas.csv (acordos com o que já foi
-pago), que leva o cliente a Preventivo, Acordo em dia, Quebra ou Liquidado.
+pago), que leva o cliente a Preventivo, Acordo em dia, Quebra ou Liquidado. pagamentos.csv guarda
+cada baixa por cliente (parcela de acordo, quitação ou parcial); a coluna `pagou` marca o que conta
+como pagamento para o aprendizado: quitação ou a 1ª parcela do acordo paga. Acordo fechado sem
+parcela paga é promessa, não pagamento.
 Quem recebe ação (na_carga.csv) = estoque + quem tem acordo aberto (exceto se foi retirado
 depois do acordo). Quitação sem acordo vira um acordo quitado ("QUITACAO") → Liquidado.
 """
@@ -26,6 +29,7 @@ from .ingestao import LayoutInvalido
 PASTAS = {"geral": "bruto", "incremental": "incremental", "retirada": "retirada", "acordo": "acordo",
           "baixa": "baixa"}
 TOLERANCIA = 0.99   # pagamento ≥ 99% do valor da parcela (ou do saldo) conta como pago
+CAMPOS_PAGAMENTO = ("id_cliente", "id_contrato", "data", "valor", "tipo", "id_acordo", "parcela", "pagou", "arquivo")
 
 
 def _arquivos(pasta: Path) -> list[Path]:
@@ -114,6 +118,18 @@ def _identificador(arquivos: list[tuple[Path, object]]) -> Identificador:
     return ident
 
 
+def _gravar_pagamentos(arq: Path, registro: list[dict]):
+    """Reescreve o arquivo inteiro a cada montagem (as baixas são relidas todas): rodar de novo não duplica."""
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    tmp = arq.with_suffix(".tmp")
+    with open(tmp, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=CAMPOS_PAGAMENTO, delimiter=";")
+        w.writeheader()
+        for g in sorted(registro, key=lambda g: (g["data"], g["id_cliente"], g["arquivo"])):
+            w.writerow({**g, "data": g["data"].isoformat(), "valor": f"{g['valor']:.2f}"})
+    tmp.replace(arq)
+
+
 def montar(pasta: str | Path, entrada: Entrada) -> dict:
     """Lê as cinco pastas do credor e grava a base canônica em <pasta>/base/. Retorna o relatório."""
     pasta = Path(pasta)
@@ -162,6 +178,7 @@ def montar(pasta: str | Path, entrada: Entrada) -> dict:
 
     # baixas: primeiro as de parcela de acordo; o resto vai para o estoque (quitação/parcial)
     pagamentos = []
+    registro = []   # pagamentos.csv: toda baixa aceita, por cliente
     rel_baixa = Counter()
     for r in sorted(linhas["baixa"], key=lambda r: r["data"]):
         idc = cliente(r)
@@ -171,25 +188,36 @@ def montar(pasta: str | Path, entrada: Entrada) -> dict:
         abertos = [(idc, i) for i in ids if (idc, i) in acordos
                    and any(p["pago_em"] is None for p in acordos[(idc, i)]["parcelas"].values())]
         if r["tipo"] != "quitacao" and abertos:
-            a = acordos[max(abertos, key=lambda k: acordos[k]["dia"])]
+            chave = max(abertos, key=lambda k: acordos[k]["dia"])
+            a = acordos[chave]
             resta = r["valor"]
-            alvo = ([a["parcelas"][r["parcela"]]] if r["parcela"] in a["parcelas"] else
-                    [p for _, p in sorted(a["parcelas"].items()) if p["pago_em"] is None])
-            for p in alvo:
+            alvo = ([(r["parcela"], a["parcelas"][r["parcela"]])] if r["parcela"] in a["parcelas"] else
+                    [(n, p) for n, p in sorted(a["parcelas"].items()) if p["pago_em"] is None])
+            tocadas, pagas = [], []
+            for n, p in alvo:
                 if resta <= 0 or p["pago_em"] is not None:
                     continue
                 falta = p["valor"] - p["pago"]
                 usado = min(resta, falta) if falta > 0 else resta
                 p["pago"] += usado
                 resta -= usado
+                tocadas.append(n)
                 if p["valor"] <= 0 or p["pago"] >= p["valor"] * TOLERANCIA:
                     p["pago_em"] = r["data"]
+                    pagas.append(n)
                     rel_baixa["parcelas pagas"] += 1
                 if r["parcela"] in a["parcelas"]:
                     break
+            registro.append({"id_cliente": idc, "id_contrato": r["id_contrato"], "data": r["data"],
+                             "valor": r["valor"], "tipo": "parcela", "id_acordo": chave[1],
+                             "parcela": (tocadas or [r["parcela"] or ""])[0],
+                             "pagou": int(min(a["parcelas"]) in pagas), "arquivo": r["arquivo"]})
             continue
         pagamentos.append({"data": r["data"], "id_cliente": idc, "id_contrato": r["id_contrato"],
                            "valor": r["valor"], "tipo": r["tipo"] if r["tipo"] != "parcela" else "parcial"})
+        registro.append({"id_cliente": idc, "id_contrato": r["id_contrato"], "data": r["data"], "valor": r["valor"],
+                         "tipo": r["tipo"] or "", "id_acordo": "", "parcela": "", "pagou": 0,
+                         "arquivo": r["arquivo"], "_item": pagamentos[-1]})
 
     rel = converter_base(arqs["geral"], entrada.base, base, incrementais=arqs["incremental"],
                          retiradas=retiradas, pagamentos=pagamentos, layout_incremental=entrada.incremental)
@@ -199,6 +227,14 @@ def montar(pasta: str | Path, entrada: Entrada) -> dict:
     for (arq, como), n in achados.items():
         rel["identificacao"].setdefault(arq, {})[como] = rel["identificacao"].get(arq, {}).get(como, 0) + n
     rel["parcelas_pagas"] = rel_baixa["parcelas pagas"]
+    for g in registro:   # fora de acordo: a base diz se quitou (tipo quitação ou valor ≥ 99% do saldo)
+        item = g.pop("_item", None)
+        if item is not None:
+            quitou = bool(item.get("quitou")) or g["tipo"] == "quitacao"
+            g["tipo"], g["pagou"] = ("quitacao", 1) if quitou else ("parcial", 0)
+    _gravar_pagamentos(base / "pagamentos.csv", registro)
+    rel["pagamentos_registrados"] = len(registro)
+    rel["clientes_que_pagaram"] = len({g["id_cliente"] for g in registro if g["pagou"]})
 
     # parcelas.csv: acordos do credor + quitações sem acordo (acordo quitado → Liquidado)
     abertos_desde = {}
