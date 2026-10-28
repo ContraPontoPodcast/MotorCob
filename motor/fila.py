@@ -700,7 +700,9 @@ def esteira_tem_enriquecimento(rc: Regua) -> bool:
 def lista_enriquecimento(estados: dict[str, EstadoCliente], flags: dict[str, dict], certs_contatos: dict[str, list[str]],
                          hoje: date, regua: Regua, programados: dict | None = None) -> list[dict]:
     """Quem vai para o bureau hoje: o dia que a esteira programou (programados) ou, se a esteira
-    não programa enriquecimento, a entrada na carga; mais revalidação vencida e re-enriquecimento."""
+    não programa enriquecimento, a entrada na carga; mais revalidação vencida e re-enriquecimento.
+    Com a fase do cliente desligada na estratégia, nada vai ao bureau sem a esteira pedir (a carteira
+    pode nascer sem ação nenhuma: o bureau custa e o cliente não programou)."""
     saida = []
     programados = programados or {}
     for idc, est in estados.items():
@@ -708,10 +710,13 @@ def lista_enriquecimento(estados: dict[str, EstadoCliente], flags: dict[str, dic
             continue
         cfg = regua.enriquecimento(est.cluster_atual)
         motivo = None
+        rc = regua.para(est.cluster_atual)
         if idc in programados:
             motivo = programados[idc]
+        elif fase_desligada(est, rc):
+            continue
         elif (est.estado == "LOC" and not est.esteira_pendente and dia_na_carga(est, hoje, regua) == 1
-              and not esteira_tem_enriquecimento(regua.para(est.cluster_atual))):   # no D+1 de fato
+              and not esteira_tem_enriquecimento(rc)):   # no D+1 de fato
             motivo = "entrada na carteira (D+1)"
         elif est.reenriquecer:
             motivo = est.reenriquecer

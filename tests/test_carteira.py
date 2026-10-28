@@ -381,6 +381,15 @@ class TestEnriquecimentoNaEsteira(unittest.TestCase):
             r = self._rodar(tmp, date(2026, 9, 2), [])
             self.assertEqual([l["motivo"] for l in r["enriquecimento"]], ["entrada na carteira (D+1)"])
 
+    def test_estrategia_desligada_nao_manda_ao_bureau(self):
+        desligada = {f: {"ativo": False} for f in ("localizacao", "cpc", "giro", "preventivo", "quebra")}
+        estr = [{"id": 1, "nome": "Vazia", "padrao": True, "definicao": desligada}]
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            self._carga(tmp)
+            r = self._rodar(tmp, date(2026, 9, 2), estr)
+            self.assertEqual((r["fila"], r["enriquecimento"]), ([], []))   # carteira nova sem nada: sem custo
+
     def test_prioridade_dos_telefones_pelo_retorno_do_bureau(self):
         from motor.entrada import aplicar_enriquecimento, carregar_entrada
         ent = carregar_entrada(EMPRESA)
