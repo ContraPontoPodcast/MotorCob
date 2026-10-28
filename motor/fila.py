@@ -624,6 +624,8 @@ def fase_desligada(est, regua) -> str | None:
         return "não CPC"
     if est.estado == "QBR" and regua["quebra"].get("ativo") is False:
         return "quebra"
+    if est.estado == "PRE" and regua["preventivo"].get("ativo") is False:
+        return "acordo em dia"   # quem já estava em PRE quando o estágio foi desligado
     return None
 
 
@@ -639,6 +641,8 @@ def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None, recencia_hor
         passo = regua["quebra"]["passos"].get(str(d))
         return ("quebra", f"D+{d}", acoes(passo), True) if passo else None
     if est.estado == "PRE":
+        if regua["preventivo"].get("ativo") is False:
+            return None
         d = 0 if est.ciclo == "D0" else int(est.ciclo[2:])
         passo = list(regua["preventivo"]["passos"].get(str(d), []))
         if d == 0 and cliente and regua.voz_d0(est.cluster_atual):
