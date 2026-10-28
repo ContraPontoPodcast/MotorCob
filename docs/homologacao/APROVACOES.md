@@ -431,3 +431,7 @@ Princípio: a ferramenta não limita o cliente. Ela informa, sugere e alerta; qu
   (referência, não orientação jurídica).
 - Chamadas curtas (MP 1.396/2026): monitoramento e alerta com limites configuráveis; corte opcional, desligado por
   padrão. Acompanhar a regra e tomar as medidas é responsabilidade da operação do cliente.
+- Vista Matriz (Propensão × Abordagem: Acelerar, Descobrir rápido, Manter barato, Economizar) aprovada em 27/10/2026
+  no protótipo `plataforma-em-acao-prototipo.html`. O prompt entra junto com a etapa 3 (faixas de Propensão
+  calculadas pelo motor), para a tela não nascer vazia. Os quadrantes são sugestão; o cliente configura o que cada
+  um faz.
