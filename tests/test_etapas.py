@@ -39,6 +39,14 @@ class TestValidar(unittest.TestCase):
         self.assertEqual(e.passos[3][0]["mensagem"], "Proposta especial: responda SIM")
         self.assertEqual(e.passos[5][0]["personas"], [7])     # raia da persona continua valendo
 
+    def test_prazo_agrupado_em_janela_como_o_site_grava(self):
+        site = {k: v for k, v in TICKET.items() if k not in ("referencia", "de", "ate")}
+        site["janela"] = {"de": 0, "ate": 10, "contando": {"tipo": "entrada", "coluna": None}, "ciclo": None}
+        over, erros = _validar([site])
+        self.assertEqual(erros, [])
+        e = over["etapas"][0]
+        self.assertEqual((e.tipo_ref, e.de, e.ate, sorted(e.passos)), ("entrada", 0, 10, [0, 3, 5]))
+
     def test_erros_ficam_so_na_etapa_com_problema(self):
         ruins = [
             {**TICKET, "id": "cpc"},                                         # id de fase do motor
