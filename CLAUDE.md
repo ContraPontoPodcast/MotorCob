@@ -244,7 +244,8 @@ de outra pessoa pela certificação e a rotação segue.
   sem rotina segurando a trava (`_rodada_em_andamento`) vira erro.
 - Enriquecimento na esteira: ação `{"canal": "enriquecimento"}` em qualquer dia (não na ordem do
   CPC); `gerar_fila(para_bureau=)` separa essa ação da cadeia de contato. `lista_enriquecimento`
-  usa o dia programado; sem enriquecimento na esteira, vai na entrada (D+1). Mesmo cliente não
+  usa o dia programado; sem enriquecimento na esteira, vai na entrada (D+1). Fase do cliente
+  desligada (`fase_desligada`): nada vai ao bureau sem a esteira pedir (nem D+1 nem revalidação). Mesmo cliente não
   volta ao bureau antes de `INTERVALO_BUREAU` (30) dias (estado/bureau_enviados.json). Saída
   `saida/<data>/bureau/enviar_bureau.csv` (CPF_CNPJ;ID_CLIENTE). Enquadramento: enriq_enviado e
   enriq_retorno. `prioridade_contatos` na estratégia (critérios ranking/score/whatsapp/rcs/bureau

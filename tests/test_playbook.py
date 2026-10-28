@@ -215,6 +215,16 @@ class TestAcordoConfiguravel(unittest.TestCase):
         _, erros = validar_estrategia({"quebra": {"carencia": -1}})
         self.assertTrue(erros)
 
+    def test_preventivo_desligado_nao_aciona_quem_ja_estava_em_acordo(self):
+        from motor.fila import _passo_do_dia, fase_desligada
+        from motor.marcacao import EstadoCliente
+        ligada, desligada = self.regua(), self.regua(preventivo={"ativo": False})
+        est = EstadoCliente("C1", SEG, "M1", "M1", "2026-08")
+        est.estado, est.ciclo = "PRE", "D0"     # entrou no acordo antes de o estágio ser desligado
+        self.assertIsNotNone(_passo_do_dia(est, None, SEG, ligada, {}))
+        self.assertIsNone(_passo_do_dia(est, None, SEG, desligada, {}))
+        self.assertEqual(fase_desligada(est, desligada), "acordo em dia")
+
     def test_quebra_desligada_nao_aciona_e_volta_ao_estoque_no_prazo(self):
         from motor.fila import _passo_do_dia
         from motor.marcacao import EstadoCliente

@@ -549,9 +549,9 @@ def _recencia_ok(est: EstadoCliente, hoje: date, regua: Regua, horas: int | None
 MOTIVOS = {
     "com_acao": "com ação hoje",
     "sem_passo_hoje": "a esteira não tem passo hoje (ex.: D+2)",
-    "quebra_desligada": "acordo quebrado, mas a quebra está desligada na estratégia deste segmento "
+    "quebra_desligada": "sem estágio — acordo quebrado e o estágio de quebra está desligado neste segmento "
                         "(volta ao estoque no prazo definido)",
-    "fase_desligada": "a fase do cliente (cliente novo, CPC ou não CPC) está desligada na estratégia deste segmento",
+    "fase_desligada": "sem estágio — nenhum estágio ligado deste segmento pega o cliente",
     "intervalo_48h": "aguardando 48h desde a última ação (localização e Não CPC)",
     "sem_contato": "sem contato para os canais do dia",
     "sem_acao_na_raia": "persona com 'sem ação' hoje",
@@ -624,6 +624,8 @@ def fase_desligada(est, regua) -> str | None:
         return "não CPC"
     if est.estado == "QBR" and regua["quebra"].get("ativo") is False:
         return "quebra"
+    if est.estado == "PRE" and regua["preventivo"].get("ativo") is False:
+        return "acordo em dia"   # quem já estava em PRE quando o estágio foi desligado
     return None
 
 
@@ -639,6 +641,8 @@ def _passo_do_dia(est, cliente, hoje, regua, disp, ultima_cpc=None, recencia_hor
         passo = regua["quebra"]["passos"].get(str(d))
         return ("quebra", f"D+{d}", acoes(passo), True) if passo else None
     if est.estado == "PRE":
+        if regua["preventivo"].get("ativo") is False:
+            return None
         d = 0 if est.ciclo == "D0" else int(est.ciclo[2:])
         passo = list(regua["preventivo"]["passos"].get(str(d), []))
         if d == 0 and cliente and regua.voz_d0(est.cluster_atual):
@@ -700,7 +704,9 @@ def esteira_tem_enriquecimento(rc: Regua) -> bool:
 def lista_enriquecimento(estados: dict[str, EstadoCliente], flags: dict[str, dict], certs_contatos: dict[str, list[str]],
                          hoje: date, regua: Regua, programados: dict | None = None) -> list[dict]:
     """Quem vai para o bureau hoje: o dia que a esteira programou (programados) ou, se a esteira
-    não programa enriquecimento, a entrada na carga; mais revalidação vencida e re-enriquecimento."""
+    não programa enriquecimento, a entrada na carga; mais revalidação vencida e re-enriquecimento.
+    Com a fase do cliente desligada na estratégia, nada vai ao bureau sem a esteira pedir (a carteira
+    pode nascer sem ação nenhuma: o bureau custa e o cliente não programou)."""
     saida = []
     programados = programados or {}
     for idc, est in estados.items():
@@ -708,10 +714,13 @@ def lista_enriquecimento(estados: dict[str, EstadoCliente], flags: dict[str, dic
             continue
         cfg = regua.enriquecimento(est.cluster_atual)
         motivo = None
+        rc = regua.para(est.cluster_atual)
         if idc in programados:
             motivo = programados[idc]
+        elif fase_desligada(est, rc):
+            continue
         elif (est.estado == "LOC" and not est.esteira_pendente and dia_na_carga(est, hoje, regua) == 1
-              and not esteira_tem_enriquecimento(regua.para(est.cluster_atual))):   # no D+1 de fato
+              and not esteira_tem_enriquecimento(rc)):   # no D+1 de fato
             motivo = "entrada na carteira (D+1)"
         elif est.reenriquecer:
             motivo = est.reenriquecer

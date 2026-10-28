@@ -235,6 +235,9 @@ with itens(ordem, item, ok, se_falhar) as (values
        exists (select 1 from public.permissoes_catalogo where codigo = 'ver_painel')
        and exists (select 1 from public.permissoes_catalogo where codigo = 'ver_clientes'),
        'rodar o SQL 46 (supabase/migrations/20261213000001_permissoes_ver.sql)'),
+  (34, 'Início › Para hoje avisa clientes sem estágio de cobrança (SQL 47)',
+       position('sem_estagio' in coalesce(pg_get_functiondef(to_regprocedure('public.para_hoje(bigint,integer)')), '')) > 0,
+       'rodar o SQL 47 (supabase/migrations/20261214000001_sem_estagio_inicio.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

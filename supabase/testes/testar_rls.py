@@ -1826,6 +1826,16 @@ checar("Lista do dia pronta com o número de clientes", True, "select detalhe fr
 checar("Para hoje não mostra a empresa dos outros", True, f"select count(*) from public.para_hoje({EW}) where tipo <> 'chamado'", "authenticated", u["oper"], 0)
 checar("Para hoje: equipe escolhe a empresa", True, f"select count(*) from public.para_hoje({EW}, 3)", "authenticated", u["admin"], 3)
 checar("anon não lê Para hoje", False, "select * from public.para_hoje()", "anon")
+# SQL 47: cliente sem estágio (motivo novo e antigo) vira item do Para hoje para quem edita a Orquestração
+_sv(f"""insert into public.clusters (empresa_id,codigo,nome) values ({EW},'AC','Atraso curto');
+ insert into public.estado_cliente (empresa_id,credor_id,id_cliente,tag,safra,cluster_origem,cluster_atual,estado,canal,motivo_hoje) values
+ ({EW},(select id from public.credores where empresa_id={EW} and codigo='alfa'),'S1','t','2026-10-01','AC','AC','LOC','ND','sem ação: sem estágio — nenhum estágio ligado deste segmento pega o cliente'),
+ ({EW},(select id from public.credores where empresa_id={EW} and codigo='alfa'),'S2','t','2026-10-01','AC','AC','NCP','ND','sem ação: a fase do cliente (cliente novo, CPC ou não CPC) está desligada'),
+ ({EW},(select id from public.credores where empresa_id={EW} and codigo='alfa'),'S3','t','2026-10-01','AC','AC','CPA','ND','com ação hoje')""")
+checar("Para hoje: clientes sem estágio por carteira e segmento", True, "select titulo||' · '||acao||' · '||link from public.para_hoje(null, 10) where tipo='sem_estagio'", "authenticated", WAD,
+       f"2 clientes sem estágio em Banco Alfa · Atraso curto — ficam sem ação · Resolver · /orquestracao?carteira={_sv(f'select id from public.credores where empresa_id={EW} and codigo=$$alfa$$')}&segmento={_sv(f'select id from public.clusters where empresa_id={EW} and codigo=$$AC$$')}&passo=estagios")
+checar("Para hoje: Operação não vê o aviso de sem estágio", True, "select count(*) from public.para_hoje(null, 10) where tipo='sem_estagio'", "authenticated", WOP, 0)
+_sv(f"delete from public.estado_cliente where empresa_id={EW} and id_cliente in ('S1','S2','S3'); delete from public.clusters where empresa_id={EW} and codigo='AC'")
 checar("Suas áreas: número do dia e área não contratada sem número", True, "select string_agg(area||':'||contratada||':'||coalesce(numero,'-'), ',' order by area) from public.numeros_areas()", "authenticated", WAD, "cobranca:true:3,jornada:false:-,mensageria:true:96,2%")
 checar("Suas áreas: detalhe da Cobrança e da Mensageria", True, "select string_agg(detalhe, ' | ' order by area) from public.numeros_areas() where contratada", "authenticated", WAD, "na Lista do dia · 3 carteiras | entregues ontem · RCS e SMS")
 checar("Pessoas: lista com convite pendente", True, "select string_agg(papel||':'||situacao, ',' order by papel, situacao) from public.pessoas_empresa()", "authenticated", WAD, "admin:ativo,gestao:ativo,operacao:ativo,operacao:convite")

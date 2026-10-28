@@ -435,3 +435,15 @@ Princípio: a ferramenta não limita o cliente. Ela informa, sugere e alerta; qu
   no protótipo `plataforma-em-acao-prototipo.html`. O prompt entra junto com a etapa 3 (faixas de Propensão
   calculadas pelo motor), para a tela não nascer vazia. Os quadrantes são sugestão; o cliente configura o que cada
   um faz.
+
+## Estágios de cobrança definidos pelo cliente — decisões do dono em 28/10/2026
+- Protótipo `docs/homologacao/estagios-prototipo.html` (caminho único: Carteira → Segmentos → Estágios → Régua →
+  Revisar; Estratégia de 8 para 3 subabas). Especialista independente recomendou evoluir o motor (não reescrever).
+- Nada padrão imposto: carteira nova começa vazia; caminhos "Criar do zero", "Copiar de outra carteira" e
+  "Começar de um modelo (opcional)" (Estágios clássicos, Só digital, Da sua empresa), sem recomendação.
+- O cliente define os estágios (nome "estágio de cobrança", a língua do mercado), POR SEGMENTO, com regras sobre
+  fatos que o MotorCX calcula (Situação do cliente; Propensão a pagamento e Abordagem quando o motor calcular).
+- Cliente que não se encaixa em nenhum estágio fica sem ação, e o decisor é avisado (Início › Para hoje, SQL 47;
+  Lista do dia "Sem estágio").
+- "Montar pelas personas" sai dos caminhos de início (vira as sugestões da Abordagem na régua).
+- Gerado: SQL 47, prompts 81 a 86, motor (bureau e "Acordo em dia" respeitam o estágio desligado; motivo "sem estágio").
