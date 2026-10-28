@@ -377,15 +377,15 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
       <div class="linha"><button class="btn" data-msg="Abre o card de interesse que já existe.">Quero conhecer</button><button class="btn sec" data-ir="/inicio">Ir para o Início</button></div></div>`;
   }
   function telaArea(area, rotulo, grupo) {
-    const p = caminho(est.rota);
+    const p = caminho(est.rota), pe = esc(p);   // pe: o endereço digitado, escapado para o HTML
     let corpo = "";
     if (p === "/fila") corpo = `<div class="kpis"><div class="kpi"><span>Na Lista do dia</span><b>18.420</b><small>3 carteiras</small></div><div class="kpi"><span>Prioridade alta</span><b>2.115</b><small>11% da lista</small></div><div class="kpi"><span>Promessas para hoje</span><b>640</b><small>R$ 412 mil</small></div></div>
       <div class="cartao"><h3>Lista do dia · 23/10</h3><p class="nota">Lista por carteira e faixa, sem nome nem documento de devedor nesta visão.</p><div class="linha"><button class="btn">Baixar lista</button></div></div>`;
     else if (/\/lotes$/.test(p)) corpo = `<div class="cartao"><div class="rolar"><table class="tab"><thead><tr><th>Lote</th><th>Campanha</th><th class="n">Mensagens</th><th>Situação</th></tr></thead><tbody>
       ${[[4812, "Lembrete de vencimento D-3", "12.400", '<span class="pil at">Pausado</span>'], [4809, "Acordo · confirmação", "3.180", '<span class="pil ok">Enviado</span>'], [4801, "Boas-vindas", "960", '<span class="pil ok">Enviado</span>']]
-        .map(([id, n, q, s]) => `<tr><td><button class="link" data-ir="${p}/${id}">#${id}</button></td><td>${n}</td><td class="n">${q}</td><td>${s}</td></tr>`).join("")}
-      </tbody></table></div><p class="nota">O link do lote leva para <code>${p}/{id}</code> (hoje leva para /mensageria/lotes/{id} e dá 404).</p></div>`;
-    else if (/\/lotes\/\d+$/.test(p)) corpo = `<div class="cartao"><h3>Lote #${p.split("/").pop()} · Lembrete de vencimento D-3</h3><p class="nota">Pausado às 09:40 · motivo: fatura vencida. 12.400 mensagens · ${CANAL[canalAtual()]}.</p><div class="linha"><button class="btn">Retomar</button><button class="btn sec">Ver mensagens com erro</button></div></div>`;
+        .map(([id, n, q, s]) => `<tr><td><button class="link" data-ir="${pe}/${id}">#${id}</button></td><td>${n}</td><td class="n">${q}</td><td>${s}</td></tr>`).join("")}
+      </tbody></table></div><p class="nota">O link do lote leva para <code>${pe}/{id}</code> (hoje leva para /mensageria/lotes/{id} e dá 404).</p></div>`;
+    else if (/\/lotes\/\d+$/.test(p)) corpo = `<div class="cartao"><h3>Lote #${esc(p.split("/").pop())} · Lembrete de vencimento D-3</h3><p class="nota">Pausado às 09:40 · motivo: fatura vencida. 12.400 mensagens · ${CANAL[canalAtual()]}.</p><div class="linha"><button class="btn">Retomar</button><button class="btn sec">Ver mensagens com erro</button></div></div>`;
     else if (area === "relatorios") { const pr = produtoRelatorio(); corpo = `<div class="cartao"><h3>${NOME_PRODUTO[pr]}${param(est.rota, "canal") ? " · " + CANAL[param(est.rota, "canal")] : ""}</h3><p class="nota">Abre no produto de onde a pessoa veio (o menu manda ?produto=). Sem parâmetro: Cobrança, depois Jornada, depois Mensageria, conforme o contratado. O canal fica na URL.</p></div>`; }
     else corpo = `<div class="cartao"><h3>${rotulo}</h3><p class="nota">Conteúdo da tela, sem mudança neste protótipo. O que importa aqui é o menu ao lado: ele vem da rota.</p></div>`;
     return `<div class="migalha">${AREA[area].nome}${grupo ? " › " + grupo : ""} › ${rotulo}</div>${cab(rotulo)}${corpo}`;
@@ -394,7 +394,7 @@ body{background:var(--fundo);color:var(--texto);font-family:var(--sans);font-siz
   function telaWorkspace() {
     const p = caminho(est.rota);
     if (p === "/inicio") return telaInicio();
-    const t = WS_TIT[p] || (p.startsWith("/suporte/") ? "Chamado #" + p.split("/").pop() : "Tela do Workspace");
+    const t = esc(WS_TIT[p] || (p.startsWith("/suporte/") ? "Chamado #" + p.split("/").pop() : "Tela do Workspace"));
     const abasEmp = p.startsWith("/empresa") ? `<div class="linha">${["/empresa", "/empresa/pessoas", "/empresa/integracoes", "/empresa/faturamento", "/empresa/contratacao", "/empresa/auditoria"].map(r => `<button class="pil ${r === p ? "ok" : "neutra"}" style="border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:600" data-ir="${r}">${WS_TIT[r]}</button>`).join("")}</div>` : "";
     return `<div class="migalha">${p.startsWith("/empresa") ? "Empresa › " : ""}${t}</div>${cab(t)}${abasEmp}<div class="cartao"><p class="nota">Workspace: só a barra do topo, sem menu lateral. ${p.startsWith("/empresa") ? "As abas são as mesmas do Empresa ▾, na mesma ordem, em todas as telas da Empresa." : ""}</p></div>`;
   }
