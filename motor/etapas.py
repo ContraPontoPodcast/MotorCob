@@ -121,6 +121,21 @@ def _int(v):
     return int(s) if re.fullmatch(r"-?\d+", s) else None
 
 
+def _da_janela(b: dict) -> dict:
+    """O site (prompt 84) pode gravar o prazo agrupado: {"janela": {"de", "ate", "contando": {"tipo", "coluna"},
+    "ciclo"}}. Vale como os campos de cima (de, ate, referencia, ciclo); o que já vier solto na etapa ganha."""
+    j = b.get("janela")
+    if not isinstance(j, dict):
+        return b
+    b = dict(b)
+    for k in ("de", "ate", "ciclo"):
+        if b.get(k) in (None, "") and j.get(k) not in (None, ""):
+            b[k] = j[k]
+    if not b.get("referencia") and (j.get("contando") or j.get("referencia")):
+        b["referencia"] = j.get("contando") or j.get("referencia")
+    return b
+
+
 def validar(definicao: dict, frente: str, nome: str = "?", validar_acoes=None) -> tuple[list[Etapa], list[str], list[str]]:
     """definicao da estratégia -> (etapas ligadas, ordem de prioridade, avisos). Etapa com erro fica de fora
     (com aviso); o resto vale. validar_acoes(lista, onde, erros) normaliza as ações de um dia (a mesma
@@ -147,6 +162,7 @@ def validar(definicao: dict, frente: str, nome: str = "?", validar_acoes=None) -
         vistos.add(eid)
         if b.get("ativo") is False:
             continue
+        b = _da_janela(b)
         conds, erro = ler_condicoes(b.get("condicoes"))
         if erro or not conds:
             erros.append(f"{onde}: {erro or 'sem condição de entrada'} (etapa ignorada)")
