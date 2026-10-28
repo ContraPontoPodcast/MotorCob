@@ -231,6 +231,10 @@ with itens(ordem, item, ok, se_falhar) as (values
        to_regprocedure('public.corrigir_link_aviso()') is not null
        and position('/lista-do-dia' in coalesce(pg_get_functiondef(to_regprocedure('public.numeros_areas(bigint)')), '/lista-do-dia')) = 0,
        'rodar o SQL 45 (supabase/migrations/20261212000001_links_inicio.sql)'),
+  (33, 'Permissões ver_clientes e ver_painel no catálogo (Clientes, Personas e Painel no menu) (SQL 46)',
+       exists (select 1 from public.permissoes_catalogo where codigo = 'ver_painel')
+       and exists (select 1 from public.permissoes_catalogo where codigo = 'ver_clientes'),
+       'rodar o SQL 46 (supabase/migrations/20261213000001_permissoes_ver.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

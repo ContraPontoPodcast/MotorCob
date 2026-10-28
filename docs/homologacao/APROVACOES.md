@@ -408,3 +408,30 @@ Suporte, Minha conta), só a barra clara no topo; o menu lateral claro fica só 
    Conferência: item 31 OK.
 5. Correção incluída no SQL 30: o perfil Administrativo não herda a Orquestração, as cargas, os canais nem os usuários
    do cliente (antes herdaria pelo papel Planejamento).
+
+## Navegação por áreas (Onda 1) — aprovado em 25/10/2026
+- Protótipo `docs/homologacao/navegacao-prototipo.html`, feito pelos agentes de CX e UX a partir da auditoria do site
+  publicado (`docs/homologacao/auditoria_navegacao/`), aprovado pelo dono.
+- O menu lateral segue a rota (não a frente guardada); Mensageria é área própria; Jornada sem telas da Cobrança;
+  404, sem permissão e área não contratada com saída; um corte de largura em 1024 px; "Pagar agora" só para quem paga.
+- Gerado: SQL 46 (`ver_clientes`, `ver_painel`) e prompt 73. Fora desta onda: tela de tokens (prompt 63), empresa só
+  Mensageria, parâmetros dos links e "MotorCob" → "MotorCX" (Onda 2).
+
+## Abordagem da persona, Propensão a pagamento e Discagem — decisões do dono em 26 e 27/10/2026
+Princípio: a ferramenta não limita o cliente. Ela informa, sugere e alerta; quem decide e configura é o cliente.
+- Nome do conceito: **Abordagem** (Contato · Canal · Mensagem). O nome provisório "3C" não é usado em lugar nenhum
+  (conflita com marca existente no mercado). Na tela: "Abordagem · Definida", "Abordagem desta persona".
+- Nome na tela: "Propensão a pagamento" (nunca "Score"). Evidência: Coletando / Prévia / Definida.
+- Tipos de carteira: a lista do MotorCX é sugestão; o cliente cadastra tipos novos, sem limite.
+- "Pagou" = quitação ou pagamento da 1ª parcela. Acordo fechado é promessa de pagamento, não pagamento; só vira
+  pagamento quando a 1ª parcela é paga. A propensão aprende só com pagamentos.
+- Sugestões de frase do motor: sempre aprovadas por uma pessoa; nada é aplicado sozinho.
+- Modo frio entre credores (fase 3): depende da cláusula de compartilhamento no contrato.
+- Horários por UF/DDD: campo configurável pelo cliente, pré-preenchido com a prévia do conhecimento do MotorCX
+  (referência, não orientação jurídica).
+- Chamadas curtas (MP 1.396/2026): monitoramento e alerta com limites configuráveis; corte opcional, desligado por
+  padrão. Acompanhar a regra e tomar as medidas é responsabilidade da operação do cliente.
+- Vista Matriz (Propensão × Abordagem: Acelerar, Descobrir rápido, Manter barato, Economizar) aprovada em 27/10/2026
+  no protótipo `plataforma-em-acao-prototipo.html`. O prompt entra junto com a etapa 3 (faixas de Propensão
+  calculadas pelo motor), para a tela não nascer vazia. Os quadrantes são sugestão; o cliente configura o que cada
+  um faz.

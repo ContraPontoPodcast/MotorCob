@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluxo livre · fase 2</title>
+<style>
+/* Fase 2, sem compromisso: construtor de jornada em quadro, na moldura aprovada (lateral só ícones). */
+:root{
+  --app:#F1F1F3; --cartao:#FFFFFF; --borda:#E6E6EA; --borda2:#EFEFF2; --fill:#F5F5F7; --fill2:#EDEDF0;
+  --texto:#1D1D1F; --texto2:#6E6E73; --texto3:#8E8E93; --quadro:#FAFAFB; --ponto:#DADADF;
+  --destaque:#8A6A2E; --destaque-forte:#6F5424; --destaque-suave:#F4EDE0; --sobre-destaque:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E8F6EC; --at:#8A5A00; --at-f:#FFF4D6; --erro:#B3261E; --erro-f:#FDECEA; --info:#0A60D0;
+  --sombra:0 12px 32px rgba(0,0,0,.14);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --app:#000000; --cartao:#1C1C1E; --borda:#2C2C2E; --borda2:#2A2A2C; --fill:#2C2C2E; --fill2:#3A3A3C;
+  --texto:#F5F5F7; --texto2:#AEAEB2; --texto3:#8E8E93; --quadro:#141416; --ponto:#2E2E31;
+  --destaque:#D9B26B; --destaque-forte:#E8C688; --destaque-suave:#3A2F1C; --sobre-destaque:#1D1D1F;
+  --ok:#30D158; --ok-f:#12301B; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1412; --info:#4DA3FF;
+  --sombra:0 12px 32px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --app:#000000; --cartao:#1C1C1E; --borda:#2C2C2E; --borda2:#2A2A2C; --fill:#2C2C2E; --fill2:#3A3A3C;
+  --texto:#F5F5F7; --texto2:#AEAEB2; --texto3:#8E8E93; --quadro:#141416; --ponto:#2E2E31;
+  --destaque:#D9B26B; --destaque-forte:#E8C688; --destaque-suave:#3A2F1C; --sobre-destaque:#1D1D1F;
+  --ok:#30D158; --ok-f:#12301B; --at:#FFD60A; --at-f:#332A00; --erro:#FF6961; --erro-f:#3A1412; --info:#4DA3FF;
+  --sombra:0 12px 32px rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--app);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45}
+button,input,select{font:inherit;color:inherit}
+svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+:focus-visible{outline:2px solid var(--destaque);outline-offset:2px}
+.doc{max-width:1472px;margin:0 auto;padding:18px 16px 4px;display:flex;flex-direction:column;gap:6px}
+.doc h1{margin:0;font-size:21px}
+.doc p{margin:0;color:var(--texto2);max-width:100ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.ctrl{max-width:1472px;margin:8px auto 0;padding:0 16px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.ctrl .g{display:flex;gap:6px;align-items:center}
+.ctrl .g>span{font-size:12px;color:var(--texto2)}
+.seg{display:inline-flex;gap:2px;background:var(--fill2);border-radius:9px;padding:2px}
+.seg button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:7px;color:var(--texto2);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--cartao);color:var(--texto);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.palco{padding:12px 16px 28px;display:flex;justify-content:center}
+.janela{width:100%;max-width:1440px;container:app/inline-size;transition:max-width .25s}
+
+.app{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:10px;background:var(--app);border-radius:18px;border:1px solid var(--borda)}
+.lado{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0}
+.logo{width:30px;height:30px;margin-bottom:10px}
+.li{all:unset;position:relative;cursor:pointer;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:var(--texto2)}
+.li svg.i{width:18px;height:18px}
+.li[aria-current="page"]{background:var(--fill2);color:var(--texto)}
+.li[aria-current="page"]::before{content:"";position:absolute;left:-4px;top:9px;bottom:9px;width:2px;border-radius:2px;background:var(--texto)}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:16px;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.ctx{display:flex;align-items:center;gap:10px;height:44px;padding:0 20px;border-bottom:1px solid var(--borda2);font-size:12.5px;color:var(--texto2)}
+.barra{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--borda2)}
+.barra h1{margin:0;font-size:19px;font-weight:650;white-space:nowrap}
+.tag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--borda);border-radius:999px;padding:1px 8px;color:var(--texto2)}
+.selc{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--borda);border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap}
+.selc .lbl{color:var(--texto2);font-weight:500}
+.barra .dir{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 13px;border-radius:9px;background:var(--destaque);color:var(--sobre-destaque);font-weight:600;font-size:13px;white-space:nowrap}
+.btn.sec{background:var(--cartao);color:var(--texto);border:1px solid var(--borda)}
+.btn.sec[aria-pressed="true"]{background:var(--texto);color:var(--cartao);border-color:var(--texto)}
+.btn[aria-disabled="true"]{opacity:.45;cursor:default}
+.est{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px;white-space:nowrap;cursor:pointer;border:0}
+.est.ok{background:var(--ok-f);color:var(--ok)} .est.at{background:var(--at-f);color:var(--at)} .est.erro{background:var(--erro-f);color:var(--erro)}
+
+.trab{display:grid;grid-template-columns:200px minmax(0,1fr) 300px;height:680px;min-height:0}
+.paleta{border-right:1px solid var(--borda2);padding:12px;display:flex;flex-direction:column;gap:6px;overflow:auto}
+.paleta .t{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--texto3);margin:4px 2px}
+.bl{display:flex;align-items:center;gap:8px;border:1px solid var(--borda);border-radius:10px;padding:8px 10px;background:var(--cartao);cursor:grab;font-size:13px;font-weight:600;user-select:none}
+.bl small{display:block;font-weight:500;font-size:11.5px;color:var(--texto3)}
+.bl:active{cursor:grabbing}
+.ico{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none;background:var(--fill);color:var(--texto2)}
+#paleta{display:flex;flex-direction:column;gap:6px}
+.paleta .dica{font-size:11.5px;color:var(--texto3);margin-top:6px}
+
+.quadro{position:relative;overflow:hidden;background:var(--quadro);background-image:radial-gradient(var(--ponto) 1px,transparent 1px);background-size:18px 18px;cursor:grab;touch-action:none}
+.quadro.arrastando{cursor:grabbing}
+.mundo{position:absolute;left:0;top:0;width:2600px;height:2600px;transform-origin:0 0}
+.mundo svg.linhas{position:absolute;inset:0;width:2600px;height:2600px;overflow:visible;pointer-events:none}
+.aresta{fill:none;stroke:var(--texto3);stroke-width:1.6;pointer-events:stroke;cursor:pointer}
+.aresta.hit{stroke:transparent;stroke-width:12}
+.aresta.sel{stroke:var(--destaque);stroke-width:2.4}
+.rotA{font-size:11px;font-weight:600;fill:var(--texto2);paint-order:stroke;stroke:var(--quadro);stroke-width:4px}
+.rotS{font-size:11px;font-weight:700;fill:var(--info);paint-order:stroke;stroke:var(--quadro);stroke-width:4px}
+.no{position:absolute;width:210px;background:var(--cartao);border:1px solid var(--borda);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12.5px;cursor:default}
+.no.sel{border-color:var(--destaque);box-shadow:0 0 0 2px var(--destaque-suave)}
+.no.alvo{box-shadow:0 0 0 2px var(--info)}
+.no .cab{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--borda2);cursor:move;user-select:none}
+.no .cab b{font-size:12.5px}
+.no .cab small{margin-left:auto;font-size:10.5px;color:var(--texto3);text-transform:uppercase;letter-spacing:.08em}
+.no .corpo{padding:8px 10px;display:flex;flex-direction:column;gap:4px;color:var(--texto2)}
+.no .corpo .c1{display:flex;align-items:center;gap:6px;font-weight:700;color:var(--texto)}
+.no .corpo .sq{display:flex;align-items:center;gap:5px;padding-left:8px;border-left:1.5px solid var(--borda);margin-left:3px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.con{font-size:10px;font-weight:600;color:var(--texto2);background:var(--fill2);border-radius:999px;padding:0 6px}
+.pin{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--cartao);border:2px solid var(--texto3);cursor:crosshair}
+.pin.ent{top:-7px;left:99px}
+.pin.sai{bottom:-7px}
+.pin.sai.ativo{background:var(--info);border-color:var(--info)}
+.pin.livre{border-color:var(--erro)}
+.pr{position:absolute;bottom:-24px;font-size:10.5px;font-weight:600;color:var(--texto3);transform:translateX(-50%);white-space:nowrap}
+.alerta{position:absolute;top:-9px;right:-9px;min-width:20px;height:20px;border-radius:999px;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;padding:0 5px}
+.alerta.erro{background:var(--erro)} .alerta.at{background:#C98A00}
+.cnt{position:absolute;top:-10px;left:10px;font-size:10.5px;font-weight:700;color:var(--info);background:var(--cartao);border:1px solid var(--info);border-radius:999px;padding:0 6px}
+.zoom{position:absolute;left:12px;bottom:12px;display:flex;gap:4px;align-items:center;background:var(--cartao);border:1px solid var(--borda);border-radius:10px;padding:3px}
+.zoom button{all:unset;cursor:pointer;min-width:28px;height:26px;border-radius:7px;display:grid;place-items:center;font-weight:700;font-size:13px;padding:0 6px}
+.zoom button:hover{background:var(--fill)}
+.zoom span{font-size:12px;color:var(--texto2);min-width:40px;text-align:center}
+.mini{position:absolute;right:12px;bottom:12px;width:190px;height:130px;background:var(--cartao);border:1px solid var(--borda);border-radius:10px;overflow:hidden;cursor:pointer}
+.mini rect.n{fill:var(--fill2)} .mini rect.n.e{fill:var(--erro)} .mini rect.v{fill:none;stroke:var(--destaque);stroke-width:12}
+.ligando{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--info);color:#fff;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:999px;z-index:5}
+
+.insp{border-left:1px solid var(--borda2);display:flex;flex-direction:column;min-height:0}
+.insp .tt{padding:12px 14px;border-bottom:1px solid var(--borda2);display:flex;align-items:center;gap:8px}
+.insp .tt b{font-size:14px}
+.insp .cp{padding:12px 14px;display:flex;flex-direction:column;gap:12px;overflow:auto;flex:1}
+.f{display:flex;flex-direction:column;gap:5px}
+.f>span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--texto3)}
+.f select,.f input{border:1px solid var(--borda);border-radius:8px;background:var(--cartao);padding:6px 8px;font-size:13px;width:100%}
+.f .lin{display:flex;gap:6px;align-items:center}
+.f .lin select,.f .lin input{width:auto;flex:1;min-width:0}
+.f small{font-size:11.5px;color:var(--texto3)}
+.passo{border:1px solid var(--borda);border-radius:9px;padding:6px;display:flex;flex-direction:column;gap:4px}
+.mn{all:unset;cursor:pointer;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--texto3)}
+.mn:hover{background:var(--fill);color:var(--texto)}
+.add{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--texto2);border:1px dashed var(--borda);border-radius:9px;padding:6px 10px;text-align:center}
+.val{border-top:1px solid var(--borda2);max-height:230px;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.val .t{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--texto3)}
+.it{all:unset;cursor:pointer;display:flex;gap:8px;align-items:flex-start;font-size:12.5px;border-radius:8px;padding:5px 6px}
+.it:hover{background:var(--fill)}
+.it i{width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;font-style:normal;font-size:10px;font-weight:800;color:#fff;margin-top:1px}
+.it.erro i{background:var(--erro)} .it.at i{background:#C98A00} .it.ok i{background:var(--ok)}
+.it.trava i{background:var(--info)}
+.perigo{all:unset;cursor:pointer;color:var(--erro);font-weight:600;font-size:13px}
+.vazio{color:var(--texto2);font-size:13px}
+.sim{position:absolute;top:12px;right:12px;width:250px;background:var(--cartao);border:1px solid var(--borda);border-radius:12px;box-shadow:var(--sombra);padding:12px;font-size:12.5px;display:flex;flex-direction:column;gap:6px;z-index:4}
+.sim b{font-size:13px}
+.sim .lin{display:flex;justify-content:space-between;gap:8px}
+.sim small{color:var(--texto3)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--texto);color:var(--cartao);padding:10px 16px;border-radius:10px;z-index:90;max-width:calc(100vw - 32px)}
+.notas{max-width:1440px;margin:0 auto 32px;padding:0 16px}
+.notas .bx{background:var(--cartao);border:1px solid var(--borda);border-radius:14px;padding:14px 16px;font-size:13.5px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px 24px}
+.notas b{display:block;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--texto2);margin-bottom:4px}
+.notas ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+
+@container app (max-width:1023px){
+  .app{grid-template-columns:minmax(0,1fr);padding:0;gap:0}
+  .lado{display:none}
+  .trab{grid-template-columns:minmax(0,1fr);height:auto}
+  .paleta{overflow-x:auto;border-right:0;border-bottom:1px solid var(--borda2);padding:8px}
+  #paleta{flex-direction:row}
+  .paleta .t,.paleta .dica{display:none}
+  .bl{flex:none}
+  .bl small{display:none}
+  .quadro{height:520px}
+  .insp{border-left:0;border-top:1px solid var(--borda2)}
+  .mini{display:none}
+  .sim{left:12px;right:12px;width:auto}
+}
+</style>
+</head>
+<body>
+<div class="doc">
+  <span class="selo">Protótipo · fase 2, sem compromisso · 26/10/2026</span>
+  <h1>Fluxo livre: desenhar a jornada de cobrança num quadro</h1>
+  <p>Construtor de jornada para comparar com a esteira de hoje. Arraste blocos da paleta, ligue a saída (bolinha de baixo) à entrada (bolinha de cima) de outro bloco, edite na lateral, use o zoom e o minimapa. A validação aponta bloco sem saída, ciclo sem espera e onde as travas e as faixas de segurança vão segurar o envio. "Simular" mostra quantos clientes passariam por cada caminho (números fictícios). O modelo "Cobrança padrão MotorCX" vem carregado: é a régua do Cliente novo de hoje (D+1 WhatsApp · D+3 RCS · D+5 agente virtual com discador de reserva · D+7 SMS com e-mail junto · D+8 → Não CPC).</p>
+</div>
+<div class="ctrl">
+  <div class="g"><span>Largura</span><div class="seg" id="s-larg"><button aria-pressed="true" data-v="1440">Computador 1440</button><button aria-pressed="false" data-v="390">Celular 390</button></div></div>
+  <div class="g"><span>Tema</span><div class="seg" id="s-tema"><button aria-pressed="true" data-v="">Sistema</button><button aria-pressed="false" data-v="light">Claro</button><button aria-pressed="false" data-v="dark">Escuro</button></div></div>
+  <div class="g"><span>Experimente</span><div class="seg"><button data-acao="demo-erro">Criar um erro</button><button data-acao="simular">Simular</button><button data-acao="modelo">Recarregar o modelo</button><button data-acao="limpar">Quadro vazio</button></div></div>
+</div>
+<div class="palco"><div class="janela" id="janela"><div class="app">
+  <nav class="lado" aria-label="Navegação">
+    <svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="11" fill="none" style="color:var(--texto)"/><path d="M50 12 A38 38 0 0 1 86.1 38.3" stroke="#C9A35A" stroke-width="11" stroke-linecap="round" fill="none"/><path d="M83.6 70 A38 38 0 0 1 30 82.3" stroke="#8E8E93" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="50" cy="50" r="11" fill="#C9A35A"/></svg>
+    <span class="li" title="Início"><svg class="i" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+    <span class="li" aria-current="page" title="Cobrança"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg></span>
+    <span class="li" title="Jornada do Cliente"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></span>
+    <span class="li" title="Mensageria"><svg class="i" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></span>
+    <span class="li" title="Relatórios"><svg class="i" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 18v-1M12 18v-6M16 18v-3"/></svg></span>
+  </nav>
+  <section class="cartao">
+    <div class="ctx">Cobrança › Estratégia › Orquestração › Fluxo livre</div>
+    <div class="barra">
+      <h1>Fluxo livre</h1><span class="tag">fase 2 · protótipo</span>
+      <span class="selc"><span class="lbl">Carteira</span>Banco Alfa · Cartões ▾</span>
+      <span class="selc"><span class="lbl">Segmento</span>Atraso curto ▾</span>
+      <span class="selc"><span class="lbl">Modelo</span>Cobrança padrão MotorCX</span>
+      <div class="dir"><span id="estado"></span><button class="btn sec" data-acao="simular" id="bSim">Simular</button><button class="btn" aria-disabled="true" title="Protótipo: não grava">Salvar</button></div>
+    </div>
+    <div class="trab">
+      <aside class="paleta" aria-label="Blocos">
+        <span class="t">Blocos</span>
+        <div id="paleta"></div>
+        <p class="dica">Arraste para o quadro. No celular, toque para pôr no centro.</p>
+      </aside>
+      <div class="quadro" id="quadro" aria-label="Quadro do fluxo">
+        <div class="mundo" id="mundo"><svg class="linhas" id="linhas"></svg><div id="nos"></div></div>
+        <div id="ligando"></div>
+        <div id="simbox"></div>
+        <div class="zoom" role="group" aria-label="Zoom"><button data-z="-1" aria-label="Diminuir">−</button><span id="zv">100%</span><button data-z="1" aria-label="Aumentar">+</button><button data-z="0" aria-label="Ajustar ao quadro">Ajustar</button></div>
+        <svg class="mini" id="mini" viewBox="0 0 2600 2600" preserveAspectRatio="xMidYMid meet" aria-label="Minimapa"></svg>
+      </div>
+      <aside class="insp" aria-label="Edição do bloco">
+        <div class="tt" id="instt"></div>
+        <div class="cp" id="inscp"></div>
+        <div class="val" id="val"></div>
+      </aside>
+    </div>
+  </section>
+</div></div></div>
+<div class="notas"><div class="bx">
+  <div><b>O que este desenho permite e a esteira não</b><ul>
+    <li>Esperas em horas ou dias entre ações, em vez de dias fixos da faixa.</li>
+    <li>Condições no meio do caminho (respondeu, entregou, abriu, deu CPC, fez acordo, persona, score, faixa de atraso).</li>
+    <li>Teste A/B com divisão em %.</li>
+    <li>Mudar o momento do cliente por regra desenhada, não só pelas transições fixas do motor.</li></ul></div>
+  <div><b>O que continua valendo sempre</b><ul>
+    <li>Faixas de segurança: 08:00–20:00, intervalo mínimo de 12 h entre ações, freio do WhatsApp até 5%.</li>
+    <li>Travas da estratégia (ações por dia, por semana, domingo, Não Perturbe).</li>
+    <li>Hierarquia dos momentos: Acordo quebrado &gt; Preventivo &gt; Acordo em dia &gt; CPC &gt; Cliente novo &gt; Não CPC.</li>
+    <li>Plano completo no arquivo fluxo-livre-plano.md.</li></ul></div>
+</div></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const CAN = { wa: "WhatsApp", sms: "SMS", rcs: "RCS", em: "E-mail", dis: "Discador", ag: "Agente virtual" };
+  const COR = { wa: "#1F8A4C", rcs: "#3B5BA9", sms: "#7A4FB0", em: "#A2552B", ag: "#0E7C86", dis: "#475569" };
+  const CONECTOR = { senao: "↳ senão", junto: "+ junto", reserva: "↻ reserva", sempre: "e sempre" };
+  const FRASES = ["Lembrete amigável", "Boleto atualizado", "Proposta de acordo", "Última chance de desconto", "Confirmação de acordo"];
+  const MOMENTOS = ["Cliente novo", "CPC A", "CPC B", "Não CPC", "Acordo"];
+  const CONDS = { respondeu: "Respondeu", entregou: "Entregou", abriu: "Abriu / clicou", cpc: "Deu CPC", acordo: "Fez acordo", persona: "É da persona", score: "Score do bureau ≥", faixa: "Faixa de atraso" };
+  const TAXA = { respondeu: .18, entregou: .92, abriu: .35, cpc: .14, acordo: .06, persona: .4, score: .5, faixa: .3 };
+  const ICON = {
+    entrada: '<path d="M5 12h14M13 6l6 6-6 6"/>', enviar: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>', esperar: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    condicao: '<path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/>', dividir: '<path d="M16 3h5v5M8 3H3v5M21 3l-9 9M3 3l9 9v9"/>',
+    mudar: '<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>', sair: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'
+  };
+  const TIPOS = {
+    entrada: { nome: "Entrada", d: "segmento ou momento", saidas: ["→"] },
+    enviar: { nome: "Enviar", d: "canal + frase, com conector", saidas: ["depois"] },
+    esperar: { nome: "Esperar", d: "horas ou dias", saidas: ["→"] },
+    condicao: { nome: "Condição", d: "sim / não", saidas: ["sim", "não"], lados: true },
+    dividir: { nome: "Dividir %", d: "teste A/B", saidas: ["A", "B"] },
+    mudar: { nome: "Mudar momento", d: "leva a outro momento", saidas: ["→"] },
+    sair: { nome: "Sair", d: "fim do caminho", saidas: [] }
+  };
+  const I = k => `<svg class="i" viewBox="0 0 24 24">${ICON[k]}</svg>`;
+
+  /* ---------- modelo: régua do Cliente novo de hoje, convertida ---------- */
+  function modelo() {
+    const N = [], E = [];
+    let id = 0; const n = (tipo, x, y, p = {}) => { const o = { id: "n" + (++id), tipo, x, y, p }; N.push(o); return o.id; };
+    const e = (a, s, b) => E.push({ a, s, b });
+    const en = n("entrada", 120, 40, { como: "momento", valor: "Cliente novo" });
+    const w1 = n("esperar", 120, 170, { q: 1, u: "dias", nota: "D+1" });
+    const s1 = n("enviar", 120, 300, { c: ["wa"], m: {}, f: "Lembrete amigável", h: "09:00" });
+    const w2 = n("esperar", 120, 450, { q: 2, u: "dias", nota: "até D+3" });
+    const c1 = n("condicao", 120, 580, { q: "cpc" });
+    const s2 = n("enviar", 120, 740, { c: ["rcs", "sms"], m: { 1: "senao" }, f: "Boleto atualizado", h: "10:00" });
+    const w3 = n("esperar", 120, 910, { q: 2, u: "dias", nota: "até D+5" });
+    const c2 = n("condicao", 120, 1040, { q: "cpc" });
+    const s3 = n("enviar", 120, 1200, { c: ["ag", "dis"], m: { 1: "reserva" }, f: "Proposta de acordo", h: "11:00" });
+    const w4 = n("esperar", 120, 1370, { q: 2, u: "dias", nota: "até D+7" });
+    const c3 = n("condicao", 120, 1500, { q: "cpc" });
+    const s4 = n("enviar", 120, 1660, { c: ["sms", "em"], m: { 1: "junto" }, f: "Última chance de desconto", h: "14:00" });
+    const w5 = n("esperar", 120, 1830, { q: 1, u: "dias", nota: "até D+8" });
+    const c4 = n("condicao", 120, 1960, { q: "cpc" });
+    const m2 = n("mudar", 120, 2120, { para: "Não CPC" });
+    const sy = n("sair", 120, 2250, { motivo: "Segue no giro do Não CPC" });
+    const ma = n("mudar", 470, 580, { para: "CPC A" }), mb = n("mudar", 470, 1040, { para: "CPC A" }), mc = n("mudar", 470, 1500, { para: "CPC A" }), md = n("mudar", 470, 1960, { para: "CPC A" });
+    const sx = n("sair", 820, 1270, { motivo: "Segue no CPC A (régua de negociação)" });
+    e(en, 0, w1); e(w1, 0, s1); e(s1, 0, w2); e(w2, 0, c1); e(c1, 0, ma); e(c1, 1, s2); e(s2, 0, w3); e(w3, 0, c2); e(c2, 0, mb); e(c2, 1, s3);
+    e(s3, 0, w4); e(w4, 0, c3); e(c3, 0, mc); e(c3, 1, s4); e(s4, 0, w5); e(w5, 0, c4); e(c4, 0, md); e(c4, 1, m2); e(m2, 0, sy);
+    [ma, mb, mc, md].forEach(m => e(m, 0, sx));
+    return { N, E, seq: id };
+  }
+  let G = modelo();
+  const est = { sel: null, selA: null, ligar: null, z: .62, px: 10, py: 10, sim: null };
+
+  /* ---------- validação ---------- */
+  function validar() {
+    const out = [], porNo = {};
+    const add = (tipo, no, txt) => { out.push({ tipo, no, txt }); if (no) (porNo[no] = porNo[no] || []).push(tipo); };
+    if (!G.N.some(n => n.tipo === "entrada")) add("erro", null, "Falta um bloco Entrada: ninguém começa o fluxo.");
+    for (const n of G.N) {
+      const T = TIPOS[n.tipo];
+      T.saidas.forEach((s, i) => { if (!G.E.some(e => e.a === n.id && e.s === i)) add("erro", n.id, `${T.nome}: a saída "${s}" não leva a lugar nenhum.`); });
+      if (n.tipo !== "entrada" && !G.E.some(e => e.b === n.id)) add("at", n.id, `${T.nome} sem nada chegando: ninguém passa por ele.`);
+      if (n.tipo === "dividir") { const a = +n.p.a || 0, b = +n.p.b || 0; if (a + b !== 100) add("erro", n.id, `Dividir %: A + B precisa dar 100% (está ${a + b}%).`); }
+      if (n.tipo === "enviar") {
+        if (!n.p.c.length) add("erro", n.id, "Enviar sem canal.");
+        const h = n.p.h || "09:00"; if (h < "08:00" || h > "20:00") add("trava", n.id, `Enviar às ${h}: fora da faixa 08:00–20:00. O motor segura até as 08:00.`);
+        if (n.p.c[0] === "wa") add("trava", n.id, "WhatsApp: o freio de até 5% de bloqueios vale sempre; acima disso o motor pausa o canal.");
+      }
+      if (n.tipo === "esperar" && n.p.u === "horas" && +n.p.q < 12) add("trava", n.id, `Esperar ${n.p.q} h: o intervalo mínimo entre ações é de 12 h; o próximo envio só sai depois disso.`);
+    }
+    // enviar → enviar sem espera no meio
+    for (const e of G.E) { const a = no(e.a), b = no(e.b); if (a && b && a.tipo === "enviar" && b.tipo === "enviar") add("trava", b.id, "Dois envios seguidos sem Esperar: o 2º só sai 12 h depois do 1º (intervalo mínimo)."); }
+    // ciclo sem espera
+    const ciclos = acharCiclos();
+    for (const c of ciclos) if (!c.some(id => no(id).tipo === "esperar")) add("erro", c[0], "Ciclo sem Esperar: o cliente giraria sem parar. Ponha um Esperar no caminho de volta.");
+    return { out, porNo };
+  }
+  function acharCiclos() {
+    const res = [], cor = {}, pilha = [];
+    const viz = id => G.E.filter(e => e.a === id).map(e => e.b);
+    const dfs = id => { cor[id] = 1; pilha.push(id); for (const v of viz(id)) { if (cor[v] === 1) res.push(pilha.slice(pilha.indexOf(v))); else if (!cor[v]) dfs(v); } pilha.pop(); cor[id] = 2; };
+    G.N.forEach(n => { if (!cor[n.id]) dfs(n.id); });
+    return res;
+  }
+  const no = id => G.N.find(n => n.id === id);
+
+  /* ---------- simulação (números fictícios) ---------- */
+  function simular() {
+    const cont = {}, arest = {}, saidas = {};
+    const ent = G.N.filter(n => n.tipo === "entrada");
+    const total = 10000;
+    const fila = ent.map(n => [n.id, Math.round(total / ent.length), 0]);
+    let passos = 0;
+    while (fila.length && passos++ < 400) {
+      const [id, q, prof] = fila.shift(); if (q < 1) continue;
+      const n = no(id); cont[id] = (cont[id] || 0) + q;
+      if (n.tipo === "sair") { saidas[n.p.motivo || "Sair"] = (saidas[n.p.motivo || "Sair"] || 0) + q; continue; }
+      if (prof > 30) continue;
+      const sai = G.E.filter(e => e.a === id);
+      sai.forEach(e => {
+        let k = q;
+        if (n.tipo === "condicao") { const t = TAXA[n.p.q] ?? .3; k = Math.round(q * (e.s === 0 ? t : 1 - t)); }
+        if (n.tipo === "dividir") k = Math.round(q * ((e.s === 0 ? +n.p.a : +n.p.b) || 0) / 100);
+        arest[`${e.a}|${e.s}`] = (arest[`${e.a}|${e.s}`] || 0) + k;
+        fila.push([e.b, k, prof + 1]);
+      });
+    }
+    return { cont, arest, saidas, total };
+  }
+
+  /* ---------- desenho ---------- */
+  const W = 210;
+  const pos = (n, s, k) => { const T = TIPOS[n.tipo]; const tot = T.saidas.length;
+    if (T.lados && s === 0) return { x: n.x + W + 6, y: n.y + altura(n) / 2 }; return { x: n.x + (tot === 1 ? W / 2 : 40 + s * (W - 80) / Math.max(1, tot - 1)), y: n.y + altura(n) + 6 }; };
+  function altura(n) { return n.tipo === "enviar" ? 64 + 18 * Math.max(1, n.p.c.length) : n.tipo === "condicao" || n.tipo === "dividir" ? 78 : 66; }
+  function corpo(n) {
+    const p = n.p;
+    if (n.tipo === "entrada") return `<span>${p.como === "segmento" ? "Segmento" : "Momento"}: <b style="color:var(--texto)">${p.valor}</b></span>`;
+    if (n.tipo === "enviar") return (p.c.length ? `<span class="c1"><span class="dot" style="background:${COR[p.c[0]]}"></span>${CAN[p.c[0]]}</span>${p.c.slice(1).map((k, j) => `<span class="sq"><span class="con">${CONECTOR[(p.m || {})[j + 1] || "senao"]}</span><span class="dot" style="background:${COR[k]}"></span>${CAN[k]}</span>`).join("")}` : "<span>sem canal</span>") + `<span style="font-size:11.5px">${p.f || "sem frase"} · ${p.h || "09:00"}</span>`;
+    if (n.tipo === "esperar") return `<span><b style="color:var(--texto)">${p.q} ${p.u}</b>${p.nota ? ` · ${p.nota}` : ""}</span>`;
+    if (n.tipo === "condicao") return `<span><b style="color:var(--texto)">${CONDS[p.q]}${p.q === "score" ? " " + (p.v || 600) : p.q === "persona" ? " " + (p.v || "Digitais SP") : p.q === "faixa" ? " " + (p.v || "até 30 dias") : ""}?</b></span><span style="font-size:11.5px">em até ${p.prazo || 1} dia(s) depois do último envio</span>`;
+    if (n.tipo === "dividir") return `<span><b style="color:var(--texto)">A ${p.a ?? 50}% · B ${p.b ?? 50}%</b></span><span style="font-size:11.5px">sorteio fixo por cliente</span>`;
+    if (n.tipo === "mudar") return `<span>Vai para <b style="color:var(--texto)">${p.para}</b></span>`;
+    return `<span>${p.motivo || "Fim"}</span>`;
+  }
+  function render() {
+    const V = validar(), sim = est.sim;
+    $("mundo").style.transform = `translate(${est.px}px,${est.py}px) scale(${est.z})`;
+    $("zv").textContent = Math.round(est.z * 100) + "%";
+    $("nos").innerHTML = G.N.map(n => {
+      const T = TIPOS[n.tipo], al = V.porNo[n.id] || [];
+      const erro = al.includes("erro"), at = al.includes("at") || al.includes("trava");
+      const pins = T.saidas.map((s, i) => { const p = pos(n, i); const livre = !G.E.some(e => e.a === n.id && e.s === i); const lado = T.lados && i === 0; return `<span class="pin sai${est.ligar && est.ligar.a === n.id && est.ligar.s === i ? " ativo" : ""}${livre ? " livre" : ""}" style="left:${p.x - n.x - 6}px;${lado ? `top:${p.y - n.y - 6}px;bottom:auto` : ""}" data-pin="${n.id}|${i}" title="Ligar a saída ${s}"></span>${T.saidas.length > 1 ? `<span class="pr" style="left:${p.x - n.x + (lado ? 14 : 0)}px;${lado ? `top:${p.y - n.y - 22}px;bottom:auto` : ""}">${s}</span>` : ""}`; }).join("");
+      return `<div class="no${est.sel === n.id ? " sel" : ""}${est.ligar && est.ligar.a !== n.id ? " alvo" : ""}" data-no="${n.id}" style="left:${n.x}px;top:${n.y}px">
+        ${n.tipo !== "entrada" ? `<span class="pin ent" data-entrada="${n.id}" title="Entrada"></span>` : ""}${G.E.some(e => e.b === n.id && TIPOS[no(e.a).tipo].lados && e.s === 0) ? `<span class="pin" style="left:-7px;top:${altura(n) / 2 - 6}px"></span>` : ""}
+        <div class="cab" data-arrastar="${n.id}"><span class="ico">${I(n.tipo)}</span><b>${T.nome}</b><small>${n.id}</small></div>
+        <div class="corpo">${corpo(n)}</div>${pins}
+        ${erro ? `<span class="alerta erro" title="Erro">!</span>` : at ? `<span class="alerta at" title="Aviso">!</span>` : ""}
+        ${sim && sim.cont[n.id] ? `<span class="cnt">${sim.cont[n.id].toLocaleString("pt-BR")}</span>` : ""}</div>`;
+    }).join("");
+    // arestas
+    $("linhas").innerHTML = G.E.map((e, i) => {
+      const a = no(e.a), b = no(e.b); if (!a || !b) return "";
+      const p = pos(a, e.s), q = { x: b.x + W / 2, y: b.y - 6 };
+      const lado = TIPOS[a.tipo].lados && e.s === 0;
+      const dy = Math.max(40, Math.abs(q.y - p.y) / 2);
+      const q2 = lado ? { x: b.x - 6, y: b.y + altura(b) / 2 } : q;
+      const d = lado ? `M${p.x},${p.y} C${p.x + 70},${p.y} ${q2.x - 70},${q2.y} ${q2.x},${q2.y}` : q.y > p.y ? `M${p.x},${p.y} C${p.x},${p.y + dy} ${q.x},${q.y - dy} ${q.x},${q.y}` : `M${p.x},${p.y} C${p.x},${p.y + 80} ${q.x + (q.x >= p.x ? 140 : -140)},${q.y - 80} ${q.x},${q.y}`;
+      const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+      const rot = TIPOS[a.tipo].saidas.length > 1 ? TIPOS[a.tipo].saidas[e.s] : "";
+      const sv = sim ? sim.arest[`${e.a}|${e.s}`] : null;
+      return `<path class="aresta${est.selA === i ? " sel" : ""}" d="${d}" marker-end="url(#seta)"/><path class="aresta hit" d="${d}" data-aresta="${i}"/>${rot && !lado ? `<text class="rotA" x="${p.x + 6}" y="${p.y + 16}">${rot}</text>` : ""}${sv != null ? `<text class="rotS" x="${mx + 6}" y="${my}">${sv.toLocaleString("pt-BR")}</text>` : ""}`;
+    }).join("") + `<defs><marker id="seta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--texto3)"/></marker></defs>`;
+    // minimapa
+    const qd = $("quadro").getBoundingClientRect();
+    $("mini").innerHTML = G.N.map(n => `<rect class="n${(V.porNo[n.id] || []).includes("erro") ? " e" : ""}" x="${n.x}" y="${n.y}" width="${W}" height="${altura(n)}" rx="14"/>`).join("") + `<rect class="v" x="${-est.px / est.z}" y="${-est.py / est.z}" width="${qd.width / est.z}" height="${qd.height / est.z}" rx="10"/>`;
+    $("ligando").innerHTML = est.ligar ? `<div class="ligando">Clique no bloco de destino · Esc cancela</div>` : "";
+    // estado
+    const ne = V.out.filter(o => o.tipo === "erro").length, na = V.out.filter(o => o.tipo !== "erro").length;
+    $("estado").innerHTML = `<button class="est ${ne ? "erro" : na ? "at" : "ok"}" data-acao="ver-val">${ne ? `${ne} erro(s)` : "Sem erros"}${na ? ` · ${na} aviso(s)` : ""}</button>`;
+    $("val").innerHTML = `<span class="t">Validação</span>${V.out.length ? V.out.map(o => `<button class="it ${o.tipo}" ${o.no ? `data-ir="${o.no}"` : ""}><i>${o.tipo === "trava" ? "i" : "!"}</i><span>${o.tipo === "trava" ? "<b>Trava · </b>" : ""}${o.txt}</span></button>`).join("") : `<div class="it ok"><i>✓</i><span>Nenhum problema. As travas e as faixas de segurança valem sempre.</span></div>`}`;
+    $("simbox").innerHTML = sim ? `<div class="sim"><b>Simulação · ${sim.total.toLocaleString("pt-BR")} clientes</b><small>Números fictícios, com taxas médias por condição.</small>${Object.entries(sim.saidas).map(([k, v]) => `<div class="lin"><span>${k}</span><b>${v.toLocaleString("pt-BR")}</b></div>`).join("")}<button class="btn sec" data-acao="fechar-sim" style="align-self:flex-end">Fechar</button></div>` : "";
+    $("bSim").setAttribute("aria-pressed", !!sim);
+    inspetor();
+  }
+  function opts(o, v) { return Object.entries(o).map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${n}</option>`).join(""); }
+  function lista(a, v) { return a.map(x => `<option${x === v ? " selected" : ""}>${x}</option>`).join(""); }
+  function inspetor() {
+    if (est.selA != null) {
+      const e = G.E[est.selA];
+      $("instt").innerHTML = `<b>Ligação</b>`;
+      $("inscp").innerHTML = e ? `<p class="vazio">${TIPOS[no(e.a).tipo].nome} (${no(e.a).id}) → ${TIPOS[no(e.b).tipo].nome} (${no(e.b).id})</p><button class="perigo" data-acao="apagar-aresta">Apagar ligação</button>` : "";
+      return;
+    }
+    const n = no(est.sel);
+    if (!n) { $("instt").innerHTML = "<b>Nenhum bloco escolhido</b>"; $("inscp").innerHTML = `<p class="vazio">Clique num bloco para editar. Para ligar, clique na bolinha de baixo de um bloco e depois no bloco de destino. Arraste o fundo para mover o quadro; Ctrl + roda para zoom.</p>`; return; }
+    const p = n.p; let h = "";
+    if (n.tipo === "entrada") h = `<label class="f"><span>Entra por</span><select data-p="como">${opts({ momento: "Momento", segmento: "Segmento" }, p.como)}</select></label><label class="f"><span>${p.como === "segmento" ? "Segmento" : "Momento"}</span><select data-p="valor">${lista(p.como === "segmento" ? ["Atraso curto", "Atraso longo", "Demais clientes"] : MOMENTOS, p.valor)}</select></label>`;
+    if (n.tipo === "enviar") h = `<label class="f"><span>Primeiro canal</span><select data-p="c0">${opts(CAN, p.c[0])}</select></label>
+      <div class="f"><span>Depois</span>${p.c.slice(1).map((k, j) => `<div class="passo"><div class="lin" style="display:flex;gap:6px"><select data-mod="${j + 1}" style="flex:1">${opts({ senao: "Senão", junto: "Junto", reserva: "Reserva", sempre: "Sempre" }, (p.m || {})[j + 1] || "senao")}</select><select data-can="${j + 1}" style="flex:1">${opts(CAN, k)}</select><button class="mn" data-rm="${j + 1}" aria-label="Remover">✕</button></div></div>`).join("")}<button class="add" data-acao="add-can">+ adicionar canal</button></div>
+      <label class="f"><span>Frase</span><select data-p="f">${lista(["", ...FRASES], p.f)}</select></label>
+      <label class="f"><span>Horário do envio</span><input type="time" data-p="h" value="${p.h || "09:00"}"><small>Fora de 08:00–20:00 o motor segura até as 08:00.</small></label>`;
+    if (n.tipo === "esperar") h = `<div class="f"><span>Esperar</span><div class="lin"><input type="number" min="1" data-p="q" value="${p.q}"><select data-p="u">${lista(["horas", "dias"], p.u)}</select></div><small>Entre dois envios valem no mínimo 12 h.</small></div>`;
+    if (n.tipo === "condicao") h = `<label class="f"><span>Pergunta</span><select data-p="q">${opts(CONDS, p.q)}</select></label>${p.q === "persona" ? `<label class="f"><span>Persona</span><select data-p="v">${lista(["Digitais SP", "Só fixo", "WhatsApp ativo"], p.v)}</select></label>` : p.q === "score" ? `<label class="f"><span>Score mínimo</span><input type="number" data-p="v" value="${p.v || 600}"></label>` : p.q === "faixa" ? `<label class="f"><span>Faixa</span><select data-p="v">${lista(["até 30 dias", "31 a 90 dias", "mais de 90 dias"], p.v)}</select></label>` : ""}
+      <label class="f"><span>Olhar em até</span><div class="lin"><input type="number" min="1" data-p="prazo" value="${p.prazo || 1}"><span style="font-size:13px">dia(s) depois do último envio</span></div></label><small style="color:var(--texto3);font-size:11.5px">Saída "sim" à esquerda, "não" à direita.</small>`;
+    if (n.tipo === "dividir") h = `<div class="f"><span>Divisão</span><div class="lin"><input type="number" data-p="a" value="${p.a ?? 50}"> % A <input type="number" data-p="b" value="${p.b ?? 50}"> % B</div><small>O mesmo cliente cai sempre no mesmo lado.</small></div>`;
+    if (n.tipo === "mudar") h = `<label class="f"><span>Momento</span><select data-p="para">${lista(MOMENTOS, p.para)}</select><small>A hierarquia vale: acordo quebrado e preventivo passam na frente.</small></label>`;
+    if (n.tipo === "sair") h = `<label class="f"><span>Motivo</span><input data-p="motivo" value="${p.motivo || ""}"></label>`;
+    $("instt").innerHTML = `<span class="ico">${I(n.tipo)}</span><b>${TIPOS[n.tipo].nome}</b><span style="margin-left:auto;font-size:11px;color:var(--texto3)">${n.id}</span>`;
+    $("inscp").innerHTML = h + `<button class="perigo" data-acao="apagar">Apagar bloco</button>`;
+  }
+  $("paleta").innerHTML = Object.entries(TIPOS).map(([k, t]) => `<div class="bl" draggable="true" data-tipo="${k}"><span class="ico">${I(k)}</span><span>${t.nome}<small>${t.d}</small></span></div>`).join("");
+
+  /* ---------- interação ---------- */
+  const qd = $("quadro");
+  const mundoXY = (cx, cy) => { const r = qd.getBoundingClientRect(); return { x: (cx - r.left - est.px) / est.z, y: (cy - r.top - est.py) / est.z }; };
+  function novo(tipo, x, y) {
+    const p = { entrada: { como: "momento", valor: "CPC B" }, enviar: { c: ["wa"], m: {}, f: "", h: "09:00" }, esperar: { q: 1, u: "dias" }, condicao: { q: "respondeu" }, dividir: { a: 50, b: 50 }, mudar: { para: "CPC A" }, sair: { motivo: "Fim" } }[tipo];
+    const id = "n" + (++G.seq); G.N.push({ id, tipo, x: Math.round(x - W / 2), y: Math.round(y - 30), p: JSON.parse(JSON.stringify(p)) }); est.sel = id; est.selA = null; est.sim = null; render();
+  }
+  $("paleta").addEventListener("dragstart", e => { const b = e.target.closest("[data-tipo]"); if (b) e.dataTransfer.setData("text/plain", b.dataset.tipo); });
+  $("paleta").addEventListener("click", e => { const b = e.target.closest("[data-tipo]"); if (!b) return; const r = qd.getBoundingClientRect(); const c = mundoXY(r.left + r.width / 2, r.top + r.height / 2); novo(b.dataset.tipo, c.x, c.y); });
+  qd.addEventListener("dragover", e => e.preventDefault());
+  qd.addEventListener("drop", e => { e.preventDefault(); const t = e.dataTransfer.getData("text/plain"); if (!TIPOS[t]) return; const c = mundoXY(e.clientX, e.clientY); novo(t, c.x, c.y); });
+  let arr = null;
+  qd.addEventListener("pointerdown", e => {
+    if (e.target.closest(".zoom,.mini,.sim")) return;
+    const pin = e.target.closest("[data-pin]");
+    if (pin) { const [a, s] = pin.dataset.pin.split("|"); est.ligar = { a, s: +s }; est.sel = null; est.selA = null; render(); return; }
+    const noEl = e.target.closest("[data-no]");
+    if (noEl) {
+      const id = noEl.dataset.no;
+      if (est.ligar && est.ligar.a !== id) { G.E = G.E.filter(x => !(x.a === est.ligar.a && x.s === est.ligar.s)); if (no(id).tipo !== "entrada") G.E.push({ a: est.ligar.a, s: est.ligar.s, b: id }); est.ligar = null; est.sim = null; render(); return; }
+      est.sel = id; est.selA = null;
+      if (e.target.closest("[data-arrastar]")) { const n = no(id); arr = { tipo: "no", id, ox: e.clientX, oy: e.clientY, x: n.x, y: n.y }; qd.setPointerCapture(e.pointerId); }
+      render(); return;
+    }
+    const ar = e.target.closest("[data-aresta]");
+    if (ar) { est.selA = +ar.dataset.aresta; est.sel = null; render(); return; }
+    est.ligar = null; est.sel = null; est.selA = null;
+    arr = { tipo: "fundo", ox: e.clientX, oy: e.clientY, px: est.px, py: est.py }; qd.classList.add("arrastando"); qd.setPointerCapture(e.pointerId); render();
+  });
+  qd.addEventListener("pointermove", e => {
+    if (!arr) return;
+    if (arr.tipo === "no") { const n = no(arr.id); n.x = Math.round(arr.x + (e.clientX - arr.ox) / est.z); n.y = Math.round(arr.y + (e.clientY - arr.oy) / est.z); render(); }
+    else { est.px = arr.px + e.clientX - arr.ox; est.py = arr.py + e.clientY - arr.oy; render(); }
+  });
+  qd.addEventListener("pointerup", () => { arr = null; qd.classList.remove("arrastando"); });
+  qd.addEventListener("wheel", e => { if (!e.ctrlKey && !e.metaKey) { est.px -= e.deltaX; est.py -= e.deltaY; render(); e.preventDefault(); return; } e.preventDefault(); zoom(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
+  function zoom(f, cx, cy) { const r = qd.getBoundingClientRect(); cx = cx ?? r.left + r.width / 2; cy = cy ?? r.top + r.height / 2; const m = mundoXY(cx, cy); est.z = Math.min(1.6, Math.max(.3, est.z * f)); est.px = cx - r.left - m.x * est.z; est.py = cy - r.top - m.y * est.z; render(); }
+  function ajustar() { const r = qd.getBoundingClientRect(); const xs = G.N.map(n => n.x), ys = G.N.map(n => n.y); if (!xs.length) return; const x0 = Math.min(...xs) - 40, y0 = Math.min(...ys) - 40, x1 = Math.max(...xs) + W + 40, y1 = Math.max(...ys) + 160; est.z = Math.min(1.2, Math.max(.3, Math.min(r.width / (x1 - x0), r.height / (y1 - y0)))); est.px = -x0 * est.z + (r.width - (x1 - x0) * est.z) / 2; est.py = -y0 * est.z + 10; render(); }
+  document.addEventListener("click", e => {
+    const t = e.target.closest("[data-z],[data-acao],[data-ir],[data-rm],#mini");
+    if (!t) return;
+    if (t.id === "mini") { const r = t.getBoundingClientRect(), s = Math.min(r.width / 2600, r.height / 2600); const ox = (r.width - 2600 * s) / 2, oy = (r.height - 2600 * s) / 2; const mx = (e.clientX - r.left - ox) / s, my = (e.clientY - r.top - oy) / s; const q = qd.getBoundingClientRect(); est.px = q.width / 2 - mx * est.z; est.py = q.height / 2 - my * est.z; return render(); }
+    if (t.dataset.z) { const z = +t.dataset.z; return z === 0 ? ajustar() : zoom(z > 0 ? 1.15 : 1 / 1.15); }
+    if (t.dataset.ir) { const n = no(t.dataset.ir); est.sel = n.id; est.selA = null; const r = qd.getBoundingClientRect(); est.px = r.width / 2 - (n.x + W / 2) * est.z; est.py = r.height / 2 - (n.y + 40) * est.z; return render(); }
+    if (t.dataset.rm) { const n = no(est.sel), j = +t.dataset.rm; n.p.c.splice(j, 1); const m = {}; Object.entries(n.p.m || {}).forEach(([k, v]) => { k = +k; if (k < j) m[k] = v; else if (k > j) m[k - 1] = v; }); n.p.m = m; est.sim = null; return render(); }
+    const a = t.dataset.acao;
+    if (a === "apagar") { G.E = G.E.filter(x => x.a !== est.sel && x.b !== est.sel); G.N = G.N.filter(n => n.id !== est.sel); est.sel = null; est.sim = null; return render(); }
+    if (a === "apagar-aresta") { G.E.splice(est.selA, 1); est.selA = null; est.sim = null; return render(); }
+    if (a === "add-can") { const n = no(est.sel); const k = Object.keys(CAN).find(x => !n.p.c.includes(x)) || "sms"; n.p.c.push(k); n.p.m = n.p.m || {}; n.p.m[n.p.c.length - 1] = "senao"; return render(); }
+    if (a === "simular") { est.sim = est.sim ? null : simular(); return render(); }
+    if (a === "fechar-sim") { est.sim = null; return render(); }
+    if (a === "modelo") { G = modelo(); est.sel = null; est.selA = null; est.sim = null; return ajustar(); }
+    if (a === "limpar") { G = { N: [], E: [], seq: 0 }; est.sel = null; est.selA = null; est.sim = null; return render(); }
+    if (a === "ver-val") { $("val").scrollIntoView({ block: "nearest" }); return; }
+    if (a === "demo-erro") { const id = "n" + (++G.seq); G.N.push({ id, tipo: "enviar", x: 820, y: 900, p: { c: ["wa"], m: {}, f: "", h: "21:30" } }); const w = G.N.find(n => n.tipo === "esperar"); if (w) { w.p.q = 6; w.p.u = "horas"; } est.sel = id; est.sim = null; render(); const n = no(id); const r = qd.getBoundingClientRect(); est.px = r.width / 2 - (n.x + W / 2) * est.z; est.py = r.height / 2 - n.y * est.z; return render(); }
+  });
+  document.addEventListener("input", e => {
+    const n = no(est.sel); if (!n) return; const t = e.target;
+    if (t.dataset.p) { if (t.dataset.p === "c0") { const k = t.value, at = n.p.c.indexOf(k); if (at > 0) n.p.c.splice(at, 1); n.p.c[0] = k; } else n.p[t.dataset.p] = t.type === "number" ? +t.value : t.value; }
+    if (t.dataset.mod) { n.p.m = n.p.m || {}; n.p.m[+t.dataset.mod] = t.value; }
+    if (t.dataset.can) n.p.c[+t.dataset.can] = t.value;
+    est.sim = null;
+    const foco = t.dataset.p || t.dataset.mod || t.dataset.can; render();
+    if (t.type === "number" || t.type === "text" || t.tagName === "INPUT") { const el = document.querySelector(`#inscp [data-p="${t.dataset.p}"]`); if (el) { el.focus(); const v = el.value; if (el.setSelectionRange && el.type === "text") el.setSelectionRange(v.length, v.length); } }
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { est.ligar = null; est.selA = null; render(); } if ((e.key === "Delete" || e.key === "Backspace") && !e.target.closest("input,select")) { if (est.selA != null) { G.E.splice(est.selA, 1); est.selA = null; render(); } } });
+  function segc(id, fn) { $(id).querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset.v); })); }
+  segc("s-larg", v => { $("janela").style.maxWidth = v + "px"; setTimeout(vistaInicial, 300); });
+  segc("s-tema", v => { v ? document.documentElement.setAttribute("data-theme", v) : document.documentElement.removeAttribute("data-theme"); });
+  window.addEventListener("resize", () => render());
+  function vistaInicial() { const r = qd.getBoundingClientRect(), e0 = G.N[0]; if (r.width < 700 && e0) { est.z = .7; est.px = r.width / 2 - (e0.x + W / 2) * est.z; est.py = 10 - (e0.y - 20) * est.z; } else { est.z = .8; est.px = 30; est.py = 20; } render(); }
+  vistaInicial();
+})();
+</script>
+</body>
+</html>
