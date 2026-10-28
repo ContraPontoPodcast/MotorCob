@@ -549,9 +549,9 @@ def _recencia_ok(est: EstadoCliente, hoje: date, regua: Regua, horas: int | None
 MOTIVOS = {
     "com_acao": "com ação hoje",
     "sem_passo_hoje": "a esteira não tem passo hoje (ex.: D+2)",
-    "quebra_desligada": "acordo quebrado, mas a quebra está desligada na estratégia deste segmento "
+    "quebra_desligada": "sem estágio — acordo quebrado e o estágio de quebra está desligado neste segmento "
                         "(volta ao estoque no prazo definido)",
-    "fase_desligada": "a fase do cliente (cliente novo, CPC ou não CPC) está desligada na estratégia deste segmento",
+    "fase_desligada": "sem estágio — nenhum estágio ligado deste segmento pega o cliente",
     "intervalo_48h": "aguardando 48h desde a última ação (localização e Não CPC)",
     "sem_contato": "sem contato para os canais do dia",
     "sem_acao_na_raia": "persona com 'sem ação' hoje",

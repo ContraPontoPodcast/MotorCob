@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estratégia simples</title>
+<style>
+/* Protótipo: criação de estratégia em um caminho só (Carteira → Quem? → O que fazer? → Revisar). Dados fictícios. */
+:root{
+  --app:#F1F1F3; --cartao:#FFFFFF; --borda:#E6E6EA; --borda2:#EFEFF2; --fill:#F5F5F7; --fill2:#EDEDF0;
+  --texto:#1D1D1F; --texto2:#6E6E73; --texto3:#8E8E93;
+  --destaque:#8A6A2E; --destaque-suave:#F4EDE0; --sobre-destaque:#FFFFFF;
+  --ok:#1E7A36; --ok-f:#E8F6EC; --at:#8A5A00; --at-f:#FFF4D6; --info:#0A60D0; --info-f:#E8F1FD; --erro:#B3261E;
+  --fA:#0F4C5C; --fB:#2E7487; --fC:#5B9AAB; --fD:#93BFCB; --fE:#C9DFE5;
+  --tA:#FFFFFF; --tB:#FFFFFF; --tC:#0B2A33; --tD:#0B2A33; --tE:#0B2A33;
+  --sombra:0 18px 48px rgba(0,0,0,.18);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+}
+:root[data-theme="dark"]{
+  --app:#000000; --cartao:#1C1C1E; --borda:#2C2C2E; --borda2:#2A2A2C; --fill:#2C2C2E; --fill2:#3A3A3C;
+  --texto:#F5F5F7; --texto2:#AEAEB2; --texto3:#8E8E93;
+  --destaque:#D9B26B; --destaque-suave:#3A2F1C; --sobre-destaque:#1D1D1F;
+  --ok:#30D158; --ok-f:#12301B; --at:#FFD60A; --at-f:#332A00; --info:#4DA3FF; --info-f:#0F2440; --erro:#FF6961;
+  --fA:#A8DCE6; --fB:#7CC0CE; --fC:#5299A9; --fD:#357483; --fE:#24535E;
+  --tA:#06222A; --tB:#06222A; --tC:#04161B; --tD:#FFFFFF; --tE:#FFFFFF;
+  --sombra:0 18px 48px rgba(0,0,0,.7); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--app);color:var(--texto);font-family:var(--sans);font-size:14px;line-height:1.45}
+button,input,select{font:inherit;color:inherit}
+svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+:focus-visible{outline:2px solid var(--destaque);outline-offset:2px}
+.doc{max-width:1472px;margin:0 auto;padding:16px 16px 4px;display:flex;flex-direction:column;gap:6px}
+.doc h1{margin:0;font-size:21px}
+.doc p{margin:0;color:var(--texto2);max-width:110ch}
+.selo{align-self:flex-start;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--texto);border-radius:999px;padding:1px 8px}
+.ctrl{max-width:1472px;margin:8px auto 0;padding:0 16px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.ctrl .g{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ctrl .g>span{font-size:12px;color:var(--texto2)}
+.seg{display:inline-flex;gap:2px;background:var(--fill2);border-radius:9px;padding:2px;flex-wrap:wrap}
+.seg button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:7px;color:var(--texto2);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--cartao);color:var(--texto);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.palco{padding:12px 16px 20px;display:flex;justify-content:center}
+.janela{width:100%;max-width:1440px;container:app/inline-size;transition:max-width .25s}
+.app{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:10px;background:var(--app);border-radius:18px;border:1px solid var(--borda)}
+.lado{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0}
+.logo{width:30px;height:30px;margin-bottom:10px}
+.li{position:relative;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:var(--texto2)}
+.li svg.i{width:18px;height:18px}
+.li[aria-current="page"]{background:var(--fill2);color:var(--texto)}
+.li[aria-current="page"]::before{content:"";position:absolute;left:-4px;top:9px;bottom:9px;width:2px;border-radius:2px;background:var(--texto)}
+.lado hr{width:20px;border:0;border-top:1px solid var(--borda);margin:6px 0}
+.lado .fim{margin-top:auto}
+.cartao{background:var(--cartao);border:1px solid var(--borda);border-radius:16px;min-width:0;display:flex;flex-direction:column;position:relative}
+.ctx{display:flex;align-items:center;gap:10px;height:44px;padding:0 20px;border-bottom:1px solid var(--borda2);font-size:12.5px;color:var(--texto2);white-space:nowrap;overflow:hidden}
+.barra{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 20px 0}
+.barra h1{margin:0;font-size:19px;font-weight:650;white-space:nowrap}
+.barra .dir{margin-left:auto;display:flex;gap:8px;align-items:center}
+.selc{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--borda);border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap}
+.selc .lbl{color:var(--texto2);font-weight:500}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;white-space:nowrap;background:var(--fill2)}
+.pill.at{background:var(--at-f);color:var(--at)} .pill.ok{background:var(--ok-f);color:var(--ok)}
+.btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 13px;border-radius:9px;background:var(--destaque);color:var(--sobre-destaque);font-weight:600;font-size:13px;white-space:nowrap}
+.btn.sec{background:var(--cartao);color:var(--texto);border:1px solid var(--borda)}
+.btn.peq{height:26px;padding:0 9px;font-size:12px}
+.btn[aria-disabled="true"]{opacity:.45;cursor:default}
+.lnk{all:unset;cursor:pointer;font-weight:600;font-size:12.5px;text-decoration:underline;text-underline-offset:2px}
+.abas{display:flex;gap:4px;padding:6px 20px 0;border-bottom:1px solid var(--borda2);overflow-x:auto;scrollbar-width:none}
+.aba{all:unset;cursor:pointer;padding:9px 10px 10px;font-size:13.5px;font-weight:600;color:var(--texto2);border-bottom:2px solid transparent;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
+.aba[aria-selected="true"]{color:var(--texto);border-bottom-color:var(--destaque)}
+.aba .n{font-size:11px;font-weight:700;border-radius:999px;padding:0 6px;background:var(--at-f);color:var(--at)}
+.corpo{padding:16px 20px 22px;display:flex;flex-direction:column;gap:14px;min-height:520px}
+.muted{color:var(--texto2);font-size:12.5px}
+.tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:1px 8px;background:var(--fill2);color:var(--texto2);white-space:nowrap}
+.tag.ok{background:var(--ok-f);color:var(--ok)} .tag.at{background:var(--at-f);color:var(--at)} .tag.info{background:var(--info-f);color:var(--info)}
+.fl{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;font-size:11.5px;font-weight:800;flex:none}
+.fl.A{background:var(--fA);color:var(--tA)} .fl.B{background:var(--fB);color:var(--tB)} .fl.C{background:var(--fC);color:var(--tC)} .fl.D{background:var(--fD);color:var(--tD)} .fl.E{background:var(--fE);color:var(--tE)}
+.pchip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border:1px solid var(--borda);border-radius:999px;padding:2px 9px 2px 7px;white-space:nowrap}
+.pchip i{width:8px;height:8px;border-radius:50%;flex:none}
+.ev{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--texto2);white-space:nowrap}
+.ev i{display:inline-flex;gap:2px}
+.ev i u{width:6px;height:6px;border-radius:50%;border:1.3px solid var(--texto3);text-decoration:none}
+.ev i u.on{background:var(--texto2);border-color:var(--texto2)}
+.cd{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+
+/* Passo a passo */
+.passos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.ps{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--borda);border-radius:12px;padding:10px 12px;display:grid;grid-template-columns:28px minmax(0,1fr);gap:2px 10px;align-items:start}
+.ps .nn{grid-row:1/4;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12.5px;background:var(--fill2);color:var(--texto2)}
+.ps.feito .nn{background:var(--ok-f);color:var(--ok)}
+.ps[aria-current="step"]{border-color:var(--destaque);box-shadow:inset 0 0 0 1px var(--destaque)}
+.ps[aria-current="step"] .nn{background:var(--destaque);color:var(--sobre-destaque)}
+.ps small{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--texto3);font-weight:700}
+.ps b{font-size:14px}
+.ps span.st{font-size:12px;color:var(--texto2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps span.st.falta{color:var(--at)}
+
+/* Carteiras */
+.carts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ct{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--borda);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.ct[aria-pressed="true"]{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.ct b{font-size:15px}
+.ct .l{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--texto2)}
+
+/* Segmentos */
+.segs{display:flex;flex-direction:column;gap:8px}
+.sg{border:1px solid var(--borda);border-radius:12px;padding:10px 14px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:6px 16px;align-items:center}
+.sg b{font-size:14px}
+.sg .cond{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.sg .cond span{font-size:11.5px;background:var(--fill);border-radius:6px;padding:1px 7px;color:var(--texto2)}
+.sg .chips{display:flex;gap:5px;flex-wrap:wrap}
+.vazio{border:1px dashed var(--borda);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.vazio h3{margin:0;font-size:16px}
+.ops{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;width:100%}
+.op{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;font-weight:650}
+.op small{font-weight:500;color:var(--texto2);font-size:12px}
+.op.rec{border-color:var(--destaque);box-shadow:inset 0 0 0 1px var(--destaque)}
+.op.rec em{font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--destaque)}
+.novo{border:1px solid var(--borda);border-radius:12px;padding:12px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.novo label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--texto2)}
+.novo input,.novo select{border:1px solid var(--borda);border-radius:8px;background:var(--cartao);padding:6px 8px;font-size:13px}
+
+/* Régua */
+.rg{display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px}
+.sl{display:flex;flex-direction:column;gap:6px}
+.si{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--borda);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;font-size:13px;font-weight:600}
+.si small{font-weight:500;color:var(--texto2);font-size:11.5px}
+.si[aria-pressed="true"]{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.rtopo{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.rtopo .dir{margin-left:auto;display:flex;gap:8px;align-items:center}
+.origem{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;border:1px solid var(--borda2);background:var(--fill);border-radius:10px;padding:7px 10px}
+.menu{position:absolute;z-index:30;background:var(--cartao);border:1px solid var(--borda);border-radius:12px;box-shadow:var(--sombra);padding:6px;min-width:320px;display:flex;flex-direction:column;top:36px;right:0}
+.menu button{all:unset;cursor:pointer;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:600;display:flex;flex-direction:column}
+.menu button:hover{background:var(--fill)}
+.menu small{color:var(--texto3);font-weight:500;font-size:11.5px}
+.menu p{margin:4px 10px 6px;font-size:11.5px;color:var(--texto2)}
+.forma{display:inline-flex;gap:2px;background:var(--fill2);border-radius:9px;padding:2px}
+.forma button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:4px 12px;border-radius:7px;color:var(--texto2)}
+.forma button[aria-pressed="true"]{background:var(--texto);color:var(--cartao)}
+.estágios{display:flex;gap:6px;flex-wrap:wrap}
+.estágios button{all:unset;cursor:pointer;padding:5px 11px;border-radius:9px;border:1px solid var(--borda);font-size:12.5px;font-weight:600;color:var(--texto2)}
+.estágios button[aria-pressed="true"]{border-color:var(--texto);color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.grade{border:1px solid var(--borda);border-radius:12px;overflow:auto;max-width:100%}
+table.r{border-collapse:separate;border-spacing:0;width:100%;min-width:860px;font-size:12.5px}
+.r th,.r td{border-bottom:1px solid var(--borda2);border-right:1px solid var(--borda2);padding:0;vertical-align:top}
+.r thead th{background:var(--fill);font-weight:600;color:var(--texto2);font-size:11.5px;padding:7px 8px;text-align:left;white-space:nowrap}
+.r .est{position:sticky;left:0;background:var(--cartao);z-index:1;width:190px;min-width:190px;padding:9px 10px;text-align:left}
+.r thead .est{background:var(--fill)}
+.r .est b{display:block;font-size:13px}
+.r .est small{display:block;color:var(--texto3);font-size:11.5px;line-height:1.3}
+.r tr.persona .est{padding-left:22px;background:var(--fill)}
+.r tr.persona td{background:color-mix(in srgb,var(--fill) 55%,transparent)}
+.cel{display:flex;flex-direction:column;gap:4px;min-height:58px;padding:7px}
+.cel.segue{color:var(--texto3);font-style:italic;font-size:12px}
+.ord{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ord .c1{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;white-space:nowrap}
+.ord .c1 i,.ord .cn i{width:8px;height:8px;border-radius:50%;flex:none}
+.ord .seq{display:flex;align-items:center;gap:4px;padding-left:9px;border-left:1.5px solid var(--borda);margin-left:3px;font-size:11.5px;white-space:nowrap}
+.ord .cn{display:inline-flex;align-items:center;gap:4px;font-weight:600}
+.con{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--texto2);background:var(--fill2);border-radius:999px;padding:1px 7px;white-space:nowrap;line-height:1.5}
+.porq{font-size:10.5px;font-weight:600;color:var(--destaque);background:var(--destaque-suave);border-radius:6px;padding:1px 6px;line-height:1.3}
+.frase{font-size:11px;color:var(--texto2)}
+.sug{border:1px dashed var(--destaque);border-radius:9px;padding:6px 8px;display:flex;flex-direction:column;gap:5px;background:color-mix(in srgb,var(--destaque-suave) 60%,transparent);font-size:11.5px;max-width:240px}
+.sug b{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--destaque)}
+.sug .ac{display:flex;gap:6px;align-items:center}
+.regras{border:1px solid var(--borda);border-radius:12px;padding:0}
+.regras summary{cursor:pointer;padding:10px 14px;font-size:13px;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.regras summary small{font-weight:500;color:var(--texto2)}
+.regras .bd{padding:0 14px 12px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;font-size:12.5px}
+.regras .bd div{border:1px solid var(--borda2);border-radius:9px;padding:8px 10px;color:var(--texto2)}
+.regras .bd b{display:block;color:var(--texto);font-size:13px}
+/* Fluxo */
+.trilho{display:flex;flex-direction:column;align-items:flex-start}
+.no{border:1px solid var(--borda);border-radius:12px;background:var(--cartao);padding:10px 12px;min-width:260px;max-width:440px}
+.no.ini{background:var(--fill)}
+.liga{width:2px;height:16px;background:var(--borda);margin-left:24px}
+.dia-l{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.desvio{border:1px dashed var(--texto3);border-radius:10px;padding:7px 10px;font-size:12px;display:flex;flex-direction:column;gap:4px;max-width:300px}
+/* Revisar */
+.rev{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px}
+.ck{display:flex;flex-direction:column;gap:8px}
+.ck div{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--borda2);border-radius:10px;padding:9px 12px;font-size:13px}
+.ck i{font-style:normal;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;flex:none}
+.ck i.ok{background:var(--ok-f);color:var(--ok)} .ck i.at{background:var(--at-f);color:var(--at)}
+.ck small{display:block;color:var(--texto2);font-size:12px}
+.cx{border:1px solid var(--borda);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.cx h3{margin:0;font-size:14px}
+.sw{all:unset;cursor:pointer;width:34px;height:20px;border-radius:999px;background:var(--fill2);position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s}
+.sw[aria-checked="true"]{background:#0F4C5C}
+.sw[aria-checked="true"]::after{left:16px}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:13px}
+.chk small{display:block;color:var(--texto3);font-size:11.5px}
+/* Personas */
+.pg{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.ap{border:1px solid var(--borda);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.ap .t{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ap .ac{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pc{border:1px solid var(--borda);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.pc .t{display:flex;gap:8px;align-items:center}
+.pc .ab{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:2px 10px;font-size:12.5px;padding:3px 0}
+.pc .ab .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--texto3);font-weight:700;padding-top:2px}
+table.tab{width:100%;border-collapse:collapse;font-size:12.5px}
+.tab th{text-align:left;font-weight:600;color:var(--texto2);border-bottom:1px solid var(--borda);padding:6px 8px;white-space:nowrap}
+.tab td{border-bottom:1px solid var(--borda2);padding:7px 8px;vertical-align:top}
+.tab td.n,.tab th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tabw{overflow-x:auto}
+/* Antes × Depois */
+.ad{max-width:1440px;margin:0 auto 32px;padding:0 16px}
+.ad .bx{background:var(--cartao);border:1px solid var(--borda);border-radius:14px;padding:16px}
+.ad h2{margin:0 0 4px;font-size:17px}
+.ad p{margin:0 0 10px;color:var(--texto2);font-size:13px}
+.ad .tab{min-width:640px}
+.ad .tab td:first-child{white-space:nowrap;font-weight:600}
+.ad .tab code{font-size:11.5px;color:var(--texto3)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--texto);color:var(--cartao);padding:10px 16px;border-radius:10px;z-index:90;max-width:calc(100vw - 32px);font-size:13px}
+
+@container app (max-width:1023px){
+  .app{grid-template-columns:minmax(0,1fr);padding:0;gap:0}
+  .lado{display:none}
+  .passos{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .carts,.ops{grid-template-columns:minmax(0,1fr)}
+  .rg,.rev,.pg{grid-template-columns:minmax(0,1fr)}
+  .sl{flex-direction:row;overflow-x:auto}
+  .si{flex:none}
+  .sg{grid-template-columns:minmax(0,1fr)}
+  .regras .bd{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
+@container app (max-width:600px){
+  .ctx,.barra{padding-left:16px;padding-right:16px}
+  .abas{padding-left:12px;padding-right:12px}
+  .corpo{padding:14px 16px 20px}
+  .barra .dir{margin-left:0;width:100%}
+  .barra .dir .btn{flex:1;justify-content:center}
+  .ps{grid-template-columns:24px minmax(0,1fr);padding:8px}
+  .ps .nn{width:22px;height:22px;font-size:11.5px}
+  .ps span.st{white-space:normal}
+  .rtopo .dir{margin-left:0}
+  .menu{right:auto;left:0;min-width:280px}
+  .no{min-width:0;max-width:100%}
+  .dia-l{flex-direction:column}
+}
+/* v2: estágios do cliente e modelos opcionais */
+.passos{grid-template-columns:repeat(5,minmax(0,1fr))}
+.ops{grid-template-columns:repeat(3,minmax(0,1fr))}
+.segbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.segbar .muted{margin-right:4px}
+.mm{display:grid;grid-template-columns:320px minmax(0,1fr);gap:14px}
+.ml{display:flex;flex-direction:column;gap:6px}
+.mi{border:1px solid var(--borda);border-radius:10px;padding:8px 8px 8px 6px;display:grid;grid-template-columns:16px 22px minmax(0,1fr) auto;gap:2px 8px;align-items:center;cursor:pointer;background:var(--cartao)}
+.mi[aria-pressed="true"]{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mi.off{opacity:.55}
+.mi.arr{opacity:.4}
+.mi .h{color:var(--texto3);cursor:grab;font-size:13px;line-height:1;user-select:none}
+.mi .n{width:20px;height:20px;border-radius:50%;background:var(--fill2);display:grid;place-items:center;font-size:11px;font-weight:700}
+.mi b{font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mi small{display:block;color:var(--texto2);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mi .r{display:flex;gap:2px;align-items:center}
+.mn{all:unset;cursor:pointer;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--texto2);font-size:12px}
+.mn:hover{background:var(--fill)}
+.mn[aria-disabled="true"]{opacity:.3;cursor:default}
+.aviso{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border-radius:10px;font-size:12.5px;background:var(--at-f)}
+.aviso.info{background:var(--info-f)}
+.aviso b{display:block}
+.ed{border:1px solid var(--borda);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.ed h4{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--texto3)}
+.ed .lin{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.inp{border:1px solid var(--borda);border-radius:8px;background:var(--cartao);padding:6px 8px;font-size:13px}
+.inp.n{width:72px}
+.inp.nome{font-size:16px;font-weight:650;min-width:240px;flex:1}
+.cnd{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:4px 0}
+.prev{font-size:12.5px;font-weight:600;border-radius:999px;padding:3px 10px;background:var(--fill2)}
+.fato{font-size:12px;color:var(--texto2);border-left:2px solid var(--info);padding:2px 0 2px 10px}
+.fato b{color:var(--texto)}
+.said{display:grid;grid-template-columns:170px minmax(0,1fr);gap:6px 10px;align-items:center;font-size:13px}
+.mchips{display:flex;gap:6px;flex-wrap:wrap}
+.mchips button{all:unset;cursor:pointer;padding:5px 11px;border-radius:9px;border:1px solid var(--borda);font-size:12.5px;font-weight:600;color:var(--texto2)}
+.mchips button[aria-pressed="true"]{border-color:var(--texto);color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mchips button.off{opacity:.5}
+.resumo{font-size:12.5px;color:var(--texto2);border:1px solid var(--borda2);background:var(--fill);border-radius:10px;padding:7px 10px}
+.addc{all:unset;cursor:pointer;font-size:12px;font-weight:600;color:var(--texto3);border:1px dashed var(--borda);border-radius:8px;padding:4px 8px}
+.pick{display:flex;flex-wrap:wrap;gap:4px}
+.pick button{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center;font-size:11.5px;font-weight:600;border:1px solid var(--borda);border-radius:7px;padding:2px 6px}
+.pick i{width:7px;height:7px;border-radius:50%}
+.mods{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px;width:100%}
+.mod{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--borda);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:2px;font-weight:650;font-size:13px}
+.mod small{font-weight:500;color:var(--texto2);font-size:12px}
+.mod[aria-pressed="true"]{border-color:var(--texto);box-shadow:inset 0 0 0 1px var(--texto)}
+.mlst{display:flex;flex-direction:column;gap:6px}
+.mlst h5{margin:6px 0 0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--texto3)}
+.dentro{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.dentro table{width:100%;border-collapse:collapse;font-size:12.5px}
+.dentro td{border-bottom:1px solid var(--borda2);padding:5px 6px;vertical-align:top}
+@container app (max-width:1023px){
+  .passos{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mm,.mods{grid-template-columns:minmax(0,1fr)}
+  .ops{grid-template-columns:minmax(0,1fr)}
+  .said{grid-template-columns:minmax(0,1fr)}
+}
+@container app (max-width:600px){ .inp.nome{min-width:0;width:100%;flex:1 1 100%} }
+.fxs{display:inline-flex;gap:4px}
+.fxs button{all:unset;cursor:pointer;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:800;border:1px solid var(--borda);color:var(--texto2)}
+.fxs button[aria-pressed="true"].A{background:var(--fA);color:var(--tA);border-color:transparent} .fxs button[aria-pressed="true"].B{background:var(--fB);color:var(--tB);border-color:transparent} .fxs button[aria-pressed="true"].C{background:var(--fC);color:var(--tC);border-color:transparent} .fxs button[aria-pressed="true"].D{background:var(--fD);color:var(--tD);border-color:transparent} .fxs button[aria-pressed="true"].E{background:var(--fE);color:var(--tE);border-color:transparent}
+.mx{display:grid;grid-template-columns:22px minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto 22px;gap:8px}
+.eixoY{grid-row:1/3;writing-mode:vertical-rl;transform:rotate(180deg);display:flex;justify-content:space-between;font-size:11px;color:var(--texto3);text-transform:uppercase;letter-spacing:.08em}
+.eixoX{grid-column:2/4;display:flex;justify-content:space-between;font-size:11px;color:var(--texto3);text-transform:uppercase;letter-spacing:.08em}
+.q{border:1px solid var(--borda);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.q .t{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.q .t b{font-size:15px}
+.q .t i.sq{width:10px;height:10px;border-radius:3px}
+.q .nums{display:flex;gap:16px;font-size:12px;color:var(--texto2)}
+.q .nums b{display:block;font-size:16px;color:var(--texto)}
+.q .chips{display:flex;gap:5px;flex-wrap:wrap}
+.q .acao{border-top:1px solid var(--borda2);padding-top:8px;display:flex;gap:10px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;font-size:12.5px}
+@container app (max-width:700px){ .mx{grid-template-columns:minmax(0,1fr)} .eixoY,.eixoX{display:none} }
+</style>
+</head>
+<body>
+<div class="doc">
+  <span class="selo">Protótipo · Estratégia em um caminho só · v2 · 28/10/2026 · dados fictícios</span>
+  <h1>Carteira → Quem? → Em que estágio? → O que fazer? → Revisar</h1>
+  <p>Nada vem pronto: carteira nova começa vazia, e o modelo é opcional, visível antes de usar e vira cópia sua. Os estágios de cobrança são do cliente e de cada segmento (quem entra, por quanto tempo, quando sai), e a ordem é a prioridade. Quem não cai em nenhum estágio fica sem ação, e isso aparece no Início e na Lista do dia. “Situação do cliente” é um fato que o motor calcula e você usa como condição. A Abordagem da persona aparece dentro da régua para aprovar. Estratégia tem 3 subabas: Orquestração · Personas · Frases.</p>
+</div>
+<div class="ctrl">
+  <div class="g"><span>Largura</span><div class="seg" id="s-larg"><button aria-pressed="true" data-v="1440">Computador 1440</button><button aria-pressed="false" data-v="390">Celular 390</button></div></div>
+  <div class="g"><span>Tema</span><div class="seg" id="s-tema"><button aria-pressed="false" data-v="light">Claro</button><button aria-pressed="true" data-v="dark">Escuro</button></div></div>
+  <div class="g"><span>Cenário</span><div class="seg" id="s-cen"><button aria-pressed="true" data-v="alfa" data-demo="cenario-carteira-que-usa">Carteira que já usa</button><button aria-pressed="false" data-v="gama" data-demo="cenario-carteira-nova">Carteira nova</button></div></div>
+  <div class="g"><span>Tela</span><div class="seg" id="s-tela"><button aria-pressed="true" data-tela="estrategia" data-demo="tela-estrategia">Estratégia</button><button aria-pressed="false" data-tela="inicio" data-demo="tela-inicio">Início</button><button aria-pressed="false" data-tela="lista" data-demo="tela-lista">Lista do dia</button></div></div>
+  <div class="g"><span>Ver</span><div class="seg"><button data-acao="ir-ad" data-demo="antes-depois">Antes × Depois</button></div></div>
+</div>
+
+<div class="palco"><div class="janela" id="janela"><div class="app">
+  <nav class="lado" aria-label="Navegação">
+    <svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="11" fill="none" style="color:var(--texto)"/><path d="M50 12 A38 38 0 0 1 86.1 38.3" stroke="#C9A35A" stroke-width="11" stroke-linecap="round" fill="none"/><path d="M83.6 70 A38 38 0 0 1 30 82.3" stroke="#8E8E93" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="50" cy="50" r="11" fill="#C9A35A"/></svg>
+    <span class="li" title="Início" data-tela="inicio" style="cursor:pointer"><svg class="i" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+    <span class="li" aria-current="page" title="Cobrança" data-tela="estrategia" style="cursor:pointer"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg></span>
+    <span class="li" title="Jornada do Cliente"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></span>
+    <span class="li" title="Mensageria"><svg class="i" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></span>
+    <span class="li" title="Relatórios"><svg class="i" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 18v-1"/><path d="M12 18v-6"/><path d="M16 18v-3"/></svg></span>
+    <hr>
+    <span class="li" title="Empresa"><svg class="i" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg></span>
+    <span class="li" title="Suporte"><svg class="i" viewBox="0 0 24 24"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M21 16v2a4 4 0 0 1-4 4h-5"/></svg></span>
+    <span class="li" title="Console MotorCX"><svg class="i" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span>
+    <span class="li fim" title="Mostrar nomes"><svg class="i" viewBox="0 0 24 24"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg></span>
+  </nav>
+  <section class="cartao" id="tela"></section>
+</div></div></div>
+
+<section class="ad" id="ad"><div class="bx">
+  <h2>Antes × Depois</h2>
+  <p>Criar e editar fica num lugar só (Orquestração, em passos); cadastro vai para Configurações; análise vai para Resultados. Uma coisa saiu de propósito: o padrão aplicado em silêncio. Agora o modelo é opcional, visível e vira cópia do cliente.</p>
+  <div class="tabw"><table class="tab"><thead><tr><th>Antes</th><th>O que fazia</th><th>Depois</th></tr></thead><tbody>
+    <tr><td>Orquestração <code>/orquestracao</code></td><td>Editar a régua; também criava estratégia e segmento</td><td><b>Estratégia › Orquestração</b>, passo 4 “O que fazer?”, por estágio. Segmento só se cria no passo 2</td></tr>
+    <tr><td>Fases fixas do motor</td><td>Cliente novo, CPC, Não CPC, Preventivo e Quebra, impostas a todos</td><td><b>Estágios de cobrança do cliente, por segmento</b>, passo 3 “Em que estágio?”: nome, quem entra, por quanto tempo, quando sai, ordem por prioridade, liga e desliga. Quem já usava vê as 5 fases como estágios da carteira. A situação calculada pelo motor vira o fato “Situação do cliente”. Cliente sem estágio fica sem ação e aparece no Início (“Para hoje”) e na Lista do dia como “Sem estágio”</td></tr>
+    <tr><td>Propensão a pagamento</td><td>Não existia no produto</td><td><b>Fato nas regras do estágio</b> (“Propensão a pagamento”, faixas A–E) + <b>Matriz em Personas</b> (Propensão × Abordagem), com “Criar estágio com estes clientes”</td></tr>
+    <tr><td>Personas <code>/personas</code></td><td>Personas e melhor canal</td><td><b>Estratégia › Personas</b>: o que o motor aprendeu (Abordagem e propensão) e as aprovações pendentes. As sugestões também aparecem na régua</td></tr>
+    <tr><td>Segmentos <code>/clusters</code></td><td>Segmentos com condições, por carteira</td><td><b>Orquestração › passo 2 “Quem?”</b></td></tr>
+    <tr><td>Carteiras <code>/credores</code></td><td>Cadastro da carteira</td><td><b>Configurações › Carteiras</b> (cadastro e tipo). A escolha da carteira é o passo 1</td></tr>
+    <tr><td>Canais e frases <code>/canais</code></td><td>Fornecedores, janelas, números e frases</td><td>Canais: <b>Configurações › Canais</b>. Frases: <b>Estratégia › Frases</b></td></tr>
+    <tr><td>Mapa da Esteira <code>/mapa</code></td><td>Onde os clientes estão</td><td><b>Resultados › Mapa da esteira</b> (por estágio do cliente)</td></tr>
+    <tr><td>Comitê <code>/comite</code></td><td>Visão do comitê</td><td><b>Resultados › Comitê</b></td></tr>
+    <tr><td>Estratégias <code>/estrategias</code></td><td>Biblioteca, compartilhar, separar, copiar, padrão MotorCX, montar pelas personas</td><td>Carteira nova: <b>Criar do zero · Copiar de outra carteira · Começar de um modelo (opcional)</b>, lado a lado e sem recomendação. “Usar a régua de…” no passo 4. “Guardar como modelo da empresa” no passo 5. O padrão aplicado sem mostrar deixa de existir. “Montar pelas personas” vira as sugestões da Abordagem dentro da régua</td></tr>
+    <tr><td>(dentro da régua)</td><td>Travas e regras de contato</td><td>Passo 4, bloco “Regras de contato desta régua”</td></tr>
+  </tbody></table></div>
+</div></section>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const nf = n => n.toLocaleString("pt-BR");
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const COR = { whatsapp: "#1F8A4C", rcs: "#3B5BA9", sms: "#7A4FB0", email: "#A2552B", agente_voz: "#0E7C86", discador: "#475569" };
+  const NOME = { whatsapp: "WhatsApp", rcs: "RCS", sms: "SMS", email: "E-mail", agente_voz: "Agente virtual", discador: "Discador" };
+  const CON = { "senão": "↳ senão", junto: "+ junto", reserva: "↻ reserva", sempre: "e sempre" };
+  const EVN = { pouca: ["Coletando", 1], previa: ["Prévia", 2], firme: ["Definida", 3] };
+  const ev = n => `<span class="ev"><i>${[1, 2, 3].map(k => `<u class="${k <= EVN[n][1] ? "on" : ""}"></u>`).join("")}</i>${EVN[n][0]}</span>`;
+  const fl = f => `<span class="fl ${f}">${f}</span>`;
+
+  const PER = {
+    wa: { cli: 8420, saldo: 9.7, nome: "Atraso curto com WhatsApp", cor: "#1F8A4C", f: "A", ab: "firme", contato: "Celular 2 · certificado", canal: "WhatsApp ↳ senão SMS · 18h–20h", msg: "“Parcela que cabe no bolso”" },
+    acordo: { cli: 2480, saldo: 5.7, nome: "Já fez acordo antes", cor: "#3B5BA9", f: "B", ab: "firme", contato: "Celular 1 · certificado", canal: "WhatsApp ↳ senão RCS · 12h–14h", msg: "“Retome seu acordo”" },
+    novos: { cli: 4050, saldo: 6.9, nome: "Entraram há menos de 30 dias", cor: "#7A4FB0", f: "B", ab: "previa", contato: "Celular do cadastro", canal: "RCS ↳ senão WhatsApp", msg: "ainda testando 3 frases" },
+    alto: { cli: 1960, saldo: 24.3, nome: "Ticket alto em atraso médio", cor: "#A2552B", f: "C", ab: "previa", contato: "E-mail certificado", canal: "Agente virtual ↳ senão E-mail · 10h–12h", msg: "“Condição especial até sexta”" },
+    fixo: { cli: 3100, saldo: 5.9, nome: "Só telefone fixo", cor: "#475569", f: "D", ab: "previa", contato: "Telefone fixo", canal: "Discador ↳ senão Agente virtual", msg: "ainda testando roteiros" },
+    longo: { cli: 11300, saldo: 7.2, nome: "Atraso longo e saldo baixo", cor: "#0E7C86", f: "E", ab: "firme", contato: "Celular provável · enriquecimento", canal: "SMS ↳ senão RCS", msg: "“Link de autoatendimento”" } };
+  const pchip = id => `<span class="pchip"><i style="background:${PER[id].cor}"></i>${esc(PER[id].nome)}</span>`;
+
+  // Campos de condição: os da carga + o fato "Situação do cliente" (campo fase, calculado pelo motor)
+  const CAMPOS = { fase: "Situação do cliente (fato)", prop: "Propensão a pagamento (fato · em breve)", ab: "Abordagem da persona (fato · em breve)", atraso: "Dias de atraso", saldo: "Saldo (R$)", produto: "Produto", uf: "UF", idade: "Idade", tem_whatsapp: "Tem WhatsApp", tem_celular: "Tem celular", tem_email: "Tem e-mail", so_fixo: "Só telefone fixo", qtd_telefones: "Qtd. de telefones", ddd: "DDD" };
+  const BOOL = ["tem_whatsapp", "tem_celular", "tem_email", "so_fixo"], NUM = ["atraso", "saldo", "idade", "qtd_telefones"];
+  const FASE = { localizacao: "Ainda sem contato", cpc: "Contatado (CPC)", giro: "Sem contato após as tentativas", preventivo: "Acordo em dia", quebra: "Acordo atrasado" };
+  const FX = { A: ["Muito alta", .12], B: ["Alta", .18], C: ["Média", .25], D: ["Baixa", .22], E: ["Muito baixa", .23] };
+  const AB = { firme: ["Definida", .55], aprendendo: ["Coletando ou prévia", .45] };
+  const SHARE = { quebra: .042, preventivo: .134, cpc: .169, giro: .289, localizacao: .338 };
+  const REF = { entrada: "da entrada neste estágio", atraso: "dos dias de atraso", vencimento: "do vencimento da parcela", coluna: "de uma data da carga" };
+  const EVT = [["cpc", "Quando der CPC"], ["acordo", "Quando fechar acordo"], ["pagamento", "Quando pagar"], ["fim", "No fim do prazo"]];
+
+  // Modelos opcionais: ponto de partida visível, vira cópia do cliente
+  const momsClassicos = digital => {
+    const voz = (a, b) => digital ? b : a;
+    return [
+      { id: "m-quebra", nome: "Acordo atrasado", ativo: true, cond: [{ campo: "fase", op: "=", valor: "quebra" }], ref: "entrada", de: 0, ate: 5, ciclo: null, saidas: { cpc: "fica", acordo: "fica", pagamento: "geral", fim: "m-giro" }, dias: [0, 1, 3, 5],
+        r: { geral: { 0: [["", "whatsapp"]], 1: [["", "sms"], ["junto", "email"]], 3: voz([["", "agente_voz"], ["reserva", "discador"]], [["", "rcs"], ["senão", "sms"]]), 5: [["", "whatsapp"]] } } },
+      { id: "m-prev", nome: "Acordo em dia", ativo: true, cond: [{ campo: "fase", op: "=", valor: "preventivo" }], ref: "vencimento", de: -3, ate: 0, ciclo: null, saidas: { cpc: "fica", acordo: "fica", pagamento: "geral", fim: "geral" }, dias: [-3, -1, 0],
+        r: { geral: { "-3": [["", "sms"]], "-1": [["", "whatsapp"]], 0: [["", "whatsapp"], ["junto", "email"]] } } },
+      { id: "m-cpc", nome: "Contatado (CPC)", ativo: true, cond: [{ campo: "fase", op: "=", valor: "cpc" }], ref: "entrada", de: 0, ate: 20, ciclo: { dias: 3, vezes: 5 }, saidas: { cpc: "fica", acordo: "m-prev", pagamento: "sai", fim: "m-giro" }, dias: [1, 2, 3],
+        r: { geral: { 1: [["", "whatsapp"]], 3: voz([["", "agente_voz"], ["senão", "sms"]], [["", "rcs"], ["senão", "sms"]]) } } },
+      { id: "m-giro", nome: "Sem contato após as tentativas", ativo: true, cond: [{ campo: "fase", op: "=", valor: "giro" }], ref: "entrada", de: 0, ate: 60, ciclo: { dias: 7, vezes: 4 }, saidas: { cpc: "m-cpc", acordo: "m-prev", pagamento: "sai", fim: "sai" }, dias: [1, 3, 5],
+        r: { geral: { 1: [["", "sms"]], 3: [["", "rcs"], ["senão", "sms"]], 5: [["", "email"]] } } },
+      { id: "m-novo", nome: "Ainda sem contato", ativo: true, cond: [{ campo: "fase", op: "=", valor: "localizacao" }], ref: "entrada", de: 1, ate: 8, ciclo: null, saidas: { cpc: "m-cpc", acordo: "m-prev", pagamento: "sai", fim: "m-giro" }, dias: [1, 3, 5, 7],
+        r: { geral: { 1: [["", "whatsapp"]], 3: [["", "rcs"], ["senão", "sms"]], 5: voz([["", "agente_voz"], ["reserva", "discador"]], [["", "whatsapp"], ["senão", "sms"]]), 7: [["", "sms"], ["junto", "email"]] } } }];
+  };
+  const MODELOS = [
+    { id: "classicos", nome: "Estágios clássicos da cobrança", desc: "5 estágios pela situação do cliente, com réguas de todos os canais.", de: "motorcx", moms: () => momsClassicos(false) },
+    { id: "digital", nome: "Só digital", desc: "Os mesmos 5 estágios só com WhatsApp, SMS, RCS e e-mail. Sem discador nem agente virtual.", de: "motorcx", moms: () => momsClassicos(true) },
+    { id: "noite", nome: "Cartões · noite", desc: "Guardado por Planejamento em 12/10, a partir de Cartões Alfa.", de: "empresa", moms: () => { const m = momsClassicos(false); m.forEach(x => x.r.geral[1] = [["", "whatsapp"], ["senão", "sms"]]); return m; } }];
+
+  // Carteira que já usa: os 5 estágios antigos já são dela (nomes que ela escolheu, sem selo)
+  const migrado = () => { const m = momsClassicos(false); m[4].nome = "Cliente novo"; m[2].nome = "Conversando"; m[3].nome = "Giro sem contato";
+    m.unshift({ id: "m-quebra-alta", nome: "Acordo atrasado com alta chance", ativo: true, cond: [{ campo: "fase", op: "=", valor: "quebra" }, { campo: "prop", op: "em", valor: ["A", "B"] }], ref: "entrada", de: 0, ate: 5, ciclo: null, saidas: { cpc: "fica", acordo: "fica", pagamento: "geral", fim: "m-quebra" }, dias: [0, 1, 2, 3],
+      r: { geral: { 0: [["", "whatsapp"], ["junto", "sms"]], 1: [["", "discador"], ["senão", "agente_voz"]], 2: [["", "whatsapp"], ["junto", "email"]], 3: [["", "discador"], ["reserva", "agente_voz"]] } } });
+    m.splice(5, 0, { id: "m-novo-baixa", nome: "Sem contato, baixa chance", ativo: true, cond: [{ campo: "fase", op: "=", valor: "localizacao" }, { campo: "prop", op: "em", valor: ["D", "E"] }], ref: "entrada", de: 1, ate: 8, ciclo: null, saidas: { cpc: "m-cpc", acordo: "m-prev", pagamento: "sai", fim: "m-giro" }, dias: [1, 4, 8],
+      r: { geral: { 1: [["", "sms"]], 4: [["", "email"]], 8: [["", "sms"]] } } });
+    return m; };
+  const novaCart = () => ({
+    alfa: { nome: "Cartões Alfa", tipo: "Cartões", cli: 36510, segs: [
+      { id: "curto", nome: "Atraso curto", cond: ["Atraso até 60 dias"], cli: 14200, pers: ["wa", "acordo", "novos"], moms: migrado() },
+      { id: "medio", nome: "Atraso médio", cond: ["Atraso de 61 a 180 dias"], cli: 9800, pers: ["alto", "fixo"], moms: migrado() },
+      { id: "longo", nome: "Atraso longo", cond: ["Atraso acima de 180 dias"], cli: 12510, pers: ["longo"], moms: migrado() }] },
+    beta: { nome: "Consignado Beta", tipo: "Consignado", cli: 12400, segs: [
+      { id: "b1", nome: "Margem ativa", cond: ["Tem margem consignável"], cli: 8100, pers: ["acordo"], moms: migrado() }] },
+    gama: { nome: "Crediário Gama", tipo: "Varejo e crediário", cli: 8900, segs: [] } });
+  let CART = novaCart();
+  const SUG0 = () => ({
+    wa: { seg: "curto", mom: "m-novo", p: "wa", dia: 1, txt: "1º canal WhatsApp no celular 2, às 18h", porque: "71% dos CPC vieram do celular 2; WhatsApp custa R$ 1,88 por CPC e ela responde à noite.", cel: [["", "whatsapp"], ["senão", "sms"]], st: "pend" },
+    acordo: { seg: "curto", mom: "m-novo", p: "acordo", dia: 3, txt: "Mensagem “Retome seu acordo” no WhatsApp", porque: "Gera 2,8× mais promessas (acordos) que a média da carteira.", cel: [["", "whatsapp"]], frase: "Retome seu acordo", st: "pend" },
+    alto: { seg: "medio", mom: "m-novo", p: "alto", dia: 1, txt: "1º canal Agente virtual, das 10h às 12h", porque: "Canal definido: R$ 2,73 por CPC, o mais barato para este grupo.", cel: [["", "agente_voz"], ["senão", "email"]], st: "pend" } });
+  let SUG = SUG0();
+  const est = { cen: "alfa", aba: "orq", passo: 3, cart: "alfa", seg: "curto", mom: "m-novo", forma: "raias", menu: false, novoSeg: false, salvo: false, sujo: false, modelo: false, pick: null, escolha: null, modSel: "classicos", alvo: "seg", pvista: "lista", tela: "estrategia" };
+  const C = () => CART[est.cart];
+  const S = () => C().segs.find(s => s.id === est.seg) || C().segs[0];
+  const M = () => { const s = S(); return s && (s.moms.find(m => m.id === est.mom) || s.moms[0]); };
+  const pend = () => Object.values(SUG).filter(s => s.st === "pend");
+  const prevM = (seg, m) => { if (!m.cond.length || m.cond.every(c => c.campo === "atraso" && c.op === "≥" && c.valor === "0")) return seg.cli; let f = 1; m.cond.forEach(c => { f *= c.campo === "fase" ? (SHARE[c.valor] || .2) : c.campo === "prop" ? c.valor.reduce((a, k) => a + FX[k][1], 0) : c.campo === "ab" ? AB[c.valor][1] : BOOL.includes(c.campo) ? .6 : NUM.includes(c.campo) ? .5 : .4; }); return Math.round(seg.cli * f / 10) * 10; };
+  const semMom = seg => { const at = seg.moms.filter(m => m.ativo); if (at.some(m => prevM(seg, m) >= seg.cli)) return 0;
+    const unicos = new Set(at.filter(m => m.cond.length === 1 && m.cond[0].campo === "fase").map(m => m.cond[0].valor));
+    let cobre = [...unicos].reduce((a, f) => a + SHARE[f] * seg.cli, 0);
+    at.forEach(m => { const f = m.cond.find(c => c.campo === "fase"); if ((m.cond.length > 1 || !f) && (!f || !unicos.has(f.valor))) cobre += prevM(seg, m); });
+    return Math.max(0, Math.round((seg.cli - Math.min(seg.cli, cobre)) / 10) * 10); };
+  const temRegua = m => Object.values(m.r.geral || {}).some(a => a && a.length);
+  const lab = (m, d) => m.ciclo ? `Dia ${d} do ciclo` : m.ref === "vencimento" ? (d < 0 ? `D${d}` : d === 0 ? "D0" : `D+${d}`) : m.ref === "atraso" ? `Atraso ${d}` : `Dia ${d}`;
+  const nomeM = (seg, id) => (seg.moms.find(x => x.id === id) || {}).nome || "?";
+  const destino = (seg, v) => v === "fica" ? "fica neste estágio" : v === "sai" ? "sai da régua" : v === "geral" ? "volta ao geral" : `vai para “${nomeM(seg, v)}”`;
+  const condTxt = c => c.campo === "fase" ? `Situação do cliente = ${FASE[c.valor]}` : c.campo === "prop" ? `Propensão em ${c.valor.join(", ") || "nenhuma faixa"}` : c.campo === "ab" ? `Abordagem ${AB[c.valor][0].toLowerCase()}` : BOOL.includes(c.campo) ? `${CAMPOS[c.campo]}: ${c.valor === "sim" ? "sim" : "não"}` : `${CAMPOS[c.campo]} ${c.op} ${c.valor}`;
+
+  function inicio() {
+    const itens = [];
+    Object.values(CART).forEach(c => c.segs.forEach(g => { const n = g.moms.length ? semMom(g) : g.cli; if (n > 0) itens.push([c, g, n]); }));
+    return `<div class="ctx">Início</div><div class="barra"><h1>Bom dia</h1><span class="muted">Terça, 28 de outubro</span></div>
+      <div class="corpo"><b style="font-size:15px">Para hoje</b><div class="ck">
+        ${itens.map(([c, g, n], i) => `<div><i class="at">!</i><span style="flex:1"><b>≈ ${nf(n)} clientes sem estágio em ${esc(c.nome)} · ${esc(g.nome)}</b><small>Ficam sem ação até entrarem em algum estágio.</small></span><button class="btn peq" data-resolver="${c === CART.alfa ? "alfa" : c === CART.beta ? "beta" : "gama"}|${g.id}" data-demo="resolver-${g.id}"${i === 0 ? "" : ""}>Resolver</button></div>`).join("")}
+        <div><i class="ok">✓</i><span style="flex:1"><b>Lista do dia saiu às 07:40</b><small>18.240 clientes com ação hoje</small></span><button class="btn sec peq" data-tela="lista">Ver</button></div>
+        <div><i class="at">!</i><span style="flex:1"><b>Fatura de outubro vence em 3 dias</b><small>R$ 12.480,00</small></span><button class="btn sec peq">Ver</button></div></div></div>`;
+  }
+  function listaDia() {
+    const sem = Object.values(CART).reduce((a, c) => a + c.segs.reduce((b, g) => b + (g.moms.length ? semMom(g) : 0), 0), 0);
+    const pri = Object.values(CART).flatMap(c => c.segs.map(g => [c, g, g.moms.length ? semMom(g) : 0])).find(x => x[2] > 0);
+    const M2 = [["Sem estágio", sem, "não se encaixam em nenhum estágio do segmento (estágio desligado ou sem estágio para a situação deles)", true], ["Aguardando 48 h desde a última ação", 5210], ["A régua não tem passo hoje", 3100], ["Sem contato para os canais do dia", 4120], ["Domingo, feriado ou fora do calendário", 0]];
+    return `<div class="ctx">Cobrança › Lista do dia</div><div class="barra"><h1>Lista do dia</h1><span class="muted">28/10 · saiu às 07:40</span></div>
+      <div class="corpo"><div class="passos" style="grid-template-columns:repeat(4,minmax(0,1fr))">${[["Com ação hoje", 18240], ["A régua segurou", 8310 + sem], ["Sem contato", 4120], ["Fora da cobrança", 1900]].map(([l, n]) => `<div class="ps" style="cursor:default"><span class="nn">#</span><small>${l}</small><b>${nf(n)}</b><span class="st">clientes</span></div>`).join("")}</div>
+        <b style="font-size:14px">Quem ficou de fora hoje, por motivo</b><div class="tabw"><table class="tab"><thead><tr><th>Motivo</th><th class="n">Clientes</th><th></th></tr></thead><tbody>
+        ${M2.map(([l, n, d, sx]) => `<tr><td><b>${l}</b>${d ? `<br><span class="muted">${d}</span>` : ""}</td><td class="n">${nf(n)}</td><td>${sx && n && pri ? `<button class="btn peq" data-resolver="alfa|${pri[1].id}" data-demo="lista-resolver">Resolver</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>`;
+  }
+  function tela() {
+    document.querySelectorAll(".lado .li").forEach((li, i) => li.toggleAttribute("aria-current", (est.tela === "inicio" && i === 0) || (est.tela !== "inicio" && i === 1)));
+    document.querySelectorAll(".lado .li[aria-current]").forEach(li => li.setAttribute("aria-current", "page"));
+    if (est.tela === "inicio") { $("tela").innerHTML = inicio(); return; }
+    if (est.tela === "lista") { $("tela").innerHTML = listaDia(); return; }
+    const c = C(), np = pend().filter(s => est.cart === "alfa").length;
+    const ctx = { orq: "Cobrança › Estratégia › Orquestração", per: "Cobrança › Estratégia › Personas", fra: "Cobrança › Estratégia › Frases" }[est.aba];
+    const acao = { orq: `<button class="btn" data-passo="5" data-demo="revisar-salvar">Revisar e salvar</button>`, per: `<button class="btn" data-acao="editar-personas">Editar personas</button>`, fra: `<button class="btn" data-acao="nova-frase">+ Frase</button>` }[est.aba];
+    $("tela").innerHTML = `<div class="ctx">${ctx}</div>
+      <div class="barra"><h1>Estratégia</h1><span class="selc" data-passo="1"><span class="lbl">Carteira</span>${esc(c.nome)} ▾</span>
+        ${est.sujo ? `<span class="pill at">Alterações não salvas</span>` : est.salvo ? `<span class="pill ok">Salvo</span>` : ""}<div class="dir">${acao}</div></div>
+      <div class="abas" role="tablist">${[["orq", "Orquestração"], ["per", "Personas", np], ["fra", "Frases"]].map(([k, l, n]) => `<button class="aba" role="tab" aria-selected="${est.aba === k}" data-aba="${k}" data-demo="aba-${{ orq: "orquestracao", per: "personas", fra: "frases" }[k]}">${l}${n ? `<span class="n">${n}</span>` : ""}</button>`).join("")}</div>
+      <div class="corpo">${est.aba === "orq" ? orq() : est.aba === "per" ? personas() : frases()}</div>`;
+  }
+
+  function orq() {
+    const c = C(), segs = c.segs, moms = segs.flatMap(s => s.moms), comM = segs.filter(s => s.moms.length).length, comR = moms.filter(temRegua).length, sem = segs.reduce((a, s) => a + (s.moms.length ? semMom(s) : s.cli), 0);
+    const P = [[1, "Carteira", "De quem?", c.nome, true],
+      [2, "Segmentos", "Quem?", segs.length ? `${segs.length} segmento${segs.length > 1 ? "s" : ""}` : "falta criar", segs.length > 0],
+      [3, "Estágios", "Em que estágio?", !segs.length ? "depois dos segmentos" : comM < segs.length ? `falta em ${segs.length - comM} segmento(s)` : sem ? `${moms.length} estágio${moms.length > 1 ? "s" : ""} · ≈ ${nf(sem)} sem estágio` : `${moms.length} estágio${moms.length > 1 ? "s" : ""}`, segs.length && comM === segs.length],
+      [4, "Régua", "O que fazer?", !moms.length ? "depois dos estágios" : comR < moms.length ? `${comR} de ${moms.length} com régua` : `${moms.length} de ${moms.length} com régua`, moms.length && comR === moms.length],
+      [5, "Revisar e salvar", "Pronto?", est.salvo ? "salvo" : "falta salvar", est.salvo]];
+    return `<div class="passos" role="list">${P.map(([i, t, q, st, ok]) => `<button class="ps${ok ? " feito" : ""}" role="listitem" data-passo="${i}" data-demo="passo-${i}"${est.passo === i ? ' aria-current="step"' : ""}><span class="nn">${ok && est.passo !== i ? "✓" : i}</span><small>${q}</small><b>${t}</b><span class="st${ok ? "" : " falta"}">${esc(st)}</span></button>`).join("")}</div>` + [null, p1, p2, p3, p4, p5][est.passo]();
+  }
+
+  function p1() {
+    return `<div class="muted">Escolha a carteira. Cadastrar carteira nova e o tipo dela fica em <b>Configurações › Carteiras</b>.</div>
+      <div class="carts">${Object.entries(CART).map(([k, c]) => `<button class="ct" aria-pressed="${est.cart === k}" data-cart="${k}" data-demo="carteira-${k}"><b>${esc(c.nome)}</b><span class="l"><span class="tag">${esc(c.tipo)}</span>${nf(c.cli)} clientes</span>
+        <span class="l">${c.segs.length ? `${c.segs.length} segmentos · ${c.segs.reduce((a, s) => a + s.moms.length, 0)} estágios` : `<span class="tag at">vazia</span>`}</span></button>`).join("")}</div>
+      <div><button class="btn" data-passo="2" data-demo="continuar-segmentos">Continuar: quem vamos cobrar?</button></div>`;
+  }
+
+  // Três caminhos lado a lado, nenhum marcado
+  function caminhos(alvo) {
+    const titulo = alvo === "seg" ? `${esc(C().nome)} está vazia` : `${esc(S().nome)} ainda não tem estágios`;
+    const sub = alvo === "seg" ? "Nada vem pronto. Escolha por onde começar; tudo fica editável." : "Um estágio diz quem entra, por quanto tempo e quando sai. Nada vem pronto.";
+    return `<div class="vazio"><h3>${titulo}</h3><span class="muted">${sub}</span>
+      <div class="ops"><button class="op" data-acao="${alvo === "seg" ? "novo-seg" : "novo-mom"}" data-demo="criar-do-zero${alvo === "seg" ? "" : "-estagio"}">Criar do zero<small>${alvo === "seg" ? "Você define o primeiro segmento." : "Você define o primeiro estágio."}</small></button>
+        <button class="op" data-acao="copiar" data-alvo="${alvo}" data-demo="copiar-carteira${alvo === "seg" ? "" : "-estagio"}">Copiar de outra carteira<small>Da sua empresa. Vira cópia desta carteira.</small></button>
+        <button class="op" data-acao="modelos" data-alvo="${alvo}" data-demo="comecar-modelo${alvo === "seg" ? "" : "-estagio"}">Começar de um modelo (opcional)<small>Você vê o que vem dentro antes de usar.</small></button></div>
+      ${est.escolha === "modelos" && est.alvo === alvo ? modelos() : ""}${est.escolha === "copiar" && est.alvo === alvo ? copiar() : ""}</div>`;
+  }
+  function modelos() {
+    const m = MODELOS.find(x => x.id === est.modSel), moms = m.moms();
+    const lista = de => MODELOS.filter(x => x.de === de).map(x => `<button class="mod" aria-pressed="${est.modSel === x.id}" data-mod="${x.id}" data-demo="modelo-${x.id}">${esc(x.nome)}<small>${esc(x.desc)}</small></button>`).join("");
+    return `<div class="mods"><div class="mlst"><h5>Modelos de partida</h5>${lista("motorcx")}<h5>Da sua empresa</h5>${lista("empresa")}</div>
+      <div class="dentro"><b>O que vem dentro de “${esc(m.nome)}”</b><span class="muted">Vira cópia sua: tudo editável e desligável. Nada fica ligado ao modelo.</span>
+        <table>${moms.map((x, i) => `<tr><td>${i + 1}º</td><td><b>${esc(x.nome)}</b><br><span class="muted">${esc(condTxt(x.cond[0]))} · ${x.de} a ${x.ate} dias${x.ciclo ? ` · repete a cada ${x.ciclo.dias} dias` : ""}</span></td><td>${[...new Set(Object.values(x.r.geral).flat().map(a => a[1]))].map(cn => `<span class="cd" style="background:${COR[cn]}"></span>${NOME[cn]}`).join(" ")}</td></tr>`).join("")}</table>
+        <div><button class="btn" data-acao="usar-modelo" data-demo="usar-e-editar">Usar e editar</button></div></div></div>`;
+  }
+  function copiar() {
+    return `<div class="mods"><div class="mlst"><h5>Carteiras da sua empresa</h5>${["alfa", "beta"].filter(k => k !== est.cart).map(k => `<button class="mod" data-copiar="${k}" data-demo="copiar-${k}">${esc(CART[k].nome)}<small>${CART[k].segs.length} segmentos · ${CART[k].segs.reduce((a, s) => a + s.moms.length, 0)} estágios</small></button>`).join("")}</div>
+      <div class="dentro"><b>Copiar cria uma cópia desta carteira</b><span class="muted">Mudar aqui depois não muda a carteira de origem.</span></div></div>`;
+  }
+
+  function p2() {
+    const c = C();
+    if (!c.segs.length) return caminhos("seg") + (est.novoSeg ? novoSeg() : "");
+    return `<div class="muted">Quem vamos cobrar, dividido por segmento. Cada segmento tem os seus estágios no próximo passo.</div>
+      <div class="segs">${c.segs.map(s => `<div class="sg"><div><b>${esc(s.nome)}</b> <span class="muted">· ${nf(s.cli)} clientes</span><div class="cond">${s.cond.map(t => `<span>${esc(t)}</span>`).join("")}</div></div>
+        <div class="chips">${s.pers.map(pchip).join("") || `<span class="muted">personas aparecem com o tempo</span>`}</div>
+        <div style="display:flex;gap:8px;align-items:center">${s.moms.length ? `<span class="tag ok">${s.moms.length} estágios</span>` : `<span class="tag at">sem estágios</span>`}<button class="btn sec peq" data-seg="${s.id}" data-irpasso="3" data-demo="estagios-${s.id}">Estágios</button></div></div>`).join("")}</div>
+      ${est.novoSeg ? novoSeg() : `<div><button class="btn sec" data-acao="novo-seg" data-demo="novo-segmento">+ Segmento</button></div>`}`;
+  }
+  function novoSeg() {
+    return `<div class="novo"><label>Nome<input id="ns-nome" value="${C().segs.length ? "Ticket alto" : "Todos os clientes"}" aria-label="Nome do segmento"></label><label>Condição<select id="ns-cond"><option>Carteira inteira</option><option>Saldo acima de R$ 5.000</option><option>Atraso até 30 dias</option></select></label>
+      <span class="muted" style="align-self:center">Prévia: ≈ ${nf(C().segs.length ? 2100 : C().cli)} clientes</span><button class="btn" data-acao="criar-seg" data-demo="criar-segmento">Criar segmento</button><button class="lnk" data-acao="novo-seg">Cancelar</button></div>`;
+  }
+  const segbar = passo => `<div class="segbar"><span class="muted">Segmento</span>${C().segs.map(g => `<button class="si" style="flex-direction:row;gap:6px" aria-pressed="${g.id === S().id}" data-seg="${g.id}" data-demo="segmento-${g.id}">${esc(g.nome)}<small>${nf(g.cli)}</small></button>`).join("")}</div>`;
+
+  function p3() {
+    const s = S();
+    if (!s) return `<div class="vazio"><h3>Primeiro crie um segmento</h3><button class="btn" data-passo="2">Ir para Quem?</button></div>`;
+    if (!s.moms.length) return segbar() + caminhos("mom");
+    const m = M(), sem = semMom(s), i0 = s.moms.indexOf(m);
+    const lista = s.moms.map((x, i) => `<div class="mi${x.ativo ? "" : " off"}" draggable="true" data-arr="${i}" data-mom="${x.id}" aria-pressed="${x.id === m.id}" data-demo="estagio-${x.id}">
+        <span class="h" title="Arraste para mudar a prioridade">⋮⋮</span><span class="n">${i + 1}</span><span><b>${esc(x.nome)}</b><small>${x.ativo ? `≈ ${nf(prevM(s, x))} clientes hoje` : "desligado"}</small></span>
+        <span class="r"><button class="mn" data-mv="${i}" data-dir="-1" aria-label="Subir"${i ? "" : ' aria-disabled="true"'} data-demo="subir-${x.id}">↑</button><button class="mn" data-mv="${i}" data-dir="1" aria-label="Descer"${i < s.moms.length - 1 ? "" : ' aria-disabled="true"'}>↓</button><button class="sw" role="switch" aria-checked="${x.ativo}" data-ativo="${x.id}" aria-label="Ligado" data-demo="ativo-${x.id}"></button></span></div>`).join("");
+    const opsCampo = cur => Object.entries(CAMPOS).map(([k, l]) => `<option value="${k}"${k === cur ? " selected" : ""}>${l}</option>`).join("");
+    const valor = (c, i) => c.campo === "prop" ? `<span class="muted">em</span><span class="fxs" role="group" aria-label="Faixas">${Object.keys(FX).map(k => `<button class="${k}" aria-pressed="${c.valor.includes(k)}" data-faixa="${k}" data-ci="${i}" title="${FX[k][0]}" data-demo="faixa-${k}">${k}</button>`).join("")}</span>`
+      : c.campo === "ab" ? `<select class="inp" data-cond="${i}" data-k="valor">${Object.entries(AB).map(([k, l]) => `<option value="${k}"${k === c.valor ? " selected" : ""}>${l[0]}</option>`).join("")}</select>`
+      : c.campo === "fase" ? `<select class="inp" data-cond="${i}" data-k="valor">${Object.entries(FASE).map(([k, l]) => `<option value="${k}"${k === c.valor ? " selected" : ""}>${l}</option>`).join("")}</select>`
+      : BOOL.includes(c.campo) ? `<select class="inp" data-cond="${i}" data-k="valor"><option value="sim"${c.valor === "sim" ? " selected" : ""}>sim</option><option value="nao"${c.valor === "nao" ? " selected" : ""}>não</option></select>`
+      : `<select class="inp" data-cond="${i}" data-k="op">${["=", "≠", ">", "≥", "<", "≤"].map(o => `<option${o === c.op ? " selected" : ""}>${o}</option>`).join("")}</select><input class="inp" style="width:120px" value="${esc(c.valor)}" data-cond="${i}" data-k="valor" aria-label="Valor">`;
+    const dest = (ev, cur) => `<select class="inp" data-saida="${ev}" data-demo="saida-${ev}">${ev === "fim" ? "" : `<option value="fica"${cur === "fica" ? " selected" : ""}>fica neste estágio</option>`}<option value="sai"${cur === "sai" ? " selected" : ""}>sai da régua</option><option value="geral"${cur === "geral" ? " selected" : ""}>volta ao geral (1º estágio em que se encaixar)</option>${s.moms.filter(x => x.id !== m.id).map(x => `<option value="${x.id}"${cur === x.id ? " selected" : ""}>vai para “${esc(x.nome)}”</option>`).join("")}</select>`;
+    return segbar() + `<div class="mm"><div class="ml"><b style="font-size:13px">Estágios de ${esc(s.nome)} <span class="muted" style="font-weight:500">· ordem = prioridade</span></b>
+        <span class="muted">O cliente fica no 1º estágio em que se encaixa. Arraste para mudar.</span>${lista}
+        ${sem ? `<div class="aviso"><span>!</span><div><b>≈ ${nf(sem)} clientes sem estágio</b>Ficam sem ação. O decisor vê este aviso no Início e na Lista do dia. <button class="lnk" data-acao="mom-sobra" data-demo="estagio-para-sobra">Criar um estágio para eles</button></div></div>` : `<div class="aviso info"><div><b>Todos os clientes caem em algum estágio.</b></div></div>`}
+        <button class="btn sec" data-acao="novo-mom" data-demo="novo-estagio">+ Estágio</button></div>
+      <div class="ed">
+        <div class="lin"><input class="inp nome" value="${esc(m.nome)}" data-nome="1" aria-label="Nome do estágio" data-demo="nome-estagio"><label class="chk"><button class="sw" role="switch" aria-checked="${m.ativo}" data-ativo="${m.id}" aria-label="Estágio ligado"></button><span>${m.ativo ? "Ligado" : "Desligado"}</span></label><span class="tag">${i0 + 1}º na prioridade</span></div>
+        <div><h4>Quem entra</h4>${m.cond.map((c, i) => `<div class="cnd"><select class="inp" data-cond="${i}" data-k="campo" aria-label="Campo">${opsCampo(c.campo)}</select>${c.campo === "fase" || c.campo === "ab" ? `<span class="muted">=</span>` : ""}${valor(c, i)}<button class="mn" data-rmcond="${i}" aria-label="Remover condição">✕</button>${c.campo === "prop" || c.campo === "ab" ? `<span class="tag at" title="O motor ainda não calcula este fato">Coletando · em breve: ainda não grava</span>` : ""}${i < m.cond.length - 1 ? `<span class="muted">e</span>` : ""}</div>`).join("") || `<span class="aviso" style="display:inline-flex">Pelo menos uma condição (regra do motor). Para pegar todo mundo do segmento, use “Dias de atraso ≥ 0”.</span>`}
+          <div class="lin" style="margin-top:6px"><button class="addc" data-acao="add-cond" data-demo="add-condicao">+ condição</button><span class="prev">≈ ${nf(prevM(s, m))} clientes hoje</span></div>
+          <p class="fato"><b>Situação do cliente</b> é um fato que o MotorCX calcula pelos retornos e acordos (ainda sem contato, contatado, sem contato após as tentativas, acordo em dia, acordo atrasado). Você usa como condição; não edita.</p>
+          <p class="fato"><b>Propensão a pagamento</b> ${ev("pouca")} o MotorCX calcula pela chance de pagar em 30 dias, em faixas de A (muito alta) a E (muito baixa); pagamento = quitação ou 1ª parcela; acordo é promessa. <span style="color:var(--at)">Em breve: o MotorCX começa a calcular quando houver pagamentos suficientes nesta carteira; até lá não grava como condição.</span></p></div>
+        <div><h4>Por quanto tempo</h4><div class="lin">de <input class="inp n" type="number" value="${m.de}" data-campo="de" aria-label="De"> até <input class="inp n" type="number" value="${m.ate}" data-campo="ate" aria-label="Até"> dias, contando <select class="inp" data-campo="ref" aria-label="Contando de">${Object.entries(REF).map(([k, l]) => `<option value="${k}"${k === m.ref ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+          <label class="chk" style="margin-top:8px"><button class="sw" role="switch" aria-checked="${!!m.ciclo}" data-acao="ciclo" aria-label="Repetir"></button><span>Repetir a régua${m.ciclo ? ` a cada <input class="inp n" type="number" value="${m.ciclo.dias}" data-ciclo="dias" aria-label="Dias"> dias, <input class="inp n" type="number" value="${m.ciclo.vezes}" data-ciclo="vezes" aria-label="Vezes"> vezes` : ""}</span></label></div>
+        <div><h4>Quando sair</h4><div class="said">${EVT.map(([k, l]) => `<span>${l}</span>${dest(k, m.saidas[k])}`).join("")}</div><p class="muted" style="margin:6px 0 0">“Volta ao geral” = o 1º estágio em que o cliente se encaixar. Se não houver nenhum, ele fica sem ação.</p></div>
+        <div class="lin"><button class="btn" data-passo="4" data-demo="regua-do-estagio">Montar a régua deste estágio</button><button class="lnk" data-acao="rm-mom">Apagar estágio</button></div>
+      </div></div>`;
+  }
+
+  function celula(s, m, lane, d) {
+    const sg = Object.values(SUG).find(x => x.seg === s.id && x.mom === m.id && x.p === lane && x.dia === d && est.cart === "alfa");
+    const ord = (arr, porq, frase) => `<div class="ord"><span class="c1"><i style="background:${COR[arr[0][1]]}"></i>${NOME[arr[0][1]]}</span>${porq ? `<span class="porq">por causa da persona ${esc(PER[lane].nome)}</span>` : ""}${frase ? `<span class="frase">“${esc(frase)}”</span>` : ""}${arr.slice(1).map(([c, cn]) => `<span class="seq"><span class="con">${CON[c]}</span><span class="cn"><i style="background:${COR[cn]}"></i>${NOME[cn]}</span></span>`).join("")}</div>`;
+    const key = `${lane}|${d}`, picker = est.pick === key ? `<div class="pick">${Object.keys(NOME).map(cn => `<button data-canal="${cn}" data-demo="canal-${cn}"><i style="background:${COR[cn]}"></i>${NOME[cn]}</button>`).join("")}</div>` : "";
+    if (lane === "geral") { const a = (m.r.geral || {})[d]; return `<td><div class="cel">${a && a.length ? ord(a) : picker || `<button class="addc" data-add="${key}" data-demo="add-canal-geral-${d}">+ canal</button>`}</div></td>`; }
+    if (sg && sg.st === "pend") return `<td><div class="cel"><div class="sug"><b>Abordagem sugere</b><span>${esc(sg.txt)}</span><span class="muted" style="font-size:11px">${esc(sg.porque)}</span>
+      <span class="ac"><button class="btn peq" data-sug="${sg.p}" data-v="ok" data-demo="aplicar-${sg.p}">Aplicar</button><button class="lnk" data-sug="${sg.p}" data-v="nao" data-demo="agora-nao-${sg.p}">Agora não</button></span></div></div></td>`;
+    if (sg && sg.st === "ok") return `<td><div class="cel">${ord(sg.cel, true, sg.frase)}</div></td>`;
+    return `<td><div class="cel segue">segue o geral</div></td>`;
+  }
+
+  function p4() {
+    const s = S(); if (!s || !s.moms.length) return `<div class="vazio"><h3>Primeiro defina os estágios</h3><button class="btn" data-passo="3">Ir para Em que estágio?</button></div>`;
+    const m = M();
+    const lanes = ["geral", ...s.pers.filter(p => est.cart === "alfa" && Object.values(SUG).some(g => g.seg === s.id && g.mom === m.id && g.p === p))];
+    const regua = est.forma === "raias" ? `<div class="grade"><table class="r"><thead><tr><th class="est">Quem</th>${m.dias.map(d => `<th>${lab(m, d)}</th>`).join("")}<th><button class="addc" data-acao="add-dia" data-demo="add-dia">+ dia</button></th></tr></thead><tbody>
+        ${lanes.map(l => `<tr class="${l === "geral" ? "" : "persona"}"${l !== "geral" ? ` data-demo="raia-${l}"` : ""}><th class="est">${l === "geral" ? `<b>Todos do estágio</b><small>≈ ${nf(prevM(s, m))} clientes</small>` : `<b>${esc(PER[l].nome)}</b><small>persona · Abordagem ${EVN[PER[l].ab][0].toLowerCase()}</small>`}</th>${m.dias.map(d => celula(s, m, l, d)).join("")}<td></td></tr>`).join("")}
+      </tbody></table></div>` : fluxo(s, m, lanes);
+    return segbar() + `<div class="mchips">${s.moms.map(x => `<button class="${x.ativo ? "" : "off"}" aria-pressed="${x.id === m.id}" data-mom="${x.id}" data-demo="regua-${x.id}">${esc(x.nome)}${temRegua(x) ? "" : " · sem régua"}</button>`).join("")}</div>
+      <div class="rtopo"><b style="font-size:15px">O que fazer em “${esc(m.nome)}”?</b>
+        <span class="dir"><span class="forma" role="group" aria-label="Forma"><button aria-pressed="${est.forma === "raias"}" data-forma="raias" data-demo="forma-raias">Raias</button><button aria-pressed="${est.forma === "fluxo"}" data-forma="fluxo" data-demo="forma-fluxo">Fluxo</button></span>
+        <span style="position:relative"><button class="btn sec peq" data-acao="menu" data-demo="usar-regua" aria-expanded="${est.menu}">Usar a régua de… ▾</button>${est.menu ? `<div class="menu" role="menu"><p>Usar = copiar para este estágio. A cópia é sua: mudar aqui não muda a origem.</p>
+          <button data-copiaregua="noite">Modelo da sua empresa: Cartões · noite<small>guardado em 12/10 por Planejamento</small></button>
+          <button data-copiaregua="beta">Consignado Beta · ${esc(m.nome)}<small>outra carteira da empresa</small></button></div>` : ""}</span></span></div>
+      <div class="resumo">Quem entra: ${m.cond.map(condTxt).map(esc).join(" e ") || "todos do segmento"} · de ${m.de} a ${m.ate} dias, contando ${REF[m.ref]}${m.ciclo ? ` · repete a cada ${m.ciclo.dias} dias, ${m.ciclo.vezes} vezes` : ""} · sai: ${EVT.filter(([k]) => m.saidas[k] !== "fica").map(([k, l]) => `${l.replace("Quando ", "").replace("No ", "")} → ${destino(s, m.saidas[k])}`).map(esc).join(" · ")} <button class="lnk" data-passo="3">editar</button></div>
+      ${regua}
+      <details class="regras"><summary>Regras de contato desta régua <small>até 2 ações por dia · 08:00–20:00 · 48 h entre ações · discador: 2 tentativas por número</small><span class="lnk" style="margin-left:auto">Ver e editar</span></summary>
+        <div class="bd"><div><b>2 por dia, 6 por semana</b>limite de ações</div><div><b>08:00–20:00</b>horário (por UF e DDD na Discagem)</div><div><b>48 h</b>intervalo entre ações</div><div><b>2 por número</b>tentativas do discador</div></div></details>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" data-passo="3">Voltar: estágios</button><button class="btn" data-passo="5" data-demo="continuar-revisar">Continuar: revisar</button></div>`;
+  }
+
+  function fluxo(s, m, lanes) {
+    const acoes = a => a && a.length ? a.map(([cn, c], i) => `${i ? `<span class="con">${CON[cn]}</span> ` : ""}<span class="cd" style="background:${COR[c]}"></span><b>${NOME[c]}</b>`).join(" ") : `<span class="muted">sem ação</span>`;
+    return `<div class="trilho"><div class="no ini"><b>Entra em “${esc(m.nome)}”</b><br><small class="muted">${esc(m.cond.map(condTxt).join(" e ") || "todos do segmento")}</small></div>
+      ${m.dias.map(d => { const dv = lanes.filter(l => l !== "geral").map(l => { const g = Object.values(SUG).find(x => x.seg === s.id && x.mom === m.id && x.p === l && x.dia === d); return g ? [l, g] : null; }).filter(Boolean);
+        return `<div class="liga"></div><div class="dia-l"><div class="no"><b>${lab(m, d)}</b><div style="margin-top:4px">${acoes((m.r.geral || {})[d])}</div></div>
+        ${dv.map(([l, g]) => `<div class="desvio">${pchip(l)}${g.st === "ok" ? `<span>${acoes(g.cel)}</span><span class="porq">por causa da persona</span>` : g.st === "pend" ? `<span class="muted">Abordagem sugere: ${esc(g.txt)}</span><span><button class="btn peq" data-sug="${l}" data-v="ok">Aplicar</button></span>` : `<span class="muted">segue o geral</span>`}</div>`).join("")}</div>`; }).join("")}
+      <div class="liga"></div><div class="no ini"><b>Saídas</b><br><small class="muted">${EVT.map(([k, l]) => `${l}: ${destino(s, m.saidas[k])}`).map(esc).join(" · ")}</small></div></div>`;
+  }
+
+  function p5() {
+    const c = C(), segs = c.segs, moms = segs.flatMap(s => s.moms), comR = moms.filter(temRegua).length, sem = segs.reduce((a, s) => a + (s.moms.length ? semMom(s) : s.cli), 0), ap = Object.values(SUG).filter(s => s.st === "ok").length, pd = est.cart === "alfa" ? pend().length : 0;
+    const ok = segs.length > 0, completo = moms.length && comR === moms.length;
+    return `<div class="rev"><div class="ck">
+        <div><i class="ok">✓</i><span><b>Carteira:</b> ${esc(c.nome)}<small>tipo ${esc(c.tipo)} · ${nf(c.cli)} clientes</small></span></div>
+        <div><i class="${segs.length ? "ok" : "at"}">${segs.length ? "✓" : "!"}</i><span><b>Quem:</b> ${segs.length} segmento(s)<small>${segs.map(s => `${esc(s.nome)} (${nf(s.cli)})`).join(" · ") || "nenhum ainda"}</small></span></div>
+        <div><i class="${moms.length && !sem ? "ok" : "at"}">${moms.length && !sem ? "✓" : "!"}</i><span><b>Em que estágio:</b> ${moms.length} estágio(s), ${moms.filter(m => !m.ativo).length} desligado(s)<small>${sem ? `≈ ${nf(sem)} clientes não caem em nenhum estágio e ficam sem ação. Pode salvar assim, se for de propósito.` : "todo cliente cai em algum estágio"}</small>${sem ? `<button class="lnk" data-passo="3">Ver estágios</button>` : ""}</span></div>
+        <div><i class="${moms.length && comR === moms.length ? "ok" : "at"}">${moms.length && comR === moms.length ? "✓" : "!"}</i><span><b>O que fazer:</b> ${comR} de ${moms.length} estágios com régua<small>${moms.filter(m => !temRegua(m)).map(m => `sem régua: ${esc(m.nome)}`).join(" · ") || "todas as réguas prontas"}</small>${comR < moms.length ? `<button class="lnk" data-passo="4">Montar agora</button>` : ""}</span></div>
+        <div><i class="${pd ? "at" : "ok"}">${pd ? "!" : "✓"}</i><span><b>Como falar:</b> ${ap} sugestão(ões) da Abordagem aplicada(s)${pd ? `, ${pd} para decidir` : ""}<small>Sugestão pendente não impede salvar; ela continua em Personas.</small></span></div></div>
+      <div class="cx"><h3>Salvar</h3><label class="chk"><button class="sw" role="switch" aria-checked="${est.modelo}" data-acao="modelo" data-demo="guardar-modelo" aria-label="Guardar como modelo"></button><span>Guardar como modelo da empresa<small>Aparece em “Da sua empresa” para outras carteiras. Quem usar recebe uma cópia.</small></span></label>
+        <span class="muted">Vale a partir da próxima lista do dia. O histórico guarda quem salvou e quando.</span>
+        <button class="btn" data-acao="salvar" data-demo="salvar"${ok ? "" : ' aria-disabled="true"'}>${est.salvo ? "Salvo" : "Salvar estratégia"}</button>
+        ${completo ? "" : `<span class="muted">Estágio sem régua não envia nada. Dá para salvar assim e completar depois.</span>`}</div></div>`;
+  }
+
+  const QD = {
+    acelerar: { nome: "Acelerar", cor: "#D9B26B", sub: "propensão alta · Abordagem definida", fx: ["A", "B", "C"], ab: "firme", acao: "Régua completa + discador no número e no horário da persona." },
+    descobrir: { nome: "Descobrir rápido", cor: "#4DA3FF", sub: "propensão alta · Abordagem aprendendo", fx: ["A", "B", "C"], ab: "aprendendo", acao: "Régua completa com mais testes de canal e frase." },
+    manter: { nome: "Manter barato", cor: "#8E8E93", sub: "propensão baixa · Abordagem definida", fx: ["D", "E"], ab: "firme", acao: "Só o canal vencedor da Abordagem, digital." },
+    economizar: { nome: "Economizar", cor: "#5C5C61", sub: "propensão baixa · Abordagem aprendendo", fx: ["D", "E"], ab: "aprendendo", acao: "Mínimo digital, sem discador." } };
+  const quadDe = p => (["A", "B", "C"].includes(p.f) ? (p.ab === "firme" ? "acelerar" : "descobrir") : (p.ab === "firme" ? "manter" : "economizar"));
+  function matriz() {
+    const cel = k => { const ps = Object.entries(PER).filter(([, p]) => quadDe(p) === k), q = QD[k];
+      return `<div class="q" data-demo="quadrante-${k}"><div class="t"><i class="sq" style="background:${q.cor}"></i><b>${q.nome}</b><span class="muted">${q.sub}</span><span class="tag" style="margin-left:auto">sugestão</span></div>
+        <div class="nums"><span><b>${nf(ps.reduce((a, [, p]) => a + p.cli, 0))}</b>clientes</span><span><b>R$ ${ps.reduce((a, [, p]) => a + p.saldo, 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi</b>saldo</span><span><b>${ps.length}</b>persona${ps.length > 1 ? "s" : ""}</span></div>
+        <div class="chips">${ps.map(([id]) => pchip(id)).join("")}</div>
+        <div class="acao"><span><span class="muted">Sugestão:</span> ${q.acao}</span><button class="btn sec peq" data-quad="${k}" data-demo="criar-estagio-${k}">Criar estágio com estes clientes</button></div></div>`; };
+    return `<div class="muted">Propensão a pagamento × Abordagem. Os quadrantes são sugestão do MotorCX: o que cada um faz é você que decide, criando um estágio com estes clientes. ${ev("pouca")} <span style="color:var(--at)">A propensão começa a ser calculada quando houver pagamentos suficientes nesta carteira; os números abaixo são fictícios.</span></div>
+      <div class="mx"><div class="eixoY"><span>baixa (D–E)</span><b>Propensão a pagamento</b><span>alta (A–C)</span></div>${cel("descobrir")}${cel("acelerar")}${cel("economizar")}${cel("manter")}<div class="eixoX"><span>Abordagem coletando ou em prévia</span><b>Abordagem →</b><span>definida</span></div></div>`;
+  }
+  function criarDoQuadrante(k) {
+    const q = QD[k]; Object.assign(est, { aba: "orq", cart: "alfa", seg: "curto", passo: 3 }); const s = S(), id = "m-" + k + s.moms.length;
+    const full = { 1: [["", "whatsapp"], ["senão", "sms"]], 3: [["", "discador"], ["senão", "agente_voz"]], 5: [["", "whatsapp"], ["junto", "email"]] }, dig = { 1: [["", "sms"]], 5: [["", "email"]] };
+    s.moms.unshift({ id, nome: q.nome, ativo: true, cond: [{ campo: "prop", op: "em", valor: [...q.fx] }, { campo: "ab", op: "=", valor: q.ab }], ref: "entrada", de: 0, ate: 30, ciclo: null, saidas: { cpc: "fica", acordo: "m-prev", pagamento: "sai", fim: "geral" }, dias: [1, 3, 5], r: { geral: clone(k === "acelerar" || k === "descobrir" ? full : dig) } });
+    est.mom = id; sujo(); tela(); toast(`Estágio “${q.nome}” criado no topo da prioridade, com as condições do quadrante. Ajuste o que quiser.`);
+  }
+  function personas() {
+    const pd = est.cart === "alfa" ? pend() : [], feitas = Object.values(SUG).filter(s => s.st !== "pend");
+    const tg = `<div class="seg" role="group" aria-label="Vista"><button aria-pressed="${est.pvista === "lista"}" data-pvista="lista" data-demo="vista-aprendizado">Aprendizado e aprovações</button><button aria-pressed="${est.pvista === "matriz"}" data-pvista="matriz" data-demo="vista-matriz">Matriz</button></div>`;
+    if (est.pvista === "matriz") return tg + matriz();
+    return tg + `<div class="muted">O que o motor aprendeu sobre cada persona, e o que ele sugere mudar. Nada muda sem aprovação de uma pessoa.</div>
+      <div class="pg"><div style="display:flex;flex-direction:column;gap:8px"><b>Aprovações pendentes (${pd.length})</b>
+        ${pd.map(s => { const g = CART.alfa.segs.find(x => x.id === s.seg), m = g.moms.find(x => x.id === s.mom); return `<div class="ap"><div class="t">${pchip(s.p)}<span class="muted">${esc(g.nome)} · ${esc(m.nome)} · ${lab(m, s.dia)}</span></div><b style="font-size:13.5px">${esc(s.txt)}</b><span class="muted">${esc(s.porque)}</span>
+          <div class="ac"><button class="btn peq" data-sug="${s.p}" data-v="ok" data-demo="aprovar-${s.p}">Aprovar</button><button class="btn sec peq" data-sug="${s.p}" data-v="nao">Recusar</button><button class="lnk" data-ver="${s.p}" data-demo="ver-na-regua-${s.p}">Ver na régua</button></div></div>`; }).join("") || `<div class="ap muted">Nada pendente.</div>`}
+        ${feitas.length ? `<span class="muted">Decididas: ${feitas.map(s => `${esc(PER[s.p].nome)} (${s.st === "ok" ? "aplicada" : "recusada"})`).join(" · ")}</span>` : ""}</div>
+      <div style="display:flex;flex-direction:column;gap:8px"><b>O que o motor aprendeu · ${esc(C().nome)}</b>
+        ${Object.entries(PER).map(([id, p]) => `<div class="pc"><div class="t"><span class="cd" style="background:${p.cor};margin:0"></span><b>${esc(p.nome)}</b>${fl(p.f)}<span style="margin-left:auto">${ev(p.ab)}</span></div>
+          <div class="ab"><span class="k">Contato</span><span>${esc(p.contato)}</span><span></span></div><div class="ab"><span class="k">Canal</span><span>${esc(p.canal)}</span><span></span></div><div class="ab"><span class="k">Mensagem</span><span>${esc(p.msg)}</span><span></span></div></div>`).join("")}</div></div>`;
+  }
+
+  function frases() {
+    const F = [["Parcela que cabe no bolso", "WhatsApp, RCS, SMS", "aprovada", "Atraso curto · Cliente novo", "2,3×"], ["Retome seu acordo", "WhatsApp", "aprovada", "Atraso curto · Cliente novo", "2,8×"], ["Condição especial até sexta", "E-mail", "em teste", "Atraso médio · Cliente novo", "1,3×"], ["Link de autoatendimento", "SMS", "aprovada", "Atraso longo · Giro sem contato", "0,3×"], ["Lembrete neutro", "SMS, WhatsApp", "aprovada", "vários estágios", "1,0×"]];
+    return `<div class="muted">As frases que o motor pode usar. Ele só escolhe entre as aprovadas e nunca escreve sozinho. Canais (fornecedores, janelas, números) ficam em Configurações › Canais.</div>
+      <div class="tabw"><table class="tab"><thead><tr><th>Frase</th><th>Canais</th><th>Situação</th><th>Usada em</th><th class="n">Promessas vs média</th></tr></thead><tbody>
+      ${F.map(f => `<tr><td><b>“${f[0]}”</b></td><td>${f[1]}</td><td><span class="tag ${f[2] === "aprovada" ? "ok" : "info"}">${f[2]}</span></td><td>${f[3]}</td><td class="n">${f[4]}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+
+  function toast(t) { document.querySelectorAll(".toast").forEach(x => x.remove()); const d = document.createElement("div"); d.className = "toast"; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2600); }
+  const sujo = () => { est.sujo = true; est.salvo = false; };
+  function cenario(v) { CART = novaCart(); SUG = SUG0(); document.querySelectorAll("#s-tela button").forEach(b => b.setAttribute("aria-pressed", b.dataset.tela === "estrategia")); Object.assign(est, { tela: "estrategia", cen: v, aba: "orq", cart: v, passo: v === "gama" ? 2 : 3, seg: v === "gama" ? null : "curto", mom: "m-novo", menu: false, novoSeg: false, salvo: false, sujo: false, forma: "raias", pick: null, escolha: null, modSel: "classicos" }); document.querySelectorAll("#s-cen button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v)); tela(); }
+  function novoMom(s, sobra) {
+    const id = "m" + Date.now().toString(36).slice(-5) + s.moms.length;
+    s.moms.push({ id, nome: sobra ? "Todos os outros" : `Estágio ${s.moms.length + 1}`, ativo: true, cond: sobra ? [{ campo: "atraso", op: "≥", valor: "0" }] : [{ campo: "fase", op: "=", valor: "localizacao" }], ref: "entrada", de: 0, ate: 30, ciclo: null, saidas: { cpc: "fica", acordo: "sai", pagamento: "sai", fim: "geral" }, dias: [1, 3, 5], r: { geral: {} } });
+    est.mom = id; sujo(); tela();
+  }
+
+  document.addEventListener("click", e => {
+    const t = e.target.closest("button,[data-passo],.mi,[data-tela]"); if (!t) { if (est.menu) { est.menu = false; tela(); } return; }
+    const a = t.dataset.acao;
+    if (a === "ir-ad") return $("ad").scrollIntoView({ behavior: "smooth" });
+    if (t.dataset.tela) { est.tela = t.dataset.tela; document.querySelectorAll("#s-tela button").forEach(b => b.setAttribute("aria-pressed", b.dataset.tela === est.tela)); return tela(); }
+    if (t.dataset.resolver) { const [ck, sid] = t.dataset.resolver.split("|"); Object.assign(est, { tela: "estrategia", aba: "orq", cart: ck, seg: sid, passo: 3 }); est.mom = S().moms[0]?.id; document.querySelectorAll("#s-tela button").forEach(b => b.setAttribute("aria-pressed", b.dataset.tela === "estrategia")); tela(); return $("janela").scrollIntoView({ behavior: "smooth" }); }
+    if (t.closest("#s-cen") || t.closest("#s-larg") || t.closest("#s-tema")) return;
+    if (t.dataset.aba) { est.aba = t.dataset.aba; est.menu = false; return tela(); }
+    if (t.dataset.cart) { est.cart = t.dataset.cart; est.seg = C().segs[0]?.id || null; est.mom = C().segs[0]?.moms[0]?.id; est.salvo = false; est.escolha = null; return tela(); }
+    if (t.dataset.ativo) { const m = S().moms.find(x => x.id === t.dataset.ativo); m.ativo = !m.ativo; sujo(); return tela(); }
+    if (t.dataset.mv != null) { if (t.getAttribute("aria-disabled") === "true") return; const s = S(), i = +t.dataset.mv, j = i + +t.dataset.dir; [s.moms[i], s.moms[j]] = [s.moms[j], s.moms[i]]; sujo(); tela(); return toast("Prioridade mudada: o cliente fica no 1º estágio em que se encaixa."); }
+    if (t.dataset.faixa) { const c = M().cond[+t.dataset.ci], k = t.dataset.faixa; c.valor = c.valor.includes(k) ? c.valor.filter(x => x !== k) : [...c.valor, k].sort(); sujo(); return tela(); }
+    if (t.dataset.pvista) { est.pvista = t.dataset.pvista; return tela(); }
+    if (t.dataset.quad) return criarDoQuadrante(t.dataset.quad);
+    if (t.dataset.rmcond != null) { M().cond.splice(+t.dataset.rmcond, 1); sujo(); return tela(); }
+    if (t.dataset.seg && !t.dataset.irpasso) { est.seg = t.dataset.seg; est.mom = S().moms[0]?.id; est.menu = false; est.pick = null; return tela(); }
+    if (t.dataset.irpasso) { est.seg = t.dataset.seg; est.mom = S().moms[0]?.id; est.passo = 3; return tela(); }
+    if (t.dataset.mom && (t.classList.contains("mi") || t.closest(".mchips"))) { est.mom = t.dataset.mom; est.pick = null; return tela(); }
+    if (t.dataset.passo) { est.passo = +t.dataset.passo; est.aba = "orq"; est.menu = false; est.pick = null; if (!est.seg) est.seg = C().segs[0]?.id || null; if (S() && !S().moms.some(m => m.id === est.mom)) est.mom = S().moms[0]?.id; return tela(); }
+    if (t.dataset.forma) { est.forma = t.dataset.forma; return tela(); }
+    if (t.dataset.add) { est.pick = t.dataset.add; return tela(); }
+    if (t.dataset.canal) { const [lane, d] = est.pick.split("|"); M().r.geral[d] = [["", t.dataset.canal]]; est.pick = null; sujo(); tela(); return toast(`${NOME[t.dataset.canal]} no ${lab(M(), +d).toLowerCase()}. Clique na célula para pôr “senão”, “junto” ou “reserva”, como hoje.`); }
+    if (t.dataset.sug) { const s = SUG[t.dataset.sug]; s.st = t.dataset.v; sujo(); tela(); return toast(s.st === "ok" ? `Aplicado na régua: ${s.txt}.` : "Sugestão guardada em Personas; a régua segue o geral."); }
+    if (t.dataset.ver) { const s = SUG[t.dataset.ver]; Object.assign(est, { aba: "orq", cart: "alfa", passo: 4, seg: s.seg, mom: s.mom, forma: "raias" }); tela(); return document.querySelector(`[data-demo="raia-${s.p}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }); }
+    if (t.dataset.mod) { est.modSel = t.dataset.mod; return tela(); }
+    if (t.dataset.copiar) { const src = CART[t.dataset.copiar]; if (est.alvo === "seg") { C().segs = clone(src.segs).map(s => ({ ...s, pers: [] })); est.seg = C().segs[0].id; est.passo = 2; } else { S().moms = clone(src.segs[0].moms); } est.mom = S().moms[0].id; est.escolha = null; sujo(); tela(); return toast(`Copiado de ${src.nome}. Agora é desta carteira: mudar aqui não muda lá.`); }
+    if (t.dataset.copiaregua) { M().r.geral = clone(MODELOS[2].moms()[0].r.geral); M().dias = [0, 1, 3, 5]; est.menu = false; sujo(); tela(); return toast("Régua copiada. Agora é deste estágio."); }
+    if (a === "menu") { est.menu = !est.menu; return tela(); }
+    if (a === "modelos" || a === "copiar") { est.escolha = est.escolha === a && est.alvo === t.dataset.alvo ? null : a; est.alvo = t.dataset.alvo; return tela(); }
+    if (a === "usar-modelo") { const md = MODELOS.find(x => x.id === est.modSel); if (est.alvo === "seg") { C().segs = [{ id: "g1", nome: "Todos os clientes", cond: ["Carteira inteira"], cli: C().cli, pers: [], moms: md.moms() }]; est.seg = "g1"; } else S().moms = md.moms(); est.mom = S().moms[0].id; est.passo = 3; est.escolha = null; sujo(); tela(); return toast(`“${md.nome}” virou cópia sua: ${S().moms.length} estágios, todos editáveis e desligáveis.`); }
+    if (a === "novo-seg") { est.novoSeg = !est.novoSeg; est.escolha = null; return tela(); }
+    if (a === "criar-seg") { const c = C(), id = "n" + c.segs.length; c.segs.push({ id, nome: $("ns-nome").value || "Novo segmento", cond: [$("ns-cond").value], cli: c.segs.length ? 2100 : c.cli, pers: [], moms: [] }); est.novoSeg = false; est.seg = id; sujo(); tela(); return toast("Segmento criado. Falta dizer em que estágios ele recebe ação."); }
+    if (a === "novo-mom") { est.escolha = null; return novoMom(S()); }
+    if (a === "mom-sobra") { novoMom(S(), true); return toast("Estágio “Todos os outros” (Dias de atraso ≥ 0), no fim da lista: pega quem não caiu em nenhum outro."); }
+    if (a === "rm-mom") { const s = S(); s.moms = s.moms.filter(x => x.id !== est.mom); est.mom = s.moms[0]?.id; sujo(); return tela(); }
+    if (a === "add-cond") { M().cond.push({ campo: "atraso", op: "≥", valor: "30" }); sujo(); return tela(); }
+    if (a === "ciclo") { const m = M(); m.ciclo = m.ciclo ? null : { dias: 7, vezes: 3 }; sujo(); return tela(); }
+    if (a === "add-dia") { const m = M(); m.dias.push((m.dias[m.dias.length - 1] ?? 0) + 2); sujo(); return tela(); }
+    if (a === "modelo") { est.modelo = !est.modelo; return tela(); }
+    if (a === "salvar") { if (t.getAttribute("aria-disabled") === "true") return; est.salvo = true; est.sujo = false; tela(); return toast(`Estratégia de ${C().nome} salva${est.modelo ? " e guardada como modelo da empresa" : ""}. Vale na próxima lista do dia.`); }
+    if (a === "editar-personas") return toast("Abre o editor de personas (condições), como hoje.");
+    if (a === "nova-frase") return toast("Abre o cadastro de frase; ela entra como “em teste” até alguém aprovar.");
+  });
+  document.addEventListener("change", e => {
+    const t = e.target, m = M(); if (!m) return;
+    if (t.dataset.nome) { m.nome = t.value || m.nome; sujo(); return tela(); }
+    if (t.dataset.cond != null) { const c = m.cond[+t.dataset.cond]; c[t.dataset.k] = t.value; if (t.dataset.k === "campo") { c.op = "="; c.valor = t.value === "fase" ? "localizacao" : t.value === "prop" ? ["A", "B"] : t.value === "ab" ? "firme" : BOOL.includes(t.value) ? "sim" : NUM.includes(t.value) ? "30" : ""; } sujo(); return tela(); }
+    if (t.dataset.campo) { m[t.dataset.campo] = t.dataset.campo === "ref" ? t.value : +t.value; sujo(); return tela(); }
+    if (t.dataset.ciclo) { m.ciclo[t.dataset.ciclo] = +t.value; sujo(); return tela(); }
+    if (t.dataset.saida) { m.saidas[t.dataset.saida] = t.value; sujo(); return tela(); }
+  });
+  // arrastar para ordenar (prioridade)
+  let arr = null;
+  document.addEventListener("dragstart", e => { const it = e.target.closest?.(".mi"); if (!it) return; arr = +it.dataset.arr; it.classList.add("arr"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", String(arr)); } catch {} });
+  document.addEventListener("dragover", e => { if (arr != null && e.target.closest?.(".mi")) e.preventDefault(); });
+  document.addEventListener("drop", e => { const it = e.target.closest?.(".mi"); if (arr == null || !it) return; e.preventDefault(); const s = S(), to = +it.dataset.arr, [x] = s.moms.splice(arr, 1); s.moms.splice(to, 0, x); arr = null; sujo(); tela(); toast("Prioridade mudada: o cliente fica no 1º estágio em que se encaixa."); });
+  document.addEventListener("dragend", () => { arr = null; document.querySelectorAll(".mi.arr").forEach(x => x.classList.remove("arr")); });
+
+  function segc(id, fn) { $(id).querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset.v); })); }
+  segc("s-larg", v => { $("janela").style.maxWidth = v + "px"; });
+  segc("s-tema", v => document.documentElement.setAttribute("data-theme", v));
+  segc("s-cen", v => cenario(v));
+  tela();
+})();
+</script>
+</body>
+</html>
