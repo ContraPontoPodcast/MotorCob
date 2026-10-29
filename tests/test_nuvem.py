@@ -263,6 +263,26 @@ class TestSincronizar(unittest.TestCase):
         ex = next(e for e in t["execucoes"] if e["empresa_id"] == 1)
         self.assertEqual(sum("SQL 48" in a for a in ex["alertas"]), 1)
 
+    def test_bloco_contato_da_persona_e_banco_sem_o_sql_49(self):
+        self._dia(date(2026, 9, 25))
+        t = self.falso.tabelas
+        self.assertTrue(t["personas"] and all(isinstance(l["contato"], dict) for l in t["personas"]))
+        self.assertNotRegex(json.dumps([l["contato"] for l in t["personas"]]), r"\d{10,11}")
+        post = self.falso.post
+
+        def sem_coluna(h, caminho, q, corpo):
+            tabela = caminho.rsplit("/", 1)[1]
+            if tabela == "personas" and b'"contato"' in corpo:
+                return h._resp(400, json.dumps({"code": "PGRST204", "message": "Could not find the 'contato' column "
+                                                "of 'personas' in the schema cache"}).encode())
+            return post(h, caminho, q, corpo)
+        self.falso.post = sem_coluna
+        self._dia(date(2026, 9, 26))
+        self.assertTrue(t["personas"] and not any("contato" in l for l in t["personas"]))
+        self.assertTrue(all("propensao" in l for l in t["personas"]))                # o resto continua indo
+        ex = [e for e in t["execucoes"] if e["empresa_id"] == 1][-1]
+        self.assertEqual(sum("SQL 49" in a for a in ex["alertas"]), 1)
+
     def test_contratos_do_mes_para_o_faturamento(self):
         self._dia(date(2026, 9, 25))
         t = self.falso.tabelas

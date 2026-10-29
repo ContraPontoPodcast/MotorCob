@@ -185,6 +185,22 @@ de outra pessoa pela certificação e a rotação segue.
   ≥ 99% do saldo) ou 1ª parcela do acordo paga: acordo sem parcela paga é promessa, não
   pagamento (decisão do dono, 26/10/2026). É o alvo da Propensão a pagamento.
   Layouts `retirada`, `acordo`, `baixa` (e `incremental` opcional) em empresas/<slug>.json.
+- Nota de contato (Abordagem da persona › Contato; `certificacao.nota_contatos` → `NotaContatos`): por
+  (cliente, contato, canal) = É dele (`Certificacao.score`) × Chega (Beta do retorno de canal: entregue/lido/
+  clique ÷ envios com retorno por contato × canal × dia, meia-vida 60, prior = taxa do canal na carteira; voz
+  = discador e agente) × Responde (CPC do contato no canal ÷ tentativas/dia, encolhido para
+  `Afinidade.prob_cpc` do cliente, `FORCA_RESPONDE` 5). Calculada sob demanda; `rodar_dia` certifica hoje UMA
+  vez antes dos dias pendentes, calcula a nota e grava `estado/contatos_nota.csv` (só contatos com
+  histórico; troca atômica; **contato nunca vai ao banco**). Na fila (`candidatos(notas=)`) só troca o
+  desempate `-score` por `-nota` do canal (Hot → rotação → `prioridade_contatos` → nota → score → ranking);
+  localizador primeiro e a trava do WhatsApp ficam como estavam (a nota ordena dentro do que ela libera);
+  voz disca nessa ordem. Cliente sem histórico próprio: ordem idêntica à antiga (teste de paridade). Erro na
+  nota (no cálculo ou no meio da fila) → ordem antiga + alerta "NOTA DE CONTATO". Resumos por cliente viram
+  atributos calculados (personas e segmentos): `melhor_contato` (alta/média/baixa pelos tercis da maior
+  nota; sem), `tem_contato_certificado`, `contatos_alcancaveis` (0/1/2+, Chega ≥ 0,5). Bloco
+  `personas.contato` (SQL 49): acionados, localizados (Hot ou certificado), taxa de localização, ações até
+  o 1º CPC (`acoes.agregar(primeiro_cpc=)`) e evidência pelos cortes da maturidade (30/200). Banco sem o
+  SQL 49: publica sem e alerta.
 - `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
   = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
   Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias
@@ -260,7 +276,7 @@ de outra pessoa pela certificação e a rotação segue.
   desligada (`fase_desligada`): nada vai ao bureau sem a esteira pedir (nem D+1 nem revalidação). Mesmo cliente não
   volta ao bureau antes de `INTERVALO_BUREAU` (30) dias (estado/bureau_enviados.json). Saída
   `saida/<data>/bureau/enviar_bureau.csv` (CPF_CNPJ;ID_CLIENTE). Enquadramento: enriq_enviado e
-  enriq_retorno. `prioridade_contatos` na estratégia (critérios ranking/score/whatsapp/rcs/bureau
+  enriq_retorno. `prioridade_contatos` na estratégia (critérios ranking/score/whatsapp/rcs/bureau/nota
   asc|desc, score_minimo, ranking_maximo) ordena e filtra os telefones em `candidatos` depois do
   Hot e do rodízio; sem dado do bureau passa e vai depois.
 - Segmento × carteira (`segmentos_carteira`): com vínculos, o segmento vale só nas carteiras

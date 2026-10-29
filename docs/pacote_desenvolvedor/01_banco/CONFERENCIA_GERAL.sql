@@ -243,6 +243,9 @@ with itens(ordem, item, ok, se_falhar) as (values
        and pg_temp.n('select count(*) from information_schema.columns where table_schema = ''public'' and table_name = ''personas'' and column_name = ''propensao''') = 1
        and to_regclass('public.propensao_carteira') is not null,
        'rodar o SQL 48 (supabase/migrations/20261215000001_propensao.sql)'),
+  (36, 'Abordagem da persona: bloco Contato das personas (localização, ações até o 1º CPC) (SQL 49)',
+       pg_temp.n('select count(*) from information_schema.columns where table_schema = ''public'' and table_name = ''personas'' and column_name = ''contato''') = 1,
+       'rodar o SQL 49 (supabase/migrations/20261216000001_abordagem_contato.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

@@ -15,7 +15,7 @@ pelos retornos do dia, pelas parcelas e pela passagem do tempo.
 """
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import date, timedelta
 
 from .acordos import Parcela, situacao_acordo
@@ -73,7 +73,9 @@ class EstadoCliente:
                                     self.canal, self.ciclo) if p)
 
     def para_json(self) -> dict:
-        d = asdict(self)
+        # como asdict (mesma ordem), sem a cópia profunda genérica: os campos são texto, data, número e
+        # listas de texto (asdict era o grosso do tempo de salvar o estado em carteira grande)
+        d = {k: (list(v) if isinstance(v, list) else v) for k in _CAMPOS_ESTADO for v in (getattr(self, k),)}
         for k in ("safra", "ultima_massiva", "giro_inicio", "inicio_esteira"):
             d[k] = d[k].isoformat() if d[k] else None
         return d
@@ -84,6 +86,9 @@ class EstadoCliente:
         for k in ("safra", "ultima_massiva", "giro_inicio", "inicio_esteira"):
             d[k] = date.fromisoformat(d[k]) if d.get(k) else None
         return cls(**d)
+
+
+_CAMPOS_ESTADO = tuple(f.name for f in fields(EstadoCliente))
 
 
 def _entradas(estados, clientes, dia, regua, trilha, pela_lista=False):

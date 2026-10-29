@@ -57,12 +57,15 @@ def _passa_prioridade(regra: dict, sinal: dict) -> bool:
     return True
 
 
-def _chave_prioridade(regra: dict, sinal: dict, flag: dict) -> tuple:
-    """Ordem da regra do usuário (ex.: ranking menor primeiro, depois score maior). Sem o dado: vai depois."""
+def _chave_prioridade(regra: dict, sinal: dict, flag: dict, nota: float | None = None) -> tuple:
+    """Ordem da regra do usuário (ex.: ranking menor primeiro, depois score maior). Sem o dado: vai depois.
+    "nota" = nota de contato no canal (certificacao.NotaContatos); só existe na ordem por canal."""
     chave = []
     for c in regra.get("criterios") or []:
         campo = c["campo"]
-        if campo == "score":
+        if campo == "nota":
+            v = nota
+        elif campo == "score":
             v = _num(sinal.get("score_bureau"))
         elif campo == "ranking":
             v = _num(sinal.get("ranking"))
@@ -80,26 +83,43 @@ def _chave_prioridade(regra: dict, sinal: dict, flag: dict) -> tuple:
 
 
 def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flags: dict[str, dict],
-               regua: Regua, freio_whatsapp: bool, sinais: dict[str, dict] | None = None) -> dict[str, list]:
+               regua: Regua, freio_whatsapp: bool, sinais: dict[str, dict] | None = None,
+               notas=None) -> dict[str, list]:
     """{canal: Certificacoes que podem receber, em ordem de prioridade}, antes do filtro da ação.
 
     Aplica as travas que nenhuma estratégia desliga: contato inválido/contestado/"não pertence",
     restrição do canal (opt-out, sem conta…), canal bloqueado pelo cluster ou desligado na
     empresa, Não Perturbe na voz (se a empresa respeitar) e a trava do WhatsApp.
+    notas: certificacao.NotaContatos (nota de contato É dele × Chega × Responde). Só troca o desempate
+    do score: Hot, rotação e regra do usuário vêm antes; a trava do WhatsApp vem depois. Cliente sem
+    histórico (ou notas=None): a ordem é a de antes.
     """
     sinais = sinais or {}
     bloqueados = regua.canais_bloqueados(cluster)
     validos = [c for c in certs if c.status not in FORA and sinais.get(c.contato, {}).get("pertence") != "nao"]
     # Hot (deu CPC ou marcado na carga) primeiro. Sem Hot, rotação: contato ainda não exportado
-    # antes, depois os já tentados do mais antigo para o mais recente. Depois score e ranking.
+    # antes, depois os já tentados do mais antigo para o mais recente. Depois a regra do usuário,
+    # a nota de contato no canal, o score e o ranking.
     tent = {c: i + 1 for i, c in enumerate(est.contatos_tentados)} if not est.contato_localizador else {}
     regra = regua.dados.get("prioridade_contatos") or {}
     if regra:
         validos = [c for c in validos if _passa_prioridade(regra, sinais.get(c.contato, {}))]
-    validos.sort(key=lambda c: (not (c.status == "CERTIFICADO" or sinais.get(c.contato, {}).get("hot")),
-                                tent.get(c.contato, 0),
-                                *_chave_prioridade(regra, sinais.get(c.contato, {}), flags.get(c.contato, {})),
-                                -c.score, sinais.get(c.contato, {}).get("ranking") or 99))
+
+    def chave(c, canal=None):
+        s = sinais.get(c.contato, {})
+        nota = notas.nota(c, canal) if canal else None
+        return (not (c.status == "CERTIFICADO" or s.get("hot")), tent.get(c.contato, 0),
+                *_chave_prioridade(regra, s, flags.get(c.contato, {}), nota),
+                *((-nota,) if canal else ()), -c.score, s.get("ranking") or 99)
+    validos.sort(key=chave)
+    # sem histórico a nota é proporcional ao score em cada canal: a ordem acima já é a final
+    por_nota = False
+    if notas is not None and len(validos) > 1 and not notas.erro:
+        try:
+            por_nota = any(c["campo"] == "nota" for c in regra.get("criterios") or []) \
+                or notas.tem_historico(est.id_cliente, validos)
+        except Exception as ex:   # noqa: BLE001 — a nota nunca segura a lista: fica a ordem de antes
+            notas.erro = f"{ex.__class__.__name__}: {str(ex)[:120]}"
     loc = est.contato_localizador
     w = regua["whatsapp"]
     saida = {}
@@ -118,6 +138,11 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
             respeitar = True
         if canal in CANAIS_VOZ if respeitar is None else respeitar:
             cands = [c for c in cands if not sinais.get(c.contato, {}).get("nao_perturbe")]
+        if por_nota and len(cands) > 1 and not notas.erro:   # voz disca nesta ordem; no WhatsApp a trava
+            try:                                             # escolhe dentro dela
+                cands = sorted(cands, key=lambda c, canal=canal: chave(c, canal))
+            except Exception as ex:   # noqa: BLE001 — a nota nunca segura a lista: fica a ordem de antes
+                notas.erro = f"{ex.__class__.__name__}: {str(ex)[:120]}"
         if canal == "whatsapp":
             # número marcado com WhatsApp (carga ou bureau) na frente; sem marcação, o celular vale
             # (a não ser que a estratégia peça "só números marcados": exige_whatsapp_valido)
@@ -238,7 +263,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                para_bureau: dict | None = None, motivos: dict | None = None, motivo_de: dict | None = None,
                detalhe_de: dict | None = None, senao_auto: dict | None = None, ultima_cpc: dict | None = None,
                etapas_estado: dict | None = None, historico_acoes: dict | None = None,
-               propensao: dict | None = None):
+               propensao: dict | None = None, notas=None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -263,6 +288,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
               por cliente da trava; sem histórico, só o limite do dia vale).
     propensao: {id_cliente: faixa "A".."E" ("" em Coletando)} da Propensão a pagamento (motor/propensao.py);
               vale como campo "propensao" nas condições das etapas. Não muda ordem nem canal.
+    notas: certificacao.NotaContatos — ordena os números dentro do canal (desempate no lugar do score;
+              ver candidatos). None = ordem antiga.
     """
     alertas = []
     taxa, envios = taxa_bloqueio_whatsapp(eventos or [], hoje, regua)
@@ -417,7 +444,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     for idc, est in estados.items():
         rc = regua.para(est.cluster_atual)
         sin = sinais_por.get(idc, {})
-        cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio_de(rc), sin)
+        cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio_de(rc), sin, notas)
         disp = _disponiveis_cpc(cands, est, flags, sin, rc)
         disponiveis[idc] = disp
         def conta(m, idc=idc):

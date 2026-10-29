@@ -486,6 +486,8 @@ def chave_sugestao(s: dict) -> str:
 
 ALERTA_SQL48 = ("BANCO: rode o SQL 48 (supabase/migrations/20261215000001_propensao.sql) para ver a Propensão a "
                 "pagamento por cliente e por persona")
+ALERTA_SQL49 = ("BANCO: rode o SQL 49 (supabase/migrations/20261216000001_abordagem_contato.sql) para ver o bloco "
+                "Contato das personas")
 
 
 def publicar_personas(sb: Supabase, empresa_id, r, cid=None) -> int:
@@ -504,10 +506,11 @@ def publicar_personas(sb: Supabase, empresa_id, r, cid=None) -> int:
                "condicoes": p["condicoes"], "ranking": p["ranking"],
                "maturidade": {**p.get("maturidade", {}), "indice_anterior": anterior.get(p["persona"])},
                "caracteristicas": r.get("caracteristicas_persona") or [], "atualizado_em": ts,
-               "propensao": p.get("propensao")}
+               "propensao": p.get("propensao"), "contato": p.get("contato")}
               for p in r.get("personas") or []]
-    # banco sem as colunas novas: grava sem elas e avisa (propensao = SQL 48; maturidade = pacote de 2026-10)
-    avisos = {"propensao": ALERTA_SQL48,
+    # banco sem as colunas novas: grava sem elas e avisa (contato = SQL 49; propensao = SQL 48;
+    # maturidade = pacote de 2026-10)
+    avisos = {"contato": ALERTA_SQL49, "propensao": ALERTA_SQL48,
               "maturidade": "BANCO: rode supabase/atualizar_producao_2026-10.sql para ver a maturidade das personas"}
     fora = []
     while linhas:
