@@ -123,9 +123,9 @@ class TestNota(unittest.TestCase):
                  ("N4", "n4@exemplo.invalid"): _cert("N4", "n4@exemplo.invalid", 0.4, tipo="email")}
         n = nota_contatos(evs, certs, HOJE)
         linhas = n.linhas(certs)
-        self.assertEqual({l["id_cliente"] for l in linhas}, {"N1", "N2"})            # só quem tem histórico
-        self.assertEqual(set(linhas[0]), set(CE.CAMPOS_NOTA))
-        self.assertTrue(all(l["canal"] in CE.CANAIS_NOTA["telefone"] for l in linhas))
+        linhas = [dict(zip(CE.CAMPOS_NOTA, l)) for l in linhas]
+        self.assertEqual({(l["id_cliente"], l["canal"]) for l in linhas}, {("N1", "discador"), ("N2", "discador")})
+        self.assertEqual(len(linhas[0]), len(CE.CAMPOS_NOTA))
         res = n.resumo_clientes(certs)
         self.assertEqual(res["N1"]["tem_contato_certificado"], "sim")
         self.assertEqual(res["N2"]["tem_contato_certificado"], "não")

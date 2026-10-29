@@ -7,7 +7,9 @@ Score de titularidade = média de uma Beta(alfa, beta):
 - evidências a favor/contra somam em alfa/beta, com decaimento exponencial
   (meia-vida de 90 dias).
 """
+import gc
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -156,10 +158,10 @@ def certificar_contatos(eventos: list[Evento], hoje: date, contatos: list[dict] 
     return certs
 
 
-def hit_rate_por_canal(eventos: list[Evento]) -> dict[str, dict]:
+def hit_rate_por_canal(eventos: list[Evento], deduplicado: bool = False) -> dict[str, dict]:
     """Força de contato da carteira: tentativas x contato efetivo, por canal."""
     agg = defaultdict(lambda: {"tentativas": 0, "engajados": 0, "certificados": 0, "custo": 0.0})
-    for e in deduplicar(eventos):
+    for e in (eventos if deduplicado else deduplicar(eventos)):
         cl = classificar(e.canal, e.resultado)
         a = agg[e.canal]
         a["tentativas"] += 1
@@ -193,25 +195,26 @@ class Afinidade:
     TETO = 0.95
 
     def __init__(self, eventos: list[Evento], hit_rate: dict[str, dict],
-                 certs: dict[tuple[str, str], "Certificacao"] | None = None):
-        eventos = deduplicar(eventos)
+                 certs: dict[tuple[str, str], "Certificacao"] | None = None, deduplicado: bool = False):
+        if not deduplicado:
+            eventos = deduplicar(eventos)
         self.base = {c: r["hit_rate"] for c, r in hit_rate.items()}
         self.obs = defaultdict(lambda: [0, 0])  # (id_cliente, canal) -> [engajou, tentativas]
         titulares = {k for k, c in (certs or {}).items() if c.status == "CERTIFICADO"}
         cert_tit = defaultdict(lambda: [0, 0])  # canal -> [certificou, tentativas] em contato titular
         # Viés de seleção: o contato só é "titular conhecido" PORQUE certificou.
-        # Descarta a 1ª certificação de cada um, que foi o evento que o selecionou.
+        # Descarta a 1ª certificação de cada um (a mais antiga; no empate, a 1ª da lista), que foi o
+        # evento que o selecionou: conta tudo numa passada e tira essa no fim.
         selecao = {}
-        for e in sorted(eventos, key=lambda e: e.data):
-            k = (e.id_cliente, e.contato)
-            if k in titulares and k not in selecao and classificar(e.canal, e.resultado).nivel == Nivel.CERTIFICADO:
-                selecao[k] = e
         for e in eventos:
             cl = classificar(e.canal, e.resultado)
-            if (e.id_cliente, e.contato) in titulares and selecao.get((e.id_cliente, e.contato)) is not e:
+            k = (e.id_cliente, e.contato)
+            if k in titulares:
                 ct = cert_tit[e.canal]
                 ct[0] += cl.nivel == Nivel.CERTIFICADO
                 ct[1] += 1
+                if cl.nivel == Nivel.CERTIFICADO and (k not in selecao or e.data < selecao[k].data):
+                    selecao[k] = e
             # Terceiro, contato inválido ou sem conta no app dizem algo sobre o
             # CONTATO, não sobre a preferência de canal do cliente.
             if cl.contra_titular > 0 or cl.nivel == Nivel.INVALIDO or cl.restricao == "whatsapp:sem_conta":
@@ -219,6 +222,10 @@ class Afinidade:
             o = self.obs[(e.id_cliente, e.canal)]
             o[0] += cl.nivel >= Nivel.ENGAJADO
             o[1] += 1
+        for e in selecao.values():
+            ct = cert_tit[e.canal]
+            ct[0] -= 1
+            ct[1] -= 1
         self.cert_titular = {}
         for canal, r in hit_rate.items():
             k, n = cert_tit.get(canal, (0, 0))
@@ -257,6 +264,18 @@ CANAIS_NOTA = {"telefone": ("whatsapp", "rcs", "agente_voz", "discador", "sms"),
 CAMPOS_NOTA = ("id_cliente", "contato", "canal", "e_dele", "chega", "responde", "nota", "data")
 
 
+@contextmanager
+def sem_gc():
+    """Passadas que criam milhões de tuplas sem ciclo: o coletor de ciclos só atrasa (carteira grande)."""
+    ligado = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if ligado:
+            gc.enable()
+
+
 class NotaContatos:
     """Nota de cada (cliente, contato, canal). Calculada sob demanda (só o histórico é guardado):
     contato sem histórico tem Chega = taxa do canal na carteira e Responde = Afinidade.prob_cpc do
@@ -277,8 +296,8 @@ class NotaContatos:
     def chega(self, contato: str, canal: str) -> float:
         rc = RETORNO_DO_CANAL.get(canal, canal)
         p0 = self.chega_base.get(rc, 1.0)
-        k, n = self.chega_obs.get((contato, rc), (0.0, 0.0))
-        return (k + FORCA_CHEGA * p0) / (n + FORCA_CHEGA)
+        o = self.chega_obs.get((contato, rc))
+        return p0 if o is None else (o[0] + FORCA_CHEGA * p0) / (o[1] + FORCA_CHEGA)
 
     def responde(self, id_cliente: str, contato: str, canal: str) -> float:
         p0 = self._p0.get((id_cliente, canal))
@@ -297,12 +316,19 @@ class NotaContatos:
     def nota(self, cert: Certificacao, canal: str) -> float:
         return cert.score * self.chega(cert.contato, canal) * self.responde(cert.id_cliente, cert.contato, canal)
 
+    def difere(self, id_cliente: str, certs, canal: str) -> bool:
+        """Algum desses contatos tem histórico próprio NESTE canal? Senão a nota no canal é proporcional ao
+        score e a ordem não muda (nem precisa calcular)."""
+        rc = RETORNO_DO_CANAL.get(canal, canal)
+        return any((c.contato, rc) in self.chega_obs or (id_cliente, c.contato, canal) in self.resp_obs
+                   for c in certs)
+
     def tem_historico(self, id_cliente: str, certs) -> bool:
         """O cliente tem algo que diferencie os contatos além do score (CPC/tentativa ou retorno de canal)?"""
         return id_cliente in self._clientes_resp or any(c.contato in self._contatos_chega for c in certs)
 
-    def linhas(self, certs: dict, ids: set | None = None) -> list[dict]:
-        """Linhas de estado/contatos_nota.csv: só (cliente, contato, canal) com histórico próprio NO CANAL
+    def linhas(self, certs: dict, ids: set | None = None) -> list[tuple]:
+        """Linhas (na ordem de CAMPOS_NOTA) de estado/contatos_nota.csv: só (cliente, contato, canal) com histórico próprio NO CANAL
         (retorno de canal ou tentativa); os demais têm a nota do prior (score × taxas do canal/cliente).
         Inválido/contestado ficam fora (nunca recebem)."""
         saida, d = [], self.hoje.isoformat()
@@ -316,8 +342,7 @@ class NotaContatos:
                         and (idc, contato, canal) not in self.resp_obs:
                     continue
                 e, ch, r, n = self.partes(c, canal)
-                saida.append({"id_cliente": idc, "contato": contato, "canal": canal, "e_dele": round(e, 4),
-                              "chega": round(ch, 4), "responde": round(r, 4), "nota": round(n, 6), "data": d})
+                saida.append((idc, contato, canal, round(e, 4), round(ch, 4), round(r, 4), round(n, 6), d))
         return saida
 
     def resumo_clientes(self, certs: dict, ids: set | None = None, fora: set | None = None) -> dict[str, dict]:
@@ -327,6 +352,9 @@ class NotaContatos:
         canal sem restrição e Chega ≥ LIMIAR_ALCANCAVEL). fora: {(id, contato)} que não pertencem."""
         fora = fora or set()
         chega, responde = self.chega, self.responde
+        cbase = {canal: self.chega_base.get(RETORNO_DO_CANAL.get(canal, canal), 1.0)
+                 for cs in CANAIS_NOTA.values() for canal in cs}
+        p0 = self._p0
         melhor, cert_, alc = {}, {}, defaultdict(int)
         for (idc, contato), c in certs.items():
             if ids is not None and idc not in ids:
@@ -337,12 +365,20 @@ class NotaContatos:
                 continue
             cert_[idc] = cert_[idc] or c.status == "CERTIFICADO"
             alcanca, m = False, melhor[idc]
+            # contato sem histórico (o caso comum): Chega e Responde são os priors, sem o cálculo completo
+            simples = contato not in self._contatos_chega and idc not in self._clientes_resp
             for canal in CANAIS_NOTA.get(c.tipo, ()):
                 if c.restricoes and any(r.startswith(canal + ":") for r in c.restricoes):
                     continue
-                ch = chega(contato, canal)
+                if simples:
+                    ch = cbase[canal]
+                    r = p0.get((idc, canal))
+                    if r is None:
+                        r = responde(idc, contato, canal)
+                else:
+                    ch, r = chega(contato, canal), responde(idc, contato, canal)
                 alcanca = alcanca or ch >= LIMIAR_ALCANCAVEL
-                n = c.score * ch * responde(idc, contato, canal)
+                n = c.score * ch * r
                 if m is None or n > m:
                     m = n
             melhor[idc] = m
@@ -372,6 +408,12 @@ def nota_contatos(eventos: list[Evento], certs: dict[tuple[str, str], Certificac
                   viés da 1ª certificação). Retorno de canal não é tentativa; ocorrência sem contato
                   identificado (voz com vários números) não entra.
     retornos_canal: [motor.retorno_canal.Registro] (contato, canal, marca, data)."""
+    with sem_gc():
+        return _nota_contatos(eventos, certs, hoje, retornos_canal)
+
+
+def _nota_contatos(eventos, certs, hoje, retornos_canal) -> NotaContatos:
+    """Ver nota_contatos."""
     # retorno reimportado não conta duas vezes: a contagem é por dia (Chega e Responde) e a Afinidade deduplica
     eventos = [e for e in eventos if e.data < hoje]
     # Chega
@@ -411,5 +453,6 @@ def nota_contatos(eventos: list[Evento], certs: dict[tuple[str, str], Certificac
         o = resp_obs[(idc, contato, canal)]
         o[0] += cpc
         o[1] += 1
-    afin = Afinidade(acoes, hit_rate_por_canal(acoes), certs)
+    acoes = deduplicar(acoes)
+    afin = Afinidade(acoes, hit_rate_por_canal(acoes, deduplicado=True), certs, deduplicado=True)
     return NotaContatos(hoje, dict(chega_obs), chega_base, dict(resp_obs), afin)

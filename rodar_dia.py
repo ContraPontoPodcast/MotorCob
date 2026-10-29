@@ -35,7 +35,7 @@ from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 
-from motor.certificacao import CAMPOS_NOTA, certificar_contatos, nota_contatos
+from motor.certificacao import CAMPOS_NOTA, certificar_contatos, nota_contatos, sem_gc
 from motor.retorno_canal import aplicar_restricoes, avaliar as avaliar_canal, regras_de
 from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
@@ -51,13 +51,13 @@ from motor.rastreio import carregar_acoes, ler_log_portal
 from motor.regua import carregar_regua
 
 
-def _salvar_atomico(caminho: Path, linhas: list[dict], campos) -> None:
-    """CSV inteiro com troca atômica (o arquivo antigo só sai quando o novo está pronto)."""
+def _salvar_atomico(caminho: Path, linhas: list[tuple], campos) -> None:
+    """CSV inteiro (linhas na ordem de `campos`) com troca atômica (o antigo só sai quando o novo está pronto)."""
     caminho.parent.mkdir(parents=True, exist_ok=True)
     tmp = caminho.with_name(caminho.name + ".tmp")
     with open(tmp, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(campos), delimiter=";")
-        w.writeheader()
+        w = csv.writer(f, delimiter=";")
+        w.writerow(campos)
         w.writerows(linhas)
     tmp.replace(caminho)
 
@@ -450,8 +450,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     certs_hoje = certificar(ev_hoje, hoje)
     try:
         notas = nota_contatos(ev_hoje, certs_hoje, hoje, retornos_canal)
-        resumo_contato = notas.resumo_clientes(certs_hoje, set(clientes),
-                                               {k for k, s_ in sinais.items() if s_.get("pertence") == "nao"})
+        with sem_gc():
+            resumo_contato = notas.resumo_clientes(certs_hoje, set(clientes),
+                                                   {k for k, s_ in sinais.items() if s_.get("pertence") == "nao"})
         erro_nota = None
     except Exception as ex:   # noqa: BLE001
         notas, resumo_contato = None, {}
@@ -582,7 +583,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                        "(Hot, rotação, regra da estratégia, score)")
     # estado local do motor (tem o contato: nunca vai ao banco); troca atômica
     try:
-        _salvar_atomico(pasta_estado / ARQ_NOTAS, notas.linhas(certs) if notas is not None else [], CAMPOS_NOTA)
+        with sem_gc():
+            _salvar_atomico(pasta_estado / ARQ_NOTAS, notas.linhas(certs) if notas is not None else [], CAMPOS_NOTA)
     except OSError as ex:
         alertas.append(f"NOTA DE CONTATO: {ARQ_NOTAS} não gravado ({ex.__class__.__name__})")
     nomes_e = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}

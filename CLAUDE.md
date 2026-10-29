@@ -263,7 +263,9 @@ de outra pessoa pela certificação e a rotação segue.
   quebra seguem as datas do acordo. Lista vazia: `gerar_fila(motivos=, motivo_de=)` + `previsao()`
   (próximos 7 dias) → alerta "LISTA VAZIA HOJE", resumo.sem_acao/proximos, previsao.json.
 - Desempenho: `persona.aprender` conta os valores distintos de cada coluna numa passada (era
-  quadrático no nº de clientes: 10 mil clientes levavam minutos a horas). Mesmo canal no mesmo
+  quadrático no nº de clientes: 10 mil clientes levavam minutos a horas); `_qui2` numa passada por
+  coluna; `ler_retorno` lê cada data/hora distinta uma vez; `para_json` sem `asdict`. Referência
+  (100 mil clientes, 3–5 contatos): a nota de contato tem de custar < 10% da rotina. Mesmo canal no mesmo
   dia e mesma raia: `estrategia._sem_repetir` fica com o 1º e avisa.
 - "Reenquadrar agora": o site insere em `pedidos_rotina` (credor_id; status pendente). `ha_arquivo_novo`
   e `empresas_com_carga_nova` incluem os pedidos (o plantão roda em até 5 s, sem o freio de

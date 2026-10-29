@@ -113,13 +113,20 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
                 *((-nota,) if canal else ()), -c.score, s.get("ranking") or 99)
     validos.sort(key=chave)
     # sem histórico a nota é proporcional ao score em cada canal: a ordem acima já é a final
-    por_nota = False
+    por_nota, usa_criterio = False, False
     if notas is not None and len(validos) > 1 and not notas.erro:
         try:
-            por_nota = any(c["campo"] == "nota" for c in regra.get("criterios") or []) \
-                or notas.tem_historico(est.id_cliente, validos)
+            usa_criterio = any(c["campo"] == "nota" for c in regra.get("criterios") or [])
+            por_nota = usa_criterio or notas.tem_historico(est.id_cliente, validos)
         except Exception as ex:   # noqa: BLE001 — a nota nunca segura a lista: fica a ordem de antes
             notas.erro = f"{ex.__class__.__name__}: {str(ex)[:120]}"
+    chave_canal = chave
+    if por_nota and not usa_criterio:   # a mesma chave com a nota do canal antes do score (o resto calculado 1x)
+        base = {id(c): chave(c) for c in validos}
+
+        def chave_canal(c, canal):
+            b = base[id(c)]
+            return b[:-2] + (-notas.nota(c, canal),) + b[-2:]
     loc = est.contato_localizador
     w = regua["whatsapp"]
     saida = {}
@@ -140,7 +147,8 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
             cands = [c for c in cands if not sinais.get(c.contato, {}).get("nao_perturbe")]
         if por_nota and len(cands) > 1 and not notas.erro:   # voz disca nesta ordem; no WhatsApp a trava
             try:                                             # escolhe dentro dela
-                cands = sorted(cands, key=lambda c, canal=canal: chave(c, canal))
+                if usa_criterio or notas.difere(est.id_cliente, cands, canal):
+                    cands = sorted(cands, key=lambda c, canal=canal: chave_canal(c, canal))
             except Exception as ex:   # noqa: BLE001 — a nota nunca segura a lista: fica a ordem de antes
                 notas.erro = f"{ex.__class__.__name__}: {str(ex)[:120]}"
         if canal == "whatsapp":

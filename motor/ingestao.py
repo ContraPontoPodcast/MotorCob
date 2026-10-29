@@ -93,6 +93,7 @@ def ler_retorno(caminho: str | Path, layout: Layout, vistos: set | None = None):
     vistos = set() if vistos is None else vistos
     rel = Relatorio(layout.fornecedor, caminho.name)
     eventos, quarentena = [], []
+    datas = {}
     col = layout.colunas
     with open(caminho, newline="", encoding=layout.encoding) as f:
         leitor = csv.DictReader(f, delimiter=layout.delimitador)
@@ -117,11 +118,14 @@ def ler_retorno(caminho: str | Path, layout: Layout, vistos: set | None = None):
             if contato is None:
                 rel.rejeitadas["contato inválido"] += 1
                 continue
-            try:
-                data = datetime.strptime(linha[col["data"]].strip(), layout.formato_data).date()
-            except (ValueError, AttributeError):
-                rel.rejeitadas["data inválida"] += 1
-                continue
+            txt = linha[col["data"]]
+            data = datas.get(txt)
+            if data is None:
+                try:      # strptime é caro e as datas/horas se repetem muito num arquivo: lê cada uma uma vez
+                    data = datas[txt] = datetime.strptime(txt.strip(), layout.formato_data).date()
+                except (ValueError, AttributeError):
+                    rel.rejeitadas["data inválida"] += 1
+                    continue
             if layout.custo_fixo is not None:
                 custo = layout.custo_fixo
             else:
