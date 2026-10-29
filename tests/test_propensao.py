@@ -291,3 +291,15 @@ class TestRodarDia(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRotinaNaoPara(unittest.TestCase):
+    def test_erro_na_propensao_nao_segura_a_lista_do_dia(self):
+        from unittest import mock
+        import rodar_dia
+        from tests.test_fases_mensagens import PASSO, _rodar
+        with mock.patch.object(rodar_dia.propensao, "calcular", side_effect=ValueError("quebrou")):
+            r = _rodar(PASSO)
+        self.assertEqual([l["canal"] for l in r["fila"]], ["whatsapp"])          # a lista saiu
+        self.assertTrue(any(a.startswith("PROPENSÃO: não calculada hoje") for a in r["alertas"]))
+        self.assertEqual(r["propensao"]["evidencia"], "indisponivel")

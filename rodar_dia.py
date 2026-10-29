@@ -525,9 +525,17 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     ET.limpar(etapas_estado, set(estados) if ativos is None else (set(estados) & ativos))
     # Propensão a pagamento (fase 1): depois da marcação e do aprendizado, antes da lista. Só calcula, publica
     # e vale como condição de etapa (campo "propensao"); não muda a ordem da fila nem o canal
-    prop = propensao.calcular(clientes, estados, hoje, pasta_estado,
-                              propensao.carregar_pagamentos(Path(clientes_csv).parent / "pagamentos.csv", parcelas),
-                              ativos)
+    # um erro aqui nunca pode segurar a lista do dia: sem propensão hoje, com alerta
+    try:
+        prop = propensao.calcular(clientes, estados, hoje, pasta_estado,
+                                  propensao.carregar_pagamentos(Path(clientes_csv).parent / "pagamentos.csv", parcelas),
+                                  ativos)
+        erro_prop = None
+    except Exception as ex:   # noqa: BLE001
+        erro_prop = f"PROPENSÃO: não calculada hoje ({ex.__class__.__name__}: {str(ex)[:120]}); a lista saiu sem ela"
+        prop = {"modelo": {"evidencia": "indisponivel"}, "clientes": {}, "treinou": False,
+                "resumo": {"evidencia": "indisponivel", "pagamentos_treino": 0, "versao": None, "clientes": 0,
+                           "faixas": {}, "treinou": False}}
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
                                   motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto,
@@ -535,6 +543,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                                   historico_acoes=historico_acoes,
                                   propensao={k: v["faixa"] for k, v in prop["clientes"].items()})
     ET.salvar_estado(pasta_estado, etapas_estado)
+    if erro_prop:
+        alertas.append(erro_prop)
     nomes_e = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
     ativas = [f for f in _ler_lista(frases) if f.get("ativo") is not False]
     playbook = {f.get("id"): f.get("texto") for f in ativas if f.get("texto")}
