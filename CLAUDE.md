@@ -196,7 +196,8 @@ de outra pessoa pela certificação e a rotação segue.
   localizador primeiro e a trava do WhatsApp ficam como estavam (a nota ordena dentro do que ela libera);
   voz disca nessa ordem. Cliente sem histórico próprio: ordem idêntica à antiga (teste de paridade). Erro na
   nota (no cálculo ou no meio da fila) → ordem antiga + alerta "NOTA DE CONTATO". Resumos por cliente viram
-  atributos calculados (personas e segmentos): `melhor_contato` (alta/média/baixa pelos tercis da maior
+  atributos calculados (segmentos e personas da empresa; fora da persona aprendida, `persona.FORA_DA_PERSONA`,
+  porque vêm do mesmo histórico de CPC e dominariam a seleção): `melhor_contato` (alta/média/baixa pelos tercis da maior
   nota; sem), `tem_contato_certificado`, `contatos_alcancaveis` (0/1/2+, Chega ≥ 0,5). Bloco
   `personas.contato` (SQL 49): acionados, localizados (Hot ou certificado), taxa de localização, ações até
   o 1º CPC (`acoes.agregar(primeiro_cpc=)`) e evidência pelos cortes da maturidade (30/200). Banco sem o

@@ -444,7 +444,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     # Nota de contato (É dele × Chega × Responde), com o histórico até ontem, logo depois de certificar.
     # A certificação de hoje não depende dos dias pendentes (abaixo), então é feita uma vez só aqui e os
     # resumos por cliente (melhor_contato, tem_contato_certificado, contatos_alcancaveis) entram nos
-    # atributos: viram características candidatas da persona e valem em segmentos/personas da empresa.
+    # atributos: valem em segmentos e nas personas da empresa (fora da persona aprendida: persona.FORA_DA_PERSONA).
     # Um erro aqui nunca segura a lista do dia: a fila sai na ordem de antes, com alerta.
     ev_hoje = [e for e in eventos if e.data < hoje]
     certs_hoje = certificar(ev_hoje, hoje)

@@ -377,3 +377,15 @@ class TestRotina(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPersonaNaoUsaContato(unittest.TestCase):
+    def test_resumos_de_contato_ficam_fora_da_persona_aprendida(self):
+        from motor.persona import FORA_DA_PERSONA, caracteristicas
+        from motor.marcacao import Cliente
+        c = Cliente("P1", date(2026, 1, 1), 800.0, 40,
+                    atributos={"produto": "CARTAO", "melhor_contato": "alta", "tem_contato_certificado": "sim",
+                               "contatos_alcancaveis": "2+"})
+        f = caracteristicas({"P1": c}, date(2026, 10, 1))["P1"]
+        self.assertEqual(f.get("produto"), "CARTAO")
+        self.assertFalse(FORA_DA_PERSONA & set(f))

@@ -4,9 +4,10 @@ Fluxo (refeito a cada rotina com os eventos até ontem):
 1. Tentativas: cada (cliente, canal, dia) acionado vira uma tentativa; sucesso = contato
    (CPC) naquele canal, pela régua (`regua.e_contato`).
 2. Características do cliente: as colunas da carga (`atributos`) e campos derivados —
-   faixa de saldo, faixa de atraso, DDD, tem WhatsApp, tem RCS e os resumos da nota de contato
-   (melhor_contato, tem_contato_certificado, contatos_alcancaveis; ver
-   certificacao.NotaContatos.resumo_clientes — o contato em si nunca vira característica).
+   faixa de saldo, faixa de atraso, DDD, tem WhatsApp, tem RCS. Os resumos da nota de contato
+   (melhor_contato, tem_contato_certificado, contatos_alcancaveis) ficam FORA da persona aprendida
+   (FORA_DA_PERSONA): vêm do mesmo histórico de CPC que a persona mede e dominariam a seleção,
+   mudando as personas de quem já usa. Eles valem em segmentos e nas personas da empresa.
    Colunas numéricas viram faixas (tercis). Nada de dado sensível: só o que a carga e o
    enriquecimento trazem.
 3. Seleção automática: o motor testa todas as características e fica com as (até) 2 que
@@ -59,6 +60,9 @@ def _num(v):
         return None
 
 
+FORA_DA_PERSONA = frozenset({"melhor_contato", "tem_contato_certificado", "contatos_alcancaveis"})
+
+
 def caracteristicas(clientes: dict, dia, contatos_por: dict[str, list[dict]] | None = None) -> dict[str, dict[str, str]]:
     """{id_cliente: {característica: valor}} — colunas da carga + derivadas."""
     contatos_por = contatos_por or {}
@@ -71,7 +75,7 @@ def caracteristicas(clientes: dict, dia, contatos_por: dict[str, list[dict]] | N
             f["tem_whatsapp"] = "sim" if any(x.get("whatsapp_valido") for x in tels) else "não"
             f["tem_rcs"] = "sim" if any(x.get("rcs") for x in tels) else "não"
         for k, v in (c.atributos or {}).items():
-            if (v or "").strip():
+            if (v or "").strip() and k not in FORA_DA_PERSONA:
                 f[k] = str(v).strip()
         saida[idc] = f
     return saida
