@@ -238,6 +238,11 @@ with itens(ordem, item, ok, se_falhar) as (values
   (34, 'Início › Para hoje avisa clientes sem estágio de cobrança (SQL 47)',
        position('sem_estagio' in coalesce(pg_get_functiondef(to_regprocedure('public.para_hoje(bigint,integer)')), '')) > 0,
        'rodar o SQL 47 (supabase/migrations/20261214000001_sem_estagio_inicio.sql)'),
+  (35, 'Propensão a pagamento por cliente, por persona e por faixa (SQL 48)',
+       pg_temp.n('select count(*) from information_schema.columns where table_schema = ''public'' and table_name = ''estado_cliente'' and column_name in (''propensao'', ''faixa_propensao'')') = 2
+       and pg_temp.n('select count(*) from information_schema.columns where table_schema = ''public'' and table_name = ''personas'' and column_name = ''propensao''') = 1
+       and to_regclass('public.propensao_carteira') is not null,
+       'rodar o SQL 48 (supabase/migrations/20261215000001_propensao.sql)'),
   (16, 'Mensageria começa em simulação',
        to_regclass('public.mensageria_config') is null
        or pg_temp.n('select count(*) from public.mensageria_config where modo = ''real''') = 0,

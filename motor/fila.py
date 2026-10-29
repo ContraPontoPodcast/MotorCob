@@ -237,7 +237,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                pausados: set[str] = frozenset(), adiados: set | None = None, publico: dict | None = None,
                para_bureau: dict | None = None, motivos: dict | None = None, motivo_de: dict | None = None,
                detalhe_de: dict | None = None, senao_auto: dict | None = None, ultima_cpc: dict | None = None,
-               etapas_estado: dict | None = None, historico_acoes: dict | None = None):
+               etapas_estado: dict | None = None, historico_acoes: dict | None = None,
+               propensao: dict | None = None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -260,6 +261,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
               {id_cliente: data em que outro credor acionou}: aí vale a pausa da trava da estratégia.
     historico_acoes: {id_cliente: [(data, canal)]} das ações exportadas antes de hoje (limite de ações
               por cliente da trava; sem histórico, só o limite do dia vale).
+    propensao: {id_cliente: faixa "A".."E" ("" em Coletando)} da Propensão a pagamento (motor/propensao.py);
+              vale como campo "propensao" nas condições das etapas. Não muda ordem nem canal.
     """
     alertas = []
     taxa, envios = taxa_bloqueio_whatsapp(eventos or [], hoje, regua)
@@ -441,7 +444,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         if etapas_estado is not None and rc.dados.get("etapas"):
             cli = clientes.get(idc)
             campos = {**((cli.atributos or {}) if cli else {}), "fase": ET.FASE_DO_ESTADO.get(est.estado, ""),
-                      "estado": est.estado}
+                      "estado": est.estado, "propensao": (propensao or {}).get(idc, "")}
             if cli:
                 campos.update(saldo=cli.saldo, dias_atraso=cli.atraso_em(hoje), qtd_contratos=cli.qtd_contratos)
             abertas = [p.vencimento for p in (parcelas or {}).get(idc, []) if getattr(p, "pago_em", None) is None]

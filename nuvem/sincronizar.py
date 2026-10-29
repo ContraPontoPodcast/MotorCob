@@ -484,6 +484,10 @@ def chave_sugestao(s: dict) -> str:
     return f'{s["persona"]}|{s["fase"]}|{s["dia"]}|{s["de"]}|{s["para"]}'
 
 
+ALERTA_SQL48 = ("BANCO: rode o SQL 48 (supabase/migrations/20261215000001_propensao.sql) para ver a Propensão a "
+                "pagamento por cliente e por persona")
+
+
 def publicar_personas(sb: Supabase, empresa_id, r, cid=None) -> int:
     """Personas do dia (substitui as anteriores) e sugestões novas; devolve quantas sugestões novas."""
     ts = agora()
@@ -499,17 +503,24 @@ def publicar_personas(sb: Supabase, empresa_id, r, cid=None) -> int:
     linhas = [{"empresa_id": empresa_id, **_c(cid), "persona": p["persona"], "nome": p["nome"], "clientes": p["clientes"],
                "condicoes": p["condicoes"], "ranking": p["ranking"],
                "maturidade": {**p.get("maturidade", {}), "indice_anterior": anterior.get(p["persona"])},
-               "caracteristicas": r.get("caracteristicas_persona") or [], "atualizado_em": ts}
+               "caracteristicas": r.get("caracteristicas_persona") or [], "atualizado_em": ts,
+               "propensao": p.get("propensao")}
               for p in r.get("personas") or []]
-    if linhas:
+    # banco sem as colunas novas: grava sem elas e avisa (propensao = SQL 48; maturidade = pacote de 2026-10)
+    avisos = {"propensao": ALERTA_SQL48,
+              "maturidade": "BANCO: rode supabase/atualizar_producao_2026-10.sql para ver a maturidade das personas"}
+    fora = []
+    while linhas:
         try:
-            sb.inserir("personas", linhas)
-        except ErroSupabase as ex:   # banco sem a coluna nova: grava sem a maturidade e avisa
-            if "maturidade" not in str(ex):
+            sb.inserir("personas", [{k: v for k, v in l.items() if k not in fora} for l in linhas])
+            break
+        except ErroSupabase as ex:
+            col = next((c for c in avisos if c in str(ex) and c not in fora), None)
+            if col is None:
                 raise
-            sb.inserir("personas", [{k: v for k, v in l.items() if k != "maturidade"} for l in linhas])
-            r.setdefault("alertas", []).append("BANCO: rode supabase/atualizar_producao_2026-10.sql para ver a "
-                                               "maturidade das personas")
+            fora.append(col)
+            if avisos[col] not in r.setdefault("alertas", []):
+                r["alertas"].append(avisos[col])
     existentes = {s["chave"]: s for s in sb.selecionar("sugestoes", {"empresa_id": f"eq.{empresa_id}", **_fc(cid)})
                   or []}
     novas = 0
@@ -947,7 +958,9 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         enq = r.get("enquadramento") or {}
         def sem(*cols):
             return {k: {c: v for c, v in d.items() if c not in cols} for k, d in enq.items()}
-        tentativas = (enq, sem("motivo_categoria"), sem("motivo_categoria", "motivo_hoje"), None)
+        prop = ("propensao", "faixa_propensao")     # SQL 48
+        tentativas = (enq, sem(*prop), sem(*prop, "motivo_categoria"), sem(*prop, "motivo_categoria", "motivo_hoje"),
+                      None)
         for i, tentativa in enumerate(tentativas):
             try:
                 sb.inserir("estado_cliente", _linhas_estado(r["estados"], eid, r.get("clientes"), data, cid,
@@ -956,12 +969,14 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             except ErroSupabase as ex:   # banco sem as colunas novas: grava o resto e avisa
                 if i == len(tentativas) - 1 or not any(
                         c in str(ex) for c in ("estrategia", "persona", "acao_hoje", "na_carga", "passo_hoje",
-                                               "enriq_", "motivo_hoje", "motivo_categoria")):
+                                               "enriq_", "motivo_hoje", "motivo_categoria", "propensao")):
                     raise
-        if i == 1:
+        if i:
+            r["alertas"].append(ALERTA_SQL48)
+        if i == 2:
             r["alertas"].append("BANCO: rode supabase/migrations/20261030000001_motivo_categoria.sql para a "
                                 "Lista do dia agrupar os motivos (com ação, regra da esteira, sem contato, encerrado)")
-        elif i:
+        elif i > 2:
             r["alertas"].append("BANCO: rode supabase/atualizar_producao_2026-10.sql para ver onde cada cliente "
                                 "se enquadrou (esteira, persona, ação de hoje e o motivo)")
         n_trilha = publicar_trilha(sb, pasta / "estado", eid, cid)
@@ -1001,6 +1016,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                   "acoes_ontem": _acoes_de(r.get("acoes"), data - timedelta(days=1)),
                   "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq,
                   "sem_acao": r.get("motivos") or {}, "proximos": r.get("proximos") or [],
+                  "propensao": r.get("propensao"),
                   "retorno_canal": {k: v for k, v in (r.get("retorno_canal") or {}).items() if k != "regras"} or None}
         if cid is not None:
             resumo["credor"] = u["codigo"]
