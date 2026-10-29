@@ -43,6 +43,7 @@ from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, ca
 from motor.acoes import agregar as agregar_acoes, sem_ocorrencia, totais as totais_acoes
 from motor.estrategia import CANAIS_SEM_MENSAGEM, CANAIS_TEMPLATE, frase_da_acao, validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
+from motor import propensao
 from motor.fila import MOTIVOS, categoria_do_motivo, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
 from motor.marcacao import aplicar_pendentes, ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
@@ -522,12 +523,28 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     from motor import etapas as ET
     etapas_estado = ET.carregar_estado(pasta_estado)      # etapas próprias da estratégia (entrou, feitos, saiu)
     ET.limpar(etapas_estado, set(estados) if ativos is None else (set(estados) & ativos))
+    # Propensão a pagamento (fase 1): depois da marcação e do aprendizado, antes da lista. Só calcula, publica
+    # e vale como condição de etapa (campo "propensao"); não muda a ordem da fila nem o canal
+    # um erro aqui nunca pode segurar a lista do dia: sem propensão hoje, com alerta
+    try:
+        prop = propensao.calcular(clientes, estados, hoje, pasta_estado,
+                                  propensao.carregar_pagamentos(Path(clientes_csv).parent / "pagamentos.csv", parcelas),
+                                  ativos)
+        erro_prop = None
+    except Exception as ex:   # noqa: BLE001
+        erro_prop = f"PROPENSÃO: não calculada hoje ({ex.__class__.__name__}: {str(ex)[:120]}); a lista saiu sem ela"
+        prop = {"modelo": {"evidencia": "indisponivel"}, "clientes": {}, "treinou": False,
+                "resumo": {"evidencia": "indisponivel", "pagamentos_treino": 0, "versao": None, "clientes": 0,
+                           "faixas": {}, "treinou": False}}
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
                                   motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto,
                                   ultima_cpc=ultima_cpc, etapas_estado=etapas_estado,
-                                  historico_acoes=historico_acoes)
+                                  historico_acoes=historico_acoes,
+                                  propensao={k: v["faixa"] for k, v in prop["clientes"].items()})
     ET.salvar_estado(pasta_estado, etapas_estado)
+    if erro_prop:
+        alertas.append(erro_prop)
     nomes_e = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
     ativas = [f for f in _ler_lista(frases) if f.get("ativo") is not False]
     playbook = {f.get("id"): f.get("texto") for f in ativas if f.get("texto")}
@@ -696,6 +713,14 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         alertas += sem_ocorrencia(acoes, _dia_util_anterior(hoje, regua))
     (saida / "acoes.json").write_text(json.dumps(acoes, ensure_ascii=False), encoding="utf-8")
     personas = resumo_personas(modelo, ativos)
+    # propensão por persona (só relatório; a persona não é variável do score): aprendida e da empresa
+    por_aprendida = propensao.agregar(prop["clientes"], clientes,
+                                      lambda k: "|".join(modelo.persona(k)) if k in modelo.feats else None)
+    for p_ in personas:
+        p_["propensao"] = {**por_aprendida[p_["persona"]], "evidencia": prop["modelo"]["evidencia"]} \
+            if p_["persona"] in por_aprendida else None
+    prop["resumo"]["por_persona_usuario"] = propensao.agregar(
+        prop["clientes"], clientes, lambda k: nome_persona.get(publico.get(k)) or "Sem persona") if pers_usuario else {}
     nomes_estr = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
 
     def primeiro_passo(idc):
@@ -748,6 +773,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         out(f"  ações de ontem: {t['enviadas']} enviadas · {t['com_retorno']} com retorno · {t['cpcs']} CPC"
             + (f" · R$ {t['custo']:.2f}" if t["custo"] else ""))
     out(f"  enriquecimento: {len(enriq)} clientes")
+    rp = prop["resumo"]
+    out(f"  propensão a pagamento: {rp['evidencia']} ({rp['pagamentos_treino']} pagamentos no treino, modelo "
+        f"{rp['versao']}) · {rp['clientes']} clientes · " + " ".join(f"{k} {v}" for k, v in rp["faixas"].items()))
     for a in alertas:
         out(f"  ALERTA: {a}")
     out(f"  saídas em {saida}/ · estado em {pasta_estado}/")
@@ -776,6 +804,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                             else _motivo_do_cliente(motivo_de.get(k), e, hoje, regua)),
             "motivo_categoria": "sem_contato" if k in detalhe_de else categoria_do_motivo(motivo_de.get(k)),
             "persona_usuario": nome_persona.get(publico.get(k), "") if pers_usuario else "",
+            "propensao": prop["clientes"][k]["p"] if k in prop["clientes"] else None,
+            "faixa_propensao": (prop["clientes"][k]["faixa"] or None) if k in prop["clientes"] else None,
             "enriq_enviado": enviados_bureau.get(k),
             "enriq_retorno": ultimo_retorno[k].isoformat() if k in ultimo_retorno else None}
     compartilhar = {
@@ -788,6 +818,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         "esperando": {pessoa_de[i]: hoje for i in adiados if i in pessoa_de}}
     return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "compartilhar": compartilhar,
             "enquadramento": enquadramento, "personas": personas, "sugestoes": sugestoes,
+            "propensao": prop["resumo"],
             "caracteristicas_persona": modelo.colunas,
             "motivos": motivos, "proximos": proximos,
             "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,

@@ -185,6 +185,18 @@ de outra pessoa pela certificação e a rotação segue.
   ≥ 99% do saldo) ou 1ª parcela do acordo paga: acordo sem parcela paga é promessa, não
   pagamento (decisão do dono, 26/10/2026). É o alvo da Propensão a pagamento.
   Layouts `retirada`, `acordo`, `baixa` (e `incremental` opcional) em empresas/<slug>.json.
+- `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
+  = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
+  Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias
+  (LOC, CPA, CPB, NCP, QBR no começo de D, pela trilha; saldo em D = hoje + quitações/parciais depois de D;
+  alvo fechado: D ≤ hoje − 30), semanal (domingo, sem modelo, ≥ 7 dias ou dia passado) em
+  `estado/modelo_propensao.json` com versão, cortes A–E (quintis das fotos, congelados até o próximo
+  treino) e realizado por faixa. Evidência: Coletando (< 30 pagamentos; sem faixa) · Prévia · Definida
+  (≥ 200). `rodar_dia` aplica antes da lista (estado/propensao.json, motivos em código), põe
+  `propensao`/`faixa_propensao` no enquadramento, a faixa vira o campo "propensao" das etapas
+  (`gerar_fila(propensao=)`), agregados por persona (aprendida em `personas.propensao`, da empresa em
+  r["propensao"]) e o resumo vai para a execução. Não muda ordem nem canal. Nunca usa idade, sexo, DDD/UF
+  nem a persona como variável. SQL 48 (`propensao_carteira`); banco sem ele: grava sem e alerta.
   Entre credores da mesma empresa (mesmo CPF, `pessoa_de`): `rodar_dia(compartilhado=)`
   recebe Hot (pessoa, contato), WhatsApp válido e acionados (pessoa → data); quem outro credor
   acionou há < `recencia_horas` não recebe massiva (`gerar_fila(pausados=)`); devolve

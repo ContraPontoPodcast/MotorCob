@@ -230,6 +230,39 @@ class TestSincronizar(unittest.TestCase):
         self.assertIsInstance(linha["saldo"], float)
         self.assertGreaterEqual(linha["dias_atraso"], 0)
 
+    def test_propensao_vai_para_o_estado_as_personas_e_o_resumo(self):
+        self._dia(date(2026, 9, 25))
+        t = self.falso.tabelas
+        alfa = [l for l in t["estado_cliente"] if l["empresa_id"] == 1]
+        self.assertTrue(all("propensao" in l and "faixa_propensao" in l for l in alfa))
+        self.assertTrue(any(l["propensao"] is not None for l in alfa))
+        self.assertTrue(all(l["faixa_propensao"] in (None, "A", "B", "C", "D", "E") for l in alfa))
+        self.assertTrue(all("propensao" in l for l in t["personas"]))
+        ex = next(e for e in t["execucoes"] if e["empresa_id"] == 1)
+        self.assertIn(ex["resumo"]["propensao"]["evidencia"], ("coletando", "previa", "definida"))
+        self.assertFalse(any("SQL 48" in a for a in ex["alertas"]))
+
+    def test_banco_sem_o_sql_48_grava_sem_a_propensao_e_avisa(self):
+        post = self.falso.post
+
+        def sem_coluna(h, caminho, q, corpo):
+            tabela = caminho.rsplit("/", 1)[1]
+            if tabela in ("estado_cliente", "personas") and b'"propensao"' in corpo:
+                col = "faixa_propensao" if tabela == "estado_cliente" else "propensao"
+                return h._resp(400, json.dumps({"code": "PGRST204", "message": f"Could not find the '{col}' column "
+                                                f"of '{tabela}' in the schema cache"}).encode())
+            return post(h, caminho, q, corpo)
+        self.falso.post = sem_coluna
+        self._dia(date(2026, 9, 25))
+        t = self.falso.tabelas
+        alfa = [l for l in t["estado_cliente"] if l["empresa_id"] == 1]
+        self.assertEqual(len(alfa), 600)
+        self.assertFalse(any("propensao" in l for l in alfa))
+        self.assertTrue("motivo_categoria" in alfa[0])                 # o resto continua indo
+        self.assertTrue(t["personas"] and not any("propensao" in l for l in t["personas"]))
+        ex = next(e for e in t["execucoes"] if e["empresa_id"] == 1)
+        self.assertEqual(sum("SQL 48" in a for a in ex["alertas"]), 1)
+
     def test_contratos_do_mes_para_o_faturamento(self):
         self._dia(date(2026, 9, 25))
         t = self.falso.tabelas
