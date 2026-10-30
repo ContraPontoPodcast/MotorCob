@@ -1877,6 +1877,12 @@ checar("rotina grava a propensão da persona", True, f"update public.personas se
 checar("propensão da persona: A lê a sua", True, "select string_agg(propensao->>'p_media', ',') from public.personas", "authenticated", u["oper"], "0.0712")
 checar("propensão da persona: B não lê a da A", True, "select count(*) from public.personas where nome='UF RJ'", "authenticated", u["operb"], 0)
 checar("anon não lê personas", False, "select propensao from public.personas", "anon")
+# SQL 49: bloco Contato da persona (só números; o contato em si fica no estado local do motor)
+checar("rotina grava o bloco contato da persona", True, f"update public.personas set contato='{{\"acionados\": 250, \"taxa_localizacao\": 0.312, \"evidencia\": \"definida\"}}' where empresa_id in ({EA},{EB})", "service_role")
+checar("contato da persona: A lê o seu", True, "select string_agg(contato->>'taxa_localizacao', ',') from public.personas", "authenticated", u["oper"], "0.312")
+checar("contato da persona: B não lê o da A", True, "select count(*) from public.personas where nome='UF RJ' and contato is not null", "authenticated", u["operb"], 0)
+checar("operação não muda o contato da persona", True, f"update public.personas set contato='{{}}' where empresa_id={EA}; select count(*) from public.personas where contato = '{{}}'::jsonb", "authenticated", u["oper"], 0)
+checar("anon não lê o contato da persona", False, "select contato from public.personas", "anon")
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

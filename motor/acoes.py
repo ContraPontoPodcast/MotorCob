@@ -28,9 +28,11 @@ METRICAS = ("enviadas", "reservas", "com_retorno", "retornos", "cpcs", "custo", 
 
 
 def agregar(escolhas: dict, eventos: list, regua, custos: dict | None = None,
-            desde: date | None = None) -> list[dict]:
+            desde: date | None = None, primeiro_cpc: dict | None = None) -> list[dict]:
     """escolhas: carregar_escolhas(); eventos: Evento[]; custos: {canal: custo por ação}.
-    Retorna linhas {data, canal, regua, cluster, persona, <METRICAS>} a partir de `desde`."""
+    Retorna linhas {data, canal, regua, cluster, persona, <METRICAS>} a partir de `desde`.
+    primeiro_cpc (opcional) recebe {id_cliente: ações até o 1º CPC} dos 1ºs CPC a partir de `desde`
+    (fica na memória da rotina: é o insumo do bloco Contato da persona, que só leva a soma)."""
     custos = {c: float(v) for c, v in (custos or {}).items() if v not in (None, "")}
     acoes = {}                         # (data, idc, canal) -> dados da ação
     por_cliente_canal = defaultdict(list)
@@ -78,7 +80,10 @@ def agregar(escolhas: dict, eventos: list, regua, custos: dict | None = None,
             d, canal, a = primeiro
             s = soma[(d, canal, a["regua"], a["cluster"], a["persona"])]
             s["primeiros_cpc"] += 1
-            s["acoes_ate_primeiro_cpc"] += sum(1 for x in ls if x[0] <= d)
+            n = sum(1 for x in ls if x[0] <= d)
+            s["acoes_ate_primeiro_cpc"] += n
+            if primeiro_cpc is not None and (desde is None or d >= desde.isoformat()):
+                primeiro_cpc[idc] = n
     for (d, idc, canal), a in acoes.items():
         s = soma[(d, canal, a["regua"], a["cluster"], a["persona"])]
         foi = not a["reserva"] or a["retornos"] > 0

@@ -63,7 +63,7 @@ CANAIS_TEMPLATE = ("whatsapp", "rcs")
 CANAIS_FRASE = ("sms", "agente_voz")
 CANAIS_SEM_MENSAGEM = ("discador", "email")
 SEM_ACAO = "sem_acao"               # na raia de uma persona: neste dia ela não recebe nada
-CAMPOS_PRIORIDADE = ("ranking", "score", "whatsapp", "rcs", "bureau")
+CAMPOS_PRIORIDADE = ("ranking", "score", "whatsapp", "rcs", "bureau", "nota")   # nota = nota de contato no canal
 
 
 def _simples(v) -> str:
@@ -370,9 +370,10 @@ def _ligado(v) -> bool:
 
 def _prioridade(p) -> tuple[dict | None, str | None]:
     """Regra do usuário para ordenar (e filtrar) os telefones com o retorno do bureau:
-    {"criterios": [{"campo": ranking|score|whatsapp|rcs|bureau, "sentido": asc|desc}],
+    {"criterios": [{"campo": ranking|score|whatsapp|rcs|bureau|nota, "sentido": asc|desc}],
      "score_minimo": número, "ranking_maximo": número}. Telefone sem score/ranking passa no
-    filtro e vai depois dos que têm."""
+    filtro e vai depois dos que têm. "nota" = nota de contato do MotorCob no canal (É dele × Chega ×
+    Responde); sem ela calculada, não muda a ordem."""
     if not p:
         return None, None
     if not isinstance(p, dict):

@@ -35,7 +35,7 @@ from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 
-from motor.certificacao import certificar_contatos
+from motor.certificacao import CAMPOS_NOTA, certificar_contatos, nota_contatos, sem_gc
 from motor.retorno_canal import aplicar_restricoes, avaliar as avaliar_canal, regras_de
 from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
@@ -49,6 +49,17 @@ from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layout
 from motor.marcacao import aplicar_pendentes, ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
 from motor.rastreio import carregar_acoes, ler_log_portal
 from motor.regua import carregar_regua
+
+
+def _salvar_atomico(caminho: Path, linhas: list[tuple], campos) -> None:
+    """CSV inteiro (linhas na ordem de `campos`) com troca atômica (o antigo só sai quando o novo está pronto)."""
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    tmp = caminho.with_name(caminho.name + ".tmp")
+    with open(tmp, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(campos)
+        w.writerows(linhas)
+    tmp.replace(caminho)
 
 
 def _salvar(caminho: Path, linhas: list[dict], anexar=False):
@@ -430,6 +441,25 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         if tels:
             extra["ddd"] = tels[0]["contato"][:2]
         clientes[k] = replace(c, atributos={**extra, **(c.atributos or {})})
+    # Nota de contato (É dele × Chega × Responde), com o histórico até ontem, logo depois de certificar.
+    # A certificação de hoje não depende dos dias pendentes (abaixo), então é feita uma vez só aqui e os
+    # resumos por cliente (melhor_contato, tem_contato_certificado, contatos_alcancaveis) entram nos
+    # atributos: valem em segmentos e nas personas da empresa (fora da persona aprendida: persona.FORA_DA_PERSONA).
+    # Um erro aqui nunca segura a lista do dia: a fila sai na ordem de antes, com alerta.
+    ev_hoje = [e for e in eventos if e.data < hoje]
+    certs_hoje = certificar(ev_hoje, hoje)
+    try:
+        notas = nota_contatos(ev_hoje, certs_hoje, hoje, retornos_canal)
+        with sem_gc():
+            resumo_contato = notas.resumo_clientes(certs_hoje, set(clientes),
+                                                   {k for k, s_ in sinais.items() if s_.get("pertence") == "nao"})
+        erro_nota = None
+    except Exception as ex:   # noqa: BLE001
+        notas, resumo_contato = None, {}
+        erro_nota = ex
+    if notas is not None:
+        for k, c in list(clientes.items()):
+            clientes[k] = replace(c, atributos={**resumo_contato.get(k, SEM_CONTATO), **(c.atributos or {})})
     from motor.cluster import carregar_personas, persona_de
     pers_usuario, avisos_pers = carregar_personas(_ler_lista(personas_usuario))
     avisos_cluster += avisos_pers
@@ -488,8 +518,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     pasta_estado.mkdir(parents=True, exist_ok=True)
     aplicados_arq.write_text("\n".join(sorted({chave_ev(e) for e in eventos if e.data <= ultimo})), encoding="utf-8")
 
-    ev_ate = [e for e in eventos if e.data < hoje]
-    certs = certificar(ev_ate, hoje)
+    ev_ate = ev_hoje
+    certs = certs_hoje       # certificado lá em cima (junto da nota de contato)
     # personas: aprendidas com o histórico até ontem; escolhem o canal das etiquetas persona_1/2
     custos = {c["canal"]: c.get("custo") for c in _ler_lista(canais) if c.get("custo") is not None}
     modelo = aprender(ev_ate, clientes, regua, hoje, dados_contatos, custos)
@@ -540,11 +570,23 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
                                   motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto,
                                   ultima_cpc=ultima_cpc, etapas_estado=etapas_estado,
-                                  historico_acoes=historico_acoes,
+                                  historico_acoes=historico_acoes, notas=notas,
                                   propensao={k: v["faixa"] for k, v in prop["clientes"].items()})
     ET.salvar_estado(pasta_estado, etapas_estado)
     if erro_prop:
         alertas.append(erro_prop)
+    if notas is not None and notas.erro:
+        erro_nota = notas.erro
+    if erro_nota is not None:
+        txt = erro_nota if isinstance(erro_nota, str) else f"{erro_nota.__class__.__name__}: {str(erro_nota)[:120]}"
+        alertas.append(f"NOTA DE CONTATO: não usada hoje ({txt}); os números saíram na ordem de antes "
+                       "(Hot, rotação, regra da estratégia, score)")
+    # estado local do motor (tem o contato: nunca vai ao banco); troca atômica
+    try:
+        with sem_gc():
+            _salvar_atomico(pasta_estado / ARQ_NOTAS, notas.linhas(certs) if notas is not None else [], CAMPOS_NOTA)
+    except OSError as ex:
+        alertas.append(f"NOTA DE CONTATO: {ARQ_NOTAS} não gravado ({ex.__class__.__name__})")
     nomes_e = {e.get("id"): e.get("nome") for e in _ler_lista(estrategias)}
     ativas = [f for f in _ler_lista(frases) if f.get("ativo") is not False]
     playbook = {f.get("id"): f.get("texto") for f in ativas if f.get("texto")}
@@ -707,12 +749,23 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         if sem_doc:
             alertas.append(f"BUREAU: {sem_doc} clientes sem CPF/CNPJ na carga não vão no arquivo do bureau por CPF")
     # ações realizadas (agregado, sem dado pessoal): últimos DIAS_ACOES dias
-    acoes = agregar_acoes(carregar_escolhas(pasta_estado), eventos, regua, custos,
-                          desde=hoje - timedelta(days=DIAS_ACOES))
+    escolhas_hist = carregar_escolhas(pasta_estado)
+    ate_1o_cpc = {}
+    acoes = agregar_acoes(escolhas_hist, eventos, regua, custos,
+                          desde=hoje - timedelta(days=DIAS_ACOES), primeiro_cpc=ate_1o_cpc)
     if ocorrencias:
         alertas += sem_ocorrencia(acoes, _dia_util_anterior(hoje, regua))
     (saida / "acoes.json").write_text(json.dumps(acoes, ensure_ascii=False), encoding="utf-8")
-    personas = resumo_personas(modelo, ativos)
+    # bloco Contato da persona: acionados (ação exportada ou ocorrência até ontem), localizados (Hot ou
+    # contato certificado) e ações até o 1º CPC; só a contagem sai daqui
+    acionados = {idc for (d_, idc), ls_ in escolhas_hist.items()
+                 if d_ < hoje.isoformat() and any(str(l.get("reserva")) != "1" for l in ls_)}
+    acionados.update(e.id_cliente for e in ev_ate)
+    localizados = {k for k, e in estados.items() if e.contato_localizador}
+    localizados.update(idc for (idc, _), c in certs.items() if c.status == "CERTIFICADO")
+    localizados.update(idc for (idc, _), s_ in sinais.items() if s_.get("hot"))
+    personas = resumo_personas(modelo, ativos, {"acionados": acionados, "localizados": localizados,
+                                                "ate_1o_cpc": ate_1o_cpc})
     # propensão por persona (só relatório; a persona não é variável do score): aprendida e da empresa
     por_aprendida = propensao.agregar(prop["clientes"], clientes,
                                       lambda k: "|".join(modelo.persona(k)) if k in modelo.feats else None)
@@ -827,9 +880,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "dias_processados": (hoje - inicio).days if inicio < hoje else 0}
 
 
+# atributos que o motor calcula (valem em segmentos e personas); os 3 últimos vêm da nota de contato
 CALCULADAS = ("persona", "ddd", "tem_whatsapp", "tem_rcs", "tem_email", "tem_celular", "so_fixo", "qtd_telefones",
-              "idade")   # atributos que o motor calcula (valem em segmentos e personas)
+              "idade", "melhor_contato", "tem_contato_certificado", "contatos_alcancaveis")
 DIAS_ACOES = 60
+ARQ_NOTAS = "contatos_nota.csv"   # nota de contato por (cliente, contato, canal): só no estado local
+SEM_CONTATO = {"melhor_contato": "sem", "tem_contato_certificado": "não", "contatos_alcancaveis": "0"}
 INTERVALO_BUREAU = 30   # o mesmo cliente não volta ao bureau antes disso
 
 

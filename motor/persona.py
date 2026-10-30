@@ -4,8 +4,12 @@ Fluxo (refeito a cada rotina com os eventos até ontem):
 1. Tentativas: cada (cliente, canal, dia) acionado vira uma tentativa; sucesso = contato
    (CPC) naquele canal, pela régua (`regua.e_contato`).
 2. Características do cliente: as colunas da carga (`atributos`) e campos derivados —
-   faixa de saldo, faixa de atraso, DDD, tem WhatsApp, tem RCS. Colunas numéricas viram
-   faixas (tercis). Nada de dado sensível: só o que a carga e o enriquecimento trazem.
+   faixa de saldo, faixa de atraso, DDD, tem WhatsApp, tem RCS. Os resumos da nota de contato
+   (melhor_contato, tem_contato_certificado, contatos_alcancaveis) ficam FORA da persona aprendida
+   (FORA_DA_PERSONA): vêm do mesmo histórico de CPC que a persona mede e dominariam a seleção,
+   mudando as personas de quem já usa. Eles valem em segmentos e nas personas da empresa.
+   Colunas numéricas viram faixas (tercis). Nada de dado sensível: só o que a carga e o
+   enriquecimento trazem.
 3. Seleção automática: o motor testa todas as características e fica com as (até) 2 que
    mais mudam a taxa de CPC por canal (qui-quadrado por grau de liberdade, com volume
    mínimo). Persona = combinação dos valores dessas características.
@@ -56,6 +60,9 @@ def _num(v):
         return None
 
 
+FORA_DA_PERSONA = frozenset({"melhor_contato", "tem_contato_certificado", "contatos_alcancaveis"})
+
+
 def caracteristicas(clientes: dict, dia, contatos_por: dict[str, list[dict]] | None = None) -> dict[str, dict[str, str]]:
     """{id_cliente: {característica: valor}} — colunas da carga + derivadas."""
     contatos_por = contatos_por or {}
@@ -68,7 +75,7 @@ def caracteristicas(clientes: dict, dia, contatos_por: dict[str, list[dict]] | N
             f["tem_whatsapp"] = "sim" if any(x.get("whatsapp_valido") for x in tels) else "não"
             f["tem_rcs"] = "sim" if any(x.get("rcs") for x in tels) else "não"
         for k, v in (c.atributos or {}).items():
-            if (v or "").strip():
+            if (v or "").strip() and k not in FORA_DA_PERSONA:
                 f[k] = str(v).strip()
         saida[idc] = f
     return saida
@@ -103,14 +110,16 @@ def tentativas(eventos, regua) -> list[tuple[str, str, bool]]:
 def _qui2(tent, feats, col) -> tuple[float, int]:
     """Qui-quadrado por grau de liberdade de (valor × CPC) somado nos canais."""
     total, gl = 0.0, 0
+    por_canal = defaultdict(lambda: defaultdict(lambda: [0, 0]))   # uma passada só (era uma por canal)
+    vazio = {}
+    for i, c, s in tent:
+        v = feats.get(i, vazio).get(col)
+        if v is not None:
+            g = por_canal[c][v]
+            g[0] += s
+            g[1] += 1
     for canal in CANAIS:
-        grupos = defaultdict(lambda: [0, 0])
-        for i, c, s in tent:
-            if c == canal and col in feats.get(i, {}):
-                g = grupos[feats[i][col]]
-                g[0] += s
-                g[1] += 1
-        grupos = {v: g for v, g in grupos.items() if g[1] >= MIN_GRUPO}
+        grupos = {v: g for v, g in por_canal.get(canal, {}).items() if g[1] >= MIN_GRUPO}
         if len(grupos) < 2:
             continue
         n = sum(g[1] for g in grupos.values())
@@ -300,12 +309,36 @@ def maturidade(modelo: ModeloPersona, persona: tuple, ranking: list[dict]) -> di
             "proximo_passo": passo}
 
 
-def resumo(modelo: ModeloPersona, clientes_ativos: set[str] | None = None) -> list[dict]:
-    """Uma linha por persona: clientes, ranking com taxa, volume e custo por CPC, e maturidade."""
+def bloco_contato(acionados: int, localizados: int, primeiros_cpc: int, acoes_ate: int) -> dict:
+    """Bloco Contato da persona (só números): taxa de localização (Hot ou certificado ÷ acionados),
+    ações até o 1º CPC (média) e a evidência pelo volume de acionados, com os mesmos cortes da
+    maturidade: Coletando (< MIN_GRUPO) · Prévia · Definida (≥ MIN_SUGESTAO)."""
+    return {"acionados": acionados, "localizados": localizados,
+            "taxa_localizacao": round(localizados / acionados, 4) if acionados else None,
+            "primeiros_cpc": primeiros_cpc, "acoes_ate_primeiro_cpc": acoes_ate,
+            "acoes_por_primeiro_cpc": round(acoes_ate / primeiros_cpc, 2) if primeiros_cpc else None,
+            "evidencia": "coletando" if acionados < MIN_GRUPO else "previa" if acionados < MIN_SUGESTAO
+            else "definida"}
+
+
+def resumo(modelo: ModeloPersona, clientes_ativos: set[str] | None = None, contato: dict | None = None) -> list[dict]:
+    """Uma linha por persona: clientes, ranking com taxa, volume e custo por CPC, e maturidade.
+    contato (opcional): {"acionados": {id}, "localizados": {id}, "ate_1o_cpc": {id: ações}} → bloco
+    "contato" de cada persona (bloco_contato); nenhum contato nem ID sai no resumo."""
     contagem = defaultdict(int)
+    cont = defaultdict(lambda: [0, 0, 0, 0])      # persona -> acionados, localizados, 1ºs CPC, ações até eles
+    acion, local_, ate = ((contato or {}).get(k) or {} for k in ("acionados", "localizados", "ate_1o_cpc"))
     for idc in modelo.feats:
         if clientes_ativos is None or idc in clientes_ativos:
-            contagem[modelo.persona(idc)] += 1
+            p = modelo.persona(idc)
+            contagem[p] += 1
+            if contato is not None and idc in acion:
+                b = cont[p]
+                b[0] += 1
+                b[1] += idc in local_
+                if idc in ate:
+                    b[2] += 1
+                    b[3] += ate[idc]
     prior = FORCA if modelo.colunas else 20.0
     linhas = []
     for p, n in sorted(contagem.items(), key=lambda x: -x[1]):
@@ -322,6 +355,8 @@ def resumo(modelo: ModeloPersona, clientes_ativos: set[str] | None = None) -> li
         linhas.append({"persona": "|".join(p), "nome": modelo.nome(p), "clientes": n,
                        "condicoes": [{"campo": c, "valor": v} for c, v in zip(modelo.colunas, p)],
                        "ranking": ranking, "maturidade": maturidade(modelo, p, ranking)})
+        if contato is not None:
+            linhas[-1]["contato"] = bloco_contato(*cont[p])
     return linhas
 
 
