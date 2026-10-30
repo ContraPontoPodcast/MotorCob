@@ -940,7 +940,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 personas_usuario=personas_usuario,
                                 demais_ativo=u.get("demais_ativo") is not False,
                                 calendario=u.get("calendario"), retornos_canal=reg_canal,
-                                regras_retorno=u.get("regras_retorno"), frases=frases)
+                                regras_retorno=u.get("regras_retorno"), frases=frases,
+                                discagem=u.get("discagem"))
         _guardar_compartilhado(pasta_emp, u, r, data)
         try:   # medição para o faturamento por contrato; nunca derruba a rodada
             from nuvem import faturamento
@@ -1021,7 +1022,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                   "acoes_ontem": _acoes_de(r.get("acoes"), data - timedelta(days=1)),
                   "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq,
                   "sem_acao": r.get("motivos") or {}, "proximos": r.get("proximos") or [],
-                  "propensao": r.get("propensao"),
+                  "propensao": r.get("propensao"), "discagem": r.get("discagem") or None,
                   "retorno_canal": {k: v for k, v in (r.get("retorno_canal") or {}).items() if k != "regras"} or None}
         if cid is not None:
             resumo["credor"] = u["codigo"]

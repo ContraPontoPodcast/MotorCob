@@ -947,6 +947,19 @@ class TestSincronizar(unittest.TestCase):
         rc = T["execucoes"][-1]["resumo"]["retorno_canal"]
         self.assertGreaterEqual(rc["contatos_fora"][canal], 1)
 
+    def test_discagem_do_credor_chega_ao_motor(self):
+        """credores.discagem (SQL 51) vai para o motor; parte inválida vira alerta e o resumo vai para a execução."""
+        t = self.falso.tabelas
+        self._dia(date(2026, 9, 1), empresa="beta")             # antes do credor: pasta da empresa
+        t["credores"] = [{"id": 21, "empresa_id": 2, "codigo": "principal", "nome": "Principal", "ativo": True,
+                          "discagem": {"horarios": "x", "chamadas_curtas": {"aviso": 0.5}}}]
+        self._dia(date(2026, 9, 2), empresa="beta")
+        ex = t["execucoes"][-1]
+        self.assertTrue(any("discagem do credor/horarios" in a for a in ex["alertas"]))
+        self.assertIsInstance(ex["resumo"]["discagem"], dict)
+        self.assertIn("renitencia", ex["resumo"]["discagem"])
+        self.assertNotRegex(json.dumps(ex["resumo"]["discagem"]), r"\d{10,}")      # só contagens, sem telefone
+
     def _mapear(self, eid, tipo=None, colunas=None, codigos=None, credor=None):
         """Faz o que o cliente faz no site: confirma as colunas (a sugestão do motor, se não disser) e marca códigos."""
         T = self.falso.tabelas
