@@ -65,14 +65,14 @@ def _ev(idc, contato, resultado, dia, canal="discador", n=0, **kw):
 
 class TestHorarios(unittest.TestCase):
     def test_fuso_menos_1_e_menos_2(self):
-        r = _regua()
+        r = _regua(LIGADO)
         self.assertEqual(r.janela_do_numero(SEX, MT), ("09:00", "20:00"))      # MT 08:00–19:50 local = 09:00–20:50
         self.assertEqual(r.janela_do_numero(SEX, AC), ("10:00", "20:00"))      # AC (−2): 08:00 local = 10:00
         self.assertEqual(r.janela_do_numero(SEX, AM), ("09:00", "18:50"))      # AM: 08:00–17:50 local
         self.assertEqual(r.janela_do_numero(SAB, AC), ("11:00", "14:00"))      # sábado ∩ janela do playbook
 
     def test_uf_sem_sabado_na_previa(self):
-        r = _regua()
+        r = _regua(LIGADO)
         for tel in (RJ, "31988880007", "51988880008", "27988880009", "85988880010"):   # RJ MG RS ES CE
             self.assertIsNone(r.janela_do_numero(SAB, tel), tel)
             self.assertIsNotNone(r.janela_do_numero(SEX, tel), tel)
@@ -82,17 +82,17 @@ class TestHorarios(unittest.TestCase):
     def test_tabela_do_cliente_vence_a_previa(self):
         tab = {"hora": "local", "ufs": {"RJ": {"seg_sex": ["10:00", "17:00"], "sabado": ["09:00", "12:00"]}},
                "ddds": {"11": {"seg_sex": ["09:00", "18:00"], "sabado": None}}}
-        r = _regua({"horarios": {"tabela": tab}})
+        r = _regua({"horarios": {"ativo": True, "tabela": tab}})
         self.assertEqual(r.janela_do_numero(SAB, RJ), ("09:00", "12:00"))
         self.assertEqual(r.janela_do_numero(SEX, RJ), ("10:00", "17:00"))
         self.assertIsNone(r.janela_do_numero(SAB, SP))                          # DDD do cliente vence
         self.assertEqual(r.janela_do_numero(SAB, "12988880011"), ("08:00", "13:50"))   # SP de outro DDD: prévia
-        r2 = _regua({"horarios": {"tabela": {"hora": "brasilia", "ufs": {"MT": {"seg_sex": ["10:00", "16:00"]}}}}})
+        r2 = _regua({"horarios": {"ativo": True, "tabela": {"hora": "brasilia", "ufs": {"MT": {"seg_sex": ["10:00", "16:00"]}}}}})
         self.assertEqual(r2.janela_do_numero(SEX, MT), ("10:00", "16:00"))      # já em Brasília: sem conversão
 
     def test_faixa_global_nunca_e_furada(self):
         tab = {"ufs": {"BA": {"seg_sex": ["06:00", "23:00"], "sabado": ["06:00", "23:00"]}}}
-        r = _regua({"horarios": {"tabela": tab}})
+        r = _regua({"horarios": {"ativo": True, "tabela": tab}})
         self.assertEqual(r.janela_do_numero(SEX, BA), ("08:00", "20:00"))
         self.assertIsNone(r.janela_do_numero(DOM, BA))
         self.assertIsNone(r.janela_do_numero(FERIADO, BA))
@@ -109,7 +109,7 @@ class TestHorarios(unittest.TestCase):
         self.assertEqual(cfg["horarios"]["tabela"]["ufs"], {})
 
     def test_fila_sabado_tira_numero_sem_janela_e_explica(self):
-        r = _regua(passo=[{"canal": "discador", "modo": "sempre", "numeros": 99}])
+        r = _regua(LIGADO, passo=[{"canal": "discador", "modo": "sempre", "numeros": 99}])
         disc = DG.Discagem(SAB)
         fila, motivo_de, detalhe = _fila(r, {"C1": [RJ, SP], "C2": [RJ]}, SAB, disc)
         voz = {(l["id_cliente"], l["contato"]) for l in fila if l["canal"] == "discador"}
@@ -125,7 +125,8 @@ class TestHorarios(unittest.TestCase):
 class TestConfig(unittest.TestCase):
     def test_padrao_recomendado(self):
         cfg = carregar_regua()["discagem"]
-        self.assertTrue(cfg["inexistente"]["ativo"] and cfg["nao_ligar"]["ativo"] and cfg["horarios"]["ativo"])
+        self.assertTrue(cfg["inexistente"]["ativo"] and cfg["nao_ligar"]["ativo"])
+        self.assertFalse(cfg["horarios"]["ativo"])          # desligado até o jurídico validar a prévia
         self.assertFalse(cfg["descanso_nao_atende"]["ativo"] or cfg["descanso_recusa"]["ativo"]
                          or cfg["promessa_suspende"]["ativo"] or cfg["chamadas_curtas"]["corte_ativo"])
         self.assertEqual((cfg["descanso_nao_atende"]["n"], cfg["chamadas_curtas"]["aviso"]), (6, 0.75))
@@ -323,6 +324,7 @@ def _rotina(tmp, nome="a", **kw):
 
 
 DESLIGADO = {"horarios": {"ativo": False}, "chamadas_curtas": {"ativo": False}}
+LIGADO = {"horarios": {"ativo": True}}   # horários por UF/DDD vêm desligados por padrão
 
 
 class TestRotina(unittest.TestCase):
@@ -331,6 +333,7 @@ class TestRotina(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.r = _rotina(cls.tmp.name, "padrao")
         cls.r0 = _rotina(cls.tmp.name, "desligado", discagem=DESLIGADO)
+        cls.rh = _rotina(cls.tmp.name, "horarios", discagem=LIGADO)
 
     @classmethod
     def tearDownClass(cls):
@@ -344,16 +347,16 @@ class TestRotina(unittest.TestCase):
         self.assertTrue(any(l["canal"] == "discador" for l in self.r["fila"]))
 
     def test_discador_csv_inalterado_e_mailing_novo(self):
-        disc = self._arq(self.r, "ids/discador.csv")
+        disc = self._arq(self.rh, "ids/discador.csv")
         self.assertEqual(disc, self._arq(self.r0, "ids/discador.csv"))
         self.assertTrue(disc.startswith("id_cliente;contato\n"))
-        linhas = list(csv.DictReader(self._arq(self.r, "discador_mailing.csv").splitlines(), delimiter=";"))
+        linhas = list(csv.DictReader(self._arq(self.rh, "discador_mailing.csv").splitlines(), delimiter=";"))
         self.assertEqual(tuple(linhas[0]), DG.CAMPOS_MAILING)
         pares = {tuple(x.split(";")) for x in disc.splitlines()[1:]}
         self.assertEqual({(l["id_cliente"], l["telefone"]) for l in linhas if l["reserva"] == "0"}, pares)
         self.assertTrue(all(l["janela_local"] == "08:00-19:50" and l["uf"] == "SP" for l in linhas))
         self.assertTrue(all(l["tentativas_max_numero"] == "2" and l["tentativas_max_cliente"] == "3" for l in linhas))
-        texto = self._arq(self.r, "discador_mailing.csv")
+        texto = self._arq(self.rh, "discador_mailing.csv")
         cpfs = {l.split(";")[4] for l in (EX / "carteira_contatos.csv").read_text().splitlines()[1:] if l.split(";")[4]}
         self.assertFalse(any(c in texto for c in cpfs))                              # nunca CPF
 
@@ -369,7 +372,7 @@ class TestRotina(unittest.TestCase):
             with mock.patch.object(DG.Horarios, "janela", side_effect=RuntimeError("x")), \
                     mock.patch.object(DG, "renitencia", side_effect=RuntimeError("y")), \
                     mock.patch.object(DG, "curtas", side_effect=RuntimeError("z")):
-                r = _rotina(tmp)
+                r = _rotina(tmp, discagem=LIGADO)
             self.assertEqual(r["fila"], self.r0["fila"])
             self.assertTrue(sum(a.startswith("DISCAGEM") for a in r["alertas"]) >= 3)
             self.assertTrue((r["saida"] / "ids" / "discador.csv").exists())

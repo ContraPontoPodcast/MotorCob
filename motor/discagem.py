@@ -48,7 +48,7 @@ PADRAO = {
     "promessa_suspende": {"ativo": False, "dias_sem_data": 7},
     "inexistente": {"ativo": True},
     "nao_ligar": {"ativo": True},
-    "horarios": {"ativo": True, "tabela": None},
+    "horarios": {"ativo": False, "tabela": None},   # desligado até o jurídico validar a prévia
     "chamadas_curtas": {"ativo": True, "aviso": 0.75, "corte_ativo": False, "corte": 0.80,
                         "max_por_numero_dia": 900, "max_total_dia": 9000, "abandono_conta": True, "segundos": 6},
 }

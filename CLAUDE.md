@@ -209,10 +209,11 @@ de outra pessoa pela certificação e a rotação segue.
   (por_dia/por_numero/intervalo_min/intervalo_ocupado). Taxonomia de voz: promessa e recusa (CPC), recado,
   ocupado, abandonada, falha_rede (fora da certificação), opt_out (`voz:opt_out` → todos os canais de voz).
   Evento ganha `hora`, `duracao_s`, `data_promessa` (colunas opcionais `hora`/`duracao`/`data_promessa` nos
-  layouts). Ligados por padrão: horário por UF/DDD (`Regua.janela_do_numero` = estratégia ∩ canal ∩ UF do DDD
+  layouts). Horário por UF/DDD vem DESLIGADO por padrão até o jurídico validar a prévia e o cliente poder
+  ligar/editar na tela (`discagem.horarios.ativo`); ligado: (`Regua.janela_do_numero` = estratégia ∩ canal ∩ UF do DDD
   em hora local → Brasília ∩ 08:00–20:00, sem domingo/feriado; tabela do cliente, senão a PRÉVIA
   `regras/horarios_uf.json`, que não é orientação jurídica; número sem janela não sai na voz, o próximo
-  assume, motivo na Lista do dia), bloqueio de inexistente (layout com `inexistente_confirmado` só aceita
+  assume, motivo na Lista do dia). Ligados por padrão: bloqueio de inexistente (layout com `inexistente_confirmado` só aceita
   esses códigos; o resto vira falha_rede), "não ligar" e o aviso de chamadas curtas. Desligados, com o valor
   recomendado: descanso por N "não atende" (pausa da voz no número via `retorno_canal`,
   `temporarios_janela_dias`), recusa (descanso da voz do cliente), promessa (voz suspensa até a data + 1)
