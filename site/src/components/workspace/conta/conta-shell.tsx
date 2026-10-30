@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 
 const TABS = [
 	{ id: 'dados', label: 'Dados' },
@@ -11,6 +11,7 @@ const TABS = [
 
 export function ContaShell({ children }: { children: ReactNode }) {
 	const [params] = useSearchParams();
+	const navigate = useNavigate();
 	const aba = params.get('aba') || 'dados';
 	return (
 		<div className="mx-auto max-w-[760px] px-4 py-8">
@@ -19,7 +20,10 @@ export function ContaShell({ children }: { children: ReactNode }) {
 			<div className="mb-4 sm:hidden">
 				<select
 					value={aba}
-					onChange={e => { window.location.href = `/conta?aba=${e.target.value}`; }}
+					onChange={e => {
+						const tab = TABS.find(t => t.id === e.target.value);
+						if (tab) navigate(`/conta?aba=${tab.id}`);
+					}}
 					className="h-10 w-full rounded-lg border border-[#D2D2D7] bg-white px-3 text-[15px] outline-none focus:border-[#1D1D1F]"
 				>
 					{TABS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
