@@ -1885,5 +1885,11 @@ checar("contato da persona: B não lê o da A", True, "select count(*) from publ
 checar("operação não muda o contato da persona", True, f"update public.personas set contato='{{}}' where empresa_id={EA}; select count(*) from public.personas where contato = '{{}}'::jsonb", "authenticated", u["oper"], 0)
 checar("anon não lê o contato da persona", False, "select contato from public.personas", "anon")
 
+# SQL 51 · regras de discagem da carteira (credores.discagem)
+checar("planejamento grava a discagem da carteira", True, f"update public.credores set discagem='{{\"horarios\": {{\"ativo\": false}}, \"chamadas_curtas\": {{\"corte_ativo\": false}}}}' where id={CX} returning id", "authenticated", u["plan"], CX)
+checar("operação não altera a discagem", True, f"update public.credores set discagem=null where id={CX} returning id", "authenticated", u["oper"], None)
+checar("discagem precisa ser objeto", False, f"update public.credores set discagem='[1]' where id={CX}", "service_role")
+checar("B não lê a discagem da A", True, f"select count(*) from public.credores where id={CX} and discagem is not null", "authenticated", u["operb"], 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
