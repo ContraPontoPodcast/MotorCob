@@ -910,11 +910,13 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             rel_enriq = rodar_dia.preparar_enriquecimento(entrada, pasta / "enriquecimento", pasta / "base")
         n_aplicadas = aplicar_sugestoes(sb, eid, out, cid)
         clusters = baixar_clusters(sb, pasta, eid, cid)
-        estrategias = _baixar(sb, pasta, "estrategias", eid, "id.asc")
+        # só as da Cobrança: o padrão da Jornada (frente motorcli) nunca vale aqui
+        estrategias = [e for e in _baixar(sb, pasta, "estrategias", eid, "id.asc")
+                       if (e.get("frente") or "motorcob") == "motorcob"]
         if u.get("estrategia_id"):   # estratégia padrão do credor
             estrategias = [{**e, "padrao": e.get("id") == u["estrategia_id"]} for e in estrategias]
-            (pasta / "config" / "estrategias.json").write_text(json.dumps(estrategias, ensure_ascii=False, indent=1),
-                                                               encoding="utf-8")
+        (pasta / "config" / "estrategias.json").write_text(json.dumps(estrategias, ensure_ascii=False, indent=1),
+                                                           encoding="utf-8")
         personas_usuario = _personas_usuario(sb, pasta, eid, cid)
         try:
             frases = _baixar(sb, pasta, "frases", eid, "id.asc")

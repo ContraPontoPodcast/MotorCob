@@ -496,7 +496,10 @@ class TestSincronizar(unittest.TestCase):
                          {"id": 22, "empresa_id": 2, "codigo": "banco-x", "nome": "Banco X", "ativo": True,
                           "estrategia_id": 5}]
         t["estrategias"] = [{"id": 5, "empresa_id": 2, "nome": "Só SMS", "padrao": False,
-                             "definicao": {"localizacao": {"passos": {"1": [{"canal": "sms"}]}}}}]
+                             "definicao": {"localizacao": {"passos": {"1": [{"canal": "sms"}]}}}},
+                            # padrão da Jornada: nunca vale na Cobrança
+                            {"id": 6, "empresa_id": 2, "nome": "Jornada boas-vindas", "padrao": True,
+                             "frente": "motorcli", "definicao": {"passos": [{"canal": "email"}]}}]
         t["personas_usuario"] = [{"id": 31, "empresa_id": 2, "credor_id": 22, "nome": "Paulistas", "ordem": 1,
                                   "ativo": True, "condicoes": [{"campo": "UF", "op": "=", "valor": "SP"}]}]
         carga = (EX / "empresa" / "bruto" / "base_2026-09-02.csv").read_bytes()
@@ -514,6 +517,9 @@ class TestSincronizar(unittest.TestCase):
         self.assertIn("saidas/beta/2026-09-02/principal/fila_do_dia.csv", o)
         estr = json.loads((cred / "banco-x" / "config" / "estrategias.json").read_text())
         self.assertTrue(estr[0]["padrao"])                                           # estratégia do credor
+        self.assertEqual([e["id"] for e in estr], [5])                               # sem as da Jornada
+        estr_p = json.loads((cred / "principal" / "config" / "estrategias.json").read_text())
+        self.assertFalse(any(e["padrao"] for e in estr_p))
         # mesmo CPF: o principal acionou hoje → o Banco X não manda massiva (48h contam juntas)
         self.assertIn("OUTRO CREDOR", o["saidas/beta/2026-09-02/banco-x/alertas.txt"].decode())
         self.assertNotIn("saidas/beta/2026-09-02/banco-x/ids/sms.csv", o)

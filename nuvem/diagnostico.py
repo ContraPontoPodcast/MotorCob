@@ -183,7 +183,7 @@ def _orquestracao(sb, dados, empresas, ok, ruim, info):
     from nuvem.sincronizar import credores, credores_com_orquestracao_nova, segmento_vale
     for emp in empresas:
         estr = {e["id"]: e for e in sb.selecionar("estrategias", {"empresa_id": f"eq.{emp['id']}"}) or []}
-        padrao_emp = next((e for e in estr.values() if e.get("padrao")), None)
+        padrao_frente = {(e.get("frente") or "motorcob"): e for e in estr.values() if e.get("padrao")}
         clusters = sb.selecionar("clusters", {"empresa_id": f"eq.{emp['id']}"}, ordem="ordem.asc") or []
         try:
             vinc = {}
@@ -194,7 +194,7 @@ def _orquestracao(sb, dados, empresas, ok, ruim, info):
         mudou = credores_com_orquestracao_nova(sb, emp)
         for u in credores(sb, dados, emp):
             nome = emp["slug"] + (f" / {u['codigo']}" if u["id"] is not None else "")
-            base = estr.get(u.get("estrategia_id")) or padrao_emp
+            base = estr.get(u.get("estrategia_id")) or padrao_frente.get(u.get("frente") or "motorcob")
             origem = "da carteira" if estr.get(u.get("estrategia_id")) else "padrão da empresa"
             if u.get("demais_ativo") is False:
                 info(f"{nome} · Demais clientes: DESLIGADO (quem não cai em segmento fica sem ação)")
