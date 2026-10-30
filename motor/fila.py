@@ -25,6 +25,7 @@ from .persona import resolver_tokens
 from . import etapas as ET
 from . import normalizacao as norm
 from . import travas as TV
+from . import discagem as DG
 from .regua import CANAIS_VOZ, Regua
 
 FORA = {"INVALIDO", "CONTESTADO"}
@@ -84,7 +85,7 @@ def _chave_prioridade(regra: dict, sinal: dict, flag: dict, nota: float | None =
 
 def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flags: dict[str, dict],
                regua: Regua, freio_whatsapp: bool, sinais: dict[str, dict] | None = None,
-               notas=None) -> dict[str, list]:
+               notas=None, disc=None) -> dict[str, list]:
     """{canal: Certificacoes que podem receber, em ordem de prioridade}, antes do filtro da ação.
 
     Aplica as travas que nenhuma estratégia desliga: contato inválido/contestado/"não pertence",
@@ -93,6 +94,8 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
     notas: certificacao.NotaContatos (nota de contato É dele × Chega × Responde). Só troca o desempate
     do score: Hot, rotação e regra do usuário vêm antes; a trava do WhatsApp vem depois. Cliente sem
     histórico (ou notas=None): a ordem é a de antes.
+    disc: discagem.Discagem de hoje — na voz, tira o número sem janela hoje (horário por UF/DDD) e o
+    cliente com a voz suspensa (recusa, promessa, "não ligar"). None = como antes.
     """
     sinais = sinais or {}
     bloqueados = regua.canais_bloqueados(cluster)
@@ -145,6 +148,11 @@ def candidatos(est: EstadoCliente, cluster: str, certs: list[Certificacao], flag
             respeitar = True
         if canal in CANAIS_VOZ if respeitar is None else respeitar:
             cands = [c for c in cands if not sinais.get(c.contato, {}).get("nao_perturbe")]
+        if disc is not None and canal in CANAIS_VOZ and not disc.erro:
+            try:                       # discagem nunca segura a lista: com erro, fica como antes (alerta)
+                cands = disc.filtrar(regua, est.id_cliente, canal, cands)
+            except Exception as ex:   # noqa: BLE001
+                disc.erro = f"{ex.__class__.__name__}: {str(ex)[:120]}"
         if por_nota and len(cands) > 1 and not notas.erro:   # voz disca nesta ordem; no WhatsApp a trava
             try:                                             # escolhe dentro dela
                 if usa_criterio or notas.difere(est.id_cliente, cands, canal):
@@ -216,15 +224,19 @@ NOME_CANAL = {"whatsapp": "WhatsApp", "rcs": "RCS", "sms": "SMS", "email": "E-ma
 
 
 def por_que_sem_contato(canais: list[str], cands: dict, certs: list[Certificacao], flags: dict[str, dict],
-                        regua: Regua, cluster: str) -> str:
-    """Por que nenhum canal do dia tem contato para o cliente, canal a canal (texto curto)."""
+                        regua: Regua, cluster: str, id_cliente: str | None = None, disc=None) -> str:
+    """Por que nenhum canal do dia tem contato para o cliente, canal a canal (texto curto).
+    disc (discagem.Discagem): na voz, diz quando foi o horário da UF ou a voz suspensa do cliente."""
     validos = [c for c in certs if c.status not in FORA]
     fones = [c for c in validos if c.tipo == "telefone"]
     partes = []
     for canal in dict.fromkeys(c for c in canais if c in NOME_CANAL):
         cfg = regua.canal_cfg(canal)
+        voz = disc.motivo_voz(id_cliente) if disc is not None and canal in CANAIS_VOZ else None
         if canal in regua.canais_bloqueados(cluster) or cfg.get("ativo") is False:
             motivo = "canal desligado ou bloqueado no segmento"
+        elif voz and canal not in cands:
+            motivo = voz
         elif canal in cands:
             motivo = "nenhum contato passa no filtro da ação"
         elif canal == "email":
@@ -271,7 +283,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                para_bureau: dict | None = None, motivos: dict | None = None, motivo_de: dict | None = None,
                detalhe_de: dict | None = None, senao_auto: dict | None = None, ultima_cpc: dict | None = None,
                etapas_estado: dict | None = None, historico_acoes: dict | None = None,
-               propensao: dict | None = None, notas=None):
+               propensao: dict | None = None, notas=None, discagem=None):
     """Retorna (fila, disponiveis, alertas).
 
     fila: linhas (cliente x canal x contato) para subir nos fornecedores hoje.
@@ -298,6 +310,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
               vale como campo "propensao" nas condições das etapas. Não muda ordem nem canal.
     notas: certificacao.NotaContatos — ordena os números dentro do canal (desempate no lugar do score;
               ver candidatos). None = ordem antiga.
+    discagem: discagem.Discagem de hoje (janela por número na voz, voz suspensa do cliente). None = como antes.
     """
     alertas = []
     taxa, envios = taxa_bloqueio_whatsapp(eventos or [], hoje, regua)
@@ -388,7 +401,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             return ("bureau_hoje" if idc in (para_bureau or {}) else "sem_acao_na_raia"), [], None
         if not blend:
             detalhe = por_que_sem_contato([a["canal"] for t in tentativas for a in t], cands,
-                                          certs_por.get(idc, []), flags, rc, est.cluster_atual) \
+                                          certs_por.get(idc, []), flags, rc, est.cluster_atual, idc, discagem) \
                 if detalhe_de is not None else None
             return "sem_contato", [], (nome_regua, detalhe)
         if pausado(idc, rc) and est.estado in ESTADOS_MASSIVOS:
@@ -421,7 +434,7 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
                     "status_contato": status_contato(cert_de.get(contato), sin.get(contato, {}),
                                                      flags.get(contato, {}), est),
                     "condicao": condicao, "data_fixa": data_fixa,
-                    "spins_max": cfg.get("tentativas_dia") or (rc["spins_discador_dia"] if canal == "discador" else ""),
+                    "spins_max": cfg.get("tentativas_dia") or (DG.tentativas_cliente(rc.dados) if canal == "discador" else ""),
                     "janela": f"{jan[0]}-{jan[1]}",
                     "persona": persona_rot,
                     **({"frase_acao": frase_de[canal]} if canal in frase_de else {}),
@@ -452,7 +465,8 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
     for idc, est in estados.items():
         rc = regua.para(est.cluster_atual)
         sin = sinais_por.get(idc, {})
-        cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio_de(rc), sin, notas)
+        cands = candidatos(est, est.cluster_atual, certs_por.get(idc, []), flags, rc, freio_de(rc), sin, notas,
+                           discagem)
         disp = _disponiveis_cpc(cands, est, flags, sin, rc)
         disponiveis[idc] = disp
         def conta(m, idc=idc):
@@ -604,6 +618,7 @@ MOTIVOS = {
     "saiu_da_regua": "saiu da régua pela regra de uma etapa da empresa",
     "sem_orcamento": "ficou fora do orçamento do canal na etapa (concorre de novo amanhã)",
     "limite_acoes": "atingiu o limite de ações por cliente (trava da estratégia)",
+    "corte_curtas": "saiu da voz pelo corte de chamadas curtas (ligado pelo cliente; fim da prioridade)",
 }
 
 # Grupo de cada motivo na Lista do dia do site: quem tem ação, quem a régua segurou hoje, quem não tem

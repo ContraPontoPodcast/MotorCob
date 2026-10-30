@@ -11,9 +11,9 @@ import gc
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, time
 
-from .taxonomia import TAXONOMIA, Nivel, classificar
+from .taxonomia import EXPANDE_RESTRICAO, TAXONOMIA, Nivel, classificar
 
 MEIA_VIDA_DIAS = 90
 PRIOR_TITULAR = 0.4       # calibrar por origem: cadastro, enriquecimento, bureau
@@ -40,6 +40,9 @@ class Evento:
     id_externo: str | None = None  # id do retorno no fornecedor, para deduplicar
     candidatos: tuple = ()         # contato vazio: os contatos que foram na ação (descoberta do Hot)
     origem: str = ""               # arquivo de onde veio (ocorrência que chegou depois do dia fechado)
+    hora: time | None = None       # hora da chamada/envio, quando o layout traz (discagem)
+    duracao_s: int | None = None   # duração da chamada em segundos (chamadas curtas, MP 1.396/2026)
+    data_promessa: date | None = None   # promessa de pagamento: data prometida (suspende a voz até + 1)
 
 
 @dataclass
@@ -107,6 +110,8 @@ def certificar_contatos(eventos: list[Evento], hoje: date, contatos: list[dict] 
         k = (e.id_cliente, e.contato)
         cert = certs.setdefault(k, Certificacao(e.id_cliente, e.contato, e.tipo))
         cl = classificar(e.canal, e.resultado)
+        if cl.ignorar:              # falha de rede: não diz nada do número
+            continue
         d = decaimento(e.data, hoje)
         cert.tentativas += 1
         cert.ultimo_evento = max(cert.ultimo_evento or e.data, e.data)
@@ -117,8 +122,8 @@ def certificar_contatos(eventos: list[Evento], hoje: date, contatos: list[dict] 
             ult_cert[k] = max(ult_cert.get(k, e.data), e.data)
         elif cl.nivel == Nivel.INVALIDO:
             ult_invalido[k] = max(ult_invalido.get(k, e.data), e.data)
-        if cl.restricao:
-            restricoes[k][cl.restricao] = max(restricoes[k].get(cl.restricao, e.data), e.data)
+        for r in EXPANDE_RESTRICAO.get(cl.restricao, (cl.restricao,)) if cl.restricao else ():
+            restricoes[k][r] = max(restricoes[k].get(r, e.data), e.data)
 
     # Contato certificado para uma pessoa é evidência contra as OUTRAS pessoas que o têm
     # e a favor dos outros IDs da MESMA pessoa.
@@ -163,6 +168,8 @@ def hit_rate_por_canal(eventos: list[Evento], deduplicado: bool = False) -> dict
     agg = defaultdict(lambda: {"tentativas": 0, "engajados": 0, "certificados": 0, "custo": 0.0})
     for e in (eventos if deduplicado else deduplicar(eventos)):
         cl = classificar(e.canal, e.resultado)
+        if cl.ignorar:
+            continue
         a = agg[e.canal]
         a["tentativas"] += 1
         a["custo"] += e.custo
@@ -208,6 +215,8 @@ class Afinidade:
         selecao = {}
         for e in eventos:
             cl = classificar(e.canal, e.resultado)
+            if cl.ignorar:
+                continue
             k = (e.id_cliente, e.contato)
             if k in titulares:
                 ct = cert_tit[e.canal]
@@ -443,7 +452,7 @@ def _nota_contatos(eventos, certs, hoje, retornos_canal) -> NotaContatos:
         if not e.contato:
             continue
         cl = TAXONOMIA.get(e.canal, {}).get(e.resultado)
-        if cl is None:          # resultado desconhecido: não entra (fica para a quarentena)
+        if cl is None or cl.ignorar:   # desconhecido (quarentena) ou falha de rede: não entra
             continue
         k = (e.id_cliente, e.contato, e.canal, e.data)
         if not por_dia.get(k):

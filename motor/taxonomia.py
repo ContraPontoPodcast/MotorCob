@@ -26,6 +26,7 @@ class Classificacao:
     pro_titular: float = 0.0     # peso de evidência a favor de ser do cliente
     contra_titular: float = 0.0  # peso de evidência contra (ex.: terceiro desconhece)
     restricao: str | None = None  # restringe o CANAL para o contato, não o invalida
+    ignorar: bool = False         # não diz nada do contato (falha de rede): fora da certificação
 
 
 # Pesos de evidência. Calibrar com dados reais (ver CLAUDE.md).
@@ -42,6 +43,16 @@ TAXONOMIA: dict[str, dict[str, Classificacao]] = {
         "atendida_sem_cpc": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
         "atendida_terceiro_desconhece": C(Nivel.ENGAJADO, contra_titular=TERCEIRO),
         "cpc": C(Nivel.CERTIFICADO, pro_titular=CERT),
+        # discagem (motor/discagem.py): promessa e recusa são CPC (promessa NÃO é pagamento); recado é de
+        # alguém do círculo do titular; ocupado/abandono não dizem de quem é; falha de rede não penaliza;
+        # "não ligar" tira o número de todos os canais de voz (certificar_contatos expande voz:opt_out)
+        "promessa": C(Nivel.CERTIFICADO, pro_titular=CERT),
+        "recusa": C(Nivel.CERTIFICADO, pro_titular=CERT),
+        "recado": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
+        "ocupado": C(Nivel.SEM_RETORNO),
+        "abandonada": C(Nivel.SEM_RETORNO),
+        "falha_rede": C(Nivel.SEM_RETORNO, ignorar=True),
+        "opt_out": C(Nivel.ENGAJADO, restricao="voz:opt_out"),
     },
     "sms": {
         "nao_entregue": C(Nivel.INVALIDO),
@@ -93,6 +104,10 @@ TAXONOMIA["agente_voz"] = {
     **TAXONOMIA["discador"],
     "identidade_confirmada": C(Nivel.CERTIFICADO, pro_titular=CERT),
 }
+
+
+# restrição que vale para mais de um canal
+EXPANDE_RESTRICAO = {"voz:opt_out": ("discador:opt_out", "agente_voz:opt_out")}
 
 
 class ResultadoDesconhecido(ValueError):

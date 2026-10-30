@@ -124,7 +124,9 @@ class TestOcorrencia(unittest.TestCase):
         self.assertEqual((por[("X0001", "discador")].contato, por[("X0001", "discador")].resultado), ("", "cpc"))
         # SMS do dia anterior: o motor sabe qual número foi usado
         self.assertEqual((por[("X0003", "sms")].contato, por[("X0003", "sms")].resultado), ("31955550003", "opt_out"))
-        self.assertEqual(rels[0].rejeitadas["'opt_out' não se aplica a agente_voz"], 1)
+        # "não ligar" na voz (discagem, fase 1): vale e tira o número/cliente de todos os canais de voz
+        self.assertEqual(por[("X0003", "agente_voz")].resultado, "opt_out")
+        self.assertEqual(rels[0].rejeitadas["'opt_out' não se aplica a agente_voz"], 0)
 
     def test_sem_coluna_de_canal_usa_o_canal_que_o_motor_mandou(self):
         with tempfile.TemporaryDirectory() as tmp:

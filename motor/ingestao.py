@@ -39,6 +39,7 @@ class Layout:
     encoding: str = "utf-8"
     decimal: str = "."
     custo_fixo: float | None = None
+    inexistente_confirmado: list = field(default_factory=list)  # voz: códigos de inexistente confiáveis
 
     @property
     def tipo_contato(self) -> str:
@@ -78,6 +79,7 @@ class Relatorio:
     duplicadas: int = 0
     rejeitadas: Counter = field(default_factory=Counter)      # motivo -> qtd
     desconhecidos: Counter = field(default_factory=Counter)   # código -> qtd
+    avisos: Counter = field(default_factory=Counter)          # aceitas com ressalva
 
 
 def _mascarar(valor: str) -> str:
@@ -88,6 +90,8 @@ def ler_retorno(caminho: str | Path, layout: Layout, vistos: set | None = None):
     """Lê um arquivo de retorno. Retorna (eventos, relatorio, quarentena).
 
     quarentena: linhas com código desconhecido, com o contato mascarado (LGPD).
+    Colunas opcionais (discagem): hora (senão a hora da coluna data, se houver), duracao (segundos ou
+    MM:SS), data_promessa. Com `inexistente_confirmado`, inexistente da voz de outro código vira falha_rede.
     """
     caminho = Path(caminho)
     vistos = set() if vistos is None else vistos
@@ -95,6 +99,7 @@ def ler_retorno(caminho: str | Path, layout: Layout, vistos: set | None = None):
     eventos, quarentena = [], []
     datas = {}
     col = layout.colunas
+    voz = layout.canal in ("discador", "agente_voz")
     with open(caminho, newline="", encoding=layout.encoding) as f:
         leitor = csv.DictReader(f, delimiter=layout.delimitador)
         ausentes = [c for c in col.values() if c not in (leitor.fieldnames or [])]
@@ -139,8 +144,22 @@ def ler_retorno(caminho: str | Path, layout: Layout, vistos: set | None = None):
                 rel.duplicadas += 1
                 continue
             vistos.add((layout.fornecedor, id_externo))
+            extra = {}
+            if voz:
+                if resultado == "numero_inexistente" and layout.inexistente_confirmado \
+                        and codigo not in layout.inexistente_confirmado:
+                    resultado = "falha_rede"
+                    rel.avisos["número inexistente sem código confirmado (vale como falha de rede)"] += 1
+                extra["hora"] = norm.hora(linha[col["hora"]] if "hora" in col else txt)
+                if "duracao" in col:
+                    extra["duracao_s"] = norm.segundos(linha[col["duracao"]])
+                if (linha.get(col.get("data_promessa", "")) or "").strip():
+                    try:
+                        extra["data_promessa"] = _data(linha[col["data_promessa"]])
+                    except ValueError:
+                        rel.avisos["data_promessa inválida (ignorada)"] += 1
             eventos.append(Evento(id_cliente, contato, layout.tipo_contato, layout.canal, resultado,
-                                  data, custo, fornecedor=layout.fornecedor, id_externo=id_externo))
+                                  data, custo, fornecedor=layout.fornecedor, id_externo=id_externo, **extra))
             rel.aceitas += 1
     return eventos, rel, quarentena
 

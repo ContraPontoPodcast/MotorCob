@@ -19,6 +19,8 @@ Com os arquivos da empresa cliente (base bruta e ocorrências, ver empresas/):
    O que foi mandado acionar fica em --estado/escolhas.csv: é por ele que a ocorrência
    da empresa (que não traz o contato) é ligada ao número/e-mail usado. A frase que saiu em cada
    ação também fica ali (frase_id e frase_versao), para medir o resultado de cada frase.
+   discador_mailing.csv  mailing estendido do discador (tentativas, intervalo, janela do número em Brasília,
+                         prioridade; motor/discagem.py). O ids/discador.csv continua igual
    fila_do_dia.csv       detalhe completo (régua, passo, TAG, contato escolhido)
    enriquecimento.csv    quem mandar para o bureau · alertas.txt
 
@@ -44,6 +46,7 @@ from motor.acoes import agregar as agregar_acoes, sem_ocorrencia, totais as tota
 from motor.estrategia import CANAIS_SEM_MENSAGEM, CANAIS_TEMPLATE, frase_da_acao, validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor import propensao
+from motor import discagem as DG
 from motor.fila import MOTIVOS, categoria_do_motivo, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
 from motor.marcacao import aplicar_pendentes, ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
@@ -288,7 +291,7 @@ def _motivo_do_cliente(motivo, est, hoje, regua) -> str:
 # sem ação saindo, o D+1 não aconteceu: segue no D+1 (sem contato também: quando o contato
 # chegar — carga, bureau — ou a esteira mudar, o D+1 sai)
 NAO_INICIA_ESTEIRA = {"outro_credor", "fora_da_carga", "encerrado", "domingo_feriado", "demais_desligado",
-                      "sem_contato"}
+                      "sem_contato", "corte_curtas"}
 
 
 def carregar_estado(pasta: Path):
@@ -324,7 +327,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
               ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
               na_carga=None, compartilhado=None, personas_usuario=None, demais_ativo=True, calendario=None,
-              retornos_canal=None, regras_retorno=None, frases=None):
+              retornos_canal=None, regras_retorno=None, frases=None, discagem=None):
     """clusters: regras de cluster da empresa (lista de dicts da tabela `clusters` ou arquivo .json).
     atributos: base/atributos.csv (colunas da base bruta usadas pelas regras).
     na_carga: base/na_carga.csv — quem está na carga do dia (só esses recebem ação hoje).
@@ -347,8 +350,20 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     frases: playbook de frases da empresa ([{id, canal, texto, ativo}] da tabela frases); a estratégia
              aponta uma frase com {"frase_id": n} e o texto vem daqui (frase desativada não sai).
     regras_retorno: regras de renitência do credor ({canal: {...}}, credores.regras_retorno); o que faltar
-             usa a sugestão do MotorCob."""
+             usa a sugestão do MotorCob.
+    discagem: regras de discagem do credor (bloco como regua.json › discagem; motor/discagem.py): horários
+             por UF/DDD, descansos, promessa, chamadas curtas. O que faltar usa o padrão. Qualquer erro nas
+             regras de discagem nunca segura a lista: ela sai como antes, com alerta "DISCAGEM"."""
     regua = carregar_regua(regua_json) if regua_json else carregar_regua()
+    alertas_disc, cfg_disc = [], None
+    try:
+        cfg_disc, av_ = DG.normalizar(discagem, regua.dados.get("discagem") or DG.PADRAO, "discagem do credor")
+        regua = replace(regua, dados={**regua.dados, "discagem": cfg_disc}, _cache={})
+        alertas_disc += [f"DISCAGEM: {a}" for a in av_]
+    except Exception as ex:   # noqa: BLE001
+        cfg_disc = None
+        alertas_disc.append(f"DISCAGEM: regras de discagem não usadas hoje ({ex.__class__.__name__}: {str(ex)[:120]}); "
+                            "a lista saiu como antes")
     avisos_cluster = []
     if clusters:
         linhas = json.loads(Path(clusters).read_text(encoding="utf-8")) if isinstance(clusters, (str, Path)) \
@@ -397,12 +412,29 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
     if portal:
         eventos += ler_log_portal(portal, carregar_acoes(acoes))[0]
     parcelas = carregar_parcelas(parcelas_csv)[0] if parcelas_csv else {}
+    # discagem: regra desligada pelo cliente (inexistente, "não ligar") e renitência da voz (recusa, promessa,
+    # "não ligar" sem número, descanso por "não atende" pelo retorno de canal)
+    sem_voz, reg_voz, resumo_disc = {}, [], {}
+    regras_canal = regras_de(_ler_lista(canais), regras_retorno)
+    if cfg_disc is not None:
+        try:
+            eventos_aj, trocados = DG.ajustar_eventos(eventos, cfg_disc)
+            sem_voz, reg_voz, ren = DG.renitencia(eventos_aj, hoje, cfg_disc)
+            regras_canal = DG.regras_voz(regras_canal, cfg_disc)
+            eventos = eventos_aj
+            resumo_disc = {"renitencia": dict(ren), "regras_desligadas": dict(trocados)}
+        except Exception as ex:   # noqa: BLE001
+            sem_voz, reg_voz = {}, []
+            alertas_disc.append(f"DISCAGEM: renitência não aplicada hoje ({ex.__class__.__name__}: {str(ex)[:120]}); "
+                                "a lista saiu como antes")
     # retorno de canal: vale só para a certificação/restrição dos contatos (fica fora da esteira e das personas)
     donos = defaultdict(list)
     for c in contatos:
         donos[c["contato"]].append(c["id_cliente"])
-    regras_canal = regras_de(_ler_lista(canais), regras_retorno)
-    ev_canal, restr_canal, situacao_canal, resumo_canal = avaliar_canal(retornos_canal or [], donos, hoje, regras_canal)
+    ev_canal, restr_canal, situacao_canal, resumo_canal = avaliar_canal((retornos_canal or []) + reg_voz, donos, hoje,
+                                                                        regras_canal)
+    if reg_voz:   # o que veio das ocorrências já é evidência na certificação: não conta duas vezes
+        ev_canal = [e for e in ev_canal if not (e.origem or "").startswith(DG.ORIGEM)]
 
     def certificar(ev, dia):
         ev_c = [e for e in ev_canal if e.data <= dia] if dia < hoje else [e for e in ev_canal if e.data < hoje]
@@ -566,13 +598,18 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         prop = {"modelo": {"evidencia": "indisponivel"}, "clientes": {}, "treinou": False,
                 "resumo": {"evidencia": "indisponivel", "pagamentos_treino": 0, "versao": None, "clientes": 0,
                            "faixas": {}, "treinou": False}}
+    disc = DG.Discagem(hoje, sem_voz) if cfg_disc is not None else None
     fila, _, alertas = gerar_fila(estados, clientes, certs, flags, parcelas, hoje, regua, ev_ate, sinais, ativos_fila,
                                   pausados=pausados, adiados=adiados, publico=publico, para_bureau=para_bureau,
                                   motivos=motivos, motivo_de=motivo_de, detalhe_de=detalhe_de, senao_auto=senao_auto,
                                   ultima_cpc=ultima_cpc, etapas_estado=etapas_estado,
                                   historico_acoes=historico_acoes, notas=notas,
-                                  propensao={k: v["faixa"] for k, v in prop["clientes"].items()})
+                                  propensao={k: v["faixa"] for k, v in prop["clientes"].items()}, discagem=disc)
     ET.salvar_estado(pasta_estado, etapas_estado)
+    alertas += alertas_disc
+    if disc is not None:
+        fila = _discagem_do_dia(disc, fila, eventos, hoje, regua, estados, cfg_disc, motivos, motivo_de, alertas,
+                                resumo_disc)
     if erro_prop:
         alertas.append(erro_prop)
     if notas is not None and notas.erro:
@@ -712,13 +749,26 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         por_canal[l["canal"]].append(l)
     exportar_ids(saida / "ids", por_canal)
     exportar_por_estrategia(saida / "ids" / "estrategias", fila)
+    # mailing estendido do discador (arquivo NOVO; o ids/discador.csv de hoje não muda)
+    (saida / "discador_mailing.csv").unlink(missing_ok=True)
+    if cfg_disc is not None and por_canal.get("discador"):
+        try:
+            linhas_m, sem_j = DG.linhas_mailing(fila, hoje, lambda i: regua.para(estados[i].cluster_atual))
+            _salvar_atomico(saida / "discador_mailing.csv", linhas_m, DG.CAMPOS_MAILING)
+            resumo_disc["mailing"] = len(linhas_m)
+            if sem_j:
+                alertas.append(f"DISCAGEM: {sem_j} número(s) do discador sem janela no horário da etapa ∩ UF ficaram "
+                               "fora do discador_mailing.csv (estão no discador.csv)")
+        except Exception as ex:   # noqa: BLE001
+            alertas.append(f"DISCAGEM: discador_mailing.csv não gerado ({ex.__class__.__name__}: {str(ex)[:120]}); "
+                           "o discador.csv saiu normalmente")
     salvar_escolhas(pasta_estado, hoje, fila)
     _salvar(saida / "enriquecimento.csv", enriq)
     # retorno de canal: contatos mortos/em pausa/bloqueados (para devolver ao CRM/credor) e quantos clientes
     # foram "oxigenados" hoje (saíram por outro contato porque o principal estava fora do canal)
     retorno_canal = None
     (saida / "higienizacao.csv").unlink(missing_ok=True)
-    if retornos_canal:
+    if retornos_canal or reg_voz:
         if situacao_canal:
             _salvar(saida / "higienizacao.csv", situacao_canal)
         fora = defaultdict(set)    # (id_cliente, canal) com algum contato fora do canal
@@ -877,7 +927,46 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
             "na_carga": len(ativos) if ativos is not None else None, "contatos_status": contatos_status, "enriquecimento": enriq, "alertas": alertas, "trilha": trilha,
             "saida": saida, "relatorios": relatorios, "relatorios_ocorrencia": rel_ocorrencias,
             "quarentena": quarentena, "sem_layout": sem_layout, "retorno_canal": retorno_canal,
+            "discagem": resumo_disc,
             "dias_processados": (hoje - inicio).days if inicio < hoje else 0}
+
+
+def _discagem_do_dia(disc, fila, eventos, hoje, regua, estados, cfg, motivos, motivo_de, alertas, resumo) -> list:
+    """Depois da fila de hoje: alertas de horário por UF e renitência, chamadas curtas (KPI, previsão,
+    alerta, corte opcional). Erro aqui não segura a lista (sai como veio, com alerta "DISCAGEM")."""
+    if disc.erro:
+        alertas.append(f"DISCAGEM: horário por UF/renitência não aplicados em parte da lista ({disc.erro}); "
+                       "esses números saíram como antes")
+    fora = disc.resumo_horarios()
+    if fora:
+        alertas.append(f"HORÁRIO POR UF/DDD: {sum(fora.values())} número(s) de voz sem janela hoje ("
+                       + ", ".join(f"{uf} {n}" for uf, n in list(fora.items())[:6])
+                       + ") não saem na voz; o próximo número do cliente assume. A tabela padrão é uma prévia "
+                       "(referência inicial, não é orientação jurídica): confira com o jurídico e ajuste a sua.")
+    resumo["horario_fora_por_uf"] = fora
+    if disc.sem_voz:
+        n = Counter("recusa" if t.startswith("recusou") else "promessa" if t.startswith("promessa") else "não ligar"
+                    for t in disc.sem_voz.values())
+        alertas.append("RENITÊNCIA: " + " · ".join(f"{v} clientes sem voz hoje por {k}" for k, v in n.items())
+                       + " (WhatsApp, SMS e e-mail seguem a régua)")
+    try:
+        def tentativas(l):
+            c = DG.config_de(regua.para(estados[l["id_cliente"]].cluster_atual))
+            return c["tentativas_numero_dia"], c["tentativas_cliente_dia"]
+        antes = {l["id_cliente"] for l in fila}
+        fila, res, al = DG.curtas(fila, eventos, hoje, cfg, tentativas)
+        alertas += al
+        resumo["chamadas_curtas"] = {k: v for k, v in res.items() if k != "cortados"}
+        resumo["chamadas_curtas"]["cortados"] = len(res["cortados"])
+        sobrou = {l["id_cliente"] for l in fila}
+        for idc in res["cortados"]:
+            if idc in antes and idc not in sobrou:      # ficou sem nenhuma ação hoje
+                motivos["com_acao"] = motivos.get("com_acao", 0) - 1
+                motivos["corte_curtas"] = motivos.get("corte_curtas", 0) + 1
+                motivo_de[idc] = "corte_curtas"
+    except Exception as ex:   # noqa: BLE001
+        alertas.append(f"DISCAGEM: chamadas curtas não calculadas hoje ({ex.__class__.__name__}: {str(ex)[:120]})")
+    return fila
 
 
 # atributos que o motor calcula (valem em segmentos e personas); os 3 últimos vêm da nota de contato

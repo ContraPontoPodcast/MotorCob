@@ -1,0 +1,38 @@
+{
+  "_doc": "PRÉVIA de horários de cobrança por UF/DDD. Referência inicial, não é orientação jurídica: o cliente confirma com o jurídico dele e configura a sua tabela (discagem.horarios.tabela); sem tabela, vale esta. Fonte: levantamento do Portal ContraPonto (28/01/2026), já com 10 min de margem. Horas em HORA LOCAL da UF (o motor converte para Brasília pelo fuso, motor/discagem.py FUSO). sabado null = não liga no sábado. Domingo e feriado nacional: nunca. A faixa de segurança global (08:00-20:00 de Brasília) sempre vale por cima. DDD vence UF.",
+  "fonte": "Portal ContraPonto, 28/01/2026 (cada lei a conferir pelo jurídico)",
+  "hora": "local",
+  "ufs": {
+    "SP": {"seg_sex": ["08:00", "19:50"], "sabado": ["08:00", "13:50"], "base": "Lei 17.832/2023"},
+    "RJ": {"seg_sex": ["09:00", "18:50"], "sabado": null, "base": "Lei 7.645/2017"},
+    "MG": {"seg_sex": ["08:00", "19:50"], "sabado": null, "base": "Lei 23.254/2019"},
+    "RS": {"seg_sex": ["08:00", "18:50"], "sabado": null, "base": "Lei 15.608/2014"},
+    "ES": {"seg_sex": ["08:00", "18:50"], "sabado": null, "base": "Lei 10.626/2017"},
+    "CE": {"seg_sex": ["08:00", "18:50"], "sabado": null, "base": "Lei 16.306/2018"},
+    "PR": {"seg_sex": ["08:00", "18:50"], "sabado": ["08:00", "12:50"], "base": "Lei 19.854/2019"},
+    "DF": {"seg_sex": ["08:00", "17:50"], "sabado": ["08:00", "13:50"], "base": "Lei 4.664/2011"},
+    "GO": {"seg_sex": ["08:00", "17:50"], "sabado": ["08:00", "12:50"], "base": "Lei 16.606/2009"},
+    "PA": {"seg_sex": ["08:00", "17:50"], "sabado": ["08:00", "13:50"], "base": "Lei 7.706/2013"},
+    "PE": {"seg_sex": ["08:00", "18:50"], "sabado": ["08:00", "14:50"], "base": "Lei 16.003/2017"},
+    "PI": {"seg_sex": ["08:00", "18:50"], "sabado": ["08:00", "13:50"], "base": "Lei 6.364/2013"},
+    "AL": {"seg_sex": ["08:00", "19:50"], "sabado": ["08:00", "13:50"], "base": "Lei 7.782/2016"},
+    "AM": {"seg_sex": ["08:00", "17:50"], "sabado": ["08:00", "13:50"], "base": "Lei 4.644/2018 (fonte: 09:00-18:50 e sáb. 09:00-14:50 em Brasília)"},
+    "MT": {"seg_sex": ["08:00", "19:50"], "sabado": ["09:00", "14:50"], "base": "SARB 27 (fonte: 09:00-20:50 e sáb. 10:00-15:50 em Brasília)"},
+    "MS": {"seg_sex": ["08:00", "19:50"], "sabado": ["09:00", "14:50"], "base": "SARB 27 (fonte: 09:00-20:50 e sáb. 10:00-15:50 em Brasília)"},
+    "RO": {"seg_sex": ["08:00", "19:50"], "sabado": ["09:00", "14:50"], "base": "SARB 27 (fonte: 09:00-20:50 e sáb. 10:00-15:50 em Brasília)"},
+    "RR": {"seg_sex": ["08:00", "19:50"], "sabado": ["09:00", "14:50"], "base": "SARB 27 (fonte: 09:00-20:50 e sáb. 10:00-15:50 em Brasília)"},
+    "AC": {"seg_sex": ["08:00", "18:50"], "sabado": ["09:00", "13:50"], "base": "SARB 27 (fonte: 10:00-20:50 e sáb. 11:00-15:50 em Brasília)"},
+    "BA": {"seg_sex": ["07:00", "20:50"], "sabado": ["09:00", "15:50"], "base": "SARB 27"},
+    "MA": {"seg_sex": ["07:00", "20:50"], "sabado": ["09:00", "15:50"], "base": "SARB 27"},
+    "PB": {"seg_sex": ["07:00", "20:50"], "sabado": ["09:00", "15:50"], "base": "SARB 27"},
+    "SC": {"seg_sex": ["07:00", "20:50"], "sabado": ["09:00", "15:50"], "base": "SARB 27"},
+    "SE": {"seg_sex": ["07:00", "20:50"], "sabado": ["09:00", "15:50"], "base": "SARB 27"},
+    "TO": {"seg_sex": ["07:00", "20:50"], "sabado": ["09:00", "15:50"], "base": "SARB 27"},
+    "AP": {"seg_sex": ["07:00", "20:50"], "sabado": ["09:00", "15:50"], "base": "SARB 27"},
+    "RN": {"seg_sex": ["08:00", "18:50"], "sabado": null, "base": "a confirmar (sem lei estadual na fonte; vale a de Natal, DDD 84)"}
+  },
+  "ddds": {
+    "48": {"seg_sex": ["08:00", "18:50"], "sabado": ["08:00", "13:50"], "base": "Florianópolis, Lei municipal 10.461/2018"},
+    "84": {"seg_sex": ["08:00", "18:50"], "sabado": null, "base": "Natal, Lei municipal 7.061/2020"}
+  }
+}
