@@ -6,6 +6,7 @@ vira dois e a evidência se divide.
 """
 import hashlib
 import re
+from datetime import time
 
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -76,3 +77,34 @@ def email(valor: str) -> str | None:
 
 def contato(valor: str, tipo: str) -> str | None:
     return telefone(valor) if tipo == "telefone" else email(valor)
+
+
+_HORA = re.compile(r"(?:^|[\sT])(\d{1,2}):(\d{2})(?::(\d{2}))?")
+
+
+def hora(valor: str) -> time | None:
+    """Hora de um texto ("14:05", "14:05:30" ou "29/10/2026 14:05"), ou None."""
+    m = _HORA.search(str(valor or "").strip()) if valor else None
+    if not m or int(m.group(1)) > 23 or int(m.group(2)) > 59:
+        return None
+    return time(int(m.group(1)), int(m.group(2)), min(int(m.group(3) or 0), 59))
+
+
+def segundos(valor) -> int | None:
+    """Duração em segundos: "35", "35,0", "00:35" (MM:SS) ou "00:00:35"; None se vazio ou inválido."""
+    v = str(valor if valor is not None else "").strip().replace(",", ".")
+    if not v:
+        return None
+    try:
+        if ":" in v:
+            partes = [int(float(p)) for p in v.split(":")]
+            if len(partes) > 3 or any(p < 0 for p in partes):
+                return None
+            total = 0
+            for p in partes:
+                total = total * 60 + p
+            return total
+        n = float(v)
+        return int(round(n)) if n >= 0 else None
+    except ValueError:
+        return None

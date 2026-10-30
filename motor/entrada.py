@@ -12,8 +12,11 @@ Empresa nova = arquivo novo, sem código novo.
   estado/escolhas.csv o que mandou acionar em cada dia (ID, canal, contato e a frase que saiu).
 
 O resultado da ocorrência é traduzido em dois passos: o código da empresa vira um
-resultado genérico (cpc, sem_contato, atendida_sem_cpc, terceiro, invalido, opt_out)
-e o genérico vira o resultado da taxonomia do canal. Código que o de-para não conhece
+resultado genérico (cpc, sem_contato, atendida_sem_cpc, terceiro, invalido, opt_out; na voz também
+promessa, recusa, recado, ocupado, abandonada, falha_rede) e o genérico vira o resultado da taxonomia
+do canal. Colunas opcionais da discagem: hora, duracao (segundos ou MM:SS) e data_promessa; layout com
+`inexistente_confirmado` (códigos) só aceita "inexistente" da voz com esses códigos (o resto vira
+falha de rede, que não penaliza o número). Código que o de-para não conhece
 vai para a quarentena, como nos retornos de fornecedor.
 """
 import csv
@@ -44,8 +47,19 @@ GENERICOS: dict[str, dict[str, str]] = {
                  "whatsapp": "desconhece", "rcs": "desconhece", "sms": "desconhece", "email": "desconhece"},
     "invalido": {"discador": "numero_inexistente", "agente_voz": "numero_inexistente", "whatsapp": "sem_conta",
                  "rcs": "nao_entregue", "sms": "nao_entregue", "email": "hard_bounce"},
-    "opt_out": {"whatsapp": "bloqueio", "sms": "opt_out", "email": "descadastro"},
+    "opt_out": {"whatsapp": "bloqueio", "sms": "opt_out", "email": "descadastro",
+                "discador": "opt_out", "agente_voz": "opt_out"},
+    # discagem (motor/discagem.py): promessa e recusa são CPC; os demais só existem na voz
+    "promessa": {"discador": "promessa", "agente_voz": "promessa", "whatsapp": "identidade_confirmada",
+                 "rcs": "identidade_confirmada", "sms": "identidade_confirmada", "email": "identidade_confirmada"},
+    "recusa": {"discador": "recusa", "agente_voz": "recusa", "whatsapp": "identidade_confirmada",
+               "rcs": "identidade_confirmada", "sms": "identidade_confirmada", "email": "identidade_confirmada"},
+    "recado": {"discador": "recado", "agente_voz": "recado"},
+    "ocupado": {"discador": "ocupado", "agente_voz": "ocupado"},
+    "abandonada": {"discador": "abandonada", "agente_voz": "abandonada"},
+    "falha_rede": {"discador": "falha_rede", "agente_voz": "falha_rede"},
 }
+CANAIS_VOZ = ("discador", "agente_voz")
 DIAS_BUSCA_ESCOLHA = 3   # ocorrência de hoje pode ser de uma ação exportada até 3 dias antes
 CAMPOS_ESCOLHA = ("data", "id_cliente", "canal", "contato", "ordem_contato", "reserva", "regua", "cluster",
                   "estado", "persona", "frase_id", "frase_versao")
@@ -81,7 +95,8 @@ class LayoutBase:
 @dataclass(frozen=True)
 class LayoutOcorrencia:
     arquivo: str
-    colunas: dict[str, str]              # id_cliente, data, resultado; opcionais canal, contato, id_externo, custo
+    colunas: dict[str, str]              # id_cliente, data, resultado; opcionais canal, contato, id_externo, custo,
+                                         # hora, duracao, data_promessa
     resultados: dict[str, str]           # código da empresa -> genérico ou resultado da taxonomia
     canal: str | None = None             # arquivo de um canal só
     canais: dict[str, str] = field(default_factory=dict)  # valor da coluna canal -> canal do motor
@@ -90,6 +105,7 @@ class LayoutOcorrencia:
     encoding: str = "utf-8"
     decimal: str = ","
     custo_fixo: dict[str, float] = field(default_factory=dict)  # canal -> custo por tentativa
+    inexistente_confirmado: list = field(default_factory=list)  # códigos de inexistente confiáveis (voz)
 
 
 @dataclass(frozen=True)
@@ -814,6 +830,10 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
             if resultado is None:
                 rel.rejeitadas[f"'{generico}' não se aplica a {canal}"] += 1
                 continue
+            if resultado == "numero_inexistente" and canal in CANAIS_VOZ and layout.inexistente_confirmado \
+                    and codigo not in layout.inexistente_confirmado:
+                resultado = "falha_rede"     # inexistente sem sinal confiável: não bloqueia o número
+                rel.avisos["número inexistente sem código confirmado (vale como falha de rede)"] += 1
             id_ext = (linha[col["id_externo"]] or "").strip() if "id_externo" in col else ""
             if not id_ext:  # sem id da empresa: a própria linha identifica (reenvio do arquivo não duplica)
                 id_ext = "h" + hashlib.sha256(json.dumps(sorted(linha.items())).encode()).hexdigest()[:20]
@@ -828,9 +848,16 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
                     custo = 0.0
             else:
                 custo = layout.custo_fixo.get(canal, 0.0)
+            hora = norm.hora(linha[col["hora"]]) if "hora" in col else norm.hora(linha[col["data"]])
+            dur = norm.segundos(linha[col["duracao"]]) if "duracao" in col else None
+            prom = None
+            if "data_promessa" in col and (linha[col["data_promessa"]] or "").strip():
+                txt = linha[col["data_promessa"]].strip()
+                prom = _data(txt, layout.formato_data) or _data(txt, "%Y-%m-%d") or _data(txt, "%d/%m/%Y")
             eventos.append(Evento(idc, contato or "", _tipo(canal), canal, resultado, dia, custo,
                                   fornecedor=fornecedor, id_externo=id_ext,
-                                  candidatos=() if contato else candidatos, origem=caminho.name))
+                                  candidatos=() if contato else candidatos, origem=caminho.name,
+                                  hora=hora, duracao_s=dur, data_promessa=prom))
             rel.aceitas += 1
             rel.contato_identificado += bool(contato)
     return eventos, rel, quarentena

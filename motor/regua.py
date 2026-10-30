@@ -142,6 +142,11 @@ class Regua:
         r = self._regra(cluster)
         return r.voz_d0 if r else cluster[:1] in self.dados["preventivo"]["voz_d0_tickets"]
 
+    def janela_do_numero(self, dia: date, contato: str, canal: str = "discador") -> tuple[str, str] | None:
+        """Janela do número no dia (Brasília): estratégia ∩ canal ∩ UF do DDD ∩ faixa global (discagem.py)."""
+        from .discagem import janela_do_numero
+        return janela_do_numero(self, dia, contato, canal)
+
     def janela(self, dia: date) -> tuple[str, str] | None:
         """Janela de acionamento do dia, ou None (dia sem exportação: fora dos dias da semana do
         calendário, feriado nacional ou data sem ação). Padrão: segunda a sábado, sem feriados."""
@@ -206,6 +211,10 @@ def carregar_regua(caminho: str | Path = PADRAO) -> Regua:
         for f in ("1", "2", "3"):
             if t + f not in d["enriquecimento"]:
                 erros.append(f"enriquecimento sem cluster {t + f}")
+    if "discagem" in d:     # regras de discagem (motor/discagem.py): normalizado aqui, falha alto
+        from .discagem import normalizar
+        d["discagem"], av = normalizar(d["discagem"])
+        erros += av
     if erros:
         raise ReguaInvalida("; ".join(erros))
     return Regua(d)

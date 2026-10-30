@@ -40,7 +40,8 @@ comitê + commit.** Este texto e o JSON têm de dizer a mesma coisa.
 
 **O que é contato (vira CPC A)** — por canal, em `regua.json › contato`:
 WhatsApp resposta/clique/identidade · RCS interação/clique/identidade · agente virtual
-identidade/CPC · discador CPC · SMS clique/resposta · e-mail clique · portal login pelo link.
+identidade/CPC/promessa/recusa · discador CPC/promessa/recusa · SMS clique/resposta · e-mail clique ·
+portal login pelo link. Promessa de pagamento é CPC, não é pagamento (pagamento = quitação ou 1ª parcela).
 **Não é contato:** entregue, lido, abertura de e-mail, atendida por terceiro, caixa postal.
 Terceiro que diz "não conheço/pessoa errada" nunca vira CPA; o contato é marcado como
 de outra pessoa pela certificação e a rotação segue.
@@ -202,6 +203,26 @@ de outra pessoa pela certificação e a rotação segue.
   `personas.contato` (SQL 49): acionados, localizados (Hot ou certificado), taxa de localização, ações até
   o 1º CPC (`acoes.agregar(primeiro_cpc=)`) e evidência pelos cortes da maturidade (30/200). Banco sem o
   SQL 49: publica sem e alerta.
+- `motor/discagem.py` (Discador, fase 1; vale para qualquer discador: o MotorCX decide quem, qual número,
+  quantas vezes e em que janela; informa, sugere e alerta, e quem decide é o cliente). Bloco `discagem` em
+  `regua.json` (validado) < do credor (`rodar_dia(discagem=)`, tolerante) < trava `ligacoes` da estratégia
+  (por_dia/por_numero/intervalo_min/intervalo_ocupado). Taxonomia de voz: promessa e recusa (CPC), recado,
+  ocupado, abandonada, falha_rede (fora da certificação), opt_out (`voz:opt_out` → todos os canais de voz).
+  Evento ganha `hora`, `duracao_s`, `data_promessa` (colunas opcionais `hora`/`duracao`/`data_promessa` nos
+  layouts). Ligados por padrão: horário por UF/DDD (`Regua.janela_do_numero` = estratégia ∩ canal ∩ UF do DDD
+  em hora local → Brasília ∩ 08:00–20:00, sem domingo/feriado; tabela do cliente, senão a PRÉVIA
+  `regras/horarios_uf.json`, que não é orientação jurídica; número sem janela não sai na voz, o próximo
+  assume, motivo na Lista do dia), bloqueio de inexistente (layout com `inexistente_confirmado` só aceita
+  esses códigos; o resto vira falha_rede), "não ligar" e o aviso de chamadas curtas. Desligados, com o valor
+  recomendado: descanso por N "não atende" (pausa da voz no número via `retorno_canal`,
+  `temporarios_janela_dias`), recusa (descanso da voz do cliente), promessa (voz suspensa até a data + 1)
+  e o corte de curtas. Chamadas curtas (MP 1.396/2026; ≤ 6 s, caixa postal, não completada, abandono
+  configurável): KPI medido pelos retornos de voz, previsão = Σ tentativas × P(curta) do número (Beta,
+  prior da carteira), alerta "CHAMADAS CURTAS" (≥ aviso e volume ≥ uma linha) com sugestões; corte (se
+  ligado) pelo fim da prioridade, preventivo/quebra ficam (motivo `corte_curtas`). O motor não sabe a
+  linha de origem: o limite por linha vira "linhas mínimas". Saída nova `saida/<dia>/discador_mailing.csv`
+  (`DG.CAMPOS_MAILING`; nunca CPF/nome); `ids/discador.csv` não muda. Erro nas regras nunca segura a
+  lista (sai como antes + alerta "DISCAGEM"). Resumo em r["discagem"].
 - `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
   = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
   Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias

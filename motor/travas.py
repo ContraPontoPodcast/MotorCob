@@ -10,7 +10,8 @@
                                                                    # feriados: nacionais | nenhum
         "limite_acoes":    {"ligado": true, "dia": 2, "semana": 6, "mes": 20},
         "limite_leads":    {"ligado": true, "semana": 2},          # MotorCli: só para leads
-        "ligacoes":        {"ligado": true, "por_dia": 3},         # tentativas do discador no número
+        "ligacoes":        {"ligado": true, "por_dia": 3,          # tentativas do discador por cliente/dia
+                            "por_numero": 2, "intervalo_min": 120, "intervalo_ocupado": 15},  # (discagem.py)
         "nao_perturbe":    {"ligado": true, "quem": "voz"},        # voz | todos
         "freio_whatsapp":  {"ligado": true, "taxa": 3, "minimo": 500}
     }
@@ -147,11 +148,26 @@ def ler(definicao: dict, frente: str = "cob", nome: str = "?") -> tuple[dict, li
             out["limite_leads_semana"] = s
 
     if "ligacoes" in bruto and frente == "cob" and _ligada(bruto["ligacoes"]):
-        n = _int(bruto["ligacoes"].get("por_dia"), 1, 10)
-        if n is None:
-            av.append(f"{onde}/ligacoes: tentativas por dia de 1 a 10 (vale o padrão)")
-        else:
-            out["spins_discador_dia"] = n
+        t, dt = bruto["ligacoes"], {}
+        extras = (("por_numero", "tentativas_numero_dia", 1, 10), ("intervalo_min", "intervalo_min_minutos", 0, 1440),
+                  ("intervalo_ocupado", "intervalo_ocupado_minutos", 0, 1440))
+        if "por_dia" in t or not any(k in t for k, *_ in extras):
+            n = _int(t.get("por_dia"), 1, 10)
+            if n is None:
+                av.append(f"{onde}/ligacoes: tentativas por dia de 1 a 10 (vale o padrão)")
+            else:
+                out["spins_discador_dia"] = n
+                dt["tentativas_cliente_dia"] = n
+        for chave, destino, lo, hi in extras:      # regras de discagem da estratégia (motor/discagem.py)
+            if t.get(chave) in (None, ""):
+                continue
+            v = _int(t[chave], lo, hi)
+            if v is None:
+                av.append(f"{onde}/ligacoes/{chave}: use um número de {lo} a {hi} (vale o padrão)")
+            else:
+                dt[destino] = v
+        if dt:
+            out["discagem_trava"] = dt
 
     if "nao_perturbe" in bruto and frente == "cob":
         t = bruto["nao_perturbe"]

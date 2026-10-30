@@ -70,8 +70,10 @@ PADRAO = {
                  "limite_lote": 0.5},
     "email": {"temporarios_pausa": 3, "dias_pausa": 30, "inexistente": "bloquear", "dias_rever": 60, "limite_lote": 0.5},
     "voz": {"temporarios_pausa": 0, "dias_pausa": 30, "inexistente": "escalonar", "dias_rever": 60, "limite_lote": 0.5,
-            "escalonamento": [7, 15, 30, 90, 120]},
+            "escalonamento": [7, 15, 30, 90, 120], "temporarios_janela_dias": 0},
 }
+# temporarios_janela_dias (voz): só contam os temporários dos últimos N dias até o último (0 = todos desde o
+# último positivo). O descanso por "não atende" da discagem (motor/discagem.py) liga a pausa da voz por aqui.
 CANAL_DA_CONFIG = {"sms": "sms", "rcs": "rcs", "whatsapp": "whatsapp", "email": "email", "voz": "discador"}
 
 
@@ -92,6 +94,8 @@ def regras_de(canais_empresa: list[dict] | None = None, do_credor: dict | None =
             r["dias_pausa"] = max(1, int(r["dias_pausa"]))
             r["dias_rever"] = max(1, int(r["dias_rever"]))
             r["limite_lote"] = min(1.0, max(0.05, float(r["limite_lote"])))
+            if "temporarios_janela_dias" in base:
+                r["temporarios_janela_dias"] = max(0, int(r["temporarios_janela_dias"]))
             if "escalonamento" in base:
                 esc = [min(365, max(1, int(d))) for d in (r["escalonamento"] or [])][:10]
                 r["escalonamento"] = esc or list(base["escalonamento"])
@@ -178,12 +182,14 @@ _SUGESTOES = [
                   "COMPLAIN", "DENUNCIA", "NAO PERTURBE", "BLACKLIST")),
     ("temporario", ("SOFT", "TEMPOR", "CAIXA CHEIA", "MAILBOX FULL", "EXPIRED", "EXPIRAD", "DESLIGAD", "FORA DE AREA",
                     "AUSENTE", "ABSENT", "OCUPAD", "BUSY", "NAO ATEND", "NO ANSWER", "TIMEOUT", "TENTE", "RETRY",
-                    "THROTTL", "INDISPONIV", "UNAVAILABLE", "DEFERRED", "ADIAD")),
+                    "THROTTL", "INDISPONIV", "UNAVAILABLE", "DEFERRED", "ADIAD", "CONGESTION", "SEM ROTA", "FALHA DE ROTA")),
     ("inexistente", ("HARD", "UNDELIV", "NAO ENTREG", "NAO_ENTREG", "INEXIST", "INVALID", "UNKNOWN", "DESCONHECID",
                      "NOT EXIST", "NAO EXIST", "REJECT", "REJEIT", "FAILED", "FALH", "ERRO", "ERROR", "BOUNCE",
                      "NAO SUPORT", "NOT SUPPORT", "SEM SUPORTE", "SEM CONTA", "NO ACCOUNT", "NOT ON WHATSAPP",
-                     "NUMERO ERRADO", "DISCONNECTED", "NAO COMPLETA")),
-    ("clique", ("CLIQ", "CLIC", "CLICK", "RESPOND", "RESPOST", "REPLY", "INTERA", "ATENDID", "ATENDEU", "ANSWERED")),
+                     "NUMERO ERRADO", "DISCONNECTED", "NAO COMPLETA", "MENSAGEM DE OPERADORA", "MSG OPERADORA",
+                     "FORA DE SERVICO")),
+    ("clique", ("CLIQ", "CLIC", "CLICK", "RESPOND", "RESPOST", "REPLY", "INTERA", "ATENDID", "ATENDEU", "ANSWERED",
+                "ABANDON", "RECADO", "PROMESSA", "RECUSA")),
     ("lido", ("LIDO", "LIDA", "READ", "ABERT", "OPEN", "VISUALIZ", "SEEN")),
     ("entregue", ("ENTREG", "DELIVR", "DELIVERED", "DELIVERY OK", "RECEBID", "RECEIVED", "SUCESS", "SUCCESS",
                   "CAIXA POSTAL", "VOICEMAIL", "ACCEPTED", "ACEIT")),
@@ -357,15 +363,16 @@ def avaliar(registros: list[Registro], donos: dict[str, list[str]], hoje: date, 
     for (contato, canal), rs in por_chave.items():
         rs.sort(key=lambda r: (r.data, MARCAS.index(r.marca)))
         inexistente = temp_ini = bloqueio = ultimo_pos = None
-        temps = 0
+        temps, tdatas = 0, []
         for r in rs:
             if r.marca in POSITIVAS:
-                inexistente, temps, ultimo_pos = None, 0, r.data
+                inexistente, temps, ultimo_pos, tdatas = None, 0, r.data, []
             elif r.marca == "inexistente":
                 inexistente = r.data
             elif r.marca == "temporario":
                 temps += 1
                 temp_ini = r.data
+                tdatas.append(r.data)
             elif r.marca == "bloqueio":
                 bloqueio = r.data
         dono = donos.get(contato) or []
@@ -380,6 +387,8 @@ def avaliar(registros: list[Registro], donos: dict[str, list[str]], hoje: date, 
                              "ate": ""})
             resumo[canal]["contatos_bloqueados"] += 1
         rg = regras[canal]
+        if rg.get("temporarios_janela_dias") and temps:
+            temps = sum(1 for d in tdatas if (temp_ini - d).days < rg["temporarios_janela_dias"])
         if rg["inexistente"] == "escalonar":
             inexistente = None                                   # suspensão escalonada (abaixo, SMS + voz juntos)
         if inexistente and rg["inexistente"] != "ignorar":

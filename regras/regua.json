@@ -42,10 +42,14 @@
     ],
     "agente_voz": [
       "identidade_confirmada",
-      "cpc"
+      "cpc",
+      "promessa",
+      "recusa"
     ],
     "discador": [
-      "cpc"
+      "cpc",
+      "promessa",
+      "recusa"
     ],
     "sms": [
       "clique_link",
@@ -62,6 +66,21 @@
   "recencia_horas": 48,
   "tentativas_por_canal": 3,
   "spins_discador_dia": 3,
+  "discagem": {
+    "_doc": "Regras de discagem e renitência para qualquer discador (motor/discagem.py). Valores recomendados; o credor muda os dele (todas desligáveis) e a trava 'ligacoes' da estratégia muda tentativas e intervalos. Ligados por padrão: bloqueio de inexistente, 'não ligar', horários por UF/DDD (prévia regras/horarios_uf.json, referência, não é orientação jurídica) e o aviso de chamadas curtas (corte desligado). tentativas_cliente_dia null = spins_discador_dia.",
+    "tentativas_numero_dia": 2,
+    "tentativas_cliente_dia": null,
+    "intervalo_min_minutos": 120,
+    "intervalo_ocupado_minutos": 15,
+    "descanso_nao_atende": {"ativo": false, "n": 6, "em_dias": 3, "descansa_dias": 7},
+    "descanso_recusa": {"ativo": false, "dias": 7},
+    "promessa_suspende": {"ativo": false, "dias_sem_data": 7},
+    "inexistente": {"ativo": true},
+    "nao_ligar": {"ativo": true},
+    "horarios": {"ativo": true, "tabela": null},
+    "chamadas_curtas": {"ativo": true, "aviso": 0.75, "corte_ativo": false, "corte": 0.80,
+                        "max_por_numero_dia": 900, "max_total_dia": 9000, "abandono_conta": true, "segundos": 6}
+  },
   "localizacao": {
     "passos": {
       "1": [
