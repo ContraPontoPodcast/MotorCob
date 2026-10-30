@@ -1,0 +1,64 @@
+# Site motorcob.online no Netlify (site estático, modo SPA do React Router). Guia: site/LEIA.md
+# No painel do Netlify: Base directory = site (o resto vem deste arquivo).
+
+[build]
+  base = "site"
+  # O Netlify instala as dependências pelo package-lock.json (npm) antes deste comando.
+  command = "npm run build"
+  publish = "build/client"
+  # Só monta quando algo dentro de site/ mudou (o motor e o banco não disparam deploy).
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ."
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Supabase do site: URL e chave anon são públicas (vão no JavaScript do navegador; quem protege é a RLS).
+  # Nunca coloque aqui a chave service_role.
+  VITE_SUPABASE_URL = "https://jxwppkrkuckfwmphqjva.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d3Bwa3JrdWNrZndtcGhxanZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNTc3NTIsImV4cCI6MjEwNTkzMzc1Mn0.nLtZW67zleBlLB-wyUQYQnLtuqQ6-mMr0gzc3g6jFuU"
+  VITE_SITE_ORIGIN = "https://motorcob.online"
+
+# www → domínio sem www (antes era o loader da raiz, com 308)
+[[redirects]]
+  from = "https://www.motorcob.online/*"
+  to = "https://motorcob.online/:splat"
+  status = 301
+  force = true
+
+# SPA: toda rota que não é arquivo abre o index.html e o React Router resolve no navegador.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+    Link = "<https://motorcob.online/sitemap.xml>; rel=\"sitemap\"; type=\"application/xml\""
+
+# Arquivos do build têm hash no nome: cache longo.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/sitemap.xml"
+  [headers.values]
+    Content-Type = "application/xml; charset=utf-8"
+    Cache-Control = "public, max-age=3600"
+    Access-Control-Allow-Origin = "*"
+
+[[headers]]
+  for = "/robots.txt"
+  [headers.values]
+    Content-Type = "text/plain; charset=utf-8"
+    Cache-Control = "public, max-age=3600"
