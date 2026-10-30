@@ -493,6 +493,13 @@ Mensageria. Regras em `regras/jornada.json` (propostas, a validar em comitê; mu
 - Comando: `python rodar_jornada.py --clientes exemplos/jornada/clientes.csv --carteira
   exemplos/jornada/contatos.csv --data 2026-10-13`
 
+## Site (motorcob.online)
+O site (página comercial + app: Workspace, Orquestração, Mensageria, Console) vive em `site/` e é publicado no
+Netlify como site estático (React Router em modo SPA, `site/netlify.toml`). **O Horizons não é mais a fonte da
+verdade**: mudança no site é commit aqui. Dados só pelo Supabase com a chave anon e a RLS; nada de service_role
+no site. O formulário de contato grava em `contatos_site` (SQL 29 + SQL 52). Como rodar, variáveis e deploy:
+`site/LEIA.md`. CI: `.github/workflows/site.yml` (lint + build).
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
