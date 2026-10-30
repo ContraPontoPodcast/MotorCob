@@ -1,0 +1,8 @@
+node_modules/
+build/
+.react-router/
+.netlify/
+.env
+.env.*
+!.env.example
+!src/components/acoes/

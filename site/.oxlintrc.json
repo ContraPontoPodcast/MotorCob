@@ -1,0 +1,102 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"plugins": [
+		"typescript",
+		"react",
+		"import"
+	],
+	"categories": {
+		"correctness": "off"
+	},
+	"env": {
+		"browser": true,
+		"es2024": true
+	},
+	"globals": {
+		"React": "readonly",
+		"Intl": "readonly"
+	},
+	"ignorePatterns": [
+		"node_modules/**",
+		"dist/**",
+		"build/**",
+		".react-router/**",
+		"**/*.jsx",
+		"src/components/ui/**",
+		"src/hooks/use-toast.ts",
+		"vite.config.ts",
+		"react-router.config.ts",
+		"duas-etapas/**"
+	],
+	"overrides": [
+		{
+			"files": [
+				"**/*.{ts,tsx}"
+			],
+			"rules": {
+				"no-var": "error",
+				"prefer-const": [
+					"error",
+					{
+						"destructuring": "any",
+						"ignoreReadBeforeAssign": false
+					}
+				],
+				"prefer-rest-params": "error",
+				"prefer-spread": "error",
+				"no-array-constructor": "error",
+				"no-unused-expressions": [
+					"error",
+					{
+						"allowShortCircuit": false,
+						"allowTaggedTemplates": false,
+						"allowTernary": false
+					}
+				],
+				"typescript/ban-ts-comment": "error",
+				"typescript/no-duplicate-enum-values": "error",
+				"typescript/no-empty-object-type": "error",
+				"typescript/no-extra-non-null-assertion": "error",
+				"typescript/no-misused-new": "error",
+				"typescript/no-namespace": "error",
+				"typescript/no-non-null-asserted-optional-chain": "error",
+				"typescript/no-require-imports": "error",
+				"typescript/no-this-alias": "error",
+				"typescript/no-unnecessary-type-constraint": "error",
+				"typescript/no-unsafe-declaration-merging": "error",
+				"typescript/no-unsafe-function-type": "error",
+				"typescript/no-wrapper-object-types": "error",
+				"typescript/prefer-as-const": "error",
+				"typescript/prefer-namespace-keyword": "error",
+				"typescript/triple-slash-reference": "error",
+				"react/jsx-key": "error",
+				"react/jsx-no-duplicate-props": "error",
+				"react/jsx-no-target-blank": "error",
+				"react/jsx-no-undef": "error",
+				"react/no-children-prop": "error",
+				"react/no-danger-with-children": "error",
+				"react/no-direct-mutation-state": "error",
+				"react/no-find-dom-node": "error",
+				"react/no-is-mounted": "error",
+				"react/no-render-return-value": "error",
+				"react/no-string-refs": "error",
+				"react/no-unknown-property": "error",
+				"react/no-unsafe": [
+					"error",
+					{
+						"checkAliases": true
+					}
+				],
+				"react/require-render-return": "error",
+				"react/rules-of-hooks": "error",
+				"import/no-self-import": "error",
+				"import/no-cycle": [
+					"error",
+					{
+						"ignoreExternal": true
+					}
+				]
+			}
+		}
+	]
+}

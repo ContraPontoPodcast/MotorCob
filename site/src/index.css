@@ -1,0 +1,494 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 195 18% 97%;
+    --foreground: 194 42% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 194 42% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 194 42% 17%;
+    --primary: 193 72% 21%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 190 26% 94%;
+    --secondary-foreground: 193 72% 21%;
+    --muted: 190 20% 94%;
+    --muted-foreground: 195 11% 44%;
+    --accent: 36 79% 57%;
+    --accent-foreground: 194 42% 17%;
+    --destructive: 0 66% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 190 18% 89%;
+    --input: 190 18% 89%;
+    --ring: 193 72% 21%;
+    --radius: .65rem;
+  }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; overflow-x: clip; }
+  .ls-tight { letter-spacing: -0.035em; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  button, input, select { font: inherit; }
+}
+
+/* ============================================================
+   PLATAFORMA (área logada) — tema por variáveis
+   Cada token vem da tabela tema_tokens (chave, claro, escuro).
+   Se a leitura falhar, os valores abaixo (claro) servem de reserva.
+   Escuro: mesmas variáveis sob [data-tema="escuro"].
+   Nenhuma cor fixa no código fora destas variáveis e das cores dos canais.
+   ============================================================ */
+:root {
+  /* Base (estilo Apple) */
+  --base-menu: #EEEFF1;
+  --base-menu-borda: #E3E4E8;
+  --base-conteudo: #F8F8F9;
+  --base-cartao: #FFFFFF;
+  --base-borda: #E3E4E8;
+  --base-texto: #1D1D1F;
+  --base-texto-2: #6E6E73;
+  --base-texto-3: #8E8E93;
+  --base-fill: #F5F5F7;
+  --base-fill-2: #F2F2F7;
+  --base-separator: #E5E5EA;
+  --base-field-border: #D2D2D7;
+
+  /* Áreas — uma cor de destaque por área */
+  --area-cobranca: #8A6A2E;
+  --area-cobranca-ativo: #8A6A2E;
+  --area-cobranca-ativo-texto: #FFFFFF;
+  --area-cobranca-forte: #6F5424;
+  --area-jornada: #4F6B3A;
+  --area-jornada-ativo: #4F6B3A;
+  --area-jornada-ativo-texto: #FFFFFF;
+  --area-jornada-forte: #3E5530;
+  --area-mensageria: #7A2E3B;
+  --area-mensageria-ativo: #7A2E3B;
+  --area-mensageria-ativo-texto: #FFFFFF;
+  --area-mensageria-forte: #5E2330;
+  --area-neutro: #1D1D1F;
+  --area-neutro-ativo: #1D1D1F;
+  --area-neutro-ativo-texto: #FFFFFF;
+  --area-neutro-forte: #000000;
+
+  /* Área ativa (definida por rota). Padrão: neutro. */
+  --area: var(--area-neutro);
+  --area-ativo: var(--area-neutro-ativo);
+  --area-ativo-texto: var(--area-neutro-ativo-texto);
+  --area-forte: var(--area-neutro-forte);
+
+  /* Estados fixos (não mudam com a área) */
+  --estado-pronto: #34C759;
+  --estado-pronto-fundo: #E8F8EC;
+  --estado-pronto-texto: #248A3D;
+  --estado-atencao: #FF9500;
+  --estado-atencao-fundo: #FFF7E8;
+  --estado-atencao-texto: #9A631B;
+  --estado-erro: #FF3B30;
+  --estado-erro-fundo: #FFE8E6;
+  --estado-erro-texto: #C62828;
+  --estado-info: #0A60D0;
+  --estado-info-fundo: #E8F1FF;
+
+  /* Cores dos canais (fixas) */
+  --canal-whatsapp: #1F8A4C;
+  --canal-sms: #7A4FB0;
+  --canal-rcs: #3B5BA9;
+  --canal-email: #A2552B;
+  --canal-voz: #B3261E;
+
+  /* Faixas do Score de Entrega — nunca verde/amarelo/vermelho
+     (essas são de pronto, alerta e erro). Tons próprios por faixa. */
+  --score-alto: #0E7C86;
+  --score-alto-texto: #FFFFFF;
+  --score-medio: #5B6BAA;
+  --score-medio-texto: #FFFFFF;
+  --score-baixo: #B5563C;
+  --score-baixo-texto: #FFFFFF;
+  --score-sem: #8E8E93;
+  --score-sem-texto: #FFFFFF;
+}
+
+/* Tema escuro — valores da coluna escuro (reserva quando tema_tokens falha) */
+[data-tema="escuro"] {
+  --base-menu: #1C1C1E;
+  --base-menu-borda: #2C2C2E;
+  --base-conteudo: #000000;
+  --base-cartao: #1C1C1E;
+  --base-borda: #2C2C2E;
+  --base-texto: #F5F5F7;
+  --base-texto-2: #AEAEB2;
+  --base-texto-3: #636366;
+  --base-fill: #2C2C2E;
+  --base-fill-2: #1C1C1E;
+  --base-separator: #2C2C2E;
+  --base-field-border: #3A3A3C;
+
+  --estado-pronto: #30D158;
+  --estado-pronto-fundo: #1B3A24;
+  --estado-pronto-texto: #30D158;
+  --estado-atencao: #FF9F0A;
+  --estado-atencao-fundo: #3A2E14;
+  --estado-atencao-texto: #FF9F0A;
+  --estado-erro: #FF453A;
+  --estado-erro-fundo: #3A1C1A;
+  --estado-erro-texto: #FF453A;
+  --estado-info: #0A84FF;
+  --estado-info-fundo: #11243A;
+
+  /* Faixas do Score no tema escuro. */
+  --score-alto: #2BB3BD;
+  --score-alto-texto: #0A1A1C;
+  --score-medio: #8A98D0;
+  --score-medio-texto: #11132A;
+  --score-baixo: #D08770;
+  --score-baixo-texto: #2A1410;
+  --score-sem: #636366;
+  --score-sem-texto: #F5F5F7;
+}
+
+/* ---- Tema escuro: fundos, bordas e textos que ficaram de fora ----
+   Só no escuro (o claro não muda). Regra para o futuro: tela nova usa só
+   as variáveis --base-* (ou as classes já mapeadas), nunca hex claro solto. */
+[data-tema="escuro"] .mc-platform .bg-\[\#fafcfc\],
+[data-tema="escuro"] .mc-platform .bg-\[\#f5f7f8\],
+[data-tema="escuro"] .mc-platform .bg-\[\#f2f6f7\],
+[data-tema="escuro"] .mc-platform .bg-\[\#f0f6f7\],
+[data-tema="escuro"] .mc-platform .bg-\[\#f1f5f6\],
+[data-tema="escuro"] .mc-platform .bg-\[\#f5f5f7\],
+[data-tema="escuro"] .mc-platform .bg-\[\#f2f2f7\],
+[data-tema="escuro"] .mc-platform .bg-slate-50 { background-color: var(--base-cartao); }
+
+[data-tema="escuro"] .mc-platform .bg-\[\#eef2f3\],
+[data-tema="escuro"] .mc-platform .bg-\[\#eef3f4\],
+[data-tema="escuro"] .mc-platform .bg-\[\#e9f1f3\],
+[data-tema="escuro"] .mc-platform .bg-\[\#e8f1f3\],
+[data-tema="escuro"] .mc-platform .bg-\[\#e3e9eb\],
+[data-tema="escuro"] .mc-platform .bg-\[\#edf2f3\],
+[data-tema="escuro"] .mc-platform .bg-slate-100 { background-color: var(--base-fill); }
+
+[data-tema="escuro"] .mc-platform .bg-\[\#faf3e8\],
+[data-tema="escuro"] .mc-platform .bg-\[\#fffbf0\],
+[data-tema="escuro"] .mc-platform .bg-\[\#fde9c4\] { background-color: color-mix(in srgb, #E9A23B 16%, var(--base-cartao)); }
+
+[data-tema="escuro"] .mc-platform .text-\[\#9a631b\],
+[data-tema="escuro"] .mc-platform .text-\[\#80520f\],
+[data-tema="escuro"] .mc-platform .text-\[\#e9a23b\],
+[data-tema="escuro"] .mc-platform .text-\[\#E9A23B\] { color: #F0B860; }
+
+[data-tema="escuro"] .mc-platform .border-\[\#d9e5e8\],
+[data-tema="escuro"] .mc-platform .border-\[\#eef2f3\],
+[data-tema="escuro"] .mc-platform .border-\[\#cbdadd\],
+[data-tema="escuro"] .mc-platform .border-\[\#cbd5db\],
+[data-tema="escuro"] .mc-platform .border-\[\#dce8e9\],
+[data-tema="escuro"] .mc-platform .border-\[\#d7e2e5\],
+[data-tema="escuro"] .mc-platform .border-\[\#dce8ea\],
+[data-tema="escuro"] .mc-platform .border-\[\#bcd6da\],
+[data-tema="escuro"] .mc-platform .border-\[\#cdd9db\],
+[data-tema="escuro"] .mc-platform .border-\[\#cfe0e3\],
+[data-tema="escuro"] .mc-platform .border-\[\#ECF0F1\],
+[data-tema="escuro"] .mc-platform .border-\[\#cbd9dd\],
+[data-tema="escuro"] .mc-platform .border-\[\#e2eaec\] { border-color: var(--base-borda); }
+
+[data-tema="escuro"] .mc-platform .text-\[\#304b55\],
+[data-tema="escuro"] .mc-platform .text-\[\#365661\],
+[data-tema="escuro"] .mc-platform .text-\[\#4a6770\] { color: var(--base-texto); }
+
+.mc-platform {
+  background-color: var(--base-conteudo);
+  color: var(--base-texto);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+
+/* Foco visível Apple */
+.mc-platform :focus-visible {
+  outline: 3px solid rgba(0, 113, 227, .5);
+  outline-offset: 1px;
+}
+
+/* Campos de formulário seguem o tema (claro e escuro). */
+:root { color-scheme: light; }
+[data-tema="escuro"] { color-scheme: dark; }
+.mc-platform input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])),
+.mc-platform select,
+.mc-platform textarea {
+  background-color: var(--base-cartao) !important;
+  color: var(--base-texto) !important;
+  border-color: var(--base-field-border) !important;
+}
+.mc-platform input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"]))::placeholder,
+.mc-platform textarea::placeholder {
+  color: var(--base-texto-3) !important;
+}
+.mc-platform input:disabled,
+.mc-platform select:disabled,
+.mc-platform textarea:disabled {
+  background-color: var(--base-fill) !important;
+  color: var(--base-texto-3) !important;
+}
+
+/* ---- Menu lateral claro (base igual em todas as áreas) ---- */
+.mc-platform .mc-menu {
+  background-color: #F5F5F7;
+  color: var(--base-texto);
+  border-right: 1px solid #E5E5EA;
+}
+[data-tema="escuro"] .mc-platform .mc-menu {
+  background-color: #1C1C1E;
+  border-right: 1px solid #2C2C2E;
+}
+.mc-platform .mc-menu .text-white { color: var(--base-texto); }
+.mc-platform .mc-menu .text-\[\#8E8E93\],
+.mc-platform .mc-menu .text-\[\#AEAEB2\] { color: var(--base-texto-3); }
+.mc-platform .mc-menu .text-\[\#E5E5EA\] { color: var(--base-texto-2); }
+.mc-platform .mc-menu .text-white\/50,
+.mc-platform .mc-menu .text-white\/\[\.5\] { color: var(--base-texto-3); }
+.mc-platform .mc-menu .bg-white\/\[\.04\] { background-color: color-mix(in srgb, var(--base-texto) 4%, transparent); }
+.mc-platform .mc-menu .bg-white\/\[\.06\] { background-color: color-mix(in srgb, var(--base-texto) 6%, transparent); }
+.mc-platform .mc-menu .bg-white\/\[\.08\] { background-color: color-mix(in srgb, var(--base-texto) 8%, transparent); }
+.mc-platform .mc-menu .hover\:bg-white\/\[\.06\]:hover { background-color: color-mix(in srgb, var(--base-texto) 6%, transparent); }
+.mc-platform .mc-menu .hover\:bg-white\/\[\.08\]:hover { background-color: color-mix(in srgb, var(--base-texto) 8%, transparent); }
+.mc-platform .mc-menu .hover\:bg-white\/\[\.12\]:hover { background-color: color-mix(in srgb, var(--base-texto) 12%, transparent); }
+.mc-platform .mc-menu .bg-black\/\[\.03\] { background-color: color-mix(in srgb, var(--base-texto) 4%, transparent); }
+.mc-platform .mc-menu .bg-black\/\[\.04\] { background-color: color-mix(in srgb, var(--base-texto) 5%, transparent); }
+.mc-platform .mc-menu .bg-black\/\[\.06\] { background-color: color-mix(in srgb, var(--base-texto) 7%, transparent); }
+.mc-platform .mc-menu .bg-black\/\[\.08\] { background-color: color-mix(in srgb, var(--base-texto) 9%, transparent); }
+.mc-platform .mc-menu .hover\:bg-black\/\[\.04\]:hover { background-color: color-mix(in srgb, var(--base-texto) 5%, transparent); }
+.mc-platform .mc-menu .hover\:bg-black\/\[\.06\]:hover { background-color: color-mix(in srgb, var(--base-texto) 7%, transparent); }
+.mc-platform .mc-menu .hover\:bg-black\/\[\.08\]:hover { background-color: color-mix(in srgb, var(--base-texto) 9%, transparent); }
+.mc-platform .mc-menu .border-white\/10,
+.mc-platform .mc-menu .border-white\/\[\.1\] { border-color: var(--base-menu-borda); }
+.mc-platform .mc-menu .bg-\[\#3A3A3C\] { background-color: var(--base-fill-2); }
+
+/* Item ativo do menu: cor da área (fundo .ativo, texto .ativo_texto) */
+.mc-platform .mc-menu .mc-nav-active {
+  background-color: var(--area-ativo) !important;
+  color: var(--area-ativo-texto) !important;
+}
+.mc-platform .mc-menu .mc-nav-active span,
+.mc-platform .mc-menu .mc-nav-active svg { color: var(--area-ativo-texto) !important; }
+
+/* ---- Remapeamento da paleta antiga (teal/âmbar) para as variáveis ----
+   Sobrescreve os utilitários arbitrários do Tailwind usados pelos componentes
+   da plataforma, sem alterar o site público e o login. */
+.mc-platform .text-\[\#0F4C5C\],
+.mc-platform .text-\[\#163943\],
+.mc-platform .text-\[\#315d68\] { color: var(--base-texto); }
+
+.mc-platform .bg-\[\#0F4C5C\] { background-color: var(--area); }
+.mc-platform .hover\:bg-\[\#0d4252\]:hover { background-color: var(--area-forte); }
+.mc-platform .border-\[\#0F4C5C\],
+.mc-platform .border-\[\#0d4252\] { border-color: var(--area); }
+.mc-platform .ring-\[\#0F4C5C\] { --tw-ring-color: var(--area); }
+
+.mc-platform .bg-\[\#eaf2f3\],
+.mc-platform .bg-\[\#edf4f5\],
+.mc-platform .bg-\[\#f5f8f9\],
+.mc-platform .bg-\[\#f7fafb\] { background-color: var(--base-fill); }
+.mc-platform .hover\:bg-\[\#edf4f5\]:hover,
+.mc-platform .hover\:bg-\[\#eaf2f3\]:hover,
+.mc-platform .hover\:bg-\#edf4f5:hover { background-color: var(--base-fill-2); }
+.mc-platform .bg-\[\#e8f0f2\] { background-color: var(--base-fill-2); }
+
+/* Âmbar → estado de atenção */
+.mc-platform .text-\[\#e9a23b\],
+.mc-platform .text-\[\#E9A23B\],
+.mc-platform .text-\[\#9a631b\],
+.mc-platform .text-\[\#80520f\] { color: var(--estado-atencao-texto); }
+.mc-platform .bg-\[\#e9a23b\],
+.mc-platform .bg-\[\#E9A23B\] { background-color: var(--estado-atencao); }
+.mc-platform .border-\[\#e9a23b\],
+.mc-platform .border-\[\#E9A23B\],
+.mc-platform .border-\[\#f0d49a\] { border-color: var(--estado-atencao); }
+.mc-platform .bg-\[\#fff7e8\],
+.mc-platform .bg-\[\#fff3df\],
+.mc-platform .bg-\[\#fff1d8\] { background-color: var(--estado-atencao-fundo); }
+
+/* Verde/vermelho mantêm semântica */
+.mc-platform .text-\[\#2E7D32\] { color: var(--estado-pronto-texto); }
+.mc-platform .bg-\[\#2E7D32\] { background-color: var(--estado-pronto); }
+.mc-platform .text-\[\#C62828\] { color: var(--estado-erro-texto); }
+.mc-platform .bg-\[\#C62828\] { background-color: var(--estado-erro); }
+
+/* Textos cinza escuros da paleta antiga → label */
+.mc-platform .text-slate-500 { color: var(--base-texto-2); }
+.mc-platform .text-slate-400 { color: var(--base-texto-3); }
+.mc-platform .text-slate-600 { color: var(--base-texto-2); }
+.mc-platform .text-slate-700 { color: var(--base-texto); }
+
+/* Bordas claras antigas → separador */
+.mc-platform .border-\[\#dfe8ea\],
+.mc-platform .border-\[\#dee7e9\],
+.mc-platform .border-\[\#e2eaec\],
+.mc-platform .border-\[\#e3e9eb\],
+.mc-platform .border-\[\#e5edef\],
+.mc-platform .border-\[\#ecf0f1\],
+.mc-platform .border-\[\#eef3f4\],
+.mc-platform .border-\[\#e9eff0\],
+.mc-platform .border-\[\#e4ebed\],
+.mc-platform .border-\[\#c9dadd\],
+.mc-platform .border-\[\#d8e3e5\],
+.mc-platform .border-\[\#dbe5e8\],
+.mc-platform .border-\[\#bcd2d7\],
+.mc-platform .border-\[\#cbd9dd\] { border-color: var(--base-borda); }
+.mc-platform .divide-\[\#ecf0f1\] > * + *,
+.mc-platform .divide-\[\#eef3f4\] > * + *,
+.mc-platform .divide-\[\#e9eff0\] > * + *,
+.mc-platform .divide-\[\#e5edef\] > * + * { border-color: var(--base-separator); }
+
+/* Cartões: branco, raio 12, sem sombra pesada */
+.mc-platform .rounded-xl { border-radius: 12px; }
+
+/* ---- Paleta Apple → variáveis (suporta tema escuro e cor da área) ---- */
+.mc-platform .bg-white { background-color: var(--base-cartao); }
+.mc-platform .bg-\[\#FFFFFF\] { background-color: var(--base-cartao); }
+.mc-platform .bg-\[\#F5F5F7\] { background-color: var(--base-fill); }
+.mc-platform .bg-\[\#F2F2F7\] { background-color: var(--base-fill-2); }
+.mc-platform .hover\:bg-\[\#F5F5F7\]:hover { background-color: var(--base-fill); }
+.mc-platform .text-\[\#1D1D1F\] { color: var(--base-texto); }
+.mc-platform .text-\[\#6E6E73\] { color: var(--base-texto-2); }
+.mc-platform .text-\[\#8E8E93\] { color: var(--base-texto-3); }
+.mc-platform .text-\[\#A1A1A6\] { color: var(--base-texto-3); }
+.mc-platform .border-\[\#E5E5EA\] { border-color: var(--base-separator); }
+.mc-platform .border-\[\#D2D2D7\] { border-color: var(--base-field-border); }
+.mc-platform .border-\[\#F0F0F2\] { border-color: var(--base-separator); }
+.mc-platform .divide-\[\#F0F0F2\] > * + * { border-color: var(--base-separator); }
+
+/* Botão principal: cor da área (fundo), pressionado = .forte.
+   #1D1D1F era o botão escuro Apple; vira a cor da área ativa. */
+.mc-platform .bg-\[\#1D1D1F\] { background-color: var(--area); }
+.mc-platform .hover\:bg-\[\#3a3a3c\]:hover { background-color: var(--area-forte); }
+.mc-platform .bg-\[\#3A3A3C\] { background-color: var(--base-fill-2); }
+
+/* Estados fixos em fundos coloridos */
+.mc-platform .bg-\[\#FF3B30\] { background-color: var(--estado-erro); }
+.mc-platform .bg-\[\#34C759\] { background-color: var(--estado-pronto); }
+.mc-platform .bg-\[\#0A60D0\] { background-color: var(--estado-info); }
+.mc-platform .bg-green-100 { background-color: var(--estado-pronto-fundo); }
+.mc-platform .bg-amber-50 { background-color: var(--estado-atencao-fundo); }
+.mc-platform .bg-red-50 { background-color: var(--estado-erro-fundo); }
+
+/* Números tabulares */
+.mc-platform .tnum { font-variant-numeric: tabular-nums; }
+
+/* ---- Botão principal: cor da área (fundo), pressionado = .forte ---- */
+.mc-platform .mc-btn-primary {
+  background-color: var(--area);
+  color: var(--area-ativo-texto);
+}
+.mc-platform .mc-btn-primary:hover { background-color: var(--area-forte); }
+.mc-platform .mc-btn-primary:active { background-color: var(--area-forte); }
+
+/* ---- Filete de 3 px à esquerda do título da página ---- */
+.mc-platform .mc-page-title { position: relative; padding-left: 12px; }
+.mc-platform .mc-page-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background-color: var(--area);
+}
+
+/* ---- Etiqueta da área no topo ---- */
+.mc-area-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--area);
+}
+.mc-area-tag::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background-color: var(--area);
+}
+
+/* ---- Halo suave só onde não se trabalha (login, Início, telas vazias) ---- */
+.mc-halo { position: relative; }
+.mc-halo::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 70%;
+  height: 70%;
+  pointer-events: none;
+  background: radial-gradient(circle at top right, color-mix(in srgb, var(--area) 8%, transparent), transparent 70%);
+  z-index: 0;
+}
+.mc-halo > * { position: relative; z-index: 1; }
+
+/* Carrossel do site público — trilho sem barra de rolagem visível */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Bolinha pulsante de "Atualizando" nas personas do site público */
+@keyframes mc-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.5); }
+  100% { box-shadow: 0 0 0 10px rgba(52, 199, 89, 0); }
+}
+.mc-pulse-dot { animation: mc-pulse 2s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .mc-pulse-dot { animation: none; }
+}
+
+/* ---- Tabela responsiva (container query) ----
+   Abaixo de 600 px de largura do contêiner, cada linha vira um cartão.
+   Acima, tabela normal com rolagem lateral. */
+.mc-tabela-container { container-type: inline-size; container-name: mctab; }
+.mc-tabela-cards { display: none; }
+@container mctab (max-width: 600px) {
+  .mc-tabela-desktop { display: none; }
+  .mc-tabela-cards { display: block; }
+}
+
+/* ---- Campo alterado no PainelEdicao: borda na cor da área ---- */
+.mc-campo-alterado {
+  border-color: var(--area) !important;
+  box-shadow: 0 0 0 1px var(--area);
+}
+
+/* ---- Faixas de propensão a pagamento (A–E) ---- */
+:root {
+  --prop-A-bg:#0F4C5C; --prop-A-text:#FFFFFF;
+  --prop-B-bg:#2E7487; --prop-B-text:#FFFFFF;
+  --prop-C-bg:#5B9AAB; --prop-C-text:#0B2A33;
+  --prop-D-bg:#93BFCB; --prop-D-text:#0B2A33;
+  --prop-E-bg:#C9DFE5; --prop-E-text:#0B2A33;
+}
+[data-tema="escuro"] {
+  --prop-A-bg:#A8DCE6; --prop-A-text:#06222A;
+  --prop-B-bg:#7CC0CE; --prop-B-text:#06222A;
+  --prop-C-bg:#5299A9; --prop-C-text:#06222A;
+  --prop-D-bg:#357483; --prop-D-text:#FFFFFF;
+  --prop-E-bg:#24535E; --prop-E-text:#FFFFFF;
+}
+
+/* ---- Cor de destaque (task 2) ---- */
+:root { --destaque:#8A6A2E; --destaque-forte:#6F5424; --destaque-suave:#F4EDE0; --destaque-texto:#FFFFFF; }
+[data-tema="escuro"] { --destaque:#D9B26B; --destaque-forte:#E8C688; --destaque-suave:#3A2F1C; --destaque-texto:#1D1D1F; }
+
+/* Botão principal dos cabeçalhos de página (PageHeading) — ouro */
+.mc-platform .mc-page-actions .bg-\[\#1D1D1F\] { background-color: var(--destaque) !important; color: var(--destaque-texto) !important; }
+.mc-platform .mc-page-actions .hover\:bg-\[\#3a3a3c\]:hover { background-color: var(--destaque-forte) !important; }
+
+/* ---- Tema escuro: fundos, bordas e textos de estado (task 3) ---- */
+.mc-platform .bg-\[\#FFE8E6\],.mc-platform .hover\:bg-\[\#FFE8E6\]:hover{background-color:var(--estado-erro-fundo)}
+.mc-platform .bg-\[\#E8F8EC\],.mc-platform .hover\:bg-\[\#E8F8EC\]:hover{background-color:var(--estado-pronto-fundo)}
+.mc-platform .bg-\[\#E8F1FF\]{background-color:var(--estado-info-fundo)}
+.mc-platform .text-\[\#0A60D0\]{color:var(--estado-info)} .mc-platform .border-\[\#0A60D0\]{border-color:var(--estado-info)}
+.mc-platform .text-\[\#FF3B30\],.mc-platform .hover\:text-\[\#FF3B30\]:hover{color:var(--estado-erro)}
+.mc-platform .border-\[\#FF3B30\]{border-color:var(--estado-erro)} .mc-platform .text-\[\#248A3D\]{color:var(--estado-pronto-texto)}
+[data-tema="escuro"] .mc-platform :is(.bg-\[\#FFF3E8\],.bg-\[\#FFF7E8\],.bg-\[\#FFF8E1\],.bg-\[\#FFF3DF\],.hover\:bg-\[\#FFF1D8\]:hover){background-color:var(--estado-atencao-fundo)}
+[data-tema="escuro"] .mc-platform :is(.bg-\[\#E8E8ED\],.bg-\[\#E5E5EA\],.bg-\[\#EEEEF0\],.bg-\[\#F0F0F2\],.hover\:bg-\[\#E8E8ED\]:hover,.hover\:bg-\[\#E5E5EA\]:hover,.hover\:bg-\[\#EEEEF0\]:hover){background-color:var(--base-fill)}
+[data-tema="escuro"] .mc-platform :is(.bg-\[\#FAFAFC\],.bg-\[\#FAFAFB\],.bg-\[\#F8F8F9\],.bg-\[\#F8F9FB\],.hover\:bg-\[\#FAFAFC\]:hover){background-color:var(--base-cartao)}
+[data-tema="escuro"] .mc-platform .border-\[\#FFE08A\]{border-color:var(--base-borda)}

@@ -1,0 +1,35 @@
+# Site motorcob.online (site/): instala pelo package-lock.json, confere o lint e monta o build estático
+# do Netlify. Roda só quando algo em site/ (ou este arquivo) muda.
+# O typecheck (npm run typecheck) ainda não passa: o código que veio do Horizons tem erros de tipo antigos
+# (os mesmos 60 do export). Por isso aqui só roda o lint; ligue o typecheck quando zerar.
+name: site
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: site/.nvmrc
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - name: o build tem o index.html, o sitemap e o robots
+        run: test -f build/client/index.html && test -f build/client/sitemap.xml && test -f build/client/robots.txt
