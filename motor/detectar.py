@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .entrada import Entrada, validar_entrada
 from .ingestao import LayoutInvalido
+from .voz import GENERICOS_SITE
 
 AMOSTRA = 300
 FORMATOS_DATA = ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y", "%Y/%m/%d", "%d.%m.%Y", "%Y%m%d", "%d%m%Y")
@@ -250,6 +251,30 @@ def _resultado(v: str) -> str | None:
                                  "SEM_CONTATO", "NAO_LOCALIZADO", "NAO_RESPONDEU")):
         return "sem_contato"
     return None
+
+
+# Marcas que o site aceita em ocorrencia_codigos.resultado (CHECK do banco, SQL 20261017000001; nuvem.mapeamento).
+# O layout fixo e o automático usam o vocabulário maior de _resultado (invalido, promessa…); o site só tem estas.
+RESULTADOS_SITE = GENERICOS_SITE
+_TERCEIRO_FORTE = ("DESCONHEC", "NAO_CONHECE", "NAO_E_O_TITULAR", "NAO_TITULAR", "ERRADO")
+
+
+def sugestao_site(v: str) -> str | None:
+    """Sugestão do MotorCX para um código de ocorrência no site: sempre uma marca que o banco aceita
+    (RESULTADOS_SITE) ou None (o cliente decide; aceitar sem sugestão = sem contato).
+
+    - recado deixado com alguém é sem contato, não terceiro: na taxonomia é alguém do círculo do titular
+      (terceiro pesa contra o número); só é terceiro se o código também diz que não conhece/é errado;
+    - promessa/recusa são CPC (o site não tem marca própria para elas);
+    - "invalido" (número inexistente) não tem marca no site: sem sugestão, o cliente decide.
+    _resultado (layout fixo e automático) não muda aqui."""
+    n = _n(v)
+    if "RECADO" in n and not any(x in n for x in _TERCEIRO_FORTE):
+        return "sem_contato"
+    r = _resultado(v)
+    if r in ("promessa", "recusa"):
+        return "cpc"
+    return r if r in RESULTADOS_SITE else None
 
 
 def _canal(v: str) -> str | None:

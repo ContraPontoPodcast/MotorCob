@@ -137,6 +137,12 @@ de outra pessoa pela certificação e a rotação segue.
   `openpyxl` (única dependência, fora do núcleo).
 - `motor/certificacao.py`: score Beta por contato, status, hit rate, afinidade.
 - `motor/taxonomia.py`: retorno bruto de cada canal → `Nivel` + pesos + restrições.
+- `motor/voz.py`: tabela ÚNICA dos desfechos de voz (discador/agente virtual). Dela saem a taxonomia da voz,
+  `discagem.MARCA_VOZ`, `NAO_COMPLETADA`/abandono (curtas), `NAO_ATENDE` (descanso), os genéricos de voz da
+  ocorrência (`entrada.GENERICOS`) e as marcas do site (`GENERICOS_SITE` = CHECK do banco). Também os flags
+  `e_cpc` (= `regua.json › contato`), `conta_tentativa` (hoje todos) e `prova_existencia`, e as listas SIP/Q.850 que
+  confirmam (tipo A/B) ou nunca confirmam inexistente (`tipo_confirmacao`; só dados até a ingestão ler causas).
+  Desfecho novo = uma linha lá. Paridade com os valores antigos em `tests/test_voz.py`.
 - `motor/ingestao.py` + `layouts/*.json`: retornos por layout de fornecedor, base de
   clientes (agrega contratos), carteira de contatos e parcelas.
 - `motor/cluster.py`: cluster por regras da empresa (tabela `clusters`, editada no site).
@@ -385,7 +391,8 @@ de outra pessoa pela certificação e a rotação segue.
 - `nuvem/mapeamento.py`: mapeamento por credor feito no site (Credores → Configurações). O
   cliente aponta as colunas de ocorrência, acordo e pagamento (`mapeamento_arquivos`) e marca
   cada resultado de ocorrência (`ocorrencia_codigos`: cpc · terceiro · opt_out · sem marca =
-  sem_contato). O motor sugere, registra os códigos e SEGURA o que não está mapeado
+  sem_contato). O motor sugere (`detectar.sugestao_site`: sempre uma das 4 marcas do banco ou nada;
+  recado = sem contato; inválido fica sem sugestão; o site não aceita com um clique sugestão fora das 4), registra os códigos e SEGURA o que não está mapeado
   (`<tipo>/aguardando/`, envio com status `aguardando`); quando o cliente confirma, a vigia
   roda e relê tudo. Com `empresas/<slug>.json`, o arquivo já vale como mapeado.
 - Retorno de canal (`motor/retorno_canal.py`, `nuvem/retorno_canal.py`): arquivos dos fornecedores

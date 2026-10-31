@@ -30,36 +30,31 @@ from fnmatch import fnmatch
 from pathlib import Path
 
 from . import normalizacao as norm
+from . import voz as VOZ
 from .certificacao import Evento
 from .cluster import tipos_das_colunas
 from .ingestao import LayoutInvalido, _mascarar, _sim
 from .taxonomia import CANAIS_EMAIL, TAXONOMIA
 
 # resultado genérico -> resultado da taxonomia, por canal
-GENERICOS: dict[str, dict[str, str]] = {
-    "cpc": {"discador": "cpc", "agente_voz": "cpc", "whatsapp": "identidade_confirmada",
-            "rcs": "identidade_confirmada", "sms": "identidade_confirmada", "email": "identidade_confirmada"},
-    "sem_contato": {"discador": "nao_atendida", "agente_voz": "nao_atendida", "whatsapp": "entregue",
-                    "rcs": "entregue", "sms": "entregue", "email": "entregue"},
-    "atendida_sem_cpc": {"discador": "atendida_sem_cpc", "agente_voz": "atendida_sem_cpc", "whatsapp": "lido",
-                         "rcs": "lido", "sms": "entregue", "email": "abertura"},
-    "terceiro": {"discador": "atendida_terceiro_desconhece", "agente_voz": "atendida_terceiro_desconhece",
-                 "whatsapp": "desconhece", "rcs": "desconhece", "sms": "desconhece", "email": "desconhece"},
-    "invalido": {"discador": "numero_inexistente", "agente_voz": "numero_inexistente", "whatsapp": "sem_conta",
-                 "rcs": "nao_entregue", "sms": "nao_entregue", "email": "hard_bounce"},
-    "opt_out": {"whatsapp": "bloqueio", "sms": "opt_out", "email": "descadastro",
-                "discador": "opt_out", "agente_voz": "opt_out"},
-    # discagem (motor/discagem.py): promessa e recusa são CPC; os demais só existem na voz
-    "promessa": {"discador": "promessa", "agente_voz": "promessa", "whatsapp": "identidade_confirmada",
-                 "rcs": "identidade_confirmada", "sms": "identidade_confirmada", "email": "identidade_confirmada"},
-    "recusa": {"discador": "recusa", "agente_voz": "recusa", "whatsapp": "identidade_confirmada",
-               "rcs": "identidade_confirmada", "sms": "identidade_confirmada", "email": "identidade_confirmada"},
-    "recado": {"discador": "recado", "agente_voz": "recado"},
-    "ocupado": {"discador": "ocupado", "agente_voz": "ocupado"},
-    "abandonada": {"discador": "abandonada", "agente_voz": "abandonada"},
-    "falha_rede": {"discador": "falha_rede", "agente_voz": "falha_rede"},
+_DIGITAIS: dict[str, dict[str, str]] = {
+    "cpc": {"whatsapp": "identidade_confirmada", "rcs": "identidade_confirmada", "sms": "identidade_confirmada",
+            "email": "identidade_confirmada"},
+    "sem_contato": {"whatsapp": "entregue", "rcs": "entregue", "sms": "entregue", "email": "entregue"},
+    "atendida_sem_cpc": {"whatsapp": "lido", "rcs": "lido", "sms": "entregue", "email": "abertura"},
+    "terceiro": {"whatsapp": "desconhece", "rcs": "desconhece", "sms": "desconhece", "email": "desconhece"},
+    "invalido": {"whatsapp": "sem_conta", "rcs": "nao_entregue", "sms": "nao_entregue", "email": "hard_bounce"},
+    "opt_out": {"whatsapp": "bloqueio", "sms": "opt_out", "email": "descadastro"},
+    # discagem (motor/discagem.py): promessa e recusa são CPC; recado, ocupado, abandonada e falha_rede só na voz
+    "promessa": {"whatsapp": "identidade_confirmada", "rcs": "identidade_confirmada", "sms": "identidade_confirmada",
+                 "email": "identidade_confirmada"},
+    "recusa": {"whatsapp": "identidade_confirmada", "rcs": "identidade_confirmada", "sms": "identidade_confirmada",
+               "email": "identidade_confirmada"},
 }
-CANAIS_VOZ = ("discador", "agente_voz")
+# a parte da voz (discador e agente virtual) vem da tabela única de desfechos (motor/voz.py)
+GENERICOS: dict[str, dict[str, str]] = {g: {**VOZ.GENERICOS_VOZ.get(g, {}), **_DIGITAIS.get(g, {})}
+                                        for g in dict.fromkeys([*_DIGITAIS, *VOZ.GENERICOS_VOZ])}
+CANAIS_VOZ = VOZ.CANAIS_VOZ
 DIAS_BUSCA_ESCOLHA = 3   # ocorrência de hoje pode ser de uma ação exportada até 3 dias antes
 CAMPOS_ESCOLHA = ("data", "id_cliente", "canal", "contato", "ordem_contato", "reserva", "regua", "cluster",
                   "estado", "persona", "frase_id", "frase_versao")

@@ -6,6 +6,8 @@ contato EXISTE, o que prova que ALGUÉM engajou e o que prova que é o CLIENTE.
 from dataclasses import dataclass
 from enum import IntEnum
 
+from . import voz as _voz
+
 
 class Nivel(IntEnum):
     INVALIDO = -1     # contato morto (hard bounce, número inexistente)
@@ -36,24 +38,6 @@ ENGAJ = 0.5     # engajamento: sinal fraco de titularidade
 
 C = Classificacao
 TAXONOMIA: dict[str, dict[str, Classificacao]] = {
-    "discador": {
-        "numero_inexistente": C(Nivel.INVALIDO),
-        "nao_atendida": C(Nivel.SEM_RETORNO),
-        "caixa_postal": C(Nivel.ENTREGUE),
-        "atendida_sem_cpc": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
-        "atendida_terceiro_desconhece": C(Nivel.ENGAJADO, contra_titular=TERCEIRO),
-        "cpc": C(Nivel.CERTIFICADO, pro_titular=CERT),
-        # discagem (motor/discagem.py): promessa e recusa são CPC (promessa NÃO é pagamento); recado é de
-        # alguém do círculo do titular; ocupado/abandono não dizem de quem é; falha de rede não penaliza;
-        # "não ligar" tira o número de todos os canais de voz (certificar_contatos expande voz:opt_out)
-        "promessa": C(Nivel.CERTIFICADO, pro_titular=CERT),
-        "recusa": C(Nivel.CERTIFICADO, pro_titular=CERT),
-        "recado": C(Nivel.ENGAJADO, pro_titular=ENGAJ),
-        "ocupado": C(Nivel.SEM_RETORNO),
-        "abandonada": C(Nivel.SEM_RETORNO),
-        "falha_rede": C(Nivel.SEM_RETORNO, ignorar=True),
-        "opt_out": C(Nivel.ENGAJADO, restricao="voz:opt_out"),
-    },
     "sms": {
         "nao_entregue": C(Nivel.INVALIDO),
         "entregue": C(Nivel.ENTREGUE),
@@ -98,12 +82,18 @@ TAXONOMIA: dict[str, dict[str, Classificacao]] = {
         "acesso_portal_autenticado": C(Nivel.CERTIFICADO, pro_titular=CERT),
     },
 }
-# Agente de voz (URA inteligente) devolve os mesmos resultados do discador,
-# mais a confirmação de identidade feita pelo próprio agente.
-TAXONOMIA["agente_voz"] = {
-    **TAXONOMIA["discador"],
-    "identidade_confirmada": C(Nivel.CERTIFICADO, pro_titular=CERT),
-}
+# Voz (discador e agente virtual): vem da tabela única de desfechos (motor/voz.py). O agente virtual devolve os
+# mesmos resultados do discador, mais a confirmação de identidade feita pelo próprio agente.
+_PESO = {None: 0.0, "CERT": CERT, "ENGAJ": ENGAJ, "TERCEIRO": TERCEIRO}
+
+
+def _da_voz(d) -> Classificacao:
+    return C(Nivel[d.nivel], pro_titular=_PESO[d.pro], contra_titular=_PESO[d.contra], restricao=d.restricao,
+             ignorar=d.ignorar)
+
+
+_VOZ = {c: {d.chave: _da_voz(d) for d in _voz.do_canal(c)} for c in _voz.CANAIS_VOZ}
+TAXONOMIA = {"discador": _VOZ["discador"], **TAXONOMIA, "agente_voz": _VOZ["agente_voz"]}   # a ordem de sempre
 
 
 # restrição que vale para mais de um canal

@@ -52,9 +52,33 @@ export type DiscagemExecResumo = {
 	};
 	renitencia?: { recusa?: number; promessa?: number; nao_ligar?: number };
 	horario_fora_por_uf?: Record<string, number>;
-	regras_desligadas?: string[];
-	mailing?: string[];
+	// O motor grava (rodar_dia.py): regras_desligadas = {resultado: linhas trocadas hoje}; mailing = nº de linhas
+	// do discador_mailing.csv. Execuções antigas podem ter lista; o leitor aceita as duas formas.
+	regras_desligadas?: Record<string, number> | string[];
+	mailing?: number | string[];
 };
+
+const REGRA_DESLIGADA: Record<string, string> = {
+	numero_inexistente: 'Bloqueio de inexistente desligado: “número inexistente” contou como falha de rede',
+	opt_out: 'Lista “não ligar” desligada: “não ligar” contou como atendida sem CPC',
+};
+
+/** Linhas de “Regras desligadas” a partir do que o motor grava ({resultado: quantidade} ou lista antiga). */
+export function linhasRegrasDesligadas(rd: DiscagemExecResumo['regras_desligadas']): string[] {
+	if (!rd) return [];
+	if (Array.isArray(rd)) return rd.map(String);
+	return Object.entries(rd)
+		.filter(([, n]) => Number(n) > 0)
+		.map(([k, n]) => `${REGRA_DESLIGADA[k] ?? k}: ${Number(n).toLocaleString('pt-BR')} ${Number(n) === 1 ? 'linha' : 'linhas'}`);
+}
+
+/** Linhas do mailing do discador: o motor grava a quantidade (número); execuções antigas, lista. */
+export function linhasMailing(m: DiscagemExecResumo['mailing']): string[] {
+	if (m === undefined || m === null) return [];
+	if (Array.isArray(m)) return m.map(String);
+	const n = Number(m);
+	return Number.isFinite(n) ? [`discador_mailing.csv: ${n.toLocaleString('pt-BR')} ${n === 1 ? 'linha' : 'linhas'} (um telefone por linha, na ordem de discagem)`] : [];
+}
 
 export type DiscagemProps = {
 	draft: Discagem;

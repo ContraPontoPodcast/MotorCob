@@ -21,7 +21,7 @@ TIPOS = ("ocorrencia", "acordo", "baixa")
 PASTA = {"ocorrencia": "ocorrencias", "acordo": "acordo", "baixa": "baixa"}
 NOME = {"ocorrencia": "ocorrência", "acordo": "acordo", "baixa": "pagamento"}
 ESPERA = "aguardando"
-RESULTADOS = ("cpc", "sem_contato", "terceiro", "opt_out")
+RESULTADOS = ("cpc", "sem_contato", "terceiro", "opt_out")   # = motor.voz.GENERICOS_SITE (CHECK do banco; teste)
 
 
 def _agora():
@@ -102,7 +102,7 @@ def aplicar(sb, eid, cid, pasta: Path, entrada, repo: bool, out=print):
     """Aplica o mapeamento do site sobre a entrada (arquivo do repositório ou layout automático).
     Devolve (entrada a usar, info). info: {"aguardando": {tipo: [arquivos]}, "codigos_novos": {código: linhas},
     "codigos_do_arquivo": {arquivo: [códigos novos]}, "sem_tabela": bool}."""
-    from motor.detectar import _resultado, ler
+    from motor.detectar import ler, sugestao_site
     from motor.entrada import data_do_arquivo
     from nuvem.supabase_api import ErroSupabase
     info = {"aguardando": {}, "codigos_novos": {}, "codigos_do_arquivo": {}, "sem_tabela": False}
@@ -188,7 +188,7 @@ def aplicar(sb, eid, cid, pasta: Path, entrada, repo: bool, out=print):
             antes = codigos.get(c[:200]) or {}
             linha = {"qtd": n, "primeira_vez": min(primeira[c], antes.get("primeira_vez") or primeira[c]),
                      "ultima_vez": max(ultima[c], antes.get("ultima_vez") or ultima[c]),
-                     "sugerido": do_repo.get(c) or _resultado(c), "visto_em": agora}
+                     "sugerido": do_repo.get(c) or sugestao_site(c), "visto_em": agora}
             if antes.get("id"):  # resultado/mapeado são do cliente: não mexe
                 if any(str(antes.get(k)) != str(v) for k, v in linha.items() if k != "visto_em"):
                     sb.atualizar("ocorrencia_codigos", {"id": f"eq.{antes['id']}"}, linha)
