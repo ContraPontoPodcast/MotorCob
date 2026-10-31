@@ -61,6 +61,8 @@ export default [
     route('empresas', 'routes/empresas.tsx'),
     route('jornada', 'routes/jornada.tsx'),
     route('jornada/lista', 'routes/jornada-lista.tsx'),
+    route('jornada/clientes', 'routes/jornada-clientes.tsx'),
+    route('jornada/painel', 'routes/jornada-painel.tsx'),
     route('jornada/cargas', 'routes/jornada-cargas.tsx'),
     route('jornada/carteiras', 'routes/jornada-carteiras.tsx'),
     route('jornada/momentos', 'routes/jornada-momentos.tsx'),

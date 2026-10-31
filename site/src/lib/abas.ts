@@ -95,6 +95,7 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 				abas: [
 					{ nome: 'Visão geral', to: '/jornada', icon: Map, exato: true },
 					{ nome: 'Lista do dia', to: '/jornada/lista', icon: ClipboardList },
+					{ nome: 'Clientes', to: '/jornada/clientes', icon: UsersRound, perm: PERM.verClientes },
 					{ nome: 'Cargas', to: '/jornada/cargas', icon: FileUp, perm: PERM.enviarArquivos },
 				],
 			},
@@ -104,6 +105,13 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Momentos e fases', to: '/jornada/momentos', icon: Route },
 					{ nome: 'Mensagens', to: '/jornada/mensagens', icon: MessageCircle },
 					{ nome: 'Carteiras', to: '/jornada/carteiras', icon: Landmark },
+				],
+			},
+			{
+				// Ações da Jornada moram aqui (tabela "Ações por canal"): a Jornada não tem aba Ações (Onda 3).
+				rotulo: 'Resultados',
+				abas: [
+					{ nome: 'Painel', to: '/jornada/painel', icon: ChartNoAxesCombined, perm: PERM.verPainel },
 				],
 			},
 		],

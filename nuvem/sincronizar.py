@@ -788,6 +788,23 @@ def _publicar_resultados_jornada(sb: Supabase, eid: int, cid: int, data: date, r
         out(f"  aviso: resultado da jornada não gravado ({str(e)[:120]})")
 
 
+HISTORICO_DIAS = 90   # histórico do cliente no site (Jornada › Clientes), decisão do dono na Onda 3
+
+
+def _publicar_historico_jornada(sb: Supabase, eid: int, cid: int, data: date, r: dict, out=print) -> None:
+    """Grava o dia de cada cliente com algo acontecendo (SQL 55) e apaga o que passou de 90 dias. Rodada repetida
+    no dia substitui o dia. Banco sem o SQL 55: avisa e a rodada segue."""
+    try:
+        base = {"empresa_id": f"eq.{eid}", "credor_id": f"eq.{cid}"}
+        sb.apagar("jornada_cliente_dia", {**base, "data": f"eq.{data.isoformat()}"})
+        sb.apagar("jornada_cliente_dia", {**base, "data": f"lt.{(data - timedelta(days=HISTORICO_DIAS)).isoformat()}"})
+        linhas = [{"empresa_id": eid, "credor_id": cid, "data": data.isoformat(), **l} for l in r.get("historico") or []]
+        for i in range(0, len(linhas), 1000):
+            sb.inserir("jornada_cliente_dia", linhas[i:i + 1000])
+    except Exception as e:  # noqa: BLE001
+        out(f"  aviso: histórico da jornada não gravado ({str(e)[:120]})")
+
+
 def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
     """Carteira da frente MotorCli: roda a jornada (rodar_jornada.py) e publica a Lista do dia, o
     enquadramento (jornada_cliente), as ações (acoes_dia) e os lotes da Mensageria, no mesmo lugar que o MotorCob."""
@@ -838,6 +855,7 @@ def _rodar_jornada(sb: Supabase, emp: dict, u: dict, data: date, baixados, out):
         n_arq = publicar_arquivos(sb, r["saida"], f"{emp['slug']}/{data.isoformat()}/{u['codigo']}", limpar=True)
         publicar_acoes(sb, eid, r, cid)
         _publicar_resultados_jornada(sb, eid, cid, data, r, out)
+        _publicar_historico_jornada(sb, eid, cid, data, r, out)
         try:   # medição da Jornada para o faturamento; nunca derruba a rodada
             from nuvem import faturamento
             n_cli = faturamento.publicar_clientes_jornada(sb, eid, cid, pasta, data, r["fila"])

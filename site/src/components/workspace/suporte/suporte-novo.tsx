@@ -14,6 +14,13 @@ const ACEITOS = ['.csv', '.txt', '.pdf', '.jpg', '.png', '.zip', '.xls', '.xlsx'
 
 function fmtTamanho(b: number) { return b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`; }
 
+/** O aviso "quer conhecer a área" (SQL 55) traz ?assunto=conhecer-<área>: vira o assunto em texto. */
+const CONHECER: Record<string, string> = { 'conhecer-cobranca': 'Quero conhecer Cobrança', 'conhecer-jornada': 'Quero conhecer Jornada do Cliente', 'conhecer-mensageria': 'Quero conhecer Mensageria' };
+function assuntoDoLink(a: string | null): string {
+  if (!a) return '';
+  return CONHECER[a] ?? a;
+}
+
 export function SuporteNovoPage() {
   const { empresa, perfil } = useMotorAuth();
   const navigate = useNavigate();
@@ -29,7 +36,7 @@ export function SuporteNovoPage() {
   const [anexarConversa, setAnexarConversa] = useState(true);
   const [motivo, setMotivo] = useState(assistentePayload?.motivo ?? params.get('motivo') ?? 'acesso');
   const [motivoOutro, setMotivoOutro] = useState('');
-  const [assunto, setAssunto] = useState(assistentePayload?.assunto ?? params.get('assunto') ?? '');
+  const [assunto, setAssunto] = useState(assistentePayload?.assunto ?? assuntoDoLink(params.get('assunto')));
   const [prioridade, setPrioridade] = useState<'normal' | 'alta'>('normal');
   const [descricao, setDescricao] = useState('');
   const [anexos, setAnexos] = useState<File[]>([]);
