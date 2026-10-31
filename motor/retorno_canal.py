@@ -26,7 +26,8 @@ desfaz inexistente e pausa anteriores):
   pode usar WhatsApp e voz) e é retestado depois de dias_rever (60).
 * WhatsApp inexistente: sem conta → sai do WhatsApp e é retestado depois de dias_rever (15).
 * E-mail inexistente (hard bounce): sai do e-mail.
-* Voz inexistente (número não existe): sai de todos os canais de telefone.
+* Voz inexistente com "bloquear"/"retestar": sai só da voz (SMS, RCS e WhatsApp seguem; decisão do dono,
+  31/10/2026). Tudo do celular só quando o SMS também falha (junção da escada).
 * Temporário: temporarios_pausa seguidos (sem positivo no meio) → pausa de dias_pausa no canal.
 * Bloqueio: sai do canal (vale até o cliente voltar a ser cadastrado; não é desfeito por entrega).
 * Trava de lote: arquivo com LOTE_MINIMO+ linhas e mais de limite_lote de "inexistente" é falha do
@@ -345,7 +346,7 @@ def ler_arquivo(arq: Path, canal: str, colunas: dict, marcas: dict[str, str], di
 def _restricoes_inexistente(canal: str) -> list[str]:
     return {"sms": ["sms:inexistente", "rcs:inexistente"], "rcs": ["rcs:sem_suporte"],
             "whatsapp": ["whatsapp:sem_conta"], "email": ["email:inexistente"],
-            "voz": [f"{c}:inexistente" for c in TELEFONE]}[canal]
+            "voz": [f"{c}:inexistente" for c in CANAIS_VOZ]}[canal]   # voz: só a voz (decisão do dono, 31/10/2026)
 
 
 def avaliar(registros: list[Registro], donos: dict[str, list[str]], hoje: date, regras: dict | None = None):

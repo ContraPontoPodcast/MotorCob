@@ -226,7 +226,8 @@ class Afinidade:
                     selecao[k] = e
             # Terceiro, contato inválido ou sem conta no app dizem algo sobre o
             # CONTATO, não sobre a preferência de canal do cliente.
-            if cl.contra_titular > 0 or cl.nivel == Nivel.INVALIDO or cl.restricao == "whatsapp:sem_conta":
+            if cl.contra_titular > 0 or cl.nivel == Nivel.INVALIDO or cl.restricao == "whatsapp:sem_conta" \
+                    or e.resultado == "inexistente_voz":
                 continue
             o = self.obs[(e.id_cliente, e.canal)]
             o[0] += cl.nivel >= Nivel.ENGAJADO
@@ -405,7 +406,7 @@ class NotaContatos:
 
 
 def nota_contatos(eventos: list[Evento], certs: dict[tuple[str, str], Certificacao], hoje: date,
-                  retornos_canal=None) -> NotaContatos:
+                  retornos_canal=None, sinais_voz=None) -> NotaContatos:
     """Nota de contato (É dele × Chega × Responde) com o histórico até ontem. Passadas lineares.
 
     - É dele    = Certificacao.score (titularidade, já com a evidência cruzada entre IDs da mesma pessoa).
@@ -416,12 +417,19 @@ def nota_contatos(eventos: list[Evento], certs: dict[tuple[str, str], Certificac
                   encolhido para Afinidade.prob_cpc do cliente (que já encolhe para a carteira e descarta o
                   viés da 1ª certificação). Retorno de canal não é tentativa; ocorrência sem contato
                   identificado (voz com vários números) não entra.
-    retornos_canal: [motor.retorno_canal.Registro] (contato, canal, marca, data)."""
+    retornos_canal: [motor.retorno_canal.Registro] (contato, canal, marca, data).
+    sinais_voz: [(contato, dia)] de número inexistente confirmado na voz (discagem.protecao_inexistente): cada dia
+    vale PESO_SINAL de uma falha de envio no Chega do número em SMS/RCS/WhatsApp (só no número, não na taxa da
+    carteira). Não restringe: uma entrega/clique depois devolve a confiança."""
     with sem_gc():
-        return _nota_contatos(eventos, certs, hoje, retornos_canal)
+        return _nota_contatos(eventos, certs, hoje, retornos_canal, sinais_voz)
 
 
-def _nota_contatos(eventos, certs, hoje, retornos_canal) -> NotaContatos:
+CANAIS_SINAL_VOZ = ("sms", "rcs", "whatsapp")
+PESO_SINAL_VOZ = 0.5
+
+
+def _nota_contatos(eventos, certs, hoje, retornos_canal, sinais_voz=None) -> NotaContatos:
     """Ver nota_contatos."""
     # retorno reimportado não conta duas vezes: a contagem é por dia (Chega e Responde) e a Afinidade deduplica
     eventos = [e for e in eventos if e.data < hoje]
@@ -445,6 +453,12 @@ def _nota_contatos(eventos, certs, hoje, retornos_canal) -> NotaContatos:
         t[0] += ok * w
         t[1] += w
     chega_base = {c: (k + 1.0) / (n + 1.0) for c, (k, n) in tot.items()}   # sem retorno nenhum: presume que chega
+    for contato, d in sinais_voz or ():
+        if d >= hoje:
+            continue
+        w = PESO_SINAL_VOZ * 0.5 ** (max((hoje - d).days, 0) / MEIA_VIDA_CHEGA)
+        for canal in CANAIS_SINAL_VOZ:
+            chega_obs[(contato, canal)][1] += w
     # Responde
     acoes = [e for e in eventos if not (e.fornecedor or "").startswith("canal:")]
     por_dia = {}

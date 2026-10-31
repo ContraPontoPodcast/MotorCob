@@ -19,6 +19,7 @@ Campos de cada desfecho:
   rotulo       nome que o cliente vê
   e_cpc        é contato (CPC) no padrão do playbook (regua.json › contato; o teste confere)
   conta_tentativa  conta como tentativa da régua e no Responde (hoje TODOS contam; mudar é decisão do dono)
+  interno      só o motor gera (ex.: inexistente_voz); fora do de-para e do site
   prova_existencia o número existe (alguém/algo atendeu ou a linha deu sinal): zera confirmações de inexistente
                    (usado pela proteção do inexistente; sem efeito até ela entrar)
 
@@ -47,6 +48,7 @@ class Desfecho:
     e_cpc: bool = False
     conta_tentativa: bool = True
     prova_existencia: bool = False
+    interno: bool = False        # só o motor gera (não é mapeável nem aparece no site)
 
 
 D = Desfecho
@@ -77,6 +79,9 @@ DESFECHOS: tuple[Desfecho, ...] = (
     D("falha_rede", "SEM_RETORNO", "Falha de rede", ignorar=True, curta="sempre", generico="falha_rede"),
     # "não ligar" tira o número de todos os canais de voz (certificar_contatos expande voz:opt_out)
     D("opt_out", "ENGAJADO", "Não ligar", restricao="voz:opt_out", generico="opt_out", prova_existencia=True),
+    # proteção do inexistente (discagem.inexistente.modo = "so_voz"): o número inexistente da voz não invalida o
+    # número na certificação; a voz do número fica em quarentena/encerrada por restrição (discagem.protecao_inexistente)
+    D("inexistente_voz", "SEM_RETORNO", "Número inexistente (só voz)", curta="sempre", interno=True),
     # o agente virtual também confirma a identidade
     D("identidade_confirmada", "CERTIFICADO", "Identidade confirmada", pro="CERT", canais=("agente_voz",),
       marca="clique", e_cpc=True, prova_existencia=True),

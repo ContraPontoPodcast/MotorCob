@@ -230,6 +230,22 @@ de outra pessoa pela certificação e a rotação segue.
   linha de origem: o limite por linha vira "linhas mínimas". Saída nova `saida/<dia>/discador_mailing.csv`
   (`DG.CAMPOS_MAILING`; nunca CPF/nome); `ids/discador.csv` não muda. Erro nas regras nunca segura a
   lista (sai como antes + alerta "DISCAGEM"). Resumo em r["discagem"].
+  **Número inexistente (decisão do dono, 31/10/2026; `discagem.inexistente`, `DG.protecao_inexistente`, antes de
+  `ajustar_eventos`):** modo `so_voz` (padrão; `invalida` = regra antiga): o inexistente da voz vira `inexistente_voz`
+  (não invalida o número na certificação; Afinidade ignora) e vale só para a voz, por (cliente, número): 1ª
+  confirmação = quarentena (`discador/agente_voz:suspenso`) por `reteste_dias` (7); 2ª em OUTRO dia (`confirmacoes`,
+  2) = voz encerrada no número para este cliente (`<voz>:inexistente`); prova de existência (`voz.PROVA_EXISTENCIA`:
+  caixa postal, ocupado, atendida…) zera; reteste sem conclusão renova a quarentena até `max_retestes` (3), depois
+  fica suspensa sem encerrar + alerta. Sinal para mensagens (`sinal_outros_canais`): cada dia de confirmação vale meia
+  falha de envio no Chega do número em SMS/RCS/WhatsApp (`nota_contatos(sinais_voz=)`; nunca restringe). Trava de
+  lote (os dois modos): arquivo × dia (e rota) com ≥ `trava_lote_minimo` (200; rota 50) chamadas e > 30% de
+  inexistente, ou > 2× a mediana de 14 dias do fornecedor e +10 p.p. → as confirmações viram falha de rede, alerta
+  "DISCAGEM: suspeita de falha da operadora" e aviso no sino da empresa (`sincronizar.aviso_lote_discagem`). Só
+  retornos a partir de `so_voz_desde` (2026-11-01): os anteriores seguem a regra antiga (número já inválido fica
+  inválido; `resumo.inexistente.anteriores_regra_antiga`); para reavaliá-los o credor põe uma data anterior. Vale
+  mesmo se as regras do credor falharem (padrão do regua.json); erro → regra antiga só na rodada + alerta. Não muda a
+  contagem de tentativas. Dia em aberto reprocessado usa o ciclo daquele dia (`DG.ciclo_inexistente`), não o de
+  hoje. `retorno_canal`: "bloquear"/"retestar" da voz também tiram só a voz.
 - `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
   = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
   Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias

@@ -48,7 +48,14 @@ PADRAO = {
     "descanso_nao_atende": {"ativo": False, "n": 6, "em_dias": 3, "descansa_dias": 7},
     "descanso_recusa": {"ativo": False, "dias": 7},
     "promessa_suspende": {"ativo": False, "dias_sem_data": 7},
-    "inexistente": {"ativo": True},
+    # inexistente (decisão do dono, 31/10/2026): só a voz (so_voz; "invalida" = regra antiga, número INVALIDO em
+    # tudo), 2 confirmações em dias diferentes, reteste em D+7 até 3 vezes e trava de lote (suspeita de rota)
+    # so_voz_desde: só os retornos a partir desta data seguem a regra nova; os de antes ficam como estavam (número já
+    # inválido continua inválido). Para reavaliar os antigos, o credor põe uma data anterior.
+    "inexistente": {"ativo": True, "modo": "so_voz", "so_voz_desde": "2026-11-01", "confirmacoes": 2, "reteste_dias": 7, "max_retestes": 3,
+                    "sinal_outros_canais": True, "aceita_tipo_b": True,
+                    "trava_lote_ativo": True, "trava_lote_minimo": 200, "trava_lote_fracao": 0.30,
+                    "trava_lote_relativa": 2.0, "trava_lote_pp_min": 0.10, "trava_rota_minimo": 50},
     "nao_ligar": {"ativo": True},
     "horarios": {"ativo": False, "tabela": None},   # desligado até o jurídico validar a prévia
     "chamadas_curtas": {"ativo": True, "aviso": 0.75, "corte_ativo": False, "corte": 0.80,
@@ -59,7 +66,11 @@ _SUB = {
     "descanso_nao_atende": {"ativo": bool, "n": (1, 50), "em_dias": (1, 60), "descansa_dias": (1, 365)},
     "descanso_recusa": {"ativo": bool, "dias": (1, 365)},
     "promessa_suspende": {"ativo": bool, "dias_sem_data": (1, 90)},
-    "inexistente": {"ativo": bool},
+    "inexistente": {"ativo": bool, "modo": ("so_voz", "invalida"), "so_voz_desde": "data", "confirmacoes": (1, 10), "reteste_dias": (1, 90),
+                    "max_retestes": (0, 10), "sinal_outros_canais": bool, "aceita_tipo_b": bool,
+                    "trava_lote_ativo": bool, "trava_lote_minimo": (1, 10 ** 6), "trava_lote_fracao": "fracao",
+                    "trava_lote_relativa": ("real", 1.0, 20.0), "trava_lote_pp_min": "fracao",
+                    "trava_rota_minimo": (1, 10 ** 6)},
     "nao_ligar": {"ativo": bool},
     "chamadas_curtas": {"ativo": bool, "aviso": "fracao", "corte_ativo": bool, "corte": "fracao",
                         "max_por_numero_dia": (1, 10 ** 6), "max_total_dia": (1, 10 ** 8),
@@ -105,6 +116,40 @@ def _fracao(v):
     if not 0 < x <= 1:
         raise ValueError("use uma porcentagem de 1 a 100")
     return round(x, 4)
+
+
+def _real(v, lo, hi):
+    if isinstance(v, bool) or v is None:
+        raise ValueError(f"use um número de {lo:g} a {hi:g}")
+    x = float(str(v).replace(",", "."))
+    if not lo <= x <= hi:
+        raise ValueError(f"use um número de {lo:g} a {hi:g}")
+    return round(x, 4)
+
+
+def _valor(v, regra):
+    """Valor de um campo de bloco pela regra: bool, "fracao", (lo, hi) inteiro, ("real", lo, hi) ou opções (texto)."""
+    if regra is bool:
+        return _bool(v)
+    if regra == "fracao":
+        return _fracao(v)
+    if regra == "data":
+        from datetime import datetime
+        t = str(v or "").strip()[:10]
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(t, fmt).date().isoformat()
+            except ValueError:
+                continue
+        raise ValueError("use uma data AAAA-MM-DD")
+    if regra[0] == "real":
+        return _real(v, regra[1], regra[2])
+    if isinstance(regra[0], str):
+        t = str(v).strip().lower()
+        if t not in regra:
+            raise ValueError("use " + " ou ".join(regra))
+        return t
+    return _inteiro(v, *regra)
 
 
 def _hora(s) -> str:
@@ -202,8 +247,7 @@ def normalizar(bruto, base: dict | None = None, onde: str = "discagem") -> tuple
                         av.append(f"{onde}/{k}: '{kk}' não existe (ignorado)")
                         continue
                     try:
-                        cfg[k][kk] = _bool(vv) if regra is bool else _fracao(vv) if regra == "fracao" \
-                            else _inteiro(vv, *regra)
+                        cfg[k][kk] = _valor(vv, regra)
                     except (TypeError, ValueError) as ex:
                         av.append(f"{onde}/{k}/{kk}: {ex} (vale {cfg[k][kk]!r})")
         except (TypeError, ValueError) as ex:
@@ -460,6 +504,220 @@ def renitencia(eventos: list, hoje: date, cfg: dict) -> tuple[dict, list, Counte
     for t in sem_voz.values():
         resumo["recusa" if t.startswith("recusou") else "promessa" if t.startswith("promessa") else "nao_ligar"] += 1
     return sem_voz, regs, resumo
+
+
+# ------------------------------------------------------------------ proteção do número inexistente
+CONFIRMA = "numero_inexistente"
+INEXISTENTE_VOZ = "inexistente_voz"           # só a voz (taxonomia: SEM_RETORNO; motor/voz.py)
+LOTE_TRAVADO = "falha_rede"                   # confirmação de lote travado: suspeita de rota, não diz nada do número
+RESTR_QUARENTENA = tuple(f"{c}:suspenso" for c in CANAIS_VOZ)
+RESTR_ENCERRADA = tuple(f"{c}:inexistente" for c in CANAIS_VOZ)
+
+
+class Protecao:
+    """Resultado da proteção do inexistente: restrições de voz por (cliente, número), sinais para o Chega dos
+    canais de mensagem, resumo (só contagens) e alertas."""
+
+    def __init__(self):
+        self.restricoes: dict[tuple[str, str], set] = {}
+        self.sinais: list[tuple[str, date]] = []
+        self.resumo: dict = {}
+        self.alertas: list[str] = []
+        self.cfg: dict | None = None     # modo so_voz: a config, para recalcular o ciclo num dia passado
+
+
+def _mediana(xs: list[float]) -> float:
+    xs = sorted(xs)
+    n = len(xs)
+    return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
+
+
+def _dispara(n: int, k: int, med, ic: dict, minimo: int) -> bool:
+    if n < minimo or not k:
+        return False
+    f = k / n
+    if f > ic["trava_lote_fracao"]:
+        return True
+    return med is not None and f > ic["trava_lote_relativa"] * med and f >= med + ic["trava_lote_pp_min"]
+
+
+def trava_lote(eventos: list, cfg: dict) -> tuple[set, list[dict]]:
+    """Trava de lote: arquivo × dia (e rota, se houver) com muitas confirmações de inexistente é suspeita de falha
+    da operadora/rota. Só avalia lote com ≥ trava_lote_minimo chamadas de voz (rota: trava_rota_minimo). Dispara
+    se a taxa passar de trava_lote_fracao, ou de trava_lote_relativa × a mediana dos últimos 14 dias do mesmo
+    fornecedor/layout e ao menos trava_lote_pp_min acima dela. Devolve (chaves travadas, informações)."""
+    ic = cfg["inexistente"]
+    if not ic["trava_lote_ativo"]:
+        return set(), []
+    lote = defaultdict(lambda: [0, 0])            # (fornecedor, arquivo, dia) -> [chamadas, confirmações]
+    rota = defaultdict(lambda: [0, 0])            # (fornecedor, arquivo, dia, rota) -> idem
+    por_dia = defaultdict(lambda: [0, 0])         # (fornecedor, dia) -> idem
+    for e in eventos:
+        if e.canal not in CANAIS_VOZ or (e.fornecedor or "").startswith("canal:"):
+            continue
+        k = (e.fornecedor or "", e.origem or "", e.data)
+        c = e.resultado == CONFIRMA
+        for chave, agg in ((k, lote), ((k[0], e.data), por_dia)):
+            agg[chave][0] += 1
+            agg[chave][1] += c
+        r = getattr(e, "rota", None)
+        if r:
+            rota[k + (r,)][0] += 1
+            rota[k + (r,)][1] += c
+    hist = defaultdict(dict)
+    for (forn, d), (n, k) in por_dia.items():
+        if n >= ic["trava_lote_minimo"]:
+            hist[forn][d] = k / n
+
+    def med(forn, d):
+        xs = [f for dd, f in hist[forn].items() if 1 <= (d - dd).days <= 14]
+        return _mediana(xs) if xs else None
+
+    travados, info = set(), []
+    for k, (n, c) in lote.items():
+        m = med(k[0], k[2])
+        if _dispara(n, c, m, ic, ic["trava_lote_minimo"]):
+            travados.add(k)
+            info.append({"arquivo": k[1] or k[0], "data": k[2].isoformat(), "chamadas": n, "inexistentes": c,
+                         "fracao": round(c / n, 4), "mediana_14d": None if m is None else round(m, 4), "rota": None})
+    for kr, (n, c) in rota.items():
+        k = kr[:3]
+        if k in travados:
+            continue
+        m = med(k[0], k[2])
+        if _dispara(n, c, m, ic, ic["trava_rota_minimo"]):
+            travados.add(kr)
+            info.append({"arquivo": k[1] or k[0], "data": k[2].isoformat(), "chamadas": n, "inexistentes": c,
+                         "fracao": round(c / n, 4), "mediana_14d": None if m is None else round(m, 4), "rota": kr[3]})
+    return travados, info
+
+
+def protecao_inexistente(eventos: list, hoje: date, cfg: dict) -> tuple[list, Protecao]:
+    """Número inexistente da voz (decisão do dono, 31/10/2026). Com `inexistente.ativo`:
+
+    1. trava de lote (os dois modos): confirmações de um lote suspeito viram falha de rede (não contam) + alerta;
+    2. modo "so_voz" (padrão): o inexistente NÃO invalida o número na certificação (vira inexistente_voz, sem
+       nível de inválido) e vale só para a voz, por (cliente, número):
+       - 1ª confirmação: voz em quarentena (`<voz>:suspenso`) por reteste_dias;
+       - 2ª confirmação em OUTRO dia (confirmacoes): voz encerrada no número para este cliente (`<voz>:inexistente`);
+       - prova de que o número existe (caixa postal, ocupado, qualquer atendida…) zera tudo;
+       - reteste sem conclusão (não atende, falha…) depois da quarentena: nova quarentena, até max_retestes;
+         esgotado, a voz fica suspensa sem encerrar e o motor alerta;
+       - sinal para SMS/RCS/WhatsApp (sinal_outros_canais): cada dia de confirmação vale meia falha de envio no
+         Chega do número nesses canais (nunca restringe; entrega/clique depois devolve a confiança).
+    Modo "invalida": a regra antiga (o inexistente invalida o número em todos os canais), só com a trava de lote.
+    Só vale para retornos a partir de `so_voz_desde`: os de antes seguem a regra antiga (número inválido continua
+    inválido; resumo["anteriores_regra_antiga"] conta quantos). Nunca muda a contagem de tentativas da régua.
+    Recalculado do histórico a cada rodada (idempotente)."""
+    from dataclasses import replace
+    p = Protecao()
+    ic = cfg["inexistente"]
+    if not ic["ativo"]:
+        return eventos, p
+    desde = date.fromisoformat(ic["so_voz_desde"])
+    travados, info = trava_lote([e for e in eventos if e.data >= desde], cfg)
+    so_voz = ic["modo"] == "so_voz"
+    saida, n_travadas, antigos = [], 0, set()
+    for e in eventos:
+        if e.canal in CANAIS_VOZ and e.resultado == CONFIRMA and e.data < desde \
+                and not (e.fornecedor or "").startswith("canal:"):
+            antigos.add((e.id_cliente, e.contato))           # antes da vigência: fica como estava (regra antiga)
+        elif e.canal in CANAIS_VOZ and e.resultado == CONFIRMA and not (e.fornecedor or "").startswith("canal:"):
+            k = (e.fornecedor or "", e.origem or "", e.data)
+            r = getattr(e, "rota", None)
+            if k in travados or (r and k + (r,) in travados):
+                e = replace(e, resultado=LOTE_TRAVADO)
+                n_travadas += 1
+            elif so_voz:
+                e = replace(e, resultado=INEXISTENTE_VOZ)
+        saida.append(e)
+    resumo = {"modo": ic["modo"], "desde": ic["so_voz_desde"], "lotes_travados": info,
+              "confirmacoes_travadas": n_travadas, "anteriores_regra_antiga": len({k for k in antigos if k[1]})}
+    for i in info:
+        med = "" if i["mediana_14d"] is None else f", mediana de 14 dias {_pct(i['mediana_14d'])}"
+        onde = f"arquivo {i['arquivo']}" + (f", rota {i['rota']}" if i["rota"] else "")
+        p.alertas.append(f"DISCAGEM: suspeita de falha da operadora: {_pct(i['fracao'])} de número inexistente em "
+                         f"{_n(i['chamadas'])} chamadas ({onde}, {date.fromisoformat(i['data']):%d/%m}{med}). "
+                         "Esses números NÃO foram invalidados (contam como falha técnica); confira a rota com o "
+                         "discador.")
+    if not so_voz:
+        p.resumo = resumo
+        return saida, p
+    p.cfg = cfg
+    p.restricoes, cont, sinais = ciclo_inexistente(saida, hoje, cfg)
+    if ic["sinal_outros_canais"]:
+        p.sinais = sorted(sinais)
+    resumo.update({"quarentena": cont["quarentena"], "em_reteste": cont["em_reteste"],
+                   "encerrados": cont["encerrados"], "sem_confirmacao": cont["sem_confirmacao"],
+                   "sinal_outros_canais": len({c for c, _ in p.sinais})})
+    if cont["sem_confirmacao"]:
+        p.alertas.append(f"DISCAGEM: {cont['sem_confirmacao']} número(s) com inexistente sem confirmação depois de "
+                         f"{ic['max_retestes']} reteste(s): a voz segue suspensa, sem encerrar. Confira com o "
+                         "discador (falha de rota ou aparelho desligado).")
+    p.resumo = resumo
+    return saida, p
+
+
+def ciclo_inexistente(eventos: list, hoje: date, cfg: dict) -> tuple[dict, Counter, set]:
+    """Ciclo de vida do inexistente da voz por (cliente, número), com os eventos JÁ ajustados por
+    protecao_inexistente (inexistente_voz) e o histórico até `hoje`: (restrições, contagens, sinais (número, dia)).
+    Separado para a rotina recalcular o estado de um dia passado (rodar_dia reprocessa os dias em aberto)."""
+    ic = cfg["inexistente"]
+    restricoes: dict[tuple[str, str], set] = {}
+    por = defaultdict(lambda: defaultdict(set))       # (cliente, número) -> dia -> {confirma, prova, outro}
+    for e in eventos:
+        if e.canal not in CANAIS_VOZ or not e.contato or e.data > hoje or (e.fornecedor or "").startswith("canal:"):
+            continue
+        d = V.POR_CHAVE.get(e.resultado)
+        tipo = "confirma" if e.resultado == INEXISTENTE_VOZ else "prova" if d is not None and d.prova_existencia \
+            else "outro"
+        por[(e.id_cliente, e.contato)][e.data].add(tipo)
+    passo = timedelta(days=ic["reteste_dias"])
+    cont = Counter()
+    sinais = set()
+    for k, dias in por.items():
+        conf, ult, ate, retestes, fim = 0, None, None, 0, None     # fim: "encerrada" | "esgotado"
+        for d in sorted(dias):
+            t = dias[d]
+            if "prova" in t:
+                conf, ult, ate, retestes, fim = 0, None, None, 0, None
+            elif "confirma" in t:
+                sinais.add((k[1], d))
+                if fim == "encerrada":
+                    continue
+                if conf == 0 or d != ult:
+                    conf += 1
+                    ult = d
+                    ate = d + passo
+                if conf >= ic["confirmacoes"]:
+                    fim = "encerrada"
+            elif conf and fim is None and ate is not None and d >= ate:
+                retestes += 1
+                if retestes >= ic["max_retestes"]:
+                    fim = "esgotado"
+                else:
+                    ate = d + passo
+        if fim == "encerrada":
+            restricoes[k] = set(RESTR_ENCERRADA)
+            cont["encerrados"] += 1
+        elif fim == "esgotado":
+            restricoes[k] = set(RESTR_QUARENTENA)
+            cont["sem_confirmacao"] += 1
+        elif conf and ate is not None and hoje < ate:
+            restricoes[k] = set(RESTR_QUARENTENA)
+            cont["quarentena"] += 1
+        elif conf:
+            cont["em_reteste"] += 1
+    return restricoes, cont, sinais
+
+
+def aplicar_restricoes_voz(certs: dict, restricoes: dict) -> dict:
+    """Junta as restrições da proteção do inexistente às certificações ({(id, contato): Certificacao})."""
+    for k, rs in (restricoes or {}).items():
+        c = certs.get(k)
+        if c is not None:
+            c.restricoes = set(c.restricoes) | rs
+    return certs
 
 
 def regras_voz(regras_canal: dict, cfg: dict) -> dict:

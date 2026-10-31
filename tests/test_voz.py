@@ -72,21 +72,25 @@ def _e_curta_antes(e, cc):
 
 class TestParidadeVoz(unittest.TestCase):
     def test_taxonomia_identica_e_na_mesma_ordem(self):
-        self.assertEqual(TAXONOMIA["discador"], ANTES_DISCADOR)
-        self.assertEqual(list(TAXONOMIA["discador"]), list(ANTES_DISCADOR))
-        self.assertEqual(TAXONOMIA["agente_voz"], ANTES_AGENTE)
-        self.assertEqual(list(TAXONOMIA["agente_voz"]), list(ANTES_AGENTE))
+        internos = {d.chave for d in V.DESFECHOS if d.interno}      # só o motor gera (proteção do inexistente)
+        disc = {k: v for k, v in TAXONOMIA["discador"].items() if k not in internos}
+        agente = {k: v for k, v in TAXONOMIA["agente_voz"].items() if k not in internos}
+        self.assertEqual(disc, ANTES_DISCADOR)
+        self.assertEqual(list(disc), list(ANTES_DISCADOR))
+        self.assertEqual(agente, ANTES_AGENTE)
+        self.assertEqual(list(agente), list(ANTES_AGENTE))
+        self.assertFalse(internos & {r for g in GENERICOS.values() for r in g.values()})
         self.assertEqual(list(TAXONOMIA), ["discador", "sms", "whatsapp", "rcs", "email", "agente_voz"])
 
     def test_renitencia_curtas_e_nao_atende(self):
         self.assertEqual(DG.MARCA_VOZ, ANTES_MARCA_VOZ)
-        self.assertEqual(set(DG.NAO_COMPLETADA), set(ANTES_NAO_COMPLETADA))
+        self.assertEqual(set(DG.NAO_COMPLETADA) - {"inexistente_voz"}, set(ANTES_NAO_COMPLETADA))
         self.assertEqual(set(V.NAO_ATENDE), set(ANTES_NAO_ATENDE))
         self.assertEqual(V.CURTA_SE_ABANDONO, ("abandonada",))
         self.assertTrue(set(DG.MARCA_VOZ.values()) <= set(MARCAS))
 
     def test_e_curta_igual_em_todos_os_desfechos(self):
-        for r in list(ANTES_AGENTE) + ["xpto"]:
+        for r in list(ANTES_AGENTE) + ["xpto"]:   # inexistente_voz (novo) é curta como o inexistente
             for dur in (None, 0, 6, 7, 120):
                 for ab in (True, False):
                     cc = {"segundos": 6, "abandono_conta": ab}

@@ -426,8 +426,19 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
     parcelas = carregar_parcelas(parcelas_csv)[0] if parcelas_csv else {}
     # discagem: regra desligada pelo cliente (inexistente, "não ligar") e renitência da voz (recusa, promessa,
     # "não ligar" sem número, descanso por "não atende" pelo retorno de canal)
-    sem_voz, reg_voz, resumo_disc = {}, [], {}
+    sem_voz, reg_voz, resumo_disc, prot = {}, [], {}, None
     regras_canal = regras_de(_ler_lista(canais), regras_retorno)
+    # número inexistente: só a voz, reteste e trava de lote (DG.protecao_inexistente). Protege o cliente: vale mesmo
+    # quando as regras do credor não puderam ser lidas (aí com o padrão do regua.json). Erro aqui nunca segura a
+    # lista: vale a regra antiga só nesta rodada (o histórico é relido amanhã) + alerta
+    try:
+        eventos, prot = DG.protecao_inexistente(eventos, hoje,
+                                                cfg_disc or DG.normalizar(regua.dados.get("discagem"))[0])
+        alertas_disc += prot.alertas
+    except Exception as ex:   # noqa: BLE001
+        prot = None
+        alertas_disc.append(f"DISCAGEM: proteção do número inexistente não aplicada hoje ({ex.__class__.__name__}: "
+                            f"{str(ex)[:120]}); vale a regra antiga só nesta rodada")
     if cfg_disc is not None:
         try:
             eventos_aj, trocados = DG.ajustar_eventos(eventos, cfg_disc)
@@ -439,6 +450,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
             sem_voz, reg_voz = {}, []
             alertas_disc.append(f"DISCAGEM: renitência não aplicada hoje ({ex.__class__.__name__}: {str(ex)[:120]}); "
                                 "a lista saiu como antes")
+    if prot is not None and prot.resumo:
+        resumo_disc["inexistente"] = prot.resumo
     # retorno de canal: vale só para a certificação/restrição dos contatos (fica fora da esteira e das personas)
     donos = defaultdict(list)
     for c in contatos:
@@ -450,7 +463,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
 
     def certificar(ev, dia):
         ev_c = [e for e in ev_canal if e.data <= dia] if dia < hoje else [e for e in ev_canal if e.data < hoje]
-        return aplicar_restricoes(certificar_contatos(ev + ev_c, dia, contatos, pessoa_de), restr_canal)
+        certs_ = aplicar_restricoes(certificar_contatos(ev + ev_c, dia, contatos, pessoa_de), restr_canal)
+        if prot is None:
+            return certs_
+        # dia em aberto (reprocessado): o ciclo do inexistente como estava naquele dia, não o de hoje
+        restr = prot.restricoes if dia >= hoje or prot.cfg is None else DG.ciclo_inexistente(ev, dia, prot.cfg)[0]
+        return DG.aplicar_restricoes_voz(certs_, restr)
     flags = {c["contato"]: {"whatsapp_valido": c["whatsapp_valido"], "atualizado_em": c["atualizado_em"]}
              for c in contatos}
     sinais = {(c["id_cliente"], c["contato"]): {k: c.get(k) for k in ("rcs", "nao_perturbe", "score_bureau",
@@ -493,7 +511,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
     ev_hoje = [e for e in eventos if e.data < hoje]
     certs_hoje = certificar(ev_hoje, hoje)
     try:
-        notas = nota_contatos(ev_hoje, certs_hoje, hoje, retornos_canal)
+        notas = nota_contatos(ev_hoje, certs_hoje, hoje, retornos_canal,
+                              sinais_voz=prot.sinais if prot is not None else None)
         with sem_gc():
             resumo_contato = notas.resumo_clientes(certs_hoje, set(clientes),
                                                    {k for k, s_ in sinais.items() if s_.get("pertence") == "nao"})
