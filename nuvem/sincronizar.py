@@ -1036,6 +1036,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                   "parcelas_pagas": rel_base.get("parcelas_pagas", 0)}
         sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
                      {"status": "ok", "terminada_em": agora(), "resumo": resumo, "alertas": r["alertas"]})
+        aviso_lote_discagem(sb, eid, cid, u.get("nome") or u.get("codigo") or "", r.get("discagem"), out)
         out(f"  nuvem: {len(r['estados'])} clientes · {n_trilha} eventos de trilha · {len(fila)} linhas de fila "
             f"· {n_arq} arquivos publicados")
         return {"execucao": execucao["id"], "resumo": resumo, "rodar": r}
@@ -1043,6 +1044,24 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         sb.atualizar("execucoes", {"id": f"eq.{execucao['id']}"},
                      {"status": "erro", "terminada_em": agora(), "erro": str(ex)[:2000]})
         raise
+
+
+def aviso_lote_discagem(sb, eid, cid, nome: str, discagem: dict | None, out=print) -> int:
+    """Trava de lote do número inexistente (motor/discagem.trava_lote) → aviso no sino da empresa, um por arquivo
+    e dia. Nunca levanta exceção (sem sino, segue; o alerta da Lista do dia já está lá)."""
+    from nuvem import avisos
+    n = 0
+    for i in ((discagem or {}).get("inexistente") or {}).get("lotes_travados") or []:
+        try:
+            onde = (i.get("arquivo") or "") + (f", rota {i['rota']}" if i.get("rota") else "")
+            n += avisos.criar(sb, "empresa", "Discagem: suspeita de falha da operadora",
+                              f"{nome}: {round(i['fracao'] * 100)}% de número inexistente em {i['chamadas']} "
+                              f"chamadas ({onde}, {i['data']}). Esses números não foram invalidados; confira a rota "
+                              "com o discador.", tipo="atencao", empresa_id=eid, link="/discagem",
+                              chave=f"discagem_lote:{cid}:{i['data']}:{i.get('arquivo')}:{i.get('rota') or ''}")
+        except Exception as ex:  # noqa: BLE001
+            out(f"  discagem: aviso de lote não gravado ({ex})")
+    return n
 
 
 def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, out=print,

@@ -147,10 +147,10 @@ class TestRegras(unittest.TestCase):
         self.assertEqual(sit[0]["ate"], (HOJE + timedelta(13)).isoformat())  # 15 dias a partir do SMS
         # atendeu / caixa postal depois: zera
         self.assertEqual(avaliar([R(T1, "voz", "inexistente", 4), R(T1, "voz", "entregue", 1)], donos, HOJE)[1], {})
-        # a empresa pode voltar ao "bloquear" na voz (tira o número de todos os canais de telefone)
+        # "bloquear" na voz tira o número só da voz (decisão do dono, 31/10/2026: SMS/RCS/WhatsApp seguem)
         regras = regras_de([{"canal": "discador", "regras_retorno": {"inexistente": "bloquear"}}])
         _, restr, _, _ = avaliar([R(T1, "voz", "inexistente", 2)], donos, HOJE, regras)
-        self.assertIn("sms:inexistente", restr[T1])
+        self.assertEqual(restr[T1], {"discador:inexistente", "agente_voz:inexistente"})
 
     def test_rcs_e_whatsapp_sem_suporte_sao_retestados(self):
         donos = {T1: ["A1"]}
