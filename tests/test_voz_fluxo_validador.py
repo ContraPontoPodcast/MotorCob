@@ -82,5 +82,30 @@ class TestValidadorFluxo(unittest.TestCase):
             self.assertIn("identidade_sem_conferencia:N2", V.pendencias(f(), {}, True, set()), cod)
 
 
+class TestVariaveisLineares(unittest.TestCase):
+    """variaveis()/trocar_variaveis() = regex do banco \\{\\{([^}]*)\\}\\}, sem o tempo quadrático do regex (CodeQL
+    py/polynomial-redos: o texto vem de quem edita o fluxo, pelo simulador)."""
+    RE_BANCO = re.compile(r"\{\{([^}]*)\}\}")
+
+    def test_mesmo_resultado_do_regex(self):
+        import random
+        rnd = random.Random(58)
+        fixos = ["", "{{", "}}", "{{}}", "{{ nome }}", "{{{nome}}}", "{{a}b}}", "{{a}}}}", "x{{a}}y{{ b }}z", "{{a}",
+                 "{{ {{x}} }}", "{ {a}}", "{{a\n}}", "}}{{", "{{{{"]
+        aleatorios = ["".join(rnd.choice("{}a ") for _ in range(rnd.randint(0, 14))) for _ in range(5000)]
+        for t in fixos + aleatorios:
+            self.assertEqual(V.variaveis(t), [m.strip(" \t\n\r") for m in self.RE_BANCO.findall(t)], repr(t))
+            self.assertEqual(V.trocar_variaveis(t, lambda n: f"<{n}>"), self.RE_BANCO.sub(lambda m: f"<{m.group(1)}>", t),
+                             repr(t))
+
+    def test_tempo_linear(self):
+        import time
+        for t in ("{{" * 100_000, "{{|" * 100_000, "{{" + "a}" * 100_000, "{" * 200_000 + "}"):
+            ini = time.perf_counter()
+            V.variaveis(t)
+            V.trocar_variaveis(t, lambda _: "")
+            self.assertLess(time.perf_counter() - ini, 1.0, t[:6])
+
+
 if __name__ == "__main__":
     unittest.main()

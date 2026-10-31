@@ -175,7 +175,7 @@ def erros_geracao(d, ctx: dict) -> list[str]:
         if b["tipo"] == "intencao" and any(i not in cat for i in b["params"]["intencoes"]):
             out.append(f"intencao_fora_catalogo:{b['id']}")
         for campo, txt in FV.textos_do_bloco(b):
-            if campo != "objetivo" and RE_OFERTA_FIXA.search(re.sub(r"\{\{[^}]*\}\}", "", txt.lower())):
+            if campo != "objetivo" and RE_OFERTA_FIXA.search(FV.trocar_variaveis(txt.lower(), lambda _: "")):
                 out.append(f"oferta_escrita_na_fala:{b['id']}")
         if b["tipo"] == "oferta" and not ctx.get("tem_alcada"):
             out.append(f"oferta_sem_alcada:{b['id']}")
