@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Monitor, Moon, Sun, HelpCircle, LayoutGrid } from 'lucide-react';
+import { Monitor, Moon, Sun, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError } from '@/lib/supabase';
-import { useFrente } from '@/components/frente-provider';
-import { FRENTES, type FrenteId } from '@/lib/frentes';
 import { ContaShell, cardShadow } from './conta-shell';
 
 type TemaPref = 'claro' | 'escuro' | 'sistema';
@@ -25,10 +23,8 @@ const AJUDAS: { id: AjudaPref; label: string; desc: string }[] = [
 
 export function ContaPreferenciasPage() {
   const { session } = useMotorAuth();
-  const { frentes } = useFrente();
   const [tema, setTema] = useState<TemaPref>('sistema');
   const [ajuda, setAjuda] = useState<AjudaPref>('automatica');
-  const [frentePref, setFrentePref] = useState<FrenteId | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -39,10 +35,9 @@ export function ContaPreferenciasPage() {
       try {
         const { data } = await supabase.rpc('minha_ajuda');
         if (!active) return;
-        const d = data as { tema?: string; ajuda?: string; frente_preferida?: string } | null;
+        const d = data as { tema?: string; ajuda?: string } | null;
         setTema((d?.tema === 'claro' || d?.tema === 'escuro' || d?.tema === 'sistema') ? d.tema as TemaPref : 'sistema');
         setAjuda((d?.ajuda === 'automatica' || d?.ajuda === 'sempre' || d?.ajuda === 'info' || d?.ajuda === 'off') ? d.ajuda as AjudaPref : 'automatica');
-        setFrentePref((d?.frente_preferida === 'motorcob' || d?.frente_preferida === 'motorcli') ? d.frente_preferida as FrenteId : null);
       } catch { /* defaults */ }
       if (active) setLoading(false);
     })();
@@ -63,14 +58,11 @@ export function ContaPreferenciasPage() {
     if (!supabase || !session) return;
     setBusy(true);
     const payload: Record<string, string> = { tema, ajuda };
-    if (frentePref) payload.frente_preferida = frentePref;
     const { error } = await supabase.from('perfis').update(payload).eq('id', session.user.id);
     setBusy(false);
     if (error) { toast.error(friendlyError(error)); return; }
     toast.success('Preferências salvas.');
   }
-
-  const temDuasFrentes = frentes.length > 1;
 
   return (
     <ContaShell>
@@ -123,28 +115,6 @@ export function ContaPreferenciasPage() {
                 ))}
               </div>
             </div>
-
-            {/* Área que abre primeiro */}
-            {temDuasFrentes && (
-              <div>
-                <div className="mb-3 flex items-center gap-2">
-                  <LayoutGrid size={16} className="text-[#8E8E93]" />
-                  <h3 className="text-[14px] font-semibold text-[#1D1D1F]">Área que abre primeiro</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {(Object.values(FRENTES) as { id: FrenteId; nome: string; area: string }[]).map(f => (
-                    <button
-                      key={f.id}
-                      onClick={() => setFrentePref(f.id)}
-                      className={`flex flex-col items-start gap-1 rounded-xl border-2 p-4 transition-colors ${frentePref === f.id ? 'border-[#1D1D1F] bg-[#F5F5F7]' : 'border-[#E5E5EA] hover:bg-[#F5F5F7]'}`}
-                    >
-                      <span className={`text-[14px] font-semibold ${frentePref === f.id ? 'text-[#1D1D1F]' : 'text-[#6E6E73]'}`}>{f.nome}</span>
-                      <span className="text-[12px] text-[#8E8E93]">{f.area}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
