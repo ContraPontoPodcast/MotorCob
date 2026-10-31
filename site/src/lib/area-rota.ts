@@ -41,7 +41,7 @@ export function areaDaRota(pathname: string): AreaRota {
 	// Cobrança (frente motorcob).
 	const cobrancaPrefixes = [
 		'/fila', '/clientes', '/acoes', '/envios', '/orquestracao', '/personas',
-		'/clusters', '/credores', '/canais', '/mapa', '/comite', '/painel',
+		'/clusters', '/credores', '/canais', '/discagem', '/mapa', '/comite', '/painel',
 		'/estrategias', '/estrategia',
 	];
 	if (cobrancaPrefixes.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'cobranca';
