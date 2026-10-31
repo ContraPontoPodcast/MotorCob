@@ -113,13 +113,30 @@ checar("SQL 57: a view de tarifação não tem cliente, destino nem códigos", T
 CH = (f"[{{\"empresa_id\": {EA}, \"credor_id\": {CA}, \"id_cliente\": \"C1\", \"id_acao\": \"A1\", \"id_chamada\": \"vza-0001\", "
       f"\"resultado\": \"promessa\", \"billsec\": 31, \"duracao_s\": 31, \"tech_prefix\": \"4321\", \"tronco_id\": {TA}, "
       f"\"destino_hash\": \"{H64}\", \"ocorrido_em\": \"2026-11-05T10:00:00-03:00\", "
-      f"\"encerrada_em\": \"2026-11-05T10:00:40-03:00\", \"custo_operadora\": 99, \"transferencia_resultado\": \"x\"}}]")
-checar("SQL 57: grava chamada", True, f"select voz_vm.gravar_chamadas('{CH}')", 1)
-checar("SQL 57: reenvio da mesma chamada não duplica", True,
+      f"\"encerrada_em\": \"2026-11-05T10:00:40-03:00\", \"canal\": \"agente_voz\", \"destino\": \"ia_humano\", "
+      f"\"transferencia\": \"atendida\", \"transferida_em\": \"2026-11-05T10:00:30-03:00\"}}]")
+CH_ANTIGA = CH.replace('"canal"', '"transferencia_resultado": "x", "canal"')   # o formato de antes do #152
+CH_TARIFA = CH.replace('"canal"', '"custo_operadora": 99, "canal"')
+checar("SQL 57: grava chamada (formato corrigido: transferencia, transferida_em, destino)", True,
+       f"select voz_vm.gravar_chamadas('{CH}')", 1)
+checar("SQL 57: reenvio da mesma chamada não duplica (empresa, id_chamada, canal)", True,
        f"select voz_vm.gravar_chamadas('{CH}'); select count(*) from voz_vm.chamadas_tarifacao where id_chamada = 'vza-0001'", 1)
-checar("SQL 57: tarifação é do gatilho (o custo mandado pela VM é ignorado)", True,
+checar("SQL 57: mesmo id_chamada em outro canal é outra linha", True,
+       f"select voz_vm.gravar_chamadas('{CH.replace('agente_voz', 'discador')}'); "
+       "select count(*) from voz_vm.chamadas_tarifacao where id_chamada = 'vza-0001'", 2)
+checar("SQL 57: a transferência fica nas colunas reais", True,
+       "select string_agg(transferencia || '|' || (transferida_em is not null) || '|' || destino, ',') "
+       "from public.voz_chamadas where id_chamada = 'vza-0001'", "atendida|true|ia_humano,atendida|true|ia_humano",
+       usuario="postgres")
+checar("SQL 57: tarifação é do gatilho", True,
        "select custo_operadora || '|' || segundos_tarifados || '|' || modo from voz_vm.chamadas_tarifacao "
-       "where id_chamada = 'vza-0001'", "0.05400|36|simulado")
+       "where id_chamada = 'vza-0001' and canal = 'agente_voz'", "0.05400|36|simulado")
+checar("SQL 57: coluna antiga (transferencia_resultado) é recusada, não ignorada", False,
+       f"select voz_vm.gravar_chamadas('{CH_ANTIGA}')",
+       erro="transferencia_resultado")
+checar("SQL 57: coluna de tarifação mandada pela VM é recusada (é do gatilho)", False,
+       f"select voz_vm.gravar_chamadas('{CH_TARIFA}')",
+       erro="custo_operadora")
 checar("SQL 57: grava consumo do dia", True,
        f"select voz_vm.gravar_consumo('[{{\"empresa_id\": {EA}, \"dia\": \"2026-11-05\", \"tech_prefix\": \"4321\", "
        f"\"chamadas\": 1, \"chamadas_atendidas\": 1, \"segundos_atendidos\": 31, \"segundos_tarifados\": 36, "
@@ -324,7 +341,8 @@ if PG is not None:
 
     reg = RegistroBanco(sb)
     e = EventoChamada(empresa_id=int(EA), id_cliente="C2", numero_discado="11988887770", data=date(2026, 11, 5),
-                      hora=time(11, 0), id_chamada="vza-0101", billsec=20, tech_prefix="4321", credor_id=int(CA))
+                      hora=time(11, 0), id_chamada="vza-0101", billsec=20, tech_prefix="4321", credor_id=int(CA),
+                      modo="teste")   # simulado não entra no consumo_voz (como consolidar_consumo_voz)
     e.desfecho = "cpc"
     reg.registrar(e)
     caso("VM: RegistroBanco grava voz_chamadas pelo acesso próprio", reg.descarregar() == 1 and reg.erros == 0, reg.erros)

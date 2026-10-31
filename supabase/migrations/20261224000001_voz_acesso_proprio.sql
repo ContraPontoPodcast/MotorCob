@@ -218,14 +218,33 @@ grant select on voz_vm.config, voz_vm.troncos, voz_vm.rotas, voz_vm.transferenci
                voz_vm.chamadas_tarifacao to motorcx_voz;
 
 -- ================================================================ 5. escrita: chamadas (upsert por empresa, id_chamada e canal)
--- A tarifação (rota, segundos, preço, custo) é do gatilho tarifar_chamada_voz: o que a VM mandar nessas colunas é
--- ignorado. Reenvio não apaga valor já gravado (coalesce). Modo ausente = o modo atual da empresa.
+-- O mesmo formato do modo chave (voz/banco.py › COLUNAS e CONFLITO, corrigido no #152): só colunas reais de
+-- voz_chamadas (transferencia, transferida_em, destino...) e upsert por (empresa_id, id_chamada, canal). Chave que não
+-- é coluna gravável é recusada, como o PostgREST recusa coluna inexistente: nada é ignorado em silêncio. A tarifação
+-- (rota, segundos, preço, custo, tarifada_em) é do gatilho tarifar_chamada_voz e a VM nunca manda (SO_DO_BANCO);
+-- mandar também é recusado. Reenvio não apaga valor já gravado (coalesce). Modo ausente = o modo atual da empresa.
 create or replace function voz_vm.gravar_chamadas(linhas jsonb) returns int
 language plpgsql security definer set search_path = '' as $$
-declare n int;
+declare n int; fora text;
 begin
     if jsonb_typeof(linhas) <> 'array' or jsonb_array_length(linhas) > 5000 then
         raise exception 'linhas: lista de até 5000 chamadas';
+    end if;
+    if exists (select 1 from jsonb_array_elements(linhas) e where jsonb_typeof(e) <> 'object') then
+        raise exception 'linhas: cada chamada é um objeto';
+    end if;
+    select string_agg(distinct k, ', ' order by k) into fora
+      from jsonb_array_elements(linhas) e, jsonb_object_keys(e) k
+     where k <> all (array['empresa_id', 'credor_id', 'lote_id', 'onda_id', 'id_chamada', 'canal', 'id_cliente',
+                           'id_acao', 'destino_mascara', 'destino_hash', 'tentativa', 'modo', 'provedor', 'conversa_ref',
+                           'ocorrido_em', 'atendida_em', 'encerrada_em', 'duracao_s', 'billsec', 'causa_sip',
+                           'causa_q850', 'dialstatus', 'amd', 'resultado_ia', 'resultado_operador', 'resultado',
+                           'origem_resultado', 'destino', 'identidade_confirmada', 'transferencia', 'transferida_em',
+                           'transferencia_id', 'minutos_ia', 'no_pico', 'tronco_id', 'tech_prefix', 'data_promessa',
+                           'valor_promessa', 'retorno_em', 'roteiro_id', 'roteiro_versao', 'tem_gravacao',
+                           'transcricao']);
+    if fora is not null then
+        raise exception 'colunas que a VM não grava em voz_chamadas: %', fora;
     end if;
     if exists (select 1 from jsonb_populate_recordset(null::public.voz_chamadas, linhas) r
                 where r.empresa_id is null or not voz_vm.tem_voz(r.empresa_id)) then

@@ -29,6 +29,8 @@ import ssl
 import urllib.error
 import urllib.request
 
+from voz import banco as B
+
 try:   # o driver só existe na imagem da VM (voz/requirements.txt); o resto do módulo não depende dele
     from pg8000.exceptions import InterfaceError as _ConexaoCaiu
 except ImportError:   # pragma: no cover
@@ -44,11 +46,13 @@ LEITURA = {
     "voz_contrato": "contrato", "voz_roteiros": "roteiros_em_uso", "voz_divisao_concorrencia": "divisao_concorrencia",
     "empresas": "empresas", "credores": "carteiras", "voz_chamadas": "chamadas_tarifacao",
 }
-# tabela -> função de escrita do schema voz_vm (a chave de conflito é dela; o parâmetro conflito é ignorado)
+# tabela -> função de escrita do schema voz_vm (o upsert é dela)
 ESCRITA = {
     "voz_chamadas": "gravar_chamadas", "consumo_voz": "gravar_consumo", "voz_gravacoes": "gravar_gravacoes",
     "fornecedor_saude": "gravar_saude", "voz_lotes": "gravar_lotes", "voz_ondas": "gravar_ondas",
 }
+# a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
+# chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual
 DEVOLVE_ID = ("voz_lotes", "voz_ondas")
 
 COLUNA = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
@@ -178,6 +182,8 @@ class AcessoProprio:
             return feitos if retornar else []
         if tabela not in ESCRITA:
             raise AcessoNegado(f"a VM de voz não grava em {tabela}")
+        if conflito and tabela in B.CONFLITO and conflito.replace(" ", "") != B.conflito(tabela):
+            raise ValueError(f"{tabela}: o upsert do acesso próprio é por ({B.conflito(tabela)}), não ({conflito})")
         saida = []
         for i in range(0, len(linhas), lote):
             corpo = json.dumps(linhas[i:i + lote], default=str, ensure_ascii=False)

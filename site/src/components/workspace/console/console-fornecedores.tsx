@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Plus, Info } from 'lucide-react';
 import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import { CANAIS_MSG } from '@/lib/empresa-helpers';
@@ -9,6 +10,9 @@ import { useConsolePerms } from './console-perms';
 import { FornecedorDrawer, MENSAGEM_COR } from './console-fornecedor-drawer';
 import { Negociacoes } from './console-negociacoes';
 import { Rotas } from './console-rotas';
+import { AgenteVirtualConsole } from './console-voz';
+
+const ABAS_FORN = ['fornecedores', 'negociacoes', 'rotas', 'voz'] as const;
 
 function canalNome(c: string) { return CANAIS_MSG.find(x => x.id === c)?.nome ?? c; }
 function canalCor(c: string) { return CANAIS_MSG.find(x => x.id === c)?.cor ?? '#8E8E93'; }
@@ -16,6 +20,15 @@ function canalCor(c: string) { return CANAIS_MSG.find(x => x.id === c)?.cor ?? '
 export function ConsoleFornecedoresPage() {
 	const { can, loading: permsLoading } = useConsolePerms();
 	const pode = can('gerenciar_fornecedores');
+	// Agente virtual (SQL 56): quem cuida dos troncos de voz ou liga o agente entra só nesta aba; quem não tem
+	// nenhuma das duas vê a aba em leitura, com o cadeado nas ações.
+	const podeVoz = can('gerenciar_troncos_voz') || can('ligar_voz_real');
+	const [params, setParams] = useSearchParams();
+	const abaUrl = params.get('aba');
+	const aba = !pode ? 'voz' : (ABAS_FORN as readonly string[]).includes(abaUrl ?? '') ? String(abaUrl) : 'fornecedores';
+	function trocarAba(v: string) {
+		setParams(prev => { const n = new URLSearchParams(prev); if (v === 'fornecedores') n.delete('aba'); else n.set('aba', v); return n; }, { replace: true });
+	}
 
 	const [fornecedores, setFornecedores] = useState<Row[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -30,7 +43,7 @@ export function ConsoleFornecedoresPage() {
 		if (error) setError(friendlyError(error));
 		setLoading(false);
 	}
-	useEffect(() => { void reload(); }, []);
+	useEffect(() => { if (pode) void reload(); else setLoading(false); }, [pode]);
 
 	async function toggleAtivo(forn: Row, on: boolean) {
 		if (!supabase) return;
@@ -45,7 +58,8 @@ export function ConsoleFornecedoresPage() {
 	if (!pode) {
 		return (
 			<ConsoleShell>
-				<div className="rounded-2xl bg-[#F5F5F7] px-6 py-12 text-center text-[14px] text-[#6E6E73]">Sua função não tem acesso a Fornecedores e rotas.</div>
+				{!podeVoz && <div className="mb-4 rounded-2xl bg-[#F5F5F7] px-5 py-4 text-[14px] text-[#6E6E73]">Sua função não tem acesso aos fornecedores de mensageria. Abaixo, o agente virtual em leitura.</div>}
+				<AgenteVirtualConsole />
 			</ConsoleShell>
 		);
 	}
@@ -54,11 +68,12 @@ export function ConsoleFornecedoresPage() {
 		<ConsoleShell>
 			{error && <div className="mb-4 rounded-xl bg-[#FFE8E6] px-4 py-3 text-[14px] text-[#FF3B30]">{error}</div>}
 
-			<Tabs defaultValue="fornecedores">
-				<TabsList className="mb-6">
+			<Tabs value={aba} onValueChange={trocarAba}>
+				<TabsList className="mb-6 max-w-full justify-start overflow-x-auto">
 					<TabsTrigger value="fornecedores">Fornecedores</TabsTrigger>
 					<TabsTrigger value="negociacoes">Negociações</TabsTrigger>
 					<TabsTrigger value="rotas">Rotas</TabsTrigger>
+					<TabsTrigger value="voz">Agente virtual</TabsTrigger>
 				</TabsList>
 
 				<TabsContent value="fornecedores">
@@ -109,6 +124,7 @@ export function ConsoleFornecedoresPage() {
 
 				<TabsContent value="negociacoes"><Negociacoes /></TabsContent>
 				<TabsContent value="rotas"><Rotas /></TabsContent>
+				<TabsContent value="voz"><AgenteVirtualConsole /></TabsContent>
 			</Tabs>
 
 			{drawer && <FornecedorDrawer fornecedor={drawer.forn} novo={drawer.novo} onClose={() => setDrawer(null)} onSaved={() => { setDrawer(null); void reload(); }} />}

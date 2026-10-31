@@ -2211,6 +2211,12 @@ checar("SQL 56: todas as tabelas de voz com RLS", True, "select count(*) from pg
 checar("SQL 56: RPCs de voz com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%voz%' or proname in ('guardar_gravacao','soltar_gravacao','abrir_pedido_titular','telefonia_csv','definir_concorrencia_contratada')) and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
 checar("SQL 56: anon não chama nenhuma RPC de voz", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%voz%' or proname in ('guardar_gravacao','soltar_gravacao','abrir_pedido_titular','telefonia_csv','insights_voz','definir_concorrencia_contratada')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
 
+# contrato entre o código da VM de voz (voz/) e o SQL 56, com o insert do modo chave e a tarifação pelo gatilho
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_contrato.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 56: contrato do código de voz com o banco (testar_voz_contrato.py)", True, f"select {r.returncode}", None, None, 0)
+
 # SQL 57 · acesso próprio das VMs de voz: entra como o papel motorcx_voz (login de verdade) em arquivo próprio
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_acesso.py")],
                    capture_output=True, text=True)

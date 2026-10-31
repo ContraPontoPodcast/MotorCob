@@ -6,6 +6,7 @@ import {
 	Building, Users, Plug, Receipt, ScrollText,
 	HeartPulse, Mail, TrendingUp, Filter,
 	CircleDollarSign, MessagesSquare, Phone,
+	Mic, Sparkles, PhoneCall,
 } from 'lucide-react';
 import type { AreaRota } from './area-rota';
 import { PERM } from './permissoes';
@@ -77,6 +78,8 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Painel', to: '/painel', icon: ChartNoAxesCombined, perm: PERM.verPainel },
 					{ nome: 'Mapa da esteira', to: '/mapa', icon: Map },
 					{ nome: 'Comitê', to: '/comite', icon: ShieldCheck, perm: PERM.baixarComite },
+					{ nome: 'Gravações', to: '/gravacoes', icon: Mic, perm: 'ouvir_gravacoes' },
+					{ nome: 'Insights de voz', to: '/insights-voz', icon: Sparkles },
 				],
 			},
 			{
@@ -152,6 +155,12 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Atendimento', to: '/mensageria/config/atendimento', icon: Settings },
 				],
 			},
+			{
+				// Agente de voz: lotes fora do layout por canal de mensagem (/mensageria/voz/...).
+				abas: [
+					{ nome: 'Agente virtual', to: '/mensageria/voz/lotes', icon: PhoneCall },
+				],
+			},
 		],
 	},
 	relatorios: {
@@ -179,6 +188,7 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Faturas', to: '/empresa/faturamento', icon: Receipt, perm: PERM.verFaturamento },
 					{ nome: 'Contratação', to: '/empresa/contratacao', icon: Receipt, permConsole: ['editar_contratacao', 'editar_precos'] },
 					{ nome: 'Auditoria', to: '/empresa/auditoria', icon: ScrollText, perm: PERM.verAuditoria },
+					{ nome: 'Privacidade e gravações', to: '/empresa/privacidade', icon: ShieldCheck },
 				],
 			},
 		],

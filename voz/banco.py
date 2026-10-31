@@ -1,8 +1,10 @@
 """Leitura das tabelas de voz (SQL 56: voz_troncos, voz_rotas, voz_transferencias, voz_chamadas, voz_config).
 
-As tabelas nascem em outra branch (claude/voz-banco). Aqui só há a INTERFACE descrita na seção 0 do plano e na
-lista V1–V25 do protótipo: o JSON que a VM busca do banco (uma lista de linhas por tabela) vira dataclasses.
-Se um nome de coluna mudar no SQL final, ajuste só o dicionário COLUNAS abaixo (campo interno -> coluna).
+O JSON que a VM busca do banco (uma lista de linhas por tabela, como o PostgREST devolve) vira dataclasses.
+COLUNAS (campo interno -> coluna) é o contrato com o SQL 56: supabase/testes/testar_voz_contrato.py aplica as
+migrações e confere que cada coluna daqui existe, com tipo compatível. Se um nome mudar no SQL, muda só aqui.
+Campo que não é coluna de voz_config: limite_simultaneas, que voz/configuracao.py traz de
+voz_divisao_concorrencia.limite (a concorrência contratada dividida pelo banco).
 
 Nenhuma coluna guarda senha: o tronco com autenticação por senha traz só `segredo_ref` (nome do segredo no
 Secret Manager), resolvido em voz/segredos.py na hora de gerar o pjsip.conf.
@@ -34,25 +36,33 @@ COLUNAS: dict[str, dict[str, str]] = {
     "voz_transferencias": {
         "id": "id", "empresa_id": "empresa_id", "destino_sip": "destino_sip", "metodo": "metodo",
         "tech_prefix": "tech_prefix", "cabecalhos": "cabecalhos", "tronco_id": "tronco_id", "ativo": "ativo",
+        "credor_id": "credor_id",
     },
     # V1, V16, V24
     "voz_config": {
-        "empresa_id": "empresa_id", "credor_id": "credor_id", "modo": "modo", "provedor": "provedor",
-        "limite_simultaneas": "limite_simultaneas", "pico_multiplo": "pico_multiplo",
+        "empresa_id": "empresa_id", "modo": "modo", "provedor": "provedor", "pico_multiplo": "pico_multiplo",
         "abandono_max_pct": "abandono_max_pct", "freio_ritmo_pct": "freio_ritmo_pct",
         "alo_fake_liberado": "alo_fake_liberado", "alo_fake": "alo_fake", "alo_fake_max_s": "alo_fake_max_s",
         "alo_fake_audio_ref": "alo_fake_audio_ref", "gravar": "gravar", "retencao_dias": "retencao_dias",
         "transcrever": "transcrever", "transcrever_min_segundos": "transcrever_min_segundos",
-        "bucket_gravacoes": "bucket_gravacoes",
+        "bucket_gravacoes": "bucket_gravacoes", "variaveis": "variaveis",
     },
-    # V21 / V24 / V25: uma linha por tentativa (o número discado não vai para o banco)
+    # V4: a divisão da concorrência contratada (view; a VM lê o limite de cada empresa)
+    "voz_divisao_concorrencia": {"empresa_id": "empresa_id", "limite": "limite"},
+    # V21 / V24 / V25: uma linha por tentativa (o número discado não vai para o banco). A tarifação (rota_id,
+    # segundos_tarifados, preco_minuto, custo_operadora) é do gatilho tarifar_chamada_voz: a VM só LÊ essas colunas.
     "voz_chamadas": {
         "empresa_id": "empresa_id", "credor_id": "credor_id", "id_cliente": "id_cliente", "id_acao": "id_acao",
-        "id_chamada": "id_chamada", "resultado": "resultado", "duracao_s": "duracao_s", "billsec": "billsec",
-        "tech_prefix": "tech_prefix", "rota_id": "rota_id", "segundos_tarifados": "segundos_tarifados",
-        "preco_minuto": "preco_minuto", "custo_operadora": "custo_operadora", "no_pico": "no_pico",
-        "transferencia_resultado": "transferencia_resultado", "tem_gravacao": "tem_gravacao",
-        "ocorrido_em": "ocorrido_em",
+        "id_chamada": "id_chamada", "canal": "canal", "modo": "modo", "provedor": "provedor",
+        "ocorrido_em": "ocorrido_em", "atendida_em": "atendida_em", "encerrada_em": "encerrada_em",
+        "duracao_s": "duracao_s", "billsec": "billsec", "causa_sip": "causa_sip", "causa_q850": "causa_q850",
+        "dialstatus": "dialstatus", "amd": "amd", "resultado_ia": "resultado_ia", "resultado": "resultado",
+        "origem_resultado": "origem_resultado", "destino": "destino", "identidade_confirmada": "identidade_confirmada",
+        "transferencia": "transferencia", "transferida_em": "transferida_em", "no_pico": "no_pico",
+        "tronco_id": "tronco_id", "tech_prefix": "tech_prefix", "data_promessa": "data_promessa",
+        "valor_promessa": "valor_promessa", "retorno_em": "retorno_em", "tem_gravacao": "tem_gravacao",
+        "rota_id": "rota_id", "segundos_tarifados": "segundos_tarifados", "preco_minuto": "preco_minuto",
+        "custo_operadora": "custo_operadora",
     },
     # V22: por empresa, dia e tech prefix
     "consumo_voz": {
@@ -63,13 +73,15 @@ COLUNAS: dict[str, dict[str, str]] = {
 }
 
 # chave de conflito (upsert) de cada tabela gravada pela VM
-CONFLITO = {"voz_chamadas": ("id_chamada",), "consumo_voz": ("empresa_id", "dia", "tech_prefix")}
+CONFLITO = {"voz_chamadas": ("empresa_id", "id_chamada", "canal"), "consumo_voz": ("empresa_id", "dia", "tech_prefix")}
+# colunas de voz_chamadas que só o gatilho do banco escreve (a VM nunca manda: reenvio não conflita com a tarifação)
+SO_DO_BANCO = {"voz_chamadas": ("rota_id", "segundos_tarifados", "preco_minuto", "custo_operadora")}
 
 
 def para_colunas(tabela: str, linha: dict) -> dict:
-    """Campos internos -> nomes de coluna do banco (o que não está no mapa não vai)."""
-    m = COLUNAS[tabela]
-    return {m[k]: v for k, v in linha.items() if k in m}
+    """Campos internos -> nomes de coluna do banco (o que não está no mapa, ou é só do banco, não vai)."""
+    m, fora = COLUNAS[tabela], SO_DO_BANCO.get(tabela, ())
+    return {m[k]: v for k, v in linha.items() if k in m and k not in fora}
 
 
 def conflito(tabela: str) -> str:
@@ -85,9 +97,16 @@ METODOS_TRANSFERENCIA = ("refer", "ponte")
 SEGREDO_REF = re.compile(r"^[A-Za-z0-9_\-/.]{1,120}$")
 TECH_PREFIX = re.compile(r"^[0-9]{1,8}$")
 HOST = re.compile(r"^[A-Za-z0-9.\-]{1,253}$")
-SIP_URI = re.compile(r"^sip:([A-Za-z0-9_.+\-]{1,64})@([A-Za-z0-9.\-]{1,253})(?::(\d{1,5}))?(?:;transport=(udp|tcp|tls))?$")
-CABECALHO = re.compile(r"^X-[A-Za-z0-9\-]{1,40}$")
+SIP_URI = re.compile(r"^sips?:([A-Za-z0-9_.+\-]{1,64})@([A-Za-z0-9.\-]{1,253})(?::(\d{1,5}))?(?:;transport=(udp|tcp|tls))?$")
+# cabeçalhos X-MotorCX que a transferência pode levar (voz_transferencias.cabecalhos, text[] com check no SQL 56)
+CABECALHOS_TRANSFERENCIA = ("X-MotorCX-Id-Chamada", "X-MotorCX-Id-Acao", "X-MotorCX-Acao", "X-MotorCX-Motivo")
 CODECS_OK = ("alaw", "ulaw", "g729", "g722", "opus", "gsm")
+# public.variaveis_voz() do SQL 56 (cópia de motor/voz.py › VARIAVEIS_VOZ: o contêiner do Asterisk leva só voz/,
+# sem o motor; tests/test_voz_gerador.py confere a paridade e testar_voz_contrato.py, a do banco). Nunca CPF.
+VARIAVEIS_VOZ = ("primeiro_nome", "credor", "saldo", "dias_atraso", "vencimento", "link_pagamento",
+                 "valor_minimo", "parcelas_max", "desconto_max")
+# voz_config.variaveis: o padrão do banco (o que vai ao provedor se a empresa não escolheu)
+VARIAVEIS_PADRAO = ("primeiro_nome", "credor", "link_pagamento")
 
 
 class DadosInvalidos(ValueError):
@@ -191,9 +210,10 @@ class Transferencia:
     destino_sip: str
     metodo: str = "refer"
     tech_prefix: str = ""
-    cabecalhos: dict = field(default_factory=dict)   # fixos (nunca CPF/nome/valor)
+    cabecalhos: tuple = CABECALHOS_TRANSFERENCIA      # quais X-MotorCX vão (nunca CPF/nome/valor)
     tronco_id: int | None = None                     # "ponte pelo tronco": sai pelo tronco da empresa
     ativo: bool = True
+    credor_id: int | None = None                     # nulo = a empresa toda
 
     @property
     def nome(self) -> str:
@@ -213,17 +233,20 @@ class Transferencia:
         return int(p) if p else 5060
 
     @property
+    def esquema(self) -> str:
+        return "sips" if self.destino_sip.startswith("sips:") else "sip"
+
+    @property
     def transporte(self) -> str:
-        return SIP_URI.match(self.destino_sip).group(4) or "udp"
+        return SIP_URI.match(self.destino_sip).group(4) or ("tls" if self.esquema == "sips" else "udp")
 
 
 @dataclass(frozen=True)
 class ConfigVoz:
     empresa_id: int
-    credor_id: int | None = None
     modo: str = "simulado"
     provedor: str = "simulador"
-    limite_simultaneas: int | None = None     # nulo = canais dos troncos
+    limite_simultaneas: int | None = None     # voz_divisao_concorrencia.limite; nulo = canais dos troncos
     pico_multiplo: int = 1                    # 1 = desligado, até 3
     abandono_max_pct: float = 3.0
     freio_ritmo_pct: float = 60.0
@@ -236,6 +259,7 @@ class ConfigVoz:
     transcrever: bool = True
     transcrever_min_segundos: int = 5
     bucket_gravacoes: str | None = None       # um bucket por empresa (criar_gcp.sh empresa <id> <dias>)
+    variaveis: tuple = VARIAVEIS_PADRAO       # quais variáveis_voz() a empresa manda ao provedor (só os nomes)
 
     @property
     def alo_fake_ativo(self) -> bool:
@@ -336,15 +360,25 @@ def ler_transferencia(linha: dict) -> Transferencia:
     tp = str(_v(linha, t, "tech_prefix", "") or "")
     if tp and not TECH_PREFIX.match(tp):
         raise DadosInvalidos(f"{onde}: tech_prefix '{tp}'")
-    cab = _v(linha, t, "cabecalhos", {}) or {}
-    for k, v in cab.items():
-        if not CABECALHO.match(k) or not re.match(r"^[A-Za-z0-9_.:\-/ ]{0,80}$", str(v)):
-            raise DadosInvalidos(f"{onde}: cabeçalho fixo inválido '{k}' (só X-..., valor curto sem caracteres "
-                                 "especiais)")
+    cab = ler_cabecalhos(_v(linha, t, "cabecalhos"), onde)
     tr = _v(linha, t, "tronco_id")
+    cred = _v(linha, t, "credor_id")
     return Transferencia(id=xid, empresa_id=_int(_v(linha, t, "empresa_id"), f"{onde}.empresa_id", 1),
-                         destino_sip=dest, metodo=met, tech_prefix=tp, cabecalhos=dict(cab),
-                         tronco_id=int(tr) if tr else None, ativo=_bool(_v(linha, t, "ativo"), True))
+                         destino_sip=dest, metodo=met, tech_prefix=tp, cabecalhos=cab,
+                         tronco_id=int(tr) if tr else None, ativo=_bool(_v(linha, t, "ativo"), True),
+                         credor_id=int(cred) if cred else None)
+
+
+def ler_cabecalhos(v, onde: str) -> tuple:
+    """voz_transferencias.cabecalhos (text[]): lista JSON do PostgREST ou literal do Postgres ('{a,b}'). Ausente =
+    os quatro (o padrão do banco); lista vazia = nenhum. Só os nomes do check do SQL 56, na ordem deles."""
+    if v is None:
+        return CABECALHOS_TRANSFERENCIA
+    v = _lista_texto(v, f"{onde}: cabecalhos")
+    fora = [x for x in v if x not in CABECALHOS_TRANSFERENCIA]
+    if fora:
+        raise DadosInvalidos(f"{onde}: cabeçalho fora da lista do banco: {', '.join(map(str, fora))}")
+    return tuple(x for x in CABECALHOS_TRANSFERENCIA if x in v)
 
 
 def ler_config(linha: dict) -> ConfigVoz:
@@ -352,11 +386,10 @@ def ler_config(linha: dict) -> ConfigVoz:
     eid = _int(_v(linha, t, "empresa_id"), "voz_config.empresa_id", 1)
     onde = f"voz_config[{eid}]"
     lim = _v(linha, t, "limite_simultaneas")
-    cred = _v(linha, t, "credor_id")
     return ConfigVoz(
-        empresa_id=eid, credor_id=int(cred) if cred else None, modo=str(_v(linha, t, "modo", "simulado")),
+        empresa_id=eid, modo=str(_v(linha, t, "modo", "simulado")),
         provedor=str(_v(linha, t, "provedor", "simulador")),
-        limite_simultaneas=_int(lim, f"{onde}.limite_simultaneas", 1) if lim is not None else None,
+        limite_simultaneas=_int(lim, f"{onde}.limite_simultaneas", 0) if lim is not None else None,
         pico_multiplo=_int(_v(linha, t, "pico_multiplo", 1), f"{onde}.pico_multiplo", 1, 3),
         abandono_max_pct=float(_v(linha, t, "abandono_max_pct", 3.0)),
         freio_ritmo_pct=float(_v(linha, t, "freio_ritmo_pct", 60.0)),
@@ -367,7 +400,32 @@ def ler_config(linha: dict) -> ConfigVoz:
         transcrever=_bool(_v(linha, t, "transcrever"), True),
         transcrever_min_segundos=_int(_v(linha, t, "transcrever_min_segundos", 5), f"{onde}.transcrever_min_segundos",
                                       0, 600),
-        bucket_gravacoes=_bucket(_v(linha, t, "bucket_gravacoes"), onde))
+        bucket_gravacoes=_bucket(_v(linha, t, "bucket_gravacoes"), onde),
+        variaveis=ler_variaveis(_v(linha, t, "variaveis"), onde))
+
+
+def ler_variaveis(v, onde: str) -> tuple:
+    """voz_config.variaveis (text[]): só nomes de variaveis_voz() (motor/voz.py › VARIAVEIS_VOZ), na ordem de lá.
+    Ausente = o padrão do banco; lista vazia = nenhuma."""
+    if v is None:
+        return VARIAVEIS_PADRAO
+    nomes = _lista_texto(v, f"{onde}: variaveis")
+    fora = [x for x in nomes if x not in VARIAVEIS_VOZ]
+    if fora:
+        raise DadosInvalidos(f"{onde}: variável fora de variaveis_voz(): {', '.join(map(str, fora))}")
+    return tuple(x for x in VARIAVEIS_VOZ if x in nomes)
+
+
+def _lista_texto(v, onde: str) -> list:
+    """text[] do banco: lista JSON do PostgREST ou literal do Postgres ('{a,b}')."""
+    if isinstance(v, str):
+        txt = v.strip()
+        if not (txt.startswith("{") and txt.endswith("}")):
+            raise DadosInvalidos(f"{onde} deve ser a lista do banco (text[])")
+        v = [x.strip().strip('"') for x in txt[1:-1].split(",") if x.strip()]
+    if not isinstance(v, (list, tuple)):
+        raise DadosInvalidos(f"{onde} deve ser a lista do banco (text[])")
+    return list(v)
 
 
 def _bucket(v, onde: str) -> str | None:

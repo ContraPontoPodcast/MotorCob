@@ -112,24 +112,32 @@ O plantão do orquestrador:
 - manda os eventos ao motor como **retorno de fornecedor** (envio tipo `retorno`, arquivo
   `motorcx_voz_*.csv` ou `motorcx_discador_*.csv`, lido pelos layouts `layouts/motorcx_*.json`).
 
+As variáveis da fala de cada cliente (primeiro nome, saldo, atraso, vencimento) vêm das colunas extras do
+`ids/agente_voz.csv` que o motor gera; `credor` é o nome da carteira (`credores.nome`). O plantão apaga os
+arquivos baixados logo depois de ler: os valores ficam só na memória da VM durante o lote e vão ao provedor na
+chamada. Vão só as variáveis que a empresa escolheu em `voz_config.variaveis`, sempre dentro de
+`variaveis_voz()`, e nunca o CPF. Nada disso vai para o banco, para os eventos ou para o log.
+
 Os segredos ficam só em `/run/motorcx`, que é memória. As gravações ficam em `/var/motorcx/gravacoes` até
 subirem para o bucket da empresa.
 
 **Provedores de voz da VM:**
-- `/etc/motorcx/provedores.json`: `{"montagem": {...}, "elevenlabs": {"numero_agente": "..."}}`;
+- `/etc/motorcx/provedores.json`: `{"montagem": {...}, "elevenlabs": {"numero_agente": "..."}}` (a chave
+  `montagem` atende quem tem `voz_config.provedor = 'montagem_motorcx'`);
 - `/etc/motorcx/provedores_sip.json`: o endpoint SIP da ElevenLabs.
 
 ## 5. Transferência para o discador do cliente
 
 **Importante:** a transferência por **REFER** (`voz_transferencias.metodo = 'refer'`) precisa ser validada com
 cada discador do cliente pelo botão **"Testar transferência"** antes de entrar em produção. Os discadores tratam
-REFER e os cabeçalhos X-MotorCX de jeitos diferentes. Esses cabeçalhos vão no Refer-To e levam:
-- o id da chamada;
-- o cliente;
-- a ação;
-- o motivo.
+REFER e os cabeçalhos X-MotorCX de jeitos diferentes. Esses cabeçalhos vão no Refer-To. Cada destino escolhe
+quais leva (`voz_transferencias.cabecalhos`; o padrão são os quatro):
+- `X-MotorCX-Id-Chamada`: o id da chamada;
+- `X-MotorCX-Id-Acao`: o id da ação do motor;
+- `X-MotorCX-Acao`: o canal da ação (`agente_voz` ou `discador`);
+- `X-MotorCX-Motivo`: o motivo da transferência.
 
-Nunca levam CPF, nome ou valor.
+Nunca levam CPF, nome ou valor. O destino da carteira vale antes do destino da empresa toda.
 
 Se o REFER falhar, a **ponte** entra automaticamente como alternativa: o MotorCX liga para o destino, com os
 mesmos cabeçalhos no INVITE, e junta as duas pernas.

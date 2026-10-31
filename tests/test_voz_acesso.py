@@ -133,11 +133,19 @@ class TestLeitura(unittest.TestCase):
 class TestEscrita(unittest.TestCase):
     def test_cada_tabela_tem_sua_funcao(self):
         sb, conn = acesso()
-        sb.inserir("voz_chamadas", [{"empresa_id": 1, "id_chamada": "c-0001", "id_cliente": "C1"}], conflito="id_chamada")
+        sb.inserir("voz_chamadas", [{"empresa_id": 1, "id_chamada": "c-0001", "id_cliente": "C1"}],
+                   conflito="empresa_id,id_chamada,canal")
         sb.inserir("consumo_voz", [{"empresa_id": 1, "dia": "2026-11-03"}], conflito="empresa_id,dia,tech_prefix")
         self.assertIn("voz_vm.gravar_chamadas(cast(:l as jsonb))", conn.chamadas[0][0])
         self.assertEqual(json.loads(conn.chamadas[0][1]["l"])[0]["id_chamada"], "c-0001")
         self.assertIn("voz_vm.gravar_consumo", conn.chamadas[1][0])
+
+    def test_conflito_e_o_do_banco(self):
+        """A chave do upsert é a de voz/banco.py › CONFLITO, nos dois acessos: outra chave é erro, não é ignorada."""
+        sb, conn = acesso()
+        with self.assertRaises(ValueError):
+            sb.inserir("voz_chamadas", [{"empresa_id": 1, "id_chamada": "c-0001"}], conflito="id_chamada")
+        self.assertEqual(conn.chamadas, [])
 
     def test_lotes_devolvem_id(self):
         sb, conn = acesso(ConexaoFalsa([[[41]]]))

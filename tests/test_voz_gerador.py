@@ -52,7 +52,7 @@ def dados_exemplo() -> dict:
         ],
         "voz_transferencias": [
             {"id": 7, "empresa_id": 1, "destino_sip": "sip:fila@203.0.113.50:5060", "metodo": "ponte",
-             "tech_prefix": "", "cabecalhos": {"X-Campanha": "cobranca"}},
+             "tech_prefix": "", "cabecalhos": ["X-MotorCX-Id-Chamada", "X-MotorCX-Id-Acao", "X-MotorCX-Motivo"]},
             {"id": 8, "empresa_id": 2, "destino_sip": "sip:8000@203.0.113.60", "metodo": "refer", "tronco_id": 20},
         ],
         "voz_config": [{"empresa_id": 1, "limite_simultaneas": 4, "pico_multiplo": 2, "provedor": "simulador"}],
@@ -96,7 +96,7 @@ class TestBanco(unittest.TestCase):
             ("voz_rotas", 0, {"tronco_id": 20}, "não existe na empresa"),
             ("voz_rotas", 0, {"prioridade": 10}, "fora de"),
             ("voz_transferencias", 0, {"destino_sip": "fila@host"}, "destino_sip"),
-            ("voz_transferencias", 0, {"cabecalhos": {"CPF": "1"}}, "cabeçalho"),
+            ("voz_transferencias", 0, {"cabecalhos": ["X-CPF"]}, "cabeçalho"),
             ("voz_config", 0, {"retencao_dias": 30}, "fora de"),
             ("voz_config", 0, {"pico_multiplo": 4}, "fora de"),
         ]
@@ -107,6 +107,76 @@ class TestBanco(unittest.TestCase):
                 with self.assertRaises(B.DadosInvalidos) as cm:
                     B.carregar(d)
                 self.assertIn(msg, str(cm.exception))
+
+    def test_cabecalhos_no_formato_do_banco(self):
+        """voz_transferencias.cabecalhos é text[] no SQL 56: lista do PostgREST ou literal do Postgres."""
+        todos = B.CABECALHOS_TRANSFERENCIA
+        self.assertEqual(B.ler_cabecalhos(None, "x"), todos)                        # ausente = padrão do banco
+        self.assertEqual(B.ler_cabecalhos([], "x"), ())                             # nenhum
+        self.assertEqual(B.ler_cabecalhos(["X-MotorCX-Motivo", "X-MotorCX-Id-Chamada"], "x"),
+                         ("X-MotorCX-Id-Chamada", "X-MotorCX-Motivo"))
+        self.assertEqual(B.ler_cabecalhos("{X-MotorCX-Id-Chamada,X-MotorCX-Id-Acao,X-MotorCX-Acao,X-MotorCX-Motivo}",
+                                          "x"), todos)
+        for ruim in ({"X-Campanha": "cobranca"}, "X-MotorCX-Motivo", ["X-MotorCX-Cliente"]):
+            with self.assertRaises(B.DadosInvalidos):
+                B.ler_cabecalhos(ruim, "x")
+        d = dados_exemplo()                                 # a linha como o banco devolve (com o default)
+        d["voz_transferencias"][0]["cabecalhos"] = list(todos)
+        d["voz_transferencias"][0]["credor_id"] = 7
+        tf = B.carregar(d).transferencias[0]
+        self.assertEqual((tf.cabecalhos, tf.credor_id), (todos, 7))
+
+    def test_variaveis_da_empresa_no_formato_do_banco(self):
+        """voz_config.variaveis é text[] (subconjunto de variaveis_voz()); a lista é a mesma do motor."""
+        from motor import voz as MV
+        self.assertEqual(B.VARIAVEIS_VOZ, MV.VARIAVEIS_VOZ)      # o contêiner do Asterisk leva só voz/
+        self.assertEqual(B.ler_variaveis(None, "x"), ("primeiro_nome", "credor", "link_pagamento"))
+        self.assertEqual(B.ler_variaveis("{saldo,primeiro_nome}", "x"), ("primeiro_nome", "saldo"))
+        self.assertEqual(B.ler_variaveis([], "x"), ())
+        for ruim in (["cpf"], "saldo", {"saldo": 1}):
+            with self.assertRaises(B.DadosInvalidos):
+                B.ler_variaveis(ruim, "x")
+        d = dados_exemplo()
+        d["voz_config"][0]["variaveis"] = ["saldo", "credor"]
+        self.assertEqual(B.carregar(d).config(1).variaveis, ("credor", "saldo"))
+        self.assertEqual(B.carregar(dados_exemplo()).config(9).variaveis, B.VARIAVEIS_PADRAO)
+
+    def test_destino_da_carteira_antes_do_da_empresa(self):
+        from types import SimpleNamespace as NS
+        from voz.orquestrador.nucleo import Orquestrador
+        d = dados_exemplo()
+        geral = dict(d["voz_transferencias"][0])
+        d["voz_transferencias"].append({**geral, "id": 70, "credor_id": 7, "destino_sip": "sip:cart7@203.0.113.61"})
+        dados = B.carregar(d)
+        destino = lambda chave: Orquestrador._destino_humano(NS(dados=dados), NS(empresa_id=1, lote_chave=chave))  # noqa: E731
+        self.assertEqual(destino((1, 7, "discador")).id, 70)          # a da carteira
+        self.assertEqual(destino((1, 8, "discador")).id, geral["id"])  # outra carteira: a da empresa toda
+        self.assertEqual(destino(()).id, geral["id"])
+
+    def test_sips_usa_tls(self):
+        d = dados_exemplo()
+        d["voz_transferencias"][0]["destino_sip"] = "sips:fila@discador.exemplo.com.br"
+        tf = B.carregar(d).transferencias[0]
+        self.assertEqual((tf.esquema, tf.transporte, tf.porta), ("sips", "tls", 5060))
+
+    def test_limite_vem_da_divisao_do_banco(self):
+        from voz import configuracao as CF
+
+        class Sb:
+            def __init__(self, divisao):
+                self.divisao = divisao
+
+            def selecionar(self, tabela, *a, **k):
+                d = dados_exemplo()
+                d["voz_config"].append({"empresa_id": 2})
+                return {"voz_divisao_concorrencia": self.divisao, "voz_contrato": [{"concorrencia_contratada": 9}]
+                        }.get(tabela, d.get(tabela))
+        d = CF.buscar(Sb([{"empresa_id": 1, "limite": 0}, {"empresa_id": 2, "limite": 3}]))
+        cfg = B.carregar(d)
+        self.assertEqual((cfg.config(1).limite_simultaneas, cfg.config(2).limite_simultaneas), (0, 3))
+        self.assertNotIn("limite_simultaneas", B.COLUNAS["voz_config"])          # não é coluna de voz_config
+        d = CF.buscar(Sb([]))                                                       # sem divisão: canais
+        self.assertIsNone(B.carregar(d).config(1).limite_simultaneas)
 
     def test_colunas_ajustaveis(self):
         """Se o SQL final renomear uma coluna, só o dicionário COLUNAS muda."""

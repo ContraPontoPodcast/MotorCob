@@ -2,10 +2,12 @@
 
   python3 -m voz.configuracao --saida /run/motorcx/voz.json [--provedores-sip /etc/motorcx/provedores_sip.json]
 
-Lê voz_troncos, voz_rotas, voz_transferencias, voz_config e voz_contrato (concorrência contratada) pelo acesso
-que a VM usa (voz/acesso.py: chave do servidor no piloto, papel motorcx_voz antes do modo real; só em memória).
-Valida tudo com voz/banco.py ANTES de gravar: configuração quebrada no banco não derruba o Asterisk que está no ar. Só grava se mudou (hash) e então sai com código 10, para o serviço
-da VM regerar o pjsip/dialplan dentro do contêiner e recarregar (infra/asterisk/vm/motorcx-voz-config).
+Lê voz_troncos, voz_rotas, voz_transferencias, voz_config, voz_contrato (concorrência contratada) e
+voz_divisao_concorrencia (o limite de cada empresa) pelo acesso que a VM usa (voz/acesso.py: chave do servidor no
+piloto, papel motorcx_voz antes do modo real; só em memória).
+Valida tudo com voz/banco.py ANTES de gravar: configuração quebrada no banco não derruba o Asterisk que está no
+ar. Só grava se mudou (hash) e então sai com código 10, para o serviço da VM regerar o pjsip/dialplan dentro do
+contêiner e recarregar (infra/asterisk/vm/motorcx-voz-config).
 Nenhuma senha passa por aqui: o banco só tem a referência do segredo.
 """
 from __future__ import annotations
@@ -32,6 +34,15 @@ def buscar(sb, provedores_sip: list | None = None) -> dict:
         contrato = []
     dados["voz_contrato"] = {"concorrencia_contratada": int(contrato[0].get("concorrencia_contratada") or 0)} \
         if contrato else {"concorrencia_contratada": 0}
+    # o limite de cada empresa é a parte dela no contratado, calculada pelo banco (voz_divisao_concorrencia)
+    try:
+        divisao = sb.selecionar("voz_divisao_concorrencia") or []
+    except Exception:   # noqa: BLE001 — sem a view: limite = canais dos troncos (como antes)
+        divisao = []
+    cd = B.COLUNAS["voz_divisao_concorrencia"]
+    limite = {int(d[cd["empresa_id"]]): d.get(cd["limite"]) for d in divisao}
+    for c in dados["voz_config"]:
+        c["limite_simultaneas"] = limite.get(int(c[B.COLUNAS["voz_config"]["empresa_id"]]))
     dados["provedores_sip"] = provedores_sip or []
     B.carregar(dados)            # valida (erro alto, nada é gravado)
     return dados
@@ -69,8 +80,9 @@ def main(argv=None, sb=None) -> int:
         Path(a.provedores_sip).exists() else []
     try:
         dados = buscar(sb or supabase_do_ambiente(), prov)
-    except B.DadosInvalidos as ex:
-        print(f"ERRO: configuração de voz inválida no banco (mantida a anterior): {ex}", file=sys.stderr)
+    except (B.DadosInvalidos, TypeError, AttributeError, KeyError) as ex:   # formato inesperado também não derruba
+        print(f"ERRO: configuração de voz inválida no banco (mantida a anterior): {ex.__class__.__name__}: {ex}",
+              file=sys.stderr)
         return 2
     mudou = gravar_se_mudou(dados, Path(a.saida))
     print(json.dumps({"mudou": mudou, **{t: len(dados[t]) for t in TABELAS}}, ensure_ascii=False))

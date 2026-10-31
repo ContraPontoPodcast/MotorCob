@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import queue
+import re
 import threading
 import urllib.error
 import urllib.request
@@ -113,13 +114,12 @@ class Conversa:
     def __init__(self, ctx: ContextoChamada, modelo, emitir: Emitir, roteiro: str, primeira_fala: str,
                  max_turnos: int = 40, hoje: date | None = None):
         self.ctx, self.modelo, self.emitir = ctx, modelo, emitir
-        self.primeira_fala = primeira_fala
+        self.primeira_fala = preencher(primeira_fala, ctx.variaveis)
         self.max_turnos, self.turnos = max_turnos, 0
         self.encerrada = False
         self.avisos: list[str] = []
         hoje = hoje or date.today()
-        variaveis = {k: str(v) for k, v in (ctx.variaveis or {}).items()}
-        sistema = roteiro.format_map(_Seguro(variaveis)) + (
+        sistema = preencher(roteiro, ctx.variaveis) + (
             f"\n\nHoje é {hoje:%d/%m/%Y}. Use só as ferramentas para registrar resultado, transferir ou encerrar. "
             "Nunca peça o CPF completo nem dados de cartão.")
         self.historico = [{"role": "system", "content": sistema}]
@@ -193,9 +193,14 @@ class Conversa:
             self.emitir(self.ctx.id_chamada, "encerrar", {})
 
 
-class _Seguro(dict):
-    def __missing__(self, k):
-        return "{" + k + "}"
+VARIAVEL = re.compile(r"\{\{\s*(\w+)\s*\}\}|\{(\w+)\}")
+
+
+def preencher(texto: str, variaveis: dict | None) -> str:
+    """Troca {{variavel}} (como o site grava o roteiro) e {variavel} pelos valores da chamada. Variável sem valor
+    fica como está (o roteiro mostra o que faltou); nada além do texto é avaliado."""
+    v = {k: str(x) for k, x in (variaveis or {}).items() if x not in (None, "")}
+    return VARIAVEL.sub(lambda m: v.get(m.group(1) or m.group(2), m.group(0)), texto or "")
 
 
 def montar_servicos_pipecat(cfg: ConfigMontagem, segredos) -> tuple:
@@ -271,7 +276,7 @@ class Montagem(ProvedorVoz):
     """Provedor 'montagem'. `roteiro_de(ctx) -> (roteiro, primeira_fala)`; `modelo_de()` -> modelo do LLM;
     `executor(sessao)` roda a sessão (padrão: um loop asyncio numa thread por processo). Os eventos da conversa
     são emitidos no tick() (thread do orquestrador), nunca de dentro da thread de áudio."""
-    codigo = "montagem"
+    codigo = "montagem_motorcx"          # voz_config.provedor (SQL 56)
 
     def __init__(self, cfg: ConfigMontagem, segredos, roteiro_de, modelo_de=None, executor=None, servicos=None):
         self.cfg, self.segredos, self.roteiro_de = cfg, segredos, roteiro_de
