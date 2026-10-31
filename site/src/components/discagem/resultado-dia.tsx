@@ -1,18 +1,18 @@
-import { filtrarAlertas, pct, type DiscagemExecResumo } from '@/lib/discagem';
+import { filtrarAlertas, linhasMailing, linhasRegrasDesligadas, type DiscagemExecResumo } from '@/lib/discagem';
 import { SectionCard } from './discagem-campos';
 
 export function ResultadoDia({ exec }: { exec: { resumo: DiscagemExecResumo | null; alertas: string[] } | null }) {
 	const resumo = exec?.resumo ?? null;
 	const alertas = exec?.alertas ?? [];
 
-	if (!exec || !resumo || (!resumo.renitencia && !resumo.horario_fora_por_uf && !resumo.regras_desligadas && !resumo.mailing && !resumo.chamadas_curtas)) {
+	if (!exec || !resumo || (!resumo.renitencia && !resumo.horario_fora_por_uf && resumo.regras_desligadas == null && resumo.mailing == null && !resumo.chamadas_curtas)) {
 		return <div className="rounded-xl border p-6 text-center text-[14px] text-[var(--base-texto-2)]" style={{ borderColor: 'var(--base-borda)', backgroundColor: 'var(--base-cartao)' }}>Sem execução: aparece depois da próxima lista do dia.</div>;
 	}
 
 	const ren = resumo.renitencia;
 	const hfu = resumo.horario_fora_por_uf ?? {};
-	const rd = resumo.regras_desligadas ?? [];
-	const mail = resumo.mailing ?? [];
+	const rd = linhasRegrasDesligadas(resumo.regras_desligadas);
+	const mail = linhasMailing(resumo.mailing);
 	const todosAlertas = filtrarAlertas(alertas, ['CHAMADAS CURTAS', 'DISCAGEM', 'HORÁRIO POR UF/DDD:', 'RENITÊNCIA:']);
 
 	return (

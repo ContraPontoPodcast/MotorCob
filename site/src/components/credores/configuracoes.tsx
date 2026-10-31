@@ -51,7 +51,14 @@ const CAMPOS: Record<TipoArquivo, CampoDef[]> = {
 	],
 };
 const TIPO_LABEL: Record<TipoArquivo, string> = { ocorrencia: 'Ocorrência', acordo: 'Acordo', baixa: 'Pagamento' };
-const SUGERIDO_LABEL: Record<string, string> = { cpc: 'CPC', terceiro: 'Número errado', opt_out: 'Não contatar', sem_contato: 'Sem contato' };
+const SUGERIDO_LABEL: Record<string, string> = { cpc: 'CPC', terceiro: 'Número errado', opt_out: 'Não contatar', sem_contato: 'Sem contato', invalido: 'Número inválido (layout fixo; marque)', promessa: 'Promessa (layout fixo)', recusa: 'Recusa (layout fixo)', recado: 'Recado (layout fixo)' };
+// Marcas que o banco aceita (ocorrencia_codigos.resultado). Sugestão fora delas (vinda do layout fixo do repositório,
+// ex.: invalido, promessa) é só informação: não é aceita com um clique, o cliente marca.
+const RESULTADOS_VALIDOS: readonly ResultadoOcorrencia[] = ['cpc', 'sem_contato', 'terceiro', 'opt_out'];
+function sugestaoAceitavel(s: string | null): ResultadoOcorrencia | null {
+	if (s == null) return 'sem_contato';
+	return (RESULTADOS_VALIDOS as readonly string[]).includes(s) ? (s as ResultadoOcorrencia) : null;
+}
 const RESULTADO_OPTS: { value: 'cpc' | 'terceiro' | 'opt_out'; label: string }[] = [
 	{ value: 'cpc', label: 'CPC' },
 	{ value: 'terceiro', label: 'Número errado / de outra pessoa' },
@@ -313,7 +320,8 @@ function AbOcorrencias({ credor, codigos, canEdit, setCodigos, onSaved }: {
 
 	async function aceitarSugestao(oc: OcorrenciaCodigo) {
 		if (!supabase) return;
-		const novo: ResultadoOcorrencia = (oc.sugerido as ResultadoOcorrencia) ?? 'sem_contato';
+		const novo = sugestaoAceitavel(oc.sugerido);
+		if (!novo) return;
 		setCodigos(prev => prev.map(c => c.id === oc.id ? { ...c, resultado: novo, mapeado: true } : c));
 		setBusyId(oc.id);
 		const { error } = await supabase.from('ocorrencia_codigos').update({ resultado: novo, mapeado: true, atualizado_em: nowISO() }).eq('id', oc.id);
@@ -323,12 +331,12 @@ function AbOcorrencias({ credor, codigos, canEdit, setCodigos, onSaved }: {
 
 	async function aceitarTodosNovos() {
 		if (!supabase) return;
-		const novos = codigos.filter(c => !c.mapeado);
+		const novos = codigos.filter(c => !c.mapeado && sugestaoAceitavel(c.sugerido));
 		if (!novos.length) return;
 		if (!window.confirm(`Aceitar a sugestão do MotorCX para os ${novos.length} resultados novos?`)) return;
 		setAceitando(true);
 		for (const oc of novos) {
-			const novo: ResultadoOcorrencia = (oc.sugerido as ResultadoOcorrencia) ?? 'sem_contato';
+			const novo = sugestaoAceitavel(oc.sugerido) ?? 'sem_contato';
 			const { error } = await supabase.from('ocorrencia_codigos').update({ resultado: novo, mapeado: true, atualizado_em: nowISO() }).eq('id', oc.id);
 			if (error) { toastError(error); break; }
 		}
@@ -380,7 +388,7 @@ function AbOcorrencias({ credor, codigos, canEdit, setCodigos, onSaved }: {
 													{opt.label}
 												</label>
 											))}
-											{!oc.mapeado && canEdit && (
+											{!oc.mapeado && canEdit && sugestaoAceitavel(oc.sugerido) && (
 												<button onClick={() => aceitarSugestao(oc)} disabled={busyId === oc.id} className="text-xs font-semibold text-[#0F4C5C] underline hover:text-[#0d4252] disabled:opacity-50">aceitar sugestão</button>
 											)}
 										</div>

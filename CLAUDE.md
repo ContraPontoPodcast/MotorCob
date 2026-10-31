@@ -385,7 +385,8 @@ de outra pessoa pela certificação e a rotação segue.
 - `nuvem/mapeamento.py`: mapeamento por credor feito no site (Credores → Configurações). O
   cliente aponta as colunas de ocorrência, acordo e pagamento (`mapeamento_arquivos`) e marca
   cada resultado de ocorrência (`ocorrencia_codigos`: cpc · terceiro · opt_out · sem marca =
-  sem_contato). O motor sugere, registra os códigos e SEGURA o que não está mapeado
+  sem_contato). O motor sugere (`detectar.sugestao_site`: sempre uma das 4 marcas do banco ou nada;
+  recado = sem contato; inválido fica sem sugestão; o site não aceita com um clique sugestão fora das 4), registra os códigos e SEGURA o que não está mapeado
   (`<tipo>/aguardando/`, envio com status `aguardando`); quando o cliente confirma, a vigia
   roda e relê tudo. Com `empresas/<slug>.json`, o arquivo já vale como mapeado.
 - Retorno de canal (`motor/retorno_canal.py`, `nuvem/retorno_canal.py`): arquivos dos fornecedores
