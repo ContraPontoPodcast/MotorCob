@@ -260,11 +260,12 @@ export function exportacaoSituacao(s: string): { label: string; cor: string } {
 }
 
 /** Detecta o produto ativo pela aba ou query. */
-export function produtoAtivo(query: string | null, modulos: { mensageria: boolean; orquestracao: boolean; jornada: boolean }): ProdutoRelatorio {
-	if (query === 'mensageria' && modulos.mensageria) return 'mensageria';
-	if (query === 'jornada' && modulos.jornada) return 'jornada';
-	if (query === 'orquestracao' && modulos.orquestracao) return 'orquestracao';
-	if (modulos.mensageria) return 'mensageria';
-	if (modulos.orquestracao) return 'orquestracao';
-	return 'jornada';
+/** Produto que a tela de Relatórios abre: o do ?produto= (se contratado); sem ele, Cobrança, depois Jornada,
+ *  depois Mensageria, conforme o que a empresa contratou (áreas liberadas, a mesma regra do menu). */
+export function produtoAtivo(query: string | null, contratado: Record<ProdutoRelatorio, boolean>): ProdutoRelatorio | null {
+	if ((query === 'orquestracao' || query === 'jornada' || query === 'mensageria') && contratado[query]) return query;
+	if (contratado.orquestracao) return 'orquestracao';
+	if (contratado.jornada) return 'jornada';
+	if (contratado.mensageria) return 'mensageria';
+	return null;
 }

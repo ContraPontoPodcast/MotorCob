@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { CloudUpload, FileSpreadsheet, UploadCloud, ChevronDown, ChevronUp, Landmark } from 'lucide-react';
 import { Empty, Loading, Notice, PageHeading } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
@@ -159,6 +159,28 @@ export function Uploads() {
 		setLoading(false);
 	}
 	useEffect(() => { void reload(); }, [empresa?.id]);
+
+	// ?carga=ID (Início › Para hoje › "Uma carga voltou com erro"): abre o relatório dessa carga.
+	const [params, setParams] = useSearchParams();
+	const cargaLink = params.get('carga');
+	useEffect(() => {
+		if (!cargaLink || !supabase || !empresa || loading) return;
+		const naLista = rows.find(r => String(r.id) === cargaLink);
+		let active = true;
+		(async () => {
+			let alvo: Row | null = naLista ?? null;
+			if (!alvo) {
+				const { data } = await supabase.from('envios').select('*').eq('empresa_id', empresa.id).eq('id', cargaLink).maybeSingle();
+				alvo = (data as Row | null) ?? null;
+			}
+			if (!active) return;
+			if (alvo) setSelected(alvo);
+			else setError('Não encontramos esta carga. Ela pode ter sido apagada.');
+			const n = new URLSearchParams(params); n.delete('carga'); setParams(n, { replace: true });
+		})();
+		return () => { active = false; };
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [cargaLink, empresa?.id, loading]);
 
 	const credorFixo = credores.length === 1;
 	const credorNome = (id: string | null) => id ? (credores.find(c => c.id === id)?.nome ?? '—') : 'Todas as carteiras';

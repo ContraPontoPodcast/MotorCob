@@ -72,7 +72,8 @@ export function Atendimento() {
 	const [rapidas, setRapidas] = useState<Row[]>([]);
 	const [colegas, setColegas] = useState<Row[]>([]);
 	const [outras, setOutras] = useState<Row[]>([]);
-	const [fila, setFila] = useState<Fila>('abertas');
+	// ?filtro=sem_dono (Início › Para hoje): abre nas conversas sem responsável.
+	const [fila, setFila] = useState<Fila>(searchParams.get('filtro') === 'sem_dono' ? 'sem_resp' : 'abertas');
 	const [fCanal, setFCanal] = useState<string>(canalParam && CANAIS_ATEND.includes(canalParam as typeof CANAIS_ATEND[number]) ? canalParam : 'all');
 	const [fClasse, setFClasse] = useState<string>('all');
 	const [busca, setBusca] = useState('');

@@ -65,7 +65,7 @@ export function DocsApiPage() {
           </div>
           <div>
             <p className="text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Autenticação</p>
-            <p className="mt-1.5 text-[15px] text-[#1D1D1F]">Cabeçalho <code className="rounded bg-[#F5F5F7] px-1.5 py-0.5 font-mono text-[13px]">Authorization: Bearer mc_...</code>. O token é criado em <strong>Minha conta › Tokens de API</strong>.</p>
+            <p className="mt-1.5 text-[15px] text-[#1D1D1F]">Cabeçalho <code className="rounded bg-[#F5F5F7] px-1.5 py-0.5 font-mono text-[13px]">Authorization: Bearer mc_...</code>. O token é criado em <strong>Empresa › Integrações</strong>, por quem cuida da API na sua empresa (o Admin, por padrão).</p>
           </div>
           <div>
             <p className="text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Limite</p>

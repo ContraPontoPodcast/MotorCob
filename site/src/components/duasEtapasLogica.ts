@@ -46,7 +46,7 @@ async function iniciarCadastro(sb, agora = /* @__PURE__ */ new Date()) {
   for (const f of abertos) {
     await sb.auth.mfa.unenroll({ factorId: f.id });
   }
-  const nome = `MotorCob ${agora.toISOString().slice(0, 19).replace("T", " ")}`;
+  const nome = `MotorCX ${agora.toISOString().slice(0, 19).replace("T", " ")}`;
   const d = await ok(sb.auth.mfa.enroll({ factorType: "totp", friendlyName: nome }));
   if (!d?.id || !d.totp?.qr_code || !d.totp.secret) {
     throw new ErroDuasEtapas("N\xE3o foi poss\xEDvel preparar o autenticador.", "enroll sem QR ou chave");

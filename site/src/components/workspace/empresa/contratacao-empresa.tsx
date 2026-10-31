@@ -4,6 +4,7 @@ import { X, Plus, Trash2, ChevronDown, Info } from 'lucide-react';
 import { supabase, moneyBR, dateBR, today, friendlyError, type Row } from '@/lib/supabase';
 import { SEGMENTOS, formatCNPJ, validarCNPJ, slugEmpresa, mesExtenso, dataLocal } from '@/lib/empresa-helpers';
 import { FRENTES, type FrenteId } from '@/lib/frentes';
+import { esquecerAreasLiberadas } from '@/hooks/use-areas-liberadas';
 import { Chave } from '@/components/workspace/console/chave';
 import { useConsolePerms } from '@/components/workspace/console/console-perms';
 import { ErrorDetail } from '@/components/error-detail';
@@ -403,7 +404,8 @@ export function ContratacaoEmpresa({
     const faltam: string[] = [];
     if (frentes.includes('motorcob') && !modulos.orquestracao) faltam.push('Orquestração');
     if (frentes.includes('motorcli') && !modulos.jornada) faltam.push('Jornada');
-    if (faltam.length) return `Marque o módulo do motor contratado: ${faltam.join(' e ')}.`;
+    // Empresa só de Mensageria: o motor fica gravado (o banco pede um), mas sem o módulo dele a área some do cliente.
+    if (faltam.length && !modulos.mensageria) return `Marque o módulo do motor contratado: ${faltam.join(' e ')}.`;
     if (formas.length === 0) return 'Escolha pelo menos uma forma de pagamento.';
     if (modeloPag === 'pre' && parseNum(recargaMinima) <= 0) return 'Informe a recarga mínima.';
     if (recargaAutomatica && !formas.includes('cartao')) return 'Recarga automática precisa do cartão de crédito nas formas aceitas.';
@@ -507,6 +509,7 @@ export function ContratacaoEmpresa({
       if (e1 || !empRow) { setError(`Falha ao criar empresa: ${errMsg(e1, 'tente novamente')}`); setBusy(false); return; }
       const empresaSalvaId = (empRow as Row).id as string;
       await salvarTudo(empresaSalvaId);
+      esquecerAreasLiberadas(empresaSalvaId);
       // convidar Admin
       const { error: eAdmin } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'convidar', email: emp.admin_email.trim(), nome: emp.admin_nome.trim(), papel: 'admin', empresa_id: empresaSalvaId } });
       if (eAdmin) { setError(`Empresa criada, mas falha ao convidar Admin: ${errMsg(eAdmin, 'tente novamente')}`); setBusy(false); return; }
@@ -535,6 +538,7 @@ export function ContratacaoEmpresa({
         await salvarPrecos(empresaId);
       } else {
         await salvarTudo(empresaId);
+        esquecerAreasLiberadas(empresaId);
       }
       setSuccess('Contratação salva.');
       setBusy(false);
@@ -562,6 +566,7 @@ export function ContratacaoEmpresa({
       ];
       const { error: eMo } = await supabase.from('empresa_modulos').upsert(modRows, { onConflict: 'empresa_id,modulo' });
       if (eMo) throw new Error(`Falha ao salvar módulos: ${eMo.message}`);
+      esquecerAreasLiberadas(empresaId);
       setCardStatus({ card: 'motor', success: 'Motor e módulos salvos.' });
       setResetSignal(s => s + 1);
     } catch (err) {

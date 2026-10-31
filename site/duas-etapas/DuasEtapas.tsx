@@ -115,7 +115,7 @@ export default function DuasEtapas({ supabase, passo, onPronto, onSair }: Props)
           <p style={s.sub}>Leia o código com o aplicativo autenticador (Google Authenticator, Microsoft Authenticator ou 1Password).</p>
           {cadastro ? (
             <>
-              <img src={cadastro.qr} alt="QR do autenticador MotorCob" width={200} height={200} style={s.qr} />
+              <img src={cadastro.qr} alt="QR do autenticador MotorCX" width={200} height={200} style={s.qr} />
               <div style={s.chave}>
                 <span>Ou digite a chave:</span>
                 <span style={s.codigoChave}>{chaveEmGrupos(cadastro.chave)}</span>
@@ -171,7 +171,7 @@ export default function DuasEtapas({ supabase, passo, onPronto, onSair }: Props)
         <p style={s.ajuda}>
           Confira se o relógio do celular está no automático e use o código que aparece agora no aplicativo. Se você
           trocou de celular ou apagou o aplicativo, peça a outro Admin da sua empresa para resetar a sua verificação em
-          Usuários › Resetar duas etapas, ou fale com o suporte MotorCob.
+          Usuários › Resetar duas etapas, ou fale com o suporte MotorCX.
         </p>
       )}
     </form>

@@ -10,7 +10,7 @@ import { AssistenteProvider } from '@/components/workspace/assistente/assistente
 import { AssistenteAvatar } from '@/components/workspace/assistente/assistente-avatar';
 import { AssistenteGaveta } from '@/components/workspace/assistente/assistente-gaveta';
 import { LateralIcones, useLarguraLateral } from '@/components/lateral-icones';
-import { MobileNavDrawer, AvatarMenu } from '@/components/platform-top-bar';
+import { MobileNavDrawer, AvatarMenu, CompanyPill } from '@/components/platform-top-bar';
 import { SinoAvisos } from '@/components/comuns/sino-avisos';
 import { CommandPalette } from '@/components/workspace/workspace-command-palette';
 import { useAreaLabel } from '@/components/tema-provider';
@@ -85,6 +85,8 @@ function TopoCartaoWorkspace({ onMenuClick }: { onMenuClick?: () => void }) {
 				)}
 				<Link to="/inicio" className="flex items-center gap-2 lg:hidden"><MarcaMotorCX /></Link>
 				<span className="hidden text-[13px] font-medium text-[var(--base-texto-3)] lg:block">{areaLabel}</span>
+				{/* Pílula da empresa (a mesma das áreas): a equipe escolhe a empresa também no Workspace. */}
+				<div className="hidden lg:block"><CompanyPill /></div>
 				<div className="ml-auto flex items-center gap-1">
 					<button onClick={() => setPaletteOpen(true)} className="hidden h-9 items-center gap-2 rounded-lg border px-3 text-[13px] hover:bg-[var(--base-fill)] lg:flex" style={{ borderColor: 'var(--base-borda)', backgroundColor: 'var(--base-fill)', color: 'var(--base-texto-3)' }}>
 						<Search size={15} />

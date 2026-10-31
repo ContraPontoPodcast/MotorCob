@@ -130,7 +130,7 @@ export function LateralIcones() {
 	const items: RailItem[] = [
 		{ area: 'cobranca', nome: 'Cobrança', icon: CircleDollarSign, to: '/fila', contratada: areasLib.cobranca },
 		{ area: 'jornada', nome: 'Jornada do Cliente', icon: Route, to: '/jornada', contratada: areasLib.jornada },
-		{ area: 'mensageria', nome: 'Mensageria', icon: MessagesSquare, to: `/mensageria/${areasLib.canalPadrao}`, contratada: areasLib.mensageria },
+		{ area: 'mensageria', nome: 'Mensageria', icon: MessagesSquare, to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
 		{ area: 'relatorios', nome: 'Relatórios', icon: FileChartColumn, to: '/relatorios', contratada: true },
 	];
 

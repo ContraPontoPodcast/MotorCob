@@ -6,6 +6,7 @@ import { useAssistente } from './assistente-context';
 import { supabase, dateBR, dateTimeBR, type Row } from '@/lib/supabase';
 import { rotaDaAcao, telaNome } from '@/lib/assistente';
 import { PageHeading } from '@/components/app-shell';
+import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
 
 type PerguntaRow = {
 	id: string;
@@ -30,6 +31,7 @@ function resultadoLabel(r: PerguntaRow): { texto: string; cor: string } {
 
 export function MinhasPerguntas() {
 	const { session, permissoes } = useMotorAuth();
+	const areasLib = useAreasLiberadas();
 	const { perguntar, abrirGaveta } = useAssistente();
 	const navigate = useNavigate();
 	const [lista, setLista] = useState<PerguntaRow[]>([]);
@@ -58,12 +60,12 @@ export function MinhasPerguntas() {
 	async function perguntarDeNovo(r: PerguntaRow) {
 		await perguntar(r.pergunta, 'conversa');
 		abrirGaveta();
-		navigate('/workspace');
+		navigate('/inicio');
 	}
 
 	function executarAcao(r: PerguntaRow) {
 		if (!r.acao) return;
-		const rota = rotaDaAcao(r.acao.id, permissoes);
+		const rota = rotaDaAcao(r.acao.id, permissoes, undefined, areasLib);
 		if (rota) navigate(rota);
 	}
 
@@ -108,7 +110,7 @@ export function MinhasPerguntas() {
 											<button onClick={() => void perguntarDeNovo(r)} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#D2D2D7] bg-white px-3 text-[12.5px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">
 												<RotateCw size={13} /> Perguntar de novo
 											</button>
-											{r.acao && (
+											{r.acao && rotaDaAcao(r.acao.id, permissoes, undefined, areasLib) !== null && (
 												<button onClick={() => executarAcao(r)} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#1D1D1F] px-3 text-[12.5px] font-semibold text-white hover:opacity-85">
 													{r.acao.rotulo} <ArrowRight size={13} />
 												</button>
@@ -147,7 +149,7 @@ export function MinhasPerguntas() {
 											<button onClick={() => void perguntarDeNovo(r)} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#D2D2D7] bg-white px-3 text-[12px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">
 												<RotateCw size={12} /> Perguntar de novo
 											</button>
-											{r.acao && (
+											{r.acao && rotaDaAcao(r.acao.id, permissoes, undefined, areasLib) !== null && (
 												<button onClick={() => executarAcao(r)} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#1D1D1F] px-3 text-[12px] font-semibold text-white hover:opacity-85">
 													{r.acao.rotulo} <ArrowRight size={12} />
 												</button>

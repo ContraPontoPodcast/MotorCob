@@ -78,7 +78,7 @@ export function Auditoria() {
   }
 
   return <>
-    <PageHeading title="Auditoria" description="Histórico de alterações no MotorCX." titleExtra={<Info slug="auditoria" />} actions={
+    <PageHeading semControles title="Auditoria" description="Histórico de alterações no MotorCX." titleExtra={<Info slug="auditoria" />} actions={
       <button onClick={exportarCSV} disabled={!rows.length} className="flex h-10 items-center gap-2 rounded-lg bg-[#1D1D1F] px-4 text-sm font-semibold text-white hover:bg-[#3a3a3c] disabled:opacity-40"><Download size={16}/> Exportar CSV</button>
     }/>
     <form onSubmit={aplicar} className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-[#E5E5EA] bg-white p-4">

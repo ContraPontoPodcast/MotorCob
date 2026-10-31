@@ -5,6 +5,7 @@
 import { supabase } from '@/lib/supabase';
 import { PERM } from '@/lib/permissoes';
 import { CANAL_STORAGE_KEY } from '@/lib/mensageria-produtos';
+import { areaDaRota } from '@/lib/area-rota';
 
 /** Endereço único do avatar do Assistente MotorCX (usado em todos os lugares). */
 export const AVATAR_ASSISTENTE =
@@ -61,7 +62,7 @@ export const ACOES_ROTA: Record<string, RotaAcao> = {
 	abrir_mensageria_painel: { rota: c => `/mensageria/${c}` },
 	abrir_campanhas: { rota: c => `/mensageria/${c}/campanhas` },
 	abrir_lotes: { rota: c => `/mensageria/${c}/lotes` },
-	abrir_respostas: { rota: c => `/mensageria/${c}/respostas` },
+	abrir_respostas: { rota: c => `/mensageria/atendimento?canal=${c}` },
 	abrir_templates: { rota: c => `/mensageria/${c}/templates` },
 	abrir_listas: { rota: c => `/mensageria/${c}/listas` },
 	abrir_config_mensageria: { rota: c => `/mensageria/${c}/config` },
@@ -75,7 +76,7 @@ export const ACOES_ROTA: Record<string, RotaAcao> = {
 	abrir_tokens_api: { rota: () => '/empresa/integracoes', perm: PERM.gerenciarApi },
 	abrir_documentacao: { rota: () => '/docs' },
 	abrir_permissoes: { rota: () => '/empresa/pessoas?aba=perfis', perm: PERM.gerenciarPermissoes },
-	abrir_auditoria: { rota: () => '/auditoria', perm: PERM.verAuditoria },
+	abrir_auditoria: { rota: () => '/empresa/auditoria', perm: PERM.verAuditoria },
 	abrir_chamado: { rota: () => '/suporte/novo', comPergunta: true },
 	abrir_jornada: { rota: () => '/jornada' },
 	abrir_jornada_lista: { rota: () => '/jornada/lista' },
@@ -93,13 +94,20 @@ export const ACOES_ROTA: Record<string, RotaAcao> = {
 	abrir_minhas_perguntas: { rota: () => '/assistente/minhas' },
 };
 
-/** Resolve a rota de uma ação; retorna null se o usuário não tem permissão. */
-export function rotaDaAcao(acaoId: string, permissoes: string[], pergunta?: string): string | null {
+/** Áreas contratadas (useAreasLiberadas) e canal padrão, para o Assistente não levar a tela de área fora do plano. */
+export type ContextoAcao = { cobranca: boolean; jornada: boolean; mensageria: boolean; canalPadrao?: string };
+
+/** Resolve a rota de uma ação; retorna null sem a permissão ou, com `areas`, se a tela é de área não contratada. */
+export function rotaDaAcao(acaoId: string, permissoes: string[], pergunta?: string, areas?: ContextoAcao): string | null {
 	const def = ACOES_ROTA[acaoId];
 	if (!def) return null;
 	if (def.perm && !permissoes.includes(def.perm)) return null;
-	const canal = ultimoCanal();
+	const canal = areas?.canalPadrao ?? ultimoCanal();
 	let rota = def.rota(canal);
+	if (areas) {
+		const a = areaDaRota(rota.split('?')[0]);
+		if ((a === 'cobranca' || a === 'jornada' || a === 'mensageria') && !areas[a]) return null;
+	}
 	if (def.comPergunta && pergunta) {
 		rota += `?assunto=${encodeURIComponent(pergunta.slice(0, 120))}`;
 	}
@@ -152,9 +160,10 @@ export function telaNome(pathname: string): string {
 		{ match: /^\/empresa\/modulos$/, nome: 'Empresa · Módulos' },
 		{ match: /^\/empresa\/faturamento$/, nome: 'Empresa · Faturas' },
 		{ match: /^\/empresa\/contratacao$/, nome: 'Empresa · Contratação' },
-		{ match: /^\/empresa$/, nome: 'Empresa · Dados e contatos' },
+		{ match: /^\/empresa\/integracoes\/\d+$/, nome: 'Empresa · Integrações · Uso do token' },
+		{ match: /^\/empresa$/, nome: 'Empresa · Visão geral' },
 		{ match: /^\/conta\/seguranca$/, nome: 'Minha conta · Segurança' },
-		{ match: /^\/conta\/tokens$/, nome: 'Minha conta · Tokens de API' },
+		{ match: /^\/conta\/tokens$/, nome: 'Empresa · Integrações' },
 		{ match: /^\/conta\/notificacoes$/, nome: 'Minha conta · Notificações' },
 		{ match: /^\/conta\/permissoes$/, nome: 'Minha conta · Permissões' },
 		{ match: /^\/conta$/, nome: 'Minha conta' },

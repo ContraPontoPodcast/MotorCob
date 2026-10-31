@@ -3,6 +3,7 @@ import { ABAS, abaAtiva, rotaCanal, type Aba, type GrupoAbas } from '@/lib/abas'
 import { useMotorAuth } from '@/components/auth-provider';
 import { useConsolePerms } from '@/components/workspace/console/console-perms';
 import type { AreaRota } from '@/lib/area-rota';
+import { useAreasLiberadas, type AreasLiberadas } from '@/hooks/use-areas-liberadas';
 
 type Props = {
 	area: AreaRota;
@@ -15,9 +16,11 @@ type Item =
 	| { kind: 'aba'; aba: Aba }
 	| { kind: 'grupo'; rotulo: string; abas: Aba[] };
 
-function visibleAbas(g: GrupoAbas, area: AreaRota, canal: string, permissoes: string[], can: (c: string) => boolean): Aba[] {
+function visibleAbas(g: GrupoAbas, area: AreaRota, canal: string, permissoes: string[], can: (c: string) => boolean, areas: AreasLiberadas, ehEquipe: boolean): Aba[] {
 	return g.abas.filter(a => {
 		if (a.excetoCanal && canal && a.excetoCanal.includes(canal)) return false;
+		if (a.requerArea && !areas[a.requerArea]) return false;
+		if (a.permConsole && (!ehEquipe || !a.permConsole.some(c => can(c)))) return false;
 		if (a.perm) {
 			if (area === 'console') { if (!can(a.perm)) return false; }
 			else { if (!permissoes.includes(a.perm)) return false; }
@@ -52,15 +55,16 @@ function TabItem({ aba, ativo, canal, badges }: { aba: Aba; ativo: boolean; cana
 /** Barra de abas de uma área. Grupos com rótulo viram uma aba; ao ativar, mostra subabas em pílula. */
 export function AbasTelas({ area, canal = '', badges }: Props) {
 	const areaAbas = ABAS[area];
-	const { permissoes } = useMotorAuth();
+	const { permissoes, perfil } = useMotorAuth();
 	const { can } = useConsolePerms();
+	const areasLib = useAreasLiberadas();
 	const loc = useLocation();
 
 	if (!areaAbas) return null;
 
 	const items: Item[] = [];
 	for (const g of areaAbas.grupos) {
-		const vis = visibleAbas(g, area, canal, permissoes, can);
+		const vis = visibleAbas(g, area, canal, permissoes, can, areasLib, !!perfil?.equipe);
 		if (vis.length === 0) continue;
 		// Grupo com rótulo e 2+ abas visíveis → uma aba de grupo.
 		// Grupo sem rótulo, ou com uma só aba visível → mostra a(s) aba(s) direto.

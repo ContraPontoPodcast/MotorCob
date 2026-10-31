@@ -113,7 +113,7 @@ export function DefinirSenhaForm({ mode }: Props) {
       }
       // Redefinição de senha: volta direto ao acesso.
       if (mode === 'redefinir') {
-        navigate(equipe ? '/workspace' : '/inicio', { replace: true });
+        navigate('/inicio', { replace: true });
         return;
       }
       // Convite: busca o nome da empresa para a tela de pronto.

@@ -1,11 +1,12 @@
+import { redirect } from 'react-router';
 import type { Route } from './+types/relatorios-novo';
-import { seo } from '@/lib/seo';
-import { MontarRelatorioNovo } from '@/components/relatorios/montar-relatorio-novo';
 
-export function meta({ matches, location }: Route.MetaArgs) {
-	return seo({ matches, location }, { title: 'Montar relatório · MotorCX', description: 'Monte um relatório para a sua empresa.', noindex: true });
+// O montador abre dentro de Relatórios (mesmo do botão "Montar relatório"); o produto do link é mantido.
+export function clientLoader({ request }: Route.ClientLoaderArgs) {
+	const de = new URL(request.url).searchParams;
+	const para = new URLSearchParams({ montar: '1' });
+	const produto = de.get('produto');
+	if (produto) para.set('produto', produto);
+	return redirect(`/relatorios?${para.toString()}`);
 }
-
-export default function RelatoriosNovo() {
-	return <MontarRelatorioNovo />;
-}
+export default function RelatoriosNovoRedirect() { return null; }

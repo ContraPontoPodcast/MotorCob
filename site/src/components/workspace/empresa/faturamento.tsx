@@ -94,6 +94,8 @@ export function FaturamentoPage() {
   const [acordos, setAcordos] = useState<Row[]>([]);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // ?fatura=ID (Início › Para hoje, aviso no sino): destaca a fatura e rola até ela.
+  const faturaDestaque = searchParams.get('fatura');
 
   const isPre = painel?.modelo === 'pre';
 
@@ -309,6 +311,7 @@ export function FaturamentoPage() {
             ) : (
               <>
                 <FaturaAbertaCard
+                  destaque={faturaDestaque}
                   fatura={faturaAbertaEmAcordo ? null : faturaAberta}
                   formas={formas}
                   pagamento={pagamento}
@@ -329,6 +332,7 @@ export function FaturamentoPage() {
               </>
             ) : (
               <FaturasAnteriores
+                destaque={faturaDestaque}
                 faturas={(painel.faturas as Row[]) ?? []}
                 acordosConcluidos={acordosConcluidos}
                 onDemonstrativo={demonstrativo}
@@ -373,7 +377,18 @@ export function FaturamentoPage() {
 
 // ============================ Fatura em aberto ============================
 
-function FaturaAbertaCard({ fatura, formas, pagamento, pagando, podePagar, onPagar, onDemonstrativo }: {
+/** Rola até a fatura do link (?fatura=ID), uma vez, quando ela aparece na tela. */
+function useRolarAteFatura(destaque: string | null | undefined, n: number) {
+  const feito = useRef(false);
+  useEffect(() => {
+    if (!destaque || feito.current || n === 0) return;
+    const el = document.getElementById(`fatura-${destaque}`);
+    if (el) { feito.current = true; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  }, [destaque, n]);
+}
+
+function FaturaAbertaCard({ fatura, formas, pagamento, pagando, podePagar, onPagar, onDemonstrativo, destaque }: {
+  destaque?: string | null;
   fatura: Row | null;
   formas: string[];
   pagamento: Pagamento | null;
@@ -382,6 +397,7 @@ function FaturaAbertaCard({ fatura, formas, pagamento, pagando, podePagar, onPag
   onPagar: (id: string, forma: 'boleto' | 'pix' | 'cartao') => void;
   onDemonstrativo: (id: string) => void;
 }) {
+  useRolarAteFatura(destaque, fatura ? 1 : 0);
   if (!fatura) {
     return (
       <section className="rounded-2xl bg-white p-8 text-center" style={{ boxShadow: cardShadow }}>
@@ -403,8 +419,9 @@ function FaturaAbertaCard({ fatura, formas, pagamento, pagando, podePagar, onPag
   // formas padrão: boleto e pix sempre disponíveis; cartão só se aceito
   const formasAtivas: string[] = formas.length ? formas : ['boleto', 'pix'];
 
+  const emDestaque = !!destaque && String(fatura.id) === destaque;
   return (
-    <section className="rounded-2xl bg-white p-6" style={{ boxShadow: cardShadow }}>
+    <section id={`fatura-${fatura.id}`} className="rounded-2xl bg-white p-6" style={{ boxShadow: emDestaque ? '0 0 0 2px #FF9500, 0 2px 12px rgba(0,0,0,.04)' : cardShadow }}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[13px] text-[#6E6E73]">Fatura de {mesFatura(fatura)} · nº {numFatura(fatura)}</p>
@@ -569,7 +586,8 @@ function faturaSitLabel(f: Row): { label: string; cor: string } | null {
   return null;
 }
 
-function FaturasAnteriores({ faturas, acordosConcluidos, onDemonstrativo }: { faturas: Row[]; acordosConcluidos: Row[]; onDemonstrativo: (id: string) => void }) {
+function FaturasAnteriores({ faturas, acordosConcluidos, onDemonstrativo, destaque }: { faturas: Row[]; acordosConcluidos: Row[]; onDemonstrativo: (id: string) => void; destaque?: string | null }) {
+  useRolarAteFatura(destaque, faturas.length);
   if (faturas.length === 0 && acordosConcluidos.length === 0) {
     return (
       <section className="rounded-2xl bg-white p-6" style={{ boxShadow: cardShadow }}>
@@ -598,7 +616,7 @@ function FaturasAnteriores({ faturas, acordosConcluidos, onDemonstrativo }: { fa
                 const nota = f.nota as Row | null;
                 const fsit = faturaSitLabel(f);
                 return (
-                  <tr key={f.id} className="text-[14px]">
+                  <tr key={f.id} id={`fatura-${f.id}`} className={`text-[14px] ${destaque && String(f.id) === destaque ? 'bg-[#FFF7E8]' : ''}`}>
                     <td className="py-3 pr-3 align-top">
                       <p className="font-medium text-[#1D1D1F]">{mesFatura(f)}</p>
                       {f.ciclo_inicio && f.ciclo_fim && <p className="text-[12px] text-[#8E8E93]">{dateBR(f.ciclo_inicio)} a {dateBR(f.ciclo_fim)}</p>}
