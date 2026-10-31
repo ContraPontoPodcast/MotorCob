@@ -86,7 +86,7 @@ export async function iniciarCadastro(sb: ClienteAuth, agora = new Date()):
   for (const f of abertos) {
     await sb.auth.mfa.unenroll({ factorId: f.id });   // cadastros pela metade de outras vezes; se já sumiu, segue
   }
-  const nome = `MotorCob ${agora.toISOString().slice(0, 19).replace("T", " ")}`;
+  const nome = `MotorCX ${agora.toISOString().slice(0, 19).replace("T", " ")}`;
   const d = (await ok(sb.auth.mfa.enroll({ factorType: "totp", friendlyName: nome }))) as
     { id?: string; totp?: { qr_code?: string; secret?: string } } | null;
   if (!d?.id || !d.totp?.qr_code || !d.totp.secret) {

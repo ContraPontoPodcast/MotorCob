@@ -8,6 +8,8 @@ import { MensageriaModal } from '@/components/workspace/mensageria-modal';
 import { EmpresaShell, cardShadow } from './empresa-shell';
 import type { MensageriaModo } from '@/lib/mensageria';
 import { LigarEnvioRealButton } from '@/components/workspace/console/ligar-envio-real';
+import { esquecerAreasLiberadas } from '@/hooks/use-areas-liberadas';
+import { TokensApi } from './tokens-api';
 
 export function ModulosPage() {
   const { empresa, perfil } = useMotorAuth();
@@ -105,12 +107,12 @@ export function ModulosPage() {
     setRotasEmpresa(prev => ({ ...prev, [canal]: planoId }));
   }
 
-  async function toggleModulo(id: string, ativo: boolean) {
+  async function toggleModulo(id: string, ativo: boolean, confirmado = false) {
     if (!supabase || !empresa) return;
-    if (id === 'orquestracao' && !ativo) { setConfirmarOrq(true); return; }
+    if (id === 'orquestracao' && !ativo && !confirmado) { setConfirmarOrq(true); return; }
     setBusy(id);
     const { error } = await supabase.from('empresa_modulos').upsert({ empresa_id: empresa.id, modulo: id, ativo, canais: mods[id]?.canais ?? [] }, { onConflict: 'empresa_id,modulo' });
-    if (error) setError(friendlyError(error)); else void reload();
+    if (error) setError(friendlyError(error)); else { esquecerAreasLiberadas(empresa.id); void reload(); }
     setBusy('');
   }
 
@@ -120,7 +122,7 @@ export function ModulosPage() {
     const atuais: string[] = Array.isArray(mods[modId]?.canais) ? (mods[modId].canais as string[]) : [];
     const canais = on ? [...new Set([...atuais, canal])] : atuais.filter(c => c !== canal);
     const { error } = await supabase.from('empresa_modulos').upsert({ empresa_id: empresa.id, modulo: modId, ativo: mods[modId]?.ativo ?? true, canais }, { onConflict: 'empresa_id,modulo' });
-    if (error) setError(friendlyError(error)); else void reload();
+    if (error) setError(friendlyError(error)); else { esquecerAreasLiberadas(empresa.id); void reload(); }
     setBusy('');
   }
 
@@ -235,6 +237,9 @@ export function ModulosPage() {
         </div>
       </section>
 
+      {/* Tokens de API (prompt 63): saíram de Minha conta e ficam aqui, em Empresa › Integrações. */}
+      {!loading && <TokensApi apiAtivo={apiAtivo} />}
+
       {!isEquipe && (
         <div className="mt-6 rounded-2xl bg-[#F5F5F7] p-6 text-center" style={{ boxShadow: cardShadow }}>
           <p className="text-[14px] text-[#6E6E73]">Para incluir um módulo, fale com o comercial.</p>
@@ -246,10 +251,10 @@ export function ModulosPage() {
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={() => setConfirmarOrq(false)}>
           <div className="w-full max-w-[420px] rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
             <h2 className="text-[17px] font-semibold text-[#1D1D1F]">Desligar a Orquestração?</h2>
-            <p className="mt-2 text-[14px] text-[#6E6E73]">Com a Orquestração desligada, o MotorCX não roda a rotina do dia desta empresa e a mensalidade da Orquestração sai da fatura.</p>
+            <p className="mt-2 text-[14px] text-[#6E6E73]">Com a Orquestração desligada, o MotorCX não roda a rotina do dia desta empresa e a mensalidade da Orquestração sai da fatura. Os usuários deixam de ver a Cobrança; com a Mensageria ligada, a empresa fica só com a Mensageria.</p>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setConfirmarOrq(false)} className="h-10 rounded-full border border-[#D2D2D7] px-5 text-[14px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Voltar</button>
-              <button onClick={() => { setConfirmarOrq(false); void toggleModulo('orquestracao', false); }} disabled={busy === 'orquestracao'} className="h-10 rounded-full bg-[#1D1D1F] px-5 text-[14px] font-medium text-white disabled:opacity-50 hover:opacity-85">Desligar</button>
+              <button onClick={() => { setConfirmarOrq(false); void toggleModulo('orquestracao', false, true); }} disabled={busy === 'orquestracao'} className="h-10 rounded-full bg-[#1D1D1F] px-5 text-[14px] font-medium text-white disabled:opacity-50 hover:opacity-85">Desligar</button>
             </div>
           </div>
         </div>

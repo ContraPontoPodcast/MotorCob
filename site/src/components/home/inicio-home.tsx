@@ -46,7 +46,7 @@ function AtalhosInicio({ areas }: { areas: AreaInfo[] | null }) {
 	const atalhos: Atalho[] = [
 		{ area: 'cobranca', nome: 'Cobrança', desc: 'Lista do dia, réguas e carteiras', to: '/fila', contratada: areasLib.cobranca },
 		{ area: 'jornada', nome: 'Jornada do Cliente', desc: 'Boas-vindas, ativação e retenção', to: '/jornada', contratada: areasLib.jornada },
-		{ area: 'mensageria', nome: 'Mensageria', desc: 'Campanhas, lotes e respostas', to: `/mensageria/${areasLib.canalPadrao}`, contratada: areasLib.mensageria },
+		{ area: 'mensageria', nome: 'Mensageria', desc: 'Campanhas, lotes e respostas', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
 		{ area: 'relatorios', nome: 'Relatórios', desc: 'Os números de todas as áreas', to: '/relatorios', contratada: true },
 		{ area: 'empresa', nome: 'Empresa', desc: 'Pessoas, faturas e integrações', to: '/empresa', contratada: true },
 		{ area: 'suporte', nome: 'Suporte', desc: 'Seus chamados', to: '/suporte', contratada: true },
@@ -110,9 +110,24 @@ function saudacao(): string {
 	return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
 }
 
+/** Pílula de área do Início: a área da sessão, se contratada; senão a primeira contratada (empresa só de
+ *  Mensageria mostra "Mensageria"). Equipe sem empresa na pílula: sem pílula. */
+function useAreaDoInicio(): { nome: string; cor: string } | null {
+	const { frente, info } = useFrente();
+	const a = useAreasLiberadas();
+	if (a.semEmpresa || !a.pronto) return null;
+	if (frente === 'motorcob' && a.cobranca) return info;
+	if (frente === 'motorcli' && a.jornada) return info;
+	if (a.cobranca) return { nome: 'Cobrança', cor: '#C9A35A' };
+	if (a.jornada) return { nome: 'Jornada do Cliente', cor: '#8E8E93' };
+	if (a.mensageria) return { nome: 'Mensageria', cor: '#7A4FB0' };
+	return null;
+}
+
 export function InicioHome() {
 	const { perfil, empresa } = useMotorAuth();
-	const { info: frenteInfo } = useFrente();
+	const areaInicio = useAreaDoInicio();
+	const semEmpresa = !!perfil?.equipe && !empresa;
 	const navigate = useNavigate();
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const [paraHoje, setParaHoje] = useState<ParaHojeItem[] | null>(null);
@@ -131,7 +146,7 @@ export function InicioHome() {
 		let active = true;
 		(async () => {
 			try {
-				const { data, error } = await supabase.rpc('para_hoje', { empresa: empresa?.id ?? null, limite: 5 });
+				const { data, error } = await supabase.rpc('para_hoje', { empresa: empresa?.id ?? null, lim: 5 });
 				if (!active || error) { if (active) setParaHoje([]); return; }
 				setParaHoje((data ?? []) as ParaHojeItem[]);
 			} catch { if (active) setParaHoje([]); }
@@ -164,12 +179,14 @@ export function InicioHome() {
 			{/* Saudação + busca */}
 			<div className="text-center">
 				<h1 className="text-[32px] font-bold tracking-tight text-[#1D1D1F] sm:text-[34px]">{saudacao()}, {primeiroNome}.</h1>
-				<div className="mt-2 flex justify-center">
-					<span className="inline-flex items-center gap-1.5 rounded-full bg-[#F5F5F7] px-3 py-1 text-[13px] font-medium text-[#1D1D1F]">
-						<span className="h-2 w-2 rounded-full" style={{ backgroundColor: frenteInfo.cor }} />
-						{frenteInfo.nome}
-					</span>
-				</div>
+				{areaInicio && (
+					<div className="mt-2 flex justify-center">
+						<span className="inline-flex items-center gap-1.5 rounded-full bg-[#F5F5F7] px-3 py-1 text-[13px] font-medium text-[#1D1D1F]">
+							<span className="h-2 w-2 rounded-full" style={{ backgroundColor: areaInicio.cor }} />
+							{areaInicio.nome}
+						</span>
+					</div>
+				)}
 				<button
 					onClick={() => setPaletteOpen(true)}
 					className="mx-auto mt-6 flex h-14 w-full max-w-[560px] items-center gap-3 rounded-2xl border border-[#E5E5EA] bg-white px-5 text-left transition hover:bg-[#F5F5F7]"
@@ -189,7 +206,9 @@ export function InicioHome() {
 			{/* Para hoje — largura total */}
 			<div className="mt-8">
 				<h2 className="mb-3 text-[17px] font-semibold text-[#1D1D1F]">Para hoje</h2>
-				{paraHoje === null ? (
+				{semEmpresa ? (
+					<p className="py-1 text-[15px] text-[#6E6E73]">Escolha a empresa no topo para ver o que ela tem para hoje.</p>
+				) : paraHoje === null ? (
 					<p className="py-2 text-center text-[14px] text-[#8E8E93]">Carregando...</p>
 				) : paraHoje.length === 0 ? (
 					<div className="flex items-center gap-3 py-1">
@@ -222,6 +241,7 @@ export function InicioHome() {
 			{/* Atalhos */}
 			<div className="mt-8">
 				<h2 className="mb-3 text-[17px] font-semibold text-[#1D1D1F]">Atalhos</h2>
+				{semEmpresa && <p className="-mt-1 mb-3 text-[13px] text-[#6E6E73]">Escolha a empresa no topo para ver as áreas e os números dela.</p>}
 				<AtalhosInicio areas={areas} />
 			</div>
 

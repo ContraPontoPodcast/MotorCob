@@ -112,7 +112,8 @@ export function ConsolePermsProvider({ children }: { children: ReactNode }) {
 	useEffect(() => { void reload(); }, [perfil?.id, perfil?.equipe]);
 
 	const eu = membros.find(m => m.id === perfil?.id) ?? null;
-	const isMaster = eu?.funcao === 'master' || perfil?.papel === 'admin';
+	// Master é da equipe: o Admin de uma empresa cliente (papel admin, sem equipe) nunca ganha permissão do Console.
+	const isMaster = eu?.funcao === 'master' || (!!perfil?.equipe && perfil?.papel === 'admin');
 	const perms = eu?.permissoes ?? {};
 
 	function can(perm: string): boolean {

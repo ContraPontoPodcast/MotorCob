@@ -1,5 +1,4 @@
-import type { Route } from './+types/empresas';
-import { seo } from '@/lib/seo';
-import { Empresas } from '@/components/empresas/empresas';
-export function meta({ matches, location }: Route.MetaArgs) { return seo({ matches, location }, { title: 'Empresas · MotorCX', description: 'Cadastre e gerencie as empresas clientes do MotorCX.' }); }
-export default function EmpresasRoute() { return <Empresas/>; }
+import { redirect } from 'react-router';
+// A lista de empresas da equipe é o Console › Empresas.
+export function clientLoader() { return redirect('/console'); }
+export default function EmpresasRedirect() { return null; }

@@ -15,13 +15,15 @@ type Props = {
 	modelo: ModeloRelatorio;
 	bases: RelatorioBase[];
 	camposByBase: Record<string, RelatorioCampo[]>;
+	/** Filtro que já vem do link (ex.: ?canal=sms): aplicado ao abrir, se o relatório tem esse campo. */
+	filtroInicial?: { campo: string; valor: string; valorRotulo: string } | null;
 	onBack: () => void;
 	onSaved: () => void;
 };
 
 type FiltroAtivo = { campo: string; rotulo: string; valor: string; valorRotulo: string };
 
-export function RelatorioAberto({ modelo, bases, camposByBase, onBack, onSaved }: Props) {
+export function RelatorioAberto({ modelo, bases, camposByBase, filtroInicial, onBack, onSaved }: Props) {
 	const { empresa, perfil } = useMotorAuth();
 	const [modeloAtual, setModeloAtual] = useState(modelo);
 	const base = bases.find(b => b.id === modeloAtual.base);
@@ -32,7 +34,10 @@ export function RelatorioAberto({ modelo, bases, camposByBase, onBack, onSaved }
 	const [de, setDe] = useState('');
 	const [ate, setAte] = useState('');
 	const [comparar, setComparar] = useState(true);
-	const [filtrosAtivos, setFiltrosAtivos] = useState<FiltroAtivo[]>([]);
+	const [filtrosAtivos, setFiltrosAtivos] = useState<FiltroAtivo[]>(() => {
+		const c = filtroInicial ? campos.find(x => x.nome === filtroInicial.campo && x.filtravel) : undefined;
+		return c && filtroInicial ? [{ campo: c.nome, rotulo: c.rotulo, valor: filtroInicial.valor, valorRotulo: filtroInicial.valorRotulo }] : [];
+	});
 	const [filtroCampo, setFiltroCampo] = useState<string | null>(null);
 	const [filtroBusca, setFiltroBusca] = useState('');
 	const [filtroValores, setFiltroValores] = useState<Row[]>([]);

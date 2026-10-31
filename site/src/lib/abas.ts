@@ -20,12 +20,18 @@ export type Aba = {
 	badgeTone?: 'red' | 'blue';
 	/** Link externo (Relatórios ↗). */
 	externo?: boolean;
+	/** Só a rota exata ativa a aba (ex.: Empresa › Visão geral em /empresa não fica ativa em /empresa/integracoes). */
+	exato?: boolean;
 	/** Rotas adicionais que ativam esta aba (além do prefixo de `to`). */
 	match?: string[];
 	/** Não mostra no WhatsApp (ex: Lotes). */
 	excetoCanal?: string[];
 	/** Query params que, presentes na URL, DESATIVAM esta aba (ex: Canais x Frases). */
 	excludeQuery?: Record<string, string>;
+	/** Só para a equipe com uma destas permissões do Console (ex.: Empresa › Contratação). */
+	permConsole?: string[];
+	/** Só aparece com esta área contratada (ex.: Relatórios › Cobrança). */
+	requerArea?: 'cobranca' | 'jornada' | 'mensageria';
 };
 
 export type GrupoAbas = {
@@ -87,7 +93,7 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 		grupos: [
 			{
 				abas: [
-					{ nome: 'Visão geral', to: '/jornada', icon: Map },
+					{ nome: 'Visão geral', to: '/jornada', icon: Map, exato: true },
 					{ nome: 'Lista do dia', to: '/jornada/lista', icon: ClipboardList },
 					{ nome: 'Cargas', to: '/jornada/cargas', icon: FileUp, perm: PERM.enviarArquivos },
 				],
@@ -127,7 +133,7 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 			{
 				rotulo: 'Resultados',
 				abas: [
-					{ nome: 'Painel do canal', to: '/mensageria/{c}', icon: ChartNoAxesCombined },
+					{ nome: 'Painel do canal', to: '/mensageria/{c}', icon: ChartNoAxesCombined, exato: true },
 					{ nome: 'Score', to: '/mensageria/{c}/score', icon: Gauge },
 				],
 			},
@@ -145,9 +151,9 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 		grupos: [
 			{
 				abas: [
-					{ nome: 'Cobrança', to: '/relatorios?produto=orquestracao', icon: CircleDollarSign },
-					{ nome: 'Jornada', to: '/relatorios?produto=jornada', icon: Route },
-					{ nome: 'Mensageria', to: '/relatorios?produto=mensageria', icon: MessagesSquare },
+					{ nome: 'Cobrança', to: '/relatorios?produto=orquestracao', icon: CircleDollarSign, requerArea: 'cobranca' },
+					{ nome: 'Jornada', to: '/relatorios?produto=jornada', icon: Route, requerArea: 'jornada' },
+					{ nome: 'Mensageria', to: '/relatorios?produto=mensageria', icon: MessagesSquare, requerArea: 'mensageria' },
 					{ nome: 'Meus arquivos', to: '/relatorios?exportacao=1', icon: FileText },
 				],
 			},
@@ -158,12 +164,12 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 		grupos: [
 			{
 				abas: [
-					{ nome: 'Visão geral', to: '/empresa', icon: Building },
+					{ nome: 'Visão geral', to: '/empresa', icon: Building, exato: true },
 					{ nome: 'Contatos', to: '/empresa/contatos', icon: MessageCircle },
 					{ nome: 'Pessoas e perfis', to: '/empresa/pessoas', icon: Users },
 					{ nome: 'Integrações', to: '/empresa/integracoes', icon: Plug, match: ['/empresa/modulos'] },
 					{ nome: 'Faturas', to: '/empresa/faturamento', icon: Receipt, perm: PERM.verFaturamento },
-					{ nome: 'Contratação', to: '/empresa/contratacao', icon: Receipt },
+					{ nome: 'Contratação', to: '/empresa/contratacao', icon: Receipt, permConsole: ['editar_contratacao', 'editar_precos'] },
 					{ nome: 'Auditoria', to: '/empresa/auditoria', icon: ScrollText, perm: PERM.verAuditoria },
 				],
 			},
@@ -175,11 +181,12 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 			{
 				rotulo: 'Clientes',
 				abas: [
-					{ nome: 'Empresas', to: '/console', icon: Building, match: ['/empresas'] },
+					{ nome: 'Empresas', to: '/console', icon: Building, match: ['/empresas'], exato: true },
 					{ nome: 'Saúde', to: '/console/saude', icon: HeartPulse },
 					{ nome: 'Implantação', to: '/console/implantacao', icon: Route, badge: 'implantacao', badgeTone: 'blue' },
 					{ nome: 'Carteiras', to: '/console/carteiras', icon: UsersRound },
 					{ nome: 'Contatos do site', to: '/console/contatos-site', icon: Mail },
+					{ nome: 'Integrações', to: '/console/integracoes', icon: Plug },
 				],
 			},
 			{
@@ -246,7 +253,7 @@ export function abaAtiva(aba: Aba, pathname: string, canal: string, search = '')
 		const mm = rotaCanal(m, canal);
 		if (path.startsWith(mm)) return true;
 	}
-	// Match por prefixo (ex: /credores/... ativa Carteiras).
-	if (toPath !== '/' && path.startsWith(toPath + '/')) return true;
+	// Match por prefixo (ex: /credores/... ativa Carteiras), salvo aba exata.
+	if (!aba.exato && toPath !== '/' && path.startsWith(toPath + '/')) return true;
 	return false;
 }

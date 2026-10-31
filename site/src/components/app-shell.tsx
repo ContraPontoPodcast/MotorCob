@@ -249,7 +249,11 @@ export function AppShell() {
 
 	const area = areaDaRota(loc.pathname);
 
-	// Cliente sem a área contratada → página de área não contratada.
+	// Cliente sem a área contratada → página de área não contratada (só depois de ler os módulos da empresa,
+	// para a página não piscar para quem tem a área).
+	if (!areasLib.pronto && (area === 'cobranca' || area === 'jornada' || area === 'mensageria')) {
+		return <div className="mc-platform grid min-h-screen place-items-center" style={{ backgroundColor: 'var(--base-conteudo)', color: 'var(--base-texto)' }}><div className="flex items-center gap-3"><Activity className="animate-pulse" /> Carregando seu espaço...</div></div>;
+	}
 	const areaContratada = area === 'cobranca' ? areasLib.cobranca :
 		area === 'jornada' ? areasLib.jornada :
 		area === 'mensageria' ? areasLib.mensageria : true;
@@ -288,8 +292,6 @@ export function AppShell() {
 	const acordoSit = String(acordo?.situacao ?? '');
 	const acordoQuebrado = acordoSit === 'quebrado' && Number(acordo?.valor_restante ?? 0) > 0;
 	const acordoParcelaVencida = acordoSit === 'parcela_vencida';
-	const acordoEmDia = acordoSit === 'em_dia';
-	const naInicioOuFaturamento = loc.pathname === '/inicio' || loc.pathname === '/empresa/faturamento';
 	const acordoPagueAte = acordo?.quebra_em ? dateBR(minusDayISO(String(acordo.quebra_em))) : '';
 
 	// Áreas que mostram abas.
@@ -340,13 +342,7 @@ export function AppShell() {
 								<PagarAgora corTexto="#FF3B30" />
 							</div>
 						)}
-						{!acessoBloqueado && !acordoParcelaVencida && acordoEmDia && naInicioOuFaturamento && (
-							<div className="flex flex-wrap items-center justify-between gap-3 bg-[#FF9500] px-6 py-3 text-white">
-								<p className="text-[14px] font-medium">Acordo de pagamento em dia. Próxima parcela: {moneyBR(acordo?.proxima_valor)} em {dateBR(acordo?.proxima_vencimento)}. O acesso fica liberado enquanto as parcelas estiverem em dia.</p>
-								<PagarAgora corTexto="#9a631b" />
-							</div>
-						)}
-						{!acessoBloqueado && !acordoParcelaVencida && !(acordoEmDia && naInicioOuFaturamento) && acesso?.liberada_ate && (
+						{!acessoBloqueado && !acordoParcelaVencida && acesso?.liberada_ate && (
 							<div className="flex flex-wrap items-center justify-between gap-3 bg-[#FF9500] px-6 py-3 text-white">
 								<p className="text-[14px] font-medium">Acesso liberado pela MotorCX até {acessoLiberadaAte}. A fatura continua em aberto: pague até lá para não bloquear de novo.</p>
 								<PagarAgora corTexto="#9a631b" />
@@ -395,10 +391,10 @@ export function useAllowed(roles: string[]) {
 	return true;
 }
 
-export function PageHeading({ title, description, actions, titleExtra }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode; titleExtra?: ReactNode }) {
+export function PageHeading({ title, description, actions, titleExtra, semControles }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode; titleExtra?: ReactNode; /** Sem "Buscar cliente" e seletor de carteira (telas fora da Cobrança, ex.: Empresa › Auditoria). */ semControles?: boolean }) {
 	const { empresa, credor } = useMotorAuth();
 	const areaLabel = useAreaLabel();
-	const contexto = [empresa?.nome, credor?.nome, dateExtensa()].filter(Boolean).join(' · ');
+	const contexto = [empresa?.nome, semControles ? null : credor?.nome, dateExtensa()].filter(Boolean).join(' · ');
 	return (
 		<div className="mb-7 flex flex-wrap items-start justify-between gap-4">
 			<div className="min-w-0">
@@ -411,7 +407,7 @@ export function PageHeading({ title, description, actions, titleExtra }: { eyebr
 				{description && <p className="mt-0.5 text-[13px] text-[var(--base-texto-3)]">{description}</p>}
 			</div>
 			<div className="mc-page-actions flex flex-wrap items-center gap-2">
-				<HeaderControls />
+				{!semControles && <HeaderControls />}
 				{actions}
 			</div>
 		</div>

@@ -1833,12 +1833,18 @@ checar("Para hoje do Admin: até 5, por urgência", True, "select string_agg(tip
 checar("Para hoje: fatura em palavras e valor em reais", True, "select titulo||' · '||detalhe from public.para_hoje() where tipo='fatura'", "authenticated", WAD, "Fatura de setembro vence amanhã · R$ 4.380,00")
 checar("Para hoje: respostas sem dono contam só as não lidas", True, "select titulo from public.para_hoje() where tipo='respostas'", "authenticated", WAD, "2 respostas de clientes esperam alguém")
 checar("Para hoje: token vencendo em 12 dias", True, "select titulo from public.para_hoje() where tipo='token'", "authenticated", WAD, 'Token "ERP Financeiro" vence em 12 dias')
-checar("Para hoje da Gestão: vê a fatura, mas não paga", True, "select string_agg(tipo||':'||acao, ',' order by urgencia) from public.para_hoje()", "authenticated", WGE, "fatura:Ver,lista:Baixar")
+checar("Para hoje da Gestão: vê a fatura, mas não paga", True, "select string_agg(tipo||':'||acao, ',' order by urgencia) from public.para_hoje()", "authenticated", WGE, "fatura:Ver,lista:Abrir")
 checar("Para hoje da Operação: o chamado que espera por ela e a Lista do dia", True, "select string_agg(tipo||':'||urgencia, ',' order by urgencia) from public.para_hoje()", "authenticated", WOP, "chamado:15,lista:60")
 checar("Lista do dia pronta com o número de clientes", True, "select detalhe from public.para_hoje() where tipo='lista'", "authenticated", WOP, "3 clientes")
 checar("Para hoje não mostra a empresa dos outros", True, f"select count(*) from public.para_hoje({EW}) where tipo <> 'chamado'", "authenticated", u["oper"], 0)
 checar("Para hoje: equipe escolhe a empresa", True, f"select count(*) from public.para_hoje({EW}, 3)", "authenticated", u["admin"], 3)
 checar("anon não lê Para hoje", False, "select * from public.para_hoje()", "anon")
+# SQL 53: "Ver" da carga com erro abre a carga; a Lista do dia pronta tem "Abrir" (não promete download)
+checar("SQL 53: carga com erro leva o id da carga", True, "select link from public.para_hoje() where tipo='carga'", "authenticated", WAD,
+       "/envios?carga=" + _sv(f"select id from public.envios where empresa_id={EW} and status='erro'"))
+checar("SQL 53: Lista do dia pronta com Abrir em /fila", True, "select acao||' '||link from public.para_hoje() where tipo='lista'", "authenticated", WOP, "Abrir /fila")
+checar("SQL 53: Operação não vê a carga com erro (não envia cargas)", True, "select count(*) from public.para_hoje(null, 10) where tipo='carga'", "authenticated", WOP, 0)
+checar("SQL 53: equipe vê o link da carga da empresa escolhida", True, f"select count(*) from public.para_hoje({EW}, 10) where tipo='carga' and link like '/envios?carga=%'", "authenticated", u["admin"], 1)
 # SQL 47: cliente sem estágio (motivo novo e antigo) vira item do Para hoje para quem edita a Orquestração
 _sv(f"""insert into public.clusters (empresa_id,codigo,nome) values ({EW},'AC','Atraso curto');
  insert into public.estado_cliente (empresa_id,credor_id,id_cliente,tag,safra,cluster_origem,cluster_atual,estado,canal,motivo_hoje) values
@@ -1850,6 +1856,13 @@ checar("Para hoje: clientes sem estágio por carteira e segmento", True, "select
 checar("Para hoje: Operação não vê o aviso de sem estágio", True, "select count(*) from public.para_hoje(null, 10) where tipo='sem_estagio'", "authenticated", WOP, 0)
 _sv(f"delete from public.estado_cliente where empresa_id={EW} and id_cliente in ('S1','S2','S3'); delete from public.clusters where empresa_id={EW} and codigo='AC'")
 checar("Suas áreas: número do dia e área não contratada sem número", True, "select string_agg(area||':'||contratada||':'||coalesce(numero,'-'), ',' order by area) from public.numeros_areas()", "authenticated", WAD, "cobranca:true:3,jornada:false:-,mensageria:true:96,2%")
+# Empresa só de Mensageria (Onda 2, sem SQL novo): frente motorcob gravada, Orquestração desligada → a Cobrança não
+# conta como contratada (o site usa a mesma regra: frente + módulo) e a Mensageria sim.
+_sv(f"update public.empresa_modulos set ativo=false where empresa_id={EW} and modulo='orquestracao'")
+checar("só Mensageria: Cobrança não contratada, Mensageria contratada", True, "select string_agg(area||':'||contratada, ',' order by area) from public.numeros_areas()", "authenticated", WOP, "cobranca:false,jornada:false,mensageria:true")
+checar("só Mensageria: a pessoa lê os módulos ativos da empresa", True, "select string_agg(modulo, ',' order by modulo) from public.empresa_modulos where ativo", "authenticated", WOP, "mensageria")
+checar("só Mensageria: a pessoa lê as frentes da empresa", True, "select string_agg(frente, ',') from public.empresa_frentes where ativo", "authenticated", WOP, "motorcob")
+_sv(f"update public.empresa_modulos set ativo=true where empresa_id={EW} and modulo='orquestracao'")
 checar("Suas áreas: detalhe da Cobrança e da Mensageria", True, "select string_agg(detalhe, ' | ' order by area) from public.numeros_areas() where contratada", "authenticated", WAD, "na Lista do dia · 3 carteiras | entregues ontem · RCS e SMS")
 checar("Pessoas: lista com convite pendente", True, "select string_agg(papel||':'||situacao, ',' order by papel, situacao) from public.pessoas_empresa()", "authenticated", WAD, "admin:ativo,gestao:ativo,operacao:ativo,operacao:convite")
 checar("Pessoas: Admin vê os e-mails", True, "select count(email) from public.pessoas_empresa()", "authenticated", WAD, 4)

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { useNavigate, useLocation } from 'react-router';
 import { useMotorAuth } from '@/components/auth-provider';
 import { useFrente } from '@/components/frente-provider';
+import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
 import {
 	avaliarResposta,
 	carregarSugestoes,
@@ -49,6 +50,8 @@ type AssistenteContextValue = {
 	fecharGaveta: () => void;
 	fecharCampo: () => void;
 	executarAcao: (msg: Mensagem) => void;
+	/** A ação da resposta leva a uma tela que a pessoa pode abrir (permissão e área contratada)? */
+	acaoDisponivel: (msg: Mensagem) => boolean;
 	esconderAssistente: () => void;
 	mostrarAssistente: () => void;
 	abrirSuporte: (msg: Mensagem, avaliacaoMotivo?: string | null) => Promise<void>;
@@ -72,6 +75,7 @@ const Context = createContext<AssistenteContextValue>({
 	fecharGaveta: () => {},
 	fecharCampo: () => {},
 	executarAcao: () => {},
+	acaoDisponivel: () => false,
 	esconderAssistente: () => {},
 	mostrarAssistente: () => {},
 	abrirSuporte: async () => {},
@@ -103,6 +107,7 @@ function lerOculto(): boolean {
 export function AssistenteProvider({ children }: { children: ReactNode }) {
 	const { permissoes } = useMotorAuth();
 	const { frente } = useFrente();
+	const areasLib = useAreasLiberadas();
 	const navigate = useNavigate();
 	const location = useLocation();
 	const [mensagens, setMensagens] = useState<Mensagem[]>(carregarMensagens);
@@ -268,9 +273,15 @@ export function AssistenteProvider({ children }: { children: ReactNode }) {
 			void abrirSuporte(msg);
 			return;
 		}
-		const rota = rotaDaAcao(msg.acao.id, permissoes);
+		const rota = rotaDaAcao(msg.acao.id, permissoes, undefined, areasLib);
 		if (rota) { setDrawerOpen(false); navigate(rota); }
-	}, [permissoes, navigate]);
+	}, [permissoes, navigate, areasLib]);
+
+	const acaoDisponivel = useCallback((msg: Mensagem) => {
+		if (!msg.acao) return false;
+		if (msg.acao.id === 'abrir_chamado') return true;
+		return rotaDaAcao(msg.acao.id, permissoes, undefined, areasLib) !== null;
+	}, [permissoes, areasLib]);
 
 	const abrirSuporte = useCallback(async (msg: Mensagem, avaliacaoMotivo?: string | null) => {
 		const idx = mensagens.indexOf(msg);
@@ -320,7 +331,7 @@ export function AssistenteProvider({ children }: { children: ReactNode }) {
 		<Context.Provider value={{
 			mensagens, loading, campoVisivel, drawerOpen, oculto, balaoVisivel, balaoSaindo, aviso,
 			telaNomeAtual, sugestoes, carregandoSugestoes,
-			perguntar, avaliar, abrirGaveta, fecharGaveta, fecharCampo, executarAcao, esconderAssistente, mostrarAssistente, abrirSuporte,
+			perguntar, avaliar, abrirGaveta, fecharGaveta, fecharCampo, executarAcao, acaoDisponivel, esconderAssistente, mostrarAssistente, abrirSuporte,
 		}}>
 			{children}
 			{aviso && (

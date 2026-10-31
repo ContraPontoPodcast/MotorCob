@@ -20,7 +20,7 @@ function Cursor() {
 
 /** Renderiza o conteúdo de uma mensagem do assistente. */
 export function AssistenteConteudo({ msg, compacto = false }: { msg: Mensagem; compacto?: boolean }) {
-	const { avaliar, executarAcao, abrirSuporte } = useAssistente();
+	const { avaliar, executarAcao, acaoDisponivel, abrirSuporte } = useAssistente();
 	const [mostrarMotivos, setMostrarMotivos] = useState(false);
 	const timerRef = useRef<number | null>(null);
 	const votado = msg.avaliacao != null;
@@ -108,7 +108,7 @@ export function AssistenteConteudo({ msg, compacto = false }: { msg: Mensagem; c
 			)}
 
 			{/* Botão da ação (mapa de ações). */}
-			{!foraDoAr && msg.acao && !msg.streaming && (
+			{!foraDoAr && msg.acao && !msg.streaming && acaoDisponivel(msg) && (
 				<button
 					onClick={() => executarAcao(msg)}
 					className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-full bg-[#1D1D1F] px-4 text-[13px] font-semibold text-white hover:opacity-85 active:scale-[.98]"

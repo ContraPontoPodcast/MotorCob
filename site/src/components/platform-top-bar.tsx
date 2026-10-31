@@ -118,7 +118,7 @@ function AreasDropdown({ areas }: { areas: AreaItem[] }) {
 	);
 }
 
-/** Dropdown Empresa ▾: Dados e contatos, Pessoas e perfis, Integrações, Faturas, Auditoria. */
+/** Dropdown Empresa ▾: os mesmos nomes e a mesma ordem das abas da Empresa. */
 function EmpresaDropdown() {
 	const { permissoes } = useMotorAuth();
 	const [open, setOpen] = useState(false);
@@ -131,7 +131,8 @@ function EmpresaDropdown() {
 	}, [open]);
 
 	const items: { to: string; label: string; perm?: string }[] = [
-		{ to: '/empresa/contatos', label: 'Dados e contatos' },
+		{ to: '/empresa', label: 'Visão geral' },
+		{ to: '/empresa/contatos', label: 'Contatos' },
 		{ to: '/empresa/pessoas', label: 'Pessoas e perfis' },
 		{ to: '/empresa/integracoes', label: 'Integrações' },
 		{ to: '/empresa/faturamento', label: 'Faturas', perm: PERM.verFaturamento },
@@ -255,7 +256,7 @@ export function PlatformTopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 	const areas: AreaItem[] = [
 		{ id: 'cobranca', nome: 'Cobrança', icon: AREA_ICON.cobranca, cor: '#C9A35A', to: '/fila', contratada: areasLib.cobranca },
 		{ id: 'jornada', nome: 'Jornada do Cliente', icon: AREA_ICON.jornada, cor: '#8E8E93', to: '/jornada', contratada: areasLib.jornada },
-		{ id: 'mensageria', nome: 'Mensageria', icon: AREA_ICON.mensageria, cor: '#7A4FB0', to: `/mensageria/${areasLib.canalPadrao}`, contratada: areasLib.mensageria },
+		{ id: 'mensageria', nome: 'Mensageria', icon: AREA_ICON.mensageria, cor: '#7A4FB0', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
 		{ id: 'relatorios', nome: 'Relatórios', icon: AREA_ICON.relatorios, cor: '#0A60D0', to: '/relatorios', contratada: true },
 	];
 
@@ -333,7 +334,7 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 	const areas: { id: string; nome: string; to: string; contratada: boolean }[] = [
 		{ id: 'cobranca', nome: 'Cobrança', to: '/fila', contratada: areasLib.cobranca },
 		{ id: 'jornada', nome: 'Jornada do Cliente', to: '/jornada', contratada: areasLib.jornada },
-		{ id: 'mensageria', nome: 'Mensageria', to: `/mensageria/${areasLib.canalPadrao}`, contratada: areasLib.mensageria },
+		{ id: 'mensageria', nome: 'Mensageria', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
 		{ id: 'relatorios', nome: 'Relatórios', to: '/relatorios', contratada: true },
 	];
 
@@ -365,7 +366,8 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 					); })}
 
 					<p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#8E8E93]">Empresa</p>
-					<Link to="/empresa/contatos" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Dados e contatos</Link>
+					<Link to="/empresa" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Visão geral</Link>
+					<Link to="/empresa/contatos" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Contatos</Link>
 					<Link to="/empresa/pessoas" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Pessoas e perfis</Link>
 					<Link to="/empresa/integracoes" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Integrações</Link>
 					{permissoes.includes(PERM.verFaturamento) && <Link to="/empresa/faturamento" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Faturas</Link>}

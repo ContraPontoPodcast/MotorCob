@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { Download, Pencil, Copy, Trash2, Plus, Lock, Search, Star, Mail, FileText } from 'lucide-react';
+import { Download, Pencil, Copy, Trash2, Plus, Lock, Search, Star, Mail, FileText, X } from 'lucide-react';
 import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import { useMotorAuth } from '@/components/auth-provider';
+import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
+import { isCanalValido, PRODUTO_MAP } from '@/lib/mensageria-produtos';
 import {
+	produtoAtivo,
 	PRODUTO_REL_LABEL,
 	envioDescricao,
 	type ProdutoRelatorio,
@@ -19,8 +22,15 @@ import { MeusArquivos } from '@/components/relatorios/meus-arquivos';
 export function RelatoriosLista() {
 	const { empresa, perfil } = useMotorAuth();
 	const [params, setParams] = useSearchParams();
-	const [modulos, setModulos] = useState({ mensageria: false, orquestracao: false, jornada: false });
-	const [produto, setProduto] = useState<ProdutoRelatorio>('mensageria');
+	const areasLib = useAreasLiberadas();
+	// Produtos contratados: a mesma regra do menu (Cobrança = frente + Orquestração; Jornada = frente + módulo;
+	// Mensageria = módulo).
+	const modulos = useMemo(() => ({ orquestracao: areasLib.cobranca, jornada: areasLib.jornada, mensageria: areasLib.mensageria }),
+		[areasLib.cobranca, areasLib.jornada, areasLib.mensageria]);
+	const [produto, setProduto] = useState<ProdutoRelatorio>('orquestracao');
+	// ?canal= (ex.: vindo de /mensageria/sms/relatorios): filtro de canal nos relatórios da Mensageria.
+	const canalParam = params.get('canal');
+	const canalFiltro = canalParam && isCanalValido(canalParam) ? canalParam : null;
 	const [bases, setBases] = useState<RelatorioBase[]>([]);
 	const [camposByBase, setCamposByBase] = useState<Record<string, RelatorioCampo[]>>({});
 	const [padrao, setPadrao] = useState<ModeloRelatorio[]>([]);
@@ -36,27 +46,17 @@ export function RelatoriosLista() {
 	const [loading, setLoading] = useState(true);
 	const [erro, setErro] = useState('');
 
-	// Query params: ?produto= e ?exportacao=
+	// Query params: ?produto=, ?exportacao= e ?montar=1 (o antigo /relatorios/novo).
 	useEffect(() => {
 		const exp = params.get('exportacao');
 		if (exp) setVerArquivos(true);
+		if (params.get('montar') === '1') setMontar(true);
 	}, [params]);
 
 	async function reload() {
 		if (!supabase || !empresa) return;
 		setLoading(true);
 		setErro('');
-		// Módulos contratados.
-		const { data: mods } = await supabase.from('empresa_modulos').select('modulo,ativo').eq('empresa_id', empresa.id);
-		const m: Record<string, boolean> = {};
-		(mods ?? []).forEach((r: Row) => { m[r.modulo] = !!r.ativo; });
-		const mod = {
-			mensageria: !!m.mensageria,
-			orquestracao: !!(m.orquestracao || m.cobranca),
-			jornada: !!m.jornada,
-		};
-		setModulos(mod);
-
 		// Score ativo.
 		const { data: sc } = await supabase.from('empresa_score').select('ativo').eq('empresa_id', empresa.id).maybeSingle();
 		setScoreAtivo(!!(sc as Row | null)?.ativo);
@@ -103,14 +103,20 @@ export function RelatoriosLista() {
 	}
 	useEffect(() => { void reload(); /* eslint-disable-next-line */ }, [empresa?.id]);
 
-	// Produto ativo pela query ou padrão.
+	// Produto ativo: o de onde a pessoa veio (?produto=) ou, sem ele, Cobrança → Jornada → Mensageria.
+	// Com ?canal= e sem ?produto=, é a Mensageria.
 	useEffect(() => {
-		const q = params.get('produto') as ProdutoRelatorio | null;
-		if (q && modulos[q]) { setProduto(q); return; }
-		if (modulos.mensageria) setProduto('mensageria');
-		else if (modulos.orquestracao) setProduto('orquestracao');
-		else if (modulos.jornada) setProduto('jornada');
-	}, [params, modulos]);
+		if (!areasLib.pronto) return;
+		const q = params.get('produto') ?? (canalFiltro ? 'mensageria' : null);
+		const p = produtoAtivo(q, modulos);
+		if (p) setProduto(p);
+	}, [params, modulos, canalFiltro, areasLib.pronto]);
+
+	function tirarCanal() {
+		const next = new URLSearchParams(params);
+		next.delete('canal');
+		setParams(next, { replace: true });
+	}
 
 	const basesProduto = useMemo(() => bases.filter(b => b.produto === produto), [bases, produto]);
 	const basesIds = useMemo(() => new Set(basesProduto.map(b => b.id)), [basesProduto]);
@@ -175,9 +181,16 @@ export function RelatoriosLista() {
 
 	if (verArquivos) return <MeusArquivos onBack={() => { setVerArquivos(false); const n = new URLSearchParams(params); n.delete('exportacao'); setParams(n, { replace: true }); }} />;
 
-	if (aberto) return <RelatorioAberto modelo={aberto} bases={bases} camposByBase={camposByBase} onBack={() => setAberto(null)} onSaved={reload} />;
+	const filtroInicial = produto === 'mensageria' && canalFiltro ? { campo: 'canal', valor: canalFiltro, valorRotulo: PRODUTO_MAP[canalFiltro]?.nome ?? canalFiltro } : null;
 
-	if (montar) return <MontarRelatorio bases={basesProduto} camposByBase={camposByBase} onBack={() => setMontar(false)} onSaved={m => { setMontar(false); void reload(); setAberto(m); }} />;
+	if (aberto) return <RelatorioAberto modelo={aberto} bases={bases} camposByBase={camposByBase} filtroInicial={filtroInicial} onBack={() => setAberto(null)} onSaved={reload} />;
+
+	function fecharMontar() {
+		setMontar(false);
+		if (params.get('montar')) { const n = new URLSearchParams(params); n.delete('montar'); setParams(n, { replace: true }); }
+	}
+
+	if (montar) return <MontarRelatorio bases={basesProduto} camposByBase={camposByBase} onBack={fecharMontar} onSaved={m => { fecharMontar(); void reload(); setAberto(m); }} />;
 
 	const produtosDisponiveis = (['mensageria', 'orquestracao', 'jornada'] as ProdutoRelatorio[]).filter(p => modulos[p]);
 
@@ -202,6 +215,16 @@ export function RelatoriosLista() {
 					{produtosDisponiveis.map(p => (
 						<button key={p} onClick={() => trocarProduto(p)} className={`shrink-0 rounded-[9px] px-3 py-1.5 text-[14px] font-medium ${produto === p ? 'bg-white text-[#1D1D1F] font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.12)]' : 'text-[#1D1D1F] hover:bg-[#E8E8ED]'}`}>{PRODUTO_REL_LABEL[p]}</button>
 					))}
+				</div>
+			)}
+
+			{filtroInicial && (
+				<div className="mb-4 flex flex-wrap items-center gap-2 text-[13px] text-[#6E6E73]">
+					<span>Os relatórios abrem filtrados pelo canal</span>
+					<span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#0A60D0] bg-[#E8F1FF] pl-3 pr-1 text-[13px] font-medium text-[#0A60D0]">
+						{filtroInicial.valorRotulo}
+						<button onClick={tirarCanal} aria-label="Tirar o filtro de canal" className="grid h-6 w-6 place-items-center rounded-full hover:bg-white/60"><X size={13} /></button>
+					</span>
 				</div>
 			)}
 

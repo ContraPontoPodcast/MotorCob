@@ -3,12 +3,16 @@ import { useNavigate } from 'react-router';
 import { Search, CornerDownLeft } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { PERM } from '@/lib/permissoes';
+import { useAreasLiberadas, type AreasLiberadas } from '@/hooks/use-areas-liberadas';
 
-export type Atalho = { id: string; label: string; to: string; perm?: string; keywords: string };
+/** area: a tela é de uma área; sem a área contratada o atalho não aparece. */
+export type Atalho = { id: string; label: string; to: string; perm?: string; keywords: string; area?: 'cobranca' | 'jornada' | 'mensageria' };
 
 /** Lista fixa de atalhos do Workspace, usada pela busca da página inicial e pelo ⌘K. */
 export const ATALHOS: Atalho[] = [
-	{ id: 'lista', label: 'Abrir a Lista do dia', to: '/fila', keywords: 'lista dia fila clientes ação hoje' },
+	{ id: 'lista', label: 'Abrir a Lista do dia', to: '/fila', keywords: 'lista dia fila clientes ação hoje', area: 'cobranca' },
+	{ id: 'jornada-lista', label: 'Abrir a Lista do dia da Jornada', to: '/jornada/lista', keywords: 'lista dia jornada clientes hoje', area: 'jornada' },
+	{ id: 'respostas', label: 'Respostas dos clientes', to: '/mensageria/atendimento', keywords: 'respostas atendimento caixa mensageria conversas', area: 'mensageria' },
 	{ id: 'chamado-novo', label: 'Abrir chamado', to: '/suporte/novo', keywords: 'chamado suporte novo ticket abrir' },
 	{ id: 'chamados', label: 'Meus chamados', to: '/suporte', keywords: 'chamados suporte tickets meus' },
 	{ id: 'convidar', label: 'Convidar membro', to: '/empresa/pessoas?aba=pessoas', keywords: 'convidar membro usuário equipe' },
@@ -19,11 +23,12 @@ export const ATALHOS: Atalho[] = [
 	{ id: 'docs', label: 'Documentação', to: '/docs', keywords: 'documentação docs ajuda manual' },
 ];
 
-/** Filtra os atalhos pela permissão do usuário e pelo texto digitado. */
-export function filtrarAtalhos(atalhos: Atalho[], q: string, permissoes: string[]): Atalho[] {
+/** Filtra os atalhos pela permissão do usuário, pelas áreas contratadas e pelo texto digitado. */
+export function filtrarAtalhos(atalhos: Atalho[], q: string, permissoes: string[], areas?: Pick<AreasLiberadas, 'cobranca' | 'jornada' | 'mensageria'>): Atalho[] {
 	const query = q.trim().toLowerCase();
 	return atalhos.filter(a => {
 		if (a.perm && !permissoes.includes(a.perm)) return false;
+		if (a.area && areas && !areas[a.area]) return false;
 		if (!query) return true;
 		return (a.label + ' ' + a.keywords).toLowerCase().includes(query);
 	});
@@ -33,11 +38,12 @@ export function filtrarAtalhos(atalhos: Atalho[], q: string, permissoes: string[
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
 	const navigate = useNavigate();
 	const { permissoes } = useMotorAuth();
+	const areasLib = useAreasLiberadas();
 	const [q, setQ] = useState('');
 	const [sel, setSel] = useState(0);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	const lista = useMemo(() => filtrarAtalhos(ATALHOS, q, permissoes), [q, permissoes]);
+	const lista = useMemo(() => filtrarAtalhos(ATALHOS, q, permissoes, areasLib), [q, permissoes, areasLib.cobranca, areasLib.jornada, areasLib.mensageria]);
 
 	useEffect(() => { if (open) { setQ(''); setSel(0); setTimeout(() => inputRef.current?.focus(), 0); } }, [open]);
 	useEffect(() => { setSel(0); }, [q]);

@@ -70,7 +70,7 @@ export function LoginForm() {
 			if (frentes.includes(linkFrente)) {
 				aplicarFrente(linkFrente);
 				sessionStorage.removeItem(FRENTE_LINK_KEY);
-				navigate('/workspace', { replace: true });
+				navigate('/inicio', { replace: true });
 				return;
 			}
 			// Sem acesso à frente do link: segue o fluxo normal e deixa um aviso
@@ -79,12 +79,12 @@ export function LoginForm() {
 			sessionStorage.removeItem(FRENTE_LINK_KEY);
 		}
 		if (frentes.length <= 1) {
-			void escolherFrente(frentes[0] ?? 'motorcob', true).then(() => navigate('/workspace', { replace: true }));
+			void escolherFrente(frentes[0] ?? 'motorcob', true).then(() => navigate('/inicio', { replace: true }));
 			return;
 		}
 		const lembrada = frenteLembrada();
 		if (lembrada && frentes.includes(lembrada)) {
-			void escolherFrente(lembrada, true).then(() => navigate('/workspace', { replace: true }));
+			void escolherFrente(lembrada, true).then(() => navigate('/inicio', { replace: true }));
 			return;
 		}
 		setEscolhaFrente(frentes[0]);
@@ -96,7 +96,7 @@ export function LoginForm() {
 		setBusy(true);
 		await escolherFrente(escolhaFrente, lembrar);
 		setBusy(false);
-		navigate('/workspace', { replace: true });
+		navigate('/inicio', { replace: true });
 	}
 
 	/** Busca o perfil e decide o próximo passo de duas etapas. */
