@@ -251,7 +251,7 @@ export function RoteiroAgente() {
 								<input type="checkbox" checked={draft.virtual} disabled={!editavel} onChange={e => patch({ virtual: e.target.checked })} className="mt-0.5 accent-[var(--destaque)]" />
 								<span>Escrever no roteiro "aqui é a assistente virtual" <span className="text-[var(--base-texto-3)]">(padrão: desligado)</span><small className="block text-[12px] text-[var(--base-texto-2)]">É texto do roteiro, não um aviso separado: muda a fala acima e passa pela mesma aprovação da empresa.</small></span>
 							</label>
-							<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">O aviso de ligação gravada vale para a empresa toda e muda em Empresa › Privacidade e gravações (Admin).</p>
+							<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">O aviso de ligação gravada vale para a empresa toda e muda em <Link to="/empresa/privacidade" className="underline">Empresa › Privacidade e gravações</Link> (Admin).</p>
 
 							<label htmlFor="prompt" className="mt-4 block text-[12px] font-semibold text-[var(--base-texto-2)]">Como o agente conduz a conversa</label>
 							<textarea id="prompt" value={draft.prompt} maxLength={20000} rows={5} disabled={!editavel} onChange={e => patch({ prompt: e.target.value })} className={`${campoCls} mt-1 h-auto w-full py-2 leading-relaxed`} style={campoStyle} />

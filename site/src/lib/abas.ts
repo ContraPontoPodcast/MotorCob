@@ -188,6 +188,7 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Faturas', to: '/empresa/faturamento', icon: Receipt, perm: PERM.verFaturamento },
 					{ nome: 'Contratação', to: '/empresa/contratacao', icon: Receipt, permConsole: ['editar_contratacao', 'editar_precos'] },
 					{ nome: 'Auditoria', to: '/empresa/auditoria', icon: ScrollText, perm: PERM.verAuditoria },
+					{ nome: 'Privacidade e gravações', to: '/empresa/privacidade', icon: ShieldCheck },
 				],
 			},
 		],

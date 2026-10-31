@@ -164,7 +164,7 @@ export function GravacoesDiscador() {
 						<Cartao titulo="Transcrever e analisar">
 							<p className="flex items-center gap-2 text-[13px] text-[var(--base-texto)]"><Pilula tom={atual?.transcrever ? 'ok' : 'neutro'}>{atual?.transcrever ? 'Ligado' : 'Desligado'}</Pilula> Transcrever as gravações do discador</p>
 							<dl className="mt-3 grid grid-cols-[minmax(0,140px)_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[13px]">
-								<dt className="text-[var(--base-texto-3)]">Transcreve a partir de</dt><dd className="text-[var(--base-texto)]">{minS} segundos (Empresa › Privacidade e gravações)</dd>
+								<dt className="text-[var(--base-texto-3)]">Transcreve a partir de</dt><dd className="text-[var(--base-texto)]">{minS} segundos (<Link to="/empresa/privacidade" className="underline">Empresa › Privacidade e gravações</Link>)</dd>
 								<dt className="text-[var(--base-texto-3)]">Custo estimado</dt><dd className="text-[var(--base-texto)]">{precoTransc != null ? `${reais(precoTransc, 2)} por minuto transcrito` : 'preço da transcrição no contrato (Empresa › Faturas)'}</dd>
 								<dt className="text-[var(--base-texto-3)]">Separação de vozes</dt><dd className="text-[var(--base-texto)]">canais separados quando o discador entrega assim</dd>
 								<dt className="text-[var(--base-texto-3)]">Retenção</dt><dd className="text-[var(--base-texto)]">{retencao} dias, a mesma da empresa</dd>

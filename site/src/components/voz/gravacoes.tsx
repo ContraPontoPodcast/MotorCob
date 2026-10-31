@@ -3,7 +3,7 @@
 // link de 5 minutos à Edge Function `gravacoes`, que confere a permissão e grava em `acessos`.
 // Só o ID do cliente aparece — nunca nome, CPF ou telefone.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Lock, Play, Search } from 'lucide-react';
 import { Loading, Notice, PageHeading, usePermissao } from '@/components/app-shell';
@@ -303,7 +303,7 @@ function Detalhe({ g, carteira, podeLer, ehAdmin, onMudou }: { g: Gravacao; cart
 						<Trilho valor={100 * (1 - faltam / total)} cor={faltam <= 7 ? 'var(--estado-atencao)' : 'var(--area)'} />
 					</>
 				)}
-				<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Áudio e transcrição apagam juntos, sozinhos, no fim do prazo. Ficam só os códigos de resultado e os números agregados.</p>
+				<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Áudio e transcrição apagam juntos, sozinhos, no fim do prazo. Ficam só os códigos de resultado e os números agregados. O prazo é da empresa, em <Link to="/empresa/privacidade" className="underline">Empresa › Privacidade e gravações</Link>.</p>
 				{ehAdmin ? (
 					<div className="mt-3">{g.guarda
 						? <Botao secundario onClick={() => setSoltarAberto(true)} disabled={ocupado}>Tirar a guarda</Botao>

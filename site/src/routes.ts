@@ -36,6 +36,7 @@ export default [
     route('docs/api', 'routes/docs-api.tsx'),
     route('docs/:slug', 'routes/docs-artigo.tsx'),
     route('documentacao', 'routes/documentacao.tsx'),
+    route('empresa/privacidade', 'routes/empresa-privacidade.tsx'),
   ]),
   layout('routes/app-layout.tsx', [
     route('mapa', 'routes/mapa.tsx'),
@@ -105,6 +106,7 @@ export default [
     route('assistente/minhas', 'routes/assistente-minhas.tsx'),
     route('relatorios', 'routes/relatorios.tsx'),
     route('relatorios/novo', 'routes/relatorios-novo.tsx'),
+    route('console/voz', 'routes/console-voz.tsx'),
     // Agente de voz (telas do cliente)
     route('canais/agente-virtual', 'routes/canais-agente-virtual.tsx'),
     route('mensageria/voz/lotes', 'routes/mensageria-voz-lotes.tsx'),

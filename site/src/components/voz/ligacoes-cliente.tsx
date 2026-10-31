@@ -8,7 +8,7 @@ import { usePermissao } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { supabase } from '@/lib/supabase';
 import {
-	PERM_VOZ, TIPO_ROTA, codigosEmPilulas, dataCurta, dataHoraCurta, duracao, duracaoExtensa, inteiro, numeroMascarado, reais,
+	PERM_VOZ, TIPOS_ROTA, codigosEmPilulas, dataCurta, dataHoraCurta, duracao, duracaoExtensa, inteiro, numeroMascarado, reais,
 	resultadoVoz, type CodigosVoz,
 } from '@/lib/voz';
 import { Aviso, Cartao, CartaoLinha, Pilula, Tabela } from './ui';
@@ -93,7 +93,7 @@ export function LigacoesAgenteVirtual({ idCliente, credorId }: { idCliente: stri
 		if (!c.tech_prefix) return '—';
 		const r = c.rota_id != null ? rotas[c.rota_id] : null;
 		if (c.rota_id == null && c.tarifada_em && (c.billsec ?? 0) > 0) return <><span className="font-mono">{c.tech_prefix}</span> · <Pilula tom="atencao">sem cadastro</Pilula></>;
-		return <><span className="font-mono">{c.tech_prefix}</span>{r ? ` · ${TIPO_ROTA[r.tipo] ?? r.tipo} · ${r.cadencia_inicial_s}/${r.cadencia_incremento_s}` : ''}</>;
+		return <><span className="font-mono">{c.tech_prefix}</span>{r ? ` · ${TIPOS_ROTA[r.tipo] ?? r.tipo} · ${r.cadencia_inicial_s}/${r.cadencia_incremento_s}` : ''}</>;
 	};
 	const gravTxt = (c: Chamada) => !c.tem_gravacao ? '—'
 		: podeOuvir ? <Link to={linkGrav} className="font-semibold underline">Abrir em Gravações</Link>
