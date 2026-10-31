@@ -69,6 +69,26 @@ class TestSimuladorHttp(unittest.TestCase):
             srv.shutdown()
             srv.server_close()
 
+    def test_roleplay_so_acorda_com_assinatura(self):
+        acordou = []
+        srv = SH.criar_servidor(0, "chave-x", relogio=lambda: 1793000000, ao_roleplay=lambda: acordou.append(1))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        url = f"http://127.0.0.1:{srv.server_address[1]}/roleplay"
+        corpo = b'{"lote": 9}'
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(urllib.request.Request(url, data=corpo, method="POST", headers={
+                    "X-MotorCX-Carimbo": "1793000000", "X-MotorCX-Assinatura": "0" * 64}))
+            self.assertEqual((e.exception.code, acordou), (401, []))
+            req = urllib.request.Request(url, data=corpo, method="POST", headers={
+                "X-MotorCX-Carimbo": "1793000000", "X-MotorCX-Assinatura": SH.assinatura("chave-x", "1793000000", corpo)})
+            with urllib.request.urlopen(req) as r:
+                self.assertEqual(r.status, 202)
+            self.assertEqual(acordou, [1])
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
 
 if __name__ == "__main__":
     unittest.main()

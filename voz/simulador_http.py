@@ -72,7 +72,9 @@ def rodar(pedido: dict, modelo_de=None, entendedor=None, hoje: date | None = Non
 
 
 def criar_servidor(porta: int, chave: str, modelo_de=None, entendedor_de=None, host: str = "127.0.0.1",
-                   relogio=time.time) -> ThreadingHTTPServer:
+                   relogio=time.time, ao_roleplay=None) -> ThreadingHTTPServer:
+    """POST /simular roda um pedido do simulador; POST /roleplay {lote} acorda o trabalhador do roleplay (SQL 59),
+    que lê o lote do banco. Os dois com a mesma assinatura HMAC."""
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):          # sem corpo nem fala em log
             pass
@@ -86,7 +88,7 @@ def criar_servidor(porta: int, chave: str, modelo_de=None, entendedor_de=None, h
             self.wfile.write(b)
 
         def do_POST(self):  # noqa: N802
-            if self.path != "/simular":
+            if self.path not in ("/simular", "/roleplay"):
                 return self._resp(404, {"erro": "não encontrado"})
             n = int(self.headers.get("Content-Length") or 0)
             if n <= 0 or n > MAX_CORPO:
@@ -96,6 +98,11 @@ def criar_servidor(porta: int, chave: str, modelo_de=None, entendedor_de=None, h
                             corpo, relogio()):
                 log.warning("simulador: assinatura recusada")
                 return self._resp(401, {"erro": "assinatura inválida"})
+            if self.path == "/roleplay":
+                if ao_roleplay is None:
+                    return self._resp(503, {"erro": "roleplay desligado nesta VM"})
+                ao_roleplay()
+                return self._resp(202, {"ok": True})
             try:
                 pedido = json.loads(corpo.decode("utf-8"))
                 r = rodar(pedido, modelo_de=modelo_de, entendedor=entendedor_de() if entendedor_de else None)
@@ -108,21 +115,37 @@ def criar_servidor(porta: int, chave: str, modelo_de=None, entendedor_de=None, h
     return ThreadingHTTPServer((host, porta), H)
 
 
+def modelos_da_vm(provedores: str = "/etc/motorcx/provedores.json"):   # pragma: no cover - VM
+    """(modelo_de, entendedor_de) com o LLM configurado na Montagem e a chave do cofre."""
+    from voz.provedores import ler_config
+    from voz.provedores.montagem import ConfigMontagem, ModeloOpenAICompat
+    from voz.segredos import SecretManager
+    seg = SecretManager()
+    cfg = ConfigMontagem(**{k: v for k, v in (ler_config(provedores).get("montagem") or {}).items() if k != "portas"})
+    modelo_de = lambda: ModeloOpenAICompat(cfg.llm_base_url, seg.valor(cfg.ref_llm), cfg.llm_modelo)   # noqa: E731
+    return modelo_de, (lambda: FX.EntendedorLLM(modelo_de()))
+
+
 def main(argv=None) -> int:   # pragma: no cover - serviço
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--porta", type=int, default=8091)
     ap.add_argument("--chave-ref", default="voz/simulador")
     ap.add_argument("--provedores", default="/etc/motorcx/provedores.json")
+    ap.add_argument("--roleplay", action="store_true", help="liga o trabalhador do roleplay (SQL 59) neste processo")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
-    from voz.provedores import ler_config
-    from voz.provedores.montagem import ConfigMontagem, ModeloOpenAICompat
+    import threading
     from voz.segredos import SecretManager
-    seg = SecretManager()
-    cfg = ConfigMontagem(**{k: v for k, v in (ler_config(a.provedores).get("montagem") or {}).items() if k != "portas"})
-    modelo_de = lambda: ModeloOpenAICompat(cfg.llm_base_url, seg.valor(cfg.ref_llm), cfg.llm_modelo)   # noqa: E731
-    srv = criar_servidor(a.porta, seg.valor(a.chave_ref), modelo_de=modelo_de,
-                         entendedor_de=lambda: FX.EntendedorLLM(modelo_de()))
+    modelo_de, entendedor_de = modelos_da_vm(a.provedores)
+    acordar = None
+    if a.roleplay:
+        from voz.configuracao import supabase_do_ambiente
+        from voz.roleplay import Trabalhador
+        t = Trabalhador(supabase_do_ambiente(), modelo_de, modelo_de, entendedor_de=entendedor_de)
+        threading.Thread(target=t.rodar_para_sempre, daemon=True, name="roleplay").start()
+        acordar = t.acordar.set
+    srv = criar_servidor(a.porta, SecretManager().valor(a.chave_ref), modelo_de=modelo_de, entendedor_de=entendedor_de,
+                         ao_roleplay=acordar)
     srv.serve_forever()
     return 0
 
