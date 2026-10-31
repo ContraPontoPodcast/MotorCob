@@ -174,6 +174,62 @@ class Rotina(unittest.TestCase):
             self.assertEqual(r["desfechos"], [{"momento": "pre_vencimento", "canal": "sms", "frase_id": 3, "desfecho": "sucesso",
                                               "clientes": 1}])
 
+            # histórico de 90 dias (SQL 55): dia 1 entrou no Pré-vencimento com SMS; dia 2 fechou o resultado
+            self.assertEqual(r["historico"], [{"id_cliente": "C1", "fase": "", "entrou": True, "passo": "",
+                                               "canal": "", "desfecho": "sucesso", "desfecho_momento": "pre_vencimento"}])
+
+
+class Historico(unittest.TestCase):
+    """Histórico de 90 dias do cliente no site (Onda 3, SQL 55): só os dias com algo, só o ID."""
+
+    def test_calcular_devolve_o_resultado_de_cada_cliente(self):
+        v = HOJE + timedelta(days=1)
+        est, por = {}, {}
+        dia([cli(vencimento=v)], HOJE, est)
+        acoes = {"C1": {"ultima": HOJE.isoformat(), "canal": "whatsapp"}}
+        jr.calcular({"C1": cli(vencimento=v, pago=True)}, lambda c: momento(c, HOJE + timedelta(days=1)),
+                    HOJE + timedelta(days=1), est, acoes, por_cliente=por)
+        self.assertEqual(por, {"C1": ("pre_vencimento", "sucesso")})
+
+    def test_so_grava_o_dia_com_algo(self):
+        from rodar_jornada import historico_do_dia
+        enq = {"A": {"fase": "retencao", "passo": "D+30"}, "B": {"fase": "retencao", "passo": ""},
+               "C": {"fase": "ativacao", "passo": "D+3"}, "D": {"fase": "reativacao", "passo": ""},
+               "L1": {"fase": "", "passo": "D0"}}
+        fila = [{"id_cliente": "A", "canal": "whatsapp"}, {"id_cliente": "A", "canal": "sms"},
+                {"id_cliente": "L1", "canal": "email"}]
+        antes = {"A": "retencao", "B": "retencao", "C": None, "D": "retencao"}     # L1 é lead: fora
+        linhas = historico_do_dia(enq, fila, antes, {"D": ("retencao", "nao")})
+        self.assertEqual([(x["id_cliente"], x["entrou"], x["canal"], x["desfecho"]) for x in linhas],
+                         [("A", False, "whatsapp", ""), ("C", True, "", ""), ("D", True, "", "nao")])
+        self.assertTrue(all(set(x) == {"id_cliente", "fase", "entrou", "passo", "canal", "desfecho", "desfecho_momento"}
+                            for x in linhas))
+
+    def test_sincronizar_troca_o_dia_e_apaga_o_que_passou_de_90_dias(self):
+        from nuvem import sincronizar as S
+
+        class SB:
+            def __init__(self, falha=False):
+                self.chamadas, self.falha = [], falha
+
+            def apagar(self, tabela, filtros):
+                if self.falha:
+                    raise RuntimeError("relation jornada_cliente_dia does not exist")
+                self.chamadas.append(("apagar", tabela, filtros["data"]))
+
+            def inserir(self, tabela, linhas):
+                self.chamadas.append(("inserir", tabela, len(linhas)))
+
+        sb = SB()
+        r = {"historico": [{"id_cliente": f"C{i}", "fase": "retencao", "entrou": True, "passo": "", "canal": "",
+                            "desfecho": "", "desfecho_momento": ""} for i in range(1500)]}
+        S._publicar_historico_jornada(sb, 7, 9, HOJE, r, out=lambda *a: None)
+        self.assertEqual(sb.chamadas, [("apagar", "jornada_cliente_dia", "eq.2026-10-13"),
+                                       ("apagar", "jornada_cliente_dia", "lt.2026-07-15"),
+                                       ("inserir", "jornada_cliente_dia", 1000), ("inserir", "jornada_cliente_dia", 500)])
+        avisos = []
+        S._publicar_historico_jornada(SB(falha=True), 7, 9, HOJE, r, out=avisos.append)
+        self.assertTrue(avisos and "histórico da jornada não gravado" in avisos[0])
 
 if __name__ == "__main__":
     unittest.main()

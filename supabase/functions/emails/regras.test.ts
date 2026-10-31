@@ -153,3 +153,17 @@ test("pedidos: ações, link de sair e tipos de teste", () => {
     assert.doesNotMatch(e.html, /CPF/);
   }
 });
+
+test("pedido ao Admin (SQL 55): sai com a frente Empresa, botão para a pessoa e link de sair (assunto opcional)", () => {
+  const l = linha({ assunto: "pedidos_admin", assunto_nome: "Pedidos ao Admin", obrigatorio: false, remetente: "avisos",
+    tipo: "atencao", titulo: "Ana Exemplo pediu acesso: Painel da Jornada", texto: 'Perfil Operação. "Acompanho toda semana."',
+    link: "/empresa/pessoas?pessoa=00000000-0000-0000-0000-000000000001", usuario_id: "00000000-0000-0000-0000-000000000002",
+    contato_id: null });
+  assert.equal(opcional(l), true);
+  assert.equal(assuntoDoAviso(l), "Ana Exemplo pediu acesso: Painel da Jornada");
+  const { html } = emailAviso(l, "https://motorcob.online", null, "https://motorcob.online/email/sair?x=1");
+  assert.match(html, /Empresa/);
+  assert.match(html, /https:\/\/motorcob\.online\/empresa\/pessoas\?pessoa=00000000-0000-0000-0000-000000000001/);
+  assert.match(html, /Pedidos ao Admin/);
+  assert.match(html, /&quot;Acompanho toda semana\.&quot;|"Acompanho toda semana\."/);
+});

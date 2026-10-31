@@ -58,10 +58,13 @@ def _canal(est_acao: dict | None, hoje: date) -> str:
     return est_acao["canal"] if (hoje - date.fromisoformat(est_acao["ultima"])).days <= ATRIBUICAO_DIAS else ""
 
 
-def calcular(clientes: dict, momento_de, hoje: date, estado: dict, estado_acoes: dict) -> tuple[Counter, Counter]:
+def calcular(clientes: dict, momento_de, hoje: date, estado: dict, estado_acoes: dict,
+             por_cliente: dict | None = None) -> tuple[Counter, Counter]:
     """(desfechos, movimento). desfechos: Counter((momento, canal, frase_id, desfecho)); movimento: Counter((de, para)).
     momento_de(cliente) -> momento do motor hoje (ou None). estado: o deste módulo (atualizado aqui);
-    estado_acoes: o da jornada (ultima, canal e passos feitos), antes das ações de hoje."""
+    estado_acoes: o da jornada (ultima, canal e passos feitos), antes das ações de hoje.
+    por_cliente (opcional): recebe {id_cliente: (momento, desfecho)} do resultado que fechou hoje, para o histórico
+    de 90 dias do cliente no site (SQL 55). Só o ID; as contagens continuam as mesmas."""
     desf, mov = Counter(), Counter()
     for idc, c in clientes.items():
         p = estado.get(idc) or {}
@@ -74,6 +77,8 @@ def calcular(clientes: dict, momento_de, hoje: date, estado: dict, estado_acoes:
             if chave not in fechados:
                 fechados.add(chave)
                 desf[(momento, canal, frase, resultado)] += 1
+                if por_cliente is not None:
+                    por_cliente[idc] = (momento, resultado)
 
         atraso = (c.dias_atraso or 0) > 0
         agora = "cobranca" if atraso else (momento_de(c) or "")
@@ -119,6 +124,8 @@ def calcular(clientes: dict, momento_de, hoje: date, estado: dict, estado_acoes:
         # ---- cobrança e movimento
         if atraso and not p.get("atraso") and idc in estado:
             desf[(antes or "", canal, frase, "cobranca")] += 1
+            if por_cliente is not None:
+                por_cliente[idc] = (antes or "", "cobranca")
         if idc not in estado:
             if agora:
                 mov[("entrada", agora)] += 1
