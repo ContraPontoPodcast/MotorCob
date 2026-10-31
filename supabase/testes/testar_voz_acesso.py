@@ -59,6 +59,18 @@ r = subprocess.run(["psql", "-d", BANCO, "-U", "postgres", "-v", "ON_ERROR_STOP=
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
 
+# no CI o Postgres exige senha (scram) para todo login: o papel ganha a senha descartável do próprio banco de teste
+# (PGPASSWORD do job), e o psql/pg8000 entram com ela. Local (trust pelo socket) fica sem senha, como antes.
+SENHA_TESTE = os.environ.get("PGPASSWORD", "")
+
+
+def _senha_de_teste():
+    if SENHA_TESTE:
+        _sv("alter role motorcx_voz with password '" + SENHA_TESTE.replace("'", "''") + "'")
+
+
+_senha_de_teste()
+
 # ------------------------------------------------------------------ dados (como postgres): A com voz, B sem voz
 _sv("delete from public.envios where caminho like 'vza-%'; delete from storage.objects where name like 'vza-%'")
 _sv("delete from auth.users where email like 'vza.%'")
@@ -394,6 +406,7 @@ caso("senha: o comando do README define a senha do papel (só o verificador SCRA
      r.stderr[:200])
 caso("senha: a senha não aparece no que vai ao banco", FICTICIA not in r.stdout + r.stderr)
 _sv("alter role motorcx_voz with password null")
+_senha_de_teste()
 
 # ------------------------------------------------------------------ limpeza
 _sv("delete from public.envios where caminho like 'vza-%'; delete from storage.objects where name like 'vza-%'")
