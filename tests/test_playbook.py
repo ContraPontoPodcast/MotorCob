@@ -18,6 +18,11 @@ SEG = date(2026, 8, 3)  # segunda-feira
 TEL, TEL2, MAIL = "11999990000", "11988880000", "c@exemplo.com"
 
 
+def replace_atrib(c, atributos):
+    from dataclasses import replace
+    return replace(c, atributos=atributos)
+
+
 def ev(canal, resultado, dia, contato=TEL, idc="C1", tipo="telefone"):
     return Evento(idc, contato, tipo, canal, resultado, dia, 0.1)
 
@@ -359,6 +364,72 @@ class TestOperacao(unittest.TestCase):
                              "id_cliente;contato;mensagem;produto\nC1;11900000001;Oi;sms_otp\nC2;11900000002;Oi;\n")
             self.assertEqual((pasta / "email.csv").read_text(),
                              "id_cliente;contato;mensagem;produto\nC1;11900000001;;sms_otp\n")
+
+    def test_variaveis_de_voz_so_no_arquivo_do_agente_voz(self):
+        """O agente de voz recebe primeiro nome, saldo, atraso e vencimento por cliente; os outros canais não mudam."""
+        import rodar_dia
+        linhas = [{"id_cliente": "C1", "contato": "11900000010", "ordem_contato": 1, "condicao": ""},
+                  {"id_cliente": "C2", "contato": "11900000002", "ordem_contato": 1, "condicao": ""}]
+        voz = {"C1": {"primeiro_nome": "Ana", "saldo": "R$ 1.234,50", "dias_atraso": "40", "vencimento": "10/11/2026"},
+               "C2": {"saldo": "R$ 10,00", "dias_atraso": "3"}}
+        reserva = [{"id_cliente": "C1", "contato": "11900000011", "ordem_contato": 2, "condicao": "x"}]
+        with tempfile.TemporaryDirectory() as tmp:
+            pasta = Path(tmp) / "ids"
+            rodar_dia.exportar_ids(pasta, {"agente_voz": linhas + reserva, "discador": linhas,
+                                           "sms": [{**linhas[0], "mensagem": "Oi"}]}, voz=voz)
+            self.assertEqual((pasta / "agente_voz.csv").read_text(),
+                             "id_cliente;contato;primeiro_nome;saldo;dias_atraso;vencimento\n"
+                             "C1;11900000010;Ana;R$ 1.234,50;40;10/11/2026\nC2;11900000002;;R$ 10,00;3;\n")
+            self.assertEqual((pasta / "agente_voz_reserva.csv").read_text(),
+                             "id_cliente;contato;primeiro_nome;saldo;dias_atraso;vencimento\n"
+                             "C1;11900000011;Ana;R$ 1.234,50;40;10/11/2026\n")
+            self.assertEqual((pasta / "discador.csv").read_text(),
+                             "id_cliente;contato\nC1;11900000010\nC2;11900000002\n")
+            self.assertEqual((pasta / "sms.csv").read_text(), "id_cliente;contato;mensagem\nC1;11900000010;Oi\n")
+            # com frase no agente_voz: a frase continua na 3ª coluna e as variáveis vêm depois
+            rodar_dia.exportar_ids(pasta, {"agente_voz": [{**linhas[0], "mensagem": "Oi {nome}"}]}, voz=voz)
+            self.assertEqual((pasta / "agente_voz.csv").read_text().splitlines(),
+                             ["id_cliente;contato;mensagem;primeiro_nome;saldo;dias_atraso;vencimento",
+                              "C1;11900000010;Oi {nome};Ana;R$ 1.234,50;40;10/11/2026"])
+            rodar_dia.exportar_ids(pasta, {"agente_voz": linhas})          # sem variáveis: o formato de antes
+            self.assertEqual((pasta / "agente_voz.csv").read_text(),
+                             "id_cliente;contato\nC1;11900000010\nC2;11900000002\n")
+
+    def test_variaveis_de_voz_do_cliente(self):
+        import rodar_dia
+        from motor import voz as V
+        hoje = date(2026, 11, 3)
+        c = Cliente("C1", date(2026, 10, 1), 1234.5, 10,
+                    atributos={"CPF": "12345678909", "Nome do Cliente": "  MARIA-JOSÉ da Silva", "UF": "SP"})
+        parc = [Parcela("C1", "A1", 1, date(2026, 10, 20), 100.0, None),
+                Parcela("C1", "A1", 2, date(2026, 11, 20), 100.0, None)]
+        v = rodar_dia.variaveis_voz_cliente(c, parc, hoje)
+        self.assertEqual(v, {"primeiro_nome": "Maria-José", "saldo": "R$ 1.234,50", "dias_atraso": "43",
+                             "vencimento": "20/11/2026"})
+        self.assertTrue(set(v) <= set(V.VARIAVEIS_VOZ))
+        self.assertNotIn("12345678909", json.dumps(v))
+        self.assertEqual(rodar_dia.variaveis_voz_cliente(replace_atrib(c, {"UF": "SP"}), [], hoje),
+                         {"saldo": "R$ 1.234,50", "dias_atraso": "43"})     # sem coluna de nome: sem primeiro_nome
+        self.assertEqual(V.primeiro_nome({"NM_DEVEDOR": "123 joão"}), "João")
+        self.assertEqual(rodar_dia.variaveis_voz_cliente(None, None, hoje), {})
+
+    def test_rotina_diaria_poe_as_variaveis_so_no_agente_voz(self):
+        import rodar_dia
+        ex = RAIZ / "exemplos"
+        with tempfile.TemporaryDirectory() as tmp:
+            r = rodar_dia.rodar_dia(ex / "clientes.csv", ex / "carteira_contatos.csv", ex / "retornos",
+                                    date(2026, 9, 25), RAIZ / "layouts", ex / "parcelas.csv", None, None,
+                                    Path(tmp) / "est", Path(tmp) / "out", out=lambda *a: None)
+            ids = Path(tmp) / "out" / "2026-09-25" / "ids"
+            self.assertIn("agente_voz", {l["canal"] for l in r["fila"]})
+            for arq in ids.glob("*.csv"):
+                cab = arq.read_text(encoding="utf-8").splitlines()[0].split(";")
+                if arq.stem.startswith("agente_voz"):
+                    self.assertEqual(cab[-4:], ["primeiro_nome", "saldo", "dias_atraso", "vencimento"])
+                else:
+                    self.assertFalse({"primeiro_nome", "saldo"} & set(cab), arq.name)
+            fila = (Path(tmp) / "out" / "2026-09-25" / "fila_do_dia.csv").read_text(encoding="utf-8")
+            self.assertNotIn("primeiro_nome", fila.splitlines()[0])
 
     def test_rotina_diaria_e_idempotente(self):
         import rodar_dia

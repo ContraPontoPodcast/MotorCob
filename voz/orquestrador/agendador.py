@@ -1,8 +1,8 @@
 """Concorrência, pico, CPS por tronco e freio de abandono (decisões 6, 12 e V24 do dono).
 
-  teto da empresa   = min(limite × pico_multiplo, canais dos troncos ativos); limite = voz_config.limite_simultaneas
-                      (a parte da empresa na divisão do contratado; nulo = canais). Chamada acima do limite e dentro
-                      do teto sai marcada no_pico (minuto de IA ao dobro).
+  teto da empresa   = min(limite × pico_multiplo, canais dos troncos ativos); limite = a parte da empresa na
+                      divisão do contratado (voz_divisao_concorrencia.limite; nulo = canais; 0 = não disca).
+                      Chamada acima do limite e dentro do teto sai marcada no_pico (minuto de IA ao dobro).
   teto global       = concorrência contratada (voz_contrato), nunca ultrapassado.
   por tronco        = canais do tronco em voo e CPS (balde de fichas: até `cps` por segundo, rajada de 1 s).
   freio de abandono = abandonos ÷ atendidas por pessoa no lote (mínimo de amostra). Acima de abandono_max_pct, o
@@ -48,12 +48,13 @@ class EstadoEmpresa:
 
     @property
     def limite(self) -> int:
-        return min(self.config.limite_simultaneas or self.canais, self.canais)
+        lim = self.config.limite_simultaneas            # 0 = sem parte na divisão do contratado: não disca
+        return min(self.canais if lim is None else lim, self.canais)
 
     @property
     def teto(self) -> int:
         t = min(self.limite * max(1, self.config.pico_multiplo), self.canais)
-        if self.freado:
+        if self.freado and t > 0:
             t = max(1, math.floor(t * self.config.freio_ritmo_pct / 100))
         return t
 
