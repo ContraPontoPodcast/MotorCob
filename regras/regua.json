@@ -44,12 +44,14 @@
       "identidade_confirmada",
       "cpc",
       "promessa",
-      "recusa"
+      "recusa",
+      "retorno_agendado"
     ],
     "discador": [
       "cpc",
       "promessa",
-      "recusa"
+      "recusa",
+      "retorno_agendado"
     ],
     "sms": [
       "clique_link",
@@ -80,6 +82,8 @@
                     "reteste_dias": 7, "max_retestes": 3, "sinal_outros_canais": true, "aceita_tipo_b": true,
                     "trava_lote_ativo": true, "trava_lote_minimo": 200, "trava_lote_fracao": 0.30,
                     "trava_lote_relativa": 2.0, "trava_lote_pp_min": 0.10, "trava_rota_minimo": 50},
+    "agente_ia": {"_doc": "CPC do agente de IA (decisão do dono, 31/10/2026): 1,0 com a identidade confirmada na chamada, 0,5 sem. A tabulação do operador vale 1,0.",
+                  "peso_cpc": 1.0, "peso_cpc_sem_identidade": 0.5},
     "nao_ligar": {"ativo": true},
     "horarios": {"ativo": false, "tabela": null},
     "chamadas_curtas": {"ativo": true, "aviso": 0.75, "corte_ativo": false, "corte": 0.80,

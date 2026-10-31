@@ -43,6 +43,19 @@ class Evento:
     hora: time | None = None       # hora da chamada/envio, quando o layout traz (discagem)
     duracao_s: int | None = None   # duração da chamada em segundos (chamadas curtas, MP 1.396/2026)
     data_promessa: date | None = None   # promessa de pagamento: data prometida (suspende a voz até + 1)
+    # voz (de-para da rede, decisões do dono de 31/10/2026): a rede, o evento da IA e o do operador ficam separados;
+    # `resultado` é o desfecho final (voz.classificar_chamada). Tudo opcional: layout antigo não muda nada.
+    causa_sip: int | None = None          # rede: SIP final
+    causa_q850: int | None = None         # rede: Q.850 / HANGUPCAUSE
+    resultado_ia: str | None = None       # evento do agente de IA (desfecho de voz)
+    resultado_operador: str | None = None  # tabulação do operador (discador do cliente, depois da transferência)
+    transferencia: str | None = None      # atendida | sem_operador | falhou
+    destino: str | None = None            # ia | ia_humano
+    origem_resultado: str | None = None   # quem decidiu o desfecho: operador | transferencia | ia | rede
+    identidade_confirmada: bool | None = None   # a IA verificou a identidade nesta chamada
+    rota: str | None = None               # rota/tronco (trava de lote por rota)
+    id_chamada: str | None = None         # id da tentativa (um registro por canal por tentativa)
+    peso_pro: float | None = None         # multiplicador da evidência a favor (CPC da IA sem identidade: 0,5)
 
 
 @dataclass
@@ -115,10 +128,11 @@ def certificar_contatos(eventos: list[Evento], hoje: date, contatos: list[dict] 
         d = decaimento(e.data, hoje)
         cert.tentativas += 1
         cert.ultimo_evento = max(cert.ultimo_evento or e.data, e.data)
-        alfa[k] += cl.pro_titular * d
+        pro = cl.pro_titular * d * (1.0 if e.peso_pro is None else e.peso_pro)
+        alfa[k] += pro
         beta[k] += cl.contra_titular * d
         if cl.nivel == Nivel.CERTIFICADO:
-            peso_cert[k] += cl.pro_titular * d
+            peso_cert[k] += pro
             ult_cert[k] = max(ult_cert.get(k, e.data), e.data)
         elif cl.nivel == Nivel.INVALIDO:
             ult_invalido[k] = max(ult_invalido.get(k, e.data), e.data)

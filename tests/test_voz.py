@@ -70,11 +70,27 @@ def _e_curta_antes(e, cc):
     return e.resultado == "abandonada" and cc["abandono_conta"]
 
 
+# chaves acrescentadas pelo de-para SIP/Q.850 + decisões do dono (31/10/2026): só aparecem com código/coluna novos
+NOVOS_DE_PARA = {"maquina", "desligou_sem_conversar", "atendeu_desligou", "retorno_agendado", "falha_operadora",
+                 "bloqueio_originacao", "cancelada_discador", "indisponivel", "rejeitada", "mudo", "fax"}
+NOVOS = NOVOS_DE_PARA | {"inexistente_voz"}
+
+
+def _sem_novos(d):
+    return {k: v for k, v in d.items() if k not in NOVOS}
+
+
 class TestParidadeVoz(unittest.TestCase):
+    """O que existia antes continua idêntico; o que entrou depois é só acréscimo (NOVOS)."""
+
+    def test_so_entraram_as_chaves_do_de_para(self):
+        self.assertEqual({d.chave for d in V.DESFECHOS} - set(ANTES_AGENTE), NOVOS)
+        self.assertEqual({d.chave for d in V.DESFECHOS if d.interno}, {"inexistente_voz"})
+
     def test_taxonomia_identica_e_na_mesma_ordem(self):
         internos = {d.chave for d in V.DESFECHOS if d.interno}      # só o motor gera (proteção do inexistente)
-        disc = {k: v for k, v in TAXONOMIA["discador"].items() if k not in internos}
-        agente = {k: v for k, v in TAXONOMIA["agente_voz"].items() if k not in internos}
+        disc = _sem_novos(TAXONOMIA["discador"])
+        agente = _sem_novos(TAXONOMIA["agente_voz"])
         self.assertEqual(disc, ANTES_DISCADOR)
         self.assertEqual(list(disc), list(ANTES_DISCADOR))
         self.assertEqual(agente, ANTES_AGENTE)
@@ -83,9 +99,9 @@ class TestParidadeVoz(unittest.TestCase):
         self.assertEqual(list(TAXONOMIA), ["discador", "sms", "whatsapp", "rcs", "email", "agente_voz"])
 
     def test_renitencia_curtas_e_nao_atende(self):
-        self.assertEqual(DG.MARCA_VOZ, ANTES_MARCA_VOZ)
-        self.assertEqual(set(DG.NAO_COMPLETADA) - {"inexistente_voz"}, set(ANTES_NAO_COMPLETADA))
-        self.assertEqual(set(V.NAO_ATENDE), set(ANTES_NAO_ATENDE))
+        self.assertEqual(_sem_novos(DG.MARCA_VOZ), ANTES_MARCA_VOZ)
+        self.assertEqual(set(DG.NAO_COMPLETADA) - NOVOS, set(ANTES_NAO_COMPLETADA))
+        self.assertEqual(set(V.NAO_ATENDE) - NOVOS, set(ANTES_NAO_ATENDE))
         self.assertEqual(V.CURTA_SE_ABANDONO, ("abandonada",))
         self.assertTrue(set(DG.MARCA_VOZ.values()) <= set(MARCAS))
 
@@ -105,7 +121,9 @@ class TestParidadeVoz(unittest.TestCase):
         self.assertEqual({e.resultado for e in ev if m.nao_atende.get(e.contato)}, set(ANTES_NAO_ATENDE))
 
     def test_genericos_identicos(self):
-        self.assertEqual(GENERICOS, ANTES_GENERICOS)
+        antes = {g: {c: r for c, r in m.items() if r not in NOVOS} for g, m in GENERICOS.items()}
+        self.assertEqual({g: m for g, m in antes.items() if m}, ANTES_GENERICOS)
+        self.assertEqual({g for g, m in GENERICOS.items() if set(m.values()) <= NOVOS}, NOVOS_DE_PARA)
 
     def test_marcas_do_site_iguais_no_banco_e_na_tela(self):
         sql = (RAIZ / "supabase" / "migrations" / "20261017000001_mapeamento_arquivos.sql").read_text(encoding="utf-8")

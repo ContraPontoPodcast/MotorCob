@@ -452,6 +452,15 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
                                 "a lista saiu como antes")
     if prot is not None and prot.resumo:
         resumo_disc["inexistente"] = prot.resumo
+    # CPC do agente de IA: 1,0 com identidade confirmada, 0,5 sem (só a certificação do número; a régua não muda)
+    try:
+        cfg_ia = cfg_disc or DG.normalizar(regua.dados.get("discagem"))[0]
+        eventos, ia_cont = DG.peso_cpc_ia(eventos, cfg_ia)
+        dest = DG.por_destino(eventos, hoje - timedelta(days=1))
+        if ia_cont or dest:
+            resumo_disc["agente_ia"] = {"cpc": dict(ia_cont), "ontem_por_destino": dest}
+    except Exception as ex:   # noqa: BLE001
+        alertas_disc.append(f"DISCAGEM: peso do CPC da IA não aplicado hoje ({ex.__class__.__name__}: {str(ex)[:120]})")
     # retorno de canal: vale só para a certificação/restrição dos contatos (fica fora da esteira e das personas)
     donos = defaultdict(list)
     for c in contatos:

@@ -33,7 +33,7 @@ from . import normalizacao as norm
 from . import voz as VOZ
 from .certificacao import Evento
 from .cluster import tipos_das_colunas
-from .ingestao import LayoutInvalido, _mascarar, _sim
+from .ingestao import AVISO_DADOS_MINIMOS, COLUNAS_REDE, LayoutInvalido, _mascarar, _sim, colunas_voz, ler_voz
 from .taxonomia import CANAIS_EMAIL, TAXONOMIA
 
 # resultado genérico -> resultado da taxonomia, por canal
@@ -101,6 +101,11 @@ class LayoutOcorrencia:
     decimal: str = ","
     custo_fixo: dict[str, float] = field(default_factory=dict)  # canal -> custo por tentativa
     inexistente_confirmado: list = field(default_factory=list)  # códigos de inexistente confiáveis (voz)
+    # voz (de-para do dono): colunas opcionais causa_sip, causa_q850, dialstatus, amd, toque, resultado_operador,
+    # transferencia, destino, rota, identidade_confirmada; numero_discado/billsec/id_chamada como nomes de coluna
+    transferencias: dict = field(default_factory=dict)
+    destinos: dict = field(default_factory=dict)
+    toque_min_segundos: int = 15
 
 
 @dataclass(frozen=True)
@@ -756,7 +761,7 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
     vistos = set() if vistos is None else vistos
     rel = RelatorioOcorrencia(caminho.name)
     eventos, quarentena = [], []
-    col = layout.colunas
+    col = colunas_voz(layout.colunas)
     fornecedor = f"ocorrencia:{empresa}"
     with open(caminho, newline="", encoding=layout.encoding) as f:
         leitor = csv.DictReader(f, delimiter=layout.delimitador)
@@ -825,11 +830,23 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
             if resultado is None:
                 rel.rejeitadas[f"'{generico}' não se aplica a {canal}"] += 1
                 continue
-            if resultado == "numero_inexistente" and canal in CANAIS_VOZ and layout.inexistente_confirmado \
-                    and codigo not in layout.inexistente_confirmado:
-                resultado = "falha_rede"     # inexistente sem sinal confiável: não bloqueia o número
-                rel.avisos["número inexistente sem código confirmado (vale como falha de rede)"] += 1
+            extra = {}
+            if canal in CANAIS_VOZ:
+                com_rede = any((linha[col[k]] or "").strip() for k in COLUNAS_REDE if k in col)
+                if not com_rede and resultado == "numero_inexistente" and layout.inexistente_confirmado \
+                        and codigo not in layout.inexistente_confirmado:
+                    resultado = "falha_rede"     # inexistente sem sinal confiável: não bloqueia o número
+                    rel.avisos["número inexistente sem código confirmado (vale como falha de rede)"] += 1
+
+                def _traduz(c, canal=canal):
+                    g = layout.resultados.get(c)
+                    return traduzir(canal, g) if g else None
+                resultado, extra = ler_voz(linha, col, resultado, _traduz, contato or "", layout, rel.avisos, canal)
+                if not all(k in col for k in ("contato", "duracao", "id_externo")):
+                    rel.avisos[AVISO_DADOS_MINIMOS] += 1
             id_ext = (linha[col["id_externo"]] or "").strip() if "id_externo" in col else ""
+            if id_ext and "id_chamada" in layout.colunas and "id_externo" not in layout.colunas:
+                id_ext = f"{canal}:{id_ext}"     # um registro por canal por tentativa
             if not id_ext:  # sem id da empresa: a própria linha identifica (reenvio do arquivo não duplica)
                 id_ext = "h" + hashlib.sha256(json.dumps(sorted(linha.items())).encode()).hexdigest()[:20]
             if (fornecedor, id_ext) in vistos:
@@ -852,7 +869,7 @@ def ler_ocorrencia(caminho: str | Path, layout: LayoutOcorrencia, empresa: str, 
             eventos.append(Evento(idc, contato or "", _tipo(canal), canal, resultado, dia, custo,
                                   fornecedor=fornecedor, id_externo=id_ext,
                                   candidatos=() if contato else candidatos, origem=caminho.name,
-                                  hora=hora, duracao_s=dur, data_promessa=prom))
+                                  hora=hora, duracao_s=dur, data_promessa=prom, **extra))
             rel.aceitas += 1
             rel.contato_identificado += bool(contato)
     return eventos, rel, quarentena
