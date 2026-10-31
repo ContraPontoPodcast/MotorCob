@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Empty, Loading, Notice } from '@/components/app-shell';
 import { useJornadaCarteira, JornadaHeading, SemCarteiraCard } from '@/components/jornada/jornada-shell';
-import { dateBR, friendlyError, numberBR, supabase, today, type Row } from '@/lib/supabase';
-import { fetchAcoes, periodo30 } from '@/lib/acoes';
-import { MOMENTOS, REGUA_NOME, CANAL_NOME, momentoAtivo } from '@/lib/jornada';
+import { ChartNoAxesCombined } from 'lucide-react';
+import { dateBR, friendlyError, moneyBR, numberBR, supabase, today, type Row } from '@/lib/supabase';
+import { MOMENTOS } from '@/lib/jornada';
+import { fetchMapa, fetchResultado, pct1, periodoDe, taxaDe, totais, type MapaMomento, type ResultadoCanal } from '@/lib/jornada-resultado';
 
 export function JornadaInicio() {
 	const { empresa, carteiras, carteira, loading: cLoading } = useJornadaCarteira();
@@ -12,7 +13,8 @@ export function JornadaInicio() {
 	const [rodada, setRodada] = useState<string>(today());
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
-	const [acoes, setAcoes] = useState<Row[]>([]);
+	const [mapa, setMapa] = useState<MapaMomento[]>([]);
+	const [res, setRes] = useState<ResultadoCanal[]>([]);
 	const [aLoading, setALoading] = useState(true);
 
 	useEffect(() => {
@@ -33,23 +35,25 @@ export function JornadaInicio() {
 		return () => { active = false; };
 	}, [empresa?.id, carteira?.id]);
 
+	// Cartões e os 4 números de 30 dias: mapa_jornada e resultado_jornada (SQL 40). O detalhe fica no Painel.
 	useEffect(() => {
-		if (!empresa || !carteira) { setAcoes([]); setALoading(false); return; }
+		if (!empresa || !carteira) { setMapa([]); setRes([]); setALoading(false); return; }
 		let active = true;
 		setALoading(true);
-		const p = periodo30();
-		fetchAcoes(empresa.id, p.de, p.ate, carteira.id).then(rows => { if (active) { setAcoes(rows as unknown as Row[]); setALoading(false); } }).catch(() => { if (active) { setAcoes([]); setALoading(false); } });
+		const p = periodoDe(30);
+		Promise.all([fetchMapa(carteira.id, p), fetchResultado(carteira.id, p)])
+			.then(([m, r]) => { if (active) { setMapa(m); setRes(r); setALoading(false); } })
+			.catch(() => { if (active) { setMapa([]); setRes([]); setALoading(false); } });
 		return () => { active = false; };
 	}, [empresa?.id, carteira?.id]);
 
 	const diaRows = useMemo(() => resumo.filter(r => String(r.data) === rodada), [resumo, rodada]);
 
 	const cards = useMemo(() => MOMENTOS.map(m => {
-		const rows = diaRows.filter(r => String(r.momento) === m.id);
-		const total = rows.reduce((s, r) => s + (Number(r.clientes) || 0), 0);
-		const comAcao = rows.filter(r => String(r.motivo) === 'com ação hoje').reduce((s, r) => s + (Number(r.clientes) || 0), 0);
-		return { m, total, comAcao, ativo: momentoAtivo({ recencia_horas: 48, momentos: {} }, m.id) };
-	}), [diaRows]);
+		const x = mapa.find(r => r.momento === m.id);
+		return { m, total: x?.no_momento ?? 0, comAcao: x?.com_acao ?? 0, taxa: x ? taxaDe(x.sucesso, x.sucesso + x.nao) : null };
+	}), [mapa]);
+	const t30 = useMemo(() => totais(mapa, res), [mapa, res]);
 
 	const fora = useMemo(() => {
 		const map: Record<string, number> = {};
@@ -60,27 +64,11 @@ export function JornadaInicio() {
 		return Object.entries(map).sort((a, b) => b[1] - a[1]);
 	}, [diaRows]);
 
-	const acoesAgrup = useMemo(() => {
-		const porRegua: Record<string, number> = {};
-		const porReguaCanal: Record<string, Record<string, number>> = {};
-		for (const r of acoes) {
-			const regua = String(r.regua ?? '');
-			if (!REGUA_NOME[regua]) continue;
-			const env = Number(r.enviadas) || 0;
-			porRegua[regua] = (porRegua[regua] ?? 0) + env;
-			const canal = String(r.canal ?? '');
-			porReguaCanal[regua] = porReguaCanal[regua] ?? {};
-			porReguaCanal[regua][canal] = (porReguaCanal[regua][canal] ?? 0) + env;
-		}
-		const max = Math.max(1, ...Object.values(porRegua));
-		return MOMENTOS.map(m => ({ m, total: porRegua[m.id] ?? 0, canais: porReguaCanal[m.id] ?? {}, max }));
-	}, [acoes]);
-
 	if (cLoading) return <div className="mc-platform"><Loading /></div>;
 	if (carteiras.length === 0) return <><JornadaHeading title="Jornada" /><SemCarteiraCard /></>;
 	if (!carteira) return <div className="mc-platform"><Loading /></div>;
 
-	const linha = `${empresa?.nome ?? ''} · ${carteira.nome} · ${dateBR(rodada)}`;
+	const linha = `${empresa?.nome ?? ''} · ${carteira.nome} · rodada de ${dateBR(rodada)}`;
 
 	return (
 		<>
@@ -88,7 +76,7 @@ export function JornadaInicio() {
 			{error && <div className="mb-5"><Notice>{error}</Notice></div>}
 
 			{!loading && resumo.length === 0 ? (
-				<div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<span className="mc-area-tag mb-3">Jornada do Cliente</span>
 					<h2 className="text-[18px] font-semibold text-[#1D1D1F]">Jornada</h2>
 					<p className="mx-auto mt-2 max-w-sm text-[14px] text-[#6E6E73]">Os clientes aparecem aqui depois da primeira carga, já em uma etapa da jornada.</p>
@@ -97,32 +85,33 @@ export function JornadaInicio() {
 			) : (
 			<>
 			<section className="mb-8">
-				<h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Momentos da jornada</h2>
-				{loading ? <Loading /> : (
-					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-						{cards.map(({ m, total, comAcao, ativo }) => (
-							<div key={m.id} className={`rounded-2xl border p-5 ${ativo ? 'border-[#E5E5EA] bg-white' : 'border-[#E5E5EA] bg-[#F5F5F7] opacity-70'}`} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+					<h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Momentos da jornada</h2>
+					<p className="text-[12.5px] text-[#6E6E73]">Quem está em cada momento hoje e quanto deu certo nos últimos 30 dias.</p>
+				</div>
+				{loading || aLoading ? <Loading /> : (
+					<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
+						{cards.map(({ m, total, comAcao, taxa }) => (
+							<div key={m.id} className="min-w-0 rounded-2xl border border-[#E5E5EA] bg-white p-4 lg:p-5" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}>
 								<p className="text-[13px] font-semibold text-[#1D1D1F]">{m.nome}</p>
 								<p className="mt-1 text-[11px] text-[#8E8E93]">{m.descricao}</p>
-								{ativo ? (
-									<>
-										<p className="mt-4 text-[28px] font-bold tracking-tight text-[#1D1D1F] tnum">{numberBR(comAcao)}</p>
-										<p className="text-[12px] text-[#6E6E73]">com ação hoje · {numberBR(total)} no momento</p>
-									</>
-								) : (
-									<p className="mt-4 text-[13px] font-semibold text-[#8E8E93]">Desligado</p>
-								)}
+								<p className="mt-3 text-[24px] font-bold tracking-tight text-[#1D1D1F] tnum lg:mt-4 lg:text-[28px]">{numberBR(comAcao)}</p>
+								<p className="text-[12px] text-[#6E6E73]">com ação hoje · {numberBR(total)} no momento</p>
+								<div className="mt-2.5 flex justify-between border-t border-[#F0F0F2] pt-2.5 text-[12px] text-[#6E6E73]">
+									<span>Resultado 30 dias</span>
+									<b className="text-[#1D1D1F] tnum">{pct1(taxa)}</b>
+								</div>
 							</div>
 						))}
 					</div>
 				)}
 			</section>
 
-			<section className="mb-8">
-				<h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Quem ficou de fora hoje</h2>
-				<div className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+				<section className="min-w-0 rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}>
+					<h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Quem ficou de fora hoje</h2>
 					{loading ? <Loading /> : fora.length === 0 ? <Empty>Ninguém fora da jornada hoje.</Empty> : (
-						<ul className="divide-y divide-[#F0F0F2]">
+						<ul className="divide-y divide-[color:var(--base-separator)]">
 							{fora.map(([motivo, n]) => (
 								<li key={motivo} className="flex items-center justify-between py-3 text-[14px]">
 									<span className="text-[#1D1D1F]">{motivo}</span>
@@ -131,36 +120,24 @@ export function JornadaInicio() {
 							))}
 						</ul>
 					)}
-				</div>
-			</section>
+				</section>
 
-			<section>
-				<h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Ações dos últimos 30 dias</h2>
-				<div className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
-					{aLoading ? <Loading /> : acoesAgrup.every(a => a.total === 0) ? <Empty>Sem ações registradas nos últimos 30 dias.</Empty> : (
-						<div className="space-y-4">
-							{acoesAgrup.map(({ m, total, canais, max }) => (
-								<div key={m.id}>
-									<div className="mb-1.5 flex items-center justify-between text-[13px]">
-										<span className="font-medium text-[#1D1D1F]">{m.nome}</span>
-										<span className="text-[#6E6E73] tnum">{numberBR(total)}</span>
-									</div>
-									<div className="h-2.5 w-full overflow-hidden rounded-full bg-[#F2F2F7]">
-										<div className="h-full rounded-full bg-[#1D1D1F]" style={{ width: `${(total / max) * 100}%` }} />
-									</div>
-									{total > 0 && (
-										<div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#8E8E93]">
-											{Object.entries(canais).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([c, v]) => (
-												<span key={c}>{CANAL_NOME[c] ?? c}: <strong className="text-[#1D1D1F] tnum">{numberBR(v)}</strong></span>
-											))}
-										</div>
-									)}
-								</div>
-							))}
-						</div>
+				<section className="min-w-0 rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}>
+					<h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Últimos 30 dias</h2>
+					{aLoading ? <Loading /> : (
+						<>
+							<div className="grid grid-cols-2 gap-3">
+								<div><p className="text-[12px] text-[#6E6E73]">Acionamentos</p><p className="mt-1 text-[24px] font-bold tracking-tight text-[#1D1D1F] tnum">{numberBR(t30.acionamentos)}</p></div>
+								<div><p className="text-[12px] text-[#6E6E73]">Deu certo</p><p className="mt-1 text-[24px] font-bold tracking-tight text-[#1D1D1F] tnum">{numberBR(t30.sucesso)}</p><p className="text-[12px] text-[#6E6E73]">taxa de {pct1(taxaDe(t30.sucesso, t30.fechados))}</p></div>
+								<div><p className="text-[12px] text-[#6E6E73]">Custo por resultado</p><p className="mt-1 text-[24px] font-bold tracking-tight text-[#1D1D1F] tnum">{t30.sucesso > 0 ? moneyBR(t30.custo / t30.sucesso) : '—'}</p></div>
+								<div><p className="text-[12px] text-[#6E6E73]">Foram para a cobrança</p><p className="mt-1 text-[24px] font-bold tracking-tight text-[#1D1D1F] tnum">{numberBR(t30.cobranca)}</p></div>
+							</div>
+							<p className="mb-2 mt-3 text-[12.5px] text-[#6E6E73]">O detalhe por canal e por mensagem fica no Painel.</p>
+							<Link to={`/jornada/painel?carteira=${encodeURIComponent(carteira.codigo)}`} className="inline-flex h-[30px] items-center gap-1.5 rounded-full border border-[#D2D2D7] px-3 text-[12.5px] font-semibold text-[#1D1D1F] hover:bg-[#F5F5F7]">Abrir o Painel <ChartNoAxesCombined size={14} /></Link>
+						</>
 					)}
-				</div>
-			</section>
+				</section>
+			</div>
 			</>
 			)}
 		</>

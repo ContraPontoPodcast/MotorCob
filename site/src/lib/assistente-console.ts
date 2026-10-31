@@ -87,6 +87,8 @@ export const TELAS_OPCOES: { rota: string; nome: string }[] = [
 	{ rota: '/docs', nome: 'Documentação' },
 	{ rota: '/jornada', nome: 'Jornada · Início' },
 	{ rota: '/jornada/lista', nome: 'Jornada · Lista do dia' },
+	{ rota: '/jornada/clientes', nome: 'Jornada · Clientes' },
+	{ rota: '/jornada/painel', nome: 'Jornada · Painel' },
 	{ rota: '/jornada/cargas', nome: 'Jornada · Enviar arquivos' },
 	{ rota: '/jornada/carteiras', nome: 'Jornada · Carteiras' },
 	{ rota: '/jornada/momentos', nome: 'Jornada · Momentos da jornada' },

@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { Lock } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
+import { BlocoPedido, BotaoPedido, usePedidoAdmin } from '@/components/comuns/pedido-admin';
 import { supabase, type Row } from '@/lib/supabase';
 
 const PAPEL_LABEL: Record<string, string> = { admin: 'Administrador', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão' };
@@ -19,7 +21,8 @@ export function PermissionGate({ perm, tela, children }: { perm: string; tela?: 
   return <>{children}</>;
 }
 
-/** Página "Seu perfil não abre esta tela" — dentro da moldura, menu lateral da área continua. */
+/** Página "Seu perfil não abre esta tela" — dentro da moldura, menu lateral da área continua.
+ *  Com a permissão conhecida, o botão principal é "Pedir acesso ao Admin" (Onda 3, SQL 55); o Admin decide. */
 export function SemPermissao({ perm, tela }: { perm?: string; tela?: string }) {
   const { perfil } = useMotorAuth();
   const [perfisComPerm, setPerfisComPerm] = useState<string[] | null>(null);
@@ -51,17 +54,26 @@ export function SemPermissao({ perm, tela }: { perm?: string; tela?: string }) {
   const docTitle = typeof document !== 'undefined' ? document.title.replace(/\s*[·|]\s*MotorCX\s*$/, '').trim() : '';
   const nomeTela = tela ?? (docTitle || 'Esta tela');
   const perfilAtual = perfil ? (PAPEL_LABEL[perfil.papel] ?? perfil.papel) : '—';
+  // Nome da tela no aviso ao Admin, sem o artigo ("O Painel da Jornada" → "Painel da Jornada").
+  const telaAviso = nomeTela.replace(/^(O|A|Os|As)\s+/, '');
+  const pedido = usePedidoAdmin('permissao', perm, telaAviso);
 
   return (
-    <div className="mx-auto max-w-[560px] px-4 py-12 text-center">
+    <div className="mx-auto max-w-[580px] px-2 py-10 text-center sm:px-4">
+      <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-[#F5F5F7]"><Lock size={26} className="text-[#8E8E93]" /></div>
       <h1 className="text-[20px] font-semibold text-[#1D1D1F]">Seu perfil não abre esta tela.</h1>
       <p className="mt-3 text-[14px] leading-relaxed text-[#6E6E73]">
         {nomeTela} é do perfil {perfisComPerm ? perfisComPerm.join(', ') : 'quem tem a permissão'}. Você está como {perfilAtual}. Quem libera é o Admin da sua empresa, em Empresa › Pessoas e perfis.
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-        <Link to="/inicio" className="inline-flex h-10 items-center rounded-lg bg-[#1D1D1F] px-6 text-[14px] font-semibold text-white hover:opacity-85">Ir para o Início</Link>
+        {pedido.disponivel ? (
+          <BotaoPedido p={pedido} rotulo="Pedir acesso ao Admin" />
+        ) : (
+          <Link to="/inicio" className="inline-flex h-10 items-center rounded-lg bg-[#1D1D1F] px-6 text-[14px] font-semibold text-white hover:opacity-85">Ir para o Início</Link>
+        )}
         <Link to="/conta?aba=perfil" className="inline-flex h-10 items-center rounded-lg border border-[#D2D2D7] px-6 text-[14px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Ver o que meu perfil pode</Link>
       </div>
+      {pedido.disponivel && <BlocoPedido p={pedido} oque={`o nome desta tela (${telaAviso})`} />}
     </div>
   );
 }

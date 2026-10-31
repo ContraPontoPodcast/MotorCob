@@ -13,6 +13,7 @@ const FRENTE: Record<string, string> = {
   seguranca: "Acesso", faturas: "Faturas", financeiro_equipe: "Faturas", integracoes: "Integrações",
   integracoes_aviso: "Integrações", pausa: "Mensageria", exportacoes: "Relatórios", atendimento: "Atendimento",
   qualidade: "Qualidade", implantacao: "Implantação", equipe: "Equipe", suporte: "Suporte", comercial: "Comercial",
+  pedidos_admin: "Empresa",
 };
 const INTERNOS = new Set(["suporte", "comercial", "financeiro_equipe"]);
 
