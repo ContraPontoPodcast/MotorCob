@@ -26,7 +26,9 @@ Campos de cada desfecho:
 Também aqui: os códigos SIP/Q.850 que confirmam (tipo A/B) ou nunca confirmam número inexistente
 (de-para do especialista, scratchpad/discador/de_para_sip.md §3.1). São só dados até a ingestão ler as causas.
 """
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
 CANAIS_VOZ = ("discador", "agente_voz")
 
@@ -85,6 +87,33 @@ DESFECHOS: tuple[Desfecho, ...] = (
     # o agente virtual também confirma a identidade
     D("identidade_confirmada", "CERTIFICADO", "Identidade confirmada", pro="CERT", canais=("agente_voz",),
       marca="clique", e_cpc=True, prova_existencia=True),
+    # ---- de-para SIP/Q.850 do especialista + decisões do dono (31/10/2026). Só aparecem com código/coluna novos:
+    # layout e ocorrência antigos não mudam. Tentativa técnica continua contando como tentativa (conta_tentativa)
+    # e a falha técnica conta como chamada curta (MP 1.396: não completada).
+    # as 8 situações do dono (SITUACOES_DONO): máquina, desligou sem conversar, atendeu e desligou, pediu retorno
+    D("maquina", "ENTREGUE", "Máquina", marca="temporario", nao_atende=True, curta="sempre", generico="maquina",
+      prova_existencia=True),
+    D("desligou_sem_conversar", "ENTREGUE", "Desligou sem conversar", marca="entregue",
+      generico="desligou_sem_conversar", prova_existencia=True),
+    D("atendeu_desligou", "ENGAJADO", "Atendeu e desligou", pro="ENGAJ", marca="clique", generico="atendeu_desligou",
+      prova_existencia=True),
+    # pediu retorno: CPC só se foi o titular (de terceiro é recado + retorno_em)
+    D("retorno_agendado", "CERTIFICADO", "Atendeu e pediu retorno", pro="CERT", marca="clique",
+      generico="retorno_agendado", e_cpc=True, prova_existencia=True),
+    # técnico: nunca penaliza o número (fora da certificação, do Chega e do Responde); a nossa rede é falha_rede
+    D("falha_operadora", "SEM_RETORNO", "Falha da operadora / rota", ignorar=True, curta="sempre",
+      generico="falha_operadora"),
+    D("bloqueio_originacao", "SEM_RETORNO", "Bloqueio de originação", ignorar=True, curta="sempre",
+      generico="bloqueio_originacao"),
+    D("cancelada_discador", "SEM_RETORNO", "Cancelada antes do toque mínimo", ignorar=True, curta="sempre",
+      generico="cancelada_discador"),
+    # aparelho desligado/fora de área: nem confirma nem desfaz inexistente
+    D("indisponivel", "SEM_RETORNO", "Fora de área / desligado", marca="temporario", nao_atende=True, curta="sempre",
+      generico="indisponivel"),
+    D("rejeitada", "ENTREGUE", "Recusou a chamada", marca="entregue", curta="sempre", generico="rejeitada",
+      prova_existencia=True),
+    D("mudo", "SEM_RETORNO", "Mudo", marca="temporario", nao_atende=True, generico="mudo"),
+    D("fax", "SEM_RETORNO", "Fax / sinal", marca="inexistente", generico="fax"),
 )
 POR_CHAVE = {d.chave: d for d in DESFECHOS}
 assert len(POR_CHAVE) == len(DESFECHOS), "desfecho de voz repetido"
@@ -107,6 +136,19 @@ for _d in DESFECHOS:
         GENERICOS_VOZ.setdefault(_d.generico, {}).update({c: _d.chave for c in _d.canais})
 
 PROVA_EXISTENCIA = tuple(d.chave for d in DESFECHOS if d.prova_existencia)
+TECNICOS = tuple(d.chave for d in DESFECHOS if d.ignorar)        # não dizem nada do número
+
+# As 8 situações do dono (31/10/2026) -> desfechos. "Número incorreto" são dois: não existe × pessoa errada.
+SITUACOES_DONO: dict[str, tuple[str, ...]] = {
+    "Máquina": ("maquina",),
+    "Não atendeu": ("nao_atendida",),
+    "Ocupado": ("ocupado",),
+    "Caixa postal": ("caixa_postal",),
+    "Desligou sem conversar": ("desligou_sem_conversar",),
+    "Atendeu e pediu retorno": ("retorno_agendado",),
+    "Atendeu e desligou": ("atendeu_desligou",),
+    "Número incorreto": ("numero_inexistente", "atendida_terceiro_desconhece"),
+}
 
 
 def cpc_padrao(canal: str) -> tuple[str, ...]:
@@ -151,6 +193,146 @@ def tipo_confirmacao(sip: int | None = None, q850: int | None = None, canonico: 
     if sip in CONFIRMA_B_SIP and (q850 is None or q850 in CONFIRMA_A_Q850 | CONFIRMA_B_Q850):
         return "B" if b_ok else None
     return None
+
+
+# ------------------------------------------------------------------ de-para da rede (regras/voz_causas.json)
+# Decisões do dono (31/10/2026): quem disca é sempre o agente de IA, pelo tronco do cliente; quando precisa de um
+# humano ele transfere por SIP para o discador do cliente. Cada tentativa traz TRÊS fontes, guardadas separadas
+# no Evento: a REDE (SIP final, Q.850/HANGUPCAUSE, DIALSTATUS, AMD), o evento da IA e o evento do OPERADOR (a
+# tabulação que volta do discador do cliente depois da transferência, ou que chega pela importação).
+CAUSAS = Path(__file__).resolve().parent.parent / "regras" / "voz_causas.json"
+GRUPOS_CAUSA = ("sip", "q850", "dialstatus", "amd")
+TRANSFERENCIAS = ("atendida", "sem_operador", "falhou")     # resultado da transferência IA -> humano
+DESTINOS = ("ia", "ia_humano")                               # quem ficou com a chamada do nosso lado
+FRACOS = ("nao_atendida",)       # resultado que a rede pode detalhar (o "sem contato" genérico vira não atende)
+_causas_cache: dict = {}
+
+
+def validar_causas(dados: dict, onde: str = "voz_causas.json") -> dict:
+    """De-para da rede validado: grupo -> código (texto, maiúsculo) -> {chave, confirma}. Toda chave existe na
+    tabela ("*" = decide a tabulação); "numero_inexistente" exige confirma A/B (nunca por palpite)."""
+    out = {}
+    for g in GRUPOS_CAUSA:
+        out[g] = {}
+        for cod, v in (dados.get(g) or {}).items():
+            ch = v.get("chave") if isinstance(v, dict) else v
+            if ch != "*" and ch not in POR_CHAVE:
+                raise ValueError(f"{onde}: {g}/{cod}: desfecho '{ch}' não existe em motor/voz.py")
+            conf = v.get("confirma") if isinstance(v, dict) else None
+            if ch == "numero_inexistente" and conf not in ("A", "B"):
+                raise ValueError(f"{onde}: {g}/{cod}: inexistente sem tipo de confirmação (A ou B)")
+            out[g][str(cod).strip().upper()] = {"chave": ch, "confirma": conf}
+    return out
+
+
+def carregar_causas(caminho: Path | None = None) -> dict:
+    """regras/voz_causas.json (falha alto na carga, como o regua.json)."""
+    caminho = Path(caminho or CAUSAS)
+    if caminho not in _causas_cache:
+        _causas_cache[caminho] = validar_causas(json.loads(caminho.read_text(encoding="utf-8")), caminho.name)
+    return _causas_cache[caminho]
+
+
+def numero_canonico(numero: str | None) -> bool:
+    """DDD válido + 9º dígito no celular (11 dígitos começando por 9) ou fixo de 8 (2–5). Celular de 8 dígitos é
+    número antigo sem o 9º dígito: erro da base, não do número (nunca confirma inexistente tipo B)."""
+    n = "".join(c for c in str(numero or "") if c.isdigit())
+    if len(n) in (12, 13) and n.startswith("55"):
+        n = n[2:]
+    if len(n) not in (10, 11) or "0" in n[:2]:
+        return False
+    return n[2] == "9" if len(n) == 11 else n[2] in "2345"
+
+
+def _inteiro(v):
+    try:
+        return int(str(v).strip()) if v is not None and str(v).strip() != "" else None
+    except ValueError:
+        return None
+
+
+def pela_rede(sip=None, q850=None, dialstatus=None, amd=None, toque_s=None, toque_min: int = 15,
+              canonico: bool = True, aceita_tipo_b: bool = True, causas: dict | None = None):
+    """Desfecho que a REDE indica: (chave ou None, tipo de confirmação de inexistente ou None, avisos).
+    Ordem: AMD; o SIP final, com o Q.850 decidindo quando o SIP é genérico ou não confirmou; o DIALSTATUS por
+    último. Inexistente só por código confirmável (tipo_confirmacao); 'não confirmou' vira falha da operadora."""
+    c = causas or carregar_causas()
+    sip, q850 = _inteiro(sip), _inteiro(q850)
+    av = []
+    a = str(amd or "").strip().upper()
+    if a:
+        x = c["amd"].get(a)
+        if x is None:
+            av.append(f"AMD desconhecido '{a}'")
+        elif x["chave"] != "*":
+            return x["chave"], None, av
+    t = tipo_confirmacao(sip, q850, canonico, aceita_tipo_b)
+    if t:
+        return "numero_inexistente", t, av
+
+    def _de(g, cod):
+        x = c[g].get(str(cod).upper())
+        if x is None:
+            av.append(f"causa {g.upper()} {cod} desconhecida (vale a tabulação)")
+            return None
+        if x["chave"] == "numero_inexistente":       # não confirmou (tipo B fora do número canônico, Q.850 de rota)
+            av.append("NORMALIZAÇÃO: inexistente tipo B em número não canônico (vale como falha da operadora)"
+                      if x["confirma"] == "B" and not canonico else "inexistente sem confirmação da rede")
+            return "falha_operadora"
+        if x["chave"] == "*":
+            return None
+        if x["chave"] == "nao_atendida" and str(cod).upper() in ("487", "CANCEL") and toque_s is not None \
+                and _inteiro(toque_s) is not None and _inteiro(toque_s) < toque_min:
+            return "cancelada_discador"
+        return x["chave"]
+
+    q_decide = q850 is not None and (sip is None or sip in SIP_GENERICO or sip in CONFIRMA_A_SIP | CONFIRMA_B_SIP
+                                     or q850 in NUNCA_CONFIRMA_Q850 | APARELHO_Q850)
+    if q_decide:
+        ch = _de("q850", q850)
+        if ch:
+            return ch, None, av
+    if sip is not None:
+        ch = _de("sip", sip)
+        if ch:
+            return ch, None, av
+    ds = str(dialstatus or "").strip().upper()
+    if ds:
+        ch = _de("dialstatus", ds)
+        if ch:
+            return ch, None, av
+    return None, None, av
+
+
+def classificar_chamada(resultado_ia=None, resultado_operador=None, transferencia=None, sip=None, q850=None,
+                        dialstatus=None, amd=None, toque_s=None, toque_min: int = 15, canonico: bool = True,
+                        aceita_tipo_b: bool = True, causas: dict | None = None):
+    """Desfecho final de uma tentativa: (chave, origem, avisos); origem = operador|transferencia|ia|rede|nenhum.
+
+    1. a tabulação do OPERADOR (depois da transferência) manda, se diz algo além de "não atendeu";
+    2. transferência sem operador ou que falhou = abandono (não penaliza o número);
+    3. o evento da IA;
+    4. a rede (pela_rede). "Não atendeu" genérico da IA/operador cede para o que a rede detalhou.
+    Número inexistente vindo da IA/operador com causa de rede que NÃO confirma vira o que a rede disse (ou falha
+    da operadora): nunca se invalida a voz de um número por um código não confirmável."""
+    rede, conf, av = pela_rede(sip, q850, dialstatus, amd, toque_s, toque_min, canonico, aceita_tipo_b, causas)
+    tem_rede = any(v not in (None, "") for v in (sip, q850, dialstatus, amd))
+    if resultado_operador and resultado_operador not in FRACOS:
+        ch, origem = resultado_operador, "operador"
+    elif transferencia in ("sem_operador", "falhou"):
+        ch, origem = "abandonada", "transferencia"
+    elif resultado_ia and resultado_ia not in FRACOS:
+        ch, origem = resultado_ia, "ia"
+    elif rede:
+        ch, origem = rede, "rede"
+    elif resultado_operador or resultado_ia:
+        ch, origem = resultado_operador or resultado_ia, "operador" if resultado_operador else "ia"
+    else:
+        return None, "nenhum", av
+    if ch == "numero_inexistente" and origem != "rede" and tem_rede and not conf:
+        ch = rede if rede and rede != "numero_inexistente" else "falha_operadora"
+        av.append("inexistente da tabulação sem confirmação da rede (vale o que a rede disse)")
+    return ch, origem, av
 
 
 # Marcas que o cliente escolhe no site para um código de ocorrência (ocorrencia_codigos.resultado: CHECK do banco,

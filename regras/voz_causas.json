@@ -1,0 +1,696 @@
+{
+ "_doc": "De-para da rede (SIP final, Q.850/HANGUPCAUSE, DIALSTATUS do Asterisk, AMD) -> desfecho de voz (motor/voz.py). Gerado do de-para do especialista (31/10/2026). 'confirma': A = confirma número inexistente; B = só com número canônico; null = nunca confirma. '*' = decide a tabulação. Validado na carga (voz.carregar_causas): toda chave existe em voz.DESFECHOS.",
+ "sip": {
+  "200": {
+   "chave": "*",
+   "confirma": null,
+   "classe": "CONVERSA"
+  },
+  "300": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "302": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "305": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "380": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "301": {
+   "chave": "numero_inexistente",
+   "confirma": "B",
+   "classe": "INVALIDO"
+  },
+  "400": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "401": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "407": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "402": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "403": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "404": {
+   "chave": "numero_inexistente",
+   "confirma": "A",
+   "classe": "INVALIDO"
+  },
+  "405": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "406": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "408": {
+   "chave": "indisponivel",
+   "confirma": null,
+   "classe": "TEMPORARIO"
+  },
+  "410": {
+   "chave": "numero_inexistente",
+   "confirma": "A",
+   "classe": "INVALIDO"
+  },
+  "413": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "414": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "415": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "416": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "420": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "421": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "422": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "423": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "429": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "428": {
+   "chave": "bloqueio_originacao",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "436": {
+   "chave": "bloqueio_originacao",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "437": {
+   "chave": "bloqueio_originacao",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "438": {
+   "chave": "bloqueio_originacao",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "433": {
+   "chave": "bloqueio_originacao",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "480": {
+   "chave": "indisponivel",
+   "confirma": null,
+   "classe": "TEMPORARIO"
+  },
+  "481": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "482": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "483": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "484": {
+   "chave": "numero_inexistente",
+   "confirma": "B",
+   "classe": "INVALIDO"
+  },
+  "485": {
+   "chave": "numero_inexistente",
+   "confirma": "B",
+   "classe": "INVALIDO"
+  },
+  "486": {
+   "chave": "ocupado",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "487": {
+   "chave": "nao_atendida",
+   "confirma": null,
+   "classe": "OPERACAO"
+  },
+  "488": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "489": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "491": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "493": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "494": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "500": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "501": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "502": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "503": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "504": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "505": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "513": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "555": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "580": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "600": {
+   "chave": "ocupado",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "603": {
+   "chave": "rejeitada",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "604": {
+   "chave": "numero_inexistente",
+   "confirma": "A",
+   "classe": "INVALIDO"
+  },
+  "606": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "607": {
+   "chave": "rejeitada",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "608": {
+   "chave": "bloqueio_originacao",
+   "confirma": null,
+   "classe": "TECNICO"
+  }
+ },
+ "q850": {
+  "1": {
+   "chave": "numero_inexistente",
+   "confirma": "A",
+   "classe": "INVALIDO"
+  },
+  "2": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "3": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "4": {
+   "chave": "numero_inexistente",
+   "confirma": "B",
+   "classe": "INVALIDO"
+  },
+  "5": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "6": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "8": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "14": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "16": {
+   "chave": "*",
+   "confirma": null,
+   "classe": "CONVERSA"
+  },
+  "17": {
+   "chave": "ocupado",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "18": {
+   "chave": "indisponivel",
+   "confirma": null,
+   "classe": "TEMPORARIO"
+  },
+  "19": {
+   "chave": "nao_atendida",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "20": {
+   "chave": "indisponivel",
+   "confirma": null,
+   "classe": "TEMPORARIO"
+  },
+  "21": {
+   "chave": "rejeitada",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "22": {
+   "chave": "numero_inexistente",
+   "confirma": "A",
+   "classe": "INVALIDO"
+  },
+  "23": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "25": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "26": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "27": {
+   "chave": "indisponivel",
+   "confirma": null,
+   "classe": "TEMPORARIO"
+  },
+  "28": {
+   "chave": "numero_inexistente",
+   "confirma": "B",
+   "classe": "INVALIDO"
+  },
+  "29": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "50": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "57": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "58": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "63": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "65": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "66": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "69": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "70": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "79": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "31": {
+   "chave": "indisponivel",
+   "confirma": null,
+   "classe": "TEMPORARIO"
+  },
+  "34": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "38": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "41": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "42": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "44": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "47": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "52": {
+   "chave": "bloqueio_originacao",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "53": {
+   "chave": "bloqueio_originacao",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "54": {
+   "chave": "indisponivel",
+   "confirma": null,
+   "classe": "TEMPORARIO"
+  },
+  "55": {
+   "chave": "indisponivel",
+   "confirma": null,
+   "classe": "TEMPORARIO"
+  },
+  "81": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "82": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "83": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "84": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "85": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "86": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "87": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "88": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "89": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "90": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "91": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "92": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "93": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "94": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "95": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "96": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "97": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "98": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "99": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "100": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "101": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "111": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "102": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "127": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  }
+ },
+ "dialstatus": {
+  "ANSWER": {
+   "chave": "*",
+   "confirma": null,
+   "classe": "CONVERSA"
+  },
+  "BUSY": {
+   "chave": "ocupado",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "NOANSWER": {
+   "chave": "nao_atendida",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "CANCEL": {
+   "chave": "nao_atendida",
+   "confirma": null,
+   "classe": "OPERACAO"
+  },
+  "CONGESTION": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "CHANUNAVAIL": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  },
+  "DONTCALL": {
+   "chave": "opt_out",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "TORTURE": {
+   "chave": "opt_out",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "INVALIDARGS": {
+   "chave": "falha_operadora",
+   "confirma": null,
+   "classe": "TECNICO"
+  }
+ },
+ "amd": {
+  "MACHINE": {
+   "chave": "maquina",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "HUMAN": {
+   "chave": "*",
+   "confirma": null,
+   "classe": "CONVERSA"
+  },
+  "NOTSURE": {
+   "chave": "*",
+   "confirma": null,
+   "classe": "CONVERSA"
+  },
+  "HANGUP": {
+   "chave": "desligou_sem_conversar",
+   "confirma": null,
+   "classe": "COMPORTAMENTO"
+  },
+  "INITIALSILENCE": {
+   "chave": "mudo",
+   "confirma": null,
+   "classe": "CONVERSA"
+  }
+ }
+}

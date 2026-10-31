@@ -143,6 +143,24 @@ de outra pessoa pela certificação e a rotação segue.
   `e_cpc` (= `regua.json › contato`), `conta_tentativa` (hoje todos) e `prova_existencia`, e as listas SIP/Q.850 que
   confirmam (tipo A/B) ou nunca confirmam inexistente (`tipo_confirmacao`; só dados até a ingestão ler causas).
   Desfecho novo = uma linha lá. Paridade com os valores antigos em `tests/test_voz.py`.
+  **De-para da rede (decisões do dono, 31/10/2026; `regras/voz_causas.json`, gerado do de-para SIP/Q.850 do
+  especialista e validado na carga por `voz.carregar_causas`):** quem disca é sempre o agente de IA; humano só por
+  transferência SIP para o discador do cliente. Cada tentativa guarda SEPARADOS no `Evento` a rede (`causa_sip`,
+  `causa_q850`; DIALSTATUS/AMD/toque só decidem), o evento da IA (`resultado_ia` = coluna resultado) e a tabulação
+  do operador (`resultado_operador`, depois da transferência), mais `transferencia` (atendida|sem_operador|falhou),
+  `destino` (ia|ia_humano), `origem_resultado`, `identidade_confirmada`, `rota`, `id_chamada`. `voz.classificar_chamada`
+  decide o desfecho: operador > transferência sem operador/falhou (= `abandonada`) > IA > rede; "não atende"
+  genérico cede para a rede; inexistente só com causa confirmável (tipo B só com `numero_canonico`; senão
+  `falha_operadora` + aviso NORMALIZAÇÃO). Chaves novas (só com código/coluna novos): as 8 situações do dono
+  (`voz.SITUACOES_DONO`: maquina, nao_atendida, ocupado, caixa_postal, desligou_sem_conversar, retorno_agendado
+  (CPC), atendeu_desligou, numero_inexistente/atendida_terceiro_desconhece) + falha_operadora, bloqueio_originacao,
+  cancelada_discador (técnicas: fora da certificação, mas CONTAM como tentativa e como curta), indisponivel,
+  rejeitada, mudo, fax. Layouts (fornecedor e ocorrência) aceitam as colunas novas e os nomes `numero_discado`,
+  `billsec`, `id_chamada` (um registro por canal por tentativa: id da ocorrência = `<canal>:<id_chamada>`); voz sem
+  esses dados → aviso de dados mínimos. CPC da IA (`discagem.agente_ia`, `DG.peso_cpc_ia`): 1,0 com identidade
+  confirmada na chamada, 0,5 sem (`Evento.peso_pro`, só a certificação; a régua não muda; operador = 1,0);
+  `inexistente.aceita_tipo_b=false` faz o tipo B virar falha da operadora. Resumo em r["discagem"]["agente_ia"].
+  Site: sem mudança (o mapeamento do site segue com as 4 marcas; as colunas novas valem nos layouts do repositório).
 - `motor/ingestao.py` + `layouts/*.json`: retornos por layout de fornecedor, base de
   clientes (agrega contratos), carteira de contatos e parcelas.
 - `motor/cluster.py`: cluster por regras da empresa (tabela `clusters`, editada no site).

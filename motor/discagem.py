@@ -56,6 +56,9 @@ PADRAO = {
                     "sinal_outros_canais": True, "aceita_tipo_b": True,
                     "trava_lote_ativo": True, "trava_lote_minimo": 200, "trava_lote_fracao": 0.30,
                     "trava_lote_relativa": 2.0, "trava_lote_pp_min": 0.10, "trava_rota_minimo": 50},
+    # CPC feito pelo agente de IA (decisão do dono, 31/10/2026): vale 1,0 com a identidade confirmada na chamada e
+    # 0,5 sem; a tabulação do operador (humano, depois da transferência) vale sempre 1,0
+    "agente_ia": {"peso_cpc": 1.0, "peso_cpc_sem_identidade": 0.5},
     "nao_ligar": {"ativo": True},
     "horarios": {"ativo": False, "tabela": None},   # desligado até o jurídico validar a prévia
     "chamadas_curtas": {"ativo": True, "aviso": 0.75, "corte_ativo": False, "corte": 0.80,
@@ -71,6 +74,7 @@ _SUB = {
                     "trava_lote_ativo": bool, "trava_lote_minimo": (1, 10 ** 6), "trava_lote_fracao": "fracao",
                     "trava_lote_relativa": ("real", 1.0, 20.0), "trava_lote_pp_min": "fracao",
                     "trava_rota_minimo": (1, 10 ** 6)},
+    "agente_ia": {"peso_cpc": ("real", 0.0, 2.0), "peso_cpc_sem_identidade": ("real", 0.0, 2.0)},
     "nao_ligar": {"ativo": bool},
     "chamadas_curtas": {"ativo": bool, "aviso": "fracao", "corte_ativo": bool, "corte": "fracao",
                         "max_por_numero_dia": (1, 10 ** 6), "max_total_dia": (1, 10 ** 8),
@@ -617,7 +621,7 @@ def protecao_inexistente(eventos: list, hoje: date, cfg: dict) -> tuple[list, Pr
     desde = date.fromisoformat(ic["so_voz_desde"])
     travados, info = trava_lote([e for e in eventos if e.data >= desde], cfg)
     so_voz = ic["modo"] == "so_voz"
-    saida, n_travadas, antigos = [], 0, set()
+    saida, n_travadas, antigos, n_tipo_b = [], 0, set(), 0
     for e in eventos:
         if e.canal in CANAIS_VOZ and e.resultado == CONFIRMA and e.data < desde \
                 and not (e.fornecedor or "").startswith("canal:"):
@@ -628,11 +632,15 @@ def protecao_inexistente(eventos: list, hoje: date, cfg: dict) -> tuple[list, Pr
             if k in travados or (r and k + (r,) in travados):
                 e = replace(e, resultado=LOTE_TRAVADO)
                 n_travadas += 1
+            elif not ic["aceita_tipo_b"] and (e.causa_sip is not None or e.causa_q850 is not None) \
+                    and V.tipo_confirmacao(e.causa_sip, e.causa_q850) == "B":
+                e = replace(e, resultado="falha_operadora")     # tipo B desligado pelo credor: não confirma
+                n_tipo_b += 1
             elif so_voz:
                 e = replace(e, resultado=INEXISTENTE_VOZ)
         saida.append(e)
     resumo = {"modo": ic["modo"], "desde": ic["so_voz_desde"], "lotes_travados": info,
-              "confirmacoes_travadas": n_travadas, "anteriores_regra_antiga": len({k for k in antigos if k[1]})}
+              "confirmacoes_travadas": n_travadas, "tipo_b_desligado": n_tipo_b, "anteriores_regra_antiga": len({k for k in antigos if k[1]})}
     for i in info:
         med = "" if i["mediana_14d"] is None else f", mediana de 14 dias {_pct(i['mediana_14d'])}"
         onde = f"arquivo {i['arquivo']}" + (f", rota {i['rota']}" if i["rota"] else "")
@@ -718,6 +726,43 @@ def aplicar_restricoes_voz(certs: dict, restricoes: dict) -> dict:
         if c is not None:
             c.restricoes = set(c.restricoes) | rs
     return certs
+
+
+# ------------------------------------------------------------------ CPC do agente de IA
+def peso_cpc_ia(eventos: list, cfg: dict) -> tuple[list, Counter]:
+    """CPC (cpc, promessa, recusa, retorno agendado) decidido pelo agente de IA pesa agente_ia.peso_cpc (1,0) com a
+    identidade confirmada na chamada (campo identidade_confirmada ou evento identidade_confirmada do mesmo número
+    no dia/da mesma chamada) e peso_cpc_sem_identidade (0,5) sem. É da IA: canal agente_voz ou destino ia, salvo
+    quando a tabulação do operador decidiu (humano: 1,0). Só muda a certificação do número (Evento.peso_pro);
+    a régua (CPC/TAG) não muda. Devolve (eventos, contagem com/sem identidade)."""
+    from dataclasses import replace
+    ia = cfg["agente_ia"]
+    cpc = set(V.cpc_padrao("agente_voz")) - {"identidade_confirmada"}
+    verif = {(e.id_cliente, e.contato, e.data) for e in eventos if e.resultado == "identidade_confirmada"}
+    verif_ch = {e.id_chamada for e in eventos if e.resultado == "identidade_confirmada" and e.id_chamada}
+    saida, cont = [], Counter()
+    for e in eventos:
+        if e.resultado in cpc and e.canal in CANAIS_VOZ and not (e.fornecedor or "").startswith("canal:") \
+                and (e.canal == "agente_voz" or e.destino in V.DESTINOS) and e.origem_resultado != "operador":
+            ok = bool(e.identidade_confirmada) or (e.id_cliente, e.contato, e.data) in verif \
+                or (e.id_chamada and e.id_chamada in verif_ch)
+            w = ia["peso_cpc"] if ok else ia["peso_cpc_sem_identidade"]
+            cont["com_identidade" if ok else "sem_identidade"] += 1
+            if w != 1.0:
+                e = replace(e, peso_pro=w)
+        saida.append(e)
+    return saida, cont
+
+
+def por_destino(eventos: list, dia: date) -> dict:
+    """Tentativas de voz do dia por destino (ia/ia_humano) e resultado da transferência (resumo do dia)."""
+    c = Counter()
+    for e in eventos:
+        if e.data == dia and e.canal in CANAIS_VOZ and not (e.fornecedor or "").startswith("canal:"):
+            c[e.destino or ("ia" if e.canal == "agente_voz" else "sem_destino")] += 1
+            if e.transferencia:
+                c[f"transferencia_{e.transferencia}"] += 1
+    return dict(c)
 
 
 def regras_voz(regras_canal: dict, cfg: dict) -> dict:

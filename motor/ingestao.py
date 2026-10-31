@@ -17,6 +17,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 
 from . import normalizacao as norm
+from . import voz as V
 from .certificacao import Evento
 from .taxonomia import CANAIS_EMAIL, TAXONOMIA
 
@@ -40,14 +41,85 @@ class Layout:
     decimal: str = "."
     custo_fixo: float | None = None
     inexistente_confirmado: list = field(default_factory=list)  # voz: códigos de inexistente confiáveis
+    transferencias: dict = field(default_factory=dict)   # voz: valor da coluna transferencia -> atendida|sem_operador|falhou
+    destinos: dict = field(default_factory=dict)         # voz: valor da coluna destino -> ia|ia_humano
+    toque_min_segundos: int = 15                         # voz: 487/CANCEL com menos toque = cancelada antes do toque
 
     @property
     def tipo_contato(self) -> str:
         return "email" if self.canal in CANAIS_EMAIL else "telefone"
 
 
+# ------------------------------------------------------------------ voz: rede × IA × operador (de-para do dono)
+# nomes de coluna das decisões do dono (um registro por canal por tentativa): número discado, billsec e id da chamada
+ALIAS_VOZ = {"numero_discado": "contato", "billsec": "duracao", "id_chamada": "id_externo"}
+COLUNAS_REDE = ("causa_sip", "causa_q850", "dialstatus", "amd", "toque")
+COLUNAS_VOZ = COLUNAS_REDE + ("resultado_operador", "transferencia", "destino", "rota", "identidade_confirmada",
+                              "id_chamada")
+AVISO_DADOS_MINIMOS = ("voz sem número discado, billsec ou id da chamada por tentativa: renitência por número, "
+                       "confirmação de inexistente e KPI de curtas ficam limitados")
+
+
+def colunas_voz(col: dict) -> dict:
+    """Aceita os nomes numero_discado/billsec/id_chamada (o nome antigo vence se o layout trouxer os dois)."""
+    col = dict(col)
+    for novo, antigo in ALIAS_VOZ.items():
+        if novo in col and antigo not in col:
+            col[antigo] = col[novo]
+    return col
+
+
+def _int(txt):
+    try:
+        return int(str(txt).strip()) if str(txt or "").strip() else None
+    except ValueError:
+        return None
+
+
+def ler_voz(linha: dict, col: dict, resultado: str, traduz, contato: str, layout, avisos: Counter, canal: str):
+    """Campos de voz de uma linha: (desfecho final, campos extras do Evento). A rede (SIP/Q.850/DIALSTATUS/AMD),
+    o evento da IA (coluna resultado) e a tabulação do operador (resultado_operador, depois da transferência)
+    ficam em campos separados; o desfecho final sai de voz.classificar_chamada. Sem as colunas novas, o
+    desfecho é o de sempre. traduz: código do cliente -> desfecho de voz (ou None)."""
+    def v(k):
+        return (linha.get(col[k]) or "").strip() if k in col else ""
+    sip, q850 = _int(v("causa_sip")), _int(v("causa_q850"))
+    op_cod = v("resultado_operador")
+    op = traduz(op_cod) if op_cod else None
+    if op_cod and op is None:
+        avisos["tabulação do operador com código desconhecido (ignorada)"] += 1
+    tr = v("transferencia").lower()
+    tr = layout.transferencias.get(v("transferencia"), layout.transferencias.get(tr, tr)) or None
+    if tr and tr not in V.TRANSFERENCIAS:
+        avisos[f"transferência '{tr}' desconhecida (ignorada)"] += 1
+        tr = None
+    de = v("destino").lower()
+    de = layout.destinos.get(v("destino"), layout.destinos.get(de, de)) or None
+    if de and de not in V.DESTINOS:
+        avisos[f"destino '{de}' desconhecido (ignorado)"] += 1
+        de = None
+    ident = v("identidade_confirmada")
+    extra = {"causa_sip": sip, "causa_q850": q850, "resultado_operador": op, "transferencia": tr, "destino": de,
+             "rota": v("rota") or None, "identidade_confirmada": _sim(ident) if ident else None,
+             "id_chamada": v("id_chamada") or None}
+    if canal == "agente_voz" or de:
+        extra["resultado_ia"] = resultado
+    if any(v(k) for k in COLUNAS_REDE) or op or tr:
+        ch, origem, av = V.classificar_chamada(
+            resultado_ia=resultado, resultado_operador=op, transferencia=tr, sip=sip, q850=q850,
+            dialstatus=v("dialstatus"), amd=v("amd"), toque_s=_int(v("toque")), toque_min=layout.toque_min_segundos,
+            canonico=V.numero_canonico(contato))
+        for a in av:
+            avisos[a] += 1
+        if ch:
+            resultado, extra["origem_resultado"] = ch, origem
+    return resultado, {k: x for k, x in extra.items() if x is not None}
+
+
 def validar_layout(dados: dict) -> Layout:
     """Carrega e valida um layout. Um de-para errado aqui contaminaria todo o score."""
+    if isinstance(dados.get("colunas"), dict):
+        dados = {**dados, "colunas": colunas_voz(dados["colunas"])}
     try:
         layout = Layout(**dados)
     except TypeError as e:
@@ -146,10 +218,15 @@ def ler_retorno(caminho: str | Path, layout: Layout, vistos: set | None = None):
             vistos.add((layout.fornecedor, id_externo))
             extra = {}
             if voz:
-                if resultado == "numero_inexistente" and layout.inexistente_confirmado \
+                com_rede = any((linha.get(col.get(k, "")) or "").strip() for k in COLUNAS_REDE if k in col)
+                if not com_rede and resultado == "numero_inexistente" and layout.inexistente_confirmado \
                         and codigo not in layout.inexistente_confirmado:
                     resultado = "falha_rede"
                     rel.avisos["número inexistente sem código confirmado (vale como falha de rede)"] += 1
+                resultado, extra = ler_voz(linha, col, resultado, layout.resultados.get, contato, layout, rel.avisos,
+                                           layout.canal)
+                if "duracao" not in col:
+                    rel.avisos[AVISO_DADOS_MINIMOS] += 1
                 extra["hora"] = norm.hora(linha[col["hora"]] if "hora" in col else txt)
                 if "duracao" in col:
                     extra["duracao_s"] = norm.segundos(linha[col["duracao"]])
