@@ -11,13 +11,13 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from motor import voz as V
-from motor.entrada import LayoutOcorrencia, ler_ocorrencia
+from motor.ingestao import carregar_layouts, ingerir_pasta
 from tests.test_voz_gerador import dados_exemplo
 from voz import banco as B
 from voz.orquestrador import amd as A
 from voz.orquestrador.agendador import AMOSTRA_MIN_ABANDONO, Agendador
 from voz.orquestrador.ari import AriFalso
-from voz.orquestrador.eventos import CAMPOS, LAYOUT_OCORRENCIA, SEM_IA, EscritorEventos, para_voz_chamadas
+from voz.orquestrador.eventos import CAMPOS, LAYOUTS, SEM_IA, EscritorEventos, para_voz_chamadas
 from voz.orquestrador.gravacao import EnviadorLocal, FilaEnvio
 from voz.orquestrador.lote import Guarda, ItemLote, Lote, ler_mailing
 from voz.orquestrador.nucleo import Orquestrador
@@ -26,6 +26,8 @@ from voz.provedores.simulador import Simulador
 logging.getLogger("motorcx.voz").setLevel(logging.ERROR)
 D0 = datetime(2026, 11, 3, 10, 0, 0)     # terça
 CEL = "11988887770"                      # termina em 0 = cenário cpc do Simulador
+BUCKET = "proj-ficticio-motorcx-grav-e1"
+RAIZ = Path(__file__).resolve().parent.parent
 
 
 class Relogio:
@@ -52,6 +54,7 @@ class Base(unittest.TestCase):
         for tabela, i, campos in mud or []:
             d[tabela][i].update(campos)
         d["voz_config"][0]["gravar"] = gravar
+        d["voz_config"][0]["bucket_gravacoes"] = BUCKET
         self.dados = B.carregar(d)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -150,13 +153,13 @@ class TestFluxo(Base):
         self.assertEqual((ev.valor_promessa, ev.data_promessa, ev.identidade_confirmada),
                          (150.0, date(2026, 11, 6), True))
         self.assertEqual((ev.billsec, ev.segundos_tarifados, ev.custo_operadora), (61, 66, 0.055))
-        self.assertEqual(ev.gravacao, f"empresa=1/2026/11/03/{cid}.wav")
+        self.assertEqual(ev.gravacao, f"gs://{BUCKET}/credor=0/2026/11/03/{cid}.wav")
         self.assertEqual(ev.provedor, "simulador")
         self.assertIn(("destruir_ponte", f"{cid}-b"), self.ari.comandos)
         self.assertEqual(self.fila.processar(100.0), [])       # primeira leitura do tamanho
         uris = self.fila.processar(102.0)
         self.assertEqual(len(uris), 1)
-        self.assertTrue((self.pasta / "gcs" / ev.gravacao).exists())
+        self.assertTrue((self.pasta / "gcs" / BUCKET / f"credor=0/2026/11/03/{cid}.wav").exists())
         self.assertFalse((self.pasta / "spool" / f"{cid}.wav").exists())
         # cliente com contato hoje não recebe outra ligação
         self.assertIn("C1", self.lote.guarda.clientes_encerrados)
@@ -173,6 +176,13 @@ class TestFluxo(Base):
         self.cair(canal)
         self.assertIsNone(self.eventos[0].gravacao)
         self.assertEqual(self.fila.pendentes, {})
+
+    def test_gravar_sem_bucket_alerta_e_nao_grava(self):
+        orq = self.montar([item()], mud=[("voz_config", 0, {"bucket_gravacoes": None})])
+        self.dados.configs[1] = B.ler_config({**dados_exemplo()["voz_config"][0], "bucket_gravacoes": None})
+        orq.tick()
+        self.assertEqual(self.originados()[0][4]["MOTORCX_GRAVAR"], "0")
+        self.assertTrue(any("sem bucket_gravacoes" in a for a in orq.alertas))
 
     def test_failover_por_falha_tecnica(self):
         orq = self.montar([item()])
@@ -306,12 +316,26 @@ class TestTransferencia(Base):
         self.cair(canal)
         self.assertEqual((self.eventos[0].transferencia, self.eventos[0].destino), ("atendida", "ia_humano"))
 
-    def test_refer_recusado(self):
+    def test_refer_recusado_cai_na_ponte(self):
         mud = [("voz_transferencias", 0, {"metodo": "refer"})]
         orq, canal, cid = self._ate_transferir(mud)
         self.ev("StasisStart", canal, args=["transferencia", "FAILURE", "486"])
+        self.assertIn(canal, self.ari.pontes[f"{cid}-b"])               # o cliente volta para a ponte
+        h = [c for c in self.ari.de("originar") if c[3][0] == "humano"]
+        self.assertEqual((h[0][1], h[0][4]["PJSIP_HEADER(add,X-MotorCX-Motivo)"]), ("PJSIP/fila@tf-1-7", "cpc"))
+        self.ev("StasisStart", f"{cid}-h", args=["humano", cid])
+        self.cair(f"{cid}-h")
         self.cair(canal)
-        self.assertEqual(self.eventos[0].transferencia, "sem_operador")
+        self.assertEqual((self.eventos[0].transferencia, self.eventos[0].destino), ("atendida", "ia_humano"))
+        self.assertEqual(orq.contagem["refer_falhou_ponte"], 1)
+
+    def test_refer_e_ponte_falham(self):
+        mud = [("voz_transferencias", 0, {"metodo": "refer"})]
+        orq, canal, cid = self._ate_transferir(mud)
+        self.ev("StasisStart", canal, args=["transferencia", "FAILURE", "486"])
+        self.cair(f"{cid}-h", 17)
+        self.cair(canal)
+        self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho), ("sem_operador", "abandonada"))
 
     def test_sem_destino_cadastrado(self):
         mud = [("voz_transferencias", 0, {"ativo": False})]
@@ -564,35 +588,58 @@ class TestEventoNoMotor(Base):
         self.cair(c3, 1, tech=404)
         self.cair(c4, 17, tech=486)
         arq = orq.escritor.caminho(1, D0.date())
+        self.assertEqual(arq.name, "motorcx_voz_2026-11-03.csv")
         cab = arq.read_text(encoding="utf-8").splitlines()[0].split(";")
         self.assertEqual(tuple(cab), CAMPOS)
-        layout = LayoutOcorrencia(**LAYOUT_OCORRENCIA)
-        vistos = set()
-        evs, rel, quar = ler_ocorrencia(arq, layout, "motorcx_asterisk", {}, vistos=vistos)
-        self.assertEqual(quar, [])
-        self.assertEqual(rel.aceitas, 4)
+        # o mesmo caminho de qualquer retorno de fornecedor: pasta retornos/ + layouts/ achado pelo nome
+        retornos = self.pasta / "retornos"
+        retornos.mkdir()
+        (retornos / "motorcx_voz_2026-11-03_0001.csv").write_bytes(arq.read_bytes())
+        (retornos / "motorcx_voz_2026-11-03_0002.csv").write_bytes(arq.read_bytes())    # reenvio
+        evs, rels, quar, sem_layout = ingerir_pasta(retornos, carregar_layouts(RAIZ / "layouts"))
+        self.assertEqual((quar, sem_layout), ([], []))
+        self.assertEqual([(r.aceitas, r.duplicadas) for r in rels], [(4, 0), (0, 4)])    # id_chamada deduplica
         por_id = {e.id_cliente: e for e in evs}
         esperado = {e.id_cliente: e.desfecho for e in self.eventos}
         self.assertEqual({k: e.resultado for k, e in por_id.items()}, esperado)
         self.assertEqual(esperado, {"C1": "promessa", "C2": "maquina", "C3": "numero_inexistente", "C4": "ocupado"})
         e1 = por_id["C1"]
         self.assertEqual((e1.canal, e1.contato, e1.duracao_s, e1.data_promessa, e1.valor_promessa,
-                          e1.identidade_confirmada, e1.origem_resultado, e1.resultado_ia),
-                         ("agente_voz", "11988887771", 61, date(2026, 11, 6), 150.0, True, "ia", "promessa"))
-        self.assertEqual(e1.id_chamada, self.eventos[0].id_chamada)
+                          e1.identidade_confirmada, e1.origem_resultado, e1.resultado_ia, e1.fornecedor),
+                         ("agente_voz", "11988887771", 61, date(2026, 11, 6), 150.0, True, "ia", "promessa",
+                          "motorcx_voz"))
+        self.assertEqual(e1.id_externo, self.eventos[0].id_chamada)
         self.assertEqual(e1.rota, "tr-1-10/1010")
         self.assertEqual(e1.custo, 0.055)
         e3 = por_id["C3"]
         self.assertEqual((e3.causa_sip, e3.causa_q850, e3.origem_resultado), (404, 1, "rede"))
-        # reimportar o mesmo arquivo não duplica (um registro por canal por tentativa: id_chamada)
-        evs2, rel2, _ = ler_ocorrencia(arq, layout, "motorcx_asterisk", {}, vistos=vistos)
-        self.assertEqual((evs2, rel2.duplicadas), ([], 4))
+
+    def test_canal_discador_vai_no_layout_do_discador(self):
+        self.montar([])
+        self.lote = Lote(1, [item()], canal="discador", credor_id=7)
+        self.orq.lotes = {}
+        self.orq.adicionar_lote(self.lote)
+        self.orq.tick()
+        self.cair(self.originados()[0][2], 19)
+        ev = self.eventos[0]
+        self.assertEqual((ev.canal, ev.credor_id), ("discador", 7))
+        arq = self.orq.escritor.caminho(1, D0.date(), 7, "discador")
+        self.assertEqual(arq.name, "motorcx_discador_2026-11-03.csv")
+        evs, rels, _, _ = ingerir_pasta(arq.parent, carregar_layouts(RAIZ / "layouts"))
+        self.assertEqual((evs[0].canal, evs[0].resultado), ("discador", "nao_atendida"))
+
+    def test_layouts_do_repositorio_iguais_ao_codigo(self):
+        import json
+        for canal, lay in LAYOUTS.items():
+            arq = RAIZ / "layouts" / f"{lay['fornecedor']}.json"
+            self.assertEqual(json.loads(arq.read_text(encoding="utf-8")), lay, arq.name)
 
     def test_layout_cobre_todos_os_desfechos_do_canal(self):
-        for d in V.do_canal("agente_voz"):
-            if not d.interno:
-                self.assertEqual(LAYOUT_OCORRENCIA["resultados"][d.chave], d.chave)
-        self.assertIn(LAYOUT_OCORRENCIA["resultados"][SEM_IA], V.FRACOS)
+        for canal, lay in LAYOUTS.items():
+            for d in V.do_canal(canal):
+                if not d.interno:
+                    self.assertEqual(lay["resultados"][d.chave], d.chave)
+            self.assertIn(lay["resultados"][SEM_IA], V.FRACOS)
 
     def test_arquivo_de_eventos_privado(self):
         import stat

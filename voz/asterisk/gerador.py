@@ -24,7 +24,7 @@ import tempfile
 from pathlib import Path
 
 from voz import banco as B
-from voz.segredos import Dicionario, Resolvedor, SecretManager
+from voz.segredos import Dicionario, Resolvedor, SecretManager, Tardio
 
 APP_ARI = "motorcx"
 DIR_GRAVACOES = "/var/spool/asterisk/motorcx"
@@ -163,7 +163,8 @@ def gerar_extensions(dados: B.DadosVoz, amd: str = AMD_PADRAO) -> str:
             " same => n,Stasis(${MOTORCX_APP},transferencia,${TRANSFERSTATUS},${TRANSFERSTATUSPROTOCOL})",
             " same => n,Hangup()",
             ""]
-    # saída por empresa e tipo de número: chamada de teste e reserva sem o orquestrador (mesma ordem de failover)
+    # saída por empresa e tipo de número: chamada de teste e reserva sem o orquestrador (mesma ordem de failover).
+    # EXTEN = DDD + número; o formato de discagem do tronco decide o que vai entre o tech prefix e o DDD.
     grupos: dict[tuple[int, str], list] = {}
     for r in dados.rotas:
         if r.tronco_id in troncos:
@@ -187,7 +188,7 @@ def gerar_extensions(dados: B.DadosVoz, amd: str = AMD_PADRAO) -> str:
                     f" same => n,Set(GROUP(motorcx)={t.nome})",
                     f" same => n,Set(MOTORCX_TECH_PREFIX={r.tech_prefix})",
                     f" same => n,Set(MOTORCX_ROTA_ID={r.id})",
-                    f" same => n,Dial(PJSIP/{r.tech_prefix}${{EXTEN}}@{t.nome},60)",
+                    f" same => n,Dial(PJSIP/{t.discar(r.tech_prefix, '${EXTEN}')}@{t.nome},60)",
                     f" same => n,GotoIf($[\"${{DIALSTATUS}}\" = \"CHANUNAVAIL\" | \"${{DIALSTATUS}}\" = \"CONGESTION\"]"
                     f"?r{i + 1})",
                     " same => n,Hangup()"]
@@ -241,7 +242,7 @@ def main(argv=None) -> int:
     ap.add_argument("--sem-senhas", action="store_true", help="pré-visualização: senha vira um marcador")
     a = ap.parse_args(argv)
     entrada = json.loads(Path(a.dados).read_text(encoding="utf-8"))
-    seg = Dicionario(marcador="SEM-SENHA-PREVIA") if a.sem_senhas else SecretManager()
+    seg = Dicionario(marcador="SEM-SENHA-PREVIA") if a.sem_senhas else Tardio(SecretManager)
     tls = {"cert": a.tls_cert, "chave": a.tls_chave} if a.tls_cert and a.tls_chave else None
     try:
         res = gerar(entrada, Path(a.saida), seg, a.ip_externo, a.rede_local, tls)

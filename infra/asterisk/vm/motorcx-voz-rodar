@@ -1,0 +1,24 @@
+#!/bin/bash
+# Sobe um dos contêineres da voz em primeiro plano (o systemd cuida de reiniciar).
+#   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao
+set -euo pipefail
+. /usr/local/bin/motorcx-voz-comum
+comum_voz=(--rm --network host --user 10010:10010 --env-file "$RUN/voz.env" -e MOTORCX_ARI_SENHA_ARQUIVO="$RUN/ari_senha"
+           -v "$RUN:$RUN:ro" -v /var/motorcx:/var/motorcx -v /etc/motorcx:/etc/motorcx:ro --read-only --tmpfs /tmp)
+case "${1:-}" in
+  asterisk)
+    exec docker run --rm --name motorcx-asterisk --network host \
+      -e MOTORCX_GCP_PROJETO="$PROJETO" -e MOTORCX_IP_EXTERNO="$IP_EXTERNO" -e MOTORCX_REDE_LOCAL="$REDE_LOCAL" \
+      -v "$RUN:$RUN:ro" -v /var/motorcx/gravacoes:/var/spool/asterisk/motorcx "$IMG_ASTERISK" ;;
+  orquestrador|simulado)
+    modo=real; [ "$1" = simulado ] && modo=simulado
+    exec docker run --name "motorcx-voz-$modo" "${comum_voz[@]}" "$IMG_VOZ" \
+      python3 -m voz.orquestrador.principal --auto --modo "$modo" --parte "$PARTE" \
+      --dados "$RUN/voz.json" --eventos "/var/motorcx/eventos/$modo" ;;
+  transcricao)
+    reserva=(); [ "$(meta motorcx-transcricao-reserva)" = 1 ] && reserva=(--reserva-api)
+    exec docker run --name motorcx-voz-transcricao "${comum_voz[@]}" -e MOTORCX_WHISPER_PASTA=/var/motorcx/modelos -e HF_HOME=/var/motorcx/modelos \
+      "$IMG_VOZ" python3 -m voz.transcricao.worker --dados "$RUN/voz.json" --entrada /var/motorcx/importadas \
+      --saida /var/motorcx/transcricoes "${reserva[@]}" ;;
+  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao" >&2; exit 2 ;;
+esac

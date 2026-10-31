@@ -1,0 +1,9 @@
+[Unit]
+Description=Busca a configuração de voz a cada 2 minutos
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

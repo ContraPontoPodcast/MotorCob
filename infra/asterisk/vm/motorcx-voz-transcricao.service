@@ -1,0 +1,11 @@
+[Unit]
+Description=Transcrição das gravações do discador do cliente (Whisper)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-transcricao
+ExecStart=/usr/local/bin/motorcx-voz-rodar transcricao
+Nice=10

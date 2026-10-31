@@ -1,7 +1,8 @@
 """Gravação: o MixMonitor grava na VM (só a parte com pessoa) e o orquestrador sobe para o GCS e apaga o local.
 
-Nome do objeto: empresa=<id>/<AAAA>/<MM>/<DD>/<id_chamada>.wav — nunca telefone, CPF ou nome. A retenção é a regra
-de ciclo de vida do bucket (criar_gcp.sh; padrão 90 dias) e a cifra é a do bucket (CMEK opcional).
+Um bucket por empresa (voz_config.bucket_gravacoes, criado por criar_gcp.sh empresa <id> <dias>), com a retenção
+da empresa como regra de ciclo de vida e a cifra do bucket (CMEK opcional). Nome do objeto:
+credor=<id|0>/<AAAA>/<MM>/<DD>/<id_chamada>.wav — nunca telefone, CPF ou nome.
 """
 from __future__ import annotations
 
@@ -22,21 +23,21 @@ def nome_arquivo(id_chamada: str) -> str:
     return id_chamada
 
 
-def nome_objeto(empresa_id: int, dia: date, id_chamada: str) -> str:
-    return f"empresa={int(empresa_id)}/{dia:%Y/%m/%d}/{nome_arquivo(id_chamada)}.wav"
+def nome_objeto(credor_id: int | None, dia: date, id_chamada: str) -> str:
+    return f"credor={int(credor_id or 0)}/{dia:%Y/%m/%d}/{nome_arquivo(id_chamada)}.wav"
 
 
 class Enviador:
-    """Interface: enviar(caminho_local, nome_objeto) -> URI gs://."""
+    """Interface: enviar(caminho_local, nome_objeto, bucket) -> URI."""
 
-    def enviar(self, caminho: Path, objeto: str) -> str:  # pragma: no cover - interface
+    def enviar(self, caminho: Path, objeto: str, bucket: str | None = None) -> str:  # pragma: no cover
         raise NotImplementedError
 
 
 class EnviadorGCS(Enviador):
     """Upload simples pela API JSON do GCS com o token da conta de serviço da VM (só biblioteca padrão)."""
 
-    def __init__(self, bucket: str, token=None, abrir=None):
+    def __init__(self, bucket: str | None = None, token=None, abrir=None):
         from voz import gcp
         import urllib.request
         self.bucket = bucket
@@ -44,12 +45,15 @@ class EnviadorGCS(Enviador):
         self._token = token or gcp.Token(self._abrir)
         self._gcp = gcp
 
-    def enviar(self, caminho, objeto):
-        url = (f"https://storage.googleapis.com/upload/storage/v1/b/{urllib.parse.quote(self.bucket)}/o"
+    def enviar(self, caminho, objeto, bucket=None):
+        bucket = bucket or self.bucket
+        if not bucket:
+            raise ValueError("bucket de gravações não informado")
+        url = (f"https://storage.googleapis.com/upload/storage/v1/b/{urllib.parse.quote(bucket)}/o"
                f"?uploadType=media&name={urllib.parse.quote(objeto, safe='')}&ifGenerationMatch=0")
         self._gcp.requisitar("POST", url, self._token, Path(caminho).read_bytes(), "audio/wav", abrir=self._abrir,
                              timeout=120)
-        return f"gs://{self.bucket}/{objeto}"
+        return f"gs://{bucket}/{objeto}"
 
 
 class EnviadorLocal(Enviador):
@@ -58,8 +62,8 @@ class EnviadorLocal(Enviador):
     def __init__(self, pasta: Path):
         self.pasta = Path(pasta)
 
-    def enviar(self, caminho, objeto):
-        destino = self.pasta / objeto
+    def enviar(self, caminho, objeto, bucket=None):
+        destino = self.pasta / (bucket or "sem-bucket") / objeto
         destino.parent.mkdir(parents=True, exist_ok=True)
         destino.write_bytes(Path(caminho).read_bytes())
         return f"file://{destino}"
@@ -76,8 +80,8 @@ class FilaEnvio:
     pendentes: dict = field(default_factory=dict)   # nome -> {objeto, tamanho, visto, tentativas, ao_enviar}
     erros: int = 0
 
-    def agendar(self, nome: str, objeto: str, ao_enviar=None) -> None:
-        self.pendentes[nome] = {"objeto": objeto, "tamanho": -1, "visto": None, "tentativas": 0,
+    def agendar(self, nome: str, objeto: str, ao_enviar=None, bucket: str | None = None) -> None:
+        self.pendentes[nome] = {"objeto": objeto, "bucket": bucket, "tamanho": -1, "visto": None, "tentativas": 0,
                                 "ao_enviar": ao_enviar}
 
     def processar(self, agora_s: float | None = None) -> list[str]:
@@ -94,7 +98,7 @@ class FilaEnvio:
             if agora_s - p["visto"] < self.estavel_s:
                 continue
             try:
-                uri = self.enviador.enviar(arq, p["objeto"])
+                uri = self.enviador.enviar(arq, p["objeto"], p["bucket"])
             except Exception:
                 p["tentativas"] += 1
                 self.erros += 1

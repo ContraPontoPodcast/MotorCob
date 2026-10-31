@@ -1,0 +1,9 @@
+[Unit]
+Description=Configuração de voz do banco -> Asterisk
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStart=/usr/local/bin/motorcx-voz-config

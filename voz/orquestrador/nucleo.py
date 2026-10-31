@@ -69,6 +69,11 @@ class Chamada:
     canal_humano: str | None = None
     tf: Transferencia | None = None
     gravando: bool = False
+    bucket: str | None = None
+    motivo_tf: str = ""
+    refer_falhou: bool = False
+    lote_chave: tuple = ()
+    t_fim: datetime | None = None
     espera_agente_ate: datetime | None = None
     failover_ate: datetime | None = None
     provedor: str | None = None
@@ -103,7 +108,8 @@ class Orquestrador:
         self.toque_max_s, self.toque_min_s = toque_max_s, toque_min_s
         self.transferencia_toque_s, self.failover_espera_s = transferencia_toque_s, failover_espera_s
         self.audio_alo = audio_alo
-        self.lotes: dict[int, Lote] = {}
+        self.lotes: dict[tuple, Lote] = {}      # (empresa_id, credor_id, canal) -> lote
+        self.aguardando: dict[str, tuple] = {}   # id_chamada -> (Chamada, prazo) esperando o resultado do provedor
         self.chamadas: dict[str, Chamada] = {}
         self.contagem: dict[str, int] = {}
         self.alertas: list[str] = []
@@ -118,11 +124,22 @@ class Orquestrador:
             log.warning(txt)
 
     def adicionar_lote(self, lote: Lote) -> None:
-        self.lotes[lote.empresa_id] = lote
+        self.lotes[lote.chave] = lote
 
     def _provedor(self, empresa_id: int) -> ProvedorVoz | None:
         cfg = self.dados.config(empresa_id)
-        return self.provedores.get(cfg.provedor) or self.provedores.get("simulador")
+        p = self.provedores.get(cfg.provedor)
+        if p is None:
+            self._alerta(f"empresa {empresa_id}: provedor '{cfg.provedor}' não configurado na VM (usando o Simulador)")
+            p = self.provedores.get("simulador")
+        return p
+
+    def atualizar_dados(self, dados: DadosVoz) -> None:
+        """Configuração nova do banco (voz.json mudou): rotas, transferências e limites valem já; o que está em voo
+        continua com o que tinha."""
+        self.dados = dados
+        for emp in list(self.agendador.empresas):
+            self.agendador.atualizar_empresa(dados.config(emp), dados.troncos_da(emp))
 
     # ---------------------------------------------------------------- ciclo
     def tick(self) -> int:
@@ -135,6 +152,10 @@ class Orquestrador:
                 self._tentar_agente(c, agora)
             if c.failover_ate is not None:
                 self._tentar_failover(c, agora)
+        for cid, (c, prazo) in list(self.aguardando.items()):
+            if agora >= prazo:
+                self._alerta(f"provedor {c.provedor}: resultado não chegou a tempo (tentativa fechada pela rede)")
+                self._registrar(c)
         if self.fila_envio is not None:
             self.fila_envio.processar(agora.timestamp())
         return self._originar_rodadas(agora)
@@ -143,8 +164,8 @@ class Orquestrador:
         total, progresso = 0, True
         while progresso:                       # rodízio: uma por empresa por rodada (partilha justa)
             progresso = False
-            for emp, lote in self.lotes.items():
-                if not self.agendador.vaga_empresa(emp):
+            for lote in self.lotes.values():
+                if not self.agendador.vaga_empresa(lote.empresa_id):
                     continue
                 prox = lote.proximo(agora)
                 if prox is None:
@@ -163,7 +184,7 @@ class Orquestrador:
             self._conta("sem_rota")
             self._alerta(f"empresa {lote.empresa_id}: número sem rota cadastrada para o tipo (fica fora do dia)")
             return None
-        c = Chamada(uuid.uuid4().hex, lote.empresa_id, idx, item, cands)
+        c = Chamada(uuid.uuid4().hex, lote.empresa_id, idx, item, cands, lote_chave=lote.chave)
         for i, cand in enumerate(cands):
             if self.agendador.tronco_livre(cand.tronco.id, agora.timestamp()):
                 c.i_rota = i
@@ -179,10 +200,17 @@ class Orquestrador:
             return False
         return True
 
+    def _grava(self, empresa_id: int) -> bool:
+        """Grava se a empresa quer E tem bucket próprio (um por empresa); sem bucket, alerta e não grava."""
+        cfg = self.dados.config(empresa_id)
+        if cfg.gravar and not cfg.bucket_gravacoes and self.fila_envio is not None:
+            self._alerta(f"empresa {empresa_id}: gravar ligado sem bucket_gravacoes (criar_gcp.sh empresa {empresa_id} "
+                         "<dias>): chamadas sem gravação")
+        return cfg.gravar and bool(cfg.bucket_gravacoes) and self.fila_envio is not None
+
     def _variaveis(self, c: Chamada) -> dict:
-        cfg = self.dados.config(c.empresa_id)
         return {"MOTORCX_ID": c.id, "MOTORCX_AMD": "1" if self.detector.usa_amd_asterisk else "0",
-                "MOTORCX_GRAVAR": "1" if cfg.gravar else "0", "MOTORCX_GRAVACAO": G.nome_arquivo(c.id),
+                "MOTORCX_GRAVAR": "1" if self._grava(c.empresa_id) else "0", "MOTORCX_GRAVACAO": G.nome_arquivo(c.id),
                 "MOTORCX_TECH_PREFIX": c.candidata.rota.tech_prefix}
 
     def _discar(self, c: Chamada, agora: datetime) -> bool:
@@ -214,7 +242,7 @@ class Orquestrador:
     def _desistir(self, c: Chamada, agora: datetime) -> None:
         """Nenhuma rota originou (erro do ARI/rede local): não é tentativa; o item volta em 1 minuto."""
         self.chamadas.pop(c.id, None)
-        lote = self.lotes[c.empresa_id]
+        lote = self.lotes[c.lote_chave]
         lote.em_voo.discard(c.idx)
         c.item.nao_antes_de = agora + timedelta(minutes=1)
         self.agendador.liberar(c.empresa_id, c.candidata.tronco.id)
@@ -249,6 +277,16 @@ class Orquestrador:
                 c.canal_provedor = None
                 if c.estado == "conversa":         # o provedor caiu/encerrou no meio da conversa
                     self._desligar_cliente(c)
+        elif tipo == "ChannelTransfer" and canal == c.canal_provedor:
+            # REFER do provedor (ElevenLabs: sip:transferir-<motivo>@...): a transferência é feita pelo MotorCX
+            from voz.provedores.elevenlabs import motivo_do_refer
+            destino = ((ev.get("refer_to") or {}).get("requested_destination") or {}).get("destination") or ""
+            m = motivo_do_refer(destino)
+            if m and c.estado == "conversa":
+                self._transferir(c, m, agora)
+        # tech_cause = código SIP final no evento do ARI. Confirmado no Asterisk 22.11 da imagem pelo teste de ponta a
+        # ponta (404 e 503 chegam no ChannelDestroyed). Se uma versão futura não mandar, só o Q.850 decide
+        # (motor/voz.py: pela_rede usa o que houver) — decisão do dono: fica assim.
         elif tipo == "ChannelHangupRequest" and canal == c.canal:
             if ev.get("cause") is not None:
                 c.causa_q850 = _int(ev.get("cause"))
@@ -267,7 +305,8 @@ class Orquestrador:
             self._conta(f"amd_{v.tipo}")
             self._desligar_cliente(c)
             return
-        c.gravando = self.dados.config(c.empresa_id).gravar
+        c.gravando = self._grava(c.empresa_id)
+        c.bucket = self.dados.config(c.empresa_id).bucket_gravacoes
         prov = self._provedor(c.empresa_id)
         if prov is not None and prov.disponivel():
             self._conectar(c, prov, agora)
@@ -316,21 +355,30 @@ class Orquestrador:
     # ---------------------------------------------------------------- eventos do provedor
     def evento_provedor(self, id_chamada: str, tipo: str, dados: dict) -> None:
         c = self.chamadas.get(id_chamada)
+        if c is None and id_chamada in self.aguardando:        # resultado que chegou depois do fim da chamada
+            c = self.aguardando[id_chamada][0]
+            if tipo == "resultado":
+                self._guardar_resultado(c, dados)
+                self._registrar(c)
+            return
         if c is None:
             return
         if tipo == "resultado":
-            r = dados.get("resultado_ia")
-            if r and r in V.POR_CHAVE:
-                c.resultado_ia = r
-            elif r:
-                self._alerta(f"provedor {c.provedor}: resultado desconhecido '{r}' (ignorado)")
-            for k in ("identidade_confirmada", "data_promessa", "valor_promessa", "retorno_em"):
-                if dados.get(k) is not None:
-                    c.extras[k] = dados[k]
+            self._guardar_resultado(c, dados)
         elif tipo == "transferir":
             self._transferir(c, str(dados.get("motivo") or ""), self.relogio())
         elif tipo == "encerrar":
             self._desligar_cliente(c)
+
+    def _guardar_resultado(self, c: Chamada, dados: dict) -> None:
+        r = dados.get("resultado_ia")
+        if r and r in V.POR_CHAVE:
+            c.resultado_ia = r
+        elif r:
+            self._alerta(f"provedor {c.provedor}: resultado desconhecido '{r}' (ignorado)")
+        for k in ("identidade_confirmada", "data_promessa", "valor_promessa", "retorno_em"):
+            if dados.get(k) is not None:
+                c.extras[k] = dados[k]
 
     def _cabecalhos(self, c: Chamada, motivo: str, tf: Transferencia) -> dict:
         """Cabeçalhos X-MotorCX (id da chamada, cliente, ação, motivo) + os fixos. Nunca CPF, nome ou valor."""
@@ -345,9 +393,10 @@ class Orquestrador:
             self._alerta(f"empresa {c.empresa_id}: transferência pedida sem destino cadastrado (voz_transferencias)")
             self._abandonar(c, "falhou")
             return
-        c.tf, c.estado = tf, "transferindo"
+        c.tf, c.estado, c.motivo_tf = tf, "transferindo", motivo
         cab = self._cabecalhos(c, motivo, tf)
         if tf.metodo == "refer":
+            # REFER: validar com cada discador do cliente ("Testar transferência"); se falhar, cai na ponte
             self._soltar_provedor(c)
             self.ari.remover_da_ponte(c.ponte, [c.canal])
             hdrs = "&".join(f"{k}={v.replace(' ', '%20')}" for k, v in cab.items())
@@ -355,7 +404,10 @@ class Orquestrador:
             self.ari.definir_variavel(c.canal, "MOTORCX_TF_URI", uri)
             self.ari.continuar(c.canal, "motorcx-transferir", "refer", 1)
             return
-        # ponte: origina para o discador do cliente e só tira a IA quando o humano atender
+        self._ponte(c, tf, cab)
+
+    def _ponte(self, c: Chamada, tf: Transferencia, cab: dict) -> None:
+        """Ponte: origina para o discador do cliente (cabeçalhos no INVITE) e só tira a IA quando o humano atende."""
         c.canal_humano = f"{c.id}-h"
         if tf.tronco_id is not None:
             tr = self.dados.tronco(tf.tronco_id)
@@ -378,6 +430,13 @@ class Orquestrador:
             self._desligar_cliente(c)        # o discador do cliente ficou com a chamada
             return
         sip = _int(proto)
+        if not c.refer_falhou and c.tf is not None and (c.tf.tronco_id is not None or c.tf.ativo):
+            # alternativa automática: o cliente volta para a ponte e o MotorCX liga para o destino
+            c.refer_falhou = True
+            self._conta("refer_falhou_ponte")
+            self.ari.adicionar_na_ponte(c.ponte, [c.canal])
+            self._ponte(c, c.tf, self._cabecalhos(c, c.motivo_tf, c.tf))
+            return
         self._abandonar(c, "sem_operador" if sip in SEM_OPERADOR_SIP else "falhou")
 
     def _humano_atendeu(self, c: Chamada, agora: datetime) -> None:
@@ -441,12 +500,26 @@ class Orquestrador:
         return t is not None and self.agendador.em_voo_tronco.get(tronco_id, 0) < t.canais
 
     def _finalizar(self, c: Chamada, agora: datetime) -> None:
+        """O canal do cliente acabou: libera canal, tronco e vaga na hora. Se o provedor manda o resultado depois
+        (ElevenLabs: webhook pós-chamada), a tentativa espera até espera_resultado_s antes de virar evento."""
         self.chamadas.pop(c.id, None)
+        prov = self.provedores.get(c.provedor or "")
+        espera = getattr(prov, "espera_resultado_s", 0) if prov is not None else 0
         self._soltar_provedor(c)
         if c.canal_humano:
             self.ari.desligar(c.canal_humano)
         if c.ponte:
             self.ari.destruir_ponte(c.ponte)
+        c.t_fim = agora
+        self.agendador.liberar(c.empresa_id, c.candidata.tronco.id)
+        if espera and c.veredito == A.PESSOA and c.resultado_ia is None:
+            self.aguardando[c.id] = (c, agora + timedelta(seconds=espera))
+            return
+        self._registrar(c)
+
+    def _registrar(self, c: Chamada) -> None:
+        self.aguardando.pop(c.id, None)
+        agora = c.t_fim
         cand = c.candidata
         billsec = int((agora - c.t_atendeu).total_seconds()) if c.t_atendeu else 0
         toque = int(((c.t_atendeu or agora) - c.t_origem).total_seconds()) if c.t_origem else None
@@ -456,7 +529,9 @@ class Orquestrador:
         ev = EventoChamada(
             empresa_id=c.empresa_id, id_cliente=c.item.id_cliente, numero_discado=c.item.telefone,
             data=(c.t_origem or agora).date(), hora=(c.t_origem or agora).time().replace(microsecond=0),
-            id_chamada=c.id, resultado=c.resultado_ia or SEM_IA, billsec=billsec, toque=toque,
+            id_chamada=c.id, resultado=c.resultado_ia or (
+                # pessoa atendeu e falou com o agente, mas o provedor não registrou resultado
+                "atendida_sem_cpc" if c.veredito == A.PESSOA and c.provedor and c.transferencia is None else SEM_IA), billsec=billsec, toque=toque,
             causa_sip=c.causa_sip, causa_q850=c.causa_q850, dialstatus="ANSWER" if c.t_atendeu else None,
             amd=c.amd, transferencia=c.transferencia, destino=c.destino,
             rota=f"{cand.tronco.nome}/{cand.rota.tech_prefix}",
@@ -465,19 +540,20 @@ class Orquestrador:
             retorno_em=c.extras.get("retorno_em"), id_acao=c.item.id_acao, tronco_id=cand.tronco.id,
             tech_prefix=cand.rota.tech_prefix, rota_id=tar["rota_id"], segundos_tarifados=tar["segundos_tarifados"],
             preco_minuto=tar["preco_minuto"], custo_operadora=tar["custo_operadora"], no_pico=c.no_pico,
-            provedor=c.provedor)
+            provedor=c.provedor, credor_id=c.lote_chave[1] if c.lote_chave else None,
+            canal=c.lote_chave[2] if c.lote_chave else "agente_voz", custo=tar["custo_operadora"] or 0.0)
         if c.gravando and c.t_atendeu and self.fila_envio is not None:
-            ev.gravacao = G.nome_objeto(c.empresa_id, ev.data, c.id)
-            self.fila_envio.agendar(G.nome_arquivo(c.id), ev.gravacao)
+            objeto = G.nome_objeto(c.lote_chave[1] if c.lote_chave else None, ev.data, c.id)
+            ev.gravacao = f"gs://{c.bucket}/{objeto}"
+            self.fila_envio.agendar(G.nome_arquivo(c.id), objeto, bucket=c.bucket)
         classificar(ev, self.toque_min_s)
         self.escritor.escrever(ev)
         if self.ao_registrar is not None:
             self.ao_registrar(ev)
-        lote = self.lotes.get(c.empresa_id)
+        lote = self.lotes.get(c.lote_chave)
         if lote is not None:
             lote.em_voo.discard(c.idx)
-            lote.guarda.registrar(c.item, ev.desfecho, agora)
-        self.agendador.liberar(c.empresa_id, cand.tronco.id)
+            lote.guarda.registrar(c.item, ev.desfecho, self.relogio())
         if c.veredito == A.PESSOA:
             mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho == "abandonada")
             if mudou == "freou":

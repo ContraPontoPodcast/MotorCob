@@ -1,0 +1,4 @@
+# Dependências SÓ da Montagem MotorCX e do worker de transcrição (imagem voz da VM do Asterisk). Ficam fora da
+# imagem do motor e do CI do motor: os testes usam mocks e não precisam delas.
+pipecat-ai[deepgram,elevenlabs,google,silero]==1.12.0   # STT Deepgram em streaming + TTS pt-BR
+faster-whisper==1.2.1                                    # Whisper self-hosted (transcrição em São Paulo)

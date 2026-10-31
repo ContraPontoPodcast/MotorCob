@@ -70,3 +70,15 @@ class Dicionario(Resolvedor):
         if self.marcador is not None:
             return self.marcador
         raise SegredoAusente(f"segredo '{ref}' indisponível")
+
+
+class Tardio(Resolvedor):
+    """Cria o resolvedor de verdade só no primeiro segredo pedido (tronco só por IP não exige o cofre)."""
+
+    def __init__(self, fabrica):
+        self._fabrica, self._r = fabrica, None
+
+    def valor(self, ref: str) -> str:
+        if self._r is None:
+            self._r = self._fabrica()
+        return self._r.valor(ref)

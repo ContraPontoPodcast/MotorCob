@@ -71,6 +71,18 @@ class TestBanco(unittest.TestCase):
         self.assertEqual(d.config(1).pico_multiplo, 2)
         self.assertEqual(d.config(2).transcrever_min_segundos, 5)   # padrão da decisão 7
         self.assertEqual(d.config(2).retencao_dias, 90)
+        self.assertIsNone(d.config(1).bucket_gravacoes)
+
+    def test_bucket_por_empresa_e_colunas_do_banco(self):
+        d = dados_exemplo()
+        d["voz_config"][0]["bucket_gravacoes"] = "proj-motorcx-grav-e1"
+        self.assertEqual(B.carregar(d).config(1).bucket_gravacoes, "proj-motorcx-grav-e1")
+        d["voz_config"][0]["bucket_gravacoes"] = "gs://x"
+        with self.assertRaises(B.DadosInvalidos):
+            B.carregar(d)
+        self.assertEqual(B.para_colunas("consumo_voz", {"empresa_id": 1, "dia": "2026-11-03", "xyz": 1}),
+                         {"empresa_id": 1, "dia": "2026-11-03"})
+        self.assertEqual(B.conflito("consumo_voz"), "empresa_id,dia,tech_prefix")
 
     def test_erros(self):
         casos = [
@@ -173,6 +185,34 @@ class TestGerador(unittest.TestCase):
         self.assertIn("Stasis(${MOTORCX_APP},amd,", ex)
         self.assertNotIn(SENHA, ex)
 
+    def test_formatos_de_discagem(self):
+        """tech_ddd_numero (padrão), tech_0_csp_ddd_numero e tech_55_ddd_numero, no dialplan e na rota."""
+        casos = [({}, "1010${EXTEN}", "101011988887777"),
+                 ({"formato_discagem": "tech_ddd_numero"}, "1010${EXTEN}", "101011988887777"),
+                 ({"formato_discagem": "tech_0_csp_ddd_numero", "csp": "21"}, "1010021${EXTEN}", "101002111988887777"),
+                 ({"formato_discagem": "tech_55_ddd_numero"}, "101055${EXTEN}", "10105511988887777")]
+        for mud, no_dialplan, discado in casos:
+            with self.subTest(mud=mud):
+                d = dados_exemplo()
+                d["voz_troncos"][0].update(mud)
+                dados = B.carregar(d)
+                ex = G.gerar_extensions(dados)
+                bloco = ex.split("[motorcx-saida-1-movel_vc1]")[1].split("\n\n")[0]
+                self.assertIn(f"Dial(PJSIP/{no_dialplan}@tr-1-10,60)", bloco)
+                self.assertIn("Dial(PJSIP/2020${EXTEN}@tr-1-11,60)", bloco)     # o outro tronco não muda
+                c = T.rotas_para(dados, 1, "11988887777", date(2026, 11, 3))[0]
+                self.assertEqual((c.discar, c.endpoint), (discado, f"PJSIP/{discado}@tr-1-10"))
+
+    def test_formato_invalido_ou_sem_csp(self):
+        for mud, msg in (({"formato_discagem": "outro"}, "formato_discagem"),
+                         ({"formato_discagem": "tech_0_csp_ddd_numero"}, "csp"),
+                         ({"formato_discagem": "tech_0_csp_ddd_numero", "csp": "123"}, "csp")):
+            d = dados_exemplo()
+            d["voz_troncos"][0].update(mud)
+            with self.assertRaises(B.DadosInvalidos) as cm:
+                B.carregar(d)
+            self.assertIn(msg, str(cm.exception))
+
     def test_gerar_grava_arquivos_com_permissao(self):
         with tempfile.TemporaryDirectory() as tmp:
             res = G.gerar(dados_exemplo(), Path(tmp), self.seg, "203.0.113.10", ["10.60.0.0/24"])
@@ -200,6 +240,18 @@ class TestGerador(unittest.TestCase):
             with redirect_stdout(io.StringIO()), redirect_stderr(err):
                 self.assertEqual(G.main(["--dados", str(arq), "--saida", tmp, "--sem-senhas"]), 2)
             self.assertIn("ERRO", err.getvalue())
+
+    def test_sem_tronco_com_senha_nao_precisa_do_cofre(self):
+        d = dados_exemplo()
+        d["voz_troncos"] = [t for t in d["voz_troncos"] if t.get("autenticacao") != "senha"]
+        d["voz_rotas"] = [r for r in d["voz_rotas"] if r["tronco_id"] != 11]
+        chamado = []
+        seg = S.Tardio(lambda: chamado.append(1) or S.Dicionario({}))
+        G.gerar_pjsip(B.carregar(d), seg)
+        self.assertEqual(chamado, [])
+        with self.assertRaises(S.SegredoAusente):
+            G.gerar_pjsip(self.dados, seg)
+        self.assertEqual(chamado, [1])
 
     def test_banco_nao_tem_coluna_de_senha(self):
         for tabela, cols in B.COLUNAS.items():

@@ -1,0 +1,12 @@
+#!/bin/bash
+# Variáveis comuns dos scripts da voz (lidas dos metadados da VM; nenhum segredo).
+META=http://metadata.google.internal/computeMetadata/v1/instance/attributes
+meta() { curl -fsS -H 'Metadata-Flavor: Google' "$META/$1" 2>/dev/null || true; }
+PROJETO="$(meta motorcx-projeto)"
+IP_EXTERNO="$(meta motorcx-ip-externo)"
+REDE_LOCAL="$(meta motorcx-rede-local)"
+PARTE="$(meta motorcx-parte)"; PARTE="${PARTE:-1/1}"          # empresas desta VM: id % n == i-1
+REGISTRO="southamerica-east1-docker.pkg.dev/${PROJETO}/motorcob"
+IMG_ASTERISK="$(meta motorcx-imagem-asterisk)"; IMG_ASTERISK="${IMG_ASTERISK:-$REGISTRO/asterisk:latest}"
+IMG_VOZ="$(meta motorcx-imagem-voz)"; IMG_VOZ="${IMG_VOZ:-$REGISTRO/voz:latest}"
+RUN=/run/motorcx

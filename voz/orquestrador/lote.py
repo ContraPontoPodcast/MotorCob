@@ -130,12 +130,21 @@ class Lote:
     """Itens de uma empresa no dia, na ordem da Lista. proximo() devolve o primeiro que a guarda libera; o número
     de reserva só entra quando os principais do mesmo cliente acabaram (encerrados ou esgotados) sem contato."""
 
-    def __init__(self, empresa_id: int, itens: list[ItemLote], guarda: Guarda | None = None):
+    def __init__(self, empresa_id: int, itens: list[ItemLote], guarda: Guarda | None = None,
+                 credor_id: int | None = None, canal: str = "agente_voz"):
+        if canal not in ("agente_voz", "discador"):
+            raise ValueError(f"canal de voz desconhecido: {canal}")
         self.empresa_id = empresa_id
+        self.credor_id = credor_id
+        self.canal = canal          # canal da ação no motor (o evento volta no mesmo canal, para a atribuição)
         self.itens = itens
         self.guarda = guarda or Guarda()
         self.em_voo: set[int] = set()            # índices discando agora
         self.motivos: dict[str, int] = {}         # contagem do porquê não discou (observabilidade)
+
+    @property
+    def chave(self) -> tuple:
+        return (self.empresa_id, self.credor_id, self.canal)
 
     def _principais_acabaram(self, idc: str) -> bool:
         for it in self.itens:
@@ -170,3 +179,23 @@ class Lote:
                    and it.tentativas < it.tentativas_max_numero
                    and self.guarda.tentativas_cliente.get(it.id_cliente, 0) < it.tentativas_max_cliente
                    and it.janela_local is not None and agora.strftime("%H:%M") < it.janela_local[1])
+
+
+def ler_ids(caminho: str | Path, dia, reserva: bool = False, base=("08:00", "20:00"), feriados=(),
+            tentativas_numero: int = 3, tentativas_cliente: int = 6) -> list[ItemLote]:
+    """ids/agente_voz.csv (id_cliente;contato, um número por linha na ordem de discagem; rodar_dia.exportar_ids).
+    Sem a janela por número do mailing, a janela sai da prévia de horários por UF/DDD do próprio motor
+    (motor/discagem.py: Horarios) dentro de `base`. reserva=True para o agente_voz_reserva.csv."""
+    from motor.discagem import DDD_UF, Horarios
+    hor = Horarios(None, feriados)
+    itens, ordem = [], {}
+    with open(caminho, newline="", encoding="utf-8") as f:
+        for l in csv.DictReader(f, delimiter=";"):
+            idc, tel = (l.get("id_cliente") or "").strip(), (l.get("contato") or "").strip()
+            if not idc or not tel:
+                continue
+            ordem[idc] = ordem.get(idc, 0) + 1
+            itens.append(ItemLote(id_cliente=idc, telefone=tel, ordem=ordem[idc], reserva=reserva,
+                                  tentativas_max_numero=tentativas_numero, tentativas_max_cliente=tentativas_cliente,
+                                  janela_local=hor.janela(dia, tel, base), uf=DDD_UF.get(tel[:2], "")))
+    return itens

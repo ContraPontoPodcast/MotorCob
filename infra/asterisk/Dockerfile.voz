@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+# Imagem da voz na VM do Asterisk: orquestrador ARI, configuração, Montagem MotorCX (Pipecat) e transcrição
+# (faster-whisper). Separada da imagem do motor: as dependências pesadas de IA não entram lá.
+#   docker build -f infra/asterisk/Dockerfile.voz -t motorcx-voz .
+# Sem segredo na imagem: chaves do Supabase e do ARI chegam por --env-file/arquivo em /run (memória da VM).
+ARG BASE=python:3.12-slim
+FROM ${BASE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=America/Sao_Paulo LANG=C.UTF-8
+
+WORKDIR /app
+COPY voz/requirements.txt voz/requirements-ia.txt /tmp/req/
+ARG COM_IA=1
+# rede com proxy TLS próprio (só no build local): docker build --secret id=ca,src=ca.crt ...; sem o segredo, nada muda
+RUN --mount=type=secret,id=ca,required=false \
+    CERT=""; if [ -s /run/secrets/ca ]; then CERT="--cert /run/secrets/ca"; fi \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends tzdata \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir $CERT -r /tmp/req/requirements.txt \
+ && if [ "$COM_IA" = 1 ]; then pip install --no-cache-dir $CERT -r /tmp/req/requirements-ia.txt; fi \
+ && useradd --system --uid 10010 --no-create-home --shell /usr/sbin/nologin motorcx-voz
+
+COPY . /app
+RUN chmod -R a+rX,go-w /app
+USER motorcx-voz
+CMD ["python3", "-m", "voz.orquestrador.principal", "--help"]

@@ -47,7 +47,9 @@ class AmdAsterisk(DetectorMaquina):
 
 
 # Conclusões da Khomp (cabeçalho X-Khomp-Analytics-CC) -> (veredito, código AMD do evento). Vocabulário a
-# confirmar com a Khomp no piloto (plano B.1): ajuste aqui, sem mexer no orquestrador.
+# confirmar com a Khomp no piloto (plano B.1): ajuste aqui, sem mexer no orquestrador (decisão do dono: fica
+# assim até o piloto). O cabeçalho é lido no dialplan com PJSIP_RESPONSE_HEADER (a função existe na imagem; o teste
+# de fumaça confere) e chega como 3º argumento do Stasis 'amd'.
 MAPA_KHOMP_PADRAO = {
     "HUMAN": (PESSOA, "HUMAN"),
     "VOICEMAIL": (MAQUINA, "MACHINE"),

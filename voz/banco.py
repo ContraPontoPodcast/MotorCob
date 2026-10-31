@@ -20,7 +20,8 @@ COLUNAS: dict[str, dict[str, str]] = {
         "id": "id", "empresa_id": "empresa_id", "referencia": "referencia", "operadora": "operadora",
         "host": "host", "porta": "porta", "transporte": "transporte", "autenticacao": "autenticacao",
         "usuario": "usuario", "segredo_ref": "segredo_ref", "codecs": "codecs", "canais": "canais", "cps": "cps",
-        "bina": "bina", "ddd_origem": "ddd_origem", "ativo": "ativo",
+        "bina": "bina", "ddd_origem": "ddd_origem", "formato_discagem": "formato_discagem", "csp": "csp",
+        "ativo": "ativo",
     },
     # V20
     "voz_rotas": {
@@ -42,10 +43,41 @@ COLUNAS: dict[str, dict[str, str]] = {
         "alo_fake_liberado": "alo_fake_liberado", "alo_fake": "alo_fake", "alo_fake_max_s": "alo_fake_max_s",
         "alo_fake_audio_ref": "alo_fake_audio_ref", "gravar": "gravar", "retencao_dias": "retencao_dias",
         "transcrever": "transcrever", "transcrever_min_segundos": "transcrever_min_segundos",
+        "bucket_gravacoes": "bucket_gravacoes",
+    },
+    # V21 / V24 / V25: uma linha por tentativa (o número discado não vai para o banco)
+    "voz_chamadas": {
+        "empresa_id": "empresa_id", "credor_id": "credor_id", "id_cliente": "id_cliente", "id_acao": "id_acao",
+        "id_chamada": "id_chamada", "resultado": "resultado", "duracao_s": "duracao_s", "billsec": "billsec",
+        "tech_prefix": "tech_prefix", "rota_id": "rota_id", "segundos_tarifados": "segundos_tarifados",
+        "preco_minuto": "preco_minuto", "custo_operadora": "custo_operadora", "no_pico": "no_pico",
+        "transferencia_resultado": "transferencia_resultado", "tem_gravacao": "tem_gravacao",
+        "ocorrido_em": "ocorrido_em",
+    },
+    # V22: por empresa, dia e tech prefix
+    "consumo_voz": {
+        "empresa_id": "empresa_id", "dia": "dia", "tech_prefix": "tech_prefix", "rota_id": "rota_id",
+        "chamadas": "chamadas", "chamadas_atendidas": "chamadas_atendidas", "segundos_atendidos": "segundos_atendidos",
+        "segundos_tarifados": "segundos_tarifados", "custo_estimado": "custo_estimado", "sem_custo": "sem_custo",
     },
 }
 
+# chave de conflito (upsert) de cada tabela gravada pela VM
+CONFLITO = {"voz_chamadas": ("id_chamada",), "consumo_voz": ("empresa_id", "dia", "tech_prefix")}
+
+
+def para_colunas(tabela: str, linha: dict) -> dict:
+    """Campos internos -> nomes de coluna do banco (o que não está no mapa não vai)."""
+    m = COLUNAS[tabela]
+    return {m[k]: v for k, v in linha.items() if k in m}
+
+
+def conflito(tabela: str) -> str:
+    return ",".join(COLUNAS[tabela][k] for k in CONFLITO[tabela])
+
 TRANSPORTES = ("udp", "tcp", "tls")
+# o que vai no Request-URI depois do tech prefix: DDD+número · 0+CSP+DDD+número · 55+DDD+número
+FORMATOS_DISCAGEM = ("tech_ddd_numero", "tech_0_csp_ddd_numero", "tech_55_ddd_numero")
 AUTENTICACOES = ("ip", "senha")
 TIPOS_ROTA = ("fixo_local", "fixo_ldn", "movel_vc1", "movel_vc2_vc3")
 METODOS_TRANSFERENCIA = ("refer", "ponte")
@@ -110,12 +142,27 @@ class Tronco:
     operadora: str = ""
     bina: str | None = None          # número exibido (do cliente; não é dado pessoal)
     ddd_origem: str | None = None    # DDD de onde o tronco sai (tipo da rota: local × LDN, VC1 × VC2/3)
+    formato_discagem: str = "tech_ddd_numero"
+    csp: str | None = None           # código de seleção de prestadora (2 dígitos), só no formato com CSP
     ativo: bool = True
 
     @property
     def nome(self) -> str:
         """Nome do endpoint no Asterisk (estável: muda só se o id mudar)."""
         return f"tr-{self.empresa_id}-{self.id}"
+
+    @property
+    def meio(self) -> str:
+        """O que entra entre o tech prefix e o DDD+número."""
+        if self.formato_discagem == "tech_0_csp_ddd_numero":
+            return "0" + (self.csp or "")
+        if self.formato_discagem == "tech_55_ddd_numero":
+            return "55"
+        return ""
+
+    def discar(self, tech_prefix: str, nacional: str) -> str:
+        """Request-URI do número (nacional = DDD + número, sem 0 nem 55)."""
+        return f"{tech_prefix}{self.meio}{nacional}"
 
 
 @dataclass(frozen=True)
@@ -188,6 +235,7 @@ class ConfigVoz:
     retencao_dias: int = 90
     transcrever: bool = True
     transcrever_min_segundos: int = 5
+    bucket_gravacoes: str | None = None       # um bucket por empresa (criar_gcp.sh empresa <id> <dias>)
 
     @property
     def alo_fake_ativo(self) -> bool:
@@ -232,6 +280,13 @@ def ler_tronco(linha: dict) -> Tronco:
     ddd = str(ddd) if ddd else None
     if ddd and not re.match(r"^[1-9][1-9]$", ddd):
         raise DadosInvalidos(f"{onde}: ddd_origem inválido")
+    fmt = str(_v(linha, t, "formato_discagem", "tech_ddd_numero"))
+    if fmt not in FORMATOS_DISCAGEM:
+        raise DadosInvalidos(f"{onde}: formato_discagem '{fmt}' ({', '.join(FORMATOS_DISCAGEM)})")
+    csp = _v(linha, t, "csp")
+    csp = str(csp) if csp is not None else None
+    if fmt == "tech_0_csp_ddd_numero" and not (csp and re.match(r"^[0-9]{2}$", csp)):
+        raise DadosInvalidos(f"{onde}: formato com CSP exige csp de 2 dígitos")
     cps = float(_v(linha, t, "cps", 5))
     if not 0 < cps <= 500:
         raise DadosInvalidos(f"{onde}: cps fora de (0, 500]")
@@ -241,7 +296,7 @@ def ler_tronco(linha: dict) -> Tronco:
                   autenticacao=aut, usuario=str(usuario) if usuario else None, segredo_ref=str(ref) if ref else None,
                   codecs=codecs, canais=_int(_v(linha, t, "canais", 30), f"{onde}.canais", 1, 10000), cps=cps,
                   operadora=str(_v(linha, t, "operadora", ""))[:60], bina=bina, ddd_origem=ddd,
-                  ativo=_bool(_v(linha, t, "ativo"), True))
+                  formato_discagem=fmt, csp=csp, ativo=_bool(_v(linha, t, "ativo"), True))
 
 
 def ler_rota(linha: dict) -> Rota:
@@ -311,7 +366,16 @@ def ler_config(linha: dict) -> ConfigVoz:
         retencao_dias=_int(_v(linha, t, "retencao_dias", 90), f"{onde}.retencao_dias", 90),
         transcrever=_bool(_v(linha, t, "transcrever"), True),
         transcrever_min_segundos=_int(_v(linha, t, "transcrever_min_segundos", 5), f"{onde}.transcrever_min_segundos",
-                                      0, 600))
+                                      0, 600),
+        bucket_gravacoes=_bucket(_v(linha, t, "bucket_gravacoes"), onde))
+
+
+def _bucket(v, onde: str) -> str | None:
+    if v in (None, ""):
+        return None
+    if not re.match(r"^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$", str(v)):
+        raise DadosInvalidos(f"{onde}: bucket_gravacoes inválido")
+    return str(v)
 
 
 @dataclass

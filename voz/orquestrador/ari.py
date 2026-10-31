@@ -135,7 +135,8 @@ class AriHttp(ClienteARI):
     def eventos(self, app):
         import websocket   # websocket-client (voz/requirements.txt)
         url = self.base.replace("http", "ws", 1) + "/ari/events?" + urllib.parse.urlencode({"app": app})
-        ws = websocket.create_connection(url, header=[f"Authorization: {self._auth}"], timeout=None)
+        ws = websocket.create_connection(url, header=[f"Authorization: {self._auth}"], timeout=None,
+                                         suppress_origin=True)
         try:
             while True:
                 msg = ws.recv()
@@ -207,3 +208,52 @@ class AriFalso(ClienteARI):
 
     def eventos(self, app):
         return iter(())
+
+
+class AriSimulado(AriFalso):
+    """Modo 'simulado' do voz_config (nenhuma ligação de verdade): responde aos comandos com os eventos que o
+    Asterisk mandaria, pelo último dígito do número, para a empresa ver o caminho inteiro sem telefonia.
+      9 não atende (Q.850 19) · 5 ocupado (17/486) · 4 inexistente (1/404) · 6 máquina · demais: pessoa."""
+
+    def __init__(self):
+        super().__init__()
+        import queue as _q
+        self.fila = _q.Queue()
+        self._numero: dict[str, str] = {}
+
+    def _ev(self, tipo, canal, **kw):
+        self.fila.put({"type": tipo, "channel": {"id": canal}, **kw})
+
+    def originar(self, endpoint, id_canal, app, app_args, variaveis=None, callerid=None, timeout=40):
+        r = super().originar(endpoint, id_canal, app, app_args, variaveis, callerid, timeout)
+        etapa = app_args[0] if app_args else ""
+        if etapa != "saida":
+            self._ev("StasisStart", id_canal, args=list(app_args))
+            return r
+        final = endpoint.split("@")[0][-1:]
+        self._numero[id_canal] = final
+        if final == "9":
+            self._ev("ChannelDestroyed", id_canal, cause=19)
+        elif final == "5":
+            self._ev("ChannelDestroyed", id_canal, cause=17, tech_cause=486)
+        elif final == "4":
+            self._ev("ChannelDestroyed", id_canal, cause=1, tech_cause=404)
+        else:
+            self._ev("StasisStart", id_canal, args=list(app_args))
+        return r
+
+    def continuar(self, canal, contexto, extensao="s", prioridade=1):
+        super().continuar(canal, contexto, extensao, prioridade)
+        if contexto == "motorcx-atendeu":
+            maq = self._numero.get(canal) == "6"
+            self._ev("StasisStart", canal, args=["amd", "MACHINE" if maq else "HUMAN", "", ""])
+        elif contexto == "motorcx-transferir":
+            self._ev("StasisStart", canal, args=["transferencia", "SUCCESS", "202"])
+
+    def desligar(self, canal, motivo="normal"):
+        super().desligar(canal, motivo)
+        self._ev("ChannelDestroyed", canal, cause=16)
+
+    def eventos(self, app):
+        while True:
+            yield self.fila.get()

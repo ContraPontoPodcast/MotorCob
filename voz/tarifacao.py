@@ -52,7 +52,7 @@ class Candidata:
     rota: Rota
     tronco: Tronco
     tipo: str
-    discar: str          # tech prefix + DDD + número (o que vai no Request-URI)
+    discar: str          # tech prefix + (0+CSP | 55 | nada, pelo formato do tronco) + DDD + número
 
     @property
     def endpoint(self) -> str:
@@ -72,14 +72,14 @@ def rotas_para(dados: DadosVoz, empresa_id: int, numero: str, dia: date) -> list
         t = troncos[r.tronco_id]
         tipo = tipo_numero(n, t.ddd_origem)
         if r.tipo == tipo:
-            saida.append(Candidata(r, t, tipo, r.tech_prefix + n))
+            saida.append(Candidata(r, t, tipo, t.discar(r.tech_prefix, n)))
     if saida:
         return saida
     for r in sorted(vig, key=lambda r: (r.prioridade, r.id)):
         t = troncos[r.tronco_id]
         tipo = tipo_numero(n, t.ddd_origem)
         if r.tipo == VIZINHA.get(tipo):
-            saida.append(Candidata(r, t, tipo, r.tech_prefix + n))
+            saida.append(Candidata(r, t, tipo, t.discar(r.tech_prefix, n)))
     return saida
 
 

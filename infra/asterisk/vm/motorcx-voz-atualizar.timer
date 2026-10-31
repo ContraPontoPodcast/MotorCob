@@ -1,0 +1,9 @@
+[Unit]
+Description=Atualiza as imagens da voz às 05:35
+
+[Timer]
+OnCalendar=*-*-* 05:35:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

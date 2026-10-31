@@ -35,7 +35,7 @@ class TestNormalizacao(unittest.TestCase):
 
 class TestLayout(unittest.TestCase):
     def test_layouts_do_repositorio_sao_validos(self):
-        self.assertEqual(len(carregar_layouts(RAIZ / "layouts")), 6)
+        self.assertEqual(len(carregar_layouts(RAIZ / "layouts")), 8)   # + motorcx_voz e motorcx_discador (voz/orquestrador/eventos.py)
 
     def test_de_para_para_resultado_fora_da_taxonomia_e_recusado(self):
         with self.assertRaises(LayoutInvalido):

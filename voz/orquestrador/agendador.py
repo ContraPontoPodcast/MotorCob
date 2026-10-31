@@ -80,6 +80,21 @@ class Agendador:
             self.em_voo_tronco.setdefault(t.id, 0)
             self.baldes.setdefault(t.id, Balde(taxa=t.cps, capacidade=max(1.0, t.cps)))
 
+    def atualizar_empresa(self, config: ConfigVoz, troncos: list[Tronco]) -> None:
+        """Limites novos sem perder o que está em voo."""
+        e = self.empresas.get(config.empresa_id)
+        if e is None:
+            self.registrar_empresa(config, troncos)
+            return
+        ativos = [t for t in troncos if t.ativo]
+        e.config, e.canais = config, sum(t.canais for t in ativos)
+        for t in ativos:
+            velho = self.troncos.get(t.id)
+            self.troncos[t.id] = t
+            self.em_voo_tronco.setdefault(t.id, 0)
+            if velho is None or velho.cps != t.cps:
+                self.baldes[t.id] = Balde(taxa=t.cps, capacidade=max(1.0, t.cps))
+
     @property
     def em_voo_global(self) -> int:
         return sum(e.em_voo for e in self.empresas.values())

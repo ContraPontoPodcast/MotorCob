@@ -1,0 +1,20 @@
+#!/bin/bash
+# Busca a configuração de voz no banco (voz/configuracao.py). Se mudou (código 10), regera o pjsip/dialplan
+# DENTRO do contêiner do Asterisk (senhas do Secret Manager) e recarrega PJSIP e dialplan. Configuração inválida
+# no banco: mantém a que está no ar (código 2, aparece no journal).
+set -uo pipefail
+. /usr/local/bin/motorcx-voz-comum
+docker run --rm --network host --env-file "$RUN/voz.env" -v "$RUN:$RUN" -v /etc/motorcx:/etc/motorcx:ro "$IMG_VOZ" \
+  python3 -m voz.configuracao --saida "$RUN/voz.json" --provedores-sip /etc/motorcx/provedores_sip.json
+rc=$?
+[ "$rc" = 0 ] && exit 0
+[ "$rc" = 10 ] || exit "$rc"
+[ "${1:-}" = --so-buscar ] && exit 0
+if docker ps --format '{{.Names}}' | grep -qx motorcx-asterisk; then
+  docker exec motorcx-asterisk python3 -m voz.asterisk.gerador --dados "$RUN/voz.json" --saida /etc/asterisk/motorcx \
+    --ip-externo "$IP_EXTERNO" --rede-local "$REDE_LOCAL" || exit 3
+  docker exec motorcx-asterisk asterisk -rx "module reload res_pjsip.so" >/dev/null
+  docker exec motorcx-asterisk asterisk -rx "dialplan reload" >/dev/null
+  echo "configuração de voz aplicada e Asterisk recarregado"
+fi
+exit 0
