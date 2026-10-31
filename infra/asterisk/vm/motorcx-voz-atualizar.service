@@ -1,0 +1,8 @@
+[Unit]
+Description=Atualiza as imagens da voz
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/motorcx-voz-atualizar

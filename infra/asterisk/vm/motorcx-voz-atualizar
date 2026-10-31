@@ -1,0 +1,17 @@
+#!/bin/bash
+# Baixa as imagens novas e reinicia os serviços que mudaram (05:35, antes da janela de discagem).
+set -euo pipefail
+. /usr/local/bin/motorcx-voz-comum
+atualizar() {   # imagem serviço...
+  local img="$1"; shift
+  local antes depois
+  antes="$(docker image inspect -f '{{.Id}}' "$img" 2>/dev/null || true)"
+  docker pull -q "$img" >/dev/null
+  depois="$(docker image inspect -f '{{.Id}}' "$img")"
+  if [ "$antes" != "$depois" ]; then
+    for s in "$@"; do systemctl restart "$s.service"; done
+  fi
+}
+atualizar "$IMG_ASTERISK" motorcx-asterisk
+atualizar "$IMG_VOZ" motorcx-voz-orquestrador motorcx-voz-simulado
+docker image prune -f >/dev/null

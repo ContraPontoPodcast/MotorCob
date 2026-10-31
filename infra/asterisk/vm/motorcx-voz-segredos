@@ -1,0 +1,20 @@
+#!/bin/bash
+# Lê do Secret Manager (conta de serviço da VM) e grava só em /run (memória). Nunca imprime.
+#   motorcx-voz-ari-senha       senha do ARI (gerada pelo criar_gcp.sh)
+#   motorcx-voz-supabase-url    URL do Supabase   } o dono cria uma vez (README, passo 2)
+#   motorcx-voz-supabase-key    chave do servidor }
+set -euo pipefail
+. /usr/local/bin/motorcx-voz-comum
+umask 077
+install -d -m 755 "$RUN"
+gcloud secrets versions access latest --secret=motorcx-voz-ari-senha | \
+  install -m 400 -o 10010 -g 10010 /dev/stdin "$RUN/ari_senha"
+URL="$(gcloud secrets versions access latest --secret=motorcx-voz-supabase-url)"
+CHAVE="$(gcloud secrets versions access latest --secret=motorcx-voz-supabase-key)"
+ENVIADO_POR="$(meta motorcx-enviado-por)"
+{
+  printf 'MOTORCOB_SUPABASE_URL=%s\nMOTORCOB_SUPABASE_KEY=%s\n' "$URL" "$CHAVE"
+  printf 'MOTORCX_GCP_PROJETO=%s\nMOTORCX_VOZ_ENVIADO_POR=%s\n' "$PROJETO" "$ENVIADO_POR"
+} > "$RUN/voz.env.tmp"
+mv "$RUN/voz.env.tmp" "$RUN/voz.env"
+unset CHAVE URL

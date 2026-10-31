@@ -1,0 +1,55 @@
+# Publica as imagens da voz no Artifact Registry do Google Cloud (mesmo padrão do imagem.yml): o Asterisk
+# (infra/asterisk/Dockerfile) e a voz (orquestrador, configuração, Montagem MotorCX e transcrição;
+# infra/asterisk/Dockerfile.voz). As VMs baixam às 05:35 (motorcx-voz-atualizar). Sem chave guardada: Workload
+# Identity Federation. Antes de publicar: teste de fumaça do Asterisk e testes da voz dentro da imagem.
+name: imagem-voz
+on:
+  push:
+    branches: [main]
+    paths:
+      - "voz/**"
+      - "infra/asterisk/**"
+      - "motor/voz.py"
+      - "motor/discagem.py"
+      - "regras/voz_causas.json"
+      - "regras/horarios_uf.json"
+      - "layouts/motorcx_*.json"
+      - "nuvem/supabase_api.py"
+      - "tests/test_voz_*.py"
+      - ".github/workflows/imagem-voz.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: imagem-voz
+  cancel-in-progress: false
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    env:
+      REG: southamerica-east1-docker.pkg.dev/${{ vars.GCP_PROJETO || 'motorcob' }}/motorcob
+    steps:
+      - uses: actions/checkout@v7
+      - name: Montar a imagem do Asterisk
+        run: docker build -f infra/asterisk/Dockerfile -t "$REG/asterisk:${GITHUB_SHA::12}" -t "$REG/asterisk:latest" -t motorcx-asterisk:fumaca .
+      - name: Teste de fumaça do Asterisk (sobe o contêiner com troncos fictícios; não liga para ninguém)
+        run: bash infra/asterisk/teste_fumaca.sh --sem-build
+      - name: Ponta a ponta com SIPp (originação, tech prefix, AMD, Stasis e causa SIP pelo ARI)
+        run: bash infra/asterisk/teste_ponta_a_ponta.sh --sem-build
+      - name: Montar a imagem da voz
+        run: docker build -f infra/asterisk/Dockerfile.voz -t "$REG/voz:${GITHUB_SHA::12}" -t "$REG/voz:latest" .
+      - name: Testes da voz dentro da imagem (somente leitura, sem privilégios)
+        run: |
+          docker run --rm --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+            -w /tmp "$REG/voz:latest" sh -c 'python3 -m unittest discover -s /app/tests -t /app -p "test_voz_*.py" -q'
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER || 'projects/1066520898298/locations/global/workloadIdentityPools/github/providers/github' }}
+          service_account: ${{ vars.GCP_SA_CI || 'motorcob-ci@motorcob.iam.gserviceaccount.com' }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Publicar
+        run: |
+          gcloud auth configure-docker southamerica-east1-docker.pkg.dev --quiet
+          docker push --all-tags "$REG/asterisk"
+          docker push --all-tags "$REG/voz"

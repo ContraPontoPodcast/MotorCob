@@ -1,0 +1,17 @@
+[Unit]
+Description=Orquestrador do MotorCX em modo simulado (nenhuma ligação)
+After=docker.service network-online.target 
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-simulado
+ExecStart=/usr/local/bin/motorcx-voz-rodar simulado
+ExecStop=/usr/bin/docker stop -t 30 motorcx-voz-simulado
+Restart=always
+RestartSec=5
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

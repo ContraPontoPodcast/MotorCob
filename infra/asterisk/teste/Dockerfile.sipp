@@ -1,0 +1,4 @@
+# Só para o teste de ponta a ponta: operadora de mentira (SIPp) e o orquestrador (Python + websocket-client).
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends sip-tester python3 python3-websocket tzdata \
+ && rm -rf /var/lib/apt/lists/*

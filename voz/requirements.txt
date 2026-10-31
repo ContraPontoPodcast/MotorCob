@@ -1,0 +1,4 @@
+# Dependências SÓ do orquestrador de voz na VM do Asterisk (fora da imagem do motor e do CI).
+# O gerador de configuração, o Secret Manager e o envio ao GCS usam só a biblioteca padrão.
+websocket-client==1.8.0   # eventos do ARI (WebSocket)
+# Montagem MotorCX e transcrição: voz/requirements-ia.txt (separado, pesado)
