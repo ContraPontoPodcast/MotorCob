@@ -2217,5 +2217,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 56: contrato do código de voz com o banco (testar_voz_contrato.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 57 · acesso próprio das VMs de voz: entra como o papel motorcx_voz (login de verdade) em arquivo próprio
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_acesso.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 57: testes do papel motorcx_voz (testar_voz_acesso.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

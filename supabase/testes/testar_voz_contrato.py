@@ -11,6 +11,8 @@
    voz/banco.py; o limite de cada empresa vem de voz_divisao_concorrencia; voz_config.variaveis (text[]) é lida.
 4. Listas fechadas iguais nos dois lados: variaveis_voz() = VARIAVEIS_VOZ (voz/banco.py e motor/voz.py) e os
    códigos dos provedores da VM (voz/provedores) passam nos checks de voz_config.provedor e voz_chamadas.provedor.
+5. O mesmo pelo acesso próprio (SQL 57, papel motorcx_voz com voz/acesso.py e pg8000): configuração igual à do modo
+   chave e voz_chamadas gravada igual, coluna por coluna. Sem o pg8000 (motor, CI), esta parte é pulada com aviso.
 
 Chamado pelo testar_rls.py no fim; também roda só:
     PGHOST=... PGPORT=... PGUSER=postgres PGDATABASE=sb python supabase/testes/testar_voz_contrato.py
@@ -251,6 +253,62 @@ c = json.loads(sql(f"select json_agg(t) from (select tech_prefix, chamadas, segu
                    f"custo, rota_id is not null rota from public.consumo_voz where empresa_id = {EA}) t"))
 caso("registro: consumo_voz sai do que o banco tarifou", cons == 1 and reg.erros == 0
      and c == [{"tech_prefix": "4321", "chamadas": 3, "segundos_tarifados": 108, "custo": 0.162, "rota": True}], (cons, c))
+
+# ------------------------------------------------------------------ 5. o mesmo contrato pelo acesso próprio (SQL 57)
+# O código da VM com voz/acesso.py entrando como o papel motorcx_voz (login de verdade, pg8000 pelo socket, como o
+# testar_voz_acesso.py): a configuração sai igual à do modo chave e voz_chamadas fica igual, coluna por coluna.
+try:
+    import pg8000.native as PG
+except ImportError:   # o motor e o CI não têm o driver; a VM tem (voz/requirements.txt)
+    PG = None
+    print("AVISO: pg8000 ausente, pulando o contrato pelo acesso próprio (motorcx_voz)")
+
+if PG is not None:
+    from voz import acesso as A
+    # o testar_rls.py reaplica o SQL 56 (divisao_concorrencia_voz sem a VM): reaplica o 57 por cima, como o dono faria
+    r = subprocess.run(BASE[:-1] + ["-q", "-f", str(RAIZ / "supabase" / "migrations" /
+                                                   "20261224000001_voz_acesso_proprio.sql")],
+                       capture_output=True, text=True)
+    caso("acesso próprio: SQL 57 reaplicado", r.returncode == 0, r.stderr[:300])
+    SOCK = os.path.join(os.environ.get("PGHOST", "/tmp"), f".s.PGSQL.{os.environ.get('PGPORT', '5432')}")
+    vm = A.AcessoProprio(lambda: PG.Connection("motorcx_voz", unix_sock=SOCK, database=BANCO,
+                                               application_name="motorcx-voz-contrato"))
+    try:
+        def da_empresa(cfg):
+            return (cfg.config(EA), [x for x in cfg.troncos if x.empresa_id == EA],
+                    [x for x in cfg.rotas if x.empresa_id == EA], [x for x in cfg.transferencias if x.empresa_id == EA])
+        chave, proprio = da_empresa(B.carregar(CF.buscar(sb))), da_empresa(B.carregar(CF.buscar(vm)))
+        caso("acesso próprio: a configuração lida é igual à do modo chave (config, troncos, rotas, transferências)",
+             chave == proprio and proprio[0].limite_simultaneas is not None, (chave, proprio))
+    except Exception as ex:   # noqa: BLE001
+        caso("acesso próprio: configuração lida e validada por voz/banco.py", False, repr(ex))
+
+    try:
+        regp = RegistroBanco(vm)
+        for e in (evento("vzp-0001"), evento("vzp-0001", canal="discador"), evento("vzp-0002", transferencia="sem_operador")):
+            regp.registrar(e)
+        n = regp.descarregar()
+        caso("acesso próprio: RegistroBanco grava voz_chamadas por voz_vm.gravar_chamadas", n == 3 and regp.erros == 0,
+             (n, regp.erros))
+        regp.registrar(evento("vzp-0001"))
+        caso("acesso próprio: reenvio não duplica (mesma chave do modo chave)", regp.descarregar() == 1
+             and regp.erros == 0 and sql(f"select count(*) from public.voz_chamadas where empresa_id = {EA} "
+                                         "and id_chamada like 'vzp-%'") == "3", regp.erros)
+        # as duas formas de acesso gravam igual: todas as colunas, menos id e o horário da tarifação
+        lado = ("select coalesce(json_agg(to_jsonb(v) - 'id' - 'tarifada_em' - 'id_chamada' order by id_chamada, canal), "
+                f"'[]') from public.voz_chamadas v where empresa_id = {EA} and id_chamada like '{{p}}-%'")
+        k, p = json.loads(sql(lado.format(p="vzc"))), json.loads(sql(lado.format(p="vzp")))
+        caso("acesso próprio: voz_chamadas fica igual à do modo chave, coluna por coluna", k == p and len(p) == 3,
+             [(a, b) for a, b in zip(k, p) if a != b] or (len(k), len(p)))
+        try:
+            vm.inserir("voz_chamadas", [{"empresa_id": EA, "id_chamada": "vzp-0009"}], conflito="id_chamada")
+            caso("acesso próprio: on_conflict diferente do banco é recusado", False, "aceitou")
+        except ValueError:
+            caso("acesso próprio: on_conflict diferente do banco é recusado", True)
+    except Exception as ex:   # noqa: BLE001
+        caso("acesso próprio: registro de chamadas", False, repr(ex))
+    finally:
+        vm.fechar()
 
 # ------------------------------------------------------------------ limpeza
 sql(f"update public.voz_contrato set concorrencia_contratada = {int(contrato_antes or 0)}")
