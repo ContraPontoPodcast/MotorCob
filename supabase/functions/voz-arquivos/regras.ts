@@ -31,7 +31,7 @@ export function usoValido(x: unknown, pedida: Operacao): Uso | null {
   if (!((u.operacao === "baixar" && u.bucket === "saidas") || (u.operacao !== "baixar" && u.bucket === "entradas"))) return null;
   const c = String(u.caminho ?? "");
   if (!CAMINHO.test(c) || c.includes("..") || c.includes("//")) return null;
-  return { operacao: u.operacao, bucket: u.bucket as Uso["bucket"], caminho: c };
+  return { operacao: pedida, bucket: u.bucket as Uso["bucket"], caminho: c };
 }
 
 // caminho do objeto na API do Storage, com cada pedaço codificado
