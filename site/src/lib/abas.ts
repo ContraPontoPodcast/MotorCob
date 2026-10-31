@@ -6,7 +6,7 @@ import {
 	Building, Users, Plug, Receipt, ScrollText,
 	HeartPulse, Mail, TrendingUp, Filter,
 	CircleDollarSign, MessagesSquare, Phone,
-	Mic, Sparkles, PhoneCall,
+	Mic, AudioLines, PhoneCall,
 } from 'lucide-react';
 import type { AreaRota } from './area-rota';
 import { PERM } from './permissoes';
@@ -79,7 +79,7 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Mapa da esteira', to: '/mapa', icon: Map },
 					{ nome: 'Comitê', to: '/comite', icon: ShieldCheck, perm: PERM.baixarComite },
 					{ nome: 'Gravações', to: '/gravacoes', icon: Mic, perm: 'ouvir_gravacoes' },
-					{ nome: 'Insights de voz', to: '/insights-voz', icon: Sparkles },
+					{ nome: 'Speech Analytics', to: '/speech-analytics', icon: AudioLines, match: ['/speech-analytics/'] },
 				],
 			},
 			{

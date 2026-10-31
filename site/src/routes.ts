@@ -9,6 +9,7 @@ export default [
   route('nova-senha', 'routes/nova-senha.tsx'),
   route('privacidade', 'routes/privacidade.tsx'),
   route('email/sair', 'routes/email-sair.tsx'),
+  route('relatorio-credor/:token', 'routes/relatorio-credor.tsx'),
   layout('routes/workspace-layout.tsx', [
     route('inicio', 'routes/home.tsx'),
     route('workspace', 'routes/workspace.tsx'),
@@ -113,6 +114,7 @@ export default [
     route('mensageria/voz/lotes/:id', 'routes/mensageria-voz-lote.tsx'),
     route('gravacoes', 'routes/gravacoes.tsx'),
     route('insights-voz', 'routes/insights-voz.tsx'),
+    route('speech-analytics/:aba?', 'routes/speech-analytics.tsx'),
     route('envios/gravacoes-discador', 'routes/envios-gravacoes-discador.tsx'),
     route('*', 'routes/app-not-found.tsx'),
   ]),
