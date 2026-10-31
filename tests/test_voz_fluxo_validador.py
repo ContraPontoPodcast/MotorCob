@@ -40,7 +40,7 @@ class TestValidadorFluxo(unittest.TestCase):
         for c in ("abertura_ausente", "abertura_repetida", "sem_saida", "saida_inexistente", "inalcancavel",
                   "ciclo_sem_limite", "blocos_demais", "fala_longa", "variavel_invalida", "valor_antes_identidade",
                   "identidade_generativa", "generativo_sem_objetivo", "generativo_sem_limite", "ferramenta_invalida",
-                  "transferir_humano_desligado", "terceiro_sem_recado", "fala_pede_senha"):
+                  "transferir_humano_desligado", "terceiro_sem_recado", "fala_pede_senha", "params_invalidos"):
             self.assertIn(c, codigos)
 
     def test_listas_iguais_ao_banco(self):
@@ -75,7 +75,18 @@ class TestValidadorFluxo(unittest.TestCase):
         self.assertEqual(V.pendencias(d, con, False, intencoes), ["sem_alcada"])
         self.assertEqual(V.pendencias(d, con, True, intencoes - {"ja_paguei"}), ["intencao_fora_catalogo:N3"])
         sem = C.negociador(None, None, None, None)
-        self.assertEqual(V.pendencias(sem, con, True, intencoes), ["conector_inativo:N4", "conector_inativo:N7"])
+        self.assertEqual(V.pendencias(sem, con, True, intencoes),
+                         ["conector_inativo:N4", "conector_inativo:N7", "identidade_sem_conferencia:N2"])
+        # conferência pelo dado da carga: só com a liberação da empresa (desligada por padrão)
+        carga = C.negociador()
+        n2 = next(b for b in carga["blocos"] if b["id"] == "N2")
+        n2["params"].update(confere="dado_carga_vm", conector_id=None)
+        n2["saidas"].pop()
+        self.assertEqual(V.pendencias(carga, con, True, intencoes), ["identidade_sem_conferencia:N2"])
+        self.assertEqual(V.pendencias(carga, con, True, intencoes, dado_carga_vm=True), [])
+        # os 4 modelos começam com a identidade pendente até a empresa escolher o conector de validação
+        for cod, (_n, _t, _d, f) in M.MODELOS.items():
+            self.assertIn("identidade_sem_conferencia:N2", V.pendencias(f(), {}, True, set()), cod)
 
 
 if __name__ == "__main__":

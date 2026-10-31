@@ -2213,8 +2213,7 @@ checar("SQL 56: anon não chama nenhuma RPC de voz", True, "select count(*) from
 
 
 # SQL 58 · Agente de voz: fluxos, conectores de CRM, alçada, passos, base de respostas e casos de teste
-# reaplica o SQL 58 depois dos testes do SQL 56 (que reaplicam o SQL 56): migra o roteiro em uso RV1 e volta o roteiro
-# para só leitura
+# reaplica o SQL 58 depois dos testes do SQL 56 (que reaplicam o SQL 56): migra o roteiro em uso RV1 (como rascunho)
 r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261225000001_voz_fluxo.sql")],
                    capture_output=True, text=True)
@@ -2240,9 +2239,9 @@ for _cod, (_nome, _tipo, _desc, _f) in _FM.MODELOS.items():
 checar("SQL 58: anon não chama o validador", False, "select public.fluxo_voz_erros('{}')", "anon")
 
 # migração do roteiro em uso (RV1, tipo ambos: pedido_humano, contestacao, fora_alcada e ofertas_sem_acordo > 0)
-checar("SQL 58: o roteiro em uso virou fluxo v1 em uso", True,
+checar("SQL 58: o roteiro em uso virou fluxo v1 em rascunho (falta o conector de validação)", True,
        f"select v.versao||'|'||v.situacao||'|'||f.nome from public.voz_fluxos f join public.voz_fluxo_versoes v on v.fluxo_id=f.id where f.roteiro_origem_id={RV1}",
-       "authenticated", u["oper"], "1|em_uso|Roteiro v1")
+       "authenticated", u["oper"], "1|rascunho|Roteiro v1")
 checar("SQL 58: regras_transferencia viraram as saídas do generativo", True,
        f"select string_agg(s->>'quando', ',' order by s->>'quando') from public.voz_fluxos f join public.voz_fluxo_versoes v on v.fluxo_id=f.id, jsonb_array_elements(v.definicao->'blocos') b, jsonb_array_elements(b->'saidas') s where f.roteiro_origem_id={RV1} and b->>'tipo'='generativa'",
        "authenticated", u["oper"], "contestacao,fora_alcada,ofertas_sem_acordo,pedido_humano")
@@ -2256,9 +2255,11 @@ checar("SQL 58: o fluxo gerado do roteiro passa no validador", True,
 checar("SQL 58: primeira fala com {{saldo}} daria valor antes da identidade (migra como rascunho)", True,
        f"select array_to_string(public.fluxo_voz_erros(public.fluxo_do_roteiro_voz(jsonb_populate_record(r, '{{\"primeira_fala\": \"Consta {{{{saldo}}}}. Falo com {{{{primeiro_nome}}}}?\"}}'))), ',') from public.voz_roteiros r where r.id={RV1}",
        "service_role", None, "valor_antes_identidade:N1")
-checar("SQL 58: roteiro ficou só leitura", False,
-       f"select public.salvar_roteiro_voz({EA}, {CX}, '{RT}', 'Olá, tudo bem?', 'negociador', null, false, {RV1})", "authenticated", u["plan"])
-checar("SQL 58: aprovar roteiro também recusa", False, f"select public.aprovar_roteiro_voz({RV1}, 'em_uso')", "authenticated", u["admina"])
+checar("SQL 58: o migrado pede o conector de validação antes de aprovar", True,
+       f"select array_to_string(public.fluxo_voz_bloqueios(v.id), ',') from public.voz_fluxos f join public.voz_fluxo_versoes v on v.fluxo_id=f.id where f.roteiro_origem_id={RV1}",
+       "authenticated", u["oper"], "identidade_sem_conferencia:N2")
+checar("SQL 58: o roteiro continua editável (só leitura fica para outro SQL)", True,
+       f"select public.salvar_roteiro_voz({EA}, {CX}, '{RT}', 'Olá, tudo bem?', 'negociador', null, false, {RV1}) is not null", "authenticated", u["plan"], "t")
 checar("SQL 58: variaveis_voz() tem assessoria", True, "select 'assessoria' = any(public.variaveis_voz())", "authenticated", u["oper"], "t")
 
 # permissão nova da equipe
@@ -2373,6 +2374,14 @@ checar("SQL 58: intenção fora do catálogo", True, f"select array_to_string(pu
 _CY = _sv(f"insert into public.credores (empresa_id,codigo,nome) values ({EA},'banco-y-fluxo','Banco Y') returning id")
 _CB = _sv(f"insert into public.credores (empresa_id,codigo,nome) values ({EB},'banco-b-fluxo','Banco B') returning id")
 checar("SQL 58: fluxo que oferece sem alçada na carteira", True, f"select array_to_string(public.fluxo_voz_pendencias({EA}, {_CY}, '{_lit(_NEG)}'), ',')", "authenticated", u["oper"], "sem_alcada")
+_CARGA = _FC.negociador(C1, None, C3, C4); _n2 = [b for b in _CARGA["blocos"] if b["id"] == "N2"][0]
+_n2["params"]["confere"] = "dado_carga_vm"; _n2["saidas"].pop()
+checar("SQL 58: identidade pelo dado da carga fica pendente (desligada por padrão)", True, f"select array_to_string(public.fluxo_voz_pendencias({EA}, {CX}, '{_lit(_CARGA)}'), ',')", "authenticated", u["oper"], "identidade_sem_conferencia:N2")
+checar("SQL 58: Técnico não libera a conferência pelo dado da carga", False, f"select public.liberar_identidade_dado_carga({EA}, true)", "authenticated", VTEC)
+checar("SQL 58: Admin do cliente não libera a conferência pelo dado da carga", False, f"select public.liberar_identidade_dado_carga({EA}, true)", "authenticated", u["admina"])
+checar("SQL 58: Master libera e a pendência some", True, f"select public.liberar_identidade_dado_carga({EA}, true); select cardinality(public.fluxo_voz_pendencias({EA}, {CX}, '{_lit(_CARGA)}'))", "authenticated", u["admin"], 0)
+_sv(f"update public.voz_config set identidade_dado_carga_vm=false where empresa_id={EA}")
+checar("SQL 58: modelo sem conector de validação fica pendente", True, f"select array_to_string(public.fluxo_voz_pendencias({EA}, {CX}, definicao), ',') from public.voz_fluxo_modelos where codigo='branco'", "authenticated", u["oper"], "identidade_sem_conferencia:N2")
 checar("SQL 58: cliente B não consulta pendências da A", False, f"select public.fluxo_voz_pendencias({EA}, {CX}, '{_lit(_NEG)}')", "authenticated", u["operb"])
 checar("SQL 58: com os conectores ativos e a alçada, nada pendente", True, f"select cardinality(public.fluxo_voz_bloqueios({FV1}))", "authenticated", u["oper"], 0)
 # casos de teste (decisão 5)
@@ -2395,7 +2404,7 @@ checar("SQL 58: equipe MotorCX não aprova o fluxo do cliente", False, f"select 
 checar("SQL 58: não pula etapa (rascunho direto para uso)", False, f"select public.usar_fluxo_voz({FV1})", "authenticated", u["admina"])
 checar("SQL 58: Admin aprova pela empresa", True, f"select public.aprovar_fluxo_voz({FV1}, 'ok')", "authenticated", u["admina"], "aprovado_empresa")
 checar("SQL 58: Admin coloca em uso", True, f"select public.usar_fluxo_voz({FV1})", "authenticated", u["admina"], "em_uso")
-checar("SQL 58: o fluxo migrado da carteira foi para o arquivo", True, f"select v.situacao from public.voz_fluxos f join public.voz_fluxo_versoes v on v.fluxo_id=f.id where f.roteiro_origem_id={RV1}", "authenticated", u["oper"], "arquivado")
+checar("SQL 58: o rascunho migrado fica como está", True, f"select v.situacao from public.voz_fluxos f join public.voz_fluxo_versoes v on v.fluxo_id=f.id where f.roteiro_origem_id={RV1}", "authenticated", u["oper"], "rascunho")
 checar("SQL 58: fluxo_voz_em_uso devolve a versão da carteira (com hash)", True, f"select versao_id||'|'||length(hash) from public.fluxo_voz_em_uso({EA}, {CX})", "authenticated", u["oper"], f"{FV1}|64")
 checar("SQL 58: cliente B não pede o fluxo da A", True, f"select count(*) from public.fluxo_voz_em_uso({EA}, {CX})", "authenticated", u["operb"], 0)
 checar("SQL 58: versão em uso não muda direto (nem pela VM)", False, f"update public.voz_fluxo_versoes set definicao='{{\"esquema\": 1, \"blocos\": []}}' where id={FV1}", "service_role")
@@ -2468,7 +2477,7 @@ for t in _T58:
     checar(f"SQL 58: anon não lê {t}", False, f"select * from public.{t} limit 1", "anon")
 checar("SQL 58: todas as tabelas novas com RLS", True, "select count(*) from pg_tables where schemaname='public' and tablename in ('" + "','".join(_T58[:-1]) + "') and not rowsecurity", "service_role", None, 0)
 checar("SQL 58: RPCs novas com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%fluxo%' or proname like '%conector%' or proname like '%host_crm%' or proname like '%alcada%' or proname like '%intencao%') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
-checar("SQL 58: anon não chama nenhuma função nova", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%fluxo%' or proname like '%conector%' or proname like '%host_crm%' or proname like '%alcada%' or proname like '%intencao%' or proname like '%pedido%fluxo%' or proname like '%geracao%' or proname in ('anexos_pedido_voz_ok','resultado_pedido_voz_ok','falas_teste_voz_ok','contagem_codigos_ok','campos_oferta_voz','codigos_conector_voz','variaveis_voz')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
+checar("SQL 58: anon não chama nenhuma função nova", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%fluxo%' or proname like '%conector%' or proname like '%host_crm%' or proname like '%alcada%' or proname like '%intencao%' or proname like '%dado_carga%' or proname like '%pedido%fluxo%' or proname like '%geracao%' or proname in ('anexos_pedido_voz_ok','resultado_pedido_voz_ok','falas_teste_voz_ok','contagem_codigos_ok','campos_oferta_voz','codigos_conector_voz','variaveis_voz')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
