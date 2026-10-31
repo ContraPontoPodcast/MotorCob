@@ -416,6 +416,13 @@ Suporte, Minha conta), só a barra clara no topo; o menu lateral claro fica só 
   404, sem permissão e área não contratada com saída; um corte de largura em 1024 px; "Pagar agora" só para quem paga.
 - Gerado: SQL 46 (`ver_clientes`, `ver_painel`) e prompt 73. Fora desta onda: tela de tokens (prompt 63), empresa só
   Mensageria, parâmetros dos links e "MotorCob" → "MotorCX" (Onda 2).
+- Onda 2 (31/10/2026, branch `claude/onda-2`), só com o que já estava decidido em `proposta_ux.md`: tokens de API em
+  Empresa › Integrações (prompt 63, com Uso do token e Console › Integrações); empresa só de Mensageria (sem SQL: Cobrança
+  = frente + módulo Orquestração, como `numeros_areas`); links do Início (`?fatura=`, `?token=`, `?filtro=sem_dono`,
+  `?carga=`, `&canal=` em Relatórios); Relatórios abre em Cobrança → Jornada → Mensageria; Auditoria na moldura da
+  Empresa; `/empresas`, `/relatorios/novo` e `/empresa/modulos` redirecionam; login direto para `/inicio`; nome
+  "MotorCX" no autenticador. SQL 53 (`para_hoje`: carga com erro abre a carga; Lista do dia com "Abrir").
+  Continuam com o dono: depois do login (Início ou área guardada) e aviso no sino da troca do nome no autenticador.
 
 ## Abordagem da persona, Propensão a pagamento e Discagem — decisões do dono em 26 e 27/10/2026
 Princípio: a ferramenta não limita o cliente. Ela informa, sugere e alerta; quem decide e configura é o cliente.
