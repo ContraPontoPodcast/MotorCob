@@ -198,7 +198,7 @@ function a(canal: string, modo?: string, extras?: Partial<Acao>): Acao {
 	return { canal, modo, ...extras };
 }
 
-/** Playbook MotorCob atual, como ações. */
+/** Playbook MotorCX atual, como ações. */
 export function playbookDefinicao(): Definicao {
 	const locPassos: Passos = {
 		'1': [a('whatsapp', 'sempre', { contatos: { whatsapp: true } })],

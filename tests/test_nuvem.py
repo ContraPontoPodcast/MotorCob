@@ -531,7 +531,7 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(linha[(22, "X0001")]["estrategia"], "Só SMS")
         self.assertEqual(linha[(22, "X0001")]["persona_usuario"], "Paulistas")     # persona da carteira
         self.assertEqual(linha[(21, "X0001")]["persona_usuario"], "")             # outra carteira: sem ela
-        self.assertEqual(linha[(21, "X0001")]["estrategia"], "Playbook MotorCob")
+        self.assertEqual(linha[(21, "X0001")]["estrategia"], "Playbook MotorCX")
         self.assertIn("whatsapp", linha[(21, "X0001")]["acao_hoje"])
         self.assertTrue(linha[(21, "X0001")]["na_carga"])
         self.assertEqual({e.get("credor_id") for e in t["execucoes"] if e["empresa_id"] == 2} - {None}, {21, 22})

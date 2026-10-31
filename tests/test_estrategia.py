@@ -253,3 +253,12 @@ class TestProdutoDaAcao(unittest.TestCase):
         self.assertNotIn("produto", _acao({"canal": "discador", "produto": "sms_otp"}, "z", erros))
         self.assertEqual(len(erros), 2)
         self.assertIn("não é do canal", erros[0])
+
+
+class TestPlaybookNome(unittest.TestCase):
+    def test_nome_mostrado_e_motorcx_e_a_pasta_continua_a_mesma(self):
+        # o texto que o cliente vê é MotorCX; o caminho em ids/estrategias/ não muda (quem baixa usa o caminho)
+        self.assertEqual(rodar_dia.PLAYBOOK_NOME, "Playbook MotorCX")
+        self.assertEqual(rodar_dia._pasta_estrategia("", rodar_dia.PLAYBOOK_NOME), "playbook-motorcob")
+        self.assertEqual(rodar_dia._pasta_estrategia(None, rodar_dia.PLAYBOOK_NOME), "playbook-motorcob")
+        self.assertEqual(rodar_dia._pasta_estrategia(7, "Negociação"), "7-negociacao")

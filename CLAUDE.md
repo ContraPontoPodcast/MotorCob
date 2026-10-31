@@ -251,7 +251,7 @@ de outra pessoa pela certificação e a rotação segue.
   dá para entender → rejeitados/ + envio com erro listando as colunas. O .json do repositório
   sempre vence.
 - Enquadramento: `rodar_dia` devolve r["enquadramento"] {id: estrategia (nome da estratégia do
-  segmento ou "Playbook MotorCob"), persona, na_carga, acao_hoje, passo_hoje}; sai em
+  segmento ou "Playbook MotorCX"), persona, na_carga, acao_hoje, passo_hoje}; sai em
   estado_cliente (se o banco não tiver as colunas, grava sem elas e alerta). View enquadramento.
 - Calendário da localização: o dia em que o cliente chega na carga é o D+1 (`marcacao.dia_na_carga`);
   `rodar_dia` registra as entradas de hoje (`registrar_entradas`) antes da lista, então a 1ª ação
