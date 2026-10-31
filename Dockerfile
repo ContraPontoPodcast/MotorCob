@@ -1,7 +1,7 @@
 # MotorCob na nuvem: o mesmo plantão do Mac (scripts/rodar_dia.sh --plantao) num contêiner.
 # Dados (estado, bases, saídas) ficam no volume /dados; a chave do Supabase chega por variável de ambiente
 # (MOTORCOB_SUPABASE_URL / MOTORCOB_SUPABASE_KEY), nunca dentro da imagem.
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     TZ=America/Sao_Paulo LANG=C.UTF-8 \
