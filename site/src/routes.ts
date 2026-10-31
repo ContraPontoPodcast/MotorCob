@@ -105,6 +105,13 @@ export default [
     route('assistente/minhas', 'routes/assistente-minhas.tsx'),
     route('relatorios', 'routes/relatorios.tsx'),
     route('relatorios/novo', 'routes/relatorios-novo.tsx'),
+    // Agente de voz (telas do cliente)
+    route('canais/agente-virtual', 'routes/canais-agente-virtual.tsx'),
+    route('mensageria/voz/lotes', 'routes/mensageria-voz-lotes.tsx'),
+    route('mensageria/voz/lotes/:id', 'routes/mensageria-voz-lote.tsx'),
+    route('gravacoes', 'routes/gravacoes.tsx'),
+    route('insights-voz', 'routes/insights-voz.tsx'),
+    route('envios/gravacoes-discador', 'routes/envios-gravacoes-discador.tsx'),
     route('*', 'routes/app-not-found.tsx'),
   ]),
 ] satisfies RouteConfig;

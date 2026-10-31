@@ -242,6 +242,10 @@ export function Uploads() {
 
 	return <>
 		<PageHeading eyebrow="ENTRADA / ARQUIVOS" title="Enviar arquivos" description="Envie os arquivos de entrada para o processamento diário."/>
+		<div role="tablist" className="no-scrollbar mb-4 flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--base-borda)' }}>
+			<span role="tab" aria-selected="true" className="shrink-0 border-b-2 px-4 py-2 text-[13px] font-semibold" style={{ borderColor: 'var(--area)', color: 'var(--base-texto)' }}>Enviar carga</span>
+			<Link role="tab" aria-selected="false" to="/envios/gravacoes-discador" className="shrink-0 border-b-2 border-transparent px-4 py-2 text-[13px] font-semibold text-[var(--base-texto-3)] hover:text-[var(--base-texto)]">Gravações do discador</Link>
+		</div>
 		{!empresa ? <Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice> : <div className="space-y-6">
 			{error && <Notice>{error}</Notice>}
 			{success && <Notice variant="success">{success}</Notice>}
