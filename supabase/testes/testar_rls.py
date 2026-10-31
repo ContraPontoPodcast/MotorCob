@@ -2613,13 +2613,14 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
 _M = u["admin"]
-checar("SQL 61: itens de IA marcados (e só eles)", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where eh_ia", "authenticated", u["oper"], "voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,ia_geracao_fluxo,ia_roleplay")
+checar("SQL 61: itens de IA marcados", True, "select count(*) from public.cobranca_itens where eh_ia and codigo in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','ia_geracao_fluxo','ia_roleplay')", "authenticated", u["oper"], 5)
+checar("SQL 61: nenhum item fora da IA marcado", True, "select count(*) from public.cobranca_itens where eh_ia and codigo not like 'ia\\_%' and codigo not in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao')", "authenticated", u["oper"], 0)
 checar("SQL 61: MC mínima da IA nasce em 70%", True, "select mc_minima_ia_pct from public.parametros_margem", "authenticated", _M, "70.00")
 checar("SQL 61: Administrativo não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", ADM, 0)
 checar("SQL 61: cliente não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", u["admina"], 0)
 checar("SQL 61: impostos + MC mínima da IA ≥ 100% é recusado", False, "update public.parametros_margem set impostos_pct=30", "authenticated", _M)
 checar("SQL 61: Master zera os impostos (conta do preço padrão)", True, "update public.parametros_margem set impostos_pct=0, mc_minima_ia_pct=70; select impostos_pct||'|'||mc_minima_ia_pct from public.parametros_margem", "authenticated", _M, "0.00|70.00")
-checar("SQL 61: preço padrão = custo ÷ (1 − 0 − 0,70), para cima (centavos; 5 casas abaixo de R$ 0,10)", True, "select string_agg(codigo||'='||preco_tabela, ',' order by ordem) from public.cobranca_itens where eh_ia", "authenticated", u["oper"], "voz_minuto_ia=1.50000,voz_minuto_ia_pico=1.50000,voz_transcricao=0.06851,ia_geracao_fluxo=0.56000,ia_roleplay=0.01120")
+checar("SQL 61: preço padrão = custo ÷ (1 − 0 − 0,70), para cima (centavos; 5 casas abaixo de R$ 0,10)", True, "select string_agg(codigo||'='||preco_tabela, ',' order by ordem) from public.cobranca_itens where codigo in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','ia_geracao_fluxo','ia_roleplay')", "authenticated", u["oper"], "voz_minuto_ia=1.50000,voz_minuto_ia_pico=1.50000,voz_transcricao=0.06851,ia_geracao_fluxo=0.56000,ia_roleplay=0.01120")
 checar("SQL 61: Master vê custo, mínimo e %MC da tabela", True, "select custo_unitario||'|'||moeda||'|'||custo_moeda||'|'||preco_minimo_ia||'|'||mc_tabela_pct from public.itens_ia() where codigo='voz_minuto_ia'", "authenticated", _M, "0.448000|USD|0.080000|1.50000|70.1")
 # custo só para o Master
 for nome_u, uid in (("Admin do cliente", u["admina"]), ("Operação", u["oper"]), ("Administrativo", ADM)):

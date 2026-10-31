@@ -4,9 +4,12 @@
 --     preço mínimo = custo unitário ÷ (1 − impostos% − MC mínima da IA%)
 -- arredondado PARA CIMA em centavos (ou em 5 casas, a precisão dos preços, quando o mínimo fica abaixo de R$ 0,10).
 -- 1. cobranca_itens.eh_ia: marca os itens de IA (o guarda vale para qualquer item marcado). Hoje: voz_minuto_ia,
---    voz_minuto_ia_pico, voz_transcricao (SQL 56), ia_geracao_fluxo (SQL 58), ia_roleplay (SQL 59). Item novo com
---    código "ia_…" ou do produto speech_analytics nasce marcado (gancho para o Speech Analytics, SQL 60); outro item
---    novo de IA: o Master marca (update public.cobranca_itens set eh_ia = true where codigo = '…').
+--    voz_minuto_ia_pico, voz_transcricao (SQL 56), ia_geracao_fluxo (SQL 58), ia_roleplay (SQL 59) e
+--    ia_speech_analytics (SQL 60). Item novo com código "ia_…" ou do produto speech_analytics nasce marcado; outro
+--    item novo de IA: o Master marca (update public.cobranca_itens set eh_ia = true where codigo = '…').
+--    Speech Analytics: custos_ia_voz (SQL 60) segue como o cadastro de insumos por componente; o custo real de cada
+--    uso (voz_analise_consumo) é espelhado em consumo_ia, e o custo médio realizado entra no guarda.
+--    ORDEM: rode o SQL 60 antes deste. Se o 60 vier depois, rode este de novo (é idempotente).
 -- 2. custos_ia: custo REAL por unidade do item (separado do preço), com moeda, cotação e vigência; opcionalmente o
 --    custo por mil tokens, quando o uso chega em tokens (geração de fluxo). Só o Master vê e grava (salvar_custo_ia).
 -- 3. consumo_ia: o uso de cada mês com a quantidade e o custo real (tokens × custo, minutos × custo ou o custo que o
@@ -155,14 +158,20 @@ language sql stable security definer set search_path = public as $$
      where c.item = it and c.vigente_desde <= dia
      order by c.vigente_desde desc limit 1
 $$;
--- custo de referência para o guarda: o maior entre o de hoje e os já cadastrados para depois (preço gravado hoje
--- não pode ficar abaixo do mínimo quando o custo novo entrar)
+-- custo de referência para o guarda: o maior entre o de hoje, os já cadastrados para depois (preço gravado hoje
+-- não pode ficar abaixo do mínimo quando o custo novo entrar) e o custo médio REALIZADO por unidade nos últimos 3
+-- meses (consumo_ia, com pelo menos 10 registros e todos com custo): se o uso real sai mais caro que o cadastro, vale
+-- o real. É assim que o Speech Analytics (custo por componente em custos_ia_voz, SQL 60) entra no guarda.
 create or replace function public.custo_ia_referencia(it text) returns numeric
 language sql stable security definer set search_path = public as $$
     select max(x) from (
         select public.custo_ia_vigente(it, current_date) as x
         union all
         select round(c.custo_unitario * c.cotacao, 6) from public.custos_ia c where c.item = it and c.vigente_desde > current_date
+        union all
+        select round(sum(k.custo) / sum(k.quantidade), 6) from public.consumo_ia k
+         where k.item = it and k.competencia >= date_trunc('month', current_date - 90)::date
+        having sum(k.quantidade) > 0 and sum(k.registros) >= 10 and sum(k.sem_custo) = 0
     ) v
 $$;
 
@@ -381,6 +390,50 @@ select pg_temp.trocar('public.registrar_geracao_fluxo_voz(bigint,jsonb,jsonb)',
 '    registrar_geracao_fluxo_voz.resultado := registrar_geracao_fluxo_voz.resultado - ''tokens_ia'';   -- SQL 61: custo só no consumo_ia
     erros := case when definicao is null');
 
+-- Speech Analytics (SQL 60, PR #154): o uso e o custo real ficam em voz_analise_consumo (custo por componente em
+-- custos_ia_voz, que continua sendo o cadastro de insumos do Speech Analytics) e a fatura em consumo_mensageria
+-- (item ia_speech_analytics, marcado como IA aqui ou pelo gatilho de cobranca_itens). Para a margem e o guarda serem
+-- um só, cada gravação em voz_analise_consumo é espelhada em consumo_ia (sem faturar de novo). Funciona em qualquer
+-- ordem; se o SQL 60 vier DEPOIS deste, rode este SQL de novo (cria o espelho e refaz o histórico).
+create or replace function public.espelhar_uso_ia_voz() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+    q numeric := coalesce(new.minutos_cobrados, 0) - coalesce(old.minutos_cobrados, 0);
+    c numeric := coalesce(new.custo_real, 0) - coalesce(old.custo_real, 0);
+    t bigint := coalesce(new.tokens_entrada, 0) + coalesce(new.tokens_saida, 0)
+                - coalesce(old.tokens_entrada, 0) - coalesce(old.tokens_saida, 0);
+begin
+    if not exists (select 1 from public.cobranca_itens i where i.codigo = 'ia_speech_analytics') then
+        return null;
+    end if;
+    insert into public.consumo_ia as x (empresa_id, competencia, item, quantidade, tokens, custo, registros, sem_custo)
+    values (new.empresa_id, date_trunc('month', new.dia)::date, 'ia_speech_analytics', greatest(q, 0), greatest(t, 0),
+            greatest(c, 0), case when tg_op = 'INSERT' then 1 else 0 end,
+            case when new.sem_custo and not coalesce(old.sem_custo, false) then 1 else 0 end)
+    on conflict (empresa_id, competencia, item) do update
+        set quantidade = greatest(x.quantidade + q, 0), tokens = greatest(x.tokens + t, 0), custo = greatest(x.custo + c, 0),
+            registros = x.registros + excluded.registros, sem_custo = x.sem_custo + excluded.sem_custo, atualizado_em = now();
+    return null;
+end $$;
+do $$
+begin
+    if to_regclass('public.voz_analise_consumo') is null
+       or not exists (select 1 from public.cobranca_itens i where i.codigo = 'ia_speech_analytics') then
+        return;
+    end if;
+    update public.cobranca_itens set eh_ia = true where codigo = 'ia_speech_analytics' and not eh_ia;
+    execute 'drop trigger if exists espelhar_uso_ia_voz on public.voz_analise_consumo';
+    -- histórico refeito do zero (rodar de novo não soma em dobro)
+    delete from public.consumo_ia where item = 'ia_speech_analytics';
+    execute $q$
+        insert into public.consumo_ia (empresa_id, competencia, item, quantidade, tokens, custo, registros, sem_custo)
+        select v.empresa_id, date_trunc('month', v.dia)::date, 'ia_speech_analytics', sum(v.minutos_cobrados),
+               sum(v.tokens_entrada + v.tokens_saida), sum(v.custo_real), count(*), count(*) filter (where v.sem_custo)
+          from public.voz_analise_consumo v group by 1, 2$q$;
+    execute 'create trigger espelhar_uso_ia_voz after insert or update on public.voz_analise_consumo '
+            'for each row execute function public.espelhar_uso_ia_voz()';
+end $$;
+
 -- ================================================================ 6. telas do Master
 -- catálogo da IA: custo vigente, preço mínimo, tabela e %MC
 create or replace function public.itens_ia()
@@ -564,7 +617,7 @@ end $$;
 revoke all on function public.custo_ia_vigente(text, date), public.custo_ia_referencia(text),
     public.preco_minimo_ia(text, numeric), public.mc_pct_ia(numeric, numeric), public.problema_preco_ia(text, text, numeric),
     public.conferir_preco_ia(text, text, numeric), public.guardar_item_ia(), public.guardar_preco_empresa_ia(),
-    public.guardar_faixa_ia(), public.validar_custo_ia(), public.validar_parametros_margem()
+    public.guardar_faixa_ia(), public.validar_custo_ia(), public.validar_parametros_margem(), public.espelhar_uso_ia_voz()
     from public, anon, authenticated;
 revoke all on function public.registrar_consumo_ia(bigint, text, numeric, bigint, numeric, boolean, date)
     from public, anon, authenticated;
