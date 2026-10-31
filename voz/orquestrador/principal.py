@@ -250,8 +250,12 @@ def main(argv=None) -> int:
         from voz.registro import RegistroBanco
         sb = supabase_do_ambiente()
         registro = RegistroBanco(sb)
+        if "montagem" in provedores:            # SQL 58: a versão em uso do fluxo da carteira (sem fluxo: roteiro)
+            from voz.fluxo import CarregadorFluxos
+            provedores["montagem"].fluxo_de = CarregadorFluxos(sb)
         orq = Orquestrador(ari, dados, Agendador(contratado=contratado), EscritorEventos(a.eventos), provedores,
-                           relogio_brasilia, fila_envio=fila_envio, ao_registrar=registro.registrar)
+                           relogio_brasilia, fila_envio=fila_envio, ao_registrar=registro.registrar,
+                           ao_fluxo=registro.registrar_fluxo)
         usuario = os.environ.get("MOTORCX_VOZ_ENVIADO_POR", "")
         pub = Publicador(sb, a.eventos, usuario) if usuario else None
         if pub is None:

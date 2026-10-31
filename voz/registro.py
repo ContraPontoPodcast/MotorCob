@@ -32,6 +32,8 @@ class RegistroBanco:
         self.tocados: set[tuple[int, date]] = set()
         self.max_fila = max_fila
         self.erros = 0
+        self.fila_passos: list[dict] = []
+        self.fila_conectores: list[dict] = []
 
     def registrar(self, ev: EventoChamada) -> None:
         linha = para_voz_chamadas(ev)
@@ -41,7 +43,36 @@ class RegistroBanco:
         if len(self.fila) > self.max_fila:                           # banco fora há muito tempo: não estoura memória
             self.fila = self.fila[-self.max_fila:]
 
+    def registrar_fluxo(self, empresa_id: int, id_chamada: str, tipo: str, dados: dict) -> None:
+        """Eventos do executor do fluxo (SQL 58): passo → voz_fluxo_passos, conector → crm_chamadas. Só códigos."""
+        linha = dict(dados, empresa_id=empresa_id, id_chamada=id_chamada)
+        if tipo == "passo":
+            self.fila_passos.append(B.para_colunas("voz_fluxo_passos", linha))
+        elif tipo == "conector" and dados.get("conector_id") is not None:
+            self.fila_conectores.append(B.para_colunas("crm_chamadas", linha))
+        for f in (self.fila_passos, self.fila_conectores):
+            del f[:-self.max_fila]
+
+    def _descarregar_fluxo(self) -> None:
+        for tabela, attr, conf in (("voz_fluxo_passos", "fila_passos", B.conflito("voz_fluxo_passos")),
+                                   ("crm_chamadas", "fila_conectores", None)):
+            lote = getattr(self, attr)
+            if not lote:
+                continue
+            setattr(self, attr, [])
+            try:
+                self.sb.inserir(tabela, lote, conflito=conf)
+            except Exception as ex:   # noqa: BLE001
+                self.erros += 1
+                log.warning("%s: falha ao gravar (%s); %d linha(s) ficam na fila", tabela, ex.__class__.__name__, len(lote))
+                setattr(self, attr, lote + getattr(self, attr))
+
     def descarregar(self) -> int:
+        n = self._descarregar_voz()
+        self._descarregar_fluxo()      # depois das chamadas (mesma ordem do banco)
+        return n
+
+    def _descarregar_voz(self) -> int:
         if not self.fila:
             return 0
         lote, self.fila = self.fila, []

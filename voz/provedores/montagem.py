@@ -19,11 +19,12 @@ import asyncio
 import json
 import logging
 import queue
+import re
 import threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from motor import voz as V
 from voz.provedores.base import MOTIVOS_TRANSFERENCIA, Conexao, ContextoChamada, Emitir, ProvedorVoz
@@ -193,6 +194,224 @@ class Conversa:
             self.emitir(self.ctx.id_chamada, "encerrar", {})
 
 
+# ------------------------------------------------------------------ bloco generativo do fluxo (SQL 58)
+FIXA_SENHA = "Não preciso de senha nem de número de cartão. O pagamento é sempre pelo link que eu envio."
+FIXA_LIMITE = "Posso te ajudar com uma das condições que tenho aqui para você."
+RE_PEDE_SENHA = re.compile(r"senha|numero do cartao|codigo de seguranca|cvv|digitos do cartao")
+RE_DATAS_HORAS = re.compile(r"\b\d{1,2}/\d{1,2}(/\d{2,4})?\b|\b\d{1,2}h(\d{2})?\b|\b\d{1,2}:\d{2}\b|\b\d{4}-\d{2}-\d{2}\b")
+RE_NUMERO = re.compile(r"\d+(?:\.\d{3})*(?:,\d+)?|\d+(?:\.\d+)?")
+_ACENTOS = str.maketrans("áàâãäéèêëíìîïóòôõöúùûüç", "aaaaaeeeeiiiiooooouuuuc")
+
+
+def _normal(t: str) -> str:
+    return (t or "").lower().translate(_ACENTOS)
+
+
+def _numero_br(t: str) -> float | None:
+    try:
+        return float(t.replace(".", "").replace(",", ".")) if "," in t else float(t.replace(".", "")) if re.fullmatch(r"\d{1,3}(\.\d{3})+", t) else float(t)
+    except ValueError:
+        return None
+
+
+def ferramentas_do_bloco(ferramentas: list, ofertas: list, devolucoes: list) -> list[dict]:
+    """Ferramentas do Generativo montadas por bloco, com enum gerado na hora: só os IDs das ofertas recebidas
+    (conector ou carteira) e só os motivos de devolução que o bloco tem como saída."""
+    ids = [str(o["id"]) for o in ofertas]
+    out = [{"type": "function", "function": {
+        "name": "devolver", "description": "Devolve o controle ao fluxo pelo motivo (saída do bloco).",
+        "parameters": {"type": "object", "additionalProperties": False, "required": ["motivo"], "properties": {
+            "motivo": {"type": "string", "enum": list(devolucoes)}}}}},
+        {"type": "function", "function": {
+            "name": "transferir_humano", "description": "Transfere para um atendente humano.",
+            "parameters": {"type": "object", "additionalProperties": False, "required": ["motivo"], "properties": {
+                "motivo": {"type": "string", "enum": list(MOTIVOS_TRANSFERENCIA)}}}}}]
+    if "encerrar_chamada" in ferramentas:
+        out.append({"type": "function", "function": {"name": "encerrar_chamada", "description": "Despede-se e encerra.",
+                                                      "parameters": {"type": "object", "additionalProperties": False,
+                                                                     "properties": {}}}})
+    if ids and "apresentar_oferta" in ferramentas:
+        out.append({"type": "function", "function": {
+            "name": "apresentar_oferta", "description": "Apresenta uma das ofertas recebidas (só pelo código).",
+            "parameters": {"type": "object", "additionalProperties": False, "required": ["oferta_id"], "properties": {
+                "oferta_id": {"type": "string", "enum": ids}}}}})
+    if ids and "registrar_promessa" in ferramentas:
+        out.append({"type": "function", "function": {
+            "name": "registrar_promessa", "description": "Registra a promessa com a oferta escolhida e a data do 1º pagamento.",
+            "parameters": {"type": "object", "additionalProperties": False, "required": ["oferta_id", "data"],
+                           "properties": {"oferta_id": {"type": "string", "enum": ids},
+                                          "data": {"type": "string", "description": "AAAA-MM-DD"}}}}})
+    if "agendar_retorno" in ferramentas:
+        out.append({"type": "function", "function": {
+            "name": "agendar_retorno", "description": "Agenda o retorno da ligação.",
+            "parameters": {"type": "object", "additionalProperties": False, "required": ["quando"], "properties": {
+                "quando": {"type": "string", "description": "AAAA-MM-DDTHH:MM (Brasília)"}}}}})
+    if "consultar_base" in ferramentas:
+        out.append({"type": "function", "function": {
+            "name": "consultar_base", "description": "Consulta a base de respostas aprovadas da empresa.",
+            "parameters": {"type": "object", "additionalProperties": False, "required": ["pergunta"], "properties": {
+                "pergunta": {"type": "string"}}}}})
+    return out
+
+
+@dataclass
+class TurnoBloco:
+    falas: list = field(default_factory=list)
+    acao: tuple | None = None          # ("devolver", motivo) | ("transferir", motivo) | ("encerrar", None)
+    trava: str | None = None           # senha_cartao | oferta_inventada | alcada | repeticao
+
+
+class ConversaBloco:
+    """O executor do bloco Conversa generativa: a Conversa de antes, agora com objetivo, tom, base de respostas e
+    ferramentas montadas por bloco. As travas ficam aqui, não no prompt: valor ou parcela que a IA falar e que não
+    seja de uma oferta recebida troca a frase por uma fala fixa; pedido de senha ou cartão também; ferramenta ou
+    argumento fora do enum é ignorado; passar de max_turnos transfere."""
+
+    def __init__(self, modelo, params: dict, devolucoes: list, ofertas: list, contexto: str, base: list | None = None,
+                 hoje: date | None = None, validade_dias: int = 5, numeros_livres: tuple = ()):
+        self.modelo, self.params, self.devolucoes, self.ofertas = modelo, params, list(devolucoes), list(ofertas)
+        self.hoje = hoje or date.today()
+        self.validade_dias = validade_dias
+        self.max_turnos = int(params.get("max_turnos") or 8)
+        self.max_apresentar = int(params.get("contrapropostas_max", 2)) + 1
+        self.turnos = self.apresentadas = 0
+        self.oferta_atual: dict | None = None
+        self.promessa: dict | None = None
+        self.retorno_em: datetime | None = None
+        self.avisos: list[str] = []
+        self.base = list(base or [])
+        self.ferramentas = ferramentas_do_bloco(params.get("ferramentas") or [], self.ofertas, self.devolucoes)
+        self.numeros_livres = set(numeros_livres)
+        tom = ", ".join(params.get("tom") or [])
+        linhas_of = "\n".join(f"- {o['id']}: " + ", ".join(f"{k}={v}" for k, v in o.items() if k != "id") for o in self.ofertas)
+        linhas_base = "\n".join(f"- P: {p} R: {r}" for p, r in self.base)
+        sistema = (f"{params.get('objetivo', '')}\n\nTom: {tom or 'cordial'}. Fale em português do Brasil, frases curtas.\n"
+                   f"Hoje é {self.hoje:%d/%m/%Y}.\n{contexto}\n"
+                   + (f"Ofertas que você pode usar (só estas, pelo código):\n{linhas_of}\n" if self.ofertas else
+                      "Não há ofertas para apresentar.\n")
+                   + (f"Respostas aprovadas da empresa (responda só com elas; fora disso, diga que vai verificar):\n{linhas_base}\n"
+                      if self.base else "")
+                   + "Use as ferramentas para apresentar oferta, registrar promessa, agendar retorno, devolver ao fluxo, "
+                     "transferir ou encerrar. Nunca peça senha, cartão ou documento.")
+        self.historico = [{"role": "system", "content": sistema}]
+
+    # ---------------------------------------------------------------- números permitidos (trava de valor)
+    def _numeros_ok(self, texto: str) -> bool:
+        t = RE_DATAS_HORAS.sub(" ", texto)
+        permitidos = set(self.numeros_livres)
+        for o in self.ofertas:
+            for k in ("parcelas", "valor_parcela", "desconto_pct", "valor_total", "entrada"):
+                if isinstance(o.get(k), (int, float)):
+                    permitidos.add(round(float(o[k]), 2))
+        for n in RE_NUMERO.findall(t):
+            v = _numero_br(n)
+            if v is not None and v > 1 and round(v, 2) not in permitidos:
+                return False
+        return True
+
+    def _filtrar(self, texto: str) -> tuple[str, str | None]:
+        if not texto:
+            return texto, None
+        if RE_PEDE_SENHA.search(_normal(texto)):
+            return FIXA_SENHA, "senha_cartao"
+        if not self._numeros_ok(texto):
+            if self.oferta_atual:
+                o = self.oferta_atual
+                return (f"A condição que tenho é {o.get('parcelas')} vez(es) de "
+                        f"{_reais(o.get('valor_parcela') or o.get('valor_total'))}."), "alcada"
+            return FIXA_LIMITE, "alcada"
+        return texto, None
+
+    def comecar(self) -> TurnoBloco:
+        return self._rodar("(a etapa começou: fale a primeira frase desta etapa)", interno=True)
+
+    def ouvir(self, texto: str) -> TurnoBloco:
+        return self._rodar(texto)
+
+    def _rodar(self, texto: str, interno: bool = False) -> TurnoBloco:
+        self.historico.append({"role": "system" if interno else "user", "content": texto})
+        try:
+            r = self.modelo.responder(self.historico, self.ferramentas)
+        except Exception as ex:   # noqa: BLE001
+            self.avisos.append(f"LLM indisponível ({ex.__class__.__name__})")
+            return TurnoBloco(acao=("transferir", "pedido_humano"))
+        turno = TurnoBloco()
+        for nome, args in r.chamadas:
+            self._ferramenta(nome, args or {}, turno)
+            if turno.acao:
+                break
+        fala, trava = self._filtrar(r.texto)
+        if fala:
+            turno.falas.append(fala)
+            self.historico.append({"role": "assistant", "content": fala})
+        turno.trava = turno.trava or trava
+        if not interno:
+            self.turnos += 1
+        if not turno.acao and self.turnos >= self.max_turnos:
+            self.avisos.append("limite de turnos do bloco")
+            turno.acao, turno.trava = ("transferir", "pedido_humano"), "repeticao"
+        return turno
+
+    def _oferta(self, oid) -> dict | None:
+        return next((o for o in self.ofertas if str(o["id"]) == str(oid)), None)
+
+    def _ferramenta(self, nome: str, a: dict, turno: TurnoBloco) -> None:
+        if nome == "devolver":
+            if a.get("motivo") in self.devolucoes:
+                turno.acao = ("devolver", a["motivo"])
+            else:
+                self.avisos.append("devolução fora das saídas (ignorada)")
+        elif nome == "transferir_humano":
+            m = a.get("motivo")
+            turno.acao = ("transferir", m if m in MOTIVOS_TRANSFERENCIA else "pedido_humano")
+        elif nome == "encerrar_chamada" and "encerrar_chamada" in (self.params.get("ferramentas") or []):
+            turno.acao = ("encerrar", None)
+        elif nome == "apresentar_oferta" and "apresentar_oferta" in (self.params.get("ferramentas") or []):
+            o = self._oferta(a.get("oferta_id"))
+            if o is None:
+                turno.trava = "oferta_inventada"
+            elif self.apresentadas >= self.max_apresentar:
+                self.avisos.append("contrapropostas esgotadas")
+            else:
+                self.apresentadas += 1
+                self.oferta_atual = o
+        elif nome == "registrar_promessa" and "registrar_promessa" in (self.params.get("ferramentas") or []):
+            o = self._oferta(a.get("oferta_id"))
+            try:
+                d = date.fromisoformat(str(a.get("data"))[:10])
+            except ValueError:
+                d = None
+            if o is None:
+                turno.trava = "oferta_inventada"
+            elif d is None or not self.hoje <= d <= self.hoje + timedelta(days=self.validade_dias):
+                self.avisos.append("data da promessa fora da validade (ignorada)")
+            else:
+                self.oferta_atual = o
+                valor = o.get("valor_parcela") if int(o.get("parcelas") or 1) > 1 else o.get("valor_total")
+                self.promessa = {"oferta": o, "data_promessa": d, "valor_promessa": valor}
+        elif nome == "agendar_retorno" and "agendar_retorno" in (self.params.get("ferramentas") or []):
+            try:
+                q = datetime.fromisoformat(str(a.get("quando"))[:16])
+                if q.date() >= self.hoje:
+                    self.retorno_em = q
+            except ValueError:
+                self.avisos.append("retorno inválido (ignorado)")
+        elif nome == "consultar_base" and "consultar_base" in (self.params.get("ferramentas") or []):
+            p = _normal(str(a.get("pergunta") or ""))
+            melhor = max(self.base, key=lambda pr: len(set(_normal(pr[0]).split()) & set(p.split())), default=None)
+            if melhor is not None and set(_normal(melhor[0]).split()) & set(p.split()):
+                turno.falas.append(melhor[1])
+        else:
+            self.avisos.append(f"ferramenta fora do bloco '{nome}' (ignorada)")
+
+
+def _reais(v) -> str:
+    try:
+        return "R$ " + f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except (TypeError, ValueError):
+        return "o valor combinado"
+
+
 class _Seguro(dict):
     def __missing__(self, k):
         return "{" + k + "}"
@@ -250,6 +469,9 @@ async def rodar_pipecat(ponte: PonteRTP, conversa: Conversa, stt, tts, parar: as
     task = PipelineTask(Pipeline([stt, Cerebro(), tts, Saida()]))
     ponte.ao_audio = lambda pcm: asyncio.ensure_future(
         task.queue_frame(InputAudioRawFrame(audio=pcm, sample_rate=TAXA, num_channels=1)))
+    if hasattr(conversa, "falar_agora"):          # fala de espera do bloco Chamar conector, antes da API responder
+        loop = asyncio.get_running_loop()
+        conversa.falar_agora = lambda t: asyncio.run_coroutine_threadsafe(task.queue_frame(TTSSpeakFrame(t)), loop)
     for t in conversa.comecar():
         await task.queue_frame(TTSSpeakFrame(t))
     runner = asyncio.ensure_future(PipelineRunner(handle_sigint=False).run(task))
@@ -273,8 +495,15 @@ class Montagem(ProvedorVoz):
     são emitidos no tick() (thread do orquestrador), nunca de dentro da thread de áudio."""
     codigo = "montagem"
 
-    def __init__(self, cfg: ConfigMontagem, segredos, roteiro_de, modelo_de=None, executor=None, servicos=None):
+    def __init__(self, cfg: ConfigMontagem, segredos, roteiro_de, modelo_de=None, executor=None, servicos=None,
+                 fluxo_de=None, conectores=None, entendedor_de=None, verificar_carga=None):
+        """fluxo_de(ctx) -> voz.fluxo.FluxoCarregado | None: a versão em uso do fluxo da carteira (SQL 58). Com fluxo,
+        a sessão é o executor voz/fluxo.Sessao (a Conversa cuida só do bloco generativo); sem fluxo, a Conversa de
+        antes com o roteiro (roteiro_de). conectores: voz.conector.ClienteConectores (padrão: com o cofre da VM)."""
         self.cfg, self.segredos, self.roteiro_de = cfg, segredos, roteiro_de
+        self.fluxo_de, self.verificar_carga = fluxo_de, verificar_carga
+        self._conectores = conectores
+        self.entendedor_de = entendedor_de
         self.modelo_de = modelo_de or (lambda: ModeloOpenAICompat(cfg.llm_base_url, segredos.valor(cfg.ref_llm),
                                                                   cfg.llm_modelo))
         self.servicos = servicos
@@ -294,10 +523,14 @@ class Montagem(ProvedorVoz):
     def iniciar(self, ctx: ContextoChamada, emitir: Emitir) -> Conexao:
         if not self.disponivel():
             raise RuntimeError("montagem sem capacidade")
+        fluxo = self.fluxo_de(ctx) if self.fluxo_de else None
         porta = self._livres.pop(0)
-        roteiro, primeira = self.roteiro_de(ctx)
-        conv = Conversa(ctx, self.modelo_de(), lambda i, t, d: self._eventos.put((i, t, d)), roteiro, primeira,
-                        self.cfg.max_turnos)
+        emitir_fila = lambda i, t, d: self._eventos.put((i, t, d))   # noqa: E731
+        if fluxo is not None:
+            conv = self._sessao_fluxo(ctx, fluxo, emitir_fila)
+        else:
+            roteiro, primeira = self.roteiro_de(ctx)
+            conv = Conversa(ctx, self.modelo_de(), emitir_fila, roteiro, primeira, self.cfg.max_turnos)
         s = SessaoMontagem(ctx, porta, conv)
         self.sessoes[ctx.id_chamada] = s
         self._emitir[ctx.id_chamada] = emitir
@@ -318,9 +551,24 @@ class Montagem(ProvedorVoz):
         self._emitir.pop(id_chamada, None)
         if s is None:
             return
+        if hasattr(s.conversa, "descartar"):
+            s.conversa.descartar()                  # resposta do CRM some da memória
         if s.parar is not None and s.loop is not None:
             s.loop.call_soon_threadsafe(s.parar.set)
         self._livres.append(s.porta)
+
+    def _sessao_fluxo(self, ctx: ContextoChamada, fluxo, emitir: Emitir):
+        from voz import fluxo as FX
+        from voz.conector import ClienteConectores
+        if self._conectores is None:
+            self._conectores = ClienteConectores(self.segredos, {})
+        if hasattr(self._conectores, "hosts"):
+            self._conectores.hosts[ctx.empresa_id] = set(getattr(fluxo, "hosts", ()) or ())
+        entendedor = self.entendedor_de() if self.entendedor_de else FX.EntendedorLLM(self.modelo_de())
+        variaveis = dict(ctx.variaveis or {})
+        return FX.Sessao(fluxo, ctx.id_chamada, ctx.id_cliente, variaveis, emitir, self._conectores,
+                         entendedor=entendedor, gerador=FX.gerador_montagem(self.modelo_de),
+                         verificar_carga=self.verificar_carga)
 
     # ---------------------------------------------------------------- execução real (Pipecat)
     def _executar_em_thread(self, s: SessaoMontagem) -> None:

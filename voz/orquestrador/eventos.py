@@ -71,6 +71,8 @@ class EventoChamada:
     desfecho: str | None = None
     origem_desfecho: str | None = None
     avisos: str = ""
+    fluxo_versao_id: int | None = None   # SQL 58: versão do fluxo que conduziu a chamada
+    bloco_final: str | None = None
 
 
 CAMPOS = tuple(f.name for f in fields(EventoChamada))
@@ -166,4 +168,5 @@ def para_voz_chamadas(ev: EventoChamada) -> dict:
             "tech_prefix": ev.tech_prefix, "rota_id": ev.rota_id, "segundos_tarifados": ev.segundos_tarifados,
             "preco_minuto": ev.preco_minuto, "custo_operadora": ev.custo_operadora, "no_pico": ev.no_pico,
             "transferencia_resultado": ev.transferencia, "tem_gravacao": bool(ev.gravacao),
+            "fluxo_versao_id": ev.fluxo_versao_id, "bloco_final": ev.bloco_final,
             "ocorrido_em": datetime.combine(ev.data, ev.hora).isoformat()}
