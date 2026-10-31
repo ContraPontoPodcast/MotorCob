@@ -131,6 +131,23 @@ class TestGerar(unittest.TestCase):
         self.assertEqual(a["resultado"]["erros"], ["valor_antes_identidade:N1"])
         self.assertFalse(G.processar_um(sb, LLM([])))
 
+    def test_limpar_anexos(self):
+        class SB:
+            def __init__(self):
+                self.removidos, self.marcados = [], []
+
+            def rpc(self, f, a):
+                if f == "anexos_fluxo_vencidos":
+                    return [{"pedido_id": 7, "anexos": ["entradas/alfa/fluxo/desenho.pdf", "chamados/alfa/r.docx", "x"]}]
+                self.marcados.append(a["pedido"])
+
+            def remover(self, bucket, caminhos):
+                self.removidos.append((bucket, caminhos))
+        sb = SB()
+        self.assertEqual(G.limpar_anexos(sb), 1)
+        self.assertEqual(sb.removidos, [("entradas", ["alfa/fluxo/desenho.pdf"]), ("chamados", ["alfa/r.docx"])])
+        self.assertEqual(sb.marcados, [7])
+
 
 if __name__ == "__main__":
     unittest.main()

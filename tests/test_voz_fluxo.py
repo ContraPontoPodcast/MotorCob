@@ -111,21 +111,10 @@ class TestCaminhos(unittest.TestCase):
         self.assertTrue(r["turnos"][-1]["fim"].startswith("transferida"))
 
     def test_identidade_nunca_pela_ia(self):
-        """Sem conector nem dado da carga, a sessão não confirma (nem com LLM de cognição dizendo que sim)."""
+        """Sem o conector de validação do CRM a sessão nunca confirma (nem com a cognição dizendo que sim)."""
         d = C.negociador(1, None, 3, 4)
         r = simular(ATE_N3, f=fluxo(d))
         self.assertNotIn("N3", r["caminho"])
-
-    def test_identidade_pelo_dado_da_carga_so_liberado(self):
-        d = C.negociador()
-        n2 = next(b for b in d["blocos"] if b["id"] == "N2")
-        n2["params"].update(confere="dado_carga_vm", conector_id=None)
-        n2["saidas"].pop()
-        conf = lambda cli, dia, mes: (dia, mes) == (15, 3)                    # estado local da VM (fictício)
-        desligado = simular(ATE_N3, f=fluxo(d), verificar_carga=conf)
-        self.assertEqual(desligado["caminho"], ["N1", "N2", "N14"])
-        ligado = simular(ATE_N3, f=fluxo(d, dado_carga_vm=True), verificar_carga=conf)
-        self.assertEqual(ligado["caminho"], ["N1", "N2", "N3"])
 
     def test_ja_paguei(self):
         r = simular(ATE_N3 + ["Já paguei", "Paguei dia 28/10"])
@@ -453,8 +442,7 @@ class TestMontagemFluxo(unittest.TestCase):
                 return [{"id": 1, "desconto_max_pct": 20, "parcelas_max": 6, "parcela_min": 50, "ofertas_padrao": []}]
 
             def selecionar(self, t, filtros=None, **k):
-                return {"crm_conectores": [], "crm_hosts_permitidos": [{"host": "api.crm.exemplo.com.br"}],
-                        "voz_config": [{"identidade_dado_carga_vm": False}]}.get(t, [])
+                return {"crm_conectores": [], "crm_hosts_permitidos": [{"host": "api.crm.exemplo.com.br"}]}.get(t, [])
         car = FX.CarregadorFluxos(SB(), ttl_s=60, relogio=lambda: 0)
         ctx = ContextoChamada(id_chamada="a", empresa_id=1, id_cliente="C", credor_id=5)
         f1, f2 = car(ctx), car(ctx)

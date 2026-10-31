@@ -62,9 +62,7 @@ FERRAMENTAS = ("apresentar_oferta", "registrar_promessa", "agendar_retorno", "co
 TONS = ("cordial", "frases_curtas", "sem_giria", "nao_pressiona", "formal")
 ENTIDADES = ("data", "valor", "parcelas", "hora")
 PERGUNTAS_IDENTIDADE = ("dia_mes_nascimento", "ano_nascimento", "ultimos3_documento")
-# como a identidade é conferida (nunca pela IA): pelo conector de validação do CRM (padrão) ou, se o dono liberar,
-# pelo dia e mês tirados da carga e guardados só no estado local da VM (dado_carga_vm, desligado por padrão)
-CONFERENCIAS = ("conector", "dado_carga_vm")
+# a identidade é conferida só pelo CRM (conector de finalidade validar_cadastro), nunca pela IA (decisão do dono)
 ORIGENS_OFERTA = ("conector", "carteira")
 REGISTROS = ("acordo_crm", "promessa_motorcx")
 CANAIS_LINK = ("whatsapp_sms", "sms", "whatsapp")
@@ -80,7 +78,7 @@ CHAVES_BLOCO = ("id", "tipo", "modo", "x", "y", "titulo", "repetir_max", "params
 CHAVES_SAIDA = ("rotulo", "para", "tipo", "quando")
 CHAVES_PARAMS = {
     "abertura": ("fala",),
-    "identidade": ("fala", "pergunta", "confere", "conector_id", "tentativas"),
+    "identidade": ("fala", "pergunta", "conector_id", "tentativas"),
     "pergunta": ("fala", "opcoes", "tentativas"),
     "intencao": ("fala", "intencoes", "exemplos", "confianca_min", "tentativas", "entidades"),
     "generativa": ("objetivo", "tom", "max_turnos", "ferramentas", "contrapropostas_max"),
@@ -176,10 +174,6 @@ def _params(b: dict, erros: list[str]) -> None:
 
     if tipo == "identidade":
         ruim |= p.get("pergunta") not in PERGUNTAS_IDENTIDADE
-        if "confere" in p:
-            ruim |= p["confere"] not in CONFERENCIAS
-            if p["confere"] == "dado_carga_vm":
-                ruim |= p.get("conector_id") is not None or p.get("pergunta") != "dia_mes_nascimento"
     elif tipo == "pergunta":
         op = p.get("opcoes")
         if not isinstance(op, list) or not 1 <= len(op) <= 6:
@@ -466,21 +460,13 @@ def usa_oferta(d: dict) -> bool:
     return False
 
 
-def conferencia(b: dict) -> str:
-    return (b.get("params") or {}).get("confere", "conector")
-
-
-def pendencias(d: dict, conectores: dict[int, tuple[str, str]], tem_alcada: bool, intencoes: set[str],
-               dado_carga_vm: bool = False) -> list[str]:
-    """Erros que dependem do banco. conectores: id → (situacao, finalidade) da empresa; intencoes: catálogo ativo;
-    dado_carga_vm: a empresa tem a conferência pelo dado da carga liberada (voz_config.identidade_dado_carga_vm).
+def pendencias(d: dict, conectores: dict[int, tuple[str, str]], tem_alcada: bool, intencoes: set[str]) -> list[str]:
+    """Erros que dependem do banco. conectores: id → (situacao, finalidade) da empresa; intencoes: catálogo ativo.
     Só para fluxo que passa em erros()."""
     out = []
     for b in d["blocos"]:
         if b["tipo"] == "identidade":
-            if conferencia(b) == "conector" and b["params"].get("conector_id") is None:
-                out.append(f"identidade_sem_conferencia:{b['id']}")
-            elif conferencia(b) == "dado_carga_vm" and not dado_carga_vm:
+            if b["params"].get("conector_id") is None:          # só o CRM confere a identidade
                 out.append(f"identidade_sem_conferencia:{b['id']}")
         for c in conectores_do_bloco(b):
             info = conectores.get(c) if c is not None else None

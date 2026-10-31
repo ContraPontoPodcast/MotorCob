@@ -64,12 +64,9 @@ def rodar(pedido: dict, modelo_de=None, entendedor=None, hoje: date | None = Non
         c = CN.Conector.da_linha(linha)
         cons[c.id] = c
     base = {k: [tuple(x) for x in v] for k, v in (pedido.get("base") or {}).items()}
-    fluxo = FX.FluxoCarregado(pedido.get("versao_id"), d, cons, CN.Alcada.da_linha(pedido.get("alcada")), base,
-                              dado_carga_vm=bool(pedido.get("dado_carga_vm")))
-    dado_teste = pedido.get("dado_carga_teste")         # dia/mês fictício do cliente de teste (modo dado_carga_vm)
-    verificar = (lambda cli, dia, mes: [dia, mes] == dado_teste) if dado_teste else None
+    fluxo = FX.FluxoCarregado(pedido.get("versao_id"), d, cons, CN.Alcada.da_linha(pedido.get("alcada")), base)
     r = FX.simular(fluxo, falas, pedido.get("variaveis") or {}, entendedor=entendedor, modelo_de=modelo_de,
-                   falhar=set(pedido.get("falhar") or ()), verificar_carga=verificar, hoje=hoje)
+                   falhar=set(pedido.get("falhar") or ()), hoje=hoje)
     del r["eventos"]
     return r
 

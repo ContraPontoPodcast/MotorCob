@@ -8,8 +8,9 @@
 --    acima da alçada é descartada pelo executor (voz/fluxo.py), que grava o código oferta_acima_alcada em
 --    crm_chamadas. Por isso todo fluxo que oferece (bloco Oferta ou Generativo com apresentar_oferta) precisa de
 --    alçada vigente para ser aprovado.
--- 3. Confirmar identidade: pode usar o modo cognição, mas a conferência é sempre feita pelo conector (Validar
---    cadastro) ou pelo dado do MotorCX, nunca pela IA. Nunca no modo generativo (o validador recusa).
+-- 3. Confirmar identidade: pode usar o modo cognição, mas a conferência é feita SÓ pelo CRM (conector Validar
+--    cadastro), nunca pela IA. Nunca no modo generativo (o validador recusa). Sem o conector: pendência
+--    identidade_sem_conferencia, que segura a aprovação.
 -- 4. Teste A/B: fica para depois (nada aqui).
 -- 5. Casos de teste guardados: voz_fluxo_casos_teste, que o simulador de texto roda a cada nova versão; caso que
 --    falhou na versão segura a aprovação dela.
@@ -304,7 +305,7 @@ begin
         else
             chaves := case tipo
                 when 'abertura' then array['fala']
-                when 'identidade' then array['fala', 'pergunta', 'confere', 'conector_id', 'tentativas']
+                when 'identidade' then array['fala', 'pergunta', 'conector_id', 'tentativas']
                 when 'pergunta' then array['fala', 'opcoes', 'tentativas']
                 when 'intencao' then array['fala', 'intencoes', 'exemplos', 'confianca_min', 'tentativas', 'entidades']
                 when 'generativa' then array['objetivo', 'tom', 'max_turnos', 'ferramentas', 'contrapropostas_max']
@@ -342,13 +343,6 @@ begin
             if tipo = 'identidade' then
                 ruim := ruim or not public.fluxo_voz_aux_em(p -> 'pergunta',
                                                            array['dia_mes_nascimento', 'ano_nascimento', 'ultimos3_documento']);
-                if p ? 'confere' then
-                    ruim := ruim or not public.fluxo_voz_aux_em(p -> 'confere', array['conector', 'dado_carga_vm']);
-                    if p ->> 'confere' = 'dado_carga_vm' then
-                        ruim := ruim or coalesce(jsonb_typeof(p -> 'conector_id') <> 'null', false)
-                                     or p ->> 'pergunta' is distinct from 'dia_mes_nascimento';
-                    end if;
-                end if;
             elsif tipo = 'pergunta' then
                 if jsonb_typeof(p -> 'opcoes') is distinct from 'array' or jsonb_array_length(p -> 'opcoes') not between 1 and 6 then
                     ruim := true;
@@ -906,13 +900,13 @@ revoke insert, update, delete on public.voz_fluxo_modelos from authenticated;
 
 insert into public.voz_fluxo_modelos (codigo, nome, tipo_agente, descricao, definicao) values
     ('localizador', 'Localizador', 'localizador', 'Confirma o titular e transfere para o discador de vocês. Quase tudo árvore.',
-     $m${"esquema": 1, "blocos": [{"id": "N1", "tipo": "abertura", "modo": "arvore", "x": 300, "y": 20, "params": {"fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"}, "saidas": [{"rotulo": "Sou eu", "para": "N2", "tipo": "normal", "quando": "titular"}, {"rotulo": "Não é a pessoa", "para": "N6", "tipo": "normal", "quando": "terceiro"}]}, {"id": "N2", "tipo": "identidade", "modo": "cognicao", "x": 300, "y": 180, "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?", "pergunta": "dia_mes_nascimento", "confere": "conector", "conector_id": null, "tentativas": 2}, "saidas": [{"rotulo": "Confirmou", "para": "N3", "tipo": "normal", "quando": "confirmou"}, {"rotulo": "Não confirmou", "para": "N6", "tipo": "normal", "quando": "nao_confirmou"}, {"rotulo": "Conector falhou", "para": "N9", "tipo": "falha", "quando": "falhou"}]}, {"id": "N3", "tipo": "pergunta", "modo": "arvore", "x": 300, "y": 360, "params": {"fala": "Obrigada. Posso transferir você agora para um atendente da {{assessoria}}?", "tentativas": 1, "opcoes": [{"codigo": "sim", "rotulo": "Pode transferir"}, {"codigo": "nao", "rotulo": "Agora não"}]}, "saidas": [{"rotulo": "Pode transferir", "para": "N4", "tipo": "normal", "quando": "sim"}, {"rotulo": "Agora não", "para": "N5", "tipo": "normal", "quando": "nao"}, {"rotulo": "Sem resposta", "para": "N4", "tipo": "normal", "quando": "sem_resposta"}]}, {"id": "N4", "tipo": "transferir", "modo": "arvore", "x": 80, "y": 540, "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "cpc"}, "saidas": []}, {"id": "N5", "tipo": "retorno", "modo": "cognicao", "x": 300, "y": 540, "params": {"fala": "Sem problema. Quando fica melhor para falarmos?", "dias_max": 7}, "saidas": [{"rotulo": "Agendou", "para": "N7", "tipo": "normal", "quando": "agendou"}, {"rotulo": "Não agendou", "para": "N8", "tipo": "normal", "quando": "nao_agendou"}]}, {"id": "N6", "tipo": "encerrar", "modo": "arvore", "x": 560, "y": 180, "titulo": "Encerrar · recado neutro", "params": {"fala": "Peço que {{primeiro_nome}} retorne a ligação para a {{assessoria}}. Obrigada.", "resultado": "recado"}, "saidas": []}, {"id": "N7", "tipo": "encerrar", "modo": "arvore", "x": 300, "y": 720, "params": {"fala": "Combinado, eu ligo nesse horário. Até lá!", "resultado": "retorno_agendado"}, "saidas": []}, {"id": "N8", "tipo": "encerrar", "modo": "arvore", "x": 560, "y": 720, "params": {"fala": "Obrigada pela atenção. Até logo.", "resultado": "cpc"}, "saidas": []}, {"id": "N9", "tipo": "transferir", "modo": "arvore", "x": 560, "y": 360, "titulo": "Transferir · atendente", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "pedido_humano"}, "saidas": []}]}$m$::jsonb),
+     $m${"esquema": 1, "blocos": [{"id": "N1", "tipo": "abertura", "modo": "arvore", "x": 300, "y": 20, "params": {"fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"}, "saidas": [{"rotulo": "Sou eu", "para": "N2", "tipo": "normal", "quando": "titular"}, {"rotulo": "Não é a pessoa", "para": "N6", "tipo": "normal", "quando": "terceiro"}]}, {"id": "N2", "tipo": "identidade", "modo": "cognicao", "x": 300, "y": 180, "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?", "pergunta": "dia_mes_nascimento", "conector_id": null, "tentativas": 2}, "saidas": [{"rotulo": "Confirmou", "para": "N3", "tipo": "normal", "quando": "confirmou"}, {"rotulo": "Não confirmou", "para": "N6", "tipo": "normal", "quando": "nao_confirmou"}, {"rotulo": "Conector falhou", "para": "N9", "tipo": "falha", "quando": "falhou"}]}, {"id": "N3", "tipo": "pergunta", "modo": "arvore", "x": 300, "y": 360, "params": {"fala": "Obrigada. Posso transferir você agora para um atendente da {{assessoria}}?", "tentativas": 1, "opcoes": [{"codigo": "sim", "rotulo": "Pode transferir"}, {"codigo": "nao", "rotulo": "Agora não"}]}, "saidas": [{"rotulo": "Pode transferir", "para": "N4", "tipo": "normal", "quando": "sim"}, {"rotulo": "Agora não", "para": "N5", "tipo": "normal", "quando": "nao"}, {"rotulo": "Sem resposta", "para": "N4", "tipo": "normal", "quando": "sem_resposta"}]}, {"id": "N4", "tipo": "transferir", "modo": "arvore", "x": 80, "y": 540, "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "cpc"}, "saidas": []}, {"id": "N5", "tipo": "retorno", "modo": "cognicao", "x": 300, "y": 540, "params": {"fala": "Sem problema. Quando fica melhor para falarmos?", "dias_max": 7}, "saidas": [{"rotulo": "Agendou", "para": "N7", "tipo": "normal", "quando": "agendou"}, {"rotulo": "Não agendou", "para": "N8", "tipo": "normal", "quando": "nao_agendou"}]}, {"id": "N6", "tipo": "encerrar", "modo": "arvore", "x": 560, "y": 180, "titulo": "Encerrar · recado neutro", "params": {"fala": "Peço que {{primeiro_nome}} retorne a ligação para a {{assessoria}}. Obrigada.", "resultado": "recado"}, "saidas": []}, {"id": "N7", "tipo": "encerrar", "modo": "arvore", "x": 300, "y": 720, "params": {"fala": "Combinado, eu ligo nesse horário. Até lá!", "resultado": "retorno_agendado"}, "saidas": []}, {"id": "N8", "tipo": "encerrar", "modo": "arvore", "x": 560, "y": 720, "params": {"fala": "Obrigada pela atenção. Até logo.", "resultado": "cpc"}, "saidas": []}, {"id": "N9", "tipo": "transferir", "modo": "arvore", "x": 560, "y": 360, "titulo": "Transferir · atendente", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "pedido_humano"}, "saidas": []}]}$m$::jsonb),
     ('negociador', 'Negociador', 'negociador', 'Confirma o titular, entende a intenção, busca ofertas no CRM e negocia.',
-     $m${"esquema": 1, "blocos": [{"id": "N1", "tipo": "abertura", "modo": "arvore", "x": 480, "y": 20, "params": {"fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"}, "saidas": [{"rotulo": "Sou eu", "para": "N2", "tipo": "normal", "quando": "titular"}, {"rotulo": "Não é a pessoa", "para": "N14", "tipo": "normal", "quando": "terceiro"}]}, {"id": "N2", "tipo": "identidade", "modo": "cognicao", "x": 480, "y": 180, "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?", "pergunta": "dia_mes_nascimento", "confere": "conector", "conector_id": null, "tentativas": 2}, "saidas": [{"rotulo": "Confirmou", "para": "N3", "tipo": "normal", "quando": "confirmou"}, {"rotulo": "Não confirmou", "para": "N14", "tipo": "normal", "quando": "nao_confirmou"}, {"rotulo": "Conector falhou", "para": "N13", "tipo": "falha", "quando": "falhou"}]}, {"id": "N3", "tipo": "intencao", "modo": "cognicao", "x": 480, "y": 360, "params": {"fala": "Obrigada. Consta {{saldo}} em aberto com {{credor}}. Como fica melhor para você resolver?", "intencoes": ["quero_negociar", "ja_paguei", "nao_reconheco", "sem_dinheiro"], "exemplos": {"quero_negociar": ["quero parcelar", "tem desconto?"], "ja_paguei": ["já paguei"]}, "confianca_min": 0.7, "tentativas": 2, "entidades": ["data", "parcelas"]}, "saidas": [{"rotulo": "Quer negociar", "para": "N4", "tipo": "normal", "quando": "quero_negociar"}, {"rotulo": "Já paguei", "para": "N8", "tipo": "normal", "quando": "ja_paguei"}, {"rotulo": "Não reconheço", "para": "N10", "tipo": "normal", "quando": "nao_reconheco"}, {"rotulo": "Sem dinheiro agora", "para": "N9", "tipo": "normal", "quando": "sem_dinheiro"}, {"rotulo": "Não entendi 2×", "para": "N13", "tipo": "normal", "quando": "nao_entendido"}]}, {"id": "N4", "tipo": "conector", "modo": "sistema", "x": 20, "y": 600, "params": {"conector_id": null, "fala_espera": "Um instante, vou ver as condições para você."}, "saidas": [{"rotulo": "Respondeu", "para": "N15", "tipo": "normal", "quando": "respondeu"}, {"rotulo": "Falhou", "para": "N6", "tipo": "falha", "quando": "falhou"}]}, {"id": "N15", "tipo": "condicao", "modo": "sistema", "x": 20, "y": 780, "params": {"campo": "ofertas_quantidade", "op": ">=", "valor": 1}, "saidas": [{"rotulo": "Sim", "para": "N5", "tipo": "normal", "quando": "sim"}, {"rotulo": "Nenhuma oferta", "para": "N13", "tipo": "normal", "quando": "nao"}]}, {"id": "N6", "tipo": "oferta", "modo": "cognicao", "x": 250, "y": 780, "titulo": "Oferta da carteira", "params": {"origem": "carteira", "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}, com vencimento em {{oferta.vencimento}}. Fica bom?"}, "saidas": [{"rotulo": "Aceitou", "para": "N7", "tipo": "normal", "quando": "aceitou"}, {"rotulo": "Quer outra condição", "para": "N5", "tipo": "normal", "quando": "quer_outra"}, {"rotulo": "Recusou", "para": "N9", "tipo": "normal", "quando": "recusou"}]}, {"id": "N5", "tipo": "generativa", "modo": "generativo", "x": 20, "y": 980, "titulo": "Negociar dentro das ofertas", "params": {"objetivo": "Fechar um acordo usando uma das ofertas recebidas. Comece pela que tem menor parcela. Se a pessoa pedir algo fora das ofertas, explique o limite uma vez; se insistir, devolva por fora_alcada.", "tom": ["cordial", "frases_curtas", "sem_giria", "nao_pressiona"], "max_turnos": 8, "ferramentas": ["apresentar_oferta", "registrar_promessa", "agendar_retorno", "consultar_base", "transferir_humano", "encerrar_chamada"], "contrapropostas_max": 2}, "saidas": [{"rotulo": "Fechou acordo", "para": "N7", "tipo": "devolve", "quando": "fechou_acordo"}, {"rotulo": "Contestou", "para": "N10", "tipo": "devolve", "quando": "contestou"}, {"rotulo": "Sem acordo", "para": "N9", "tipo": "devolve", "quando": "sem_acordo"}, {"rotulo": "Fora da alçada", "para": "N13", "tipo": "devolve", "quando": "fora_alcada"}]}, {"id": "N7", "tipo": "registrar", "modo": "sistema", "x": 20, "y": 1200, "params": {"registra": "acordo_crm", "conectores": [null, null]}, "saidas": [{"rotulo": "Registrado", "para": "N11", "tipo": "normal", "quando": "registrado"}, {"rotulo": "CRM falhou", "para": "N13", "tipo": "falha", "quando": "falhou"}]}, {"id": "N11", "tipo": "link", "modo": "arvore", "x": 250, "y": 1200, "params": {"canal": "whatsapp_sms", "fala": "Acabei de mandar o link do pagamento no seu WhatsApp."}, "saidas": [{"rotulo": "Enviado", "para": "N12", "tipo": "normal", "quando": "enviado"}, {"rotulo": "Não enviou", "para": "N12", "tipo": "falha", "quando": "falhou"}]}, {"id": "N12", "tipo": "encerrar", "modo": "arvore", "x": 480, "y": 1200, "titulo": "Encerrar · acordo", "params": {"fala": "Obrigada pela atenção. Até logo.", "resultado": "promessa", "codigo": "acordo_registrado"}, "saidas": []}, {"id": "N8", "tipo": "pergunta", "modo": "arvore", "x": 480, "y": 600, "titulo": "Pergunta · já paguei", "params": {"fala": "Em que data você pagou?", "tentativas": 1, "opcoes": [{"codigo": "informou_data", "rotulo": "Informou a data"}, {"codigo": "nao_lembra", "rotulo": "Não lembra", "exemplos": ["não lembro", "não sei"]}]}, "saidas": [{"rotulo": "Informou a data", "para": "N16", "tipo": "normal", "quando": "informou_data"}, {"rotulo": "Não lembra", "para": "N13", "tipo": "normal", "quando": "nao_lembra"}, {"rotulo": "Sem resposta", "para": "N13", "tipo": "normal", "quando": "sem_resposta"}]}, {"id": "N16", "tipo": "encerrar", "modo": "arvore", "x": 480, "y": 780, "titulo": "Encerrar · alega pagamento", "params": {"fala": "Obrigada. Vou registrar e a equipe confere o pagamento.", "resultado": "recusa", "codigo": "alega_pagamento"}, "saidas": []}, {"id": "N10", "tipo": "transferir", "modo": "arvore", "x": 710, "y": 600, "titulo": "Transferir · contestação", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "contestacao"}, "saidas": []}, {"id": "N9", "tipo": "retorno", "modo": "cognicao", "x": 940, "y": 600, "params": {"fala": "Quando fica melhor eu ligar de novo?", "dias_max": 7}, "saidas": [{"rotulo": "Agendou", "para": "N17", "tipo": "normal", "quando": "agendou"}, {"rotulo": "Não agendou", "para": "N13", "tipo": "normal", "quando": "nao_agendou"}]}, {"id": "N17", "tipo": "encerrar", "modo": "arvore", "x": 940, "y": 780, "titulo": "Encerrar · retorno", "params": {"fala": "Combinado, eu ligo nesse horário. Até lá!", "resultado": "retorno_agendado"}, "saidas": []}, {"id": "N13", "tipo": "transferir", "modo": "arvore", "x": 1170, "y": 600, "titulo": "Transferir · atendente", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "pedido_humano"}, "saidas": []}, {"id": "N14", "tipo": "encerrar", "modo": "arvore", "x": 940, "y": 180, "titulo": "Encerrar · recado neutro", "params": {"fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.", "resultado": "recado"}, "saidas": []}]}$m$::jsonb),
+     $m${"esquema": 1, "blocos": [{"id": "N1", "tipo": "abertura", "modo": "arvore", "x": 480, "y": 20, "params": {"fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"}, "saidas": [{"rotulo": "Sou eu", "para": "N2", "tipo": "normal", "quando": "titular"}, {"rotulo": "Não é a pessoa", "para": "N14", "tipo": "normal", "quando": "terceiro"}]}, {"id": "N2", "tipo": "identidade", "modo": "cognicao", "x": 480, "y": 180, "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?", "pergunta": "dia_mes_nascimento", "conector_id": null, "tentativas": 2}, "saidas": [{"rotulo": "Confirmou", "para": "N3", "tipo": "normal", "quando": "confirmou"}, {"rotulo": "Não confirmou", "para": "N14", "tipo": "normal", "quando": "nao_confirmou"}, {"rotulo": "Conector falhou", "para": "N13", "tipo": "falha", "quando": "falhou"}]}, {"id": "N3", "tipo": "intencao", "modo": "cognicao", "x": 480, "y": 360, "params": {"fala": "Obrigada. Consta {{saldo}} em aberto com {{credor}}. Como fica melhor para você resolver?", "intencoes": ["quero_negociar", "ja_paguei", "nao_reconheco", "sem_dinheiro"], "exemplos": {"quero_negociar": ["quero parcelar", "tem desconto?"], "ja_paguei": ["já paguei"]}, "confianca_min": 0.7, "tentativas": 2, "entidades": ["data", "parcelas"]}, "saidas": [{"rotulo": "Quer negociar", "para": "N4", "tipo": "normal", "quando": "quero_negociar"}, {"rotulo": "Já paguei", "para": "N8", "tipo": "normal", "quando": "ja_paguei"}, {"rotulo": "Não reconheço", "para": "N10", "tipo": "normal", "quando": "nao_reconheco"}, {"rotulo": "Sem dinheiro agora", "para": "N9", "tipo": "normal", "quando": "sem_dinheiro"}, {"rotulo": "Não entendi 2×", "para": "N13", "tipo": "normal", "quando": "nao_entendido"}]}, {"id": "N4", "tipo": "conector", "modo": "sistema", "x": 20, "y": 600, "params": {"conector_id": null, "fala_espera": "Um instante, vou ver as condições para você."}, "saidas": [{"rotulo": "Respondeu", "para": "N15", "tipo": "normal", "quando": "respondeu"}, {"rotulo": "Falhou", "para": "N6", "tipo": "falha", "quando": "falhou"}]}, {"id": "N15", "tipo": "condicao", "modo": "sistema", "x": 20, "y": 780, "params": {"campo": "ofertas_quantidade", "op": ">=", "valor": 1}, "saidas": [{"rotulo": "Sim", "para": "N5", "tipo": "normal", "quando": "sim"}, {"rotulo": "Nenhuma oferta", "para": "N13", "tipo": "normal", "quando": "nao"}]}, {"id": "N6", "tipo": "oferta", "modo": "cognicao", "x": 250, "y": 780, "titulo": "Oferta da carteira", "params": {"origem": "carteira", "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}, com vencimento em {{oferta.vencimento}}. Fica bom?"}, "saidas": [{"rotulo": "Aceitou", "para": "N7", "tipo": "normal", "quando": "aceitou"}, {"rotulo": "Quer outra condição", "para": "N5", "tipo": "normal", "quando": "quer_outra"}, {"rotulo": "Recusou", "para": "N9", "tipo": "normal", "quando": "recusou"}]}, {"id": "N5", "tipo": "generativa", "modo": "generativo", "x": 20, "y": 980, "titulo": "Negociar dentro das ofertas", "params": {"objetivo": "Fechar um acordo usando uma das ofertas recebidas. Comece pela que tem menor parcela. Se a pessoa pedir algo fora das ofertas, explique o limite uma vez; se insistir, devolva por fora_alcada.", "tom": ["cordial", "frases_curtas", "sem_giria", "nao_pressiona"], "max_turnos": 8, "ferramentas": ["apresentar_oferta", "registrar_promessa", "agendar_retorno", "consultar_base", "transferir_humano", "encerrar_chamada"], "contrapropostas_max": 2}, "saidas": [{"rotulo": "Fechou acordo", "para": "N7", "tipo": "devolve", "quando": "fechou_acordo"}, {"rotulo": "Contestou", "para": "N10", "tipo": "devolve", "quando": "contestou"}, {"rotulo": "Sem acordo", "para": "N9", "tipo": "devolve", "quando": "sem_acordo"}, {"rotulo": "Fora da alçada", "para": "N13", "tipo": "devolve", "quando": "fora_alcada"}]}, {"id": "N7", "tipo": "registrar", "modo": "sistema", "x": 20, "y": 1200, "params": {"registra": "acordo_crm", "conectores": [null, null]}, "saidas": [{"rotulo": "Registrado", "para": "N11", "tipo": "normal", "quando": "registrado"}, {"rotulo": "CRM falhou", "para": "N13", "tipo": "falha", "quando": "falhou"}]}, {"id": "N11", "tipo": "link", "modo": "arvore", "x": 250, "y": 1200, "params": {"canal": "whatsapp_sms", "fala": "Acabei de mandar o link do pagamento no seu WhatsApp."}, "saidas": [{"rotulo": "Enviado", "para": "N12", "tipo": "normal", "quando": "enviado"}, {"rotulo": "Não enviou", "para": "N12", "tipo": "falha", "quando": "falhou"}]}, {"id": "N12", "tipo": "encerrar", "modo": "arvore", "x": 480, "y": 1200, "titulo": "Encerrar · acordo", "params": {"fala": "Obrigada pela atenção. Até logo.", "resultado": "promessa", "codigo": "acordo_registrado"}, "saidas": []}, {"id": "N8", "tipo": "pergunta", "modo": "arvore", "x": 480, "y": 600, "titulo": "Pergunta · já paguei", "params": {"fala": "Em que data você pagou?", "tentativas": 1, "opcoes": [{"codigo": "informou_data", "rotulo": "Informou a data"}, {"codigo": "nao_lembra", "rotulo": "Não lembra", "exemplos": ["não lembro", "não sei"]}]}, "saidas": [{"rotulo": "Informou a data", "para": "N16", "tipo": "normal", "quando": "informou_data"}, {"rotulo": "Não lembra", "para": "N13", "tipo": "normal", "quando": "nao_lembra"}, {"rotulo": "Sem resposta", "para": "N13", "tipo": "normal", "quando": "sem_resposta"}]}, {"id": "N16", "tipo": "encerrar", "modo": "arvore", "x": 480, "y": 780, "titulo": "Encerrar · alega pagamento", "params": {"fala": "Obrigada. Vou registrar e a equipe confere o pagamento.", "resultado": "recusa", "codigo": "alega_pagamento"}, "saidas": []}, {"id": "N10", "tipo": "transferir", "modo": "arvore", "x": 710, "y": 600, "titulo": "Transferir · contestação", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "contestacao"}, "saidas": []}, {"id": "N9", "tipo": "retorno", "modo": "cognicao", "x": 940, "y": 600, "params": {"fala": "Quando fica melhor eu ligar de novo?", "dias_max": 7}, "saidas": [{"rotulo": "Agendou", "para": "N17", "tipo": "normal", "quando": "agendou"}, {"rotulo": "Não agendou", "para": "N13", "tipo": "normal", "quando": "nao_agendou"}]}, {"id": "N17", "tipo": "encerrar", "modo": "arvore", "x": 940, "y": 780, "titulo": "Encerrar · retorno", "params": {"fala": "Combinado, eu ligo nesse horário. Até lá!", "resultado": "retorno_agendado"}, "saidas": []}, {"id": "N13", "tipo": "transferir", "modo": "arvore", "x": 1170, "y": 600, "titulo": "Transferir · atendente", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "pedido_humano"}, "saidas": []}, {"id": "N14", "tipo": "encerrar", "modo": "arvore", "x": 940, "y": 180, "titulo": "Encerrar · recado neutro", "params": {"fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.", "resultado": "recado"}, "saidas": []}]}$m$::jsonb),
     ('ambos', 'Localizador + Negociador', 'ambos', 'Negocia quando há oferta; sem oferta, transfere com CPC.',
-     $m${"esquema": 1, "blocos": [{"id": "N1", "tipo": "abertura", "modo": "arvore", "x": 300, "y": 20, "params": {"fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"}, "saidas": [{"rotulo": "Sou eu", "para": "N2", "tipo": "normal", "quando": "titular"}, {"rotulo": "Não é a pessoa", "para": "N10", "tipo": "normal", "quando": "terceiro"}]}, {"id": "N2", "tipo": "identidade", "modo": "cognicao", "x": 300, "y": 180, "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?", "pergunta": "dia_mes_nascimento", "confere": "conector", "conector_id": null, "tentativas": 2}, "saidas": [{"rotulo": "Confirmou", "para": "N3", "tipo": "normal", "quando": "confirmou"}, {"rotulo": "Não confirmou", "para": "N10", "tipo": "normal", "quando": "nao_confirmou"}, {"rotulo": "Conector falhou", "para": "N11", "tipo": "falha", "quando": "falhou"}]}, {"id": "N3", "tipo": "conector", "modo": "sistema", "x": 300, "y": 360, "params": {"conector_id": null, "fala_espera": "Um instante, vou ver as condições para você."}, "saidas": [{"rotulo": "Respondeu", "para": "N4", "tipo": "normal", "quando": "respondeu"}, {"rotulo": "Falhou", "para": "N9", "tipo": "falha", "quando": "falhou"}]}, {"id": "N4", "tipo": "condicao", "modo": "sistema", "x": 300, "y": 540, "params": {"campo": "ofertas_quantidade", "op": ">=", "valor": 1}, "saidas": [{"rotulo": "Tem oferta", "para": "N5", "tipo": "normal", "quando": "sim"}, {"rotulo": "Sem oferta", "para": "N9", "tipo": "normal", "quando": "nao"}]}, {"id": "N5", "tipo": "generativa", "modo": "generativo", "x": 300, "y": 720, "params": {"objetivo": "Apresentar as ofertas recebidas e fechar um acordo com uma delas. Se a pessoa não quiser negociar agora, devolva por sem_acordo para transferir com o titular na linha.", "tom": ["cordial", "frases_curtas", "nao_pressiona"], "max_turnos": 8, "ferramentas": ["apresentar_oferta", "consultar_base", "transferir_humano", "encerrar_chamada"], "contrapropostas_max": 2}, "saidas": [{"rotulo": "Fechou acordo", "para": "N6", "tipo": "devolve", "quando": "fechou_acordo"}, {"rotulo": "Sem acordo", "para": "N9", "tipo": "devolve", "quando": "sem_acordo"}, {"rotulo": "Contestou", "para": "N8", "tipo": "devolve", "quando": "contestou"}]}, {"id": "N6", "tipo": "registrar", "modo": "sistema", "x": 80, "y": 900, "params": {"registra": "promessa_motorcx", "conectores": []}, "saidas": [{"rotulo": "Registrado", "para": "N7", "tipo": "normal", "quando": "registrado"}, {"rotulo": "Falhou", "para": "N9", "tipo": "falha", "quando": "falhou"}]}, {"id": "N7", "tipo": "encerrar", "modo": "arvore", "x": 80, "y": 1080, "params": {"fala": "Combinado. Obrigada pela atenção, até logo.", "resultado": "promessa"}, "saidas": []}, {"id": "N8", "tipo": "transferir", "modo": "arvore", "x": 560, "y": 900, "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "contestacao"}, "saidas": []}, {"id": "N9", "tipo": "transferir", "modo": "arvore", "x": 560, "y": 540, "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "cpc"}, "saidas": []}, {"id": "N10", "tipo": "encerrar", "modo": "arvore", "x": 560, "y": 180, "titulo": "Encerrar · recado neutro", "params": {"fala": "Peço que {{primeiro_nome}} retorne a ligação para a {{assessoria}}. Obrigada.", "resultado": "recado"}, "saidas": []}, {"id": "N11", "tipo": "transferir", "modo": "arvore", "x": 760, "y": 180, "titulo": "Transferir · atendente", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "pedido_humano"}, "saidas": []}]}$m$::jsonb),
+     $m${"esquema": 1, "blocos": [{"id": "N1", "tipo": "abertura", "modo": "arvore", "x": 300, "y": 20, "params": {"fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"}, "saidas": [{"rotulo": "Sou eu", "para": "N2", "tipo": "normal", "quando": "titular"}, {"rotulo": "Não é a pessoa", "para": "N10", "tipo": "normal", "quando": "terceiro"}]}, {"id": "N2", "tipo": "identidade", "modo": "cognicao", "x": 300, "y": 180, "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?", "pergunta": "dia_mes_nascimento", "conector_id": null, "tentativas": 2}, "saidas": [{"rotulo": "Confirmou", "para": "N3", "tipo": "normal", "quando": "confirmou"}, {"rotulo": "Não confirmou", "para": "N10", "tipo": "normal", "quando": "nao_confirmou"}, {"rotulo": "Conector falhou", "para": "N11", "tipo": "falha", "quando": "falhou"}]}, {"id": "N3", "tipo": "conector", "modo": "sistema", "x": 300, "y": 360, "params": {"conector_id": null, "fala_espera": "Um instante, vou ver as condições para você."}, "saidas": [{"rotulo": "Respondeu", "para": "N4", "tipo": "normal", "quando": "respondeu"}, {"rotulo": "Falhou", "para": "N9", "tipo": "falha", "quando": "falhou"}]}, {"id": "N4", "tipo": "condicao", "modo": "sistema", "x": 300, "y": 540, "params": {"campo": "ofertas_quantidade", "op": ">=", "valor": 1}, "saidas": [{"rotulo": "Tem oferta", "para": "N5", "tipo": "normal", "quando": "sim"}, {"rotulo": "Sem oferta", "para": "N9", "tipo": "normal", "quando": "nao"}]}, {"id": "N5", "tipo": "generativa", "modo": "generativo", "x": 300, "y": 720, "params": {"objetivo": "Apresentar as ofertas recebidas e fechar um acordo com uma delas. Se a pessoa não quiser negociar agora, devolva por sem_acordo para transferir com o titular na linha.", "tom": ["cordial", "frases_curtas", "nao_pressiona"], "max_turnos": 8, "ferramentas": ["apresentar_oferta", "consultar_base", "transferir_humano", "encerrar_chamada"], "contrapropostas_max": 2}, "saidas": [{"rotulo": "Fechou acordo", "para": "N6", "tipo": "devolve", "quando": "fechou_acordo"}, {"rotulo": "Sem acordo", "para": "N9", "tipo": "devolve", "quando": "sem_acordo"}, {"rotulo": "Contestou", "para": "N8", "tipo": "devolve", "quando": "contestou"}]}, {"id": "N6", "tipo": "registrar", "modo": "sistema", "x": 80, "y": 900, "params": {"registra": "promessa_motorcx", "conectores": []}, "saidas": [{"rotulo": "Registrado", "para": "N7", "tipo": "normal", "quando": "registrado"}, {"rotulo": "Falhou", "para": "N9", "tipo": "falha", "quando": "falhou"}]}, {"id": "N7", "tipo": "encerrar", "modo": "arvore", "x": 80, "y": 1080, "params": {"fala": "Combinado. Obrigada pela atenção, até logo.", "resultado": "promessa"}, "saidas": []}, {"id": "N8", "tipo": "transferir", "modo": "arvore", "x": 560, "y": 900, "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "contestacao"}, "saidas": []}, {"id": "N9", "tipo": "transferir", "modo": "arvore", "x": 560, "y": 540, "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "cpc"}, "saidas": []}, {"id": "N10", "tipo": "encerrar", "modo": "arvore", "x": 560, "y": 180, "titulo": "Encerrar · recado neutro", "params": {"fala": "Peço que {{primeiro_nome}} retorne a ligação para a {{assessoria}}. Obrigada.", "resultado": "recado"}, "saidas": []}, {"id": "N11", "tipo": "transferir", "modo": "arvore", "x": 760, "y": 180, "titulo": "Transferir · atendente", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "pedido_humano"}, "saidas": []}]}$m$::jsonb),
     ('branco', 'Em branco', 'negociador', 'Só Abertura, Confirmar identidade, Encerrar e Transferir. As travas já vêm valendo.',
-     $m${"esquema": 1, "blocos": [{"id": "N1", "tipo": "abertura", "modo": "arvore", "x": 300, "y": 20, "params": {"fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"}, "saidas": [{"rotulo": "Sou eu", "para": "N2", "tipo": "normal", "quando": "titular"}, {"rotulo": "Não é a pessoa", "para": "N4", "tipo": "normal", "quando": "terceiro"}]}, {"id": "N2", "tipo": "identidade", "modo": "cognicao", "x": 300, "y": 180, "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?", "pergunta": "dia_mes_nascimento", "confere": "conector", "conector_id": null, "tentativas": 2}, "saidas": [{"rotulo": "Confirmou", "para": "N3", "tipo": "normal", "quando": "confirmou"}, {"rotulo": "Não confirmou", "para": "N4", "tipo": "normal", "quando": "nao_confirmou"}, {"rotulo": "Conector falhou", "para": "N5", "tipo": "falha", "quando": "falhou"}]}, {"id": "N3", "tipo": "encerrar", "modo": "arvore", "x": 300, "y": 360, "params": {"fala": "Obrigada pela atenção. Até logo.", "resultado": "identidade_confirmada"}, "saidas": []}, {"id": "N4", "tipo": "encerrar", "modo": "arvore", "x": 560, "y": 180, "titulo": "Encerrar · recado neutro", "params": {"fala": "Peço que {{primeiro_nome}} retorne a ligação para a {{assessoria}}. Obrigada.", "resultado": "recado"}, "saidas": []}, {"id": "N5", "tipo": "transferir", "modo": "arvore", "x": 560, "y": 360, "titulo": "Transferir · atendente", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "pedido_humano"}, "saidas": []}]}$m$::jsonb)
+     $m${"esquema": 1, "blocos": [{"id": "N1", "tipo": "abertura", "modo": "arvore", "x": 300, "y": 20, "params": {"fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"}, "saidas": [{"rotulo": "Sou eu", "para": "N2", "tipo": "normal", "quando": "titular"}, {"rotulo": "Não é a pessoa", "para": "N4", "tipo": "normal", "quando": "terceiro"}]}, {"id": "N2", "tipo": "identidade", "modo": "cognicao", "x": 300, "y": 180, "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?", "pergunta": "dia_mes_nascimento", "conector_id": null, "tentativas": 2}, "saidas": [{"rotulo": "Confirmou", "para": "N3", "tipo": "normal", "quando": "confirmou"}, {"rotulo": "Não confirmou", "para": "N4", "tipo": "normal", "quando": "nao_confirmou"}, {"rotulo": "Conector falhou", "para": "N5", "tipo": "falha", "quando": "falhou"}]}, {"id": "N3", "tipo": "encerrar", "modo": "arvore", "x": 300, "y": 360, "params": {"fala": "Obrigada pela atenção. Até logo.", "resultado": "identidade_confirmada"}, "saidas": []}, {"id": "N4", "tipo": "encerrar", "modo": "arvore", "x": 560, "y": 180, "titulo": "Encerrar · recado neutro", "params": {"fala": "Peço que {{primeiro_nome}} retorne a ligação para a {{assessoria}}. Obrigada.", "resultado": "recado"}, "saidas": []}, {"id": "N5", "tipo": "transferir", "modo": "arvore", "x": 560, "y": 360, "titulo": "Transferir · atendente", "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "pedido_humano"}, "saidas": []}]}$m$::jsonb)
 on conflict (codigo) do update set nome = excluded.nome, tipo_agente = excluded.tipo_agente,
     descricao = excluded.descricao, definicao = excluded.definicao, atualizado_em = now();
 
@@ -1195,30 +1189,14 @@ select pg_temp.trocar('public.apagar_voz_expirada()',
                                                                     where cf.empresa_id = h.empresa_id), 90));
     return jsonb_build_object(''gravacoes'', g, ''codigos'', c + c2);');
 
--- ================================================================ 11b. conferência da identidade pelo dado da carga (desligada)
--- Modo 'dado_carga_vm' do bloco Confirmar identidade: a VM tira o dia e o mês de nascimento da carga e guarda só no
--- estado local (nunca no banco: o MotorCX só guarda a idade, motor/entrada.py). Só vale se o dono aprovar: o Master
--- da equipe liga por empresa. Desligado, o bloco fica com a pendência identidade_sem_conferencia.
-alter table public.voz_config add column if not exists identidade_dado_carga_vm boolean not null default false;
-comment on column public.voz_config.identidade_dado_carga_vm is
-    'Libera conferir a identidade pelo dia e mês da carga guardados só na VM (modo dado_carga_vm). Padrão: desligado.';
-create or replace function public.liberar_identidade_dado_carga(empresa bigint, ligado boolean) returns boolean
-language plpgsql security definer set search_path = public as $$
-begin
-    if not public.admin_equipe() then
-        raise exception 'só o Master da equipe MotorCX libera a conferência pelo dado da carga';
-    end if;
-    insert into public.voz_config (empresa_id) values (empresa) on conflict (empresa_id) do nothing;
-    update public.voz_config c set identidade_dado_carga_vm = coalesce(ligado, false), atualizado_em = now(),
-           atualizado_por = auth.uid()
-     where c.empresa_id = empresa;
-    return coalesce(ligado, false);
-end $$;
-revoke all on function public.liberar_identidade_dado_carga(bigint, boolean) from public, anon;
-grant execute on function public.liberar_identidade_dado_carga(bigint, boolean) to authenticated;
+-- ================================================================ 11b. identidade só pelo CRM (decisão do dono)
+-- A conferência pelo dado da carga na VM foi descartada: a identidade é confirmada só pelo conector validar_cadastro.
+-- Quem aplicou uma versão anterior deste SQL perde a coluna e a função.
+drop function if exists public.liberar_identidade_dado_carga(bigint, boolean);
+alter table public.voz_config drop column if exists identidade_dado_carga_vm;
 
 -- ================================================================ 12. pendências de contexto (seguram aprovação e uso)
--- identidade_sem_conferencia:ID Confirmar identidade sem conector de validação (ou pelo dado da carga sem a liberação)
+-- identidade_sem_conferencia:ID Confirmar identidade sem o conector de validação do CRM (só ele confere)
 -- conector_inativo:ID   conector não escolhido, de outra empresa ou fora de 'ativo'
 -- conector_finalidade:ID identidade → validar_cadastro; oferta → buscar_ofertas; registrar → acordo/boleto/link
 -- sem_alcada            fluxo que oferece sem alçada vigente (decisão 2: ela é o teto de toda oferta)
@@ -1240,12 +1218,8 @@ begin
     end if;
     for b in select x from jsonb_array_elements(d -> 'blocos') x loop
         p := b -> 'params';
-        if b ->> 'tipo' = 'identidade' then
-            if (coalesce(p ->> 'confere', 'conector') = 'conector' and coalesce(jsonb_typeof(p -> 'conector_id'), 'null') = 'null')
-               or (p ->> 'confere' = 'dado_carga_vm'
-                   and not coalesce((select c2.identidade_dado_carga_vm from public.voz_config c2 where c2.empresa_id = empresa), false)) then
-                out := out || ('identidade_sem_conferencia:' || (b ->> 'id'));
-            end if;
+        if b ->> 'tipo' = 'identidade' and coalesce(jsonb_typeof(p -> 'conector_id'), 'null') = 'null' then
+            out := out || ('identidade_sem_conferencia:' || (b ->> 'id'));     -- só o CRM confere a identidade
         end if;
         cs := case
             when b ->> 'tipo' = 'conector' then jsonb_build_array(p -> 'conector_id')
@@ -1907,8 +1881,7 @@ begin
                 jsonb_build_object('rotulo', 'Não é a pessoa', 'para', 'N9', 'tipo', 'normal', 'quando', 'terceiro'))),
         jsonb_build_object('id', 'N2', 'tipo', 'identidade', 'modo', 'cognicao', 'x', 300, 'y', 180,
             'params', jsonb_build_object('fala', 'Para sua segurança, me confirma o dia e o mês do seu nascimento?',
-                                         'pergunta', 'dia_mes_nascimento', 'confere', 'conector', 'conector_id', null,
-                                         'tentativas', 2),
+                                         'pergunta', 'dia_mes_nascimento', 'conector_id', null, 'tentativas', 2),
             'saidas', jsonb_build_array(
                 jsonb_build_object('rotulo', 'Confirmou', 'para', 'N3', 'tipo', 'normal', 'quando', 'confirmou'),
                 jsonb_build_object('rotulo', 'Não confirmou', 'para', 'N9', 'tipo', 'normal', 'quando', 'nao_confirmou'),
@@ -1980,6 +1953,34 @@ end $$;
 -- O resultado ("o que entendi" frase → bloco, "suposições e perguntas", o que mudou em relação à versão de origem e os
 -- erros que sobraram) fica em `resultado`; as respostas da empresa às perguntas vão em `respostas` e pedem nova geração.
 -- Anexos: referências ao Storage da própria empresa ('entradas/<slug>/...' ou 'chamados/<slug>/...'), nunca o arquivo.
+-- Decisões do dono:
+--   * geração pela IA SEM LIMITE de pedidos, com o custo visível no extrato: cada geração feita conta 1 no item
+--     ia_geracao_fluxo (consumo_mensageria → fatura, com o preço da empresa); falha do LLM antes de gerar não conta;
+--   * pedido à equipe: prazo de 2 dias úteis (seg a sex; feriados não contam como exceção, como nos chamados),
+--     gravado em prazo_em e escrito no chamado; a equipe entrega com entregar_pedido_fluxo_equipe;
+--   * anexos guardados ENQUANTO A VERSÃO GERADA EXISTIR. Sem versão gerada (com_erros ou cancelado), 30 dias sem
+--     movimento. anexos_fluxo_vencidos() lista o que pode sair e a VM apaga do Storage (voz/gerar_fluxo.py) e
+--     marca com marcar_anexos_apagados().
+insert into public.cobranca_itens (codigo, produto, nome, unidade, preco_de, modulo, ordem, descricao) values
+    ('ia_geracao_fluxo', 'agente_voz', 'Agente virtual · geração de fluxo por IA', 'geração', null, 'agente_voz', 55,
+     'cada fluxo gerado por IA a partir do texto da empresa (sem limite)')
+on conflict (codigo) do nothing;
+
+-- soma n dias úteis (seg a sex, em São Paulo) a um instante
+create or replace function public.somar_dias_uteis(inicio timestamptz, n int) returns timestamptz
+language plpgsql immutable parallel safe as $$
+declare
+    t timestamp := inicio at time zone 'America/Sao_Paulo';
+    k int := 0;
+begin
+    while k < n loop
+        t := t + interval '1 day';
+        if extract(isodow from t) < 6 then
+            k := k + 1;
+        end if;
+    end loop;
+    return t at time zone 'America/Sao_Paulo';
+end $$;
 create or replace function public.anexos_pedido_voz_ok(a text[]) returns boolean
 language sql immutable parallel safe as $$
     select coalesce(cardinality(a) <= 10
@@ -2016,9 +2017,13 @@ create table if not exists public.voz_fluxo_pedidos (
     pedido_em         timestamptz not null default now(),
     atualizado_em     timestamptz not null default now(),
     gerado_em         timestamptz,
+    geracoes          int not null default 0 check (geracoes >= 0),            -- quantas vezes a IA gerou (extrato)
+    prazo_em          timestamptz,                                              -- equipe: 2 dias úteis
+    anexos_apagados_em timestamptz,
     check (versao_origem_id is null or fluxo_id is not null),
-    check (tipo = 'ia' or situacao in ('na_equipe', 'gerado', 'cancelado')),
-    check (situacao <> 'gerado' or versao_gerada_id is not null)
+    check (tipo = 'ia' or prazo_em is not null),
+    check (tipo = 'ia' or situacao in ('na_equipe', 'gerado', 'cancelado'))
+    -- 'gerado' com versao_gerada_id nulo = a versão gerada deixou de existir (os anexos podem sair)
 );
 create index if not exists voz_fluxo_pedidos_fila on public.voz_fluxo_pedidos (pedido_em) where situacao = 'pendente';
 create index if not exists voz_fluxo_pedidos_empresa on public.voz_fluxo_pedidos (empresa_id, pedido_em desc);
@@ -2087,22 +2092,27 @@ declare
     fid bigint;
     pid bigint;
     ch bigint;
+    prazo timestamptz;
 begin
     fid := public.conferir_pedido_fluxo_voz(empresa, credor, anexos, versao_origem);
     insert into public.chamados (empresa_id, motivo, assunto, prioridade)
     values (empresa, 'integracao', case when versao_origem is null then 'Fluxo do agente virtual: criar fluxo novo'
                                         else 'Fluxo do agente virtual: mudar um fluxo' end, 'normal')
     returning id into ch;
+    prazo := public.somar_dias_uteis(now(), 2);
     insert into public.chamado_mensagens (chamado_id, empresa_id, tipo, texto, anexos)
-    values (ch, empresa, 'cliente', trim(pedir_fluxo_equipe.texto),
+    values (ch, empresa, 'cliente', trim(pedir_fluxo_equipe.texto) || chr(10) || chr(10) || 'Prazo da equipe MotorCX: até '
+                || to_char(prazo at time zone 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') || ' (2 dias úteis).',
             coalesce((select jsonb_agg(x) from unnest(coalesce(pedir_fluxo_equipe.anexos, '{}')) with ordinality u(x, n) where n <= 5), '[]'));
-    insert into public.voz_fluxo_pedidos (empresa_id, credor_id, texto, anexos, tipo, fluxo_id, versao_origem_id, situacao, chamado_id)
+    insert into public.voz_fluxo_pedidos (empresa_id, credor_id, texto, anexos, tipo, fluxo_id, versao_origem_id, situacao,
+                                          chamado_id, prazo_em)
     values (empresa, credor, trim(pedir_fluxo_equipe.texto), coalesce(pedir_fluxo_equipe.anexos, '{}'), 'equipe', fid,
-            versao_origem, 'na_equipe', ch)
+            versao_origem, 'na_equipe', ch, prazo)
     returning id into pid;
     insert into public.avisos (para, empresa_id, tipo, titulo, texto, link, chave)
     select 'equipe', empresa, 'atencao', left('Pedido de fluxo do agente · ' || e.nome, 140),
-           'Montar o rascunho do fluxo pedido pela empresa.', '/console/chamados', 'voz_fluxo_pedido:' || pid
+           'Montar o rascunho do fluxo pedido pela empresa até ' || to_char(prazo at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI')
+           || ' (2 dias úteis).', '/console/chamados', 'voz_fluxo_pedido:' || pid
       from public.empresas e where e.id = empresa;
     return pid;
 end $$;
@@ -2176,6 +2186,15 @@ begin
     if p.id is null or p.situacao <> 'gerando' then
         raise exception 'pedido não está em geração';
     end if;
+    -- extrato: toda geração feita conta (válida ou não); LLM fora antes de gerar não conta
+    if definicao is not null or not coalesce(resultado -> 'erros' <@ '["llm_indisponivel", "falha_na_geracao"]'::jsonb
+                                             and jsonb_array_length(resultado -> 'erros') > 0, false) then
+        insert into public.consumo_mensageria (empresa_id, competencia, item, quantidade)
+        values (p.empresa_id, date_trunc('month', now() at time zone 'America/Sao_Paulo')::date, 'ia_geracao_fluxo', 1)
+        on conflict (empresa_id, competencia, item) do update
+            set quantidade = public.consumo_mensageria.quantidade + 1, atualizado_em = now();
+        update public.voz_fluxo_pedidos x set geracoes = x.geracoes + 1 where x.id = pedido;
+    end if;
     erros := case when definicao is null
                   then coalesce(nullif(array(select jsonb_array_elements_text(
                            case when jsonb_typeof(resultado -> 'erros') = 'array' then resultado -> 'erros' else '[]' end)), '{}'),
@@ -2227,6 +2246,69 @@ begin
      where x.id = pedido;
     return vid;
 end $$;
+-- a equipe entrega o rascunho do pedido feito a ela (valida igual; nunca aprova nem coloca em uso)
+create or replace function public.entregar_pedido_fluxo_equipe(pedido bigint, definicao jsonb) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare
+    p public.voz_fluxo_pedidos;
+    vid bigint;
+    fid bigint;
+begin
+    select * into p from public.voz_fluxo_pedidos x where x.id = pedido for update;
+    if p.id is null or not public.equipe_pode('responder_chamados', p.empresa_id) then
+        raise exception 'pedido não encontrado ou sem permissão (responder chamados)';
+    end if;
+    if p.tipo <> 'equipe' or p.situacao <> 'na_equipe' then
+        raise exception 'o pedido não está com a equipe';
+    end if;
+    if not public.fluxo_voz_valido(definicao) then
+        raise exception 'fluxo inválido: %', array_to_string(public.fluxo_voz_erros(definicao), ', ');
+    end if;
+    if p.fluxo_id is null then
+        insert into public.voz_fluxos (empresa_id, credor_id, nome, tipo_agente, modelo_origem, criado_por)
+        values (p.empresa_id, p.credor_id, 'Pedido ' || p.id, 'negociador', 'pedido_equipe', p.pedido_por) returning id into fid;
+        insert into public.voz_fluxo_versoes (fluxo_id, empresa_id, versao, definicao, motivo, criado_por)
+        values (fid, p.empresa_id, 1, definicao, 'montado pela equipe (pedido ' || p.id || ')', auth.uid()) returning id into vid;
+    else
+        select x.id into vid from public.voz_fluxo_versoes x where x.fluxo_id = p.fluxo_id and x.situacao = 'rascunho';
+        if vid is not null then
+            update public.voz_fluxo_versoes x set definicao = entregar_pedido_fluxo_equipe.definicao, atualizado_em = now(),
+                   motivo = 'montado pela equipe (pedido ' || p.id || ')' where x.id = vid;
+        else
+            insert into public.voz_fluxo_versoes (fluxo_id, empresa_id, versao, definicao, motivo, criado_por)
+            values (p.fluxo_id, p.empresa_id, (select max(x.versao) + 1 from public.voz_fluxo_versoes x where x.fluxo_id = p.fluxo_id),
+                    definicao, 'montado pela equipe (pedido ' || p.id || ')', auth.uid())
+            returning id into vid;
+        end if;
+    end if;
+    update public.voz_fluxo_pedidos x set situacao = 'gerado', versao_gerada_id = vid, gerado_em = now(), atualizado_em = now()
+     where x.id = pedido;
+    return vid;
+end $$;
+revoke all on function public.entregar_pedido_fluxo_equipe(bigint, jsonb) from public, anon;
+grant execute on function public.entregar_pedido_fluxo_equipe(bigint, jsonb) to authenticated;
+
+-- anexos que já podem sair do Storage: a versão gerada deixou de existir, ou o pedido terminou sem versão e está há
+-- 30 dias sem movimento. A VM apaga os objetos e marca com marcar_anexos_apagados.
+create or replace function public.anexos_fluxo_vencidos() returns table (pedido_id bigint, anexos text[])
+language sql stable security definer set search_path = public as $$
+    select p.id, p.anexos from public.voz_fluxo_pedidos p
+     where public.chamada_do_servidor() and cardinality(p.anexos) > 0
+       and ((p.situacao = 'gerado' and p.versao_gerada_id is null)
+            or (p.situacao in ('com_erros', 'cancelado') and p.versao_gerada_id is null
+                and p.atualizado_em < now() - interval '30 days'))
+$$;
+create or replace function public.marcar_anexos_apagados(pedido bigint) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+    if not public.chamada_do_servidor() then
+        raise exception 'só o servidor apaga anexos';
+    end if;
+    update public.voz_fluxo_pedidos x set anexos = '{}', anexos_apagados_em = now() where x.id = pedido;
+end $$;
+revoke all on function public.anexos_fluxo_vencidos(), public.marcar_anexos_apagados(bigint) from public, anon, authenticated;
+grant execute on function public.anexos_fluxo_vencidos(), public.marcar_anexos_apagados(bigint) to service_role;
+
 revoke all on function public.pegar_pedido_fluxo_voz(), public.registrar_geracao_fluxo_voz(bigint, jsonb, jsonb)
     from public, anon, authenticated;
 grant execute on function public.pegar_pedido_fluxo_voz(), public.registrar_geracao_fluxo_voz(bigint, jsonb, jsonb) to service_role;
@@ -2253,7 +2335,7 @@ begin
                 and (p.proname like 'fluxo\_voz\_%' or p.proname in ('variaveis_voz', 'campos_oferta_voz', 'codigos_conector_voz',
                      'origens_entrada_conector', 'destinos_saida_conector', 'nome_pessoal_conector', 'mapa_conector_valido',
                      'cabecalhos_conector_validos', 'exemplo_resposta_seguro', 'ofertas_alcada_validas', 'falas_teste_voz_ok', 'contagem_codigos_ok',
-                     'anexos_pedido_voz_ok', 'resultado_pedido_voz_ok'))
+                     'anexos_pedido_voz_ok', 'resultado_pedido_voz_ok', 'somar_dias_uteis'))
                 and p.proname not in ('fluxo_voz_pendencias', 'fluxo_voz_bloqueios', 'fluxo_voz_em_uso') loop
         execute format('revoke all on function %s from public, anon', f);
         execute format('grant execute on function %s to authenticated, service_role', f);

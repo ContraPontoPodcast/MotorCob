@@ -496,12 +496,12 @@ class Montagem(ProvedorVoz):
     codigo = "montagem"
 
     def __init__(self, cfg: ConfigMontagem, segredos, roteiro_de, modelo_de=None, executor=None, servicos=None,
-                 fluxo_de=None, conectores=None, entendedor_de=None, verificar_carga=None):
+                 fluxo_de=None, conectores=None, entendedor_de=None):
         """fluxo_de(ctx) -> voz.fluxo.FluxoCarregado | None: a versão em uso do fluxo da carteira (SQL 58). Com fluxo,
         a sessão é o executor voz/fluxo.Sessao (a Conversa cuida só do bloco generativo); sem fluxo, a Conversa de
         antes com o roteiro (roteiro_de). conectores: voz.conector.ClienteConectores (padrão: com o cofre da VM)."""
         self.cfg, self.segredos, self.roteiro_de = cfg, segredos, roteiro_de
-        self.fluxo_de, self.verificar_carga = fluxo_de, verificar_carga
+        self.fluxo_de = fluxo_de
         self._conectores = conectores
         self.entendedor_de = entendedor_de
         self.modelo_de = modelo_de or (lambda: ModeloOpenAICompat(cfg.llm_base_url, segredos.valor(cfg.ref_llm),
@@ -567,8 +567,7 @@ class Montagem(ProvedorVoz):
         entendedor = self.entendedor_de() if self.entendedor_de else FX.EntendedorLLM(self.modelo_de())
         variaveis = dict(ctx.variaveis or {})
         return FX.Sessao(fluxo, ctx.id_chamada, ctx.id_cliente, variaveis, emitir, self._conectores,
-                         entendedor=entendedor, gerador=FX.gerador_montagem(self.modelo_de),
-                         verificar_carga=self.verificar_carga)
+                         entendedor=entendedor, gerador=FX.gerador_montagem(self.modelo_de))
 
     # ---------------------------------------------------------------- execução real (Pipecat)
     def _executar_em_thread(self, s: SessaoMontagem) -> None:

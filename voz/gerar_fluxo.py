@@ -15,6 +15,8 @@ gerar_fluxo_voz(contexto, modelo):
      para corrigir, até 2 vezes. Sobrou erro: devolve sem definição e com os erros;
   4. devolve "o que entendi" (frase → bloco), "suposições e perguntas" (respondidas, geram de novo) e, para mudança
      num fluxo existente, o que mudou em relação à versão de origem.
+Sem limite de pedidos (decisão do dono): cada geração aparece no extrato (item ia_geracao_fluxo, contado pelo banco
+em registrar_geracao_fluxo_voz). Anexos: apagados do Storage quando a versão gerada deixa de existir (limpar_anexos).
 A chave do LLM fica no Secret Manager (voz/llm-fluxo). Só biblioteca padrão.
 """
 from __future__ import annotations
@@ -43,7 +45,7 @@ ESQUEMA_TEXTO = """Esquema (esquema 1, fechado; nada fora disto):
 Tipos, modos, params e `quando` das saídas:
 - abertura (arvore) {fala}; saídas titular, terceiro (terceiro vai para um Encerrar com resultado recado)
 - identidade (arvore|cognicao, nunca generativo) {fala, pergunta: dia_mes_nascimento|ano_nascimento|ultimos3_documento,
-  confere: "conector", conector_id: id de um conector validar_cadastro ou null, tentativas 1..3}; saídas confirmou,
+  conector_id: id de um conector validar_cadastro ou null (a identidade só é conferida pelo CRM), tentativas 1..3}; saídas confirmou,
   nao_confirmou, falhou (tipo falha)
 - pergunta (arvore) {fala, opcoes: [{codigo, rotulo, exemplos}], tentativas}; saídas = códigos das opções + sem_resposta
 - intencao (cognicao) {fala, intencoes: [do catálogo], exemplos: {intencao: [frases]}, confianca_min 0.5..0.95,
@@ -123,7 +125,7 @@ def aplicar_travas(d, ctx: dict) -> tuple[object, list[str]]:
         if t == "identidade":
             if b.get("modo") not in ("arvore", "cognicao"):
                 b["modo"] = "cognicao"                       # nunca generativo
-            p.setdefault("confere", "conector")
+            p.pop("confere", None)                         # só o CRM confere
         if t == "generativa":
             fe = [f for f in (p.get("ferramentas") or []) if f in FV.FERRAMENTAS]
             if "transferir_humano" not in fe:
@@ -249,6 +251,26 @@ def processar_um(sb, modelo) -> bool:
     return True
 
 
+def limpar_anexos(sb) -> int:
+    """Anexos guardados enquanto a versão gerada existir (decisão do dono): apaga do Storage o que o banco liberou
+    (anexos_fluxo_vencidos) e marca o pedido. Falha num pedido não segura os outros."""
+    n = 0
+    for linha in sb.rpc("anexos_fluxo_vencidos", {}) or []:
+        por_bucket: dict[str, list[str]] = {}
+        for a in linha.get("anexos") or []:
+            bucket, _, caminho = str(a).partition("/")
+            if bucket in ("entradas", "chamados") and caminho:
+                por_bucket.setdefault(bucket, []).append(caminho)
+        try:
+            for bucket, caminhos in por_bucket.items():
+                sb.remover(bucket, caminhos)
+            sb.rpc("marcar_anexos_apagados", {"pedido": linha["pedido_id"]})
+            n += 1
+        except Exception as ex:   # noqa: BLE001
+            log.warning("anexos do pedido %s: falha ao apagar (%s)", linha.get("pedido_id"), ex.__class__.__name__)
+    return n
+
+
 def main(argv=None) -> int:   # pragma: no cover - serviço
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--uma-vez", action="store_true")
@@ -265,6 +287,7 @@ def main(argv=None) -> int:   # pragma: no cover - serviço
     while True:
         while processar_um(sb, modelo):
             pass
+        limpar_anexos(sb)
         if a.uma_vez:
             return 0
         time.sleep(a.intervalo)

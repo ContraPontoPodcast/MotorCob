@@ -44,7 +44,7 @@ test("pacote da VM: sem credencial, com exemplo e cliente fictício", () => {
   const p = pacoteVM({
     versao, conectores: [{ id: 1, nome: "Buscar ofertas", segredo_ref: "crm/7/1/x", cabecalhos_fixos: { "X-A": "b" }, exemplo_resposta: { offers: [] } }],
     alcada: { id: 3, parcelas_max: 6 }, base: [{ bloco_id: "N5", pergunta: "Suja meu nome?", resposta: "Não, com o acordo em dia." }],
-    falas: ["Sou eu"], falhar: [1], dado_carga_vm: false, variaveis: variaveisTeste("Aurora", null),
+    falas: ["Sou eu"], falhar: [1], variaveis: variaveisTeste("Aurora", null),
   });
   assert.equal("segredo_ref" in p.conectores[0], false);
   assert.equal("cabecalhos_fixos" in p.conectores[0], false);
@@ -52,7 +52,8 @@ test("pacote da VM: sem credencial, com exemplo e cliente fictício", () => {
   assert.deepEqual(p.base, { N5: [["Suja meu nome?", "Não, com o acordo em dia."]] });
   assert.equal(p.variaveis.primeiro_nome, "Ana");
   assert.equal(p.variaveis.credor, "Credor de teste");
-  assert.equal(pacoteVM({ ...{ versao, conectores: [], base: [], falas: [], falhar: [], dado_carga_vm: false, variaveis: {} }, alcada: {} }).alcada, null);
+  assert.equal("dado_carga_vm" in p, false);                     // identidade só pelo CRM
+  assert.equal(pacoteVM({ ...{ versao, conectores: [], base: [], falas: [], falhar: [], variaveis: {} }, alcada: {} }).alcada, null);
 });
 
 test("assinatura HMAC igual à da VM (vetor em voz/simulador_http, tests/test_voz_simulador_http.py)", async () => {

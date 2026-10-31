@@ -25,8 +25,7 @@ def negociador(ofertas=C_OFERTAS, validar=C_VALIDAR, acordo=C_ACORDO, boleto=C_B
          "saidas": [_s("Sou eu", "N2", "titular"), _s("Não é a pessoa", "N14", "terceiro")]},
         {"id": "N2", "tipo": "identidade", "modo": "cognicao", "x": 480, "y": 180,
          "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
-                    "pergunta": "dia_mes_nascimento", "confere": "conector", "conector_id": validar,
-                    "tentativas": 2},
+                    "pergunta": "dia_mes_nascimento", "conector_id": validar, "tentativas": 2},
          "saidas": [_s("Confirmou", "N3", "confirmou"), _s("Não confirmou", "N14", "nao_confirmou"),
                     _s("Conector falhou", "N13", "falhou", "falha")]},
         {"id": "N3", "tipo": "intencao", "modo": "cognicao", "x": 480, "y": 360,
@@ -216,13 +215,8 @@ CASOS: list[tuple[str, object, list[str]]] = [
     ("registrar com 3 conectores", _mud(_set("N7", "conectores", [3, 4, 5])), ["params_invalidos:N7"]),
     ("transferir com motivo fora da lista", _mud(_set("N13", "motivo", "cobrar")), ["params_invalidos:N13"]),
     ("modelo sem conector escolhido ainda é válido", negociador(None, None, None, None), []),
-    ("identidade pelo dado da carga (sem conector) é válida",
-     _mud(lambda d: (_bloco(d, "N2")["params"].update(confere="dado_carga_vm", conector_id=None),
-                     _bloco(d, "N2")["saidas"].pop())), []),
-    ("dado da carga com conector junto é recusado", _mud(_set("N2", "confere", "dado_carga_vm")), ["params_invalidos:N2"]),
-    ("dado da carga só com dia e mês", _mud(lambda d: _bloco(d, "N2")["params"].update(
-        confere="dado_carga_vm", conector_id=None, pergunta="ano_nascimento")), ["params_invalidos:N2"]),
-    ("conferência pela IA não existe", _mud(_set("N2", "confere", "ia")), ["params_invalidos:N2"]),
+    ("conferência fora do CRM não existe (sem param confere)", _mud(_set("N2", "confere", "dado_carga_vm")),
+     ["params_invalidos:N2"]),
 ]
 
 

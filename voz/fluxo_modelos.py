@@ -12,7 +12,7 @@ IDENTIDADE = "Para sua segurança, me confirma o dia e o mês do seu nascimento?
 TRANSFERE = "Vou passar você para um atendente agora, só um instante."
 # a identidade é conferida pelo conector de validação do CRM (finalidade validar_cadastro), escolhido pela empresa
 # antes de aprovar (sem ele: pendência identidade_sem_conferencia). Nunca pela IA.
-IDENT = {"fala": IDENTIDADE, "pergunta": "dia_mes_nascimento", "confere": "conector", "conector_id": None, "tentativas": 2}
+IDENT = {"fala": IDENTIDADE, "pergunta": "dia_mes_nascimento", "conector_id": None, "tentativas": 2}
 
 
 def _humano(bid: str, x: int, y: int) -> dict:

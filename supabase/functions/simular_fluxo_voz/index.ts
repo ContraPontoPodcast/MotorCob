@@ -86,18 +86,16 @@ Deno.serve(async (req) => {
   }
 
   // Contexto da simulação, com o login de quem pede (RLS)
-  const [{ data: cons }, { data: alc }, { data: base }, { data: cfg }, { data: emp }, { data: cred }] = await Promise.all([
+  const [{ data: cons }, { data: alc }, { data: base }, { data: emp }, { data: cred }] = await Promise.all([
     comoUsuario.from("crm_conectores").select("*").eq("empresa_id", versao.empresa_id),
     comoUsuario.rpc("alcada_voz_vigente", { empresa: versao.empresa_id, credor: versao.credor_id }),
     comoUsuario.from("voz_base_respostas").select("bloco_id, pergunta, resposta").eq("fluxo_versao_id", versao.id).not("revisado_em", "is", null),
-    comoUsuario.from("voz_config").select("identidade_dado_carga_vm").eq("empresa_id", versao.empresa_id).maybeSingle(),
     comoUsuario.from("empresas").select("nome").eq("id", versao.empresa_id).maybeSingle(),
     versao.credor_id ? comoUsuario.from("credores").select("nome").eq("id", versao.credor_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const montar = (falas: string[], falhar: number[]) => pacoteVM({
     versao, conectores: (cons ?? []) as Record<string, unknown>[], alcada: (Array.isArray(alc) ? alc[0] : alc) as Record<string, unknown> | null,
     base: (base ?? []) as { bloco_id: string; pergunta: string; resposta: string }[], falas, falhar,
-    dado_carga_vm: Boolean((cfg as { identidade_dado_carga_vm?: boolean } | null)?.identidade_dado_carga_vm),
     variaveis: variaveisTeste((emp as { nome?: string } | null)?.nome ?? "Assessoria de teste", (cred as { nome?: string } | null)?.nome ?? null),
   });
 

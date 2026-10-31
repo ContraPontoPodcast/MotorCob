@@ -77,13 +77,6 @@ class TestValidadorFluxo(unittest.TestCase):
         sem = C.negociador(None, None, None, None)
         self.assertEqual(V.pendencias(sem, con, True, intencoes),
                          ["conector_inativo:N4", "conector_inativo:N7", "identidade_sem_conferencia:N2"])
-        # conferência pelo dado da carga: só com a liberação da empresa (desligada por padrão)
-        carga = C.negociador()
-        n2 = next(b for b in carga["blocos"] if b["id"] == "N2")
-        n2["params"].update(confere="dado_carga_vm", conector_id=None)
-        n2["saidas"].pop()
-        self.assertEqual(V.pendencias(carga, con, True, intencoes), ["identidade_sem_conferencia:N2"])
-        self.assertEqual(V.pendencias(carga, con, True, intencoes, dado_carga_vm=True), [])
         # os 4 modelos começam com a identidade pendente até a empresa escolher o conector de validação
         for cod, (_n, _t, _d, f) in M.MODELOS.items():
             self.assertIn("identidade_sem_conferencia:N2", V.pendencias(f(), {}, True, set()), cod)

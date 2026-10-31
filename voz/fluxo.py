@@ -12,8 +12,7 @@ aqui e não no prompt:
   5. nunca passa da alçada (ofertas do CRM acima dela são descartadas, código oferta_acima_alcada);
   6. "quero falar com uma pessoa" transfere a qualquer momento;
   7. o Generativo só usa as ofertas recebidas (enum por chamada; número fora delas troca a frase).
-A identidade é conferida pelo conector (Validar cadastro) ou pelo dado da carga na VM (`dado_carga_vm`, desligado
-por padrão), nunca pela IA. A Cognição só classifica intenção (saída fechada) e a fala continua a do roteiro.
+A identidade é conferida só pelo CRM (conector Validar cadastro), nunca pela IA. A Cognição só classifica intenção (saída fechada) e a fala continua a do roteiro.
 
 Eventos para o orquestrador (emitir(id_chamada, tipo, dados)):
   passo      um por bloco (voz_fluxo_passos: ordem, bloco_id, modo, saida_quando, intencao, confianca_faixa,
@@ -196,7 +195,6 @@ class FluxoCarregado:
     conectores: dict = field(default_factory=dict)          # id -> conector.Conector
     alcada: CN.Alcada | None = None
     base: dict = field(default_factory=dict)                # bloco_id -> [(pergunta, resposta)] revisadas
-    dado_carga_vm: bool = False                             # voz_config.identidade_dado_carga_vm
     hash: str = ""
     hosts: tuple = ()                                       # crm_hosts_permitidos da empresa
 
@@ -219,8 +217,7 @@ class FluxoInvalido(ValueError):
 
 class Sessao:
     def __init__(self, fluxo: FluxoCarregado, id_chamada: str, id_cliente: str, variaveis: dict, emitir,
-                 cliente_conectores, entendedor=None, gerador=None, verificar_carga=None, hoje: date | None = None,
-                 modelo_texto: bool = False):
+                 cliente_conectores, entendedor=None, gerador=None, hoje: date | None = None):
         erros = FV.erros(fluxo.definicao)
         if erros:
             raise FluxoInvalido(", ".join(erros))
@@ -229,7 +226,6 @@ class Sessao:
         self.emitir_fora, self.cliente = emitir, cliente_conectores
         self.entendedor = entendedor or EntendedorRegras()
         self.gerador = gerador                 # (sessao, bloco) -> ConversaBloco
-        self.verificar_carga = verificar_carga  # (id_cliente, dia, mes) -> bool | None (estado local da VM)
         self.hoje = hoje or date.today()
         self.blocos = {b["id"]: b for b in fluxo.definicao["blocos"]}
         self.abertura = next(b["id"] for b in fluxo.definicao["blocos"] if b["tipo"] == "abertura")
@@ -452,7 +448,7 @@ class Sessao:
             self._marca_trava("terceiro")
             self._seguir(b, "terceiro")
 
-    # ---------------------------------------------------------------- identidade: conector ou dado da carga, nunca a IA
+    # ---------------------------------------------------------------- identidade: só o CRM confere, nunca a IA
     def _entrar_identidade(self, b):
         self._falar_bloco(b)
 
@@ -473,15 +469,9 @@ class Sessao:
                 self._seguir(b, "nao_confirmou")
             return
         self._turno.intencao = {"intencao": "informou_data", "confianca": "alta", "entidades": ["dado: ••••"]}
-        confere = FV.conferencia(b)
-        ok: bool | None
-        if confere == "dado_carga_vm":
-            ok = (self.verificar_carga(self.id_cliente, int(informado[:2]), int(informado[2:]))
-                  if self.fluxo.dado_carga_vm and self.verificar_carga and len(informado) == 4 else None)
-        else:
-            r = self._chamar(b, p.get("conector_id"), {"data_informada": informado, "ano_informado": informado,
-                                                       "digitos_informados": informado})
-            ok = None if r is None or not r.ok else {"identidade_ok": True, "identidade_nao_confere": False}.get(r.codigo)
+        r = self._chamar(b, p.get("conector_id"), {"data_informada": informado, "ano_informado": informado,
+                                                   "digitos_informados": informado})
+        ok = None if r is None or not r.ok else {"identidade_ok": True, "identidade_nao_confere": False}.get(r.codigo)
         if ok is None:                      # sem conferência possível: nunca "confirma" por palpite
             self._seguir(b, "falhou") if any(s["quando"] == "falhou" for s in b["saidas"]) else self._seguir(b, "nao_confirmou")
         elif ok:
@@ -808,11 +798,10 @@ class CarregadorFluxos:
         for r in self.sb.selecionar("voz_base_respostas", {"fluxo_versao_id": f"eq.{v['versao_id']}",
                                                            "revisado_em": "not.is.null"}) or []:
             base.setdefault(r["bloco_id"], []).append((r["pergunta"], r["resposta"]))
-        cfg = self.sb.selecionar("voz_config", {"empresa_id": f"eq.{emp}"}) or [{}]
         return FluxoCarregado(versao_id=int(v["versao_id"]), definicao=v["definicao"], hash=v["hash"],
                               conectores={int(c["id"]): CN.Conector.da_linha(c) for c in cons},
                               alcada=CN.Alcada.da_linha(alc if isinstance(alc, dict) and alc.get("id") else None),
-                              base=base, dado_carga_vm=bool(cfg[0].get("identidade_dado_carga_vm")),
+                              base=base,
                               hosts=tuple(h["host"] for h in hosts))
 
 
@@ -840,13 +829,13 @@ def gerador_montagem(modelo_de):
 
 # ------------------------------------------------------------------ modo texto (simulador)
 def simular(fluxo: FluxoCarregado, falas: list[str], variaveis: dict, entendedor=None, modelo_de=None,
-            falhar: set | None = None, verificar_carga=None, hoje: date | None = None, id_cliente: str = "CLI-TESTE") -> dict:
+            falhar: set | None = None, hoje: date | None = None, id_cliente: str = "CLI-TESTE") -> dict:
     """Roda o fluxo em modo texto, com os conectores trocados pelo exemplo_resposta (ou falhando os de `falhar`).
     Devolve, por turno, fala, bloco, caminho, intenção, travas e chamadas a conectores, e os eventos de passo."""
     eventos: list = []
     s = Sessao(fluxo, "sim-texto", id_cliente, variaveis, lambda i, t, d: eventos.append((t, d)),
                CN.ConectoresDeExemplo(falhar), entendedor=entendedor,
-               gerador=gerador_montagem(modelo_de) if modelo_de else None, verificar_carga=verificar_carga, hoje=hoje)
+               gerador=gerador_montagem(modelo_de) if modelo_de else None, hoje=hoje)
     turnos = []
     s._turno = Turno()
     s._entrar(s.abertura)

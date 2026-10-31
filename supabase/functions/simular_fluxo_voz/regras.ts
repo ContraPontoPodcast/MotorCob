@@ -63,9 +63,6 @@ export function variaveisTeste(assessoria: string, credor: string | null): Recor
     vencimento: "05/11", link_pagamento: "https://pagar.exemplo/teste", valor_minimo: "100,00",
   };
 }
-/** Dia e mês do cliente de teste no modo dado_carga_vm (a pessoa que testa fala "15 de março"). */
-export const DADO_CARGA_TESTE = [15, 3];
-
 // Só o que o simulador precisa de cada conector: nada de credencial (segredo_ref) nem cabeçalhos.
 const CAMPOS_CONECTOR = ["id", "empresa_id", "nome", "finalidade", "metodo", "url", "autenticacao", "mapa_entrada",
   "mapa_saida", "timeout_ms", "tentativas", "idempotencia", "em_falha", "situacao", "versao", "exemplo_resposta"];
@@ -73,7 +70,7 @@ const CAMPOS_CONECTOR = ["id", "empresa_id", "nome", "finalidade", "metodo", "ur
 export function pacoteVM(args: {
   versao: Versao; conectores: Record<string, unknown>[]; alcada: Record<string, unknown> | null;
   base: { bloco_id: string; pergunta: string; resposta: string }[]; falas: string[]; falhar: number[];
-  dado_carga_vm: boolean; variaveis: Record<string, string>;
+  variaveis: Record<string, string>;
 }) {
   const base: Record<string, [string, string][]> = {};
   for (const r of args.base) (base[r.bloco_id] ??= []).push([r.pergunta, r.resposta]);
@@ -81,7 +78,7 @@ export function pacoteVM(args: {
     versao_id: args.versao.id, definicao: args.versao.definicao,
     conectores: args.conectores.map((c) => Object.fromEntries(CAMPOS_CONECTOR.map((k) => [k, c[k] ?? null]))),
     alcada: args.alcada && args.alcada.id ? args.alcada : null, base, falas: args.falas, falhar: args.falhar,
-    dado_carga_vm: args.dado_carga_vm, dado_carga_teste: DADO_CARGA_TESTE, variaveis: args.variaveis,
+    variaveis: args.variaveis,
   };
 }
 

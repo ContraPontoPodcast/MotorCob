@@ -102,6 +102,12 @@ class Supabase:
     def baixar(self, bucket, caminho) -> bytes:
         return self._req("GET", f"/storage/v1/object/{bucket}/{urllib.parse.quote(caminho)}", bruto=True)
 
+    def remover(self, bucket, caminhos: list[str]):
+        """Apaga objetos do Storage (anexos vencidos dos pedidos de fluxo de voz, SQL 58)."""
+        if not caminhos:
+            return None
+        return self._req("DELETE", f"/storage/v1/object/{bucket}", {"prefixes": list(caminhos)})
+
     def listar(self, bucket, prefixo: str) -> list[str]:
         """Caminhos dos arquivos sob o prefixo (desce nas pastas)."""
         saida, pastas = [], [prefixo.rstrip("/")]
