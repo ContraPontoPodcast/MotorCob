@@ -5,6 +5,7 @@ import { Empty, Loading, Notice, PageHeading } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { dateBR, friendlyError, logAccess, states, supabase, type Row } from '@/lib/supabase';
 import { rotuloEstado, rotuloCiclo, tagToPhrase, mesesAbrev } from '@/lib/operacao';
+import { LigacoesAgenteVirtual } from '@/components/voz/ligacoes-cliente';
 
 const channelNames: Record<string,string> = { WA:'WhatsApp', RC:'RCS', AV:'Agente virtual', DC:'Discador', SM:'SMS', EM:'E-mail', ND:'Nenhum' };
 const tagKeys = ['safra','cluster','estado','canal','ciclo'] as const;
@@ -80,6 +81,7 @@ export function ClientLookup() {
 
 function ClienteCard({ card }: { card: CardData }) {
   const { current, history, credorNome } = card;
+  const idVoz = String(current?.id_cliente ?? history[0]?.id_cliente ?? '').trim();
   const parsed = parseTag(String(current?.tag ?? current?.TAG ?? ''));
   const fieldLabels: Record<string, string> = { safra: 'Safra', cluster: 'Segmento', estado: 'Fase', canal: 'Canal', ciclo: 'Ciclo' };
   const fields = tagKeys.map(k => {
@@ -109,6 +111,7 @@ function ClienteCard({ card }: { card: CardData }) {
         <div className="rounded-lg border border-[#e2eaec] bg-[#fafcfc] p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ação de hoje</p><p className="mt-2 text-sm font-semibold text-[#0F4C5C]">{current.acao_hoje?.trim() ? <span>{current.acao_hoje}{String(current.acao_hoje).toLowerCase().includes('reserva') ? <span className="ml-1 text-xs text-slate-400">(reserva)</span> : null}</span> : '—'}</p></div>
         <div className="rounded-lg border border-[#e2eaec] bg-[#fafcfc] p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Passo</p><p className="mt-2 text-sm font-semibold text-[#0F4C5C]">{current.passo_hoje?.trim() ?? '—'}</p></div>
       </div>{current.reenriquecer && <div className="mt-5 flex items-center gap-2 rounded-lg bg-[#fff7e8] p-4 text-sm text-[#80520f]"><AlertTriangle size={18}/> Reenriquecimento: {String(current.reenriquecer)}</div>}</section>
+    {idVoz && <LigacoesAgenteVirtual idCliente={idVoz} credorId={card.credorId} />}
     <section className="rounded-xl border border-[#dfe8ea] bg-white p-6 sm:p-8"><div className="mb-6 flex items-center gap-3"><History size={20} className="text-[#0F4C5C]"/><h2 className="text-lg font-semibold">Linha do tempo da trilha</h2></div>{history.length ? <div className="border-l-2 border-[#dce8e9] pl-6">{history.map((row,i) => { const tag = String(row.tag ?? row.TAG ?? ''); const green = tag.includes('CPA'); const gold = ['COL','PRE','LIQ'].some(x => tag.includes(x)); return <div key={row.id ?? i} className="relative pb-7 last:pb-0"><span className={`absolute -left-[31px] top-1 h-3 w-3 rounded-full ring-4 ring-white ${green ? 'bg-[#2E7D32]' : gold ? 'bg-[#e9a23b]' : 'bg-[#0F4C5C]'}`}/><p className="text-xs text-slate-500">{dateBR(row.data)}</p><div className="mt-2 flex flex-wrap items-center gap-2"><code title={tag} className={`rounded px-2 py-1 text-xs font-bold ${green ? 'bg-green-50 text-[#2E7D32]' : gold ? 'bg-amber-50 text-[#9a631b]' : 'bg-[#eaf2f3] text-[#0F4C5C]'}`}>{tagToPhrase(tag)}</code><span className="text-sm">{row.motivo || 'Sem motivo informado'}</span></div><p className="mt-2 text-xs text-slate-400">Quem marcou: {row.quem_marcou ?? row.marcado_por ?? '—'}</p></div>; })}</div> : <Empty>Não há registros na trilha deste cliente.</Empty>}</section>
   </div>;
 }
