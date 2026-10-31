@@ -333,10 +333,10 @@ class Sessao:
         nomes = FV.variaveis(texto)
         if any(n in FV.VARIAVEIS_SENSIVEIS for n in nomes) and not self.identidade_confirmada:
             return self._recado(), "valor_antes_identidade"
-        def troca(m):
-            v = self._valor(m.group(1).strip(" \t\n\r"))
+        def troca(nome):
+            v = self._valor(nome.strip(" \t\n\r"))
             return v if v is not None else ""
-        fala = re.sub(r"\{\{([^}]*)\}\}", troca, texto)
+        fala = FV.trocar_variaveis(texto, troca)
         if RE_SENHA.search(normal(fala)):
             return FALA_SENHA, "senha_cartao"
         return fala, None

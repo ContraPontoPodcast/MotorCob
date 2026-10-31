@@ -95,7 +95,6 @@ COM_FALA = ("abertura", "identidade", "pergunta", "intencao", "oferta", "retorno
 
 RE_ID = re.compile(r"N[0-9]{1,3}")
 RE_CODIGO = re.compile(r"[a-z][a-z0-9_]{1,40}")
-RE_VARIAVEL = re.compile(r"\{\{([^}]*)\}\}")
 RE_SENHA = re.compile(r"senha|numero do cartao|codigo de seguranca|cvv")
 _BRANCOS = " \t\n\r"      # btrim do banco
 # mesma troca de acentos do banco (translate), para o filtro de senha dar igual nos dois
@@ -128,9 +127,39 @@ def _id_num(i: str) -> int:
     return int(i[1:])
 
 
+def trechos_variaveis(texto: str) -> list[tuple[int, int, str]]:
+    """(início, fim, conteúdo) de cada {{...}}, na ordem. Mesmo resultado do regex do banco \\{\\{([^}]*)\\}\\}
+    (variaveis_texto_voz), mas em tempo linear: o texto vem de quem edita o fluxo e o regex, aplicado com busca,
+    fica quadrático em textos como '{{{{{{...' (negação de serviço)."""
+    out: list[tuple[int, int, str]] = []
+    n, p, fecha = len(texto), 0, -1
+    while p < n - 1:
+        if texto[p] == "{" and texto[p + 1] == "{":
+            if fecha < p + 2:
+                fecha = texto.find("}", p + 2)   # 1º "}" depois de "{{": só ali o conteúdo pode terminar
+                if fecha < 0:
+                    break
+            if texto[fecha + 1:fecha + 2] == "}":
+                out.append((p, fecha + 2, texto[p + 2:fecha]))
+                p = fecha + 2
+                continue
+        p += 1
+    return out
+
+
+def trocar_variaveis(texto: str, troca) -> str:
+    """Troca cada {{...}} por troca(conteúdo) (o que re.sub faria com o regex de trechos_variaveis)."""
+    partes, ult = [], 0
+    for ini, fim, nome in trechos_variaveis(texto):
+        partes += [texto[ult:ini], troca(nome)]
+        ult = fim
+    partes.append(texto[ult:])
+    return "".join(partes)
+
+
 def variaveis(texto: str) -> list[str]:
     """Nomes entre {{ }} (sem espaços nas pontas), na ordem em que aparecem."""
-    return [m.strip(_BRANCOS) for m in RE_VARIAVEL.findall(texto)]
+    return [m.strip(_BRANCOS) for _, _, m in trechos_variaveis(texto)]
 
 
 def pede_senha(texto: str) -> bool:
