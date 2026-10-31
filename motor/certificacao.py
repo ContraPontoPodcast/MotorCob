@@ -11,7 +11,7 @@ import gc
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date, time
+from datetime import date, datetime, time
 
 from .taxonomia import EXPANDE_RESTRICAO, TAXONOMIA, Nivel, classificar
 
@@ -56,6 +56,9 @@ class Evento:
     rota: str | None = None               # rota/tronco (trava de lote por rota)
     id_chamada: str | None = None         # id da tentativa (um registro por canal por tentativa)
     peso_pro: float | None = None         # multiplicador da evidência a favor (CPC da IA sem identidade: 0,5)
+    # evento pós-atendimento (IA ou operador): o que move o processo (etapas, renitência, próxima ação)
+    valor_promessa: float | None = None   # valor prometido (R$)
+    retorno_em: datetime | None = None    # retorno agendado: data e hora pedidas (Brasília)
 
 
 @dataclass

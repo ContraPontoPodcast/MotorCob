@@ -47,6 +47,7 @@ from motor.estrategia import CANAIS_SEM_MENSAGEM, CANAIS_TEMPLATE, frase_da_acao
 from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor import propensao
 from motor import discagem as DG
+from motor import voz as VOZ
 from motor.fila import MOTIVOS, categoria_do_motivo, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
 from motor.marcacao import aplicar_pendentes, ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
@@ -426,8 +427,17 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
     parcelas = carregar_parcelas(parcelas_csv)[0] if parcelas_csv else {}
     # discagem: regra desligada pelo cliente (inexistente, "não ligar") e renitência da voz (recusa, promessa,
     # "não ligar" sem número, descanso por "não atende" pelo retorno de canal)
-    sem_voz, reg_voz, resumo_disc, prot = {}, [], {}, None
+    sem_voz, reg_voz, resumo_disc, prot, agendados = {}, [], {}, None, {}
     regras_canal = regras_de(_ler_lista(canais), regras_retorno)
+    # um registro por canal por tentativa: a mesma chamada (webhook da IA + tabulação do operador, ou reimportada)
+    # vira um evento só, com a tabulação mais forte (voz.unificar_chamadas)
+    try:
+        eventos, n_unif = VOZ.unificar_chamadas(eventos)
+        if n_unif:
+            resumo_disc["chamadas_unificadas"] = n_unif
+    except Exception as ex:   # noqa: BLE001
+        alertas_disc.append(f"DISCAGEM: chamadas repetidas não unificadas hoje ({ex.__class__.__name__}: "
+                            f"{str(ex)[:120]})")
     # número inexistente: só a voz, reteste e trava de lote (DG.protecao_inexistente). Protege o cliente: vale mesmo
     # quando as regras do credor não puderam ser lidas (aí com o padrão do regua.json). Erro aqui nunca segura a
     # lista: vale a regra antiga só nesta rodada (o histórico é relido amanhã) + alerta
@@ -445,7 +455,14 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
             sem_voz, reg_voz, ren = DG.renitencia(eventos_aj, hoje, cfg_disc)
             regras_canal = DG.regras_voz(regras_canal, cfg_disc)
             eventos = eventos_aj
-            resumo_disc = {"renitencia": dict(ren), "regras_desligadas": dict(trocados)}
+            resumo_disc.update({"renitencia": dict(ren), "regras_desligadas": dict(trocados)})
+            # retorno agendado (IA ou operador): espera até o dia; no dia, topo do mailing com agendar_para
+            espera, agendados, av_ret = DG.retornos_agendados(eventos_aj, hoje, cfg_disc)
+            for k, t in espera.items():
+                sem_voz.setdefault(k, t)
+            alertas_disc += av_ret
+            if espera or agendados:
+                resumo_disc["retorno_agendado"] = {"aguardando": len(espera), "hoje": len(agendados)}
         except Exception as ex:   # noqa: BLE001
             sem_voz, reg_voz = {}, []
             alertas_disc.append(f"DISCAGEM: renitência não aplicada hoje ({ex.__class__.__name__}: {str(ex)[:120]}); "
@@ -645,6 +662,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
                                   ultima_cpc=ultima_cpc, etapas_estado=etapas_estado,
                                   historico_acoes=historico_acoes, notas=notas,
                                   propensao={k: v["faixa"] for k, v in prop["clientes"].items()}, discagem=disc)
+    for l in fila:                      # retorno agendado para hoje: a hora pedida vai com a linha de voz
+        if l["id_cliente"] in agendados and l["canal"] in VOZ.CANAIS_VOZ:
+            l["agendar_para"] = agendados[l["id_cliente"]]
     ET.salvar_estado(pasta_estado, etapas_estado)
     alertas += alertas_disc
     if disc is not None:
@@ -985,8 +1005,8 @@ def _discagem_do_dia(disc, fila, eventos, hoje, regua, estados, cfg, motivos, mo
                        "(referência inicial, não é orientação jurídica): confira com o jurídico e ajuste a sua.")
     resumo["horario_fora_por_uf"] = fora
     if disc.sem_voz:
-        n = Counter("recusa" if t.startswith("recusou") else "promessa" if t.startswith("promessa") else "não ligar"
-                    for t in disc.sem_voz.values())
+        n = Counter("recusa" if t.startswith("recusou") else "promessa" if t.startswith("promessa")
+                    else "retorno agendado" if t.startswith("retorno") else "não ligar" for t in disc.sem_voz.values())
         alertas.append("RENITÊNCIA: " + " · ".join(f"{v} clientes sem voz hoje por {k}" for k, v in n.items())
                        + " (WhatsApp, SMS e e-mail seguem a régua)")
     try:

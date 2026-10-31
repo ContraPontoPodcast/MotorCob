@@ -27,6 +27,9 @@ Ordem = prioridade: o cliente fica na primeira etapa da lista em que se encaixa.
 lista "pega" o cliente que está nela; uma etapa própria acima dela captura antes. Etapa própria fora da
 lista entra no topo, na ordem em que foi criada.
 
+Eventos do MotorCob: cpc, acordo, pagamento (mudança de estado), fim_janela, e os eventos pós-atendimento
+de voz (IA ou operador, desde a rodada anterior): promessa e retorno_agendado (eventos_pos_atendimento).
+
 Saídas (evento -> destino): "padrao" (sai desta etapa e segue as fases do motor), "sai" (sai da régua:
 nenhuma ação, nem das fases do motor, até sair da carga) ou "etapa:<id>" (entra nessa etapa hoje, sem
 olhar as condições dela). Evento sem saída configurada não tira o cliente da etapa; o fim da janela
@@ -74,7 +77,8 @@ FASES = {
 # entrada do lead, ou a data de uma coluna da carga
 TIPOS_REF = {"cob": ("entrada", "atraso", "vencimento", "coluna"),
              "cli": ("entrada", "lead", "contratacao", "vencimento", "sem_atividade", "coluna")}
-EVENTOS = {"cob": ("cpc", "acordo", "pagamento", "fim_janela"),
+# promessa e retorno_agendado (decisão do dono, 31/10/2026): eventos pós-atendimento da IA ou do operador
+EVENTOS = {"cob": ("cpc", "acordo", "pagamento", "fim_janela", "promessa", "retorno_agendado"),
            "cli": ("convertido", "fim_janela")}
 ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 # critérios de "quem recebe primeiro" no orçamento; os pares opostos não valem juntos
@@ -616,6 +620,24 @@ def aplicar_orcamento(pendentes: list[Pendente], alertas: list | None = None) ->
 # ------------------------------------------------------------------ eventos do MotorCob
 FASE_DO_ESTADO = {"LOC": "localizacao", "CPA": "cpc", "CPB": "cpc", "NCP": "giro",
                   "PRE": "preventivo", "COL": "preventivo", "QBR": "quebra"}
+
+
+POS_ATENDIMENTO = ("promessa", "retorno_agendado")      # desfecho de voz -> evento de saída de etapa
+
+
+def eventos_pos_atendimento(eventos, desde: str | None, hoje: date) -> set:
+    """Eventos pós-atendimento (IA ou operador) de UM cliente desde a rodada anterior: desfechos de voz em
+    POS_ATENDIMENTO com data depois de `desde` (ISO; sem ele, só ontem) e antes de hoje. A chamada já vem
+    unificada por id_chamada (voz.unificar_chamadas): a mesma chamada não conta duas vezes."""
+    from .voz import CANAIS_VOZ
+    ini = date.fromisoformat(desde) if desde else None
+    ev = set()
+    for e in eventos or ():
+        if e.resultado in POS_ATENDIMENTO and e.canal in CANAIS_VOZ and e.data < hoje \
+                and not (e.fornecedor or "").startswith("canal:") \
+                and (e.data > ini if ini else (hoje - e.data).days == 1):
+            ev.add(e.resultado)
+    return ev
 
 
 def eventos_cob(antes: str | None, agora: str) -> set:

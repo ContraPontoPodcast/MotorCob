@@ -29,7 +29,7 @@ import copy
 import json
 import math
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
@@ -59,6 +59,9 @@ PADRAO = {
     # CPC feito pelo agente de IA (decisão do dono, 31/10/2026): vale 1,0 com a identidade confirmada na chamada e
     # 0,5 sem; a tabulação do operador (humano, depois da transferência) vale sempre 1,0
     "agente_ia": {"peso_cpc": 1.0, "peso_cpc_sem_identidade": 0.5},
+    # retorno agendado (evento pós-atendimento da IA ou do operador): a voz do cliente espera até o dia pedido; no
+    # dia, ele sai no topo do mailing com agendar_para. Fora da faixa de horário vai para a próxima abertura.
+    "retorno_agendado": {"ativo": True, "max_dias": 7, "sem_hora_dias": 1, "de": "08:00", "ate": "20:00"},
     "nao_ligar": {"ativo": True},
     "horarios": {"ativo": False, "tabela": None},   # desligado até o jurídico validar a prévia
     "chamadas_curtas": {"ativo": True, "aviso": 0.75, "corte_ativo": False, "corte": 0.80,
@@ -75,6 +78,7 @@ _SUB = {
                     "trava_lote_relativa": ("real", 1.0, 20.0), "trava_lote_pp_min": "fracao",
                     "trava_rota_minimo": (1, 10 ** 6)},
     "agente_ia": {"peso_cpc": ("real", 0.0, 2.0), "peso_cpc_sem_identidade": ("real", 0.0, 2.0)},
+    "retorno_agendado": {"ativo": bool, "max_dias": (1, 60), "sem_hora_dias": (0, 30), "de": "hora", "ate": "hora"},
     "nao_ligar": {"ativo": bool},
     "chamadas_curtas": {"ativo": bool, "aviso": "fracao", "corte_ativo": bool, "corte": "fracao",
                         "max_por_numero_dia": (1, 10 ** 6), "max_total_dia": (1, 10 ** 8),
@@ -146,6 +150,11 @@ def _valor(v, regra):
             except ValueError:
                 continue
         raise ValueError("use uma data AAAA-MM-DD")
+    if regra == "hora":
+        h = _hora(v)
+        if len(h) != 5 or h[2] != ":" or not (0 <= int(h[:2]) <= 23 and 0 <= int(h[3:]) <= 59):
+            raise ValueError("use uma hora HH:MM")
+        return h
     if regra[0] == "real":
         return _real(v, regra[1], regra[2])
     if isinstance(regra[0], str):
@@ -733,7 +742,8 @@ def peso_cpc_ia(eventos: list, cfg: dict) -> tuple[list, Counter]:
     """CPC (cpc, promessa, recusa, retorno agendado) decidido pelo agente de IA pesa agente_ia.peso_cpc (1,0) com a
     identidade confirmada na chamada (campo identidade_confirmada ou evento identidade_confirmada do mesmo número
     no dia/da mesma chamada) e peso_cpc_sem_identidade (0,5) sem. É da IA: canal agente_voz ou destino ia, salvo
-    quando a tabulação do operador decidiu (humano: 1,0). Só muda a certificação do número (Evento.peso_pro);
+    quando a tabulação do operador decidiu (humano: 1,0). Só chamadas novas (com origem_resultado ou o campo de
+    identidade): os layouts atuais do agente_voz ficam como estão (decisão do dono). Só muda a certificação do número (Evento.peso_pro);
     a régua (CPC/TAG) não muda. Devolve (eventos, contagem com/sem identidade)."""
     from dataclasses import replace
     ia = cfg["agente_ia"]
@@ -743,7 +753,8 @@ def peso_cpc_ia(eventos: list, cfg: dict) -> tuple[list, Counter]:
     saida, cont = [], Counter()
     for e in eventos:
         if e.resultado in cpc and e.canal in CANAIS_VOZ and not (e.fornecedor or "").startswith("canal:") \
-                and (e.canal == "agente_voz" or e.destino in V.DESTINOS) and e.origem_resultado != "operador":
+                and (e.canal == "agente_voz" or e.destino in V.DESTINOS) and e.origem_resultado != "operador" \
+                and (e.origem_resultado is not None or e.identidade_confirmada is not None):   # só chamada nova
             ok = bool(e.identidade_confirmada) or (e.id_cliente, e.contato, e.data) in verif \
                 or (e.id_chamada and e.id_chamada in verif_ch)
             w = ia["peso_cpc"] if ok else ia["peso_cpc_sem_identidade"]
@@ -763,6 +774,61 @@ def por_destino(eventos: list, dia: date) -> dict:
             if e.transferencia:
                 c[f"transferencia_{e.transferencia}"] += 1
     return dict(c)
+
+
+# ------------------------------------------------------------------ retorno agendado (próxima ação)
+def _proxima_abertura(quando: datetime, de: str, ate: str) -> tuple[datetime, bool]:
+    """Primeiro horário dentro da faixa (de–ate, sem domingo) a partir de `quando`; (horário, ajustou?)."""
+    hd, md = map(int, de.split(":"))
+    ha, ma = map(int, ate.split(":"))
+    t, ajustou = quando, False
+    for _ in range(8):
+        abre = t.replace(hour=hd, minute=md, second=0, microsecond=0)
+        fecha = t.replace(hour=ha, minute=ma, second=0, microsecond=0)
+        if t.weekday() == 6 or t >= fecha:
+            t, ajustou = (t + timedelta(days=1)).replace(hour=hd, minute=md, second=0, microsecond=0), True
+            continue
+        if t < abre:
+            t, ajustou = abre, True
+        return t, ajustou
+    return t, ajustou
+
+
+def retornos_agendados(eventos: list, hoje: date, cfg: dict) -> tuple[dict, dict, list[str]]:
+    """Retorno agendado (IA ou operador, desfecho retorno_agendado + retorno_em): o último pedido de cada cliente.
+    Antes do dia: a voz do cliente espera ({id: motivo}, como a renitência). No dia: {id: "AAAA-MM-DDTHH:MM"} para
+    o agendar_para do mailing (sai no topo). Sem hora: sem_hora_dias depois da chamada; mais de max_dias: limita
+    e avisa; fora da faixa (de–ate, domingo): próxima abertura e avisa. Nunca fura a faixa global da lista."""
+    ra = cfg["retorno_agendado"]
+    if not ra["ativo"]:
+        return {}, {}, []
+    ult = {}
+    for e in _voz(eventos, hoje):
+        if e.resultado == "retorno_agendado" and (e.id_cliente not in ult or e.data >= ult[e.id_cliente].data):
+            ult[e.id_cliente] = e
+    espera, hoje_ag, avisos = {}, {}, Counter()
+    for idc, e in ult.items():
+        q = e.retorno_em
+        if q is None or (q.hour, q.minute) == (0, 0):
+            dia = (q.date() if q is not None else e.data + timedelta(days=ra["sem_hora_dias"]))
+            q, sem_hora = datetime.combine(dia, datetime.min.time()), True
+        else:
+            sem_hora = False
+        limite = datetime.combine(e.data + timedelta(days=ra["max_dias"]), datetime.max.time())
+        if q > limite:
+            q = datetime.combine(e.data + timedelta(days=ra["max_dias"]), q.time())
+            avisos["retorno pedido para depois do limite de dias (limitado)"] += 1
+        q, ajustou = _proxima_abertura(q, ra["de"], ra["ate"])
+        if ajustou and not sem_hora:
+            avisos["retorno pedido fora da faixa de horário (vai para a próxima abertura)"] += 1
+        if q.date() < hoje:
+            continue
+        if q.date() > hoje:
+            espera[idc] = f"retorno agendado para {q:%d/%m}" + ("" if sem_hora else f" às {q:%H:%M}")
+        else:
+            hoje_ag[idc] = q.strftime("%Y-%m-%d") if sem_hora else q.strftime("%Y-%m-%dT%H:%M")
+    alertas = [f"DISCAGEM: {n} {t}" for t, n in avisos.items()]
+    return espera, hoje_ag, alertas
 
 
 def regras_voz(regras_canal: dict, cfg: dict) -> dict:
@@ -951,7 +1017,7 @@ def curtas(fila: list, eventos: list, hoje: date, cfg: dict, tentativas) -> tupl
 # ------------------------------------------------------------------ mailing estendido
 CAMPOS_MAILING = ("id_cliente", "telefone", "ordem", "reserva", "tentativas_max_numero", "tentativas_max_cliente",
                   "intervalo_min", "intervalo_ocupado", "janela_local", "uf", "prioridade", "regua", "passo",
-                  "persona", "id_acao")
+                  "persona", "id_acao", "agendar_para")   # colunas novas sempre no fim
 
 
 def linhas_mailing(fila: list, hoje: date, regua_de) -> tuple[list[tuple], int]:
@@ -973,6 +1039,6 @@ def linhas_mailing(fila: list, hoje: date, regua_de) -> tuple[list[tuple], int]:
                       cfg["tentativas_numero_dia"], cfg["tentativas_cliente_dia"], cfg["intervalo_min_minutos"],
                       cfg["intervalo_ocupado_minutos"], f"{jan[0]}-{jan[1]}", DDD_UF.get(l["contato"][:2], ""),
                       l["prioridade"], l.get("regua") or "", l.get("passo") or "", l.get("persona") or "",
-                      l.get("id_acao") or ""))
-    saida.sort(key=lambda r: (r[3], r[10], r[0], r[2]))
+                      l.get("id_acao") or "", l.get("agendar_para") or ""))
+    saida.sort(key=lambda r: (r[3], not r[15], r[10], r[0], r[2]))     # retorno agendado do dia no topo
     return saida, sem

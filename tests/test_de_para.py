@@ -155,7 +155,17 @@ class TestCpcDaIa(unittest.TestCase):
     CFG = DG.normalizar(None)[0]
 
     def _ev(self, resultado, n, **kw):
+        kw.setdefault("origem_resultado", "ia")          # chamada nova (veio pelo de-para da IA)
         return Evento("C1", SP, "telefone", "agente_voz", resultado, DIA, fornecedor="ia", id_externo=str(n), **kw)
+
+    def test_layout_atual_do_agente_voz_nao_muda(self):
+        """Decisão do dono: o 0,5 vale só para chamadas novas (origem_resultado ou o campo de identidade)."""
+        antigo = Evento("C1", SP, "telefone", "agente_voz", "cpc", DIA, fornecedor="vozbot", id_externo="1")
+        ev, cont = DG.peso_cpc_ia([antigo], self.CFG)
+        self.assertEqual((ev[0].peso_pro, dict(cont)), (None, {}))
+        ev, _ = DG.peso_cpc_ia([Evento("C1", SP, "telefone", "agente_voz", "cpc", DIA, fornecedor="v",
+                                       id_externo="2", identidade_confirmada=False)], self.CFG)
+        self.assertEqual(ev[0].peso_pro, 0.5)
 
     def test_peso_um_com_identidade_e_meio_sem(self):
         ev, cont = DG.peso_cpc_ia([self._ev("cpc", 1)], self.CFG)

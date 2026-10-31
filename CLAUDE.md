@@ -161,6 +161,19 @@ de outra pessoa pela certificação e a rotação segue.
   confirmada na chamada, 0,5 sem (`Evento.peso_pro`, só a certificação; a régua não muda; operador = 1,0);
   `inexistente.aceita_tipo_b=false` faz o tipo B virar falha da operadora. Resumo em r["discagem"]["agente_ia"].
   Site: sem mudança (o mapeamento do site segue com as 4 marcas; as colunas novas valem nos layouts do repositório).
+  O peso 0,5 vale só para chamada nova (com `origem_resultado` ou o campo de identidade): layouts atuais do
+  `agente_voz` ficam como estão.
+  **Eventos pós-atendimento (IA e operador) movem o processo:** `voz.unificar_chamadas` (rodar_dia, antes de tudo)
+  deixa um registro por (canal, `id_chamada`): a tabulação mais forte (`voz.FORCA`; operador antes da IA), com os
+  campos que só os outros traziam (data/valor da promessa, retorno, causas) e a identidade confirmada de qualquer
+  um deles. Colunas novas `valor_promessa` e `retorno_em` (Evento). Saídas de etapa (`etapas.EVENTOS["cob"]`):
+  `promessa` e `retorno_agendado`, além de cpc, acordo, pagamento e fim_janela; vêm de
+  `ET.eventos_pos_atendimento` (desfechos de voz desde a última rodada, `etapas.json › eventos_ate`; uma vez só).
+  Acordo proposto pela IA/operador entra como promessa (acordo de verdade só pelas parcelas). Renitência: a promessa
+  suspende a voz até a data + 1 (`promessa_suspende`, como antes). Próxima ação: `discagem.retorno_agendado`
+  (`DG.retornos_agendados`): antes do dia a voz espera (sem_voz "retorno agendado…"); no dia a linha de voz leva
+  `agendar_para` e sai no topo do `discador_mailing.csv` (coluna nova no FIM); sem hora → `sem_hora_dias`; fora
+  de `de`–`ate` ou domingo → próxima abertura + alerta; > `max_dias` → limita + alerta.
 - `motor/ingestao.py` + `layouts/*.json`: retornos por layout de fornecedor, base de
   clientes (agrega contratos), carteira de contatos e parcelas.
 - `motor/cluster.py`: cluster por regras da empresa (tabela `clusters`, editada no site).
