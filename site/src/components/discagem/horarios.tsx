@@ -37,13 +37,18 @@ export function Horarios({ draft, update, reverter, canEdit, exec }: Props) {
 		const novoTipo = { ...(tipo === 'ufs' ? base.ufs : base.ddds), [key]: j };
 		update({ horarios: { ativo: h.ativo, tabela: { ...base, [tipo]: novoTipo } } });
 	}
+	/** Linha que o cliente acrescentou (está na tabela dele e não existe na prévia). Só ela pode ser removida. */
+	function isAdicionada(tipo: 'ufs' | 'ddds', key: string): boolean {
+		const t = tipo === 'ufs' ? ufsT : dddsT;
+		const prev = tipo === 'ufs' ? PREVIA_UFS[key] : PREVIA_DDDS[key];
+		return key in t && !prev;
+	}
 	function removerLinha(tipo: 'ufs' | 'ddds', key: string) {
-		if (!canEdit || tipo === 'ufs') return;
+		if (!canEdit || !isAdicionada(tipo, key)) return;
 		const base: HorariosTabela = tabela ?? { hora: 'local', ufs: {}, ddds: {} };
-		if (!(key in base.ddds)) return;
-		const novoTipo = { ...base.ddds };
+		const novoTipo = { ...base[tipo] };
 		delete novoTipo[key];
-		update({ horarios: { ativo: h.ativo, tabela: { ...base, ddds: novoTipo } } });
+		update({ horarios: { ativo: h.ativo, tabela: { ...base, [tipo]: novoTipo } } });
 	}
 	function restaurarPrevia() {
 		if (!canEdit) return;
@@ -154,13 +159,13 @@ export function Horarios({ draft, update, reverter, canEdit, exec }: Props) {
 											}
 										}
 										return (
-											<LinhaHorario key={`uf-${uf}`} label={uf} tipo="ufs" janela={ufJan} ajustado={ufAjust} canEdit={canEdit}
+											<LinhaHorario key={`uf-${uf}`} label={uf} janela={ufJan} ajustado={ufAjust} podeRemover={canEdit && isAdicionada('ufs', uf)} canEdit={canEdit}
 												avisoDdd={avisoDdd} botaoCopiarLabel={botaoCopiarLabel} onCopiarDdd={ddd ? () => copiarParaDdd(uf, ddd) : undefined}
 												onHora={(c, i, v) => editarHoras('ufs', uf, c, i, v)} onNaoLiga={c => toggleNaoLiga('ufs', uf, c)} onAtivar={c => ativarJanela('ufs', uf, c)} onRemover={() => removerLinha('ufs', uf)} />
 										);
 									})}
 									{[...dddsEfetivos].map(dd => (
-										<LinhaHorario key={`dd-${dd}`} label={`DDD ${dd}`} tipo="ddds" janela={janelaEfetiva('ddds', dd)} ajustado={isAjustado('ddds', dd)} canEdit={canEdit}
+										<LinhaHorario key={`dd-${dd}`} label={`DDD ${dd}`} janela={janelaEfetiva('ddds', dd)} ajustado={isAjustado('ddds', dd)} podeRemover={canEdit && isAdicionada('ddds', dd)} canEdit={canEdit}
 											avisoDdd={null} botaoCopiarLabel=""
 											onHora={(c, i, v) => editarHoras('ddds', dd, c, i, v)} onNaoLiga={c => toggleNaoLiga('ddds', dd, c)} onAtivar={c => ativarJanela('ddds', dd, c)} onRemover={() => removerLinha('ddds', dd)} />
 									))}
@@ -191,8 +196,8 @@ export function Horarios({ draft, update, reverter, canEdit, exec }: Props) {
 	);
 }
 
-function LinhaHorario({ label, tipo, janela, ajustado, canEdit, avisoDdd, botaoCopiarLabel, onCopiarDdd, onHora, onNaoLiga, onAtivar, onRemover }: {
-	label: string; tipo: 'ufs' | 'ddds'; janela: JanelaHorario; ajustado: boolean; canEdit: boolean;
+function LinhaHorario({ label, janela, ajustado, podeRemover, canEdit, avisoDdd, botaoCopiarLabel, onCopiarDdd, onHora, onNaoLiga, onAtivar, onRemover }: {
+	label: string; janela: JanelaHorario; ajustado: boolean; podeRemover: boolean; canEdit: boolean;
 	avisoDdd: string | null; botaoCopiarLabel: string; onCopiarDdd?: () => void;
 	onHora: (campo: 'seg_sex' | 'sabado', idx: 0 | 1, val: string) => void;
 	onNaoLiga: (campo: 'seg_sex' | 'sabado') => void;
@@ -220,7 +225,7 @@ function LinhaHorario({ label, tipo, janela, ajustado, canEdit, avisoDdd, botaoC
 				)}
 			</td>
 			<td className="py-2 text-right">
-				{tipo === 'ddds' && ajustado && canEdit && <button type="button" onClick={onRemover} className="text-[11px] font-medium text-[var(--estado-erro-texto)] hover:underline">Remover</button>}
+				{podeRemover && <button type="button" onClick={onRemover} className="text-[11px] font-medium text-[var(--estado-erro-texto)] hover:underline">Remover</button>}
 			</td>
 		</tr>
 	);
