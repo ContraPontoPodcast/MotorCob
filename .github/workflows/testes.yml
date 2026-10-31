@@ -9,11 +9,17 @@ permissions:
 jobs:
   motor:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 = imagem do motor hoje; 3.14 = prova antes de subir a imagem (Dependabot #113)
+        python: ["3.12", "3.14"]
+    name: motor (${{ matrix.python }})
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - run: pip install openpyxl==3.1.5 anthropic==1.13.0   # Excel (comitê, cargas .xlsx) e IA do Radar (mesmas versões da imagem)
       - run: python -m unittest discover -s tests -q
   banco:
