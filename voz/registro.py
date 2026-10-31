@@ -1,10 +1,11 @@
 """Gravação no banco do que o orquestrador produz: voz_chamadas (V21/V24/V25) e consumo_voz (V22).
 
 Só pela interface de colunas de voz/banco.py (COLUNAS, CONFLITO): se o SQL 56 mudar um nome, muda lá.
-  voz_chamadas  upsert por id_chamada (reprocessar não duplica); nunca o número discado.
+  voz_chamadas  upsert por empresa, id_chamada e canal (reprocessar não duplica); nunca o número discado. A
+                tarifação é do gatilho do banco (encerrada_em + billsec); a VM só a lê para o consumo.
   consumo_voz   recalculado a partir de voz_chamadas do dia (empresa × dia × tech prefix): as duas VMs gravam
                 chamadas e qualquer uma pode recalcular sem somar em dobro. Rota sem preço: custo nulo, conta em
-                sem_custo (nunca preço inventado).
+                sem_custo (nunca preço inventado). Chamada do modo simulado não entra (igual a consolidar_consumo_voz).
 Falha do banco não derruba a discagem: as linhas ficam na fila e vão no próximo descarregar().
 """
 from __future__ import annotations
@@ -25,6 +26,15 @@ def _instante(dia: date, hora: time = time(0)) -> str:
     return datetime.combine(dia, hora, tzinfo=FUSO).isoformat()
 
 
+def _valor(v):
+    """Horário sem fuso (Brasília) -> ISO com fuso; data -> ISO; o resto como está."""
+    if isinstance(v, datetime):
+        return (v if v.tzinfo else v.replace(tzinfo=FUSO)).isoformat()
+    if isinstance(v, date):
+        return v.isoformat()
+    return v
+
+
 class RegistroBanco:
     def __init__(self, sb, max_fila: int = 50000):
         self.sb = sb
@@ -34,8 +44,7 @@ class RegistroBanco:
         self.erros = 0
 
     def registrar(self, ev: EventoChamada) -> None:
-        linha = para_voz_chamadas(ev)
-        linha["ocorrido_em"] = _instante(ev.data, ev.hora)          # com fuso (timestamptz)
+        linha = {k: _valor(v) for k, v in para_voz_chamadas(ev).items()}      # horários com fuso (timestamptz)
         self.fila.append(B.para_colunas("voz_chamadas", linha))
         self.tocados.add((ev.empresa_id, ev.data))
         if len(self.fila) > self.max_fila:                           # banco fora há muito tempo: não estoura memória
@@ -74,6 +83,8 @@ class RegistroBanco:
         c = B.COLUNAS["voz_chamadas"]
         por: dict[str, dict] = {}
         for ch in chamadas:
+            if ch.get(c["modo"]) == "simulado":     # como consolidar_consumo_voz: simulado não é telefonia
+                continue
             tp = ch.get(c["tech_prefix"]) or ""
             a = por.setdefault(tp, {"empresa_id": empresa_id, "dia": dia.isoformat(), "tech_prefix": tp,
                                     "rota_id": None, "chamadas": 0, "chamadas_atendidas": 0,

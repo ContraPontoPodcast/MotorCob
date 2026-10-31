@@ -71,6 +71,10 @@ class EventoChamada:
     desfecho: str | None = None
     origem_desfecho: str | None = None
     avisos: str = ""
+    modo: str | None = None                   # voz_config.modo da empresa (simulado | teste | real)
+    atendida_em: datetime | None = None       # horário de Brasília, sem fuso (o registro põe o fuso)
+    encerrada_em: datetime | None = None      # com billsec, faz o gatilho do banco tarifar a chamada
+    transferida_em: datetime | None = None
 
 
 CAMPOS = tuple(f.name for f in fields(EventoChamada))
@@ -159,11 +163,19 @@ class EscritorEventos:
 
 
 def para_voz_chamadas(ev: EventoChamada) -> dict:
-    """Colunas de voz_chamadas (V21, V24, V25) para a VM gravar no banco (sem o número discado)."""
+    """Colunas de voz_chamadas (V21, V24, V25) para a VM gravar no banco (sem o número discado). Horários sem fuso
+    (Brasília): voz/registro.py põe o fuso. A tarifação (rota, segundos, preço, custo) não vai: é do gatilho
+    tarifar_chamada_voz, que roda com encerrada_em + billsec. Chave do upsert: empresa, id_chamada e canal."""
     return {"empresa_id": ev.empresa_id, "credor_id": ev.credor_id, "id_cliente": ev.id_cliente,
-            "id_acao": ev.id_acao or None,
-            "id_chamada": ev.id_chamada, "resultado": ev.desfecho, "duracao_s": ev.billsec, "billsec": ev.billsec,
-            "tech_prefix": ev.tech_prefix, "rota_id": ev.rota_id, "segundos_tarifados": ev.segundos_tarifados,
-            "preco_minuto": ev.preco_minuto, "custo_operadora": ev.custo_operadora, "no_pico": ev.no_pico,
-            "transferencia_resultado": ev.transferencia, "tem_gravacao": bool(ev.gravacao),
-            "ocorrido_em": datetime.combine(ev.data, ev.hora).isoformat()}
+            "id_acao": ev.id_acao or None, "id_chamada": ev.id_chamada, "canal": ev.canal, "modo": ev.modo,
+            "provedor": ev.provedor, "ocorrido_em": datetime.combine(ev.data, ev.hora),
+            "atendida_em": ev.atendida_em, "encerrada_em": ev.encerrada_em,
+            "duracao_s": ev.billsec, "billsec": ev.billsec, "causa_sip": ev.causa_sip, "causa_q850": ev.causa_q850,
+            "dialstatus": ev.dialstatus, "amd": ev.amd,
+            "resultado_ia": None if ev.resultado in (SEM_IA, "", None) else ev.resultado,
+            "resultado": ev.desfecho, "origem_resultado": ev.origem_desfecho, "destino": ev.destino,
+            "identidade_confirmada": ev.identidade_confirmada,
+            "transferencia": ev.transferencia, "transferida_em": ev.transferida_em if ev.transferencia else None,
+            "no_pico": ev.no_pico, "tronco_id": ev.tronco_id, "tech_prefix": ev.tech_prefix,
+            "data_promessa": ev.data_promessa, "valor_promessa": ev.valor_promessa, "retorno_em": ev.retorno_em,
+            "tem_gravacao": bool(ev.gravacao)}

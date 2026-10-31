@@ -165,7 +165,10 @@ class TestFluxo(Base):
         self.assertIn("C1", self.lote.guarda.clientes_encerrados)
         db = para_voz_chamadas(ev)
         self.assertNotIn("numero_discado", db)
-        self.assertEqual((db["resultado"], db["tem_gravacao"], db["custo_operadora"]), ("promessa", True, 0.055))
+        self.assertEqual((db["resultado"], db["tem_gravacao"], db["canal"]), ("promessa", True, "agente_voz"))
+        self.assertIsNotNone(db["encerrada_em"])                 # com billsec, o gatilho do banco tarifa
+        self.assertEqual(ev.custo_operadora, 0.055)               # no evento (CSV); no banco quem tarifa é o gatilho
+        self.assertTrue(set(B.SO_DO_BANCO["voz_chamadas"]).isdisjoint(B.para_colunas("voz_chamadas", db)))
 
     def test_sem_gravar(self):
         orq = self.montar([item()], gravar=False)
@@ -272,9 +275,10 @@ class TestTransferencia(Base):
         h = [c for c in self.ari.de("originar") if c[3][0] == "humano"][0]
         self.assertEqual(h[1], "PJSIP/fila@tf-1-7")
         self.assertEqual(h[2], f"{cid}-h")
-        self.assertEqual(h[4], {"PJSIP_HEADER(add,X-MotorCX-Id)": cid, "PJSIP_HEADER(add,X-MotorCX-Cliente)": "C8",
-                                "PJSIP_HEADER(add,X-MotorCX-Acao)": "a-C8", "PJSIP_HEADER(add,X-MotorCX-Motivo)": "cpc",
-                                "PJSIP_HEADER(add,X-Campanha)": "cobranca"})
+        # só os cabeçalhos que a transferência escolheu no banco (voz_transferencias.cabecalhos)
+        self.assertEqual(h[4], {"PJSIP_HEADER(add,X-MotorCX-Id-Chamada)": cid,
+                                "PJSIP_HEADER(add,X-MotorCX-Id-Acao)": "a-C8",
+                                "PJSIP_HEADER(add,X-MotorCX-Motivo)": "cpc"})
         self.assertFalse(any(CEL[:9] in str(v) for v in h[4].values()))
         self.ev("StasisStart", f"{cid}-h", args=["humano", cid])
         self.assertIn(f"{cid}-h", self.ari.pontes[f"{cid}-b"])
@@ -287,6 +291,9 @@ class TestTransferencia(Base):
         self.assertEqual((ev.transferencia, ev.destino, ev.resultado, ev.desfecho), ("atendida", "ia_humano", "cpc",
                                                                                      "cpc"))
         self.assertEqual(ev.billsec, 151)
+        db = para_voz_chamadas(ev)                               # a transferência vai nas colunas reais
+        self.assertEqual((db["transferencia"], db["destino"]), ("atendida", "ia_humano"))
+        self.assertTrue(db["atendida_em"] <= db["transferida_em"] <= db["encerrada_em"])
 
     def test_ponte_sem_operador_vira_abandono(self):
         orq, canal, cid = self._ate_transferir()
@@ -308,7 +315,7 @@ class TestTransferencia(Base):
         mud = [("voz_transferencias", 0, {"metodo": "refer", "tech_prefix": "77"})]
         orq, canal, cid = self._ate_transferir(mud)
         uri = self.ari.variaveis[(canal, "MOTORCX_TF_URI")]
-        self.assertTrue(uri.startswith("sip:77fila@203.0.113.50:5060?X-MotorCX-Id=" + cid))
+        self.assertTrue(uri.startswith("sip:77fila@203.0.113.50:5060?X-MotorCX-Id-Chamada=" + cid))
         self.assertIn("X-MotorCX-Motivo=cpc", uri)
         self.assertEqual(self.ari.de("continuar")[-1][1:], (canal, "motorcx-transferir", "refer", 1))
         self.assertNotIn(cid, self.sim.sessoes)

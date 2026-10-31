@@ -32,6 +32,33 @@ from pathlib import Path
 
 CANAIS_VOZ = ("discador", "agente_voz")
 
+# variáveis que o agente de voz pode receber por cliente (paridade com public.variaveis_voz() do SQL 56; o teste
+# supabase/testes/testar_voz_contrato.py confere). Nunca CPF. O valor só existe no arquivo do agente_voz, na
+# memória da VM e no provedor durante a chamada; nunca no banco nem em log.
+VARIAVEIS_VOZ = ("primeiro_nome", "credor", "saldo", "dias_atraso", "vencimento", "link_pagamento",
+                 "valor_minimo", "parcelas_max", "desconto_max")
+# as que o motor conhece e põe no ids/agente_voz.csv (colunas no fim, nesta ordem). credor vem do banco (a VM lê
+# credores.nome); link_pagamento e a alçada (valor_minimo, parcelas_max, desconto_max) vêm de fora do motor.
+VARIAVEIS_DO_MOTOR = ("primeiro_nome", "saldo", "dias_atraso", "vencimento")
+# colunas da base bruta que trazem o nome da pessoa (normalizadas como motor.entrada._nome_simples)
+COLUNAS_NOME = ("NOME", "NOME_CLIENTE", "NOME_DEVEDOR", "NOME_TITULAR", "NOME_COMPLETO", "NOME_CONSUMIDOR",
+                "NOME_DO_CLIENTE", "NOME_DO_DEVEDOR", "NOME_DO_TITULAR", "NM_CLIENTE", "NM_DEVEDOR", "NM_TITULAR",
+                "CLIENTE_NOME", "PRIMEIRO_NOME")
+
+
+def primeiro_nome(atributos: dict | None) -> str:
+    """Só o primeiro nome (para a saudação), da coluna de nome da base bruta; vazio se não houver."""
+    import re
+    import unicodedata
+    for col, valor in (atributos or {}).items():
+        chave = re.sub(r"[^A-Z0-9]+", "_", unicodedata.normalize("NFKD", str(col or "")).encode("ascii", "ignore")
+                       .decode().upper()).strip("_")
+        if chave in COLUNAS_NOME:
+            partes = re.findall(r"[^\W\d_]+(?:['-][^\W\d_]+)*", str(valor or ""))
+            if partes:
+                return partes[0][:30].title()
+    return ""
+
 
 @dataclass(frozen=True)
 class Desfecho:
