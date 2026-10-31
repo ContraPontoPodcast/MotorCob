@@ -68,9 +68,17 @@ begin
             connection limit 20;
     end if;
 end $$;
--- reafirma os atributos (sem PASSWORD: rodar de novo não troca nem apaga a senha que o dono definiu)
-alter role motorcx_voz with login noinherit nosuperuser nocreatedb nocreaterole nobypassrls noreplication
-    connection limit 20;
+-- reafirma os atributos (sem PASSWORD: rodar de novo não troca nem apaga a senha que o dono definiu).
+-- No Supabase o "postgres" não é superusuário: ele não pode nem citar SUPERUSER, BYPASSRLS ou REPLICATION num
+-- ALTER ROLE (dá "permission denied to alter role"). Esses três só nascem no CREATE acima e são conferidos aqui.
+alter role motorcx_voz with login noinherit nocreatedb nocreaterole connection limit 20;
+do $$
+begin
+    if exists (select 1 from pg_roles where rolname = 'motorcx_voz'
+                  and (rolsuper or rolbypassrls or rolreplication)) then
+        raise exception 'motorcx_voz não pode ser superusuário, furar RLS nem replicar: apague o papel e rode de novo';
+    end if;
+end $$;
 alter role motorcx_voz set search_path = voz_vm;
 alter role motorcx_voz set statement_timeout = '30s';
 alter role motorcx_voz set idle_in_transaction_session_timeout = '60s';
