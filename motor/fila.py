@@ -462,6 +462,11 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             if escolha is not None:
                 ET.marcar_feito(escolha)
             fila.extend(linhas)
+    voz_por = defaultdict(list)          # eventos pós-atendimento por cliente (saídas de etapa)
+    if etapas_estado is not None:
+        for e in eventos or ():
+            if e.resultado in ET.POS_ATENDIMENTO:
+                voz_por[e.id_cliente].append(e)
     for idc, est in estados.items():
         rc = regua.para(est.cluster_atual)
         sin = sinais_por.get(idc, {})
@@ -476,6 +481,9 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
             st_et = etapas_estado.setdefault(idc, {"etapas": {}})
             eventos_et = ET.eventos_cob(st_et.get("estado_motor"), est.estado)
             st_et["estado_motor"] = est.estado
+            if rc.dados.get("etapas"):        # promessa / retorno agendado da IA ou do operador desde a última rodada
+                eventos_et |= ET.eventos_pos_atendimento(voz_por.get(idc), st_et.get("eventos_ate"), hoje)
+            st_et["eventos_ate"] = max(st_et.get("eventos_ate") or "", (hoje - timedelta(days=1)).isoformat())
         if est.estado in ("BLQ", "LIQ", "COL"):
             if etapas_estado is not None and rc.dados.get("etapas"):
                 ET.so_eventos(rc.dados["etapas"], eventos_et, etapas_estado, idc, hoje)   # saída por pagamento/acordo

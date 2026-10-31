@@ -335,6 +335,54 @@ def classificar_chamada(resultado_ia=None, resultado_operador=None, transferenci
     return ch, origem, av
 
 
+# ------------------------------------------------------------------ eventos pós-atendimento (IA e operador)
+# A mesma chamada pode chegar mais de uma vez (o webhook da IA e, depois, a tabulação do operador do discador do
+# cliente; ou o arquivo reimportado): vale UM registro por canal por tentativa (canal, id_chamada).
+# Ordem de força da tabulação (a mais forte fica; o operador vence a IA no empate): acordo proposto entra como
+# promessa (acordo de verdade só nasce das parcelas).
+FORCA = ("promessa", "retorno_agendado", "recusa", "cpc", "identidade_confirmada", "recado",
+         "atendida_terceiro_desconhece", "atendeu_desligou", "atendida_sem_cpc", "opt_out")
+_COMPLEMENTA = ("data_promessa", "valor_promessa", "retorno_em", "duracao_s", "hora", "causa_sip", "causa_q850",
+                "resultado_ia", "resultado_operador", "transferencia", "destino", "rota")
+
+
+def _forca(e) -> tuple:
+    r = FORCA.index(e.resultado) if e.resultado in FORCA else len(FORCA)
+    return (r, 0 if e.origem_resultado == "operador" else 1)
+
+
+def unificar_chamadas(eventos: list) -> tuple[list, int]:
+    """Um registro por (canal, id_chamada) de voz: fica a tabulação mais forte (FORCA; operador antes da IA), com
+    os campos que só os outros registros traziam (data/valor da promessa, retorno, causas…). Identidade
+    confirmada em qualquer registro da chamada vale para o que ficou. Sem id_chamada: nada muda.
+    Devolve (eventos na ordem original, quantos registros foram fundidos)."""
+    from dataclasses import replace
+    grupos: dict = {}
+    for i, e in enumerate(eventos):
+        if e.canal in CANAIS_VOZ and e.id_chamada and not (e.fornecedor or "").startswith("canal:"):
+            grupos.setdefault((e.canal, e.id_chamada), []).append(i)
+    fora, troca = set(), {}
+    for idx in grupos.values():
+        if len(idx) < 2:
+            continue
+        evs = [eventos[i] for i in idx]
+        fica_i = min(idx, key=lambda i: _forca(eventos[i]))
+        fica = eventos[fica_i]
+        extra = {}
+        for campo in _COMPLEMENTA:
+            if getattr(fica, campo) is None:
+                v = next((getattr(x, campo) for x in evs if getattr(x, campo) is not None), None)
+                if v is not None:
+                    extra[campo] = v
+        if any(x.resultado == "identidade_confirmada" or x.identidade_confirmada for x in evs):
+            extra["identidade_confirmada"] = True
+        troca[fica_i] = replace(fica, **extra) if extra else fica
+        fora.update(i for i in idx if i != fica_i)
+    if not fora:
+        return eventos, 0
+    return [troca.get(i, e) for i, e in enumerate(eventos) if i not in fora], len(fora)
+
+
 # Marcas que o cliente escolhe no site para um código de ocorrência (ocorrencia_codigos.resultado: CHECK do banco,
 # SQL 20261017000001; site/src/components/credores/configuracoes.tsx). São genéricos, não desfechos: o desfecho
 # fino da voz (promessa, ocupado…) ainda só vem do layout do repositório.

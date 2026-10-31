@@ -55,7 +55,33 @@ class Layout:
 ALIAS_VOZ = {"numero_discado": "contato", "billsec": "duracao", "id_chamada": "id_externo"}
 COLUNAS_REDE = ("causa_sip", "causa_q850", "dialstatus", "amd", "toque")
 COLUNAS_VOZ = COLUNAS_REDE + ("resultado_operador", "transferencia", "destino", "rota", "identidade_confirmada",
-                              "id_chamada")
+                              "id_chamada", "valor_promessa", "retorno_em")
+_FMT_RETORNO = ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%d/%m/%Y %H:%M",
+                "%d/%m/%Y %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y")
+
+
+def retorno_em(txt):
+    """Data e hora do retorno agendado (Brasília). Só a data = sem hora (00:00)."""
+    t = str(txt or "").strip()
+    for fmt in _FMT_RETORNO:
+        try:
+            return datetime.strptime(t, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def valor(txt):
+    """Valor em reais: "200", "200,00", "R$ 1.234,56", "1234.56"."""
+    t = str(txt or "").replace("R$", "").strip()
+    if not t:
+        return None
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    try:
+        return round(float(t), 2)
+    except ValueError:
+        return None
 AVISO_DADOS_MINIMOS = ("voz sem número discado, billsec ou id da chamada por tentativa: renitência por número, "
                        "confirmação de inexistente e KPI de curtas ficam limitados")
 
@@ -101,7 +127,12 @@ def ler_voz(linha: dict, col: dict, resultado: str, traduz, contato: str, layout
     ident = v("identidade_confirmada")
     extra = {"causa_sip": sip, "causa_q850": q850, "resultado_operador": op, "transferencia": tr, "destino": de,
              "rota": v("rota") or None, "identidade_confirmada": _sim(ident) if ident else None,
-             "id_chamada": v("id_chamada") or None}
+             "id_chamada": v("id_chamada") or None, "valor_promessa": valor(v("valor_promessa")),
+             "retorno_em": retorno_em(v("retorno_em"))}
+    if v("valor_promessa") and extra["valor_promessa"] is None:
+        avisos["valor_promessa inválido (ignorado)"] += 1
+    if v("retorno_em") and extra["retorno_em"] is None:
+        avisos["retorno_em inválido (ignorado)"] += 1
     if canal == "agente_voz" or de:
         extra["resultado_ia"] = resultado
     if any(v(k) for k in COLUNAS_REDE) or op or tr:
