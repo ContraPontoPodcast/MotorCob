@@ -416,6 +416,7 @@ create table if not exists public.voz_troncos (
     bina            text not null check (bina ~ '^([1-9][1-9][2-9][0-9]{7,8}|0[3589]00[0-9]{6,7}|[34]00[0-9][0-9]{4})$'),
     formato_discagem text not null default 'tech_ddd_numero'
                     check (formato_discagem in ('tech_ddd_numero', 'tech_0_csp_ddd_numero', 'tech_55_ddd_numero')),
+    csp             text check (csp ~ '^[0-9]{2}$'),
     codecs          text[] not null default '{alaw,ulaw}'
                     check (cardinality(codecs) >= 1 and codecs <@ array['alaw', 'ulaw', 'g729', 'g722', 'opus']::text[]),
     canais          int not null check (canais between 1 and 10000),
@@ -429,14 +430,25 @@ create table if not exists public.voz_troncos (
     unique (empresa_id, referencia),
     unique (id, empresa_id),
     check ((autenticacao = 'senha') = (segredo_ref is not null)),
-    check ((autenticacao = 'senha') = (usuario is not null))
+    check ((autenticacao = 'senha') = (usuario is not null)),
+    constraint voz_troncos_csp_no_formato check (formato_discagem <> 'tech_0_csp_ddd_numero' or csp is not null)
 );
+-- quem já rodou uma versão anterior do SQL 56 ganha a coluna e o check
+alter table public.voz_troncos add column if not exists csp text check (csp ~ '^[0-9]{2}$');
+do $$ begin
+    if not exists (select 1 from pg_constraint where conname = 'voz_troncos_csp_no_formato') then
+        alter table public.voz_troncos add constraint voz_troncos_csp_no_formato
+            check (formato_discagem <> 'tech_0_csp_ddd_numero' or csp is not null);
+    end if;
+end $$;
 comment on column public.voz_troncos.segredo_ref is
     'NOME do segredo (Secret Manager do MotorCX) com usuário e senha do tronco. Nulo na autenticação por IP. A senha nunca fica no banco.';
 comment on column public.voz_troncos.usuario is 'Usuário SIP (autenticação por senha). Nulo na autenticação por IP.';
 comment on column public.voz_troncos.ddd_origem is 'DDD de onde o tronco origina: separa fixo local de LDN e móvel VC1 de VC2/VC3.';
 comment on column public.voz_troncos.bina is
     'Número que a empresa exibe (da própria empresa, nunca do devedor), só dígitos e inteiro: o Asterisk origina com ele.';
+comment on column public.voz_troncos.csp is
+    'Código de seleção da prestadora (2 dígitos). Obrigatório no formato tech_0_csp_ddd_numero.';
 comment on column public.voz_troncos.formato_discagem is
     'Como o Asterisk monta o número: tech prefix + DDD + número (padrão), + 0 + CSP + DDD + número, ou + 55 + DDD + número.';
 comment on column public.voz_troncos.canais is 'Canais simultâneos contratados com a operadora: limite real de saída e peso na divisão da concorrência.';
@@ -1286,13 +1298,14 @@ grant execute on function public.aprovar_roteiro_voz(bigint, text, text) to auth
 
 -- ================================================================ 21. RPCs da equipe: troncos, rotas, transferência, contrato
 drop function if exists public.cadastrar_tronco_voz(bigint, text, text, text, int, text, text, int, text, int, text[], text, boolean);
+drop function if exists public.cadastrar_tronco_voz(bigint, text, text, text, int, text, text, text, text, text, int, text, int, text[], text, boolean);
 create or replace function public.cadastrar_tronco_voz(empresa bigint, referencia text, operadora text, host text,
                                                        canais int, autenticacao text, ddd_origem text, bina text,
                                                        segredo_ref text default null, usuario text default null,
                                                        porta int default 5060, transporte text default 'udp',
                                                        cps int default 10, codecs text[] default '{alaw,ulaw}',
                                                        formato_discagem text default 'tech_ddd_numero',
-                                                       ativo boolean default true)
+                                                       ativo boolean default true, csp text default null)
 returns bigint
 language plpgsql security definer set search_path = public as $$
 declare tid bigint;
@@ -1300,36 +1313,44 @@ begin
     if not public.cuida_voz(empresa) then
         raise exception 'só a equipe MotorCX com a permissão de troncos de voz cadastra tronco';
     end if;
+    if coalesce(formato_discagem, 'tech_ddd_numero') = 'tech_0_csp_ddd_numero' and nullif(trim(csp), '') is null then
+        raise exception 'o formato 0 + CSP + DDD + número precisa do CSP da operadora (2 dígitos)';
+    end if;
+    if nullif(trim(csp), '') is not null and trim(csp) !~ '^[0-9]{2}$' then
+        raise exception 'CSP inválido: use 2 dígitos';
+    end if;
     insert into public.voz_troncos as t (empresa_id, referencia, operadora, host, porta, transporte, autenticacao,
-                                         usuario, segredo_ref, ddd_origem, bina, formato_discagem, codecs, canais, cps,
-                                         ativo)
+                                         usuario, segredo_ref, ddd_origem, bina, formato_discagem, csp, codecs, canais,
+                                         cps, ativo)
     values (empresa, lower(trim(referencia)), trim(operadora), lower(trim(host)), porta, transporte, autenticacao,
             nullif(trim(usuario), ''), nullif(trim(segredo_ref), ''), trim(ddd_origem),
-            regexp_replace(coalesce(bina, ''), '\D', '', 'g'), coalesce(formato_discagem, 'tech_ddd_numero'), codecs,
+            regexp_replace(coalesce(bina, ''), '\D', '', 'g'), coalesce(formato_discagem, 'tech_ddd_numero'),
+            nullif(trim(csp), ''), codecs,
             canais, cps, coalesce(ativo, true))
     on conflict on constraint voz_troncos_empresa_id_referencia_key do update
         set operadora = excluded.operadora, host = excluded.host, porta = excluded.porta,
             transporte = excluded.transporte, autenticacao = excluded.autenticacao, segredo_ref = excluded.segredo_ref,
             codecs = excluded.codecs, canais = excluded.canais, cps = excluded.cps, usuario = excluded.usuario,
             ddd_origem = excluded.ddd_origem, bina = excluded.bina, formato_discagem = excluded.formato_discagem,
+            csp = excluded.csp,
             ativo = excluded.ativo, atualizado_em = now(),
             -- mudou como conecta: precisa de teste de novo
-            testado_em = case when (t.host, t.porta, t.transporte, t.autenticacao, t.usuario, t.segredo_ref, t.bina, t.formato_discagem)
+            testado_em = case when (t.host, t.porta, t.transporte, t.autenticacao, t.usuario, t.segredo_ref, t.bina, t.formato_discagem, t.csp)
                                    is distinct from (excluded.host, excluded.porta, excluded.transporte,
                                                      excluded.autenticacao, excluded.usuario, excluded.segredo_ref,
-                                                     excluded.bina, excluded.formato_discagem)
+                                                     excluded.bina, excluded.formato_discagem, excluded.csp)
                               then null else t.testado_em end,
-            teste_ok = case when (t.host, t.porta, t.transporte, t.autenticacao, t.usuario, t.segredo_ref, t.bina, t.formato_discagem)
+            teste_ok = case when (t.host, t.porta, t.transporte, t.autenticacao, t.usuario, t.segredo_ref, t.bina, t.formato_discagem, t.csp)
                                  is distinct from (excluded.host, excluded.porta, excluded.transporte,
                                                    excluded.autenticacao, excluded.usuario, excluded.segredo_ref,
-                                                   excluded.bina, excluded.formato_discagem)
+                                                   excluded.bina, excluded.formato_discagem, excluded.csp)
                             then null else t.teste_ok end
     returning t.id into tid;
     return tid;
 end $$;
-revoke all on function public.cadastrar_tronco_voz(bigint, text, text, text, int, text, text, text, text, text, int, text, int, text[], text, boolean)
+revoke all on function public.cadastrar_tronco_voz(bigint, text, text, text, int, text, text, text, text, text, int, text, int, text[], text, boolean, text)
     from public, anon;
-grant execute on function public.cadastrar_tronco_voz(bigint, text, text, text, int, text, text, text, text, text, int, text, int, text[], text, boolean)
+grant execute on function public.cadastrar_tronco_voz(bigint, text, text, text, int, text, text, text, text, text, int, text, int, text[], text, boolean, text)
     to authenticated;
 
 -- vigência nova para o tech prefix: fecha a anterior no dia de antes. Sem carência: vale a partir de "desde".
