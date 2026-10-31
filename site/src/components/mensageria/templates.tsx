@@ -81,7 +81,7 @@ function TemplateEditor({ canal, existente, onClose, onSaved }: { canal: string;
 	const [nome, setNome] = useState(existente?.nome ?? '');
 	const [categoria, setCategoria] = useState(existente?.categoria ?? 'transacional');
 	const [tipoMidia, setTipoMidia] = useState(existente?.tipo_midia ?? 'simples');
-	const [texto, setTexto] = useState((existente?.conteudo as Row)?.texto ?? '');
+	const [texto, setTexto] = useState<string>((existente?.conteudo as Row)?.texto ?? '');
 	const [rastrear, setRastrear] = useState(existente?.rastrear_links ?? false);
 	const [busy, setBusy] = useState(false);
 	const [erro, setErro] = useState('');

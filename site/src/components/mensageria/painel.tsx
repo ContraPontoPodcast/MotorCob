@@ -167,7 +167,7 @@ export function PainelCanal() {
 			const entregues = (c['entregue'] ?? 0) + (c['descadastro'] ?? 0);
 			const falhou = c['falhou'] ?? 0;
 			const semRetorno = c['enviada'] ?? 0;
-			return { nome, disparados, entregues, falhou, semRetorno };
+			return { nome: n, disparados, entregues, falhou, semRetorno };
 		});
 	}, [operadora]);
 

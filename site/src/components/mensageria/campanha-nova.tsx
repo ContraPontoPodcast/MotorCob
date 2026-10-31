@@ -110,10 +110,11 @@ export function CampanhaNova() {
 	}
 
 	async function pollCampanha() {
-		if (!supabase || !campanhaId) return;
+		const sb = supabase;
+		if (!sb || !campanhaId) return;
 		let tentativas = 0;
 		const tick = async () => {
-			const { data } = await supabase.from('mensageria_campanhas').select('situacao,carregados,layout_sugerido,erro_texto').eq('id', campanhaId).maybeSingle();
+			const { data } = await sb.from('mensageria_campanhas').select('situacao,carregados,layout_sugerido,erro_texto').eq('id', campanhaId).maybeSingle();
 			const c = data as Row | null;
 			if (!c) return;
 			if (c.situacao === 'aguardando_layout') {
@@ -155,10 +156,11 @@ export function CampanhaNova() {
 
 	// Recarrega a campanha a cada 15 s enquanto o Score calcula a prévia.
 	async function pollPrevia() {
-		if (!supabase || !campanhaId) return;
+		const sb = supabase;
+		if (!sb || !campanhaId) return;
 		let tentativas = 0;
 		const tick = async () => {
-			const { data } = await supabase.from('mensageria_campanhas').select('situacao,score_previa,erro_texto').eq('id', campanhaId).maybeSingle();
+			const { data } = await sb.from('mensageria_campanhas').select('situacao,score_previa,erro_texto').eq('id', campanhaId).maybeSingle();
 			const c = data as Row | null;
 			if (!c) return;
 			if (c.situacao === 'pronta') {

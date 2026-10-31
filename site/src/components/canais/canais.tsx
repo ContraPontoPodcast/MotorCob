@@ -84,12 +84,13 @@ export function Canais() {
 
   // Produtos liberados por canal (campo Produto padrão, só no modo carteira).
   useEffect(() => {
-    if (!supabase || !empresa || !isCarteira) { setProdutosPorCanal({}); return; }
+    const sb = supabase;
+    if (!sb || !empresa || !isCarteira) { setProdutosPorCanal({}); return; }
     let active = true;
     (async () => {
       const map: Record<string, Row[]> = {};
       await Promise.all(canalOpts.map(async c => {
-        const { data } = await supabase.rpc('produtos_liberados', { empresa: empresa.id, canal: c.id });
+        const { data } = await sb.rpc('produtos_liberados', { empresa: empresa.id, canal: c.id });
         map[c.id] = (data ?? []) as Row[];
       }));
       if (active) setProdutosPorCanal(map);

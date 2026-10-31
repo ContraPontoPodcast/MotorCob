@@ -3,11 +3,11 @@ import { Link, useNavigate } from 'react-router';
 import { MarcaMotorCX } from '@/components/site/marca-motorcx';
 import { setRemember, supabase } from '@/lib/supabase';
 import DuasEtapas from '@/components/DuasEtapas';
-import { proximoPasso } from '@/components/duasEtapasLogica';
+import { proximoPasso, type Passo } from '@/components/duasEtapasLogica';
 import { useFrente } from '@/components/frente-provider';
 import { frenteDoLink, FRENTE_AVISO_KEY, FRENTE_LINK_KEY } from '@/lib/frentes';
 
-type Passo = { etapa: 'pronto' | 'codigo' | 'cadastro'; fatorId?: string };
+type PassoPendente = Exclude<Passo, { etapa: 'pronto' }>;
 
 export function LoginForm() {
 	const navigate = useNavigate();
@@ -18,7 +18,7 @@ export function LoginForm() {
 	const [remember, setRemember] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
-	const [passo, setPasso] = useState<Passo | null>(null);
+	const [passo, setPasso] = useState<PassoPendente | null>(null);
 	const [pronto, setPronto] = useState(false);
 
 	// reset
@@ -75,7 +75,6 @@ export function LoginForm() {
 			const { data: perfil } = await supabase.from('perfis').select('papel,equipe').eq('id', userId).single();
 			setEquipe(!!perfil?.equipe);
 			const p = await proximoPasso(supabase, perfil?.papel === 'admin');
-			if (!p) return;
 			if (p.etapa === 'pronto') {
 				setPronto(true);
 			} else {
@@ -121,7 +120,7 @@ export function LoginForm() {
 	const inputCls = 'w-full bg-transparent text-[17px] text-[#1D1D1F] outline-none placeholder:text-[#A1A1A6]';
 
 	// Etapa de duas etapas: mostra a tela do duplo fator no lugar do formulário.
-	if (passo && passo.etapa !== 'pronto' && supabase) {
+	if (passo && supabase) {
 		return (
 			<main className="relative grid min-h-screen place-items-center bg-white px-5 py-16">
 				<Link to="/" className="absolute left-5 top-5 flex items-center gap-1 text-[14px] text-[#1D1D1F] hover:underline">

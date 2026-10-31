@@ -5,7 +5,7 @@ import { supabase, friendlyError, dateBR, type Row } from '@/lib/supabase';
 import { SEGMENTOS, formatCNPJ, formatCEP, validarCNPJ } from '@/lib/empresa-helpers';
 import { EmpresaShell, cardShadow } from './empresa-shell';
 
-function Field({ label, value }: { label: string; value: unknown }) {
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
       <p className="text-[12px] text-[#6E6E73]">{label}</p>

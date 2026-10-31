@@ -29,14 +29,15 @@ export function FrenteProvider({ children }: { children: ReactNode }) {
 
 	// Carrega as frentes do usuário depois do login.
 	useEffect(() => {
-		if (!supabase) { setLoading(false); return; }
+		const sb = supabase;
+		if (!sb) { setLoading(false); return; }
 		let active = true;
-		async function load() {
-			const { data: session } = await supabase.auth.getSession();
+		const load = async () => {
+			const { data: session } = await sb.auth.getSession();
 			if (!session.session) { if (active) { setFrentes([FRENTE_PADRAO]); setFrenteState(FRENTE_PADRAO); setLoading(false); } return; }
 			let ids: FrenteId[] = [FRENTE_PADRAO];
 			try {
-				const { data, error } = await supabase.rpc('minhas_frentes');
+				const { data, error } = await sb.rpc('minhas_frentes');
 				if (!active) return;
 				if (!error && Array.isArray(data) && data.length) {
 					ids = (data as FrenteRow[]).map(r => r.frente).filter((f): f is FrenteId => f === 'motorcob' || f === 'motorcli');
@@ -51,9 +52,9 @@ export function FrenteProvider({ children }: { children: ReactNode }) {
 			const inicial = daSessao && ids.includes(daSessao) ? daSessao : ids[0];
 			setFrenteState(inicial);
 			setLoading(false);
-		}
+		};
 		void load();
-		const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+		const { data: listener } = sb.auth.onAuthStateChange((event) => {
 			if (event === 'SIGNED_OUT') { setFrentes([FRENTE_PADRAO]); setFrenteState(FRENTE_PADRAO); sessionStorage.removeItem(FRENTE_STORAGE_KEY); }
 			else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') { void load(); }
 		});

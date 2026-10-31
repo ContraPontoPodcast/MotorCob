@@ -7,6 +7,7 @@ import { FRENTES, type FrenteId } from '@/lib/frentes';
 import { esquecerAreasLiberadas } from '@/hooks/use-areas-liberadas';
 import { Chave } from '@/components/workspace/console/chave';
 import { useConsolePerms } from '@/components/workspace/console/console-perms';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { ErrorDetail } from '@/components/error-detail';
 import { PainelEdicao } from '@/components/comuns/painel-edicao';
 
@@ -414,9 +415,9 @@ export function ContratacaoEmpresa({
   }
 
   /** Salva preços alterados (vigente_desde = competencia_de). */
-  async function salvarPrecos(empresaSalvaId: string) {
+  async function salvarPrecos(sb: SupabaseClient, empresaSalvaId: string) {
     let vigenteDesde = competencia;
-    try { const { data } = await supabase.rpc('competencia_de', { empresa: empresaSalvaId, dia: competencia }); if (data) vigenteDesde = String(data); } catch { /* usa hoje */ }
+    try { const { data } = await sb.rpc('competencia_de', { empresa: empresaSalvaId, dia: competencia }); if (data) vigenteDesde = String(data); } catch { /* usa hoje */ }
     for (const [codigo, ed] of Object.entries(alterados)) {
       const itemNome = itens.find(it => String(it.codigo) === codigo)?.nome ?? codigo;
       const payload: Record<string, unknown> = { empresa: empresaSalvaId, item: codigo, modelo: ed.modelo, vigente_desde: vigenteDesde };
@@ -429,7 +430,7 @@ export function ContratacaoEmpresa({
         payload.minimo = parseNum(ed.minimo);
         payload.faixas = ed.faixas.map((f, i, arr) => ({ ate: i === arr.length - 1 ? null : Number(f.ate), preco: parseNum(f.preco) }));
       }
-      const { error: ePr } = await supabase.rpc('salvar_preco', payload);
+      const { error: ePr } = await sb.rpc('salvar_preco', payload);
       if (ePr) throw new Error(`Falha ao salvar o preço do ${itemNome}: ${ePr.message}`);
     }
   }
@@ -481,7 +482,7 @@ export function ContratacaoEmpresa({
     const { error: eCi } = await supabase.from('ciclo_empresa').upsert(cicloPayload, { onConflict: 'empresa_id' });
     if (eCi) throw new Error(`Falha ao salvar o ciclo: ${eCi.message}`);
     // 4. preços alterados
-    await salvarPrecos(empresaSalvaId);
+    await salvarPrecos(supabase, empresaSalvaId);
   }
 
   async function criar() {
@@ -535,7 +536,7 @@ export function ContratacaoEmpresa({
     setBusy(true);
     try {
       if (soPrecos) {
-        await salvarPrecos(empresaId);
+        await salvarPrecos(supabase, empresaId);
       } else {
         await salvarTudo(empresaId);
         esquecerAreasLiberadas(empresaId);

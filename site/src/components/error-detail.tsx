@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { captureError, friendlyError, getErrorDetail, type ErrorDetail } from '@/lib/supabase';
+import { captureError, friendlyError, getErrorDetail, type ErrorDetail as DetalheErro } from '@/lib/supabase';
 
 /** Texto exibido no bloco: código, consulta, mensagem, detalhes e dica (sanitizados). */
-function displayText(d: ErrorDetail): string {
+function displayText(d: DetalheErro): string {
   const parts: string[] = [];
   if (d.code) parts.push(`código: ${d.code}`);
   if (d.table) parts.push(`consulta: ${d.table}`);
@@ -14,7 +14,7 @@ function displayText(d: ErrorDetail): string {
 }
 
 /** Texto copiado: inclui ainda a página e a data/hora. */
-function copyText(d: ErrorDetail): string {
+function copyText(d: DetalheErro): string {
   const base = displayText(d);
   const meta = [`página: ${d.page}`, `data/hora: ${d.timestamp}`].join(' · ');
   return base ? `${base} · ${meta}` : meta;
