@@ -54,7 +54,7 @@ Cada comando abaixo pede o valor sem mostrar na tela:
 criar() { read -r -s -p "$2: " S; echo; printf '%s' "$S" | gcloud secrets create "$1" \
   --replication-policy=user-managed --locations=southamerica-east1 --data-file=-; unset S; }
 criar motorcx-voz-supabase-url "URL do Supabase (https://xxxx.supabase.co)"
-criar motorcx-voz-supabase-key "Chave do servidor do Supabase"
+criar motorcx-voz-supabase-key "Chave do servidor do Supabase"     # só no piloto (seção 7)
 ```
 
 **Senha de tronco:** o banco guarda só a referência (`voz_troncos.segredo_ref`). Para a referência
@@ -100,7 +100,7 @@ antes da janela de discagem.
 | Serviço | O que faz |
 |---|---|
 | `motorcx-asterisk` | Asterisk 22 (PJSIP, ARI, AMD, MixMonitor) na rede do host. SIP em 5060, RTP em 10000–20000, ARI só em `127.0.0.1:8088`. |
-| `motorcx-voz-orquestrador` | Plantão das empresas com `voz_config.modo = 'real'`. Detalhes abaixo da tabela. |
+| `motorcx-voz-orquestrador` | Plantão das empresas com `voz_config.modo = 'real'`. Só disca com o acesso próprio ao banco (seção 7). Detalhes abaixo da tabela. |
 | `motorcx-voz-simulado` | O mesmo plantão para as empresas em modo `simulado`, sem ligação de verdade. |
 | `motorcx-voz-config.timer` | A cada 2 min, busca troncos, rotas, transferências e config no banco. Se algo mudou, regera o pjsip e o dialplan dentro do contêiner, com as senhas do cofre, e recarrega. Configuração inválida no banco mantém a que está no ar. |
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |
@@ -147,3 +147,68 @@ Na ponta a ponta:
 - a C responde 404, e o evento sai como número inexistente, com o SIP 404 e o Q.850 1 vindos do ARI.
 
 O teste também confere o Request-URI de cada operadora (tech prefix + DDD + número).
+
+## 7. Acesso próprio ao banco (obrigatório antes do modo real)
+
+No piloto (modo simulado), as VMs usam a chave do servidor do Supabase. Antes do modo real, elas passam a entrar no
+banco com o papel **`motorcx_voz`** (SQL 57), que só enxerga a voz: lê a configuração, grava chamadas, gravações,
+consumo, lotes, ondas e saúde, e publica o retorno. Não lê clientes, carteiras, perfis nem faturas, e não faz DDL.
+**Enquanto a VM estiver com a chave do servidor, o plantão do modo real fica parado** (o simulado segue normal).
+
+Faça uma vez, no Cloud Shell, com o projeto do GCP selecionado. Nenhum passo mostra a senha.
+
+1. **Gere a senha direto no Secret Manager:**
+
+   ```bash
+   openssl rand -base64 96 | tr -dc 'A-Za-z0-9' | head -c 48 | gcloud secrets create motorcx-voz-db-senha \
+     --replication-policy=user-managed --locations=southamerica-east1 --data-file=-
+   ```
+
+2. **Rode o SQL 57** (`supabase/migrations/20261224000001_voz_acesso_proprio.sql`) no SQL Editor do Supabase.
+
+3. **Defina a senha do papel** lendo o segredo. O script manda ao banco só o verificador SCRAM, nunca a senha.
+   Antes, baixe o certificado da CA em **Database Settings › SSL Configuration** (arquivo `prod-ca-2021.crt`,
+   público) para a pasta atual. Troque `<ref>` pela referência do projeto e `<host-do-pooler>` pelo host do pooler,
+   que aparece no Supabase em **Connect › Session pooler** (ex.: `aws-0-sa-east-1.pooler.supabase.com`). O psql
+   pede a senha do `postgres`.
+
+   ```bash
+   gcloud secrets versions access latest --secret=motorcx-voz-db-senha \
+     | python3 infra/asterisk/senha_motorcx_voz.py \
+     | psql "host=<host-do-pooler> port=5432 dbname=postgres user=postgres.<ref> sslmode=verify-full sslrootcert=prod-ca-2021.crt" \
+       -v ON_ERROR_STOP=1 -q
+   ```
+
+4. **Publique a Edge Function de arquivos**, com "Verify JWT" desligado (quem autoriza é o bilhete do banco):
+
+   ```bash
+   supabase functions deploy voz-arquivos --no-verify-jwt --project-ref <ref>
+   ```
+
+5. **Troque o modo das VMs.** Na mesma pasta do certificado, rode para cada VM (`motorcx-ast-1` na zona `a` e
+   `motorcx-ast-2` na zona `b`):
+
+   ```bash
+   VM=motorcx-ast-1; ZONA=southamerica-east1-a
+   gcloud compute instances add-metadata "$VM" --zone="$ZONA" \
+     --metadata=motorcx-voz-acesso=acesso_proprio,motorcx-voz-db-host=<host-do-pooler>,motorcx-voz-db-usuario=motorcx_voz.<ref> \
+     --metadata-from-file=motorcx-voz-db-ca=prod-ca-2021.crt
+   gcloud compute ssh "$VM" --zone="$ZONA" --tunnel-through-iap -- \
+     'sudo systemctl restart motorcx-voz-config motorcx-voz-simulado motorcx-voz-orquestrador'
+   ```
+
+   Confira no journal da VM (`journalctl -u motorcx-voz-config -n 20`) que a configuração foi lida sem erro.
+
+6. **Tire a chave do servidor do alcance das VMs.** Com as duas VMs no acesso próprio, desative o segredo
+   (volta com `enable` se precisar voltar ao piloto):
+
+   ```bash
+   gcloud secrets versions disable latest --secret=motorcx-voz-supabase-key
+   ```
+
+**Conferência:** a consulta do topo do SQL 57, no SQL Editor. O esperado é: `entra` true; `herda`, `fura_rls`,
+`super` e `cria` false; `membro_de`, `tabelas_fora_da_voz`, `definer_fora_da_voz` e `schemas_com_create` 0;
+`le_config` e `grava_chamadas` true; `tem_senha` true depois do passo 3.
+
+**Para voltar ao piloto:** `motorcx-voz-acesso=supabase_chave` no metadado, reative o segredo da chave e reinicie
+os serviços. O modo real volta a ficar parado.

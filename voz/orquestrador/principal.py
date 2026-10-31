@@ -207,6 +207,22 @@ def _rodar_plantao(plantao: Plantao, fila: queue.Queue, parar: threading.Event, 
     plantao.descarregar_tudo()
 
 
+def _acesso_proprio_ok(parar: threading.Event | None = None, ambiente=None) -> bool:
+    """Decisão do dono: o modo real só roda com o acesso próprio (SQL 57). Com a chave do servidor, o plantão real
+    fica parado (sem discar) até o serviço ser parado, sem laço de reinício no systemd."""
+    from voz.acesso import modo_do_ambiente
+    if modo_do_ambiente(ambiente) == "acesso_proprio":
+        return True
+    log.error("modo real exige MOTORCX_VOZ_ACESSO=acesso_proprio (infra/asterisk/README.md, seção 7); "
+              "o plantão real fica parado")
+    if parar is None:
+        import signal
+        parar = threading.Event()
+        signal.signal(signal.SIGTERM, lambda *_: parar.set())
+    parar.wait()
+    return False
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Orquestrador ARI do agente de voz do MotorCX")
     ap.add_argument("--dados", required=True, help="voz.json (voz/configuracao.py)")
@@ -220,6 +236,8 @@ def main(argv=None) -> int:
     ap.add_argument("--provedores", default=os.environ.get("MOTORCX_PROVEDORES", "/etc/motorcx/provedores.json"))
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if a.auto and a.modo == "real" and not _acesso_proprio_ok():
+        return 0
     bruto = json.loads(Path(a.dados).read_text(encoding="utf-8"))
     dados = B.carregar(bruto)
     contratado = a.contratado or int((bruto.get("voz_contrato") or {}).get("concorrencia_contratada") or 0)

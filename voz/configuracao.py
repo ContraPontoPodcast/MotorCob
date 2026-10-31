@@ -2,9 +2,9 @@
 
   python3 -m voz.configuracao --saida /run/motorcx/voz.json [--provedores-sip /etc/motorcx/provedores_sip.json]
 
-Lê voz_troncos, voz_rotas, voz_transferencias, voz_config e voz_contrato (concorrência contratada) pela API do
-Supabase (chave da VM, só em memória). Valida tudo com voz/banco.py ANTES de gravar: configuração quebrada no
-banco não derruba o Asterisk que está no ar. Só grava se mudou (hash) e então sai com código 10, para o serviço
+Lê voz_troncos, voz_rotas, voz_transferencias, voz_config e voz_contrato (concorrência contratada) pelo acesso
+que a VM usa (voz/acesso.py: chave do servidor no piloto, papel motorcx_voz antes do modo real; só em memória).
+Valida tudo com voz/banco.py ANTES de gravar: configuração quebrada no banco não derruba o Asterisk que está no ar. Só grava se mudou (hash) e então sai com código 10, para o serviço
 da VM regerar o pjsip/dialplan dentro do contêiner e recarregar (infra/asterisk/vm/motorcx-voz-config).
 Nenhuma senha passa por aqui: o banco só tem a referência do segredo.
 """
@@ -55,8 +55,9 @@ def gravar_se_mudou(dados: dict, saida: Path) -> bool:
 
 
 def supabase_do_ambiente():
-    from nuvem.supabase_api import Supabase
-    return Supabase(os.environ.get("MOTORCOB_SUPABASE_URL", ""), os.environ.get("MOTORCOB_SUPABASE_KEY", ""))
+    """Cliente do banco da VM: chave do servidor (piloto) ou acesso próprio (SQL 57), por MOTORCX_VOZ_ACESSO."""
+    from voz.acesso import conectar_do_ambiente
+    return conectar_do_ambiente()
 
 
 def main(argv=None, sb=None) -> int:
