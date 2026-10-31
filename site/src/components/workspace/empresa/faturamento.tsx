@@ -5,6 +5,7 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError, moneyBR, dateBR, dateTimeBR, today, type Row } from '@/lib/supabase';
 import { SIT_FATURA, mesExtenso, mesCurto } from '@/lib/empresa-helpers';
 import { EmpresaShell, cardShadow } from './empresa-shell';
+import { AgenteVozFaturamento } from './faturamento-voz';
 
 // ---------- contrato da Edge Function "cobranca" ----------
 //
@@ -353,6 +354,9 @@ export function FaturamentoPage() {
           </div>
         </div>
       )}
+
+      {/* Agente virtual (SQL 56): itens que o MotorCX fatura e, à parte, a telefonia paga à operadora. */}
+      {!loading && empresa && <div className="mt-8"><AgenteVozFaturamento empresaId={String(empresa.id)} empresaSlug={empresa.slug} /></div>}
 
       {recargaOpen && isPre && (
         <RecargaModal
