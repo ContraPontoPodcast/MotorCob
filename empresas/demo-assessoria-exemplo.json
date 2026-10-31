@@ -1,0 +1,98 @@
+{
+ "_doc": "Empresa DEMO (dados 100% fictícios) criada no Console com o nome 'Demo · Assessoria Exemplo' (slug demo-assessoria-exemplo). Lê os arquivos de scripts/demo/gerar_carga_demo.py sem esperar o mapeamento no site. Passo a passo: docs/demo/LEIA_DEMO.md. Não use este layout para empresa real.",
+ "empresa": "demo-assessoria-exemplo",
+ "base": {
+  "arquivo": "*",
+  "delimitador": ";",
+  "formato_data": "%d/%m/%Y",
+  "decimal": ",",
+  "colunas": {
+   "id_cliente": "COD_CLIENTE",
+   "id_contrato": "CONTRATO",
+   "cpf": "CPF",
+   "saldo": "SALDO_DEVEDOR",
+   "vencimento": "DT_VENCIMENTO",
+   "data_entrada": "DATA_ENTRADA"
+  },
+  "telefones": [
+   {"coluna": "TEL1", "whatsapp": "WHATS_TEL1", "rcs": "RCS_TEL1"},
+   {"coluna": "TEL2", "whatsapp": "WHATS_TEL2"},
+   "TEL3"
+  ],
+  "emails": ["EMAIL"]
+ },
+ "ocorrencia": [
+  {
+   "arquivo": "*",
+   "delimitador": ";",
+   "formato_data": "%d/%m/%Y %H:%M",
+   "colunas": {
+    "id_cliente": "COD_CLIENTE",
+    "data": "DT_ACAO",
+    "canal": "CANAL",
+    "resultado": "OCORRENCIA"
+   },
+   "canais": {
+    "WHATSAPP": "whatsapp",
+    "RCS": "rcs",
+    "SMS": "sms",
+    "EMAIL": "email",
+    "AGENTE VIRTUAL": "agente_voz",
+    "DISCADOR": "discador"
+   },
+   "resultados": {
+    "CPC": "cpc",
+    "PROMESSA DE PAGAMENTO": "promessa",
+    "RECUSA": "recusa",
+    "NAO ATENDE": "sem_contato",
+    "CAIXA POSTAL": "sem_contato",
+    "ENTREGUE SEM RESPOSTA": "sem_contato",
+    "TERCEIRO": "terceiro",
+    "NUMERO INVALIDO": "invalido",
+    "OPT OUT": "opt_out"
+   }
+  }
+ ],
+ "enriquecimento": [
+  {
+   "arquivo": "*",
+   "delimitador": ";",
+   "chave": {"cpf": "CPF/CNPJ"},
+   "telefone": {
+    "ddd": "DDD",
+    "numero": "FONE",
+    "whatsapp": "POSSUI-WHATSAPP",
+    "rcs": "POSSUI-RCS",
+    "nao_perturbe": "NAO-PERTURBE",
+    "score": "SCORE",
+    "ranking": "RANKING"
+   },
+   "emails": ["EMAIL-1", "EMAIL-2"],
+   "pertence": {}
+  }
+ ],
+ "retirada": {
+  "colunas": {"id_contrato": "CONTRATO", "data": "DT_RETIRADA", "motivo": "MOTIVO"}
+ },
+ "acordo": {
+  "colunas": {
+   "id_cliente": "COD_CLIENTE",
+   "id_acordo": "NUM_ACORDO",
+   "parcela": "PARCELA",
+   "vencimento": "VENCIMENTO",
+   "valor": "VALOR"
+  }
+ },
+ "baixa": {
+  "colunas": {
+   "id_cliente": "COD_CLIENTE",
+   "id_contrato": "CONTRATO",
+   "id_acordo": "NUM_ACORDO",
+   "parcela": "PARCELA",
+   "data": "DT_PAGAMENTO",
+   "valor": "VALOR_PAGO",
+   "tipo": "TIPO"
+  },
+  "tipos": {"QUITACAO": "quitacao", "PARCIAL": "parcial", "PARCELA": "parcela"}
+ }
+}

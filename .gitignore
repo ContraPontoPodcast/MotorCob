@@ -9,3 +9,4 @@ estado/
 *.pem
 *.key
 supabase/.temp/
+demo_saida/
