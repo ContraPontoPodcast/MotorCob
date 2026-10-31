@@ -126,13 +126,20 @@ class TestRegistro(unittest.TestCase):
         r.registrar(ev("a2", billsec=0, custo=0.0))
         r.registrar(ev("a3", tp=None, custo=None, billsec=12))
         self.assertEqual(r.descarregar(), 3)
-        self.assertEqual(sb.inseridos[0][1], "id_chamada")
+        self.assertEqual(sb.inseridos[0][1], "empresa_id,id_chamada,canal")    # a chave única do SQL 56
         linha = sb.tabelas["voz_chamadas"][0]
         self.assertEqual(linha["ocorrido_em"], "2026-11-03T10:00:00-03:00")
+        self.assertEqual(linha["canal"], "agente_voz")
         self.assertNotIn("numero_discado", linha)
+        for col in B.SO_DO_BANCO["voz_chamadas"]:                   # tarifação é do gatilho, a VM não manda
+            self.assertNotIn(col, linha)
         r.registrar(ev("a1"))                                       # reenvio: upsert, não duplica
         r.descarregar()
         self.assertEqual(len(sb.tabelas["voz_chamadas"]), 3)
+        # o que o gatilho tarifar_chamada_voz grava (o teste contra o Postgres é supabase/testes/testar_voz_contrato.py)
+        tarifa = {"a1": (1, 36, 0.03), "a2": (1, 0, 0.0), "a3": (None, None, None)}
+        for l in sb.tabelas["voz_chamadas"]:
+            l["rota_id"], l["segundos_tarifados"], l["custo_operadora"] = tarifa[l["id_chamada"]]
         self.assertEqual(r.atualizar_consumo(), 2)
         cons = {c["tech_prefix"]: c for c in sb.tabelas["consumo_voz"]}
         self.assertEqual(cons["1010"], {"empresa_id": 1, "dia": "2026-11-03", "tech_prefix": "1010", "rota_id": 1,
@@ -269,7 +276,8 @@ class TestPlantao(unittest.TestCase):
         self.assertTrue(all(l["credor_id"] == 7 for l in self.sb.tabelas["voz_chamadas"]))
         nomes = sorted(e["nome_original"].rsplit("_", 1)[0] for e in self.sb.tabelas["envios"])
         self.assertEqual(nomes, ["motorcx_discador_2026-11-03", "motorcx_voz_2026-11-03"])
-        self.assertTrue(self.sb.tabelas["consumo_voz"])
+        self.assertTrue(all(l["modo"] == "simulado" for l in self.sb.tabelas["voz_chamadas"]))
+        self.assertFalse(self.sb.tabelas.get("consumo_voz"))     # simulado não é telefonia (consolidar_consumo_voz)
         self.assertTrue(all(c[0] in ("originar", "continuar", "desligar", "criar_ponte", "adicionar_na_ponte",
                                      "destruir_ponte") for c in self.ari.comandos))
 
@@ -326,6 +334,129 @@ class TestPlantao(unittest.TestCase):
         parar.set()
         t.join(5)
         self.assertFalse(t.is_alive())
+
+
+class _ModeloEncerra:
+    """LLM falso: na primeira fala da pessoa registra recusa e encerra (sem rede)."""
+
+    def responder(self, mensagens, ferramentas):
+        from voz.provedores.montagem import Resposta
+        return Resposta("Obrigada, até logo.", [("registrar_resultado", {"resultado": "recusa"}),
+                                                ("encerrar_chamada", {})])
+
+
+class TestVariaveisDaFala(unittest.TestCase):
+    """Ponta a ponta: arquivo do agente_voz que o motor gera -> Lista do dia na VM -> orquestrador -> a Montagem
+    recebe as variáveis do cliente. Os valores ficam só na memória: nada no banco, nos eventos, no envio ou no log."""
+
+    NOME, SALDO, ATRASO = "Ana", "R$ 1.234,56", "47"
+
+    def setUp(self):
+        import logging
+
+        import rodar_dia
+        from voz.provedores.montagem import ConfigMontagem, Montagem
+        dia = "2026-11-03"
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        ids = Path(self.tmp.name) / "motor" / "ids"
+        linhas = [{"id_cliente": "C1", "contato": "11988887781", "ordem_contato": 1, "condicao": ""},
+                  {"id_cliente": "C2", "contato": "11988887791", "ordem_contato": 1, "condicao": ""}]
+        rodar_dia.exportar_ids(ids, {"agente_voz": linhas}, voz={
+            "C1": {"primeiro_nome": self.NOME, "saldo": self.SALDO, "dias_atraso": self.ATRASO,
+                   "vencimento": "20/11/2026"},
+            "C2": {"primeiro_nome": "Bruno", "saldo": "R$ 80,00"}})
+        arq = {("saidas", f"credora-ficticia/{dia}/principal/discador_mailing.csv"): _mailing([
+                   ["C1", "11988887771", 1, 0, 1, 1, 60, 15, "08:00-20:00", "SP", 1, "", "", "", "a1", ""]]),
+               ("saidas", f"credora-ficticia/{dia}/principal/ids/agente_voz.csv"):
+                   (ids / "agente_voz.csv").read_bytes()}
+        self.sb = SbFalso({"empresas": [{"id": 1, "slug": "credora-ficticia"}],
+                           "credores": [{"id": 7, "empresa_id": 1, "codigo": "principal", "nome": "Banco Fictício",
+                                         "ativo": True}]}, arq)
+        d = dados_exemplo()
+        d["voz_config"][0].update({"modo": "simulado", "bucket_gravacoes": None, "gravar": False,
+                                   "provedor": "montagem_motorcx",
+                                   # a empresa não manda dias_atraso ao provedor (voz_config.variaveis)
+                                   "variaveis": ["primeiro_nome", "credor", "saldo", "vencimento"]})
+        self.rel = Relogio()
+        self.ari = AriSimulado()
+        self.sessoes = []
+        self.mt = Montagem(ConfigMontagem(portas=(40000, 40011)), None,
+                           lambda ctx: ("Você fala em nome de {{credor}}. Saldo: {{ saldo }}. Atraso: {{dias_atraso}}.",
+                                        "Olá, em nome de {{credor}}. Falo com {{primeiro_nome}}?"),
+                           modelo_de=_ModeloEncerra, executor=self.sessoes.append)
+        self.reg = RegistroBanco(self.sb)
+        self.orq = Orquestrador(self.ari, B.carregar(d), Agendador(contratado=10), EscritorEventos(self.tmp.name),
+                                {"simulador": Simulador(), "montagem_motorcx": self.mt}, self.rel,
+                                ao_registrar=self.reg.registrar)
+        self.listas = Path(self.tmp.name) / ".listas"
+        self.pl = P.Plantao(self.orq, P.FonteListas(self.sb, self.listas), "simulado", None, self.reg,
+                            Publicador(self.sb, self.tmp.name, USUARIO, relogio=self.rel), relogio=self.rel)
+        self.logs = []
+        h = logging.Handler(logging.DEBUG)
+        h.emit = lambda r: self.logs.append(r.getMessage())
+        raiz = logging.getLogger()
+        nivel = raiz.level
+        raiz.addHandler(h)
+        raiz.setLevel(logging.DEBUG)
+        self.addCleanup(raiz.removeHandler, h)
+        self.addCleanup(raiz.setLevel, nivel)
+
+    def girar(self, segundos):
+        for _ in range(segundos):
+            while not self.ari.fila.empty():
+                self.orq.ao_evento(self.ari.fila.get())
+            self.orq.tick()
+            self.pl.ciclo((self.rel.t - D0).total_seconds())
+            self.rel.andar(1)
+
+    def test_lote_orquestrador_montagem(self):
+        self.girar(3)
+        self.assertEqual(sorted(k[2] for k in self.orq.lotes), ["agente_voz", "discador"])
+        self.assertFalse(list(self.listas.glob("*")))               # arquivos baixados apagados depois de lidos
+        por = {}
+        for s in self.sessoes:
+            por.setdefault(s.ctx.id_cliente, []).append(s)
+        self.assertEqual(sorted(por), ["C1", "C2"])
+        self.assertEqual(len(por["C1"]), 2)                           # discador e agente_voz: as mesmas variáveis
+        esperado = {"C1": {"primeiro_nome": self.NOME, "credor": "Banco Fictício", "saldo": self.SALDO,
+                           "vencimento": "20/11/2026"},
+                    "C2": {"primeiro_nome": "Bruno", "credor": "Banco Fictício", "saldo": "R$ 80,00"}}
+        for idc, ss in por.items():
+            for s in ss:
+                self.assertEqual(s.ctx.variaveis, esperado[idc])
+                self.assertNotIn("dias_atraso", s.ctx.variaveis)    # fora de voz_config.variaveis
+                self.assertNotIn(self.NOME, repr(s.ctx))
+        conv = por["C1"][0].conversa
+        self.assertEqual(conv.comecar(), [f"Olá, em nome de Banco Fictício. Falo com {self.NOME}?"])
+        self.assertIn(f"Banco Fictício. Saldo: {self.SALDO}. Atraso: {{{{dias_atraso}}}}.", conv.historico[0]["content"])
+        self.assertEqual(por["C2"][0].conversa.comecar(), ["Olá, em nome de Banco Fictício. Falo com Bruno?"])
+        for s in self.sessoes:                                        # a pessoa responde; o agente encerra
+            s.conversa.ouvir("não vou pagar")
+        self.girar(5)
+        self.pl.descarregar_tudo()
+        self.assertEqual(len(self.sb.tabelas["voz_chamadas"]), 3)
+        self.assertTrue(all(l["provedor"] == "montagem_motorcx" for l in self.sb.tabelas["voz_chamadas"]))
+        # nada do cliente fora da memória: banco, envios publicados, eventos e arquivos da VM, log
+        tabelas = {k: v for k, v in self.sb.tabelas.items() if k != "credores"}   # o nome da carteira é de lá
+        banco = json.dumps({**tabelas, "arquivos": {k[1]: v.decode("utf-8", "replace")
+                            for k, v in self.sb.arquivos.items() if k[0] != "saidas"}}, default=str,
+                           ensure_ascii=False)
+        disco = "".join(p.read_text(encoding="utf-8", errors="replace") for p in Path(self.tmp.name).rglob("*")
+                        if p.is_file() and "motor" not in p.parts)
+        for valor in (self.NOME, "Bruno", self.SALDO, "1.234", "Banco Fictício", "20/11/2026"):
+            self.assertNotIn(valor, banco, valor)
+            self.assertNotIn(valor, disco, valor)
+            self.assertFalse([m for m in self.logs if valor in m], valor)
+
+    def test_so_variaveis_de_voz_nunca_cpf(self):
+        from voz.orquestrador.lote import ler_ids
+        arq = Path(self.tmp.name) / "agente_voz.csv"
+        arq.write_text("id_cliente;contato;cpf;primeiro_nome;email;saldo\n"
+                       "C1;11988887781;12345678909;Ana;ana@exemplo.com;R$ 10,00\n", encoding="utf-8")
+        it = ler_ids(arq, date(2026, 11, 3))[0]
+        self.assertEqual(it.variaveis, {"primeiro_nome": "Ana", "saldo": "R$ 10,00"})
+        self.assertNotIn("Ana", repr(it))
 
 
 if __name__ == "__main__":

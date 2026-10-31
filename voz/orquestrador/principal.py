@@ -81,7 +81,12 @@ def rodar(orq: Orquestrador, fila: queue.Queue, passo_s: float = 0.2, relogio=re
 
 
 class FonteListas:
-    """A Lista do dia que o motor publicou no bucket "saidas" (nuvem/sincronizar.py: publicar_arquivos)."""
+    """A Lista do dia que o motor publicou no bucket "saidas" (nuvem/sincronizar.py: publicar_arquivos).
+
+    As variáveis da fala de cada cliente (ItemLote.variaveis) saem das colunas extras do ids/agente_voz*.csv e, para
+    `credor`, do nome da carteira (credores.nome). O cliente que está no discador_mailing.csv e no agente_voz recebe
+    as mesmas variáveis nos dois lotes. Os arquivos baixados são apagados logo depois de lidos: o que é do cliente
+    fica só na memória da VM durante o lote."""
 
     def __init__(self, sb, pasta_tmp: Path):
         self.sb, self.tmp = sb, Path(pasta_tmp)
@@ -97,6 +102,13 @@ class FonteListas:
         arq.chmod(0o600)
         return arq
 
+    @staticmethod
+    def _ler(arq: Path, ler, *args):
+        try:
+            return ler(arq, *args)
+        finally:
+            arq.unlink(missing_ok=True)
+
     def lotes(self, empresa_id: int, dia) -> list[Lote] | None:
         """Lotes do dia da empresa (um por carteira e canal) ou None se a lista ainda não saiu."""
         emp = (self.sb.selecionar("empresas", {"id": f"eq.{int(empresa_id)}"}) or [None])[0]
@@ -107,21 +119,34 @@ class FonteListas:
                                           ordem="id.asc") or []
         except Exception:   # noqa: BLE001 — banco sem credores: a empresa toda
             credores = []
-        unidades = [(c["id"], c["codigo"]) for c in credores] or [(None, None)]
+        unidades = [(c["id"], c["codigo"], (c.get("nome") or "").strip()) for c in credores] or [(None, None, "")]
         saida, achou = [], False
-        for cid, cod in unidades:
+        for cid, cod, nome_credor in unidades:
             prefixo = f"{emp['slug']}/{dia.isoformat()}" + (f"/{cod}" if cid is not None else "")
             base = f"e{empresa_id}_c{cid or 0}_{dia.isoformat()}"
+            mailing = None
             m = self._baixar(f"{prefixo}/discador_mailing.csv", f"{base}_mailing.csv")
             if m is not None:
                 achou = True
-                saida.append(Lote(empresa_id, ler_mailing(m), credor_id=cid, canal="discador"))
+                mailing = self._ler(m, ler_mailing)
             itens = []
             for nome, reserva in (("agente_voz", False), ("agente_voz_reserva", True)):
                 a = self._baixar(f"{prefixo}/ids/{nome}.csv", f"{base}_{nome}.csv")
                 if a is not None:
                     achou = True
-                    itens += ler_ids(a, dia, reserva)
+                    itens += self._ler(a, ler_ids, dia, reserva)
+            # variáveis por cliente: as do arquivo do agente_voz valem também no discador; credor = nome da carteira
+            por_cliente: dict[str, dict] = {}
+            for it in itens + (mailing or []):
+                d = por_cliente.setdefault(it.id_cliente, {})
+                for k, v in it.variaveis.items():
+                    d.setdefault(k, v)
+            for it in itens + (mailing or []):
+                fixas = {**({"credor": nome_credor[:80]} if nome_credor else {}),
+                         **({"assessoria": emp["nome"][:80]} if emp.get("nome") else {})}    # SQL 58: nome da empresa
+                it.variaveis = {**fixas, **por_cliente[it.id_cliente]}
+            if mailing is not None:
+                saida.append(Lote(empresa_id, mailing, credor_id=cid, canal="discador"))
             if itens:
                 saida.append(Lote(empresa_id, itens, credor_id=cid, canal="agente_voz"))
         return saida if achou else None
@@ -250,9 +275,9 @@ def main(argv=None) -> int:
         from voz.registro import RegistroBanco
         sb = supabase_do_ambiente()
         registro = RegistroBanco(sb)
-        if "montagem" in provedores:            # SQL 58: a versão em uso do fluxo da carteira (sem fluxo: roteiro)
+        if "montagem_motorcx" in provedores:    # SQL 58: a versão em uso do fluxo da carteira (sem fluxo: roteiro)
             from voz.fluxo import CarregadorFluxos
-            provedores["montagem"].fluxo_de = CarregadorFluxos(sb)
+            provedores["montagem_motorcx"].fluxo_de = CarregadorFluxos(sb)
         orq = Orquestrador(ari, dados, Agendador(contratado=contratado), EscritorEventos(a.eventos), provedores,
                            relogio_brasilia, fila_envio=fila_envio, ao_registrar=registro.registrar,
                            ao_fluxo=registro.registrar_fluxo)

@@ -130,6 +130,21 @@ def montar_mensagem(texto: str, cliente, parcelas, hoje: date) -> str:
     return re.sub(r"\{(\w+)\}", lambda m: vars_.get(m.group(1), m.group(0)), texto)
 
 
+def variaveis_voz_cliente(cliente, parcelas, hoje: date) -> dict:
+    """Variáveis do agente de voz que o motor conhece (motor/voz.py › VARIAVEIS_DO_MOTOR), só para o arquivo do
+    agente_voz: primeiro nome (da coluna de nome da base bruta), saldo, dias de atraso e o próximo vencimento do
+    acordo. Mesmos valores da frase (montar_mensagem). Nunca CPF; o que o motor não sabe fica vazio."""
+    v = {}
+    if cliente is not None:
+        v["primeiro_nome"] = VOZ.primeiro_nome(cliente.atributos)
+        v["saldo"] = _reais(cliente.saldo)
+        v["dias_atraso"] = str(cliente.atraso_em(hoje))
+    abertas = sorted((p for p in parcelas or [] if p.pago_em is None), key=lambda p: p.vencimento)
+    if abertas:
+        v["vencimento"] = next((p for p in abertas if p.vencimento >= hoje), abertas[0]).vencimento.strftime("%d/%m/%Y")
+    return {k: v[k] for k in VOZ.VARIAVEIS_DO_MOTOR if v.get(k)}
+
+
 def estagio_da_linha(l: dict) -> str:
     """Estágio da esteira da linha da fila: régua do dia, e no CPC separa CPC A de CPC B."""
     r = l.get("regua") or ""
@@ -193,13 +208,16 @@ def exportar_por_estrategia(pasta: Path, fila: list[dict]) -> list[dict]:
     return indice
 
 
-def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]]) -> dict[str, list[str]]:
+def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]], voz: dict[str, dict] | None = None
+                 ) -> dict[str, list[str]]:
     """Um arquivo por canal com o ID do cliente e o contato a acionar hoje (id_cliente;contato).
 
     A ferramenta de cada canal recebe o contato que o MotorCob escolheu; no discador e no
     agente virtual o cliente pode ter várias linhas (um número por linha, na ordem de
     discagem). Linhas condicionais (ex.: discador de reserva para quem o agente virtual
     não contatou no dia) vão para um arquivo à parte.
+    voz: {id_cliente: variaveis_voz_cliente(...)}. Só o agente_voz (e o agente_voz_reserva) ganha as colunas
+    das variáveis (motor/voz.py › VARIAVEIS_DO_MOTOR) no fim; os outros canais não mudam.
     """
     pasta.mkdir(parents=True, exist_ok=True)
     for antigo in pasta.glob("*.csv"):  # reprocessar o dia não deixa arquivo velho
@@ -218,8 +236,17 @@ def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]]) -> dict[str, lis
                 continue
             nome = f"{canal}_reserva" if condicional else canal
             frase, produto = any(p[2] for p in pares), any(p[3] for p in pares)
+            vars_voz = voz if canal == "agente_voz" and voz and any(voz.get(p[0]) for p in pares) else None
             with open(pasta / f"{nome}.csv", "w", newline="", encoding="utf-8") as f:
-                if frase or produto:   # frase ou template do provedor: 3ª coluna; produto da ação (sms_otp…): 4ª
+                if vars_voz is not None:   # agente_voz: as variáveis da fala, por cliente, depois das colunas de sempre
+                    w = csv.writer(f, delimiter=";", lineterminator="\n")
+                    base = ["id_cliente", "contato"] + (["template" if template else "mensagem"] if frase or produto
+                                                        else []) + (["produto"] if produto else [])
+                    w.writerow(base + list(VOZ.VARIAVEIS_DO_MOTOR))
+                    for p in pares:
+                        vv = vars_voz.get(p[0]) or {}
+                        w.writerow(list(p[:len(base)]) + [vv.get(k, "") for k in VOZ.VARIAVEIS_DO_MOTOR])
+                elif frase or produto:   # frase ou template do provedor: 3ª coluna; produto da ação (sms_otp…): 4ª
                     w = csv.writer(f, delimiter=";", lineterminator="\n")
                     w.writerow(["id_cliente", "contato", "template" if template else "mensagem"]
                                + (["produto"] if produto else []))
@@ -807,7 +834,11 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
     por_canal = defaultdict(list)
     for l in fila:
         por_canal[l["canal"]].append(l)
-    exportar_ids(saida / "ids", por_canal)
+    # agente de voz: primeiro nome, saldo, atraso e vencimento por cliente, só no ids/agente_voz*.csv (a VM do
+    # agente lê e guarda em memória durante o lote; nunca no banco nem em log)
+    voz_vars = {idc: variaveis_voz_cliente(clientes.get(idc), parcelas.get(idc), hoje)
+                for idc in {l["id_cliente"] for l in por_canal.get("agente_voz", [])}}
+    exportar_ids(saida / "ids", por_canal, voz=voz_vars)
     exportar_por_estrategia(saida / "ids" / "estrategias", fila)
     # mailing estendido do discador (arquivo NOVO; o ids/discador.csv de hoje não muda)
     (saida / "discador_mailing.csv").unlink(missing_ok=True)
