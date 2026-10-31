@@ -33,9 +33,11 @@ from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 
+from . import voz as V
+
 PREVIA = Path(__file__).resolve().parent.parent / "regras" / "horarios_uf.json"
 MIN_HORA, MAX_HORA = "08:00", "20:00"        # faixa de segurança global (motor/travas.py)
-CANAIS_VOZ = ("discador", "agente_voz")
+CANAIS_VOZ = V.CANAIS_VOZ
 ORIGEM = "discagem:"                          # registros de voz vindos das ocorrências (retorno_canal)
 
 PADRAO = {
@@ -390,11 +392,8 @@ class Discagem:
 
 
 # ------------------------------------------------------------------ renitência
-MARCA_VOZ = {"nao_atendida": "temporario", "ocupado": "temporario", "caixa_postal": "temporario",
-             "numero_inexistente": "inexistente",
-             "atendida_sem_cpc": "clique", "recado": "clique", "abandonada": "clique", "cpc": "clique",
-             "promessa": "clique", "recusa": "clique", "atendida_terceiro_desconhece": "clique",
-             "identidade_confirmada": "clique"}
+# marca do retorno de canal de cada desfecho de voz (tabela única em motor/voz.py); sem marca = fora da renitência
+MARCA_VOZ = V.MARCA_VOZ
 
 
 def _voz(eventos, hoje):
@@ -474,7 +473,7 @@ def regras_voz(regras_canal: dict, cfg: dict) -> dict:
 
 
 # ------------------------------------------------------------------ chamadas curtas
-NAO_COMPLETADA = ("nao_atendida", "ocupado", "numero_inexistente", "falha_rede", "caixa_postal")
+NAO_COMPLETADA = V.NAO_COMPLETADA          # chamada curta sempre (motor/voz.py)
 PRIOR_CURTA = 0.9      # cobrança típica: 10% de atendimento humano acima de 6 s = 90% de curtas (plano C.2)
 FORCA_CARTEIRA = 20.0  # peso do prior na taxa da carteira (em chamadas)
 FORCA_NUMERO = 5.0     # peso da taxa da carteira na taxa do número (em chamadas)
@@ -488,7 +487,7 @@ def e_curta(e, cc: dict) -> bool:
         return True
     if e.resultado in NAO_COMPLETADA:
         return True
-    return e.resultado == "abandonada" and cc["abandono_conta"]
+    return e.resultado in V.CURTA_SE_ABANDONO and cc["abandono_conta"]
 
 
 def medir(eventos: list, hoje: date, cfg: dict, dias: int = 7) -> list[dict]:
@@ -521,7 +520,7 @@ class ModeloCurtas:
                 o = self.obs[e.contato]
                 o[0] += c
                 o[1] += 1
-                if e.resultado in ("nao_atendida", "ocupado", "caixa_postal") and (hoje - e.data).days <= d["em_dias"]:
+                if e.resultado in V.NAO_ATENDE and (hoje - e.data).days <= d["em_dias"]:
                     self.nao_atende[e.contato] += 1
         self.chamadas = n
         self.p0 = (k + PRIOR_CURTA * FORCA_CARTEIRA) / (n + FORCA_CARTEIRA)

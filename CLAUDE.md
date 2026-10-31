@@ -137,6 +137,12 @@ de outra pessoa pela certificação e a rotação segue.
   `openpyxl` (única dependência, fora do núcleo).
 - `motor/certificacao.py`: score Beta por contato, status, hit rate, afinidade.
 - `motor/taxonomia.py`: retorno bruto de cada canal → `Nivel` + pesos + restrições.
+- `motor/voz.py`: tabela ÚNICA dos desfechos de voz (discador/agente virtual). Dela saem a taxonomia da voz,
+  `discagem.MARCA_VOZ`, `NAO_COMPLETADA`/abandono (curtas), `NAO_ATENDE` (descanso), os genéricos de voz da
+  ocorrência (`entrada.GENERICOS`) e as marcas do site (`GENERICOS_SITE` = CHECK do banco). Também os flags
+  `e_cpc` (= `regua.json › contato`), `conta_tentativa` (hoje todos) e `prova_existencia`, e as listas SIP/Q.850 que
+  confirmam (tipo A/B) ou nunca confirmam inexistente (`tipo_confirmacao`; só dados até a ingestão ler causas).
+  Desfecho novo = uma linha lá. Paridade com os valores antigos em `tests/test_voz.py`.
 - `motor/ingestao.py` + `layouts/*.json`: retornos por layout de fornecedor, base de
   clientes (agrega contratos), carteira de contatos e parcelas.
 - `motor/cluster.py`: cluster por regras da empresa (tabela `clusters`, editada no site).

@@ -21,7 +21,7 @@ TIPOS = ("ocorrencia", "acordo", "baixa")
 PASTA = {"ocorrencia": "ocorrencias", "acordo": "acordo", "baixa": "baixa"}
 NOME = {"ocorrencia": "ocorrência", "acordo": "acordo", "baixa": "pagamento"}
 ESPERA = "aguardando"
-RESULTADOS = ("cpc", "sem_contato", "terceiro", "opt_out")   # = motor.detectar.RESULTADOS_SITE e o CHECK do banco
+RESULTADOS = ("cpc", "sem_contato", "terceiro", "opt_out")   # = motor.voz.GENERICOS_SITE (CHECK do banco; teste)
 
 
 def _agora():

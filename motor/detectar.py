@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .entrada import Entrada, validar_entrada
 from .ingestao import LayoutInvalido
+from .voz import GENERICOS_SITE
 
 AMOSTRA = 300
 FORMATOS_DATA = ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y", "%Y/%m/%d", "%d.%m.%Y", "%Y%m%d", "%d%m%Y")
@@ -254,7 +255,7 @@ def _resultado(v: str) -> str | None:
 
 # Marcas que o site aceita em ocorrencia_codigos.resultado (CHECK do banco, SQL 20261017000001; nuvem.mapeamento).
 # O layout fixo e o automático usam o vocabulário maior de _resultado (invalido, promessa…); o site só tem estas.
-RESULTADOS_SITE = ("cpc", "sem_contato", "terceiro", "opt_out")
+RESULTADOS_SITE = GENERICOS_SITE
 _TERCEIRO_FORTE = ("DESCONHEC", "NAO_CONHECE", "NAO_E_O_TITULAR", "NAO_TITULAR", "ERRADO")
 
 
