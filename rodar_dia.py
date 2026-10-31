@@ -331,7 +331,11 @@ def salvar_estado(pasta: Path, estados, ultimo_dia):
     tmp.replace(pasta / "estados.json")  # troca atômica: nunca deixa estado pela metade
 
 
-def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts", parcelas_csv=None,
+# layouts do próprio motor: não depende da pasta de onde a rotina é chamada (a imagem roda os testes em /tmp)
+LAYOUTS_PADRAO = Path(__file__).resolve().parent / "layouts"
+
+
+def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_PADRAO, parcelas_csv=None,
               acoes=None, portal=None, pasta_estado="estado", pasta_saida="saida", regua_json=None, out=print,
               ocorrencias=None, entrada=None, clusters=None, atributos=None, estrategias=None, canais=None,
               na_carga=None, compartilhado=None, personas_usuario=None, demais_ativo=True, calendario=None,
@@ -1042,7 +1046,7 @@ def main():
     ap.add_argument("--base-bruta", help="pasta com a base bruta da empresa (exige --empresa)")
     ap.add_argument("--ocorrencias", help="pasta com os arquivos de ocorrência da empresa (exige --empresa)")
     ap.add_argument("--retornos", required=True)
-    ap.add_argument("--layouts", default="layouts")
+    ap.add_argument("--layouts", default=str(LAYOUTS_PADRAO))
     ap.add_argument("--parcelas", help="id_cliente;id_acordo;parcela;vencimento;valor;pago_em")
     ap.add_argument("--acoes")
     ap.add_argument("--portal")
