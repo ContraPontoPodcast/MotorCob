@@ -60,3 +60,31 @@ def redigir(texto: str) -> tuple[str, dict]:
         return m.group(0)
 
     return SEQUENCIA.sub(_seq, t), cont
+
+
+# ------------------------------------------------------------------ trechos do Speech Analytics (SQL 60)
+# Antes de guardar um trecho ou calcular o embedding, a máscara vai além de CPF e cartão: telefone, e-mail, nomes
+# conhecidos da chamada e saúde. Nada sem máscara é indexado.
+TELEFONE = re.compile(r"(?<!\d)(?:\+?55[ .\-]?)?\(?\d{2}\)?[ .\-]?9?\d{4}[ .\-]?\d{4}(?!\d)")
+EMAIL = re.compile(r"[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+")
+DIGITOS_LONGOS = re.compile(r"\d{8,}")
+NOME_DITO = re.compile(r"\b(meu nome é|me chamo|aqui é o|aqui é a|falo com o|falo com a|com o senhor|com a senhora)"
+                       r"\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç]+)", re.IGNORECASE)
+SAUDE = re.compile(r"\b(c[aâ]ncer|quimioterapia|quimio|cirurgia|internad[oa]|interna[çc][aã]o|hospital|uti|avc|"
+                   r"infarto|depress[aã]o|ansiedade|tratamento|rem[eé]dio|diabetes|hiv|doen[çc]a|doente|gr[aá]vida|"
+                   r"gravidez|hemodi[aá]lise|psiquiatra|transplante)\b", re.IGNORECASE)
+MARCA_TELEFONE, MARCA_EMAIL, MARCA_NOME, MARCA_SAUDE, MARCA_NUMERO = (
+    "[TELEFONE]", "[E-MAIL]", "[NOME]", "[SAÚDE]", "[NÚMERO]")
+
+
+def redigir_trecho(texto: str, nomes: tuple[str, ...] | list[str] = ()) -> str:
+    """Máscara completa do trecho: CPF e cartão (redigir), e-mail, telefone, nomes conhecidos da chamada (ex.:
+    primeiro_nome das variáveis) e ditos ("meu nome é X"), termos de saúde e qualquer sequência de 8+ dígitos."""
+    t, _ = redigir(texto)
+    t = EMAIL.sub(MARCA_EMAIL, t)
+    t = TELEFONE.sub(MARCA_TELEFONE, t)
+    t = DIGITOS_LONGOS.sub(MARCA_NUMERO, t)
+    for n in sorted({x.strip() for x in nomes if x and len(x.strip()) >= 2}, key=len, reverse=True):
+        t = re.sub(rf"\b{re.escape(n)}\b", MARCA_NOME, t, flags=re.IGNORECASE)
+    t = NOME_DITO.sub(lambda m: f"{m.group(1)} {MARCA_NOME}", t)
+    return SAUDE.sub(MARCA_SAUDE, t)
