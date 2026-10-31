@@ -32,8 +32,13 @@ async function pedirGravacao(gravacao: number, tipo: 'audio' | 'transcricao'): P
 	if (!supabase) return { ok: false, motivo: 'erro', msg: 'Configuração ausente.' };
 	const { data, error } = await supabase.functions.invoke(FUNCAO_GRAVACOES, { body: { gravacao, tipo } });
 	if (!error) return { ok: true, dados: (data ?? {}) as Row };
-	const status = Number((error as { context?: { status?: number } }).context?.status ?? 0);
-	if (status === 403 || status === 401) return { ok: false, motivo: 'sem_permissao', msg: 'Seu perfil não tem permissão para isso.' };
+	const ctx = (error as { context?: { status?: number; json?: () => Promise<unknown> } }).context;
+	const status = Number(ctx?.status ?? 0);
+	// A função responde { erro } em português (sem permissão, transcrição ainda não pronta, já apagada...).
+	let erroDaFuncao = '';
+	try { const j = (await ctx?.json?.()) as { erro?: unknown } | undefined; if (typeof j?.erro === 'string') erroDaFuncao = j.erro; } catch { /* corpo não é JSON */ }
+	if (status === 403 || status === 401) return { ok: false, motivo: 'sem_permissao', msg: erroDaFuncao ? `Não foi possível: ${erroDaFuncao}.` : 'Seu perfil não tem permissão para isso.' };
+	if (erroDaFuncao) return { ok: false, motivo: 'erro', msg: `${erroDaFuncao.charAt(0).toUpperCase()}${erroDaFuncao.slice(1)}.` };
 	if (status === 404 || /FunctionsFetchError|FunctionsRelayError|Failed to send|not found/i.test(`${error.name} ${error.message}`)) {
 		return { ok: false, motivo: 'sem_funcao', msg: 'O serviço de escuta ainda não está no ar.' };
 	}

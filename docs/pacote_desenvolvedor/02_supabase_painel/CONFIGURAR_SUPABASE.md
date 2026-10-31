@@ -55,6 +55,22 @@ e o acesso deve ser **só por convite**. Tirar a página não basta: a API conti
       o prazo que o e-mail promete.
 - Remetente: o domínio de e-mail do MotorCX (SMTP próprio, se configurado). Nada de remetente pessoal.
 
+## 5c. Edge Function `gravacoes` (agente de voz: ouvir e ler a transcrição)
+- [ ] Publicar `supabase/functions/gravacoes` (ou o arquivo único de `python3 scripts/juntar_funcao.py gravacoes`)
+      com **Verify JWT ligado**: só quem está logado chama.
+- [ ] **Edge Functions › Secrets**: `GCS_GRAVACOES_CHAVE` = o JSON inteiro da chave de uma conta de serviço do GCP
+      com só **leitura de objeto** (`roles/storage.objectViewer`) nos buckets de gravação das empresas
+      (`voz_config.bucket_gravacoes`). Quem cola o valor é o dono, direto no painel; o valor nunca vai para o
+      repositório, para o chat nem para log. `SITE_URL` e `ORIGENS_PERMITIDAS` são os mesmos do item 5.
+- Contrato: `POST { gravacao, tipo: "audio" | "transcricao" }` com o login da pessoa.
+  `audio` → `{ url, expira_em }` (URL assinada V4, só GET, 5 minutos); `transcricao` → `{ segmentos }`
+  (lida pela função; o site nunca recebe o caminho do objeto).
+- Quem pode: pessoa ativa do cliente, da empresa da gravação, com `ouvir_gravacoes` (áudio) ou `ver_transcricoes`
+  (transcrição). A equipe MotorCX não ouve por aqui. Cada acesso entra em `acessos` (`ouvir_gravacao` ou
+  `ler_transcricao`, `alvo` = id da gravação) antes da resposta; sem registro, não há link.
+- Respostas de erro: 401 sem login, 403 sem permissão, 404 gravação fora do alcance, 409 transcrição ainda não
+  pronta, 410 transcrição já apagada, 503 secret ou bucket ainda não configurado.
+
 ## 6. Storage — imagem de compartilhamento do site
 Depois de rodar o SQL da pasta `01_banco` (cria o bucket público `site`):
 - [ ] **Storage › site › Upload files**: enviar `03_site_e_login/imagens/og-motorcob.jpg` na raiz do bucket.
