@@ -1,19 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useMotorAuth } from '@/components/auth-provider';
-import { FRENTES, FRENTE_PADRAO, FRENTE_STORAGE_KEY, frenteInfo, frenteLembrada, guardarFrente, type FrenteId, type FrenteInfo, type FrenteRow } from '@/lib/frentes';
+import { FRENTES, FRENTE_PADRAO, FRENTE_STORAGE_KEY, frenteDaSessao, frenteInfo, type FrenteId, type FrenteInfo, type FrenteRow } from '@/lib/frentes';
 
 type FrenteState = {
 	frentes: FrenteId[];
 	frente: FrenteId;
 	info: FrenteInfo;
 	loading: boolean;
-	/** Define a frente ativa (sem chamar o backend). */
-	setFrente: (id: FrenteId) => void;
-	/** Escolhe a frente chamando rpc('escolher_frente') e atualiza o contexto. */
-	escolherFrente: (id: FrenteId, lembrar: boolean) => Promise<void>;
-	/** Aplica a frente do link: troca só o contexto (sessionStorage), sem chamar o
-	 *  backend nem mexer na frente preferida (localStorage). */
+	/** Troca a frente ativa: só o contexto desta aba (sessionStorage), sem chamar o backend. */
 	aplicarFrente: (id: FrenteId) => void;
 };
 
@@ -22,8 +17,6 @@ const Context = createContext<FrenteState>({
 	frente: FRENTE_PADRAO,
 	info: FRENTES[FRENTE_PADRAO],
 	loading: true,
-	setFrente: () => {},
-	escolherFrente: async () => {},
 	aplicarFrente: () => {},
 });
 
@@ -36,14 +29,15 @@ export function FrenteProvider({ children }: { children: ReactNode }) {
 
 	// Carrega as frentes do usuário depois do login.
 	useEffect(() => {
-		if (!supabase) { setLoading(false); return; }
+		const sb = supabase;
+		if (!sb) { setLoading(false); return; }
 		let active = true;
-		async function load() {
-			const { data: session } = await supabase.auth.getSession();
+		const load = async () => {
+			const { data: session } = await sb.auth.getSession();
 			if (!session.session) { if (active) { setFrentes([FRENTE_PADRAO]); setFrenteState(FRENTE_PADRAO); setLoading(false); } return; }
 			let ids: FrenteId[] = [FRENTE_PADRAO];
 			try {
-				const { data, error } = await supabase.rpc('minhas_frentes');
+				const { data, error } = await sb.rpc('minhas_frentes');
 				if (!active) return;
 				if (!error && Array.isArray(data) && data.length) {
 					ids = (data as FrenteRow[]).map(r => r.frente).filter((f): f is FrenteId => f === 'motorcob' || f === 'motorcli');
@@ -52,13 +46,15 @@ export function FrenteProvider({ children }: { children: ReactNode }) {
 			} catch { /* RPC indisponível — usa a padrão */ }
 			if (!active) return;
 			setFrentes(ids);
-			const lembrada = frenteLembrada();
-			const inicial = lembrada && ids.includes(lembrada) ? lembrada : ids[0];
+			// A frente "lembrada" de versões antigas do login ficava no localStorage: some.
+			try { localStorage.removeItem(FRENTE_STORAGE_KEY); } catch { /* ignore */ }
+			const daSessao = frenteDaSessao();
+			const inicial = daSessao && ids.includes(daSessao) ? daSessao : ids[0];
 			setFrenteState(inicial);
 			setLoading(false);
-		}
+		};
 		void load();
-		const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+		const { data: listener } = sb.auth.onAuthStateChange((event) => {
 			if (event === 'SIGNED_OUT') { setFrentes([FRENTE_PADRAO]); setFrenteState(FRENTE_PADRAO); sessionStorage.removeItem(FRENTE_STORAGE_KEY); }
 			else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') { void load(); }
 		});
@@ -91,24 +87,13 @@ export function FrenteProvider({ children }: { children: ReactNode }) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [perfil?.equipe, empresa?.id]);
 
-	function setFrente(id: FrenteId) {
-		setFrenteState(id);
-		guardarFrente(id, false);
-	}
-
-	async function escolherFrente(id: FrenteId, lembrar: boolean) {
-		setFrenteState(id);
-		guardarFrente(id, lembrar);
-		if (supabase) { try { await supabase.rpc('escolher_frente', { p_frente: id, p_lembrar: lembrar }); } catch { /* ignora */ } }
-	}
-
 	function aplicarFrente(id: FrenteId) {
 		setFrenteState(id);
 		try { sessionStorage.setItem(FRENTE_STORAGE_KEY, id); } catch { /* ignore */ }
 	}
 
 	return (
-		<Context.Provider value={{ frentes, frente, info: frenteInfo(frente), loading, setFrente, escolherFrente, aplicarFrente }}>
+		<Context.Provider value={{ frentes, frente, info: frenteInfo(frente), loading, aplicarFrente }}>
 			{children}
 		</Context.Provider>
 	);

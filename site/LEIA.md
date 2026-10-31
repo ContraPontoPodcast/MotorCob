@@ -6,7 +6,8 @@ limpo do que só servia ao editor e publicado como site estático no Netlify. Mu
 com PR, como o resto do MotorCob. Não edite mais pelo Horizons (o que for feito lá não volta para cá).
 
 A pasta `site/duas-etapas/` é outra coisa (componente de verificação em duas etapas, com teste próprio no
-workflow `testes`); ela não entra no build do site.
+workflow `testes`); ela não entra no build do site. O site usa uma cópia exata dos dois arquivos em
+`src/components/` (só a primeira linha muda): mude lá e copie para cá; o CI confere.
 
 ## Como funciona
 
@@ -42,8 +43,7 @@ npm run build               # gera build/client
 npm run preview             # serve build/client em http://127.0.0.1:4173 com o fallback do SPA
 ```
 
-Outros comandos: `npm run lint` (oxlint) e `npm run typecheck` (ainda falha: erros de tipo antigos que vieram do
-Horizons; o CI roda só o lint até isso ser zerado).
+Outros comandos: `npm run lint` (oxlint) e `npm run typecheck` (tsc; tem de dar zero erro, o CI barra).
 
 ## Variáveis de ambiente
 
@@ -73,8 +73,8 @@ Todas são públicas (começam com `VITE_` e vão para o JavaScript do navegador
 
 ## CI
 
-O workflow `.github/workflows/site.yml` roda quando `site/**` muda: `npm ci` (lockfile congelado), `npm run lint`
-e `npm run build`.
+O workflow `.github/workflows/site.yml` roda quando `site/**` muda: `npm ci` (lockfile congelado), `npm run lint`,
+`npm run typecheck`, a cópia das duas etapas e `npm run build`.
 
 ## O que saiu na migração do Horizons
 
@@ -85,3 +85,10 @@ e `npm run build`.
 - O PocketBase (o formulário de contato agora usa o Supabase).
 - Os redirecionamentos antigos (`/clusters`, `/usuarios`, `/conta/seguranca`…) continuam iguais, agora no
   navegador (`clientLoader`).
+
+## Login
+
+Depois da senha e das duas etapas, todo login entra no **Início** (`/inicio`), inclusive a equipe. Não há tela
+de escolha de área nem área lembrada; a área muda pelos atalhos do Início ou pelo menu. O `?frente=motorcob` ou
+`?frente=motorcli` do link continua valendo: troca a área ativa se a pessoa tem acesso (sem acesso, aviso no
+topo do Workspace).

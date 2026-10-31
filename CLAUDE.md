@@ -251,7 +251,7 @@ de outra pessoa pela certificação e a rotação segue.
   dá para entender → rejeitados/ + envio com erro listando as colunas. O .json do repositório
   sempre vence.
 - Enquadramento: `rodar_dia` devolve r["enquadramento"] {id: estrategia (nome da estratégia do
-  segmento ou "Playbook MotorCob"), persona, na_carga, acao_hoje, passo_hoje}; sai em
+  segmento ou "Playbook MotorCX"), persona, na_carga, acao_hoje, passo_hoje}; sai em
   estado_cliente (se o banco não tiver as colunas, grava sem elas e alerta). View enquadramento.
 - Calendário da localização: o dia em que o cliente chega na carga é o D+1 (`marcacao.dia_na_carga`);
   `rodar_dia` registra as entradas de hoje (`registrar_entradas`) antes da lista, então a 1ª ação
@@ -507,7 +507,7 @@ O site (página comercial + app: Workspace, Orquestração, Mensageria, Console)
 Netlify como site estático (React Router em modo SPA, `site/netlify.toml`). **O Horizons não é mais a fonte da
 verdade**: mudança no site é commit aqui. Dados só pelo Supabase com a chave anon e a RLS; nada de service_role
 no site. O formulário de contato grava em `contatos_site` (SQL 29 + SQL 52). Como rodar, variáveis e deploy:
-`site/LEIA.md`. CI: `.github/workflows/site.yml` (lint + build).
+`site/LEIA.md`. CI: `.github/workflows/site.yml` (lint + typecheck + build).
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.

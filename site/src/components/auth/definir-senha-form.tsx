@@ -4,11 +4,11 @@ import { Check, X } from 'lucide-react';
 import { RotorMark } from '@/components/site/logo';
 import { friendlyError, supabase, type Perfil } from '@/lib/supabase';
 import DuasEtapas from '@/components/DuasEtapas';
-import { proximoPasso } from '@/components/duasEtapasLogica';
+import { proximoPasso, type Passo } from '@/components/duasEtapasLogica';
 
 type Props = { mode: 'convite' | 'redefinir' };
 type Etapa = 'senha' | 'codigo' | 'pronto' | 'expirado';
-type Passo = { etapa: 'cadastro' | 'codigo'; fatorId?: string };
+type PassoPendente = Exclude<Passo, { etapa: 'pronto' }>;
 
 const RULES = [
   { id: 'len', label: '12 caracteres ou mais', test: (p: string) => p.length >= 12 },
@@ -56,7 +56,7 @@ export function DefinirSenhaForm({ mode }: Props) {
   const [confirm, setConfirm] = useState('');
   const [ready, setReady] = useState(false);
   const [etapa, setEtapa] = useState<Etapa>('senha');
-  const [passo, setPasso] = useState<Passo | null>(null);
+  const [passo, setPasso] = useState<PassoPendente | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isEquipe, setIsEquipe] = useState(false);
   const [empresaNome, setEmpresaNome] = useState('');
@@ -126,8 +126,8 @@ export function DefinirSenhaForm({ mode }: Props) {
       if (papel === 'admin' && supabase) {
         setIsAdmin(true);
         const p = await proximoPasso(supabase, true);
-        if (p && p.etapa !== 'pronto') {
-          setPasso({ etapa: p.etapa as 'cadastro' | 'codigo', fatorId: p.fatorId });
+        if (p.etapa !== 'pronto') {
+          setPasso(p);
           setEtapa('codigo');
         } else {
           setEtapa('pronto');

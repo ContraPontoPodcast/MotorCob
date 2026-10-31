@@ -78,7 +78,15 @@ def _salvar(caminho: Path, linhas: list[dict], anexar=False):
         w.writerows(linhas)
 
 
+# Nome mostrado quando nenhuma estratégia se aplica ao cliente (fila, enquadramento, sugestões).
+PLAYBOOK_NOME = "Playbook MotorCX"
+# Pasta desse grupo em ids/estrategias/: fica com o nome antigo de propósito (quem baixa os arquivos usa o caminho).
+PLAYBOOK_PASTA = "playbook-motorcob"
+
+
 def _pasta_estrategia(eid, nome: str) -> str:
+    if eid in (None, "") and nome == PLAYBOOK_NOME:
+        return PLAYBOOK_PASTA
     import unicodedata
     t = unicodedata.normalize("NFKD", nome or "").encode("ascii", "ignore").decode().lower()
     t = re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:40] or "estrategia"
@@ -140,7 +148,7 @@ def exportar_por_estrategia(pasta: Path, fila: list[dict]) -> list[dict]:
         shutil.rmtree(pasta)        # reprocessar o dia não deixa estratégia velha
     grupos = defaultdict(list)
     for l in fila:
-        grupos[(l.get("estrategia_id", ""), l.get("estrategia") or "Playbook MotorCob")].append(l)
+        grupos[(l.get("estrategia_id", ""), l.get("estrategia") or PLAYBOOK_NOME)].append(l)
     indice = []
     for (eid, nome), linhas in sorted(grupos.items(), key=lambda g: str(g[0][1])):
         sub = _pasta_estrategia(eid, nome)
@@ -632,7 +640,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         e_ = estados.get(l["id_cliente"])
         eid_ = regua.estrategia_de(e_.cluster_atual) if e_ else None
         l["estrategia_id"] = eid_ if eid_ is not None else ""
-        l["estrategia"] = (nomes_e.get(eid_) or f"estratégia {eid_}") if eid_ is not None else "Playbook MotorCob"
+        l["estrategia"] = (nomes_e.get(eid_) or f"estratégia {eid_}") if eid_ is not None else PLAYBOOK_NOME
         # frase da ação do dia na esteira (sai numa coluna do arquivo do canal); sem frase na ação, vale a
         # frase antiga por estágio × canal da estratégia (definicao.mensagens), se houver
         texto = frase_da_acao(l.pop("frase_acao", None), l["canal"], estagio_da_linha(l))
@@ -839,7 +847,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
 
     sugestoes = sugerir(modelo, primeiro_passo, ativos)
     for s in sugestoes:
-        s["estrategia_nome"] = nomes_estr.get(s["estrategia_base"]) or "Playbook MotorCob"
+        s["estrategia_nome"] = nomes_estr.get(s["estrategia_base"]) or PLAYBOOK_NOME
     (saida / "personas.json").write_text(json.dumps({"caracteristicas": modelo.colunas, "personas": personas},
                                                     ensure_ascii=False, indent=1), encoding="utf-8")
     (saida / "sugestoes.json").write_text(json.dumps(sugestoes, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -898,7 +906,7 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts="layouts
         eid = regua.estrategia_de(e.cluster_atual)
         enquadramento[k] = {
             "estrategia": "Demais clientes (desligado)" if k in desligados else
-            (nomes_estr.get(eid) or f"estratégia {eid}") if eid is not None else "Playbook MotorCob",
+            (nomes_estr.get(eid) or f"estratégia {eid}") if eid is not None else PLAYBOOK_NOME,
             "persona": modelo.nome(modelo.persona(k)) if k in modelo.feats and modelo.colunas else "",
             "na_carga": ativos is None or k in ativos,
             "acao_hoje": ", ".join(acao_hoje.get(k, [])),

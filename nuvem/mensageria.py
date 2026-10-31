@@ -543,7 +543,7 @@ def _bloqueada(sb, empresa_id) -> str | None:
     emp = (sb.selecionar("empresas", {"id": f"eq.{empresa_id}"}) or [{}])[0]
     if emp.get("ativa") is False or emp.get("situacao") in ("suspensa", "encerrada", "inadimplente"):
         return {"inadimplente": "acesso bloqueado por fatura vencida: pague em Empresa › Faturamento",
-                "encerrada": "empresa encerrada"}.get(emp.get("situacao"), "empresa suspensa pela equipe MotorCob")
+                "encerrada": "empresa encerrada"}.get(emp.get("situacao"), "empresa suspensa pela equipe MotorCX")
     return None
 
 

@@ -3,26 +3,23 @@ import { Link, useNavigate } from 'react-router';
 import { MarcaMotorCX } from '@/components/site/marca-motorcx';
 import { setRemember, supabase } from '@/lib/supabase';
 import DuasEtapas from '@/components/DuasEtapas';
-import { proximoPasso } from '@/components/duasEtapasLogica';
+import { proximoPasso, type Passo } from '@/components/duasEtapasLogica';
 import { useFrente } from '@/components/frente-provider';
-import { frenteDoLink, frenteInfo, frenteLembrada, FRENTE_AVISO_KEY, FRENTE_LINK_KEY, type FrenteId } from '@/lib/frentes';
+import { frenteDoLink, FRENTE_AVISO_KEY, FRENTE_LINK_KEY } from '@/lib/frentes';
 
-type Passo = { etapa: 'pronto' | 'codigo' | 'cadastro'; fatorId?: string };
+type PassoPendente = Exclude<Passo, { etapa: 'pronto' }>;
 
 export function LoginForm() {
 	const navigate = useNavigate();
-	const { frentes, loading: frentesLoading, escolherFrente, aplicarFrente } = useFrente();
+	const { frentes, loading: frentesLoading, aplicarFrente } = useFrente();
 	const [equipe, setEquipe] = useState(false);
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [remember, setRemember] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
-	const [passo, setPasso] = useState<Passo | null>(null);
-	const [linkFrenteNome, setLinkFrenteNome] = useState<string | null>(null);
+	const [passo, setPasso] = useState<PassoPendente | null>(null);
 	const [pronto, setPronto] = useState(false);
-	const [escolhaFrente, setEscolhaFrente] = useState<FrenteId | null>(null);
-	const [lembrar, setLembrar] = useState(true);
 
 	// reset
 	const [mode, setMode] = useState<'login' | 'reset'>('login');
@@ -37,7 +34,6 @@ export function LoginForm() {
 		const linkFrente = frenteDoLink(new URLSearchParams(window.location.search).get('frente'));
 		if (linkFrente) {
 			sessionStorage.setItem(FRENTE_LINK_KEY, linkFrente);
-			setLinkFrenteNome(null); // login mostra só "MotorCX", sem o nome da frente
 		} else {
 			sessionStorage.removeItem(FRENTE_LINK_KEY);
 		}
@@ -53,51 +49,23 @@ export function LoginForm() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	// Depois de pronto (senha + 2FA), decide a frente: 1 frente entra direto;
-	// 2 frentes com escolha lembrada também; senão mostra a tela de escolha.
+	// Depois de pronto (senha + 2FA), entra sempre no Início (decisão do dono:
+	// sem tela de escolha de área e sem voltar à última área). A área ativa é
+	// trocada depois pelo menu ou pelos atalhos do Início.
 	useEffect(() => {
 		if (!pronto || frentesLoading) return;
-		// Quem é da equipe vai direto ao Console, sem escolher frente.
-		if (equipe) {
-			navigate('/console', { replace: true });
-			return;
-		}
-		// Frente do link (?frente=): se o usuário tem acesso, entra direto nela,
-		// só trocando o contexto (sessionStorage) — sem chamar escolher_frente,
-		// para não mexer na frente preferida que já gravou.
+		// Frente do link (?frente=), só para clientes (a frente da equipe vem da
+		// empresa selecionada): se o usuário tem acesso, troca só o contexto
+		// (sessionStorage); sem acesso, deixa um aviso discreto no topo do Workspace.
 		const linkFrente = frenteDoLink(sessionStorage.getItem(FRENTE_LINK_KEY));
-		if (linkFrente) {
-			if (frentes.includes(linkFrente)) {
-				aplicarFrente(linkFrente);
-				sessionStorage.removeItem(FRENTE_LINK_KEY);
-				navigate('/inicio', { replace: true });
-				return;
-			}
-			// Sem acesso à frente do link: segue o fluxo normal e deixa um aviso
-			// discreto no topo do Workspace.
-			sessionStorage.setItem(FRENTE_AVISO_KEY, linkFrente);
-			sessionStorage.removeItem(FRENTE_LINK_KEY);
+		sessionStorage.removeItem(FRENTE_LINK_KEY);
+		if (linkFrente && !equipe) {
+			if (frentes.includes(linkFrente)) aplicarFrente(linkFrente);
+			else sessionStorage.setItem(FRENTE_AVISO_KEY, linkFrente);
 		}
-		if (frentes.length <= 1) {
-			void escolherFrente(frentes[0] ?? 'motorcob', true).then(() => navigate('/inicio', { replace: true }));
-			return;
-		}
-		const lembrada = frenteLembrada();
-		if (lembrada && frentes.includes(lembrada)) {
-			void escolherFrente(lembrada, true).then(() => navigate('/inicio', { replace: true }));
-			return;
-		}
-		setEscolhaFrente(frentes[0]);
+		navigate('/inicio', { replace: true });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [pronto, frentesLoading]);
-
-	async function confirmarFrente() {
-		if (!escolhaFrente) return;
-		setBusy(true);
-		await escolherFrente(escolhaFrente, lembrar);
-		setBusy(false);
-		navigate('/inicio', { replace: true });
-	}
 
 	/** Busca o perfil e decide o próximo passo de duas etapas. */
 	async function decidirPasso(userId: string) {
@@ -107,7 +75,6 @@ export function LoginForm() {
 			const { data: perfil } = await supabase.from('perfis').select('papel,equipe').eq('id', userId).single();
 			setEquipe(!!perfil?.equipe);
 			const p = await proximoPasso(supabase, perfil?.papel === 'admin');
-			if (!p) return;
 			if (p.etapa === 'pronto') {
 				setPronto(true);
 			} else {
@@ -153,14 +120,14 @@ export function LoginForm() {
 	const inputCls = 'w-full bg-transparent text-[17px] text-[#1D1D1F] outline-none placeholder:text-[#A1A1A6]';
 
 	// Etapa de duas etapas: mostra a tela do duplo fator no lugar do formulário.
-	if (passo && passo.etapa !== 'pronto' && supabase) {
+	if (passo && supabase) {
 		return (
 			<main className="relative grid min-h-screen place-items-center bg-white px-5 py-16">
 				<Link to="/" className="absolute left-5 top-5 flex items-center gap-1 text-[14px] text-[#1D1D1F] hover:underline">
 					<span aria-hidden>‹</span> Voltar ao site
 				</Link>
 				<div className="w-full max-w-[380px]">
-					<div className="flex justify-center"><MarcaMotorCX frente={linkFrenteNome} markClass="h-14 w-14" /></div>
+					<div className="flex justify-center"><MarcaMotorCX markClass="h-14 w-14" /></div>
 					<div className="mt-8">
 						<DuasEtapas
 							supabase={supabase}
@@ -174,45 +141,6 @@ export function LoginForm() {
 		);
 	}
 
-	// Escolha de frente (só quem tem as duas e sem escolha lembrada).
-	if (pronto && escolhaFrente && frentes.length > 1) {
-		return (
-			<main className="relative grid min-h-screen place-items-center bg-white px-5 py-16">
-				<Link to="/" className="absolute left-5 top-5 flex items-center gap-1 text-[14px] text-[#1D1D1F] hover:underline">
-					<span aria-hidden>‹</span> Voltar ao site
-				</Link>
-				<div className="w-full max-w-[380px]">
-					<div className="flex justify-center"><MarcaMotorCX frente={linkFrenteNome} markClass="h-14 w-14" /></div>
-					<div className="mt-8">
-						<h1 className="ls-tight text-center text-[28px] font-semibold text-[#1D1D1F]">Escolha a área.</h1>
-						<p className="mt-3 text-center text-[15px] text-[#6E6E73]">Você tem acesso às duas. Dá para trocar depois pelo menu.</p>
-						<div className="mt-7 space-y-3">
-							{frentes.map(fid => {
-								const f = frenteInfo(fid);
-								const sel = escolhaFrente === fid;
-								return (
-									<button key={fid} type="button" onClick={() => setEscolhaFrente(fid)} className={`flex w-full items-center gap-3 rounded-[14px] border bg-white p-4 text-left transition-colors ${sel ? 'border-[2px] border-[#1D1D1F]' : 'border border-[#D2D2D7] hover:bg-[#F5F5F7]'}`}>
-										<span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] text-[12px] font-extrabold text-white" style={{ backgroundColor: f.cor }}>{f.sigla}</span>
-										<span className="min-w-0">
-											<span className="block text-[16px] font-semibold text-[#1D1D1F]">{f.nome}</span>
-											<span className="block text-[13.5px] text-[#6E6E73]">{f.area}</span>
-										</span>
-									</button>
-								);
-							})}
-						</div>
-						<label className="mt-5 flex items-center gap-2 text-[14px] text-[#1D1D1F]">
-							<input type="checkbox" checked={lembrar} onChange={e => setLembrar(e.target.checked)} className="h-4 w-4" style={{ accentColor: '#1D1D1F' }} />
-							Lembrar a minha escolha neste navegador
-						</label>
-						<button type="button" onClick={() => void confirmarFrente()} disabled={busy} className="mt-6 h-[50px] w-full rounded-[12px] bg-[#1D1D1F] text-[17px] font-medium text-white transition-colors hover:bg-[#3a3a3c] disabled:opacity-40">{busy ? 'Entrando…' : 'Entrar'}</button>
-						<p className="mt-5 text-center text-[12.5px] text-[#8E8E93]">Quem tem acesso a uma área só entra direto nela, sem esta escolha.</p>
-					</div>
-				</div>
-			</main>
-		);
-	}
-
 	return (
 		<main className="mc-halo relative grid min-h-screen place-items-center bg-white px-5 py-16">
 			<Link to="/" className="absolute left-5 top-5 flex items-center gap-1 text-[14px] text-[#1D1D1F] hover:underline">
@@ -220,7 +148,7 @@ export function LoginForm() {
 			</Link>
 
 			<div className="w-full max-w-[380px]">
-				<div className="flex justify-center"><MarcaMotorCX frente={linkFrenteNome} markClass="h-14 w-14" /></div>
+				<div className="flex justify-center"><MarcaMotorCX markClass="h-14 w-14" /></div>
 
 				{mode === 'reset' ? (
 					<div className="mt-8">

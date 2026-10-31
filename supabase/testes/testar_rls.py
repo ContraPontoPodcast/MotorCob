@@ -1476,7 +1476,7 @@ checar("liberação acima de 30 dias é recusada", False, f"select public.libera
 checar("Master libera com a fatura em aberto (padrão 7 dias)", True, f"select (public.liberar_inadimplente({EP}, 'acordo com o financeiro') = (now() at time zone 'America/Sao_Paulo')::date + 7)::text", "authenticated", u["admin"], "true")
 checar("liberada: acesso aberto e o prazo para o cliente", True, f"select bloqueada::text||'|'||(liberada_ate = (now() at time zone 'America/Sao_Paulo')::date + 7)::text from public.acesso_da_empresa({EP})", "authenticated", ADP, "false|true")
 checar("até o prazo, a rotina não bloqueia de novo", True, f"set role service_role; select public.atualizar_inadimplencia(); select situacao from public.empresas where id={EP}", None, None, "ativa")
-checar("cliente e equipe sabem da liberação", True, f"select count(*) from public.avisos where empresa_id={EP} and (titulo like 'Acesso liberado pela MotorCob%' or titulo like 'Inadimplente liberada%')", "service_role", None, 2)
+checar("cliente e equipe sabem da liberação", True, f"select count(*) from public.avisos where empresa_id={EP} and (titulo like 'Acesso liberado pela MotorCX%' or titulo like 'Inadimplente liberada%')", "service_role", None, 2)
 _sv(f"update public.empresas set liberada_ate = (now() at time zone 'America/Sao_Paulo')::date - 1 where id={EP}")
 checar("passou o prazo sem pagar: bloqueia de novo", True, f"set role service_role; select public.atualizar_inadimplencia(); select situacao from public.empresas where id={EP}", None, None, "inadimplente")
 checar("pagou: o acesso volta sozinho", True, f"set role service_role; update public.faturas set situacao='paga', paga_em=current_date where id={FV}; select situacao||'|'||ativa::text from public.empresas where id={EP}", None, None, "ativa|true")
@@ -1698,7 +1698,7 @@ checar("aviso de vencimento não repete", True, f"set role service_role; select 
 checar("Atendimento da equipe não revoga token de cliente", False, f"select public.revogar_token_api({NOVO}, 'vazamento do token')", "authenticated", SUP)
 checar("Master sem motivo não revoga", False, f"select public.revogar_token_api({NOVO})", "authenticated", u["admin"])
 checar("Master revoga com motivo", True, f"select public.revogar_token_api({NOVO}, 'token publicado num repositório aberto'); select revogado_motivo from public.api_tokens where id={NOVO}", "authenticated", u["admin"], "token publicado num repositório aberto")
-checar("a empresa recebe o aviso da revogação", True, f"select count(*) from public.avisos where empresa_id={ET} and titulo like 'Token de API revogado pela MotorCob%'", "service_role", None, 1)
+checar("a empresa recebe o aviso da revogação", True, f"select count(*) from public.avisos where empresa_id={ET} and titulo like 'Token de API revogado pela MotorCX%'", "service_role", None, 1)
 checar("limpeza dos registros de uso só pelo servidor", False, "select public.limpar_registros_api()", "authenticated", u["admin"])
 # SQL 42 · E-mails do sistema
 EM = _sv("insert into public.empresas (slug,nome) values ('teta-mail','Teta Mail') returning id")
@@ -1915,6 +1915,12 @@ checar("planejamento grava a discagem da carteira", True, f"update public.credor
 checar("operação não altera a discagem", True, f"update public.credores set discagem=null where id={CX} returning id", "authenticated", u["oper"], None)
 checar("discagem precisa ser objeto", False, f"update public.credores set discagem='[1]' where id={CX}", "service_role")
 checar("B não lê a discagem da A", True, f"select count(*) from public.credores where id={CX} and discagem is not null", "authenticated", u["operb"], 0)
+
+# SQL 54 · textos "MotorCob" → "MotorCX" no que o cliente lê (avisos do sino e glossário)
+checar("SQL 54: avisos de token revogado e de acesso liberado dizem MotorCX", True, "select count(*) from pg_proc where proname in ('revogar_token_api','liberar_inadimplente') and pronamespace='public'::regnamespace and prosrc like '%pela MotorCX%' and prosrc not like '%MotorCob%'", "service_role", None, 2)
+checar("SQL 54: nenhum aviso de função do banco diz 'pela MotorCob'", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosrc like '%pela MotorCob%'", "service_role", None, 0)
+checar("SQL 54: glossário não cita mais o MotorCob", True, "select count(*) from public.glossario where definicao||exemplo||antes like '%MotorCob%'", "authenticated", u["oper"], 0)
+checar("SQL 54: glossário continua com os mesmos termos", True, "select count(*) from public.glossario where slug in ('cpc-sem-resposta','segmento-padrao','disparado-enviado-e-entregue','modelo-de-mensagem') and definicao like '%MotorCX%'", "authenticated", u["oper"], 4)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

@@ -39,20 +39,12 @@ export function frenteInfo(id: FrenteId | string | null | undefined): FrenteInfo
 	return FRENTES[(id as FrenteId) ?? FRENTE_PADRAO] ?? FRENTES[FRENTE_PADRAO];
 }
 
-/** Lê a frente lembrada no navegador. */
-export function frenteLembrada(): FrenteId | null {
+/** Frente ativa desta aba (sessionStorage). Não há mais frente lembrada entre
+ *  sessões: o login sempre entra no Início e a área é trocada pelo menu. */
+export function frenteDaSessao(): FrenteId | null {
 	if (typeof window === 'undefined') return null;
 	try {
-		const v = sessionStorage.getItem(FRENTE_STORAGE_KEY) ?? localStorage.getItem(FRENTE_STORAGE_KEY);
+		const v = sessionStorage.getItem(FRENTE_STORAGE_KEY);
 		return v === 'motorcli' || v === 'motorcob' ? v : null;
 	} catch { return null; }
-}
-
-export function guardarFrente(id: FrenteId, lembrar: boolean) {
-	if (typeof window === 'undefined') return;
-	try {
-		sessionStorage.setItem(FRENTE_STORAGE_KEY, id);
-		if (lembrar) localStorage.setItem(FRENTE_STORAGE_KEY, id);
-		else localStorage.removeItem(FRENTE_STORAGE_KEY);
-	} catch { /* ignore */ }
 }
