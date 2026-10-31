@@ -55,6 +55,26 @@ def _gravar(caminho: Path, linhas: list[dict]):
         w.writerows(linhas)
 
 
+def historico_do_dia(enquadramento: dict, fila: list[dict], fase_antes: dict, resultado_hoje: dict) -> list[dict]:
+    """Uma linha por cliente com algo no dia (entrou numa fase, teve ação num canal ou fechou um resultado), para
+    jornada_cliente_dia (SQL 55). Só o ID do cliente; dia sem nada não grava. Leads (etapas) ficam de fora."""
+    canal_hoje: dict[str, str] = {}
+    for l in fila:
+        canal_hoje.setdefault(l["id_cliente"], l.get("canal") or "")
+    linhas = []
+    for idc, v in enquadramento.items():
+        if idc not in fase_antes:
+            continue
+        fase = v.get("fase") or ""
+        entrou = fase_antes[idc] is None or fase_antes[idc] != fase
+        canal = canal_hoje.get(idc, "")
+        momento_res, desfecho = resultado_hoje.get(idc, ("", ""))
+        if entrou or canal or desfecho:
+            linhas.append({"id_cliente": idc, "fase": fase, "entrou": entrou, "passo": v.get("passo") or "",
+                           "canal": canal, "desfecho": desfecho, "desfecho_momento": momento_res})
+    return linhas
+
+
 def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir, regras_json=jor.PADRAO,
                   definicao: dict | None = None, canais: list[dict] | None = None, calendario: dict | None = None,
                   registros_canal: list | None = None, regras_retorno: dict | None = None, out=print,
@@ -103,8 +123,11 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
     # resultado de cada momento e movimento: compara a carga de hoje com a de ontem (antes das ações de hoje)
     from motor import jornada_resultados as jr
     estado_res = jr.carregar(estado_dir, data)
+    # fase de ontem de cada cliente (None = chegou hoje), para o histórico de 90 dias do site (SQL 55)
+    fase_antes = {idc: (estado_res[idc].get("m") or "") if idc in estado_res else None for idc in clientes}
+    resultado_hoje: dict[str, tuple[str, str]] = {}
     desfechos, movimento = jr.calcular(clientes, lambda c: jor.momento_aplicavel(c, regras, data), data,
-                                       estado_res, estado)
+                                       estado_res, estado, por_cliente=resultado_hoje)
     jr.salvar(estado_dir, estado_res)
     janela = regua.janela(data)
     if regras.get("travas_janela"):        # trava de horário/dias da estratégia (soma restrições ao calendário)
@@ -118,6 +141,7 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
                     leads=leads, etapas_estado=etapas_estado)
     for idc, v in res.enquadramento.items():     # fase do cliente hoje (o mapa conta quem está em cada momento)
         v["fase"] = (estado_res.get(idc) or {}).get("m", "")
+    historico = historico_do_dia(res.enquadramento, res.fila, fase_antes, resultado_hoje)
     if aviso:
         res.alertas.insert(0, aviso)
     for a in regras.get("avisos_etapas") or []:
@@ -154,7 +178,8 @@ def rodar_jornada(clientes_csv, contatos_csv, data: date, estado_dir, saida_dir,
             "resumo": resumo,
             "desfechos": [{"momento": m, "canal": c, "frase_id": f, "desfecho": d, "clientes": n}
                           for (m, c, f, d), n in sorted(desfechos.items())],
-            "movimento": [{"de": de, "para": para, "clientes": n} for (de, para), n in sorted(movimento.items())]}
+            "movimento": [{"de": de, "para": para, "clientes": n} for (de, para), n in sorted(movimento.items())],
+            "historico": historico}
 
 
 def main():

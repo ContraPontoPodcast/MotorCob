@@ -1922,5 +1922,78 @@ checar("SQL 54: nenhum aviso de função do banco diz 'pela MotorCob'", True, "s
 checar("SQL 54: glossário não cita mais o MotorCob", True, "select count(*) from public.glossario where definicao||exemplo||antes like '%MotorCob%'", "authenticated", u["oper"], 0)
 checar("SQL 54: glossário continua com os mesmos termos", True, "select count(*) from public.glossario where slug in ('cpc-sem-resposta','segmento-padrao','disparado-enviado-e-entregue','modelo-de-mensagem') and definicao like '%MotorCX%'", "authenticated", u["oper"], 4)
 
+# SQL 55 · Onda 3: histórico de 90 dias do cliente da Jornada (J1) e Avisar o Admin (A1, A2)
+CJA = f"(select id from public.credores where empresa_id={EA} and codigo='jornada')"
+HJ55 = "(now() at time zone 'America/Sao_Paulo')::date"
+_sv(f"""delete from public.jornada_cliente_dia where empresa_id={EA};
+ insert into public.jornada_cliente_dia (empresa_id,credor_id,id_cliente,data,fase,entrou,passo,canal,desfecho,desfecho_momento) values
+ ({EA},{CJA},'J1',{HJ55}-100,'boas_vindas',true,'D0','email','',''),
+ ({EA},{CJA},'J1',{HJ55}-20,'retencao',true,'D+30','whatsapp','',''),
+ ({EA},{CJA},'J1',{HJ55}-5,'retencao',false,'D+45','email','',''),
+ ({EA},{CJA},'J1',{HJ55},'reativacao',true,'','','nao','retencao')""")
+checar("SQL 55: histórico do cliente só dos últimos 90 dias, do mais novo ao mais velho", True,
+       f"select string_agg(fase||':'||entrou||':'||canal, ',' order by data desc) from public.historico_cliente_jornada({CJA}, 'J1')",
+       "authenticated", u["plan"], "reativacao:true:,retencao:false:email,retencao:true:whatsapp")
+checar("SQL 55: o passo vem em texto", True, f"select passo_texto from public.historico_cliente_jornada({CJA}, 'J1') where passo='D+30'", "authenticated", u["oper"], "30 dias sem atividade")
+checar("SQL 55: o resultado fica com o momento em que estava", True, f"select desfecho||':'||desfecho_momento from public.historico_cliente_jornada({CJA}, 'J1') where desfecho <> ''", "authenticated", u["oper"], "nao:retencao")
+checar("SQL 55: B não lê o histórico da A", True, f"select count(*) from public.historico_cliente_jornada({CJA}, 'J1')", "authenticated", u["operb"], 0)
+checar("SQL 55: B não lê a tabela do histórico da A", True, "select count(*) from public.jornada_cliente_dia", "authenticated", u["operb"], 0)
+checar("SQL 55: usuário não grava no histórico", False, f"insert into public.jornada_cliente_dia (empresa_id,credor_id,id_cliente,data) values ({EA},{CJA},'J9',{HJ55})", "authenticated", u["admina"])
+checar("SQL 55: anon não lê o histórico", False, "select * from public.historico_cliente_jornada(1, 'J1')", "anon")
+checar("SQL 55: resultado inventado é recusado", False, f"insert into public.jornada_cliente_dia (empresa_id,credor_id,id_cliente,data,desfecho) values ({EA},{CJA},'J8',{HJ55},'talvez')", "service_role")
+
+_sv(f"update public.perfis set nome='Ana', sobrenome='Exemplo' where id='{u['oper']}'")
+ADM_A = _sv(f"select count(*) from public.perfis where empresa_id={EA} and ativo and not equipe and papel='admin' and id <> '{u['oper']}'")
+assert int(ADM_A) >= 1, "a empresa A precisa de um Admin ativo nos testes"
+checar("SQL 55: Operação avisa os Admins ativos da empresa", True,
+       "select avisados||':'||(avisado_em is not null) from public.avisar_admin('permissao', 'ver_painel', '  Acompanho o resultado   toda semana.  ', 'Painel da Jornada')",
+       "authenticated", u["oper"], f"{ADM_A}:true")
+checar("SQL 55: pedir de novo no mesmo dia devolve o mesmo horário", True,
+       "select (avisado_em = public.pedido_admin_hoje('ver_painel'))::text from public.avisar_admin('permissao', 'ver_painel')",
+       "authenticated", u["oper"], "true")
+checar("SQL 55: pedir de novo no mesmo dia não repete o aviso", True,
+       f"select count(*) from public.avisos where chave like 'pedido:{u['oper']}:ver_painel:%'", "service_role", None, ADM_A)
+checar("SQL 55: o Admin vê o pedido no sino, com o link para a pessoa", True,
+       "select titulo||' | '||link from public.meus_avisos(100) where link like '/empresa/pessoas?pessoa=%'",
+       "authenticated", u["admina"], f"Ana Exemplo pediu acesso: Painel da Jornada | /empresa/pessoas?pessoa={u['oper']}")
+checar("SQL 55: o texto traz o perfil e a nota sem espaços sobrando", True,
+       "select texto from public.meus_avisos(100) where link like '/empresa/pessoas?pessoa=%'",
+       "authenticated", u["admina"], 'Perfil Operação. "Acompanho o resultado toda semana." Quem libera é você, em Pessoas e perfis.')
+checar("SQL 55: quem pediu sabe o horário do pedido de hoje", True, "select public.pedido_admin_hoje('ver_painel') is not null", "authenticated", u["oper"], "t")
+checar("SQL 55: quem não pediu recebe null", True, "select public.pedido_admin_hoje('ver_painel') is null", "authenticated", u["plan"], "t")
+checar("SQL 55: quem pediu não lê os avisos dos Admins", True, "select count(*) from public.meus_avisos(100) where link like '/empresa/pessoas?pessoa=%'", "authenticated", u["oper"], 0)
+checar("SQL 55: outra empresa não vê o pedido", True, "select count(*) from public.meus_avisos(100) where link like '/empresa/pessoas?pessoa=%'", "authenticated", u["operb"], 0)
+checar("SQL 55: o pedido vai também por e-mail para o Admin (assunto com e-mail ligado)", True,
+       f"select count(*) from public.avisos_para_email(1000) where assunto='pedidos_admin' and usuario_id='{u['admina']}'", "service_role", None, 1)
+checar("SQL 55: o assunto Pedidos ao Admin aparece em Minha conta para o Admin, com e-mail ligado", True,
+       "select string_agg(assunto||':'||email, ',') from public.minhas_notificacoes() where assunto='pedidos_admin'", "authenticated", u["admina"], "pedidos_admin:true")
+checar("SQL 55: a Operação não vê o assunto Pedidos ao Admin", True,
+       "select count(*) from public.minhas_notificacoes() where assunto='pedidos_admin'", "authenticated", u["oper"], 0)
+checar("SQL 55: área fora do plano leva ao Suporte", True,
+       "select avisados > 0 from public.avisar_admin('area', 'mensageria', null)", "authenticated", u["oper"], "t")
+checar("SQL 55: o link da área abre o chamado com o assunto pronto", True,
+       f"select distinct link from public.avisos where chave like 'pedido:{u['oper']}:mensageria:%'", "service_role", None, "/suporte/novo?assunto=conhecer-mensageria")
+checar("SQL 55: nota fica em até 200 caracteres", True,
+       "select avisados > 0 from public.avisar_admin('area', 'cobranca', repeat('x', 300))", "authenticated", u["oper"], "t")
+checar("SQL 55: nota cortada em 200", True,
+       f"select max(length(texto) - length(replace(texto, 'x', ''))) from public.avisos where chave like 'pedido:{u['oper']}:cobranca:%'", "service_role", None, 200)
+checar("SQL 55: permissão desconhecida é recusada", False, "select * from public.avisar_admin('permissao', 'ver_tudo')", "authenticated", u["oper"])
+checar("SQL 55: área desconhecida é recusada", False, "select * from public.avisar_admin('area', 'console')", "authenticated", u["oper"])
+checar("SQL 55: tipo desconhecido é recusado", False, "select * from public.avisar_admin('promocao', 'x')", "authenticated", u["oper"])
+checar("SQL 55: equipe MotorCX não chama", False, "select * from public.avisar_admin('area', 'jornada')", "authenticated", u["admin"])
+checar("SQL 55: anon não chama avisar_admin", False, "select * from public.avisar_admin('area', 'jornada')", "anon")
+checar("SQL 55: anon não chama pedido_admin_hoje", False, "select public.pedido_admin_hoje('jornada')", "anon")
+FA55 = _sv(f"insert into public.faturas (empresa_id,competencia,valor_total,vencimento,modelo,situacao) values ({EA},'2026-10-01',990,{HJ55}+2,'mensalidade','aberta') returning id")
+checar("SQL 55: aviso de fatura avisa os Admins", True, f"select avisados > 0 from public.avisar_admin('fatura', '{FA55}')", "authenticated", u["oper"], "t")
+checar("SQL 55: aviso de fatura leva à fatura", True,
+       f"select distinct titulo||' | '||link from public.avisos where chave like 'pedido:{u['oper']}:{FA55}:%'",
+       "service_role", None, f"Ana Exemplo avisou sobre a fatura de outubro | /empresa/faturamento?fatura={FA55}")
+checar("SQL 55: fatura de outra empresa é recusada", False, f"select * from public.avisar_admin('fatura', '{FA55}')", "authenticated", u["operb"])
+EZ = _sv("insert into public.empresas (slug,nome) values ('zeta-onda3','Zeta Exemplo') returning id")
+_, UZ, _ = sql("insert into auth.users (email) values ('oper@zeta.exemplo') returning id")
+_sv(f"update public.perfis set papel='operacao', empresa_id={EZ} where id='{UZ}'")
+checar("SQL 55: empresa sem Admin ativo devolve 0 (a tela mostra o caso sem Admin)", True,
+       "select avisados||':'||(avisado_em is null) from public.avisar_admin('area', 'jornada')", "authenticated", UZ, "0:true")
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

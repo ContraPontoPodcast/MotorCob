@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { UserPlus, X, KeyRound, ShieldCheck, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMotorAuth } from '@/components/auth-provider';
@@ -28,6 +29,15 @@ function acessoBR(v: string | null | undefined): string {
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' }).format(d);
 }
 
+/** "hoje às 14:32", "ontem às 17:05" ou "12/10 às 09:10". */
+function quandoBR(v: string): string {
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return '';
+  const h = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(d);
+  const dia = acessoBR(v);
+  return dia.startsWith('hoje') ? `hoje às ${h}` : `${dia} às ${h}`;
+}
+
 type Situacao = 'ativo' | 'convite' | 'inativo';
 function situacaoDe(u: Perfil): Situacao {
   if (!u.ativo) return 'inativo';
@@ -44,6 +54,13 @@ export function PessoasLista() {
   const [success, setSuccess] = useState('');
   const [panelMode, setPanelMode] = useState<'invite' | 'manage' | null>(null);
   const [panelUser, setPanelUser] = useState<Perfil | null>(null);
+  // ?pessoa=<id>: o Admin chega pelo aviso "pediu acesso" (Onda 3, SQL 55); a linha fica destacada e a faixa
+  // repete o texto do próprio aviso.
+  const [params] = useSearchParams();
+  const alvoId = params.get('pessoa');
+  const [pedido, setPedido] = useState<{ titulo: string; texto: string; criado_em: string } | null>(null);
+  const alvoRef = useRef<HTMLTableRowElement>(null);
+  const alvoCardRef = useRef<HTMLDivElement>(null);
 
   async function reload() {
     if (!supabase || !empresa) { setLoading(false); return; }
@@ -58,6 +75,25 @@ export function PessoasLista() {
     setLoading(false);
   }
   useEffect(() => { void reload(); }, [empresa?.id]);
+
+  useEffect(() => {
+    if (!supabase || !alvoId) { setPedido(null); return; }
+    let active = true;
+    supabase.rpc('meus_avisos', { limite: 100 }).then(({ data }) => {
+      if (!active) return;
+      const a = ((data ?? []) as { titulo: string; texto: string | null; link: string | null; criado_em: string }[])
+        .find(x => x.link === `/empresa/pessoas?pessoa=${alvoId}`);
+      setPedido(a ? { titulo: a.titulo, texto: a.texto ?? '', criado_em: a.criado_em } : null);
+    });
+    return () => { active = false; };
+  }, [alvoId]);
+
+  const alvo = alvoId ? users.find(x => x.id === alvoId) ?? null : null;
+  useEffect(() => {
+    if (!alvo) return;
+    const el = (alvoRef.current && alvoRef.current.offsetParent ? alvoRef.current : alvoCardRef.current) as HTMLElement | null;
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [alvo?.id]);
 
   async function reenviar(u: Perfil) {
     if (!supabase || !u.email) return;
@@ -87,6 +123,16 @@ export function PessoasLista() {
         </div>
       )}
 
+      {alvo && pedido && (
+        <div role="note" className="mb-4 flex items-start gap-2.5 rounded-xl px-3.5 py-3 text-[13px] text-[#1D1D1F]" style={{ backgroundColor: 'var(--estado-info-fundo)' }}>
+          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-extrabold" style={{ backgroundColor: 'var(--estado-info)', color: 'var(--base-cartao)' }}>i</span>
+          <span>
+            <b>{pedido.titulo} · {quandoBR(pedido.criado_em)}.</b>{' '}
+            {pedido.texto.replace(/\s*Quem libera é você, em Pessoas e perfis\.\s*$/, '')}{' '}
+            Para liberar, mude o perfil {alvo.nome ? `de ${alvo.nome}` : 'da pessoa'} ou ajuste o que o perfil {roleName[alvo.papel] ?? alvo.papel} pode, em Perfis. Se não for o caso, não precisa fazer nada.
+          </span>
+        </div>
+      )}
       {error && <div className="mb-4 rounded-xl bg-[#FFE8E6] px-4 py-3 text-[14px] text-[#FF3B30]">{error}</div>}
       {success && <div className="mb-4 rounded-xl bg-[#E8F8EC] px-4 py-3 text-[14px] text-[#248A3D]">{success}</div>}
 
@@ -118,7 +164,7 @@ export function PessoasLista() {
                 {users.map(u => {
                   const sit = situacaoDe(u);
                   return (
-                    <tr key={u.id}>
+                    <tr key={u.id} ref={u.id === alvo?.id ? alvoRef : undefined} style={u.id === alvo?.id ? { backgroundColor: 'var(--estado-info-fundo)' } : undefined}>
                       <td className="py-3.5">
                         <p className="font-medium text-[#1D1D1F]">{u.nome || '—'}</p>
                         {podeGerenciar && <p className="text-[12px] text-[#8E8E93]">{u.email}</p>}
@@ -137,7 +183,7 @@ export function PessoasLista() {
                       </td>
                       {podeGerenciar && (
                         <td className="py-3.5 text-right">
-                          <button onClick={() => openManage(u)} className="rounded-lg border border-[#D2D2D7] px-3 py-1.5 text-[12px] font-semibold text-[#1D1D1F] hover:bg-[#F5F5F7]">Gerenciar</button>
+                          <button onClick={() => openManage(u)} className="rounded-lg border border-[#D2D2D7] px-3 py-1.5 text-[12px] font-semibold text-[#1D1D1F] hover:bg-[#F5F5F7]">{u.id === alvo?.id ? 'Mudar perfil' : 'Gerenciar'}</button>
                         </td>
                       )}
                     </tr>
@@ -152,7 +198,7 @@ export function PessoasLista() {
             {users.map(u => {
               const sit = situacaoDe(u);
               return (
-                <div key={u.id} className="rounded-xl border border-[#E5E5EA] p-4">
+                <div key={u.id} ref={u.id === alvo?.id ? alvoCardRef : undefined} className="rounded-xl border border-[#E5E5EA] p-4" style={u.id === alvo?.id ? { backgroundColor: 'var(--estado-info-fundo)' } : undefined}>
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-[#1D1D1F]">{u.nome || '—'}</p>
                     {sit === 'ativo' && <span className="rounded-full bg-[#E8F8EC] px-2 py-0.5 text-[10px] font-semibold text-[#248A3D]">Ativo</span>}
@@ -160,7 +206,7 @@ export function PessoasLista() {
                     {sit === 'inativo' && <span className="rounded-full bg-[#F5F5F7] px-2 py-0.5 text-[10px] font-semibold text-[#8E8E93]">Desativado</span>}
                   </div>
                   <p className="mt-1 text-[13px] text-[#6E6E73]">{roleName[u.papel] ?? u.papel} · {acessoBR(u.ultimo_acesso)}</p>
-                  {podeGerenciar && <button onClick={() => openManage(u)} className="mt-2 rounded-lg border border-[#D2D2D7] px-3 py-1.5 text-[12px] font-semibold text-[#1D1D1F]">Gerenciar</button>}
+                  {podeGerenciar && <button onClick={() => openManage(u)} className="mt-2 rounded-lg border border-[#D2D2D7] px-3 py-1.5 text-[12px] font-semibold text-[#1D1D1F]">{u.id === alvo?.id ? 'Mudar perfil' : 'Gerenciar'}</button>}
                 </div>
               );
             })}
