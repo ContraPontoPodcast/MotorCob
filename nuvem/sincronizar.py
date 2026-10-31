@@ -1400,6 +1400,11 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
             _emails.limpar(sb)                           # registro de e-mails com mais de 180 dias
             from nuvem import assistente as _assist
             _assist.cotacao(sb, out)                     # PTAX do Banco Central para o teto do Assistente (SQL 43)
+            try:                                         # mistura de operadoras pela Anatel, uma vez por mês (dia ≥ 5)
+                from nuvem import mistura_operadoras
+                mistura_operadoras.rodar(sb, out, date.fromisoformat(hoje))
+            except Exception as ex:  # noqa: BLE001 — nunca para a rotina
+                out(f"mistura de operadoras: erro ignorado ({ex})")
             try:
                 sb.rpc("limpar_eventos_mensageria")      # avisos dos fornecedores já aplicados, depois de 7 dias
             except Exception:  # noqa: BLE001 — banco ainda sem o SQL 24

@@ -242,13 +242,15 @@ class TestCampanha(unittest.TestCase):
 
     def test_rodada_do_plantao_faz_tudo(self):
         from nuvem.sincronizar import rodar_mensageria
-        with mock.patch("nuvem.sincronizar.credores", lambda sb, dados, emp: [{"id": None, "pasta": self.dados / "x"}]):
+        with mock.patch("nuvem.sincronizar.credores", lambda sb, dados, emp: [{"id": None, "pasta": self.dados / "x"}]), \
+                mock.patch("nuvem.mistura_operadoras.rodar") as mistura:      # sem rede no teste
             self.sb.funcoes["limpar_mensageria_90d"] = lambda: 0
             rodar_mensageria(self.sb, self.dados, AGORA, out=lambda *a: None)          # analisa
             self._confirmar()
             rodar_mensageria(self.sb, self.dados, AGORA, out=lambda *a: None)          # monta, envia e conclui
         self.assertEqual(self.sb.t["mensageria_campanhas"][0]["situacao"], "concluida")
         self.assertEqual((self.dados / "mensageria_limpeza.txt").read_text(), "2026-10-14")
+        mistura.assert_called_once()                                    # uma vez por dia, no bloco diário
 
     def test_links_rastreados_unicos_por_mensagem(self):
         tpl = self.sb.t["mensageria_templates"][0]

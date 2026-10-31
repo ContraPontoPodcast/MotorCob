@@ -376,6 +376,8 @@ function RotaEditor({ produto, fornecedores, vigentes, onNovoForn, onVigentesUpd
 function Mistura() {
 	const [valores, setValores] = useState<Record<string, number>>({ vivo: 0, claro: 0, tim: 0, outras: 0 });
 	const [fonte, setFonte] = useState('');
+	const [fonteGravada, setFonteGravada] = useState('');
+	const [atualizadoEm, setAtualizadoEm] = useState('');
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
@@ -394,6 +396,8 @@ function Mistura() {
 		setValores(map);
 		// A fonte é a da linha mais recente.
 		setFonte(String(rows[0]?.fonte ?? ''));
+		setFonteGravada(String(rows[0]?.fonte ?? ''));
+		setAtualizadoEm(String(rows[0]?.atualizado_em ?? ''));
 		setLoading(false);
 	}
 	useEffect(() => { void reload(); }, []);
@@ -414,7 +418,13 @@ function Mistura() {
 	return (
 		<section className="rounded-2xl bg-white p-5 sm:p-6" style={{ boxShadow: cardShadow }}>
 			<h2 className="text-[16px] font-semibold text-[#1D1D1F]">Mistura de operadoras</h2>
-			<p className="mb-4 text-[13px] text-[#8E8E93]">Usada no custo previsto das rotas por operadora.</p>
+			<p className="text-[13px] text-[#8E8E93]">Usada no custo previsto das rotas por operadora.</p>
+			<p className="mb-4 text-[13px] text-[#6E6E73]">
+				Atualizada automaticamente todo mês (Anatel).
+				{fonteGravada && <> Fonte atual: <span className="font-semibold text-[#1D1D1F]">{fonteGravada}</span></>}
+				{atualizadoEm && <>, gravada em {new Date(atualizadoEm).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</>}
+				{fonteGravada && '.'} Salvar aqui é um ajuste manual: vale até a atualização automática do mês seguinte.
+			</p>
 			{loading ? <p className="py-4 text-center text-[14px] text-[#8E8E93]">Carregando...</p> : (
 				<div className="space-y-3">
 					<div className="grid gap-3 sm:grid-cols-4">

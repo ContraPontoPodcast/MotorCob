@@ -373,6 +373,15 @@ de outra pessoa pela certificação e a rotação segue.
   com `empresa_id`. Falha → execução da empresa com status erro, envios dela continuam
   pendentes, e as outras empresas seguem. Chave service_role só em
   `~/MotorCob-dados/config/supabase.env` (criado por `scripts/configurar_nuvem.sh`).
+- `nuvem/mistura_operadoras.py`: mistura de operadoras (Console › Fornecedores e rotas, custo previsto) pelos dados
+  abertos da Anatel (`acessos_telefonia_movel.zip`, ~3,3 GB: lê só o diretório do zip e o
+  `Acessos_Telefonia_Movel_<ano>_<S>S_Colunas.csv` do semestre, ~3 MB, por intervalo de bytes). Celulares = tudo
+  menos M2M e PONTO_DE_SERVICO; operadora pelo Grupo Econômico (Telefonica → vivo, Telecom Americas → claro,
+  Telecom Italia → tim, resto → outras). Bloco diário da mensageria, a partir do dia 5, uma vez por mês (fonte
+  `Anatel (dados abertos) · <mês>/<ano> · celulares`; já tem o mês de dois meses atrás = nem acessa a rede). Edição
+  manual no Console vale até o mês seguinte. Falha, soma ≠ 100, salto > 10 pontos ou total < 100 mi: não grava e
+  avisa a equipe no sino (chave `mistura_operadoras:<AAAA-MM>`). Manual: `python -m nuvem.mistura_operadoras
+  --simular` (só mostra) ou `--forcar`.
 - `nuvem/mapeamento.py`: mapeamento por credor feito no site (Credores → Configurações). O
   cliente aponta as colunas de ocorrência, acordo e pagamento (`mapeamento_arquivos`) e marca
   cada resultado de ocorrência (`ocorrencia_codigos`: cpc · terceiro · opt_out · sem marca =
