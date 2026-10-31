@@ -34,7 +34,7 @@ class ContextoChamada:
     id_cliente: str
     id_acao: str = ""
     tipo_agente: str = "ambos"              # localizador | negociador | ambos
-    variaveis: dict = field(default_factory=dict)
+    variaveis: dict = field(default_factory=dict, repr=False)   # da Lista do dia, só memória (nunca em log)
     final_numero: str = ""                  # últimos 2 dígitos (só para simulação/diagnóstico)
     credor_id: int | None = None            # carteira (o fluxo em uso é por carteira, SQL 58)
 

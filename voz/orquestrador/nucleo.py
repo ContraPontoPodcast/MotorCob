@@ -24,7 +24,7 @@ from typing import Callable
 
 from motor import voz as V
 from voz import tarifacao as T
-from voz.banco import DadosVoz, Transferencia
+from voz.banco import VARIAVEIS_VOZ, DadosVoz, Transferencia
 from voz.orquestrador import amd as A
 from voz.orquestrador import gravacao as G
 from voz.orquestrador.agendador import Agendador
@@ -74,6 +74,7 @@ class Chamada:
     refer_falhou: bool = False
     lote_chave: tuple = ()
     t_fim: datetime | None = None
+    t_transferencia: datetime | None = None     # quando a transferência foi pedida (voz_chamadas.transferida_em)
     espera_agente_ate: datetime | None = None
     failover_ate: datetime | None = None
     provedor: str | None = None
@@ -337,9 +338,16 @@ class Orquestrador:
         self._conta("abandono")
         self._desligar_cliente(c)
 
+    def _variaveis_fala(self, c: Chamada) -> dict:
+        """Variáveis da fala do cliente (Lista do dia, em memória) que a empresa manda ao provedor: só as de
+        voz_config.variaveis, todas dentro de variaveis_voz() (nunca CPF). Não vão para evento, banco nem log."""
+        permitidas = set(self.dados.config(c.empresa_id).variaveis) & set(VARIAVEIS_VOZ)
+        return {k: v for k, v in (c.item.variaveis or {}).items() if k in permitidas and v not in (None, "")}
+
     def _conectar(self, c: Chamada, prov: ProvedorVoz, agora: datetime) -> None:
         ctx = ContextoChamada(id_chamada=c.id, empresa_id=c.empresa_id, id_cliente=c.item.id_cliente,
                               id_acao=c.item.id_acao, final_numero=c.item.telefone[-2:],
+                              variaveis=self._variaveis_fala(c),
                               credor_id=c.lote_chave[1] if c.lote_chave else None)
         con = prov.iniciar(ctx, self.evento_provedor)
         c.provedor, c.estado, c.destino = prov.codigo, "conversa", "ia"
@@ -393,14 +401,22 @@ class Orquestrador:
                 c.extras[k] = dados[k]
 
     def _cabecalhos(self, c: Chamada, motivo: str, tf: Transferencia) -> dict:
-        """Cabeçalhos X-MotorCX (id da chamada, cliente, ação, motivo) + os fixos. Nunca CPF, nome ou valor."""
-        cab = {"X-MotorCX-Id": c.id, "X-MotorCX-Cliente": c.item.id_cliente, "X-MotorCX-Acao": c.item.id_acao,
-               "X-MotorCX-Motivo": motivo}
-        cab.update(tf.cabecalhos)
-        return {k: str(v) for k, v in cab.items() if v not in (None, "")}
+        """Os cabeçalhos X-MotorCX que a transferência escolheu no banco (voz_transferencias.cabecalhos): id da
+        chamada, id da ação, ação (o canal da ação no motor: agente_voz|discador) e motivo. Nunca CPF, nome ou valor."""
+        valores = {"X-MotorCX-Id-Chamada": c.id, "X-MotorCX-Id-Acao": c.item.id_acao,
+                   "X-MotorCX-Acao": c.lote_chave[2] if c.lote_chave else "agente_voz", "X-MotorCX-Motivo": motivo}
+        return {k: str(valores[k]) for k in tf.cabecalhos if valores.get(k) not in (None, "")}
+
+    def _destino_humano(self, c: Chamada) -> Transferencia | None:
+        """Destino ativo da carteira da chamada; sem um da carteira, o da empresa toda (credor nulo)."""
+        credor = c.lote_chave[1] if c.lote_chave else None
+        ativos = [x for x in self.dados.transferencias if x.empresa_id == c.empresa_id and x.ativo]
+        return next((x for x in ativos if credor is not None and x.credor_id == credor), None) or \
+            next((x for x in ativos if x.credor_id is None), None)
 
     def _transferir(self, c: Chamada, motivo: str, agora: datetime) -> None:
-        tf = next((x for x in self.dados.transferencias if x.empresa_id == c.empresa_id and x.ativo), None)
+        c.t_transferencia = agora
+        tf = self._destino_humano(c)
         if tf is None:
             self._alerta(f"empresa {c.empresa_id}: transferência pedida sem destino cadastrado (voz_transferencias)")
             self._abandonar(c, "falhou")
@@ -412,7 +428,7 @@ class Orquestrador:
             self._soltar_provedor(c)
             self.ari.remover_da_ponte(c.ponte, [c.canal])
             hdrs = "&".join(f"{k}={v.replace(' ', '%20')}" for k, v in cab.items())
-            uri = f"sip:{tf.tech_prefix}{tf.usuario}@{tf.host}:{tf.porta}" + (f"?{hdrs}" if hdrs else "")
+            uri = f"{tf.esquema}:{tf.tech_prefix}{tf.usuario}@{tf.host}:{tf.porta}" + (f"?{hdrs}" if hdrs else "")
             self.ari.definir_variavel(c.canal, "MOTORCX_TF_URI", uri)
             self.ari.continuar(c.canal, "motorcx-transferir", "refer", 1)
             return
@@ -554,7 +570,9 @@ class Orquestrador:
             tech_prefix=cand.rota.tech_prefix, rota_id=tar["rota_id"], segundos_tarifados=tar["segundos_tarifados"],
             preco_minuto=tar["preco_minuto"], custo_operadora=tar["custo_operadora"], no_pico=c.no_pico,
             provedor=c.provedor, credor_id=c.lote_chave[1] if c.lote_chave else None,
-            canal=c.lote_chave[2] if c.lote_chave else "agente_voz", custo=tar["custo_operadora"] or 0.0)
+            canal=c.lote_chave[2] if c.lote_chave else "agente_voz", custo=tar["custo_operadora"] or 0.0,
+            modo=self.dados.config(c.empresa_id).modo, atendida_em=c.t_atendeu, encerrada_em=agora,
+            transferida_em=(c.t_transferencia or agora) if c.transferencia else None)
         if c.gravando and c.t_atendeu and self.fila_envio is not None:
             objeto = G.nome_objeto(c.lote_chave[1] if c.lote_chave else None, ev.data, c.id)
             ev.gravacao = f"gs://{c.bucket}/{objeto}"

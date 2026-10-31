@@ -2504,5 +2504,12 @@ checar("SQL 58: todas as tabelas novas com RLS", True, "select count(*) from pg_
 checar("SQL 58: RPCs novas com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%fluxo%' or proname like '%conector%' or proname like '%host_crm%' or proname like '%alcada%' or proname like '%intencao%') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
 checar("SQL 58: anon não chama nenhuma função nova", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%fluxo%' or proname like '%conector%' or proname like '%host_crm%' or proname like '%alcada%' or proname like '%intencao%' or proname like '%pedido%fluxo%' or proname like '%geracao%' or proname like '%anexos%' or proname in ('somar_dias_uteis','anexos_pedido_voz_ok','resultado_pedido_voz_ok','falas_teste_voz_ok','contagem_codigos_ok','campos_oferta_voz','codigos_conector_voz','variaveis_voz')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
 
+# (depois do SQL 58, que acrescenta 'assessoria' a variaveis_voz())
+# contrato entre o código da VM de voz (voz/) e o SQL 56, com o insert do modo chave e a tarifação pelo gatilho
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_contrato.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 56: contrato do código de voz com o banco (testar_voz_contrato.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

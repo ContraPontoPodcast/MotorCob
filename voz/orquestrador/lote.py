@@ -8,6 +8,10 @@ recalcula a régua: só confere, na hora de discar, o que pode ter mudado desde 
   - cliente que já teve contato hoje (CPC, promessa, recusa, opt-out…) não recebe outra ligação;
   - número de reserva só depois que os principais do cliente se esgotaram sem contato;
   - a guarda extra do motor (callable), para as regras de tempo real (ex.: "não ligar" recebido agora).
+
+As variáveis da fala por cliente (primeiro_nome, saldo, vencimento… só as de variaveis_voz(), nunca CPF) vêm das
+colunas extras do ids/agente_voz.csv (rodar_dia.exportar_ids) e ficam só em ItemLote.variaveis, na memória da VM
+durante o lote: fora do repr, dos eventos, do banco e de qualquer log.
 """
 from __future__ import annotations
 
@@ -41,10 +45,17 @@ class ItemLote:
     prioridade: str = ""
     id_acao: str = ""
     agendar_para: datetime | None = None
+    # variáveis da fala (variaveis_voz()); só memória: fora do repr e da comparação (nunca vai para log)
+    variaveis: dict = field(default_factory=dict, repr=False, compare=False)
     # estado do dia
     tentativas: int = 0
     nao_antes_de: datetime | None = None
     encerrado: bool = False
+
+
+def ler_variaveis(linha: dict) -> dict:
+    """As colunas de variaveis_voz() que a linha traz preenchidas (o resto do arquivo, CPF incluído, é ignorado)."""
+    return {k: str(linha[k]).strip()[:120] for k in V.VARIAVEIS_VOZ if (linha.get(k) or "").strip()}
 
 
 def _janela(txt: str):
@@ -77,7 +88,8 @@ def ler_mailing(caminho: str | Path) -> list[ItemLote]:
                 tentativas_max_cliente=int(l.get("tentativas_max_cliente") or 6),
                 intervalo_min=int(l.get("intervalo_min") or 60), intervalo_ocupado=int(l.get("intervalo_ocupado") or 15),
                 janela_local=_janela(l.get("janela_local")), uf=l.get("uf") or "", prioridade=l.get("prioridade") or "",
-                id_acao=l.get("id_acao") or "", agendar_para=_quando(l.get("agendar_para"))))
+                id_acao=l.get("id_acao") or "", agendar_para=_quando(l.get("agendar_para")),
+                variaveis=ler_variaveis(l)))
     return itens
 
 
@@ -183,7 +195,8 @@ class Lote:
 
 def ler_ids(caminho: str | Path, dia, reserva: bool = False, base=("08:00", "20:00"), feriados=(),
             tentativas_numero: int = 3, tentativas_cliente: int = 6) -> list[ItemLote]:
-    """ids/agente_voz.csv (id_cliente;contato, um número por linha na ordem de discagem; rodar_dia.exportar_ids).
+    """ids/agente_voz.csv (id_cliente;contato[;mensagem][;produto][;variáveis da fala], um número por linha na ordem de
+    discagem; rodar_dia.exportar_ids). As variáveis (primeiro_nome, saldo…) vão para ItemLote.variaveis.
     Sem a janela por número do mailing, a janela sai da prévia de horários por UF/DDD do próprio motor
     (motor/discagem.py: Horarios) dentro de `base`. reserva=True para o agente_voz_reserva.csv."""
     from motor.discagem import DDD_UF, Horarios
@@ -197,5 +210,6 @@ def ler_ids(caminho: str | Path, dia, reserva: bool = False, base=("08:00", "20:
             ordem[idc] = ordem.get(idc, 0) + 1
             itens.append(ItemLote(id_cliente=idc, telefone=tel, ordem=ordem[idc], reserva=reserva,
                                   tentativas_max_numero=tentativas_numero, tentativas_max_cliente=tentativas_cliente,
-                                  janela_local=hor.janela(dia, tel, base), uf=DDD_UF.get(tel[:2], "")))
+                                  janela_local=hor.janela(dia, tel, base), uf=DDD_UF.get(tel[:2], ""),
+                                  variaveis=ler_variaveis(l)))
     return itens

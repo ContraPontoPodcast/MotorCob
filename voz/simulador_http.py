@@ -119,7 +119,9 @@ def main(argv=None) -> int:   # pragma: no cover - serviço
     from voz.provedores.montagem import ConfigMontagem, ModeloOpenAICompat
     from voz.segredos import SecretManager
     seg = SecretManager()
-    cfg = ConfigMontagem(**{k: v for k, v in (ler_config(a.provedores).get("montagem") or {}).items() if k != "portas"})
+    bruto = ler_config(a.provedores)
+    cfg = ConfigMontagem(**{k: v for k, v in (bruto.get("montagem_motorcx") or bruto.get("montagem") or {}).items()
+                            if k != "portas"})
     modelo_de = lambda: ModeloOpenAICompat(cfg.llm_base_url, seg.valor(cfg.ref_llm), cfg.llm_modelo)   # noqa: E731
     srv = criar_servidor(a.porta, seg.valor(a.chave_ref), modelo_de=modelo_de,
                          entendedor_de=lambda: FX.EntendedorLLM(modelo_de()))

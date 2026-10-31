@@ -160,6 +160,23 @@ class TestModeloOpenAICompat(unittest.TestCase):
         self.assertEqual((corpo["model"], corpo["tool_choice"]), ("modelo-x", "auto"))
 
 
+class TestPreencher(unittest.TestCase):
+    def test_chaves_duplas_do_site_e_simples(self):
+        v = {"primeiro_nome": "Ana", "credor": "Banco Fictício", "saldo": ""}
+        self.assertEqual(M.preencher("Falo com {{primeiro_nome}}? Em nome de {{ credor }} ({credor}).", v),
+                         "Falo com Ana? Em nome de Banco Fictício (Banco Fictício).")
+        self.assertEqual(M.preencher("Saldo {{saldo}} {x} {{y}} {}", v), "Saldo {{saldo}} {x} {{y}} {}")  # sem valor
+        self.assertEqual(M.preencher("{ {primeiro_nome} }", None), "{ {primeiro_nome} }")
+
+    def test_primeira_fala_e_roteiro_com_as_variaveis(self):
+        ctx = ContextoChamada("abc123", 1, "C1", variaveis={"primeiro_nome": "Ana", "saldo": "R$ 10,00"})
+        c = M.Conversa(ctx, FakeModelo([]), lambda *a: None, "Saldo {{saldo}}.", "Falo com {{primeiro_nome}}?",
+                       hoje=date(2026, 11, 3))
+        self.assertEqual(c.comecar(), ["Falo com Ana?"])
+        self.assertTrue(c.historico[0]["content"].startswith("Saldo R$ 10,00."))
+        self.assertNotIn("Ana", repr(ctx))                      # o contexto não leva as variáveis para log
+
+
 class TestMontagem(unittest.TestCase):
     def test_iniciar_tick_encerrar(self):
         rodadas, ev = [], []
@@ -217,8 +234,8 @@ class TestMontagem(unittest.TestCase):
     def test_fabrica(self):
         p = criar_todos({"montagem": {"portas": [41000, 41010]}, "elevenlabs": {"numero_agente": "agente01"}},
                         Dicionario({}))
-        self.assertEqual(sorted(p), ["elevenlabs", "montagem", "simulador"])
-        self.assertEqual(p["montagem"].cfg.portas, (41000, 41010))
+        self.assertEqual(sorted(p), ["elevenlabs", "montagem_motorcx", "simulador"])
+        self.assertEqual(p["montagem_motorcx"].cfg.portas, (41000, 41010))
         self.assertEqual(sorted(criar_todos(None)), ["simulador"])
 
 
@@ -369,7 +386,7 @@ class TestElevenLabsNoOrquestrador(Base):
         self.assertTrue(any("não chegou a tempo" in a for a in orq.alertas))
 
     def test_provedor_nao_configurado_cai_no_simulador(self):
-        orq = self.montar([item()], mud=[("voz_config", 0, {"provedor": "montagem"})])
+        orq = self.montar([item()], mud=[("voz_config", 0, {"provedor": "montagem_motorcx"})])
         orq.tick()
         self.atender(self.originados()[0][2])
         self.assertTrue(any("não configurado" in a for a in orq.alertas))
