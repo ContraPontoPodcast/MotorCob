@@ -2176,7 +2176,11 @@ begin
     if p.id is null or p.situacao <> 'gerando' then
         raise exception 'pedido não está em geração';
     end if;
-    erros := case when definicao is null then array['sem_definicao'] else public.fluxo_voz_erros(definicao) end;
+    erros := case when definicao is null
+                  then coalesce(nullif(array(select jsonb_array_elements_text(
+                           case when jsonb_typeof(resultado -> 'erros') = 'array' then resultado -> 'erros' else '[]' end)), '{}'),
+                       array['sem_definicao'])
+                  else public.fluxo_voz_erros(definicao) end;
     if cardinality(erros) = 0 then
         -- conector ainda não escolhido (null) é aceito: a empresa escolhe antes de aprovar. Conector com id que não é
         -- um conector ativo da empresa = inventado → recusa.

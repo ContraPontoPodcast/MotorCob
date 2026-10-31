@@ -2453,6 +2453,8 @@ _RUIM = _FC.negociador(None, None, None, None); [b for b in _RUIM["blocos"] if b
 checar("SQL 58 · pedido: saída inválida do LLM não vira rascunho", True, f"select coalesce(public.registrar_geracao_fluxo_voz({PD1}, '{_lit(_RUIM)}', '{{\"entendi\": [], \"tentativas\": 2}}')::text, 'nulo')", "service_role", None, "nulo")
 checar("SQL 58 · pedido: fica com_erros e com os erros que sobraram", True, f"select situacao||'|'||(resultado->'erros'->>0)||'|'||(versao_gerada_id is null) from public.voz_fluxo_pedidos where id={PD1}", "authenticated", u["oper"], "com_erros|valor_antes_identidade:N1|true")
 checar("SQL 58 · pedido: nenhum fluxo criado pela saída inválida", True, "select count(*) from public.voz_fluxos where modelo_origem='pedido_texto'", "service_role", None, 0)
+_sv(f"update public.voz_fluxo_pedidos set situacao='gerando' where id={PD1}")
+checar("SQL 58 · pedido: sem definição, guarda os erros que a geração devolveu", True, f"select coalesce(public.registrar_geracao_fluxo_voz({PD1}, null, '{{\"erros\": [\"llm_indisponivel\"], \"tentativas\": 0}}')::text, 'nulo'); select resultado->>'erros' from public.voz_fluxo_pedidos where id={PD1}", "service_role", None, '["llm_indisponivel"]')
 checar("SQL 58 · pedido: respostas devolvem o pedido para a fila", True, f"select public.responder_pedido_fluxo_voz({PD1}, '{{\"parcelas\": \"até 6\"}}'); select situacao from public.voz_fluxo_pedidos where id={PD1}", "authenticated", u["plan"], "pendente")
 _sv("select public.pegar_pedido_fluxo_voz()")
 checar("SQL 58 · pedido: conector inventado pelo LLM é recusado", True, f"select coalesce(public.registrar_geracao_fluxo_voz({PD1}, '{_lit(_FC.negociador(999999, None, None, None))}', '{{}}')::text, 'nulo')", "service_role", None, "nulo")
@@ -2469,6 +2471,19 @@ PD3 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '
 checar("SQL 58 · pedido: pedido à equipe abre chamado no Suporte", True, f"select p.situacao||'|'||c.motivo||'|'||(select count(*) from public.chamado_mensagens m where m.chamado_id=c.id) from public.voz_fluxo_pedidos p join public.chamados c on c.id=p.chamado_id where p.id={PD3}", "authenticated", u["oper"], "na_equipe|integracao|1")
 checar("SQL 58 · pedido: cliente B não vê os pedidos da A", True, "select count(*) from public.voz_fluxo_pedidos", "authenticated", u["operb"], 0)
 checar("SQL 58 · pedido: usuário não grava pedido direto", False, f"update public.voz_fluxo_pedidos set situacao='gerado' where id={PD3}", "authenticated", u["admina"])
+
+# o que o executor Python emite (voz/fluxo.py → voz/registro.py) cabe nas tabelas do SQL 58
+from voz import fluxo as _FX, conector as _CN, banco as _B   # noqa: E402
+_sim = _FX.simular(_FX.FluxoCarregado(FV1, _FC.negociador(), {}, None), ["Não, é engano"], {"primeiro_nome": "Ana", "assessoria": "Alfa"})
+_linhas = [_B.para_colunas("voz_fluxo_passos", dict(p_, empresa_id=int(EA), id_chamada="ch-exec-1")) for p_ in _sim["passos"]]
+checar("SQL 58: passos do executor Python entram em voz_fluxo_passos", True,
+       f"insert into public.voz_fluxo_passos (empresa_id, id_chamada, fluxo_versao_id, ordem, bloco_id, modo, entrou_em, saida_quando, intencao, confianca_faixa, motivo_devolucao, trava, turnos) select empresa_id, id_chamada, fluxo_versao_id, ordem, bloco_id, modo, entrou_em, saida_quando, intencao, confianca_faixa, motivo_devolucao, trava, turnos from jsonb_populate_recordset(null::public.voz_fluxo_passos, '{_lit(_linhas)}') on conflict do nothing; select count(*) from public.voz_fluxo_passos where id_chamada='ch-exec-1'",
+       "service_role", None, 2)
+_c = {"conector_id": C1, "conector_versao": 1, "bloco_id": "N4", "classe": "ok", "http_status": 200, "latencia_ms": 300,
+      "tentativa": 1, "resultado_codigo": "oferta_acima_alcada", "ofertas_acima_alcada": 2, "fluxo_versao_id": FV1, "id_cliente": "C1"}
+checar("SQL 58: chamada de conector do executor entra em crm_chamadas", True,
+       f"insert into public.crm_chamadas (empresa_id, conector_id, conector_versao, id_chamada, id_cliente, fluxo_versao_id, bloco_id, tentativa, http_status, classe, latencia_ms, resultado_codigo, ofertas_acima_alcada) select empresa_id, conector_id, conector_versao, id_chamada, id_cliente, fluxo_versao_id, bloco_id, tentativa, http_status, classe, latencia_ms, resultado_codigo, ofertas_acima_alcada from jsonb_populate_record(null::public.crm_chamadas, '{_lit(_B.para_colunas('crm_chamadas', dict(_c, empresa_id=int(EA), id_chamada='ch-exec-1')))}') returning resultado_codigo",
+       "service_role", None, "oferta_acima_alcada")
 
 _T58 = ("voz_fluxos", "voz_fluxo_versoes", "voz_fluxo_modelos", "voz_intencoes", "crm_hosts_permitidos", "crm_conectores",
         "crm_chamadas", "voz_alcada_carteira", "voz_fluxo_passos", "voz_fluxo_metricas_dia", "voz_fluxo_intencoes_dia",
