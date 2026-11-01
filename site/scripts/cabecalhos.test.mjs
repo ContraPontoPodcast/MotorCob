@@ -12,7 +12,7 @@ const sha = s => `'sha256-${createHash('sha256').update(s, 'utf8').digest('base6
 
 test('hash de cada script inline, sem os de src e sem repetir', () => {
 	const a = 'window.x = 1;', b = 'import("/assets/entry.js");';
-	const html = `<script>${a}</script><script type="module" async="">${b}</script><script src="/assets/y.js"></script><script>${a}</script>`;
+	const html = `<script>${a}</script ><script type="module" async="">${b}</script><script src="/assets/y.js"></script><script>${a}</script>`;
 	assert.deepEqual(hashesInline(html), [sha(a), sha(b)]);
 });
 
@@ -21,7 +21,7 @@ test('política: Supabase em https e wss, gravações do GCS e scripts só por h
 	const d = Object.fromEntries(p.split('; ').map(x => { const [k, ...v] = x.split(' '); return [k, v.join(' ')]; }));
 	assert.equal(d['script-src'], "'self' 'sha256-AAA='");
 	assert.equal(d['connect-src'], "'self' https://abcdefghij.supabase.co wss://abcdefghij.supabase.co https://storage.googleapis.com");
-	assert.match(d['media-src'], /https:\/\/storage\.googleapis\.com/);
+	assert.ok(d['media-src'].split(' ').includes('https://storage.googleapis.com'));
 	assert.equal(d['frame-ancestors'], "'none'");
 	assert.equal(d['object-src'], "'none'");
 	assert.doesNotMatch(d['script-src'], /unsafe/);

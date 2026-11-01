@@ -20,7 +20,7 @@ const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /** Hash 'sha256-…' do conteúdo de cada <script> inline (sem src) do HTML, na ordem, sem repetir. */
 export function hashesInline(html) {
 	const out = [];
-	for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+	for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)) {
 		if (/\bsrc\s*=/i.test(m[1])) continue;
 		const h = `'sha256-${createHash('sha256').update(m[2], 'utf8').digest('base64')}'`;
 		if (!out.includes(h)) out.push(h);
