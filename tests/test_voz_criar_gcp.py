@@ -77,7 +77,7 @@ class TestCriarGcp(unittest.TestCase):
                       "--rules=tcp:8443 --source-ranges=0.0.0.0/0 --target-tags=motorcx-asterisk", tudo)
         self.assertIn("firewall-rules create motorcx-voz-acme --network=motorcx-voz --direction=INGRESS --action=ALLOW "
                       "--rules=tcp:80 --source-ranges=0.0.0.0/0", tudo)
-        self.assertIn("arquivo-motorcx-caddy.Caddyfile=", next(c for c in chamadas if "instances create motorcx-ast-1" in c))
+        self.assertIn("arquivo-motorcx-caddy_Caddyfile=", next(c for c in chamadas if "instances create motorcx-ast-1" in c))
         self.assertIn('resource.name.startsWith("projects/123456789/secrets/motorcx-voz-")', tudo)
         # credenciais dos conectores de CRM (crm/<e>/<c>/<v> -> motorcx-crm-...) na MESMA condição, e nada além
         cond = next(c for c in chamadas if "add-iam-policy-binding" in c and "secretAccessor" in c)
@@ -103,6 +103,12 @@ class TestCriarGcp(unittest.TestCase):
         self.assertEqual(sum("instances create" in c for c in chamadas), 2)
         criar = next(c for c in chamadas if "instances create motorcx-ast-1" in c)
         self.assertIn("arquivo-motorcx-voz-rodar=", criar)
+        # chave do metadado só com [A-Za-z0-9_-] (o GCE recusa ponto): nenhuma chave arquivo-* com ponto
+        arg = criar.split("--metadata-from-file=")[1].split(" ")[0]
+        chaves = [x.split("=", 1)[0] for x in arg.split(",")]
+        self.assertIn("arquivo-motorcx-voz-config_service", chaves)
+        for k in chaves:
+            self.assertRegex(k, r"^[A-Za-z0-9_-]{1,127}$")
         self.assertIn("motorcx-parte=1/2", criar)
         self.assertIn("--zone=southamerica-east1-a", criar)
         self.assertIn("--shielded-secure-boot", criar)
@@ -161,6 +167,20 @@ class TestCriarGcp(unittest.TestCase):
                                    "--member=serviceAccount:motorcx-gravacoes-leitura@proj-ficticio.iam.gserviceaccount.com "
                                    "--role=roles/storage.objectViewer"])
         self.assertNotIn("firewall", tudo)
+
+    def test_metadado_grande_demais_para_antes_das_vms(self):
+        (self.dir / "vm" / "motorcx-grande").write_bytes(b"#" * (300 * 1024))
+        r, chamadas = self.rodar("proj-ficticio")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("256 KB", r.stderr)
+        self.assertFalse([c for c in chamadas if "instances" in c])
+        (self.dir / "vm" / "motorcx-grande").unlink()
+        for i in range(3):                                              # cada um cabe, a soma não
+            (self.dir / "vm" / f"motorcx-medio{i}").write_bytes(b"#" * (200 * 1024))
+        r, chamadas = self.rodar("proj-ficticio")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("512 KB", r.stderr)
+        self.assertFalse([c for c in chamadas if "instances" in c])
 
     def test_bucket_cria_a_conta_de_leitura_se_faltar(self):
         self.estado.write_text("1")
@@ -413,7 +433,9 @@ class TestProvedoresDaVm(unittest.TestCase):
             falso.unlink(missing_ok=True)
         else:
             falso.write_text(metadado, encoding="utf-8")
-        script = f'baixar() {{ [ "$1" = arquivo-motorcx-provedores.padrao.json ] && cat "{falso}"; }}\nset -euo pipefail\n' + trecho
+        funcoes = "\n".join(l for l in inicio.splitlines() if l.startswith(("chave_meta()", "baixar_arquivo()")))
+        script = (f'baixar() {{ [ "$1" = "${{CHAVE_FALSA:-arquivo-motorcx-provedores_padrao_json}}" ] && cat "{falso}"; }}\n'
+                  + funcoes + '\nset -euo pipefail\n' + trecho)
         return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
 
     def setUp(self):
@@ -436,6 +458,17 @@ class TestProvedoresDaVm(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn('"meu"', (etc / "provedores.json").read_text())
         self.assertIn('"meu"', (etc / "provedores_sip.json").read_text())
+
+    def test_vm_inicio_aceita_a_chave_antiga_com_ponto(self):
+        etc = self.tmp / "etc_antiga"
+        etc.mkdir()
+        os.environ["CHAVE_FALSA"] = "arquivo-motorcx-provedores.padrao.json"
+        try:
+            r = self._instalar(etc, (VM / "motorcx-provedores.padrao.json").read_text(encoding="utf-8"))
+        finally:
+            del os.environ["CHAVE_FALSA"]
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((etc / "provedores.json").exists())
 
     def test_vm_inicio_sem_metadado_ou_invalido_nao_instala_lixo(self):
         for metadado in (None, "não é json", "[1, 2]"):
@@ -473,3 +506,39 @@ class TestPrefixosDosSegredos(unittest.TestCase):
         self.assertEqual(nome_secret_manager(crm), "motorcx-crm-12-12-20261225103000123")
         # o exemplo antigo da tela do tronco (sip/...) ficaria fora: por isso o site e o banco exigem voz/
         self.assertFalse(any(nome_secret_manager("sip/aurora-opc").startswith(p) for p in prefixos))
+
+
+class TestChavesDosMetadados(unittest.TestCase):
+    """GCE: chave de metadado só [A-Za-z0-9_-] e < 128 bytes; 256 KB por valor e 512 KB no total da instância."""
+    LINHA = "chave_meta() { printf 'arquivo-%s' \"$1\" | tr -c 'A-Za-z0-9_-' '_'; }"
+
+    def chave(self, nome):
+        r = subprocess.run(["bash", "-c", self.LINHA + '\nchave_meta "$1"', "_", nome], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout
+
+    def test_mesma_expressao_nos_dois_lados(self):
+        for f in (RAIZ / "infra" / "asterisk" / "criar_gcp.sh", VM / "vm_inicio.sh"):
+            self.assertIn(self.LINHA, f.read_text(encoding="utf-8"), f.name)
+
+    def test_cada_arquivo_vira_chave_valida_e_unica(self):
+        import re
+        arquivos = sorted(p.name for p in VM.glob("motorcx-*"))
+        chaves = [self.chave(n) for n in arquivos]
+        self.assertEqual(len(set(chaves)), len(chaves), "duas chaves iguais")
+        for n, k in zip(arquivos, chaves):
+            self.assertRegex(k, r"^[A-Za-z0-9_-]+$", n)
+            self.assertLess(len(k.encode()), 128, n)
+        self.assertEqual(self.chave("motorcx-voz-config.service"), "arquivo-motorcx-voz-config_service")
+        # tudo o que o vm_inicio.sh baixa existe na pasta (vai pelo criar_gcp.sh)
+        inicio = (VM / "vm_inicio.sh").read_text(encoding="utf-8")
+        for n in re.findall(r"\b(motorcx-[A-Za-z0-9_.-]+\.(?:service|timer|caddy|Caddyfile|json))\b", inicio):
+            if n.startswith("motorcx-voz-inicio"):
+                continue
+            self.assertIn(n, arquivos, n)
+
+    def test_cabe_no_limite_com_folga(self):
+        valores = [VM / "vm_inicio.sh", *VM.glob("motorcx-*")]
+        total = sum(p.stat().st_size for p in valores)
+        self.assertLess(total, 256 * 1024, f"{total} bytes: menos da metade do limite de 512 KB")
+        self.assertTrue(all(p.stat().st_size < 64 * 1024 for p in valores))

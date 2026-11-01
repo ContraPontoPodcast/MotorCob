@@ -64,9 +64,13 @@ instalar_caddy || echo "Caddy não instalado agora (o proxy HTTPS fica parado; t
 
 META=http://metadata.google.internal/computeMetadata/v1/instance/attributes
 baixar() { curl -fsS -H 'Metadata-Flavor: Google' "$META/$1"; }
+# chave do metadado do arquivo: a MESMA expressão do criar_gcp.sh (o GCE só aceita [A-Za-z0-9_-] na chave);
+# sem ela, tenta o nome antigo com ponto (compatibilidade)
+chave_meta() { printf 'arquivo-%s' "$1" | tr -c 'A-Za-z0-9_-' '_'; }
+baixar_arquivo() { baixar "$(chave_meta "$1")" 2>/dev/null || baixar "arquivo-$1" 2>/dev/null; }
 for f in motorcx-voz-comum motorcx-voz-segredos motorcx-voz-rodar motorcx-voz-config motorcx-voz-atualizar \
          motorcx-voz-https; do
-  baixar "arquivo-$f" > "/usr/local/bin/$f" 2>/dev/null && chmod 755 "/usr/local/bin/$f" || true
+  baixar_arquivo "$f" > "/usr/local/bin/$f" && chmod 755 "/usr/local/bin/$f" || true
 done
 for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
          motorcx-voz-config.service motorcx-voz-config.timer motorcx-voz-transcricao.service \
@@ -76,15 +80,15 @@ for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-s
          motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-https.service \
          motorcx-voz-https.timer motorcx-voz-importador.service motorcx-voz-importador.timer \
          motorcx-voz-fluxo-noite.service motorcx-voz-fluxo-noite.timer motorcx-voz-gerar-fluxo.service; do
-  baixar "arquivo-$u" > "/etc/systemd/system/$u" 2>/dev/null || true
+  baixar_arquivo "$u" > "/etc/systemd/system/$u" || true
 done
 install -d -m 755 /usr/local/share/motorcx/caddy
 for c in motorcx-caddy.Caddyfile motorcx-caddy-simulador.caddy motorcx-caddy-elevenlabs.caddy; do
-  baixar "arquivo-$c" > "/usr/local/share/motorcx/caddy/$c" 2>/dev/null || true
+  baixar_arquivo "$c" > "/usr/local/share/motorcx/caddy/$c" || true
 done
 # provedores de voz: padrão seguro só quando o arquivo não existe (o que o dono gravou fica como está)
 if [ ! -e /etc/motorcx/provedores.json ]; then
-  padrao="$(baixar arquivo-motorcx-provedores.padrao.json 2>/dev/null || true)"
+  padrao="$(baixar_arquivo motorcx-provedores.padrao.json || true)"
   json_ok() {   # objeto JSON (com python3 confere de verdade; sem ele, ao menos começa com "{")
     if command -v python3 >/dev/null; then
       python3 -c 'import json,sys; assert isinstance(json.load(sys.stdin), dict)' 2>/dev/null

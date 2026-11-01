@@ -303,11 +303,23 @@ passo "VMs do Asterisk (uma por zona)"
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 INICIO="$AQUI/vm/vm_inicio.sh"
 [ -f "$INICIO" ] || falha "falta $INICIO (rode o script de dentro do repositório: infra/asterisk/)"
-# scripts e unidades systemd vão como metadados (arquivo-<nome>); o vm_inicio.sh instala no boot
+# scripts e unidades systemd vão como metadados; o vm_inicio.sh instala no boot. A chave do metadado do GCE só
+# aceita [A-Za-z0-9_-] (até 128 bytes): o nome do arquivo vira arquivo-<nome> com todo outro caractere trocado por _
+# (motorcx-voz-config.service -> arquivo-motorcx-voz-config_service). A MESMA expressão está no vm_inicio.sh.
+chave_meta() { printf 'arquivo-%s' "$1" | tr -c 'A-Za-z0-9_-' '_'; }
+# limites do GCE: 256 KB por valor e 512 KB no total da instância (com os metadados curtos que já existem);
+# para com folga antes disso, em vez de o gcloud recusar no meio
+LIMITE_VALOR=$((256 * 1024)); LIMITE_TOTAL=$((448 * 1024))
 ARQUIVOS="startup-script=$INICIO"
+TOTAL=$(wc -c < "$INICIO")
 for f in "$AQUI"/vm/motorcx-*; do
-  ARQUIVOS="$ARQUIVOS,arquivo-$(basename "$f")=$f"
+  t=$(wc -c < "$f")
+  [ "$t" -le "$LIMITE_VALOR" ] || falha "$(basename "$f") tem $t bytes: passa do limite de 256 KB por metadado do GCE"
+  TOTAL=$((TOTAL + t))
+  ARQUIVOS="$ARQUIVOS,$(chave_meta "$(basename "$f")")=$f"
 done
+[ "$TOTAL" -le "$LIMITE_TOTAL" ] || \
+  falha "os arquivos da VM somam $TOTAL bytes: perto do limite de 512 KB de metadados do GCE (folga: 448 KB). Diminua os scripts."
 for i in 1 2; do
   VM="motorcx-ast-$i"
   ZONA="${ZONAS[$((i - 1))]}"

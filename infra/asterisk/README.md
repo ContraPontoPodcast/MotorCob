@@ -33,6 +33,24 @@ bucket único `<projeto>-motorcx-gravacoes` da versão do piloto não é usado: 
 Ele não pede nem mostra segredos. A senha do ARI é
 gerada dentro do Secret Manager (`motorcx-voz-ari-senha`) e não aparece na tela.
 
+**Depois de rodar de novo (VM que já existe):** o script só troca os metadados; a VM instala os scripts e unidades
+novos no próximo boot. Para aplicar já, em cada VM:
+
+```bash
+gcloud compute ssh motorcx-ast-1 --zone=southamerica-east1-a --tunnel-through-iap -- sudo google_metadata_script_runner startup
+gcloud compute ssh motorcx-ast-2 --zone=southamerica-east1-b --tunnel-through-iap -- sudo google_metadata_script_runner startup
+```
+
+(ou reinicie a VM). Para conferir que as unidades chegaram: `systemctl list-timers 'motorcx-voz-*'` mostra **9
+timers** (config, transcricao, atualizar, speech, speech-noite, speech-temas, https, importador, fluxo-noite) e
+`systemctl status motorcx-voz-gerar-fluxo` existe (fica parado sem o metadado `motorcx-gerar-fluxo=1`).
+
+**Chave dos metadados:** o GCE só aceita `[A-Za-z0-9_-]` no nome do metadado (até 128 bytes). Cada arquivo de `vm/`
+vai como `arquivo-<nome>` com todo outro caractere trocado por `_` (ex.: `motorcx-voz-config.service` →
+`arquivo-motorcx-voz-config_service`); o `vm_inicio.sh` usa a mesma regra e, sem ela, tenta o nome antigo. O
+script também confere o tamanho antes de mexer nas VMs: até 256 KB por arquivo e 448 KB somados (o limite do GCE é
+512 KB por instância).
+
 **O que é criado:**
 - a rede `motorcx-voz`;
 - 2 IPs estáticos;
