@@ -9,6 +9,12 @@ O provedor devolve o que aconteceu por `emitir(id_chamada, tipo, dados)`:
   resultado   {resultado_ia, identidade_confirmada?, data_promessa?, valor_promessa?, retorno_em?}
   transferir  {motivo}  (cpc, pedido_humano, ofertas_sem_acordo, fora_alcada, contestacao)
   encerrar    {}
+Com o fluxo (SQL 58, voz/fluxo.py) também:
+  passo       {ordem, bloco_id, modo, saida_quando, intencao, confianca_faixa, motivo_devolucao, trava, turnos,
+               fluxo_versao_id}  → voz_fluxo_passos
+  conector    {conector_id, classe, http_status, latencia_ms, tentativa, resultado_codigo, ...} → crm_chamadas
+  fluxo       {fluxo_versao_id, bloco_final} → voz_chamadas
+  link        {canal, modelo_id}  (envio do link pela Mensageria)
 """
 from __future__ import annotations
 
@@ -17,7 +23,7 @@ from datetime import datetime
 from typing import Callable
 
 TIPOS_CONEXAO = ("sip", "midia_externa", "interno")
-TIPOS_EVENTO = ("resultado", "transferir", "encerrar")
+TIPOS_EVENTO = ("resultado", "transferir", "encerrar", "passo", "conector", "fluxo", "link")
 MOTIVOS_TRANSFERENCIA = ("cpc", "pedido_humano", "ofertas_sem_acordo", "fora_alcada", "contestacao")
 
 
@@ -30,6 +36,7 @@ class ContextoChamada:
     tipo_agente: str = "ambos"              # localizador | negociador | ambos
     variaveis: dict = field(default_factory=dict, repr=False)   # da Lista do dia, só memória (nunca em log)
     final_numero: str = ""                  # últimos 2 dígitos (só para simulação/diagnóstico)
+    credor_id: int | None = None            # carteira (o fluxo em uso é por carteira, SQL 58)
 
 
 @dataclass(frozen=True)

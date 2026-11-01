@@ -53,11 +53,14 @@ def caso(nome, passou, detalhe=""):
 
 
 # o testar_rls.py reaplica o SQL 56 (que recria divisao_concorrencia_voz sem a troca do 57): reaplica o 57 por cima,
-# como o dono faria, o que também prova que ele roda de novo com dados
-r = subprocess.run(["psql", "-d", BANCO, "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f",
-                    str(RAIZ / "supabase" / "migrations" / "20261224000001_voz_acesso_proprio.sql")],
-                   capture_output=True, text=True)
-assert r.returncode == 0, r.stderr
+# como o dono faria, o que também prova que ele roda de novo com dados. Os SQL seguintes que estendem o voz_vm (58 em
+# diante) refazem as trocas deles depois do 57, em ordem (como o cabeçalho do 57 manda)
+DO_57_EM_DIANTE = sorted(f for f in (RAIZ / "supabase" / "migrations").glob("*.sql")
+                         if f.name >= "20261224000001_voz_acesso_proprio.sql")
+for f in DO_57_EM_DIANTE:
+    r = subprocess.run(["psql", "-d", BANCO, "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", str(f)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, f"{f.name}: {r.stderr}"
 
 # no CI o Postgres exige senha (scram) para todo login: o papel ganha a senha descartável do próprio banco de teste
 # (PGPASSWORD do job), e o psql/pg8000 entram com ela. Local (trust pelo socket) fica sem senha, como antes.
@@ -113,9 +116,9 @@ checar("SQL 57: vê id e slug só das empresas com voz", True,
 checar("SQL 57: vê só id e código das carteiras ativas das empresas com voz", True,
        f"select string_agg(codigo, ',' order by codigo) from voz_vm.carteiras where empresa_id in ({EA}, {EB})",
        "cart-a,principal")
-checar("SQL 57: a view de empresas não tem nome, CNPJ nem endereço", True,
+checar("SQL 57: a view de empresas tem só id, slug e nome (sem CNPJ, endereço nem contato)", True,
        "select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns "
-       "where table_schema = 'voz_vm' and table_name = 'empresas'", "id,slug", usuario="postgres")
+       "where table_schema = 'voz_vm' and table_name = 'empresas'", "id,slug,nome", usuario="postgres")
 checar("SQL 57: a view de tarifação não tem cliente, destino nem códigos", True,
        "select count(*) from information_schema.columns where table_schema = 'voz_vm' "
        "and table_name = 'chamadas_tarifacao' and column_name in ('id_cliente', 'destino_hash', 'destino_mascara', 'codigos', 'id_acao')",
@@ -190,9 +193,143 @@ checar("SQL 57: não escreve em tabela de voz direto", False,
 checar("SQL 57: não escreve pela view de configuração", False, f"update voz_vm.config set modo = 'real' where empresa_id = {EA}")
 checar("SQL 57: não apaga gravação", False, f"delete from public.voz_gravacoes where empresa_id = {EA}")
 
+# ------------------------------------------------------------------ SQL 58 · fluxo pelo acesso próprio (voz_vm)
+# dados (como postgres): versão em uso da carteira A, host liberado, conector ativo e um em rascunho, alçada, base
+# (uma resposta revisada e uma não), e o mesmo conector em B (sem voz)
+FLA = _sv(f"insert into public.voz_fluxos (empresa_id, credor_id, nome) values ({EA}, {CA}, 'Fluxo VZA') returning id")
+FVA = _sv(f"insert into public.voz_fluxo_versoes (fluxo_id, empresa_id, credor_id, versao, situacao, definicao, aprovado_em, "
+          f"em_uso_em) select {FLA}, {EA}, {CA}, 1, 'em_uso', m.definicao, now(), now() from public.voz_fluxo_modelos m "
+          f"order by m.codigo limit 1 returning id")
+FLB = _sv(f"insert into public.voz_fluxos (empresa_id, credor_id, nome) values ({EB}, {CB}, 'Fluxo VZB') returning id")
+FVB = _sv(f"insert into public.voz_fluxo_versoes (fluxo_id, empresa_id, credor_id, versao, situacao, definicao) "
+          f"select {FLB}, {EB}, {CB}, 1, 'rascunho', m.definicao from public.voz_fluxo_modelos m order by m.codigo limit 1 returning id")
+_sv(f"insert into public.crm_hosts_permitidos (empresa_id, host) values ({EA}, 'crm.vza-exemplo.com.br'), "
+    f"({EB}, 'crm.vzb-exemplo.com.br')")
+_CON = ("insert into public.crm_conectores (empresa_id, nome, finalidade, metodo, url, autenticacao, segredo_ref, situacao, "
+        "teste_ok, exemplo_resposta) values ({e}, '{n}', 'buscar_ofertas', 'GET', 'https://crm.{h}-exemplo.com.br/ofertas', "
+        "'bearer', 'voz/crm/{h}', '{s}', true, '{{\"ofertas\": []}}') returning id")
+KA = _sv(_CON.format(e=EA, n="Ofertas", h="vza", s="ativo"))
+KR = _sv(_CON.format(e=EA, n="Ofertas 2", h="vza", s="rascunho"))
+KB = _sv(_CON.format(e=EB, n="Ofertas", h="vzb", s="ativo"))
+_sv(f"insert into public.voz_alcada_carteira (empresa_id, credor_id, desconto_max_pct, parcelas_max, parcela_min, vigente_desde) "
+    f"values ({EA}, {CA}, 25, 6, 40, '2026-01-01'), ({EB}, {CB}, 10, 2, 40, '2026-01-01')")
+_sv(f"insert into public.voz_base_respostas (empresa_id, fluxo_versao_id, bloco_id, pergunta, resposta, revisado_em) values "
+    f"({EA}, {FVA}, 'N3', 'Posso pagar no boleto?', 'Pode sim, o link chega por mensagem.', now()), "
+    f"({EA}, {FVA}, 'N3', 'Tem desconto maior?', 'Ainda não revisada pela empresa.', null)")
+
+checar("SQL 58: lê a versão em uso do fluxo da carteira (voz_vm.fluxo_em_uso)", True,
+       f"select (r ->> 'versao_id') || '|' || (r ? 'definicao') || '|' || (r ? 'hash') "
+       f"from jsonb_array_elements(voz_vm.fluxo_em_uso('{{\"empresa\": {EA}, \"credor\": {CA}}}')) r", f"{FVA}|true|true")
+checar("SQL 58: sem fluxo da empresa sem voz", True,
+       f"select voz_vm.fluxo_em_uso('{{\"empresa\": {EB}, \"credor\": {CB}}}')::text", "[]")
+checar("SQL 58: lê a alçada vigente da carteira (voz_vm.alcada_vigente)", True,
+       f"select r ->> 'parcelas_max' from voz_vm.alcada_vigente('{{\"empresa\": {EA}, \"credor\": {CA}, \"dia\": null}}') r", "6")
+checar("SQL 58: sem alçada da empresa sem voz", True,
+       f"select coalesce(voz_vm.alcada_vigente('{{\"empresa\": {EB}, \"credor\": {CB}}}')::text, 'nulo')", "nulo")
+checar("SQL 58: vê só os conectores ativos das empresas com voz, com segredo_ref (o nome no cofre)", True,
+       f"select string_agg(id || ':' || segredo_ref, ',') from voz_vm.crm_conectores where id in ({KA}, {KR}, {KB})",
+       f"{KA}:voz/crm/vza")
+checar("SQL 58: a view de conectores não tem exemplo_resposta nem quem testou", True,
+       "select count(*) from information_schema.columns where table_schema = 'voz_vm' and table_name = 'crm_conectores' "
+       "and column_name in ('exemplo_resposta', 'testado_por', 'criado_por', 'teste_ok')", 0, usuario="postgres")
+checar("SQL 58: vê os hosts liberados só das empresas com voz", True,
+       f"select string_agg(host, ',') from voz_vm.crm_hosts_permitidos where empresa_id in ({EA}, {EB})", "crm.vza-exemplo.com.br")
+checar("SQL 58: vê só a base de respostas revisada", True,
+       f"select count(*) from voz_vm.base_respostas where fluxo_versao_id = {FVA}", 1)
+checar("SQL 58: vê o nome da empresa (variável assessoria)", True,
+       f"select nome from voz_vm.empresas where id = {EA}", "Voz Acesso Alfa")
+
+PS = (f"[{{\"empresa_id\": {EA}, \"id_chamada\": \"vza-0001\", \"fluxo_versao_id\": {FVA}, \"ordem\": 1, "
+      f"\"bloco_id\": \"N1\", \"modo\": \"arvore\", \"saida_quando\": \"atendeu\"}}, "
+      f"{{\"empresa_id\": {EA}, \"id_chamada\": \"vza-0001\", \"fluxo_versao_id\": {FVA}, \"ordem\": 2, "
+      f"\"bloco_id\": \"N3\", \"modo\": \"cognicao\", \"intencao\": \"quero_negociar\", \"confianca_faixa\": \"alta\"}}]")
+checar("SQL 58: grava os passos do fluxo", True, f"select voz_vm.gravar_fluxo_passos('{PS}')", 2)
+checar("SQL 58: reenvio dos passos é upsert (empresa, id_chamada, ordem)", True,
+       f"select voz_vm.gravar_fluxo_passos('{PS}')", 2)
+checar("SQL 58: ... e não duplica", True,
+       f"select count(*) from public.voz_fluxo_passos where empresa_id = {EA} and id_chamada = 'vza-0001'", 2, usuario="postgres")
+PS_OUTRA = PS.replace(f'"fluxo_versao_id": {FVA}', f'"fluxo_versao_id": {FVB}')
+PS_FALA = PS.replace('"modo"', '"fala": "oi", "modo"', 1)
+checar("SQL 58: passo com versão de outra empresa é recusado", False,
+       f"select voz_vm.gravar_fluxo_passos('{PS_OUTRA}')", erro="outra empresa")
+checar("SQL 58: passo com coluna fora da lista é recusado", False,
+       f"select voz_vm.gravar_fluxo_passos('{PS_FALA}')", erro="não grava em voz_fluxo_passos")
+checar("SQL 58: passo de empresa sem voz é recusado", False,
+       f"select voz_vm.gravar_fluxo_passos('[{{\"empresa_id\": {EB}, \"id_chamada\": \"vzb-0001\", \"fluxo_versao_id\": {FVB}, "
+       f"\"ordem\": 1, \"bloco_id\": \"N1\", \"modo\": \"arvore\"}}]')", erro="empresa sem voz")
+
+CC = (f"[{{\"empresa_id\": {EA}, \"conector_id\": {KA}, \"conector_versao\": 1, \"id_chamada\": \"vza-0001\", "
+      f"\"id_cliente\": \"C1\", \"fluxo_versao_id\": {FVA}, \"bloco_id\": \"N3\", \"classe\": \"ok\", "
+      f"\"http_status\": 200, \"latencia_ms\": 312, \"resultado_codigo\": \"ofertas_1_3\", \"ofertas_acima_alcada\": 1}}]")
+checar("SQL 58: grava a chamada do conector (só códigos)", True, f"select voz_vm.gravar_crm_chamadas('{CC}')", 1)
+for nome, extra in (("corpo da resposta", '"corpo": "{}"'), ("dados do CRM", '"dados": {"nome": "Ana"}'),
+                    ("ofertas", '"ofertas": []')):
+    cc_extra = CC.replace('"classe"', extra + ', "classe"', 1)
+    checar(f"SQL 58: chamada de conector com {nome} é recusada (LGPD)", False,
+           f"select voz_vm.gravar_crm_chamadas('{cc_extra}')", erro="não grava em crm_chamadas")
+checar("SQL 58: chamada de conector de outra empresa é recusada", False,
+       f"select voz_vm.gravar_crm_chamadas('{CC.replace(f': {KA},', f': {KB},')}')", erro="outra empresa")
+checar("SQL 58: código fora da lista é recusado pelo banco", False,
+       f"select voz_vm.gravar_crm_chamadas('{CC.replace('ofertas_1_3', 'cliente_vip')}')")
+checar("SQL 58: grava a chamada com a versão do fluxo e o bloco final", True,
+       f"select voz_vm.gravar_chamadas('[{{\"empresa_id\": {EA}, \"id_chamada\": \"vza-0001\", \"id_cliente\": \"C1\", "
+       f"\"fluxo_versao_id\": {FVA}, \"bloco_final\": \"N3\"}}]')", 1)
+checar("SQL 58: ... e a chamada ficou com elas", True,
+       f"select fluxo_versao_id || '|' || bloco_final from public.voz_chamadas where empresa_id = {EA} "
+       f"and id_chamada = 'vza-0001' and canal = 'agente_voz'", f"{FVA}|N3", usuario="postgres")
+checar("SQL 58: chamada com versão de fluxo de outra empresa é recusada", False,
+       f"select voz_vm.gravar_chamadas('[{{\"empresa_id\": {EA}, \"id_chamada\": \"vza-0001\", \"id_cliente\": \"C1\", "
+       f"\"fluxo_versao_id\": {FVB}}}]')", erro="outra empresa")
+checar("SQL 58: não lê conectores nem versões pelo public", False, "select * from public.crm_conectores limit 1",
+       erro="permission denied")
+checar("SQL 58: não chama a RPC do public direto", False,
+       f"select * from public.fluxo_voz_em_uso({EA}, {CA})", erro="permission denied")
+checar("SQL 58: não grava passo direto na tabela", False,
+       f"insert into public.voz_fluxo_passos (empresa_id, id_chamada, fluxo_versao_id, ordem, bloco_id, modo) "
+       f"values ({EA}, 'vza-0003', {FVA}, 1, 'N1', 'arvore')")
+
+# geração por IA: pega o pedido, devolve o resultado e limpa anexos vencidos (só os que o banco liberou)
+def _bilhete(op, bucket, caminho):
+    return f"select voz_vm.bilhete_arquivo('{op}', '{bucket}', '{caminho}') ~ '^[0-9a-f]{{64}}$'"
+
+
+PDA = _sv(f"insert into public.voz_fluxo_pedidos (empresa_id, credor_id, texto, tipo, pedido_em) values ({EA}, {CA}, "
+          f"'Quero um fluxo que confirme a identidade e ofereça parcelas.', 'ia', '2000-01-01') returning id")
+ANX = "chamados/vza-alfa/Pedido Fluxo.pdf"
+PDV = _sv(f"insert into public.voz_fluxo_pedidos (empresa_id, texto, tipo, situacao, anexos, atualizado_em) values ({EA}, "
+          f"'Pedido antigo cancelado, com anexo.', 'ia', 'cancelado', array['{ANX}'], now() - interval '40 days') returning id")
+PDN = _sv(f"insert into public.voz_fluxo_pedidos (empresa_id, texto, tipo, situacao, anexos) values ({EA}, "
+          f"'Pedido recente cancelado, com anexo.', 'ia', 'cancelado', array['entradas/vza-alfa/fluxo/novo.pdf']) returning id")
+checar("SQL 58 · geração: pega o pedido mais antigo da fila", True,
+       "select r ->> 'pedido' from voz_vm.pegar_pedido_fluxo('{}') r", PDA)
+checar("SQL 58 · geração: devolve o resultado sem definição (o pedido fica com_erros)", True,
+       f"select coalesce(voz_vm.registrar_geracao_fluxo('{{\"pedido\": {PDA}, \"definicao\": null, "
+       f"\"resultado\": {{\"erros\": [\"falha_na_geracao\"], \"tentativas\": 0}}}}')::text, 'nulo')", "nulo")
+checar("SQL 58 · geração: ... e o pedido ficou com_erros", True,
+       f"select situacao from public.voz_fluxo_pedidos where id = {PDA}", "com_erros", usuario="postgres")
+checar("SQL 58 · geração: lista só os anexos vencidos", True,
+       f"select string_agg(r ->> 'pedido_id', ',') from jsonb_array_elements(voz_vm.anexos_fluxo_vencidos('{{}}')) r "
+       f"where (r ->> 'pedido_id')::bigint in ({PDV}, {PDN})", PDV)
+checar("SQL 58 · geração: bilhete para apagar o anexo vencido", True, _bilhete("apagar", "chamados", ANX.split("/", 1)[1]), "t")
+checar("SQL 58 · geração: sem bilhete para anexo que ainda vale", False,
+       "select voz_vm.bilhete_arquivo('apagar', 'entradas', 'vza-alfa/fluxo/novo.pdf')", erro="não permitido")
+checar("SQL 58 · geração: sem bilhete para baixar nem enviar anexo", False,
+       f"select voz_vm.bilhete_arquivo('enviar', 'chamados', '{ANX.split('/', 1)[1]}')", erro="não permitido")
+checar("SQL 58 · geração: marca os anexos apagados", True,
+       f"select voz_vm.marcar_anexos_apagados('{{\"pedido\": {PDV}}}'); select count(*) from jsonb_array_elements("
+       f"voz_vm.anexos_fluxo_vencidos('{{}}')) r where (r ->> 'pedido_id')::bigint = {PDV}", 0)
+checar("SQL 58 · geração: anexo marcado não ganha mais bilhete", False,
+       _bilhete("apagar", "chamados", ANX.split("/", 1)[1]), erro="não permitido")
+checar("SQL 58 · geração: não chama a RPC do public direto", False, "select public.pegar_pedido_fluxo_voz()",
+       erro="permission denied")
+checar("SQL 58 · geração: outro login (não a VM nem o servidor) não pega pedido", False,
+       "select public.pegar_pedido_fluxo_voz()", usuario="postgres", erro="servidor")
+
 # ------------------------------------------------------------------ não pode: nada fora da voz
 for t in ("estado_cliente", "trilha", "fila_dia", "perfis", "empresas", "credores", "faturas", "envios", "api_tokens",
-          "voz_config", "voz_chamadas", "voz_gravacoes", "consumo_voz"):
+          "voz_config", "voz_chamadas", "voz_gravacoes", "consumo_voz", "crm_conectores", "crm_hosts_permitidos",
+          "crm_chamadas", "voz_fluxos", "voz_fluxo_versoes", "voz_fluxo_passos", "voz_alcada_carteira",
+          "voz_base_respostas", "voz_fluxo_pedidos"):
     checar(f"SQL 57: não lê public.{t}", False, f"select * from public.{t} limit 1", erro="permission denied")
 checar("SQL 57: não lê auth.users", False, "select * from auth.users limit 1", erro="permission denied")
 checar("SQL 57: não lê storage.objects", False, "select * from storage.objects limit 1", erro="permission denied")
@@ -394,6 +531,59 @@ if PG is not None:
         caso("VM: o envio de retorno está pendente para o motor", n == 1, n)
         caso("VM: o CSV chegou ao bucket entradas",
              any(b == "entradas" and c.endswith("_motorcx_voz_2026-11-05_123000.csv") for b, c in arquivos))
+
+    # SQL 58 · o executor do fluxo e a geração pela mesma interface (voz/fluxo.py, voz/registro.py, voz/gerar_fluxo.py)
+    from types import SimpleNamespace
+    from voz import fluxo as FX
+    from voz import gerar_fluxo as GF
+    fl = FX.CarregadorFluxos(sb)(SimpleNamespace(empresa_id=int(EA), credor_id=int(CA)))
+    caso("VM: carrega o fluxo em uso (versão, conector ativo com segredo_ref, hosts, alçada, base revisada)",
+         fl is not None and fl.versao_id == int(FVA) and list(fl.conectores) == [int(KA)]
+         and fl.conectores[int(KA)].segredo_ref == "voz/crm/vza" and fl.hosts == ("crm.vza-exemplo.com.br",)
+         and fl.alcada is not None and fl.alcada.parcelas_max == 6 and sum(len(x) for x in fl.base.values()) == 1, fl)
+    caso("VM: empresa sem voz fica sem fluxo (cai no roteiro)",
+         FX.CarregadorFluxos(sb)(SimpleNamespace(empresa_id=int(EB), credor_id=int(CB))) is None)
+    regf = RegistroBanco(sb)
+    ef = EventoChamada(empresa_id=int(EA), id_cliente="C3", numero_discado="11988887771", data=date(2026, 11, 5),
+                       hora=time(11, 5), id_chamada="vza-0102", billsec=40, tech_prefix="4321", credor_id=int(CA),
+                       modo="teste", fluxo_versao_id=int(FVA), bloco_final="N3")
+    regf.registrar(ef)
+    regf.registrar_fluxo(int(EA), "vza-0102", "passo", {"fluxo_versao_id": int(FVA), "ordem": 1, "bloco_id": "N1",
+                                                        "modo": "arvore", "saida_quando": "atendeu"})
+    regf.registrar_fluxo(int(EA), "vza-0102", "conector", {"conector_id": int(KA), "conector_versao": 1, "bloco_id": "N3",
+                                                           "classe": "tempo", "latencia_ms": 2500, "tentativa": 1,
+                                                           "resultado_codigo": "falhou", "fluxo_versao_id": int(FVA),
+                                                           "id_cliente": "C3"})
+    caso("VM: grava chamada, passo e conector do fluxo pelo acesso próprio",
+         regf.descarregar() == 1 and regf.erros == 0 and not regf.fila_passos and not regf.fila_conectores, regf.erros)
+    caso("VM: ... e as linhas estão no banco",
+         servidor.run("select (select fluxo_versao_id || '|' || bloco_final from public.voz_chamadas where id_chamada = 'vza-0102') "
+                      "|| '|' || (select count(*) from public.voz_fluxo_passos where id_chamada = 'vza-0102') "
+                      "|| '|' || (select classe from public.crm_chamadas where id_chamada = 'vza-0102')")[0][0]
+         == f"{FVA}|N3|1|tempo")
+
+    class SemLLM:
+        def __getattr__(self, nome):
+            raise RuntimeError("LLM fora")
+    PDA2 = servidor.run(f"insert into public.voz_fluxo_pedidos (empresa_id, texto, tipo, pedido_em) values ({EA}, "
+                        "'Outro pedido de fluxo para a geração.', 'ia', '2000-01-02') returning id")[0][0]
+    caso("VM: a geração pega o pedido e devolve o resultado pelo acesso próprio", GF.processar_um(sb, SemLLM()) is True
+         and servidor.run("select situacao from public.voz_fluxo_pedidos where id = :p", p=PDA2)[0][0] == "com_erros")
+    anexo = "vza-alfa/Desenho do Fluxo.pdf"
+    arquivos[("chamados", anexo)] = b"%PDF"
+    servidor.run("insert into storage.objects (bucket_id, name) values ('chamados', :c)", c=anexo)
+    PDV2 = servidor.run(f"insert into public.voz_fluxo_pedidos (empresa_id, texto, tipo, situacao, anexos, atualizado_em) "
+                        f"values ({EA}, 'Pedido antigo com anexo para apagar.', 'ia', 'cancelado', array['chamados/{anexo}'], "
+                        "now() - interval '45 days') returning id")[0][0]
+    caso("VM: a geração apaga o anexo vencido (bilhete + Edge Function) e marca o pedido",
+         GF.limpar_anexos(sb) >= 1 and ("chamados", anexo) not in arquivos
+         and servidor.run("select cardinality(anexos) || '|' || (anexos_apagados_em is not null) "
+                          "from public.voz_fluxo_pedidos where id = :p", p=PDV2)[0][0] == "0|true")
+    try:
+        sb.rpc("salvar_fluxo_voz", {})
+        caso("VM: RPC fora da lista é recusada no código", False, "chamou")
+    except A.AcessoNegado:
+        caso("VM: RPC fora da lista é recusada no código", True)
     sb.fechar()
     servidor.close()
 

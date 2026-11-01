@@ -29,6 +29,18 @@ test("uso devolvido pelo banco: operação e bucket casados, caminho limpo", () 
   assert.equal(usoValido([{ ...ok, caminho: "/alfa/x.csv" }], "baixar"), null);
 });
 
+test("apagar anexo de pedido de fluxo (SQL 58): entradas ou chamados, nome dado pela pessoa", () => {
+  const anexo = { operacao: "apagar", bucket: "chamados", caminho: "alfa/Pedido Fluxo v2.docx" };
+  assert.deepEqual(usoValido([anexo], "apagar"), anexo);
+  assert.deepEqual(usoValido([{ ...anexo, bucket: "entradas" }], "apagar")?.bucket, "entradas");
+  assert.equal(usoValido([{ ...anexo, operacao: "enviar" }], "enviar"), null);       // chamados: só apagar
+  assert.equal(usoValido([{ ...anexo, operacao: "baixar" }], "baixar"), null);
+  assert.equal(usoValido([{ ...anexo, caminho: "alfa/../beta/x.pdf" }], "apagar"), null);
+  assert.equal(usoValido([{ ...anexo, caminho: "Alfa/x.pdf" }], "apagar"), null);    // slug minúsculo
+  assert.equal(usoValido([{ ...anexo, bucket: "saidas" }], "apagar"), null);
+  assert.equal(usoValido([{ operacao: "enviar", bucket: "entradas", caminho: "alfa/Com Espaco.csv" }], "enviar"), null);
+});
+
 test("url do objeto e tamanho", () => {
   assert.equal(urlObjeto("https://x.supabase.co/", "saidas", "alfa/2026-11-03/ids/agente_voz.csv"),
     "https://x.supabase.co/storage/v1/object/saidas/alfa/2026-11-03/ids/agente_voz.csv");

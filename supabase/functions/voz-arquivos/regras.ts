@@ -23,14 +23,21 @@ export async function sha256Hex(texto: string): Promise<string> {
 }
 
 // o que o banco devolveu ao consumir o bilhete; qualquer coisa fora disso é recusada
-export interface Uso { operacao: Operacao; bucket: "saidas" | "entradas"; caminho: string }
+export interface Uso { operacao: Operacao; bucket: "saidas" | "entradas" | "chamados"; caminho: string }
 const CAMINHO = /^[a-z0-9][a-z0-9_\-./]{1,298}$/;
+// anexo de pedido de fluxo (SQL 58, anexos_pedido_voz_ok): '<slug>/...' com o nome que a pessoa deu ao arquivo.
+// Só para apagar, e só o que o banco já liberou (anexos_fluxo_vencidos) e emitiu bilhete.
+const ANEXO = /^[a-z0-9][a-z0-9_\-]*\/[A-Za-z0-9_\-/. ]{1,290}$/;
 export function usoValido(x: unknown, pedida: Operacao): Uso | null {
   const u = (Array.isArray(x) ? x[0] : x) as Record<string, unknown> | undefined;
   if (!u || u.operacao !== pedida) return null;
-  if (!((u.operacao === "baixar" && u.bucket === "saidas") || (u.operacao !== "baixar" && u.bucket === "entradas"))) return null;
+  const casado = (u.operacao === "baixar" && u.bucket === "saidas") ||
+    (u.operacao === "enviar" && u.bucket === "entradas") ||
+    (u.operacao === "apagar" && (u.bucket === "entradas" || u.bucket === "chamados"));
+  if (!casado) return null;
   const c = String(u.caminho ?? "");
-  if (!CAMINHO.test(c) || c.includes("..") || c.includes("//")) return null;
+  const formato = u.bucket === "chamados" || (u.operacao === "apagar" && !CAMINHO.test(c)) ? ANEXO : CAMINHO;
+  if (!formato.test(c) || c.includes("..") || c.includes("//")) return null;
   return { operacao: pedida, bucket: u.bucket as Uso["bucket"], caminho: c };
 }
 

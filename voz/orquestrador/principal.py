@@ -142,7 +142,9 @@ class FonteListas:
                 for k, v in it.variaveis.items():
                     d.setdefault(k, v)
             for it in itens + (mailing or []):
-                it.variaveis = {**({"credor": nome_credor[:80]} if nome_credor else {}), **por_cliente[it.id_cliente]}
+                fixas = {**({"credor": nome_credor[:80]} if nome_credor else {}),
+                         **({"assessoria": emp["nome"][:80]} if emp.get("nome") else {})}    # SQL 58: nome da empresa
+                it.variaveis = {**fixas, **por_cliente[it.id_cliente]}
             if mailing is not None:
                 saida.append(Lote(empresa_id, mailing, credor_id=cid, canal="discador"))
             if itens:
@@ -291,8 +293,12 @@ def main(argv=None) -> int:
         from voz.registro import RegistroBanco
         sb = supabase_do_ambiente()
         registro = RegistroBanco(sb)
+        if "montagem_motorcx" in provedores:    # SQL 58: a versão em uso do fluxo da carteira (sem fluxo: roteiro)
+            from voz.fluxo import CarregadorFluxos
+            provedores["montagem_motorcx"].fluxo_de = CarregadorFluxos(sb)
         orq = Orquestrador(ari, dados, Agendador(contratado=contratado), EscritorEventos(a.eventos), provedores,
-                           relogio_brasilia, fila_envio=fila_envio, ao_registrar=registro.registrar)
+                           relogio_brasilia, fila_envio=fila_envio, ao_registrar=registro.registrar,
+                           ao_fluxo=registro.registrar_fluxo)
         usuario = os.environ.get("MOTORCX_VOZ_ENVIADO_POR", "")
         pub = Publicador(sb, a.eventos, usuario) if usuario else None
         if pub is None:

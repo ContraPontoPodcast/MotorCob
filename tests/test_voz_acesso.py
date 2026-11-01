@@ -167,6 +167,35 @@ class TestEscrita(unittest.TestCase):
                 f()
         self.assertEqual(conn.chamadas, [])
 
+    def test_rpc_do_fluxo_pela_funcao_de_voz_vm(self):
+        sb, conn = acesso(ConexaoFalsa([[[[{"versao_id": 3}]]]]))
+        self.assertEqual(sb.rpc("fluxo_voz_em_uso", {"empresa": 1, "credor": None}), [{"versao_id": 3}])
+        sql, params = conn.chamadas[0]
+        self.assertEqual(sql, "select voz_vm.fluxo_em_uso(cast(:a as jsonb))")
+        self.assertEqual(json.loads(params["a"]), {"empresa": 1, "credor": None})
+        for publica, vm in (("alcada_voz_vigente", "alcada_vigente"), ("pegar_pedido_fluxo_voz", "pegar_pedido_fluxo"),
+                            ("registrar_geracao_fluxo_voz", "registrar_geracao_fluxo"),
+                            ("anexos_fluxo_vencidos", "anexos_fluxo_vencidos"),
+                            ("marcar_anexos_apagados", "marcar_anexos_apagados")):
+            self.assertEqual(A.RPC[publica], vm)
+
+    def test_fluxo_le_e_grava_pelas_views_e_funcoes(self):
+        sql, params = A.montar_select("voz_base_respostas", {"fluxo_versao_id": "eq.3", "revisado_em": "not.is.null"})
+        self.assertEqual(sql, 'select to_jsonb(t) from voz_vm.base_respostas t where "fluxo_versao_id" = :p0 '
+                              'and "revisado_em" is not null')
+        self.assertIn("voz_vm.crm_conectores", A.montar_select("crm_conectores", {"situacao": "eq.ativo"})[0])
+        self.assertIn("voz_vm.crm_hosts_permitidos", A.montar_select("crm_hosts_permitidos")[0])
+        sb, conn = acesso()
+        sb.inserir("voz_fluxo_passos", [{"empresa_id": 1, "id_chamada": "c-0001", "ordem": 1}],
+                   conflito="empresa_id,id_chamada,ordem")
+        sb.inserir("crm_chamadas", [{"empresa_id": 1, "classe": "ok"}])
+        self.assertEqual([c[0] for c in conn.chamadas], ["select voz_vm.gravar_fluxo_passos(cast(:l as jsonb))",
+                                                         "select voz_vm.gravar_crm_chamadas(cast(:l as jsonb))"])
+        with self.assertRaises(ValueError):
+            sb.inserir("voz_fluxo_passos", [{"empresa_id": 1}], conflito="id_chamada")
+        with self.assertRaises(ValueError):
+            A.montar_select("crm_conectores", {"url": "not.like.x"})
+
     def test_envio_so_de_retorno_pendente(self):
         sb, conn = acesso()
         linha = {"empresa_id": 1, "credor_id": None, "tipo": "retorno", "caminho": "alfa/retorno/x.csv",

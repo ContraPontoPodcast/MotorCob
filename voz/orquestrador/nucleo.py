@@ -101,7 +101,8 @@ class Orquestrador:
                  detector: A.DetectorMaquina | None = None, fila_envio: G.FilaEnvio | None = None,
                  ao_registrar: Callable[[EventoChamada], None] | None = None, toque_max_s: int = 40,
                  toque_min_s: int = 15, transferencia_toque_s: int = 30, failover_espera_s: int = 5,
-                 audio_alo: str = AUDIO_ALO_PADRAO):
+                 audio_alo: str = AUDIO_ALO_PADRAO,
+                 ao_fluxo: Callable[[int, str, str, dict], None] | None = None):
         self.ari, self.dados, self.agendador, self.escritor = ari, dados, agendador, escritor
         self.provedores, self.relogio = provedores, relogio
         self.detector = detector or A.AmdAsterisk()
@@ -109,6 +110,7 @@ class Orquestrador:
         self.toque_max_s, self.toque_min_s = toque_max_s, toque_min_s
         self.transferencia_toque_s, self.failover_espera_s = transferencia_toque_s, failover_espera_s
         self.audio_alo = audio_alo
+        self.ao_fluxo = ao_fluxo                # passos e chamadas de conector do fluxo (SQL 58) → RegistroBanco
         self.lotes: dict[tuple, Lote] = {}      # (empresa_id, credor_id, canal) -> lote
         self.aguardando: dict[str, tuple] = {}   # id_chamada -> (Chamada, prazo) esperando o resultado do provedor
         self.chamadas: dict[str, Chamada] = {}
@@ -345,7 +347,8 @@ class Orquestrador:
     def _conectar(self, c: Chamada, prov: ProvedorVoz, agora: datetime) -> None:
         ctx = ContextoChamada(id_chamada=c.id, empresa_id=c.empresa_id, id_cliente=c.item.id_cliente,
                               id_acao=c.item.id_acao, final_numero=c.item.telefone[-2:],
-                              variaveis=self._variaveis_fala(c))
+                              variaveis=self._variaveis_fala(c),
+                              credor_id=c.lote_chave[1] if c.lote_chave else None)
         con = prov.iniciar(ctx, self.evento_provedor)
         c.provedor, c.estado, c.destino = prov.codigo, "conversa", "ia"
         c.ponte = f"{c.id}-b"
@@ -373,6 +376,15 @@ class Orquestrador:
             return
         if tipo == "resultado":
             self._guardar_resultado(c, dados)
+        elif tipo == "fluxo":
+            c.extras["fluxo_versao_id"] = dados.get("fluxo_versao_id")
+            c.extras["bloco_final"] = dados.get("bloco_final")
+        elif tipo in ("passo", "conector", "link"):
+            if self.ao_fluxo is not None:
+                try:
+                    self.ao_fluxo(c.empresa_id, c.id, tipo, dados)
+                except Exception as ex:   # noqa: BLE001 — registro do fluxo nunca derruba a ligação
+                    self._alerta(f"fluxo: evento {tipo} não registrado ({ex.__class__.__name__})")
         elif tipo == "transferir":
             self._transferir(c, str(dados.get("motivo") or ""), self.relogio())
         elif tipo == "encerrar":
@@ -553,7 +565,8 @@ class Orquestrador:
             rota=f"{cand.tronco.nome}/{cand.rota.tech_prefix}",
             identidade_confirmada=c.extras.get("identidade_confirmada"),
             data_promessa=c.extras.get("data_promessa"), valor_promessa=c.extras.get("valor_promessa"),
-            retorno_em=c.extras.get("retorno_em"), id_acao=c.item.id_acao, tronco_id=cand.tronco.id,
+            retorno_em=c.extras.get("retorno_em"), id_acao=c.item.id_acao,
+            fluxo_versao_id=c.extras.get("fluxo_versao_id"), bloco_final=c.extras.get("bloco_final"), tronco_id=cand.tronco.id,
             tech_prefix=cand.rota.tech_prefix, rota_id=tar["rota_id"], segundos_tarifados=tar["segundos_tarifados"],
             preco_minuto=tar["preco_minuto"], custo_operadora=tar["custo_operadora"], no_pico=c.no_pico,
             provedor=c.provedor, credor_id=c.lote_chave[1] if c.lote_chave else None,

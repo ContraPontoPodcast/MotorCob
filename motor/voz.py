@@ -36,7 +36,7 @@ CANAIS_VOZ = ("discador", "agente_voz")
 # supabase/testes/testar_voz_contrato.py confere). Nunca CPF. O valor só existe no arquivo do agente_voz, na
 # memória da VM e no provedor durante a chamada; nunca no banco nem em log.
 VARIAVEIS_VOZ = ("primeiro_nome", "credor", "saldo", "dias_atraso", "vencimento", "link_pagamento",
-                 "valor_minimo", "parcelas_max", "desconto_max")
+                 "valor_minimo", "parcelas_max", "desconto_max", "assessoria")   # assessoria: nome da empresa (SQL 58)
 # as que o motor conhece e põe no ids/agente_voz.csv (colunas no fim, nesta ordem). credor vem do banco (a VM lê
 # credores.nome); link_pagamento e a alçada (valor_minimo, parcelas_max, desconto_max) vêm de fora do motor.
 VARIAVEIS_DO_MOTOR = ("primeiro_nome", "saldo", "dias_atraso", "vencimento")
