@@ -43,7 +43,7 @@ export function areaDaRota(pathname: string): AreaRota {
 		'/fila', '/clientes', '/acoes', '/envios', '/orquestracao', '/personas',
 		'/clusters', '/credores', '/canais', '/discagem', '/mapa', '/comite', '/painel',
 		'/estrategias', '/estrategia',
-		'/gravacoes', '/insights-voz',
+		'/gravacoes', '/insights-voz', '/speech-analytics',
 	];
 	if (cobrancaPrefixes.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'cobranca';
 	// 404, /cliente e qualquer outra → nenhuma (não marca área nem troca a frente).
