@@ -1,10 +1,11 @@
 // Tela 2 · Cobrança › Canais › Agente virtual › Roteiro.
 // Rascunho → Aprovado pela empresa → Em uso (sem jurídico). Lê voz_roteiros e voz_config;
 // escreve só por RPC: salvar_roteiro_voz, aprovar_roteiro_voz e configurar_voz_empresa.
+// Redesign v2: no corpo só o que se decide no roteiro (tipo de agente, quando transferir, primeira fala); as 6 regras
+// fixas no selo "Regras que não mudam"; exemplo, Alô fake e variáveis recolhidos. A ação principal é a da etapa atual.
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
-import { ShieldCheck } from 'lucide-react';
 import { PageHeading, Loading, Notice, usePermissao } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
@@ -13,7 +14,17 @@ import {
 	PERM_VOZ, SITUACAO_ROTEIRO, TIPOS_AGENTE, VARIAVEIS_VOZ, aberturaFixa, regrasDe, regrasPadrao,
 	type RegrasTransferencia, type TipoAgente,
 } from '@/lib/voz';
-import { Aviso, Botao, Cartao, Passos, Pilula, SubAbas, Trava, Vazio, campoCls, campoStyle } from './ui';
+import { Botao, Cartao, Pilula, SubAbas, Trava, Vazio, campoCls, campoStyle } from './ui';
+import { Detalhes, Gaveta, Passos as PassosDs, SeloRegras, Botao as BotaoDs } from '@/components/ds';
+
+const REGRAS_FIXAS = [
+	{ titulo: 'Só fala da dívida depois que a pessoa confirma ser o titular.', texto: 'Antes disso, o agente não diz valor, credor da dívida nem atraso.' },
+	{ titulo: 'Se atender outra pessoa, deixa só um recado neutro.', texto: '"Peço que {{primeiro_nome}} retorne para a {{assessoria}}." Sem valor, sem motivo.' },
+	{ titulo: 'Caixa postal: nenhum recado.' },
+	{ titulo: 'Oferece falar com uma pessoa a qualquer momento e aceita "não me ligue mais" na hora.', texto: 'Transfere para o discador de vocês pelo tronco SIP, com o ID do cliente e o motivo no cabeçalho.' },
+	{ titulo: 'Nunca pede CPF, número de cartão ou senha.', texto: 'O pagamento é sempre pelo link.' },
+	{ titulo: 'Nunca vão ao provedor: CPF, endereço, número do contrato, outras dívidas, e-mail.', texto: 'Não é uma opção da tela; o servidor recusa.' },
+];
 
 type Roteiro = {
 	id: number; versao: number; situacao: string; tipo_agente: TipoAgente; prompt: string; primeira_fala: string;
@@ -60,6 +71,7 @@ export function RoteiroAgente() {
 	const [ocupado, setOcupado] = useState(false);
 	const [confirma, setConfirma] = useState<null | 'aprovado_empresa' | 'em_uso'>(null);
 	const [aloMax, setAloMax] = useState('4');
+	const [verVariaveis, setVerVariaveis] = useState(false);
 
 	const credorId = credor?.id ?? null;
 
@@ -146,8 +158,21 @@ export function RoteiroAgente() {
 		setConfig((data as Row | null) as VozConfig | null);
 	}
 
+	const escopoTxt = credor ? `Carteira ${credor.nome}` : 'Empresa toda';
+	const acaoPrincipal = !draft ? null
+		: sujo && editavel ? <BotaoDs onClick={() => void salvar()} disabled={ocupado || !!erroValidacao}>{sel && sel.situacao !== 'rascunho' ? 'Salvar como nova versão' : 'Salvar rascunho'}</BotaoDs>
+		: situacao === 'rascunho' && sel && podeAprovar ? <BotaoDs onClick={() => setConfirma('aprovado_empresa')} disabled={ocupado}>Aprovar pela empresa</BotaoDs>
+		: situacao === 'aprovado_empresa' && podeAprovar ? <BotaoDs onClick={() => setConfirma('em_uso')} disabled={ocupado}>Colocar em uso</BotaoDs>
+		: null;
 	const heading = (
-		<PageHeading title="Agente virtual" description="Canais › Agente virtual · roteiro da carteira" />
+		<PageHeading title="Agente virtual" description={`Roteiro · ${escopoTxt}${sel ? ` · v${sel.versao}` : ''}`} actions={draft ? <>
+			{roteiros.length > 0 && <select aria-label="Versão" value={selId ?? ''} onChange={e => trocarVersao(Number(e.target.value))} className={campoCls} style={campoStyle}>
+				{selId == null && <option value="">nova versão</option>}
+				{roteiros.map(r => <option key={r.id} value={r.id}>v{r.versao} · {SITUACAO_ROTEIRO[r.situacao]?.toLowerCase() ?? r.situacao}</option>)}
+			</select>}
+			{sujo && <BotaoDs tipo="secundario" onClick={() => (sel ? trocarVersao(sel.id) : void reload())} disabled={ocupado}>Descartar</BotaoDs>}
+			{acaoPrincipal}
+		</> : undefined} />
 	);
 	const sub = (
 		<SubAbas atual="roteiro" itens={[
@@ -175,31 +200,19 @@ export function RoteiroAgente() {
 				</Vazio>
 			) : (
 				<div className="space-y-4">
-					<Cartao
-						titulo={sel ? `Roteiro v${sel.versao}` : 'Roteiro novo'}
-						linha={<>{escopo}. {situacao === 'em_uso' ? `Em uso desde ${dateTimeBR(sel?.em_uso_em)}.` : emUso ? `O v${emUso.versao} continua em uso até este ser aprovado e colocado em uso.` : 'Nenhuma versão em uso ainda: o agente não liga com esta carteira.'}</>}
-						direita={roteiros.length > 0 ? (
-							<select aria-label="Versão" value={selId ?? ''} onChange={e => trocarVersao(Number(e.target.value))} className={campoCls} style={campoStyle}>
-								{selId == null && <option value="">nova versão</option>}
-								{roteiros.map(r => <option key={r.id} value={r.id}>v{r.versao} · {SITUACAO_ROTEIRO[r.situacao]?.toLowerCase() ?? r.situacao}</option>)}
-							</select>
-						) : undefined}
-					>
-						{situacao === 'arquivado' ? <Aviso tom="neutro" titulo="Versão arquivada.">Fica só para consulta. Para mudar, edite a versão em uso ou o rascunho.</Aviso> : <Passos passos={PASSOS} atual={ixPasso} />}
-						<div className="mt-3 flex flex-wrap items-center gap-2">
-							{situacao === 'rascunho' && sel && !sujo && (podeAprovar
-								? <Botao onClick={() => setConfirma('aprovado_empresa')} disabled={ocupado}>Aprovar pela empresa</Botao>
-								: <span className="text-[12.5px] text-[var(--base-texto-2)]">Quem tem a permissão <b>Aprovar o roteiro</b> aprova esta versão.</span>)}
-							{situacao === 'aprovado_empresa' && !sujo && (podeAprovar
-								? <Botao onClick={() => setConfirma('em_uso')} disabled={ocupado}>Colocar em uso</Botao>
-								: <span className="text-[12.5px] text-[var(--base-texto-2)]">Aprovado. Quem tem <b>Aprovar o roteiro</b> coloca em uso.</span>)}
-							{situacao === 'em_uso' && <Pilula tom="ok">Em uso</Pilula>}
-							{sujo && editavel && <Botao onClick={() => void salvar()} disabled={ocupado || !!erroValidacao}>{sel && sel.situacao !== 'rascunho' ? 'Salvar como nova versão' : 'Salvar rascunho'}</Botao>}
-							{sujo && <Botao secundario onClick={() => (sel ? trocarVersao(sel.id) : void reload())} disabled={ocupado}>Descartar</Botao>}
-							{!podeEditar && <Pilula>somente leitura</Pilula>}
+					<Cartao>
+						<div className="flex flex-wrap items-center justify-between gap-3">
+							{situacao === 'arquivado' ? <Pilula>Versão arquivada · só consulta</Pilula> : <PassosDs rotulo="Etapas do roteiro" passos={PASSOS.map(p => p.nome)} atual={ixPasso} />}
+							<span className="flex flex-wrap items-center gap-2">
+								{!podeEditar && <Pilula>somente leitura</Pilula>}
+								<SeloRegras rotulo={`Regras que não mudam (${REGRAS_FIXAS.length})`} subtitulo="Valem acima do texto do roteiro, em toda ligação." regras={REGRAS_FIXAS} />
+							</span>
 						</div>
+						<p className="mt-2 text-[12.5px] text-[var(--base-texto-2)]">{situacao === 'em_uso' ? `Em uso desde ${dateTimeBR(sel?.em_uso_em)}.` : emUso ? `O v${emUso.versao} continua em uso até este ser aprovado e colocado em uso.` : 'Nenhuma versão em uso ainda: o agente não liga com esta carteira.'}
+							{situacao === 'rascunho' && sel && !sujo && !podeAprovar && ' Quem tem a permissão Aprovar o roteiro aprova esta versão.'}
+							{situacao === 'aprovado_empresa' && !sujo && !podeAprovar && ' Quem tem Aprovar o roteiro coloca em uso.'}
+							{sujo && sel && sel.situacao !== 'rascunho' && ' Mudar uma versão aprovada ou em uso cria uma versão nova (rascunho), que passa de novo pela aprovação.'}</p>
 						{sujo && erroValidacao && <p className="mt-2 text-[12.5px] text-[var(--estado-erro-texto)]">{erroValidacao}</p>}
-						{sujo && sel && sel.situacao !== 'rascunho' && <p className="mt-2 text-[12.5px] text-[var(--base-texto-2)]">Mudar uma versão aprovada ou em uso cria uma versão nova (rascunho), que passa de novo pela aprovação.</p>}
 					</Cartao>
 
 					<Cartao titulo="Tipo de agente" linha="Quem liga é sempre o agente de IA. A operação humana fica no discador de vocês e recebe a chamada por transferência.">
@@ -218,8 +231,7 @@ export function RoteiroAgente() {
 						</div>
 
 						<h3 className="mt-5 text-[14px] font-semibold text-[var(--base-texto)]">Quando transferir para o discador de vocês</h3>
-						<p className="mb-2 text-[12.5px] text-[var(--base-texto-2)]">Via tronco SIP, para o destino que a equipe MotorCX configura. O operador recebe a chamada com o ID do cliente e o motivo.</p>
-						<ul className="space-y-1.5">
+						<ul className="mt-2 space-y-1.5">
 							<Regra rotulo="A pessoa pede para falar com alguém" fixo travado />
 							<Regra rotulo="Assim que a pessoa confirma ser o titular (CPC)" marcado={draft.regras.cpc} travado={draft.tipo === 'localizador'} desabilitado={!editavel} onChange={v => patch({ regras: { ...draft.regras, cpc: v } })} nota={draft.tipo === 'localizador' ? 'O localizador sempre transfere ao confirmar o titular.' : undefined} />
 							{draft.tipo !== 'localizador' && (
@@ -234,104 +246,81 @@ export function RoteiroAgente() {
 							<Regra rotulo="Pediu valor ou prazo fora da alçada da carteira" marcado={draft.regras.fora_alcada} desabilitado={!editavel} onChange={v => patch({ regras: { ...draft.regras, fora_alcada: v } })} />
 							<Regra rotulo="Contesta a dívida ou fala em Procon" marcado={draft.regras.contestacao} desabilitado={!editavel} onChange={v => patch({ regras: { ...draft.regras, contestacao: v } })} />
 						</ul>
-						<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Fora dessas regras o agente encerra sozinho e grava o evento (promessa, retorno, recusa). Sem operador livre na transferência, entra o Alô fake (se a empresa ligou) e, passado o tempo, a chamada conta como abandono.</p>
+						<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Fora dessas regras o agente encerra sozinho e grava o evento (promessa, retorno, recusa). A transferência vai pelo tronco SIP com o ID do cliente e o motivo.</p>
 					</Cartao>
 
-					<div className="grid gap-4 lg:grid-cols-2">
-						<Cartao titulo="Primeira fala" linha={'O começo é fixo. Não existe aviso automático de "assistente virtual": se a empresa quiser, a frase entra no texto deste roteiro.'}>
-							<p className="rounded-xl bg-[var(--base-fill)] px-3 py-2.5 text-[13px] leading-relaxed text-[var(--base-texto)]"><Variaveis texto={aberturaFixa(draft.virtual, !!config?.aviso_gravacao)} /></p>
-							<label htmlFor="fala" className="mt-3 block text-[12px] font-semibold text-[var(--base-texto-2)]">Depois da confirmação de identidade</label>
-							<input id="fala" value={draft.fala} maxLength={500} disabled={!editavel} onChange={e => patch({ fala: e.target.value })} className={`${campoCls} mt-1 w-full`} style={campoStyle} />
-							<div className="mt-2.5 flex flex-wrap gap-1.5">
-								<Pilula tom={draft.virtual ? 'ok' : 'neutro'}>{draft.virtual ? '✓ Diz que é automática' : 'Não diz que é automática'}</Pilula>
-								<Pilula tom={config?.aviso_gravacao ? 'ok' : 'neutro'}>{config?.aviso_gravacao ? '✓ Avisa que é gravada' : 'Não avisa que é gravada'}</Pilula>
-								<Pilula tom="ok">✓ Sem valor antes da identidade</Pilula>
-							</div>
-							<label className="mt-3 flex items-start gap-2 text-[13px] text-[var(--base-texto)]">
-								<input type="checkbox" checked={draft.virtual} disabled={!editavel} onChange={e => patch({ virtual: e.target.checked })} className="mt-0.5 accent-[var(--destaque)]" />
-								<span>Escrever no roteiro "aqui é a assistente virtual" <span className="text-[var(--base-texto-3)]">(padrão: desligado)</span><small className="block text-[12px] text-[var(--base-texto-2)]">É texto do roteiro, não um aviso separado: muda a fala acima e passa pela mesma aprovação da empresa.</small></span>
-							</label>
-							<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">O aviso de ligação gravada vale para a empresa toda e muda em <Link to="/empresa/privacidade" className="underline">Empresa › Privacidade e gravações</Link> (Admin).</p>
+					<Cartao titulo="Primeira fala" linha={'O começo é fixo. Não existe aviso automático de "assistente virtual": se a empresa quiser, a frase entra no texto deste roteiro.'}>
+						<p className="rounded-xl bg-[var(--base-fill)] px-3 py-2.5 text-[13px] leading-relaxed text-[var(--base-texto)]"><Variaveis texto={aberturaFixa(draft.virtual, !!config?.aviso_gravacao)} /></p>
+						<label htmlFor="fala" className="mt-3 block text-[12px] font-semibold text-[var(--base-texto-2)]">Depois da confirmação de identidade</label>
+						<input id="fala" value={draft.fala} maxLength={500} disabled={!editavel} onChange={e => patch({ fala: e.target.value })} className={`${campoCls} mt-1 w-full`} style={campoStyle} />
+						<label className="mt-3 flex items-start gap-2 text-[13px] text-[var(--base-texto)]">
+							<input type="checkbox" checked={draft.virtual} disabled={!editavel} onChange={e => patch({ virtual: e.target.checked })} className="mt-0.5 accent-[var(--destaque)]" />
+							<span>Escrever no roteiro "aqui é a assistente virtual" <span className="text-[var(--base-texto-3)]">(padrão: desligado)</span></span>
+						</label>
+						<p className="mt-1 text-[12px] text-[var(--base-texto-3)]">{config?.aviso_gravacao ? 'A abertura avisa que a ligação é gravada' : 'A abertura não avisa que a ligação é gravada'}: isso vale para a empresa toda e muda em <Link to="/empresa/privacidade" className="underline">Empresa › Privacidade e gravações</Link>.</p>
+						<label htmlFor="prompt" className="mt-4 block text-[12px] font-semibold text-[var(--base-texto-2)]">Como o agente conduz a conversa</label>
+						<textarea id="prompt" value={draft.prompt} maxLength={20000} rows={5} disabled={!editavel} onChange={e => patch({ prompt: e.target.value })} className={`${campoCls} mt-1 h-auto w-full py-2 leading-relaxed`} style={campoStyle} />
+						<p className="mt-1 text-[11.5px] text-[var(--base-texto-3)]">Use as variáveis entre chaves duplas, como {'{{credor}}'}. As regras fixas valem acima deste texto.</p>
+					</Cartao>
 
-							<label htmlFor="prompt" className="mt-4 block text-[12px] font-semibold text-[var(--base-texto-2)]">Como o agente conduz a conversa</label>
-							<textarea id="prompt" value={draft.prompt} maxLength={20000} rows={5} disabled={!editavel} onChange={e => patch({ prompt: e.target.value })} className={`${campoCls} mt-1 h-auto w-full py-2 leading-relaxed`} style={campoStyle} />
-							<p className="mt-1 text-[11.5px] text-[var(--base-texto-3)]">Use as variáveis entre chaves duplas, como {'{{credor}}'}. As regras com cadeado valem acima deste texto.</p>
-						</Cartao>
-
-						<Cartao titulo="Exemplo de conversa" linha="Mostra como as variáveis entram; os dados são de exemplo.">
-							<div className="space-y-2">
-								<Balao quem="Agente"><Variaveis texto={aberturaFixa(draft.virtual, !!config?.aviso_gravacao)} /></Balao>
-								<Balao quem="Pessoa" cliente>Sou eu.</Balao>
-								<Balao quem="Agente">Obrigada. {draft.fala} {draft.tipo === 'localizador' ? 'Vou passar você para um atendente agora.' : <>Consta um valor de <Variaveis texto="{{saldo}}" /> em aberto.</>}</Balao>
-								{draft.tipo !== 'localizador' && <><Balao quem="Pessoa" cliente>Consigo pagar dia 5.</Balao><Balao quem="Agente">Combinado: dia 5. Quer que eu mande o link por SMS?</Balao></>}
-							</div>
-						</Cartao>
-					</div>
-
-					<div className="grid gap-4 lg:grid-cols-2">
-						<Cartao titulo="Ao atender · vale para a empresa toda" linha="Configuração da empresa, fora do roteiro.">
-							{config?.alo_fake_liberado ? (
-								<>
-									<label className="flex items-start gap-2 text-[13px] text-[var(--base-texto)]">
-										<input type="checkbox" checked={!!config.alo_fake} disabled={!podeEditar} onChange={e => void salvarConfig({ alo_fake: e.target.checked }, e.target.checked ? 'Alô fake ligado.' : 'Alô fake desligado.')} className="mt-0.5 accent-[var(--destaque)]" />
-										<span>"Alô fake" enquanto transfere <span className="text-[var(--base-texto-3)]">(padrão: desligado)</span><small className="block text-[12px] text-[var(--base-texto-2)]">Quando o agente transfere e o operador ainda não atendeu, toca um "Alô?" gravado na voz do agente para segurar a pessoa até o operador entrar.</small></span>
-									</label>
-									{config.alo_fake ? (
-										<div className="mt-3 flex flex-wrap items-end gap-2">
-											<div>
-												<label htmlFor="alo-max" className="block text-[12px] font-semibold text-[var(--base-texto-2)]">Tempo máximo de espera (segundos)</label>
-												<input id="alo-max" type="number" min={1} max={15} value={aloMax} disabled={!podeEditar} onChange={e => setAloMax(e.target.value)} className={`${campoCls} mt-1 w-24`} style={campoStyle} />
-											</div>
-											{podeEditar && Number(aloMax) !== config.alo_fake_max_s && <Botao secundario disabled={!(Number(aloMax) >= 1 && Number(aloMax) <= 15)} onClick={() => void salvarConfig({ alo_fake_max_s: Number(aloMax) }, 'Tempo do Alô fake salvo.')}>Salvar tempo</Botao>}
-											<p className="w-full text-[12px] text-[var(--base-texto-2)]">Se ninguém ficar livre em {config.alo_fake_max_s} s, a chamada cai e conta como abandono. O "Alô?" toca uma vez só.</p>
-										</div>
-									) : <p className="mt-2 text-[12px] text-[var(--base-texto-2)]">Desligado: sem operador livre na transferência, a chamada cai na hora e conta como abandono.</p>}
-								</>
-							) : (
-								<Trava titulo="Alô fake não liberado para a sua empresa." texto="É um recurso que a equipe MotorCX libera. Peça pelo Suporte." />
-							)}
-							<p className="mt-3 text-[12px] text-[var(--base-texto-3)]">O limite de abandono que freia o lote fica em <Link to="/mensageria/voz/lotes" className="underline">Ligações em curso</Link>.</p>
-						</Cartao>
-
-						<Cartao titulo="Regras que não mudam">
-							<div className="space-y-2">
-								<Trava titulo="Só fala da dívida depois que a pessoa confirma ser o titular." texto="Antes disso, o agente não diz valor, credor da dívida nem atraso." />
-								<Trava titulo="Se atender outra pessoa, deixa só um recado neutro." texto={'"Peço que {{primeiro_nome}} retorne para a {{assessoria}}." Sem valor, sem motivo.'} />
-								<Trava titulo="Caixa postal: nenhum recado." />
-								<Trava titulo={'Oferece falar com uma pessoa a qualquer momento e aceita "não me ligue mais" na hora.'} texto="Transfere para o discador de vocês pelo tronco SIP, com o ID do cliente e o motivo no cabeçalho." />
-								<Trava titulo="Nunca pede CPF, número de cartão ou senha." texto="O pagamento é sempre pelo link." />
-							</div>
-						</Cartao>
-					</div>
-
-					<Cartao semPadding titulo="O que vai para o provedor" linha="O mínimo, e vale para a empresa toda. Telefone e primeiro nome só ficam no servidor e no provedor durante a ligação; nunca no banco do MotorCX.">
-						<div className="overflow-x-auto">
-							<table className="w-full border-collapse text-[13px]">
-								<thead><tr className="border-b text-left text-[11.5px] font-semibold uppercase tracking-wide text-[var(--base-texto-3)]" style={{ borderColor: 'var(--base-borda)' }}><th className="px-4 py-2 sm:px-5">Variável</th><th className="px-4 py-2">Para que serve</th><th className="px-4 py-2">Envio</th></tr></thead>
-								<tbody>
-									{VARIAVEIS_VOZ.map(v => (
-										<tr key={v.id} className="border-b" style={{ borderColor: 'var(--base-borda)' }}>
-											<td className="px-4 py-2 font-mono text-[12px] text-[var(--base-texto)] sm:px-5">{v.id}</td>
-											<td className="px-4 py-2 text-[var(--base-texto-2)]">{v.desc}</td>
-											<td className="px-4 py-2">{v.sempre ? <Pilula>Sempre</Pilula> : (
-												<label className="flex items-center gap-1.5 whitespace-nowrap text-[var(--base-texto)]">
-													<input type="checkbox" checked={variaveis.has(v.id)} disabled={!podeEditar}
-														onChange={e => {
-															const s = new Set(variaveis); if (e.target.checked) s.add(v.id); else s.delete(v.id);
-															s.add('primeiro_nome'); s.add('credor');
-															void salvarConfig({ variaveis: [...s] }, 'Variáveis salvas.');
-														}} className="accent-[var(--destaque)]" /> Enviar
-												</label>
-											)}</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
+					<Detalhes solto resumo="Exemplo de conversa">
+						<div className="space-y-2">
+							<Balao quem="Agente"><Variaveis texto={aberturaFixa(draft.virtual, !!config?.aviso_gravacao)} /></Balao>
+							<Balao quem="Pessoa" cliente>Sou eu.</Balao>
+							<Balao quem="Agente">Obrigada. {draft.fala} {draft.tipo === 'localizador' ? 'Vou passar você para um atendente agora.' : <>Consta um valor de <Variaveis texto="{{saldo}}" /> em aberto.</>}</Balao>
+							{draft.tipo !== 'localizador' && <><Balao quem="Pessoa" cliente>Consigo pagar dia 5.</Balao><Balao quem="Agente">Combinado: dia 5. Quer que eu mande o link por SMS?</Balao></>}
 						</div>
-						<div className="p-4 sm:px-5"><Trava icone={<ShieldCheck size={15} />} titulo="Nunca vão: CPF, endereço, número do contrato, outras dívidas, e-mail." texto="Não é uma opção da tela; o servidor recusa." /></div>
-					</Cartao>
+					</Detalhes>
+
+					<Detalhes solto resumo="Ao atender e o que vai ao provedor" qtd="vale para a empresa toda">
+						{config?.alo_fake_liberado ? (
+							<>
+								<label className="flex items-start gap-2 text-[13px] text-[var(--base-texto)]">
+									<input type="checkbox" checked={!!config.alo_fake} disabled={!podeEditar} onChange={e => void salvarConfig({ alo_fake: e.target.checked }, e.target.checked ? 'Alô fake ligado.' : 'Alô fake desligado.')} className="mt-0.5 accent-[var(--destaque)]" />
+									<span>"Alô fake" enquanto transfere <span className="text-[var(--base-texto-3)]">(padrão: desligado)</span><small className="block text-[12px] text-[var(--base-texto-2)]">Quando o operador ainda não atendeu, toca um "Alô?" gravado na voz do agente para segurar a pessoa.</small></span>
+								</label>
+								{config.alo_fake ? (
+									<div className="mt-3 flex flex-wrap items-end gap-2">
+										<div>
+											<label htmlFor="alo-max" className="block text-[12px] font-semibold text-[var(--base-texto-2)]">Tempo máximo de espera (segundos)</label>
+											<input id="alo-max" type="number" min={1} max={15} value={aloMax} disabled={!podeEditar} onChange={e => setAloMax(e.target.value)} className={`${campoCls} mt-1 w-24`} style={campoStyle} />
+										</div>
+										{podeEditar && Number(aloMax) !== config.alo_fake_max_s && <Botao secundario disabled={!(Number(aloMax) >= 1 && Number(aloMax) <= 15)} onClick={() => void salvarConfig({ alo_fake_max_s: Number(aloMax) }, 'Tempo do Alô fake salvo.')}>Salvar tempo</Botao>}
+										<p className="w-full text-[12px] text-[var(--base-texto-2)]">Se ninguém ficar livre em {config.alo_fake_max_s} s, a chamada cai e conta como abandono.</p>
+									</div>
+								) : <p className="mt-2 text-[12px] text-[var(--base-texto-2)]">Desligado: sem operador livre na transferência, a chamada cai na hora e conta como abandono.</p>}
+							</>
+						) : (
+							<Trava titulo="Alô fake não liberado para a sua empresa." texto="É um recurso que a equipe MotorCX libera. Peça pelo Suporte." />
+						)}
+						<div className="mt-3 flex flex-wrap items-center gap-3 text-[12.5px] text-[var(--base-texto-2)]">
+							<BotaoDs tipo="secundario" pequeno onClick={() => setVerVariaveis(true)}>Ver as variáveis</BotaoDs>
+							<span>O limite de abandono que freia o lote fica em <Link to="/mensageria/voz/lotes" className="underline">Ligações em curso</Link>.</span>
+						</div>
+					</Detalhes>
 				</div>
 			)}
+
+			<Gaveta aberta={verVariaveis} onFechar={() => setVerVariaveis(false)} titulo="O que vai para o provedor" subtitulo="O mínimo, e vale para a empresa toda. Telefone e primeiro nome só ficam no servidor e no provedor durante a ligação; nunca no banco do MotorCX.">
+				<ul className="divide-y [&>*]:border-[var(--base-borda)]">
+					{VARIAVEIS_VOZ.map(v => (
+						<li key={v.id} className="flex items-start justify-between gap-3 py-2.5 text-[13px]">
+							<span className="min-w-0"><span className="font-mono text-[12px] text-[var(--base-texto)]">{v.id}</span><small className="block text-[12px] text-[var(--base-texto-2)]">{v.desc}</small></span>
+							{v.sempre ? <Pilula>Sempre</Pilula> : (
+								<label className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[var(--base-texto)]">
+									<input type="checkbox" checked={variaveis.has(v.id)} disabled={!podeEditar}
+										onChange={e => {
+											const s = new Set(variaveis); if (e.target.checked) s.add(v.id); else s.delete(v.id);
+											s.add('primeiro_nome'); s.add('credor');
+											void salvarConfig({ variaveis: [...s] }, 'Variáveis salvas.');
+										}} className="accent-[var(--destaque)]" /> Enviar
+								</label>
+							)}
+						</li>
+					))}
+				</ul>
+				<Trava titulo="Nunca vão: CPF, endereço, número do contrato, outras dívidas, e-mail." texto="Não é uma opção da tela; o servidor recusa." />
+			</Gaveta>
 
 			<ConfirmaAcao
 				aberto={confirma != null}

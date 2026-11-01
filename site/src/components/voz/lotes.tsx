@@ -2,6 +2,8 @@
 // Lê voz_lotes, voz_ondas, resumo_lote_voz(), voz_divisao_concorrencia, voz_config e o preço do
 // minuto de IA (precos_empresa, só quem vê faturamento). Atualiza a cada 15 s, sem realtime.
 // Escreve só por RPC: pausar_lote_voz, retomar_lote_voz, cancelar_lote_voz e configurar_voz_empresa.
+// Redesign v2: lista com 4 KPIs do dia e 5 colunas ("Simulado" vira valor da situação); lote ao vivo com Pausar como
+// ação principal, 4 KPIs de uma linha, um aviso só, resultado em barras (os 4 principais) e custos/limite recolhidos.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -13,7 +15,8 @@ import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import {
 	ATUALIZA_MS, PERM_VOZ, SIT_LOTE_VOZ, SIT_ONDA, dataCurta, diaISO, funilDoResumo, horaCurta, inteiro, pct, reais,
 } from '@/lib/voz';
-import { Aviso, Botao, Cartao, CartaoLinha, Kpi, Pilula, Tabela, Trilho, Vazio, campoCls, campoStyle } from './ui';
+import { Aviso, Botao, Cartao, Pilula, Trilho, Vazio, campoCls, campoStyle } from './ui';
+import { Detalhes, Kpis, ListaValores, Tabela as TabelaDs } from '@/components/ds';
 
 type Lote = {
 	id: number; credor_id: number | null; data: string; modo: string; situacao: string; total: number; encerradas: number;
@@ -37,6 +40,13 @@ function Cabecalho({ titulo, linha, direita }: { titulo: string; linha?: string;
 /** Moldura das telas do agente virtual na Mensageria (fora do layout por canal de mensagem). */
 function Moldura({ children }: { children: React.ReactNode }) {
 	return <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-[clamp(16px,3vw,40px)]">{children}</div>;
+}
+
+/** Situação do lote, com o modo dentro dela (Simulado / Só números de teste). */
+function situacaoLote(l: Lote) {
+	const s = SIT_LOTE_VOZ[l.situacao];
+	const modo = l.modo === 'simulado' ? 'Simulado · ' : l.modo === 'teste' ? 'Teste · ' : '';
+	return <Pilula tom={l.modo === 'simulado' ? 'neutro' : s?.tom}>{modo}{s?.label ?? l.situacao}</Pilula>;
 }
 
 // ============================================================================ lista
@@ -63,6 +73,10 @@ export function LotesVoz() {
 	}, [empresa?.id]);
 
 	const nomeCarteira = (id: number | null) => (id == null ? 'Todas as carteiras' : credores.find(c => String(c.id) === String(id))?.nome ?? `Carteira ${id}`);
+	// Resumo do dia mais recente da lista (só o que voz_lotes já traz).
+	const hoje = lotes.filter(l => l.data === diaISO());
+	const doDia = hoje.length ? hoje : lotes.filter(l => l.data === lotes[0]?.data);
+	const dia = doDia.reduce((t, l) => ({ total: t.total + Number(l.total || 0), encerradas: t.encerradas + Number(l.encerradas || 0), abandonos: t.abandonos + Number(l.abandonos || 0), custo: t.custo + Number(l.custo_operadora || 0), vivos: t.vivos + (['agendado', 'ligando', 'aguardando_aprovacao'].includes(l.situacao) ? 1 : 0) }), { total: 0, encerradas: 0, abandonos: 0, custo: 0, vivos: 0 });
 
 	return (
 		<Moldura>
@@ -75,25 +89,25 @@ export function LotesVoz() {
 						O lote do dia aparece aqui quando a Lista do dia manda clientes para o agente virtual. Antes, o roteiro precisa estar em uso.
 					</Vazio>
 				) : (
-					<Cartao semPadding>
-						<Tabela
-							cabecalho={['Data', 'Carteira', 'Modo', 'Situação', 'Encerradas', 'Abandono']}
-							numericas={[4, 5]}
-							onLinha={i => navigate(`/mensageria/voz/lotes/${lotes[i].id}`)}
-							linhas={lotes.map(l => [
-								dataCurta(l.data), nomeCarteira(l.credor_id), l.modo === 'real' ? 'Real' : l.modo === 'teste' ? 'Só números de teste' : 'Simulado',
-								<Pilula key="s" tom={SIT_LOTE_VOZ[l.situacao]?.tom}>{SIT_LOTE_VOZ[l.situacao]?.label ?? l.situacao}</Pilula>,
-								`${inteiro(l.encerradas)} de ${inteiro(l.total)}`,
-								l.encerradas ? pct((100 * l.abandonos) / Math.max(1, l.encerradas)) : '—',
-							])}
-							cartoes={lotes.map(l => (
-								<CartaoLinha key={l.id} onClick={() => navigate(`/mensageria/voz/lotes/${l.id}`)}>
-									<div className="flex items-center justify-between gap-2"><b>{dataCurta(l.data)} · {nomeCarteira(l.credor_id)}</b><Pilula tom={SIT_LOTE_VOZ[l.situacao]?.tom}>{SIT_LOTE_VOZ[l.situacao]?.label ?? l.situacao}</Pilula></div>
-									<small className="mt-1 block text-[var(--base-texto-2)]">{inteiro(l.encerradas)} de {inteiro(l.total)} encerradas</small>
-								</CartaoLinha>
-							))}
-						/>
-					</Cartao>
+					<div className="space-y-4">
+						<Kpis itens={[
+							{ rotulo: `Ligações ${hoje.length ? 'hoje' : 'no último dia'}`, valor: inteiro(dia.total), detalhe: `${inteiro(dia.encerradas)} encerradas` },
+							{ rotulo: 'Em andamento', valor: inteiro(dia.vivos), detalhe: dia.vivos === 1 ? 'lote ligando ou agendado' : 'lotes ligando ou agendados' },
+							{ rotulo: 'Abandono', valor: dia.encerradas ? pct((100 * dia.abandonos) / Math.max(1, dia.encerradas)) : '—', detalhe: 'atendeu e caiu sem operador livre' },
+							{ rotulo: 'Telefonia estimada', valor: reais(dia.custo), detalhe: 'paga à operadora, fora da fatura' },
+						]} />
+						<Cartao semPadding>
+							<TabelaDs rotulo="Lotes do agente virtual" linhas={lotes} chave={l => l.id} onAbrir={l => navigate(`/mensageria/voz/lotes/${l.id}`)}
+								colunas={[
+									{ id: 'data', titulo: 'Data', celula: l => dataCurta(l.data) },
+									{ id: 'cart', titulo: 'Carteira', celula: l => nomeCarteira(l.credor_id) },
+									{ id: 'sit', titulo: 'Situação', celula: situacaoLote },
+									{ id: 'enc', titulo: 'Encerradas', num: true, celula: l => `${inteiro(l.encerradas)} de ${inteiro(l.total)}` },
+									{ id: 'ab', titulo: 'Abandono', num: true, celula: l => (l.encerradas ? pct((100 * l.abandonos) / Math.max(1, l.encerradas)) : '—') },
+								]}
+								celular={l => ({ titulo: <>{dataCurta(l.data)} · {nomeCarteira(l.credor_id)}</>, valor: situacaoLote(l), resumo: <>{inteiro(l.encerradas)} de {inteiro(l.total)} · abandono {l.encerradas ? pct((100 * l.abandonos) / Math.max(1, l.encerradas)) : '—'}</> })} />
+						</Cartao>
+					</div>
 				)}
 		</Moldura>
 	);
@@ -209,8 +223,8 @@ export function LoteVozCurso() {
 		: vivo ? <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[var(--base-texto-2)]"><span className="h-2 w-2 animate-pulse rounded-full" style={{ backgroundColor: 'var(--estado-pronto)' }} />Ao vivo · atualiza a cada 15 s{atualizadoEm ? ` · ${atualizadoEm.toLocaleTimeString('pt-BR')}` : ''}</span>
 		: <Pilula tom={sit?.tom}>{sit?.label ?? lote.situacao}</Pilula>;
 	const botoes = !podeMudar || cancelado || lote.situacao === 'concluido' ? null
-		: pausado ? <><Botao onClick={() => void mudar('retomar')} disabled={ocupado}><Play size={14} /> Retomar</Botao><Botao secundario onClick={() => setConfirma('cancelar')} disabled={ocupado}>Cancelar o resto</Botao></>
-		: <><Botao onClick={() => setConfirma('pausar')} disabled={ocupado}><Pause size={14} /> Pausar</Botao><Botao secundario onClick={() => setConfirma('cancelar')} disabled={ocupado}>Cancelar o resto</Botao></>;
+		: pausado ? <><Botao secundario onClick={() => setConfirma('cancelar')} disabled={ocupado}>Cancelar o resto</Botao><Botao onClick={() => void mudar('retomar')} disabled={ocupado}><Play size={14} /> Retomar</Botao></>
+		: <><Botao secundario onClick={() => setConfirma('cancelar')} disabled={ocupado}>Cancelar o resto</Botao><Botao onClick={() => setConfirma('pausar')} disabled={ocupado}><Pause size={14} /> Pausar</Botao></>;
 
 	const funil: [string, number, string?, boolean?][] = [
 		['Discadas', encerradasTot],
@@ -223,75 +237,79 @@ export function LoteVozCurso() {
 		['Abandono', abandonos, atendidas ? `${pct(taxaAb)} das atendidas` : undefined, taxaAb > limAb],
 	];
 
+	const principais = funil.slice(0, 4);
+	const outros = funil.slice(4);
+	const maxF = Math.max(1, ...principais.map(x => x[1]));
+	const aviso = freado
+		? <Aviso tom="erro" titulo={`Lote freado: abandono em ${pct(taxaAb)}, acima de ${pct(limAb)}.`}>As novas ligações começam a {Number(cfg?.freio_ritmo_pct ?? 60)}% do ritmo até a taxa voltar para baixo do limite.</Aviso>
+		: lote.modo !== 'real' ? <Aviso tom="info" titulo={lote.modo === 'teste' ? 'Só números de teste:' : 'Simulado:'}>{lote.modo === 'teste' ? 'liga de verdade só para os números de teste da equipe.' : 'ninguém recebe ligação e nada entra na fatura.'}</Aviso> : null;
+
 	return (
 		<Moldura>
 			{voltar}
 			<div className="space-y-4">
-				{lote.modo !== 'real' && <Aviso tom="info" titulo={lote.modo === 'teste' ? 'Só números de teste:' : 'Simulado:'}>{lote.modo === 'teste' ? 'liga de verdade só para os números de teste da equipe.' : 'ninguém recebe ligação e nada entra na fatura.'}</Aviso>}
-				{freado && <Aviso tom="erro" titulo={`Lote freado: abandono em ${pct(taxaAb)}, acima do limite de ${pct(limAb)}.`}>As novas ligações começam a {Number(cfg?.freio_ritmo_pct ?? 60)}% do ritmo até a taxa voltar para baixo do limite. Mudar o limite ou pausar é decisão sua.</Aviso>}
-
 				<Cabecalho titulo={`Lote de ${dataCurta(lote.data)} · ${carteira}`} linha={`Agente virtual · ${inteiro(lote.total)} ligações em ${ondas.length} ${ondas.length === 1 ? 'onda' : 'ondas'}`} direita={<>{estado}{botoes}</>} />
+				{aviso}
 
-				<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-					<Kpi rotulo="Ligações ao mesmo tempo" valor={<>{inteiro(emUso)} <small className="text-[14px] font-medium text-[var(--base-texto-2)]">/ {limiteEmp != null ? inteiro(limiteEmp) : '—'}</small></>}
-						detalhe={limiteEmp == null ? 'Limite da empresa ainda não definido (troncos ou contrato).' : `em uso / limite da empresa${freado ? ` · freado a ${Number(cfg?.freio_ritmo_pct ?? 60)}%` : pico > 1 ? ` · pico ligado, até ${inteiro(teto)} (minuto de IA ao dobro)` : ' · pico desligado'}`}>
-						<Trilho valor={pico > 1 && teto ? (100 * emUso) / teto : limiteEmp ? (100 * emUso) / limiteEmp : 0} marca={pico > 1 && teto && limiteEmp ? Math.min(100, (100 * limiteEmp) / teto) : undefined} />
-					</Kpi>
-					<Kpi rotulo="Encerradas" valor={inteiro(encerradasTot)} detalhe={`${pct(lote.total ? (100 * encerradasTot) / lote.total : 0)} do lote, com as retentativas`}>
-						<Trilho valor={lote.total ? (100 * encerradasTot) / lote.total : 0} />
-					</Kpi>
-					<Kpi rotulo="Custo do agente até agora" valor={precoIa != null ? reais(minutosIa * precoIa) : `${inteiro(minutosIa)} min`}
-						detalhe={<>
-							<span>Minuto de IA · fatura do MotorCX{precoIa != null ? ` · ${inteiro(minutosIa)} min a ${reais(precoIa, 2)}` : ''}</span>
-							<span className="mt-1.5 block border-t pt-1.5" style={{ borderColor: 'var(--base-borda)' }}>Telefonia estimada: <b className="text-[var(--base-texto)]">{reais(custoTel)}</b>, paga à operadora, fora da fatura{semCusto ? <span className="text-[var(--estado-atencao-texto)]"> · {inteiro(semCusto)} sem rota cadastrada, sem custo</span> : ''}</span>
-						</>} />
-					<Kpi rotulo="Abandono do lote" valor={pct(taxaAb)} alerta={taxaAb > limAb}
-						detalhe={<>
-							<span>atendeu e caiu sem operador livre{cfg?.alo_fake ? ` (Alô fake ligado, espera até ${cfg.alo_fake_max_s} s)` : ' (Alô fake desligado)'}</span>
-							<span className="mt-1.5 flex flex-wrap items-center gap-1.5">freia acima de
-								{podeLimite ? <>
-									<input aria-label="Limite de abandono em %" value={limite} onChange={e => setLimite(e.target.value)} className={`${campoCls} h-7 w-14 px-2`} style={campoStyle} /> %
-									{limite.replace(',', '.') !== String(limAb) && <button type="button" onClick={() => void salvarLimite()} className="text-[12px] font-semibold underline">salvar</button>}
-								</> : <b className="text-[var(--base-texto)]">{pct(limAb)}</b>}
-							</span>
-						</>} />
-				</div>
+				<Kpis itens={[
+					{ rotulo: 'Ao mesmo tempo', valor: <>{inteiro(emUso)} <small className="text-[14px] font-medium text-[var(--base-texto-2)]">/ {limiteEmp != null ? inteiro(limiteEmp) : '—'}</small></>, extra: <Trilho valor={pico > 1 && teto ? (100 * emUso) / teto : limiteEmp ? (100 * emUso) / limiteEmp : 0} marca={pico > 1 && teto && limiteEmp ? Math.min(100, (100 * limiteEmp) / teto) : undefined} />, detalhe: pico > 1 ? `pico até ${inteiro(teto)}` : 'pico desligado' },
+					{ rotulo: 'Encerradas', valor: inteiro(encerradasTot), extra: <Trilho valor={lote.total ? (100 * encerradasTot) / lote.total : 0} />, detalhe: `${pct(lote.total ? (100 * encerradasTot) / lote.total : 0)} do lote` },
+					{ rotulo: 'Custo do agente', valor: precoIa != null ? reais(minutosIa * precoIa) : `${inteiro(minutosIa)} min`, detalhe: 'minuto de IA · fatura do MotorCX' },
+					{ rotulo: 'Abandono', valor: pct(taxaAb), tom: taxaAb > limAb ? 'alerta' : undefined, detalhe: `freia acima de ${pct(limAb)}` },
+				]} />
 
-				<Cartao semPadding titulo="Ondas por janela UF/DDD" linha="Cada onda começa quando a janela local abre e para quando ela fecha. A retentativa é uma onda nova.">
-					{ondas.length === 0 ? <div className="px-4 pb-4 sm:px-5"><Vazio titulo="Nenhuma onda ainda.">As ondas aparecem quando a primeira janela UF/DDD abre.</Vazio></div> : (
-						<div className="divide-y" style={{ borderColor: 'var(--base-borda)' }}>
-							{ondas.map(o => {
-								const p = o.total ? (100 * o.encerradas) / o.total : 0;
-								const s = cancelado && o.situacao !== 'encerrada' ? SIT_ONDA.cancelada
-									: pausado && o.situacao === 'ligando' ? { label: 'Pausada', tom: 'atencao' as const }
-									: SIT_ONDA[o.situacao] ?? { label: o.situacao, tom: 'neutro' as const };
-								const quando = o.situacao === 'aguardando' && o.abre_em ? `Começa ${horaCurta(o.abre_em)}` : s.label;
-								return (
-									<div key={o.id} className="grid grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] sm:items-center sm:px-5" style={{ borderColor: 'var(--base-borda)' }}>
-										<div className="min-w-0"><b className="block truncate text-[13.5px] text-[var(--base-texto)]">{o.janela}</b><small className="text-[12px] text-[var(--base-texto-3)]">{o.abre_em ? `${horaCurta(o.abre_em)}–${horaCurta(o.fecha_em)}` : 'janela local'}</small></div>
-										<div className="text-[12.5px] text-[var(--base-texto-2)]">{o.tentativa}ª tentativa · <b className="tnum text-[var(--base-texto)]">{inteiro(o.encerradas)} de {inteiro(o.total)}</b></div>
-										<Trilho valor={p} />
-										<div><Pilula tom={s.tom}>{quando}</Pilula></div>
-									</div>
-								);
-							})}
-						</div>
-					)}
-				</Cartao>
-
-				<Cartao titulo="Resultado até agora">
-					{f.total === 0 ? <Vazio titulo="Nenhuma ligação encerrada ainda.">O resultado aparece conforme as ligações terminam.</Vazio> : (
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
-							{funil.map(([n, v, sub, alerta]) => (
-								<div key={n} className="rounded-xl px-3 py-2" style={{ backgroundColor: alerta ? 'var(--estado-erro-fundo)' : 'var(--base-fill)' }}>
-									<span className="block text-[12px] text-[var(--base-texto-2)]">{n}</span>
-									<b className="block text-[18px] tnum text-[var(--base-texto)]">{inteiro(v)}</b>
-									{sub && <small className="text-[11.5px] text-[var(--base-texto-2)]">{sub}</small>}
+				<div className="grid gap-4 lg:grid-cols-2">
+					<Cartao titulo="Resultado até agora">
+						{f.total === 0 ? <Vazio titulo="Nenhuma ligação encerrada ainda.">O resultado aparece conforme as ligações terminam.</Vazio> : <>
+							{principais.map(([n, v]) => (
+								<div key={n} className="grid grid-cols-[minmax(0,150px)_minmax(0,1fr)_auto] items-center gap-3 py-1.5 text-[13px]">
+									<span className="truncate text-[var(--base-texto)]">{n}</span>
+									<span className="h-2 overflow-hidden rounded-full bg-[var(--base-fill)]"><span className="block h-full rounded-full" style={{ width: `${(100 * v) / maxF}%`, backgroundColor: 'var(--destaque)' }} /></span>
+									<b className="tnum">{inteiro(v)}</b>
 								</div>
 							))}
-						</div>
-					)}
-				</Cartao>
+							<div className="mt-3"><Detalhes resumo="Mais resultados" qtd={outros.length}>
+								<ListaValores itens={outros.map(([n, v, sub, alerta]) => [n, <span key={n} style={{ color: alerta ? 'var(--estado-erro-texto)' : undefined }}>{inteiro(v)}{sub ? ` · ${sub}` : ''}</span>])} />
+							</Detalhes></div>
+						</>}
+					</Cartao>
+					<Cartao semPadding titulo="Ondas por janela UF/DDD" linha="Cada onda abre e fecha com a janela local. A retentativa é uma onda nova.">
+						{ondas.length === 0 ? <div className="px-4 pb-4 sm:px-5"><Vazio titulo="Nenhuma onda ainda.">As ondas aparecem quando a primeira janela UF/DDD abre.</Vazio></div> : (
+							<div className="divide-y [&>*]:border-[var(--base-borda)]">
+								{ondas.map(o => {
+									const p = o.total ? (100 * o.encerradas) / o.total : 0;
+									const s = cancelado && o.situacao !== 'encerrada' ? SIT_ONDA.cancelada
+										: pausado && o.situacao === 'ligando' ? { label: 'Pausada', tom: 'atencao' as const }
+										: SIT_ONDA[o.situacao] ?? { label: o.situacao, tom: 'neutro' as const };
+									const quando = o.situacao === 'aguardando' && o.abre_em ? `Começa ${horaCurta(o.abre_em)}` : s.label;
+									return (
+										<div key={o.id} className="px-4 py-2.5 sm:px-5">
+											<div className="flex items-center justify-between gap-2 text-[13px]"><b className="min-w-0 truncate text-[var(--base-texto)]">{o.janela} <small className="font-normal text-[var(--base-texto-3)]">· {o.tentativa}ª · {o.abre_em ? `${horaCurta(o.abre_em)}–${horaCurta(o.fecha_em)}` : 'janela local'}</small></b><Pilula tom={s.tom}>{quando}</Pilula></div>
+											<div className="mt-1 flex items-center gap-3"><div className="flex-1"><Trilho valor={p} /></div><small className="tnum text-[12px] text-[var(--base-texto-2)]">{inteiro(o.encerradas)} de {inteiro(o.total)}</small></div>
+										</div>
+									);
+								})}
+							</div>
+						)}
+					</Cartao>
+				</div>
+
+				<Detalhes solto resumo="Custos e limites">
+					<ListaValores itens={[
+						['Minuto de IA (fatura do MotorCX)', precoIa != null ? `${inteiro(minutosIa)} min a ${reais(precoIa, 2)} = ${reais(minutosIa * precoIa)}` : `${inteiro(minutosIa)} min`],
+						['Telefonia estimada (paga à operadora)', reais(custoTel)],
+						['Tentativas sem rota cadastrada', semCusto ? <span key="s" className="text-[var(--estado-atencao-texto)]">{inteiro(semCusto)} sem custo</span> : 'nenhuma'],
+						['Alô fake', cfg?.alo_fake ? `ligado, espera até ${cfg.alo_fake_max_s} s` : 'desligado'],
+					]} />
+					<div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-[var(--base-texto)]">
+						<span>Freia o lote quando o abandono passa de</span>
+						{podeLimite ? <>
+							<input aria-label="Limite de abandono em %" value={limite} onChange={e => setLimite(e.target.value)} className={`${campoCls} h-8 w-16 px-2`} style={campoStyle} /> %
+							{limite.replace(',', '.') !== String(limAb) && <Botao secundario onClick={() => void salvarLimite()}>Salvar limite</Botao>}
+						</> : <b>{pct(limAb)}</b>}
+					</div>
+					<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Freado, o lote começa as novas ligações a {Number(cfg?.freio_ritmo_pct ?? 60)}% do ritmo até a taxa voltar para baixo do limite. Mudar o limite ou pausar é decisão sua.</p>
+				</Detalhes>
 			</div>
 
 			<ConfirmaAcao
@@ -306,7 +324,7 @@ export function LoteVozCurso() {
 			<ConfirmaAcao
 				aberto={confirma === 'cancelar'}
 				titulo="Cancelar o resto do lote?"
-				texto="As ligações que faltam não acontecem hoje. Quem não foi contatado segue a régua (reserva do discador). Não dá para desfazer."
+				texto="As ligações que faltam não acontecem hoje e vão para a reserva do discador (quem não foi contatado segue a régua). Não dá para desfazer."
 				botao="Cancelar o resto"
 				corBotao="var(--estado-erro)"
 				onConfirm={() => void mudar('cancelar')}
