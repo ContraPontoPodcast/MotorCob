@@ -2129,7 +2129,7 @@ checar("SQL 56: Operação não ouve nem lê", True, "select public.pode('ouvir_
 checar("SQL 56: Operação não guarda gravação", False, f"select public.guardar_gravacao({G1}, 'disputa judicial')", "authenticated", u["oper"])
 checar("SQL 56: Admin guarda a gravação para disputa", True, f"select public.guardar_gravacao({G1}, 'disputa judicial'); select guarda from public.voz_gravacoes where id={G1}", "authenticated", u["admina"], "t")
 checar("SQL 56: com guarda, a eliminação do titular fica bloqueada", False, "select public.abrir_pedido_titular('C1', 'eliminar')", "authenticated", u["admina"])
-checar("SQL 56: exportação do titular abre com prazo de 15 dias", True, "select public.abrir_pedido_titular('C1', 'exportar'); select (prazo - aberto_em::date) from public.titular_pedidos order by id desc limit 1", "authenticated", u["admina"], 15)
+checar("SQL 56: exportação do titular abre com prazo de 15 dias", True, "select public.abrir_pedido_titular('C1', 'exportar'); select (prazo - (aberto_em at time zone 'America/Sao_Paulo')::date) from public.titular_pedidos order by id desc limit 1", "authenticated", u["admina"], 15)
 checar("SQL 56: Operação não abre pedido do titular", False, "select public.abrir_pedido_titular('C1', 'exportar')", "authenticated", u["oper"])
 checar("SQL 56: Admin tira a guarda", True, f"select public.soltar_gravacao({G1}); select guarda from public.voz_gravacoes where id={G1}", "authenticated", u["admina"], "f")
 checar("SQL 56: retenção abaixo de 90 dias é recusada", False, f"select public.configurar_voz_empresa({EA}, '{{\"retencao_dias\": 60}}')", "authenticated", u["admina"])

@@ -6,9 +6,9 @@
                   (motorcx-voz-db-senha) e fica só em memória. Arquivos (Lista do dia, retorno) vão pela Edge Function
                   voz-arquivos com um bilhete de uso único que o banco emite para UM caminho validado.
 
-AcessoProprio tem a MESMA interface que a voz usa da classe Supabase (selecionar, inserir, baixar, enviar,
-apagar_arquivos): configuracao.py, registro.py, publicacao.py e o orquestrador não mudam. Tabela fora da voz é
-recusada aqui e, de novo, no banco.
+AcessoProprio tem a MESMA interface que a voz usa da classe Supabase (selecionar, inserir, rpc, baixar, enviar,
+apagar_arquivos): configuracao.py, registro.py, publicacao.py, fluxo.py, gerar_fluxo.py e o orquestrador não mudam.
+Tabela ou RPC fora da voz é recusada aqui e, de novo, no banco.
 
 Variáveis (gravadas em /run/motorcx/voz.env por infra/asterisk/vm/motorcx-voz-segredos a partir dos metadados;
 nenhuma é segredo):
@@ -45,11 +45,22 @@ LEITURA = {
     "voz_config": "config", "voz_troncos": "troncos", "voz_rotas": "rotas", "voz_transferencias": "transferencias",
     "voz_contrato": "contrato", "voz_roteiros": "roteiros_em_uso", "voz_divisao_concorrencia": "divisao_concorrencia",
     "empresas": "empresas", "credores": "carteiras", "voz_chamadas": "chamadas_tarifacao",
+    # SQL 58 · executor do fluxo: conectores ativos (segredo_ref é o nome no Secret Manager), hosts e base revisada
+    "crm_conectores": "crm_conectores", "crm_hosts_permitidos": "crm_hosts_permitidos",
+    "voz_base_respostas": "base_respostas",
 }
 # tabela -> função de escrita do schema voz_vm (o upsert é dela)
 ESCRITA = {
     "voz_chamadas": "gravar_chamadas", "consumo_voz": "gravar_consumo", "voz_gravacoes": "gravar_gravacoes",
     "fornecedor_saude": "gravar_saude", "voz_lotes": "gravar_lotes", "voz_ondas": "gravar_ondas",
+    "voz_fluxo_passos": "gravar_fluxo_passos", "crm_chamadas": "gravar_crm_chamadas",    # SQL 58 (só códigos)
+}
+# RPC do public que a VM chama -> função de voz_vm com os mesmos argumentos (um objeto jsonb, como o corpo do
+# PostgREST) e a mesma forma de resposta (lista, objeto, valor ou null). RPC fora daqui é recusada.
+RPC = {
+    "fluxo_voz_em_uso": "fluxo_em_uso", "alcada_voz_vigente": "alcada_vigente",                   # SQL 58 · executor
+    "pegar_pedido_fluxo_voz": "pegar_pedido_fluxo", "registrar_geracao_fluxo_voz": "registrar_geracao_fluxo",
+    "anexos_fluxo_vencidos": "anexos_fluxo_vencidos", "marcar_anexos_apagados": "marcar_anexos_apagados",   # geração
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual
@@ -87,6 +98,8 @@ def _condicao(col: str, expr: str, params: dict) -> str:
         return f"{_coluna(col)}::text = any(cast(:{nome} as text[]))"
     if op == "is" and val in ("null", "true", "false"):
         return f"{_coluna(col)} is {val}"
+    if op == "not" and val in ("is.null", "is.true", "is.false"):
+        return f"{_coluna(col)} is not {val[3:]}"
     raise ValueError(f"filtro não suportado: {col}={expr!r}")
 
 
@@ -210,7 +223,12 @@ class AcessoProprio:
         raise AcessoNegado("a VM de voz não apaga linha")
 
     def rpc(self, funcao, args=None):
-        raise AcessoNegado("a VM de voz não chama RPC do public")
+        """Só as RPCs de RPC, pela função equivalente de voz_vm; devolve o que o PostgREST devolveria."""
+        if funcao not in RPC:
+            raise AcessoNegado(f"a VM de voz não chama a RPC {funcao}")
+        r = self._run(f"select voz_vm.{RPC[funcao]}(cast(:a as jsonb))",
+                      a=json.dumps(args or {}, default=str, ensure_ascii=False))
+        return r[0][0] if r else None
 
     # ---------------------------------------------------------- arquivos (bilhete + Edge Function)
     def _bilhete(self, operacao: str, bucket: str, caminho: str) -> str:

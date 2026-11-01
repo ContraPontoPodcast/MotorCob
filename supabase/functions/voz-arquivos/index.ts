@@ -1,5 +1,6 @@
 // Edge Function voz-arquivos: a VM de voz (acesso próprio, SQL 57) baixa a Lista do dia do bucket saidas e sobe o
-// retorno no bucket entradas SEM ter a chave do servidor. Ela manda um bilhete de uso único que o banco emitiu
+// retorno no bucket entradas SEM ter a chave do servidor; a geração de fluxo (SQL 58) apaga os anexos que o banco já
+// liberou (entradas ou chamados). Ela manda um bilhete de uso único que o banco emitiu
 // (voz_vm.bilhete_arquivo) para UM caminho validado lá; aqui o bilhete é trocado pela operação
 // (consumir_bilhete_voz, só service_role) e o Storage é chamado com a chave que só existe no ambiente da função.
 // Publicar com "Verify JWT" DESLIGADO (quem chama não tem login do Supabase; a autorização é o bilhete).

@@ -72,8 +72,33 @@ class PostgrestLocal:
 
     def _filtro(self, col, expr):
         op, _, val = expr.partition(".")
+        if op in ("is", "not"):                   # is.null · not.is.null (o executor do fluxo lê a base revisada)
+            neg, val = (" not", val[3:]) if op == "not" else ("", val)
+            assert val in ("null", "true", "false"), expr
+            return f"{json.dumps(col)} is{neg} {val}"
         ops = {"eq": "=", "gte": ">=", "lt": "<", "gt": ">", "lte": "<="}
         return f"{json.dumps(col)} {ops[op]} {lit(val)}"
+
+    def rpc(self, funcao, args=None):
+        """POST /rest/v1/rpc/<funcao> como service_role, com a forma de resposta do PostgREST: lista para função
+        que devolve conjunto, objeto para uma linha (tudo nulo se não houver), o valor para escalar."""
+        assert funcao.isidentifier(), funcao
+        ret = sql(f"select p.proretset::text || '|' || (t.typtype = 'c')::text from pg_proc p join pg_type t "
+                  f"on t.oid = p.prorettype where p.oid = 'public.{funcao}'::regproc")
+        conjunto, composto = (x == "true" for x in ret.split("|"))
+        def valor(v):
+            if v is None:
+                return "null"
+            return lit(json.dumps(v)) if isinstance(v, (dict, list)) else lit(v)
+        chamada = f"public.{funcao}(" + ", ".join(f"{k} => {valor(v)}" for k, v in (args or {}).items()) + ")"
+        if conjunto:
+            q = f"select coalesce(jsonb_agg(to_jsonb(t)), '[]') from {chamada} t"
+        elif composto:
+            q = f"select to_jsonb(t) from {chamada} t"
+        else:
+            q = f"select to_jsonb({chamada})"
+        out = sql(q, "service_role")
+        return json.loads(out) if out else None
 
     def selecionar(self, tabela, filtros=None, ordem=None, limite=None):
         conds, off = [], 0
@@ -96,6 +121,8 @@ class PostgrestLocal:
     def inserir(self, tabela, linhas, conflito=None, retornar=False, lote=1000):
         linhas = linhas if isinstance(linhas, list) else [linhas]
         cols = list(linhas[0])                     # o PostgREST usa as chaves do primeiro objeto
+        if any(set(l) != set(cols) for l in linhas):
+            raise RuntimeError("PGRST102: All object keys must match")   # como o PostgREST (sem ?columns=)
         self.enviados.append((tabela, conflito, linhas))
         lista = ", ".join(json.dumps(c) for c in cols)
         q = (f"insert into public.{tabela} ({lista}) select {lista} from "
@@ -265,11 +292,14 @@ except ImportError:   # o motor e o CI não têm o driver; a VM tem (voz/require
 
 if PG is not None:
     from voz import acesso as A
-    # o testar_rls.py reaplica o SQL 56 (divisao_concorrencia_voz sem a VM): reaplica o 57 por cima, como o dono faria
-    r = subprocess.run(BASE[:-1] + ["-q", "-f", str(RAIZ / "supabase" / "migrations" /
-                                                   "20261224000001_voz_acesso_proprio.sql")],
-                       capture_output=True, text=True)
-    caso("acesso próprio: SQL 57 reaplicado", r.returncode == 0, r.stderr[:300])
+    # o testar_rls.py reaplica o SQL 56 (divisao_concorrencia_voz sem a VM): reaplica o 57 por cima, como o dono faria,
+    # e os SQL seguintes que estendem o voz_vm (58 em diante), em ordem
+    erros = ""
+    for f in sorted(x for x in (RAIZ / "supabase" / "migrations").glob("*.sql")
+                    if x.name >= "20261224000001_voz_acesso_proprio.sql"):
+        r = subprocess.run(BASE[:-1] + ["-q", "-f", str(f)], capture_output=True, text=True)
+        erros += f"{f.name}: {r.stderr[:300]}" if r.returncode else ""
+    caso("acesso próprio: SQL 57 e seguintes reaplicados", not erros, erros)
     SOCK = os.path.join(os.environ.get("PGHOST", "/tmp"), f".s.PGSQL.{os.environ.get('PGPORT', '5432')}")
     vm = A.AcessoProprio(lambda: PG.Connection("motorcx_voz", unix_sock=SOCK, database=BANCO,
                                                application_name="motorcx-voz-contrato"))
@@ -309,6 +339,111 @@ if PG is not None:
         caso("acesso próprio: registro de chamadas", False, repr(ex))
     finally:
         vm.fechar()
+
+# ------------------------------------------------------------------ 6. fluxo (SQL 58) pelos dois acessos
+# O executor do fluxo lê a versão em uso, os conectores ativos, os hosts, a alçada e a base revisada
+# (voz/fluxo.py › CarregadorFluxos) e grava passos e chamadas de conector (voz/registro.py › registrar_fluxo). Pela
+# chave do servidor (PostgREST imitado) e pelo acesso próprio (voz_vm): o mesmo fluxo carregado e as mesmas linhas.
+from types import SimpleNamespace                            # noqa: E402
+
+from voz import fluxo as FX                                  # noqa: E402
+
+FL = int(sql(f"insert into public.voz_fluxos (empresa_id, credor_id, nome) values ({EA}, {CA}, 'Fluxo Contrato') returning id"))
+FV = int(sql(f"insert into public.voz_fluxo_versoes (fluxo_id, empresa_id, credor_id, versao, situacao, definicao, "
+             f"aprovado_em, em_uso_em) select {FL}, {EA}, {CA}, 1, 'em_uso', m.definicao, now(), now() "
+             f"from public.voz_fluxo_modelos m order by m.codigo limit 1 returning id"))
+sql(f"insert into public.crm_hosts_permitidos (empresa_id, host) values ({EA}, 'crm.vzc-exemplo.com.br')")
+CN_ATIVO = int(sql(f"insert into public.crm_conectores (empresa_id, nome, finalidade, metodo, url, autenticacao, segredo_ref, "
+                   f"situacao, teste_ok, exemplo_resposta) values ({EA}, 'Ofertas', 'buscar_ofertas', 'GET', "
+                   f"'https://crm.vzc-exemplo.com.br/ofertas', 'bearer', 'voz/crm/vzc-ofertas', 'ativo', true, "
+                   f"'{{\"ofertas\": []}}') returning id"))
+sql(f"insert into public.crm_conectores (empresa_id, nome, finalidade, metodo, url, autenticacao, situacao) values "
+    f"({EA}, 'Rascunho', 'registrar_acordo', 'POST', 'https://crm.vzc-exemplo.com.br/acordo', 'bearer', 'rascunho')")
+sql(f"insert into public.voz_alcada_carteira (empresa_id, credor_id, desconto_max_pct, parcelas_max, parcela_min, "
+    f"vigente_desde) values ({EA}, {CA}, 30, 6, 50, '2026-01-01')")
+sql(f"insert into public.voz_base_respostas (empresa_id, fluxo_versao_id, bloco_id, pergunta, resposta, revisado_em) values "
+    f"({EA}, {FV}, 'N3', 'Posso pagar no boleto?', 'Pode sim, o link chega por mensagem.', now()), "
+    f"({EA}, {FV}, 'N3', 'Tem desconto maior?', 'Ainda não revisada pela empresa.', null)")
+CTX = SimpleNamespace(empresa_id=EA, credor_id=CA)
+
+
+def passos_e_conectores(reg, id_chamada):
+    reg.registrar_fluxo(EA, id_chamada, "passo", {"fluxo_versao_id": FV, "ordem": 1, "bloco_id": "N1", "modo": "arvore",
+                                                  "entrou_em": datetime(2026, 11, 5, 10, 0, 9), "saida_quando": "atendeu"})
+    reg.registrar_fluxo(EA, id_chamada, "passo", {"fluxo_versao_id": FV, "ordem": 2, "bloco_id": "N3", "modo": "cognicao",
+                                                  "entrou_em": datetime(2026, 11, 5, 10, 0, 15), "intencao": "quero_negociar",
+                                                  "confianca_faixa": "alta", "turnos": 2})
+    reg.registrar_fluxo(EA, id_chamada, "conector", {"conector_id": CN_ATIVO, "conector_versao": 1, "bloco_id": "N3",
+                                                     "classe": "ok", "http_status": 200, "latencia_ms": 312, "tentativa": 1,
+                                                     "resultado_codigo": "ofertas_1_3", "ofertas_acima_alcada": 1,
+                                                     "fluxo_versao_id": FV, "id_cliente": "C1"})
+    reg.registrar_fluxo(EA, id_chamada, "conector", {"conector_id": None, "bloco_id": "N4", "classe": "recusado"})   # sem conector: não vai
+
+
+fluxo_chave = FX.CarregadorFluxos(sb)(CTX)
+caso("fluxo: a versão em uso da carteira é carregada pelo modo chave", fluxo_chave is not None
+     and fluxo_chave.versao_id == FV, fluxo_chave)
+caso("fluxo: só o conector ativo, com segredo_ref (o nome no cofre), hosts liberados, alçada e base revisada",
+     fluxo_chave is not None and list(fluxo_chave.conectores) == [CN_ATIVO]
+     and fluxo_chave.conectores[CN_ATIVO].segredo_ref == "voz/crm/vzc-ofertas"
+     and fluxo_chave.hosts == ("crm.vzc-exemplo.com.br",) and fluxo_chave.alcada is not None
+     and fluxo_chave.alcada.parcelas_max == 6 and sum(len(x) for x in fluxo_chave.base.values()) == 1, fluxo_chave)
+ev_fluxo = evento("vzf-chave")
+ev_fluxo.fluxo_versao_id, ev_fluxo.bloco_final = FV, "N3"
+regf = RegistroBanco(sb)
+regf.registrar(ev_fluxo)
+passos_e_conectores(regf, "vzf-chave")
+caso("fluxo: o modo chave grava a chamada, os passos e a chamada de conector", regf.descarregar() == 1 and regf.erros == 0
+     and sql(f"select count(*) from public.voz_fluxo_passos where empresa_id = {EA} and id_chamada = 'vzf-chave'") == "2"
+     and sql(f"select count(*) from public.crm_chamadas where empresa_id = {EA} and id_chamada = 'vzf-chave'") == "1"
+     and sql(f"select fluxo_versao_id || '|' || bloco_final from public.voz_chamadas where empresa_id = {EA} "
+             f"and id_chamada = 'vzf-chave'") == f"{FV}|N3", regf.erros)
+
+if PG is not None:
+    vmf = A.AcessoProprio(lambda: PG.Connection("motorcx_voz", unix_sock=SOCK, database=BANCO,
+                                                application_name="motorcx-voz-contrato"))
+    try:
+        from dataclasses import replace as _troca
+        fluxo_proprio = FX.CarregadorFluxos(vmf)(CTX)
+        # exemplo_resposta é do simulador (o executor não usa): a view do voz_vm não o tem
+        sem_exemplo = None if fluxo_chave is None else _troca(fluxo_chave, conectores={
+            k: _troca(c, exemplo_resposta=None) for k, c in fluxo_chave.conectores.items()})
+        caso("acesso próprio: o fluxo carregado (versão, conectores, hosts, alçada, base) é igual ao do modo chave",
+             fluxo_proprio is not None and fluxo_proprio == sem_exemplo,
+             [(k, getattr(sem_exemplo, k, None), getattr(fluxo_proprio, k, None)) for k in
+              ("versao_id", "hash", "conectores", "alcada", "base", "hosts")
+              if getattr(sem_exemplo, k, None) != getattr(fluxo_proprio, k, None)])
+        ev_fluxo = evento("vzf-proprio")
+        ev_fluxo.fluxo_versao_id, ev_fluxo.bloco_final = FV, "N3"
+        regp = RegistroBanco(vmf)
+        regp.registrar(ev_fluxo)
+        passos_e_conectores(regp, "vzf-proprio")
+        caso("acesso próprio: grava a chamada, os passos e a chamada de conector pelo voz_vm",
+             regp.descarregar() == 1 and regp.erros == 0 and not regp.fila_passos and not regp.fila_conectores, regp.erros)
+        passos_e_conectores(regp, "vzf-proprio")            # reenvio dos passos: upsert (empresa, id_chamada, ordem)
+        regp.descarregar()
+        caso("acesso próprio: reenvio dos passos não duplica", regp.erros == 0 and sql(
+            f"select count(*) from public.voz_fluxo_passos where empresa_id = {EA} and id_chamada = 'vzf-proprio'") == "2",
+             regp.erros)
+        for tabela, tira in (("voz_chamadas", "- 'id' - 'tarifada_em' - 'id_chamada'"),
+                             ("voz_fluxo_passos", "- 'id' - 'id_chamada'"),
+                             ("crm_chamadas", "- 'id' - 'id_chamada' - 'ocorrido_em'")):
+            lado = (f"select coalesce(json_agg(to_jsonb(v) {tira} order by to_jsonb(v) {tira}), '[]') from public.{tabela} v "
+                    f"where empresa_id = {EA} and id_chamada = '{{p}}'")
+            k, p = json.loads(sql(lado.format(p="vzf-chave"))), json.loads(sql(lado.format(p="vzf-proprio")))
+            if tabela == "crm_chamadas":    # o modo chave gravou 1 linha; o próprio, 2 (o reenvio de conector é nova tentativa)
+                p = p[:1]
+            caso(f"acesso próprio: {tabela} do fluxo fica igual à do modo chave, coluna por coluna", k == p and len(p) >= 1,
+                 [(a, b) for a, b in zip(k, p) if a != b] or (len(k), len(p)))
+        try:
+            vmf.inserir("crm_chamadas", [{"empresa_id": EA, "conector_id": CN_ATIVO, "classe": "ok", "corpo": "{}"}])
+            caso("acesso próprio: corpo da resposta do CRM é recusado (LGPD)", False, "aceitou")
+        except Exception as ex:   # noqa: BLE001
+            caso("acesso próprio: corpo da resposta do CRM é recusado (LGPD)", "não grava em crm_chamadas" in str(ex), repr(ex)[:200])
+    except Exception as ex:   # noqa: BLE001
+        caso("acesso próprio: fluxo", False, repr(ex))
+    finally:
+        vmf.fechar()
 
 # ------------------------------------------------------------------ limpeza
 sql(f"update public.voz_contrato set concorrencia_contratada = {int(contrato_antes or 0)}")

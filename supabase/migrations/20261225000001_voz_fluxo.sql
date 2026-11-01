@@ -35,29 +35,30 @@
 -- crm_chamadas, voz_fluxo_passos e as métricas só têm códigos fechados, contagens e tempos. A resposta do CRM fica
 -- só na memória da ligação (voz/fluxo.py). exemplo_resposta é gravado pela VM com os valores trocados por
 -- exemplos, e o check recusa texto com cara de documento, telefone ou e-mail.
--- Quem grava passos, chamadas de conector, métricas e resultados de casos é a VM (service_role). O site só escreve
+-- Quem grava passos e chamadas de conector é a VM (chave do servidor ou voz_vm, item 17); resultados de casos, o
+-- simulador (service_role). O site só escreve
 -- por RPC security definer com search_path fixo. RLS em tudo e nada para anon.
--- Depende do SQL 56 (agente de voz). Pode rodar de novo sem erro.
+-- Depende do SQL 56 (agente de voz) e do SQL 57 (voz_vm). Pode rodar de novo sem erro.
 --
--- ---------------------------------------------------------------- quando o SQL 57 (voz_vm) estiver no main
--- O SQL 57 (20261224000001, branch claude/voz-acesso-proprio, PR #150) cria o papel motorcx_voz e o schema voz_vm,
--- por onde a VM passa a ler e gravar sem a chave do servidor. Este SQL não depende dele; quando os dois estiverem
--- no main, o voz_vm vai precisar de (funções security definer no schema voz_vm, como as do SQL 57):
---   LER   · a versão em uso do fluxo da carteira: public.fluxo_voz_em_uso(empresa, credor) → id, versão, hash e
---           definicao de voz_fluxo_versoes (cache por versão e hash no executor);
---         · os conectores da empresa usados pela versão: crm_conectores (id, versao, finalidade, metodo, url,
---           autenticacao, segredo_ref, cabecalhos_fixos, mapa_entrada, mapa_saida, timeout_ms, tentativas,
---           idempotencia, em_falha, situacao) e crm_hosts_permitidos (o host da URL tem de continuar liberado);
---         · a alçada vigente: public.alcada_voz_vigente(empresa, credor, dia);
---         · voz_base_respostas revisadas da versão e voz_intencoes ativas;
---         · os casos de teste do fluxo (simulador) e exemplo_resposta dos conectores.
---   GRAVAR · crm_chamadas (uma linha por tentativa de conector, só códigos);
---          · voz_fluxo_passos (um evento por bloco, no tick() do orquestrador);
---          · voz_chamadas.fluxo_versao_id e bloco_final;
---          · voz_fluxo_metricas_dia e voz_fluxo_intencoes_dia (job noturno);
---          · crm_conectores.testado_em/teste_ok/exemplo_resposta (registrar_teste_conector_crm);
---          · voz_fluxo_casos_resultados (registrar_resultado_caso_voz).
--- Hoje (sem o SQL 57) tudo isso é feito pela chave do servidor (service_role), que já tem as permissões abaixo.
+-- ---------------------------------------------------------------- acesso próprio da VM (schema voz_vm do SQL 57)
+-- A VM de voz entra no banco de dois jeitos (voz/acesso.py): a chave do servidor (piloto) ou o papel motorcx_voz do
+-- SQL 57, que só enxerga o schema voz_vm e é obrigatório antes do modo real. O item 17 dá ao voz_vm o que o executor
+-- do fluxo e a geração por IA usam, no mesmo padrão do SQL 57 (views de colunas escolhidas; escrita e RPC só por
+-- funções security definer com search_path vazio e validação por linha):
+--   LER    · voz_vm.crm_conectores (só 'ativo', sem exemplo_resposta nem quem testou; segredo_ref é o NOME do segredo:
+--            a VM lê o valor no Secret Manager), voz_vm.crm_hosts_permitidos, voz_vm.base_respostas (só as revisadas);
+--          · voz_vm.fluxo_em_uso(args) e voz_vm.alcada_vigente(args) no lugar das RPCs fluxo_voz_em_uso e
+--            alcada_voz_vigente (mesmo formato de resposta do PostgREST);
+--          · voz_vm.empresas ganha nome (variável assessoria do recado neutro), no próprio SQL 57.
+--   GRAVAR · voz_vm.gravar_chamadas passa a aceitar fluxo_versao_id e bloco_final (versão da mesma empresa);
+--          · voz_vm.gravar_fluxo_passos (upsert por empresa, id_chamada e ordem) e voz_vm.gravar_crm_chamadas (só
+--            códigos, nunca o corpo da resposta do CRM: chave fora da lista é recusada);
+--   GERAÇÃO· voz_vm.pegar_pedido_fluxo, registrar_geracao_fluxo, anexos_fluxo_vencidos e marcar_anexos_apagados, e
+--            bilhete 'apagar' (Edge Function voz-arquivos) só para anexo que o banco já liberou (anexos_fluxo_vencidos).
+-- Não passam pela VM: teste de conector e resultado dos casos (Edge Function simular_fluxo_voz, service_role). As
+-- métricas do dia (voz_fluxo_metricas_dia, voz_fluxo_intencoes_dia) ainda não têm job; quando tiver, ganha função aqui.
+-- Depende do SQL 57 (roda depois dele pela ordem dos arquivos). Se o SQL 57 for rodado de novo, rode este depois
+-- (o 57 refaz voz_vm.gravar_chamadas e voz_vm.empresa_do_caminho sem o fluxo).
 --
 -- Conferência (no SQL Editor do Supabase, depois de rodar):
 --   select (select count(*) from pg_tables where schemaname = 'public'
@@ -74,7 +75,13 @@
 --          public.fluxo_voz_erros('{"esquema": 1, "blocos": []}') as erros_vazio,                             -- {abertura_ausente}
 --          (select count(*) from public.permissoes_equipe_catalogo where permissao = 'gerenciar_conectores_crm'
 --             and master and tecnico and not atendimento and not comercial and not administrativo) as perm_equipe, -- 1
---          has_table_privilege('anon', 'public.crm_conectores', 'select') as anon_le;                          -- false
+--          has_table_privilege('anon', 'public.crm_conectores', 'select') as anon_le,                          -- false
+--          has_function_privilege('motorcx_voz', 'voz_vm.gravar_fluxo_passos(jsonb)', 'execute')
+--            and has_function_privilege('motorcx_voz', 'voz_vm.fluxo_em_uso(jsonb)', 'execute')
+--            and has_table_privilege('motorcx_voz', 'voz_vm.crm_conectores', 'select') as vm_fluxo,         -- true
+--          has_table_privilege('motorcx_voz', 'public.crm_conectores', 'select') as vm_le_public,            -- false
+--          position('fluxo_versao_id' in pg_get_functiondef('voz_vm.gravar_chamadas(jsonb)'::regprocedure)) > 0
+--            as vm_grava_fluxo_na_chamada;                                                                    -- true
 --   Migrados (todos em rascunho até a empresa escolher o conector de validação e aprovar; o motivo diz o que falta):
 --   select f.empresa_id, f.credor_id, v.versao, v.situacao, v.motivo,
 --          public.fluxo_voz_erros(v.definicao) as erros from public.voz_fluxos f
@@ -1284,7 +1291,7 @@ language sql stable security definer set search_path = public as $$
     select v.id, v.fluxo_id, v.versao, v.hash, f.tipo_agente, v.definicao
       from public.voz_fluxo_versoes v join public.voz_fluxos f on f.id = v.fluxo_id
      where v.empresa_id = empresa and v.situacao = 'em_uso' and (v.credor_id = credor or v.credor_id is null)
-       and (public.chamada_do_servidor() or empresa in (select public.minhas_empresas()))
+       and (public.chamada_do_servidor() or public.chamada_da_vm_voz() or empresa in (select public.minhas_empresas()))
      order by (v.credor_id is null) limit 1
 $$;
 revoke all on function public.fluxo_voz_em_uso(bigint, bigint) from public, anon;
@@ -2144,7 +2151,7 @@ create or replace function public.pegar_pedido_fluxo_voz() returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare p public.voz_fluxo_pedidos;
 begin
-    if not public.chamada_do_servidor() then
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só a geração (servidor) pega pedidos';
     end if;
     select * into p from public.voz_fluxo_pedidos x where x.situacao = 'pendente' and x.tipo = 'ia'
@@ -2179,7 +2186,7 @@ declare
     fid bigint;
     nome text;
 begin
-    if not public.chamada_do_servidor() then
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só a geração (servidor) registra o resultado';
     end if;
     select * into p from public.voz_fluxo_pedidos x where x.id = pedido for update;
@@ -2293,7 +2300,7 @@ grant execute on function public.entregar_pedido_fluxo_equipe(bigint, jsonb) to 
 create or replace function public.anexos_fluxo_vencidos() returns table (pedido_id bigint, anexos text[])
 language sql stable security definer set search_path = public as $$
     select p.id, p.anexos from public.voz_fluxo_pedidos p
-     where public.chamada_do_servidor() and cardinality(p.anexos) > 0
+     where (public.chamada_do_servidor() or public.chamada_da_vm_voz()) and cardinality(p.anexos) > 0
        and ((p.situacao = 'gerado' and p.versao_gerada_id is null)
             or (p.situacao in ('com_erros', 'cancelado') and p.versao_gerada_id is null
                 and p.atualizado_em < now() - interval '30 days'))
@@ -2301,7 +2308,7 @@ $$;
 create or replace function public.marcar_anexos_apagados(pedido bigint) returns void
 language plpgsql security definer set search_path = public as $$
 begin
-    if not public.chamada_do_servidor() then
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só o servidor apaga anexos';
     end if;
     update public.voz_fluxo_pedidos x set anexos = '{}', anexos_apagados_em = now() where x.id = pedido;
@@ -2341,3 +2348,284 @@ begin
         execute format('grant execute on function %s to authenticated, service_role', f);
     end loop;
 end $$;
+
+-- ================================================================ 17. acesso próprio da VM (schema voz_vm do SQL 57)
+-- O que o executor do fluxo (voz/fluxo.py, voz/registro.py) e a geração por IA (voz/gerar_fluxo.py) usam, para a VM
+-- funcionar igual com a chave do servidor e com o papel motorcx_voz (voz/acesso.py › LEITURA, ESCRITA e RPC).
+-- Mesmo padrão do SQL 57: leitura por views de colunas escolhidas (do dono das tabelas: sem RLS no caminho, por isso
+-- o filtro de empresa com voz fica na própria view, sem chamar função que o papel não executa), escrita e RPC só por funções security definer com search_path
+-- vazio, nomes qualificados e validação por linha. Nada aqui dá ao papel acesso a tabela do public.
+
+-- leitura: conectores ATIVOS das empresas com voz, só as colunas que o executor usa. segredo_ref é o nome do segredo
+-- no Secret Manager (a credencial nunca está no banco); exemplo_resposta e quem testou ficam de fora (são do simulador).
+create or replace view voz_vm.crm_conectores with (security_barrier = true) as
+    select c.id, c.empresa_id, c.nome, c.finalidade, c.metodo, c.url, c.autenticacao, c.segredo_ref, c.cabecalhos_fixos,
+           c.mapa_entrada, c.mapa_saida, c.timeout_ms, c.tentativas, c.idempotencia, c.em_falha, c.situacao, c.versao
+      from public.crm_conectores c
+     where c.situacao = 'ativo' and exists (select 1 from public.voz_config v where v.empresa_id = c.empresa_id);
+
+-- leitura: hosts liberados (o host da URL do conector tem de continuar liberado na hora da chamada)
+create or replace view voz_vm.crm_hosts_permitidos with (security_barrier = true) as
+    select h.empresa_id, h.host from public.crm_hosts_permitidos h
+     where exists (select 1 from public.voz_config v where v.empresa_id = h.empresa_id);
+
+-- leitura: base de respostas do Generativo, só as revisadas (as outras nunca vão à ligação)
+create or replace view voz_vm.base_respostas with (security_barrier = true) as
+    select r.id, r.empresa_id, r.fluxo_versao_id, r.bloco_id, r.pergunta, r.resposta, r.revisado_em
+      from public.voz_base_respostas r
+     where r.revisado_em is not null and exists (select 1 from public.voz_config v where v.empresa_id = r.empresa_id);
+
+revoke all on voz_vm.crm_conectores, voz_vm.crm_hosts_permitidos, voz_vm.base_respostas
+    from public, anon, authenticated, service_role;
+grant select on voz_vm.crm_conectores, voz_vm.crm_hosts_permitidos, voz_vm.base_respostas to motorcx_voz;
+
+-- RPC da VM: cada uma recebe os mesmos argumentos da RPC do public (um objeto jsonb, como o corpo do PostgREST) e
+-- devolve o que o PostgREST devolveria (lista para "returns table", objeto para uma linha, valor ou null).
+-- versão em uso do fluxo da carteira (public.fluxo_voz_em_uso aceita a VM: chamada_da_vm_voz)
+create or replace function voz_vm.fluxo_em_uso(args jsonb) returns jsonb
+language sql stable security definer set search_path = '' as $$
+    select coalesce(jsonb_agg(to_jsonb(f)), '[]'::jsonb)
+      from public.fluxo_voz_em_uso((args ->> 'empresa')::bigint, (args ->> 'credor')::bigint) f
+     where voz_vm.tem_voz((args ->> 'empresa')::bigint)
+$$;
+
+-- alçada vigente da carteira (ou da empresa toda); sem alçada: o objeto com tudo nulo, como o PostgREST
+create or replace function voz_vm.alcada_vigente(args jsonb) returns jsonb
+language sql stable security definer set search_path = '' as $$
+    select to_jsonb(a)
+      from public.alcada_voz_vigente((args ->> 'empresa')::bigint, (args ->> 'credor')::bigint, (args ->> 'dia')::date) a
+     where voz_vm.tem_voz((args ->> 'empresa')::bigint)
+$$;
+
+-- geração por IA (voz/gerar_fluxo.py): as funções do public aceitam a VM (chamada_da_vm_voz) e validam tudo
+create or replace function voz_vm.pegar_pedido_fluxo(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select public.pegar_pedido_fluxo_voz()
+$$;
+create or replace function voz_vm.registrar_geracao_fluxo(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select to_jsonb(public.registrar_geracao_fluxo_voz((args ->> 'pedido')::bigint,
+                                                      case when jsonb_typeof(args -> 'definicao') = 'object'
+                                                           then args -> 'definicao' end,
+                                                      args -> 'resultado'))
+$$;
+create or replace function voz_vm.anexos_fluxo_vencidos(args jsonb) returns jsonb
+language sql stable security definer set search_path = '' as $$
+    select coalesce(jsonb_agg(to_jsonb(a)), '[]'::jsonb) from public.anexos_fluxo_vencidos() a
+$$;
+create or replace function voz_vm.marcar_anexos_apagados(args jsonb) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+    perform public.marcar_anexos_apagados((args ->> 'pedido')::bigint);
+    return null;
+end $$;
+
+-- arquivos: a VM apaga do Storage só o anexo que o banco já liberou (anexos_fluxo_vencidos), pelo bilhete do SQL 57.
+-- O anexo é 'entradas/<slug>/...' ou 'chamados/<slug>/...' (anexos_pedido_voz_ok); o bilhete guarda bucket e caminho.
+alter table voz_vm.bilhetes drop constraint if exists bilhetes_bucket_check;
+alter table voz_vm.bilhetes add constraint bilhetes_bucket_check check (bucket in ('saidas', 'entradas', 'chamados'));
+select pg_temp.trocar('voz_vm.empresa_do_caminho(text, text, text)',
+    '    if operacao = ''baixar'' and bucket = ''saidas'' then',
+    '    if operacao = ''apagar'' and bucket in (''entradas'', ''chamados'') then       -- SQL 58: anexo de pedido de fluxo
+        select p.empresa_id into e from public.voz_fluxo_pedidos p
+         where p.id in (select a.pedido_id from public.anexos_fluxo_vencidos() a
+                         where (bucket || ''/'' || caminho) = any (a.anexos))
+         limit 1;
+        if e is not null then
+            return e;
+        end if;
+    end if;
+    if operacao = ''baixar'' and bucket = ''saidas'' then');
+
+-- escrita: chamadas. A mesma função do SQL 57 com fluxo_versao_id (versão da mesma empresa) e bloco_final.
+create or replace function voz_vm.gravar_chamadas(linhas jsonb) returns int
+language plpgsql security definer set search_path = '' as $$
+declare n int; fora text;
+begin
+    if jsonb_typeof(linhas) <> 'array' or jsonb_array_length(linhas) > 5000 then
+        raise exception 'linhas: lista de até 5000 chamadas';
+    end if;
+    if exists (select 1 from jsonb_array_elements(linhas) e where jsonb_typeof(e) <> 'object') then
+        raise exception 'linhas: cada chamada é um objeto';
+    end if;
+    select string_agg(distinct k, ', ' order by k) into fora
+      from jsonb_array_elements(linhas) e, jsonb_object_keys(e) k
+     where k <> all (array['empresa_id', 'credor_id', 'lote_id', 'onda_id', 'id_chamada', 'canal', 'id_cliente',
+                           'id_acao', 'destino_mascara', 'destino_hash', 'tentativa', 'modo', 'provedor', 'conversa_ref',
+                           'ocorrido_em', 'atendida_em', 'encerrada_em', 'duracao_s', 'billsec', 'causa_sip',
+                           'causa_q850', 'dialstatus', 'amd', 'resultado_ia', 'resultado_operador', 'resultado',
+                           'origem_resultado', 'destino', 'identidade_confirmada', 'transferencia', 'transferida_em',
+                           'transferencia_id', 'minutos_ia', 'no_pico', 'tronco_id', 'tech_prefix', 'data_promessa',
+                           'valor_promessa', 'retorno_em', 'roteiro_id', 'roteiro_versao', 'tem_gravacao',
+                           'transcricao', 'fluxo_versao_id', 'bloco_final']);
+    if fora is not null then
+        raise exception 'colunas que a VM não grava em voz_chamadas: %', fora;
+    end if;
+    if exists (select 1 from jsonb_populate_recordset(null::public.voz_chamadas, linhas) r
+                where r.empresa_id is null or not voz_vm.tem_voz(r.empresa_id)) then
+        raise exception 'empresa sem voz configurada';
+    end if;
+    if exists (select 1 from jsonb_populate_recordset(null::public.voz_chamadas, linhas) r
+                where (r.credor_id is not null and not exists (select 1 from public.credores k
+                                                               where k.id = r.credor_id and k.empresa_id = r.empresa_id))
+                   or (r.tronco_id is not null and not exists (select 1 from public.voz_troncos t
+                                                               where t.id = r.tronco_id and t.empresa_id = r.empresa_id))
+                   or (r.lote_id is not null and not exists (select 1 from public.voz_lotes l
+                                                             where l.id = r.lote_id and l.empresa_id = r.empresa_id))
+                   or (r.onda_id is not null and not exists (select 1 from public.voz_ondas o
+                                                             where o.id = r.onda_id and o.empresa_id = r.empresa_id))
+                   or (r.roteiro_id is not null and not exists (select 1 from public.voz_roteiros x
+                                                                where x.id = r.roteiro_id and x.empresa_id = r.empresa_id))
+                   or (r.transferencia_id is not null and not exists (select 1 from public.voz_transferencias x
+                                                       where x.id = r.transferencia_id and x.empresa_id = r.empresa_id))
+                   or (r.fluxo_versao_id is not null and not exists (select 1 from public.voz_fluxo_versoes x
+                                                       where x.id = r.fluxo_versao_id and x.empresa_id = r.empresa_id))) then
+        raise exception 'referência de outra empresa';
+    end if;
+    insert into public.voz_chamadas as v (
+        empresa_id, credor_id, lote_id, onda_id, id_chamada, canal, id_cliente, id_acao, destino_mascara, destino_hash,
+        tentativa, modo, provedor, conversa_ref, ocorrido_em, atendida_em, encerrada_em, duracao_s, billsec, causa_sip,
+        causa_q850, dialstatus, amd, resultado_ia, resultado_operador, resultado, origem_resultado, destino,
+        identidade_confirmada, transferencia, transferida_em, transferencia_id, minutos_ia, no_pico, tronco_id,
+        tech_prefix, data_promessa, valor_promessa, retorno_em, roteiro_id, roteiro_versao, tem_gravacao, transcricao,
+        fluxo_versao_id, bloco_final)
+    select r.empresa_id, r.credor_id, r.lote_id, r.onda_id, r.id_chamada, coalesce(r.canal, 'agente_voz'), r.id_cliente,
+           r.id_acao, r.destino_mascara, r.destino_hash, coalesce(r.tentativa, 1),
+           coalesce(r.modo, (select c.modo from public.voz_config c where c.empresa_id = r.empresa_id), 'simulado'),
+           r.provedor, r.conversa_ref, coalesce(r.ocorrido_em, now()), r.atendida_em, r.encerrada_em, r.duracao_s,
+           r.billsec, r.causa_sip, r.causa_q850, r.dialstatus, r.amd, r.resultado_ia, r.resultado_operador, r.resultado,
+           r.origem_resultado, r.destino, r.identidade_confirmada, r.transferencia, r.transferida_em,
+           r.transferencia_id, r.minutos_ia, coalesce(r.no_pico, false), r.tronco_id, r.tech_prefix, r.data_promessa,
+           r.valor_promessa, r.retorno_em, r.roteiro_id, r.roteiro_versao, coalesce(r.tem_gravacao, false), r.transcricao,
+           r.fluxo_versao_id, r.bloco_final
+      from jsonb_populate_recordset(null::public.voz_chamadas, linhas) r
+    on conflict (empresa_id, id_chamada, canal) do update set
+        credor_id = coalesce(excluded.credor_id, v.credor_id), lote_id = coalesce(excluded.lote_id, v.lote_id),
+        onda_id = coalesce(excluded.onda_id, v.onda_id), id_cliente = excluded.id_cliente,
+        id_acao = coalesce(excluded.id_acao, v.id_acao),
+        destino_mascara = coalesce(excluded.destino_mascara, v.destino_mascara),
+        destino_hash = coalesce(excluded.destino_hash, v.destino_hash), tentativa = excluded.tentativa,
+        provedor = coalesce(excluded.provedor, v.provedor), conversa_ref = coalesce(excluded.conversa_ref, v.conversa_ref),
+        atendida_em = coalesce(excluded.atendida_em, v.atendida_em),
+        encerrada_em = coalesce(excluded.encerrada_em, v.encerrada_em),
+        duracao_s = coalesce(excluded.duracao_s, v.duracao_s), billsec = coalesce(excluded.billsec, v.billsec),
+        causa_sip = coalesce(excluded.causa_sip, v.causa_sip), causa_q850 = coalesce(excluded.causa_q850, v.causa_q850),
+        dialstatus = coalesce(excluded.dialstatus, v.dialstatus), amd = coalesce(excluded.amd, v.amd),
+        resultado_ia = coalesce(excluded.resultado_ia, v.resultado_ia),
+        resultado_operador = coalesce(excluded.resultado_operador, v.resultado_operador),
+        resultado = coalesce(excluded.resultado, v.resultado),
+        origem_resultado = coalesce(excluded.origem_resultado, v.origem_resultado),
+        destino = coalesce(excluded.destino, v.destino),
+        identidade_confirmada = coalesce(excluded.identidade_confirmada, v.identidade_confirmada),
+        transferencia = coalesce(excluded.transferencia, v.transferencia),
+        transferida_em = coalesce(excluded.transferida_em, v.transferida_em),
+        transferencia_id = coalesce(excluded.transferencia_id, v.transferencia_id),
+        minutos_ia = coalesce(excluded.minutos_ia, v.minutos_ia), no_pico = excluded.no_pico or v.no_pico,
+        tronco_id = coalesce(excluded.tronco_id, v.tronco_id), tech_prefix = coalesce(excluded.tech_prefix, v.tech_prefix),
+        data_promessa = coalesce(excluded.data_promessa, v.data_promessa),
+        valor_promessa = coalesce(excluded.valor_promessa, v.valor_promessa),
+        retorno_em = coalesce(excluded.retorno_em, v.retorno_em), roteiro_id = coalesce(excluded.roteiro_id, v.roteiro_id),
+        roteiro_versao = coalesce(excluded.roteiro_versao, v.roteiro_versao),
+        tem_gravacao = excluded.tem_gravacao or v.tem_gravacao, transcricao = coalesce(excluded.transcricao, v.transcricao),
+        fluxo_versao_id = coalesce(excluded.fluxo_versao_id, v.fluxo_versao_id),
+        bloco_final = coalesce(excluded.bloco_final, v.bloco_final);
+    get diagnostics n = row_count;
+    return n;
+end $$;
+
+
+-- escrita: um evento por bloco (upsert por empresa, id_chamada e ordem, como voz/banco.py › CONFLITO). Só códigos.
+create or replace function voz_vm.gravar_fluxo_passos(linhas jsonb) returns int
+language plpgsql security definer set search_path = '' as $$
+declare n int; fora text;
+begin
+    if jsonb_typeof(linhas) <> 'array' or jsonb_array_length(linhas) > 5000 then
+        raise exception 'linhas: lista de até 5000 passos';
+    end if;
+    if exists (select 1 from jsonb_array_elements(linhas) e where jsonb_typeof(e) <> 'object') then
+        raise exception 'linhas: cada passo é um objeto';
+    end if;
+    select string_agg(distinct k, ', ' order by k) into fora
+      from jsonb_array_elements(linhas) e, jsonb_object_keys(e) k
+     where k <> all (array['empresa_id', 'id_chamada', 'fluxo_versao_id', 'ordem', 'bloco_id', 'modo', 'entrou_em',
+                           'saida_quando', 'intencao', 'confianca_faixa', 'motivo_devolucao', 'trava', 'turnos']);
+    if fora is not null then
+        raise exception 'colunas que a VM não grava em voz_fluxo_passos: %', fora;
+    end if;
+    if exists (select 1 from jsonb_populate_recordset(null::public.voz_fluxo_passos, linhas) r
+                where r.empresa_id is null or not voz_vm.tem_voz(r.empresa_id)) then
+        raise exception 'empresa sem voz configurada';
+    end if;
+    if exists (select 1 from jsonb_populate_recordset(null::public.voz_fluxo_passos, linhas) r
+                where not exists (select 1 from public.voz_fluxo_versoes x
+                                   where x.id = r.fluxo_versao_id and x.empresa_id = r.empresa_id)) then
+        raise exception 'referência de outra empresa';
+    end if;
+    insert into public.voz_fluxo_passos as p (empresa_id, id_chamada, fluxo_versao_id, ordem, bloco_id, modo, entrou_em,
+                                              saida_quando, intencao, confianca_faixa, motivo_devolucao, trava, turnos)
+    select r.empresa_id, r.id_chamada, r.fluxo_versao_id, r.ordem, r.bloco_id, r.modo, coalesce(r.entrou_em, now()),
+           r.saida_quando, r.intencao, r.confianca_faixa, r.motivo_devolucao, r.trava, r.turnos
+      from jsonb_populate_recordset(null::public.voz_fluxo_passos, linhas) r
+    on conflict (empresa_id, id_chamada, ordem) do update set
+        fluxo_versao_id = excluded.fluxo_versao_id, bloco_id = excluded.bloco_id, modo = excluded.modo,
+        entrou_em = excluded.entrou_em, saida_quando = excluded.saida_quando, intencao = excluded.intencao,
+        confianca_faixa = excluded.confianca_faixa, motivo_devolucao = excluded.motivo_devolucao,
+        trava = excluded.trava, turnos = excluded.turnos;
+    get diagnostics n = row_count;
+    return n;
+end $$;
+
+-- escrita: uma linha por tentativa de conector. LGPD: só códigos, status, tempo e contagens; nenhuma coluna recebe o
+-- corpo da resposta do CRM, e chave fora da lista (dados, ofertas, corpo...) é recusada, não ignorada.
+create or replace function voz_vm.gravar_crm_chamadas(linhas jsonb) returns int
+language plpgsql security definer set search_path = '' as $$
+declare n int; fora text;
+begin
+    if jsonb_typeof(linhas) <> 'array' or jsonb_array_length(linhas) > 5000 then
+        raise exception 'linhas: lista de até 5000 chamadas de conector';
+    end if;
+    if exists (select 1 from jsonb_array_elements(linhas) e where jsonb_typeof(e) <> 'object') then
+        raise exception 'linhas: cada chamada de conector é um objeto';
+    end if;
+    select string_agg(distinct k, ', ' order by k) into fora
+      from jsonb_array_elements(linhas) e, jsonb_object_keys(e) k
+     where k <> all (array['empresa_id', 'conector_id', 'conector_versao', 'id_chamada', 'id_cliente', 'fluxo_versao_id',
+                           'bloco_id', 'tentativa', 'http_status', 'classe', 'latencia_ms', 'resultado_codigo',
+                           'ofertas_acima_alcada', 'usou_alternativa']);
+    if fora is not null then
+        raise exception 'colunas que a VM não grava em crm_chamadas: %', fora;
+    end if;
+    if exists (select 1 from jsonb_populate_recordset(null::public.crm_chamadas, linhas) r
+                where r.empresa_id is null or not voz_vm.tem_voz(r.empresa_id)) then
+        raise exception 'empresa sem voz configurada';
+    end if;
+    if exists (select 1 from jsonb_populate_recordset(null::public.crm_chamadas, linhas) r
+                where (r.conector_id is not null and not exists (select 1 from public.crm_conectores x
+                                                                 where x.id = r.conector_id and x.empresa_id = r.empresa_id))
+                   or (r.fluxo_versao_id is not null and not exists (select 1 from public.voz_fluxo_versoes x
+                                                       where x.id = r.fluxo_versao_id and x.empresa_id = r.empresa_id))) then
+        raise exception 'referência de outra empresa';
+    end if;
+    insert into public.crm_chamadas (empresa_id, conector_id, conector_versao, id_chamada, id_cliente, fluxo_versao_id,
+                                     bloco_id, tentativa, http_status, classe, latencia_ms, resultado_codigo,
+                                     ofertas_acima_alcada, usou_alternativa)
+    select r.empresa_id, r.conector_id, r.conector_versao, r.id_chamada, r.id_cliente, r.fluxo_versao_id, r.bloco_id,
+           coalesce(r.tentativa, 1), r.http_status, r.classe, r.latencia_ms, r.resultado_codigo,
+           coalesce(r.ofertas_acima_alcada, 0), coalesce(r.usou_alternativa, false)
+      from jsonb_populate_recordset(null::public.crm_chamadas, linhas) r;
+    get diagnostics n = row_count;
+    return n;
+end $$;
+
+-- o que o papel executa (o resto de voz_vm continua como o SQL 57 deixou)
+do $$
+declare f regprocedure;
+begin
+    for f in select p.oid::regprocedure from pg_proc p where p.pronamespace = 'voz_vm'::regnamespace loop
+        execute format('revoke all on function %s from public, anon, authenticated, service_role', f);
+    end loop;
+end $$;
+grant execute on function voz_vm.gravar_chamadas(jsonb), voz_vm.gravar_fluxo_passos(jsonb), voz_vm.gravar_crm_chamadas(jsonb),
+                          voz_vm.fluxo_em_uso(jsonb), voz_vm.alcada_vigente(jsonb), voz_vm.pegar_pedido_fluxo(jsonb),
+                          voz_vm.registrar_geracao_fluxo(jsonb), voz_vm.anexos_fluxo_vencidos(jsonb),
+                          voz_vm.marcar_anexos_apagados(jsonb) to motorcx_voz;

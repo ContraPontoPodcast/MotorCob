@@ -7,7 +7,7 @@
 --   infra/asterisk/README.md (lê o segredo; nunca passa pelo chat nem por arquivo do repositório);
 -- * não recebe nenhum grant em tabela do public: tudo passa pelo schema voz_vm (sem uso para public), com
 --   - leitura por views de colunas escolhidas: voz_config, voz_troncos, voz_rotas, voz_transferencias, voz_contrato,
---     roteiros em uso, divisão da concorrência, id/slug das empresas com voz, id/código das carteiras ativas delas e
+--     roteiros em uso, divisão da concorrência, id/slug/nome das empresas com voz, id/código das carteiras ativas delas e
 --     as colunas de tarifação das chamadas (sem id_cliente, sem destino) para recalcular consumo_voz;
 --   - escrita só por funções security definer (search_path vazio, nomes qualificados, validação por linha):
 --     voz_chamadas, voz_gravacoes, consumo_voz, voz_lotes, voz_ondas e fornecedor_saude;
@@ -22,7 +22,8 @@
 -- PUBLIC. Assim um login direto (que consegue forjar request.jwt.claim.sub, coisa que a API não deixa) não alcança
 -- função que confia em auth.uid().
 -- Depende do SQL 56 (voz_base). Se o SQL 56 for rodado de novo, rode este depois (ele refaz a troca na divisão da
--- concorrência). Pode rodar de novo sem erro (não mexe na senha do papel).
+-- concorrência). Pode rodar de novo sem erro (não mexe na senha do papel). Os SQL seguintes que estendem o voz_vm
+-- (58 em diante) refazem as trocas deles: rodou este de novo, rode-os de novo depois, em ordem.
 --
 -- Conferência (no SQL Editor do Supabase, depois de rodar):
 --   select r.rolcanlogin as entra, r.rolinherit as herda, r.rolbypassrls as fura_rls, r.rolsuper as super,
@@ -202,9 +203,10 @@ language sql stable security definer set search_path = '' as $$
 $$;
 create or replace view voz_vm.divisao_concorrencia as select * from voz_vm.divisao();
 
--- só id e slug (monta o caminho dos arquivos) das empresas com voz
+-- só id, slug (monta o caminho dos arquivos) e nome (variável assessoria do recado neutro do fluxo, SQL 58) das
+-- empresas com voz. Sem CNPJ, endereço nem contato.
 create or replace view voz_vm.empresas with (security_barrier = true) as
-    select e.id, e.slug from public.empresas e
+    select e.id, e.slug, e.nome from public.empresas e
      where exists (select 1 from public.voz_config c where c.empresa_id = e.id);
 
 -- só id e código (pasta da Lista do dia) das carteiras ativas das empresas com voz

@@ -141,7 +141,7 @@ class TestGerar(unittest.TestCase):
                     return [{"pedido_id": 7, "anexos": ["entradas/alfa/fluxo/desenho.pdf", "chamados/alfa/r.docx", "x"]}]
                 self.marcados.append(a["pedido"])
 
-            def remover(self, bucket, caminhos):
+            def apagar_arquivos(self, bucket, caminhos):
                 self.removidos.append((bucket, caminhos))
         sb = SB()
         self.assertEqual(G.limpar_anexos(sb), 1)
