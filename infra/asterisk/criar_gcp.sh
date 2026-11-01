@@ -10,7 +10,9 @@
 #   - rede "motorcx-voz" e sub-rede em São Paulo
 #   - 2 IPs estáticos externos (um por VM; são os IPs que as operadoras liberam)
 #   - firewall: SIP (5060 UDP/TCP, 5061 TLS) só dos IPs da lista abaixo; RTP 10000–20000 UDP dos mesmos IPs;
-#     SSH só pelo IAP do Google; nada mais entra
+#     SSH só pelo IAP do Google; HTTPS 8443 (proxy Caddy: webhook da ElevenLabs e simulador do Fluxo, cada rota só
+#     com o recurso ligado e protegida por assinatura HMAC) das origens de ORIGENS_HTTPS; 80 só para o desafio do
+#     Let's Encrypt (o Caddy responde ali só o desafio e o redirecionamento); nada mais entra
 #   - conta de serviço "motorcx-asterisk" com o mínimo: lê só os segredos motorcx-voz-*, grava e lê objetos só no
 #     bucket de gravações, escreve log e métrica
 #   - segredo "motorcx-voz-ari-senha" com uma senha aleatória para o ARI (gerada aqui, nunca exibida)
@@ -39,6 +41,12 @@ IPS_OPERADORAS=(
 IPS_PROVEDORES_VOZ=(
 )
 IPS_DISCADORES_CLIENTES=(
+)
+# Quem chama o proxy HTTPS da 8443: a ElevenLabs (webhook pós-chamada) e as Edge Functions do Supabase (simulador
+# do Fluxo). Nenhum dos dois tem IP de origem fixo publicado, por isso o padrão é a internet toda e quem protege é a
+# assinatura HMAC de cada rota. Se a ElevenLabs e o Supabase passarem a ter IPs fixos, ponha só eles aqui (CIDR).
+ORIGENS_HTTPS=(
+  0.0.0.0/0
 )
 USAR_CMEK="${USAR_CMEK:-0}"                      # 1 = bucket cifrado com chave própria no Cloud KMS
 MAQUINA="${MAQUINA:-e2-standard-2}"      # piloto; antes do volume real: MAQUINA=n2-standard-4 (dá para trocar depois)
@@ -167,7 +175,7 @@ for i in 1 2; do
       --description="Asterisk MotorCX $i (IP que a operadora libera)"
 done
 
-passo "Firewall (SIP e RTP só das origens da lista; SSH só pelo IAP)"
+passo "Firewall (SIP e RTP só das origens da lista; SSH só pelo IAP; HTTPS 8443 e desafio 80 do proxy)"
 regra() {   # nome, regras, origens, descrição: cria ou atualiza as origens
   if existe gcloud compute firewall-rules describe "$1"; then
     gcloud compute firewall-rules update "$1" --rules="$2" --source-ranges="$3" >/dev/null
@@ -186,6 +194,11 @@ else
   LISTA_ORIGENS="(nenhuma, SIP fechado)"
 fi
 regra motorcx-voz-ssh-iap "tcp:22" "$IAP" "SSH só pelo IAP do Google"
+# proxy HTTPS (Caddy, vm_inicio.sh + motorcx-voz-https): 8443 das origens de ORIGENS_HTTPS; 80 para o Let's Encrypt
+# validar o certificado (o Let's Encrypt não publica os IPs de validação)
+[ "${#ORIGENS_HTTPS[@]}" -gt 0 ] || falha "ORIGENS_HTTPS vazio: ponha as origens do webhook e das Edge Functions"
+regra motorcx-voz-https "tcp:8443" "$(IFS=,; echo "${ORIGENS_HTTPS[*]}")" "HTTPS do proxy Caddy (webhook ElevenLabs, simulador)"
+regra motorcx-voz-acme "tcp:80" "0.0.0.0/0" "Desafio HTTP do Let's Encrypt para o certificado do proxy"
 
 passo "Conta de serviço com privilégio mínimo"
 existe gcloud iam service-accounts describe "$SA" || \
@@ -257,5 +270,6 @@ for i in 1 2; do
 done
 echo
 echo "Origens liberadas no firewall: $LISTA_ORIGENS"
+echo "Proxy HTTPS (webhook da ElevenLabs e simulador): https://<IP com hífens>.sslip.io:8443 (ex.: 35-198-40-10.sslip.io)"
 echo "Bucket de gravações: um por empresa — bash criar_gcp.sh empresa <id> <dias> $PROJETO"
 echo "Para incluir uma operadora nova: edite IPS_OPERADORAS no topo e rode o script de novo."

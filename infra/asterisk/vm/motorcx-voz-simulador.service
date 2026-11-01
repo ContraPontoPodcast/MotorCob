@@ -1,0 +1,17 @@
+[Unit]
+Description=Simulador de texto do Fluxo e roleplay (voz/simulador_http.py em 127.0.0.1:8091; só com o metadado motorcx-simulador-fluxo=1)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-simulador-fluxo
+ExecStart=/usr/local/bin/motorcx-voz-rodar simulador-fluxo
+ExecStop=/usr/bin/docker stop -t 10 motorcx-voz-simulador-fluxo
+# desligado (sem o metadado) sai com 0 e fica parado; erro reinicia
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

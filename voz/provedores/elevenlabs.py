@@ -14,8 +14,12 @@
                   que acabou, numa thread; tick() entrega os eventos na thread do orquestrador). A chave da API vem do
                   Secret Manager (ref_api) e nunca fica em arquivo; sem agent_id/ref_api no provedores.json, nada muda.
 
+Recomendado: um agente por VM, com o webhook pós-chamada do agente (aba Segurança) apontando para a própria VM, e a
+API de conversas (do agente desta VM) como reserva.
 A confirmar no piloto (documentação da ElevenLabs): como os cabeçalhos X- do INVITE viram variáveis dinâmicas
-(aqui: motorcx_id) e o nome do campo de análise com o resultado (aqui: data_collection_results.resultado).
+(aqui: motorcx_id; se não virarem, o "Webhook de Dados do Cliente de Iniciação de Conversa" é o caminho, se o pedido
+trouxer um identificador da chamada: infra/asterisk/README.md) e o nome do campo de análise com o resultado (aqui:
+data_collection_results.resultado).
 """
 from __future__ import annotations
 

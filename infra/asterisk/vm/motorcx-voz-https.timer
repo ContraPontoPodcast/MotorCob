@@ -1,0 +1,9 @@
+[Unit]
+Description=Proxy HTTPS da VM: confere as rotas a cada 2 min
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

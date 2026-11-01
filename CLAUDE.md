@@ -309,7 +309,11 @@ de outra pessoa pela certificação e a rotação segue.
   (`voz_resultado_por_motivo`; o site lê por `resultado_por_motivo_voz`, grupo < 30 sem número). Busca semântica:
   serviço contínuo `motorcx-voz-speech-buscas` (`rotina buscas`, a cada 2 s, parte i/n, custo do embedding da pergunta
   na empresa). Webhook pós-chamada da ElevenLabs: receptor dentro do orquestrador real (`criar_receptor`, só com
-  `ref_webhook`; 127.0.0.1:8092 atrás do Caddy :8443; HMAC, 2 MB, 10 s; corpo nunca guardado).
+  `ref_webhook`; 127.0.0.1:8092; HMAC, 2 MB, 10 s; corpo nunca guardado). Proxy HTTPS da VM: Caddy 2.8.4 instalado
+  pelo `vm_inicio.sh`, Caddyfile versionado (`infra/asterisk/vm/motorcx-caddy*`), `motorcx-voz-https` liga só as rotas
+  dos recursos ligados (webhook; simulador com `motorcx-simulador-fluxo=1`); certificado Let's Encrypt de
+  `<ip-com-hífens>.sslip.io:8443` (ElevenLabs e Edge Functions exigem certificado público); firewall 8443/80 no
+  `criar_gcp.sh`.
 - `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
   = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
   Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias
