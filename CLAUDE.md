@@ -298,7 +298,11 @@ de outra pessoa pela certificação e a rotação segue.
   inexistente nunca voltam; "mantém o limite" por padrão; automática uma por lote no dia) passam pelas mesmas regras.
   À noite a VM agrega `voz_passadas_dia`; o site lê `contato_por_passada` (menos de 30 chamadas = sem %). O site grava
   só por `salvar_discagem` (`discagem_erros` = o motor; versões em `regras_voz_versoes`); a edição da regra por
-  sinalização, do modo e da reciclagem chega com o redesign (hoje a aba só mostra o que vale).
+  sinalização, do modo e da reciclagem segue o redesign aprovado (renitencia-v2): Discagem › Renitência (cartões
+  Limites, Modo e Spin com gavetas; regra por sinalização com uma frase por linha que abre no lugar e "Mostrar só o
+  que muda"), Resubmit (prévia de ontem e reciclagem automática), Contato por passada; no lote, "Reenviar agora" é a
+  ação principal e "Reciclar mailing" é um modal em 3 passos com a prévia completa. Peças em
+  `site/src/components/discagem/renitencia/` (unificar com os componentes de design compartilhados quando chegarem).
   **Pausa da rota:** sem crédito (falha da operadora + SIP 402) ou bloqueio de originação pausam o tronco na hora no
   núcleo da VM (`Agendador.pausados`; com ou sem a regra nova; o número não é penalizado e espera outra rota ou a
   retomada), o Plantão grava em `voz_troncos_pausas` (`pausar_tronco_voz`, aviso para a equipe; bloqueio = crítico) e

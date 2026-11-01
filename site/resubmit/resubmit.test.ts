@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import {
 	PADRAO, SITUACOES, FALHAS, calcularPassadas, efetivo, linhaAlterada, mudarCampo, nomeOnda, passadaRuim,
 	resumoMudancas, voltarLinha, totalFora, type LinhaPassada,
+	avisosSinal, avisosSpin, curtasComSpins, frase, itensCompletos, modoDaCarteira, mudaHoje, mudancasCompletas, mudarModo,
+	mudarRec, mudarSinal, previaOntem, recDaCarteira, sinalAlterado, sinalDaCarteira, telefonesDia, voltarSinal, duracao,
 } from '../src/lib/renitencia.ts';
 
 const SQL = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20270101000001_voz_resubmit.sql', import.meta.url)), 'utf8');
@@ -81,4 +83,81 @@ test('ondas pelo nome da origem e prévia', () => {
 	assert.equal(nomeOnda({ ...o, origem: 'spin', passada: 2 }).nome, 'Spin 2');
 	assert.equal(nomeOnda({ ...o, janela: 'SP' }).nome, 'SP');
 	assert.equal(totalFora({ selecionados: 5, volta: 2, volta_outro_numero: 0, espera_intervalo: 0, fora: { max_dia: 2, nao_ligar: 1 } }), 3);
+});
+
+// ---------------------------------------------------------------- redesign aprovado (renitencia-v2): edição
+test('regra por sinalização: a primeira mudança liga a regra; só a diferença do padrão é gravada', () => {
+	assert.equal(sinalDaCarteira({}).ativa, false);
+	let d = mudarSinal({}, 'ocupado', 'rediscar.depois_min', 20);
+	assert.deepEqual(d.por_sinalizacao, { ocupado: { rediscar: { depois_min: 20 } } });
+	assert.equal(sinalAlterado(d, 'ocupado'), true);
+	d = mudarSinal(d, 'ocupado', 'rediscar.depois_min', 15);
+	assert.deepEqual(d.por_sinalizacao, {});
+	assert.equal(sinalDaCarteira(d).ativa, true);
+	// fixos: pediu retorno sempre finaliza; inexistente e pessoa errada não rediscam; sem crédito não é linha
+	assert.deepEqual(mudarSinal({ por_sinalizacao: {} }, 'retorno_agendado', 'finaliza', false).por_sinalizacao, {});
+	assert.deepEqual(mudarSinal({ por_sinalizacao: {} }, 'pessoa_errada', 'rediscar.ativo', true).por_sinalizacao, {});
+	assert.deepEqual(mudarSinal({}, 'sem_credito', 'finaliza', true), {});
+	// no vertical, o padrão de "não atendeu" já é próximo telefone: escolher isso não grava nada
+	const v = { modo_discagem: { modo: 'vertical' }, por_sinalizacao: {} };
+	assert.deepEqual(mudarSinal(v, 'nao_atendida', 'depois.acao', 'proximo_telefone').por_sinalizacao, {});
+	assert.deepEqual(voltarSinal({ por_sinalizacao: { maquina: { finaliza: true } } }, 'maquina').por_sinalizacao, {});
+});
+
+test('uma frase por linha, "muda o hoje" e os limites que cortam', () => {
+	const r = sinalDaCarteira({}).regras;
+	assert.equal(frase('ocupado', r.ocupado, 7), 'Redisca em 15 min (até 2×, topo da fila), depois próximo cliente');
+	assert.equal(frase('recado', r.recado, 7), 'Finaliza o cliente no dia');
+	assert.equal(frase('sem_credito', r.falha_operadora, 7), 'Pausa a rota e alerta a equipe na hora');
+	assert.equal(mudaHoje('recado', r.recado), false);
+	assert.equal(mudaHoje('desligou_sem_conversar', r.desligou_sem_conversar), true);
+	const e = efetivo({ por_sinalizacao: {}, tentativas_numero_dia: 2 });
+	assert.deepEqual(avisosSinal('ocupado', r.ocupado, e), ['a régua corta em 1: 2 tentativas por número']);
+	assert.deepEqual(avisosSinal('ocupado', r.ocupado, efetivo({ por_sinalizacao: {} })), []);
+});
+
+test('modo de discagem: padrão spin N → telefone N, avisos e telefones do dia', () => {
+	assert.equal(modoDaCarteira({}).ativo, false);
+	const d = mudarModo({}, m => ({ ...m, spins: { ...m.spins, quantidade: 4 } }));
+	const { m } = modoDaCarteira(d);
+	assert.deepEqual(m.spins.regras.map(r => r.telefone), ['t1', 't2', 't3', 't4']);
+	assert.equal(telefonesDia(m), 4);
+	const a = avisosSpin(m, 3, 3);
+	assert.equal(a.efetivos, 3);
+	assert.match(a.avisos[0], /só os 3 primeiros spins saem/);
+	const igual = mudarModo({}, x => ({ ...x, spins: { ...x.spins, regras: x.spins.regras.map(r => ({ ...r, telefone: 't1' as const })) } }));
+	assert.match(avisosSpin(modoDaCarteira(igual).m, 2, 3).avisos[0], /Telefone 1 aparece em 3 spins/);
+	assert.equal(telefonesDia(modoDaCarteira({ modo_discagem: { modo: 'vertical', max_telefones_dia: 2 } }).m), 2);
+	// só as chaves que a validação conhece (credores.discagem › modo_discagem)
+	assert.deepEqual(Object.keys(d.modo_discagem!).sort(), Object.keys(PADRAO.modo_discagem).sort());
+	assert.equal(curtasComSpins(2, []), null);
+	assert.equal(Math.round(curtasComSpins(1, [60, 80])!), 60);
+});
+
+test('reciclagem automática: igual ao padrão sai do bloco; as travadas nunca entram', () => {
+	assert.equal(mudarRec({}, { ativo: false }).reciclagem_auto, undefined);
+	const d = mudarRec({}, { ativo: true, excluir: ['cpc', 'nao_ligar'] as string[] });
+	assert.deepEqual(recDaCarteira(d).excluir, ['cpc']);
+	assert.deepEqual(Object.keys(d.reciclagem_auto!).sort(), Object.keys(PADRAO.reciclagem_auto).sort());
+});
+
+test('antes e depois do salvar (com modo e reciclagem detalhados)', () => {
+	const l = mudancasCompletas({}, mudarRec(mudarModo({ por_sinalizacao: {} }, m => ({ ...m, modo: 'vertical' as const })), { ativo: true }));
+	assert.ok(l.includes('Modo de discagem: o de hoje → salvo'));
+	assert.ok(l.includes('Modo de discagem › modo: Horizontal → Vertical'));
+	assert.ok(l.includes('Reciclagem automática › ligada: desligada → ligada'));
+	assert.ok(!l.some(x => /máx\. no dia/.test(x)), 'o máximo que só acompanhou as tentativas por número não aparece');
+	assert.deepEqual(itensCompletos({ por_sinalizacao: {} }, { por_sinalizacao: { ocupado: { rediscar: { max: 1 } } } }),
+		[{ onde: 'Regra por sinalização › Ocupado › rediscagens', antes: '2', depois: '1' }]);
+});
+
+test('prévia com o dia de ontem: a regra nova volta mais que a de hoje e nada volta quando finaliza', () => {
+	const sem = [{ situacao: 'nao_atendida', numeros: 1000 }, { situacao: 'retorno_agendado', numeros: 50 }];
+	const p = previaOntem(sem, { por_sinalizacao: {} }, { nao_atendida: 6 }, 4);
+	assert.equal(p.semContato, 1050);
+	assert.ok(p.voltam > p.hojeVoltam);
+	assert.equal(p.linhas.find(x => x.k === 'retorno_agendado')!.voltam, 0);
+	const fin = previaOntem(sem, { por_sinalizacao: { nao_atendida: { finaliza: true } } }, {}, 4);
+	assert.equal(fin.voltam, 0);
+	assert.equal(duracao(135), '2 h 15 min');
 });

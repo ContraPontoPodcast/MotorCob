@@ -2,9 +2,8 @@
 // Contato por passada (SQL 65; protótipo funcional aprovado em 01/11/2026).
 // Regras puras (sem React, sem Supabase): o site e site/resubmit/resubmit.test.ts usam as mesmas funções.
 // O padrão MotorCX é o de public.discagem_padrao() (= motor/discagem.padrao_site(); o teste confere com o SQL).
-// A edição da regra por sinalização, do modo de discagem e da reciclagem chega com o redesign aprovado: até lá a tela
-// mostra o que vale e grava só o que já editava (limites, máximo por situação, descanso e alertas). O intervalo de
-// cada situação é o rediscar.depois_min da regra por sinalização (um intervalo só, decisão do dono).
+// A edição da regra por sinalização, do modo de discagem e da reciclagem segue o redesign aprovado (renitencia-v2). O
+// intervalo de cada situação é o rediscar.depois_min da regra por sinalização (um intervalo só, decisão do dono).
 // Nenhum dado pessoal: a tela só mostra contagens.
 
 export type Prioridade = 'topo' | 'normal' | 'fim';
@@ -607,3 +606,358 @@ export const CHIPS_LOTE: { k: string; n: string; sits: string[] }[] = [
 	...['nao_atendida', 'maquina', 'caixa_postal', 'ocupado', 'desligou_sem_conversar', 'atendeu_desligou', 'numero_incorreto'].map(k => ({ k, n: NOME[k], sits: [k] })),
 	{ k: 'falha', n: 'Falha técnica', sits: FALHAS.map(f => f.k) },
 ];
+
+// ================================================================ redesign aprovado (renitencia-v2): edição
+// da regra por sinalização, do modo de discagem (vertical × horizontal com spins) e da reciclagem automática.
+// Tudo continua dentro de credores.discagem: só o que difere do padrão MotorCX é gravado (o padrão do vertical troca
+// o "depois" de máquina, não atendeu e caixa postal). Sem a chave, a VM de hoje (paridade).
+
+/** Sem crédito e bloqueio de originação não são linhas: pausam a rota e alertam a equipe (regra fixa). */
+export const TRAVA_SIN: Record<string, string> = {
+	sem_credito: 'Sem crédito: pausa a rota e alerta a equipe na hora',
+	bloqueio_originacao: 'Bloqueio: pausa a rota e alerta a equipe (alerta crítico)',
+};
+/** Inexistente e pessoa errada nunca rediscam o mesmo telefone; pediu retorno sempre finaliza (vale o agendamento). */
+export const SEM_REDISCAR = ['numero_inexistente', 'pessoa_errada'];
+export const LINHAS_SINAL = SINALIZACOES.filter(s => !FALHAS.some(f => f.k === s.k));
+export const LINHAS_TEC = [...FALHAS.map(f => ({ k: f.k, n: f.n }))];
+
+type Hoje = { finaliza?: boolean; rediscar?: boolean; depois_min?: number; acao?: AcaoDepois; txt: string };
+const H_RED = (m: number, txt: string): Hoje => ({ finaliza: false, rediscar: true, depois_min: m, acao: 'proximo_cliente', txt });
+/** O que a VM faz hoje em cada sinalização (voz/orquestrador/lote.py sem a regra nova: 2 por número, 120 min, 15 no ocupado). */
+export const HOJE_SIN: Record<string, Hoje> = {
+	maquina: H_RED(120, 'redisca em 120 min (2 por número); a lista segue'),
+	nao_atendida: H_RED(120, 'redisca em 120 min (2 por número); a lista segue'),
+	ocupado: H_RED(15, 'redisca em 15 min (2 por número); a lista segue'),
+	caixa_postal: H_RED(120, 'redisca em 120 min (2 por número); a lista segue'),
+	desligou_sem_conversar: { finaliza: true, txt: 'finaliza o cliente no dia' },
+	retorno_agendado: { finaliza: true, txt: 'finaliza; vale o retorno agendado' },
+	atendeu_desligou: { finaliza: true, txt: 'finaliza o cliente no dia' },
+	numero_inexistente: { finaliza: false, rediscar: false, acao: 'proximo_telefone', txt: 'encerra o número; segue para o próximo da lista' },
+	pessoa_errada: { finaliza: true, txt: 'finaliza o cliente no dia' },
+	recado: { finaliza: true, txt: 'finaliza o cliente no dia' },
+	falha_operadora: H_RED(120, 'redisca em 120 min; a lista segue'),
+	falha_rede: H_RED(120, 'redisca em 120 min; a lista segue'),
+	indisponivel: H_RED(120, 'redisca em 120 min; a lista segue'),
+	cancelada_discador: H_RED(120, 'redisca em 120 min; a lista segue'),
+	abandonada: { finaliza: true, txt: 'finaliza o cliente no dia' },
+	sem_credito: { txt: 'redisca em 120 min, sem pausar a rota' },
+	bloqueio_originacao: { txt: 'redisca em 120 min, sem pausar a rota' },
+};
+
+/** A regra que vale (ou o padrão, se a carteira ainda não usa a regra nova), já com o modo. */
+export function sinalDaCarteira(d: DiscagemRen | null | undefined): { ativa: boolean; regras: Record<string, RegraSinal> } {
+	const e = efetivo(d);
+	if (e.sinal) return { ativa: true, regras: e.sinal };
+	return { ativa: false, regras: efetivo({ ...(d ?? {}), por_sinalizacao: {} }).sinal! };
+}
+
+/** A linha muda o que a VM faz hoje? (badge "muda o hoje") */
+export function mudaHoje(k: string, r: RegraSinal | null): boolean {
+	const h = HOJE_SIN[k];
+	if (!h || !r) return true;
+	if (h.finaliza || r.finaliza) return !!h.finaliza !== !!r.finaliza;
+	if (!!h.rediscar !== r.rediscar.ativo) return true;
+	if (r.rediscar.ativo && (h.depois_min !== r.rediscar.depois_min || r.rediscar.max !== 1)) return true;
+	return h.acao !== r.depois.acao;
+}
+
+function padraoLinha(modo: 'vertical' | 'horizontal' | null, k: string): RegraSinal {
+	const base = PADRAO.por_sinalizacao[k];
+	return modo === 'vertical' && PADRAO.sinalizacao_vertical[k] ? mesclar(base, { depois: { acao: PADRAO.sinalizacao_vertical[k] } }) : base;
+}
+
+function diferenca(base: Record<string, unknown>, v: Record<string, unknown>): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const [k, x] of Object.entries(v)) {
+		const b = base[k];
+		if (x && typeof x === 'object' && !Array.isArray(x) && b && typeof b === 'object') {
+			const sub = diferenca(b as Record<string, unknown>, x as Record<string, unknown>);
+			if (Object.keys(sub).length) out[k] = sub;
+		} else if (x !== b) out[k] = x;
+	}
+	return out;
+}
+
+export type CampoSinal = 'finaliza' | 'rediscar.ativo' | 'rediscar.depois_min' | 'rediscar.max' | 'rediscar.prioridade' | 'depois.acao' | 'depois.espera_min' | 'ate';
+
+/** Muda um campo de uma sinalização. A primeira mudança liga a regra nova na carteira (por_sinalizacao). */
+export function mudarSinal(d: DiscagemRen, k: string, campo: CampoSinal, valor: unknown): DiscagemRen {
+	if (TRAVA_SIN[k]) return d;
+	const { regras } = sinalDaCarteira(d);
+	const linha = JSON.parse(JSON.stringify(regras[k])) as Record<string, Record<string, unknown> | unknown>;
+	const [a, b] = campo.split('.');
+	if (b) (linha[a] as Record<string, unknown>)[b] = valor; else linha[a] = valor;
+	if (k === 'retorno_agendado') (linha as RegraSinal).finaliza = true;
+	if (SEM_REDISCAR.includes(k)) (linha as RegraSinal).rediscar.ativo = false;
+	const modo = efetivo(d).modo;
+	const dif = diferenca(padraoLinha(modo, k) as unknown as Record<string, unknown>, linha as Record<string, unknown>);
+	const ps = { ...((d.por_sinalizacao as Record<string, unknown> | null | undefined) ?? {}) };
+	if (Object.keys(dif).length) ps[k] = dif; else delete ps[k];
+	return { ...d, por_sinalizacao: ps };
+}
+
+export function voltarSinal(d: DiscagemRen, k: string): DiscagemRen {
+	if (d.por_sinalizacao == null) return d;
+	const ps = { ...(d.por_sinalizacao as Record<string, unknown>) };
+	delete ps[k];
+	return { ...d, por_sinalizacao: ps };
+}
+
+export function sinalAlterado(d: DiscagemRen, k: string): boolean {
+	const ps = d.por_sinalizacao as Record<string, unknown> | null | undefined;
+	return !!ps && ps[k] != null && Object.keys(ps[k] as object).length > 0;
+}
+
+const depTxt = (r: RegraSinal) => r.depois.acao === 'proximo_telefone' ? `próximo telefone${r.depois.espera_min ? ` em ${r.depois.espera_min} min` : ''}`
+	: r.depois.acao === 'proximo_cliente' ? 'próximo cliente' : 'finaliza o cliente';
+
+/** Uma frase por linha: o que acontece depois da tentativa. */
+export function frase(k: string, r: RegraSinal, retornoDias: number): string {
+	if (TRAVA_SIN[k]) return 'Pausa a rota e alerta a equipe na hora';
+	if (k === 'retorno_agendado') return `Finaliza; liga de novo no horário pedido (até ${retornoDias} dias)`;
+	if (r.finaliza) return 'Finaliza o cliente no dia';
+	const fila = r.rediscar.prioridade === 'topo' ? ', topo da fila' : r.rediscar.prioridade === 'fim' ? ', fim da fila' : '';
+	if (!r.rediscar.ativo || SEM_REDISCAR.includes(k)) return r.depois.acao === 'finaliza' ? 'Não redisca; finaliza o cliente' : `Não redisca; vai para o ${depTxt(r)}`;
+	return `Redisca em ${r.rediscar.depois_min} min (até ${r.rediscar.max}×${fila}), depois ${depTxt(r)}`;
+}
+
+/** Os limites da carteira sempre cortam: a linha avisa quando. */
+export function avisosSinal(k: string, r: RegraSinal, e: Pick<Efetivo, 'tnum' | 'tcli' | 'ren'>): string[] {
+	const out: string[] = [];
+	if (TRAVA_SIN[k] || r.finaliza || k === 'retorno_agendado') return out;
+	if (r.rediscar.ativo && !SEM_REDISCAR.includes(k)) {
+		const max = Math.min(e.ren[k]?.max_dia ?? e.tnum, e.tnum), cabe = Math.max(0, max - 1);
+		if (cabe === 0) out.push(`não redisca: ${max} ${max === 1 ? 'tentativa' : 'tentativas'} por número`);
+		else if (r.rediscar.max > cabe) out.push(`a régua corta em ${cabe}: ${max} tentativas por número`);
+	}
+	if (r.depois.acao === 'proximo_telefone' && e.tcli < 2) out.push('1 tentativa por cliente: não sobra para o próximo telefone');
+	return out;
+}
+
+export function explicaDepois(r: RegraSinal, vertical: boolean): string {
+	if (r.depois.acao === 'proximo_telefone') return vertical ? (r.depois.espera_min ? `o próximo telefone sai ${r.depois.espera_min} min depois` : '0 min = o próximo telefone sai logo') : 'puxa o próximo telefone deste cliente para o início do spin seguinte';
+	if (r.depois.acao === 'proximo_cliente') return vertical ? 'volta aos outros telefones depois de abrir os clientes da vez' : 'o cliente volta no spin seguinte, pela regra do spin';
+	return 'sai dos spins e voltas seguintes';
+}
+
+// ---------------------------------------------------------------- modo de discagem
+export type TelSpin = 't1' | 't2' | 't3' | 't4' | 't5' | 'nao_tentado' | 'historico';
+export type Modo = {
+	modo: 'vertical' | 'horizontal'; max_telefones_dia: number; ordem: 'certificado' | 'carga' | 'historico';
+	telefone_ausente: 'proximo' | 'pula';
+	spins: { quantidade: number; intervalo_min: number; regras: { spin: number; telefone: TelSpin; inicio: string | null }[] };
+};
+export const MODOS: Record<Modo['modo'], string> = { vertical: 'Vertical', horizontal: 'Horizontal' };
+export const ORDENS: Record<Modo['ordem'], string> = { certificado: 'Certificado primeiro', carga: 'Ordem da carga', historico: 'Melhor horário pelo histórico' };
+export const TEL_SPIN: Record<TelSpin, string> = { t1: 'Telefone 1', t2: 'Telefone 2', t3: 'Telefone 3', t4: 'Telefone 4', t5: 'Telefone 5', nao_tentado: 'Próximo não tentado', historico: 'Melhor telefone pelo histórico' };
+export const AUSENTE: Record<Modo['telefone_ausente'], string> = { proximo: 'Vai para o próximo disponível', pula: 'Pula o spin' };
+
+/** O modo que vale (ou o padrão MotorCX, se a carteira não salvou: aí a VM faz o de hoje). */
+export function modoDaCarteira(d: DiscagemRen | null | undefined): { ativo: boolean; m: Modo } {
+	const base = PADRAO.modo_discagem as unknown as Modo;
+	const x = d?.modo_discagem as Partial<Modo> | null | undefined;
+	if (!x) return { ativo: false, m: JSON.parse(JSON.stringify(base)) };
+	const { spins, ...resto } = x;
+	const sp: Record<string, unknown> = { ...(spins ?? {}) };
+	delete sp.regras;
+	const m = mesclar(base, { ...resto, spins: sp }) as Modo;
+	const q = m.spins.quantidade;
+	const regras = Array.from({ length: q }, (_, i) => {
+		const r = x.spins?.regras?.find(y => y.spin === i + 1);
+		return { spin: i + 1, telefone: (r?.telefone ?? (i < 5 ? `t${i + 1}` : 'nao_tentado')) as TelSpin, inicio: r?.inicio ?? null };
+	});
+	return { ativo: true, m: { ...m, spins: { ...m.spins, regras } } };
+}
+
+/** Grava o modo inteiro (só as chaves que a validação conhece). Mudar o modo também ajusta o "depois" padrão. */
+export function mudarModo(d: DiscagemRen, f: (m: Modo) => Modo): DiscagemRen {
+	const m = f(JSON.parse(JSON.stringify(modoDaCarteira(d).m)) as Modo);
+	m.spins.quantidade = Math.min(10, Math.max(1, m.spins.quantidade));
+	m.spins.regras = Array.from({ length: m.spins.quantidade }, (_, i) => m.spins.regras[i] ?? { spin: i + 1, telefone: (i < 5 ? `t${i + 1}` : 'nao_tentado') as TelSpin, inicio: null })
+		.map((r, i) => ({ spin: i + 1, telefone: r.telefone, inicio: r.inicio || null }));
+	return { ...d, modo_discagem: m as unknown as Record<string, unknown> };
+}
+
+/** Índice (1…) do telefone de cada spin, para o desenho e os avisos. */
+export function idxSpins(m: Modo): number[] {
+	const usados: number[] = [];
+	return m.spins.regras.slice(0, m.spins.quantidade).map(r => {
+		let i = 1;
+		if (r.telefone[0] === 't') i = Number(r.telefone.slice(1));
+		else if (r.telefone === 'nao_tentado') { while (usados.includes(i)) i++; }
+		usados.push(i);
+		return i;
+	});
+}
+
+export function telefonesDia(m: Modo): number {
+	return m.modo === 'vertical' ? m.max_telefones_dia : Math.max(1, ...idxSpins(m));
+}
+
+/** Avisos do spin rate: spins acima das tentativas por cliente e telefone repetido acima das tentativas por número. */
+export function avisosSpin(m: Modo, tnum: number, tcli: number): { efetivos: number; avisos: string[]; obs: [string, boolean][] } {
+	const idx = idxSpins(m), efet = Math.min(m.spins.quantidade, tcli), usos: Record<number, number[]> = {};
+	idx.forEach((i, s) => { if (s < efet) (usos[i] = usos[i] ?? []).push(s + 1); });
+	const avisos: string[] = [];
+	if (m.spins.quantidade > tcli) avisos.push(`Spin rate ${m.spins.quantidade} é maior que as ${tcli} tentativas por cliente no dia: só os ${tcli} primeiros spins saem.`);
+	for (const [i, l] of Object.entries(usos)) if (l.length > tnum) avisos.push(`Telefone ${i} aparece em ${l.length} spins, mas o limite é ${tnum} por número: ${l.slice(tnum).map(x => `spin ${x}`).join(', ')} não ${l.length - tnum > 1 ? 'saem' : 'sai'} para ele.`);
+	const obs = idx.map((i, s): [string, boolean] => {
+		if (s >= tcli) return [`não sai: teto de ${tcli} tentativas por cliente`, true];
+		if ((usos[i] ?? []).indexOf(s + 1) >= tnum) return [`não sai: telefone ${i} já usou ${tnum} tentativas`, true];
+		const r = m.spins.regras[s].telefone;
+		if (r === 'historico') return ['o telefone com mais contato no horário; sem histórico, certificado primeiro', false];
+		if (r === 'nao_tentado') return ['o primeiro telefone que ainda não foi discado hoje', false];
+		return [i > 1 ? `quem não tem o telefone ${i}: ${m.telefone_ausente === 'pula' ? 'pula este spin' : 'próximo disponível'}` : '1ª passada: todos os clientes', false];
+	});
+	return { efetivos: efet, avisos, obs };
+}
+
+/** Curtas previstas com q spins: média das curtas medidas de cada passada (Contato por passada), pesando as
+ *  passadas seguintes pelo que sobra sem contato. Sem medida, null. */
+export function curtasComSpins(q: number, curtasPorPassada: (number | null)[]): number | null {
+	const med = curtasPorPassada.filter((x): x is number => x != null);
+	if (!med.length) return null;
+	let n = 0, p = 0;
+	for (let k = 0; k < q; k++) {
+		const v = curtasPorPassada[k] ?? med[med.length - 1];
+		const w = Math.pow(0.62, k);
+		n += v * w; p += w;
+	}
+	return n / p;
+}
+
+// ---------------------------------------------------------------- reciclagem automática
+export type RecAuto = { ativo: boolean; hora: string; sem_contato_pct: number; excluir: string[] };
+export const EXCLUSOES: { k: string; n: string; t: string }[] = [
+	{ k: 'cpc', n: 'CPC ou acordo', t: 'falou com o titular ou fechou acordo' },
+	{ k: 'promessa', n: 'Promessa', t: 'prometeu pagar' },
+	{ k: 'recusa', n: 'Recusa', t: 'recusou negociar' },
+	{ k: 'pessoa_errada', n: 'Pessoa errada', t: 'o número não é do cliente' },
+	{ k: 'retorno', n: 'Retorno agendado', t: 'mantém o horário pedido' },
+];
+export const TRAVADAS: { k: string; n: string; t: string }[] = [
+	{ k: 'nao_ligar', n: 'Não ligar', t: 'pedido do titular; nunca volta' },
+	{ k: 'inexistente', n: 'Número inexistente', t: 'a voz fica suspensa no número' },
+];
+
+export function recDaCarteira(d: DiscagemRen | null | undefined): RecAuto {
+	return mesclar(PADRAO.reciclagem_auto as unknown as RecAuto, d?.reciclagem_auto ?? {});
+}
+
+export function mudarRec(d: DiscagemRen, patch: Partial<RecAuto>): DiscagemRen {
+	const r = { ...recDaCarteira(d), ...patch };
+	r.excluir = EXCLUSOES.map(x => x.k).filter(k => r.excluir.includes(k));
+	const igual = JSON.stringify(r) === JSON.stringify(recDaCarteira({}));
+	const out = { ...d };
+	if (igual) delete out.reciclagem_auto; else out.reciclagem_auto = r as unknown as Record<string, unknown>;
+	return out;
+}
+
+// ---------------------------------------------------------------- antes e depois (modal de salvar)
+export type ItemDiff = { onde: string; antes: string; depois: string };
+export function diffItens(antes: DiscagemRen | null | undefined, depois: DiscagemRen | null | undefined): ItemDiff[] {
+	return resumoMudancas(antes, depois).map(x => {
+		const m = /^(.*): (.*) → (.*)$/.exec(x);
+		return m ? { onde: m[1], antes: m[2], depois: m[3] } : { onde: x, antes: '', depois: '' };
+	});
+}
+
+export function detalhesModoRec(antes: DiscagemRen | null | undefined, depois: DiscagemRen | null | undefined): string[] {
+	const out: string[] = [];
+	const a = modoDaCarteira(antes), b = modoDaCarteira(depois);
+	if (a.ativo !== b.ativo) out.push(`Modo de discagem: ${a.ativo ? 'salvo' : 'o de hoje'} → ${b.ativo ? 'salvo' : 'o de hoje'}`);
+	if (a.ativo || b.ativo) {
+		const pares: [string, unknown, unknown][] = [
+			['telefones por cliente no dia', a.m.max_telefones_dia, b.m.max_telefones_dia], ['ordem dos telefones', ORDENS[a.m.ordem], ORDENS[b.m.ordem]],
+			['spin rate', a.m.spins.quantidade, b.m.spins.quantidade], ['intervalo entre spins (min)', a.m.spins.intervalo_min, b.m.spins.intervalo_min],
+			['cliente sem o telefone do spin', AUSENTE[a.m.telefone_ausente], AUSENTE[b.m.telefone_ausente]],
+		];
+		if (a.m.modo !== b.m.modo) pares.unshift(['modo', MODOS[a.m.modo], MODOS[b.m.modo]]);
+		for (const [n, x, y] of pares) if (x !== y) out.push(`Modo de discagem › ${n}: ${x} → ${y}`);
+		const q = Math.max(a.m.spins.quantidade, b.m.spins.quantidade);
+		for (let i = 0; i < q; i++) {
+			const ra = a.m.spins.regras[i], rb = b.m.spins.regras[i];
+			const ta = ra ? `${TEL_SPIN[ra.telefone]}${ra.inicio ? ` · ${ra.inicio}` : ''}` : '—', tb = rb ? `${TEL_SPIN[rb.telefone]}${rb.inicio ? ` · ${rb.inicio}` : ''}` : '—';
+			if (ta !== tb) out.push(`Modo de discagem › spin ${i + 1}: ${ta} → ${tb}`);
+		}
+	}
+	const ra = recDaCarteira(antes), rb = recDaCarteira(depois);
+	const nm = (l: string[]) => l.length ? l.map(k => EXCLUSOES.find(x => x.k === k)?.n ?? k).join(', ') : 'só as travadas';
+	const rp: [string, string, string][] = [
+		['ligada', ra.ativo ? 'ligada' : 'desligada', rb.ativo ? 'ligada' : 'desligada'], ['horário', ra.hora, rb.hora],
+		['sem contato a partir de (%)', String(ra.sem_contato_pct), String(rb.sem_contato_pct)], ['ficam de fora', nm(ra.excluir), nm(rb.excluir)],
+	];
+	for (const [n, x, y] of rp) if (x !== y) out.push(`Reciclagem automática › ${n}: ${x} → ${y}`);
+	return out;
+}
+
+/** Tudo o que muda entre duas regras (resumo do histórico e o antes/depois do salvar). */
+export function mudancasCompletas(antes: DiscagemRen | null | undefined, depois: DiscagemRen | null | undefined): string[] {
+	const ta = efetivo(antes).tnum, tb = efetivo(depois).tnum;
+	// o máximo por situação que só acompanhou as tentativas por número não é mudança à parte
+	const soTeto = (x: string) => { const m = /^Renitência › .* › máx\. no dia: (\d+) → (\d+)$/.exec(x); return !!m && Number(m[1]) === ta && Number(m[2]) === tb; };
+	return [...resumoMudancas(antes, depois).filter(x => x !== 'Modo de discagem: ajustes' && x !== 'Reciclagem automática: ajustes' && !x.startsWith('Limites › Modo de discagem') && !soTeto(x)),
+		...detalhesModoRec(antes, depois)];
+}
+export function itensCompletos(antes: DiscagemRen | null | undefined, depois: DiscagemRen | null | undefined): ItemDiff[] {
+	return mudancasCompletas(antes, depois).map(x => {
+		const m = /^(.*): (.*) → (.*)$/.exec(x);
+		return m ? { onde: m[1], antes: m[2], depois: m[3] } : { onde: x, antes: '', depois: '' };
+	});
+}
+
+// ---------------------------------------------------------------- prévia com o dia de ontem (Resubmit)
+export type SemContatoDia = { situacao: string; numeros: number };
+export type LinhaPrevia = { k: string; semContato: number; voltam: number; contatos: number };
+const SIT_SINAL: Record<string, string> = { numero_incorreto: 'numero_inexistente', sem_credito: 'falha_operadora' };
+
+/** Quantos dos sem contato de ontem voltariam pela regra em edição e quantos contatos a mais isso daria, pela
+ *  taxa de contato da 2ª passada de cada situação (Contato por passada; sem medida, a da 2ª passada geral). Teto:
+ *  a janela do dia e os limites por número. */
+export function previaOntem(sem: SemContatoDia[], d: DiscagemRen, taxa2: Record<string, number | null>, taxaGeral: number | null): { linhas: LinhaPrevia[]; voltam: number; contatos: number; semContato: number; hojeVoltam: number; hojeContatos: number } {
+	const e = efetivo(d), { regras } = sinalDaCarteira(d);
+	const minutos = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+	const linhas: LinhaPrevia[] = [];
+	let voltam = 0, contatos = 0, total = 0, hojeV = 0, hojeC = 0;
+	for (const s of sem) {
+		const c = Number(s.numeros) || 0;
+		total += c;
+		const k = SIT_SINAL[s.situacao] ?? s.situacao, r = regras[k], tx = (taxa2[s.situacao] ?? taxaGeral ?? 0) / 100;
+		let v = 0;
+		if (TRAVA_SIN[s.situacao] || !r || s.situacao === 'retorno_agendado') v = 0;
+		else if (!r.finaliza) {
+			const max = Math.min(e.ren[s.situacao]?.max_dia ?? e.tnum, e.tnum), cabe = Math.max(0, max - 1);
+			const red = r.rediscar.ativo && !SEM_REDISCAR.includes(k) ? Math.min(r.rediscar.max, cabe) : 0;
+			const fit = Math.min(1, Math.max(0, (minutos(r.ate) - 8 * 60 - r.rediscar.depois_min) / (12 * 60)));
+			// cada rediscagem a mais pega só quem seguiu sem contato (≈ 45% voltam de novo)
+			v = (red > 0 ? c * fit * (1 + 0.45 * (red - 1)) : 0) + (r.depois.acao === 'proximo_telefone' ? c * 0.3 : 0);
+		}
+		const h = HOJE_SIN[k];
+		const hv = h?.rediscar ? c * Math.min(1, Math.max(0, (20 * 60 - 8 * 60 - (h.depois_min ?? 120)) / (12 * 60))) : 0;
+		hojeV += hv; hojeC += hv * tx;
+		voltam += v; contatos += v * tx;
+		if (c > 0) linhas.push({ k: s.situacao, semContato: c, voltam: Math.round(v), contatos: Math.round(v * tx) });
+	}
+	return { linhas: linhas.sort((a, b) => b.voltam - a.voltam), voltam: Math.round(voltam), contatos: Math.round(contatos), semContato: total, hojeVoltam: Math.round(hojeV), hojeContatos: Math.round(hojeC) };
+}
+
+// ---------------------------------------------------------------- prévia da reciclagem (previa_reciclagem_voz)
+export type PreviaReciclagem = {
+	base: number; volta: number; chamadas: number; ondas: number; duracao_min: number; por_hora: number;
+	resta_min: number; cabe_pct: number; cabe_na_janela: boolean; janela_fonte: 'uf_ddd' | 'faixa_legal';
+	janelas: { abre: string; fecha: string; ufs: string[]; clientes: number; resta_min: number; cabe_pct: number }[];
+	excluir_efetivo: string[]; fora: Record<string, number>; curtas_previstas: number;
+	curtas: { previstas: number; fracao_prevista: number; hoje: { chamadas: number; curtas: number; fracao: number | null }; fracao_depois: number | null; aviso: number; acima_do_aviso: boolean };
+};
+export const MOTIVO_FORA_REC: Record<string, { n: string; t: string }> = {
+	max_dia: { n: 'Já atingiram o máximo do dia', t: 'o limite por cliente continua o de hoje' },
+	cpc: { n: 'CPC ou acordo', t: 'exclusão escolhida' }, promessa: { n: 'Promessa', t: 'exclusão escolhida ou a promessa suspende ligações' },
+	recusa: { n: 'Recusa', t: 'exclusão escolhida' }, pessoa_errada: { n: 'Pessoa errada', t: 'exclusão escolhida' },
+	retorno: { n: 'Retorno agendado', t: 'mantém o horário pedido' }, nao_ligar: { n: 'Não ligar', t: 'travado: nunca volta' },
+	inexistente: { n: 'Número inexistente', t: 'travado: a voz fica suspensa' },
+};
+export function duracao(min: number): string {
+	const m = Math.max(0, Math.round(min));
+	return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`;
+}

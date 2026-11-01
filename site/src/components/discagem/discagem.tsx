@@ -6,21 +6,23 @@ import { usePermissao, PageHeading, Notice, Loading } from '@/components/app-she
 import { PERM } from '@/lib/permissoes';
 import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import { effectiveDiscagem, computeDiff, computeLigacoes, type Discagem as DiscagemT, type DiscagemExecResumo, type LigacoesInfo } from '@/lib/discagem';
-import { resumoMudancas, type DiscagemRen } from '@/lib/renitencia';
+import { itensCompletos, mudancasCompletas, type DiscagemRen } from '@/lib/renitencia';
 import { ChamadasCurtas } from './chamadas-curtas';
-import { RenitenciaSituacao } from './renitencia-situacao';
-import { RegraSinalizacao } from './sinalizacao';
+import { TelaRenitencia, type GavetaId } from './renitencia/tela-renitencia';
+import { TelaResubmit } from './renitencia/tela-resubmit';
+import { GavetaLimites, GavetaModo } from './renitencia/gavetas';
 import { ContatoPassada } from './passadas';
 import { Horarios } from './horarios';
 import { ResultadoDia } from './resultado-dia';
 
-// Abas da Discagem. Renitência por situação, Regra por sinalização e Contato por passada: SQL 65.
+// Abas da Discagem (redesign aprovado, renitencia-v2): Renitência (limites, modo, spin, regra por sinalização, 8
+// situações e falhas), Resubmit (prévia de ontem e reciclagem automática) e Contato por passada: SQL 65.
 // Toda gravação passa por salvar_discagem (valida, versiona e audita; recusa se outra pessoa salvou antes).
-type TabId = 'curtas' | 'renitencia' | 'sinalizacao' | 'passadas' | 'horarios' | 'resultado';
+type TabId = 'curtas' | 'renitencia' | 'resubmit' | 'passadas' | 'horarios' | 'resultado';
 const TABS: { id: TabId; nome: string; novo?: boolean }[] = [
 	{ id: 'curtas', nome: 'Chamadas curtas' },
 	{ id: 'renitencia', nome: 'Renitência por situação', novo: true },
-	{ id: 'sinalizacao', nome: 'Regra por sinalização', novo: true },
+	{ id: 'resubmit', nome: 'Resubmit', novo: true },
 	{ id: 'passadas', nome: 'Contato por passada', novo: true },
 	{ id: 'horarios', nome: 'Horários' },
 	{ id: 'resultado', nome: 'Resultado do dia' },
@@ -63,18 +65,25 @@ export function Discagem() {
 	const [versoes, setVersoes] = useState<Versao[]>([]);
 	const [sobre, setSobre] = useState<null | 'salvar' | 'padrao' | 'historico'>(null);
 	const [motivo, setMotivo] = useState('');
+	const [gaveta, setGaveta] = useState<GavetaId | null>(null);
+	const [curtasPassada, setCurtasPassada] = useState<(number | null)[]>([]);
 
 	useEffect(() => { if (credor) void reload(); }, [credor?.id]);
 
 	async function reload() {
 		if (!supabase || !credor) return;
 		setLoading(true); setError('');
-		const [c, ex, segs, vs] = await Promise.all([
+		const hoje = Date.now();
+		const iso = (n: number) => new Date(hoje - n * 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+		const [c, ex, segs, vs, cp] = await Promise.all([
 			supabase.from('credores').select('*').eq('id', credor.id).maybeSingle(),
 			supabase.from('execucoes').select('*').eq('credor_id', credor.id).order('iniciada_em', { ascending: false }).limit(1),
 			supabase.from('segmentos_em_uso').select('estrategia_id,nome').eq('credor_id', credor.id).eq('vinculado', true),
 			supabase.from('regras_voz_versoes').select('versao,regras,resumo,motivo,criado_em').eq('credor_id', credor.id).order('versao', { ascending: false }).limit(50),
+			empresa ? supabase.rpc('contato_por_passada', { empresa: empresa.id, credor: Number(credor.id), de: iso(30), ate: iso(1), situacao: null }) : Promise.resolve({ data: [] }),
 		]);
+		const porPassada = ((cp.data ?? []) as { passada: number; curtas_pct: number | null }[]).sort((a, b) => a.passada - b.passada);
+		setCurtasPassada(porPassada.map(r => r.curtas_pct == null ? null : Number(r.curtas_pct)));
 		if (c.error) { setError(friendlyError(c.error)); setLoading(false); return; }
 		const disc = (c.data as Row | null)?.discagem as Record<string, unknown> | null | undefined;
 		setStored(disc ?? null);
@@ -96,7 +105,8 @@ export function Discagem() {
 	const atual = versoes[0]?.versao ?? 0;
 	const proxima = Math.max(atual, 1) + 1;
 	const diff = computeDiff(draft);
-	const pendentes = dirty ? resumoMudancas(stored as DiscagemRen, diff as DiscagemRen) : [];
+	const pendentes = dirty ? mudancasCompletas(stored as DiscagemRen, diff as DiscagemRen) : [];
+	const itens = dirty ? itensCompletos(stored as DiscagemRen, diff as DiscagemRen) : [];
 	const mudouOutra = dirty && pendentes.length === 0 && JSON.stringify(diff) !== JSON.stringify(stored ?? {});
 
 	function update(patch: Partial<DiscagemT>) { setDraft(prev => ({ ...prev, ...patch })); setDirty(true); }
@@ -108,11 +118,11 @@ export function Discagem() {
 		setSaving(true);
 		const { data, error: e } = await supabase.rpc('salvar_discagem', {
 			credor: Number(credor.id), regras: diff, versao_base: atual, motivo: motivo.trim() || null,
-			resumo: (pendentes.length ? pendentes : ['Ajustes de chamadas curtas ou horários']).slice(0, 200),
+			resumo: (pendentes.length ? pendentes : ['Ajustes de chamadas curtas ou horários']).map(x => x.slice(0, 300)).slice(0, 200),
 		});
 		setSaving(false);
 		if (e) { toast.error(friendlyError(e)); return; }
-		setSobre(null); setMotivo('');
+		setSobre(null); setMotivo(''); setGaveta(null);
 		toast.success(`v${data} salva. Vale na próxima lista do dia e na próxima onda.`);
 		await reload();
 	}
@@ -120,7 +130,7 @@ export function Discagem() {
 	if (!empresa) return <><PageHeading title="Discagem" description="Regras de discagem da carteira." /><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></>;
 	if (!credor) return <><PageHeading title="Discagem" description="Regras de discagem da carteira." /><Notice variant="warning">Escolha a carteira no topo.</Notice></>;
 
-	const edita = tab !== 'passadas' && tab !== 'resultado' && tab !== 'sinalizacao';
+	const edita = tab !== 'passadas' && tab !== 'resultado';
 	const nPend = pendentes.length + (mudouOutra ? 1 : 0);
 
 	return (
@@ -151,16 +161,17 @@ export function Discagem() {
 					</div>
 
 					{tab === 'curtas' && <ChamadasCurtas draft={draft} update={update} reverter={reverter} canEdit={canEdit} exec={exec} />}
-					{tab === 'renitencia' && <RenitenciaSituacao draft={draft} setDraft={trocar} canEdit={canEdit} ligacoes={ligacoes} />}
-					{tab === 'sinalizacao' && <RegraSinalizacao draft={draft} />}
-					{tab === 'passadas' && <ContatoPassada irResubmit={() => setTab('sinalizacao')} />}
+					{tab === 'renitencia' && <TelaRenitencia draft={draft} salvo={stored} setDraft={trocar} canEdit={canEdit} ligacoes={ligacoes} abrir={setGaveta} curtasPorPassada={curtasPassada} />}
+					{tab === 'resubmit' && <TelaResubmit draft={draft} salvo={stored} setDraft={trocar} canEdit={canEdit} irSinal={() => { setTab('renitencia'); window.setTimeout(() => document.getElementById('regra-sin')?.scrollIntoView({ behavior: 'smooth' }), 50); }} />}
+					{tab === 'passadas' && <ContatoPassada irResubmit={() => { setTab('renitencia'); window.setTimeout(() => document.getElementById('regra-sin')?.scrollIntoView({ behavior: 'smooth' }), 50); }} />}
 					{tab === 'horarios' && <Horarios draft={draft} update={update} reverter={reverter} canEdit={canEdit} exec={exec} />}
 					{tab === 'resultado' && <ResultadoDia exec={exec} />}
 
 					{edita && (nPend > 0 && canEdit ? (
 						<div role="region" aria-label="Alterações não salvas" className="sticky bottom-0 z-10 mt-5 flex flex-wrap items-center gap-2.5 rounded-2xl border px-3.5 py-2.5 text-[13px]" style={{ borderColor: 'var(--area)', backgroundColor: 'var(--base-cartao)', boxShadow: '0 18px 48px rgba(0,0,0,.18)' }}>
+							<span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--area)' }} />
 							<b className="text-[var(--base-texto)]">{nPend} {nPend === 1 ? 'alteração não salva' : 'alterações não salvas'}</b>
-							<span className="text-[12px] text-[var(--base-texto-2)]">em {credor.nome} · vale na próxima onda depois de salvar</span>
+							<span className="text-[12px] text-[var(--base-texto-2)]">em {credor.nome} · nada vale até salvar</span>
 							<span className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
 								<button type="button" className={`${btnSec} flex-1 sm:flex-none`} style={{ borderColor: 'var(--base-borda)' }} onClick={() => { setDraft(effectiveDiscagem(stored)); setDirty(false); toast('Alterações descartadas.'); }}>Descartar</button>
 								<button type="button" className={`${btn} flex-1 text-[var(--destaque-texto)] sm:flex-none`} style={{ backgroundColor: 'var(--destaque)' }} onClick={() => setSobre('salvar')}>Salvar como v{proxima}</button>
@@ -174,13 +185,20 @@ export function Discagem() {
 				</>
 			)}
 
+			{gaveta === 'lim' && sobre !== 'salvar' && <GavetaLimites draft={draft} setDraft={trocar} canEdit={canEdit} ligacoes={ligacoes} onClose={() => setGaveta(null)} pendentes={nPend} proxima={proxima} onSalvar={() => setSobre('salvar')} />}
+			{gaveta === 'modo' && sobre !== 'salvar' && <GavetaModo draft={draft} setDraft={trocar} canEdit={canEdit} ligacoes={ligacoes} curtasPorPassada={curtasPassada} onClose={() => setGaveta(null)} pendentes={nPend} proxima={proxima} onSalvar={() => setSobre('salvar')} />}
 			{sobre === 'salvar' && (
 				<Modal titulo={`Salvar como v${proxima}?`} onClose={() => setSobre(null)}>
-					<p className="text-[13.5px] text-[var(--base-texto-2)]">{credor.nome} · vale a partir da próxima onda. Fica no histórico com o antes e depois.</p>
-					<ul className="flex max-h-[220px] list-disc flex-col gap-1 overflow-auto pl-5 text-[13px] text-[var(--base-texto)]">
-						{pendentes.map(x => <li key={x}>{x}</li>)}
-						{mudouOutra && <li>Ajustes de chamadas curtas ou horários</li>}
-					</ul>
+					<p className="text-[13.5px] text-[var(--base-texto-2)]">{credor.nome} · vale a partir da próxima onda. Fica no histórico com o seu nome, o antes e o depois.</p>
+					<div className="flex max-h-[260px] flex-col overflow-auto rounded-xl border" style={{ borderColor: 'var(--base-borda)' }}>
+						{itens.map(x => (
+							<div key={x.onde + x.depois} className="flex flex-col gap-0.5 border-b px-3 py-2 last:border-b-0" style={{ borderColor: 'var(--base-borda)' }}>
+								<small className="text-[11.5px] text-[var(--base-texto-3)]">{x.onde}</small>
+								{x.antes || x.depois ? <span className="text-[13px] text-[var(--base-texto)]"><s className="text-[var(--base-texto-3)]">{x.antes}</s> → <em className="font-semibold not-italic">{x.depois}</em></span> : null}
+							</div>
+						))}
+						{mudouOutra && <div className="px-3 py-2 text-[13px]">Ajustes de chamadas curtas ou horários</div>}
+					</div>
 					<label className="text-[12px] text-[var(--base-texto-2)]" htmlFor="motivo-discagem">Motivo (opcional, sem dados de clientes)</label>
 					<textarea id="motivo-discagem" maxLength={200} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex.: teste de volta mais cedo para Ocupado"
 						className="min-h-[56px] w-full rounded-xl border bg-[var(--base-cartao)] px-3 py-2 text-[13px] text-[var(--base-texto)]" style={{ borderColor: 'var(--base-borda)' }} />
@@ -191,10 +209,10 @@ export function Discagem() {
 				</Modal>
 			)}
 			{sobre === 'padrao' && (() => {
-				const n = resumoMudancas(diff as DiscagemRen, {}).length;
+				const n = mudancasCompletas(diff as DiscagemRen, {}).length;
 				return (
 					<Modal titulo="Voltar ao padrão MotorCX?" onClose={() => setSobre(null)}>
-						<p className="text-[13.5px] text-[var(--base-texto-2)]">{n ? `${n} ${n === 1 ? 'valor volta' : 'valores voltam'} ao padrão em ${credor.nome} (o que o motor faz hoje, sem o Resubmit). Nada vale até salvar; a versão atual continua no histórico.` : 'Esta carteira já está no padrão MotorCX.'}</p>
+						<p className="text-[13.5px] text-[var(--base-texto-2)]">{n ? `${n} ${n === 1 ? 'valor volta' : 'valores voltam'} ao padrão em ${credor.nome} (limites, modo, regra por sinalização, renitência e reciclagem: o que o motor faz hoje). Nada vale até salvar; a versão atual continua no histórico.` : 'Esta carteira já está no padrão MotorCX.'}</p>
 						<div className="flex flex-wrap justify-end gap-2">
 							<button type="button" className={btnSec} style={{ borderColor: 'var(--base-borda)' }} onClick={() => setSobre(null)}>Cancelar</button>
 							<button type="button" disabled={!n} className={`${btn} text-[var(--destaque-texto)]`} style={{ backgroundColor: 'var(--destaque)' }} onClick={() => { trocar(effectiveDiscagem(null)); setSobre(null); toast('Padrão MotorCX carregado. Salve para valer.'); }}>Voltar ao padrão</button>

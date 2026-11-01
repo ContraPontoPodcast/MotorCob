@@ -6,7 +6,7 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { usePermissao } from '@/components/app-shell';
 import { supabase, friendlyError } from '@/lib/supabase';
 import { NOME, SITUACOES_RENITENCIA, calcularPassadas, passadaRuim, type LinhaPassada, type PassadaCalc } from '@/lib/renitencia';
-import { Nota, SecaoTitulo } from './renitencia-situacao';
+import { Nota, SecaoTitulo } from './renitencia/pecas';
 
 const nf = (n: number) => Math.round(n).toLocaleString('pt-BR');
 const pc = (n: number, d = 1) => `${n.toFixed(d).replace('.', ',')}%`;

@@ -30,7 +30,7 @@ export type Discagem = {
 	retorno_agendado?: { max_dias?: number } & Record<string, unknown>;
 	por_situacao?: Record<string, Record<string, unknown>>;
 	falhas_tecnicas?: Record<string, Record<string, unknown>>;
-	// a edição destes três chega com o redesign; o site só preserva o que estiver salvo
+	// editados pela tela Renitência (lib/renitencia.ts: mudarSinal, mudarModo, mudarRec)
 	por_sinalizacao?: Record<string, unknown> | null;
 	modo_discagem?: Record<string, unknown> | null;
 	reciclagem_auto?: Record<string, unknown> | null;
@@ -168,7 +168,11 @@ export function stableEqual(a: unknown, b: unknown): boolean {
 
 /** Definição efetiva = sugestões mescladas com os overrides gravados. */
 export function effectiveDiscagem(stored: Record<string, unknown> | null | undefined): Discagem {
-	return { ...SUGESTOES, ...(stored as Discagem) };
+	// tentativas por número sem valor salvo fica vazio: o padrão depende da regra nova (2 hoje; 3 com por_sinalizacao
+	// ou modo_discagem, SQL 65) e a tela lê o efetivo (lib/renitencia.ts › efetivo)
+	const d: Discagem = { ...SUGESTOES, ...(stored as Discagem) };
+	if ((stored as Discagem | null | undefined)?.tentativas_numero_dia == null) delete d.tentativas_numero_dia;
+	return d;
 }
 
 /** Calcula a saída de horários: ativo false → omitir; ativo true → { ativo, tabela? }. */
@@ -197,6 +201,12 @@ export function computeDiff(draft: Discagem): Record<string, unknown> {
 	const keys = new Set<string>([...Object.keys(SUGESTOES), ...Object.keys(draft)]);
 	for (const key of keys) {
 		const k = key as keyof Discagem;
+		if (k === 'tentativas_numero_dia') {
+			// grava só o que difere do padrão que vale (2 hoje, 3 com a regra nova), para o motor e o site dizerem o mesmo
+			const v = draft.tentativas_numero_dia, nova = draft.por_sinalizacao != null || draft.modo_discagem != null;
+			if (v != null && v !== (nova ? 3 : 2)) out[k] = v;
+			continue;
+		}
 		if (k === 'tentativas_cliente_dia') {
 			const v = draft.tentativas_cliente_dia;
 			if (v != null) out[k] = v;
@@ -208,7 +218,7 @@ export function computeDiff(draft: Discagem): Record<string, unknown> {
 			continue;
 		}
 		if (k === 'por_sinalizacao' || k === 'modo_discagem' || k === 'reciclagem_auto') {
-			if (draft[k] != null) out[k] = draft[k]; // preservados como estão salvos (a edição chega com o redesign)
+			if (draft[k] != null) out[k] = draft[k]; // já só com o que difere do padrão (lib/renitencia.ts)
 			continue;
 		}
 		if (k === 'retorno_agendado') {

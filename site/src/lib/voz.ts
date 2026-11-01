@@ -157,6 +157,7 @@ export const PERM_VOZ = {
 	editarCanais: 'editar_canais',
 	enviarMensagens: 'enviar_mensagens',
 	reenviarLote: 'reenviar_lote_voz', // SQL 65 · Reenviar agora (padrão: Admin e Operação)
+	reciclarLote: 'reciclar_lote_voz', // SQL 65 · Reciclar mailing (padrão: Admin e Operação)
 } as const;
 
 /** Grupos com menos conversas que isto não mostram percentual (insights_voz devolve null). */
