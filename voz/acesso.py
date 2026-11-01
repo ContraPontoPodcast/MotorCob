@@ -57,6 +57,7 @@ ESCRITA = {
     "fornecedor_saude": "gravar_saude", "voz_lotes": "gravar_lotes", "voz_ondas": "gravar_ondas",
     "voz_fluxo_passos": "gravar_fluxo_passos", "crm_chamadas": "gravar_crm_chamadas",    # SQL 58 (só códigos)
     "voz_trechos": "gravar_trechos", "voz_curadoria_itens": "gravar_curadoria",           # SQL 60 (Speech Analytics)
+    "voz_resubmits": "gravar_resubmits",                                                    # SQL 65 (Resubmit)
 }
 # RPC do public que a VM chama -> função de voz_vm com os mesmos argumentos (um objeto jsonb, como o corpo do
 # PostgREST) e a mesma forma de resposta (lista, objeto, valor ou null). RPC fora daqui é recusada.
@@ -75,10 +76,14 @@ RPC = {
     "conferir_rascunhos_recomendacoes": "conferir_rascunhos_recomendacoes",
     "recomendacoes_aplicadas_voz": "recomendacoes_aplicadas", "gravar_impacto_voz": "gravar_impacto",
     "avisar_alertas_voz": "avisar_alertas",
+    # SQL 65 · Renitência por situação, Resubmit, Reenviar agora e contato por passada
+    "regras_discagem_voz": "regras_discagem", "lote_voz_do_dia": "lote_do_dia",
+    "registrar_onda_voz": "registrar_onda", "pegar_reenvio_voz": "pegar_reenvio",
+    "concluir_reenvio_voz": "concluir_reenvio", "agregar_passadas_voz": "agregar_passadas",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual
-DEVOLVE_ID = ("voz_lotes", "voz_ondas")
+DEVOLVE_ID = ("voz_lotes", "voz_ondas", "voz_resubmits")
 
 COLUNA = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 OPERADORES = {"eq": "=", "neq": "<>", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}

@@ -21,6 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 from motor import voz as V
 from voz import tarifacao as T
@@ -30,10 +31,11 @@ from voz.orquestrador import gravacao as G
 from voz.orquestrador.agendador import Agendador
 from voz.orquestrador.ari import ClienteARI, ErroARI
 from voz.orquestrador.eventos import SEM_IA, EscritorEventos, EventoChamada, classificar
-from voz.orquestrador.lote import ItemLote, Lote
+from voz.orquestrador.lote import ItemLote, Lote, hash_destino
 from voz.provedores.base import ContextoChamada, ProvedorVoz
 
 log = logging.getLogger("motorcx.voz")
+_FUSO = ZoneInfo("America/Sao_Paulo")
 APP = "motorcx"
 TECNICOS_FAILOVER = ("falha_operadora", "bloqueio_originacao")
 # Q.850 do destino da transferência que quer dizer "ninguém para atender" (o resto é falha)
@@ -78,6 +80,7 @@ class Chamada:
     espera_agente_ate: datetime | None = None
     failover_ate: datetime | None = None
     provedor: str | None = None
+    passagem: dict = field(default_factory=dict)   # passada, situação de origem, onda e volta (Lote.iniciar)
 
     @property
     def candidata(self):
@@ -86,6 +89,17 @@ class Chamada:
 
 def _id_de(canal_id: str) -> str:
     return canal_id.rsplit("-", 1)[0]
+
+
+def _quando(v) -> datetime | None:
+    """retorno_em do provedor (datetime ou texto ISO) -> horário de Brasília sem fuso."""
+    if isinstance(v, datetime):
+        return v.replace(tzinfo=None) if v.tzinfo is None else v.astimezone(_FUSO).replace(tzinfo=None)
+    try:
+        d = datetime.fromisoformat(str(v).strip().replace("Z", "+00:00")) if v else None
+    except ValueError:
+        return None
+    return None if d is None else (d if d.tzinfo is None else d.astimezone(_FUSO).replace(tzinfo=None))
 
 
 def _int(v):
@@ -196,6 +210,7 @@ class Orquestrador:
             self._conta("troncos_cheios")
             return False
         c.no_pico = self.agendador.ocupar(lote.empresa_id, c.candidata.tronco.id)
+        c.passagem = lote.iniciar(idx, agora)
         lote.em_voo.add(idx)
         self.chamadas[c.id] = c
         if not self._discar(c, agora):
@@ -572,7 +587,11 @@ class Orquestrador:
             provedor=c.provedor, credor_id=c.lote_chave[1] if c.lote_chave else None,
             canal=c.lote_chave[2] if c.lote_chave else "agente_voz", custo=tar["custo_operadora"] or 0.0,
             modo=self.dados.config(c.empresa_id).modo, atendida_em=c.t_atendeu, encerrada_em=agora,
-            transferida_em=(c.t_transferencia or agora) if c.transferencia else None)
+            transferida_em=(c.t_transferencia or agora) if c.transferencia else None,
+            lote_id=self.lotes[c.lote_chave].lote_id if c.lote_chave in self.lotes else None,
+            destino_hash=hash_destino(c.item.telefone), passada=c.passagem.get("passada"),
+            situacao_origem=c.passagem.get("situacao_origem"), resubmit_ref=c.passagem.get("resubmit_ref"),
+            onda_chave=c.passagem.get("onda_chave"))
         if c.gravando and c.t_atendeu and self.fila_envio is not None:
             objeto = G.nome_objeto(c.lote_chave[1] if c.lote_chave else None, ev.data, c.id)
             ev.gravacao = f"gs://{c.bucket}/{objeto}"
@@ -584,7 +603,8 @@ class Orquestrador:
         lote = self.lotes.get(c.lote_chave)
         if lote is not None:
             lote.em_voo.discard(c.idx)
-            lote.guarda.registrar(c.item, ev.desfecho, self.relogio())
+            lote.registrar(c.item, ev.desfecho, self.relogio(), causa_sip=c.causa_sip,
+                           retorno_em=_quando(c.extras.get("retorno_em")), id_chamada=c.id)
         if c.veredito == A.PESSOA:
             mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho == "abandonada")
             if mudou == "freou":

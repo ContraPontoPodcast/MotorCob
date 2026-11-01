@@ -2718,5 +2718,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 57: testes do papel motorcx_voz (testar_voz_acesso.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 65 · Renitência por situação, Resubmit, Reenviar agora e contato por passada (inclui o papel motorcx_voz).
+# Depois do testar_voz_acesso.py, que reaplica o 57 em diante (o 65 reaplica a troca dele no gravar_chamadas)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_resubmit.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 65: Renitência e Resubmit (testar_voz_resubmit.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

@@ -65,7 +65,14 @@ PADRAO = {
     "nao_ligar": {"ativo": True},
     "horarios": {"ativo": False, "tabela": None},   # desligado até o jurídico validar a prévia
     "chamadas_curtas": {"ativo": True, "aviso": 0.75, "corte_ativo": False, "corte": 0.80,
-                        "max_por_numero_dia": 900, "max_total_dia": 9000, "abandono_conta": True, "segundos": 6},
+                        "max_por_numero_dia": 900, "max_total_dia": 9000, "abandono_conta": True, "segundos": 6,
+                        "falha_conta": True},
+    # Renitência por situação e Resubmit (protótipo aprovado de 01/11/2026, SQL 65). Vazio/None = o que o motor e a
+    # VM fazem hoje (paridade): intervalo_min_minutos (ocupado: intervalo_ocupado_minutos) e tentativas_numero_dia
+    # para toda situação; falha técnica religa pelo intervalo geral; sem resubmit = a retentativa de hoje.
+    "por_situacao": {},          # {situação: {intervalo_minutos, max_dia, conta_descanso}} (só as mudadas)
+    "falhas_tecnicas": {},       # {falha: {religar_minutos, aviso}} (só as mudadas)
+    "resubmit": None,            # None = retentativa de hoje; objeto = Resubmit por situação (RESUBMIT_PADRAO + mudanças)
 }
 # campo -> (tipo, mínimo, máximo) dos blocos
 _SUB = {
@@ -82,8 +89,156 @@ _SUB = {
     "nao_ligar": {"ativo": bool},
     "chamadas_curtas": {"ativo": bool, "aviso": "fracao", "corte_ativo": bool, "corte": "fracao",
                         "max_por_numero_dia": (1, 10 ** 6), "max_total_dia": (1, 10 ** 8),
-                        "abandono_conta": bool, "segundos": (1, 60)},
+                        "abandono_conta": bool, "segundos": (1, 60), "falha_conta": bool},
 }
+
+# ------------------------------------------------------------------ Renitência por situação e Resubmit (SQL 65)
+# As 8 situações do dono (motor/voz.py › SITUACOES_DONO) e as falhas técnicas do de-para SIP. "sem_credito" é a
+# falha_operadora com SIP 402; "numero_incorreto" é numero_inexistente (ou inexistente_voz) e pessoa errada.
+SITUACOES_RENITENCIA = ("maquina", "nao_atendida", "ocupado", "caixa_postal", "desligou_sem_conversar",
+                        "atendeu_desligou")
+FALHAS_TECNICAS = ("falha_operadora", "sem_credito", "falha_rede", "indisponivel", "bloqueio_originacao",
+                   "cancelada_discador", "abandonada")
+SITUACOES_RESUBMIT = ("maquina", "nao_atendida", "ocupado", "caixa_postal", "desligou_sem_conversar",
+                      "retorno_agendado", "atendeu_desligou", "numero_incorreto") + FALHAS_TECNICAS
+PRIORIDADES = ("topo", "normal", "fim")
+_SUB_SITUACAO = {"intervalo_minutos": (0, 1440), "max_dia": (1, 10), "conta_descanso": bool}
+_SUB_FALHA = {"religar_minutos": (0, 1440), "aviso": "fracao"}
+_SUB_RESUBMIT = {"ativo": bool, "depois_minutos": (0, 600), "max_dia": (1, 9), "prioridade": PRIORIDADES,
+                 "ate": "hora", "outro_numero": bool}
+# aviso (fração das tentativas do dia) de cada falha técnica: só alerta, nunca muda a discagem
+AVISO_FALHA_PADRAO = {"falha_operadora": 0.15, "sem_credito": 0.01, "falha_rede": 0.05, "indisponivel": 0.20,
+                      "bloqueio_originacao": 0.01, "cancelada_discador": 0.05, "abandonada": 0.03}
+# o "padrão MotorCX" que a tela do Resubmit mostra e que vale quando a carteira salva o bloco resubmit
+_R = lambda ativo, dep, mx, pri, ate, outro: {"ativo": ativo, "depois_minutos": dep, "max_dia": mx,  # noqa: E731
+                                              "prioridade": pri, "ate": ate, "outro_numero": outro}
+RESUBMIT_PADRAO = {
+    "maquina": _R(True, 120, 1, "fim", "19:00", True),
+    "nao_atendida": _R(True, 60, 2, "normal", "19:30", True),
+    "ocupado": _R(True, 15, 2, "topo", "19:30", False),
+    "caixa_postal": _R(True, 120, 1, "fim", "19:00", True),
+    "desligou_sem_conversar": _R(True, 90, 1, "normal", "19:00", False),
+    "retorno_agendado": _R(True, 0, 1, "topo", "20:00", False),
+    "atendeu_desligou": _R(False, 120, 1, "fim", "18:00", False),
+    "numero_incorreto": _R(False, 30, 1, "normal", "19:00", True),
+    "falha_operadora": _R(True, 30, 2, "topo", "19:30", False),
+    "sem_credito": _R(False, 30, 1, "normal", "19:30", False),
+    "falha_rede": _R(True, 30, 2, "topo", "19:30", False),
+    "indisponivel": _R(True, 180, 1, "fim", "19:00", True),
+    "bloqueio_originacao": _R(False, 120, 1, "normal", "19:00", False),
+    "cancelada_discador": _R(True, 30, 1, "topo", "19:30", False),
+    "abandonada": _R(True, 60, 1, "topo", "19:30", False),
+}
+del _R
+# travas da tela: retorno agendado volta sempre (no horário pedido, 1 vez, topo); número incorreto nunca volta no
+# mesmo número ("ativo" = tentar outro número do cliente)
+_TRAVADO_RESUBMIT = {"retorno_agendado": {"ativo": True, "max_dia": 1, "prioridade": "topo", "outro_numero": False},
+                     "numero_incorreto": {"max_dia": 1}}
+
+
+def situacao_de(desfecho: str | None, causa_sip: int | None = None) -> str | None:
+    """Desfecho de voz -> situação da Renitência/Resubmit (None = houve contato ou pedido: não volta)."""
+    if desfecho in ("numero_inexistente", "inexistente_voz", "atendida_terceiro_desconhece"):
+        return "numero_incorreto"
+    if desfecho == "falha_operadora" and causa_sip == 402:
+        return "sem_credito"
+    return desfecho if desfecho in SITUACOES_RESUBMIT else None
+
+
+def regra_situacao(cfg: dict, sit: str) -> dict:
+    """Intervalo (min), máximo no dia no mesmo número e se conta no descanso, efetivos para a situação. Sem a chave
+    em por_situacao/falhas_tecnicas valem os globais de hoje (paridade)."""
+    if sit in FALHAS_TECNICAS:
+        f = (cfg.get("falhas_tecnicas") or {}).get(sit) or {}
+        return {"intervalo_minutos": f.get("religar_minutos", cfg["intervalo_min_minutos"]),
+                "max_dia": cfg["tentativas_numero_dia"], "conta_descanso": False,
+                "aviso": f.get("aviso", AVISO_FALHA_PADRAO[sit])}
+    p = (cfg.get("por_situacao") or {}).get(sit) or {}
+    glob = cfg["intervalo_ocupado_minutos"] if sit == "ocupado" else cfg["intervalo_min_minutos"]
+    return {"intervalo_minutos": p.get("intervalo_minutos", glob),
+            "max_dia": min(p.get("max_dia", cfg["tentativas_numero_dia"]), cfg["tentativas_numero_dia"]),
+            "conta_descanso": p.get("conta_descanso", sit in V.NAO_ATENDE)}
+
+
+def resubmit_efetivo(cfg: dict, sit: str, tentativas_cliente: int | None = None) -> dict | None:
+    """Regra do Resubmit que vale para a situação (None = carteira sem Resubmit: retentativa de hoje).
+    depois_efetivo = o maior entre "depois de" e o intervalo da renitência (decisão do dono); cabe = quantas voltas a
+    régua deixa (tentativas por número, ou por cliente com outro número)."""
+    res = cfg.get("resubmit")
+    if res is None or sit not in res:
+        return None
+    r = dict(res[sit])
+    ren = regra_situacao(cfg, sit)
+    tc = tentativas_cliente or cfg.get("tentativas_cliente_dia") or 3
+    r["depois_efetivo"] = max(r["depois_minutos"], ren["intervalo_minutos"])
+    r["cabe"] = max(0, tc - 1) if r["outro_numero"] else max(0, ren["max_dia"] - 1)
+    r["max_efetivo"] = min(r["max_dia"], r["cabe"])
+    return r
+
+
+def _bloco_por_chave(v, permitidas, regras: dict, onde: str, base: dict | None) -> tuple[dict, list[str]]:
+    """{chave: {campo: valor}} validado campo a campo (o que não der fica de fora, com aviso)."""
+    if not isinstance(v, dict):
+        return copy.deepcopy(base or {}), [f"{onde}: precisa ser um objeto (vale o padrão)"]
+    saida, av = copy.deepcopy(base or {}), []
+    for k, campos in v.items():
+        if str(k).startswith("_"):
+            continue
+        if k not in permitidas:
+            av.append(f"{onde}: '{k}' não existe (ignorado)")
+            continue
+        if not isinstance(campos, dict):
+            av.append(f"{onde}/{k}: precisa ser um objeto (ignorado)")
+            continue
+        atual = saida.setdefault(k, {})
+        for kk, vv in campos.items():
+            if str(kk).startswith("_"):
+                continue
+            regra = regras.get(kk)
+            if regra is None:
+                av.append(f"{onde}/{k}: '{kk}' não existe (ignorado)")
+                continue
+            try:
+                atual[kk] = _valor(vv, regra)
+            except (TypeError, ValueError) as ex:
+                av.append(f"{onde}/{k}/{kk}: {ex} (ignorado)")
+        if not atual:
+            saida.pop(k)
+    return saida, av
+
+
+def _resubmit(v, onde: str) -> tuple[dict | None, list[str]]:
+    """Bloco resubmit -> regra completa por situação (RESUBMIT_PADRAO + o que a carteira mudou, com as travas)."""
+    if v is None:
+        return None, []
+    mud, av = _bloco_por_chave(v, SITUACOES_RESUBMIT, _SUB_RESUBMIT, onde, None)
+    if not isinstance(v, dict):
+        return None, av
+    saida = copy.deepcopy(RESUBMIT_PADRAO)
+    for k, campos in mud.items():
+        saida[k].update(campos)
+    for k, trava in _TRAVADO_RESUBMIT.items():
+        saida[k].update(trava)
+    return saida, av
+
+
+def padrao_site() -> dict:
+    """O padrão MotorCX que o site mostra (public.discagem_padrao(), SQL 65; tests/test_resubmit.py confere):
+    os valores de hoje por situação e falha técnica, e o Resubmit sugerido."""
+    base = copy.deepcopy(PADRAO)
+    tc = 3
+    return {
+        "tentativas_numero_dia": base["tentativas_numero_dia"], "tentativas_cliente_dia": tc,
+        "intervalo_min_minutos": base["intervalo_min_minutos"],
+        "intervalo_ocupado_minutos": base["intervalo_ocupado_minutos"],
+        "por_situacao": {s: {k: v for k, v in regra_situacao(base, s).items() if k in _SUB_SITUACAO}
+                         for s in SITUACOES_RENITENCIA},
+        "falhas_tecnicas": {s: {"religar_minutos": regra_situacao(base, s)["intervalo_minutos"],
+                                "aviso": AVISO_FALHA_PADRAO[s]} for s in FALHAS_TECNICAS},
+        "resubmit": copy.deepcopy(RESUBMIT_PADRAO),
+        "retorno_agendado": {"max_dias": base["retorno_agendado"]["max_dias"]},
+        "chamadas_curtas": {"falha_conta": base["chamadas_curtas"]["falha_conta"]},
+    }
 _INTEIROS = {"tentativas_numero_dia": (1, 10), "tentativas_cliente_dia": (1, 10),
              "intervalo_min_minutos": (0, 1440), "intervalo_ocupado_minutos": (0, 1440)}
 
@@ -241,6 +396,14 @@ def normalizar(bruto, base: dict | None = None, onde: str = "discagem") -> tuple
         try:
             if k in _INTEIROS:
                 cfg[k] = None if (k == "tentativas_cliente_dia" and v in (None, "")) else _inteiro(v, *_INTEIROS[k])
+            elif k in ("por_situacao", "falhas_tecnicas"):
+                perm, regras = ((SITUACOES_RENITENCIA, _SUB_SITUACAO) if k == "por_situacao"
+                                else (FALHAS_TECNICAS, _SUB_FALHA))
+                cfg[k], a = _bloco_por_chave(v, perm, regras, f"{onde}/{k}", cfg.get(k))
+                av += a
+            elif k == "resubmit":
+                cfg[k], a = _resubmit(v, f"{onde}/{k}")
+                av += a
             elif k == "horarios":
                 if isinstance(v, bool) or not isinstance(v, dict):
                     v = {"ativo": v}
@@ -479,6 +642,18 @@ def ajustar_eventos(eventos: list, cfg: dict) -> tuple[list, Counter]:
     return saida, n
 
 
+def _marca_descanso(resultado: str, cfg: dict) -> str | None:
+    """Marca do retorno de canal; com conta_descanso mudado na Renitência por situação, a situação passa a contar
+    (temporário) ou deixa de contar no descanso por "não atende". Sem a chave, a marca de hoje (paridade)."""
+    marca = MARCA_VOZ.get(resultado)
+    p = (cfg.get("por_situacao") or {}).get(resultado) or {}
+    if "conta_descanso" not in p:
+        return marca
+    if p["conta_descanso"]:
+        return "temporario"
+    return None if marca == "temporario" else marca
+
+
 def renitencia(eventos: list, hoje: date, cfg: dict) -> tuple[dict, list, Counter]:
     """(sem_voz {id_cliente: motivo}, registros de voz para o retorno de canal, resumo).
 
@@ -510,7 +685,7 @@ def renitencia(eventos: list, hoje: date, cfg: dict) -> tuple[dict, list, Counte
             ate, texto = date.max, "pediu para não ligar"
         if ate is not None and hoje < ate and (e.id_cliente not in ate_de or ate > ate_de[e.id_cliente][0]):
             ate_de[e.id_cliente] = (ate, texto)
-        marca = MARCA_VOZ.get(e.resultado)
+        marca = _marca_descanso(e.resultado, cfg)
         if e.contato and marca and descanso and (marca != "inexistente" or inex):
             regs.append(Registro(e.contato, "voz", marca, e.data, ORIGEM + (e.origem or e.fornecedor or "")))
     sem_voz = {k: t for k, (_, t) in ate_de.items()}
@@ -851,6 +1026,8 @@ DIAS_HISTORICO = 30
 
 def e_curta(e, cc: dict) -> bool:
     """Chamada curta: até `segundos`, caixa postal ou não completada; abandono conta se configurado."""
+    if e.resultado in V.TECNICOS and not cc.get("falha_conta", True):
+        return False                       # a carteira não conta a falha técnica como curta (abandono à parte)
     d = getattr(e, "duracao_s", None)
     if d is not None and d <= cc["segundos"]:
         return True

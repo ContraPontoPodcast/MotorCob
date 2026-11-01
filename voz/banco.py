@@ -64,6 +64,17 @@ COLUNAS: dict[str, dict[str, str]] = {
         "rota_id": "rota_id", "segundos_tarifados": "segundos_tarifados", "preco_minuto": "preco_minuto",
         "custo_operadora": "custo_operadora",
         "fluxo_versao_id": "fluxo_versao_id", "bloco_final": "bloco_final",
+        # SQL 65 · Resubmit e contato por passada
+        "lote_id": "lote_id", "onda_id": "onda_id", "destino_hash": "destino_hash", "passada": "passada",
+        "situacao_origem": "situacao_origem", "resubmit_id": "resubmit_id",
+    },
+    # SQL 65 · cada decisão do Resubmit (automático ou "Reenviar agora"): só destino_hash, nunca o telefone
+    "voz_resubmits": {
+        "ref": "ref", "empresa_id": "empresa_id", "credor_id": "credor_id", "lote_id": "lote_id",
+        "id_chamada_origem": "id_chamada_origem", "id_cliente": "id_cliente", "destino_hash": "destino_hash",
+        "situacao_origem": "situacao_origem", "passada": "passada", "origem": "origem", "pedido_id": "pedido_id",
+        "decisao": "decisao", "motivo_fora": "motivo_fora", "nao_antes_de": "nao_antes_de", "onda_id": "onda_id",
+        "criado_em": "criado_em",
     },
     # SQL 58 · um evento por bloco e uma linha por chamada a conector (só códigos)
     "voz_fluxo_passos": {
@@ -89,7 +100,7 @@ COLUNAS: dict[str, dict[str, str]] = {
 
 # chave de conflito (upsert) de cada tabela gravada pela VM
 CONFLITO = {"voz_chamadas": ("empresa_id", "id_chamada", "canal"), "consumo_voz": ("empresa_id", "dia", "tech_prefix"),
-            "voz_fluxo_passos": ("empresa_id", "id_chamada", "ordem")}
+            "voz_fluxo_passos": ("empresa_id", "id_chamada", "ordem"), "voz_resubmits": ("empresa_id", "ref")}
 # colunas de voz_chamadas que só o gatilho do banco escreve (a VM nunca manda: reenvio não conflita com a tarifação)
 SO_DO_BANCO = {"voz_chamadas": ("rota_id", "segundos_tarifados", "preco_minuto", "custo_operadora")}
 
