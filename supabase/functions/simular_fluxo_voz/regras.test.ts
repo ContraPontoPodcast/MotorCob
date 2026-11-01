@@ -57,7 +57,7 @@ test("pacote da VM: sem credencial, com exemplo e cliente fictício", () => {
 });
 
 test("assinatura HMAC igual à da VM (vetor em voz/simulador_http, tests/test_voz_simulador_http.py)", async () => {
-  const vetor = JSON.parse(readFileSync(new URL("./vetor_assinatura.json", import.meta.url), "utf-8"));
+  const vetor = JSON.parse(readFileSync(new URL("../../../tests/dados/vetor_assinatura_simulador.json", import.meta.url), "utf-8"));
   assert.equal(await assinar(vetor.chave, vetor.carimbo, vetor.corpo), vetor.assinatura);
 });
 
