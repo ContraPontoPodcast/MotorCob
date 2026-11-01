@@ -23,6 +23,10 @@ case "$*" in
   "storage service-agent"*) echo service-1@gs-project-accounts.iam.gserviceaccount.com ;;
   *" describe "*|*" describe") [ -f "$ESTADO" ] || exit 1 ;;
   *"--lifecycle-file="*) a="$*"; f="${a##*--lifecycle-file=}"; cat "${f%% *}" >> "$LOG.ciclo" ;;
+  "iam service-accounts keys create"*)
+    [ -n "${CHAVE_FALHA:-}" ] && exit 1
+    a="$*"; f="${a#iam service-accounts keys create }"; f="${f%% *}"
+    printf '{"client_email":"x","private_key":"-----BEGIN PRIVATE KEY-----\\nCHAVE-FALSA-NAO-MOSTRAR\\n"}' > "$f" ;;
 esac
 exit 0
 '''
@@ -48,7 +52,7 @@ class TestCriarGcp(unittest.TestCase):
                           encoding="utf-8")
         # gcloud falso como função exportada do bash: não precisa de arquivo executável (/tmp noexec no CI)
         env = {**os.environ, "BASH_FUNC_gcloud%%": f'() {{ bash "{self.fake}" "$@"; }}', "LOG": str(self.log),
-               "ESTADO": str(self.estado)}
+               "ESTADO": str(self.estado), "HOME": str(self.tmp), **getattr(self, "env_extra", {})}
         r = subprocess.run(["bash", str(script), *args], capture_output=True, text=True, env=env, timeout=60)
         chamadas = self.log.read_text().splitlines() if self.log.exists() else []
         return r, chamadas
@@ -73,13 +77,38 @@ class TestCriarGcp(unittest.TestCase):
                       "--rules=tcp:8443 --source-ranges=0.0.0.0/0 --target-tags=motorcx-asterisk", tudo)
         self.assertIn("firewall-rules create motorcx-voz-acme --network=motorcx-voz --direction=INGRESS --action=ALLOW "
                       "--rules=tcp:80 --source-ranges=0.0.0.0/0", tudo)
-        self.assertIn("arquivo-motorcx-caddy.Caddyfile=", next(c for c in chamadas if "instances create motorcx-ast-1" in c))
+        self.assertIn("arquivo-motorcx-caddy_Caddyfile=", next(c for c in chamadas if "instances create motorcx-ast-1" in c))
         self.assertIn('resource.name.startsWith("projects/123456789/secrets/motorcx-voz-")', tudo)
+        # credenciais dos conectores de CRM (crm/<e>/<c>/<v> -> motorcx-crm-...) na MESMA condição, e nada além
+        cond = next(c for c in chamadas if "add-iam-policy-binding" in c and "secretAccessor" in c)
+        self.assertIn('resource.name.startsWith("projects/123456789/secrets/motorcx-voz-") || '
+                      'resource.name.startsWith("projects/123456789/secrets/motorcx-crm-")', cond)
+        self.assertIn("title=motorcx-voz-crm-segredos", cond)
+        self.assertEqual(sum("add-iam-policy-binding" in c and "secretAccessor" in c for c in chamadas), 1)
+        # a condição antiga (só motorcx-voz-) sai: a nova cobre
+        self.assertIn("remove-iam-policy-binding proj-ficticio --member=serviceAccount:motorcx-asterisk@proj-ficticio"
+                      ".iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor "
+                      '--condition=expression=resource.name.startsWith("projects/123456789/secrets/motorcx-voz-"),'
+                      "title=motorcx-voz-segredos", tudo)
+        # Vertex AI (Speech Analytics e busca semântica): API ligada e o papel mínimo para o predict
+        self.assertIn("aiplatform.googleapis.com", next(c for c in chamadas if c.startswith("services enable")))
+        self.assertIn("projects add-iam-policy-binding proj-ficticio --member=serviceAccount:motorcx-asterisk@"
+                      "proj-ficticio.iam.gserviceaccount.com --role=roles/aiplatform.user --condition=None", tudo)
+        # conta de leitura das gravações: criada, sem papel nenhum no projeto e sem chave aqui
+        self.assertIn("iam service-accounts create motorcx-gravacoes-leitura", tudo)
+        self.assertFalse([c for c in chamadas if "projects add-iam-policy-binding" in c and "gravacoes-leitura" in c])
+        self.assertNotIn("keys create", tudo)
         self.assertIn("secrets create motorcx-voz-ari-senha", tudo)
         self.assertNotIn("versions access", tudo)                       # não lê segredo
         self.assertEqual(sum("instances create" in c for c in chamadas), 2)
         criar = next(c for c in chamadas if "instances create motorcx-ast-1" in c)
         self.assertIn("arquivo-motorcx-voz-rodar=", criar)
+        # chave do metadado só com [A-Za-z0-9_-] (o GCE recusa ponto): nenhuma chave arquivo-* com ponto
+        arg = criar.split("--metadata-from-file=")[1].split(" ")[0]
+        chaves = [x.split("=", 1)[0] for x in arg.split(",")]
+        self.assertIn("arquivo-motorcx-voz-config_service", chaves)
+        for k in chaves:
+            self.assertRegex(k, r"^[A-Za-z0-9_-]{1,127}$")
         self.assertIn("motorcx-parte=1/2", criar)
         self.assertIn("--zone=southamerica-east1-a", criar)
         self.assertIn("--shielded-secure-boot", criar)
@@ -117,6 +146,7 @@ class TestCriarGcp(unittest.TestCase):
         self.assertNotIn("instances create", tudo)
         self.assertEqual(sum("instances add-metadata" in c for c in chamadas), 2)
         self.assertNotIn("secrets create", tudo)
+        self.assertNotIn("service-accounts create", tudo)               # as duas contas já existem
 
     def test_bucket_da_empresa(self):
         self.estado.write_text("1")                                     # a infraestrutura já existe
@@ -131,7 +161,60 @@ class TestCriarGcp(unittest.TestCase):
         self.assertIn("buckets add-iam-policy-binding gs://proj-ficticio-motorcx-grav-e12 "
                       "--member=serviceAccount:motorcx-asterisk@proj-ficticio.iam.gserviceaccount.com "
                       "--role=roles/storage.objectCreator", tudo)
+        # a conta da Edge Function gravacoes (GCS_GRAVACOES_CHAVE) só lê este bucket
+        leitura = [c for c in chamadas if "buckets add-iam-policy-binding" in c and "gravacoes-leitura" in c]
+        self.assertEqual(leitura, ["storage buckets add-iam-policy-binding gs://proj-ficticio-motorcx-grav-e12 "
+                                   "--member=serviceAccount:motorcx-gravacoes-leitura@proj-ficticio.iam.gserviceaccount.com "
+                                   "--role=roles/storage.objectViewer"])
         self.assertNotIn("firewall", tudo)
+
+    def test_metadado_grande_demais_para_antes_das_vms(self):
+        (self.dir / "vm" / "motorcx-grande").write_bytes(b"#" * (300 * 1024))
+        r, chamadas = self.rodar("proj-ficticio")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("256 KB", r.stderr)
+        self.assertFalse([c for c in chamadas if "instances" in c])
+        (self.dir / "vm" / "motorcx-grande").unlink()
+        for i in range(3):                                              # cada um cabe, a soma não
+            (self.dir / "vm" / f"motorcx-medio{i}").write_bytes(b"#" * (200 * 1024))
+        r, chamadas = self.rodar("proj-ficticio")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("512 KB", r.stderr)
+        self.assertFalse([c for c in chamadas if "instances" in c])
+
+    def test_bucket_cria_a_conta_de_leitura_se_faltar(self):
+        self.estado.write_text("1")
+        self.fake.write_text(GCLOUD.replace('  *" describe "*|*" describe")',
+                                            '  *"describe motorcx-gravacoes-leitura"*) exit 1 ;;\n  *" describe "*|*" describe")'))
+        r, chamadas = self.rodar("empresa", "12", "90", "proj-ficticio")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("iam service-accounts create motorcx-gravacoes-leitura", "\n".join(chamadas))
+
+    def test_chave_de_leitura_vai_so_para_arquivo(self):
+        self.estado.write_text("1")
+        r, chamadas = self.rodar("chave-leitura", "proj-ficticio")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        criar = next(c for c in chamadas if "keys create" in c)
+        self.assertIn("--iam-account=motorcx-gravacoes-leitura@proj-ficticio.iam.gserviceaccount.com", criar)
+        arqs = list(self.tmp.glob("gcs-gravacoes-chave.*.json"))
+        self.assertEqual(len(arqs), 1)
+        self.assertEqual(arqs[0].stat().st_mode & 0o777, 0o600)
+        self.assertIn("CHAVE-FALSA", arqs[0].read_text())
+        for saida in (r.stdout, r.stderr):                                  # nunca mostra a chave
+            self.assertNotIn("CHAVE-FALSA", saida)
+            self.assertNotIn("PRIVATE KEY", saida)
+        self.assertIn("GCS_GRAVACOES_CHAVE", r.stdout)
+        self.assertIn(f'shred -u "{arqs[0]}"', r.stdout)
+        self.assertNotIn("firewall", "\n".join(chamadas))
+        self.assertNotIn("buckets", "\n".join(chamadas))
+
+    def test_chave_de_leitura_recusada_apaga_o_arquivo(self):
+        self.estado.write_text("1")
+        self.env_extra = {"CHAVE_FALHA": "1"}
+        r, _ = self.rodar("chave-leitura", "proj-ficticio")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("iam.disableServiceAccountKeyCreation", r.stderr)
+        self.assertEqual(list(self.tmp.glob("gcs-gravacoes-chave.*")), [])
 
     def test_bucket_novo_com_90_dias_e_recusa_menos(self):
         self.estado.write_text("1")
@@ -155,7 +238,7 @@ class TestScriptsDaVm(unittest.TestCase):
             r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, f"{f.name}: {r.stderr}")
         servicos = sorted(vm.glob("*.service"))
-        self.assertEqual(len(servicos), 14)
+        self.assertEqual(len(servicos), 15)
         for s in servicos:
             txt = s.read_text()
             self.assertIn("ExecStart=", txt, s.name)
@@ -171,7 +254,8 @@ class TestScriptsDaVm(unittest.TestCase):
                      "motorcx-voz-https", "motorcx-caddy.Caddyfile", "motorcx-caddy-simulador.caddy",
                      "motorcx-caddy-elevenlabs.caddy", "motorcx-voz-importador.service",
                      "motorcx-voz-importador.timer", "motorcx-voz-fluxo-noite.service",
-                     "motorcx-voz-fluxo-noite.timer"):
+                     "motorcx-voz-fluxo-noite.timer", "motorcx-voz-gerar-fluxo.service",
+                     "motorcx-provedores.padrao.json"):
             self.assertIn(nome, inicio)
             self.assertTrue((vm / nome).exists(), nome)
         # Speech Analytics (SQL 62): desligado por padrão, só liga com o metadado da VM
@@ -299,3 +383,162 @@ class TestProxyHttps(unittest.TestCase):
         self.assertEqual((self.etc / "motorcx-rotas" / "00-base.caddy").read_text(), "tls internal\n")
         r, _, _ = self.https(dom="x;rm -rf /")
         self.assertEqual(r.returncode, 1)
+
+
+class TestProvedoresDaVm(unittest.TestCase):
+    """/etc/motorcx/provedores.json e provedores_sip.json: exemplos versionados (só referências, sem segredo) no formato
+    que voz/provedores e o gerador do Asterisk leem, e o padrão seguro (Montagem) que o vm_inicio.sh instala só quando
+    o arquivo não existe."""
+
+    class Cofre:
+        def __init__(self):
+            self.pedidos = []
+
+        def valor(self, ref):
+            self.pedidos.append(ref)
+            return "valor-ficticio"
+
+    def test_exemplos_e_padrao_carregam(self):
+        from voz import provedores as PV
+        from voz.segredos import nome_secret_manager
+        padrao = json.loads((VM / "motorcx-provedores.padrao.json").read_text(encoding="utf-8"))
+        self.assertEqual(set(padrao), {"montagem"})                          # padrão: só a Montagem
+        self.assertEqual(sorted(PV.criar_todos(padrao, self.Cofre())), ["montagem_motorcx", "simulador"])
+        exemplo = json.loads((VM / "provedores.exemplo.json").read_text(encoding="utf-8"))
+        cofre = self.Cofre()
+        self.assertEqual(sorted(PV.criar_todos(exemplo, cofre)), ["elevenlabs", "montagem_motorcx", "simulador"])
+        # só referências: toda ref_* vira um segredo que a conta da VM pode ler (motorcx-voz-)
+        for cfg in (padrao, exemplo):
+            for prov in cfg.values():
+                for k, v in prov.items():
+                    if k.startswith("ref_"):
+                        self.assertTrue(nome_secret_manager(v).startswith("motorcx-voz-"), (k, v))
+        for f in ("motorcx-provedores.padrao.json", "provedores.exemplo.json", "provedores_sip.exemplo.json"):
+            self.assertNotRegex((VM / f).read_text(encoding="utf-8"), r"(?i)(sk-|xi-api|BEGIN|password|senha)", f)
+
+    def test_exemplo_sip_gera_o_endpoint(self):
+        from voz.asterisk import gerador as GER
+        from voz import banco as B
+        sip = json.loads((VM / "provedores_sip.exemplo.json").read_text(encoding="utf-8"))
+        conf = GER.gerar_pjsip(B.DadosVoz(), None, provedores_sip=sip)
+        self.assertIn("[pv-elevenlabs]", conf)
+
+    def _instalar(self, etc, metadado):
+        """Roda o trecho do vm_inicio.sh que instala os provedores, com /etc/motorcx numa pasta temporária."""
+        inicio = (VM / "vm_inicio.sh").read_text(encoding="utf-8")
+        trecho = inicio[inicio.index("# provedores de voz: padrão seguro"):inicio.index("systemctl daemon-reload")]
+        trecho = trecho.replace("/etc/motorcx", str(etc))
+        falso = self.tmp / "metadado.json"
+        if metadado is None:
+            falso.unlink(missing_ok=True)
+        else:
+            falso.write_text(metadado, encoding="utf-8")
+        funcoes = "\n".join(l for l in inicio.splitlines() if l.startswith(("chave_meta()", "baixar_arquivo()")))
+        script = (f'baixar() {{ [ "$1" = "${{CHAVE_FALSA:-arquivo-motorcx-provedores_padrao_json}}" ] && cat "{falso}"; }}\n'
+                  + funcoes + '\nset -euo pipefail\n' + trecho)
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+
+    def test_vm_inicio_instala_o_padrao_sem_sobrescrever(self):
+        etc = self.tmp / "etc"
+        etc.mkdir()
+        padrao = (VM / "motorcx-provedores.padrao.json").read_text(encoding="utf-8")
+        r = self._instalar(etc, padrao)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads((etc / "provedores.json").read_text()), json.loads(padrao))
+        self.assertEqual((etc / "provedores.json").stat().st_mode & 0o777, 0o644)   # o contêiner (10010) lê
+        self.assertEqual(json.loads((etc / "provedores_sip.json").read_text()), [])
+        # o que o dono gravou nunca é sobrescrito
+        (etc / "provedores.json").write_text('{"elevenlabs": {"numero_agente": "meu"}}')
+        (etc / "provedores_sip.json").write_text('[{"nome": "meu"}]')
+        r = self._instalar(etc, padrao)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('"meu"', (etc / "provedores.json").read_text())
+        self.assertIn('"meu"', (etc / "provedores_sip.json").read_text())
+
+    def test_vm_inicio_aceita_a_chave_antiga_com_ponto(self):
+        etc = self.tmp / "etc_antiga"
+        etc.mkdir()
+        os.environ["CHAVE_FALSA"] = "arquivo-motorcx-provedores.padrao.json"
+        try:
+            r = self._instalar(etc, (VM / "motorcx-provedores.padrao.json").read_text(encoding="utf-8"))
+        finally:
+            del os.environ["CHAVE_FALSA"]
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((etc / "provedores.json").exists())
+
+    def test_vm_inicio_sem_metadado_ou_invalido_nao_instala_lixo(self):
+        for metadado in (None, "não é json", "[1, 2]"):
+            etc = self.tmp / f"etc{len(str(metadado))}"
+            etc.mkdir()
+            r = self._instalar(etc, metadado)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertFalse((etc / "provedores.json").exists(), metadado)
+            self.assertTrue((etc / "provedores_sip.json").exists())
+
+
+class TestPrefixosDosSegredos(unittest.TestCase):
+    """Todo segredo que a VM lê precisa caber na condição do IAM da conta motorcx-asterisk (criar_gcp.sh)."""
+
+    def prefixos(self):
+        import re
+        txt = (RAIZ / "infra" / "asterisk" / "criar_gcp.sh").read_text(encoding="utf-8")
+        linha = next(l for l in txt.splitlines() if l.startswith("CONDICAO_SEGREDOS="))
+        return re.findall(r'secrets/(motorcx-[a-z]+-)', linha)
+
+    def test_refs_que_a_vm_le_cabem_na_condicao(self):
+        import re
+        from voz import gerar_fluxo as G
+        from voz.segredos import nome_secret_manager
+        prefixos = self.prefixos()
+        self.assertEqual(prefixos, ["motorcx-voz-", "motorcx-crm-"])
+        # a referência do conector de CRM, exatamente como o SQL 58 gera (crm/<empresa>/<conector>/<versão>)
+        sql = (RAIZ / "supabase" / "migrations" / "20261225000001_voz_fluxo.sql").read_text(encoding="utf-8")
+        fmt = re.search(r"ref := format\('(crm/[^']+)'", sql).group(1)
+        crm = fmt.replace("%s", "12", 2).replace("%s", "20261225103000123")
+        refs = [crm, "voz/trunk/12-3", G.REF_LLM, "voz/importador/12/5/20261119103000", "voz/db-senha"]
+        for ref in refs:
+            nome = nome_secret_manager(ref)
+            self.assertTrue(any(nome.startswith(p) for p in prefixos), (ref, nome))
+        self.assertEqual(nome_secret_manager(crm), "motorcx-crm-12-12-20261225103000123")
+        # o exemplo antigo da tela do tronco (sip/...) ficaria fora: por isso o site e o banco exigem voz/
+        self.assertFalse(any(nome_secret_manager("sip/aurora-opc").startswith(p) for p in prefixos))
+
+
+class TestChavesDosMetadados(unittest.TestCase):
+    """GCE: chave de metadado só [A-Za-z0-9_-] e < 128 bytes; 256 KB por valor e 512 KB no total da instância."""
+    LINHA = "chave_meta() { printf 'arquivo-%s' \"$1\" | tr -c 'A-Za-z0-9_-' '_'; }"
+
+    def chave(self, nome):
+        r = subprocess.run(["bash", "-c", self.LINHA + '\nchave_meta "$1"', "_", nome], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout
+
+    def test_mesma_expressao_nos_dois_lados(self):
+        for f in (RAIZ / "infra" / "asterisk" / "criar_gcp.sh", VM / "vm_inicio.sh"):
+            self.assertIn(self.LINHA, f.read_text(encoding="utf-8"), f.name)
+
+    def test_cada_arquivo_vira_chave_valida_e_unica(self):
+        import re
+        arquivos = sorted(p.name for p in VM.glob("motorcx-*"))
+        chaves = [self.chave(n) for n in arquivos]
+        self.assertEqual(len(set(chaves)), len(chaves), "duas chaves iguais")
+        for n, k in zip(arquivos, chaves):
+            self.assertRegex(k, r"^[A-Za-z0-9_-]+$", n)
+            self.assertLess(len(k.encode()), 128, n)
+        self.assertEqual(self.chave("motorcx-voz-config.service"), "arquivo-motorcx-voz-config_service")
+        # tudo o que o vm_inicio.sh baixa existe na pasta (vai pelo criar_gcp.sh)
+        inicio = (VM / "vm_inicio.sh").read_text(encoding="utf-8")
+        for n in re.findall(r"\b(motorcx-[A-Za-z0-9_.-]+\.(?:service|timer|caddy|Caddyfile|json))\b", inicio):
+            if n.startswith("motorcx-voz-inicio"):
+                continue
+            self.assertIn(n, arquivos, n)
+
+    def test_cabe_no_limite_com_folga(self):
+        valores = [VM / "vm_inicio.sh", *VM.glob("motorcx-*")]
+        total = sum(p.stat().st_size for p in valores)
+        self.assertLess(total, 256 * 1024, f"{total} bytes: menos da metade do limite de 512 KB")
+        self.assertTrue(all(p.stat().st_size < 64 * 1024 for p in valores))

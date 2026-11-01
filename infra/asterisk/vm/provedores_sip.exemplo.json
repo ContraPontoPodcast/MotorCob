@@ -1,0 +1,9 @@
+[
+  {
+    "nome": "elevenlabs",
+    "host": "sip.rtc.elevenlabs.io",
+    "porta": 5060,
+    "transporte": "tcp",
+    "codecs": ["ulaw", "alaw"]
+  }
+]

@@ -6,7 +6,8 @@ import { KeyRound } from 'lucide-react';
 import { supabase, friendlyError, today, type Row } from '@/lib/supabase';
 import {
 	CODECS, FORMATOS_DISCAGEM, IPS_SAIDA_MOTORCX, RE_BINA, RE_CSP, RE_DDD, RE_DESTINO_SIP, RE_HOST, RE_IP, RE_REFERENCIA,
-	RE_SEGREDO, RE_TECH, RE_USUARIO, TIPOS_ROTA, TRANSPORTES, cadenciaTxt, lerNumero, reais, segundosTarifados, hashNumeroTeste,
+	RE_TECH, RE_USUARIO, TIPOS_ROTA, TRANSPORTES, cadenciaTxt, lerNumero, reais, segundosTarifados, hashNumeroTeste,
+	segredoTroncoOk,
 } from '@/lib/voz';
 import { Aviso, Campo, Dialogo, Gaveta, Trava, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 
@@ -53,7 +54,7 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 	const portaN = Number(porta); if (!Number.isInteger(portaN) || portaN < 1 || portaN > 65535) e.porta = 'De 1 a 65535.';
 	if (autenticacao === 'senha') {
 		if (!RE_USUARIO.test(usuario.trim())) e.usuario = 'Usuário SIP do contrato.';
-		if (!RE_SEGREDO.test(segredo.trim())) e.segredo = 'Nome do segredo no cofre. Ex.: sip/aurora-opb';
+		if (!segredoTroncoOk(segredo, tronco?.segredo_ref == null ? null : String(tronco.segredo_ref))) e.segredo = 'Nome do segredo no cofre, começando com voz/. Ex.: voz/trunk/aurora-opb';
 	}
 	const canaisN = Number(canais); if (!Number.isInteger(canaisN) || canaisN < 1 || canaisN > 10000) e.canais = 'De 1 a 10.000.';
 	const cpsN = Number(cps); if (!Number.isInteger(cpsN) || cpsN < 1 || cpsN > 1000) e.cps = 'De 1 a 1.000.';
@@ -124,8 +125,8 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 					<Campo rotulo="Usuário SIP" erro={err('usuario')}>
 						<input value={usuario} onChange={x => setUsuario(x.target.value)} autoComplete="off" className={`${campoCls} font-mono`} />
 					</Campo>
-					<Campo rotulo="Referência da senha no cofre" erro={err('segredo')} ajuda="Só o nome do segredo. A senha nunca passa por esta tela.">
-						<input value={segredo} onChange={x => setSegredo(x.target.value)} placeholder="sip/aurora-opc" autoComplete="off" className={`${campoCls} font-mono`} />
+					<Campo rotulo="Referência da senha no cofre" erro={err('segredo')} ajuda="Só o nome do segredo, começando com voz/ (no cofre vira motorcx-voz-…). A senha nunca passa por esta tela.">
+						<input value={segredo} onChange={x => setSegredo(x.target.value)} placeholder="voz/trunk/aurora-opc" autoComplete="off" className={`${campoCls} font-mono`} />
 					</Campo>
 				</div>
 			)}

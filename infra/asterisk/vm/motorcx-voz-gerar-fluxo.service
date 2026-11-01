@@ -1,0 +1,18 @@
+[Unit]
+Description=Geração do fluxo por texto (voz/gerar_fluxo.py: pedidos "Descrever e o MotorCX monta"; só com o metadado motorcx-gerar-fluxo=1)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-gerar-fluxo
+ExecStart=/usr/local/bin/motorcx-voz-rodar gerar-fluxo
+ExecStop=/usr/bin/docker stop -t 30 motorcx-voz-gerar-fluxo
+# desligado (sem o metadado) sai com 0 e fica parado; erro (ex.: falta o segredo motorcx-voz-llm-fluxo) reinicia
+Restart=on-failure
+RestartSec=60
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

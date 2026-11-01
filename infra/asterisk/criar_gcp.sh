@@ -5,6 +5,9 @@
 #
 #   bash criar_gcp.sh [ID-DO-PROJETO]                          infraestrutura (uma vez)
 #   bash criar_gcp.sh empresa <id> <dias> [ID-DO-PROJETO]      bucket de gravações da empresa (um por empresa)
+#   bash criar_gcp.sh chave-leitura [ID-DO-PROJETO]             chave JSON da conta de leitura das gravações, num
+#                                                              arquivo temporário (para o GCS_GRAVACOES_CHAVE do
+#                                                              Supabase); o script nunca mostra o conteúdo
 #
 # Infraestrutura:
 #   - rede "motorcx-voz" e sub-rede em São Paulo
@@ -13,8 +16,13 @@
 #     SSH só pelo IAP do Google; HTTPS 8443 (proxy Caddy: webhook da ElevenLabs e simulador do Fluxo, cada rota só
 #     com o recurso ligado e protegida por assinatura HMAC) das origens de ORIGENS_HTTPS; 80 só para o desafio do
 #     Let's Encrypt (o Caddy responde ali só o desafio e o redirecionamento); nada mais entra
-#   - conta de serviço "motorcx-asterisk" com o mínimo: lê só os segredos motorcx-voz-*, grava e lê objetos só no
-#     bucket de gravações, escreve log e métrica
+#   - conta de serviço "motorcx-asterisk" com o mínimo: lê só os segredos motorcx-voz-* e motorcx-crm-* (credenciais
+#     dos conectores de CRM), grava e lê objetos só nos buckets de gravações, escreve log e métrica e chama os
+#     modelos da Vertex AI (roles/aiplatform.user: embedding do Speech Analytics e da busca semântica,
+#     voz/analise/trechos.py)
+#   - conta de serviço "motorcx-gravacoes-leitura", sem papel nenhum no projeto: só lê objetos nos buckets de
+#     gravações (dado pelo modo empresa). A chave dela é o GCS_GRAVACOES_CHAVE da Edge Function gravacoes (URL
+#     assinada para ouvir a gravação no site); gere com o modo chave-leitura
 #   - segredo "motorcx-voz-ari-senha" com uma senha aleatória para o ARI (gerada aqui, nunca exibida)
 #   - chave própria no Cloud KMS (CMEK) para as gravações, opcional (USAR_CMEK=1)
 #   - 2 VMs (zonas a e b), Shielded VM, Debian 12; no boot, vm_inicio.sh instala o Docker e os serviços
@@ -22,7 +30,10 @@
 # Empresa (decisão do dono: um bucket por empresa, com a retenção dela):
 #   - bucket <projeto>-motorcx-grav-e<id> em São Paulo, privado, apagando depois de <dias> (mínimo 90, sem teto;
 #     a partir de 365 dias passa para Coldline aos 90), CMEK se a chave existir ou USAR_CMEK=1, e acesso só da
-#     conta motorcx-asterisk. O nome vai para voz_config.bucket_gravacoes da empresa.
+#     conta motorcx-asterisk (grava e lê) e da motorcx-gravacoes-leitura (só lê). O nome vai para
+#     voz_config.bucket_gravacoes da empresa.
+# Chave de leitura (chave-leitura): cria uma chave nova da motorcx-gravacoes-leitura num arquivo 0600 do Cloud Shell
+#   e diz como colar no Supabase e apagar (shred). Rode de novo para trocar a chave (e apague a antiga, como indicado).
 #
 # Não pede nem imprime nenhum segredo. Não instala o Asterisk: a imagem (infra/asterisk/Dockerfile) é publicada
 # pelo GitHub e iniciada na VM (README).
@@ -59,6 +70,9 @@ if [ "${1:-}" = empresa ]; then
   EMPRESA_ID="${2:-}"
   RETENCAO_DIAS="${3:-}"
   shift 3 || true
+elif [ "${1:-}" = chave-leitura ]; then
+  MODO=chave-leitura
+  shift
 fi
 PROJETO="${1:-$(gcloud config get-value project 2>/dev/null || true)}"
 [ -n "$PROJETO" ] || { echo "Informe o ID do projeto: bash criar_gcp.sh meu-projeto-123" >&2; exit 1; }
@@ -73,6 +87,7 @@ SUBREDE=motorcx-voz-sp
 FAIXA_SUBREDE=10.60.0.0/24
 TAG=motorcx-asterisk
 SA_NOME=motorcx-asterisk
+SA_LEITURA_NOME=motorcx-gravacoes-leitura      # GCS_GRAVACOES_CHAVE (Edge Function gravacoes): só lê as gravações
 KMS_ANEL=motorcx-voz
 KMS_CHAVE=gravacoes
 SEGREDO_ARI=motorcx-voz-ari-senha
@@ -83,6 +98,42 @@ passo() { printf '\n== %s\n' "$*"; }
 falha() { echo "ERRO: $*" >&2; exit 1; }
 
 CHAVE_KMS_NOME="projects/${PROJETO}/locations/${REGIAO}/keyRings/${KMS_ANEL}/cryptoKeys/${KMS_CHAVE}"
+SA_LEITURA="${SA_LEITURA_NOME}@${PROJETO}.iam.gserviceaccount.com"
+
+garantir_sa_leitura() {   # conta de leitura das gravações: sem papel no projeto, só leitura nos buckets (modo empresa)
+  existe gcloud iam service-accounts describe "$SA_LEITURA" || \
+    gcloud iam service-accounts create "$SA_LEITURA_NOME" \
+      --display-name="Leitura das gravações (Edge Function gravacoes, GCS_GRAVACOES_CHAVE)" >/dev/null
+}
+
+# ======================================================================= modo chave-leitura: GCS_GRAVACOES_CHAVE
+if [ "$MODO" = chave-leitura ]; then
+  gcloud config set project "$PROJETO" >/dev/null
+  garantir_sa_leitura
+  umask 077
+  ARQ="$(mktemp --suffix=.json "${HOME:-/tmp}/gcs-gravacoes-chave.XXXXXX")"
+  # o conteúdo vai só para o arquivo (0600); nada da chave passa pela tela
+  if ! gcloud iam service-accounts keys create "$ARQ" --iam-account="$SA_LEITURA" >/dev/null 2>&1; then
+    shred -u "$ARQ" 2>/dev/null || rm -f "$ARQ"
+    falha "não foi possível criar a chave de $SA_LEITURA (a política da organização pode proibir chaves de conta de serviço: iam.disableServiceAccountKeyCreation)"
+  fi
+  cat <<FIM
+
+Chave nova da $SA_LEITURA gravada em:
+  $ARQ
+(o conteúdo não foi mostrado; o arquivo só pode ser lido por você)
+
+1. Abra o arquivo no editor do Cloud Shell:   cloudshell edit "$ARQ"
+   e copie o conteúdo inteiro (o JSON todo, do { ao }).
+2. Supabase › Edge Functions › Secrets › Add new secret: nome GCS_GRAVACOES_CHAVE, valor = o JSON copiado.
+   Não cole em nenhum outro lugar (chat, e-mail, documento).
+3. Apague o arquivo:                           shred -u "$ARQ"
+4. Trocou a chave? Depois de abrir uma gravação no site, apague a antiga (a nova é a de data mais recente):
+     gcloud iam service-accounts keys list --iam-account=$SA_LEITURA --managed-by=user
+     gcloud iam service-accounts keys delete <ID-DA-CHAVE-ANTIGA> --iam-account=$SA_LEITURA
+FIM
+  exit 0
+fi
 
 garantir_cmek() {   # cria (se pedido) a chave do Cloud KMS e dá ao agente do GCS o uso dela; ecoa o nome ou nada
   if [ "$USAR_CMEK" = 1 ]; then
@@ -129,6 +180,10 @@ if [ "$MODO" = empresa ]; then
     gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$SA" --role="$papel" \
       >/dev/null
   done
+  # Edge Function gravacoes (GCS_GRAVACOES_CHAVE): só leitura, para a URL assinada de 5 min
+  garantir_sa_leitura
+  gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$SA_LEITURA" \
+    --role=roles/storage.objectViewer >/dev/null
   echo
   echo "Pronto. Grave em voz_config.bucket_gravacoes da empresa $EMPRESA_ID: $BUCKET"
   echo "(${RETENCAO_DIAS} dias${CHAVE_KMS:+, CMEK}). Para mudar a retenção, rode de novo com outro número de dias."
@@ -159,7 +214,7 @@ SA="${SA_NOME}@${PROJETO}.iam.gserviceaccount.com"
 passo "Ligando as APIs (1–2 minutos na primeira vez)"
 gcloud services enable compute.googleapis.com secretmanager.googleapis.com storage.googleapis.com \
   iam.googleapis.com logging.googleapis.com monitoring.googleapis.com cloudkms.googleapis.com \
-  iap.googleapis.com >/dev/null
+  iap.googleapis.com aiplatform.googleapis.com >/dev/null
 
 passo "Rede e sub-rede em São Paulo"
 existe gcloud compute networks describe "$REDE" || \
@@ -203,15 +258,25 @@ regra motorcx-voz-acme "tcp:80" "0.0.0.0/0" "Desafio HTTP do Let's Encrypt para 
 passo "Conta de serviço com privilégio mínimo"
 existe gcloud iam service-accounts describe "$SA" || \
   gcloud iam service-accounts create "$SA_NOME" --display-name="Asterisk MotorCX (voz)"
-for papel in roles/logging.logWriter roles/monitoring.metricWriter; do
+# log, métrica e Vertex AI (roles/aiplatform.user: o predict do embedding em São Paulo, voz/analise/trechos.py)
+for papel in roles/logging.logWriter roles/monitoring.metricWriter roles/aiplatform.user; do
   gcloud projects add-iam-policy-binding "$PROJETO" --member="serviceAccount:$SA" --role="$papel" \
     --condition=None >/dev/null
 done
-# só os segredos com o prefixo motorcx-voz- (senhas de tronco e do ARI); nenhum outro segredo do projeto
+# só os segredos com o prefixo motorcx-voz- (senhas de tronco, ARI, chaves da voz) e motorcx-crm- (credenciais dos
+# conectores de CRM: a referência crm/<empresa>/<conector>/<versão> do SQL 58 vira motorcx-crm-...); nenhum outro
+# segredo do projeto
+CONDICAO_ANTIGA="expression=resource.name.startsWith(\"projects/${NUM}/secrets/motorcx-voz-\"),title=motorcx-voz-segredos,description=Asterisk le so segredos motorcx-voz-"
+CONDICAO_SEGREDOS="expression=resource.name.startsWith(\"projects/${NUM}/secrets/motorcx-voz-\") || resource.name.startsWith(\"projects/${NUM}/secrets/motorcx-crm-\"),title=motorcx-voz-crm-segredos,description=Asterisk le so segredos motorcx-voz- e motorcx-crm-"
 gcloud projects add-iam-policy-binding "$PROJETO" --member="serviceAccount:$SA" \
-  --role=roles/secretmanager.secretAccessor \
-  --condition="expression=resource.name.startsWith(\"projects/${NUM}/secrets/motorcx-voz-\"),title=motorcx-voz-segredos,description=Asterisk le so segredos motorcx-voz-" \
-  >/dev/null
+  --role=roles/secretmanager.secretAccessor --condition="$CONDICAO_SEGREDOS" >/dev/null
+# a condição antiga (só motorcx-voz-) é coberta pela nova: sai para não ficarem duas (se não existe, segue)
+gcloud projects remove-iam-policy-binding "$PROJETO" --member="serviceAccount:$SA" \
+  --role=roles/secretmanager.secretAccessor --condition="$CONDICAO_ANTIGA" >/dev/null 2>&1 || true
+
+passo "Conta de leitura das gravações (Edge Function gravacoes; a leitura em cada bucket vem do modo empresa)"
+garantir_sa_leitura
+echo "$SA_LEITURA (chave para o Supabase: bash criar_gcp.sh chave-leitura $PROJETO)"
 
 passo "Senha do ARI no Secret Manager (gerada aqui, nunca exibida)"
 if existe gcloud secrets describe "$SEGREDO_ARI"; then
@@ -238,11 +303,23 @@ passo "VMs do Asterisk (uma por zona)"
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 INICIO="$AQUI/vm/vm_inicio.sh"
 [ -f "$INICIO" ] || falha "falta $INICIO (rode o script de dentro do repositório: infra/asterisk/)"
-# scripts e unidades systemd vão como metadados (arquivo-<nome>); o vm_inicio.sh instala no boot
+# scripts e unidades systemd vão como metadados; o vm_inicio.sh instala no boot. A chave do metadado do GCE só
+# aceita [A-Za-z0-9_-] (até 128 bytes): o nome do arquivo vira arquivo-<nome> com todo outro caractere trocado por _
+# (motorcx-voz-config.service -> arquivo-motorcx-voz-config_service). A MESMA expressão está no vm_inicio.sh.
+chave_meta() { printf 'arquivo-%s' "$1" | tr -c 'A-Za-z0-9_-' '_'; }
+# limites do GCE: 256 KB por valor e 512 KB no total da instância (com os metadados curtos que já existem);
+# para com folga antes disso, em vez de o gcloud recusar no meio
+LIMITE_VALOR=$((256 * 1024)); LIMITE_TOTAL=$((448 * 1024))
 ARQUIVOS="startup-script=$INICIO"
+TOTAL=$(wc -c < "$INICIO")
 for f in "$AQUI"/vm/motorcx-*; do
-  ARQUIVOS="$ARQUIVOS,arquivo-$(basename "$f")=$f"
+  t=$(wc -c < "$f")
+  [ "$t" -le "$LIMITE_VALOR" ] || falha "$(basename "$f") tem $t bytes: passa do limite de 256 KB por metadado do GCE"
+  TOTAL=$((TOTAL + t))
+  ARQUIVOS="$ARQUIVOS,$(chave_meta "$(basename "$f")")=$f"
 done
+[ "$TOTAL" -le "$LIMITE_TOTAL" ] || \
+  falha "os arquivos da VM somam $TOTAL bytes: perto do limite de 512 KB de metadados do GCE (folga: 448 KB). Diminua os scripts."
 for i in 1 2; do
   VM="motorcx-ast-$i"
   ZONA="${ZONAS[$((i - 1))]}"
@@ -272,4 +349,5 @@ echo
 echo "Origens liberadas no firewall: $LISTA_ORIGENS"
 echo "Proxy HTTPS (webhook da ElevenLabs e simulador): https://<IP com hífens>.sslip.io:8443 (ex.: 35-198-40-10.sslip.io)"
 echo "Bucket de gravações: um por empresa — bash criar_gcp.sh empresa <id> <dias> $PROJETO"
+echo "Chave do GCS_GRAVACOES_CHAVE (Supabase): bash criar_gcp.sh chave-leitura $PROJETO"
 echo "Para incluir uma operadora nova: edite IPS_OPERADORAS no topo e rode o script de novo."

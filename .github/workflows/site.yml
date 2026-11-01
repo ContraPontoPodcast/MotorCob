@@ -37,3 +37,6 @@ jobs:
       - run: npm run build
       - name: o build tem o index.html, o sitemap e o robots
         run: test -f build/client/index.html && test -f build/client/sitemap.xml && test -f build/client/robots.txt
+      - name: o build tem a CSP do Netlify (_headers) com os scripts inline por hash
+        run: |
+          grep -q "Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-" build/client/_headers

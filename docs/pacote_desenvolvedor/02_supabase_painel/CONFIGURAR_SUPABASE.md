@@ -23,7 +23,7 @@ e o acesso deve ser **só por convite**. Tirar a página não basta: a API conti
 ## 4. Senha e proteção de login
 - [ ] **Password requirements** (Authentication › Providers › Email): **Minimum password length = 12** e
       **Password requirements = Letters and digits**. É a regra única aprovada no bloco 5 (12+ caracteres, letra e
-      número), a mesma que as telas mostram (prompt 45).
+      número), a mesma que as telas mostram (prompt 45) e a mesma do `docs/SEGURANCA.md` (seção 2).
 - [ ] **Leaked password protection** ligado (se o plano permitir).
 - [ ] **Attack Protection**: ligar CAPTCHA (Cloudflare Turnstile) no login e no "esqueci a senha" (opcional nesta
       etapa; se ligar, o login do site precisa enviar o token do captcha).
@@ -62,6 +62,9 @@ e o acesso deve ser **só por convite**. Tirar a página não basta: a API conti
       com só **leitura de objeto** (`roles/storage.objectViewer`) nos buckets de gravação das empresas
       (`voz_config.bucket_gravacoes`). Quem cola o valor é o dono, direto no painel; o valor nunca vai para o
       repositório, para o chat nem para log. `SITE_URL` e `ORIGENS_PERMITIDAS` são os mesmos do item 5.
+      A conta é a `motorcx-gravacoes-leitura`, criada pelo `infra/asterisk/criar_gcp.sh` (a leitura em cada bucket
+      entra com `bash criar_gcp.sh empresa <id> <dias>`). A chave sai num arquivo temporário do Cloud Shell, sem
+      aparecer na tela: `bash criar_gcp.sh chave-leitura` mostra o caminho, como colar aqui e como apagar com `shred -u`.
 - Contrato: `POST { gravacao, tipo: "audio" | "transcricao" }` com o login da pessoa.
   `audio` → `{ url, expira_em }` (URL assinada V4, só GET, 5 minutos); `transcricao` → `{ segmentos }`
   (lida pela função; o site nunca recebe o caminho do objeto).

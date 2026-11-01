@@ -653,6 +653,13 @@ SQL 66 também: descartar o pedido em texto (`cancelar_pedido_fluxo_voz`), job n
 (`agregar_fluxo_dia` pelos passos e chamadas; `voz/fluxo_metricas.py`, timer `motorcx-voz-fluxo-noite` 02:50, nos dois
 acessos), resposta escolhida do conector no simulador (`cenarios`: sucesso/tempo/401) e "Ouvir a voz" (`/ouvir` na VM,
 TTS ElevenLabs da Montagem, áudio nunca guardado; uso em `registrar_uso_ia_voz` componente `previa_voz`).
+Geração do fluxo por texto (`voz/gerar_fluxo.py`): serviço contínuo `motorcx-voz-gerar-fluxo` da VM
+(`motorcx-voz-rodar gerar-fluxo`, metadado `motorcx-gerar-fluxo=1`, chave `motorcx-voz-llm-fluxo`), nos dois acessos.
+Go-live (SQL 67): `voz_troncos.segredo_ref` começa com `voz/` (trigger só quando a referência muda; site igual);
+`criar_gcp.sh` cria a `motorcx-gravacoes-leitura` (leitura dos buckets; `chave-leitura` gera o `GCS_GRAVACOES_CHAVE`
+sem mostrar), a conta da VM lê `motorcx-voz-*` e `motorcx-crm-*` e chama a Vertex (`roles/aiplatform.user`);
+`vm_inicio.sh` instala `provedores.json` padrão (Montagem) e `provedores_sip.json` vazio só quando faltam; CSP do
+site gerada no build (`site/scripts/cabecalhos.mjs` → `_headers`, scripts inline por hash) e HSTS no `netlify.toml`.
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.

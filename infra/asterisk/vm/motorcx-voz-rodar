@@ -1,8 +1,10 @@
 #!/bin/bash
 # Sobe um dos contêineres da voz em primeiro plano (o systemd cuida de reiniciar).
 #   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite | speech-temas |
-#                     speech-buscas | simulador-fluxo | importador | fluxo-noite
+#                     speech-buscas | simulador-fluxo | importador | fluxo-noite | gerar-fluxo
 # fluxo-noite (métricas do Fluxo do agente, SQL 66): só códigos e contagens, sem IA; roda sempre.
+# gerar-fluxo (pedido em texto "Descrever e o MotorCX monta", SQL 58/66: voz/gerar_fluxo.py) só roda com o metadado
+# motorcx-gerar-fluxo=1 (padrão: desligado); a chave do LLM vem do cofre (motorcx-voz-llm-fluxo).
 # speech, speech-noite, speech-temas e speech-buscas (Speech Analytics, SQL 62/63) só rodam com o metadado motorcx-speech-analytics=1
 # (padrão: desligado).
 # importador (gravações do discador do cliente, SQL 64) só roda com o metadado motorcx-importador-gravacoes=1 (padrão:
@@ -61,5 +63,24 @@ case "${1:-}" in
     fi
     exec docker run --name motorcx-voz-simulador-fluxo "${comum_voz[@]}" "$IMG_VOZ" \
       python3 -m voz.simulador_http --porta 8091 --roleplay --provedores /etc/motorcx/provedores.json ;;
-  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador|fluxo-noite" >&2; exit 2 ;;
+  gerar-fluxo)
+    # contínuo: pega o próximo pedido em texto (fila do banco, "for update skip locked": as duas VMs podem rodar),
+    # gera com o LLM, valida e devolve o rascunho; apaga os anexos vencidos. Nos dois acessos da VM (voz/acesso.py).
+    if [ "$(meta motorcx-gerar-fluxo)" != 1 ]; then
+      echo "geração de fluxo por texto desligada nesta VM (metadado motorcx-gerar-fluxo)"; exit 0
+    fi
+    llm=()
+    url="$(meta motorcx-gerar-fluxo-base-url)"     # API compatível com OpenAI (padrão: https://api.openai.com/v1)
+    if [ -n "$url" ]; then
+      [[ "$url" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._/-]*)?$ ]] || { echo "motorcx-gerar-fluxo-base-url inválido" >&2; exit 2; }
+      llm+=(--base-url "$url")
+    fi
+    modelo="$(meta motorcx-gerar-fluxo-modelo)"    # padrão: gpt-4.1
+    if [ -n "$modelo" ]; then
+      [[ "$modelo" =~ ^[A-Za-z0-9._:/-]{1,80}$ ]] || { echo "motorcx-gerar-fluxo-modelo inválido" >&2; exit 2; }
+      llm+=(--modelo "$modelo")
+    fi
+    exec docker run --name motorcx-voz-gerar-fluxo "${comum_voz[@]}" "$IMG_VOZ" \
+      python3 -m voz.gerar_fluxo --intervalo 15 "${llm[@]}" ;;
+  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador|fluxo-noite|gerar-fluxo" >&2; exit 2 ;;
 esac

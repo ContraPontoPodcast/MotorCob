@@ -20,6 +20,11 @@
 #                                      motorcx-importador-gravacoes=1; sem ele, sai sem fazer nada; SQL 64)
 #   motorcx-voz-fluxo-noite.timer      02:50: métricas do dia do Fluxo do agente (funil e intenções por versão e bloco;
 #                                      só códigos e contagens, sem IA; SQL 66)
+#   motorcx-voz-gerar-fluxo.service    contínuo: gera o rascunho do fluxo a partir do pedido em texto (a cada 15 s;
+#                                      metadado motorcx-gerar-fluxo=1; sem ele, sai sem fazer nada; SQL 58/66)
+# Provedores de voz: /etc/motorcx/provedores.json e provedores_sip.json são da VM e nunca são sobrescritos. Se não
+# existem, entra o padrão seguro: só a Montagem, com as REFERÊNCIAS das chaves no cofre (motorcx-provedores.padrao.json),
+# e nenhum provedor SIP ([]). Exemplos completos: infra/asterisk/vm/provedores*.exemplo.json.
 set -euo pipefail
 exec > >(logger -t motorcx-voz-inicio) 2>&1
 
@@ -59,9 +64,13 @@ instalar_caddy || echo "Caddy não instalado agora (o proxy HTTPS fica parado; t
 
 META=http://metadata.google.internal/computeMetadata/v1/instance/attributes
 baixar() { curl -fsS -H 'Metadata-Flavor: Google' "$META/$1"; }
+# chave do metadado do arquivo: a MESMA expressão do criar_gcp.sh (o GCE só aceita [A-Za-z0-9_-] na chave);
+# sem ela, tenta o nome antigo com ponto (compatibilidade)
+chave_meta() { printf 'arquivo-%s' "$1" | tr -c 'A-Za-z0-9_-' '_'; }
+baixar_arquivo() { baixar "$(chave_meta "$1")" 2>/dev/null || baixar "arquivo-$1" 2>/dev/null; }
 for f in motorcx-voz-comum motorcx-voz-segredos motorcx-voz-rodar motorcx-voz-config motorcx-voz-atualizar \
          motorcx-voz-https; do
-  baixar "arquivo-$f" > "/usr/local/bin/$f" 2>/dev/null && chmod 755 "/usr/local/bin/$f" || true
+  baixar_arquivo "$f" > "/usr/local/bin/$f" && chmod 755 "/usr/local/bin/$f" || true
 done
 for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
          motorcx-voz-config.service motorcx-voz-config.timer motorcx-voz-transcricao.service \
@@ -70,18 +79,36 @@ for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-s
          motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.service motorcx-voz-speech-temas.timer \
          motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-https.service \
          motorcx-voz-https.timer motorcx-voz-importador.service motorcx-voz-importador.timer \
-         motorcx-voz-fluxo-noite.service motorcx-voz-fluxo-noite.timer; do
-  baixar "arquivo-$u" > "/etc/systemd/system/$u" 2>/dev/null || true
+         motorcx-voz-fluxo-noite.service motorcx-voz-fluxo-noite.timer motorcx-voz-gerar-fluxo.service; do
+  baixar_arquivo "$u" > "/etc/systemd/system/$u" || true
 done
 install -d -m 755 /usr/local/share/motorcx/caddy
 for c in motorcx-caddy.Caddyfile motorcx-caddy-simulador.caddy motorcx-caddy-elevenlabs.caddy; do
-  baixar "arquivo-$c" > "/usr/local/share/motorcx/caddy/$c" 2>/dev/null || true
+  baixar_arquivo "$c" > "/usr/local/share/motorcx/caddy/$c" || true
 done
+# provedores de voz: padrão seguro só quando o arquivo não existe (o que o dono gravou fica como está)
+if [ ! -e /etc/motorcx/provedores.json ]; then
+  padrao="$(baixar_arquivo motorcx-provedores.padrao.json || true)"
+  json_ok() {   # objeto JSON (com python3 confere de verdade; sem ele, ao menos começa com "{")
+    if command -v python3 >/dev/null; then
+      python3 -c 'import json,sys; assert isinstance(json.load(sys.stdin), dict)' 2>/dev/null
+    else
+      [ "$(head -c 1)" = "{" ]
+    fi
+  }
+  if [ -n "$padrao" ] && printf '%s' "$padrao" | json_ok; then
+    printf '%s\n' "$padrao" | install -m 644 /dev/stdin /etc/motorcx/provedores.json
+    echo "provedores.json padrão instalado (Montagem)"
+  else
+    echo "provedores.json padrão indisponível no metadado: sem provedores de IA até criar /etc/motorcx/provedores.json"
+  fi
+fi
+[ -e /etc/motorcx/provedores_sip.json ] || printf '[]\n' | install -m 644 /dev/stdin /etc/motorcx/provedores_sip.json
 systemctl daemon-reload
 systemctl enable --now motorcx-voz-config.timer motorcx-voz-transcricao.timer motorcx-voz-atualizar.timer \
   motorcx-voz-speech.timer motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.timer motorcx-voz-https.timer \
   motorcx-voz-importador.timer motorcx-voz-fluxo-noite.timer
 systemctl enable --now motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
-  motorcx-voz-speech-buscas.service motorcx-voz-simulador.service
+  motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-gerar-fluxo.service
 systemctl enable caddy >/dev/null 2>&1 || true
 /usr/local/bin/motorcx-voz-https || true          # rotas ligadas, certificado e reload (de novo a cada 2 min)
