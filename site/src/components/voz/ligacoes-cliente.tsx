@@ -1,7 +1,10 @@
 // Tela 4 · Extrato do cliente › "Ligações do agente virtual".
 // Só o resultado e a tarifação de cada tentativa (voz_chamadas), sem transcrição. Número sempre mascarado.
 // O custo é de telefonia (pago à operadora) e não entra na fatura do MotorCX; rota sem cadastro fica sem custo.
+// Redesign v2: 4 colunas (quando, resultado, duração, custo); número, tentativa, rota, segundos tarifados, gravação e
+// carência na gaveta da tentativa; última conversa e códigos num bloco; um aviso; total no rodapé.
 import { useEffect, useState } from 'react';
+import { Aviso as AvisoDs, Gaveta, ListaValores, Tabela as TabelaDs } from '@/components/ds';
 import { Link } from 'react-router';
 import { Lock } from 'lucide-react';
 import { usePermissao } from '@/components/app-shell';
@@ -11,7 +14,7 @@ import {
 	PERM_VOZ, TIPOS_ROTA, codigosEmPilulas, dataCurta, dataHoraCurta, duracao, duracaoExtensa, inteiro, numeroMascarado, reais,
 	resultadoVoz, type CodigosVoz,
 } from '@/lib/voz';
-import { Aviso, Cartao, CartaoLinha, Pilula, Tabela } from './ui';
+import { Cartao, Pilula } from './ui';
 
 type Chamada = {
 	id: number; ocorrido_em: string; destino_mascara: string | null; tentativa: number; resultado: string | null;
@@ -50,6 +53,7 @@ export function LigacoesAgenteVirtual({ idCliente, credorId }: { idCliente: stri
 	const [rotas, setRotas] = useState<Record<number, Rota>>({});
 	const [carregado, setCarregado] = useState(false);
 	const [falhou, setFalhou] = useState(false);
+	const [sel, setSel] = useState<Chamada | null>(null);
 
 	useEffect(() => {
 		if (!supabase || !empresa || !idCliente) return;
@@ -107,55 +111,47 @@ export function LigacoesAgenteVirtual({ idCliente, credorId }: { idCliente: stri
 					<div className="px-4 pb-5 sm:px-5"><div className="rounded-xl bg-[var(--base-fill)] px-4 py-5 text-center text-[13px] text-[var(--base-texto-2)]">Nenhuma ligação do agente virtual para este cliente{credorId ? ' nesta carteira' : ''}.</div></div>
 				) : (
 					<>
-						<div className="grid gap-3 px-4 pb-4 sm:px-5 lg:grid-cols-2">
-							<div className="rounded-xl bg-[var(--base-fill)] p-3.5">
+						<div className="mx-4 mb-4 grid gap-3 rounded-xl bg-[var(--base-fill)] p-3.5 sm:mx-5 lg:grid-cols-2">
+							<div className="min-w-0">
 								<h3 className="text-[13.5px] font-semibold text-[var(--base-texto)]">{ultima ? `Última conversa: ${dataHoraCurta(ultima.ocorrido_em)} · ${duracaoExtensa(ultima.duracao_s ?? ultima.billsec)}` : 'Ainda sem conversa com o titular'}</h3>
 								<p className="mt-1 text-[13px] text-[var(--base-texto-2)]">{ultima ? resumoConversa(ultima) : 'As tentativas abaixo não chegaram a uma conversa.'}</p>
 							</div>
-							<div className="rounded-xl bg-[var(--base-fill)] p-3.5">
+							<div className="min-w-0">
 								<h3 className="text-[13.5px] font-semibold text-[var(--base-texto)]">Para a próxima ligação</h3>
 								{pilulas.length ? <div className="mt-1.5 flex flex-wrap gap-1.5">{pilulas.map(p => <Pilula key={p}>{p}</Pilula>)}</div> : <p className="mt-1 text-[13px] text-[var(--base-texto-2)]">Nenhum código guardado (ou já apagado com a gravação).</p>}
-								<p className="mt-2 text-[11.5px] text-[var(--base-texto-3)]">Só códigos fechados, nunca texto livre. É o mesmo resumo que o agente recebe na próxima ligação.</p>
+								<p className="mt-1.5 text-[11.5px] text-[var(--base-texto-3)]">Só códigos fechados, nunca texto livre: o mesmo resumo que o agente recebe.</p>
 							</div>
-						</div>
-						<Tabela
-							cabecalho={['Quando', 'Número', 'Tentativa no dia', 'Resultado', 'Duração', 'Rota', 'Seg. tarifados', 'Custo estimado', 'Gravação']}
-							numericas={[2, 4, 6, 7]}
-							linhas={chamadas.map(c => {
-								const r = resultadoVoz(c.resultado ?? (c.tarifada_em ? null : 'em_andamento'));
-								const cu = custoCelula(c);
-								return [
-									dataHoraCurta(c.ocorrido_em), <span key="n" className="font-mono">{numeroMascarado(c.destino_mascara)}</span>, `${c.tentativa}ª`,
-									<Pilula key="r" tom={r.tom}>{r.label}</Pilula>, duracao(c.duracao_s ?? c.billsec), rotaTxt(c),
-									c.segundos_tarifados != null ? `${inteiro(c.segundos_tarifados)} s` : '—',
-									cu.semCadastro ? <span key="c" title="Rota sem cadastro: o custo não é calculado">sem custo</span> : cu.texto,
-									gravTxt(c),
-								];
-							})}
-							cartoes={chamadas.map(c => {
-								const r = resultadoVoz(c.resultado ?? (c.tarifada_em ? null : 'em_andamento'));
-								const cu = custoCelula(c);
-								return (
-									<CartaoLinha key={c.id}>
-										<div className="flex items-center justify-between gap-2"><b>{dataHoraCurta(c.ocorrido_em)}</b><Pilula tom={r.tom}>{r.label}</Pilula></div>
-										<small className="mt-1 block font-mono text-[var(--base-texto-2)]">{numeroMascarado(c.destino_mascara)} · {c.tentativa}ª tentativa · {duracao(c.duracao_s ?? c.billsec)}</small>
-										<small className="block text-[var(--base-texto-2)]">Rota {c.tech_prefix ?? '—'}{c.segundos_tarifados != null ? ` · ${inteiro(c.segundos_tarifados)} s tarifados` : ''} · {cu.texto}</small>
-										{c.tem_gravacao && <div className="mt-1">{gravTxt(c)}</div>}
-									</CartaoLinha>
-								);
-							})}
-						/>
-						<div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3 text-[12.5px] text-[var(--base-texto-2)] sm:px-5" style={{ borderColor: 'var(--base-borda)' }}>
-							<span>Telefonia estimada deste cliente no mês: <b className="text-[var(--base-texto)]">{reais(totTel, 4)}</b>{semCadastro.length ? ` (sem ${semCadastro.length === 1 ? 'a tentativa' : `as ${semCadastro.length} tentativas`} de rota sem cadastro)` : ''}. Paga pela empresa à operadora; não entra na fatura do MotorCX.</span>
-							<span className="text-[var(--base-texto-3)]">Sem carência: qualquer segundo atendido paga o mínimo inicial.</span>
 						</div>
 						{semCadastro.length > 0 && (
-							<div className="px-4 pb-4 sm:px-5">
-								<Aviso titulo={`${semCadastro.length === 1 ? 'Uma tentativa saiu' : `${semCadastro.length} tentativas saíram`} por rota sem cadastro (${[...new Set(semCadastro.map(c => c.tech_prefix ?? '—'))].join(', ')}).`}>
-									Fica sem custo calculado até a equipe MotorCX cadastrar a rota com o preço do contrato da operadora. O MotorCX não estima preço.
-								</Aviso>
+							<div className="px-4 pb-3 sm:px-5">
+								<AvisoDs titulo={`${semCadastro.length === 1 ? 'Uma tentativa' : `${semCadastro.length} tentativas`} por rota sem cadastro (${[...new Set(semCadastro.map(c => c.tech_prefix ?? '—'))].join(', ')}).`}>
+									Fica sem custo até a equipe MotorCX cadastrar a rota com o preço do contrato. O MotorCX não estima preço.
+								</AvisoDs>
 							</div>
 						)}
+						<TabelaDs rotulo="Tentativas do agente virtual" linhas={chamadas} chave={c => c.id} onAbrir={setSel} selecionada={sel?.id}
+							colunas={[
+								{ id: 'q', titulo: 'Quando', celula: c => dataHoraCurta(c.ocorrido_em) },
+								{ id: 'r', titulo: 'Resultado', celula: c => { const r = resultadoVoz(c.resultado ?? (c.tarifada_em ? null : 'em_andamento')); return <Pilula tom={r.tom}>{r.label}</Pilula>; } },
+								{ id: 'd', titulo: 'Duração', num: true, celula: c => duracao(c.duracao_s ?? c.billsec) },
+								{ id: 'c', titulo: 'Custo estimado', num: true, celula: c => { const cu = custoCelula(c); return cu.semCadastro ? <span title="Rota sem cadastro: o custo não é calculado">sem custo</span> : cu.texto; } },
+							]}
+							celular={c => { const r = resultadoVoz(c.resultado ?? (c.tarifada_em ? null : 'em_andamento')); return { titulo: dataHoraCurta(c.ocorrido_em), valor: <Pilula tom={r.tom}>{r.label}</Pilula>, resumo: `${duracao(c.duracao_s ?? c.billsec)} · ${custoCelula(c).texto}` }; }}
+							rodape={<><span>Telefonia estimada no mês: <b className="text-[var(--base-texto)]">{reais(totTel, 4)}</b>{semCadastro.length ? ` (sem ${semCadastro.length === 1 ? 'a tentativa' : `as ${semCadastro.length} tentativas`} sem rota)` : ''}</span><span className="text-[var(--base-texto-3)]">Paga à operadora; fora da fatura do MotorCX.</span></>} />
+						<Gaveta aberta={!!sel} onFechar={() => setSel(null)} titulo={sel ? `Tentativa de ${dataHoraCurta(sel.ocorrido_em)}` : ''} subtitulo={sel ? resultadoVoz(sel.resultado ?? (sel.tarifada_em ? null : 'em_andamento')).label : undefined}>
+							{sel && <>
+								<ListaValores itens={[
+									['Número', <span key="n" className="font-mono">{numeroMascarado(sel.destino_mascara)}</span>],
+									['Tentativa no dia', `${sel.tentativa}ª`],
+									['Duração', duracao(sel.duracao_s ?? sel.billsec)],
+									['Rota', rotaTxt(sel)],
+									['Segundos tarifados', sel.segundos_tarifados != null ? `${inteiro(sel.segundos_tarifados)} s` : '—'],
+									['Custo estimado', custoCelula(sel).texto],
+									['Gravação', gravTxt(sel)],
+								]} />
+								<p className="text-[12px] text-[var(--base-texto-3)]">Sem carência: qualquer segundo atendido paga o mínimo inicial da cadência. O custo é de telefonia, pago pela empresa à operadora.</p>
+							</>}
+						</Gaveta>
 					</>
 				)}
 		</Cartao>

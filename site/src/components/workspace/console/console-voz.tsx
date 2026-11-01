@@ -17,6 +17,7 @@ import {
 } from '@/lib/voz';
 import { Cadeado, Cartao, Dialogo, Pilula, Ponto, Subtitulo, Trava, Vazio, btnLink, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 import { Abas, Aviso as AvisoDs, Detalhes, Gaveta, Kpis, ListaValores, Passos, SeloRegras, Tabela } from '@/components/ds';
+import { textoTemDadoPessoal } from '@/lib/speech';
 import { useConsolePerms } from './console-perms';
 import { NumerosTesteDialogo, RotaGaveta, TransferenciaGaveta, TroncoGaveta } from './console-voz-gavetas';
 
@@ -232,7 +233,11 @@ function Concorrencia({ divisao, contrato, nomeEmpresa, podeTroncos, loading, on
 }
 
 // ============================================================== por empresa
+type Pausa = { id: number; tronco_id: number; motivo: 'sem_credito' | 'bloqueio_originacao' | string; causa_sip: number | null; pausado_em: string };
+const MOTIVO_PAUSA: Record<string, string> = { sem_credito: 'sem crédito na operadora', bloqueio_originacao: 'bloqueio de originação' };
+
 type DadosEmpresa = {
+	pausas: Pausa[];
 	config: Row | null; troncos: Row[]; rotas: Row[]; transferencia: Row | null; saude: Row[]; pedido: Row | null;
 	roteiro: Row | null; ligacoesTeste: number; recebeFaturas: number;
 };
@@ -247,9 +252,9 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 	const [gNumeros, setGNumeros] = useState(false);
 
 	const carregar = useCallback(async () => {
-		if (!supabase) { setD({ config: null, troncos: [], rotas: [], transferencia: null, saude: [], pedido: null, roteiro: null, ligacoesTeste: 0, recebeFaturas: 0 }); return; }
+		if (!supabase) { setD({ pausas: [], config: null, troncos: [], rotas: [], transferencia: null, saude: [], pedido: null, roteiro: null, ligacoesTeste: 0, recebeFaturas: 0 }); return; }
 		const eid = Number(empresaId);
-		const [cfg, tr, ro, tf, sa, pe, rt, lt, cf] = await Promise.all([
+		const [cfg, tr, ro, tf, sa, pe, rt, lt, cf, pz] = await Promise.all([
 			supabase.from('voz_config').select('*').eq('empresa_id', eid).maybeSingle(),
 			supabase.from('voz_troncos').select('id,referencia,operadora,host,porta,transporte,autenticacao,usuario,segredo_ref,ddd_origem,bina,formato_discagem,csp,codecs,canais,cps,ativo,testado_em,teste_ok').eq('empresa_id', eid).order('referencia'),
 			supabase.from('voz_rotas').select('*').eq('empresa_id', eid).order('vigente_desde', { ascending: false }),
@@ -259,8 +264,11 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 			supabase.from('voz_roteiros').select('id,versao,em_uso_em,credor_id').eq('empresa_id', eid).eq('situacao', 'em_uso').limit(1),
 			supabase.from('voz_chamadas').select('id', { count: 'exact', head: true }).eq('empresa_id', eid).eq('modo', 'teste'),
 			supabase.from('empresa_contatos').select('id', { count: 'exact', head: true }).eq('empresa_id', eid).eq('recebe_faturas', true),
+			// Pausas ativas da rota (SQL 65, PR #162): sem a tabela ainda, a leitura falha e a lista fica vazia.
+			supabase.from('voz_troncos_pausas').select('id,tronco_id,motivo,causa_sip,pausado_em').eq('empresa_id', eid).is('retomado_em', null),
 		]);
 		setD({
+			pausas: pz.error ? [] : ((pz.data ?? []) as Pausa[]),
 			config: (cfg.data as Row | null) ?? null,
 			troncos: (tr.data ?? []) as Row[],
 			rotas: (ro.data ?? []) as Row[],
@@ -292,7 +300,7 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 					podeTroncos={podeTroncos} modo={modo} onNumeros={() => setGNumeros(true)} onSalvo={m => salvo(m, true)} />
 			</>}
 			{aba === 'troncos' && <>
-				<Troncos troncos={d.troncos} podeTroncos={podeTroncos} onNovo={() => setGTronco({ tronco: null })} onEditar={t => setGTronco({ tronco: t })} />
+				<Troncos troncos={d.troncos} pausas={d.pausas} podeTroncos={podeTroncos} onRetomado={() => salvo('Rota retomada. A VM volta a discar por este tronco no próximo minuto.', true)} onNovo={() => setGTronco({ tronco: null })} onEditar={t => setGTronco({ tronco: t })} />
 				<Rotas rotas={d.rotas} troncos={d.troncos} saude={d.saude} podeTroncos={podeTroncos}
 					onNova={(base, prefixo) => setGRota({ base, prefixo })} onEncerrada={() => salvo('Rota encerrada. Ela fica no histórico.')} />
 			</>}
@@ -411,9 +419,30 @@ const formatoTxt = (t: Row) => {
 	return t.csp ? `${f} · CSP ${String(t.csp)}` : f;
 };
 
-function Troncos({ troncos, podeTroncos, onNovo, onEditar }: { troncos: Row[]; podeTroncos: boolean; onNovo: () => void; onEditar: (t: Row) => void }) {
+function Troncos({ troncos, pausas, podeTroncos, onNovo, onEditar, onRetomado }: { troncos: Row[]; pausas: Pausa[]; podeTroncos: boolean; onNovo: () => void; onEditar: (t: Row) => void; onRetomado: () => void }) {
 	const ativos = troncos.filter(t => t.ativo !== false);
 	const [sel, setSel] = useState<Row | null>(null);
+	const [retomar, setRetomar] = useState<Pausa | null>(null);
+	const [nota, setNota] = useState('');
+	const [busy, setBusy] = useState(false);
+	const pausaDe = (t: Row) => pausas.find(p => String(p.tronco_id) === String(t.id)) ?? null;
+	const situacao = (t: Row) => {
+		const p = pausaDe(t);
+		if (p) return { tom: (p.motivo === 'bloqueio_originacao' ? 'erro' : 'atencao') as 'erro' | 'atencao', txt: `Pausado · ${MOTIVO_PAUSA[p.motivo] ?? p.motivo}` };
+		const x = situacaoTronco(t);
+		return { tom: x.tom, txt: x.tom === 'ok' ? 'No ar' : x.txt };
+	};
+	const notaOk = nota.trim().length >= 3 && nota.trim().length <= 300 && !textoTemDadoPessoal(nota);
+	async function confirmarRetomar() {
+		if (!supabase || !retomar || !notaOk) return;
+		setBusy(true);
+		const { error } = await supabase.rpc('retomar_tronco_voz', { pausa: retomar.id, nota: nota.trim() });
+		setBusy(false);
+		if (error) { toast.error(erroRpc(error)); return; }
+		setRetomar(null); setNota(''); setSel(null);
+		onRetomado();
+	}
+	const selPausa = sel ? pausaDe(sel) : null;
 	return (
 		<Cartao semPad titulo="Troncos SIP da empresa"
 			desc="A empresa contrata as operadoras dela; o Asterisk do MotorCX disca por esses troncos e liga o agente de IA quando a pessoa atende."
@@ -424,6 +453,11 @@ function Troncos({ troncos, podeTroncos, onNovo, onEditar }: { troncos: Row[]; p
 				]} />
 				{podeTroncos ? <button onClick={onNovo} className={btnSec}><Plus size={15} /> Novo tronco</button> : <Cadeado>{SEM_PERM_TRONCOS} cadastra</Cadeado>}
 			</>}>
+			{pausas.length > 0 && <div className="px-5 pb-3 sm:px-6">
+				<AvisoDs tom={pausas.some(p => p.motivo === 'bloqueio_originacao') ? 'erro' : 'atencao'} titulo={pausas.length === 1 ? 'Uma rota está pausada e não disca.' : `${pausas.length} rotas estão pausadas e não discam.`}>
+					A VM parou de discar por {pausas.length === 1 ? 'este tronco' : 'estes troncos'} ({pausas.map(p => MOTIVO_PAUSA[p.motivo] ?? p.motivo).join(', ')}). Resolva com a operadora e retome a rota no tronco.
+				</AvisoDs>
+			</div>}
 			<Tabela rotulo="Troncos" linhas={troncos} chave={t => String(t.id)} onAbrir={setSel} selecionada={sel ? String(sel.id) : null}
 				vazio={<Vazio titulo="Nenhum tronco cadastrado">Sem tronco, o agente só funciona no modo Simulado. Cadastre o primeiro com os dados do contrato da empresa com a operadora.</Vazio>}
 				colunas={[
@@ -431,12 +465,18 @@ function Troncos({ troncos, podeTroncos, onNovo, onEditar }: { troncos: Row[]; p
 					{ id: 'op', titulo: 'Operadora', celula: t => String(t.operadora) },
 					{ id: 'can', titulo: 'Canais', num: true, celula: t => inteiro(t.canais) },
 					{ id: 'cps', titulo: 'CPS', num: true, celula: t => inteiro(t.cps) },
-					{ id: 'sit', titulo: 'Situação', celula: t => { const x = situacaoTronco(t); return <Pilula tom={x.tom}>{x.tom === 'ok' ? 'No ar' : x.txt}</Pilula>; } },
+					{ id: 'sit', titulo: 'Situação', celula: t => { const x = situacao(t); const p = pausaDe(t); return <span><Pilula tom={x.tom}>{x.txt}</Pilula>{p && <small className="block text-[11.5px] text-[var(--base-texto-3)]">desde {dateTimeBR(p.pausado_em)}</small>}</span>; } },
 				]}
-				celular={t => { const x = situacaoTronco(t); return { titulo: <span className="font-mono">{String(t.referencia)}</span>, valor: <Pilula tom={x.tom}>{x.tom === 'ok' ? 'No ar' : x.txt}</Pilula>, resumo: `${String(t.operadora)} · ${inteiro(t.canais)} canais` }; }}
+				celular={t => { const x = situacao(t); const p = pausaDe(t); return { titulo: <span className="font-mono">{String(t.referencia)}</span>, valor: <Pilula tom={x.tom}>{p ? 'Pausado' : x.txt}</Pilula>, resumo: p ? `${MOTIVO_PAUSA[p.motivo] ?? p.motivo} · desde ${dateTimeBR(p.pausado_em)}` : `${String(t.operadora)} · ${inteiro(t.canais)} canais` }; }}
 				rodape={<><span>Total dos troncos ativos</span><span className="tnum">{inteiro(ativos.reduce((x, t) => x + Number(t.canais ?? 0), 0))} canais · {inteiro(ativos.reduce((x, t) => x + Number(t.cps ?? 0), 0))} CPS</span></>} />
-			<Gaveta aberta={!!sel} onFechar={() => setSel(null)} titulo={sel ? `Tronco ${String(sel.referencia)}` : ''} subtitulo={sel ? situacaoTronco(sel).txt : undefined}
-				rodape={podeTroncos && sel ? <button type="button" onClick={() => { const t = sel; setSel(null); onEditar(t); }} className={btnPrim}><Pencil size={14} /> Editar</button> : undefined}>
+			<Gaveta aberta={!!sel} onFechar={() => setSel(null)} titulo={sel ? `Tronco ${String(sel.referencia)}` : ''} subtitulo={sel ? situacao(sel).txt : undefined}
+				rodape={podeTroncos && sel ? <>
+					<button type="button" onClick={() => { const t = sel; setSel(null); onEditar(t); }} className={selPausa ? btnSec : btnPrim}><Pencil size={14} /> Editar</button>
+					{selPausa && <button type="button" onClick={() => { setNota(''); setRetomar(selPausa); }} className={btnPrim}>Retomar rota</button>}
+				</> : undefined}>
+				{selPausa && <AvisoDs tom={selPausa.motivo === 'bloqueio_originacao' ? 'erro' : 'atencao'} titulo={`Pausado por ${MOTIVO_PAUSA[selPausa.motivo] ?? selPausa.motivo}`}>
+					Desde {dateTimeBR(selPausa.pausado_em)}{selPausa.causa_sip ? ` (resposta SIP ${selPausa.causa_sip})` : ''}. A VM não disca por este tronco até alguém da equipe retomar.{!podeTroncos ? ` ${SEM_PERM_TRONCOS} retoma.` : ''}
+				</AvisoDs>}
 				{sel && <ListaValores itens={[
 					['Operadora', String(sel.operadora)],
 					['Endereço', <span key="e" className="break-all font-mono text-[12.5px]">{String(sel.host)}:{String(sel.porta)} · {String(sel.transporte).toUpperCase()}</span>],
@@ -447,6 +487,19 @@ function Troncos({ troncos, podeTroncos, onNovo, onEditar }: { troncos: Row[]; p
 					['Canais · CPS', `${inteiro(sel.canais)} · ${inteiro(sel.cps)}`],
 				]} />}
 			</Gaveta>
+			{retomar && (
+				<Dialogo titulo="Retomar a rota?" onClose={() => !busy && setRetomar(null)}
+					texto="A VM volta a discar por este tronco no próximo minuto, sem reiniciar nada. Fica registrado quem retomou, quando e a nota."
+					acoes={<>
+						<button onClick={() => setRetomar(null)} disabled={busy} className={btnSec}>Cancelar</button>
+						<button onClick={() => void confirmarRetomar()} disabled={busy || !notaOk} className={btnPrim}>{busy ? 'Retomando...' : 'Retomar rota'}</button>
+					</>}>
+					<label htmlFor="nota-retomar" className="mb-1 block text-[13px] font-semibold text-[var(--base-texto)]">O que foi resolvido</label>
+					<textarea id="nota-retomar" value={nota} onChange={e => setNota(e.target.value)} rows={3} maxLength={300} placeholder="Ex.: crédito recarregado com a operadora."
+						className="w-full resize-none rounded-lg border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-3 py-2 text-[14px] text-[var(--base-texto)] outline-none focus:border-[var(--destaque)]" />
+					<p className="mt-1 text-[12px] tnum" style={{ color: textoTemDadoPessoal(nota) ? 'var(--estado-erro-texto)' : 'var(--base-texto-3)' }}>{textoTemDadoPessoal(nota) ? 'Tire o CPF, telefone ou e-mail da nota.' : `${nota.trim().length}/300 · mínimo 3 caracteres · sem CPF, telefone ou e-mail`}</p>
+				</Dialogo>
+			)}
 		</Cartao>
 	);
 }
