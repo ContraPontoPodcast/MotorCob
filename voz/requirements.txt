@@ -1,4 +1,6 @@
 # Dependências SÓ do orquestrador de voz na VM do Asterisk (fora da imagem do motor e do CI).
-# O gerador de configuração, o Secret Manager e o envio ao GCS usam só a biblioteca padrão.
+# O gerador de configuração, o Secret Manager e o envio ao GCS usam só a biblioteca padrão; a busca da
+# configuração e o plantão no modo acesso_proprio usam o pg8000.
 websocket-client==1.8.0   # eventos do ARI (WebSocket)
+pg8000==1.31.2            # acesso próprio (voz/acesso.py): Postgres pelo pooler, puro Python
 # Montagem MotorCX e transcrição: voz/requirements-ia.txt (separado, pesado)

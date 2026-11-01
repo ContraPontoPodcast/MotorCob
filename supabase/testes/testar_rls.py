@@ -617,7 +617,7 @@ checar("fatura paga não conta como vencida", True, f"select faturas_vencidas fr
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional
 SVC = "service_role"
-checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 24)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + 1 de IA do Speech Analytics (SQL 60)
+checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 26)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59) + Speech Analytics (SQL 60)
 checar("cliente não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", u["admina"])
 checar("Atendimento não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", SUP)
 checar("ninguém grava preço direto na tabela", False, f"insert into public.precos_empresa (empresa_id,item,modelo,preco) values ({EA},'sms','flat',0.01)", "authenticated", u["admin"])
@@ -2129,7 +2129,7 @@ checar("SQL 56: Operação não ouve nem lê", True, "select public.pode('ouvir_
 checar("SQL 56: Operação não guarda gravação", False, f"select public.guardar_gravacao({G1}, 'disputa judicial')", "authenticated", u["oper"])
 checar("SQL 56: Admin guarda a gravação para disputa", True, f"select public.guardar_gravacao({G1}, 'disputa judicial'); select guarda from public.voz_gravacoes where id={G1}", "authenticated", u["admina"], "t")
 checar("SQL 56: com guarda, a eliminação do titular fica bloqueada", False, "select public.abrir_pedido_titular('C1', 'eliminar')", "authenticated", u["admina"])
-checar("SQL 56: exportação do titular abre com prazo de 15 dias", True, "select public.abrir_pedido_titular('C1', 'exportar'); select (prazo - aberto_em::date) from public.titular_pedidos order by id desc limit 1", "authenticated", u["admina"], 15)
+checar("SQL 56: exportação do titular abre com prazo de 15 dias", True, "select public.abrir_pedido_titular('C1', 'exportar'); select (prazo - (aberto_em at time zone 'America/Sao_Paulo')::date) from public.titular_pedidos order by id desc limit 1", "authenticated", u["admina"], 15)
 checar("SQL 56: Operação não abre pedido do titular", False, "select public.abrir_pedido_titular('C1', 'exportar')", "authenticated", u["oper"])
 checar("SQL 56: Admin tira a guarda", True, f"select public.soltar_gravacao({G1}); select guarda from public.voz_gravacoes where id={G1}", "authenticated", u["admina"], "f")
 checar("SQL 56: retenção abaixo de 90 dias é recusada", False, f"select public.configurar_voz_empresa({EA}, '{{\"retencao_dias\": 60}}')", "authenticated", u["admina"])
@@ -2201,7 +2201,7 @@ checar("SQL 56: cliente B não lê o consumo da A", True, "select count(*) from 
 checar("SQL 56: exportação por dia e rota", True, f"select count(*) from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["gest"], 2)
 checar("SQL 56: B não exporta a telefonia da A", False, f"select * from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["operb"])
 checar("SQL 56: usuário não grava consumo de voz", False, f"insert into public.consumo_voz (empresa_id,dia) values ({EA},'2026-11-06')", "authenticated", u["admin"])
-checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_speech_analytics")
+checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_geracao_fluxo,ia_roleplay,ia_speech_analytics")   # + SQL 58, 59 e 60
 checar("SQL 56: telefonia não entra na prévia da fatura", True, f"select count(*) from public.previa_fatura({EA}, '2026-11-01') where item like '%telefon%' or item like 'consumo_voz%'", "authenticated", u["gest"], 0)
 for t in ("voz_config", "voz_roteiros", "voz_troncos", "voz_rotas", "voz_transferencias", "voz_contrato", "voz_lotes", "voz_ondas",
           "voz_chamadas", "voz_gravacoes", "consumo_voz", "fornecedor_saude", "voz_insights_dia", "titular_pedidos",
@@ -2211,12 +2211,394 @@ checar("SQL 56: todas as tabelas de voz com RLS", True, "select count(*) from pg
 checar("SQL 56: RPCs de voz com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%voz%' or proname in ('guardar_gravacao','soltar_gravacao','abrir_pedido_titular','telefonia_csv','definir_concorrencia_contratada')) and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
 checar("SQL 56: anon não chama nenhuma RPC de voz", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%voz%' or proname in ('guardar_gravacao','soltar_gravacao','abrir_pedido_titular','telefonia_csv','insights_voz','definir_concorrencia_contratada')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
 
+
+# SQL 58 · Agente de voz: fluxos, conectores de CRM, alçada, passos, base de respostas e casos de teste
+# reaplica o SQL 58 depois dos testes do SQL 56 (que reaplicam o SQL 56): migra o roteiro em uso RV1 (como rascunho)
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261225000001_voz_fluxo.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+import json as _json
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from voz import fluxo_casos as _FC, fluxo_modelos as _FM   # noqa: E402
+
+def _lit(d):
+    return _json.dumps(d, ensure_ascii=False).replace("'", "''")
+def _j(x):
+    return _json.dumps(x, ensure_ascii=False, separators=(",", ":"))
+# FL2: os mesmos casos do validador em Python (voz/fluxo_casos.py) dão a mesma lista de erros no banco
+for _n, _d, _e in _FC.casos():
+    checar(f"SQL 58 · validador: {_n}", True, f"select array_to_json(public.fluxo_voz_erros('{_lit(_d)}'::jsonb))",
+           "authenticated", u["oper"], _j(_e))
+checar("SQL 58: os 4 modelos são os de voz/fluxo_modelos.py e passam no validador", True,
+       "select count(*) from public.voz_fluxo_modelos where public.fluxo_voz_valido(definicao)", "authenticated", u["oper"], 4)
+for _cod, (_nome, _tipo, _desc, _f) in _FM.MODELOS.items():
+    checar(f"SQL 58: modelo {_cod} igual ao do Python", True,
+           f"select definicao = '{_lit(_f())}'::jsonb and tipo_agente = '{_tipo}' from public.voz_fluxo_modelos where codigo = '{_cod}'",
+           "authenticated", u["oper"], "t")
+checar("SQL 58: anon não chama o validador", False, "select public.fluxo_voz_erros('{}')", "anon")
+
+# migração do roteiro em uso (RV1, tipo ambos: pedido_humano, contestacao, fora_alcada e ofertas_sem_acordo > 0)
+checar("SQL 58: o roteiro em uso virou fluxo v1 em rascunho (falta o conector de validação)", True,
+       f"select v.versao||'|'||v.situacao||'|'||f.nome from public.voz_fluxos f join public.voz_fluxo_versoes v on v.fluxo_id=f.id where f.roteiro_origem_id={RV1}",
+       "authenticated", u["oper"], "1|rascunho|Roteiro v1")
+checar("SQL 58: regras_transferencia viraram as saídas do generativo", True,
+       f"select string_agg(s->>'quando', ',' order by s->>'quando') from public.voz_fluxos f join public.voz_fluxo_versoes v on v.fluxo_id=f.id, jsonb_array_elements(v.definicao->'blocos') b, jsonb_array_elements(b->'saidas') s where f.roteiro_origem_id={RV1} and b->>'tipo'='generativa'",
+       "authenticated", u["oper"], "contestacao,fora_alcada,ofertas_sem_acordo,pedido_humano")
+checar("SQL 58: o prompt do roteiro é o objetivo do generativo", True,
+       f"select b->'params'->>'objetivo' = r.prompt from public.voz_roteiros r join public.voz_fluxos f on f.roteiro_origem_id=r.id join public.voz_fluxo_versoes v on v.fluxo_id=f.id, jsonb_array_elements(v.definicao->'blocos') b where r.id={RV1} and b->>'tipo'='generativa'",
+       "service_role", None, "t")
+checar("SQL 58: migração não repete ao rodar de novo", True,
+       f"select count(*) from public.voz_fluxos where roteiro_origem_id={RV1}", "service_role", None, 1)
+checar("SQL 58: o fluxo gerado do roteiro passa no validador", True,
+       f"select public.fluxo_voz_erros(public.fluxo_do_roteiro_voz(r)) from public.voz_roteiros r where r.id={RV1}", "service_role", None, "{}")
+checar("SQL 58: primeira fala com {{saldo}} daria valor antes da identidade (migra como rascunho)", True,
+       f"select array_to_string(public.fluxo_voz_erros(public.fluxo_do_roteiro_voz(jsonb_populate_record(r, '{{\"primeira_fala\": \"Consta {{{{saldo}}}}. Falo com {{{{primeiro_nome}}}}?\"}}'))), ',') from public.voz_roteiros r where r.id={RV1}",
+       "service_role", None, "valor_antes_identidade:N1")
+checar("SQL 58: o migrado pede o conector de validação antes de aprovar", True,
+       f"select array_to_string(public.fluxo_voz_bloqueios(v.id), ',') from public.voz_fluxos f join public.voz_fluxo_versoes v on v.fluxo_id=f.id where f.roteiro_origem_id={RV1}",
+       "authenticated", u["oper"], "identidade_sem_conferencia:N2")
+checar("SQL 58: o roteiro continua editável (só leitura fica para outro SQL)", True,
+       f"select public.salvar_roteiro_voz({EA}, {CX}, '{RT}', 'Olá, tudo bem?', 'negociador', null, false, {RV1}) is not null", "authenticated", u["plan"], "t")
+checar("SQL 58: variaveis_voz() tem assessoria", True, "select 'assessoria' = any(public.variaveis_voz())", "authenticated", u["oper"], "t")
+
+# permissão nova da equipe
+checar("SQL 58: gerenciar_conectores_crm é do Master e do Técnico", True,
+       "select master::text||tecnico::text||atendimento::text||comercial::text||administrativo::text from public.permissoes_equipe_catalogo where permissao='gerenciar_conectores_crm'",
+       "authenticated", u["oper"], "truetruefalsefalsefalse")
+# hosts liberados (FL4)
+checar("SQL 58: Técnico libera o host do CRM da A", True, f"select public.liberar_host_crm({EA}, 'api.crm-alfa.exemplo.com.br'); select count(*) from public.crm_hosts_permitidos where empresa_id={EA}", "authenticated", VTEC, 1)
+checar("SQL 58: Atendimento da equipe não libera host", False, f"select public.liberar_host_crm({EA}, 'api.outro.exemplo.com.br')", "authenticated", VSUP)
+checar("SQL 58: Admin do cliente não libera host", False, f"select public.liberar_host_crm({EA}, 'api.outro.exemplo.com.br')", "authenticated", u["admina"])
+checar("SQL 58: host IP é recusado (porta para a rede interna)", False, f"select public.liberar_host_crm({EA}, '10.0.0.5')", "authenticated", VTEC)
+checar("SQL 58: localhost e .internal são recusados", False, f"select public.liberar_host_crm({EA}, 'crm.internal')", "authenticated", VTEC)
+checar("SQL 58: cliente A vê os hosts liberados", True, "select count(*) from public.crm_hosts_permitidos", "authenticated", u["oper"], 1)
+checar("SQL 58: cliente B não vê os hosts da A", True, "select count(*) from public.crm_hosts_permitidos", "authenticated", u["operb"], 0)
+
+# conectores (FL4): só a equipe, credencial só como referência
+_U = "https://api.crm-alfa.exemplo.com.br/v2/clientes/{id_cliente}"
+_ME = '[{"origem": "id_cliente", "destino": "id_cliente", "onde": "path"}]'
+_MS_OF = ('[{"origem": "$.offers[*].id", "destino": "oferta.id", "grava": "nao"}, '
+          '{"origem": "$.offers[*].installments", "destino": "oferta.parcelas", "grava": "nao"}, '
+          '{"origem": "$.offers[*].installmentAmount", "destino": "oferta.valor_parcela", "grava": "nao"}, '
+          '{"origem": "$.offers[*].discountPct", "destino": "oferta.desconto_pct", "grava": "nao"}]')
+def _con(nome, fin, met, url, extra=""):
+    return ('{"nome": "' + nome + '", "finalidade": "' + fin + '", "metodo": "' + met + '", "url": "' + url + '", '
+            '"autenticacao": "oauth2_cc", "mapa_entrada": ' + _ME + extra + '}')
+def _salvar_con(js, papel_uid=None):
+    return f"select public.salvar_conector_crm({EA}, '{js}'::jsonb)"
+C1 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{VTEC}', false); " + _salvar_con(_con("Buscar ofertas", "buscar_ofertas", "GET", _U + "/ofertas", ', "mapa_saida": ' + _MS_OF + ', "em_falha": "alternativa_carteira", "timeout_ms": 2500, "tentativas": 1')))
+checar("SQL 58: conector nasce rascunho, versão 1, sem credencial", True, f"select situacao||'|'||versao||'|'||coalesce(segredo_ref,'sem') from public.crm_conectores where id={C1}", "authenticated", u["oper"], "rascunho|1|sem")
+checar("SQL 58: Admin do cliente não cadastra conector", False, _salvar_con(_con("X", "outro", "GET", _U)), "authenticated", u["admina"])
+checar("SQL 58: Atendimento da equipe não cadastra conector", False, _salvar_con(_con("X", "outro", "GET", _U)), "authenticated", VSUP)
+checar("SQL 58: host não liberado é recusado", False, _salvar_con(_con("X", "outro", "GET", "https://api.outro.exemplo.com.br/x")), "authenticated", VTEC)
+checar("SQL 58: só https", False, _salvar_con(_con("X", "outro", "GET", "http://api.crm-alfa.exemplo.com.br/x")), "authenticated", VTEC)
+checar("SQL 58: CPF no mapa de entrada é recusado", False, _salvar_con(_con("X", "outro", "GET", _U).replace('"destino": "id_cliente"', '"destino": "customerCpf"')), "authenticated", VTEC)
+checar("SQL 58: telefone no mapa de saída é recusado", False, _salvar_con(_con("X", "outro", "GET", _U, ', "mapa_saida": [{"origem": "$.phone", "destino": "codigo", "grava": "codigo"}]')), "authenticated", VTEC)
+checar("SQL 58: saída que grava precisa ser código", False, _salvar_con(_con("X", "outro", "GET", _U, ', "mapa_saida": [{"origem": "$.offers[*].id", "destino": "oferta.id", "grava": "codigo"}]')), "authenticated", VTEC)
+checar("SQL 58: código fora da lista fechada é recusado", False, _salvar_con(_con("X", "validar_cadastro", "POST", _U, ', "mapa_saida": [{"origem": "$.match", "destino": "codigo", "grava": "codigo", "valores": {"true": "cliente_vip"}}]')), "authenticated", VTEC)
+checar("SQL 58: Authorization nos cabeçalhos fixos é recusado", False, _salvar_con(_con("X", "outro", "GET", _U, ', "cabecalhos_fixos": {"Authorization": "Bearer x"}')), "authenticated", VTEC)
+checar("SQL 58: POST com nova tentativa exige idempotência", False, _salvar_con(_con("X", "registrar_acordo", "POST", _U, ', "tentativas": 1')), "authenticated", VTEC)
+checar("SQL 58: alternativa da carteira só em Buscar ofertas", False, _salvar_con(_con("X", "validar_cadastro", "POST", _U, ', "em_falha": "alternativa_carteira"')), "authenticated", VTEC)
+checar("SQL 58: tempo limite acima de 8 s é recusado", False, _salvar_con(_con("X", "outro", "GET", _U, ', "timeout_ms": 9000')), "authenticated", VTEC)
+checar("SQL 58: segredo não entra pelos ajustes", False, _salvar_con(_con("X", "outro", "GET", _U, ', "segredo_ref": "crm/x"')), "authenticated", VTEC)
+checar("SQL 58: nenhuma coluna de segredo, corpo ou resposta real nos conectores", True,
+       "select count(*) from information_schema.columns where table_name in ('crm_conectores','crm_chamadas','voz_fluxo_passos') and (column_name ~ 'senha|password|secret|token|corpo|body|payload' or column_name = 'resposta')",
+       "service_role", None, 0)
+checar("SQL 58: ativar sem teste é recusado", False, f"select public.mudar_situacao_conector_crm({C1}, 'ativo')", "authenticated", VTEC)
+checar("SQL 58: testar sem credencial é recusado", False, f"select public.testar_conector_crm({C1})", "authenticated", VTEC)
+checar("SQL 58: Técnico abre a troca da credencial (só o nome do segredo)", True, f"select public.trocar_credencial_conector({C1}) ~ '^crm/{EA}/{C1}/[0-9]+$'", "authenticated", VTEC, "t")
+checar("SQL 58: Admin do cliente não troca a credencial", False, f"select public.trocar_credencial_conector({C1})", "authenticated", u["admina"])
+checar("SQL 58: empresa vê a referência do cofre", True, f"select segredo_ref like 'crm/%' from public.crm_conectores where id={C1}", "authenticated", u["oper"], "t")
+checar("SQL 58: Técnico pede o teste", True, f"select public.testar_conector_crm({C1})", "authenticated", VTEC, "pedido")
+checar("SQL 58: só a VM registra o teste", False, f"select public.registrar_teste_conector_crm({C1}, true)", "authenticated", VTEC)
+checar("SQL 58: exemplo com cara de telefone é recusado", False, f"select public.registrar_teste_conector_crm({C1}, true, '{{\"offers\": [{{\"id\": \"OF-1\", \"phone\": \"11987654321\"}}]}}')", "service_role")
+checar("SQL 58: exemplo com e-mail é recusado", False, f"select public.registrar_teste_conector_crm({C1}, true, '{{\"offers\": [], \"contato\": \"ana@exemplo.com\"}}')", "service_role")
+_EX = '{"offers": [{"id": "OF-1", "installments": 1, "installmentAmount": 1104.0, "discountPct": 20}, {"id": "OF-2", "installments": 6, "installmentAmount": 230.0, "discountPct": 0}, {"id": "OF-3", "installments": 12, "installmentAmount": 115.0, "discountPct": 0}]}'
+checar("SQL 58: VM registra o teste com exemplo de valores trocados", True, f"select public.registrar_teste_conector_crm({C1}, true, '{_EX}'); select teste_ok from public.crm_conectores where id={C1}", "service_role", None, "t")
+checar("SQL 58: Técnico ativa depois do teste", True, f"select public.mudar_situacao_conector_crm({C1}, 'ativo')", "authenticated", VTEC, "ativo")
+checar("SQL 58: usuário não grava conector direto", False, f"update public.crm_conectores set situacao='ativo' where id={C1}", "authenticated", u["admin"])
+checar("SQL 58: cliente B não lê os conectores da A", True, "select count(*) from public.crm_conectores", "authenticated", u["operb"], 0)
+def _ativo(js):
+    cid = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{VTEC}', false); " + _salvar_con(js))
+    _sv(f"select public.trocar_credencial_conector({cid})".replace("select", f"set role authenticated; select set_config('request.jwt.claim.sub', '{VTEC}', false); select", 1))
+    _sv(f"select public.registrar_teste_conector_crm({cid}, true)")
+    _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{VTEC}', false); select public.mudar_situacao_conector_crm({cid}, 'ativo')")
+    return cid
+_MS_ID = ', "mapa_entrada": [{"origem": "id_cliente", "destino": "id_cliente", "onde": "path"}, {"origem": "data_informada", "destino": "birthDayMonth", "onde": "corpo"}], "mapa_saida": [{"origem": "$.match", "destino": "codigo", "grava": "codigo", "valores": {"true": "identidade_ok", "false": "identidade_nao_confere"}}]'
+C2 = _ativo(_con("Validar cadastro", "validar_cadastro", "POST", _U + "/validacoes").replace(', "mapa_entrada": ' + _ME, _MS_ID))
+C3 = _ativo(_con("Registrar acordo", "registrar_acordo", "POST", "https://api.crm-alfa.exemplo.com.br/v2/acordos", ', "tentativas": 1, "idempotencia": true, "em_falha": "transferir"'))
+C4 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{VTEC}', false); " + _salvar_con(_con("Gerar boleto", "gerar_boleto", "POST", "https://api.crm-alfa.exemplo.com.br/v2/boletos")))
+checar("SQL 58: mudar dado técnico (tempo limite) sobe a versão e volta para rascunho", True, f"select public.salvar_conector_crm({EA}, '{{\"timeout_ms\": 3000}}', {C3}); select versao||'|'||situacao from public.crm_conectores where id={C3}", "authenticated", VTEC, "2|rascunho")
+_sv(f"select public.registrar_teste_conector_crm({C3}, true)")
+_sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{VTEC}', false); select public.mudar_situacao_conector_crm({C3}, 'ativo')")
+checar("SQL 58: revogar host em uso é recusado", False, f"select public.revogar_host_crm({EA}, 'api.crm-alfa.exemplo.com.br')", "authenticated", VTEC)
+
+# chamadas de conector (FL5): só a VM grava, só códigos
+checar("SQL 58: VM grava a chamada do conector (só código)", True, f"insert into public.crm_chamadas (empresa_id,conector_id,conector_versao,chamada_id,id_chamada,id_cliente,bloco_id,classe,http_status,latencia_ms,resultado_codigo,ofertas_acima_alcada) values ({EA},{C1},1,{CH1},'ch-0001','C1','N4','ok',200,412,'ofertas_1_3',1) returning tentativa", "service_role", None, 1)
+checar("SQL 58: código fora da lista é recusado", False, f"insert into public.crm_chamadas (empresa_id,conector_id,classe,resultado_codigo) values ({EA},{C1},'ok','cliente_vip')", "service_role")
+checar("SQL 58: oferta_acima_alcada é um código aceito", True, f"insert into public.crm_chamadas (empresa_id,conector_id,classe,resultado_codigo,ofertas_acima_alcada) values ({EA},{C1},'ok','oferta_acima_alcada',3) returning resultado_codigo", "service_role", None, "oferta_acima_alcada")
+checar("SQL 58: usuário não grava chamada de conector", False, f"insert into public.crm_chamadas (empresa_id,conector_id,classe) values ({EA},{C1},'ok')", "authenticated", u["admin"])
+checar("SQL 58: cliente A vê a saúde do conector", True, f"select volume_24h||'|'||p50_ms from public.crm_conector_saude where conector_id={C1}", "authenticated", u["oper"], "2|412")
+checar("SQL 58: cliente B não vê a saúde da A", True, "select count(*) from public.crm_conector_saude", "authenticated", u["operb"], 0)
+
+# alçada (FL6)
+checar("SQL 58: Admin cadastra a alçada da carteira", True, f"select public.salvar_alcada_voz({EA}, {CX}, 20, 6, 50, 0, 5, '[{{\"id\": \"AV\", \"parcelas\": 1, \"desconto_pct\": 20}}, {{\"id\": \"P6\", \"parcelas\": 6, \"desconto_pct\": 0}}]', '2026-01-01') is not null", "authenticated", u["admina"], "t")
+checar("SQL 58: oferta padrão acima da alçada é recusada", False, f"select public.salvar_alcada_voz({EA}, {CX}, 20, 6, 50, 0, 5, '[{{\"id\": \"P12\", \"parcelas\": 12, \"desconto_pct\": 0}}]', '2026-02-01')", "authenticated", u["admina"])
+checar("SQL 58: Operação não edita a alçada", False, f"select public.salvar_alcada_voz({EA}, {CX}, 30, 6, 50)", "authenticated", u["oper"])
+checar("SQL 58: equipe MotorCX não edita a alçada do cliente", False, f"select public.salvar_alcada_voz({EA}, {CX}, 30, 6, 50)", "authenticated", VTEC)
+checar("SQL 58: alcada_voz_vigente devolve a da carteira", True, f"select (public.alcada_voz_vigente({EA}, {CX}, '2026-06-01')).parcelas_max", "authenticated", u["oper"], 6)
+checar("SQL 58: cliente B não lê a alçada da A", True, "select count(*) from public.voz_alcada_carteira", "authenticated", u["operb"], 0)
+
+# fluxos (FL1): rascunho → aprovado_empresa → em_uso, pendências de contexto
+C1, C2, C3, C4 = int(C1), int(C2), int(C3), int(C4)
+_NEG = _FC.negociador(C1, C2, C3, C4)
+checar("SQL 58: Operação não cria fluxo", False, f"select public.salvar_fluxo_voz({EA}, {CX}, 'Negociador Alfa', 'negociador', '{_lit(_NEG)}')", "authenticated", u["oper"])
+checar("SQL 58: equipe MotorCX não cria fluxo do cliente", False, f"select public.salvar_fluxo_voz({EA}, {CX}, 'Negociador Alfa', 'negociador', '{_lit(_NEG)}')", "authenticated", VTEC)
+checar("SQL 58: rascunho fora do esquema é recusado", False, f"select public.salvar_fluxo_voz({EA}, {CX}, 'Quebrado', 'negociador', '{{\"esquema\": 2, \"blocos\": []}}')", "authenticated", u["plan"])
+_INC = _FC.negociador(C1, C2, C3, C4); [b for b in _INC["blocos"] if b["id"] == "N9"][0]["saidas"] = []
+FV1 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.salvar_fluxo_voz({EA}, {CX}, 'Negociador Alfa', 'negociador', '{_lit(_INC)}')")
+checar("SQL 58: rascunho incompleto pode ser salvo", True, f"select situacao||'|'||versao from public.voz_fluxo_versoes where id={FV1}", "authenticated", u["oper"], "rascunho|1")
+checar("SQL 58: bloco sem saída segura a aprovação", False, f"select public.aprovar_fluxo_voz({FV1})", "authenticated", u["admina"])
+checar("SQL 58: o bloqueio lista os códigos", True, f"select array_to_string(public.fluxo_voz_bloqueios({FV1}), ',')", "authenticated", u["oper"], "inalcancavel:N17,sem_saida:N9")
+checar("SQL 58: rascunho edita no lugar", True, f"select public.salvar_fluxo_voz({EA}, {CX}, 'Negociador Alfa', 'negociador', '{_lit(_NEG)}', {FV1}) = {FV1}", "authenticated", u["plan"], "t")
+checar("SQL 58: conector em rascunho (C4) segura a aprovação", True, f"select array_to_string(public.fluxo_voz_bloqueios({FV1}), ',')", "authenticated", u["oper"], "conector_inativo:N7")
+_sv(f"select public.trocar_credencial_conector({C4})".replace("select", f"set role authenticated; select set_config('request.jwt.claim.sub', '{VTEC}', false); select", 1))
+_sv(f"select public.registrar_teste_conector_crm({C4}, true)")
+_sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{VTEC}', false); select public.mudar_situacao_conector_crm({C4}, 'ativo')")
+_ERR = _FC.negociador(C1, C1, C3, C4)
+checar("SQL 58: identidade com conector de outra finalidade", True, f"select array_to_string(public.fluxo_voz_pendencias({EA}, {CX}, '{_lit(_ERR)}'), ',')", "authenticated", u["oper"], "conector_finalidade:N2")
+_INT = _FC.negociador(C1, C2, C3, C4); _b3 = [b for b in _INT["blocos"] if b["id"] == "N3"][0]
+_b3["params"]["intencoes"].append("quer_boleto"); _b3["saidas"].append({"rotulo": "Quer boleto", "para": "N13", "tipo": "normal", "quando": "quer_boleto"})
+checar("SQL 58: intenção fora do catálogo", True, f"select array_to_string(public.fluxo_voz_pendencias({EA}, {CX}, '{_lit(_INT)}'), ',')", "authenticated", u["oper"], "intencao_fora_catalogo:N3")
+_CY = _sv(f"insert into public.credores (empresa_id,codigo,nome) values ({EA},'banco-y-fluxo','Banco Y') returning id")
+_CB = _sv(f"insert into public.credores (empresa_id,codigo,nome) values ({EB},'banco-b-fluxo','Banco B') returning id")
+checar("SQL 58: fluxo que oferece sem alçada na carteira", True, f"select array_to_string(public.fluxo_voz_pendencias({EA}, {_CY}, '{_lit(_NEG)}'), ',')", "authenticated", u["oper"], "sem_alcada")
+_SEMV = _FC.negociador(C1, None, C3, C4)
+checar("SQL 58: identidade sem o conector de validação do CRM fica pendente", True, f"select array_to_string(public.fluxo_voz_pendencias({EA}, {CX}, '{_lit(_SEMV)}'), ',')", "authenticated", u["oper"], "identidade_sem_conferencia:N2")
+checar("SQL 58: conferência pelo dado da carga não existe mais", True, "select count(*) from pg_proc where proname='liberar_identidade_dado_carga'", "service_role", None, 0)
+checar("SQL 58: voz_config sem a coluna do dado da carga", True, "select count(*) from information_schema.columns where table_name='voz_config' and column_name='identidade_dado_carga_vm'", "service_role", None, 0)
+checar("SQL 58: modelo sem conector de validação fica pendente", True, f"select array_to_string(public.fluxo_voz_pendencias({EA}, {CX}, definicao), ',') from public.voz_fluxo_modelos where codigo='branco'", "authenticated", u["oper"], "identidade_sem_conferencia:N2")
+checar("SQL 58: cliente B não consulta pendências da A", False, f"select public.fluxo_voz_pendencias({EA}, {CX}, '{_lit(_NEG)}')", "authenticated", u["operb"])
+checar("SQL 58: com os conectores ativos e a alçada, nada pendente", True, f"select cardinality(public.fluxo_voz_bloqueios({FV1}))", "authenticated", u["oper"], 0)
+# casos de teste (decisão 5)
+checar("SQL 58: caso de teste com CPF nas falas é recusado", False, f"select public.salvar_caso_teste_fluxo_voz((select fluxo_id from public.voz_fluxo_versoes where id={FV1}), 'Com CPF', array['Sou eu', 'meu cpf é 12345678901'], array['N1','N2'])", "authenticated", u["plan"])
+CT1 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.salvar_caso_teste_fluxo_voz((select fluxo_id from public.voz_fluxo_versoes where id={FV1}), 'Falha do CRM cai na carteira', array['Sou eu', '15 de março', 'Quero parcelar', 'Aceito'], array['N1','N2','N3','N4','N6','N7','N11','N12'], 'promessa', array[{C1}]::bigint[])")
+checar("SQL 58: Operação não cria caso de teste", False, f"select public.salvar_caso_teste_fluxo_voz((select fluxo_id from public.voz_fluxo_versoes where id={FV1}), 'X', array['oi'], array['N1'])", "authenticated", u["oper"])
+checar("SQL 58: só o simulador grava o resultado do caso", False, f"select public.registrar_resultado_caso_voz({CT1}, {FV1}, true, array['N1'])", "authenticated", u["plan"])
+_sv(f"select public.registrar_resultado_caso_voz({CT1}, {FV1}, false, array['N1','N2','N3','N4','N13'], 'transferida')")
+checar("SQL 58: caso que falhou na versão segura a aprovação", False, f"select public.aprovar_fluxo_voz({FV1})", "authenticated", u["admina"])
+checar("SQL 58: o bloqueio diz qual caso falhou", True, f"select array_to_string(public.fluxo_voz_bloqueios({FV1}), ',')", "authenticated", u["oper"], f"caso_falhou:{CT1}")
+_sv(f"select public.registrar_resultado_caso_voz({CT1}, {FV1}, true, array['N1','N2','N3','N4','N6','N7','N11','N12'], 'promessa')")
+# base de respostas (FL8)
+checar("SQL 58: resposta da base só em bloco generativo", False, f"select public.salvar_resposta_fluxo_voz({FV1}, 'N3', 'Isso suja meu nome?', 'Com o acordo em dia, a negativação sai.')", "authenticated", u["plan"])
+RB1 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.salvar_resposta_fluxo_voz({FV1}, 'N5', 'Isso suja meu nome?', 'Com o acordo em dia, a negativação é retirada em até 5 dias úteis depois do primeiro pagamento.')")
+checar("SQL 58: Planejamento não revisa a resposta", False, f"select public.revisar_resposta_fluxo_voz({RB1})", "authenticated", u["plan"])
+checar("SQL 58: Admin revisa a resposta", True, f"select public.revisar_resposta_fluxo_voz({RB1}); select revisado_em is not null from public.voz_base_respostas where id={RB1}", "authenticated", u["admina"], "t")
+# aprovação e uso
+checar("SQL 58: Planejamento não aprova o fluxo", False, f"select public.aprovar_fluxo_voz({FV1})", "authenticated", u["plan"])
+checar("SQL 58: equipe MotorCX não aprova o fluxo do cliente", False, f"select public.aprovar_fluxo_voz({FV1})", "authenticated", u["admin"])
+checar("SQL 58: não pula etapa (rascunho direto para uso)", False, f"select public.usar_fluxo_voz({FV1})", "authenticated", u["admina"])
+checar("SQL 58: Admin aprova pela empresa", True, f"select public.aprovar_fluxo_voz({FV1}, 'ok')", "authenticated", u["admina"], "aprovado_empresa")
+checar("SQL 58: Admin coloca em uso", True, f"select public.usar_fluxo_voz({FV1})", "authenticated", u["admina"], "em_uso")
+checar("SQL 58: o rascunho migrado fica como está", True, f"select v.situacao from public.voz_fluxos f join public.voz_fluxo_versoes v on v.fluxo_id=f.id where f.roteiro_origem_id={RV1}", "authenticated", u["oper"], "rascunho")
+checar("SQL 58: fluxo_voz_em_uso devolve a versão da carteira (com hash)", True, f"select versao_id||'|'||length(hash) from public.fluxo_voz_em_uso({EA}, {CX})", "authenticated", u["oper"], f"{FV1}|64")
+checar("SQL 58: cliente B não pede o fluxo da A", True, f"select count(*) from public.fluxo_voz_em_uso({EA}, {CX})", "authenticated", u["operb"], 0)
+checar("SQL 58: versão em uso não muda direto (nem pela VM)", False, f"update public.voz_fluxo_versoes set definicao='{{\"esquema\": 1, \"blocos\": []}}' where id={FV1}", "service_role")
+checar("SQL 58: usuário não grava versão direto", False, f"update public.voz_fluxo_versoes set situacao='arquivado' where id={FV1}", "authenticated", u["admina"])
+FV2 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.salvar_fluxo_voz({EA}, {CX}, 'Negociador Alfa', 'negociador', '{_lit(_NEG)}', {FV1})")
+checar("SQL 58: editar a versão em uso cria a v2 (rascunho) com a base copiada", True, f"select v.versao||'|'||v.situacao||'|'||(select count(*) from public.voz_base_respostas r where r.fluxo_versao_id=v.id and r.revisado_em is not null) from public.voz_fluxo_versoes v where v.id={FV2}", "authenticated", u["oper"], "2|rascunho|1")
+checar("SQL 58: só um rascunho aberto por fluxo", False, f"select public.salvar_fluxo_voz({EA}, {CX}, 'Negociador Alfa', 'negociador', '{_lit(_NEG)}', {FV1})", "authenticated", u["plan"])
+checar("SQL 58: a v1 segue em uso até a v2 entrar", True, f"select situacao from public.voz_fluxo_versoes where id={FV1}", "authenticated", u["oper"], "em_uso")
+_sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['admina']}', false); select public.aprovar_fluxo_voz({FV2}); select public.usar_fluxo_voz({FV2})")
+checar("SQL 58: troca atômica: v2 em uso, v1 arquivada", True, f"select string_agg(versao||':'||situacao, ',' order by versao) from public.voz_fluxo_versoes where fluxo_id=(select fluxo_id from public.voz_fluxo_versoes where id={FV1})", "authenticated", u["oper"], "1:arquivado,2:em_uso")
+checar("SQL 58: voltar versão exige motivo", False, f"select public.voltar_versao_fluxo_voz((select fluxo_id from public.voz_fluxo_versoes where id={FV1}), 1, '')", "authenticated", u["admina"])
+checar("SQL 58: voltar para a v1 com motivo", True, f"select public.voltar_versao_fluxo_voz((select fluxo_id from public.voz_fluxo_versoes where id={FV1}), 1, 'a v2 transferiu demais')", "authenticated", u["admina"], FV1)
+checar("SQL 58: a v1 volta em uso, a v2 vai para o arquivo, com o motivo", True, f"select string_agg(versao||':'||situacao||':'||coalesce(motivo,''), ',' order by versao) from public.voz_fluxo_versoes where fluxo_id=(select fluxo_id from public.voz_fluxo_versoes where id={FV1})", "authenticated", u["oper"], "1:em_uso:a v2 transferiu demais,2:arquivado:")
+checar("SQL 58: a volta ficou na auditoria", True, f"select count(*) > 0 from public.auditoria where tabela='voz_fluxo_versoes'", "service_role", None, "t")
+DUP = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.duplicar_fluxo_voz({FV1}, {_CY})")
+checar("SQL 58: duplicar para outra carteira cria rascunho v1", True, f"select v.versao||'|'||v.situacao||'|'||(f.credor_id={_CY}) from public.voz_fluxo_versoes v join public.voz_fluxos f on f.id=v.fluxo_id where v.id={DUP}", "authenticated", u["oper"], "1|rascunho|true")
+checar("SQL 58: duplicar para carteira de outra empresa é recusado", False, f"select public.duplicar_fluxo_voz({FV1}, {_CB})", "authenticated", u["plan"])
+MOD = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.criar_fluxo_de_modelo({EA}, 'localizador', null, 'Localizador Alfa')")
+checar("SQL 58: criar a partir do modelo Localizador", True, f"select v.situacao||'|'||f.modelo_origem from public.voz_fluxo_versoes v join public.voz_fluxos f on f.id=v.fluxo_id where v.id={MOD}", "authenticated", u["oper"], "rascunho|localizador")
+checar("SQL 58: cliente B não lê os fluxos da A", True, "select count(*) from public.voz_fluxos", "authenticated", u["operb"], 0)
+checar("SQL 58: cliente B não lê as versões da A", True, "select count(*) from public.voz_fluxo_versoes", "authenticated", u["operb"], 0)
+checar("SQL 58: cliente B não lê os casos da A", True, "select count(*) from public.voz_fluxo_casos_teste", "authenticated", u["operb"], 0)
+
+# passos e métricas (FL7): só a VM grava, só códigos
+checar("SQL 58: VM grava o passo do bloco", True, f"insert into public.voz_fluxo_passos (empresa_id,chamada_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,saida_quando,intencao,confianca_faixa) values ({EA},{CH1},'ch-0001',{FV1},3,'N3','cognicao','quero_negociar','quero_negociar','alta') returning ordem", "service_role", None, 3)
+checar("SQL 58: trava fora da lista é recusada", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,trava) values ({EA},'ch-0001',{FV1},4,'N3','cognicao','cpf')", "service_role")
+checar("SQL 58: usuário não grava passo", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo) values ({EA},'ch-0001',{FV1},5,'N3','cognicao')", "authenticated", u["admin"])
+checar("SQL 58: VM grava a métrica do dia (saídas por código)", True, f"insert into public.voz_fluxo_metricas_dia (empresa_id,fluxo_versao_id,dia,bloco_id,chegaram,saidas) values ({EA},{FV1},'2026-11-05','N3',10,'{{\"quero_negociar\": 6, \"ja_paguei\": 4}}') returning chegaram", "service_role", None, 10)
+checar("SQL 58: métrica com texto livre é recusada", False, f"insert into public.voz_fluxo_metricas_dia (empresa_id,fluxo_versao_id,dia,bloco_id,saidas) values ({EA},{FV1},'2026-11-06','N3','{{\"Ana disse\": 1}}')", "service_role")
+checar("SQL 58: cliente A lê passos e métricas", True, "select (select count(*) from public.voz_fluxo_passos)||'|'||(select count(*) from public.voz_fluxo_metricas_dia)", "authenticated", u["oper"], "1|1")
+checar("SQL 58: cliente B não lê passos da A", True, "select count(*) from public.voz_fluxo_passos", "authenticated", u["operb"], 0)
+checar("SQL 58: a chamada guarda a versão do fluxo e o bloco final", True, f"update public.voz_chamadas set fluxo_versao_id={FV1}, bloco_final='N12' where id={CH1} returning bloco_final", "service_role", None, "N12")
+_sv(f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,entrou_em) values ({EA},'ch-velha',{FV1},1,'N1','arvore',now() - interval '2000 days')")
+_sv(f"insert into public.crm_chamadas (empresa_id,conector_id,classe,ocorrido_em) values ({EA},{C1},'tempo',now() - interval '2000 days')")
+checar("SQL 58: retenção apaga passos e chamadas de conector vencidos", True, "select public.apagar_voz_expirada(); select (select count(*) from public.voz_fluxo_passos where id_chamada='ch-velha')||'|'||(select count(*) from public.crm_chamadas where classe='tempo')", "service_role", None, "0|0")
+
+# pedidos de fluxo em texto: só vira rascunho o que passa no validador (saída do LLM simulada aqui)
+_TX = "Quero um fluxo que confirme o titular, busque as ofertas no CRM e negocie em até 6 vezes."
+checar("SQL 58 · pedido: Operação não pede fluxo", False, f"select public.pedir_fluxo_voz({EA}, {_CY}, '{_TX}')", "authenticated", u["oper"])
+checar("SQL 58 · pedido: anexo de outra empresa é recusado", False, f"select public.pedir_fluxo_voz({EA}, {_CY}, '{_TX}', array['entradas/beta/x.pdf'])", "authenticated", u["plan"])
+PD1 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.pedir_fluxo_voz({EA}, {_CY}, '{_TX}', array['entradas/alfa/fluxo/desenho.pdf'])")
+checar("SQL 58 · pedido: um pedido por carteira na fila", False, f"select public.pedir_fluxo_voz({EA}, {_CY}, '{_TX}')", "authenticated", u["plan"])
+checar("SQL 58 · pedido: só a geração pega o pedido", False, "select public.pegar_pedido_fluxo_voz()", "authenticated", u["plan"])
+checar("SQL 58 · pedido: geração recebe só conectores ativos, intenções e variáveis", True, "select (x->>'pedido')||'|'||jsonb_array_length(x->'conectores')||'|'||(x->'variaveis' ? 'assessoria') from (select public.pegar_pedido_fluxo_voz() x) y", "service_role", None, f"{PD1}|4|true")
+_RUIM = _FC.negociador(None, None, None, None); [b for b in _RUIM["blocos"] if b["id"] == "N1"][0]["params"]["fala"] = "Consta {{saldo}}. Falo com {{primeiro_nome}}?"
+checar("SQL 58 · pedido: saída inválida do LLM não vira rascunho", True, f"select coalesce(public.registrar_geracao_fluxo_voz({PD1}, '{_lit(_RUIM)}', '{{\"entendi\": [], \"tentativas\": 2}}')::text, 'nulo')", "service_role", None, "nulo")
+checar("SQL 58 · pedido: fica com_erros e com os erros que sobraram", True, f"select situacao||'|'||(resultado->'erros'->>0)||'|'||(versao_gerada_id is null) from public.voz_fluxo_pedidos where id={PD1}", "authenticated", u["oper"], "com_erros|valor_antes_identidade:N1|true")
+checar("SQL 58 · pedido: nenhum fluxo criado pela saída inválida", True, "select count(*) from public.voz_fluxos where modelo_origem='pedido_texto'", "service_role", None, 0)
+_sv(f"update public.voz_fluxo_pedidos set situacao='gerando' where id={PD1}")
+checar("SQL 58 · pedido: sem definição, guarda os erros que a geração devolveu", True, f"select coalesce(public.registrar_geracao_fluxo_voz({PD1}, null, '{{\"erros\": [\"llm_indisponivel\"], \"tentativas\": 0}}')::text, 'nulo'); select resultado->>'erros' from public.voz_fluxo_pedidos where id={PD1}", "service_role", None, '["llm_indisponivel"]')
+checar("SQL 58 · pedido: respostas devolvem o pedido para a fila", True, f"select public.responder_pedido_fluxo_voz({PD1}, '{{\"parcelas\": \"até 6\"}}'); select situacao from public.voz_fluxo_pedidos where id={PD1}", "authenticated", u["plan"], "pendente")
+_sv("select public.pegar_pedido_fluxo_voz()")
+checar("SQL 58 · pedido: conector inventado pelo LLM é recusado", True, f"select coalesce(public.registrar_geracao_fluxo_voz({PD1}, '{_lit(_FC.negociador(999999, None, None, None))}', '{{}}')::text, 'nulo')", "service_role", None, "nulo")
+checar("SQL 58 · pedido: o erro diz qual bloco inventou o conector", True, f"select resultado->>'erros' from public.voz_fluxo_pedidos where id={PD1}", "service_role", None, '["conector_inativo:N4"]')
+_sv(f"update public.voz_fluxo_pedidos set situacao='gerando' where id={PD1}")
+_RES = '{"entendi": [{"frase": "busque as ofertas no CRM", "bloco": "N4"}], "suposicoes": ["usei a alçada da carteira se o CRM falhar"], "perguntas": [], "mudancas": [], "tentativas": 0}'
+PV = _sv(f"select public.registrar_geracao_fluxo_voz({PD1}, '{_lit(_FC.negociador(None, None, None, None))}', '{_RES}')")
+checar("SQL 58 · pedido: saída válida vira rascunho (nunca aprovado)", True, f"select v.situacao||'|'||p.situacao||'|'||(p.versao_gerada_id={PV}) from public.voz_fluxo_pedidos p join public.voz_fluxo_versoes v on v.id=p.versao_gerada_id where p.id={PD1}", "authenticated", u["oper"], "rascunho|gerado|true")
+checar("SQL 58 · pedido: sem limite, cada geração entra no extrato (LLM fora não conta)", True, f"select p.geracoes||'|'||(select quantidade from public.consumo_mensageria c where c.empresa_id={EA} and c.item='ia_geracao_fluxo') from public.voz_fluxo_pedidos p where p.id={PD1}", "service_role", None, "3|3")
+checar("SQL 58 · pedido: item ia_geracao_fluxo no catálogo da fatura", True, "select unidade||'|'||produto from public.cobranca_itens where codigo='ia_geracao_fluxo'", "authenticated", u["oper"], "geração|agente_voz")
+checar("SQL 58 · pedido: Admin vê a geração no consumo do mês", True, f"select quantidade from public.consumo_mensageria where empresa_id={EA} and item='ia_geracao_fluxo'", "authenticated", u["admina"], 3)
+checar("SQL 58 · pedido: resultado com chave desconhecida é recusado", False, f"update public.voz_fluxo_pedidos set resultado='{{\"cpf\": []}}' where id={PD1}", "service_role")
+PD2 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.pedir_fluxo_voz({EA}, {CX}, 'Mudar: pedir a data de nascimento só uma vez.', '{{}}', {FV1})")
+checar("SQL 58 · pedido: mudança guarda fluxo e versão de origem", True, f"select (fluxo_id is not null)::text||'|'||versao_origem_id from public.voz_fluxo_pedidos where id={PD2}", "authenticated", u["oper"], f"true|{FV1}")
+checar("SQL 58 · pedido: versão de origem de outra carteira é recusada", False, f"select public.pedir_fluxo_voz({EA}, {_CY}, 'Mudar o fluxo da outra carteira.', '{{}}', {FV1})", "authenticated", u["plan"])
+PD3 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.pedir_fluxo_equipe({EA}, {CX}, 'Montem para nós um fluxo de localização com transferência.', array['chamados/alfa/roteiro.docx'])")
+checar("SQL 58 · pedido: pedido à equipe abre chamado no Suporte", True, f"select p.situacao||'|'||c.motivo||'|'||(select count(*) from public.chamado_mensagens m where m.chamado_id=c.id) from public.voz_fluxo_pedidos p join public.chamados c on c.id=p.chamado_id where p.id={PD3}", "authenticated", u["oper"], "na_equipe|integracao|1")
+checar("SQL 58 · pedido: prazo da equipe é de 2 dias úteis", True, "select public.somar_dias_uteis('2026-10-30 10:00-03', 2) = '2026-11-03 10:00-03' and public.somar_dias_uteis('2026-11-02 10:00-03', 2) = '2026-11-04 10:00-03'", "service_role", None, "t")
+checar("SQL 58 · pedido: pedido à equipe grava o prazo e escreve no chamado", True, f"select (p.prazo_em = public.somar_dias_uteis(p.pedido_em, 2))::text||'|'||(m.texto like '%2 dias úteis%') from public.voz_fluxo_pedidos p join public.chamado_mensagens m on m.chamado_id=p.chamado_id where p.id={PD3}", "service_role", None, "true|true")
+checar("SQL 58 · pedido: Admin do cliente não entrega o pedido da equipe", False, f"select public.entregar_pedido_fluxo_equipe({PD3}, '{_lit(_FC.negociador(None, None, None, None))}')", "authenticated", u["admina"])
+checar("SQL 58 · pedido: equipe não entrega fluxo inválido", False, f"select public.entregar_pedido_fluxo_equipe({PD3}, '{_lit(_RUIM)}')", "authenticated", VSUP)
+checar("SQL 58 · pedido: equipe entrega o rascunho do pedido", True, f"select public.entregar_pedido_fluxo_equipe({PD3}, '{_lit(_FC.negociador(None, None, None, None))}') is not null; select p.situacao||'|'||v.situacao from public.voz_fluxo_pedidos p join public.voz_fluxo_versoes v on v.id=p.versao_gerada_id where p.id={PD3}", "authenticated", VSUP, "gerado|rascunho")
+checar("SQL 58 · pedido: anexos ficam enquanto a versão gerada existe", True, "select count(*) from public.anexos_fluxo_vencidos()", "service_role", None, 0)
+checar("SQL 58 · pedido: cliente não lista anexos vencidos", False, "select * from public.anexos_fluxo_vencidos()", "authenticated", u["admina"])
+_sv(f"delete from public.voz_fluxo_versoes where id=(select versao_gerada_id from public.voz_fluxo_pedidos where id={PD1})")
+checar("SQL 58 · pedido: sem a versão gerada, os anexos podem sair", True, "select string_agg(pedido_id||':'||array_to_string(anexos, ','), ';') from public.anexos_fluxo_vencidos()", "service_role", None, f"{PD1}:entradas/alfa/fluxo/desenho.pdf")
+checar("SQL 58 · pedido: VM marca os anexos apagados", True, f"select public.marcar_anexos_apagados({PD1}); select cardinality(anexos)||'|'||(anexos_apagados_em is not null) from public.voz_fluxo_pedidos where id={PD1}", "service_role", None, "0|true")
+checar("SQL 58 · pedido: cliente B não vê os pedidos da A", True, "select count(*) from public.voz_fluxo_pedidos", "authenticated", u["operb"], 0)
+checar("SQL 58 · pedido: usuário não grava pedido direto", False, f"update public.voz_fluxo_pedidos set situacao='gerado' where id={PD3}", "authenticated", u["admina"])
+
+# o que o executor Python emite (voz/fluxo.py → voz/registro.py) cabe nas tabelas do SQL 58
+from voz import fluxo as _FX, conector as _CN, banco as _B   # noqa: E402
+_sim = _FX.simular(_FX.FluxoCarregado(FV1, _FC.negociador(), {}, None), ["Não, é engano"], {"primeiro_nome": "Ana", "assessoria": "Alfa"})
+_linhas = [_B.para_colunas("voz_fluxo_passos", dict(p_, empresa_id=int(EA), id_chamada="ch-exec-1")) for p_ in _sim["passos"]]
+checar("SQL 58: passos do executor Python entram em voz_fluxo_passos", True,
+       f"insert into public.voz_fluxo_passos (empresa_id, id_chamada, fluxo_versao_id, ordem, bloco_id, modo, entrou_em, saida_quando, intencao, confianca_faixa, motivo_devolucao, trava, turnos) select empresa_id, id_chamada, fluxo_versao_id, ordem, bloco_id, modo, entrou_em, saida_quando, intencao, confianca_faixa, motivo_devolucao, trava, turnos from jsonb_populate_recordset(null::public.voz_fluxo_passos, '{_lit(_linhas)}') on conflict do nothing; select count(*) from public.voz_fluxo_passos where id_chamada='ch-exec-1'",
+       "service_role", None, 2)
+_c = {"conector_id": C1, "conector_versao": 1, "bloco_id": "N4", "classe": "ok", "http_status": 200, "latencia_ms": 300,
+      "tentativa": 1, "resultado_codigo": "oferta_acima_alcada", "ofertas_acima_alcada": 2, "fluxo_versao_id": FV1, "id_cliente": "C1"}
+checar("SQL 58: chamada de conector do executor entra em crm_chamadas", True,
+       f"insert into public.crm_chamadas (empresa_id, conector_id, conector_versao, id_chamada, id_cliente, fluxo_versao_id, bloco_id, tentativa, http_status, classe, latencia_ms, resultado_codigo, ofertas_acima_alcada) select empresa_id, conector_id, conector_versao, id_chamada, id_cliente, fluxo_versao_id, bloco_id, tentativa, http_status, classe, latencia_ms, resultado_codigo, ofertas_acima_alcada from jsonb_populate_record(null::public.crm_chamadas, '{_lit(_B.para_colunas('crm_chamadas', dict(_c, empresa_id=int(EA), id_chamada='ch-exec-1')))}') returning resultado_codigo",
+       "service_role", None, "oferta_acima_alcada")
+
+_T58 = ("voz_fluxos", "voz_fluxo_versoes", "voz_fluxo_modelos", "voz_intencoes", "crm_hosts_permitidos", "crm_conectores",
+        "crm_chamadas", "voz_alcada_carteira", "voz_fluxo_passos", "voz_fluxo_metricas_dia", "voz_fluxo_intencoes_dia",
+        "voz_base_respostas", "voz_fluxo_casos_teste", "voz_fluxo_casos_resultados", "voz_fluxo_pedidos", "crm_conector_saude")
+for t in _T58:
+    checar(f"SQL 58: anon não lê {t}", False, f"select * from public.{t} limit 1", "anon")
+checar("SQL 58: todas as tabelas novas com RLS", True, "select count(*) from pg_tables where schemaname='public' and tablename in ('" + "','".join(_T58[:-1]) + "') and not rowsecurity", "service_role", None, 0)
+checar("SQL 58: RPCs novas com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%fluxo%' or proname like '%conector%' or proname like '%host_crm%' or proname like '%alcada%' or proname like '%intencao%') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
+checar("SQL 58: anon não chama nenhuma função nova", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%fluxo%' or proname like '%conector%' or proname like '%host_crm%' or proname like '%alcada%' or proname like '%intencao%' or proname like '%pedido%fluxo%' or proname like '%geracao%' or proname like '%anexos%' or proname in ('somar_dias_uteis','anexos_pedido_voz_ok','resultado_pedido_voz_ok','falas_teste_voz_ok','contagem_codigos_ok','campos_oferta_voz','codigos_conector_voz','variaveis_voz')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
+
+# (depois do SQL 58, que acrescenta 'assessoria' a variaveis_voz())
 # contrato entre o código da VM de voz (voz/) e o SQL 56, com o insert do modo chave e a tarifação pelo gatilho
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_contrato.py")],
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 56: contrato do código de voz com o banco (testar_voz_contrato.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 59 · Roleplay fase 1: teste do agente de IA com personas
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261226000001_voz_roleplay.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+from voz import roleplay as _RP   # noqa: E402
+for _cod, _p in _RP.PERSONAS_PADRAO.items():
+    checar(f"SQL 59: persona padrão {_cod} igual à do Python", True,
+           f"select perfil||'|'||array_to_string(resultados_aceitos, ',')||'|'||array_to_string(travas_esperadas, ',')||'|'||dificuldade from public.roleplay_personas where empresa_id is null and codigo='{_cod}'",
+           "authenticated", u["oper"], f"{_p[1]}|{','.join(_p[7])}|{','.join(_p[8])}|{_p[6]}")
+checar("SQL 59: 10 personas padrão visíveis a qualquer cliente", True, "select count(*) from public.roleplay_personas where empresa_id is null", "authenticated", u["operb"], 10)
+_PJ = '{"codigo": "cliente_vip", "nome": "Cliente antigo", "perfil": "outro", "objetivo": "Cliente antigo que quer desconto por fidelidade.", "frases": ["Sou cliente há anos."], "resultados_aceitos": ["promessa", "transferida_fora_alcada"]}'
+PJA = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.salvar_persona_roleplay({EA}, '{_PJ}')")
+checar("SQL 59: Operação não cria persona", False, f"select public.salvar_persona_roleplay({EA}, '{_PJ.replace('cliente_vip', 'outra')}')", "authenticated", u["oper"])
+checar("SQL 59: persona com CPF nas frases é recusada", False, f"select public.salvar_persona_roleplay({EA}, '{_PJ.replace('cliente_vip', 'cpf').replace('Sou cliente há anos.', 'Meu CPF é 12345678901')}')", "authenticated", u["plan"])
+checar("SQL 59: persona com e-mail no objetivo é recusada", False, f"select public.salvar_persona_roleplay({EA}, '{_PJ.replace('cliente_vip', 'email').replace('fidelidade.', 'fidelidade, ana@x.com')}')", "authenticated", u["plan"])
+checar("SQL 59: cliente não cria persona padrão", False, f"select public.salvar_persona_roleplay(null, '{_PJ.replace('cliente_vip', 'padrao_x')}')", "authenticated", u["admina"])
+checar("SQL 59: Master cria persona padrão", True, f"select public.salvar_persona_roleplay(null, '{_PJ.replace('cliente_vip', 'padrao_x')}') is not null", "authenticated", u["admin"], "t")
+_sv("delete from public.roleplay_personas where codigo='padrao_x'")
+checar("SQL 59: cliente B não vê a persona da A", True, f"select count(*) from public.roleplay_personas where id={PJA}", "authenticated", u["operb"], 0)
+checar("SQL 59: usuário não grava persona direto", False, f"update public.roleplay_personas set ativa=false where id={PJA}", "authenticated", u["admina"])
+_PN = {c: _sv(f"select id from public.roleplay_personas where empresa_id is null and codigo='{c}'") for c in ("nao_me_ligue", "negocia_rapido", "quer_parcelar_muito")}
+# lote
+checar("SQL 59: Operação não roda roleplay", False, f"select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']}]::bigint[], 3)", "authenticated", u["oper"])
+checar("SQL 59: cliente B não roda roleplay da A", False, f"select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']}]::bigint[], 3)", "authenticated", u["operb"])
+checar("SQL 59: mais de 200 conversas no lote é recusado", False, f"select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']}]::bigint[], 21)", "authenticated", u["plan"])
+_INV = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.salvar_fluxo_voz({EA}, null, 'Rascunho quebrado', 'negociador', '{_lit(_INC)}')")
+checar("SQL 59: versão com erro no validador não roda roleplay", False, f"select public.rodar_roleplay_voz({_INV}, array[{_PN['nao_me_ligue']}]::bigint[], 1)", "authenticated", u["plan"])
+RL1 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']},{_PN['negocia_rapido']}]::bigint[], 2)")
+checar("SQL 59: lote nasce pendente com as personas", True, f"select situacao||'|'||cardinality(personas)||'|'||quantidade from public.roleplay_lotes where id={RL1}", "authenticated", u["oper"], "pendente|2|2")
+checar("SQL 59: um roleplay por versão de cada vez", False, f"select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']}]::bigint[], 1)", "authenticated", u["plan"])
+checar("SQL 59: só a VM pega o lote", False, "select public.pegar_roleplay_voz()", "authenticated", u["plan"])
+checar("SQL 59: VM pega o lote sem credencial dos conectores", True, "select (x->>'lote')||'|'||jsonb_array_length(x->'personas')||'|'||(select count(*) from jsonb_array_elements(x->'conectores') c where c ? 'segredo_ref') from (select public.pegar_roleplay_voz() x) y", "service_role", None, f"{RL1}|2|0")
+# conversas: uma de verdade do executor Python (LLM falso) + as demais com códigos
+class _PF:
+    def __init__(self, rot): self.rot = list(rot)
+    def responder(self, msgs, ferr):
+        from voz.provedores.montagem import Resposta
+        return Resposta(self.rot.pop(0) if self.rot else "Hum.", tokens=10)
+_conv = _RP.conversar(_FX.FluxoCarregado(FV1, _FC.negociador(), {}, None), _RP.Persona.padrao("nao_me_ligue", int(_PN["nao_me_ligue"])),
+                      _PF([]), _PF(["Não me liga mais."]))
+def _reg(l, persona, rodada, res, passou, acordo=False, transc="null", travas="{}", oferta="null", parcelas="null"):
+    return (f"select public.registrar_roleplay_conversa({l}, {persona}, {rodada}, '{res}', {passou}, array['N1']::text[], '{travas}'::text[], "
+            f"'{{}}'::text[], {acordo}, {oferta}, {parcelas}, 3, 100, {transc})")
+checar("SQL 59: conversa do executor Python entra em roleplay_conversas", True,
+       _reg(RL1, _PN["nao_me_ligue"], 1, _conv.resultado, str(_conv.passou).lower(), transc=f"'{_lit(_conv.transcricao)}'::jsonb",
+            travas="{" + ",".join(_conv.travas) + "}") + " is not null", "service_role", None, "t")
+_sv(_reg(RL1, _PN["nao_me_ligue"], 2, "opt_out", "true", travas="{nao_me_ligue}"))
+_sv(_reg(RL1, _PN["negocia_rapido"], 1, "promessa", "true", acordo="true", oferta="'OF-2'", parcelas="6"))
+CV_FALHA = _sv(_reg(RL1, _PN["negocia_rapido"], 2, "limite_turnos", "false", transc="'[{\"quem\": \"agente\", \"texto\": \"Olá\", \"bloco\": \"N1\"}, {\"quem\": \"pessoa\", \"texto\": \"Sou eu.\"}, {\"quem\": \"pessoa\", \"texto\": \"Hum.\"}]'::jsonb"))
+checar("SQL 59: usuário não grava conversa", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true"), "authenticated", u["admin"])
+checar("SQL 59: trava fora da lista é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", travas="{cpf}"), "service_role")
+checar("SQL 59: transcrição com CPF é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", transc="'[{\"quem\": \"pessoa\", \"texto\": \"meu cpf 12345678901\"}]'::jsonb"), "service_role")
+checar("SQL 59: persona fora do lote é recusada", False, _reg(RL1, _PN["quer_parcelar_muito"], 1, "recusa", "true"), "service_role")
+checar("SQL 59: só a VM conclui o lote", False, f"select public.concluir_roleplay_lote({RL1}, 2500)", "authenticated", u["plan"])
+checar("SQL 59: concluir lança os tokens no item ia_roleplay (por mil)", True, f"select public.concluir_roleplay_lote({RL1}, 2500); select l.situacao||'|'||l.tokens||'|'||l.conversas||'|'||(select quantidade from public.consumo_mensageria c where c.empresa_id={EA} and c.item='ia_roleplay') from public.roleplay_lotes l where l.id={RL1}", "service_role", None, "concluido|2500|4|3")
+checar("SQL 59: item ia_roleplay no catálogo da fatura", True, "select unidade from public.cobranca_itens where codigo='ia_roleplay'", "authenticated", u["oper"], "mil tokens")
+checar("SQL 59: resultado do lote por persona (só contagens)", True, f"select string_agg(perfil||':'||conversas||':'||passaram||':'||acordos||':'||taxa_acordo||':'||opt_out||':'||cardinality(coalesce(reprovadas, '{{}}')), ',' order by perfil) from public.resultado_roleplay_voz({RL1})", "authenticated", u["oper"], "nao_me_ligue:2:2:0:0.0:2:0,negocia_rapido:2:1:1:50.0:0:1")
+checar("SQL 59: cliente B não vê o resultado da A", True, f"select count(*) from public.resultado_roleplay_voz({RL1})", "authenticated", u["operb"], 0)
+checar("SQL 59: cliente B não lê as conversas da A", True, "select count(*) from public.roleplay_conversas", "authenticated", u["operb"], 0)
+# conversa reprovada → caso de teste
+CV_OK = _sv(f"select id from public.roleplay_conversas where lote_id={RL1} and passou limit 1")
+checar("SQL 59: conversa aprovada não vira caso", False, f"select public.roleplay_para_caso_teste({CV_OK})", "authenticated", u["plan"])
+checar("SQL 59: Operação não transforma conversa em caso", False, f"select public.roleplay_para_caso_teste({CV_FALHA})", "authenticated", u["oper"])
+CT_RP = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.roleplay_para_caso_teste({CV_FALHA})")
+checar("SQL 59: conversa reprovada vira caso (falas da persona, confere só o resultado)", True, f"select array_to_string(falas, '|')||'#'||cardinality(caminho_esperado)||'#'||resultado_esperado from public.voz_fluxo_casos_teste where id={CT_RP}", "authenticated", u["oper"], "Sou eu.|Hum.#0#promessa")
+checar("SQL 59: transformar de novo devolve o mesmo caso", True, f"select public.roleplay_para_caso_teste({CV_FALHA}) = {CT_RP}", "authenticated", u["plan"], "t")
+checar("SQL 59: caso sem caminho exige resultado esperado", False, f"update public.voz_fluxo_casos_teste set resultado_esperado=null where id={CT_RP}", "service_role")
+# avisos (nunca bloqueio)
+checar("SQL 59: versão sem roleplay ganha aviso", True, f"select array_to_string(public.fluxo_voz_avisos({FV2}), ',')", "authenticated", u["oper"], "roleplay_ausente")
+checar("SQL 59: conversas reprovadas viram aviso", True, f"select array_to_string(public.fluxo_voz_avisos({FV1}), ',')", "authenticated", u["oper"], "roleplay_reprovadas:1")
+RL2 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.rodar_roleplay_voz({FV2}, array[{_PN['negocia_rapido']}]::bigint[], 2)")
+_sv("select public.pegar_roleplay_voz()")
+_sv(_reg(RL2, _PN["negocia_rapido"], 1, "recusa", "false"))
+_sv(_reg(RL2, _PN["negocia_rapido"], 2, "recusa", "false"))
+_sv(f"select public.concluir_roleplay_lote({RL2}, 0)")
+checar("SQL 59: acordo simulado que caiu em relação à versão em uso vira aviso", True, f"select array_to_string(public.fluxo_voz_avisos({FV2}), ',')", "authenticated", u["oper"], "roleplay_reprovadas:2,roleplay_acordo_caiu:25")
+checar("SQL 59: roleplay não entra nos bloqueios da aprovação", True, f"select count(*) from unnest(public.fluxo_voz_bloqueios({FV2})) b where b like 'roleplay%'", "authenticated", u["oper"], 0)
+checar("SQL 59: cliente B não lê os avisos da A", False, f"select public.fluxo_voz_avisos({FV1})", "authenticated", u["operb"])
+# retenção da transcrição simulada (90 dias)
+checar("SQL 59: transcrição simulada expira em 90 dias", True, f"select (transcricao_expira_em - criado_em) = interval '90 days' from public.roleplay_conversas where id={CV_FALHA}", "service_role", None, "t")
+_sv(f"update public.roleplay_conversas set transcricao_expira_em = now() - interval '1 day' where id={CV_FALHA}")
+checar("SQL 59: retenção apaga a transcrição e mantém os códigos", True, f"select public.apagar_voz_expirada(); select (transcricao is null)::text||'|'||resultado from public.roleplay_conversas where id={CV_FALHA}", "service_role", None, "true|limite_turnos")
+for t in ("roleplay_personas", "roleplay_lotes", "roleplay_conversas"):
+    checar(f"SQL 59: anon não lê {t}", False, f"select * from public.{t} limit 1", "anon")
+checar("SQL 59: tabelas do roleplay com RLS", True, "select count(*) from pg_tables where schemaname='public' and tablename like 'roleplay\\_%' and not rowsecurity", "service_role", None, 0)
+checar("SQL 59: RPCs do roleplay com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%roleplay%' or proname = 'fluxo_voz_avisos') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
+checar("SQL 59: anon não chama função do roleplay", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%roleplay%' or proname in ('fluxo_voz_avisos','perfis_roleplay','travas_voz','codigos_ok')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
 # SQL 60 · Speech Analytics (empresas e pessoas próprias, fictícias). Reaplica o SQL 60 antes: o SQL 56, reaplicado
 # acima, recria o catálogo de permissões sem as do SQL 60.
 r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
@@ -2227,6 +2609,103 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 60: Speech Analytics (testar_speech.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 61 · margem mínima dos itens de IA (a IA é revendida: %MC ≥ 70% em todo item de IA)
+def checar_erro(nome, cmd, papel, uid, trecho):
+    global ok_total, falhas
+    ok, out, err = sql(cmd, papel, uid)
+    passou = (not ok) and trecho in err
+    ok_total += passou; falhas += not passou
+    print(("PASSOU " if passou else "FALHOU ") + nome + ("" if passou else f"  -> ok={ok} out={out!r} err={err[:200]}"))
+# os testes acima rodam de novo os SQL 30, 58 e 59, que desfazem os trechos que o SQL 61 troca: roda o 61 de novo
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261228000001_ia_margem.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+_M = u["admin"]
+checar("SQL 61: itens de IA marcados", True, "select count(*) from public.cobranca_itens where eh_ia and codigo in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','ia_geracao_fluxo','ia_roleplay')", "authenticated", u["oper"], 5)
+checar("SQL 61: nenhum item fora da IA marcado", True, "select count(*) from public.cobranca_itens where eh_ia and codigo not like 'ia\\_%' and codigo not in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao')", "authenticated", u["oper"], 0)
+checar("SQL 61: MC mínima da IA nasce em 70%", True, "select mc_minima_ia_pct from public.parametros_margem", "authenticated", _M, "70.00")
+checar("SQL 61: Administrativo não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", ADM, 0)
+checar("SQL 61: cliente não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", u["admina"], 0)
+checar("SQL 61: impostos + MC mínima da IA ≥ 100% é recusado", False, "update public.parametros_margem set impostos_pct=30", "authenticated", _M)
+checar("SQL 61: Master zera os impostos (conta do preço padrão)", True, "update public.parametros_margem set impostos_pct=0, mc_minima_ia_pct=70; select impostos_pct||'|'||mc_minima_ia_pct from public.parametros_margem", "authenticated", _M, "0.00|70.00")
+checar("SQL 61: preço padrão = custo ÷ (1 − 0 − 0,70), para cima (centavos; 5 casas abaixo de R$ 0,10)", True, "select string_agg(codigo||'='||preco_tabela, ',' order by ordem) from public.cobranca_itens where codigo in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','ia_geracao_fluxo','ia_roleplay')", "authenticated", u["oper"], "voz_minuto_ia=1.50000,voz_minuto_ia_pico=1.50000,voz_transcricao=0.06851,ia_geracao_fluxo=0.56000,ia_roleplay=0.01120")
+checar("SQL 61: Master vê custo, mínimo e %MC da tabela", True, "select custo_unitario||'|'||moeda||'|'||custo_moeda||'|'||preco_minimo_ia||'|'||mc_tabela_pct from public.itens_ia() where codigo='voz_minuto_ia'", "authenticated", _M, "0.448000|USD|0.080000|1.50000|70.1")
+# custo só para o Master
+for nome_u, uid in (("Admin do cliente", u["admina"]), ("Operação", u["oper"]), ("Administrativo", ADM)):
+    checar(f"SQL 61: {nome_u} não lê custos_ia", True, "select count(*) from public.custos_ia", "authenticated", uid, 0)
+    checar(f"SQL 61: {nome_u} não lê consumo_ia", True, "select count(*) from public.consumo_ia", "authenticated", uid, 0)
+    checar(f"SQL 61: {nome_u} não vê itens_ia()", False, "select * from public.itens_ia()", "authenticated", uid)
+    checar(f"SQL 61: {nome_u} não vê a margem da IA", False, "select * from public.margem_ia(current_date)", "authenticated", uid)
+    checar(f"SQL 61: {nome_u} não vê os preços abaixo do mínimo", False, "select * from public.ia_precos_abaixo_minimo()", "authenticated", uid)
+    checar(f"SQL 61: {nome_u} não cadastra custo", False, "select public.salvar_custo_ia('voz_minuto_ia', 0.01)", "authenticated", uid)
+checar("SQL 61: ninguém grava custo direto pelo site", False, "insert into public.custos_ia (item,custo_unitario) values ('voz_minuto_ia',0.01)", "authenticated", _M)
+checar("SQL 61: site não lê o preço mínimo da IA direto", False, "select public.preco_minimo_ia('voz_minuto_ia')", "authenticated", u["admina"])
+# guarda do preço da empresa
+checar_erro("SQL 61: preço da empresa abaixo do mínimo é recusado com o menor preço aceito", f"select public.salvar_preco({EA},'voz_minuto_ia','flat',1.49)", "authenticated", _M, "o menor preço aceito é R$ 1,50 por minuto (MC mínima de 70% da IA)")
+checar("SQL 61: preço no mínimo é aceito", True, f"select public.salvar_preco({EA},'voz_minuto_ia','flat',1.50) > 0", "authenticated", _M, "t")
+checar("SQL 61: preço acima do mínimo é aceito", True, f"select public.salvar_preco({EA},'voz_transcricao','flat',0.09) > 0", "authenticated", ADM, "t")
+checar_erro("SQL 61: nem o Administrativo com motivo passa abaixo do mínimo da IA", f"select public.salvar_preco({EA},'voz_minuto_ia','flat',1.00,0,null,null,'cliente estratégico')", "authenticated", ADM, "item de IA")
+checar_erro("SQL 61: faixa abaixo do mínimo é recusada", f"select public.salvar_preco({EA},'voz_minuto_ia','faixa',null,0,'[{{\"ate\":1000,\"preco\":1.6}},{{\"ate\":null,\"preco\":1.2}}]')", "authenticated", _M, "R$ 1,50")
+checar("SQL 61: faixas no mínimo ou acima são aceitas", True, f"select public.salvar_preco({EA},'voz_minuto_ia','progressivo',null,0,'[{{\"ate\":1000,\"preco\":1.6}},{{\"ate\":null,\"preco\":1.5}}]') > 0", "authenticated", _M, "t")
+checar_erro("SQL 61: item de IA não aceita mensalidade", f"select public.salvar_preco({EA},'ia_roleplay','mensalidade',500)", "authenticated", _M, "nunca mensalidade")
+checar_erro("SQL 61: próxima vigência também passa pelo guarda", f"select * from public.salvar_preco_vigencia({EA},'ia_geracao_fluxo','flat',0.10)", "authenticated", _M, "R$ 0,56 por geração")
+checar_erro("SQL 61: gravação direta (servidor) abaixo do mínimo é recusada", f"insert into public.precos_empresa (empresa_id,item,modelo,preco,vigente_desde) values ({EB},'ia_roleplay','flat',0.001,date_trunc('month',current_date))", "service_role", None, "item de IA")
+checar_erro("SQL 61: faixa gravada direto abaixo do mínimo é recusada", f"update public.precos_faixas set preco=0.5 where preco_id=(select id from public.precos_empresa where empresa_id={EA} and item='voz_minuto_ia' order by vigente_desde desc limit 1)", "service_role", None, "item de IA")
+checar("SQL 61: preço de item que não é de IA não muda de regra", True, f"select public.salvar_preco({EA},'voz_plataforma','mensalidade',300) > 0", "authenticated", _M, "t")
+# guarda do preço de tabela (catálogo)
+checar_erro("SQL 61: preço de tabela abaixo do mínimo é recusado (Master direto)", "update public.cobranca_itens set preco_minimo=1, preco_tabela=1 where codigo='voz_minuto_ia'", "authenticated", _M, "R$ 1,50")
+checar_erro("SQL 61: preço de tabela abaixo do mínimo é recusado (RPC)", "select public.salvar_preco_tabela_ia('voz_minuto_ia', 1.20)", "authenticated", _M, "R$ 1,50")
+checar("SQL 61: Administrativo não define o preço de tabela da IA", False, "select public.salvar_preco_tabela_ia('voz_minuto_ia', 1.80)", "authenticated", ADM)
+checar("SQL 61: preço de tabela acima do mínimo; o mínimo do catálogo fica no da IA", True, "select public.salvar_preco_tabela_ia('voz_minuto_ia', 1.80); select preco_minimo||'|'||preco_tabela from public.cobranca_itens where codigo='voz_minuto_ia'", "authenticated", _M, "1.50000|1.80000")
+# gancho para itens novos (Speech Analytics): marcado sozinho, sem preço de empresa até ter custo
+_sv("insert into public.cobranca_itens (codigo,produto,nome,unidade,modulo,ordem) values ('sa_minuto','speech_analytics','Speech Analytics · minuto','minuto','agente_voz',60),('ia_resumo_teste','agente_voz','Resumo por IA (teste)','resumo','agente_voz',61) on conflict (codigo) do nothing")
+checar("SQL 61: item novo do Speech Analytics e item ia_… nascem marcados como IA", True, "select string_agg(codigo||'='||eh_ia, ',' order by codigo) from public.cobranca_itens where codigo in ('sa_minuto','ia_resumo_teste')", "service_role", None, "ia_resumo_teste=true,sa_minuto=true")
+checar_erro("SQL 61: item de IA sem custo não recebe preço de empresa", f"select public.salvar_preco({EA},'sa_minuto','flat',1)", "authenticated", _M, "sem custo cadastrado")
+checar("SQL 61: custo novo dá o preço padrão ao item sem tabela", True, "select public.salvar_custo_ia('sa_minuto', 0.10, 'BRL', 1, null, null, 'teste')->>'preco_minimo'; select preco_minimo||'|'||preco_tabela from public.cobranca_itens where codigo='sa_minuto'", "authenticated", _M, "0.34000|0.34000")
+checar("SQL 61: custo de item que não é de IA é recusado", False, "select public.salvar_custo_ia('sms', 0.01)", "authenticated", _M)
+checar("SQL 61: custo em dólar guarda a cotação; BRL sempre cotação 1", True, "select public.salvar_custo_ia('sa_minuto', 0.02, 'USD', 5.5, null, current_date); select custo_unitario||'|'||cotacao from public.itens_ia() where codigo='sa_minuto'", "authenticated", _M, "0.110000|5.5000")
+# custo/impostos novos: nenhum preço muda; o relatório lista o que ficou abaixo
+checar("SQL 61: impostos novos não mudam preço nenhum", True, f"update public.parametros_margem set impostos_pct=10; select (select f.preco from public.precos_faixas f join public.precos_empresa p on p.id=f.preco_id where p.empresa_id={EA} and p.item='voz_minuto_ia' and f.ate is null)||'|'||(select preco_tabela from public.cobranca_itens where codigo='voz_minuto_ia')", "authenticated", _M, "1.50000|1.80000")
+checar("SQL 61: relatório lista tabela, mínimo do catálogo e preço da empresa abaixo do novo mínimo", True, "select string_agg(origem||':'||preco||'<'||preco_minimo_ia, ',' order by origem) from public.ia_precos_abaixo_minimo() where item='voz_minuto_ia'", "authenticated", _M, "empresa:1.50000<2.24000,minimo_catalogo:1.50000<2.24000,tabela:1.80000<2.24000")
+checar("SQL 61: custo maior devolve quantos preços ficaram abaixo (sem recusar)", True, "select public.salvar_custo_ia('voz_transcricao', 0.01, 'USD', 5.6, null, current_date)->>'precos_abaixo'", "authenticated", _M, "3")
+checar("SQL 61: custo futuro já vale para o guarda", True, "select public.salvar_custo_ia('ia_geracao_fluxo', 0.05, 'USD', 5.6, 0.0006, current_date + 40)->>'preco_minimo'", "authenticated", _M, "1.40000")
+checar("SQL 61: itens_ia mostra que há custo futuro", True, "select custo_futuro from public.itens_ia() where codigo='ia_geracao_fluxo'", "authenticated", _M, "t")
+_sv("delete from public.custos_ia where item='ia_geracao_fluxo' and vigente_desde > current_date")
+# consumo com custo real: a fatura segue preço × quantidade
+RL3 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.rodar_roleplay_voz({FV2}, array[{_PN['negocia_rapido']}]::bigint[], 1)")
+_sv("select public.pegar_roleplay_voz()")
+checar("SQL 61: roleplay grava o custo real (2,5 mil tokens × custo) e fatura ceil(mil tokens)", True, f"select public.concluir_roleplay_lote({RL3}, 2500); select (select quantidade||'|'||tokens||'|'||custo||'|'||registros from public.consumo_ia where empresa_id={EA} and item='ia_roleplay')||'|'||(select quantidade from public.consumo_mensageria where empresa_id={EA} and item='ia_roleplay')", "service_role", None, "2.5000|2500|0.00840|1|6")
+_sv(f"update public.voz_fluxo_pedidos set situacao='gerando' where id={PD2}")
+checar("SQL 61: geração com tokens da VM: custo pelos tokens, e os tokens não ficam no pedido", True, f"select public.registrar_geracao_fluxo_voz({PD2}, null, '{{\"erros\": [\"resposta_fora_do_esquema\"], \"tentativas\": 2, \"tokens_ia\": 12000}}'); select (resultado ? 'tokens_ia')::text||'|'||(select quantidade||'|'||tokens||'|'||custo from public.consumo_ia where empresa_id={EA} and item='ia_geracao_fluxo')||'|'||(select quantidade from public.consumo_mensageria where empresa_id={EA} and item='ia_geracao_fluxo') from public.voz_fluxo_pedidos where id={PD2}", "service_role", None, "false|1.0000|12000|0.04032|4")
+_sv(f"update public.voz_fluxo_pedidos set situacao='gerando' where id={PD2}")
+checar("SQL 61: geração sem tokens usa o custo por geração", True, f"select public.registrar_geracao_fluxo_voz({PD2}, null, '{{\"erros\": [\"resposta_fora_do_esquema\"], \"tentativas\": 2}}'); select quantidade||'|'||custo||'|'||registros from public.consumo_ia where empresa_id={EA} and item='ia_geracao_fluxo'", "service_role", None, "2.0000|0.20832|2")
+checar("SQL 61: site não registra consumo de IA", False, f"select public.registrar_consumo_ia({EA}, 'ia_roleplay', 1)", "authenticated", _M)
+checar("SQL 61: consumo de item que não é de IA é recusado", False, f"select public.registrar_consumo_ia({EA}, 'sms', 1)", "service_role")
+checar("SQL 61: custo informado pelo fornecedor vale sobre o cadastro; sem faturar", True, f"select public.registrar_consumo_ia({EB}, 'sa_minuto', 10, null, 1.234, false); select (select custo from public.consumo_ia where empresa_id={EB} and item='sa_minuto')||'|'||(select count(*) from public.consumo_mensageria where empresa_id={EB} and item='sa_minuto')", "service_role", None, "1.23400|0")
+checar("SQL 61: uso sem custo cadastrado fica marcado (nunca custo inventado)", True, f"select public.registrar_consumo_ia({EB}, 'ia_resumo_teste', 2); select custo||'|'||sem_custo from public.consumo_ia where empresa_id={EB} and item='ia_resumo_teste'", "service_role", None, "0.00000|1")
+checar("SQL 61: cliente vê a quantidade no consumo do mês, nunca o custo", True, f"select quantidade from public.consumo_mensageria where empresa_id={EA} and item='ia_roleplay'", "authenticated", u["admina"], 6)
+# margem da IA por empresa e item (mesma conta da mensageria)
+checar("SQL 61: sem preço da empresa a margem aponta sem_preco", True, f"select situacao from public.margem_ia((now() at time zone 'America/Sao_Paulo')::date) where empresa_id={EA} and item='ia_roleplay'", "authenticated", _M, "sem_preco")
+_sv(f"select public.registrar_consumo_ia({EB}, 'ia_geracao_fluxo', 1) from generate_series(1, 4)")
+checar("SQL 61: margem da IA: 4 gerações × R$ 1, impostos 10%, custo 4 × 0,168 → 73,2%", True, f"select public.salvar_preco({EB},'ia_geracao_fluxo','flat',1.00); select quantidade||'|'||receita||'|'||impostos||'|'||custo||'|'||mc||'|'||mc_pct||'|'||situacao||'|'||custo_estimado from public.margem_ia((now() at time zone 'America/Sao_Paulo')::date) where empresa_id={EB} and item='ia_geracao_fluxo'", "authenticated", _M, "4|4.00|0.40|0.67|2.93|73.2|ok|false")
+checar("SQL 61: uso sem custo cadastrado aparece na margem com sem_custo", True, f"select situacao||'|'||sem_custo from public.margem_ia((now() at time zone 'America/Sao_Paulo')::date) where empresa_id={EB} and item='ia_resumo_teste'", "authenticated", _M, "sem_preco|1")
+_sv(f"insert into public.consumo_mensageria (empresa_id,competencia,item,quantidade) values ({EB},date_trunc('month',(now() at time zone 'America/Sao_Paulo'))::date,'voz_minuto_ia',100)")
+checar("SQL 61: uso sem registro de custo é estimado pelo custo vigente", True, f"select custo||'|'||custo_estimado from public.margem_ia((now() at time zone 'America/Sao_Paulo')::date) where empresa_id={EB} and item='voz_minuto_ia'", "authenticated", _M, "44.80|true")
+# segurança
+for t in ("custos_ia", "consumo_ia"):
+    checar(f"SQL 61: anon não lê {t}", False, f"select * from public.{t} limit 1", "anon")
+checar("SQL 61: tabelas novas com RLS", True, "select count(*) from pg_tables where schemaname='public' and tablename in ('custos_ia','consumo_ia') and not rowsecurity", "service_role", None, 0)
+checar("SQL 61: funções da IA com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%\\_ia' or proname like '%\\_ia\\_%' or proname = 'ia_precos_abaixo_minimo') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
+checar("SQL 61: anon não chama função da IA", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%\\_ia' or proname like '%\\_ia\\_%' or proname = 'ia_precos_abaixo_minimo') and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
+_sv("update public.parametros_margem set impostos_pct=10")
+
+# SQL 57 · acesso próprio das VMs de voz: entra como o papel motorcx_voz (login de verdade) em arquivo próprio
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_acesso.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 57: testes do papel motorcx_voz (testar_voz_acesso.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

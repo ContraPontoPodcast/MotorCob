@@ -2,7 +2,11 @@
 # Lê do Secret Manager (conta de serviço da VM) e grava só em /run (memória). Nunca imprime.
 #   motorcx-voz-ari-senha       senha do ARI (gerada pelo criar_gcp.sh)
 #   motorcx-voz-supabase-url    URL do Supabase   } o dono cria uma vez (README, passo 2)
-#   motorcx-voz-supabase-key    chave do servidor }
+#   motorcx-voz-supabase-key    chave do servidor } só no modo supabase_chave (piloto); no acesso_proprio nem é lida
+# Modo de acesso ao banco, no metadado motorcx-voz-acesso (README, seção 7):
+#   supabase_chave  (padrão, piloto)        API do Supabase com a chave do servidor
+#   acesso_proprio  (antes do modo real)    papel motorcx_voz pelo pooler. A senha (motorcx-voz-db-senha) é lida do
+#                                           Secret Manager pelo próprio processo (voz/acesso.py): não passa por arquivo
 set -euo pipefail
 . /usr/local/bin/motorcx-voz-comum
 umask 077
@@ -10,11 +14,26 @@ install -d -m 755 "$RUN"
 gcloud secrets versions access latest --secret=motorcx-voz-ari-senha | \
   install -m 400 -o 10010 -g 10010 /dev/stdin "$RUN/ari_senha"
 URL="$(gcloud secrets versions access latest --secret=motorcx-voz-supabase-url)"
-CHAVE="$(gcloud secrets versions access latest --secret=motorcx-voz-supabase-key)"
 ENVIADO_POR="$(meta motorcx-enviado-por)"
+ACESSO="$(meta motorcx-voz-acesso)"; ACESSO="${ACESSO:-supabase_chave}"
+case "$ACESSO" in supabase_chave|acesso_proprio) ;; *) echo "motorcx-voz-acesso inválido: $ACESSO" >&2; exit 2 ;; esac
 {
-  printf 'MOTORCOB_SUPABASE_URL=%s\nMOTORCOB_SUPABASE_KEY=%s\n' "$URL" "$CHAVE"
+  printf 'MOTORCOB_SUPABASE_URL=%s\nMOTORCX_VOZ_ACESSO=%s\n' "$URL" "$ACESSO"
   printf 'MOTORCX_GCP_PROJETO=%s\nMOTORCX_VOZ_ENVIADO_POR=%s\n' "$PROJETO" "$ENVIADO_POR"
+  if [ "$ACESSO" = acesso_proprio ]; then
+    PORTA="$(meta motorcx-voz-db-porta)"
+    printf 'MOTORCX_VOZ_DB_HOST=%s\nMOTORCX_VOZ_DB_PORTA=%s\nMOTORCX_VOZ_DB_USUARIO=%s\n' \
+      "$(meta motorcx-voz-db-host)" "${PORTA:-5432}" "$(meta motorcx-voz-db-usuario)"
+    CA="$(meta motorcx-voz-db-ca)"           # certificado PÚBLICO da CA do Supabase (não é segredo)
+    if [ -n "$CA" ]; then
+      printf '%s\n' "$CA" | install -m 444 /dev/stdin "$RUN/supabase-ca.crt"
+      printf 'MOTORCX_VOZ_DB_CA=%s\n' "$RUN/supabase-ca.crt"
+    fi
+  else
+    CHAVE="$(gcloud secrets versions access latest --secret=motorcx-voz-supabase-key)"
+    printf 'MOTORCOB_SUPABASE_KEY=%s\n' "$CHAVE"
+    unset CHAVE
+  fi
 } > "$RUN/voz.env.tmp"
 mv "$RUN/voz.env.tmp" "$RUN/voz.env"
-unset CHAVE URL
+unset URL
