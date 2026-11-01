@@ -13,7 +13,9 @@ from voz import fluxo_casos as C
 from voz import simulador_http as SH
 
 RAIZ = Path(__file__).resolve().parent.parent
-VETOR = json.loads((RAIZ / "supabase" / "functions" / "simular_fluxo_voz" / "vetor_assinatura.json").read_text("utf-8"))
+# o mesmo vetor do teste da Edge Function (supabase/functions/simular_fluxo_voz/regras.test.ts); fica em tests/dados
+# porque as imagens (Dockerfile e Dockerfile.voz) não levam supabase/functions/ (.dockerignore) e rodam estes testes
+VETOR = json.loads((RAIZ / "tests" / "dados" / "vetor_assinatura_simulador.json").read_text("utf-8"))
 
 
 def pedido(falas, falhar=()):
