@@ -54,7 +54,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - run: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts supabase/functions/api/regras.test.ts supabase/functions/l/regras.test.ts supabase/functions/assistente/regras.test.ts supabase/functions/cobranca/regras.test.ts supabase/functions/cobranca/demonstrativo.test.ts supabase/functions/retorno-mensageria/regras.test.ts supabase/functions/relatorios/regras.test.ts supabase/functions/emails/regras.test.ts supabase/functions/gravacoes/regras.test.ts supabase/functions/voz-arquivos/regras.test.ts supabase/functions/simular_fluxo_voz/regras.test.ts supabase/functions/_compartilhado/servidor.test.ts site/duas-etapas/duasEtapasLogica.test.ts site/speech/speech.test.ts
+      - run: node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts supabase/functions/api/regras.test.ts supabase/functions/l/regras.test.ts supabase/functions/assistente/regras.test.ts supabase/functions/cobranca/regras.test.ts supabase/functions/cobranca/demonstrativo.test.ts supabase/functions/retorno-mensageria/regras.test.ts supabase/functions/relatorios/regras.test.ts supabase/functions/emails/regras.test.ts supabase/functions/gravacoes/regras.test.ts supabase/functions/voz-arquivos/regras.test.ts supabase/functions/simular_fluxo_voz/regras.test.ts supabase/functions/_compartilhado/servidor.test.ts site/duas-etapas/duasEtapasLogica.test.ts site/speech/speech.test.ts site/resubmit/resubmit.test.ts
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.5.4

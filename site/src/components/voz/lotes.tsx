@@ -2,6 +2,7 @@
 // Lê voz_lotes, voz_ondas, resumo_lote_voz(), voz_divisao_concorrencia, voz_config e o preço do
 // minuto de IA (precos_empresa, só quem vê faturamento). Atualiza a cada 15 s, sem realtime.
 // Escreve só por RPC: pausar_lote_voz, retomar_lote_voz, cancelar_lote_voz e configurar_voz_empresa.
+// SQL 65: ondas por origem (1ª passada, retentativa, Resubmit, reenvio manual) e Reenviar agora (reenviar.tsx).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -14,12 +15,14 @@ import {
 	ATUALIZA_MS, PERM_VOZ, SIT_LOTE_VOZ, SIT_ONDA, dataCurta, diaISO, funilDoResumo, horaCurta, inteiro, pct, reais,
 } from '@/lib/voz';
 import { Aviso, Botao, Cartao, CartaoLinha, Kpi, Pilula, Tabela, Trilho, Vazio, campoCls, campoStyle } from './ui';
+import { nomeOnda, type OndaVoz } from '@/lib/renitencia';
+import { SemContatoLote, useReenvios } from './reenviar';
 
 type Lote = {
 	id: number; credor_id: number | null; data: string; modo: string; situacao: string; total: number; encerradas: number;
 	abandonos: number; custo_operadora: number; freado_em: string | null; roteiro_id: number | null; atualizado_em: string;
 };
-type Onda = { id: number; janela: string; tentativa: number; total: number; encerradas: number; situacao: string; abre_em: string | null; fecha_em: string | null };
+type Onda = OndaVoz;
 type Resumo = { resultado: string; chamadas: number; segundos: number; minutos_ia: number; custo_operadora: number; sem_custo: number };
 
 function Cabecalho({ titulo, linha, direita }: { titulo: string; linha?: string; direita?: React.ReactNode }) {
@@ -118,13 +121,14 @@ export function LoteVozCurso() {
 	const [ocupado, setOcupado] = useState(false);
 	const [limite, setLimite] = useState('');
 	const primeira = useRef(true);
+	const reenv = useReenvios(id ? Number(id) : null);
 
 	const carregar = useCallback(async () => {
 		if (!supabase || !empresa || !id) return;
 		const sb = supabase;
 		const [l, o, r] = await Promise.all([
 			sb.from('voz_lotes').select('id,credor_id,data,modo,situacao,total,encerradas,abandonos,custo_operadora,freado_em,roteiro_id,atualizado_em').eq('id', id).eq('empresa_id', empresa.id).maybeSingle(),
-			sb.from('voz_ondas').select('id,janela,tentativa,total,encerradas,situacao,abre_em,fecha_em').eq('lote_id', id).order('tentativa').order('abre_em'),
+			sb.from('voz_ondas').select('id,janela,tentativa,total,encerradas,situacao,abre_em,fecha_em,origem,passada,situacao_origem,prioridade,reenvio_id').eq('lote_id', id).order('tentativa').order('abre_em'),
 			sb.rpc('resumo_lote_voz', { lote: Number(id) }),
 		]);
 		if (l.error) { setError(friendlyError(l.error)); setLoading(false); return; }
@@ -144,6 +148,7 @@ export function LoteVozCurso() {
 			const pr = (p.data as Row[] | null)?.[0];
 			setPrecoIa(pr && pr.modelo === 'flat' && pr.preco != null ? Number(pr.preco) : null);
 		}
+		await reenv.carregar();
 		setError(''); setAtualizadoEm(new Date()); setLoading(false);
 	}, [empresa?.id, id]);
 
@@ -257,7 +262,7 @@ export function LoteVozCurso() {
 						</>} />
 				</div>
 
-				<Cartao semPadding titulo="Ondas por janela UF/DDD" linha="Cada onda começa quando a janela local abre e para quando ela fecha. A retentativa é uma onda nova.">
+				<Cartao semPadding titulo="Ondas de hoje" linha="A 1ª passada abre com a janela UF/DDD. As voltas automáticas (Resubmit) e os reenvios manuais são ondas novas.">
 					{ondas.length === 0 ? <div className="px-4 pb-4 sm:px-5"><Vazio titulo="Nenhuma onda ainda.">As ondas aparecem quando a primeira janela UF/DDD abre.</Vazio></div> : (
 						<div className="divide-y" style={{ borderColor: 'var(--base-borda)' }}>
 							{ondas.map(o => {
@@ -268,16 +273,27 @@ export function LoteVozCurso() {
 								const quando = o.situacao === 'aguardando' && o.abre_em ? `Começa ${horaCurta(o.abre_em)}` : s.label;
 								return (
 									<div key={o.id} className="grid grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] sm:items-center sm:px-5" style={{ borderColor: 'var(--base-borda)' }}>
-										<div className="min-w-0"><b className="block truncate text-[13.5px] text-[var(--base-texto)]">{o.janela}</b><small className="text-[12px] text-[var(--base-texto-3)]">{o.abre_em ? `${horaCurta(o.abre_em)}–${horaCurta(o.fecha_em)}` : 'janela local'}</small></div>
-										<div className="text-[12.5px] text-[var(--base-texto-2)]">{o.tentativa}ª tentativa · <b className="tnum text-[var(--base-texto)]">{inteiro(o.encerradas)} de {inteiro(o.total)}</b></div>
+										<div className="min-w-0"><b className="block truncate text-[13.5px] text-[var(--base-texto)]">{nomeOnda(o).nome}</b><small className="text-[12px] text-[var(--base-texto-3)]">{o.origem ? nomeOnda(o).detalhe : o.abre_em ? `${horaCurta(o.abre_em)}–${horaCurta(o.fecha_em)}` : 'janela local'}</small></div>
+										<div className="text-[12.5px] text-[var(--base-texto-2)]">{o.origem ? 'encerradas' : `${o.tentativa}ª tentativa`} · <b className="tnum text-[var(--base-texto)]">{inteiro(o.encerradas)} de {inteiro(o.total)}</b></div>
 										<Trilho valor={p} />
 										<div><Pilula tom={s.tom}>{quando}</Pilula></div>
 									</div>
 								);
 							})}
+							{reenv.reenvios.filter(r => r.situacao === 'pendente' || r.situacao === 'em_onda').map(r => (
+								<div key={`r${r.id}`} className="grid grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] sm:items-center sm:px-5" style={{ borderColor: 'var(--base-borda)', backgroundColor: 'var(--base-fill)' }}>
+									<div className="min-w-0"><b className="block text-[13.5px] text-[var(--base-texto)]">Reenvio manual · {horaCurta(r.pedido_em)}</b><small className="text-[12px] text-[var(--base-texto-3)]">prioridade {r.prioridade}</small></div>
+									<div className="text-[12.5px] text-[var(--base-texto-2)]">números · <b className="tnum text-[var(--base-texto)]">{inteiro(r.previa?.volta ?? 0)}</b></div>
+									<Trilho valor={0} />
+									<div><Pilula tom="info">Na fila</Pilula></div>
+								</div>
+							))}
 						</div>
 					)}
 				</Cartao>
+
+				<SemContatoLote loteId={lote.id} ondas={ondas} semContato={reenv.semContato} onPedido={() => void carregar()}
+					podeReenviarHoje={lote.data === diaISO() && ['ligando', 'pausado'].includes(lote.situacao)} />
 
 				<Cartao titulo="Resultado até agora">
 					{f.total === 0 ? <Vazio titulo="Nenhuma ligação encerrada ainda.">O resultado aparece conforme as ligações terminam.</Vazio> : (

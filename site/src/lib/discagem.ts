@@ -12,7 +12,7 @@ export type Discagem = {
 	descanso_nao_atende?: { ativo: boolean; n: number; em_dias: number; descansa_dias: number };
 	descanso_recusa?: { ativo: boolean; dias: number };
 	promessa_suspende?: { ativo: boolean; dias_sem_data: number };
-	inexistente?: { ativo: boolean };
+	inexistente?: { ativo: boolean; modo?: 'so_voz' | 'invalida' };
 	nao_ligar?: { ativo: boolean };
 	horarios?: { ativo: boolean; tabela?: HorariosTabela | null };
 	chamadas_curtas?: {
@@ -24,7 +24,13 @@ export type Discagem = {
 		max_total_dia: number;
 		segundos: number; // 1–60
 		abandono_conta: boolean;
+		falha_conta?: boolean; // SQL 65: falha técnica conta como curta (padrão: sim)
 	};
+	// SQL 65 · Renitência por situação e Resubmit (src/lib/renitencia.ts). Sem a chave = o de hoje.
+	retorno_agendado?: { max_dias?: number } & Record<string, unknown>;
+	por_situacao?: Record<string, Record<string, unknown>>;
+	falhas_tecnicas?: Record<string, Record<string, unknown>>;
+	resubmit?: Record<string, Record<string, unknown>> | null;
 };
 
 export type LigacoesTrava = {
@@ -191,6 +197,20 @@ export function computeDiff(draft: Discagem): Record<string, unknown> {
 		if (k === 'tentativas_cliente_dia') {
 			const v = draft.tentativas_cliente_dia;
 			if (v != null) out[k] = v;
+			continue;
+		}
+		if (k === 'por_situacao' || k === 'falhas_tecnicas') {
+			const b = draft[k];
+			if (b && Object.keys(b).length) out[k] = b;
+			continue;
+		}
+		if (k === 'resubmit') {
+			if (draft.resubmit != null) out.resubmit = draft.resubmit; // {} = Resubmit ligado com o padrão MotorCX
+			continue;
+		}
+		if (k === 'retorno_agendado') {
+			const b = draft.retorno_agendado;
+			if (b && Object.keys(b).length) out.retorno_agendado = b;
 			continue;
 		}
 		if (k === 'horarios') {
