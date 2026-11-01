@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { FONTE_PADRAO, MODELO_MANIFESTO, caminhoEnvio, conferirEnvio, dadosDaFonte, dominiosDe, hashNome, motivoLabel, resumoMotivos, situacaoExecucao, temDadoPessoal, tipoArquivo, validarFonte, type FonteDraft } from '../src/lib/importador.ts';
+import { FONTE_PADRAO, MODELO_MANIFESTO, caminhoEnvio, conferirEnvio, dadosDaFonte, dominiosDe, hashNome, motivoLabel, resumoMotivos, rotuloLocutor, situacaoExecucao, temDadoPessoal, tipoArquivo, validarFonte, type FonteDraft } from '../src/lib/importador.ts';
 
 const SFTP: FonteDraft = { ...FONTE_PADRAO, nome: 'SFTP do discador', forma: 'sftp', host: 'sftp.discador.exemplo.com.br', usuario: 'motorcx', chave_host: `ssh-ed25519 ${'A'.repeat(68)}`, pasta: '/gravacoes' };
 
@@ -65,4 +65,8 @@ test('modelo do manifesto sem dado pessoal e com as colunas do importador', () =
 	const [cab, ...linhas] = MODELO_MANIFESTO.trim().split('\n');
 	assert.equal(cab, 'id_chamada;inicio;duracao_s;arquivo;operador_ref;id_cliente;id_acao;carteira;id_chamada_motorcx');
 	for (const l of linhas) for (const c of l.split(';').slice(3, 8)) assert.equal(temDadoPessoal(c), false, c);
+});
+
+test('leitor de transcrição: a gravação do discador aparece como Ligação (discador)', () => {
+	assert.deepEqual(['ligacao', 'operador', 'pessoa', 'agente'].map(rotuloLocutor), ['Ligação (discador)', 'Operador', 'Pessoa', 'Agente']);
 });

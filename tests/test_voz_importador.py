@@ -302,7 +302,8 @@ class TestEnvioPeloSite(unittest.TestCase):
         a = self.saida / "empresa_12" / f"{g['id']}.wav"
         self.assertTrue(a.exists())
         self.assertEqual(oct(a.stat().st_mode & 0o777), "0o600")
-        self.assertEqual(json.loads((self.saida / "empresa_12" / f"{g['id']}.json").read_text()), {"duracao_s": 93})
+        self.assertEqual(json.loads((self.saida / "empresa_12" / f"{g['id']}.json").read_text()),
+                         {"duracao_s": 93, "bucket": "proj-motorcx-grav-e12", "objeto": f"discador/{dia}/{ch}.wav"})
         self.assertEqual(sb.execucoes[1], {"fonte": 7, "origem": "envio", "lote": 3, "erro": None, "fim": True})
 
     def test_reimportar_nao_duplica(self):
@@ -567,6 +568,40 @@ class TestWorkerRegistro(unittest.TestCase):
             self.assertEqual((r["registradas"], r["minutos"]), (2, 1.5))
             self.assertEqual(sb.transcricoes, {101: "ok", 102: "abaixo_limiar"})
             self.assertEqual(W.registrar_no_banco(sb, fonte)["registradas"], 0)   # não manda de novo
+
+    def test_transcricao_redigida_sobe_ao_lado_do_audio_e_o_caminho_vai_ao_banco(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ent, sai, gcs = Path(tmp) / "ent", Path(tmp) / "sai", Path(tmp) / "gcs"
+            R.deixar_para_transcrever(ent, 12, 101, "wav", wav(9), 9, "b-e12", "discador/2026/11/19/abcdefghijklmnopabcdefgh.wav")
+
+            class T:
+                codigo = "whisper"
+
+                def transcrever(self, caminho, idioma="pt"):
+                    from voz.transcricao.transcritores import Segmento, Transcricao
+                    return Transcricao(f"o cpf é {CPF}", [Segmento(0.0, 2.0, "bom dia"), Segmento(2.5, 5.0, f"o cpf é {CPF}")],
+                                       idioma, "whisper")
+            dados = B.carregar({"voz_config": [{"empresa_id": 12, "transcrever": True, "transcrever_min_segundos": 5}]})
+            fonte = W.FontePasta(ent)
+            W.Worker(dados, fonte, W.DestinoPasta(sai), T()).processar()
+            sb = BancoFalso()
+            falhou = type("B", (), {"enviar": lambda *a: (_ for _ in ()).throw(OSError("fora"))})()
+            r0 = W.registrar_no_banco(sb, fonte, W.DestinoPasta(sai), falhou)
+            self.assertEqual((r0["registradas"], r0["erros"]), (0, 1))           # sem upload, não registra (tenta de novo)
+            r = W.registrar_no_banco(sb, fonte, W.DestinoPasta(sai), R.BucketLocal(gcs))
+            self.assertEqual((r["registradas"], r["transcricoes_no_bucket"]), (1, 1))
+            obj = gcs / "b-e12" / "discador/2026/11/19/abcdefghijklmnopabcdefgh.transcricao.json"
+            corpo = json.loads(obj.read_text())
+            self.assertEqual([s["quem"] for s in corpo["segmentos"]], ["ligacao", "ligacao"])
+            self.assertNotIn(CPF, obj.read_text())
+            self.assertIn("[CPF REDIGIDO]", corpo["segmentos"][1]["texto"])
+            self.assertEqual(set(corpo), {"segmentos", "redigidos"})             # sem id, empresa ou cliente
+            reg = [a for n, a in sb.chamadas if n == "registrar_transcricao_voz"][0]
+            self.assertEqual(reg["itens"][0]["transcricao_caminho"], "discador/2026/11/19/abcdefghijklmnopabcdefgh.transcricao.json")
+
+    def test_formato_site_sem_segmentos_usa_o_texto(self):
+        self.assertEqual(W.formato_site({"texto": "ok", "segmentos": []})["segmentos"], [{"quem": "ligacao", "em_s": 0, "texto": "ok"}])
+        self.assertEqual(W.objeto_transcricao("discador/2026/11/19/x.m4a"), "discador/2026/11/19/x.transcricao.json")
 
     def test_banco_fora_fica_para_a_proxima(self):
         with tempfile.TemporaryDirectory() as tmp:

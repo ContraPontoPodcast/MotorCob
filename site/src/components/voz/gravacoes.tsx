@@ -2,6 +2,7 @@
 // exige o mesmo); a transcrição exige ver_transcricoes. A gravação nunca fica aberta na tela: ouvir pede um
 // link de 5 minutos à Edge Function `gravacoes`, que confere a permissão e grava em `acessos`.
 // Só o ID do cliente aparece — nunca nome, CPF ou telefone.
+import { rotuloLocutor } from '@/lib/importador';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -283,7 +284,7 @@ function Detalhe({ g, carteira, podeLer, ehAdmin, onMudou }: { g: Gravacao; cart
 								const pessoa = /pessoa|cliente|user/i.test(s.quem);
 								return (
 									<div key={i} className={`max-w-[90%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${pessoa ? 'ml-auto' : ''}`} style={{ backgroundColor: pessoa ? 'var(--destaque-suave)' : 'var(--base-fill)', color: 'var(--base-texto)' }}>
-										<small className="block text-[11px] font-semibold text-[var(--base-texto-3)]">{pessoa ? 'Pessoa' : /operador/i.test(s.quem) ? 'Operador' : 'Agente'}{s.em_s != null ? ` · ${mmss(Math.round(s.em_s))}` : ''}</small>
+										<small className="block text-[11px] font-semibold text-[var(--base-texto-3)]">{rotuloLocutor(s.quem)}{s.em_s != null ? ` · ${mmss(Math.round(s.em_s))}` : ''}</small>
 										<Redigido texto={s.texto} />
 									</div>
 								);

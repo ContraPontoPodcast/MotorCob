@@ -904,7 +904,10 @@ end $$;
 
 -- o worker da transcrição devolve a situação de cada gravação importada; na 1ª vez que dá certo, os minutos entram
 -- no item voz_transcricao (custo real para a margem + quantidade da fatura, SQL 61). itens: [{gravacao_id, situacao,
--- duracao_s}] (até 1000). Reenvio não cobra de novo.
+-- duracao_s, transcricao_caminho}] (até 1000). Reenvio não cobra de novo. transcricao_caminho (só com ok): a
+-- transcrição REDIGIDA que a VM subiu ao lado do áudio no bucket da empresa (<caminho sem extensão>.transcricao.json):
+-- o leitor do site abre pela Edge Function gravacoes (ver_transcricoes, registro em acessos) e ela tem a mesma
+-- retenção da gravação (ciclo de vida do bucket; a linha vai embora com a gravação). Outro caminho é recusado.
 create or replace function public.registrar_transcricao_voz(empresa bigint, itens jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -915,15 +918,24 @@ begin
     if jsonb_typeof(itens) is distinct from 'array' or jsonb_array_length(itens) > 1000
        or exists (select 1 from jsonb_array_elements(itens) i
                    where coalesce(i ->> 'gravacao_id', '') !~ '^[0-9]{1,18}$'
-                      or coalesce(i ->> 'situacao', '') not in ('ok', 'abaixo_limiar', 'desligada', 'erro')) then
-        raise exception 'itens: lista de até 1000 {gravacao_id, situacao, duracao_s}';
+                      or coalesce(i ->> 'situacao', '') not in ('ok', 'abaixo_limiar', 'desligada', 'erro')
+                      or (i ? 'transcricao_caminho' and i ->> 'situacao' <> 'ok')) then
+        raise exception 'itens: lista de até 1000 {gravacao_id, situacao, duracao_s, transcricao_caminho (só com ok)}';
+    end if;
+    if exists (select 1 from jsonb_array_elements(itens) i
+                join public.voz_gravacoes g on g.id = (i ->> 'gravacao_id')::bigint
+               where i ->> 'transcricao_caminho' is not null
+                 and i ->> 'transcricao_caminho' is distinct from
+                     regexp_replace(g.caminho, '\.[A-Za-z0-9]{2,5}$', '') || '.transcricao.json') then
+        raise exception 'transcricao_caminho: só ao lado do áudio da própria gravação (<caminho>.transcricao.json)';
     end if;
     with i as (
-        select r.gravacao_id, r.situacao, r.duracao_s from jsonb_to_recordset(itens)
-            as r(gravacao_id bigint, situacao text, duracao_s numeric)),
+        select r.gravacao_id, r.situacao, r.duracao_s, r.transcricao_caminho from jsonb_to_recordset(itens)
+            as r(gravacao_id bigint, situacao text, duracao_s numeric, transcricao_caminho text)),
     up as (
         update public.voz_gravacoes g set
                transcricao = i.situacao,
+               transcricao_caminho = coalesce(i.transcricao_caminho, g.transcricao_caminho),
                transcrita_em = case when i.situacao = 'ok' then now() else g.transcrita_em end,
                minutos_transcritos = case when i.situacao = 'ok'
                                           then round(greatest(coalesce(i.duracao_s, g.duracao_s, 0), 0) / 60.0, 2) end

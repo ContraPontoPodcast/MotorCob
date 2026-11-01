@@ -195,3 +195,11 @@ export function resumoMotivos(m: Record<string, number> | null | undefined, max 
 	const txt = lista.slice(0, max).map(([k, n]) => `${n.toLocaleString('pt-BR')} ${motivoLabel(k).toLowerCase()}`);
 	return txt.join(' · ') + (lista.length > max ? ` · +${lista.length - max}` : '');
 }
+
+/** Quem fala no leitor de transcrição. "ligacao" = gravação importada do discador (áudio sem separação de vozes). */
+export function rotuloLocutor(quem: string): string {
+	if (/pessoa|cliente|user/i.test(quem)) return 'Pessoa';
+	if (/operador/i.test(quem)) return 'Operador';
+	if (/ligacao/i.test(quem)) return 'Ligação (discador)';
+	return 'Agente';
+}

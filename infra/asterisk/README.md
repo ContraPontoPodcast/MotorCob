@@ -242,7 +242,11 @@ Traz as gravações do discador do cliente (a parte do operador depois da transf
 ligações feitas direto pelo discador) para o bucket da empresa, grava `voz_gravacoes` com `origem = 'discador'` e o
 `operador_ref`, e deixa o áudio para o Whisper. O worker da transcrição devolve a situação ao banco e os minutos entram
 no item `voz_transcricao` (custo para a margem e quantidade da fatura). As casadas com a transferência entram no Speech
-Analytics ligadas à chamada da IA.
+Analytics ligadas à chamada da IA. A transcrição REDIGIDA (CPF e cartão já fora) sobe ao lado do áudio no bucket da
+empresa (`<caminho sem extensão>.transcricao.json`, mesma retenção pelo ciclo de vida do bucket) e o caminho vai ao
+banco (`voz_gravacoes.transcricao_caminho`, pelo `registrar_transcricao_voz`; no acesso próprio, pela função de
+`voz_vm`). O leitor do site abre pela Edge Function `gravacoes` (`ver_transcricoes`, acesso registrado), como as outras
+gravações; a fala aparece como "Ligação (discador)", porque o discador entrega o áudio sem separar as vozes.
 
 **Fontes** (Cargas › Gravações do discador, por empresa, quantas quiser; o Admin cadastra):
 - **Envio pelo site:** manifesto + áudios (ou zip) no bucket `gravacoes-discador` do Supabase. Depois de importado, o

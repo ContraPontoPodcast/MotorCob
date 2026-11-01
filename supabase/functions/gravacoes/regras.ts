@@ -7,7 +7,8 @@ export type Tipo = "audio" | "transcricao";
 export interface Pedido { gravacao: number; tipo: Tipo }
 export interface Perfil { id: string; ativo: boolean; equipe: boolean; empresa_id: number | null }
 export interface Gravacao { id: number; empresa_id: number; caminho: string; transcricao_caminho: string | null }
-export interface Segmento { quem: "agente" | "pessoa" | "operador"; em_s: number | null; texto: string }
+// "ligacao": gravação importada do discador do cliente (SQL 64), áudio sem separação de vozes
+export interface Segmento { quem: "agente" | "pessoa" | "operador" | "ligacao"; em_s: number | null; texto: string }
 
 /** Validade do link de escuta (o site mostra a contagem regressiva). */
 export const VALIDADE_S = 300;
@@ -146,6 +147,7 @@ const QUEM: Record<string, Segmento["quem"]> = {
   agente: "agente", agent: "agente", ia: "agente", ai: "agente",
   pessoa: "pessoa", cliente: "pessoa", user: "pessoa",
   operador: "operador",
+  ligacao: "ligacao",
 };
 
 /** Aceita { segmentos: [...] } ou a lista direta; até 2.000 trechos de até 2.000 caracteres cada. */

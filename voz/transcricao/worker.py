@@ -47,6 +47,7 @@ class Gravacao:
     empresa_id: int
     caminho: Path
     duracao_s: float | None = None
+    destino: dict | None = None          # {bucket, objeto} do áudio no bucket da empresa (importador, SQL 64)
 
 
 def duracao_wav(caminho: Path) -> float | None:
@@ -76,10 +77,14 @@ class FontePasta:
                 continue
             meta = arq.with_suffix(".json")
             dur = None
+            destino = None
             if meta.exists():
                 with contextlib.suppress(ValueError, TypeError):
-                    dur = float(json.loads(meta.read_text(encoding="utf-8")).get("duracao_s"))
-            out.append(Gravacao(arq.stem, int(arq.parent.name.split("_", 1)[1]), arq, dur))
+                    m = json.loads(meta.read_text(encoding="utf-8"))
+                    if m.get("bucket") and m.get("objeto"):
+                        destino = {"bucket": str(m["bucket"]), "objeto": str(m["objeto"])}
+                    dur = float(m.get("duracao_s"))
+            out.append(Gravacao(arq.stem, int(arq.parent.name.split("_", 1)[1]), arq, dur, destino))
         return out
 
     def _situacao(self, arq: Path) -> dict:
@@ -92,7 +97,8 @@ class FontePasta:
         final = situacao in FINAIS or tent >= self.max_tentativas
         g.caminho.with_name(g.id + ".situacao.json").write_text(
             json.dumps({"situacao": situacao, "tentativas": tent, "final": final, "registrado": False,
-                        "empresa_id": g.empresa_id, **dados}, ensure_ascii=False), encoding="utf-8")
+                        "empresa_id": g.empresa_id, **({"destino": g.destino} if g.destino else {}), **dados},
+                       ensure_ascii=False), encoding="utf-8")
         if final and self.apagar_audio:
             g.caminho.unlink(missing_ok=True)
             g.caminho.with_suffix(".json").unlink(missing_ok=True)
@@ -112,8 +118,10 @@ class FontePasta:
             if not d.get("final") or d.get("registrado"):
                 continue
             emp = int(s.parent.name.split("_", 1)[1])
-            out.setdefault(emp, []).append({"gravacao_id": int(gid), "situacao": d.get("situacao"),
-                                            "duracao_s": d.get("duracao_s")})
+            item = {"gravacao_id": int(gid), "situacao": d.get("situacao"), "duracao_s": d.get("duracao_s")}
+            if d.get("destino") and d.get("situacao") == "ok":
+                item["_destino"] = d["destino"]
+            out.setdefault(emp, []).append(item)
         return out
 
     def marcar_registrado(self, empresa_id: int, ids: list[int]) -> None:
@@ -127,13 +135,48 @@ class FontePasta:
             s.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
 
 
-def registrar_no_banco(sb, fonte: FontePasta) -> dict:
-    """Manda ao banco a situação final das gravações importadas (registrar_transcricao_voz). Erro numa empresa não
-    segura as outras; o que não foi fica para a próxima rodada."""
-    out = {"empresas": 0, "registradas": 0, "minutos": 0.0, "erros": 0}
+def objeto_transcricao(objeto_audio: str) -> str:
+    """discador/2026/11/19/<chave>.wav -> discador/2026/11/19/<chave>.transcricao.json (ao lado do áudio, mesma
+    retenção: o ciclo de vida do bucket da empresa)."""
+    return re.sub(r"\.[A-Za-z0-9]{2,5}$", "", objeto_audio) + ".transcricao.json"
+
+
+def formato_site(conteudo: dict) -> dict:
+    """O que o leitor do site mostra (Edge Function gravacoes › lerTranscricao): só texto JÁ redigido, sem separação de
+    vozes (quem = "ligacao": o discador entrega o áudio misturado). Nunca leva id, empresa ou cliente."""
+    segs = [{"quem": "ligacao", "em_s": s.get("inicio"), "texto": s.get("texto") or ""}
+            for s in conteudo.get("segmentos") or [] if (s.get("texto") or "").strip()]
+    if not segs and (conteudo.get("texto") or "").strip():
+        segs = [{"quem": "ligacao", "em_s": 0, "texto": conteudo["texto"]}]
+    return {"segmentos": segs, "redigidos": conteudo.get("redigidos") or {}}
+
+
+def registrar_no_banco(sb, fonte: FontePasta, destino: "DestinoPasta | None" = None, bucket=None) -> dict:
+    """Manda ao banco a situação final das gravações importadas (registrar_transcricao_voz). Com o bucket (VM), a
+    transcrição REDIGIDA sobe antes para o bucket da empresa, ao lado do áudio, e o caminho vai junto: é o que o leitor
+    de transcrição do site abre (Edge Function gravacoes, com registro de acesso). Falha no upload: o item fica para a
+    próxima rodada. Erro numa empresa não segura as outras."""
+    out = {"empresas": 0, "registradas": 0, "minutos": 0.0, "erros": 0, "transcricoes_no_bucket": 0}
     for emp, itens in fonte.nao_registrados().items():
-        for i in range(0, len(itens), 500):
-            bloco = itens[i:i + 500]
+        prontos = []
+        for it in itens:
+            dest = it.pop("_destino", None)
+            if dest and destino is not None and bucket is not None:
+                arq = destino.pasta / f"empresa_{emp}" / f"{it['gravacao_id']}.json"
+                try:
+                    corpo = formato_site(json.loads(arq.read_text(encoding="utf-8")))
+                    obj = objeto_transcricao(dest["objeto"])
+                    bucket.enviar(dest["bucket"], obj, json.dumps(corpo, ensure_ascii=False).encode("utf-8"),
+                                  "application/json")
+                    it["transcricao_caminho"] = obj
+                    out["transcricoes_no_bucket"] += 1
+                except Exception as ex:   # noqa: BLE001 — tenta de novo na próxima rodada
+                    log.warning("transcrição: upload da gravação %s falhou (%s)", it["gravacao_id"], ex.__class__.__name__)
+                    out["erros"] += 1
+                    continue
+            prontos.append(it)
+        for i in range(0, len(prontos), 500):
+            bloco = prontos[i:i + 500]
             try:
                 r = sb.rpc("registrar_transcricao_voz", {"empresa": emp, "itens": bloco}) or {}
             except Exception as ex:   # noqa: BLE001
@@ -219,7 +262,8 @@ def main(argv=None) -> int:
     if a.registrar:
         try:
             from voz.configuracao import supabase_do_ambiente
-            out["registro"] = registrar_no_banco(supabase_do_ambiente(), fonte)
+            from voz.importador.rotina import BucketGCS
+            out["registro"] = registrar_no_banco(supabase_do_ambiente(), fonte, DestinoPasta(a.saida), BucketGCS())
         except Exception as ex:   # noqa: BLE001 — banco fora: fica para a próxima rodada
             log.warning("transcrição: sem acesso ao banco para registrar (%s)", ex.__class__.__name__)
     print(json.dumps(out, ensure_ascii=False))

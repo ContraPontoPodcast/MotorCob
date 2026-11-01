@@ -101,6 +101,7 @@ if os.environ.get("PGPASSWORD"):
 
 # ------------------------------------------------------------------ dados fictícios
 sv("delete from storage.objects where bucket_id = 'gravacoes-discador' and name like 'vzi-%'")
+sv("delete from public.acessos where usuario in (select id from auth.users where email like 'vzi.%@exemplo.test')")
 sv("delete from auth.users where email like 'vzi.%@exemplo.test'")
 sv("delete from public.empresas where slug in ('vzi-alfa', 'vzi-beta')")
 EA = sv("insert into public.empresas (slug, nome) values ('vzi-alfa', 'Importador Alfa (teste)') returning id")
@@ -395,6 +396,33 @@ checar("voz_gravacoes.transcricao = ok com os minutos", True,
 caso("transcrição de gravação de outra empresa não muda nada",
      float(srv("registrar_transcricao_voz", {"empresa": EB, "itens": [{"gravacao_id": GID, "situacao": "erro"}]})["atualizadas"]) == 0)
 
+# transcrição no leitor do site: a VM sobe a redigida ao lado do áudio e o caminho vai ao banco
+GID2 = RG[CH_["d-2"]]["gravacao_id"]
+TCAM = CAM("d-2").replace(".wav", ".transcricao.json")
+caso("caminho da transcrição fora do lado do áudio é recusado", not sql(
+    f"select public.registrar_transcricao_voz({EA}, {j([{'gravacao_id': GID2, 'situacao': 'ok', 'duracao_s': 40, 'transcricao_caminho': 'discador/2026/01/01/outra.transcricao.json'}])})",
+    "service_role")[0])
+caso("caminho da transcrição sem situação ok é recusado", not sql(
+    f"select public.registrar_transcricao_voz({EA}, {j([{'gravacao_id': GID2, 'situacao': 'erro', 'transcricao_caminho': TCAM}])})",
+    "service_role")[0])
+srv("registrar_transcricao_voz", {"empresa": EA, "itens": [{"gravacao_id": GID2, "situacao": "ok", "duracao_s": 40,
+                                                            "transcricao_caminho": TCAM}]})
+checar("a transcrição fica ao lado do áudio (mesmo bucket, mesma retenção)", True,
+       f"select transcricao_caminho||'|'||transcricao from public.voz_gravacoes where id = {GID2}", None, None, f"{TCAM}|ok")
+# o que a Edge Function gravacoes faz com o login de quem pede: RLS de voz_gravacoes, pode('ver_transcricoes') e o
+# registro do acesso antes de entregar
+checar("leitor do site: gestão (ouvir + ler transcrições) vê o caminho da transcrição", True,
+       f"select transcricao_caminho from public.voz_gravacoes where id = {GID2}", "authenticated", U["ges"], TCAM)
+checar("leitor do site: gestão pode ler transcrições", True, "select public.pode('ver_transcricoes')", "authenticated",
+       U["ges"], "t")
+checar("leitor do site: o acesso à transcrição fica registrado", True,
+       f"with x as (insert into public.acessos (usuario, acao, alvo, empresa_id) values ('{U['ges']}', 'ler_transcricao', "
+       f"'{GID2}', {EA}) returning 1) select count(*) from x", "authenticated", U["ges"], 1)
+checar("leitor do site: planejamento (sem ouvir_gravacoes) não vê a gravação", True,
+       f"select count(*) from public.voz_gravacoes where id = {GID2}", "authenticated", U["pla"], 0)
+checar("leitor do site: outra empresa não vê a gravação", True,
+       f"select count(*) from public.voz_gravacoes where id = {GID2}", "authenticated", U["admb"], 0)
+
 # ------------------------------------------------------------------ papel motorcx_voz: só voz_vm
 for t in ("voz_import_config", "voz_import_lotes", "voz_import_arquivos", "voz_gravacoes"):
     checar(f"motorcx_voz não lê public.{t}", False, f"select count(*) from public.{t}", usuario="motorcx_voz")
@@ -505,6 +533,26 @@ def rodada(cliente, nome, uuid_, prefixo):
         motivos = json.loads(sv(f"select motivos from public.voz_import_arquivos a join public.voz_import_lotes l "
                                 f"on l.execucao_id = a.execucao_id where l.id = {lid}"))
         caso(f"{nome}: motivos do arquivo no registro", motivos == {"sem_par": 2, "dado_pessoal": 1}, motivos)
+        # o Whisper (falso) transcreve, a transcrição redigida sobe ao lado do áudio e o caminho vai ao banco pelo
+        # mesmo acesso da VM
+        from voz import banco as VB
+        from voz.transcricao import worker as W
+        from voz.transcricao.transcritores import Segmento, Transcricao
+
+        class Whisper:
+            codigo = "whisper"
+
+            def transcrever(self, caminho, idioma="pt"):
+                return Transcricao(f"meu cpf é {CPF}", [Segmento(0.0, 3.0, f"meu cpf é {CPF}")], idioma, "whisper")
+        fila = W.FontePasta(Path(tmp) / "importadas")
+        dados_voz = VB.carregar({"voz_config": [{"empresa_id": int(EA), "transcrever": True, "transcrever_min_segundos": 0}]})
+        W.Worker(dados_voz, fila, W.DestinoPasta(Path(tmp) / "transcricoes"), Whisper()).processar()
+        rt = W.registrar_no_banco(cliente, fila, W.DestinoPasta(Path(tmp) / "transcricoes"), R.BucketLocal(Path(tmp) / "gcs"))
+        tc = sv(f"select coalesce(transcricao_caminho, '')||'|'||transcricao from public.voz_gravacoes where id = {gid or 0}")
+        obj = Path(tmp) / "gcs" / f"proj-motorcx-grav-e{EA}" / tc.split("|")[0] if tc else None
+        caso(f"{nome}: transcrição redigida no bucket ao lado do áudio e no banco (o leitor do site abre)",
+             rt.get("registradas") == 1 and tc.endswith(".transcricao.json|ok") and obj is not None and obj.exists()
+             and CPF not in obj.read_text() and '"quem": "ligacao"' in obj.read_text(), (rt, tc))
         out2 = imp.rodar("1/1")
         caso(f"{nome}: a rodada seguinte apaga o lote do Storage", out2.get("lotes_apagados", 0) >= 1
              and sv(f"select count(*) from storage.objects where bucket_id = 'gravacoes-discador' and name like 'vzi-alfa/{uuid_}/%'") == "0",
@@ -572,6 +620,7 @@ if PG is not None:
 sv("delete from storage.objects where bucket_id = 'gravacoes-discador' and name like 'vzi-%'")
 sv(f"delete from public.consumo_mensageria where empresa_id in ({EA}, {EB})")
 sv(f"delete from public.consumo_ia where empresa_id in ({EA}, {EB})")
+sv(f"delete from public.acessos where empresa_id in ({EA}, {EB})")
 sv("delete from auth.users where email like 'vzi.%@exemplo.test'")
 sv(f"delete from public.empresas where id in ({EA}, {EB})")
 

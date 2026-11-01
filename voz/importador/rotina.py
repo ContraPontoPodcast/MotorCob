@@ -81,13 +81,17 @@ class BucketLocal:
 
 # ------------------------------------------------------------------ fila do Whisper (pasta local da VM)
 def deixar_para_transcrever(saida: Path, empresa_id: int, gravacao_id: int, ext: str, dados: bytes,
-                            duracao_s: int) -> Path:
-    """<saida>/empresa_<id>/<gravacao>.<ext> (0600) com <gravacao>.json {duracao_s} ao lado; o áudio entra por último
-    e de uma vez (rename), para o worker nunca pegar arquivo pela metade."""
+                            duracao_s: int, bucket: str | None = None, objeto: str | None = None) -> Path:
+    """<saida>/empresa_<id>/<gravacao>.<ext> (0600) com <gravacao>.json {duracao_s, bucket, objeto} ao lado (o worker
+    sobe a transcrição redigida ao lado do áudio no bucket); o áudio entra por último e de uma vez (rename), para o
+    worker nunca pegar arquivo pela metade."""
     pasta = Path(saida) / f"empresa_{int(empresa_id)}"
     pasta.mkdir(parents=True, exist_ok=True)
     meta = pasta / f"{int(gravacao_id)}.json"
-    meta.write_text(json.dumps({"duracao_s": duracao_s}), encoding="utf-8")
+    m = {"duracao_s": duracao_s}
+    if bucket and objeto:
+        m.update(bucket=bucket, objeto=objeto)
+    meta.write_text(json.dumps(m), encoding="utf-8")
     tmp = pasta / f".{int(gravacao_id)}.{ext}.parcial"
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "wb") as f:
@@ -240,7 +244,7 @@ class Importador:
                 n["segundos"] += ln.duracao_s
                 if f.get("transcrever"):
                     deixar_para_transcrever(self.saida, int(f["empresa_id"]), int(x["gravacao_id"]), ln.extensao,
-                                            dados, ln.duracao_s)
+                                            dados, ln.duracao_s, f["bucket"], objeto)
                     n["para_transcrever"] += 1
         motivos = Counter(r.motivo for r in rej)
         rel.update(linhas=leitura.total, importadas=n["importadas"], casadas=n["casadas"], duplicadas=n["duplicadas"],
