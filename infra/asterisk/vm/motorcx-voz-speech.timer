@@ -1,0 +1,9 @@
+[Unit]
+Description=Speech Analytics a cada 15 minutos (só com o metadado motorcx-speech-analytics=1)
+
+[Timer]
+OnBootSec=8min
+OnUnitInactiveSec=15min
+
+[Install]
+WantedBy=timers.target

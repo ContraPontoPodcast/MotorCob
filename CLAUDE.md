@@ -286,6 +286,15 @@ de outra pessoa pela certificação e a rotação segue.
   trechos mascarados (`redigir_trecho`) com embedding Vertex São Paulo 1536, busca semântica pendente → VM responde,
   fila da curadoria, PDF do relatório e uso de IA (`registrar_uso_ia_voz`: custo real para a margem, separado da
   quantidade cobrada no item `ia_speech_analytics`; custo nunca é repassado).
+- `voz/analise/analisador.py` + `rotina.py` (Speech Analytics, SQL 62): na VM, cada transcrição mascarada
+  (`/var/motorcx/transcricoes`) vira UMA chamada ao LLM da Montagem (esquema fechado; resposta fora das listas é
+  recusada e pedida de novo, até 3 chamadas): nota na versão do checklist vigente no dia, códigos fechados
+  (`catalogo.py`: motivo, objeções, intenção de `voz_intencoes`, canal/horário, riscos, frases, temas promovidos),
+  vulnerabilidade só como sinal em `voz_alertas`, dúvida para a Curadoria. `gravar_analise_voz` grava tudo numa
+  transação, com o uso de IA (tokens reais; minuto cobrado só na 1ª análise ok). Noite (02:40): `agregar_speech_dia`
+  refaz os `_dia` (idempotente; operador só com ID do discador), depois as regras e o impacto de 28 dias de
+  `motor/retroalimentacao.py` pelas RPCs. Desligado por padrão: metadado `motorcx-speech-analytics=1` na VM e
+  `voz_config.speech_analytics` por empresa. Os dois acessos da VM (funções de `voz_vm`).
 - `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
   = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
   Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias

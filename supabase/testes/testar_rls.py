@@ -2701,6 +2701,17 @@ checar("SQL 61: funções da IA com search_path fixo", True, "select count(*) fr
 checar("SQL 61: anon não chama função da IA", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%\\_ia' or proname like '%\\_ia\\_%' or proname = 'ia_precos_abaixo_minimo') and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
 _sv("update public.parametros_margem set impostos_pct=10")
 
+# SQL 62 · dados do Speech Analytics (avaliador, extrator e job noturno). Reaplica o SQL 62 antes: o SQL 60, reaplicado
+# acima, recria as funções que o 62 troca (a VM também registra recomendações e lê a renitência)
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261229000001_voz_speech_dados.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_speech_dados.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 62: dados do Speech Analytics (testar_speech_dados.py)", True, f"select {r.returncode}", None, None, 0)
+
 # SQL 57 · acesso próprio das VMs de voz: entra como o papel motorcx_voz (login de verdade) em arquivo próprio
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_acesso.py")],
                    capture_output=True, text=True)

@@ -77,6 +77,8 @@ class Resposta:
     texto: str = ""
     chamadas: list = field(default_factory=list)    # [(nome, argumentos dict)]
     tokens: int = 0                                   # usage.total_tokens (custo do roleplay e da geração)
+    tokens_entrada: int = 0                           # usage.prompt_tokens (Speech Analytics: custo por entrada)
+    tokens_saida: int = 0                             # usage.completion_tokens (custo por saída)
 
 
 class ModeloOpenAICompat:
@@ -105,8 +107,10 @@ class ModeloOpenAICompat:
             except json.JSONDecodeError:
                 args = {}
             chamadas.append((fn.get("name"), args if isinstance(args, dict) else {}))
-        tokens = int(((d.get("usage") or {}).get("total_tokens")) or 0)
-        return Resposta(texto=(msg.get("content") or "").strip(), chamadas=chamadas, tokens=tokens)
+        uso = d.get("usage") or {}
+        tokens = int(uso.get("total_tokens") or 0)
+        return Resposta(texto=(msg.get("content") or "").strip(), chamadas=chamadas, tokens=tokens,
+                        tokens_entrada=int(uso.get("prompt_tokens") or 0), tokens_saida=int(uso.get("completion_tokens") or 0))
 
 
 class Conversa:

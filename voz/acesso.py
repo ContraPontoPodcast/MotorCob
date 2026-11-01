@@ -68,6 +68,13 @@ RPC = {
     "concluir_roleplay_lote": "concluir_roleplay_lote",
     "buscas_voz_pendentes": "buscas_voz_pendentes", "responder_busca_voz": "responder_busca_voz",   # SQL 60
     "registrar_uso_ia_voz": "registrar_uso_ia_voz",
+    # SQL 62 · dados do Speech Analytics (avaliador, extrator, job noturno e retroalimentação pela VM)
+    "speech_contexto_voz": "speech_contexto", "gravar_analise_voz": "gravar_analise_voz",
+    "agregar_speech_dia": "agregar_speech_dia", "speech_empresas_voz": "speech_empresas",
+    "dados_retroalimentacao_voz": "dados_retroalimentacao", "registrar_recomendacao_voz": "registrar_recomendacao_voz",
+    "conferir_rascunhos_recomendacoes": "conferir_rascunhos_recomendacoes",
+    "recomendacoes_aplicadas_voz": "recomendacoes_aplicadas", "gravar_impacto_voz": "gravar_impacto",
+    "avisar_alertas_voz": "avisar_alertas",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual

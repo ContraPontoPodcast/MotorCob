@@ -1,0 +1,11 @@
+[Unit]
+Description=Speech Analytics: job noturno (agregados _dia, recomendações e impacto de 28 dias)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-speech-noite
+ExecStart=/usr/local/bin/motorcx-voz-rodar speech-noite
+Nice=10

@@ -1,0 +1,9 @@
+[Unit]
+Description=Speech Analytics: agregados do dia e retroalimentação às 02:40
+
+[Timer]
+OnCalendar=*-*-* 02:40:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

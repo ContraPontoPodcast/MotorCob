@@ -1,0 +1,11 @@
+[Unit]
+Description=Speech Analytics: avaliação do checklist e códigos das ligações transcritas (LLM da Montagem)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-speech
+ExecStart=/usr/local/bin/motorcx-voz-rodar speech
+Nice=10
