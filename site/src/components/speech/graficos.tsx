@@ -23,10 +23,17 @@ export function Legenda({ itens }: { itens: { nome: string; cor: string; linha?:
 }
 
 /** Linha por semana. min/max fixos por métrica (uma escala só); `meta` desenha a linha tracejada. */
-export function LinhaSemanas({ x, series, min, max, ticks, fmt, meta, altura = 190, rotulo }: {
+export function LinhaSemanas(p: {
 	x: string[]; series: Serie[]; min: number; max: number; ticks: number[]; fmt: (v: number) => string; meta?: number; altura?: number; rotulo: string;
 }) {
-	const W = 600, H = altura, l = 40, r = 10, t = 10, b = 24;
+	// No celular, outra proporção (mais alta e estreita) para o texto dos eixos não ficar minúsculo.
+	return <><div className="hidden sm:block"><LinhaSvg {...p} W={600} /></div><div className="sm:hidden"><LinhaSvg {...p} W={360} altura={220} /></div></>;
+}
+
+function LinhaSvg({ x, series, min, max, ticks, fmt, meta, altura = 190, rotulo, W }: {
+	x: string[]; series: Serie[]; min: number; max: number; ticks: number[]; fmt: (v: number) => string; meta?: number; altura?: number; rotulo: string; W: number;
+}) {
+	const H = altura, l = 40, r = 10, t = 10, b = 24;
 	const px = (i: number) => l + (x.length <= 1 ? 0 : (i * (W - l - r)) / (x.length - 1));
 	const py = (v: number) => t + (1 - (Math.min(max, Math.max(min, v)) - min) / (max - min || 1)) * (H - t - b);
 	const caminho = (vs: (number | null)[]) => {
@@ -48,8 +55,8 @@ export function LinhaSemanas({ x, series, min, max, ticks, fmt, meta, altura = 1
 				</g>
 			))}
 			{meta != null && <line x1={l} x2={W - r} y1={py(meta)} y2={py(meta)} stroke="var(--base-texto-2)" strokeDasharray="4 4" strokeWidth={1.2} />}
-			{x.map((s, i) => (i % Math.ceil(x.length / 6) === 0 || i === x.length - 1) && (
-				<text key={s} x={px(i)} y={H - 6} textAnchor="middle" fontSize={11} fill="var(--base-texto-3)">{s}</text>
+			{x.map((s, i) => (i % Math.ceil(x.length / (W < 500 ? 3 : 6)) === 0 || i === x.length - 1) && (
+				<text key={s} x={px(i)} y={H - 6} textAnchor={i === 0 ? 'start' : i === x.length - 1 ? 'end' : 'middle'} fontSize={11} fill="var(--base-texto-3)">{s}</text>
 			))}
 			{series.map(s => (
 				<g key={s.nome}>

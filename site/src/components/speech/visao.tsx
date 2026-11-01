@@ -147,6 +147,7 @@ export function Visao({ f, setDias, setOrigem, persona, setPersona, setAcoes }: 
 					{ rotulo: 'Alertas sem revisão', valor: nf(abertos), detalhe: <>de {nf(p.alertas?.total ?? 0)} no período · <Link className="font-semibold text-[var(--destaque)] hover:underline" to={rotaSA('alertas')}>ver</Link></>, tom: abertos > 0 ? 'alerta' : undefined },
 				]} />
 
+				<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
 				<Cartao semPadding titulo="O que mudou neste período">
 					<ul className="divide-y px-4 pb-1 sm:px-5" style={{ borderColor: 'var(--base-borda)' }}>
 						{descobertas.map((d, i) => (
@@ -166,6 +167,7 @@ export function Visao({ f, setDias, setOrigem, persona, setPersona, setAcoes }: 
 					{series.length > 1 && <Legenda itens={series.map(s => ({ nome: s.nome, cor: s.cor, linha: true }))} />}
 					{semanas.length === 0 ? <p className="mt-2 text-[13px] text-[var(--base-texto-2)]">Ainda sem semana completa.</p> : <LinhaSemanas x={semanas.map(semanaRotulo)} series={series} {...escala} fmt={M.fmt} meta={M.meta} rotulo={M.titulo} />}
 				</Cartao>
+				</div>
 
 				<div className="grid gap-4 lg:grid-cols-2">
 					<Cartao titulo="Por que não pagam" linha="Motivo declarado, em % das conversas">
