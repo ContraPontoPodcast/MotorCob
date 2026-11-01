@@ -91,11 +91,15 @@ def ouvir(pedido: dict, sintetizar) -> dict:
             "minutos": round(len(final) / CHARS_POR_MINUTO, 3)}
 
 
-def sintetizador_elevenlabs(chave: str, voz_padrao: str, modelo: str = "", abrir=urllib.request.urlopen,
-                            timeout: float = 20):
-    """TTS da ElevenLabs pela API HTTP (o mesmo provedor e voz da Montagem). Devolve (mp3, "audio/mpeg")."""
+def sintetizador_elevenlabs(chave: str, voz_padrao: str, modelo: str = "", vozes: tuple = (),
+                            abrir=urllib.request.urlopen, timeout: float = 20):
+    """TTS da ElevenLabs pela API HTTP (o mesmo provedor e voz da Montagem). Devolve (mp3, "audio/mpeg").
+    A voz pedida só entra no endereço se for uma das vozes configuradas na VM (a padrão da Montagem e
+    `tts_vozes` do provedores.json); qualquer outra cai na padrão. O endereço nunca leva texto vindo de fora."""
+    permitidas = {v: v for v in (voz_padrao, *vozes) if v and re.fullmatch(r"[A-Za-z0-9_\-]{2,80}", v)}
+
     def sintetizar(texto: str, voz: str | None) -> tuple[bytes, str]:
-        v = voz or voz_padrao
+        v = permitidas.get(voz or "") or permitidas.get(voz_padrao)
         if not v:
             raise ValueError("sem voz configurada")
         corpo = {"text": texto, **({"model_id": modelo} if modelo else {})}
@@ -207,7 +211,8 @@ def sintetizador_da_vm(provedores: str = "/etc/motorcx/provedores.json"):   # pr
                             if k != "portas"})
     if cfg.tts_provedor != "elevenlabs":
         return None
-    return sintetizador_elevenlabs(SecretManager().valor(cfg.ref_tts), cfg.tts_voz, cfg.tts_modelo)
+    return sintetizador_elevenlabs(SecretManager().valor(cfg.ref_tts), cfg.tts_voz, cfg.tts_modelo,
+                                   tuple(x for x in (cfg.tts_vozes or ()) if isinstance(x, str)))
 
 
 def main(argv=None) -> int:   # pragma: no cover - serviço

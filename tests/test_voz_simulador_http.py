@@ -155,12 +155,14 @@ class TestSimuladorHttp(unittest.TestCase):
         def abrir(req, timeout):
             pedidos.append(req)
             return R()
-        tts = SH.sintetizador_elevenlabs("segredo", "voz_padrao", "eleven_multilingual_v2", abrir=abrir)
+        tts = SH.sintetizador_elevenlabs("segredo", "voz_padrao", "eleven_multilingual_v2", ("outra",), abrir=abrir)
         self.assertEqual(tts("Oi", None), (b"mp3", "audio/mpeg"))
         self.assertIn("/text-to-speech/voz_padrao?", pedidos[0].full_url)
         self.assertEqual(json.loads(pedidos[0].data), {"text": "Oi", "model_id": "eleven_multilingual_v2"})
         tts("Oi", "outra")
         self.assertIn("/text-to-speech/outra?", pedidos[1].full_url)
+        tts("Oi", "nao_configurada")                       # voz fora da lista da VM cai na padrão
+        self.assertIn("/text-to-speech/voz_padrao?", pedidos[2].full_url)
 
 
 if __name__ == "__main__":
