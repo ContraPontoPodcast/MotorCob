@@ -277,6 +277,15 @@ de outra pessoa pela certificação e a rotação segue.
   mesmo se as regras do credor falharem (padrão do regua.json); erro → regra antiga só na rodada + alerta. Não muda a
   contagem de tentativas. Dia em aberto reprocessado usa o ciclo daquele dia (`DG.ciclo_inexistente`), não o de
   hoje. `retorno_canal`: "bloquear"/"retestar" da voz também tiram só a voz.
+- `motor/retroalimentacao.py` (Speech Analytics, SQL 60): regras sobre os agregados de voz (horário → trava de
+  horário, renitência depois de ocupado, frases, ordem de ofertas, canal preferido, propensão em sombra) com piso
+  n >= 200 por grupo e diferença >= 5 p.p.; registra por `registrar_recomendacao_voz` (o banco cuida dos 90 dias da
+  dispensada). "Aplicar" (site, `aplicar_recomendacao`) só cria rascunho: estratégia NOVA sem vínculo ou frase
+  desligada; nunca publica. Impacto: 28 dias antes × depois quando o rascunho entra em uso. Relatório ao credor
+  (`montar_relatorio`): só agregados >= 30; estimativa = metade da diferença, faixa 25–75%. VM (`voz/analise/`):
+  trechos mascarados (`redigir_trecho`) com embedding Vertex São Paulo 1536, busca semântica pendente → VM responde,
+  fila da curadoria, PDF do relatório e uso de IA (`registrar_uso_ia_voz`: custo real para a margem, separado da
+  quantidade cobrada no item `ia_speech_analytics`; custo nunca é repassado).
 - `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
   = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
   Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias

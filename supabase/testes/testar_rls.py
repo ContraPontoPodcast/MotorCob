@@ -309,7 +309,7 @@ checar("operação não altera o calendário", True, f"update public.credores se
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
 # permissões por perfil (padrão MotorCob + ajuste do Admin da empresa) e auditoria
 checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas,ver_clientes,ver_painel")
-checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 21)   # 18 + 3 do agente de voz (SQL 56)
+checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 26)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60)
 checar("usuário inativo não tem permissão", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["inativo"], 0)
 checar("planejamento não ajusta permissões", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["plan"])
 checar("Admin libera Reenquadrar para a operação", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["admina"])
@@ -372,7 +372,7 @@ checar("convite: acessos do perfil Operação na empresa", True, "select string_
 checar("convite: Admin sempre com gerenciar usuários", True, "select permitido from public.permissoes_do_papel(papel => 'admin') where codigo='gerenciar_usuarios'", "authenticated", u["admina"], "t")
 checar("quem não gerencia usuários não lê acessos de perfil", True, "select count(*) from public.permissoes_do_papel(papel => 'operacao')", "authenticated", u["oper"], 0)
 checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
-checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 21)
+checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 26)   # 21 + 5 do SQL 60
 checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
 # página comercial: mídia pública e formulário de contato (visitante só insere)
 checar("bucket site é público", True, "select public from storage.buckets where id='site'", "service_role", "t")
@@ -617,7 +617,7 @@ checar("fatura paga não conta como vencida", True, f"select faturas_vencidas fr
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional
 SVC = "service_role"
-checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 25)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59)
+checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 26)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59) + Speech Analytics (SQL 60)
 checar("cliente não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", u["admina"])
 checar("Atendimento não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", SUP)
 checar("ninguém grava preço direto na tabela", False, f"insert into public.precos_empresa (empresa_id,item,modelo,preco) values ({EA},'sms','flat',0.01)", "authenticated", u["admin"])
@@ -2201,7 +2201,7 @@ checar("SQL 56: cliente B não lê o consumo da A", True, "select count(*) from 
 checar("SQL 56: exportação por dia e rota", True, f"select count(*) from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["gest"], 2)
 checar("SQL 56: B não exporta a telefonia da A", False, f"select * from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["operb"])
 checar("SQL 56: usuário não grava consumo de voz", False, f"insert into public.consumo_voz (empresa_id,dia) values ({EA},'2026-11-06')", "authenticated", u["admin"])
-checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_geracao_fluxo,ia_roleplay")   # + SQL 58 e 59
+checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_geracao_fluxo,ia_roleplay,ia_speech_analytics")   # + SQL 58, 59 e 60
 checar("SQL 56: telefonia não entra na prévia da fatura", True, f"select count(*) from public.previa_fatura({EA}, '2026-11-01') where item like '%telefon%' or item like 'consumo_voz%'", "authenticated", u["gest"], 0)
 for t in ("voz_config", "voz_roteiros", "voz_troncos", "voz_rotas", "voz_transferencias", "voz_contrato", "voz_lotes", "voz_ondas",
           "voz_chamadas", "voz_gravacoes", "consumo_voz", "fornecedor_saude", "voz_insights_dia", "titular_pedidos",
@@ -2599,6 +2599,16 @@ for t in ("roleplay_personas", "roleplay_lotes", "roleplay_conversas"):
 checar("SQL 59: tabelas do roleplay com RLS", True, "select count(*) from pg_tables where schemaname='public' and tablename like 'roleplay\\_%' and not rowsecurity", "service_role", None, 0)
 checar("SQL 59: RPCs do roleplay com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%roleplay%' or proname = 'fluxo_voz_avisos') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
 checar("SQL 59: anon não chama função do roleplay", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%roleplay%' or proname in ('fluxo_voz_avisos','perfis_roleplay','travas_voz','codigos_ok')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
+# SQL 60 · Speech Analytics (empresas e pessoas próprias, fictícias). Reaplica o SQL 60 antes: o SQL 56, reaplicado
+# acima, recria o catálogo de permissões sem as do SQL 60.
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261227000001_voz_speech_analytics.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_speech.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 60: Speech Analytics (testar_speech.py)", True, f"select {r.returncode}", None, None, 0)
 
 # SQL 61 · margem mínima dos itens de IA (a IA é revendida: %MC ≥ 70% em todo item de IA)
 def checar_erro(nome, cmd, papel, uid, trecho):

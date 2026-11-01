@@ -31,6 +31,7 @@ import urllib.error
 import urllib.request
 
 from voz import banco as B
+from voz.analise import contrato as K_ANALISE
 
 try:   # o driver só existe na imagem da VM (voz/requirements.txt); o resto do módulo não depende dele
     from pg8000.exceptions import InterfaceError as _ConexaoCaiu
@@ -55,6 +56,7 @@ ESCRITA = {
     "voz_chamadas": "gravar_chamadas", "consumo_voz": "gravar_consumo", "voz_gravacoes": "gravar_gravacoes",
     "fornecedor_saude": "gravar_saude", "voz_lotes": "gravar_lotes", "voz_ondas": "gravar_ondas",
     "voz_fluxo_passos": "gravar_fluxo_passos", "crm_chamadas": "gravar_crm_chamadas",    # SQL 58 (só códigos)
+    "voz_trechos": "gravar_trechos", "voz_curadoria_itens": "gravar_curadoria",           # SQL 60 (Speech Analytics)
 }
 # RPC do public que a VM chama -> função de voz_vm com os mesmos argumentos (um objeto jsonb, como o corpo do
 # PostgREST) e a mesma forma de resposta (lista, objeto, valor ou null). RPC fora daqui é recusada.
@@ -64,6 +66,8 @@ RPC = {
     "anexos_fluxo_vencidos": "anexos_fluxo_vencidos", "marcar_anexos_apagados": "marcar_anexos_apagados",   # geração
     "pegar_roleplay_voz": "pegar_roleplay", "registrar_roleplay_conversa": "registrar_roleplay_conversa",  # SQL 59
     "concluir_roleplay_lote": "concluir_roleplay_lote",
+    "buscas_voz_pendentes": "buscas_voz_pendentes", "responder_busca_voz": "responder_busca_voz",   # SQL 60
+    "registrar_uso_ia_voz": "registrar_uso_ia_voz",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual
@@ -202,8 +206,9 @@ class AcessoProprio:
             return feitos if retornar else []
         if tabela not in ESCRITA:
             raise AcessoNegado(f"a VM de voz não grava em {tabela}")
-        if conflito and tabela in B.CONFLITO and conflito.replace(" ", "") != B.conflito(tabela):
-            raise ValueError(f"{tabela}: o upsert do acesso próprio é por ({B.conflito(tabela)}), não ({conflito})")
+        chave = B.conflito(tabela) if tabela in B.CONFLITO else K_ANALISE.CONFLITO.get(tabela)
+        if conflito and chave and conflito.replace(" ", "") != chave:
+            raise ValueError(f"{tabela}: o upsert do acesso próprio é por ({chave}), não ({conflito})")
         saida = []
         for i in range(0, len(linhas), lote):
             corpo = json.dumps(linhas[i:i + lote], default=str, ensure_ascii=False)
