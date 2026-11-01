@@ -165,7 +165,7 @@ export function RenitenciaSituacao({ draft, setDraft, canEdit, ligacoes = {} }: 
 			</section>
 
 			<section>
-				<SecaoTitulo titulo="As 8 situações" linha="Intervalo antes de ligar de novo, máximo no dia, descanso, se invalida o número e se conta como chamada curta." />
+				<SecaoTitulo titulo="As 8 situações" linha="Intervalo (o “depois de” da regra por sinalização, ou o de hoje), máximo no dia, descanso, se invalida o número e se conta como chamada curta." />
 				<div className="overflow-hidden rounded-2xl border" style={{ borderColor: 'var(--base-borda)', backgroundColor: 'var(--base-cartao)' }}>
 					<div className={`hidden gap-3 border-b px-3.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--base-texto-3)] xl:grid ${GRADE_REN}`} style={{ borderColor: 'var(--base-borda)', backgroundColor: 'var(--base-fill)' }}>
 						<span>Situação</span><span>Intervalo</span><span>Máx. no dia</span><span>Descanso</span><span>Invalida?</span><span>Chamada curta (MP)</span><span />
@@ -189,7 +189,7 @@ export function RenitenciaSituacao({ draft, setDraft, canEdit, ligacoes = {} }: 
 									onChange={v => { if (v === 'nao' && !window.confirm('Recomendamos manter o bloqueio de inexistente. Desligar mesmo assim?')) return; set({ inexistente: { ...(draft.inexistente ?? {}), ativo: v !== 'nao', modo: v === 'invalida' ? 'invalida' : 'so_voz' } }); }} />
 							</Cel>;
 						} else {
-							intv = <Cel rotulo="Intervalo" nota={k === 'ocupado' ? 'intervalo de ocupado' : 'intervalo mínimo'}><Num valor={r.intervalo_minutos} min={0} max={1440} rotulo="Intervalo em minutos" disabled={!canEdit} alterado={d.por_situacao?.[k]?.intervalo_minutos !== undefined} onChange={v => campo('por_situacao', k, 'intervalo_minutos', v)} /><Un>min</Un></Cel>;
+							intv = <Cel rotulo="Intervalo" nota={e.sinal ? 'da regra por sinalização' : k === 'ocupado' ? 'intervalo de ocupado (hoje)' : 'intervalo de hoje'}><span className="tabular-nums text-[var(--base-texto)]">{r.intervalo_minutos}</span><Un>min</Un></Cel>;
 							max = <Cel rotulo="Máx. no dia" nota={(d.por_situacao?.[k]?.max_dia ?? 0) > e.tnum ? <span className="text-[var(--estado-atencao-texto)]">teto {e.tnum} por número</span> : 'no mesmo número'}><Num valor={r.max_dia} min={1} max={10} rotulo="Máximo de tentativas no dia" disabled={!canEdit} alterado={d.por_situacao?.[k]?.max_dia !== undefined} onChange={v => campo('por_situacao', k, 'max_dia', v)} /></Cel>;
 							desc = <Cel rotulo="Descanso" nota={!e.naOn && r.conta_descanso ? 'descanso desligado na carteira' : undefined}><Toggle checked={r.conta_descanso} disabled={!canEdit} label="Conta no descanso por não atende" onChange={v => campo('por_situacao', k, 'conta_descanso', v)} /><span>{r.conta_descanso ? 'Conta' : 'Não conta'}</span></Cel>;
 							inv = <Cel rotulo="Invalida?" nota={['maquina', 'caixa_postal', 'ocupado'].includes(k) ? 'prova que o número existe' : undefined}><span>Não</span></Cel>;
@@ -227,8 +227,8 @@ export function RenitenciaSituacao({ draft, setDraft, canEdit, ligacoes = {} }: 
 										<small className="block text-[11.5px] text-[var(--base-texto-3)]">{s.sinais}</small>
 										<code className="block text-[11px] text-[var(--base-texto-3)]">{s.chaves}</code>
 									</div>
-									<Cel rotulo="Religar depois de" nota={k === 'abandonada' ? 'retorno prioritário' : k === 'bloqueio_originacao' || k === 'sem_credito' ? 'só depois de resolver' : 'no mesmo dia'}>
-										<Num valor={r.religar_minutos} min={0} max={1440} rotulo="Religar depois de, minutos" disabled={!canEdit} alterado={d.falhas_tecnicas?.[k]?.religar_minutos !== undefined} onChange={v => campo('falhas_tecnicas', k, 'religar_minutos', v)} /><Un>min</Un>
+									<Cel rotulo="Religar depois de" nota={k === 'bloqueio_originacao' || k === 'sem_credito' ? 'pausa a rota e alerta a equipe' : e.sinal ? 'da regra por sinalização' : 'intervalo de hoje'}>
+										<span className="tabular-nums text-[var(--base-texto)]">{k === 'sem_credito' || k === 'bloqueio_originacao' ? '—' : r.religar_minutos}</span>{k !== 'sem_credito' && k !== 'bloqueio_originacao' && <Un>min</Un>}
 									</Cel>
 									<Cel rotulo="Penaliza o número?" nota={s.mudaHoje ? 'contava no descanso; deixou de contar' : 'fora da certificação e do Chega'}>
 										<span className="inline-flex items-center gap-1 rounded-full bg-[var(--estado-pronto-fundo,var(--base-fill))] px-2.5 py-0.5 text-[12px] font-semibold text-[var(--estado-pronto)]"><Lock size={11} /> Nunca</span>

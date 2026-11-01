@@ -1,12 +1,22 @@
-// Renitência por situação, Resubmit, Reenviar agora e Contato por passada (SQL 65; protótipo aprovado em 01/11/2026).
+// Renitência por situação, regra de discagem por sinalização, modo de discagem, Reenviar agora, Reciclar mailing e
+// Contato por passada (SQL 65; protótipo funcional aprovado em 01/11/2026).
 // Regras puras (sem React, sem Supabase): o site e site/resubmit/resubmit.test.ts usam as mesmas funções.
 // O padrão MotorCX é o de public.discagem_padrao() (= motor/discagem.padrao_site(); o teste confere com o SQL).
+// A edição da regra por sinalização, do modo de discagem e da reciclagem chega com o redesign aprovado: até lá a tela
+// mostra o que vale e grava só o que já editava (limites, máximo por situação, descanso e alertas). O intervalo de
+// cada situação é o rediscar.depois_min da regra por sinalização (um intervalo só, decisão do dono).
 // Nenhum dado pessoal: a tela só mostra contagens.
 
 export type Prioridade = 'topo' | 'normal' | 'fim';
-export type RegraSituacao = { intervalo_minutos: number; max_dia: number; conta_descanso: boolean };
-export type RegraFalha = { religar_minutos: number; aviso: number };
-export type RegraResubmit = { ativo: boolean; depois_minutos: number; max_dia: number; prioridade: Prioridade; ate: string; outro_numero: boolean };
+export type AcaoDepois = 'proximo_telefone' | 'proximo_cliente' | 'finaliza';
+export type RegraSituacao = { max_dia: number; conta_descanso: boolean };
+export type RegraFalha = { aviso: number };
+export type RegraSinal = {
+	finaliza: boolean;
+	rediscar: { ativo: boolean; depois_min: number; max: number; prioridade: Prioridade };
+	depois: { acao: AcaoDepois; espera_min: number };
+	ate: string;
+};
 export type Bloco<T> = Record<string, Partial<T>>;
 
 /** Recorte de credores.discagem que estas telas leem e escrevem (o resto do objeto é preservado). */
@@ -24,10 +34,12 @@ export type DiscagemRen = {
 	chamadas_curtas?: { falha_conta?: boolean } & Record<string, unknown>;
 	por_situacao?: Bloco<RegraSituacao>;
 	falhas_tecnicas?: Bloco<RegraFalha>;
-	resubmit?: Bloco<RegraResubmit> | null;
+	por_sinalizacao?: Record<string, unknown> | null;
+	modo_discagem?: Record<string, unknown> | null;
+	reciclagem_auto?: Record<string, unknown> | null;
 };
 
-// ---------------------------------------------------------------- situações (as 8 do dono e as falhas técnicas)
+// ---------------------------------------------------------------- situações e sinalizações
 export type Curta = 'sempre' | 'duracao' | 'misto';
 export const SITUACOES: { k: string; n: string; sinais: string; chaves: string; curta: Curta }[] = [
 	{ k: 'maquina', n: 'Máquina', sinais: 'AMD: máquina ou saudação longa', chaves: 'maquina', curta: 'sempre' },
@@ -41,24 +53,31 @@ export const SITUACOES: { k: string; n: string; sinais: string; chaves: string; 
 ];
 export const FALHAS: { k: string; n: string; sinais: string; chaves: string; mudaHoje?: boolean }[] = [
 	{ k: 'falha_operadora', n: 'Falha da operadora ou rota', sinais: 'SIP 3xx, 400–407, 5xx · Q.850 2, 3, 34–47', chaves: 'falha_operadora' },
-	{ k: 'sem_credito', n: 'Sem crédito na operadora', sinais: 'SIP 402 · alerta imediato', chaves: 'falha_operadora (402)' },
+	{ k: 'sem_credito', n: 'Sem crédito na operadora', sinais: 'SIP 402 · pausa a rota e alerta', chaves: 'falha_operadora (402)' },
 	{ k: 'falha_rede', n: 'Falha da nossa rede', sinais: 'Asterisk ou SBC do MotorCX', chaves: 'falha_rede' },
 	{ k: 'indisponivel', n: 'Fora de área ou desligado', sinais: 'SIP 408, 480 · Q.850 18, 20, 27', chaves: 'indisponivel', mudaHoje: true },
-	{ k: 'bloqueio_originacao', n: 'Bloqueio de originação', sinais: 'Q.850 52/53 · SIP 608, 428, 436–438 · alerta crítico', chaves: 'bloqueio_originacao' },
+	{ k: 'bloqueio_originacao', n: 'Bloqueio de originação', sinais: 'Q.850 52/53 · SIP 608, 428, 436–438 · pausa a rota', chaves: 'bloqueio_originacao' },
 	{ k: 'cancelada_discador', n: 'Cancelada antes do toque mínimo', sinais: 'menos de 15 s de toque', chaves: 'cancelada_discador' },
 	{ k: 'abandonada', n: 'Abandonada (sem pessoa livre)', sinais: 'atendeu e não havia agente ou operador livre', chaves: 'abandonada' },
 ];
+/** Linhas da regra por sinalização (as 8 situações com inexistente e pessoa errada separados, recado e as falhas). */
+export const SINALIZACOES: { k: string; n: string }[] = [
+	...SITUACOES.filter(s => s.k !== 'numero_incorreto').map(s => ({ k: s.k, n: s.n })),
+	{ k: 'numero_inexistente', n: 'Número inexistente' }, { k: 'pessoa_errada', n: 'Pessoa errada' }, { k: 'recado', n: 'Recado' },
+	...FALHAS.filter(f => f.k !== 'sem_credito' && f.k !== 'bloqueio_originacao').map(f => ({ k: f.k, n: f.n })),
+];
 export const SITUACOES_RENITENCIA = ['maquina', 'nao_atendida', 'ocupado', 'caixa_postal', 'desligou_sem_conversar', 'atendeu_desligou'];
-export const NOME: Record<string, string> = Object.fromEntries([...SITUACOES, ...FALHAS].map(s => [s.k, s.n]));
+export const NOME: Record<string, string> = Object.fromEntries([...SITUACOES, ...FALHAS, ...SINALIZACOES].map(s => [s.k, s.n]));
 export const CURTA_TXT: Record<Curta, string> = {
 	sempre: 'Sempre: não completada, máquina ou caixa postal',
 	duracao: 'Se durar até 6 s desde o atendimento',
 	misto: 'Inexistente: sempre · pessoa errada: até 6 s',
 };
 export const PRIORIDADES: Record<Prioridade, string> = { topo: 'Topo', normal: 'Normal', fim: 'Fim' };
+export const DEPOIS: Record<AcaoDepois, string> = { proximo_telefone: 'Próximo telefone', proximo_cliente: 'Próximo cliente', finaliza: 'Finaliza o cliente' };
 export const MOTIVO_FORA: Record<string, { n: string; t: string }> = {
 	max_dia: { n: 'Já atingiram o máximo do dia', t: 'tentativas por número ou por cliente, contando as voltas' },
-	fora_horario: { n: 'Fora do horário', t: 'a janela fecha antes de dar o intervalo da renitência' },
+	fora_horario: { n: 'Fora do horário', t: 'a janela fecha antes de dar o intervalo da situação' },
 	nao_ligar: { n: 'Pediram “não ligar”', t: 'pedido feito em ligação ou na lista da empresa' },
 	promessa: { n: 'Têm promessa', t: 'prometeram hoje; a voz espera a data' },
 	inexistente: { n: 'Número inexistente', t: 'a voz está suspensa no número (só a voz)' },
@@ -67,49 +86,330 @@ export const MOTIVO_FORA: Record<string, { n: string; t: string }> = {
 export const MIN_CHAMADAS = 30;
 
 // ---------------------------------------------------------------- padrão MotorCX (= public.discagem_padrao())
-const R = (ativo: boolean, depois_minutos: number, max_dia: number, prioridade: Prioridade, ate: string, outro_numero: boolean): RegraResubmit =>
-	({ ativo, depois_minutos, max_dia, prioridade, ate, outro_numero });
-export const PADRAO = {
-	tentativas_numero_dia: 2,
-	tentativas_cliente_dia: 3,
-	intervalo_min_minutos: 120,
-	intervalo_ocupado_minutos: 15,
-	por_situacao: {
-		maquina: { intervalo_minutos: 120, max_dia: 2, conta_descanso: true },
-		nao_atendida: { intervalo_minutos: 120, max_dia: 2, conta_descanso: true },
-		ocupado: { intervalo_minutos: 15, max_dia: 2, conta_descanso: true },
-		caixa_postal: { intervalo_minutos: 120, max_dia: 2, conta_descanso: true },
-		desligou_sem_conversar: { intervalo_minutos: 120, max_dia: 2, conta_descanso: false },
-		atendeu_desligou: { intervalo_minutos: 120, max_dia: 2, conta_descanso: false },
-	} as Record<string, RegraSituacao>,
-	falhas_tecnicas: {
-		falha_operadora: { religar_minutos: 120, aviso: 0.15 },
-		sem_credito: { religar_minutos: 120, aviso: 0.01 },
-		falha_rede: { religar_minutos: 120, aviso: 0.05 },
-		indisponivel: { religar_minutos: 120, aviso: 0.2 },
-		bloqueio_originacao: { religar_minutos: 120, aviso: 0.01 },
-		cancelada_discador: { religar_minutos: 120, aviso: 0.05 },
-		abandonada: { religar_minutos: 120, aviso: 0.03 },
-	} as Record<string, RegraFalha>,
-	resubmit: {
-		maquina: R(true, 120, 1, 'fim', '19:00', true),
-		nao_atendida: R(true, 60, 2, 'normal', '19:30', true),
-		ocupado: R(true, 15, 2, 'topo', '19:30', false),
-		caixa_postal: R(true, 120, 1, 'fim', '19:00', true),
-		desligou_sem_conversar: R(true, 90, 1, 'normal', '19:00', false),
-		retorno_agendado: R(true, 0, 1, 'topo', '20:00', false),
-		atendeu_desligou: R(false, 120, 1, 'fim', '18:00', false),
-		numero_incorreto: R(false, 30, 1, 'normal', '19:00', true),
-		falha_operadora: R(true, 30, 2, 'topo', '19:30', false),
-		sem_credito: R(false, 30, 1, 'normal', '19:30', false),
-		falha_rede: R(true, 30, 2, 'topo', '19:30', false),
-		indisponivel: R(true, 180, 1, 'fim', '19:00', true),
-		bloqueio_originacao: R(false, 120, 1, 'normal', '19:00', false),
-		cancelada_discador: R(true, 30, 1, 'topo', '19:30', false),
-		abandonada: R(true, 60, 1, 'topo', '19:30', false),
-	} as Record<string, RegraResubmit>,
-	retorno_agendado: { max_dias: 7 },
-	chamadas_curtas: { falha_conta: true },
+type Padrao = {
+	tentativas_numero_dia: number; tentativas_numero_dia_regra_nova: number; tentativas_cliente_dia: number;
+	intervalo_min_minutos: number; intervalo_ocupado_minutos: number;
+	por_situacao: Record<string, RegraSituacao>; falhas_tecnicas: Record<string, RegraFalha>;
+	por_sinalizacao: Record<string, RegraSinal>; sinalizacao_vertical: Record<string, AcaoDepois>;
+	modo_discagem: Record<string, unknown>; reciclagem_auto: Record<string, unknown>;
+	retorno_agendado: { max_dias: number }; chamadas_curtas: { falha_conta: boolean };
+};
+export const PADRAO: Padrao = {
+	"tentativas_numero_dia": 2,
+	"tentativas_numero_dia_regra_nova": 3,
+	"tentativas_cliente_dia": 3,
+	"intervalo_min_minutos": 120,
+	"intervalo_ocupado_minutos": 15,
+	"por_situacao": {
+		"maquina": {
+			"max_dia": 2,
+			"conta_descanso": true
+		},
+		"nao_atendida": {
+			"max_dia": 2,
+			"conta_descanso": true
+		},
+		"ocupado": {
+			"max_dia": 2,
+			"conta_descanso": true
+		},
+		"caixa_postal": {
+			"max_dia": 2,
+			"conta_descanso": true
+		},
+		"desligou_sem_conversar": {
+			"max_dia": 2,
+			"conta_descanso": false
+		},
+		"atendeu_desligou": {
+			"max_dia": 2,
+			"conta_descanso": false
+		}
+	},
+	"falhas_tecnicas": {
+		"falha_operadora": {
+			"aviso": 0.15
+		},
+		"sem_credito": {
+			"aviso": 0.01
+		},
+		"falha_rede": {
+			"aviso": 0.05
+		},
+		"indisponivel": {
+			"aviso": 0.2
+		},
+		"bloqueio_originacao": {
+			"aviso": 0.01
+		},
+		"cancelada_discador": {
+			"aviso": 0.05
+		},
+		"abandonada": {
+			"aviso": 0.03
+		}
+	},
+	"por_sinalizacao": {
+		"maquina": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 120,
+				"max": 1,
+				"prioridade": "fim"
+			},
+			"depois": {
+				"acao": "proximo_cliente",
+				"espera_min": 0
+			},
+			"ate": "19:00"
+		},
+		"nao_atendida": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 60,
+				"max": 2,
+				"prioridade": "normal"
+			},
+			"depois": {
+				"acao": "proximo_cliente",
+				"espera_min": 0
+			},
+			"ate": "19:30"
+		},
+		"ocupado": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 15,
+				"max": 2,
+				"prioridade": "topo"
+			},
+			"depois": {
+				"acao": "proximo_cliente",
+				"espera_min": 0
+			},
+			"ate": "19:30"
+		},
+		"caixa_postal": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 120,
+				"max": 1,
+				"prioridade": "fim"
+			},
+			"depois": {
+				"acao": "proximo_cliente",
+				"espera_min": 0
+			},
+			"ate": "19:00"
+		},
+		"desligou_sem_conversar": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 90,
+				"max": 1,
+				"prioridade": "normal"
+			},
+			"depois": {
+				"acao": "proximo_telefone",
+				"espera_min": 0
+			},
+			"ate": "19:00"
+		},
+		"retorno_agendado": {
+			"finaliza": true,
+			"rediscar": {
+				"ativo": false,
+				"depois_min": 0,
+				"max": 1,
+				"prioridade": "topo"
+			},
+			"depois": {
+				"acao": "finaliza",
+				"espera_min": 0
+			},
+			"ate": "20:00"
+		},
+		"atendeu_desligou": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 120,
+				"max": 1,
+				"prioridade": "normal"
+			},
+			"depois": {
+				"acao": "proximo_cliente",
+				"espera_min": 0
+			},
+			"ate": "19:00"
+		},
+		"numero_inexistente": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": false,
+				"depois_min": 0,
+				"max": 1,
+				"prioridade": "normal"
+			},
+			"depois": {
+				"acao": "proximo_telefone",
+				"espera_min": 0
+			},
+			"ate": "19:30"
+		},
+		"pessoa_errada": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": false,
+				"depois_min": 0,
+				"max": 1,
+				"prioridade": "normal"
+			},
+			"depois": {
+				"acao": "proximo_telefone",
+				"espera_min": 0
+			},
+			"ate": "19:30"
+		},
+		"recado": {
+			"finaliza": true,
+			"rediscar": {
+				"ativo": false,
+				"depois_min": 120,
+				"max": 1,
+				"prioridade": "normal"
+			},
+			"depois": {
+				"acao": "proximo_cliente",
+				"espera_min": 0
+			},
+			"ate": "19:00"
+		},
+		"falha_operadora": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 30,
+				"max": 1,
+				"prioridade": "topo"
+			},
+			"depois": {
+				"acao": "proximo_telefone",
+				"espera_min": 0
+			},
+			"ate": "19:30"
+		},
+		"falha_rede": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 30,
+				"max": 1,
+				"prioridade": "topo"
+			},
+			"depois": {
+				"acao": "proximo_telefone",
+				"espera_min": 0
+			},
+			"ate": "19:30"
+		},
+		"indisponivel": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 30,
+				"max": 1,
+				"prioridade": "normal"
+			},
+			"depois": {
+				"acao": "proximo_telefone",
+				"espera_min": 0
+			},
+			"ate": "19:30"
+		},
+		"cancelada_discador": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 30,
+				"max": 1,
+				"prioridade": "topo"
+			},
+			"depois": {
+				"acao": "proximo_telefone",
+				"espera_min": 0
+			},
+			"ate": "19:30"
+		},
+		"abandonada": {
+			"finaliza": false,
+			"rediscar": {
+				"ativo": true,
+				"depois_min": 0,
+				"max": 1,
+				"prioridade": "topo"
+			},
+			"depois": {
+				"acao": "proximo_cliente",
+				"espera_min": 0
+			},
+			"ate": "19:30"
+		}
+	},
+	"sinalizacao_vertical": {
+		"maquina": "proximo_telefone",
+		"nao_atendida": "proximo_telefone",
+		"caixa_postal": "proximo_telefone"
+	},
+	"modo_discagem": {
+		"modo": "horizontal",
+		"max_telefones_dia": 1,
+		"ordem": "certificado",
+		"telefone_ausente": "proximo",
+		"spins": {
+			"quantidade": 3,
+			"intervalo_min": 120,
+			"regras": [
+				{
+					"spin": 1,
+					"telefone": "t1",
+					"inicio": null
+				},
+				{
+					"spin": 2,
+					"telefone": "t2",
+					"inicio": null
+				},
+				{
+					"spin": 3,
+					"telefone": "t3",
+					"inicio": null
+				}
+			]
+		}
+	},
+	"reciclagem_auto": {
+		"ativo": false,
+		"hora": "16:00",
+		"sem_contato_pct": 60,
+		"excluir": [
+			"cpc",
+			"recusa",
+			"pessoa_errada",
+			"retorno"
+		]
+	},
+	"retorno_agendado": {
+		"max_dias": 7
+	},
+	"chamadas_curtas": {
+		"falha_conta": true
+	}
 };
 
 // ---------------------------------------------------------------- valores efetivos (o que o motor e a VM usam)
@@ -118,38 +418,54 @@ export type Efetivo = {
 	naOn: boolean; naN: number; naDias: number; naDesc: number;
 	promessa: boolean; promDias: number; recusa: boolean; recusaDias: number; nl: boolean; falhaCurta: boolean;
 	retornoDias: number; inexistente: 'so_voz' | 'invalida' | 'nao';
-	ren: Record<string, RegraSituacao>;
-	tec: Record<string, RegraFalha>;
-	res: Record<string, RegraResubmit> | null;
+	ren: Record<string, RegraSituacao & { intervalo_minutos: number }>;
+	tec: Record<string, RegraFalha & { religar_minutos: number }>;
+	sinal: Record<string, RegraSinal> | null;
+	modo: 'vertical' | 'horizontal' | null;
 };
 
-/** O que vale para a carteira: chave ausente = o de hoje (globais) e, no Resubmit, null = a retentativa de hoje. */
+function mesclar<T>(base: T, mud: unknown): T {
+	if (!mud || typeof mud !== 'object' || Array.isArray(mud)) return base;
+	const out = { ...(base as Record<string, unknown>) };
+	for (const [k, v] of Object.entries(mud as Record<string, unknown>)) {
+		out[k] = v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object' ? mesclar(out[k], v) : v;
+	}
+	return out as T;
+}
+
+const SINAL_DA_SITUACAO: Record<string, string> = { numero_incorreto: 'numero_inexistente', sem_credito: 'falha_operadora' };
+
+/** O que vale para a carteira: chave ausente = o de hoje (globais); com a regra por sinalização, o intervalo de cada
+ *  situação é o rediscar.depois_min dela e as tentativas por número, 3 (se a carteira não disse). */
 export function efetivo(d: DiscagemRen | null | undefined, travaTcli?: number): Efetivo {
 	const x = d ?? {};
-	const tnum = x.tentativas_numero_dia ?? PADRAO.tentativas_numero_dia;
+	const nova = x.por_sinalizacao != null || x.modo_discagem != null;
+	const tnum = x.tentativas_numero_dia ?? (nova ? PADRAO.tentativas_numero_dia_regra_nova : PADRAO.tentativas_numero_dia);
 	const im = x.intervalo_min_minutos ?? PADRAO.intervalo_min_minutos;
 	const io = x.intervalo_ocupado_minutos ?? PADRAO.intervalo_ocupado_minutos;
-	const ren: Record<string, RegraSituacao> = {};
+	const modo = x.modo_discagem ? ((x.modo_discagem.modo as 'vertical' | 'horizontal' | undefined) ?? 'horizontal') : null;
+	let sinal: Record<string, RegraSinal> | null = null;
+	if (x.por_sinalizacao != null) {
+		sinal = {};
+		for (const [k, base] of Object.entries(PADRAO.por_sinalizacao)) {
+			const b = modo === 'vertical' && PADRAO.sinalizacao_vertical[k] ? mesclar(base, { depois: { acao: PADRAO.sinalizacao_vertical[k] } }) : base;
+			sinal[k] = mesclar(b, (x.por_sinalizacao as Record<string, unknown>)[k]);
+		}
+	}
+	const intervalo = (k: string, glob: number) => sinal ? (sinal[SINAL_DA_SITUACAO[k] ?? k]?.rediscar.depois_min ?? glob) : glob;
+	const ren: Efetivo['ren'] = {};
 	for (const k of SITUACOES_RENITENCIA) {
 		const p = x.por_situacao?.[k] ?? {};
-		const base = PADRAO.por_situacao[k];
 		ren[k] = {
-			intervalo_minutos: p.intervalo_minutos ?? (k === 'ocupado' ? io : im),
+			intervalo_minutos: intervalo(k, k === 'ocupado' ? io : im),
 			max_dia: Math.min(p.max_dia ?? tnum, tnum),
-			conta_descanso: p.conta_descanso ?? base.conta_descanso,
+			conta_descanso: p.conta_descanso ?? PADRAO.por_situacao[k].conta_descanso,
 		};
 	}
-	const tec: Record<string, RegraFalha> = {};
+	const tec: Efetivo['tec'] = {};
 	for (const f of FALHAS) {
 		const p = x.falhas_tecnicas?.[f.k] ?? {};
-		tec[f.k] = { religar_minutos: p.religar_minutos ?? im, aviso: fracao(p.aviso) ?? PADRAO.falhas_tecnicas[f.k].aviso };
-	}
-	let res: Record<string, RegraResubmit> | null = null;
-	if (x.resubmit != null) {
-		res = {};
-		for (const [k, base] of Object.entries(PADRAO.resubmit)) res[k] = { ...base, ...(x.resubmit[k] ?? {}) } as RegraResubmit;
-		res.retorno_agendado = { ...res.retorno_agendado, ativo: true, max_dia: 1, prioridade: 'topo', outro_numero: false };
-		res.numero_incorreto = { ...res.numero_incorreto, max_dia: 1 };
+		tec[f.k] = { religar_minutos: intervalo(f.k, im), aviso: fracao(p.aviso) ?? PADRAO.falhas_tecnicas[f.k].aviso };
 	}
 	const dn = x.descanso_nao_atende;
 	return {
@@ -160,7 +476,7 @@ export function efetivo(d: DiscagemRen | null | undefined, travaTcli?: number): 
 		nl: x.nao_ligar?.ativo ?? true, falhaCurta: x.chamadas_curtas?.falha_conta ?? true,
 		retornoDias: x.retorno_agendado?.max_dias ?? PADRAO.retorno_agendado.max_dias,
 		inexistente: x.inexistente?.ativo === false ? 'nao' : x.inexistente?.modo === 'invalida' ? 'invalida' : 'so_voz',
-		ren, tec, res,
+		ren, tec, sinal, modo,
 	};
 }
 
@@ -169,50 +485,32 @@ function fracao(v: number | undefined): number | undefined {
 	return v > 1 ? v / 100 : v;
 }
 
-/** O que vale no Resubmit para a situação: o maior entre "depois de" e o intervalo da renitência, e quantas voltas cabem. */
-export function resubmitEfetivo(e: Efetivo, k: string) {
-	const r = e.res?.[k] ?? PADRAO.resubmit[k];
-	const intRen = e.ren[k]?.intervalo_minutos ?? e.tec[k]?.religar_minutos ?? 0;
-	const maxNum = Math.min(e.ren[k]?.max_dia ?? e.tnum, e.tnum);
-	const cabe = r.outro_numero ? Math.max(0, e.tcli - 1) : Math.max(0, maxNum - 1);
-	return { intRen, efDep: k === 'retorno_agendado' ? 0 : Math.max(r.depois_minutos, intRen), cabe, efMax: Math.min(r.max_dia, cabe) };
-}
-
 // ---------------------------------------------------------------- edição (só grava o que mudou do padrão)
-function semVazios<T extends object>(b: Record<string, Partial<T>>): Record<string, Partial<T>> | undefined {
-	const out: Record<string, Partial<T>> = {};
-	for (const [k, v] of Object.entries(b)) if (v && Object.keys(v).length) out[k] = v;
-	return Object.keys(out).length ? out : undefined;
-}
+type BlocoEditavel = 'por_situacao' | 'falhas_tecnicas';
 
-/** Muda um campo de uma situação; igual ao padrão (o de hoje) sai do bloco. */
-export function mudarCampo(d: DiscagemRen, bloco: 'por_situacao' | 'falhas_tecnicas' | 'resubmit', k: string, campo: string, valor: unknown): DiscagemRen {
+/** Muda um campo de uma situação; igual ao padrão sai do bloco. */
+export function mudarCampo(d: DiscagemRen, bloco: BlocoEditavel, k: string, campo: string, valor: unknown): DiscagemRen {
 	const atual = { ...((d[bloco] ?? {}) as Record<string, Record<string, unknown>>) };
 	const linha = { ...(atual[k] ?? {}) };
-	const e = efetivo({ ...d, [bloco]: bloco === 'resubmit' ? (d.resubmit ?? {}) : {} });
-	const padrao = bloco === 'por_situacao' ? (e.ren[k] as Record<string, unknown>)[campo]
-		: bloco === 'falhas_tecnicas' ? (e.tec[k] as Record<string, unknown>)[campo]
-		: (PADRAO.resubmit[k] as Record<string, unknown>)[campo];
+	const e = efetivo({ ...d, [bloco]: {} });
+	const padrao = bloco === 'por_situacao' ? (e.ren[k] as Record<string, unknown>)[campo] : (e.tec[k] as Record<string, unknown>)[campo];
 	if (valor === padrao) delete linha[campo]; else linha[campo] = valor;
-	atual[k] = linha;
-	const limpo = semVazios(atual);
+	if (Object.keys(linha).length) atual[k] = linha; else delete atual[k];
 	const out = { ...d };
-	if (bloco === 'resubmit') out.resubmit = limpo ?? {};          // resubmit ligado continua ligado, mesmo no padrão
-	else if (limpo) out[bloco] = limpo as never; else delete out[bloco];
+	if (Object.keys(atual).length) out[bloco] = atual as never; else delete out[bloco];
 	return out;
 }
 
 /** Volta uma linha ao padrão MotorCX (tira a situação do bloco). */
-export function voltarLinha(d: DiscagemRen, bloco: 'por_situacao' | 'falhas_tecnicas' | 'resubmit', k: string): DiscagemRen {
+export function voltarLinha(d: DiscagemRen, bloco: BlocoEditavel, k: string): DiscagemRen {
 	const atual = { ...((d[bloco] ?? {}) as Record<string, unknown>) };
 	delete atual[k];
 	const out = { ...d };
-	if (bloco === 'resubmit') out.resubmit = atual as Bloco<RegraResubmit>;
-	else if (Object.keys(atual).length) out[bloco] = atual as never; else delete out[bloco];
+	if (Object.keys(atual).length) out[bloco] = atual as never; else delete out[bloco];
 	return out;
 }
 
-export function linhaAlterada(d: DiscagemRen, bloco: 'por_situacao' | 'falhas_tecnicas' | 'resubmit', k: string): boolean {
+export function linhaAlterada(d: DiscagemRen, bloco: BlocoEditavel, k: string): boolean {
 	const b = d[bloco] as Record<string, object> | null | undefined;
 	return !!b && !!b[k] && Object.keys(b[k]).length > 0;
 }
@@ -223,52 +521,43 @@ const LBL_LIM: [keyof Efetivo, string][] = [
 	['naN', 'Descanso: não atende seguidos'], ['naDias', 'Descanso: em até (dias)'], ['naDesc', 'Descanso: descansa (dias)'],
 	['promessa', 'Promessa suspende ligações'], ['promDias', 'Promessa sem data: dias'], ['recusa', 'Descanso por recusa'],
 	['recusaDias', 'Recusa: dias'], ['nl', 'Lista de “não ligar”'], ['falhaCurta', 'Falha técnica conta como curta'],
-	['retornoDias', 'Retorno agendado: máx. dias'], ['inexistente', 'Número inexistente invalida'],
+	['retornoDias', 'Retorno agendado: máx. dias'], ['inexistente', 'Número inexistente invalida'], ['modo', 'Modo de discagem'],
 ];
-const LBL_F: Record<string, string> = {
-	intervalo_minutos: 'intervalo (min)', max_dia: 'máx. no dia', conta_descanso: 'conta no descanso', religar_minutos: 'religar depois de (min)',
-	aviso: 'alerta (%)', ativo: 'volta ao mailing', depois_minutos: 'depois de (min)', prioridade: 'prioridade', ate: 'horário limite',
-	outro_numero: 'outro número',
-};
+const LBL_F: Record<string, string> = { max_dia: 'máx. no dia', conta_descanso: 'conta no descanso', aviso: 'alerta (%)' };
 const INV: Record<string, string> = { so_voz: 'só a voz, após 2 confirmações', invalida: 'todos os canais (regra antiga)', nao: 'não invalida' };
 function fmt(v: unknown, campo?: string): string {
 	if (v === true) return 'ligado';
 	if (v === false) return 'desligado';
 	if (v === null || v === undefined) return '—';
 	if (campo === 'aviso' && typeof v === 'number') return `${Math.round(v * 100)}%`;
-	return PRIORIDADES[v as Prioridade] ?? INV[v as string] ?? String(v);
+	return PRIORIDADES[v as Prioridade] ?? INV[v as string] ?? DEPOIS[v as AcaoDepois] ?? String(v);
 }
 
 /** Linhas "Seção › Situação › campo: antes → depois" entre duas regras. */
 export function resumoMudancas(antes: DiscagemRen | null | undefined, depois: DiscagemRen | null | undefined): string[] {
 	const a = efetivo(antes), b = efetivo(depois), out: string[] = [];
 	for (const [k, n] of LBL_LIM) if (a[k] !== b[k]) out.push(`Limites › ${n}: ${fmt(a[k])} → ${fmt(b[k])}`);
-	for (const k of SITUACOES_RENITENCIA) for (const f of Object.keys(LBL_F)) {
+	for (const k of SITUACOES_RENITENCIA) for (const f of ['max_dia', 'conta_descanso']) {
 		const va = (a.ren[k] as Record<string, unknown>)[f], vb = (b.ren[k] as Record<string, unknown>)[f];
-		if (va !== undefined && va !== vb) out.push(`Renitência › ${NOME[k]} › ${LBL_F[f]}: ${fmt(va, f)} → ${fmt(vb, f)}`);
+		if (va !== vb) out.push(`Renitência › ${NOME[k]} › ${LBL_F[f]}: ${fmt(va, f)} → ${fmt(vb, f)}`);
 	}
-	for (const s of FALHAS) for (const f of ['religar_minutos', 'aviso']) {
-		const va = (a.tec[s.k] as Record<string, unknown>)[f], vb = (b.tec[s.k] as Record<string, unknown>)[f];
-		if (va !== vb) out.push(`Falhas técnicas › ${s.n} › ${LBL_F[f]}: ${fmt(va, f)} → ${fmt(vb, f)}`);
+	for (const s of FALHAS) {
+		const va = a.tec[s.k].aviso, vb = b.tec[s.k].aviso;
+		if (va !== vb) out.push(`Falhas técnicas › ${s.n} › alerta (%): ${fmt(va, 'aviso')} → ${fmt(vb, 'aviso')}`);
 	}
-	if (!!a.res !== !!b.res) out.push(`Resubmit: ${a.res ? 'ligado' : 'só a retentativa de hoje'} → ${b.res ? 'ligado' : 'só a retentativa de hoje'}`);
-	if (a.res && b.res) for (const k of Object.keys(PADRAO.resubmit)) for (const f of Object.keys(PADRAO.resubmit[k])) {
-		const va = (a.res[k] as Record<string, unknown>)[f], vb = (b.res[k] as Record<string, unknown>)[f];
-		if (va !== vb) out.push(`Resubmit › ${NOME[k]} › ${LBL_F[f]}: ${fmt(va)} → ${fmt(vb)}`);
+	if (!!a.sinal !== !!b.sinal) out.push(`Regra por sinalização: ${a.sinal ? 'ligada' : 'a de hoje'} → ${b.sinal ? 'ligada' : 'a de hoje'}`);
+	if (a.sinal && b.sinal) for (const s of SINALIZACOES) {
+		const ra = a.sinal[s.k], rb = b.sinal[s.k];
+		const pares: [string, unknown, unknown][] = [
+			['finaliza o cliente', ra.finaliza, rb.finaliza], ['rediscar', ra.rediscar.ativo, rb.rediscar.ativo],
+			['depois de (min)', ra.rediscar.depois_min, rb.rediscar.depois_min], ['rediscagens', ra.rediscar.max, rb.rediscar.max],
+			['prioridade', ra.rediscar.prioridade, rb.rediscar.prioridade], ['depois', ra.depois.acao, rb.depois.acao],
+			['espera (min)', ra.depois.espera_min, rb.depois.espera_min], ['horário limite', ra.ate, rb.ate],
+		];
+		for (const [n, va, vb] of pares) if (va !== vb) out.push(`Regra por sinalização › ${s.n} › ${n}: ${fmt(va)} → ${fmt(vb)}`);
 	}
-	return out;
-}
-
-/** Notas de uma linha do Resubmit (o que vale quando a regra pede mais do que a régua deixa). */
-export function notasResubmit(e: Efetivo, k: string): { tom: 'atencao' | 'info'; texto: string }[] {
-	const r = e.res?.[k];
-	if (!r || !r.ativo || k === 'retorno_agendado' || k === 'numero_incorreto') return [];
-	const ef = resubmitEfetivo(e, k), out: { tom: 'atencao' | 'info'; texto: string }[] = [];
-	if (r.depois_minutos < ef.intRen) out.push({ tom: 'atencao', texto: `Vale ${ef.efDep} min: o intervalo da renitência (${ef.intRen} min) é maior. Para voltar antes, baixe o intervalo em Renitência por situação.` });
-	if (ef.cabe === 0) out.push({ tom: 'atencao', texto: `Com ${e.tnum} ${e.tnum === 1 ? 'tentativa' : 'tentativas'} por número${e.ren[k] ? ` (ou ${e.ren[k].max_dia} nesta situação)` : ''}, não sobra volta no mesmo número. Ligue “outro número” ou suba o limite.` });
-	else if (r.max_dia > ef.cabe) out.push({ tom: 'atencao', texto: `A régua corta em ${ef.cabe} ${ef.cabe === 1 ? 'volta' : 'voltas'}: ${r.outro_numero ? `${e.tcli} tentativas por cliente no dia` : `${Math.min(e.tnum, e.ren[k]?.max_dia ?? e.tnum)} tentativas por número no dia`}.` });
-	if (k === 'bloqueio_originacao') out.push({ tom: 'atencao', texto: 'Religar com a linha bloqueada piora o bloqueio. Recomendado deixar desligado até a equipe confirmar.' });
-	if (k === 'atendeu_desligou') out.push({ tom: 'info', texto: 'A pessoa atendeu e desligou: religar no mesmo dia tende a gerar reclamação. Ligado por escolha de vocês.' });
+	if (JSON.stringify(antes?.modo_discagem ?? null) !== JSON.stringify(depois?.modo_discagem ?? null) && a.modo === b.modo) out.push('Modo de discagem: ajustes');
+	if (JSON.stringify(antes?.reciclagem_auto ?? null) !== JSON.stringify(depois?.reciclagem_auto ?? null)) out.push('Reciclagem automática: ajustes');
 	return out;
 }
 
@@ -301,7 +590,9 @@ export function nomeOnda(o: OndaVoz): { nome: string; detalhe: string } {
 	if (o.origem === 'regua') return o.passada && o.passada > 1
 		? { nome: `Retentativa · ${NOME[o.situacao_origem ?? ''] ?? 'sem contato'}`, detalhe: `${o.passada}ª tentativa` }
 		: { nome: '1ª passada', detalhe: 'janela UF/DDD de cada número' };
-	if (o.origem === 'resubmit') return { nome: `Resubmit · ${NOME[o.situacao_origem ?? ''] ?? '—'}`, detalhe: `automático · ${o.passada ?? o.tentativa}ª tentativa${pri}` };
+	if (o.origem === 'spin') return { nome: `Spin ${o.passada ?? o.tentativa}`, detalhe: 'horizontal · passagem do mailing' };
+	if (o.origem === 'rediscagem') return { nome: `Rediscagem · ${NOME[o.situacao_origem ?? ''] ?? '—'}`, detalhe: `regra por sinalização · ${o.passada ?? o.tentativa}ª tentativa${pri}` };
+	if (o.origem === 'reciclagem') return { nome: 'Reciclagem do mailing', detalhe: 'tentativas zeradas, do começo' };
 	if (o.origem === 'manual') return { nome: 'Reenvio manual', detalhe: `${NOME[o.situacao_origem ?? ''] ?? ''} · ${o.passada ?? o.tentativa}ª tentativa${pri}` };
 	return { nome: o.janela, detalhe: `${o.tentativa}ª tentativa` };
 }

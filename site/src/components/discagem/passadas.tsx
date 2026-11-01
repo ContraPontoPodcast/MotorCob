@@ -125,8 +125,8 @@ export function ContatoPassada({ irResubmit }: { irResubmit: () => void }) {
 					{ruim ? (
 						<Nota tom="info">
 							<b className="block">A partir da {ruim.passada}ª passada, {sit === 'todas' ? 'as voltas quase não compensam' : `${nomeSit} quase não compensa`}: {pc(ruim.taxa ?? 0)} de contato{ruim.cpc != null ? ` a ${rs(ruim.cpc)} por contato` : ''}{p1?.cpc != null ? ` (na 1ª: ${rs(p1.cpc)})` : ''}.</b>
-							Sugestão: no Resubmit, deixar no máximo {Math.max(0, ruim.passada - 2)} {ruim.passada - 2 === 1 ? 'volta' : 'voltas'} no dia{sit === 'todas' ? ' nas situações com taxa mais baixa' : ` para ${nomeSit}`}. Quem decide são vocês.
-							<div className="mt-2"><button type="button" onClick={irResubmit} className="inline-flex h-8 items-center rounded-full border px-4 text-[12.5px] font-semibold" style={{ borderColor: 'var(--base-borda)' }}>Abrir Resubmit</button></div>
+							Sugestão: na regra por sinalização, deixar no máximo {Math.max(0, ruim.passada - 2)} {ruim.passada - 2 === 1 ? 'volta' : 'voltas'} no dia{sit === 'todas' ? ' nas situações com taxa mais baixa' : ` para ${nomeSit}`}. Quem decide são vocês.
+							<div className="mt-2"><button type="button" onClick={irResubmit} className="inline-flex h-8 items-center rounded-full border px-4 text-[12.5px] font-semibold" style={{ borderColor: 'var(--base-borda)' }}>Abrir a regra por sinalização</button></div>
 						</Nota>
 					) : <Nota tom="info"><b className="block">Nenhuma passada abaixo de 1,5% de contato nem acima de 3× o custo por contato da 1ª.</b>As voltas desta seleção estão se pagando.</Nota>}
 					<section className="rounded-2xl border p-4" style={{ borderColor: 'var(--base-borda)', backgroundColor: 'var(--base-cartao)' }}>

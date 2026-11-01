@@ -72,7 +72,7 @@ COLUNAS: dict[str, dict[str, str]] = {
     "voz_resubmits": {
         "ref": "ref", "empresa_id": "empresa_id", "credor_id": "credor_id", "lote_id": "lote_id",
         "id_chamada_origem": "id_chamada_origem", "id_cliente": "id_cliente", "destino_hash": "destino_hash",
-        "situacao_origem": "situacao_origem", "passada": "passada", "origem": "origem", "pedido_id": "pedido_id",
+        "situacao_origem": "situacao_origem", "passada": "passada", "origem": "origem", "pedido_id": "pedido_id", "reciclagem_id": "reciclagem_id",
         "decisao": "decisao", "motivo_fora": "motivo_fora", "nao_antes_de": "nao_antes_de", "onda_id": "onda_id",
         "criado_em": "criado_em",
     },

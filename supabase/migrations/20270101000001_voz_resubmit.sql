@@ -1,51 +1,59 @@
--- SQL 65 · Renitência por situação, Resubmit automático, Reenviar agora e Contato por passada
--- Protótipo aprovado pelo dono (ux/renitencia-prototipo.html, necessidades R1 a R10) e respostas de 01/11/2026:
--- * Resubmit "depois de" menor que o intervalo da renitência: vale o maior.
--- * Prioridade "topo" pode furar a fila das 1ªs tentativas (muda a regra 5 do agendador).
--- * "Fora de área/desligado" (indisponivel) é falha técnica: não conta no descanso por não atende e nunca penaliza o
---   número (motor/voz.py). Falha técnica continua contando como tentativa do dia.
--- * "Reenviar agora" (permissão nova reenviar_lote_voz): ligada por padrão para Admin e Operação.
--- * As regras do Resubmit ficam dentro de credores.discagem: uma validação, um histórico de versões, uma auditoria.
+-- SQL 65 · Renitência por situação, regra de discagem por sinalização, modo de discagem (vertical × horizontal com
+-- spins), Reenviar agora, Reciclar mailing e Contato por passada
+-- Protótipo funcional aprovado pelo dono (ux/renitencia-prototipo-funcional.html, necessidades R1 a R16) e decisões de
+-- 01/11/2026:
+-- * Um intervalo só por situação: por_sinalizacao.<sinalização>.rediscar.depois_min (não há outro).
+-- * Tentativas por número: 3 para a carteira que salvar a regra nova (por_sinalizacao ou modo_discagem); sem ela, 2.
+-- * Horizontal: spin N → telefone N por padrão.
+-- * Prioridade "topo" fura a fila das 1ªs tentativas (muda a regra 5 do agendador).
+-- * "Fora de área/desligado" (indisponivel) é falha técnica: não conta no descanso e nunca penaliza o número
+--   (motor/voz.py); falha técnica continua contando como tentativa do dia.
+-- * "Reenviar agora" (reenviar_lote_voz) e "Reciclar mailing" (reciclar_lote_voz): Admin e Operação por padrão.
+-- * Tudo dentro de credores.discagem: uma validação, um histórico de versões, uma auditoria.
 --
--- R1  credores.discagem ganha por_situacao, falhas_tecnicas, resubmit e chamadas_curtas.falha_conta (sem coluna
---     nova; sem as chaves, o motor e a VM fazem o de hoje). Validação: discagem_erros() (mesmas regras de
---     motor/discagem.py › normalizar, geradas de lá; tests/test_resubmit.py confere) e discagem_padrao() (o padrão
---     MotorCX que o site mostra).
--- R2  regras_voz_versoes (histórico; leitura por empresa, escrita só pela RPC) e R2b salvar_discagem(): confere
---     editar_credores, recusa se outra pessoa salvou antes (versao_base), valida, grava credores.discagem e a versão.
--- R3  credores.discagem › resubmit {situação: {ativo, depois_minutos 0–600, max_dia 1–9, prioridade topo|normal|fim,
---     ate HH:MM, outro_numero}}.
--- R4  voz_ondas ganha origem (regua|resubmit|manual|reciclagem), passada, situacao_origem, prioridade e reenvio_id;
---     voz_chamadas ganha passada (1 = primeira do número no dia), situacao_origem e resubmit_id.
--- R5  voz_resubmits: cada decisão (volta ou fora, com o motivo). Só destino_hash, nunca o telefone. Leitura por
---     empresa; escrita só pela VM (voz_vm.gravar_resubmits ou a chave do servidor), com validação por linha no
---     gatilho (vale nos dois acessos). Apagada com a retenção da empresa (apagar_voz_expirada).
--- R6  previa_reenvio_voz(): só contagens. R7 voz_reenvios + pedir_reenvio_voz(). R8 permissão reenviar_lote_voz.
--- R9  voz_passadas_dia (gravada pela VM à noite: agregar_passadas_voz) e R10 contato_por_passada() (taxa nula com
---     menos de 30 chamadas).
+-- R1  credores.discagem: por_situacao {situação: {max_dia, conta_descanso}}, falhas_tecnicas {falha: {aviso}},
+--     chamadas_curtas.falha_conta. Validação: discagem_erros() (regras geradas de motor/discagem.py;
+--     tests/test_resubmit.py confere) e discagem_padrao() (o padrão MotorCX que o site mostra).
+-- R2  regras_voz_versoes + R2b salvar_discagem() (editar_credores, conflito de versão, validação, versão nova).
+-- R3  por_sinalizacao {sinalização: {finaliza, rediscar: {ativo, depois_min 0–600, max 1–9, prioridade
+--     topo|normal|fim}, depois: {acao proximo_telefone|proximo_cliente|finaliza, espera_min 0–240}, ate HH:MM}}. Fixos
+--     (recusados se mudados): pediu retorno finaliza; inexistente e pessoa errada não rediscam. CPC, promessa, recusa e
+--     "não ligar" finalizam e sem crédito e bloqueio pausam a rota (não são linhas). Sem a chave = a VM de hoje.
+-- R4  voz_ondas: origem (regua|spin|rediscagem|manual|reciclagem), passada, situacao_origem, prioridade, reenvio_id;
+--     voz_chamadas: passada (tentativa do cliente no dia), situacao_origem e resubmit_id.
+-- R5  voz_resubmits: cada decisão (finaliza, redisca, proximo_telefone, proximo_cliente ou fora, com o motivo). Só
+--     destino_hash. Leitura por empresa; escrita só pela VM (voz_vm.gravar_resubmits ou a chave do servidor), com
+--     validação por linha no gatilho. Apagada com a retenção da empresa (apagar_voz_expirada).
+-- R6/R7/R8  previa_reenvio_voz, voz_reenvios + pedir_reenvio_voz, permissão reenviar_lote_voz.
+-- R9/R10  voz_passadas_dia (a VM agrega à noite) e contato_por_passada() (menos de 30 chamadas = taxa nula).
+-- R11 modo_discagem {modo vertical|horizontal, max_telefones_dia 1–5, ordem certificado|carga|historico,
+--     spins {quantidade 1–10, intervalo_min 0–600, regras [{spin, telefone t1…t5|nao_tentado|historico, inicio}]},
+--     telefone_ausente proximo|pula}.
+-- R12–R15 voz_reciclagens, previa_reciclagem_voz, pedir_reciclagem_voz, permissão reciclar_lote_voz.
+-- R16 reciclagem_auto {ativo, hora, sem_contato_pct 10–100, excluir [cpc|promessa|recusa|pessoa_errada|retorno]};
+--     uma automática por lote no dia, sempre mantendo o limite do dia.
 -- VM (os dois acessos: chave do servidor e papel motorcx_voz): regras_discagem_voz, lote_voz_do_dia,
---     registrar_onda_voz, pegar_reenvio_voz, concluir_reenvio_voz e agregar_passadas_voz (as do public aceitam só o
---     servidor e a VM; as de voz_vm, só o motorcx_voz), e gravar_chamadas com passada, situacao_origem e resubmit_id.
--- Preparado para o que vem (não implementado aqui): modo_discagem em credores.discagem, voz_reciclagens e a
---     permissão reciclar_lote_voz (a origem "reciclagem" das ondas já é aceita).
+--     registrar_onda_voz, pegar_reenvio_voz, concluir_reenvio_voz, pegar_reciclagem_voz, registrar_reciclagem_auto_voz,
+--     concluir_reciclagem_voz e agregar_passadas_voz (as do public aceitam só o servidor e a VM; as de voz_vm, só o
+--     motorcx_voz), e gravar_chamadas com passada, situacao_origem e resubmit_id.
 -- LGPD: nenhuma coluna nova guarda CPF, nome ou telefone. Telefone só em hash (sha-256 em hex).
 -- Depende dos SQL 51 (discagem do credor), 56 (voz), 57 (voz_vm) e 58 (gravar_chamadas com o fluxo). Se o 57 ou o
 -- 58 for rodado de novo, rode este depois. Pode rodar de novo sem erro. Não precisa de superusuário.
 --
 -- Conferência (no SQL Editor do Supabase, depois de rodar):
---   select (select count(*) from pg_tables where schemaname = 'public'
---             and tablename in ('regras_voz_versoes', 'voz_resubmits', 'voz_reenvios', 'voz_passadas_dia')) as tabelas, -- 4
---          (select count(*) from pg_tables where schemaname = 'public'
---             and tablename in ('regras_voz_versoes', 'voz_resubmits', 'voz_reenvios', 'voz_passadas_dia')
---             and not rowsecurity) as sem_rls,                                                                      -- 0
+--   select (select count(*) from pg_tables where schemaname = 'public' and tablename in ('regras_voz_versoes',
+--             'voz_resubmits', 'voz_reenvios', 'voz_reciclagens', 'voz_passadas_dia')) as tabelas,                 -- 5
+--          (select count(*) from pg_tables where schemaname = 'public' and tablename in ('regras_voz_versoes',
+--             'voz_resubmits', 'voz_reenvios', 'voz_reciclagens', 'voz_passadas_dia') and not rowsecurity) as sem_rls, -- 0
 --          (select count(*) from information_schema.columns where table_schema = 'public'
 --             and ((table_name = 'voz_chamadas' and column_name in ('passada', 'situacao_origem', 'resubmit_id'))
 --               or (table_name = 'voz_ondas' and column_name in ('origem', 'passada', 'situacao_origem',
 --                                                                'prioridade', 'reenvio_id')))) as colunas,        -- 8
---          (select count(*) from public.permissoes_catalogo where codigo = 'reenviar_lote_voz') as permissao,       -- 1
---          cardinality(public.discagem_erros('{"resubmit": {"ocupado": {"max_dia": 99}}}')) as erro_validacao,     -- 1
---          public.discagem_padrao() -> 'resubmit' -> 'nao_atendida' ->> 'depois_minutos' as padrao_na,           -- 60
---          has_function_privilege('motorcx_voz', 'voz_vm.gravar_resubmits(jsonb)', 'execute') as vm_grava,         -- true
+--          (select count(*) from public.permissoes_catalogo
+--             where codigo in ('reenviar_lote_voz', 'reciclar_lote_voz')) as permissoes,                           -- 2
+--          cardinality(public.discagem_erros('{"por_sinalizacao": {"ocupado": {"rediscar": {"max": 99}}}}')) as erro, -- 1
+--          public.discagem_padrao() -> 'por_sinalizacao' -> 'nao_atendida' -> 'rediscar' ->> 'depois_min' as na,   -- 60
+--          has_function_privilege('motorcx_voz', 'voz_vm.pegar_reciclagem(jsonb)', 'execute') as vm_recicla,       -- true
 --          has_table_privilege('anon', 'public.voz_resubmits', 'select') as anon_le;                               -- false
 
 -- ================================================================ 0. auxiliar: troca de trecho em função existente
@@ -81,11 +89,11 @@ language sql immutable parallel safe as $$
     end
 $$;
 
--- desfechos que encerram o cliente no dia e que nenhuma volta reabre (= voz/orquestrador/lote.py: ENCERRA_CLIENTE
--- menos REABRIVEIS): houve contato de verdade ou pedido explícito
+-- desfechos que finalizam o cliente sempre (= motor/discagem.py › FINALIZA_SEMPRE): houve contato de verdade ou
+-- pedido explícito. O resto (recado, pessoa errada…) é linha da regra por sinalização.
 create or replace function public.encerra_cliente_voz() returns text[]
 language sql immutable parallel safe as $$
-    select array['cpc', 'identidade_confirmada', 'opt_out', 'promessa', 'recado', 'recusa', 'atendida_sem_cpc']::text[]
+    select array['cpc', 'identidade_confirmada', 'promessa', 'recusa', 'opt_out', 'atendida_sem_cpc']::text[]
 $$;
 
 -- ================================================================ 2. validação e padrão (R1, R3)
@@ -93,14 +101,14 @@ $$;
 -- PADRAO). tests/test_resubmit.py confere que este JSON é o do motor.
 create or replace function public.discagem_regras() returns jsonb
 language sql immutable parallel safe as $$
-    select '{"_inteiros":{"tentativas_numero_dia":["int",1,10],"tentativas_cliente_dia":["int",1,10],"intervalo_min_minutos":["int",0,1440],"intervalo_ocupado_minutos":["int",0,1440]},"_blocos":{"descanso_nao_atende":{"ativo":"bool","n":["int",1,50],"em_dias":["int",1,60],"descansa_dias":["int",1,365]},"descanso_recusa":{"ativo":"bool","dias":["int",1,365]},"promessa_suspende":{"ativo":"bool","dias_sem_data":["int",1,90]},"inexistente":{"ativo":"bool","modo":["enum","so_voz","invalida"],"so_voz_desde":"data","confirmacoes":["int",1,10],"reteste_dias":["int",1,90],"max_retestes":["int",0,10],"sinal_outros_canais":"bool","aceita_tipo_b":"bool","trava_lote_ativo":"bool","trava_lote_minimo":["int",1,1000000],"trava_lote_fracao":"fracao","trava_lote_relativa":["real",1.0,20.0],"trava_lote_pp_min":"fracao","trava_rota_minimo":["int",1,1000000]},"agente_ia":{"peso_cpc":["real",0.0,2.0],"peso_cpc_sem_identidade":["real",0.0,2.0]},"retorno_agendado":{"ativo":"bool","max_dias":["int",1,60],"sem_hora_dias":["int",0,30],"de":"hora","ate":"hora"},"nao_ligar":{"ativo":"bool"},"chamadas_curtas":{"ativo":"bool","aviso":"fracao","corte_ativo":"bool","corte":"fracao","max_por_numero_dia":["int",1,1000000],"max_total_dia":["int",1,100000000],"abandono_conta":"bool","segundos":["int",1,60],"falha_conta":"bool"}},"por_situacao":{"chaves":["maquina","nao_atendida","ocupado","caixa_postal","desligou_sem_conversar","atendeu_desligou"],"campos":{"intervalo_minutos":["int",0,1440],"max_dia":["int",1,10],"conta_descanso":"bool"}},"falhas_tecnicas":{"chaves":["falha_operadora","sem_credito","falha_rede","indisponivel","bloqueio_originacao","cancelada_discador","abandonada"],"campos":{"religar_minutos":["int",0,1440],"aviso":"fracao"}},"resubmit":{"chaves":["maquina","nao_atendida","ocupado","caixa_postal","desligou_sem_conversar","retorno_agendado","atendeu_desligou","numero_incorreto","falha_operadora","sem_credito","falha_rede","indisponivel","bloqueio_originacao","cancelada_discador","abandonada"],"campos":{"ativo":"bool","depois_minutos":["int",0,600],"max_dia":["int",1,9],"prioridade":["enum","topo","normal","fim"],"ate":"hora","outro_numero":"bool"}},"_chaves":["agente_ia","chamadas_curtas","descanso_nao_atende","descanso_recusa","falhas_tecnicas","horarios","inexistente","intervalo_min_minutos","intervalo_ocupado_minutos","nao_ligar","por_situacao","promessa_suspende","resubmit","retorno_agendado","tentativas_cliente_dia","tentativas_numero_dia"]}'::jsonb
+    select '{"_inteiros":{"tentativas_numero_dia":["int",1,10],"tentativas_cliente_dia":["int",1,10],"intervalo_min_minutos":["int",0,1440],"intervalo_ocupado_minutos":["int",0,1440]},"_blocos":{"descanso_nao_atende":{"ativo":"bool","n":["int",1,50],"em_dias":["int",1,60],"descansa_dias":["int",1,365]},"descanso_recusa":{"ativo":"bool","dias":["int",1,365]},"promessa_suspende":{"ativo":"bool","dias_sem_data":["int",1,90]},"inexistente":{"ativo":"bool","modo":["enum","so_voz","invalida"],"so_voz_desde":"data","confirmacoes":["int",1,10],"reteste_dias":["int",1,90],"max_retestes":["int",0,10],"sinal_outros_canais":"bool","aceita_tipo_b":"bool","trava_lote_ativo":"bool","trava_lote_minimo":["int",1,1000000],"trava_lote_fracao":"fracao","trava_lote_relativa":["real",1.0,20.0],"trava_lote_pp_min":"fracao","trava_rota_minimo":["int",1,1000000]},"agente_ia":{"peso_cpc":["real",0.0,2.0],"peso_cpc_sem_identidade":["real",0.0,2.0]},"retorno_agendado":{"ativo":"bool","max_dias":["int",1,60],"sem_hora_dias":["int",0,30],"de":"hora","ate":"hora"},"nao_ligar":{"ativo":"bool"},"chamadas_curtas":{"ativo":"bool","aviso":"fracao","corte_ativo":"bool","corte":"fracao","max_por_numero_dia":["int",1,1000000],"max_total_dia":["int",1,100000000],"abandono_conta":"bool","segundos":["int",1,60],"falha_conta":"bool"}},"por_situacao":{"chaves":["maquina","nao_atendida","ocupado","caixa_postal","desligou_sem_conversar","atendeu_desligou"],"campos":{"max_dia":["int",1,10],"conta_descanso":"bool"}},"falhas_tecnicas":{"chaves":["falha_operadora","sem_credito","falha_rede","indisponivel","bloqueio_originacao","cancelada_discador","abandonada"],"campos":{"aviso":"fracao"}},"por_sinalizacao":{"chaves":["maquina","nao_atendida","ocupado","caixa_postal","desligou_sem_conversar","retorno_agendado","atendeu_desligou","numero_inexistente","pessoa_errada","recado","falha_operadora","falha_rede","indisponivel","cancelada_discador","abandonada"],"campos":{"finaliza":"bool","rediscar":{"ativo":"bool","depois_min":["int",0,600],"max":["int",1,9],"prioridade":["enum","topo","normal","fim"]},"depois":{"acao":["enum","proximo_telefone","proximo_cliente","finaliza"],"espera_min":["int",0,240]},"ate":"hora"}},"modo_discagem":{"campos":{"modo":["enum","vertical","horizontal"],"max_telefones_dia":["int",1,5],"ordem":["enum","certificado","carga","historico"],"telefone_ausente":["enum","proximo","pula"]},"spins":{"quantidade":["int",1,10],"intervalo_min":["int",0,600]},"telefones":["t1","t2","t3","t4","t5","nao_tentado","historico"]},"reciclagem_auto":{"campos":{"ativo":"bool","hora":"hora","sem_contato_pct":["int",10,100]},"excluir":["cpc","promessa","recusa","pessoa_errada","retorno"]},"_chaves":["agente_ia","chamadas_curtas","descanso_nao_atende","descanso_recusa","falhas_tecnicas","horarios","inexistente","intervalo_min_minutos","intervalo_ocupado_minutos","modo_discagem","nao_ligar","por_sinalizacao","por_situacao","promessa_suspende","reciclagem_auto","retorno_agendado","tentativas_cliente_dia","tentativas_numero_dia"]}'::jsonb
 $$;
 
 -- o padrão MotorCX que o site mostra (= motor/discagem.padrao_site(); o teste confere): os valores de hoje por
 -- situação e falha técnica e o Resubmit sugerido (que só vale quando a carteira salva o bloco resubmit)
 create or replace function public.discagem_padrao() returns jsonb
 language sql immutable parallel safe as $$
-    select '{"tentativas_numero_dia":2,"tentativas_cliente_dia":3,"intervalo_min_minutos":120,"intervalo_ocupado_minutos":15,"por_situacao":{"maquina":{"intervalo_minutos":120,"max_dia":2,"conta_descanso":true},"nao_atendida":{"intervalo_minutos":120,"max_dia":2,"conta_descanso":true},"ocupado":{"intervalo_minutos":15,"max_dia":2,"conta_descanso":true},"caixa_postal":{"intervalo_minutos":120,"max_dia":2,"conta_descanso":true},"desligou_sem_conversar":{"intervalo_minutos":120,"max_dia":2,"conta_descanso":false},"atendeu_desligou":{"intervalo_minutos":120,"max_dia":2,"conta_descanso":false}},"falhas_tecnicas":{"falha_operadora":{"religar_minutos":120,"aviso":0.15},"sem_credito":{"religar_minutos":120,"aviso":0.01},"falha_rede":{"religar_minutos":120,"aviso":0.05},"indisponivel":{"religar_minutos":120,"aviso":0.2},"bloqueio_originacao":{"religar_minutos":120,"aviso":0.01},"cancelada_discador":{"religar_minutos":120,"aviso":0.05},"abandonada":{"religar_minutos":120,"aviso":0.03}},"resubmit":{"maquina":{"ativo":true,"depois_minutos":120,"max_dia":1,"prioridade":"fim","ate":"19:00","outro_numero":true},"nao_atendida":{"ativo":true,"depois_minutos":60,"max_dia":2,"prioridade":"normal","ate":"19:30","outro_numero":true},"ocupado":{"ativo":true,"depois_minutos":15,"max_dia":2,"prioridade":"topo","ate":"19:30","outro_numero":false},"caixa_postal":{"ativo":true,"depois_minutos":120,"max_dia":1,"prioridade":"fim","ate":"19:00","outro_numero":true},"desligou_sem_conversar":{"ativo":true,"depois_minutos":90,"max_dia":1,"prioridade":"normal","ate":"19:00","outro_numero":false},"retorno_agendado":{"ativo":true,"depois_minutos":0,"max_dia":1,"prioridade":"topo","ate":"20:00","outro_numero":false},"atendeu_desligou":{"ativo":false,"depois_minutos":120,"max_dia":1,"prioridade":"fim","ate":"18:00","outro_numero":false},"numero_incorreto":{"ativo":false,"depois_minutos":30,"max_dia":1,"prioridade":"normal","ate":"19:00","outro_numero":true},"falha_operadora":{"ativo":true,"depois_minutos":30,"max_dia":2,"prioridade":"topo","ate":"19:30","outro_numero":false},"sem_credito":{"ativo":false,"depois_minutos":30,"max_dia":1,"prioridade":"normal","ate":"19:30","outro_numero":false},"falha_rede":{"ativo":true,"depois_minutos":30,"max_dia":2,"prioridade":"topo","ate":"19:30","outro_numero":false},"indisponivel":{"ativo":true,"depois_minutos":180,"max_dia":1,"prioridade":"fim","ate":"19:00","outro_numero":true},"bloqueio_originacao":{"ativo":false,"depois_minutos":120,"max_dia":1,"prioridade":"normal","ate":"19:00","outro_numero":false},"cancelada_discador":{"ativo":true,"depois_minutos":30,"max_dia":1,"prioridade":"topo","ate":"19:30","outro_numero":false},"abandonada":{"ativo":true,"depois_minutos":60,"max_dia":1,"prioridade":"topo","ate":"19:30","outro_numero":false}},"retorno_agendado":{"max_dias":7},"chamadas_curtas":{"falha_conta":true}}'::jsonb
+    select '{"tentativas_numero_dia":2,"tentativas_numero_dia_regra_nova":3,"tentativas_cliente_dia":3,"intervalo_min_minutos":120,"intervalo_ocupado_minutos":15,"por_situacao":{"maquina":{"max_dia":2,"conta_descanso":true},"nao_atendida":{"max_dia":2,"conta_descanso":true},"ocupado":{"max_dia":2,"conta_descanso":true},"caixa_postal":{"max_dia":2,"conta_descanso":true},"desligou_sem_conversar":{"max_dia":2,"conta_descanso":false},"atendeu_desligou":{"max_dia":2,"conta_descanso":false}},"falhas_tecnicas":{"falha_operadora":{"aviso":0.15},"sem_credito":{"aviso":0.01},"falha_rede":{"aviso":0.05},"indisponivel":{"aviso":0.2},"bloqueio_originacao":{"aviso":0.01},"cancelada_discador":{"aviso":0.05},"abandonada":{"aviso":0.03}},"por_sinalizacao":{"maquina":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":120,"max":1,"prioridade":"fim"},"depois":{"acao":"proximo_cliente","espera_min":0},"ate":"19:00"},"nao_atendida":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":60,"max":2,"prioridade":"normal"},"depois":{"acao":"proximo_cliente","espera_min":0},"ate":"19:30"},"ocupado":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":15,"max":2,"prioridade":"topo"},"depois":{"acao":"proximo_cliente","espera_min":0},"ate":"19:30"},"caixa_postal":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":120,"max":1,"prioridade":"fim"},"depois":{"acao":"proximo_cliente","espera_min":0},"ate":"19:00"},"desligou_sem_conversar":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":90,"max":1,"prioridade":"normal"},"depois":{"acao":"proximo_telefone","espera_min":0},"ate":"19:00"},"retorno_agendado":{"finaliza":true,"rediscar":{"ativo":false,"depois_min":0,"max":1,"prioridade":"topo"},"depois":{"acao":"finaliza","espera_min":0},"ate":"20:00"},"atendeu_desligou":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":120,"max":1,"prioridade":"normal"},"depois":{"acao":"proximo_cliente","espera_min":0},"ate":"19:00"},"numero_inexistente":{"finaliza":false,"rediscar":{"ativo":false,"depois_min":0,"max":1,"prioridade":"normal"},"depois":{"acao":"proximo_telefone","espera_min":0},"ate":"19:30"},"pessoa_errada":{"finaliza":false,"rediscar":{"ativo":false,"depois_min":0,"max":1,"prioridade":"normal"},"depois":{"acao":"proximo_telefone","espera_min":0},"ate":"19:30"},"recado":{"finaliza":true,"rediscar":{"ativo":false,"depois_min":120,"max":1,"prioridade":"normal"},"depois":{"acao":"proximo_cliente","espera_min":0},"ate":"19:00"},"falha_operadora":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":30,"max":1,"prioridade":"topo"},"depois":{"acao":"proximo_telefone","espera_min":0},"ate":"19:30"},"falha_rede":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":30,"max":1,"prioridade":"topo"},"depois":{"acao":"proximo_telefone","espera_min":0},"ate":"19:30"},"indisponivel":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":30,"max":1,"prioridade":"normal"},"depois":{"acao":"proximo_telefone","espera_min":0},"ate":"19:30"},"cancelada_discador":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":30,"max":1,"prioridade":"topo"},"depois":{"acao":"proximo_telefone","espera_min":0},"ate":"19:30"},"abandonada":{"finaliza":false,"rediscar":{"ativo":true,"depois_min":0,"max":1,"prioridade":"topo"},"depois":{"acao":"proximo_cliente","espera_min":0},"ate":"19:30"}},"sinalizacao_vertical":{"maquina":"proximo_telefone","nao_atendida":"proximo_telefone","caixa_postal":"proximo_telefone"},"modo_discagem":{"modo":"horizontal","max_telefones_dia":1,"ordem":"certificado","telefone_ausente":"proximo","spins":{"quantidade":3,"intervalo_min":120,"regras":[{"spin":1,"telefone":"t1","inicio":null},{"spin":2,"telefone":"t2","inicio":null},{"spin":3,"telefone":"t3","inicio":null}]}},"reciclagem_auto":{"ativo":false,"hora":"16:00","sem_contato_pct":60,"excluir":["cpc","recusa","pessoa_errada","retorno"]},"retorno_agendado":{"max_dias":7},"chamadas_curtas":{"falha_conta":true}}'::jsonb
 $$;
 
 -- um valor contra uma regra ("bool", "fracao", "data", "hora", ["int", lo, hi], ["real", lo, hi], ["enum", ...]).
@@ -140,6 +148,68 @@ begin
     x := (v #>> '{}')::numeric;
     if t = 'int' and x <> trunc(x) then return false; end if;
     return x between (regra ->> 1)::numeric and (regra ->> 2)::numeric;
+end $$;
+
+-- campos de um objeto contra as regras (subobjeto = regras aninhadas, como rediscar e depois da sinalização)
+create or replace function public.discagem_campos_erros(v jsonb, regras jsonb, onde text) returns text[]
+language plpgsql immutable as $$
+declare erros text[] := '{}'; k text; x jsonb; regra jsonb;
+begin
+    if jsonb_typeof(v) <> 'object' then
+        return array[onde || ': precisa ser um objeto'];
+    end if;
+    for k, x in select * from jsonb_each(v) loop
+        continue when k like '\_%';
+        regra := regras -> k;
+        if regra is null then
+            erros := erros || (onde || ': ''' || k || ''' não existe');
+        elsif jsonb_typeof(regra) = 'object' then
+            erros := erros || public.discagem_campos_erros(x, regra, onde || '/' || k);
+        elsif not public.discagem_valor_ok(x, regra) then
+            erros := erros || (onde || '/' || k || ': fora da faixa');
+        end if;
+    end loop;
+    return erros;
+end $$;
+
+-- modo de discagem (R11): campos, spins {quantidade, intervalo_min, regras [{spin, telefone, inicio}]}; uma regra por
+-- spin até a quantidade, inícios crescentes dentro de 08:00–20:00
+create or replace function public.discagem_modo_erros(v jsonb, regras jsonb) returns text[]
+language plpgsql immutable as $$
+declare erros text[]; s jsonb; q int; e jsonb; vistos int[] := '{}'; ultimo text := '';
+begin
+    if jsonb_typeof(v) <> 'object' then
+        return array['modo_discagem: precisa ser um objeto'];
+    end if;
+    erros := public.discagem_campos_erros(v - 'spins', regras -> 'campos', 'modo_discagem');
+    s := v -> 'spins';
+    if s is null then
+        return erros;
+    end if;
+    if jsonb_typeof(s) <> 'object' then
+        return erros || 'modo_discagem/spins: precisa ser um objeto'::text;
+    end if;
+    erros := erros || public.discagem_campos_erros(s - 'regras', regras -> 'spins', 'modo_discagem/spins');
+    q := case when jsonb_typeof(s -> 'quantidade') = 'number' then (s ->> 'quantidade')::numeric::int else 3 end;
+    if s ? 'regras' then
+        if jsonb_typeof(s -> 'regras') <> 'array' then
+            return erros || 'modo_discagem/spins/regras: precisa ser uma lista'::text;
+        end if;
+        for e in select x from jsonb_array_elements(s -> 'regras') x loop
+            if jsonb_typeof(e) <> 'object' or not public.discagem_valor_ok(e -> 'spin', jsonb_build_array('int', 1, q))
+               or (e ->> 'spin')::numeric::int = any (vistos)
+               or not (regras -> 'telefones') @> jsonb_build_array(e -> 'telefone')
+               or (e -> 'inicio' is not null and e -> 'inicio' <> 'null'::jsonb
+                   and (not public.discagem_valor_ok(e -> 'inicio', '"hora"') or e ->> 'inicio' < '08:00'
+                        or e ->> 'inicio' > '20:00' or e ->> 'inicio' <= ultimo)) then
+                erros := erros || 'modo_discagem/spins/regras: uma por spin (até a quantidade), telefone t1–t5, não tentado ou histórico, início crescente entre 08:00 e 20:00'::text;
+                exit;
+            end if;
+            vistos := vistos || (e ->> 'spin')::numeric::int;
+            ultimo := coalesce(nullif(e ->> 'inicio', ''), ultimo);
+        end loop;
+    end if;
+    return erros;
 end $$;
 
 -- erros do bloco discagem (vazio = vale). Chave desconhecida é erro aqui (o motor só avisa e ignora): o que o site
@@ -183,7 +253,7 @@ begin
             elsif jsonb_typeof(v) <> 'boolean' then
                 erros := erros || 'horarios: use sim/não ou um objeto'::text;
             end if;
-        elsif k in ('por_situacao', 'falhas_tecnicas', 'resubmit') then
+        elsif k in ('por_situacao', 'falhas_tecnicas', 'por_sinalizacao') then
             if jsonb_typeof(v) <> 'object' then
                 erros := erros || (k || ': precisa ser um objeto');
                 continue;
@@ -192,20 +262,36 @@ begin
                 continue when kk like '\_%';
                 if not (r -> k -> 'chaves') ? kk then
                     erros := erros || (k || '/' || kk || ': não existe');
-                elsif jsonb_typeof(vv) <> 'object' then
-                    erros := erros || (k || '/' || kk || ': precisa ser um objeto');
                 else
-                    for kkk, vvv in select * from jsonb_each(vv) loop
-                        continue when kkk like '\_%';
-                        regra := r -> k -> 'campos' -> kkk;
-                        if regra is null then
-                            erros := erros || (k || '/' || kk || ': ''' || kkk || ''' não existe');
-                        elsif not public.discagem_valor_ok(vvv, regra) then
-                            erros := erros || (k || '/' || kk || '/' || kkk || ': fora da faixa');
-                        end if;
-                    end loop;
+                    erros := erros || public.discagem_campos_erros(vv, r -> k -> 'campos', k || '/' || kk);
                 end if;
             end loop;
+            -- regras fixas da sinalização: pediu retorno finaliza; inexistente e pessoa errada não rediscam
+            if k = 'por_sinalizacao' then
+                if v -> 'retorno_agendado' -> 'finaliza' = 'false'::jsonb then
+                    erros := erros || 'por_sinalizacao/retorno_agendado/finaliza: regra fixa (pediu retorno finaliza)'::text;
+                end if;
+                if v -> 'numero_inexistente' -> 'rediscar' -> 'ativo' = 'true'::jsonb
+                   or v -> 'pessoa_errada' -> 'rediscar' -> 'ativo' = 'true'::jsonb then
+                    erros := erros || 'por_sinalizacao: inexistente e pessoa errada não rediscam (regra fixa)'::text;
+                end if;
+            end if;
+        elsif k = 'modo_discagem' then
+            erros := erros || public.discagem_modo_erros(v, r -> 'modo_discagem');
+        elsif k = 'reciclagem_auto' then
+            if jsonb_typeof(v) <> 'object' then
+                erros := erros || 'reciclagem_auto: precisa ser um objeto'::text;
+                continue;
+            end if;
+            erros := erros || public.discagem_campos_erros(v - 'excluir', r -> 'reciclagem_auto' -> 'campos', k);
+            if v ? 'excluir' and (jsonb_typeof(v -> 'excluir') <> 'array'
+                                 or exists (select 1 from jsonb_array_elements(v -> 'excluir') e
+                                             where not (r -> 'reciclagem_auto' -> 'excluir') @> jsonb_build_array(e))) then
+                erros := erros || 'reciclagem_auto/excluir: use cpc, promessa, recusa, pessoa_errada ou retorno'::text;
+            end if;
+            if jsonb_typeof(v -> 'hora') = 'string' and (v ->> 'hora' < '08:00' or v ->> 'hora' > '20:00') then
+                erros := erros || 'reciclagem_auto/hora: entre 08:00 e 20:00'::text;
+            end if;
         else
             if jsonb_typeof(v) <> 'object' then
                 v := jsonb_build_object('ativo', v);
@@ -226,9 +312,11 @@ end $$;
 
 revoke all on function public.situacoes_resubmit_voz(), public.situacao_voz(text, int), public.encerra_cliente_voz(),
     public.discagem_regras(), public.discagem_padrao(), public.discagem_valor_ok(jsonb, jsonb),
+    public.discagem_campos_erros(jsonb, jsonb, text), public.discagem_modo_erros(jsonb, jsonb),
     public.discagem_erros(jsonb) from public, anon;
 grant execute on function public.situacoes_resubmit_voz(), public.situacao_voz(text, int), public.encerra_cliente_voz(),
     public.discagem_regras(), public.discagem_padrao(), public.discagem_valor_ok(jsonb, jsonb),
+    public.discagem_campos_erros(jsonb, jsonb, text), public.discagem_modo_erros(jsonb, jsonb),
     public.discagem_erros(jsonb) to authenticated, service_role;
 
 -- ================================================================ 3. versões das regras de discagem (R2, R2b)
@@ -343,7 +431,7 @@ alter table public.voz_ondas add column if not exists situacao_origem text;
 alter table public.voz_ondas add column if not exists prioridade text;
 alter table public.voz_ondas drop constraint if exists voz_ondas_origem_check;
 alter table public.voz_ondas add constraint voz_ondas_origem_check
-    check (origem is null or origem in ('regua', 'resubmit', 'manual', 'reciclagem'));
+    check (origem is null or origem in ('regua', 'spin', 'rediscagem', 'manual', 'reciclagem'));
 alter table public.voz_ondas drop constraint if exists voz_ondas_passada_check;
 alter table public.voz_ondas add constraint voz_ondas_passada_check check (passada is null or passada between 1 and 50);
 alter table public.voz_ondas drop constraint if exists voz_ondas_situacao_origem_check;
@@ -353,7 +441,8 @@ alter table public.voz_ondas drop constraint if exists voz_ondas_prioridade_chec
 alter table public.voz_ondas add constraint voz_ondas_prioridade_check
     check (prioridade is null or prioridade in ('topo', 'normal', 'fim'));
 comment on column public.voz_ondas.origem is
-    'regua (1ª passada e a retentativa de hoje), resubmit (volta automática), manual (Reenviar agora). Nulo = onda antiga.';
+    'regua (1ª passada e a retentativa de hoje), spin (passagem N do horizontal), rediscagem (regra por sinalização), '
+    'manual (Reenviar agora), reciclagem (Reciclar mailing). Nulo = onda antiga.';
 
 alter table public.voz_chamadas add column if not exists passada int;
 alter table public.voz_chamadas add column if not exists situacao_origem text;
@@ -389,6 +478,34 @@ comment on table public.voz_reenvios is
     'Reenviar agora (lote do dia do agente virtual): filtros, prévia e o que a VM fez. Só contagens.';
 alter table public.voz_ondas add column if not exists reenvio_id bigint references public.voz_reenvios (id) on delete set null;
 
+-- R12 · reciclagens do lote (manual ou automática): só filtros e contagens, nunca telefone
+create table if not exists public.voz_reciclagens (
+    id              bigint generated always as identity primary key,
+    empresa_id      bigint not null references public.empresas (id) on delete cascade,
+    credor_id       bigint references public.credores (id) on delete set null,
+    lote_id         bigint not null references public.voz_lotes (id) on delete cascade,
+    data            date not null,
+    origem          text not null check (origem in ('manual', 'automatica')),
+    escopo          text not null default 'lote' check (escopo in ('lote', 'filtro')),
+    filtros         jsonb not null default '{}' check (jsonb_typeof(filtros) = 'object'),
+    excluir         text[] not null default '{}' check (excluir <@ array['cpc', 'promessa', 'recusa', 'pessoa_errada', 'retorno']),
+    limite_cliente  text not null default 'mantem' check (limite_cliente in ('mantem', 'recomeca')),
+    previa          jsonb check (previa is null or jsonb_typeof(previa) = 'object'),
+    pedido_por      uuid references auth.users (id) on delete set null,
+    pedido_em       timestamptz not null default now(),
+    situacao        text not null default 'pendente' check (situacao in ('pendente', 'em_onda', 'concluido', 'cancelado')),
+    onda_id         bigint references public.voz_ondas (id) on delete set null,
+    volta_real      int check (volta_real >= 0),
+    fora_real       jsonb check (fora_real is null or jsonb_typeof(fora_real) = 'object'),
+    concluido_em    timestamptz,
+    check (origem = 'manual' or (pedido_por is null and limite_cliente = 'mantem'))
+);
+create unique index if not exists voz_reciclagens_auto_dia on public.voz_reciclagens (lote_id, data) where origem = 'automatica';
+create index if not exists voz_reciclagens_lote on public.voz_reciclagens (lote_id, pedido_em desc);
+create index if not exists voz_reciclagens_pendentes on public.voz_reciclagens (empresa_id, pedido_em) where situacao = 'pendente';
+comment on table public.voz_reciclagens is
+    'Reciclar mailing do lote do dia (manual ou automática): filtros, exclusões, limite do dia, prévia e o que a VM fez.';
+
 create table if not exists public.voz_resubmits (
     id                 bigint generated always as identity primary key,
     ref                text not null check (ref ~ '^[0-9a-f]{32}$'),
@@ -400,22 +517,25 @@ create table if not exists public.voz_resubmits (
     destino_hash       text not null check (destino_hash ~ '^[0-9a-f]{64}$'),
     situacao_origem    text not null check (situacao_origem = any (public.situacoes_resubmit_voz())),
     passada            int not null check (passada between 1 and 50),
-    origem             text not null check (origem in ('auto', 'manual')),
+    origem             text not null check (origem in ('auto', 'manual', 'reciclagem')),
     pedido_id          bigint references public.voz_reenvios (id) on delete set null,
-    decisao            text not null check (decisao in ('volta', 'fora')),
+    reciclagem_id      bigint references public.voz_reciclagens (id) on delete set null,
+    decisao            text not null check (decisao in ('finaliza', 'redisca', 'proximo_telefone', 'proximo_cliente', 'fora')),
     motivo_fora        text check (motivo_fora in ('max_dia', 'fora_horario', 'nao_ligar', 'promessa', 'inexistente',
-                                                   'descanso', 'corte_curtas')),
+                                                   'descanso', 'corte_curtas', 'cpc', 'recusa', 'pessoa_errada', 'retorno')),
     nao_antes_de       timestamptz,
     onda_id            bigint references public.voz_ondas (id) on delete set null,
     criado_em          timestamptz not null default now(),
     unique (empresa_id, ref),
     check ((decisao = 'fora') = (motivo_fora is not null)),
-    check (origem = 'auto' or pedido_id is not null or decisao = 'fora')
+    check (origem <> 'manual' or pedido_id is not null),
+    check (origem <> 'reciclagem' or reciclagem_id is not null)
 );
 create index if not exists voz_resubmits_lote on public.voz_resubmits (lote_id, situacao_origem);
 create index if not exists voz_resubmits_empresa on public.voz_resubmits (empresa_id, criado_em);
 comment on table public.voz_resubmits is
-    'Decisão de cada volta do Resubmit (auto) ou do Reenviar agora (manual). Só destino_hash, nunca o telefone. Gravada pela VM.';
+    'Cada decisão da regra por sinalização (auto), do Reenviar agora (manual) ou da reciclagem: finaliza, redisca, '
+    'próximo telefone, próximo cliente ou fora (com o motivo). Só destino_hash, nunca o telefone. Gravada pela VM.';
 
 -- validação por linha (vale para a chave do servidor e para o papel motorcx_voz): tudo da mesma empresa, com voz
 create or replace function public.validar_resubmit_voz() returns trigger
@@ -431,7 +551,9 @@ begin
        or (new.onda_id is not null and not exists (select 1 from public.voz_ondas o
                                                    where o.id = new.onda_id and o.empresa_id = new.empresa_id))
        or (new.pedido_id is not null and not exists (select 1 from public.voz_reenvios r
-                                                     where r.id = new.pedido_id and r.empresa_id = new.empresa_id)) then
+                                                     where r.id = new.pedido_id and r.empresa_id = new.empresa_id))
+       or (new.reciclagem_id is not null and not exists (select 1 from public.voz_reciclagens r
+                                                         where r.id = new.reciclagem_id and r.empresa_id = new.empresa_id)) then
         raise exception 'referência de outra empresa';
     end if;
     return new;
@@ -468,10 +590,14 @@ select pg_temp.trocar('public.apagar_voz_expirada()',
 create or replace function public.intervalo_situacao_voz(d jsonb, sit text) returns int
 language sql immutable parallel safe as $$
     select coalesce(
-        case when sit = any (array['falha_operadora', 'sem_credito', 'falha_rede', 'indisponivel', 'bloqueio_originacao',
-                                   'cancelada_discador', 'abandonada'])
-             then (d -> 'falhas_tecnicas' -> sit ->> 'religar_minutos')::int
-             else (d -> 'por_situacao' -> sit ->> 'intervalo_minutos')::int end,
+        -- o único intervalo da situação é o rediscar.depois_min da regra por sinalização (decisão do dono)
+        case when d ? 'por_sinalizacao'
+             then coalesce((d -> 'por_sinalizacao' -> (case sit when 'numero_incorreto' then 'numero_inexistente'
+                                                                  when 'sem_credito' then 'falha_operadora' else sit end)
+                              -> 'rediscar' ->> 'depois_min')::int,
+                           ((public.discagem_padrao() -> 'por_sinalizacao' -> (case sit when 'numero_incorreto'
+                              then 'numero_inexistente' when 'sem_credito' then 'falha_operadora' else sit end))
+                              -> 'rediscar' ->> 'depois_min')::int) end,
         case when sit = 'ocupado' then (d ->> 'intervalo_ocupado_minutos')::int end,
         case when sit = 'ocupado' then 15 end,
         (d ->> 'intervalo_min_minutos')::int, 120)
@@ -640,6 +766,264 @@ revoke all on function public.intervalo_situacao_voz(jsonb, text), public.sem_co
 grant execute on function public.intervalo_situacao_voz(jsonb, text), public.sem_contato_lote_voz(bigint),
     public.sem_contato_dia_voz(bigint, bigint, date), public.previa_reenvio_voz(bigint, text[], bigint[], text, boolean),
     public.pedir_reenvio_voz(bigint, text[], bigint[], text, boolean) to authenticated;
+
+-- ================================================================ 7b. reciclar mailing (R12–R15)
+alter table public.voz_reciclagens enable row level security;
+drop policy if exists voz_reciclagens_ver on public.voz_reciclagens;
+create policy voz_reciclagens_ver on public.voz_reciclagens for select to authenticated
+    using (empresa_id in (select public.minhas_empresas()));
+revoke all on public.voz_reciclagens from anon;
+revoke insert, update, delete on public.voz_reciclagens from authenticated;
+
+-- R15: permissão própria (zerar o lote é mais forte que uma volta), padrão Admin e Operação
+do $$
+declare
+    def text;
+    prox int;
+begin
+    if not exists (select 1 from public.permissoes_catalogo where codigo = 'reciclar_lote_voz') then
+        def := rtrim(btrim(pg_get_viewdef('public.permissoes_catalogo'::regclass)), ';');
+        prox := coalesce((select max(ordem) from public.permissoes_catalogo), 0) + 1;
+        execute format('create or replace view public.permissoes_catalogo as %s union all select %L::text, %L::text, '
+                       '%L::text, %L::text, true, false, true, false, %s', def, 'reciclar_lote_voz', 'Agente virtual',
+                       'Reciclar o mailing do lote',
+                       'Zerar as tentativas dos números sem contato do lote do dia e discar de novo (não ligar e inexistente nunca voltam).',
+                       prox);
+    end if;
+end $$;
+grant select on public.permissoes_catalogo to authenticated;
+revoke all on public.permissoes_catalogo from anon;
+
+-- R13: prévia, só contagens. Nunca volta: não ligar e inexistente; promessa fica fora quando a carteira suspende por
+-- promessa (travada); o resto do "excluir" é escolha. Com limite "mantem", quem já atingiu o máximo do dia fica fora.
+create or replace function public.previa_reciclagem_voz(lote bigint, escopo text default 'lote', resultados text[] default null,
+                                                        ondas bigint[] default null, excluir text[] default null,
+                                                        limite_cliente text default 'mantem')
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+    l public.voz_lotes;
+    d jsonb;
+    ex text[] := coalesce(excluir, '{}');
+    tnum int; tcli int;
+    r jsonb;
+begin
+    select * into l from public.voz_lotes v where v.id = lote;
+    if l.id is null or not (l.empresa_id in (select public.minhas_empresas()) or public.chamada_do_servidor()
+                            or public.chamada_da_vm_voz()) then
+        raise exception 'lote não encontrado';
+    end if;
+    if escopo not in ('lote', 'filtro') or limite_cliente not in ('mantem', 'recomeca')
+       or not (ex <@ array['cpc', 'promessa', 'recusa', 'pessoa_errada', 'retorno'])
+       or (escopo = 'filtro' and (resultados is null or not (resultados <@ public.situacoes_resubmit_voz()))) then
+        raise exception 'filtros da reciclagem inválidos';
+    end if;
+    select k.discagem into d from public.credores k where k.id = l.credor_id;
+    d := coalesce(d, '{}');
+    if coalesce((d -> 'promessa_suspende' ->> 'ativo')::boolean, false) and not ('promessa' = any (ex)) then
+        ex := ex || 'promessa'::text;
+    end if;
+    tnum := coalesce((d ->> 'tentativas_numero_dia')::int,
+                     case when d ? 'por_sinalizacao' or d ? 'modo_discagem' then 3 else 2 end);
+    tcli := coalesce((d ->> 'tentativas_cliente_dia')::int, (d ->> 'spins_discador_dia')::int, 3);
+    with ch as (
+        select c.* from public.voz_chamadas c where c.lote_id = lote and c.destino_hash is not null),
+    ult as (
+        select distinct on (c.id_cliente, c.destino_hash) c.id_cliente, c.destino_hash, c.onda_id, c.resultado,
+               public.situacao_voz(c.resultado, c.causa_sip) as sit
+          from ch c where c.resultado is not null
+         order by c.id_cliente, c.destino_hash, c.ocorrido_em desc, c.id desc),
+    cand as (
+        select u.*,
+               (select count(*) from ch x where x.id_cliente = u.id_cliente and x.destino_hash = u.destino_hash) as n_num,
+               (select count(*) from ch x where x.id_cliente = u.id_cliente) as n_cli,
+               array(select distinct x.resultado from ch x where x.id_cliente = u.id_cliente) as ds
+          from ult u
+         where escopo = 'lote' or (u.sit = any (resultados) and (ondas is null or cardinality(ondas) = 0
+                                                                  or u.onda_id = any (ondas)))),
+    cls as (
+        select case
+            when 'opt_out' = any (c.ds) then 'nao_ligar'
+            when c.resultado in ('numero_inexistente', 'inexistente_voz') then 'inexistente'
+            when 'cpc' = any (ex) and c.ds && array['cpc', 'identidade_confirmada', 'atendida_sem_cpc'] then 'cpc'
+            when 'promessa' = any (ex) and 'promessa' = any (c.ds) then 'promessa'
+            when 'recusa' = any (ex) and 'recusa' = any (c.ds) then 'recusa'
+            when 'pessoa_errada' = any (ex) and c.resultado = 'atendida_terceiro_desconhece' then 'pessoa_errada'
+            when 'retorno' = any (ex) and 'retorno_agendado' = any (c.ds) then 'retorno'
+            when limite_cliente = 'mantem' and (c.n_num >= tnum or c.n_cli >= tcli) then 'max_dia'
+            else 'volta' end as cl
+          from cand c)
+    select jsonb_build_object(
+        'base', count(*), 'volta', count(*) filter (where cl = 'volta'), 'chamadas', count(*) filter (where cl = 'volta'),
+        'excluir_efetivo', to_jsonb(ex),
+        'fora', jsonb_build_object(
+            'max_dia', count(*) filter (where cl = 'max_dia'), 'cpc', count(*) filter (where cl = 'cpc'),
+            'promessa', count(*) filter (where cl = 'promessa'), 'recusa', count(*) filter (where cl = 'recusa'),
+            'pessoa_errada', count(*) filter (where cl = 'pessoa_errada'), 'retorno', count(*) filter (where cl = 'retorno'),
+            'nao_ligar', count(*) filter (where cl = 'nao_ligar'), 'inexistente', count(*) filter (where cl = 'inexistente')))
+      into r from cls;
+    return r;
+end $$;
+
+-- R14: pedido manual (site)
+create or replace function public.pedir_reciclagem_voz(lote bigint, escopo text default 'lote', resultados text[] default null,
+                                                       ondas bigint[] default null, excluir text[] default null,
+                                                       limite_cliente text default 'mantem')
+returns bigint
+language plpgsql security definer set search_path = public as $$
+declare
+    l public.voz_lotes;
+    agora_sp timestamp := now() at time zone 'America/Sao_Paulo';
+    hhmm time := (now() at time zone 'America/Sao_Paulo')::time;
+    dow int := extract(isodow from (now() at time zone 'America/Sao_Paulo'));
+    p jsonb;
+    novo bigint;
+begin
+    select * into l from public.voz_lotes v where v.id = lote;
+    if l.id is null or l.empresa_id not in (select public.minhas_empresas()) then
+        raise exception 'lote não encontrado';
+    end if;
+    if not public.pode('reciclar_lote_voz') then
+        raise exception 'sem permissão para reciclar o lote';
+    end if;
+    if l.data <> agora_sp::date or l.situacao not in ('ligando', 'pausado', 'concluido') then
+        raise exception 'só o lote de hoje (ligando, pausado ou concluído) pode ser reciclado';
+    end if;
+    if dow = 7 or hhmm < time '08:00' or hhmm >= (case when dow = 6 then time '14:00' else time '20:00' end) then
+        raise exception 'fora da janela de ligações de hoje';
+    end if;
+    if exists (select 1 from public.voz_reciclagens r where r.lote_id = lote and r.situacao in ('pendente', 'em_onda')) then
+        raise exception 'já há uma reciclagem em andamento neste lote';
+    end if;
+    p := public.previa_reciclagem_voz(lote, escopo, resultados, ondas, excluir, limite_cliente);
+    insert into public.voz_reciclagens (empresa_id, credor_id, lote_id, data, origem, escopo, filtros, excluir,
+                                        limite_cliente, previa, pedido_por)
+    values (l.empresa_id, l.credor_id, l.id, l.data, 'manual', escopo,
+            jsonb_build_object('resultados', to_jsonb(coalesce(resultados, '{}')), 'ondas', to_jsonb(coalesce(ondas, '{}'::bigint[]))),
+            array(select jsonb_array_elements_text(p -> 'excluir_efetivo')), limite_cliente, p - 'excluir_efetivo', auth.uid())
+    returning id into novo;
+    return novo;
+end $$;
+revoke all on function public.previa_reciclagem_voz(bigint, text, text[], bigint[], text[], text),
+    public.pedir_reciclagem_voz(bigint, text, text[], bigint[], text[], text) from public, anon;
+grant execute on function public.previa_reciclagem_voz(bigint, text, text[], bigint[], text[], text),
+    public.pedir_reciclagem_voz(bigint, text, text[], bigint[], text[], text) to authenticated;
+grant execute on function public.previa_reciclagem_voz(bigint, text, text[], bigint[], text[], text) to service_role;
+
+-- VM: pega o pedido (manual ou automático), conclui e registra a automática (uma por lote no dia)
+create or replace function public.pegar_reciclagem_voz(empresas bigint[]) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r public.voz_reciclagens;
+begin
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
+        raise exception 'só o servidor ou a VM de voz';
+    end if;
+    select * into r from public.voz_reciclagens x
+     where x.situacao = 'pendente' and x.empresa_id = any (empresas)
+     order by x.pedido_em limit 1 for update skip locked;
+    if r.id is null then
+        return null;
+    end if;
+    update public.voz_reciclagens x set situacao = 'em_onda' where x.id = r.id;
+    return jsonb_build_object('id', r.id, 'empresa_id', r.empresa_id, 'credor_id', r.credor_id, 'lote_id', r.lote_id,
+                              'escopo', r.escopo, 'filtros', r.filtros, 'excluir', to_jsonb(r.excluir),
+                              'limite_cliente', r.limite_cliente, 'origem', r.origem);
+end $$;
+
+create or replace function public.registrar_reciclagem_auto_voz(lote bigint, excluir text[], sem_contato_pct numeric)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+    l public.voz_lotes;
+    d jsonb;
+    ex text[] := coalesce(excluir, '{}');
+    novo bigint;
+begin
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
+        raise exception 'só o servidor ou a VM de voz';
+    end if;
+    select * into l from public.voz_lotes v where v.id = lote;
+    if l.id is null or not exists (select 1 from public.voz_config c where c.empresa_id = l.empresa_id) then
+        raise exception 'lote não encontrado';
+    end if;
+    select k.discagem into d from public.credores k where k.id = l.credor_id;
+    if not coalesce((d -> 'reciclagem_auto' ->> 'ativo')::boolean, false) then
+        raise exception 'reciclagem automática desligada na carteira';
+    end if;
+    if not (ex <@ array['cpc', 'promessa', 'recusa', 'pessoa_errada', 'retorno']) then
+        raise exception 'excluir: cpc, promessa, recusa, pessoa_errada ou retorno';
+    end if;
+    if coalesce((d -> 'promessa_suspende' ->> 'ativo')::boolean, false) and not ('promessa' = any (ex)) then
+        ex := ex || 'promessa'::text;
+    end if;
+    insert into public.voz_reciclagens (empresa_id, credor_id, lote_id, data, origem, excluir, limite_cliente, previa,
+                                        situacao)
+    values (l.empresa_id, l.credor_id, l.id, l.data, 'automatica', ex, 'mantem',
+            jsonb_build_object('sem_contato_pct', sem_contato_pct), 'em_onda')
+    on conflict (lote_id, data) where origem = 'automatica' do nothing
+    returning id into novo;
+    if novo is null then
+        return null;
+    end if;
+    return jsonb_build_object('id', novo, 'lote_id', l.id, 'escopo', 'lote', 'filtros', '{}'::jsonb, 'excluir', to_jsonb(ex),
+                              'limite_cliente', 'mantem', 'origem', 'automatica');
+end $$;
+
+create or replace function public.concluir_reciclagem_voz(reciclagem bigint, situacao text, volta_real int,
+                                                          onda bigint default null, fora_real jsonb default null)
+returns void
+language plpgsql security definer set search_path = public as $$
+#variable_conflict use_variable
+declare r public.voz_reciclagens;
+begin
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
+        raise exception 'só o servidor ou a VM de voz';
+    end if;
+    select * into r from public.voz_reciclagens x where x.id = reciclagem for update;
+    if r.id is null or r.situacao <> 'em_onda' then
+        raise exception 'reciclagem não está em onda';
+    end if;
+    if situacao not in ('concluido', 'cancelado') then
+        raise exception 'situacao: concluido ou cancelado';
+    end if;
+    if onda is not null and not exists (select 1 from public.voz_ondas o where o.id = onda and o.lote_id = r.lote_id) then
+        raise exception 'onda de outro lote';
+    end if;
+    if fora_real is not null and jsonb_typeof(fora_real) <> 'object' then
+        raise exception 'fora_real: objeto de contagens';
+    end if;
+    update public.voz_reciclagens x set situacao = situacao, volta_real = greatest(coalesce(volta_real, 0), 0),
+           onda_id = onda, fora_real = fora_real, concluido_em = now()
+     where x.id = r.id;
+end $$;
+revoke all on function public.pegar_reciclagem_voz(bigint[]), public.registrar_reciclagem_auto_voz(bigint, text[], numeric),
+    public.concluir_reciclagem_voz(bigint, text, int, bigint, jsonb) from public, anon, authenticated;
+grant execute on function public.pegar_reciclagem_voz(bigint[]), public.registrar_reciclagem_auto_voz(bigint, text[], numeric),
+    public.concluir_reciclagem_voz(bigint, text, int, bigint, jsonb) to service_role;
+
+create or replace function voz_vm.pegar_reciclagem(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select public.pegar_reciclagem_voz(array(select e::bigint from jsonb_array_elements_text(coalesce(args -> 'empresas', '[]')) e
+                                              where voz_vm.tem_voz(e::bigint)))
+$$;
+create or replace function voz_vm.registrar_reciclagem_auto(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select public.registrar_reciclagem_auto_voz((args ->> 'lote')::bigint,
+                                                array(select jsonb_array_elements_text(coalesce(args -> 'excluir', '[]'))),
+                                                (args ->> 'sem_contato_pct')::numeric)
+$$;
+create or replace function voz_vm.concluir_reciclagem(args jsonb) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+    perform public.concluir_reciclagem_voz((args ->> 'reciclagem')::bigint, args ->> 'situacao', (args ->> 'volta_real')::int,
+                                           (args ->> 'onda')::bigint,
+                                           case when jsonb_typeof(args -> 'fora_real') = 'object' then args -> 'fora_real' end);
+    return null;
+end $$;
+revoke all on function voz_vm.pegar_reciclagem(jsonb), voz_vm.registrar_reciclagem_auto(jsonb),
+    voz_vm.concluir_reciclagem(jsonb) from public, anon, authenticated, service_role;
+grant execute on function voz_vm.pegar_reciclagem(jsonb), voz_vm.registrar_reciclagem_auto(jsonb),
+    voz_vm.concluir_reciclagem(jsonb) to motorcx_voz;
 
 -- ================================================================ 8. contato por passada (R9, R10)
 create table if not exists public.voz_passadas_dia (
@@ -936,8 +1320,8 @@ begin
     select string_agg(distinct k, ', ' order by k) into fora
       from jsonb_array_elements(linhas) e, jsonb_object_keys(e) k
      where k <> all (array['ref', 'empresa_id', 'credor_id', 'lote_id', 'id_chamada_origem', 'id_cliente', 'destino_hash',
-                           'situacao_origem', 'passada', 'origem', 'pedido_id', 'decisao', 'motivo_fora', 'nao_antes_de',
-                           'onda_id', 'criado_em']);
+                           'situacao_origem', 'passada', 'origem', 'pedido_id', 'reciclagem_id', 'decisao', 'motivo_fora',
+                           'nao_antes_de', 'onda_id', 'criado_em']);
     if fora is not null then
         raise exception 'colunas que a VM não grava em voz_resubmits: %', fora;
     end if;
@@ -946,11 +1330,11 @@ begin
             raise exception 'empresa sem voz configurada';
         end if;
         insert into public.voz_resubmits as v (ref, empresa_id, credor_id, lote_id, id_chamada_origem, id_cliente,
-                                               destino_hash, situacao_origem, passada, origem, pedido_id, decisao,
-                                               motivo_fora, nao_antes_de, onda_id, criado_em)
+                                               destino_hash, situacao_origem, passada, origem, pedido_id, reciclagem_id,
+                                               decisao, motivo_fora, nao_antes_de, onda_id, criado_em)
         values (r.ref, r.empresa_id, r.credor_id, r.lote_id, r.id_chamada_origem, r.id_cliente, r.destino_hash,
-                r.situacao_origem, r.passada, r.origem, r.pedido_id, r.decisao, r.motivo_fora, r.nao_antes_de, r.onda_id,
-                coalesce(r.criado_em, now()))
+                r.situacao_origem, r.passada, r.origem, r.pedido_id, r.reciclagem_id, r.decisao, r.motivo_fora,
+                r.nao_antes_de, r.onda_id, coalesce(r.criado_em, now()))
         on conflict (empresa_id, ref) do update set onda_id = coalesce(excluded.onda_id, v.onda_id)
         returning v.id into gravar_resubmits.id;
         return next;
@@ -994,7 +1378,7 @@ grant execute on function voz_vm.regras_discagem(jsonb), voz_vm.lote_do_dia(json
 do $$
 declare t text;
 begin
-    foreach t in array array['regras_voz_versoes', 'voz_reenvios'] loop
+    foreach t in array array['regras_voz_versoes', 'voz_reenvios', 'voz_reciclagens'] loop
         execute format('drop trigger if exists z_auditar on public.%I', t);
         execute format('create trigger z_auditar after insert or update or delete on public.%I '
                        'for each row execute function public.auditar()', t);

@@ -308,8 +308,8 @@ checar("planejamento define o calendário do credor", True, f"update public.cred
 checar("operação não altera o calendário", True, f"update public.credores set calendario=null where id={CX} returning id", "authenticated", u["oper"], None)
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
 # permissões por perfil (padrão MotorCob + ajuste do Admin da empresa) e auditoria
-checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas,reenviar_lote_voz,ver_clientes,ver_painel")
-checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 28)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60) + 1 do importador (SQL 64) + 1 do Resubmit (SQL 65)
+checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas,reciclar_lote_voz,reenviar_lote_voz,ver_clientes,ver_painel")
+checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 29)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60) + 1 do importador (SQL 64) + 2 do SQL 65
 checar("usuário inativo não tem permissão", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["inativo"], 0)
 checar("planejamento não ajusta permissões", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["plan"])
 checar("Admin libera Reenquadrar para a operação", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["admina"])
@@ -348,7 +348,7 @@ checar("Admin libera Baixar arquivos completos só para um operador", True, f"in
 checar("o operador passa a poder", True, "select public.pode('baixar_relatorios')", "authenticated", u["oper"], "t")
 checar("Admin bloqueia Reenquadrar só para esse operador", True, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['oper']}','reenquadrar',false)", "authenticated", u["admina"])
 checar("exceção do usuário vence o ajuste do perfil", True, "select public.pode('reenquadrar')", "authenticated", u["oper"], "f")
-checar("operador vê os próprios acessos efetivos", True, "select string_agg(codigo||':'||origem, ',' order by codigo) from public.permissoes_do_usuario(auth.uid()) where permitido", "authenticated", u["oper"], "baixar_listas:padrao,baixar_relatorios:usuario,reenviar_lote_voz:padrao,ver_clientes:padrao,ver_painel:padrao")
+checar("operador vê os próprios acessos efetivos", True, "select string_agg(codigo||':'||origem, ',' order by codigo) from public.permissoes_do_usuario(auth.uid()) where permitido", "authenticated", u["oper"], "baixar_listas:padrao,baixar_relatorios:usuario,reciclar_lote_voz:padrao,reenviar_lote_voz:padrao,ver_clientes:padrao,ver_painel:padrao")
 checar("ninguém muda os próprios acessos", False, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['admina']}','ver_acessos',false)", "authenticated", u["admina"])
 checar("Admin não perde gerenciar usuários nem por exceção", False, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['admina']}','gerenciar_usuarios',false)", "service_role")
 checar("só Admin libera acesso de administração", False, f"insert into public.permissoes_usuario (usuario_id,permissao,permitido) values ('{u['oper']}','ver_auditoria',true)", "authenticated", u["gest"])
@@ -368,11 +368,11 @@ checar("Admin vê o último acesso dos usuários da empresa", True, f"select cou
 checar("login não entra na auditoria", True, "select count(*) from public.auditoria where mudou ? 'ultimo_acesso'", "service_role", 0)
 # tela Usuários do site: catálogo ordenado, acessos do perfil (convite) e do usuário com os nomes que o site usa
 checar("catálogo tem a ordem que o site usa", True, "select string_agg(codigo, ',' order by ordem) from (select * from public.permissoes_catalogo order by ordem limit 2) c", "authenticated", u["oper"], "baixar_listas,baixar_relatorios")
-checar("convite: acessos do perfil Operação na empresa", True, "select string_agg(codigo||':'||origem, ',') from public.permissoes_do_papel(papel => 'operacao') where permitido", "authenticated", u["admina"], "baixar_listas:padrao,reenquadrar:perfil,ver_clientes:padrao,ver_painel:padrao,reenviar_lote_voz:padrao")
+checar("convite: acessos do perfil Operação na empresa", True, "select string_agg(codigo||':'||origem, ',') from public.permissoes_do_papel(papel => 'operacao') where permitido", "authenticated", u["admina"], "baixar_listas:padrao,reenquadrar:perfil,ver_clientes:padrao,ver_painel:padrao,reenviar_lote_voz:padrao,reciclar_lote_voz:padrao")
 checar("convite: Admin sempre com gerenciar usuários", True, "select permitido from public.permissoes_do_papel(papel => 'admin') where codigo='gerenciar_usuarios'", "authenticated", u["admina"], "t")
 checar("quem não gerencia usuários não lê acessos de perfil", True, "select count(*) from public.permissoes_do_papel(papel => 'operacao')", "authenticated", u["oper"], 0)
 checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
-checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 28)   # 21 + 5 do SQL 60 + 1 do SQL 64 + 1 do SQL 65 (reenviar_lote_voz)
+checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 29)   # 21 + 5 do SQL 60 + 1 do SQL 64 + 2 do SQL 65 (reenviar e reciclar)
 checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
 # página comercial: mídia pública e formulário de contato (visitante só insere)
 checar("bucket site é público", True, "select public from storage.buckets where id='site'", "service_role", "t")

@@ -277,24 +277,28 @@ de outra pessoa pela certificação e a rotação segue.
   mesmo se as regras do credor falharem (padrão do regua.json); erro → regra antiga só na rodada + alerta. Não muda a
   contagem de tentativas. Dia em aberto reprocessado usa o ciclo daquele dia (`DG.ciclo_inexistente`), não o de
   hoje. `retorno_canal`: "bloquear"/"retestar" da voz também tiram só a voz.
-- **Renitência por situação e Resubmit (SQL 65; protótipo aprovado em 01/11/2026):** chaves novas em
-  `credores.discagem` (uma validação, um histórico, uma auditoria): `por_situacao` {maquina, nao_atendida, ocupado,
-  caixa_postal, desligou_sem_conversar, atendeu_desligou: {intervalo_minutos, max_dia, conta_descanso}},
-  `falhas_tecnicas` {falha_operadora, sem_credito (= 402), falha_rede, indisponivel, bloqueio_originacao,
-  cancelada_discador, abandonada: {religar_minutos, aviso}}, `resubmit` {situação: {ativo, depois_minutos, max_dia,
-  prioridade topo|normal|fim, ate, outro_numero}} e `chamadas_curtas.falha_conta`. **Sem as chaves, tudo como antes
-  (paridade, `tests/test_resubmit.py`).** `DG.situacao_de`, `DG.regra_situacao`, `DG.resubmit_efetivo` (vale o MAIOR
-  entre "depois de" e o intervalo; o máximo é cortado pelas tentativas por número, ou por cliente com outro número).
-  `indisponivel` virou falha técnica (decisão do dono): fora da certificação e do descanso, ainda conta como tentativa.
-  VM (`voz/orquestrador/lote.py`, `RegrasLote` via RPC `regras_discagem_voz`): com resubmit, o número só volta por
-  uma Volta decidida no fim da tentativa; ordem = voltas topo > 1ªs tentativas (ordem do arquivo) > voltas normal >
-  voltas fim (regra 5 do agendador mudou: topo fura as 1ªs). Cada decisão vai para `voz_resubmits` (só destino_hash);
-  chamadas levam `passada`, `situacao_origem`, `resubmit_id`, `lote_id` e `destino_hash`. "Reenviar agora"
-  (`pedir_reenvio_voz`, permissão `reenviar_lote_voz`, Admin e Operação) é pego pela VM (`pegar_reenvio_voz`) e passa
-  pelas mesmas regras. À noite a VM agrega `voz_passadas_dia` (`agregar_passadas_voz`, contato = `e_cpc`, curtas do
-  motor); o site lê `contato_por_passada` (menos de 30 chamadas = sem percentual). O site grava só por
-  `salvar_discagem` (valida com `discagem_erros`, igual ao motor; versões em `regras_voz_versoes`; recusa se outra
-  pessoa salvou antes). Padrão que o site mostra: `discagem_padrao()` = `DG.padrao_site()` (teste confere).
+- **Renitência, regra por sinalização, modo de discagem e reciclagem (SQL 65; protótipo funcional aprovado em
+  01/11/2026):** tudo em `credores.discagem` (uma validação, um histórico, uma auditoria). `por_situacao`
+  {situação: {max_dia, conta_descanso}}, `falhas_tecnicas` {falha: {aviso}}, `chamadas_curtas.falha_conta`,
+  `por_sinalizacao` {sinalização: {finaliza, rediscar: {ativo, depois_min, max, prioridade topo|normal|fim}, depois:
+  {acao proximo_telefone|proximo_cliente|finaliza, espera_min}, ate}} (`DG.SINALIZACAO_PADRAO`; vertical troca o depois
+  de máquina/não atendeu/caixa postal), `modo_discagem` {modo vertical|horizontal, max_telefones_dia, ordem, spins
+  {quantidade, intervalo_min, regras [{spin, telefone, inicio}]}, telefone_ausente} (padrão spin N → telefone N) e
+  `reciclagem_auto`. **Um intervalo só por situação: `rediscar.depois_min`** (decisão do dono). **Sem as chaves, tudo
+  como antes (paridade, `tests/test_resubmit.py`), inclusive 2 tentativas por número; com a regra nova, 3.** Fixos:
+  CPC/promessa/recusa/"não ligar" finalizam; pediu retorno finaliza; inexistente e pessoa errada não rediscam; sem
+  crédito e bloqueio pausam a rota e alertam. `indisponivel` virou falha técnica (fora da certificação e do descanso,
+  ainda conta como tentativa). Motor: `DG.telefones_dia` define quantos telefones de voz saem por cliente
+  (`fila._limite_padrao`). VM (`voz/orquestrador/lote.py`, `RegrasLote` via RPC `regras_discagem_voz`): monta os spins
+  (o spin N só abre quando o N−1 passou pelo lote, depois do intervalo e do início) ou corta os telefones (vertical);
+  depois de cada tentativa aplica a linha da sinalização; ordem = voltas topo > 1ªs tentativas > voltas normal > fim
+  (topo fura as 1ªs: a regra 5 do agendador mudou). Cada decisão vai para `voz_resubmits` (só destino_hash); chamadas
+  levam `passada` (tentativa do cliente no dia), `situacao_origem`, `resubmit_id`, `lote_id` e `destino_hash`.
+  "Reenviar agora" (`reenviar_lote_voz`) e "Reciclar mailing" (`reciclar_lote_voz`, `voz_reciclagens`; não ligar e
+  inexistente nunca voltam; "mantém o limite" por padrão; automática uma por lote no dia) passam pelas mesmas regras.
+  À noite a VM agrega `voz_passadas_dia`; o site lê `contato_por_passada` (menos de 30 chamadas = sem %). O site grava
+  só por `salvar_discagem` (`discagem_erros` = o motor; versões em `regras_voz_versoes`); a edição da regra por
+  sinalização, do modo e da reciclagem chega com o redesign (hoje a aba só mostra o que vale).
 - `motor/retroalimentacao.py` (Speech Analytics, SQL 60): regras sobre os agregados de voz (horário → trava de
   horário, renitência depois de ocupado, frases, ordem de ofertas, canal preferido, propensão em sombra) com piso
   n >= 200 por grupo e diferença >= 5 p.p.; registra por `registrar_recomendacao_voz` (o banco cuida dos 90 dias da

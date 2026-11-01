@@ -92,15 +92,31 @@ CASOS = [
     {"inexistente": {"modo": "so_voz", "so_voz_desde": "2026-11-01"}}, {"inexistente": {"modo": "outro"}},
     {"retorno_agendado": {"de": "08:00", "ate": "21:30"}}, {"retorno_agendado": {"de": "8h"}},
     {"agente_ia": {"peso_cpc": 0.5}}, {"agente_ia": {"peso_cpc": 3}}, {"chave_nova": 1},
-    {"por_situacao": {"ocupado": {"intervalo_minutos": 20, "max_dia": 2, "conta_descanso": False}}},
+    {"por_situacao": {"ocupado": {"max_dia": 2, "conta_descanso": False}}},
+    {"por_situacao": {"ocupado": {"intervalo_minutos": 20}}},          # um intervalo só: o da sinalização
     {"por_situacao": {"ocupado": {"max_dia": 11}}}, {"por_situacao": {"falha_rede": {"max_dia": 1}}},
     {"por_situacao": {"maquina": {"x": 1}}},
-    {"falhas_tecnicas": {"indisponivel": {"religar_minutos": 180, "aviso": 0.2}}},
-    {"falhas_tecnicas": {"indisponivel": {"aviso": 0}}},
-    {"resubmit": {"ocupado": {"ativo": True, "depois_minutos": 15, "max_dia": 2, "prioridade": "topo", "ate": "19:30",
-                              "outro_numero": False}}},
-    {"resubmit": {"ocupado": {"prioridade": "alta"}}}, {"resubmit": {"ocupado": {"depois_minutos": 601}}},
-    {"resubmit": {"ocupado": {"ate": "25:00"}}}, {"resubmit": {"desconhecida": {}}}, {"resubmit": []},
+    {"falhas_tecnicas": {"indisponivel": {"aviso": 0.2}}}, {"falhas_tecnicas": {"indisponivel": {"aviso": 0}}},
+    {"por_sinalizacao": {"ocupado": {"finaliza": False, "rediscar": {"ativo": True, "depois_min": 15, "max": 2,
+                                                                       "prioridade": "topo"},
+                                     "depois": {"acao": "proximo_cliente", "espera_min": 0}, "ate": "19:30"}}},
+    {"por_sinalizacao": {"ocupado": {"rediscar": {"prioridade": "alta"}}}},
+    {"por_sinalizacao": {"ocupado": {"rediscar": {"depois_min": 601}}}},
+    {"por_sinalizacao": {"ocupado": {"depois": {"acao": "outro"}}}},
+    {"por_sinalizacao": {"ocupado": {"ate": "25:00"}}}, {"por_sinalizacao": {"desconhecida": {}}},
+    {"por_sinalizacao": {"retorno_agendado": {"finaliza": False}}},
+    {"por_sinalizacao": {"pessoa_errada": {"rediscar": {"ativo": True}}}}, {"por_sinalizacao": []},
+    {"modo_discagem": {"modo": "vertical", "max_telefones_dia": 3, "ordem": "carga"}},
+    {"modo_discagem": {"modo": "diagonal"}}, {"modo_discagem": {"max_telefones_dia": 6}},
+    {"modo_discagem": {"spins": {"quantidade": 4, "intervalo_min": 90, "regras": [
+        {"spin": 1, "telefone": "t1", "inicio": None}, {"spin": 2, "telefone": "nao_tentado", "inicio": "11:00"}]}}},
+    {"modo_discagem": {"spins": {"quantidade": 2, "regras": [{"spin": 3, "telefone": "t1"}]}}},
+    {"modo_discagem": {"spins": {"regras": [{"spin": 1, "telefone": "t9"}]}}},
+    {"modo_discagem": {"spins": {"regras": [{"spin": 1, "telefone": "t1", "inicio": "12:00"},
+                                            {"spin": 2, "telefone": "t2", "inicio": "11:00"}]}}},
+    {"reciclagem_auto": {"ativo": True, "hora": "16:00", "sem_contato_pct": 60, "excluir": ["cpc", "recusa"]}},
+    {"reciclagem_auto": {"sem_contato_pct": 5}}, {"reciclagem_auto": {"excluir": ["nao_ligar"]}},
+    {"reciclagem_auto": {"hora": "21:00"}},
     {"horarios": {"ativo": True, "tabela": None}}, {"horarios": True},
 ]
 iguais = 0
@@ -114,27 +130,29 @@ checar(f"R1: discagem_erros = motor/discagem.normalizar nos {len(CASOS)} casos",
 checar("R1: a RPC só aceita tipos JSON (o motor também entende \"sim\"; o site manda booleano)", True,
        "select cardinality(public.discagem_erros('{\"horarios\": \"sim\", \"nao_ligar\": \"sim\"}'))", 2)
 checar("R1: padrão MotorCX publicado para o site", True,
-       "select public.discagem_padrao() -> 'resubmit' -> 'ocupado' ->> 'prioridade'", "topo", papel="authenticated",
+       "select public.discagem_padrao() -> 'por_sinalizacao' -> 'ocupado' -> 'rediscar' ->> 'prioridade'", "topo", papel="authenticated",
        uid=U["oper"])
 
 # ------------------------------------------------------------------ R2: versões, conflito e permissão
-NOVA = json.dumps({"resubmit": {"ocupado": {"depois_minutos": 20}}, "por_situacao": {"ocupado": {"intervalo_minutos": 20}}})
+NOVA = json.dumps({"por_sinalizacao": {"ocupado": {"rediscar": {"depois_min": 20}}},
+                   "modo_discagem": {"modo": "vertical", "max_telefones_dia": 2},
+                   "reciclagem_auto": {"ativo": True, "hora": "16:00", "sem_contato_pct": 60}})
 site("R2: sem editar_credores não salva (Operação)", False,
      f"select public.salvar_discagem({CA}, '{NOVA}', 0)", U["oper"], erro="sem permissão")
 site("R2: carteira de outra empresa não salva", False, f"select public.salvar_discagem({CA}, '{NOVA}', 0)", U["outra"],
      erro="carteira não encontrada")
 site("R2: regra inválida é recusada com o motivo", False,
-     f"select public.salvar_discagem({CA}, '{{\"resubmit\": {{\"ocupado\": {{\"max_dia\": 99}}}}}}', 0)", U["admin"],
-     erro="resubmit/ocupado/max_dia")
+     f"select public.salvar_discagem({CA}, '{{\"por_sinalizacao\": {{\"ocupado\": {{\"rediscar\": {{\"max\": 99}}}}}}}}', 0)",
+     U["admin"], erro="por_sinalizacao/ocupado/rediscar/max")
 site("R2: motivo com telefone é recusado (LGPD)", False,
      f"select public.salvar_discagem({CA}, '{NOVA}', 0, 'ligar para (11) 98888-7777')", U["admin"], erro="motivo")
 site("R2: 1ª gravação vira v2 (v1 = o que valia antes)", True,
-     f"select public.salvar_discagem({CA}, '{NOVA}', 0, 'Teste de volta mais cedo', array['Resubmit › Ocupado › depois de (min): 15 → 20'])",
+     f"select public.salvar_discagem({CA}, '{NOVA}', 0, 'Teste de volta mais cedo', array['Regra por sinalização › Ocupado › depois de (min): 15 → 20'])",
      U["admin"], 2)
 checar("R2: credores.discagem gravado e as duas versões no histórico", True,
-       f"select (select discagem -> 'resubmit' -> 'ocupado' ->> 'depois_minutos' from public.credores where id = {CA}) "
+       f"select (select discagem -> 'por_sinalizacao' -> 'ocupado' -> 'rediscar' ->> 'depois_min' from public.credores where id = {CA}) "
        f"|| '|' || (select string_agg(versao || ':' || coalesce(resumo[1], ''), ',' order by versao) "
-       f"from public.regras_voz_versoes where credor_id = {CA})", "20|1:Padrão MotorCX,2:Resubmit › Ocupado › depois de (min): 15 → 20")
+       f"from public.regras_voz_versoes where credor_id = {CA})", "20|1:Padrão MotorCX,2:Regra por sinalização › Ocupado › depois de (min): 15 → 20")
 site("R2: versão base antiga (outra pessoa salvou antes) é recusada", False,
      f"select public.salvar_discagem({CA}, '{{}}', 1)", U["admin"], erro="outra pessoa salvou a versão 2")
 site("R2: voltar ao padrão (objeto vazio) grava nulo como v3", True,
@@ -153,11 +171,13 @@ _sv(f"update public.credores set discagem = '{NOVA}' where id = {CA}")
 # ------------------------------------------------------------------ R8: permissão nova
 for p, pode in (("admin", "t"), ("oper", "t"), ("plan", "f")):
     site(f"R8: reenviar_lote_voz padrão para {p}", True, "select public.pode('reenviar_lote_voz')", U[p], pode)
+    site(f"R15: reciclar_lote_voz padrão para {p}", True, "select public.pode('reciclar_lote_voz')", U[p], pode)
 
 # ------------------------------------------------------------------ VM: lote do dia, ondas, decisões e chamadas
 HOJE = _sv("select (now() at time zone 'America/Sao_Paulo')::date")
+LB = _sv(f"insert into public.voz_lotes (empresa_id, data, modo) values ({EB}, '{HOJE}', 'simulado') returning id")
 vm("VM: regras de discagem só com id e o bloco (sem nome nem CNPJ)", True,
-   f"select jsonb_agg(x -> 'discagem' -> 'resubmit' -> 'ocupado' ->> 'depois_minutos') from jsonb_array_elements("
+   f"select jsonb_agg(x -> 'discagem' -> 'por_sinalizacao' -> 'ocupado' -> 'rediscar' ->> 'depois_min') from jsonb_array_elements("
    f"voz_vm.regras_discagem('{{\"empresa\": {EA}}}')) x where (x ->> 'credor_id')::bigint = {CA}", '["20"]')
 vm("VM: empresa sem voz não lê regras", False, f"select voz_vm.regras_discagem('{{\"empresa\": {EB}}}')",
    erro="sem voz")
@@ -171,21 +191,21 @@ vm("VM: carteira de outra empresa não abre lote", False,
    f"select voz_vm.lote_do_dia('{{\"empresa\": {EA}, \"credor\": {CB}, \"dia\": \"{HOJE}\"}}')", erro="outra empresa")
 O1 = sql(f"select voz_vm.registrar_onda('{{\"lote\": {LT}, \"origem\": \"regua\", \"passada\": 1, \"prioridade\": \"normal\", "
          f"\"total\": 6, \"encerradas\": 0}}')", "motorcx_voz")[1]
-O2 = sql(f"select voz_vm.registrar_onda('{{\"lote\": {LT}, \"origem\": \"resubmit\", \"passada\": 2, \"situacao_origem\": "
+O2 = sql(f"select voz_vm.registrar_onda('{{\"lote\": {LT}, \"origem\": \"rediscagem\", \"passada\": 2, \"situacao_origem\": "
          f"\"nao_atendida\", \"prioridade\": \"normal\", \"total\": 1}}')", "motorcx_voz")[1]
 vm("VM: a mesma onda não duplica e fecha quando todas encerram", True,
-   f"select voz_vm.registrar_onda('{{\"lote\": {LT}, \"origem\": \"resubmit\", \"passada\": 2, \"situacao_origem\": "
+   f"select voz_vm.registrar_onda('{{\"lote\": {LT}, \"origem\": \"rediscagem\", \"passada\": 2, \"situacao_origem\": "
    f"\"nao_atendida\", \"prioridade\": \"normal\", \"total\": 1, \"encerradas\": 1}}')", O2)
 checar("VM: onda do Resubmit com origem, passada e situação", True,
        f"select origem || '|' || passada || '|' || situacao_origem || '|' || situacao from public.voz_ondas where id = {O2}",
-       "resubmit|2|nao_atendida|encerrada")
+       "rediscagem|2|nao_atendida|encerrada")
 vm("VM: situação fora da lista é recusada na onda", False,
-   f"select voz_vm.registrar_onda('{{\"lote\": {LT}, \"origem\": \"resubmit\", \"passada\": 2, \"situacao_origem\": \"cpc\", "
+   f"select voz_vm.registrar_onda('{{\"lote\": {LT}, \"origem\": \"rediscagem\", \"passada\": 2, \"situacao_origem\": \"cpc\", "
    f"\"prioridade\": \"normal\"}}')")
 REF = "ab" * 16
 DEC = json.dumps([{"ref": REF, "empresa_id": int(EA), "credor_id": int(CA), "lote_id": int(LT), "id_cliente": "CLI-1",
                    "destino_hash": H[0], "situacao_origem": "nao_atendida", "passada": 2, "origem": "auto",
-                   "decisao": "volta", "nao_antes_de": "2026-11-05T12:00:00-03:00", "id_chamada_origem": "rsb-0001"},
+                   "decisao": "redisca", "nao_antes_de": "2026-11-05T12:00:00-03:00", "id_chamada_origem": "rsb-0001"},
                   {"ref": "cd" * 16, "empresa_id": int(EA), "credor_id": int(CA), "lote_id": int(LT),
                    "id_cliente": "CLI-2", "destino_hash": H[1], "situacao_origem": "ocupado", "passada": 3,
                    "origem": "auto", "decisao": "fora", "motivo_fora": "max_dia"}])
@@ -201,8 +221,8 @@ vm("VM: decisão de empresa sem voz é recusada", False,
    "select voz_vm.gravar_resubmits('" + DEC.replace(f'"empresa_id": {EA}', f'"empresa_id": {EB}', 1) + "')")
 checar("VM: decisão com lote de outra empresa é recusada também pela chave do servidor (gatilho)", False,
        f"insert into public.voz_resubmits (ref, empresa_id, lote_id, id_cliente, destino_hash, situacao_origem, passada, "
-       f"origem, decisao) values ('{'ef' * 16}', {EA}, (select id from public.voz_lotes where empresa_id <> {EA} limit 1), "
-       f"'CLI-9', '{H[2]}', 'ocupado', 2, 'auto', 'volta')", papel="service_role", erro="outra empresa")
+       f"origem, decisao) values ('{'ef' * 16}', {EA}, {LB}, "
+       f"'CLI-9', '{H[2]}', 'ocupado', 2, 'auto', 'redisca')", papel="service_role", erro="outra empresa")
 CH = []
 for i, (cli, h, res, passada, sit, rid) in enumerate((
         ("CLI-1", H[0], "nao_atendida", 1, None, None), ("CLI-1", H[0], "nao_atendida", 2, "nao_atendida", RID),
@@ -227,9 +247,10 @@ vm("VM: não lê voz_resubmits direto (só pelas funções)", False, "select cou
 vm("VM: não chama a RPC do site (prévia)", False, f"select public.previa_reenvio_voz({LT}, array['nao_atendida'])")
 vm("VM: as funções novas de voz_vm são só dela", True,
    "select count(*) from pg_proc p where p.pronamespace = 'voz_vm'::regnamespace and p.proname in ('regras_discagem', "
-   "'lote_do_dia', 'registrar_onda', 'pegar_reenvio', 'concluir_reenvio', 'agregar_passadas', 'gravar_resubmits') "
+   "'lote_do_dia', 'registrar_onda', 'pegar_reenvio', 'concluir_reenvio', 'agregar_passadas', 'gravar_resubmits', "
+   "'pegar_reciclagem', 'registrar_reciclagem_auto', 'concluir_reciclagem') "
    "and has_function_privilege('motorcx_voz', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute') "
-   "and not has_function_privilege('service_role', p.oid, 'execute')", 7)
+   "and not has_function_privilege('service_role', p.oid, 'execute')", 10)
 
 # ------------------------------------------------------------------ R6, R7: sem contato, prévia e pedido
 site("R6: sem contato no lote, por situação (cliente com CPC ou não ligar fica fora)", True,
@@ -269,6 +290,50 @@ checar("VM: pedido concluído com volta_real", True,
 vm("VM: não conclui duas vezes", False,
    f"select voz_vm.concluir_reenvio('{{\"reenvio\": {PED or 0}, \"situacao\": \"concluido\", \"volta_real\": 1}}')")
 
+# ------------------------------------------------------------------ R12–R16: reciclar mailing
+EXC = "array['cpc', 'recusa', 'pessoa_errada', 'retorno']"
+site("R13: prévia da reciclagem só com contagens (não ligar e inexistente nunca voltam)", True,
+     f"select p ->> 'volta' || '|' || (p -> 'fora' ->> 'cpc') || '|' || (p -> 'fora' ->> 'nao_ligar') || '|' || "
+     f"(p -> 'fora' ->> 'inexistente') from public.previa_reciclagem_voz({LT}, 'lote', null, null, {EXC}) p", U["oper"],
+     "3|1|1|1")
+site("R13: excluir com valor fora da lista é recusado", False,
+     f"select public.previa_reciclagem_voz({LT}, 'lote', null, null, array['nao_ligar'])", U["oper"], erro="inválidos")
+site("R13: outra empresa não vê a prévia", False,
+     f"select public.previa_reciclagem_voz({LT})", U["outra"], erro="lote não encontrado")
+site("R14: sem reciclar_lote_voz (Planejamento) não pede", False,
+     f"select public.pedir_reciclagem_voz({LT})", U["plan"], erro="sem permissão")
+if JANELA == "t":
+    site("R14: Operação pede a reciclagem (mantém o limite do dia por padrão)", True,
+         f"select limite_cliente from public.voz_reciclagens where id = public.pedir_reciclagem_voz({LT}, 'lote', null, null, {EXC})",
+         U["oper"], "mantem")
+    site("R14: só uma reciclagem em andamento por lote", False, f"select public.pedir_reciclagem_voz({LT})", U["oper"],
+         erro="já há uma reciclagem")
+else:
+    site("R14: fora da janela de hoje não pede", False, f"select public.pedir_reciclagem_voz({LT})", U["oper"],
+         erro="fora da janela")
+    _sv(f"insert into public.voz_reciclagens (empresa_id, credor_id, lote_id, data, origem, excluir) values ({EA}, {CA}, "
+        f"{LT}, '{HOJE}', 'manual', {EXC})")
+site("R12: ninguém grava reciclagem direto", False,
+     f"insert into public.voz_reciclagens (empresa_id, lote_id, data, origem) values ({EA}, {LT}, '{HOJE}', 'manual')",
+     U["admin"])
+RC = sql(f"select voz_vm.pegar_reciclagem('{{\"empresas\": [{EA}]}}') ->> 'id'", "motorcx_voz")[1]
+vm("VM: pega a reciclagem e conclui com o total real", True,
+   f"select voz_vm.concluir_reciclagem('{{\"reciclagem\": {RC or 0}, \"situacao\": \"concluido\", \"volta_real\": 3, "
+   f"\"fora_real\": {{\"cpc\": 1}}}}'); select 1", 1)
+checar("VM: reciclagem concluída", True, f"select situacao || '|' || volta_real from public.voz_reciclagens where id = {RC or 0}",
+       "concluido|3")
+AUTO = f"select voz_vm.registrar_reciclagem_auto('{{\"lote\": {LT}, \"excluir\": [\"cpc\"], \"sem_contato_pct\": 70}}') ->> 'origem'"
+vm("R16: a automática registra (carteira com reciclagem_auto ligada)", True, AUTO, "automatica")
+vm("R16: só uma automática por lote no dia", True, AUTO, "")
+checar("R16: a automática sempre mantém o limite e não tem quem pediu", True,
+       f"select limite_cliente || '|' || (pedido_por is null) from public.voz_reciclagens where lote_id = {LT} and origem = 'automatica'",
+       "mantem|true")
+DEC_R = json.dumps([{"ref": "aa" * 16, "empresa_id": int(EA), "lote_id": int(LT), "id_cliente": "CLI-1", "destino_hash": H[0],
+                     "situacao_origem": "nao_atendida", "passada": 3, "origem": "reciclagem", "reciclagem_id": int(RC or 0),
+                     "decisao": "redisca"}])
+vm("VM: decisão da reciclagem grava com a reciclagem", True,
+   f"select count(*) from voz_vm.gravar_resubmits('{DEC_R}')", 1)
+
 # ------------------------------------------------------------------ R9, R10: contato por passada
 REGRAS = json.dumps({"contato": ["cpc", "promessa"], "curta_sempre": ["nao_atendida", "ocupado", "maquina"],
                      "curta_abandono": ["abandonada"], "segundos": 6})
@@ -293,11 +358,11 @@ site("R10: outra empresa não vê", True, f"select count(*) from public.contato_
      U["outra"], 0)
 
 # ------------------------------------------------------------------ segurança
-for t in ("regras_voz_versoes", "voz_resubmits", "voz_reenvios", "voz_passadas_dia"):
+for t in ("regras_voz_versoes", "voz_resubmits", "voz_reenvios", "voz_reciclagens", "voz_passadas_dia"):
     checar(f"segurança: anon não lê {t}", False, f"select * from public.{t} limit 1", papel="anon")
 checar("segurança: tabelas novas com RLS", True,
        "select count(*) from pg_tables where schemaname = 'public' and tablename in ('regras_voz_versoes', 'voz_resubmits', "
-       "'voz_reenvios', 'voz_passadas_dia') and not rowsecurity", 0)
+       "'voz_reenvios', 'voz_reciclagens', 'voz_passadas_dia') and not rowsecurity", 0)
 checar("segurança: nenhuma coluna nova com telefone, CPF ou nome", True,
        "select count(*) from information_schema.columns where table_schema = 'public' and table_name in ('voz_resubmits', "
        "'voz_reenvios', 'voz_passadas_dia', 'regras_voz_versoes') and column_name ~ '(telefone|cpf|^nome|numero_discado)'", 0)

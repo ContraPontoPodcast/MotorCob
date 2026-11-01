@@ -9,7 +9,8 @@ Só pela interface de colunas de voz/banco.py (COLUNAS, CONFLITO): se o SQL 56 m
                 chamadas e qualquer uma pode recalcular sem somar em dobro. Rota sem preço: custo nulo, conta em
                 sem_custo (nunca preço inventado). Chamada do modo simulado não entra (igual a consolidar_consumo_voz).
   SQL 65        o lote do dia (lote_voz_do_dia), as ondas (registrar_onda_voz) e as decisões do Resubmit
-                (voz_resubmits, upsert por empresa e ref; só destino_hash). As decisões vão ANTES das chamadas: a
+                (voz_resubmits: finaliza, redisca, próximo telefone, próximo cliente ou fora; upsert por empresa e ref; só
+                destino_hash). As decisões vão ANTES das chamadas: a
                 chamada da volta leva o resubmit_id e o onda_id do banco (se as decisões falham, as chamadas esperam).
 Falha do banco não derruba a discagem: as linhas ficam na fila e vão no próximo descarregar().
 """
@@ -123,8 +124,8 @@ class RegistroBanco:
                 continue
             for d in lote.decisoes:
                 d["lote_id"] = d.get("lote_id") or lote.lote_id
-                d["_onda"] = None if d["decisao"] != "volta" else \
-                    ("resubmit" if d["origem"] == "auto" else "manual", d["passada"], d["situacao_origem"])
+                d["_onda"] = None if d.get("nao_antes_de") is None else \
+                    ({"auto": "rediscagem"}.get(d["origem"], d["origem"]), d["passada"], d["situacao_origem"])
                 self.fila_resubmits.append(d)
             lote.decisoes = []
             for chave, o in lote.ondas.items():
@@ -148,7 +149,7 @@ class RegistroBanco:
 
     def _onda_da_decisao(self, d: dict):
         for (lid, chave), oid in self.ids_onda.items():
-            if lid == d["lote_id"] and chave[:3] == d["_onda"] and chave[4] == d.get("pedido_id"):
+            if lid == d["lote_id"] and chave[:3] == d["_onda"] and chave[4] == (d.get("pedido_id") or d.get("reciclagem_id")):
                 return oid
         return None
 

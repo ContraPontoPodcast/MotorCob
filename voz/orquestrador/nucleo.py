@@ -647,6 +647,9 @@ class Orquestrador:
             lote.em_voo.discard(c.idx)
             lote.registrar(c.item, ev.desfecho, self.relogio(), causa_sip=c.causa_sip,
                            retorno_em=_quando(c.extras.get("retorno_em")), id_chamada=c.id)
+            for al in lote.alertas:              # sem crédito / bloqueio de originação: pausa a rota e alerta
+                self._alerta(al)
+            lote.alertas.clear()
         if c.veredito == A.PESSOA:
             mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho == "abandonada")
             if mudou == "freou":

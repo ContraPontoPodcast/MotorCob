@@ -9,18 +9,18 @@ import { effectiveDiscagem, computeDiff, computeLigacoes, type Discagem as Disca
 import { resumoMudancas, type DiscagemRen } from '@/lib/renitencia';
 import { ChamadasCurtas } from './chamadas-curtas';
 import { RenitenciaSituacao } from './renitencia-situacao';
-import { Resubmit } from './resubmit';
+import { RegraSinalizacao } from './sinalizacao';
 import { ContatoPassada } from './passadas';
 import { Horarios } from './horarios';
 import { ResultadoDia } from './resultado-dia';
 
-// Abas da Discagem. Renitência por situação, Resubmit e Contato por passada: SQL 65 (protótipo de 01/11/2026).
+// Abas da Discagem. Renitência por situação, Regra por sinalização e Contato por passada: SQL 65.
 // Toda gravação passa por salvar_discagem (valida, versiona e audita; recusa se outra pessoa salvou antes).
-type TabId = 'curtas' | 'renitencia' | 'resubmit' | 'passadas' | 'horarios' | 'resultado';
+type TabId = 'curtas' | 'renitencia' | 'sinalizacao' | 'passadas' | 'horarios' | 'resultado';
 const TABS: { id: TabId; nome: string; novo?: boolean }[] = [
 	{ id: 'curtas', nome: 'Chamadas curtas' },
 	{ id: 'renitencia', nome: 'Renitência por situação', novo: true },
-	{ id: 'resubmit', nome: 'Resubmit', novo: true },
+	{ id: 'sinalizacao', nome: 'Regra por sinalização', novo: true },
 	{ id: 'passadas', nome: 'Contato por passada', novo: true },
 	{ id: 'horarios', nome: 'Horários' },
 	{ id: 'resultado', nome: 'Resultado do dia' },
@@ -120,7 +120,7 @@ export function Discagem() {
 	if (!empresa) return <><PageHeading title="Discagem" description="Regras de discagem da carteira." /><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></>;
 	if (!credor) return <><PageHeading title="Discagem" description="Regras de discagem da carteira." /><Notice variant="warning">Escolha a carteira no topo.</Notice></>;
 
-	const edita = tab !== 'passadas' && tab !== 'resultado';
+	const edita = tab !== 'passadas' && tab !== 'resultado' && tab !== 'sinalizacao';
 	const nPend = pendentes.length + (mudouOutra ? 1 : 0);
 
 	return (
@@ -152,8 +152,8 @@ export function Discagem() {
 
 					{tab === 'curtas' && <ChamadasCurtas draft={draft} update={update} reverter={reverter} canEdit={canEdit} exec={exec} />}
 					{tab === 'renitencia' && <RenitenciaSituacao draft={draft} setDraft={trocar} canEdit={canEdit} ligacoes={ligacoes} />}
-					{tab === 'resubmit' && <Resubmit draft={draft} setDraft={trocar} canEdit={canEdit} />}
-					{tab === 'passadas' && <ContatoPassada irResubmit={() => setTab('resubmit')} />}
+					{tab === 'sinalizacao' && <RegraSinalizacao draft={draft} />}
+					{tab === 'passadas' && <ContatoPassada irResubmit={() => setTab('sinalizacao')} />}
 					{tab === 'horarios' && <Horarios draft={draft} update={update} reverter={reverter} canEdit={canEdit} exec={exec} />}
 					{tab === 'resultado' && <ResultadoDia exec={exec} />}
 

@@ -199,6 +199,8 @@ class Plantao:
             self.registro.descarregar()
         if self.registro is not None and self._vence("reenvio", agora_s, 30):
             self.pegar_reenvios()
+            self.pegar_reciclagens()
+            self.reciclar_automatico()
         if self.registro is not None and self.agregado != hoje:
             self.agregar_passadas(hoje - timedelta(days=1))
             self.agregado = hoje
@@ -256,6 +258,71 @@ class Plantao:
                     "volta_real": tot["volta"], "onda": onda, "resultado": tot})
             except Exception as ex:   # noqa: BLE001
                 log.warning("reenvio %s: falha ao concluir (%s)", ped.get("id"), ex.__class__.__name__)
+
+    def _processar_reciclagem(self, ped: dict, lotes: list) -> None:
+        agora = self.relogio()
+        filtros = ped.get("filtros") or {}
+        tot = {"volta": 0, "fora": {}}
+        for l in lotes:
+            c = l.reciclar(filtros.get("resultados") or [], filtros.get("ondas") or [], ped.get("excluir") or [],
+                           ped.get("limite_cliente") or "mantem", int(ped["id"]), agora, ped.get("escopo") or "lote")
+            tot["volta"] += c["volta"]
+            for k, v in c["fora"].items():
+                tot["fora"][k] = tot["fora"].get(k, 0) + v
+        self.registro.sincronizar(lotes)
+        onda = next((o["id"] for l in lotes for k, o in l.ondas.items()
+                     if k[0] == "reciclagem" and k[4] == int(ped["id"]) and o["id"] is not None), None)
+        try:
+            self.registro.sb.rpc("concluir_reciclagem_voz", {
+                "reciclagem": int(ped["id"]), "situacao": "concluido" if lotes else "cancelado",
+                "volta_real": tot["volta"], "onda": onda, "fora_real": tot["fora"]})
+        except Exception as ex:   # noqa: BLE001
+            log.warning("reciclagem %s: falha ao concluir (%s)", ped.get("id"), ex.__class__.__name__)
+
+    def pegar_reciclagens(self) -> int:
+        """Reciclar mailing (pedido no site): zera e redisca os números escolhidos do lote, pelas mesmas regras."""
+        minhas = self._minhas()
+        n = 0
+        while minhas:
+            try:
+                ped = self.registro.sb.rpc("pegar_reciclagem_voz", {"empresas": minhas})
+            except Exception as ex:   # noqa: BLE001
+                log.warning("reciclagem: falha ao pegar pedido (%s)", ex.__class__.__name__)
+                return n
+            if not ped:
+                return n
+            n += 1
+            self._processar_reciclagem(ped, [l for l in self.orq.lotes.values() if l.lote_id == ped.get("lote_id")])
+        return n
+
+    def reciclar_automatico(self) -> int:
+        """Reciclagem automática da carteira (reciclagem_auto): no horário, com a parte sem contato do lote acima do
+        percentual, uma vez por lote no dia; sempre mantém o limite de tentativas do dia."""
+        agora = self.relogio()
+        n = 0
+        grupos: dict = {}
+        for l in self.orq.lotes.values():
+            if l.lote_id is not None and l.regras is not None:
+                grupos.setdefault(l.lote_id, []).append(l)
+        for lote_id, ls in grupos.items():
+            cfg = (ls[0].regras.cfg.get("reciclagem_auto") or {})
+            if not cfg.get("ativo") or ls[0].reciclagem_auto_em == agora.date() or agora.strftime("%H:%M") < cfg["hora"]:
+                continue
+            pct = sum(l.sem_contato_pct() * len(l.itens) for l in ls) / max(1, sum(len(l.itens) for l in ls))
+            for l in ls:
+                l.reciclagem_auto_em = agora.date()
+            if pct < cfg["sem_contato_pct"]:
+                continue
+            try:
+                ped = self.registro.sb.rpc("registrar_reciclagem_auto_voz", {
+                    "lote": lote_id, "excluir": cfg["excluir"], "sem_contato_pct": round(pct, 1)})
+            except Exception as ex:   # noqa: BLE001
+                log.warning("reciclagem automática: falha ao registrar (%s)", ex.__class__.__name__)
+                continue
+            if ped:
+                n += 1
+                self._processar_reciclagem(ped, ls)
+        return n
 
     def agregar_passadas(self, dia) -> None:
         """Noite: voz_passadas_dia (contato por passada) de cada empresa desta VM, pelas regras do motor (e_cpc e

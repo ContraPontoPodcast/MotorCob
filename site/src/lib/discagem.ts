@@ -30,7 +30,10 @@ export type Discagem = {
 	retorno_agendado?: { max_dias?: number } & Record<string, unknown>;
 	por_situacao?: Record<string, Record<string, unknown>>;
 	falhas_tecnicas?: Record<string, Record<string, unknown>>;
-	resubmit?: Record<string, Record<string, unknown>> | null;
+	// a edição destes três chega com o redesign; o site só preserva o que estiver salvo
+	por_sinalizacao?: Record<string, unknown> | null;
+	modo_discagem?: Record<string, unknown> | null;
+	reciclagem_auto?: Record<string, unknown> | null;
 };
 
 export type LigacoesTrava = {
@@ -204,8 +207,8 @@ export function computeDiff(draft: Discagem): Record<string, unknown> {
 			if (b && Object.keys(b).length) out[k] = b;
 			continue;
 		}
-		if (k === 'resubmit') {
-			if (draft.resubmit != null) out.resubmit = draft.resubmit; // {} = Resubmit ligado com o padrão MotorCX
+		if (k === 'por_sinalizacao' || k === 'modo_discagem' || k === 'reciclagem_auto') {
+			if (draft[k] != null) out[k] = draft[k]; // preservados como estão salvos (a edição chega com o redesign)
 			continue;
 		}
 		if (k === 'retorno_agendado') {

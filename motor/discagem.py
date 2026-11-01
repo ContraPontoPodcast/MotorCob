@@ -67,12 +67,14 @@ PADRAO = {
     "chamadas_curtas": {"ativo": True, "aviso": 0.75, "corte_ativo": False, "corte": 0.80,
                         "max_por_numero_dia": 900, "max_total_dia": 9000, "abandono_conta": True, "segundos": 6,
                         "falha_conta": True},
-    # Renitência por situação e Resubmit (protótipo aprovado de 01/11/2026, SQL 65). Vazio/None = o que o motor e a
-    # VM fazem hoje (paridade): intervalo_min_minutos (ocupado: intervalo_ocupado_minutos) e tentativas_numero_dia
-    # para toda situação; falha técnica religa pelo intervalo geral; sem resubmit = a retentativa de hoje.
-    "por_situacao": {},          # {situação: {intervalo_minutos, max_dia, conta_descanso}} (só as mudadas)
-    "falhas_tecnicas": {},       # {falha: {religar_minutos, aviso}} (só as mudadas)
-    "resubmit": None,            # None = retentativa de hoje; objeto = Resubmit por situação (RESUBMIT_PADRAO + mudanças)
+    # Renitência por situação, regra por sinalização, modo de discagem e reciclagem (protótipo funcional aprovado,
+    # SQL 65). Vazio/None = o que o motor e a VM fazem hoje (paridade): intervalo_min_minutos (ocupado: o dele) e
+    # tentativas_numero_dia para toda situação, retentativa na ordem do arquivo, 1 telefone de voz por cliente.
+    "por_situacao": {},          # {situação: {max_dia, conta_descanso}} (só as mudadas)
+    "falhas_tecnicas": {},       # {falha: {aviso}} (só as mudadas)
+    "por_sinalizacao": None,     # None = a VM de hoje; objeto = regra por sinalização (SINALIZACAO_PADRAO + mudanças)
+    "modo_discagem": None,       # None = hoje; objeto = vertical/horizontal com spins (MODO_PADRAO + mudanças)
+    "reciclagem_auto": None,     # None/ativo false = desligada
 }
 # campo -> (tipo, mínimo, máximo) dos blocos
 _SUB = {
@@ -92,88 +94,177 @@ _SUB = {
                         "abandono_conta": bool, "segundos": (1, 60), "falha_conta": bool},
 }
 
-# ------------------------------------------------------------------ Renitência por situação e Resubmit (SQL 65)
+# ------------------------------------------------------------------ Renitência por situação e regra por sinalização (SQL 65)
 # As 8 situações do dono (motor/voz.py › SITUACOES_DONO) e as falhas técnicas do de-para SIP. "sem_credito" é a
 # falha_operadora com SIP 402; "numero_incorreto" é numero_inexistente (ou inexistente_voz) e pessoa errada.
 SITUACOES_RENITENCIA = ("maquina", "nao_atendida", "ocupado", "caixa_postal", "desligou_sem_conversar",
                         "atendeu_desligou")
 FALHAS_TECNICAS = ("falha_operadora", "sem_credito", "falha_rede", "indisponivel", "bloqueio_originacao",
                    "cancelada_discador", "abandonada")
-SITUACOES_RESUBMIT = ("maquina", "nao_atendida", "ocupado", "caixa_postal", "desligou_sem_conversar",
-                      "retorno_agendado", "atendeu_desligou", "numero_incorreto") + FALHAS_TECNICAS
+SITUACOES = ("maquina", "nao_atendida", "ocupado", "caixa_postal", "desligou_sem_conversar",
+             "retorno_agendado", "atendeu_desligou", "numero_incorreto") + FALHAS_TECNICAS
 PRIORIDADES = ("topo", "normal", "fim")
-_SUB_SITUACAO = {"intervalo_minutos": (0, 1440), "max_dia": (1, 10), "conta_descanso": bool}
-_SUB_FALHA = {"religar_minutos": (0, 1440), "aviso": "fracao"}
-_SUB_RESUBMIT = {"ativo": bool, "depois_minutos": (0, 600), "max_dia": (1, 9), "prioridade": PRIORIDADES,
-                 "ate": "hora", "outro_numero": bool}
+_SUB_SITUACAO = {"max_dia": (1, 10), "conta_descanso": bool}
+_SUB_FALHA = {"aviso": "fracao"}
 # aviso (fração das tentativas do dia) de cada falha técnica: só alerta, nunca muda a discagem
 AVISO_FALHA_PADRAO = {"falha_operadora": 0.15, "sem_credito": 0.01, "falha_rede": 0.05, "indisponivel": 0.20,
                       "bloqueio_originacao": 0.01, "cancelada_discador": 0.05, "abandonada": 0.03}
-# o "padrão MotorCX" que a tela do Resubmit mostra e que vale quando a carteira salva o bloco resubmit
-_R = lambda ativo, dep, mx, pri, ate, outro: {"ativo": ativo, "depois_minutos": dep, "max_dia": mx,  # noqa: E731
-                                              "prioridade": pri, "ate": ate, "outro_numero": outro}
-RESUBMIT_PADRAO = {
-    "maquina": _R(True, 120, 1, "fim", "19:00", True),
-    "nao_atendida": _R(True, 60, 2, "normal", "19:30", True),
-    "ocupado": _R(True, 15, 2, "topo", "19:30", False),
-    "caixa_postal": _R(True, 120, 1, "fim", "19:00", True),
-    "desligou_sem_conversar": _R(True, 90, 1, "normal", "19:00", False),
-    "retorno_agendado": _R(True, 0, 1, "topo", "20:00", False),
-    "atendeu_desligou": _R(False, 120, 1, "fim", "18:00", False),
-    "numero_incorreto": _R(False, 30, 1, "normal", "19:00", True),
-    "falha_operadora": _R(True, 30, 2, "topo", "19:30", False),
-    "sem_credito": _R(False, 30, 1, "normal", "19:30", False),
-    "falha_rede": _R(True, 30, 2, "topo", "19:30", False),
-    "indisponivel": _R(True, 180, 1, "fim", "19:00", True),
-    "bloqueio_originacao": _R(False, 120, 1, "normal", "19:00", False),
-    "cancelada_discador": _R(True, 30, 1, "topo", "19:30", False),
-    "abandonada": _R(True, 60, 1, "topo", "19:30", False),
+
+# Regra de discagem por sinalização (decisão do dono, 01/11/2026): uma linha por sinalização. 1) finaliza o
+# cliente? 2) senão, redisca o MESMO telefone (depois de X min, até N vezes, prioridade); 3) esgotadas, depois:
+# próximo telefone (espera Y min), próximo cliente ou finaliza; mais o horário limite. "rediscar.depois_min" é o
+# único intervalo da situação (não há outro). Fixos: CPC, acordo, promessa, recusa e "não ligar" finalizam (não são
+# linhas); pediu retorno finaliza (vale o agendamento); inexistente e pessoa errada não rediscam; sem crédito e
+# bloqueio de originação pausam a rota e alertam (não são linhas).
+SINALIZACOES = ("maquina", "nao_atendida", "ocupado", "caixa_postal", "desligou_sem_conversar", "retorno_agendado",
+                "atendeu_desligou", "numero_inexistente", "pessoa_errada", "recado", "falha_operadora", "falha_rede",
+                "indisponivel", "cancelada_discador", "abandonada")
+ACOES_DEPOIS = ("proximo_telefone", "proximo_cliente", "finaliza")
+_SUB_SINAL = {"finaliza": bool, "rediscar": {"ativo": bool, "depois_min": (0, 600), "max": (1, 9), "prioridade": PRIORIDADES},
+              "depois": {"acao": ACOES_DEPOIS, "espera_min": (0, 240)}, "ate": "hora"}
+
+
+def _S(red, dep, n, pri, acao, ate, fin=False):
+    return {"finaliza": fin, "rediscar": {"ativo": red, "depois_min": dep, "max": n, "prioridade": pri},
+            "depois": {"acao": acao, "espera_min": 0}, "ate": ate}
+
+
+# padrão do horizontal (o vertical troca o "depois" de máquina, não atendeu e caixa postal: SIN_VERTICAL)
+SINALIZACAO_PADRAO = {
+    "maquina": _S(True, 120, 1, "fim", "proximo_cliente", "19:00"),
+    "nao_atendida": _S(True, 60, 2, "normal", "proximo_cliente", "19:30"),
+    "ocupado": _S(True, 15, 2, "topo", "proximo_cliente", "19:30"),
+    "caixa_postal": _S(True, 120, 1, "fim", "proximo_cliente", "19:00"),
+    "desligou_sem_conversar": _S(True, 90, 1, "normal", "proximo_telefone", "19:00"),
+    "retorno_agendado": _S(False, 0, 1, "topo", "finaliza", "20:00", fin=True),
+    "atendeu_desligou": _S(True, 120, 1, "normal", "proximo_cliente", "19:00"),
+    "numero_inexistente": _S(False, 0, 1, "normal", "proximo_telefone", "19:30"),
+    "pessoa_errada": _S(False, 0, 1, "normal", "proximo_telefone", "19:30"),
+    "recado": _S(False, 120, 1, "normal", "proximo_cliente", "19:00", fin=True),
+    "falha_operadora": _S(True, 30, 1, "topo", "proximo_telefone", "19:30"),
+    "falha_rede": _S(True, 30, 1, "topo", "proximo_telefone", "19:30"),
+    "indisponivel": _S(True, 30, 1, "normal", "proximo_telefone", "19:30"),
+    "cancelada_discador": _S(True, 30, 1, "topo", "proximo_telefone", "19:30"),
+    "abandonada": _S(True, 0, 1, "topo", "proximo_cliente", "19:30"),
 }
-del _R
-# travas da tela: retorno agendado volta sempre (no horário pedido, 1 vez, topo); número incorreto nunca volta no
-# mesmo número ("ativo" = tentar outro número do cliente)
-_TRAVADO_RESUBMIT = {"retorno_agendado": {"ativo": True, "max_dia": 1, "prioridade": "topo", "outro_numero": False},
-                     "numero_incorreto": {"max_dia": 1}}
+SIN_VERTICAL = {"maquina": "proximo_telefone", "nao_atendida": "proximo_telefone", "caixa_postal": "proximo_telefone"}
+# o que a tela não deixa mudar (o motor força e avisa)
+_TRAVA_SINAL = {"retorno_agendado": {"finaliza": True}, "numero_inexistente": {"rediscar": {"ativo": False}},
+                "pessoa_errada": {"rediscar": {"ativo": False}}}
+# desfechos que finalizam o cliente sempre (contato ou pedido explícito) e os que pausam a rota
+FINALIZA_SEMPRE = ("cpc", "identidade_confirmada", "promessa", "recusa", "opt_out", "atendida_sem_cpc")
+PAUSA_ROTA = ("sem_credito", "bloqueio_originacao")
+
+# Modo de discagem (R11). Vertical: esgota os telefones do cliente (até max_telefones_dia) antes do próximo
+# cliente. Horizontal com spin rate: uma passagem do mailing por spin; padrão do dono spin N -> telefone N.
+MODOS = ("vertical", "horizontal")
+ORDENS = ("certificado", "carga", "historico")
+TELEFONES_SPIN = ("t1", "t2", "t3", "t4", "t5", "nao_tentado", "historico")
+AUSENTE = ("proximo", "pula")
+_SUB_MODO = {"modo": MODOS, "max_telefones_dia": (1, 5), "ordem": ORDENS, "telefone_ausente": AUSENTE}
+_SUB_SPINS = {"quantidade": (1, 10), "intervalo_min": (0, 600)}
+MODO_PADRAO = {"modo": "horizontal", "max_telefones_dia": 1, "ordem": "certificado", "telefone_ausente": "proximo",
+               "spins": {"quantidade": 3, "intervalo_min": 120,
+                         "regras": [{"spin": i, "telefone": f"t{i}", "inicio": None} for i in (1, 2, 3)]}}
+# Reciclagem automática (R16): desligada; exclusões editáveis (não ligar e inexistente nunca voltam)
+EXCLUSOES_RECICLAGEM = ("cpc", "promessa", "recusa", "pessoa_errada", "retorno")
+_SUB_RECICLAGEM = {"ativo": bool, "hora": "hora", "sem_contato_pct": (10, 100)}
+RECICLAGEM_PADRAO = {"ativo": False, "hora": "16:00", "sem_contato_pct": 60,
+                     "excluir": ["cpc", "recusa", "pessoa_errada", "retorno"]}
+# tentativas por número de quem salvou a regra nova (decisão do dono); sem a regra, o de hoje (2)
+TENTATIVAS_NUMERO_REGRA_NOVA = 3
 
 
 def situacao_de(desfecho: str | None, causa_sip: int | None = None) -> str | None:
-    """Desfecho de voz -> situação da Renitência/Resubmit (None = houve contato ou pedido: não volta)."""
+    """Desfecho de voz -> situação da renitência (None = houve contato ou pedido)."""
     if desfecho in ("numero_inexistente", "inexistente_voz", "atendida_terceiro_desconhece"):
         return "numero_incorreto"
     if desfecho == "falha_operadora" and causa_sip == 402:
         return "sem_credito"
-    return desfecho if desfecho in SITUACOES_RESUBMIT else None
+    return desfecho if desfecho in SITUACOES else None
+
+
+def sinalizacao_de(desfecho: str | None, causa_sip: int | None = None) -> str | None:
+    """Desfecho de voz -> linha da regra por sinalização. None = regra fixa (finaliza ou pausa a rota)."""
+    if desfecho == "inexistente_voz":
+        return "numero_inexistente"
+    if desfecho == "atendida_terceiro_desconhece":
+        return "pessoa_errada"
+    if desfecho == "falha_operadora" and causa_sip == 402:
+        return "sem_credito"
+    return desfecho if desfecho in SINALIZACOES or desfecho in PAUSA_ROTA else None
 
 
 def regra_situacao(cfg: dict, sit: str) -> dict:
-    """Intervalo (min), máximo no dia no mesmo número e se conta no descanso, efetivos para a situação. Sem a chave
-    em por_situacao/falhas_tecnicas valem os globais de hoje (paridade)."""
+    """Intervalo (min), máximo no dia no mesmo número e se conta no descanso, efetivos para a situação. O intervalo
+    é o rediscar.depois_min da regra por sinalização (o único); sem a regra, os globais de hoje (paridade)."""
     if sit in FALHAS_TECNICAS:
         f = (cfg.get("falhas_tecnicas") or {}).get(sit) or {}
-        return {"intervalo_minutos": f.get("religar_minutos", cfg["intervalo_min_minutos"]),
+        r = regra_sinalizacao(cfg, sit)
+        return {"intervalo_minutos": r["rediscar"]["depois_min"] if r else cfg["intervalo_min_minutos"],
                 "max_dia": cfg["tentativas_numero_dia"], "conta_descanso": False,
                 "aviso": f.get("aviso", AVISO_FALHA_PADRAO[sit])}
     p = (cfg.get("por_situacao") or {}).get(sit) or {}
+    r = regra_sinalizacao(cfg, sit) if sit in SINALIZACOES else None
     glob = cfg["intervalo_ocupado_minutos"] if sit == "ocupado" else cfg["intervalo_min_minutos"]
-    return {"intervalo_minutos": p.get("intervalo_minutos", glob),
+    return {"intervalo_minutos": r["rediscar"]["depois_min"] if r else glob,
             "max_dia": min(p.get("max_dia", cfg["tentativas_numero_dia"]), cfg["tentativas_numero_dia"]),
             "conta_descanso": p.get("conta_descanso", sit in V.NAO_ATENDE)}
 
 
-def resubmit_efetivo(cfg: dict, sit: str, tentativas_cliente: int | None = None) -> dict | None:
-    """Regra do Resubmit que vale para a situação (None = carteira sem Resubmit: retentativa de hoje).
-    depois_efetivo = o maior entre "depois de" e o intervalo da renitência (decisão do dono); cabe = quantas voltas a
-    régua deixa (tentativas por número, ou por cliente com outro número)."""
-    res = cfg.get("resubmit")
-    if res is None or sit not in res:
+def regra_sinalizacao(cfg: dict, sinal: str | None) -> dict | None:
+    """A linha da regra por sinalização que vale (None = carteira sem a regra: a VM de hoje)."""
+    ps = cfg.get("por_sinalizacao")
+    if ps is None or sinal not in ps:
         return None
-    r = dict(res[sit])
-    ren = regra_situacao(cfg, sit)
-    tc = tentativas_cliente or cfg.get("tentativas_cliente_dia") or 3
-    r["depois_efetivo"] = max(r["depois_minutos"], ren["intervalo_minutos"])
-    r["cabe"] = max(0, tc - 1) if r["outro_numero"] else max(0, ren["max_dia"] - 1)
-    r["max_efetivo"] = min(r["max_dia"], r["cabe"])
-    return r
+    return ps[sinal]
+
+
+def tem_regra_nova(cfg: dict) -> bool:
+    return cfg.get("por_sinalizacao") is not None or cfg.get("modo_discagem") is not None
+
+
+def telefones_dia(cfg: dict) -> int | None:
+    """Telefones de voz por cliente no dia pelo modo de discagem (None = o de hoje, numeros_voz)."""
+    m = cfg.get("modo_discagem")
+    if not m:
+        return None
+    if m["modo"] == "vertical":
+        return m["max_telefones_dia"]
+    idx = [int(r["telefone"][1:]) for r in m["spins"]["regras"][:m["spins"]["quantidade"]] if r["telefone"][0] == "t"]
+    nao_tent = sum(1 for r in m["spins"]["regras"][:m["spins"]["quantidade"]] if r["telefone"] == "nao_tentado")
+    return max([1] + idx) + nao_tent
+
+
+def _valor_aninhado(v, regras: dict, onde: str) -> tuple[dict, list[str]]:
+    """{campo: valor | {sub: valor}} validado campo a campo pelas regras (o que não der fica de fora, com aviso)."""
+    if not isinstance(v, dict):
+        return {}, [f"{onde}: precisa ser um objeto (ignorado)"]
+    saida, av = {}, []
+    for k, x in v.items():
+        if str(k).startswith("_"):
+            continue
+        regra = regras.get(k)
+        if regra is None:
+            av.append(f"{onde}: '{k}' não existe (ignorado)")
+        elif isinstance(regra, dict):
+            sub, a = _valor_aninhado(x, regra, f"{onde}/{k}")
+            av += a
+            if sub:
+                saida[k] = sub
+        else:
+            try:
+                saida[k] = _valor(x, regra)
+            except (TypeError, ValueError) as ex:
+                av.append(f"{onde}/{k}: {ex} (ignorado)")
+    return saida, av
+
+
+def _mesclar(base: dict, mud: dict) -> dict:
+    out = copy.deepcopy(base)
+    for k, v in mud.items():
+        out[k] = _mesclar(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
 
 
 def _bloco_por_chave(v, permitidas, regras: dict, onde: str, base: dict | None) -> tuple[dict, list[str]]:
@@ -187,58 +278,106 @@ def _bloco_por_chave(v, permitidas, regras: dict, onde: str, base: dict | None) 
         if k not in permitidas:
             av.append(f"{onde}: '{k}' não existe (ignorado)")
             continue
-        if not isinstance(campos, dict):
-            av.append(f"{onde}/{k}: precisa ser um objeto (ignorado)")
-            continue
-        atual = saida.setdefault(k, {})
-        for kk, vv in campos.items():
-            if str(kk).startswith("_"):
-                continue
-            regra = regras.get(kk)
-            if regra is None:
-                av.append(f"{onde}/{k}: '{kk}' não existe (ignorado)")
-                continue
-            try:
-                atual[kk] = _valor(vv, regra)
-            except (TypeError, ValueError) as ex:
-                av.append(f"{onde}/{k}/{kk}: {ex} (ignorado)")
-        if not atual:
-            saida.pop(k)
+        sub, a = _valor_aninhado(campos, regras, f"{onde}/{k}")
+        av += a
+        if sub:
+            saida[k] = _mesclar(saida.get(k, {}), sub)
     return saida, av
 
 
-def _resubmit(v, onde: str) -> tuple[dict | None, list[str]]:
-    """Bloco resubmit -> regra completa por situação (RESUBMIT_PADRAO + o que a carteira mudou, com as travas)."""
+def _por_sinalizacao(v, onde: str, modo: str) -> tuple[dict | None, list[str]]:
+    """Bloco por_sinalizacao -> regra completa (padrão do modo + o que a carteira mudou, com as travas)."""
     if v is None:
         return None, []
-    mud, av = _bloco_por_chave(v, SITUACOES_RESUBMIT, _SUB_RESUBMIT, onde, None)
     if not isinstance(v, dict):
-        return None, av
-    saida = copy.deepcopy(RESUBMIT_PADRAO)
-    for k, campos in mud.items():
-        saida[k].update(campos)
-    for k, trava in _TRAVADO_RESUBMIT.items():
-        saida[k].update(trava)
+        return None, [f"{onde}: precisa ser um objeto (vale a discagem de hoje)"]
+    mud, av = _bloco_por_chave(v, SINALIZACOES, _SUB_SINAL, onde, None)
+    saida = {k: (_mesclar(r, {"depois": {"acao": SIN_VERTICAL[k]}}) if modo == "vertical" and k in SIN_VERTICAL else
+                 copy.deepcopy(r)) for k, r in SINALIZACAO_PADRAO.items()}
+    for k, m in mud.items():
+        saida[k] = _mesclar(saida[k], m)
+    for k, trava in _TRAVA_SINAL.items():
+        if _mesclar(saida[k], trava) != saida[k]:
+            av.append(f"{onde}/{k}: regra fixa (vale a do MotorCX)")
+            saida[k] = _mesclar(saida[k], trava)
     return saida, av
+
+
+def _modo_discagem(v, onde: str) -> tuple[dict | None, list[str]]:
+    if v is None:
+        return None, []
+    if not isinstance(v, dict):
+        return None, [f"{onde}: precisa ser um objeto (vale a discagem de hoje)"]
+    regras = {**_SUB_MODO, "spins": _SUB_SPINS}
+    mud, av = _valor_aninhado({k: x for k, x in v.items() if not (k == "spins" and isinstance(x, dict) and "regras" in x)}
+                              | ({"spins": {kk: xx for kk, xx in v["spins"].items() if kk != "regras"}}
+                                 if isinstance(v.get("spins"), dict) else {}), regras, onde)
+    m = _mesclar(MODO_PADRAO, mud)
+    q = m["spins"]["quantidade"]
+    bruto = (v.get("spins") or {}).get("regras") if isinstance(v.get("spins"), dict) else None
+    regs = {r["spin"]: dict(r) for r in MODO_PADRAO["spins"]["regras"]}
+    if bruto is not None:
+        if not isinstance(bruto, list):
+            av.append(f"{onde}/spins/regras: precisa ser uma lista (vale o padrão)")
+        else:
+            regs = {}
+            for r in bruto:
+                try:
+                    n = _inteiro(r.get("spin"), 1, q)
+                    tel = _valor(r.get("telefone"), TELEFONES_SPIN)
+                    ini = None if r.get("inicio") in (None, "") else _valor(r["inicio"], "hora")
+                    if ini is not None and not MIN_HORA <= ini <= MAX_HORA:
+                        raise ValueError(f"início fora de {MIN_HORA}–{MAX_HORA}")
+                    regs[n] = {"spin": n, "telefone": tel, "inicio": ini}
+                except (AttributeError, TypeError, ValueError) as ex:
+                    av.append(f"{onde}/spins/regras: {ex} (ignorado)")
+    # spin sem regra: telefone N (padrão do dono); inícios crescentes
+    m["spins"]["regras"] = [regs.get(n) or {"spin": n, "telefone": f"t{min(n, 5)}", "inicio": None} for n in range(1, q + 1)]
+    inis = [r["inicio"] for r in m["spins"]["regras"] if r["inicio"]]
+    if inis != sorted(inis):
+        av.append(f"{onde}/spins/regras: os inícios precisam ser crescentes (ignorados)")
+        for r in m["spins"]["regras"]:
+            r["inicio"] = None
+    return m, av
+
+
+def _reciclagem(v, onde: str) -> tuple[dict | None, list[str]]:
+    if v is None:
+        return None, []
+    if not isinstance(v, dict):
+        return None, [f"{onde}: precisa ser um objeto (desligada)"]
+    mud, av = _valor_aninhado({k: x for k, x in v.items() if k != "excluir"}, _SUB_RECICLAGEM, onde)
+    r = _mesclar(RECICLAGEM_PADRAO, mud)
+    if "excluir" in v:
+        ex = v["excluir"]
+        if not isinstance(ex, list) or any(x not in EXCLUSOES_RECICLAGEM for x in ex):
+            av.append(f"{onde}/excluir: use {', '.join(EXCLUSOES_RECICLAGEM)} (vale o padrão)")
+        else:
+            r["excluir"] = list(dict.fromkeys(ex))
+    if not MIN_HORA <= r["hora"] <= MAX_HORA:
+        av.append(f"{onde}/hora: entre {MIN_HORA} e {MAX_HORA} (vale {RECICLAGEM_PADRAO['hora']})")
+        r["hora"] = RECICLAGEM_PADRAO["hora"]
+    return r, av
 
 
 def padrao_site() -> dict:
     """O padrão MotorCX que o site mostra (public.discagem_padrao(), SQL 65; tests/test_resubmit.py confere):
-    os valores de hoje por situação e falha técnica, e o Resubmit sugerido."""
+    os valores de hoje e, para quem salva a regra nova, a regra por sinalização, o modo e a reciclagem sugeridos."""
     base = copy.deepcopy(PADRAO)
-    tc = 3
     return {
-        "tentativas_numero_dia": base["tentativas_numero_dia"], "tentativas_cliente_dia": tc,
-        "intervalo_min_minutos": base["intervalo_min_minutos"],
+        "tentativas_numero_dia": base["tentativas_numero_dia"], "tentativas_numero_dia_regra_nova": TENTATIVAS_NUMERO_REGRA_NOVA,
+        "tentativas_cliente_dia": 3, "intervalo_min_minutos": base["intervalo_min_minutos"],
         "intervalo_ocupado_minutos": base["intervalo_ocupado_minutos"],
         "por_situacao": {s: {k: v for k, v in regra_situacao(base, s).items() if k in _SUB_SITUACAO}
                          for s in SITUACOES_RENITENCIA},
-        "falhas_tecnicas": {s: {"religar_minutos": regra_situacao(base, s)["intervalo_minutos"],
-                                "aviso": AVISO_FALHA_PADRAO[s]} for s in FALHAS_TECNICAS},
-        "resubmit": copy.deepcopy(RESUBMIT_PADRAO),
+        "falhas_tecnicas": {s: {"aviso": AVISO_FALHA_PADRAO[s]} for s in FALHAS_TECNICAS},
+        "por_sinalizacao": copy.deepcopy(SINALIZACAO_PADRAO), "sinalizacao_vertical": dict(SIN_VERTICAL),
+        "modo_discagem": copy.deepcopy(MODO_PADRAO), "reciclagem_auto": copy.deepcopy(RECICLAGEM_PADRAO),
         "retorno_agendado": {"max_dias": base["retorno_agendado"]["max_dias"]},
         "chamadas_curtas": {"falha_conta": base["chamadas_curtas"]["falha_conta"]},
     }
+
+
 _INTEIROS = {"tentativas_numero_dia": (1, 10), "tentativas_cliente_dia": (1, 10),
              "intervalo_min_minutos": (0, 1440), "intervalo_ocupado_minutos": (0, 1440)}
 
@@ -401,8 +540,13 @@ def normalizar(bruto, base: dict | None = None, onde: str = "discagem") -> tuple
                                 else (FALHAS_TECNICAS, _SUB_FALHA))
                 cfg[k], a = _bloco_por_chave(v, perm, regras, f"{onde}/{k}", cfg.get(k))
                 av += a
-            elif k == "resubmit":
-                cfg[k], a = _resubmit(v, f"{onde}/{k}")
+            elif k == "por_sinalizacao":
+                continue                 # depois do modo (o padrão depende de vertical × horizontal)
+            elif k == "modo_discagem":
+                cfg[k], a = _modo_discagem(v, f"{onde}/{k}")
+                av += a
+            elif k == "reciclagem_auto":
+                cfg[k], a = _reciclagem(v, f"{onde}/{k}")
                 av += a
             elif k == "horarios":
                 if isinstance(v, bool) or not isinstance(v, dict):
@@ -428,6 +572,13 @@ def normalizar(bruto, base: dict | None = None, onde: str = "discagem") -> tuple
                         av.append(f"{onde}/{k}/{kk}: {ex} (vale {cfg[k][kk]!r})")
         except (TypeError, ValueError) as ex:
             av.append(f"{onde}/{k}: {ex} (vale o padrão)")
+    if "por_sinalizacao" in bruto:
+        modo = (cfg.get("modo_discagem") or {}).get("modo", "horizontal")
+        cfg["por_sinalizacao"], a = _por_sinalizacao(bruto["por_sinalizacao"], f"{onde}/por_sinalizacao", modo)
+        av += a
+    # quem salvou a regra nova sem dizer as tentativas por número fica com 3 (decisão do dono); sem a regra, o de hoje
+    if tem_regra_nova(cfg) and "tentativas_numero_dia" not in bruto:
+        cfg["tentativas_numero_dia"] = TENTATIVAS_NUMERO_REGRA_NOVA
     return cfg, av
 
 
