@@ -617,7 +617,7 @@ checar("fatura paga não conta como vencida", True, f"select faturas_vencidas fr
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional
 SVC = "service_role"
-checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 24)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58)
+checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 25)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59)
 checar("cliente não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", u["admina"])
 checar("Atendimento não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", SUP)
 checar("ninguém grava preço direto na tabela", False, f"insert into public.precos_empresa (empresa_id,item,modelo,preco) values ({EA},'sms','flat',0.01)", "authenticated", u["admin"])
@@ -2201,7 +2201,7 @@ checar("SQL 56: cliente B não lê o consumo da A", True, "select count(*) from 
 checar("SQL 56: exportação por dia e rota", True, f"select count(*) from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["gest"], 2)
 checar("SQL 56: B não exporta a telefonia da A", False, f"select * from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["operb"])
 checar("SQL 56: usuário não grava consumo de voz", False, f"insert into public.consumo_voz (empresa_id,dia) values ({EA},'2026-11-06')", "authenticated", u["admin"])
-checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_geracao_fluxo")   # + SQL 58
+checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_geracao_fluxo,ia_roleplay")   # + SQL 58 e 59
 checar("SQL 56: telefonia não entra na prévia da fatura", True, f"select count(*) from public.previa_fatura({EA}, '2026-11-01') where item like '%telefon%' or item like 'consumo_voz%'", "authenticated", u["gest"], 0)
 for t in ("voz_config", "voz_roteiros", "voz_troncos", "voz_rotas", "voz_transferencias", "voz_contrato", "voz_lotes", "voz_ondas",
           "voz_chamadas", "voz_gravacoes", "consumo_voz", "fornecedor_saude", "voz_insights_dia", "titular_pedidos",
@@ -2510,6 +2510,95 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 56: contrato do código de voz com o banco (testar_voz_contrato.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 59 · Roleplay fase 1: teste do agente de IA com personas
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261226000001_voz_roleplay.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+from voz import roleplay as _RP   # noqa: E402
+for _cod, _p in _RP.PERSONAS_PADRAO.items():
+    checar(f"SQL 59: persona padrão {_cod} igual à do Python", True,
+           f"select perfil||'|'||array_to_string(resultados_aceitos, ',')||'|'||array_to_string(travas_esperadas, ',')||'|'||dificuldade from public.roleplay_personas where empresa_id is null and codigo='{_cod}'",
+           "authenticated", u["oper"], f"{_p[1]}|{','.join(_p[7])}|{','.join(_p[8])}|{_p[6]}")
+checar("SQL 59: 10 personas padrão visíveis a qualquer cliente", True, "select count(*) from public.roleplay_personas where empresa_id is null", "authenticated", u["operb"], 10)
+_PJ = '{"codigo": "cliente_vip", "nome": "Cliente antigo", "perfil": "outro", "objetivo": "Cliente antigo que quer desconto por fidelidade.", "frases": ["Sou cliente há anos."], "resultados_aceitos": ["promessa", "transferida_fora_alcada"]}'
+PJA = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.salvar_persona_roleplay({EA}, '{_PJ}')")
+checar("SQL 59: Operação não cria persona", False, f"select public.salvar_persona_roleplay({EA}, '{_PJ.replace('cliente_vip', 'outra')}')", "authenticated", u["oper"])
+checar("SQL 59: persona com CPF nas frases é recusada", False, f"select public.salvar_persona_roleplay({EA}, '{_PJ.replace('cliente_vip', 'cpf').replace('Sou cliente há anos.', 'Meu CPF é 12345678901')}')", "authenticated", u["plan"])
+checar("SQL 59: persona com e-mail no objetivo é recusada", False, f"select public.salvar_persona_roleplay({EA}, '{_PJ.replace('cliente_vip', 'email').replace('fidelidade.', 'fidelidade, ana@x.com')}')", "authenticated", u["plan"])
+checar("SQL 59: cliente não cria persona padrão", False, f"select public.salvar_persona_roleplay(null, '{_PJ.replace('cliente_vip', 'padrao_x')}')", "authenticated", u["admina"])
+checar("SQL 59: Master cria persona padrão", True, f"select public.salvar_persona_roleplay(null, '{_PJ.replace('cliente_vip', 'padrao_x')}') is not null", "authenticated", u["admin"], "t")
+_sv("delete from public.roleplay_personas where codigo='padrao_x'")
+checar("SQL 59: cliente B não vê a persona da A", True, f"select count(*) from public.roleplay_personas where id={PJA}", "authenticated", u["operb"], 0)
+checar("SQL 59: usuário não grava persona direto", False, f"update public.roleplay_personas set ativa=false where id={PJA}", "authenticated", u["admina"])
+_PN = {c: _sv(f"select id from public.roleplay_personas where empresa_id is null and codigo='{c}'") for c in ("nao_me_ligue", "negocia_rapido", "quer_parcelar_muito")}
+# lote
+checar("SQL 59: Operação não roda roleplay", False, f"select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']}]::bigint[], 3)", "authenticated", u["oper"])
+checar("SQL 59: cliente B não roda roleplay da A", False, f"select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']}]::bigint[], 3)", "authenticated", u["operb"])
+checar("SQL 59: mais de 200 conversas no lote é recusado", False, f"select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']}]::bigint[], 21)", "authenticated", u["plan"])
+_INV = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.salvar_fluxo_voz({EA}, null, 'Rascunho quebrado', 'negociador', '{_lit(_INC)}')")
+checar("SQL 59: versão com erro no validador não roda roleplay", False, f"select public.rodar_roleplay_voz({_INV}, array[{_PN['nao_me_ligue']}]::bigint[], 1)", "authenticated", u["plan"])
+RL1 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']},{_PN['negocia_rapido']}]::bigint[], 2)")
+checar("SQL 59: lote nasce pendente com as personas", True, f"select situacao||'|'||cardinality(personas)||'|'||quantidade from public.roleplay_lotes where id={RL1}", "authenticated", u["oper"], "pendente|2|2")
+checar("SQL 59: um roleplay por versão de cada vez", False, f"select public.rodar_roleplay_voz({FV1}, array[{_PN['nao_me_ligue']}]::bigint[], 1)", "authenticated", u["plan"])
+checar("SQL 59: só a VM pega o lote", False, "select public.pegar_roleplay_voz()", "authenticated", u["plan"])
+checar("SQL 59: VM pega o lote sem credencial dos conectores", True, "select (x->>'lote')||'|'||jsonb_array_length(x->'personas')||'|'||(select count(*) from jsonb_array_elements(x->'conectores') c where c ? 'segredo_ref') from (select public.pegar_roleplay_voz() x) y", "service_role", None, f"{RL1}|2|0")
+# conversas: uma de verdade do executor Python (LLM falso) + as demais com códigos
+class _PF:
+    def __init__(self, rot): self.rot = list(rot)
+    def responder(self, msgs, ferr):
+        from voz.provedores.montagem import Resposta
+        return Resposta(self.rot.pop(0) if self.rot else "Hum.", tokens=10)
+_conv = _RP.conversar(_FX.FluxoCarregado(FV1, _FC.negociador(), {}, None), _RP.Persona.padrao("nao_me_ligue", int(_PN["nao_me_ligue"])),
+                      _PF([]), _PF(["Não me liga mais."]))
+def _reg(l, persona, rodada, res, passou, acordo=False, transc="null", travas="{}", oferta="null", parcelas="null"):
+    return (f"select public.registrar_roleplay_conversa({l}, {persona}, {rodada}, '{res}', {passou}, array['N1']::text[], '{travas}'::text[], "
+            f"'{{}}'::text[], {acordo}, {oferta}, {parcelas}, 3, 100, {transc})")
+checar("SQL 59: conversa do executor Python entra em roleplay_conversas", True,
+       _reg(RL1, _PN["nao_me_ligue"], 1, _conv.resultado, str(_conv.passou).lower(), transc=f"'{_lit(_conv.transcricao)}'::jsonb",
+            travas="{" + ",".join(_conv.travas) + "}") + " is not null", "service_role", None, "t")
+_sv(_reg(RL1, _PN["nao_me_ligue"], 2, "opt_out", "true", travas="{nao_me_ligue}"))
+_sv(_reg(RL1, _PN["negocia_rapido"], 1, "promessa", "true", acordo="true", oferta="'OF-2'", parcelas="6"))
+CV_FALHA = _sv(_reg(RL1, _PN["negocia_rapido"], 2, "limite_turnos", "false", transc="'[{\"quem\": \"agente\", \"texto\": \"Olá\", \"bloco\": \"N1\"}, {\"quem\": \"pessoa\", \"texto\": \"Sou eu.\"}, {\"quem\": \"pessoa\", \"texto\": \"Hum.\"}]'::jsonb"))
+checar("SQL 59: usuário não grava conversa", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true"), "authenticated", u["admin"])
+checar("SQL 59: trava fora da lista é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", travas="{cpf}"), "service_role")
+checar("SQL 59: transcrição com CPF é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", transc="'[{\"quem\": \"pessoa\", \"texto\": \"meu cpf 12345678901\"}]'::jsonb"), "service_role")
+checar("SQL 59: persona fora do lote é recusada", False, _reg(RL1, _PN["quer_parcelar_muito"], 1, "recusa", "true"), "service_role")
+checar("SQL 59: só a VM conclui o lote", False, f"select public.concluir_roleplay_lote({RL1}, 2500)", "authenticated", u["plan"])
+checar("SQL 59: concluir lança os tokens no item ia_roleplay (por mil)", True, f"select public.concluir_roleplay_lote({RL1}, 2500); select l.situacao||'|'||l.tokens||'|'||l.conversas||'|'||(select quantidade from public.consumo_mensageria c where c.empresa_id={EA} and c.item='ia_roleplay') from public.roleplay_lotes l where l.id={RL1}", "service_role", None, "concluido|2500|4|3")
+checar("SQL 59: item ia_roleplay no catálogo da fatura", True, "select unidade from public.cobranca_itens where codigo='ia_roleplay'", "authenticated", u["oper"], "mil tokens")
+checar("SQL 59: resultado do lote por persona (só contagens)", True, f"select string_agg(perfil||':'||conversas||':'||passaram||':'||acordos||':'||taxa_acordo||':'||opt_out||':'||cardinality(coalesce(reprovadas, '{{}}')), ',' order by perfil) from public.resultado_roleplay_voz({RL1})", "authenticated", u["oper"], "nao_me_ligue:2:2:0:0.0:2:0,negocia_rapido:2:1:1:50.0:0:1")
+checar("SQL 59: cliente B não vê o resultado da A", True, f"select count(*) from public.resultado_roleplay_voz({RL1})", "authenticated", u["operb"], 0)
+checar("SQL 59: cliente B não lê as conversas da A", True, "select count(*) from public.roleplay_conversas", "authenticated", u["operb"], 0)
+# conversa reprovada → caso de teste
+CV_OK = _sv(f"select id from public.roleplay_conversas where lote_id={RL1} and passou limit 1")
+checar("SQL 59: conversa aprovada não vira caso", False, f"select public.roleplay_para_caso_teste({CV_OK})", "authenticated", u["plan"])
+checar("SQL 59: Operação não transforma conversa em caso", False, f"select public.roleplay_para_caso_teste({CV_FALHA})", "authenticated", u["oper"])
+CT_RP = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.roleplay_para_caso_teste({CV_FALHA})")
+checar("SQL 59: conversa reprovada vira caso (falas da persona, confere só o resultado)", True, f"select array_to_string(falas, '|')||'#'||cardinality(caminho_esperado)||'#'||resultado_esperado from public.voz_fluxo_casos_teste where id={CT_RP}", "authenticated", u["oper"], "Sou eu.|Hum.#0#promessa")
+checar("SQL 59: transformar de novo devolve o mesmo caso", True, f"select public.roleplay_para_caso_teste({CV_FALHA}) = {CT_RP}", "authenticated", u["plan"], "t")
+checar("SQL 59: caso sem caminho exige resultado esperado", False, f"update public.voz_fluxo_casos_teste set resultado_esperado=null where id={CT_RP}", "service_role")
+# avisos (nunca bloqueio)
+checar("SQL 59: versão sem roleplay ganha aviso", True, f"select array_to_string(public.fluxo_voz_avisos({FV2}), ',')", "authenticated", u["oper"], "roleplay_ausente")
+checar("SQL 59: conversas reprovadas viram aviso", True, f"select array_to_string(public.fluxo_voz_avisos({FV1}), ',')", "authenticated", u["oper"], "roleplay_reprovadas:1")
+RL2 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.rodar_roleplay_voz({FV2}, array[{_PN['negocia_rapido']}]::bigint[], 2)")
+_sv("select public.pegar_roleplay_voz()")
+_sv(_reg(RL2, _PN["negocia_rapido"], 1, "recusa", "false"))
+_sv(_reg(RL2, _PN["negocia_rapido"], 2, "recusa", "false"))
+_sv(f"select public.concluir_roleplay_lote({RL2}, 0)")
+checar("SQL 59: acordo simulado que caiu em relação à versão em uso vira aviso", True, f"select array_to_string(public.fluxo_voz_avisos({FV2}), ',')", "authenticated", u["oper"], "roleplay_reprovadas:2,roleplay_acordo_caiu:25")
+checar("SQL 59: roleplay não entra nos bloqueios da aprovação", True, f"select count(*) from unnest(public.fluxo_voz_bloqueios({FV2})) b where b like 'roleplay%'", "authenticated", u["oper"], 0)
+checar("SQL 59: cliente B não lê os avisos da A", False, f"select public.fluxo_voz_avisos({FV1})", "authenticated", u["operb"])
+# retenção da transcrição simulada (90 dias)
+checar("SQL 59: transcrição simulada expira em 90 dias", True, f"select (transcricao_expira_em - criado_em) = interval '90 days' from public.roleplay_conversas where id={CV_FALHA}", "service_role", None, "t")
+_sv(f"update public.roleplay_conversas set transcricao_expira_em = now() - interval '1 day' where id={CV_FALHA}")
+checar("SQL 59: retenção apaga a transcrição e mantém os códigos", True, f"select public.apagar_voz_expirada(); select (transcricao is null)::text||'|'||resultado from public.roleplay_conversas where id={CV_FALHA}", "service_role", None, "true|limite_turnos")
+for t in ("roleplay_personas", "roleplay_lotes", "roleplay_conversas"):
+    checar(f"SQL 59: anon não lê {t}", False, f"select * from public.{t} limit 1", "anon")
+checar("SQL 59: tabelas do roleplay com RLS", True, "select count(*) from pg_tables where schemaname='public' and tablename like 'roleplay\\_%' and not rowsecurity", "service_role", None, 0)
+checar("SQL 59: RPCs do roleplay com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%roleplay%' or proname = 'fluxo_voz_avisos') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
+checar("SQL 59: anon não chama função do roleplay", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%roleplay%' or proname in ('fluxo_voz_avisos','perfis_roleplay','travas_voz','codigos_ok')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
 
 # SQL 57 · acesso próprio das VMs de voz: entra como o papel motorcx_voz (login de verdade) em arquivo próprio
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_acesso.py")],

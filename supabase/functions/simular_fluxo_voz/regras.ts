@@ -4,10 +4,12 @@
 // cara de documento, telefone ou e-mail são recusadas, como no banco (falas_teste_voz_ok). Nada é gravado, a não ser o
 // resultado dos casos de teste (só caminho e código).
 
-export type Acao = "simular" | "rodar_casos";
+export type Acao = "simular" | "rodar_casos" | "roleplay";
 export interface PedidoSimular { acao: "simular"; versao: number; falas: string[]; falhar: number[] }
 export interface PedidoCasos { acao: "rodar_casos"; versao: number }
-export type Pedido = PedidoSimular | PedidoCasos;
+/** SQL 59: lote de roleplay com personas (rodar_roleplay_voz) e o aviso assinado à VM para começar já. */
+export interface PedidoRoleplay { acao: "roleplay"; versao: number; personas: number[]; n: number }
+export type Pedido = PedidoSimular | PedidoCasos | PedidoRoleplay;
 export interface Perfil { id: string; ativo: boolean; equipe: boolean; empresa_id: number | null }
 export interface Versao { id: number; fluxo_id: number; empresa_id: number; credor_id: number | null; definicao: unknown }
 export interface Caso {
@@ -32,7 +34,18 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
     if (Object.keys(c).some((k) => k !== "acao" && k !== "versao")) return { erro: "pedido inválido" };
     return { pedido: { acao, versao: c.versao as number } };
   }
-  if (acao !== "simular") return { erro: "ação inválida: simular ou rodar_casos" };
+  if (acao === "roleplay") {
+    if (Object.keys(c).some((k) => !["acao", "versao", "personas", "n"].includes(k))) return { erro: "pedido inválido" };
+    const ps = c.personas;
+    if (!Array.isArray(ps) || ps.length < 1 || ps.length > 10 || !ps.every((x) => Number.isSafeInteger(x) && (x as number) > 0)) {
+      return { erro: "de 1 a 10 personas" };
+    }
+    if (!Number.isSafeInteger(c.n) || (c.n as number) < 1 || (c.n as number) > 20 || ps.length * (c.n as number) > 200) {
+      return { erro: "de 1 a 20 conversas por persona (até 200 no lote)" };
+    }
+    return { pedido: { acao, versao: c.versao as number, personas: ps as number[], n: c.n as number } };
+  }
+  if (acao !== "simular") return { erro: "ação inválida: simular, rodar_casos ou roleplay" };
   if (Object.keys(c).some((k) => !["acao", "versao", "falas", "falhar"].includes(k))) return { erro: "pedido inválido" };
   const falas = c.falas ?? [];
   if (!Array.isArray(falas) || falas.length > MAX_FALAS) return { erro: `até ${MAX_FALAS} falas` };
@@ -91,12 +104,19 @@ export async function assinar(chave: string, carimbo: string, corpo: string): Pr
   return hex(await crypto.subtle.sign("HMAC", k, enc.encode(`${carimbo}.${corpo}`)));
 }
 
+/** URL do aviso de roleplay na VM: mesmo serviço do simulador, caminho /roleplay. */
+export function urlRoleplay(urlSimular: string): string {
+  return urlSimular.replace(/\/simular\/?$/, "") + "/roleplay";
+}
+
 // ---------------------------------------------------------------- casos de teste guardados
 export interface ResultadoVM { caminho: string[]; resultado: string | null; turnos: unknown[] }
 
-/** O caso passa quando o caminho é exatamente o esperado e o resultado (se pedido) bate. */
+/** O caso passa quando o caminho é exatamente o esperado e o resultado (se pedido) bate. Caminho esperado vazio
+ *  (casos vindos do roleplay, SQL 59) = confere só o resultado. */
 export function conferirCaso(caso: Caso, r: ResultadoVM): boolean {
-  const mesmo = r.caminho.length === caso.caminho_esperado.length && r.caminho.every((b, i) => b === caso.caminho_esperado[i]);
+  const mesmo = caso.caminho_esperado.length === 0
+    || (r.caminho.length === caso.caminho_esperado.length && r.caminho.every((b, i) => b === caso.caminho_esperado[i]));
   return mesmo && (!caso.resultado_esperado || caso.resultado_esperado === r.resultado);
 }
 

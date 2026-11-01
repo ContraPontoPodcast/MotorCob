@@ -5,6 +5,9 @@
 //         caminho, resultado, encerrada, conectores }
 //   functions.invoke('simular_fluxo_voz', { acao: 'rodar_casos', versao })
 //     → { casos: [{ id, nome, passou, caminho_obtido }] } e grava cada resultado (registrar_resultado_caso_voz).
+//   functions.invoke('simular_fluxo_voz', { acao: 'roleplay', versao, personas: [ids], n })   (SQL 59)
+//     → { lote }: cria o lote com rodar_roleplay_voz (login de quem pede) e avisa a VM (/roleplay, assinado) para começar.
+//     O resultado sai depois em resultado_roleplay_voz(lote).
 // Quem pode: pessoa ativa do cliente, da empresa da versão, com pode('editar_canais'). Tudo é lido com o login de
 // quem pede (a RLS decide); a função só monta o pacote e chama o simulador da VM, que roda o MESMO executor da
 // ligação (voz/fluxo.py) em modo texto, com os conectores trocados pelo exemplo_resposta e um cliente fictício.
@@ -13,7 +16,7 @@
 // motorcx-voz-simulador da VM). Os valores nunca entram no código nem em log. Publicar com "Verify JWT" LIGADO.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
-  assinar, autorizar, conferirCaso, pacoteVM, PERMISSAO, respostaTela, validarPedido, variaveisTeste,
+  assinar, autorizar, conferirCaso, pacoteVM, PERMISSAO, respostaTela, urlRoleplay, validarPedido, variaveisTeste,
   type Caso, type Perfil, type ResultadoVM, type Versao,
 } from "./regras.ts";
 
@@ -43,10 +46,10 @@ function cabecalhos(origem: string | null): Record<string, string> {
 const responder = (corpo: unknown, status: number, origem: string | null) =>
   new Response(JSON.stringify(corpo), { status, headers: cabecalhos(origem) });
 
-async function chamarVM(pacote: unknown): Promise<{ ok: boolean; status: number; corpo: Record<string, unknown> }> {
+async function chamarVM(pacote: unknown, url = VM_URL): Promise<{ ok: boolean; status: number; corpo: Record<string, unknown> }> {
   const corpo = JSON.stringify(pacote);
   const carimbo = String(Math.floor(Date.now() / 1000));
-  const r = await fetch(VM_URL, {
+  const r = await fetch(url, {
     method: "POST", body: corpo, signal: AbortSignal.timeout(60_000),
     headers: { "Content-Type": "application/json", "X-MotorCX-Carimbo": carimbo, "X-MotorCX-Assinatura": await assinar(VM_CHAVE, carimbo, corpo) },
   });
@@ -83,6 +86,17 @@ Deno.serve(async (req) => {
   if (!VM_URL || !VM_CHAVE) {
     console.error("simular_fluxo_voz", "VOZ_SIMULADOR_URL/CHAVE ausentes");
     return responder({ erro: "o simulador ainda não está configurado" }, 503, origem);
+  }
+
+  if (pedido.acao === "roleplay") {
+    const { data: lote, error: eLote } = await comoUsuario.rpc("rodar_roleplay_voz", { versao: versao.id, personas: pedido.personas, n: pedido.n });
+    if (eLote) return responder({ erro: eLote.message }, 400, origem);
+    try {
+      await chamarVM({ lote }, urlRoleplay(VM_URL));      // só acorda a VM; se falhar, ela pega o lote no próximo ciclo
+    } catch (e) {
+      console.error("simular_fluxo_voz", "roleplay", (e as Error).name);
+    }
+    return responder({ lote }, 202, origem);
   }
 
   // Contexto da simulação, com o login de quem pede (RLS)

@@ -325,6 +325,39 @@ checar("SQL 58 · geração: não chama a RPC do public direto", False, "select 
 checar("SQL 58 · geração: outro login (não a VM nem o servidor) não pega pedido", False,
        "select public.pegar_pedido_fluxo_voz()", usuario="postgres", erro="servidor")
 
+# ------------------------------------------------------------------ SQL 59 · roleplay pelo acesso próprio (voz_vm)
+PRA = _sv("select id from public.roleplay_personas where empresa_id is null and codigo = 'nao_me_ligue'")
+RLA = _sv(f"insert into public.roleplay_lotes (empresa_id, fluxo_versao_id, personas, quantidade, pedido_em) "
+          f"values ({EA}, {FVA}, array[{PRA}]::bigint[], 2, '2000-01-01') returning id")
+checar("SQL 59: pega o lote do roleplay (sem credencial dos conectores)", True,
+       "select (x ->> 'lote') || '|' || jsonb_array_length(x -> 'personas') || '|' || "
+       "(select count(*) from jsonb_array_elements(x -> 'conectores') c where c ? 'segredo_ref') "
+       "from (select voz_vm.pegar_roleplay('{}') x) y", f"{RLA}|1|0")
+_RC = ("select voz_vm.registrar_roleplay_conversa('{{\"lote\": {l}, \"persona\": {p}, \"rodada\": {r}, "
+       "\"resultado\": \"opt_out\", \"passou\": true, \"caminho\": [\"N1\"], \"travas\": {t}, \"intencoes\": [], "
+       "\"fechou_acordo\": false, \"oferta_id\": null, \"oferta_parcelas\": null, \"turnos\": 3, \"tokens\": 900, "
+       "\"transcricao\": {x}}}') is not null")
+checar("SQL 59: grava a conversa do roleplay", True,
+       _RC.format(l=RLA, p=PRA, r=1, t='[\"nao_me_ligue\"]', x='[{\"quem\": \"pessoa\", \"texto\": \"Não me ligue.\"}]'), "t")
+checar("SQL 59: conversa sem transcrição", True, _RC.format(l=RLA, p=PRA, r=2, t="[]", x="null"), "t")
+checar("SQL 59: trava fora da lista é recusada pelo banco", False, _RC.format(l=RLA, p=PRA, r=3, t='[\"cpf\"]', x="null"))
+checar("SQL 59: transcrição com CPF é recusada pelo banco", False,
+       _RC.format(l=RLA, p=PRA, r=3, t="[]", x='[{\"quem\": \"pessoa\", \"texto\": \"cpf 12345678901\"}]'))
+checar("SQL 59: persona fora do lote é recusada", False, _RC.format(l=RLA, p=0, r=3, t="[]", x="null"), erro="fora do roleplay")
+checar("SQL 59: conclui o lote e lança os tokens no item ia_roleplay", True,
+       f"select voz_vm.concluir_roleplay_lote('{{\"lote\": {RLA}, \"tokens\": 1800, \"situacao\": \"concluido\"}}') is null", "t")
+checar("SQL 59: ... o lote ficou concluído, com as conversas e os tokens", True,
+       f"select l.situacao || '|' || l.conversas || '|' || l.tokens || '|' || (select quantidade from public.consumo_mensageria c "
+       f"where c.empresa_id = {EA} and c.item = 'ia_roleplay') from public.roleplay_lotes l where l.id = {RLA}",
+       "concluido|2|1800|2", usuario="postgres")
+checar("SQL 59: lote concluído não conclui de novo", False,
+       f"select voz_vm.concluir_roleplay_lote('{{\"lote\": {RLA}, \"tokens\": 5}}')", erro="não está rodando")
+checar("SQL 59: não chama a RPC do public direto", False, "select public.pegar_roleplay_voz()", erro="permission denied")
+checar("SQL 59: outro login (não a VM nem o servidor) não pega roleplay", False, "select public.pegar_roleplay_voz()",
+       usuario="postgres", erro="servidor")
+for t in ("roleplay_lotes", "roleplay_conversas", "roleplay_personas"):
+    checar(f"SQL 59: não lê public.{t}", False, f"select * from public.{t} limit 1", erro="permission denied")
+
 # ------------------------------------------------------------------ não pode: nada fora da voz
 for t in ("estado_cliente", "trilha", "fila_dia", "perfis", "empresas", "credores", "faturas", "envios", "api_tokens",
           "voz_config", "voz_chamadas", "voz_gravacoes", "consumo_voz", "crm_conectores", "crm_hosts_permitidos",
@@ -579,6 +612,19 @@ if PG is not None:
          GF.limpar_anexos(sb) >= 1 and ("chamados", anexo) not in arquivos
          and servidor.run("select cardinality(anexos) || '|' || (anexos_apagados_em is not null) "
                           "from public.voz_fluxo_pedidos where id = :p", p=PDV2)[0][0] == "0|true")
+    # SQL 59 · o trabalhador do roleplay (várias threads gravando pela mesma conexão)
+    from voz import roleplay as RP
+    from voz.provedores.montagem import Resposta as RespostaLLM
+
+    class LLMFixo:
+        def responder(self, msgs, ferr):
+            return RespostaLLM("Não me ligue mais.", tokens=10)
+    RLB = servidor.run(f"insert into public.roleplay_lotes (empresa_id, fluxo_versao_id, personas, quantidade, pedido_em) "
+                       f"values ({EA}, {FVA}, array[{PRA}]::bigint[], 4, '2000-01-02') returning id")[0][0]
+    caso("VM: o trabalhador do roleplay roda o lote pelo acesso próprio",
+         RP.processar_um(sb, LLMFixo, LLMFixo, concorrencia=4) is True
+         and servidor.run("select situacao || '|' || conversas from public.roleplay_lotes where id = :l", l=RLB)[0][0]
+         == "concluido|4")
     try:
         sb.rpc("salvar_fluxo_voz", {})
         caso("VM: RPC fora da lista é recusada no código", False, "chamou")

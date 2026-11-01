@@ -76,6 +76,7 @@ class ConfigMontagem:
 class Resposta:
     texto: str = ""
     chamadas: list = field(default_factory=list)    # [(nome, argumentos dict)]
+    tokens: int = 0                                   # usage.total_tokens (custo do roleplay e da geração)
 
 
 class ModeloOpenAICompat:
@@ -104,7 +105,8 @@ class ModeloOpenAICompat:
             except json.JSONDecodeError:
                 args = {}
             chamadas.append((fn.get("name"), args if isinstance(args, dict) else {}))
-        return Resposta(texto=(msg.get("content") or "").strip(), chamadas=chamadas)
+        tokens = int(((d.get("usage") or {}).get("total_tokens")) or 0)
+        return Resposta(texto=(msg.get("content") or "").strip(), chamadas=chamadas, tokens=tokens)
 
 
 class Conversa:

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  assinar, autorizar, conferirCaso, falaOk, pacoteVM, PERMISSAO, respostaTela, validarPedido, variaveisTeste,
+  assinar, autorizar, conferirCaso, falaOk, pacoteVM, PERMISSAO, respostaTela, urlRoleplay, validarPedido, variaveisTeste,
 } from "./regras.ts";
 
 const cliente = { id: "u1", ativo: true, equipe: false, empresa_id: 7 };
@@ -13,7 +13,7 @@ test("pedido: simular com falas e conectores para falhar; rodar_casos só com a 
   assert.deepEqual(validarPedido({ acao: "rodar_casos", versao: 31 }).pedido, { acao: "rodar_casos", versao: 31 });
   assert.equal(validarPedido({ versao: 31, falas: ["Sou eu"], falhar: [1] }).pedido?.acao, "simular");
   assert.equal(validarPedido({ versao: "31" }).erro, "versão inválida");
-  assert.equal(validarPedido({ versao: 31, acao: "apagar" }).erro, "ação inválida: simular ou rodar_casos");
+  assert.equal(validarPedido({ versao: 31, acao: "apagar" }).erro, "ação inválida: simular, rodar_casos ou roleplay");
   assert.equal(validarPedido({ versao: 31, falas: [], definicao: {} }).erro, "pedido inválido");
   assert.equal(validarPedido({ acao: "rodar_casos", versao: 31, falas: [] }).erro, "pedido inválido");
   assert.equal(validarPedido({ versao: 31, falhar: [0] }).erro, "conectores para falhar inválidos");
@@ -72,4 +72,20 @@ test("caso de teste: caminho exato e resultado", () => {
 test("resposta para a tela: fala, bloco, caminho, intenção e conectores", () => {
   const r = respostaTela({ turnos: [{ falas: [] }], caminho: ["N1"], resultado: null, encerrada: false, conectores: [], passos: [{ x: 1 }] });
   assert.deepEqual(Object.keys(r).sort(), ["caminho", "conectores", "encerrada", "resultado", "turnos"]);
+});
+
+test("roleplay: personas e quantidade (SQL 59)", () => {
+  assert.deepEqual(validarPedido({ acao: "roleplay", versao: 31, personas: [1, 2], n: 5 }).pedido, { acao: "roleplay", versao: 31, personas: [1, 2], n: 5 });
+  assert.equal(validarPedido({ acao: "roleplay", versao: 31, personas: [], n: 5 }).erro, "de 1 a 10 personas");
+  assert.equal(validarPedido({ acao: "roleplay", versao: 31, personas: [1], n: 21 }).erro, "de 1 a 20 conversas por persona (até 200 no lote)");
+  assert.equal(validarPedido({ acao: "roleplay", versao: 31, personas: Array.from({ length: 10 }, (_, i) => i + 1), n: 20 }).pedido?.acao, "roleplay");   // 200 cabe
+  assert.equal(validarPedido({ acao: "roleplay", versao: 31, personas: Array.from({ length: 11 }, (_, i) => i + 1), n: 1 }).erro, "de 1 a 10 personas");
+  assert.equal(validarPedido({ acao: "roleplay", versao: 31, personas: [1], n: 2, falas: [] }).erro, "pedido inválido");
+  assert.equal(urlRoleplay("https://vm.exemplo:8443/simular"), "https://vm.exemplo:8443/roleplay");
+});
+
+test("caso vindo do roleplay (caminho vazio) confere só o resultado", () => {
+  const caso = { id: 2, nome: "Roleplay", falas: ["a"], caminho_esperado: [], resultado_esperado: "opt_out", conectores_falham: [], ativo: true };
+  assert.equal(conferirCaso(caso, { caminho: ["N1", "N3"], resultado: "opt_out", turnos: [] }), true);
+  assert.equal(conferirCaso(caso, { caminho: ["N1"], resultado: "recado", turnos: [] }), false);
 });
