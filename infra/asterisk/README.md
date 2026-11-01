@@ -104,6 +104,8 @@ antes da janela de discagem.
 | `motorcx-voz-simulado` | O mesmo plantão para as empresas em modo `simulado`, sem ligação de verdade. |
 | `motorcx-voz-config.timer` | A cada 2 min, busca troncos, rotas, transferências e config no banco. Se algo mudou, regera o pjsip e o dialplan dentro do contêiner, com as senhas do cofre, e recarrega. Configuração inválida no banco mantém a que está no ar. |
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |
+| `motorcx-voz-speech.timer` | A cada 15 min, Speech Analytics (SQL 62) das transcrições em `/var/motorcx/transcricoes`: nota do checklist e códigos fechados numa chamada ao LLM da Montagem (`/etc/motorcx/provedores.json`, chave no cofre). Desligado por padrão (veja abaixo). |
+| `motorcx-voz-speech-noite.timer` | 02:40, agregados do dia do Speech Analytics (ontem e anteontem, idempotente), recomendações (`motor/retroalimentacao.py`) e impacto de 28 dias. Mesmo interruptor. |
 
 O plantão do orquestrador:
 - baixa a Lista do dia que o motor publicou (`saidas/<slug>/<data>[/<credor>]/`);
@@ -125,6 +127,16 @@ subirem para o bucket da empresa.
 - `/etc/motorcx/provedores.json`: `{"montagem": {...}, "elevenlabs": {"numero_agente": "..."}}` (a chave
   `montagem` atende quem tem `voz_config.provedor = 'montagem_motorcx'`);
 - `/etc/motorcx/provedores_sip.json`: o endpoint SIP da ElevenLabs.
+
+**Speech Analytics (SQL 62):** desligado por padrão em dois lugares.
+1. Na VM: metadado `motorcx-speech-analytics=1` (sem ele, os dois timers saem sem fazer nada):
+   `gcloud compute instances add-metadata "$VM" --zone="$ZONA" --metadata=motorcx-speech-analytics=1`.
+2. Por empresa, no banco (o Master): `update public.voz_config set speech_analytics = true where empresa_id = <id>;`.
+   Cada minuto analisado entra na fatura no item `ia_speech_analytics` pelo preço da empresa; o custo real do LLM
+   (tokens × `custos_ia_voz`, componente `avaliador`) fica só para a margem do Master.
+A transcrição de cada gravação é casada com `voz_gravacoes` pelo nome do arquivo em
+`/var/motorcx/transcricoes/empresa_<id>/<ref>.json`: `<ref>` = id da gravação (preferido), `transcricao_caminho`,
+o nome do arquivo da gravação sem extensão ou o `id_chamada`. Ao lado fica `<ref>.analise.json` (só a situação).
 
 ## 5. Transferência para o discador do cliente
 

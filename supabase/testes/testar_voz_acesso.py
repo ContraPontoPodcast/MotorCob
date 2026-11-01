@@ -450,6 +450,94 @@ checar("SQL 60: não chama a RPC do public direto", False, "select * from public
 checar("SQL 60: outro login (não a VM nem o servidor) não lê as buscas pendentes", False,
        "select * from public.buscas_voz_pendentes(1)", usuario="postgres", erro="servidor")
 
+# ------------------------------------------------------------------ SQL 62 · dados do Speech Analytics pelo acesso próprio
+ONTEM_SD = _sv("select (now() at time zone 'America/Sao_Paulo')::date - 1")
+_QSD = f"(('{ONTEM_SD}'::date + time '10:00') at time zone 'America/Sao_Paulo')"
+CSD = _sv(f"insert into public.voz_chamadas (empresa_id, credor_id, id_chamada, id_cliente, modo, ocorrido_em, atendida_em, "
+          f"resultado, identidade_confirmada) values ({EA}, {CA}, 'vza-0300', 'C30', 'real', {_QSD}, {_QSD}, 'promessa', true) "
+          f"returning id")
+GSD = _sv(f"insert into public.voz_gravacoes (empresa_id, credor_id, chamada_id, id_cliente, origem, caminho, duracao_s, gravada_em) "
+          f"values ({EA}, {CA}, {CSD}, 'C30', 'ia', 'cart-a/A30_vza-0300.wav', 120, {_QSD}) returning id")
+VSD = _sv(f"select public.checklist_vigente({EA}, '{ONTEM_SD}')")
+_REFS = f"{{\"empresa\": {EA}, \"refs\": [{{\"ref\": \"{GSD}\", \"caminho\": \"\"}}]}}"
+checar("SQL 62: Speech Analytics desligado na empresa: contexto vazio", True,
+       f"select voz_vm.speech_contexto('{_REFS}') ->> 'ligado'", "false")
+_sv(f"update public.voz_config set speech_analytics = true where empresa_id = {EA}")
+checar("SQL 62: lê o contexto da análise (gravação, versão do checklist, sem id_cliente)", True,
+       f"select (c -> 'chamadas' -> 0 ->> 'gravacao_id') || '|' || (c -> 'chamadas' -> 0 ->> 'versao_id') || '|' "
+       f"|| (position('C30' in c::text) = 0) from voz_vm.speech_contexto('{_REFS}') c", f"{GSD}|{VSD}|true")
+checar("SQL 62: contexto de empresa sem voz é recusado", False,
+       f"select voz_vm.speech_contexto('{{\"empresa\": {EB}, \"refs\": []}}')", erro="empresa sem voz")
+_AN = {"empresa_id": int(EA), "gravacao_id": int(GSD), "situacao": "ok", "versao": "speech-v1", "minutos": 2,
+       "uso": {"chamadas_llm": 1, "tokens_entrada": 2000, "tokens_saida": 300},
+       "codigos": {"motivo": "esquecimento", "riscos": ["procon"]},
+       "audio": {"fala_agente_s": 50, "fala_cliente_s": 40, "silencio_s": 30, "interrupcoes": 1},
+       "sentimento": {"ini": -0.2, "fim": 0.3},
+       "avaliacao": {"versao_id": int(VSD), "nota": 100, "itens": {"ck_cpc": "sim"}, "evidencia": {"ck_cpc": [3.0, 9.5]},
+                     "reprovada": False},
+       "alertas": [{"tipo": "procon", "falante": "cliente", "inicio_s": 40, "trecho": "Vou reclamar no Procon."},
+                   {"tipo": "vulnerabilidade", "sinal": "luto", "falante": "cliente", "inicio_s": 50}],
+       "curadoria": [{"tipo": "intencao", "trecho_redigido": "Talvez eu pague.", "decisao_ia": {"valor": "quero_negociar"},
+                      "opcoes": ["quero_negociar", "sem_dinheiro"], "confianca": 0.4}]}
+
+
+def _an(**m):
+    return "'" + json.dumps({"analise": {**_AN, **m}}).replace("'", "''") + "'"
+
+
+checar("SQL 62: grava a análise pelo acesso próprio (avaliação, alertas, curadoria e uso numa transação)", True,
+       f"select voz_vm.gravar_analise_voz({_an()}) ->> 'situacao'", "ok")
+checar("SQL 62: ... avaliação, códigos, alertas e minuto cobrado", True,
+       f"select (select nota from public.voz_avaliacoes where chamada_id = {CSD}) || '|' || "
+       f"(select codigos ->> 'motivo' from public.voz_chamadas where id = {CSD}) || '|' || "
+       f"(select count(*) from public.voz_alertas where chamada_id = {CSD}) || '|' || "
+       f"(select count(*) from public.voz_curadoria_itens where chamada_id = {CSD}) || '|' || "
+       f"(select minutos_cobrados from public.voz_analise_consumo where empresa_id = {EA} and componente = 'avaliador' "
+       f"and dia = (now() at time zone 'America/Sao_Paulo')::date)",
+       "100.00|esquecimento|2|1|2.00", usuario="postgres")
+checar("SQL 62: reenvio não cobra de novo", True, f"select voz_vm.gravar_analise_voz({_an()}) ->> 'situacao'", "ja_analisada")
+checar("SQL 62: análise de empresa sem voz é recusada", False,
+       f"select voz_vm.gravar_analise_voz({_an(empresa_id=int(EB))})", erro="empresa sem voz")
+checar("SQL 62: gravação de outra empresa é recusada", False,
+       f"select voz_vm.gravar_analise_voz({_an(gravacao_id=0)})", erro="não encontrada")
+checar("SQL 62: código fora da lista é recusado", False,
+       f"select voz_vm.gravar_analise_voz({_an(codigos={'motivo': 'doenca'})})")
+checar("SQL 62: agrega o dia pelo acesso próprio", True,
+       f"select (voz_vm.agregar_speech_dia('{{\"empresa\": {EA}, \"dia\": \"{ONTEM_SD}\"}}') ->> 'conversao')::int > 0", "t")
+checar("SQL 62: ... o agregado do dia está no banco", True,
+       f"select conversas || '|' || com_acordo from public.voz_conversao_dia where empresa_id = {EA} and data = '{ONTEM_SD}' "
+       f"and dimensao = 'total'", "1|1", usuario="postgres")
+checar("SQL 62: agregar empresa sem voz é recusado", False,
+       f"select voz_vm.agregar_speech_dia('{{\"empresa\": {EB}, \"dia\": \"{ONTEM_SD}\"}}')", erro="empresa sem voz")
+checar("SQL 62: lista as empresas ligadas (com voz)", True,
+       f"select voz_vm.speech_empresas('{{\"parte\": \"1/1\"}}') @> '[{EA}]'", "t")
+checar("SQL 62: lê os agregados da retroalimentação (com a renitência)", True,
+       f"select jsonb_typeof(d -> 'renitencia') || '|' || (jsonb_array_length(d -> 'conversao') > 0) from "
+       f"voz_vm.dados_retroalimentacao('{{\"empresa\": {EA}, \"de\": \"{ONTEM_SD}\", \"ate\": \"{ONTEM_SD}\"}}') d", "array|true")
+_RV = (f"{{\"empresa\": {EA}, \"credor\": @C@, \"destino\": \"regua\", \"regra\": \"horario\", \"chave\": \"regua:horario:vza\", "
+       f"\"titulo\": \"Ligar de manhã (teste)\", \"texto\": \"\", \"evidencia\": {{\"n_a\": 300, \"n_b\": 300, \"pct_a\": 30, "
+       f"\"pct_b\": 20}}, \"proposta\": {{}}}}")
+checar("SQL 62: registra recomendação pelo acesso próprio", True,
+       f"select voz_vm.registrar_recomendacao_voz('{_RV.replace('@C@', str(CA))}') is not null", "t")
+checar("SQL 62: recomendação com carteira de outra empresa é recusada", False,
+       f"select voz_vm.registrar_recomendacao_voz('{_RV.replace('@C@', str(CB))}')", erro="outra empresa")
+checar("SQL 62: confere os rascunhos e lê as aplicadas", True,
+       "select jsonb_typeof(voz_vm.conferir_rascunhos_recomendacoes('{}')) || '|' || "
+       f"jsonb_typeof(voz_vm.recomendacoes_aplicadas('{{\"empresa\": {EA}}}'))", "number|array")
+RECB = _sv(f"insert into public.recomendacoes (empresa_id, destino, regra, chave, titulo, evidencia, situacao, aplicada_em) "
+           f"values ({EB}, 'regua', 'horario', 'regua:horario:vzb', 'Recomendação da B (teste)', "
+           f"'{{\"n_a\": 300, \"n_b\": 300, \"pct_a\": 30, \"pct_b\": 20}}', 'aplicada', now() - interval '40 days') returning id")
+checar("SQL 62: impacto de recomendação de empresa sem voz é recusado", False,
+       f"select voz_vm.gravar_impacto('{{\"rec\": {RECB}, \"metrica\": \"acordo_pct\", \"antes\": 20, \"depois\": 30, "
+       f"\"n_antes\": 100, \"n_depois\": 100}}')", erro="empresa sem voz")
+checar("SQL 62: o sino dos alertas pelo acesso próprio", True, "select jsonb_typeof(voz_vm.avisar_alertas('{}'))", "number")
+checar("SQL 62: não lê public.voz_analise_chamadas", False, "select * from public.voz_analise_chamadas limit 1",
+       erro="permission denied")
+checar("SQL 62: não chama a RPC do public direto", False, f"select public.agregar_speech_dia({EA}, current_date)",
+       erro="permission denied")
+checar("SQL 62: outro login (não a VM nem o servidor) não grava a análise", False,
+       f"select public.gravar_analise_voz('{{}}')", usuario="postgres", erro="só o servidor")
+
 # ------------------------------------------------------------------ não pode: nada fora da voz
 for t in ("estado_cliente", "trilha", "fila_dia", "perfis", "empresas", "credores", "faturas", "envios", "api_tokens",
           "voz_config", "voz_chamadas", "voz_gravacoes", "consumo_voz", "crm_conectores", "crm_hosts_permitidos",
@@ -740,6 +828,41 @@ if PG is not None:
          if COM_VETOR else n_buscas == 0)
     caso("VM: registra o uso de IA pelo acesso próprio",
          TRC.registrar_uso(sb, int(EA), "2026-11-05", "embeddings", 1, 1.0, 0, 500, 0) is not None)
+    # SQL 62 · as rotinas do Speech Analytics (avaliador + extrator e job noturno) pela mesma interface
+    from datetime import timedelta
+    from voz.analise import analisador as AN
+    from voz.analise import rotina as RT
+
+    class LLMSpeech:
+        def responder(self, msgs, ferr):
+            props = ferr[0]["function"]["parameters"]["properties"]
+            itens = [{"id": i, "resposta": "sim", "confianca": 0.9, "segmento": 0}
+                     for i in props["itens"]["items"]["properties"]["id"]["enum"]]
+            return RespostaLLM("", [(AN.FERRAMENTA, {
+                "itens": itens, "motivo": {"probabilidades": {"esquecimento": 0.9}, "segmento": 1}, "objecoes": [],
+                "objecao_principal": None, "intencao": None, "canal_preferido": None, "horario_preferido": None,
+                "vulnerabilidade": [], "riscos": [], "frases": [], "temas": [], "sentimento": None, "falantes": "AC",
+                "transcricao_ruim": 0})], tokens=900, tokens_entrada=800, tokens_saida=100)
+    CSD2 = servidor.run(f"insert into public.voz_chamadas (empresa_id, credor_id, id_chamada, id_cliente, modo, ocorrido_em, "
+                        f"resultado) values ({EA}, {CA}, 'vza-0301', 'C31', 'real', {_QSD}, 'cpc') returning id")[0][0]
+    GSD2 = servidor.run(f"insert into public.voz_gravacoes (empresa_id, credor_id, chamada_id, id_cliente, origem, caminho, "
+                        f"duracao_s, gravada_em) values ({EA}, {CA}, {CSD2}, 'C31', 'ia', 'cart-a/A31_vza-0301.wav', 60, {_QSD}) "
+                        "returning id")[0][0]
+    with tempfile.TemporaryDirectory() as pasta_tr:
+        d_emp = Path(pasta_tr) / f"empresa_{EA}"
+        d_emp.mkdir()
+        (d_emp / f"{GSD2}.json").write_text(json.dumps({"duracao_s": 60, "segmentos": [
+            {"inicio": 0, "fim": 4, "texto": "Bom dia, aqui é a central."}, {"inicio": 5, "fim": 9, "texto": "Esqueci de pagar."}]}))
+        out_sd = RT.analisar_pendentes(sb, LLMSpeech(), RT.FonteLocal(pasta_tr))
+        caso("VM: analisa a ligação transcrita pelo acesso próprio (avaliador + extrator, uma chamada ao LLM)",
+             out_sd.get("ok") == 1 and (d_emp / f"{GSD2}.analise.json").exists()
+             and servidor.run(f"select codigos ->> 'motivo' from public.voz_analise_chamadas where gravacao_id = {GSD2}")[0][0]
+             == "esquecimento", out_sd)
+    hoje_sd = date.fromisoformat(str(ONTEM_SD)) + timedelta(days=1)
+    out_n = RT.noite(sb, hoje_sd, "1/1", dias=1)
+    caso("VM: o job noturno agrega e roda a retroalimentação pelo acesso próprio", out_n.get("erros", 0) == 0
+         and out_n.get("dias", 0) >= 1 and servidor.run(f"select sum(conversas) from public.voz_conversao_dia where empresa_id = "
+                                                         f"{EA} and data = '{ONTEM_SD}' and dimensao = 'total'")[0][0] == 2, out_n)
     try:
         sb.rpc("salvar_fluxo_voz", {})
         caso("VM: RPC fora da lista é recusada no código", False, "chamou")

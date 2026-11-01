@@ -13,12 +13,18 @@ COLUNAS: dict[str, tuple[str, ...]] = {
                             "tokens_entrada", "tokens_saida", "custo_real"),
     "empresas": ("id", "slug", "nome"),
     "credores": ("id", "nome"),
+    "voz_analise_chamadas": ("empresa_id", "credor_id", "chamada_id", "gravacao_id", "origem", "operador_ref", "dia",
+                             "situacao", "tentativas", "minutos", "codigos", "fala_agente_s", "fala_cliente_s",
+                             "silencio_s", "interrupcoes", "sentimento_ini", "sentimento_fim", "versao"),
 }
 # coluna que só existe com a extensão pgvector (decisão 9); sem ela a VM grava o trecho sem embedding
 COLUNA_EMBEDDING = "embedding"
 DIMENSAO = 1536
 
 RPCS = ("buscas_voz_pendentes", "responder_busca_voz", "gravar_relatorio_credor", "registrar_recomendacao_voz",
-        "conferir_rascunhos_recomendacoes", "renitencia_voz", "avisar_alertas_voz", "apagar_analise_voz_expirada", "registrar_uso_ia_voz")
+        "conferir_rascunhos_recomendacoes", "renitencia_voz", "avisar_alertas_voz", "apagar_analise_voz_expirada", "registrar_uso_ia_voz",
+        # SQL 62 · dados do Speech Analytics (voz/analise/analisador.py e rotina.py)
+        "speech_contexto_voz", "gravar_analise_voz", "agregar_speech_dia", "speech_empresas_voz",
+        "dados_retroalimentacao_voz", "recomendacoes_aplicadas_voz", "gravar_impacto_voz")
 
 CONFLITO = {"voz_trechos": "gravacao_id,inicio_s,falante"}
