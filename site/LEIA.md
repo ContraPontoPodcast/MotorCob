@@ -43,7 +43,13 @@ npm run build               # gera build/client
 npm run preview             # serve build/client em http://127.0.0.1:4173 com o fallback do SPA
 ```
 
-Outros comandos: `npm run lint` (oxlint) e `npm run typecheck` (tsc; tem de dar zero erro, o CI barra).
+Outros comandos: `npm run lint` (oxlint), `npm run typecheck` (tsc; tem de dar zero erro, o CI barra) e `npm test`
+(regras e componentes do Fluxo do agente em `site/fluxo/`; os componentes são empacotados com o esbuild e rodam com
+`node --test`, sem navegador).
+
+Modo de demonstração do Fluxo do agente (só desenvolvimento): `VITE_FLUXO_FIXTURES=1 npm run dev` cria a rota
+`/dev/fluxo/<tela>` (lista, editor/105, testar, desempenho, pedido/412, personas, conectores) com dados fictícios, sem
+login nem banco, para ver e fotografar as telas. Sem a variável a rota não existe, e o build de produção nunca a inclui.
 
 ## Variáveis de ambiente
 

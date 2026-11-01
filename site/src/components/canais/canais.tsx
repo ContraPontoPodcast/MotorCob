@@ -207,7 +207,7 @@ export function Canais() {
             <div className="flex gap-1 border-b border-[#ecf0f1] px-4">
               <button onClick={() => setTab(c.id, 'config')} className={`-mb-px border-b-2 px-3 py-2.5 text-xs font-semibold transition-colors ${tabEfetiva === 'config' ? 'border-[#0F4C5C] text-[#0F4C5C]' : 'border-transparent text-slate-400 hover:text-[#0F4C5C]'}`}>Configuração</button>
               {temMensagem && <button onClick={() => setTab(c.id, 'frases')} className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-xs font-semibold transition-colors ${tabEfetiva === 'frases' ? 'border-[#0F4C5C] text-[#0F4C5C]' : 'border-transparent text-slate-400 hover:text-[#0F4C5C]'}`}><BookOpen size={13}/> {abaFrasesLabel}</button>}
-              {c.id === 'agente_voz' && <Link to="/canais/agente-virtual" className="-mb-px border-b-2 border-transparent px-3 py-2.5 text-xs font-semibold text-slate-400 transition-colors hover:text-[#0F4C5C]">Roteiro</Link>}
+              {c.id === 'agente_voz' && <Link to="/canais/agente-virtual" className="-mb-px border-b-2 border-transparent px-3 py-2.5 text-xs font-semibold text-slate-400 transition-colors hover:text-[#0F4C5C]">Fluxos</Link>}
             </div>
 
             {tabEfetiva === 'config' ? (

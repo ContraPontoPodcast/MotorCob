@@ -10,11 +10,14 @@ export default [
   route('privacidade', 'routes/privacidade.tsx'),
   route('email/sair', 'routes/email-sair.tsx'),
   route('relatorio-credor/:token', 'routes/relatorio-credor.tsx'),
+  // Só no dev server com VITE_FLUXO_FIXTURES=1: telas do Fluxo do agente com dados fictícios (nunca em produção).
+  ...(process.env.VITE_FLUXO_FIXTURES === '1' && process.env.NODE_ENV !== 'production' ? [route('dev/fluxo/:tela?/:id?', 'routes/dev-fluxo.tsx')] : []),
   layout('routes/workspace-layout.tsx', [
     route('inicio', 'routes/home.tsx'),
     route('workspace', 'routes/workspace.tsx'),
     route('empresa', 'routes/empresa.tsx'),
     route('empresa/integracoes', 'routes/empresa-integracoes.tsx'),
+    route('empresa/integracoes/conectores', 'routes/empresa-integracoes-conectores.tsx'),
     route('empresa/integracoes/:id', 'routes/empresa-integracao-token.tsx'),
     route('empresa/auditoria', 'routes/empresa-auditoria.tsx'),
     route('minha-conta/notificacoes', 'routes/minha-conta-notificacoes.tsx'),
@@ -109,7 +112,15 @@ export default [
     route('relatorios/novo', 'routes/relatorios-novo.tsx'),
     route('console/voz', 'routes/console-voz.tsx'),
     // Agente de voz (telas do cliente)
+    // Fluxo do agente (SQL 58, 59 e 65): Fluxos, editor, testar conversa, desempenho, rascunho gerado e personas.
+    // O roteiro antigo fica em /roteiro até um fluxo entrar em uso na carteira.
     route('canais/agente-virtual', 'routes/canais-agente-virtual.tsx'),
+    route('canais/agente-virtual/roteiro', 'routes/canais-agente-virtual-roteiro.tsx'),
+    route('canais/agente-virtual/editor/:versao', 'routes/canais-agente-virtual-editor.tsx'),
+    route('canais/agente-virtual/testar', 'routes/canais-agente-virtual-testar.tsx'),
+    route('canais/agente-virtual/desempenho', 'routes/canais-agente-virtual-desempenho.tsx'),
+    route('canais/agente-virtual/pedido/:id', 'routes/canais-agente-virtual-pedido.tsx'),
+    route('canais/agente-virtual/personas', 'routes/canais-agente-virtual-personas.tsx'),
     route('mensageria/voz/lotes', 'routes/mensageria-voz-lotes.tsx'),
     route('mensageria/voz/lotes/:id', 'routes/mensageria-voz-lote.tsx'),
     route('gravacoes', 'routes/gravacoes.tsx'),

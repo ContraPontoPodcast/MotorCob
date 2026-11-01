@@ -2736,5 +2736,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 64: importador das gravações do discador (testar_voz_importador.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 65 · o que a tela Fluxo do agente precisa (enviar para aprovação e anexos do pedido em texto)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_fluxo_site.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 65: enviar para aprovação e anexos do pedido (testar_voz_fluxo_site.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
