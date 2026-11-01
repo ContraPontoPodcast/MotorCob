@@ -306,7 +306,10 @@ de outra pessoa pela certificação e a rotação segue.
   `novo` + item `tema` na Curadoria com nome SUGERIDO (componente `temas`); nome e promoção são de pessoa. `oferta`
   (primeira oferta do fluxo: `6x`, `avista_d10_20`; `sem_oferta` pelo CRM) em `voz_conversao_dia`. Pagou em 30 dias
   por motivo: o motor manda quem pagou (`nuvem/resultado_motivo.py`) e o banco grava só contagens de dias fechados
-  (`voz_resultado_por_motivo`; o site lê por `resultado_por_motivo_voz`, grupo < 30 sem número).
+  (`voz_resultado_por_motivo`; o site lê por `resultado_por_motivo_voz`, grupo < 30 sem número). Busca semântica:
+  serviço contínuo `motorcx-voz-speech-buscas` (`rotina buscas`, a cada 2 s, parte i/n, custo do embedding da pergunta
+  na empresa). Webhook pós-chamada da ElevenLabs: receptor dentro do orquestrador real (`criar_receptor`, só com
+  `ref_webhook`; 127.0.0.1:8092 atrás do Caddy :8443; HMAC, 2 MB, 10 s; corpo nunca guardado).
 - `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
   = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
   Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias

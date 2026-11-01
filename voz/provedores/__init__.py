@@ -16,7 +16,8 @@ CODIGOS = ("simulador", "montagem_motorcx", "elevenlabs")
 def criar_todos(config: dict | None, segredos=None, roteiro_de=None) -> dict:
     """{codigo: provedor} a partir do JSON de provedores da VM (/etc/motorcx/provedores.json):
     {"montagem": {...ConfigMontagem...}, "elevenlabs": {"numero_agente": "...", "max_simultaneas": 200,
-    "agent_id": "...", "ref_api": "voz/elevenlabs-api"}} (agent_id e ref_api: a conversa pela API, SQL 63).
+    "agent_id": "...", "ref_api": "voz/elevenlabs-api", "ref_webhook": "voz/elevenlabs-webhook", "webhook_porta": 8092}}
+    (SQL 63: agent_id e ref_api trazem a conversa pela API; ref_webhook liga o receptor do webhook pós-chamada).
     A chave "montagem" do arquivo vira o código do banco, montagem_motorcx (voz_config.provedor).
     O Simulador está sempre lá. Provedor sem configuração fica de fora (a empresa que o escolher cai no
     Simulador, com alerta do orquestrador)."""

@@ -25,6 +25,10 @@
 --    (base/pagamentos.csv). Só agregados e só dias com os 30 dias fechados. O site lê só pela função
 --    resultado_por_motivo_voz (grupo < 30 sem número); a leitura direta da tabela sai. A retroalimentação lê a mesma
 --    janela de 28 dias deslocada 30 dias para trás (só dias fechados).
+-- 5. Busca semântica atendida pela VM (SQL 60): buscas_semanticas_pendentes_voz devolve as buscas pendentes com a
+--    empresa (para o custo do embedding da pergunta ir para a empresa certa, componente embeddings) e só as da parte
+--    i/n desta VM. A VM (motorcx-voz-speech-buscas, serviço contínuo com espera de 2 s) calcula o embedding e chama
+--    responder_busca_voz. Busca pendente há mais de 2 minutos vira erro, como no SQL 60.
 -- Uso de IA (SQL 60, decisão 8 revista, e SQL 61): embeddings dos trechos e dos temas e o nome sugerido entram pelo
 -- registrar_uso_ia_voz (componentes embeddings e temas), com quantidade e custo real, sem cobrar minuto a mais (o
 -- minuto analisado já cobre). Premissas de custo, só se ainda não houver: embeddings US$ 0,15 por milhão de tokens de
@@ -46,6 +50,7 @@
 --            and has_function_privilege('motorcx_voz', 'voz_vm.propor_tema(jsonb)', 'execute')
 --            and not has_table_privilege('motorcx_voz', 'public.voz_temas_trechos', 'select') as vm_ok,    -- true
 --          has_function_privilege('authenticated', 'public.propor_tema_voz(bigint,date,jsonb)', 'execute') as site_propoe, -- false
+--          has_function_privilege('motorcx_voz', 'voz_vm.buscas_semanticas_pendentes(jsonb)', 'execute') as vm_busca, -- true
 --          (select count(*) from public.custos_ia_voz where componente in ('embeddings', 'temas')) >= 2 as custos; -- true
 
 create or replace function pg_temp.trocar(assinatura text, de text, para text) returns void
@@ -464,13 +469,43 @@ select pg_temp.trocar('public.dados_retroalimentacao_voz(bigint,date,date,boolea
 $de$where m.empresa_id = empresa and m.data between de and ate), '[]'::jsonb) end,$de$,
 $para$where m.empresa_id = empresa and m.data between de - 30 and ate - 30), '[]'::jsonb) end,   -- SQL 63: dias fechados$para$);
 
+-- ================================================================ 5b. busca semântica: pendentes com a empresa (parte i/n)
+create or replace function public.buscas_semanticas_pendentes_voz(parte text default '1/1', limite int default 20)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+    i int;
+    n int;
+begin
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
+        raise exception 'só o servidor ou a VM de voz leem as buscas pendentes';
+    end if;
+    if coalesce(parte, '1/1') !~ '^[1-9][0-9]?/[1-9][0-9]?$' then
+        raise exception 'parte: i/n';
+    end if;
+    i := split_part(coalesce(parte, '1/1'), '/', 1)::int;
+    n := split_part(coalesce(parte, '1/1'), '/', 2)::int;
+    if i > n then
+        raise exception 'parte: i/n com i <= n';
+    end if;
+    update public.voz_buscas b set situacao = 'erro'
+     where b.situacao = 'pendente' and b.em < now() - interval '2 minutes';
+    return coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'termo', x.termo, 'empresa_id', x.empresa_id)
+                                      order by x.em)
+                       from (select b.id, b.termo, b.empresa_id, b.em from public.voz_buscas b
+                              where b.situacao = 'pendente' and b.modo = 'semantica' and b.empresa_id % n = i - 1
+                              order by b.em limit least(greatest(coalesce(limite, 20), 1), 100)) x), '[]'::jsonb);
+end $$;
+
 revoke all on function public.registrar_gravacoes_ia_voz(jsonb), public.recalcular_temas_semana(bigint, date),
     public.trechos_para_temas_voz(bigint, date, int), public.propor_tema_voz(bigint, date, jsonb),
-    public.speech_vetor_voz(), public.gravar_resultado_por_motivo_voz(bigint, bigint, jsonb, date)
+    public.speech_vetor_voz(), public.gravar_resultado_por_motivo_voz(bigint, bigint, jsonb, date),
+    public.buscas_semanticas_pendentes_voz(text, int)
     from public, anon, authenticated;
 grant execute on function public.registrar_gravacoes_ia_voz(jsonb), public.recalcular_temas_semana(bigint, date),
     public.trechos_para_temas_voz(bigint, date, int), public.propor_tema_voz(bigint, date, jsonb),
-    public.speech_vetor_voz(), public.gravar_resultado_por_motivo_voz(bigint, bigint, jsonb, date) to service_role;
+    public.speech_vetor_voz(), public.gravar_resultado_por_motivo_voz(bigint, bigint, jsonb, date),
+    public.buscas_semanticas_pendentes_voz(text, int) to service_role;
 revoke all on function public.resultado_por_motivo_voz(bigint, bigint, date, date) from public, anon;
 grant execute on function public.resultado_por_motivo_voz(bigint, bigint, date, date) to authenticated;
 
@@ -517,7 +552,17 @@ language sql stable security definer set search_path = '' as $$
     select to_jsonb(public.speech_vetor_voz())
 $$;
 
+-- buscas semânticas pendentes da parte desta VM (todas as empresas com voz, como o servidor)
+create or replace function voz_vm.buscas_semanticas_pendentes(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select coalesce(jsonb_agg(b), '[]'::jsonb)
+      from jsonb_array_elements(public.buscas_semanticas_pendentes_voz(coalesce(args ->> 'parte', '1/1'),
+                                                                       coalesce((args ->> 'limite')::int, 20))) b
+     where voz_vm.tem_voz((b ->> 'empresa_id')::bigint)
+$$;
+
 revoke all on function voz_vm.registrar_gravacoes_ia(jsonb), voz_vm.trechos_para_temas(jsonb), voz_vm.propor_tema(jsonb),
-    voz_vm.recalcular_temas_semana(jsonb), voz_vm.speech_vetor(jsonb) from public, anon, authenticated, service_role;
+    voz_vm.recalcular_temas_semana(jsonb), voz_vm.speech_vetor(jsonb), voz_vm.buscas_semanticas_pendentes(jsonb)
+    from public, anon, authenticated, service_role;
 grant execute on function voz_vm.registrar_gravacoes_ia(jsonb), voz_vm.trechos_para_temas(jsonb), voz_vm.propor_tema(jsonb),
-    voz_vm.recalcular_temas_semana(jsonb), voz_vm.speech_vetor(jsonb) to motorcx_voz;
+    voz_vm.recalcular_temas_semana(jsonb), voz_vm.speech_vetor(jsonb), voz_vm.buscas_semanticas_pendentes(jsonb) to motorcx_voz;

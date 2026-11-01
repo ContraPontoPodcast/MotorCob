@@ -283,7 +283,11 @@ def main(argv=None) -> int:
     from voz import provedores as PV
     from voz.segredos import SecretManager
     cfg_prov = PV.ler_config(a.provedores)
-    provedores = PV.criar_todos(cfg_prov, SecretManager() if cfg_prov else None)
+    segredos = SecretManager() if cfg_prov else None
+    provedores = PV.criar_todos(cfg_prov, segredos)
+    if a.modo == "real" and "elevenlabs" in provedores:     # SQL 63: webhook pós-chamada (só com ref_webhook)
+        from voz.provedores.elevenlabs import ligar_receptor
+        ligar_receptor(provedores["elevenlabs"], segredos)
     fila_envio = FilaEnvio(EnviadorGCS()) if a.modo == "real" else None
     fila: queue.Queue = queue.Queue()
     parar = threading.Event()

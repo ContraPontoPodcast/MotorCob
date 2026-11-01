@@ -68,7 +68,9 @@ Tronco autenticado por IP não tem senha.
 
 **Opcionais:**
 - `motorcx-voz-deepgram`, `motorcx-voz-llm` e `motorcx-voz-tts`: chaves da Montagem MotorCX;
-- `motorcx-voz-transcricao-api`: chave da reserva da transcrição por API.
+- `motorcx-voz-transcricao-api`: chave da reserva da transcrição por API;
+- `motorcx-voz-elevenlabs-api` e `motorcx-voz-elevenlabs-webhook`: chave da API de conversas e segredo do webhook
+  pós-chamada da ElevenLabs (SQL 63; veja "Webhook da ElevenLabs" na seção 4).
 
 **Usuário dos envios:** no metadado `motorcx-enviado-por` de cada VM, coloque o uuid do usuário da equipe
 MotorCX que assina os envios de eventos (`envios.enviado_por`):
@@ -106,6 +108,7 @@ antes da janela de discagem.
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |
 | `motorcx-voz-speech.timer` | A cada 15 min, Speech Analytics (SQL 62) das transcrições em `/var/motorcx/transcricoes`: nota do checklist e códigos fechados numa chamada ao LLM da Montagem (`/etc/motorcx/provedores.json`, chave no cofre). Desligado por padrão (veja abaixo). |
 | `motorcx-voz-speech-noite.timer` | 02:40, agregados do dia do Speech Analytics (ontem e anteontem, idempotente), recomendações (`motor/retroalimentacao.py`) e impacto de 28 dias. Mesmo interruptor. |
+| `motorcx-voz-speech-buscas` | Serviço contínuo da busca semântica do site (SQL 60/63): a cada 2 s pega as buscas pendentes da parte desta VM, calcula o embedding da pergunta na Vertex (São Paulo) e responde. O site consulta até a resposta chegar; a busca vira erro sozinha em 2 min. Custo do embedding na margem (componente `embeddings`). Mesmo interruptor: desligado, sai e fica parado (depois de ligar o metadado, `systemctl restart motorcx-voz-speech-buscas`). |
 | `motorcx-voz-speech-temas.timer` | Segunda 03:20, temas novos da semana passada (SQL 63): agrupa os trechos do cliente que ficaram sem tema e sem intenção. Grupo com 30 conversas ou mais vai para a Curadoria com um nome sugerido pela IA; quem dá o nome é uma pessoa. Mesmo interruptor. |
 
 O plantão do orquestrador:
@@ -146,6 +149,36 @@ As transcrições (da IA e do Whisper) com mais de 90 dias são apagadas pela tr
 ElevenLabs: para receber a conversa (e o resultado) pela API, ponha no `provedores.json`
 `"elevenlabs": {"numero_agente": "...", "agent_id": "<id do agente>", "ref_api": "voz/elevenlabs-api"}` e crie o
 segredo `motorcx-voz-elevenlabs-api` no Secret Manager (a chave nunca vai para arquivo).
+
+**Webhook da ElevenLabs (pós-chamada, SQL 63):** só sobe com o provedor ElevenLabs configurado e
+`"ref_webhook": "voz/elevenlabs-webhook"` no `provedores.json` (porta interna `"webhook_porta"`, padrão 8092), e só no
+plantão real. O receptor roda dentro do orquestrador, escuta só em `127.0.0.1:8092`, aceita só
+`POST /elevenlabs/pos-chamada`, confere a assinatura `ElevenLabs-Signature` (HMAC-SHA256 com o segredo do webhook,
+carimbo de no máximo 30 min), recusa corpo sem tamanho (411), acima de 2 MB (413) ou que não chega em 10 s (408), não
+guarda nem registra o corpo e entrega transcrição e resultado à chamada. O que o dono faz uma vez por VM:
+1. `criar motorcx-voz-elevenlabs-webhook "Segredo do webhook da ElevenLabs"` (o valor que a ElevenLabs mostra ao
+   criar o webhook);
+2. no Caddy da VM (o mesmo TLS da 8443 do simulador), acrescentar a rota:
+   ```
+   handle /elevenlabs/pos-chamada {
+       request_body { max_size 2MB }
+       reverse_proxy 127.0.0.1:8092
+   }
+   ```
+   e `systemctl reload caddy`. A 8443 já está aberta no firewall; não precisa abrir outra porta;
+3. na ElevenLabs (Conversational AI › Webhooks), apontar o pós-chamada (`post_call_transcription`) para
+   `https://<IP da VM>:8443/elevenlabs/pos-chamada` (35.198.40.10 ou 34.39.217.31) e ligar o envio da transcrição.
+A ElevenLabs aceita UM endereço de webhook por espaço de trabalho: com as duas VMs, a VM que recebe entrega as chamadas
+dela; as da outra VM chegam pela API de conversas (`agent_id` + `ref_api`, ligue as duas coisas).
+
+**Checklist do piloto (ElevenLabs, SQL 63):**
+- [ ] a variável dinâmica `motorcx_id` chega na conversa (o `X-MotorCX-Id` do INVITE vira `motorcx_id`);
+- [ ] `GET /v1/convai/conversations?agent_id=…&call_start_after_unix=…` lista as conversas do agente e
+      `GET /v1/convai/conversations/{id}` traz `transcript` (`role`, `message`, `time_in_call_secs`), `status` = `done`
+      e `conversation_initiation_client_data.dynamic_variables.motorcx_id`;
+- [ ] o webhook assinado chega na VM (resposta 200; assinatura errada dá 401) e a transcrição aparece em
+      `/var/motorcx/transcricoes/empresa_<id>/ia_<id>.json` (mascarada);
+- [ ] o campo de análise com o resultado é `data_collection_results.resultado`.
 
 ## 5. Transferência para o discador do cliente
 

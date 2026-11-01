@@ -278,6 +278,24 @@ checar("outra empresa não lê o resultado por motivo", False,
 checar("retroalimentação lê os dias fechados (janela 30 dias para trás)", True,
        f"select jsonb_array_length(public.dados_retroalimentacao_voz({EA}, '{HOJE}'::date - 12, '{HOJE}'::date - 1)->'por_motivo')", SR, None, 2)
 
+# ---------------------------------------------------------------- 4b. busca semântica: pendentes com a empresa (parte i/n)
+BS = sv(f"insert into public.voz_buscas (empresa_id, usuario, termo, modo, situacao) values ({EA}, '{U['adm']}', 'pix não caiu', "
+        f"'semantica', 'pendente') returning id")
+BV = sv(f"insert into public.voz_buscas (empresa_id, usuario, termo, modo, situacao, em) values ({EA}, '{U['adm']}', 'velha', "
+        f"'semantica', 'pendente', now() - interval '5 minutes') returning id")
+PARTE_A = f"{int(EA) % 2 + 1}/2"
+PARTE_OUTRA = f"{(int(EA) + 1) % 2 + 1}/2"
+checar("buscas pendentes vêm com a empresa (custo do embedding na empresa certa)", True,
+       f"select count(*) from jsonb_array_elements(public.buscas_semanticas_pendentes_voz('1/1', 100)) b "
+       f"where (b->>'id')::bigint={BS} and (b->>'empresa_id')::bigint={EA} and b->>'termo'='pix não caiu'", SR, None, 1)
+checar("busca parada há mais de 2 minutos vira erro", True, f"select situacao from public.voz_buscas where id={BV}", SR, None, "erro")
+checar("só as buscas da parte desta VM", True,
+       f"select (select count(*) from jsonb_array_elements(public.buscas_semanticas_pendentes_voz('{PARTE_A}', 100)) b where (b->>'id')::bigint={BS})"
+       f"||'|'||(select count(*) from jsonb_array_elements(public.buscas_semanticas_pendentes_voz('{PARTE_OUTRA}', 100)) b where (b->>'id')::bigint={BS})",
+       SR, None, "1|0")
+checar("parte inválida é recusada", False, "select public.buscas_semanticas_pendentes_voz('3/2')", SR)
+checar("site não lê as buscas pendentes", False, "select public.buscas_semanticas_pendentes_voz('1/1')", "authenticated", U["adm"])
+
 # ---------------------------------------------------------------- 5. a VM pelo acesso próprio (motorcx_voz, login de verdade)
 C3 = chamada(EA, CA, "ee55ff66", "CLI-10003")
 LV = dict(LIN, id_chamada="ee55ff66", caminho="credor_0/x/ia_ee55ff66.wav")
@@ -299,6 +317,10 @@ vm("sabe se há pgvector", True, "select voz_vm.speech_vetor('{}')::text", str(C
 vm("recalcula a semana dos temas", True,
    f"select (voz_vm.recalcular_temas_semana('{{\"empresa\": {EA}, \"semana\": \"{SEMANA}\"}}'))::int >= 1", "t")
 vm("não lê a tabela dos grupos", False, "select count(*) from public.voz_temas_trechos")
+vm("lê as buscas semânticas pendentes da parte dela", True,
+   f"select count(*) from jsonb_array_elements(voz_vm.buscas_semanticas_pendentes('{{\"parte\": \"{PARTE_A}\"}}')) b "
+   f"where (b->>'id')::bigint={BS}", 1)
+vm("não chama a RPC do public direto", False, "select public.buscas_semanticas_pendentes_voz('1/1')")
 vm("não grava o resultado por motivo (é do motor)", False,
    f"select public.gravar_resultado_por_motivo_voz({EA}, {CA}, '[]', '{HOJE}')")
 

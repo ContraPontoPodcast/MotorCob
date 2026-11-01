@@ -568,3 +568,153 @@ class TestResultadoMotivo(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------- 7. receptor do webhook da ElevenLabs
+import hashlib  # noqa: E402
+import hmac  # noqa: E402
+import http.client  # noqa: E402
+import socket  # noqa: E402
+import threading  # noqa: E402
+
+SEGREDO_WH = "segredo-webhook-ficticio"
+
+
+def assinar(corpo: bytes, t: int) -> str:
+    return f"t={t},v0=" + hmac.new(SEGREDO_WH.encode(), f"{t}.".encode() + corpo, hashlib.sha256).hexdigest()
+
+
+class TestReceptorWebhook(unittest.TestCase):
+    CORPO = json.dumps({"type": "post_call_transcription", "data": TestProvedores.CONVERSA}).encode()
+
+    def setUp(self):
+        self.rel = Relogio(1_800_000_000.0)
+        self.el = EL.ElevenLabs("agente01", relogio=self.rel, ref_webhook="voz/elevenlabs-webhook")
+        self.ev = []
+        self.el.iniciar(TestProvedores.CTX, lambda *a: self.ev.append(a))
+        self.srv = EL.criar_receptor(0, SEGREDO_WH, self.el.receber, relogio=self.rel, max_corpo=64 * 1024, tempo_s=0.5)
+        self.porta = self.srv.server_address[1]
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+
+    def post(self, corpo: bytes, cab: dict, caminho=EL.CAMINHO_WEBHOOK):
+        c = http.client.HTTPConnection("127.0.0.1", self.porta, timeout=5)
+        c.request("POST", caminho, body=corpo, headers=cab)
+        r = c.getresponse()
+        return r.status, json.loads(r.read() or b"{}")
+
+    def test_assinatura_valida_entrega_depois_do_fim(self):
+        self.el.encerrar("abc123")                    # o webhook chega depois da chamada
+        st, r = self.post(self.CORPO, {"ElevenLabs-Signature": assinar(self.CORPO, int(self.rel.t) - 60),
+                                       "Content-Type": "application/json"})
+        self.assertEqual((st, r), (200, {"ok": True, "eventos": 2}))
+        self.assertEqual(self.ev, [])                  # só no tick (thread do orquestrador)
+        self.el.tick(datetime(2026, 11, 3))
+        self.assertEqual([e[1] for e in self.ev], ["transcricao", "resultado"])
+
+    def test_assinatura_invalida_ou_velha(self):
+        for cab in ({"ElevenLabs-Signature": assinar(self.CORPO + b" ", int(self.rel.t))},
+                    {"ElevenLabs-Signature": assinar(self.CORPO, int(self.rel.t) - 3600)},
+                    {}):
+            st, _ = self.post(self.CORPO, cab)
+            self.assertEqual(st, 401, cab)
+        self.el.tick(datetime(2026, 11, 3))
+        self.assertEqual(self.ev, [])
+
+    def test_tamanho_caminho_e_tempo(self):
+        grande = b"x" * (64 * 1024 + 1)
+        self.assertEqual(self.post(grande, {"ElevenLabs-Signature": assinar(grande, int(self.rel.t))})[0], 413)
+        self.assertEqual(self.post(self.CORPO, {}, caminho="/outra")[0], 404)
+        # sem Content-Length
+        s = socket.create_connection(("127.0.0.1", self.porta), timeout=5)
+        s.sendall(f"POST {EL.CAMINHO_WEBHOOK} HTTP/1.1\r\nHost: x\r\n\r\n".encode())
+        self.assertIn(b" 411 ", s.recv(200))
+        s.close()
+        # promete 500 bytes e não manda: cortado pelo tempo
+        s = socket.create_connection(("127.0.0.1", self.porta), timeout=5)
+        s.sendall(f"POST {EL.CAMINHO_WEBHOOK} HTTP/1.1\r\nHost: x\r\nContent-Length: 500\r\n\r\nabc".encode())
+        resp = s.recv(200)
+        s.close()
+        self.assertTrue(resp == b"" or b" 408 " in resp, resp)
+
+    def test_webhook_tira_a_chamada_da_busca_pela_api(self):
+        class Api:
+            def recentes(s, desde):
+                raise AssertionError("não devia buscar")
+
+        el = EL.ElevenLabs("agente01", api=Api(), relogio=self.rel, ref_webhook="x")
+        ev = []
+        el.iniciar(TestProvedores.CTX, lambda *a: ev.append(a))
+        el.encerrar("abc123")
+        el.busca.talvez_rodar = lambda: None
+        el.receber(EL.eventos_da_conversa(TestProvedores.CONVERSA))
+        el.tick(datetime(2026, 11, 3))
+        self.assertEqual([e[1] for e in ev], ["transcricao", "resultado"])
+        self.assertEqual(el.busca.rodada(), 0)
+
+    def test_sem_ref_webhook_nao_sobe(self):
+        self.assertIsNone(EL.ligar_receptor(EL.ElevenLabs("agente01"), object()))
+
+
+# ---------------------------------------------------------------- 8. busca semântica atendida pela VM
+class SbBusca:
+    def __init__(self, pendentes):
+        self.pendentes, self.chamadas = pendentes, []
+
+    def rpc(self, nome, args=None):
+        self.chamadas.append((nome, args))
+        if nome in ("buscas_semanticas_pendentes_voz", "buscas_voz_pendentes"):
+            p, self.pendentes = self.pendentes, []
+            return p
+        return 3
+
+
+class TestBuscaSemantica(unittest.TestCase):
+    def test_responde_e_registra_o_custo_por_empresa(self):
+        from voz.analise import trechos as TRC
+        sb = SbBusca([{"id": 1, "termo": "pix não caiu", "empresa_id": 4}, {"id": 2, "termo": "boleto", "empresa_id": 4},
+                      {"id": 3, "termo": "acordo", "empresa_id": 9}])
+        self.assertEqual(TRC.atender_buscas(sb, EmbFalso(), 20, "1/2", date(2026, 11, 3)), 3)
+        self.assertEqual(sb.chamadas[0], ("buscas_semanticas_pendentes_voz", {"parte": "1/2", "limite": 20}))
+        self.assertEqual([a["busca"] for n, a in sb.chamadas if n == "responder_busca_voz"], [1, 2, 3])
+        uso = {a["empresa"]: a for n, a in sb.chamadas if n == "registrar_uso_ia_voz"}
+        self.assertEqual((uso[4]["componente"], uso[4]["chamadas"], uso[4]["tokens_entrada"], uso[4]["minutos_cobraveis"]),
+                         ("embeddings", 2, 14, 0))
+        self.assertEqual(uso[9]["tokens_entrada"], 7)
+
+    def test_servico_continuo_espera_e_sobrevive_a_erro(self):
+        class SbFalha(SbBusca):
+            def rpc(s, nome, args=None):
+                if nome == "buscas_semanticas_pendentes_voz" and not s.chamadas:
+                    s.chamadas.append(("erro", None))
+                    raise RuntimeError("banco fora")
+                return super().rpc(nome, args)
+
+        esperas = []
+        sb = SbFalha([{"id": 7, "termo": "pix", "empresa_id": 1}])
+        out = RT.atender_buscas_sempre(sb, EmbFalso(), "1/1", 2.0, esperar=esperas.append, rodadas=3)
+        self.assertEqual(out, {"erros": 1, "respondidas": 1, "rodadas": 3})
+        self.assertEqual(esperas, [20.0, 2.0, 2.0])
+
+    def test_rotina_buscas_desligada_por_padrao_e_ligada(self):
+        sb = SbBusca([{"id": 7, "termo": "pix", "empresa_id": 1}])
+        self.assertEqual(RT.main(["buscas"], ambiente={}, sb=sb, embedder=EmbFalso()), 0)
+        self.assertEqual(sb.chamadas, [])
+        self.assertEqual(RT.main(["buscas", "--parte", "2/2", "--rodadas", "1", "--intervalo", "0.5"],
+                                 ambiente={"MOTORCX_SPEECH_ANALYTICS": "1"}, sb=sb, embedder=EmbFalso()), 0)
+        self.assertEqual(sb.chamadas[0][1]["parte"], "2/2")
+        self.assertIn(("responder_busca_voz", {"busca": 7, "emb": mock.ANY}), sb.chamadas)
+
+    def test_pergunta_usa_a_tarefa_de_consulta(self):
+        from voz.analise import trechos as TRC
+        corpos = []
+
+        def req(metodo, url, token, corpo, tipo):
+            corpos.append(json.loads(corpo))
+            return {"predictions": [{"embeddings": {"values": [0.0] * 1536}}]}
+
+        TRC.EmbeddingVertex("p", token=lambda: "x", requisitar=req, tarefa="RETRIEVAL_QUERY").vetores(["pix"])
+        self.assertEqual(corpos[0]["instances"][0]["task_type"], "RETRIEVAL_QUERY")

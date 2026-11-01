@@ -12,6 +12,7 @@
 #                                      motorcx-speech-analytics=1; sem ele, sai sem fazer nada)
 #   motorcx-voz-speech-noite.timer     02:40: agregados do dia do Speech Analytics e retroalimentação (mesmo metadado)
 #   motorcx-voz-speech-temas.timer     segunda 03:20: temas novos da semana (clusterização; mesmo metadado)
+#   motorcx-voz-speech-buscas.service  contínuo: busca semântica do site (a cada 2 s; mesmo metadado)
 set -euo pipefail
 exec > >(logger -t motorcx-voz-inicio) 2>&1
 
@@ -43,10 +44,12 @@ for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-s
          motorcx-voz-config.service motorcx-voz-config.timer motorcx-voz-transcricao.service \
          motorcx-voz-transcricao.timer motorcx-voz-atualizar.service motorcx-voz-atualizar.timer \
          motorcx-voz-speech.service motorcx-voz-speech.timer motorcx-voz-speech-noite.service \
-         motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.service motorcx-voz-speech-temas.timer; do
+         motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.service motorcx-voz-speech-temas.timer \
+         motorcx-voz-speech-buscas.service; do
   baixar "arquivo-$u" > "/etc/systemd/system/$u" 2>/dev/null || true
 done
 systemctl daemon-reload
 systemctl enable --now motorcx-voz-config.timer motorcx-voz-transcricao.timer motorcx-voz-atualizar.timer \
   motorcx-voz-speech.timer motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.timer
-systemctl enable --now motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service
+systemctl enable --now motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
+  motorcx-voz-speech-buscas.service

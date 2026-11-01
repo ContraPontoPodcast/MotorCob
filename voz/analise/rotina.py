@@ -14,6 +14,10 @@
   noite      02:40 (motorcx-voz-speech-noite.timer): para cada empresa ligada desta VM (parte i/n), agregar_speech_dia
              de ontem e anteontem (idempotente: o banco apaga e recalcula), depois as regras de
              motor/retroalimentacao.py (recomendações com piso n >= 200 e 5 p.p.) e o impacto de 28 dias.
+  buscas     serviço contínuo (motorcx-voz-speech-buscas.service): a cada 2 s, as buscas semânticas pendentes do site
+             desta VM (parte i/n; buscas_semanticas_pendentes_voz, SQL 63) → embedding da pergunta na Vertex →
+             responder_busca_voz. O site consulta até a resposta chegar (a busca vira erro sozinha em 2 min). O custo
+             do embedding vai para a empresa (componente embeddings).
   temas      segunda 03:20 (motorcx-voz-speech-temas.timer): clusterização semanal dos trechos sem tema e sem
              intenção da semana passada (voz/analise/temas.py; SQL 63). Grupo com 30 conversas ou mais vira tema novo
              na Curadoria, com nome sugerido pela IA; a promoção é de uma pessoa.
@@ -26,6 +30,7 @@ Montagem (/etc/motorcx/provedores.json, chave no Secret Manager pela referência
     python3 -m voz.analise.rotina analisar --pasta /var/motorcx/transcricoes
     python3 -m voz.analise.rotina noite --parte 1/2
     python3 -m voz.analise.rotina temas --parte 1/2
+    python3 -m voz.analise.rotina buscas --parte 1/2 --intervalo 2
 """
 from __future__ import annotations
 
@@ -306,11 +311,30 @@ def modelo_da_vm(provedores: str = "/etc/motorcx/provedores.json", segredos=None
     return ModeloOpenAICompat(cfg.llm_base_url, segredos.valor(cfg.ref_llm), cfg.llm_modelo, timeout=90), cfg.llm_modelo
 
 
-def embedder_da_vm(ambiente=None):   # pragma: no cover - VM
+def embedder_da_vm(ambiente=None, tarefa: str = "RETRIEVAL_DOCUMENT"):   # pragma: no cover - VM
     """Vertex AI em São Paulo pela conta de serviço da VM (sem chave em arquivo); None sem o projeto."""
     amb = os.environ if ambiente is None else ambiente
     projeto = (amb.get("MOTORCX_GCP_PROJETO") or "").strip()
-    return TR.EmbeddingVertex(projeto) if projeto else None
+    return TR.EmbeddingVertex(projeto, tarefa=tarefa) if projeto else None
+
+
+def atender_buscas_sempre(sb, embedder, parte: str = "1/1", intervalo_s: float = 2.0, parar=None,
+                          esperar=time.sleep, rodadas: int | None = None) -> dict:
+    """O serviço das buscas semânticas: uma rodada a cada `intervalo_s` (erro do banco ou da Vertex não derruba;
+    espera mais um pouco). `parar()` -> True encerra; `rodadas` limita (testes)."""
+    cont: Counter = Counter()
+    k = 0
+    while not (parar and parar()) and (rodadas is None or k < rodadas):
+        k += 1
+        try:
+            cont["respondidas"] += TR.atender_buscas(sb, embedder, 20, parte)
+            esperar(intervalo_s)
+        except Exception as ex:   # noqa: BLE001
+            log.warning("busca semântica: rodada falhou (%s)", ex.__class__.__name__)
+            cont["erros"] += 1
+            esperar(min(60.0, intervalo_s * 10))
+    cont["rodadas"] = k
+    return dict(cont)
 
 
 def main(argv=None, ambiente=None, sb=None, modelo=None, embedder=None) -> int:
@@ -332,6 +356,10 @@ def main(argv=None, ambiente=None, sb=None, modelo=None, embedder=None) -> int:
     a3.add_argument("--hoje", type=date.fromisoformat, default=None)
     for x in (a1, a3):
         x.add_argument("--sem-embedding", action="store_true", help="não calcula embedding (só a busca por termo)")
+    a4 = sub.add_parser("buscas")
+    a4.add_argument("--parte", default="1/1")
+    a4.add_argument("--intervalo", type=float, default=2.0)
+    a4.add_argument("--rodadas", type=int, default=None, help="só para teste: para depois de n rodadas")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if not ligado(ambiente):
@@ -340,6 +368,22 @@ def main(argv=None, ambiente=None, sb=None, modelo=None, embedder=None) -> int:
     if sb is None:
         from voz.configuracao import supabase_do_ambiente
         sb = supabase_do_ambiente()
+    if a.rotina == "buscas":
+        if embedder is None:
+            embedder = embedder_da_vm(ambiente, tarefa="RETRIEVAL_QUERY")
+        if embedder is None:
+            print(json.dumps({"desligado": True, "motivo": "sem MOTORCX_GCP_PROJETO (Vertex)"}))
+            return 0
+        import signal
+        fim = {"v": False}
+        try:
+            signal.signal(signal.SIGTERM, lambda *_: fim.__setitem__("v", True))
+        except ValueError:                    # fora da thread principal (testes)
+            pass
+        out = atender_buscas_sempre(sb, embedder, a.parte, max(0.5, a.intervalo), parar=lambda: fim["v"],
+                                    rodadas=a.rodadas)
+        print(json.dumps(out, ensure_ascii=False, sort_keys=True))
+        return 0
     if a.rotina in ("analisar", "temas") and embedder is None and not a.sem_embedding:
         embedder = embedder_da_vm(ambiente)
     if a.rotina == "analisar":

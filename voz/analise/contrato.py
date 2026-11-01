@@ -28,6 +28,6 @@ RPCS = ("buscas_voz_pendentes", "responder_busca_voz", "gravar_relatorio_credor"
         "dados_retroalimentacao_voz", "recomendacoes_aplicadas_voz", "gravar_impacto_voz",
         # SQL 63 · ligações da IA, temas novos (clusterização semanal) e embedding dos trechos
         "registrar_gravacoes_ia_voz", "trechos_para_temas_voz", "propor_tema_voz", "recalcular_temas_semana",
-        "speech_vetor_voz")
+        "speech_vetor_voz", "buscas_semanticas_pendentes_voz")
 
 CONFLITO = {"voz_trechos": "gravacao_id,inicio_s,falante"}

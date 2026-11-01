@@ -244,9 +244,11 @@ class BuscaConversas:
 
 class ElevenLabs(ProvedorVoz):
     codigo = "elevenlabs"
+    PRAZO_DEPOIS_S = 900 + 120          # quanto tempo depois do fim ainda aceita resultado/transcrição
 
     def __init__(self, numero_agente: str, max_simultaneas: int = 200, espera_resultado_s: int = 120,
-                 endpoint: str = "pv-elevenlabs", api: ApiElevenLabs | None = None, relogio=time.time):
+                 endpoint: str = "pv-elevenlabs", api: ApiElevenLabs | None = None, relogio=time.time,
+                 ref_webhook: str | None = None, webhook_porta: int = 8092):
         if not numero_agente.replace("+", "").isalnum():
             raise ValueError("número/identificador do agente inválido")
         self.numero_agente, self.max_simultaneas, self.endpoint = numero_agente, max_simultaneas, endpoint
@@ -254,9 +256,17 @@ class ElevenLabs(ProvedorVoz):
         self.sessoes: dict[str, ContextoChamada] = {}
         self.relogio = relogio
         self.busca = BuscaConversas(api, relogio=relogio) if api is not None else None
+        # receptor do webhook pós-chamada (voz/provedores/elevenlabs.py › criar_receptor): só com ref_webhook
+        self.ref_webhook, self.webhook_porta = ref_webhook, int(webhook_porta)
+        self.recebidos: queue.Queue = queue.Queue()
         self._inicio: dict[str, float] = {}
         self._emitir: dict[str, Emitir] = {}
         self._fim: dict[str, float] = {}
+
+    @property
+    def depois_do_fim(self) -> bool:
+        """O resultado/transcrição chega depois da chamada (API ou webhook)?"""
+        return self.busca is not None or bool(self.ref_webhook)
 
     def disponivel(self) -> bool:
         return len(self.sessoes) < self.max_simultaneas
@@ -276,25 +286,118 @@ class ElevenLabs(ProvedorVoz):
     def encerrar(self, id_chamada: str) -> None:
         self.sessoes.pop(id_chamada, None)
         inicio = self._inicio.pop(id_chamada, None)
-        if self.busca is not None and inicio is not None:
-            self._fim[id_chamada] = self.relogio()
-            self.busca.acompanhar(id_chamada, inicio, self._fim[id_chamada])   # resultado e transcrição pela API
-        else:
+        if inicio is None:
+            return
+        if not self.depois_do_fim:
             self._emitir.pop(id_chamada, None)
+            return
+        self._fim[id_chamada] = self.relogio()
+        if self.busca is not None:
+            self.busca.acompanhar(id_chamada, inicio, self._fim[id_chamada])   # resultado e transcrição pela API
+
+    def receber(self, eventos: list[tuple]) -> int:
+        """Eventos do webhook (thread do receptor HTTP): vão para a fila e saem no tick, na thread do orquestrador."""
+        for ev in eventos:
+            self.recebidos.put(ev)
+        return len(eventos)
+
+    def _entregar(self, i: str, tipo: str, dados: dict) -> None:
+        emitir = self._emitir.get(i)
+        if emitir is not None:
+            emitir(i, tipo, dados)
+        if self.busca is not None:                     # já chegou pelo webhook: a API não precisa buscar
+            with self.busca._trava:
+                self.busca.pendentes.pop(i, None)
 
     def tick(self, agora: datetime) -> None:
-        if self.busca is None:
+        if not self.depois_do_fim:
             return
-        self.busca.talvez_rodar()
         while True:
             try:
-                i, tipo, dados = self.busca.eventos.get_nowait()
+                self._entregar(*self.recebidos.get_nowait())
             except queue.Empty:
                 break
-            emitir = self._emitir.get(i)
-            if emitir is not None:
-                emitir(i, tipo, dados)
-        limite = self.relogio() - self.busca.prazo_s - 120
+        if self.busca is not None:
+            self.busca.talvez_rodar()
+            while True:
+                try:
+                    i, tipo, dados = self.busca.eventos.get_nowait()
+                except queue.Empty:
+                    break
+                emitir = self._emitir.get(i)
+                if emitir is not None:
+                    emitir(i, tipo, dados)
+        limite = self.relogio() - self.PRAZO_DEPOIS_S
         for i in [x for x, fim in self._fim.items() if fim < limite]:
             self._fim.pop(i, None)
             self._emitir.pop(i, None)
+
+
+# ------------------------------------------------------------------ receptor do webhook pós-chamada
+CAMINHO_WEBHOOK = "/elevenlabs/pos-chamada"
+MAX_CORPO_WEBHOOK = 2 * 1024 * 1024          # a conversa inteira com a análise cabe com folga
+TEMPO_LEITURA_S = 10                          # quem não manda o corpo nesse tempo é cortado
+
+
+def criar_receptor(porta: int, segredo: str, entregar, host: str = "127.0.0.1", relogio=time.time,
+                   max_corpo: int = MAX_CORPO_WEBHOOK, tempo_s: float = TEMPO_LEITURA_S):
+    """POST /elevenlabs/pos-chamada: confere a assinatura (ElevenLabs-Signature, HMAC-SHA256 com o segredo do
+    webhook, tolerância de 30 min em ler_webhook), recusa corpo grande (413), sem tamanho (411) ou lento (408) e
+    entrega os eventos (transcrição e resultado) por `entregar(eventos)`. O corpo nunca é gravado nem vai para log.
+    Escuta só em 127.0.0.1: o Caddy da VM (TLS na 8443) encaminha."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        timeout = tempo_s                       # socket: leitura lenta (slowloris) é cortada
+
+        def log_message(self, *a):              # sem corpo nem cabeçalho em log
+            pass
+
+        def _resp(self, status: int, corpo: dict) -> None:
+            b = json.dumps(corpo).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+
+        def do_POST(self):  # noqa: N802
+            if self.path.split("?", 1)[0] != CAMINHO_WEBHOOK:
+                return self._resp(404, {"erro": "não encontrado"})
+            n = self.headers.get("Content-Length")
+            if n is None or not n.isdigit():
+                return self._resp(411, {"erro": "tamanho obrigatório"})
+            if int(n) <= 0 or int(n) > max_corpo:
+                return self._resp(413, {"erro": "corpo grande demais"})
+            try:
+                corpo = self.rfile.read(int(n))
+            except OSError:                     # inclui o tempo de leitura estourado
+                return self._resp(408, {"erro": "tempo esgotado"})
+            if len(corpo) != int(n):
+                return self._resp(408, {"erro": "corpo incompleto"})
+            try:
+                eventos = ler_webhook(dict(self.headers.items()), corpo, segredo, relogio())
+            except AssinaturaInvalida:
+                log.warning("elevenlabs: webhook com assinatura recusada")
+                return self._resp(401, {"erro": "assinatura inválida"})
+            except (ValueError, UnicodeDecodeError):
+                return self._resp(400, {"erro": "corpo inválido"})
+            finally:
+                del corpo                       # nada do corpo cru fica no processo
+            entregar(eventos)
+            return self._resp(200, {"ok": True, "eventos": len(eventos)})
+
+        def do_GET(self):  # noqa: N802
+            return self._resp(405, {"erro": "só POST"})
+
+    return ThreadingHTTPServer((host, int(porta)), H)
+
+
+def ligar_receptor(provedor: "ElevenLabs", segredos, host: str = "127.0.0.1"):   # pragma: no cover - VM
+    """Sobe o receptor numa thread quando o provedor tem ref_webhook (o segredo vem do Secret Manager)."""
+    if not provedor.ref_webhook or segredos is None:
+        return None
+    srv = criar_receptor(provedor.webhook_porta, segredos.valor(provedor.ref_webhook), provedor.receber, host)
+    threading.Thread(target=srv.serve_forever, daemon=True, name="elevenlabs-webhook").start()
+    log.info("elevenlabs: webhook pós-chamada em %s:%s%s", host, provedor.webhook_porta, CAMINHO_WEBHOOK)
+    return srv
