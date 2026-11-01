@@ -1,0 +1,11 @@
+[Unit]
+Description=Importador das gravações do discador do cliente (envio pelo site, SFTP e HTTPS; SQL 64)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-importador
+ExecStart=/usr/local/bin/motorcx-voz-rodar importador
+Nice=10

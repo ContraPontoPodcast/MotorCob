@@ -295,6 +295,17 @@ de outra pessoa pela certificação e a rotação segue.
   refaz os `_dia` (idempotente; operador só com ID do discador), depois as regras e o impacto de 28 dias de
   `motor/retroalimentacao.py` pelas RPCs. Desligado por padrão: metadado `motorcx-speech-analytics=1` na VM e
   `voz_config.speech_analytics` por empresa. Os dois acessos da VM (funções de `voz_vm`).
+- `voz/importador/` (SQL 64): importador das gravações do discador do cliente, na VM (timer
+  `motorcx-voz-importador`, metadado `motorcx-importador-gravacoes=1` e, por fonte, `leitura_automatica`; os dois acessos).
+  Fontes por empresa em `voz_import_config` (envio pelo site no bucket `gravacoes-discador`, SFTP com a chave do servidor
+  fixada, HTTPS só nos domínios autorizados); credencial só no Secret Manager pela referência (equipe com
+  `gerenciar_troncos_voz`); o Admin cadastra (`importar_gravacoes`). Manifesto estrito (`manifesto.py`: coluna de dado
+  pessoal recusa o arquivo, linha com CPF/telefone/e-mail vai para a quarentena; `id_chamada` vira hash só de letras =
+  `voz_gravacoes.chave_importacao`, reimportar não duplica). Par com a transferência da IA (`preparar_importacao_voz`:
+  `id_chamada_motorcx` ou janela `janela_par_s`; ambíguo/sem par nunca casa). Áudio no bucket da empresa
+  (`discador/<AAAA>/<MM>/<DD>/<chave>.<ext>`), `voz_gravacoes` origem discador + `operador_ref`, fila do Whisper
+  (`<gravacao>.<ext>`); o worker (`--registrar`) devolve a situação e cobra os minutos em `voz_transcricao` uma vez só.
+  Registro por execução e arquivo (`voz_import_arquivos`) e quarentena com motivos novos, na tela Gravações do discador.
 - `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
   = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
   Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias

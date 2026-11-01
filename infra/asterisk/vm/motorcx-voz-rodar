@@ -1,7 +1,9 @@
 #!/bin/bash
 # Sobe um dos contêineres da voz em primeiro plano (o systemd cuida de reiniciar).
-#   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite
+#   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite | importador
 # speech e speech-noite (Speech Analytics, SQL 62) só rodam com o metadado motorcx-speech-analytics=1 (padrão: desligado).
+# importador (gravações do discador do cliente, SQL 64) só roda com o metadado motorcx-importador-gravacoes=1 (padrão:
+# desligado); no banco, cada fonte ainda tem a leitura automática desligada por padrão.
 set -euo pipefail
 . /usr/local/bin/motorcx-voz-comum
 comum_voz=(--rm --network host --user 10010:10010 --env-file "$RUN/voz.env" -e MOTORCX_ARI_SENHA_ARQUIVO="$RUN/ari_senha"
@@ -20,7 +22,13 @@ case "${1:-}" in
     reserva=(); [ "$(meta motorcx-transcricao-reserva)" = 1 ] && reserva=(--reserva-api)
     exec docker run --name motorcx-voz-transcricao "${comum_voz[@]}" -e MOTORCX_WHISPER_PASTA=/var/motorcx/modelos -e HF_HOME=/var/motorcx/modelos \
       "$IMG_VOZ" python3 -m voz.transcricao.worker --dados "$RUN/voz.json" --entrada /var/motorcx/importadas \
-      --saida /var/motorcx/transcricoes "${reserva[@]}" ;;
+      --saida /var/motorcx/transcricoes --registrar "${reserva[@]}" ;;
+  importador)
+    if [ "$(meta motorcx-importador-gravacoes)" != 1 ]; then
+      echo "Importador de gravações desligado nesta VM (metadado motorcx-importador-gravacoes)"; exit 0
+    fi
+    exec docker run --name motorcx-voz-importador "${comum_voz[@]}" -e MOTORCX_IMPORTADOR_GRAVACOES=1 "$IMG_VOZ" \
+      python3 -m voz.importador.rotina --parte "$PARTE" --saida /var/motorcx/importadas ;;
   speech|speech-noite)
     if [ "$(meta motorcx-speech-analytics)" != 1 ]; then
       echo "Speech Analytics desligado nesta VM (metadado motorcx-speech-analytics)"; exit 0
@@ -31,5 +39,5 @@ case "${1:-}" in
     fi
     exec docker run --name motorcx-voz-speech-noite "${comum_voz[@]}" -e MOTORCX_SPEECH_ANALYTICS=1 "$IMG_VOZ" \
       python3 -m voz.analise.rotina noite --parte "$PARTE" ;;
-  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite" >&2; exit 2 ;;
+  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|importador" >&2; exit 2 ;;
 esac

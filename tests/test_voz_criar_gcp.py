@@ -147,7 +147,7 @@ class TestScriptsDaVm(unittest.TestCase):
             r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, f"{f.name}: {r.stderr}")
         servicos = sorted(vm.glob("*.service"))
-        self.assertEqual(len(servicos), 8)
+        self.assertEqual(len(servicos), 9)
         for s in servicos:
             txt = s.read_text()
             self.assertIn("ExecStart=", txt, s.name)
@@ -157,13 +157,19 @@ class TestScriptsDaVm(unittest.TestCase):
         for nome in ("motorcx-voz-comum", "motorcx-voz-segredos", "motorcx-voz-rodar", "motorcx-voz-config",
                      "motorcx-voz-atualizar", "motorcx-voz-config.timer", "motorcx-voz-transcricao.timer",
                      "motorcx-voz-speech.timer", "motorcx-voz-speech-noite.timer", "motorcx-voz-speech.service",
-                     "motorcx-voz-speech-noite.service"):
+                     "motorcx-voz-speech-noite.service", "motorcx-voz-importador.service",
+                     "motorcx-voz-importador.timer"):
             self.assertIn(nome, inicio)
             self.assertTrue((vm / nome).exists(), nome)
         # Speech Analytics (SQL 62): desligado por padrão, só liga com o metadado da VM
         rodar = (vm / "motorcx-voz-rodar").read_text()
         self.assertIn('[ "$(meta motorcx-speech-analytics)" != 1 ]', rodar)
         self.assertIn("MOTORCX_SPEECH_ANALYTICS=1", rodar)
+        # importador das gravações do discador (SQL 64): desligado por padrão, só liga com o metadado da VM
+        self.assertIn('[ "$(meta motorcx-importador-gravacoes)" != 1 ]', rodar)
+        self.assertIn("MOTORCX_IMPORTADOR_GRAVACOES=1", rodar)
+        self.assertIn("--registrar", rodar)
+        self.assertIn("motorcx-voz-importador.timer", inicio.split("systemctl enable --now")[1])
         # nenhum segredo escrito nos scripts: só lidos do Secret Manager para /run
         for f in vm.iterdir():
             self.assertNotRegex(f.read_text(), r"(?i)(password|senha)\s*=\s*\S{6,}", f.name)

@@ -11,6 +11,8 @@
 #   motorcx-voz-speech.timer           a cada 15 min: Speech Analytics das ligações transcritas (metadado
 #                                      motorcx-speech-analytics=1; sem ele, sai sem fazer nada)
 #   motorcx-voz-speech-noite.timer     02:40: agregados do dia do Speech Analytics e retroalimentação (mesmo metadado)
+#   motorcx-voz-importador.timer       a cada 15 min: importa as gravações do discador do cliente (metadado
+#                                      motorcx-importador-gravacoes=1; sem ele, sai sem fazer nada; SQL 64)
 set -euo pipefail
 exec > >(logger -t motorcx-voz-inicio) 2>&1
 
@@ -42,10 +44,10 @@ for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-s
          motorcx-voz-config.service motorcx-voz-config.timer motorcx-voz-transcricao.service \
          motorcx-voz-transcricao.timer motorcx-voz-atualizar.service motorcx-voz-atualizar.timer \
          motorcx-voz-speech.service motorcx-voz-speech.timer motorcx-voz-speech-noite.service \
-         motorcx-voz-speech-noite.timer; do
+         motorcx-voz-speech-noite.timer motorcx-voz-importador.service motorcx-voz-importador.timer; do
   baixar "arquivo-$u" > "/etc/systemd/system/$u" 2>/dev/null || true
 done
 systemctl daemon-reload
 systemctl enable --now motorcx-voz-config.timer motorcx-voz-transcricao.timer motorcx-voz-atualizar.timer \
-  motorcx-voz-speech.timer motorcx-voz-speech-noite.timer
+  motorcx-voz-speech.timer motorcx-voz-speech-noite.timer motorcx-voz-importador.timer
 systemctl enable --now motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service

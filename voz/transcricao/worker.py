@@ -6,13 +6,17 @@ Para cada gravação pendente da fonte:
   - duração < transcrever_min_segundos      -> "abaixo_limiar" (não transcreve, não extrai, não cobra; decisão 4a);
   - senão transcreve (Whisper local, reserva por API), REDIGE CPF e cartão e só então salva -> "ok";
   - erro                                    -> "erro" (tenta de novo na próxima rodada, até max_tentativas).
-O texto bruto nunca é gravado: só a versão redigida (voz/transcricao/redacao.py).
+O texto bruto nunca é gravado: só a versão redigida (voz/transcricao/redacao.py). Situação final (ok, abaixo do
+limiar, desligada ou erro no limite de tentativas): o áudio local sai da VM (já está no bucket da empresa).
 
   python3 -m voz.transcricao.worker --dados /run/motorcx/voz.json --entrada /var/motorcx/importadas \\
-      --saida /var/motorcx/transcricoes [--modelo medium] [--reserva-api]
+      --saida /var/motorcx/transcricoes [--modelo medium] [--reserva-api] [--registrar]
 
-Fonte padrão (FontePasta): <entrada>/empresa_<id>/<id_gravacao>.wav (+ <id_gravacao>.json opcional com
-duracao_s), que os importadores por discador (decisão 5: genérico SFTP/URL/API primeiro) deixam na VM.
+Fonte padrão (FontePasta): <entrada>/empresa_<id>/<id_gravacao>.<wav|mp3|ogg|opus|flac|m4a> (+ <id_gravacao>.json
+com duracao_s), que o importador (voz/importador/rotina.py, SQL 64) deixa na VM. Com --registrar, a situação de cada
+gravação vai ao banco (registrar_transcricao_voz, nos dois acessos da VM): voz_gravacoes.transcricao e, na 1ª vez
+que dá certo, os minutos no item voz_transcricao (custo para a margem e quantidade da fatura, SQL 61). Banco fora:
+fica marcado na pasta e vai na próxima rodada.
 """
 from __future__ import annotations
 
@@ -33,6 +37,8 @@ from voz.transcricao.transcritores import ApiTranscricao, ComReserva, Transcrito
 
 log = logging.getLogger("motorcx.voz")
 ID = re.compile(r"^[A-Za-z0-9_\-]{1,80}$")
+EXT_AUDIO = ("wav", "mp3", "ogg", "opus", "flac", "m4a")
+FINAIS = ("ok", "abaixo_limiar", "desligada")
 
 
 @dataclass
@@ -52,14 +58,16 @@ def duracao_wav(caminho: Path) -> float | None:
 
 
 class FontePasta:
-    """Gravações numa pasta local; a situação fica em <id>.situacao.json ao lado (sem dado pessoal)."""
+    """Gravações numa pasta local; a situação fica em <id>.situacao.json ao lado (sem dado pessoal). apagar_audio:
+    na situação final o áudio (e o .json de duração) sai do disco da VM; a situação fica para o registro."""
 
-    def __init__(self, pasta: str | Path, max_tentativas: int = 3):
-        self.pasta, self.max_tentativas = Path(pasta), max_tentativas
+    def __init__(self, pasta: str | Path, max_tentativas: int = 3, apagar_audio: bool = True):
+        self.pasta, self.max_tentativas, self.apagar_audio = Path(pasta), max_tentativas, apagar_audio
 
     def pendentes(self) -> list[Gravacao]:
         out = []
-        for arq in sorted(self.pasta.glob("empresa_*/*.wav")):
+        audios = [a for ext in EXT_AUDIO for a in self.pasta.glob(f"empresa_*/*.{ext}")]
+        for arq in sorted(audios):
             if not ID.match(arq.stem):
                 continue
             sit = self._situacao(arq)
@@ -81,8 +89,62 @@ class FontePasta:
     def marcar(self, g: Gravacao, situacao: str, **dados) -> None:
         anterior = self._situacao(g.caminho)
         tent = anterior.get("tentativas", 0) + (1 if situacao == "erro" else 0)
+        final = situacao in FINAIS or tent >= self.max_tentativas
         g.caminho.with_name(g.id + ".situacao.json").write_text(
-            json.dumps({"situacao": situacao, "tentativas": tent, **dados}, ensure_ascii=False), encoding="utf-8")
+            json.dumps({"situacao": situacao, "tentativas": tent, "final": final, "registrado": False,
+                        "empresa_id": g.empresa_id, **dados}, ensure_ascii=False), encoding="utf-8")
+        if final and self.apagar_audio:
+            g.caminho.unlink(missing_ok=True)
+            g.caminho.with_suffix(".json").unlink(missing_ok=True)
+
+    def nao_registrados(self) -> dict[int, list[dict]]:
+        """{empresa: [{gravacao_id, situacao, duracao_s}]} das gravações do importador (id numérico) com situação
+        final ainda não registrada no banco."""
+        out: dict[int, list[dict]] = {}
+        for s in sorted(self.pasta.glob("empresa_*/*.situacao.json")):
+            gid = s.name[: -len(".situacao.json")]
+            if not gid.isdigit():
+                continue
+            try:
+                d = json.loads(s.read_text(encoding="utf-8"))
+            except (ValueError, OSError):
+                continue
+            if not d.get("final") or d.get("registrado"):
+                continue
+            emp = int(s.parent.name.split("_", 1)[1])
+            out.setdefault(emp, []).append({"gravacao_id": int(gid), "situacao": d.get("situacao"),
+                                            "duracao_s": d.get("duracao_s")})
+        return out
+
+    def marcar_registrado(self, empresa_id: int, ids: list[int]) -> None:
+        for gid in ids:
+            s = self.pasta / f"empresa_{int(empresa_id)}" / f"{int(gid)}.situacao.json"
+            try:
+                d = json.loads(s.read_text(encoding="utf-8"))
+            except (ValueError, OSError):
+                continue
+            d["registrado"] = True
+            s.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+
+
+def registrar_no_banco(sb, fonte: FontePasta) -> dict:
+    """Manda ao banco a situação final das gravações importadas (registrar_transcricao_voz). Erro numa empresa não
+    segura as outras; o que não foi fica para a próxima rodada."""
+    out = {"empresas": 0, "registradas": 0, "minutos": 0.0, "erros": 0}
+    for emp, itens in fonte.nao_registrados().items():
+        for i in range(0, len(itens), 500):
+            bloco = itens[i:i + 500]
+            try:
+                r = sb.rpc("registrar_transcricao_voz", {"empresa": emp, "itens": bloco}) or {}
+            except Exception as ex:   # noqa: BLE001
+                log.warning("transcrição: registro da empresa %s falhou (%s)", emp, ex.__class__.__name__)
+                out["erros"] += 1
+                break
+            fonte.marcar_registrado(emp, [x["gravacao_id"] for x in bloco])
+            out["registradas"] += len(bloco)
+            out["minutos"] += float(r.get("minutos") or 0)
+        out["empresas"] += 1
+    return out
 
 
 class DestinoPasta:
@@ -142,6 +204,7 @@ def main(argv=None) -> int:
     ap.add_argument("--saida", required=True)
     ap.add_argument("--modelo", default=os.environ.get("MOTORCX_WHISPER_MODELO", "medium"))
     ap.add_argument("--reserva-api", action="store_true", help="API como reserva (segredo motorcx-voz-transcricao-api)")
+    ap.add_argument("--registrar", action="store_true", help="manda a situação e os minutos ao banco (SQL 64)")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     dados = B.carregar(json.loads(Path(a.dados).read_text(encoding="utf-8")))
@@ -149,9 +212,17 @@ def main(argv=None) -> int:
     if a.reserva_api:
         from voz.segredos import SecretManager
         reserva = ApiTranscricao(SecretManager().valor("voz/transcricao-api"))
-    w = Worker(dados, FontePasta(a.entrada), DestinoPasta(a.saida),
+    fonte = FontePasta(a.entrada)
+    w = Worker(dados, fonte, DestinoPasta(a.saida),
                ComReserva(WhisperLocal(a.modelo, pasta_modelos=os.environ.get("MOTORCX_WHISPER_PASTA")), reserva))
-    print(json.dumps(w.processar(), ensure_ascii=False))
+    out = w.processar()
+    if a.registrar:
+        try:
+            from voz.configuracao import supabase_do_ambiente
+            out["registro"] = registrar_no_banco(supabase_do_ambiente(), fonte)
+        except Exception as ex:   # noqa: BLE001 — banco fora: fica para a próxima rodada
+            log.warning("transcrição: sem acesso ao banco para registrar (%s)", ex.__class__.__name__)
+    print(json.dumps(out, ensure_ascii=False))
     return 0
 
 

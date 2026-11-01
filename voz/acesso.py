@@ -75,6 +75,12 @@ RPC = {
     "conferir_rascunhos_recomendacoes": "conferir_rascunhos_recomendacoes",
     "recomendacoes_aplicadas_voz": "recomendacoes_aplicadas", "gravar_impacto_voz": "gravar_impacto",
     "avisar_alertas_voz": "avisar_alertas",
+    # SQL 64 · importador das gravações do discador do cliente e o registro da transcrição (worker Whisper)
+    "importacao_voz_pendente": "importacao_pendente", "iniciar_importacao_voz": "iniciar_importacao",
+    "arquivos_lidos_importacao_voz": "arquivos_lidos_importacao", "preparar_importacao_voz": "preparar_importacao",
+    "registrar_importacao_voz": "registrar_importacao", "registrar_arquivo_importacao_voz": "registrar_arquivo_importacao",
+    "concluir_importacao_voz": "concluir_importacao", "marcar_envio_gravacoes_apagado": "marcar_envio_apagado",
+    "registrar_transcricao_voz": "registrar_transcricao",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual

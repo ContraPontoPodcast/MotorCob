@@ -12,6 +12,8 @@ transfere por SIP para o discador do cliente.
   voz/provedores/            interface ProvedorVoz e adaptadores
   voz/fluxo_validador.py     validador do fluxo (SQL 58), cópia fiel de public.fluxo_voz_erros; casos comuns em
                              voz/fluxo_casos.py (rodam aqui e no Postgres) e modelos em voz/fluxo_modelos.py
+  voz/importador/            gravações do discador do cliente (SQL 64): envio pelo site, SFTP e HTTPS, manifesto
+                             validado, par com a transferência da IA, bucket da empresa e fila do Whisper
 
 Nada aqui é importado pelo motor: o motor só lê os eventos que o orquestrador escreve (CSV de ocorrência com
 as colunas de voz que motor/ingestao.py e motor/entrada.py já entendem). Dependências de rede (ARI, GCS,
