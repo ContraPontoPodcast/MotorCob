@@ -69,12 +69,25 @@ class RegistroBanco:
             if not lote:
                 continue
             setattr(self, attr, [])
-            try:
-                self.sb.inserir(tabela, lote, conflito=conf)
-            except Exception as ex:   # noqa: BLE001
-                self.erros += 1
-                log.warning("%s: falha ao gravar (%s); %d linha(s) ficam na fila", tabela, ex.__class__.__name__, len(lote))
-                setattr(self, attr, lote + getattr(self, attr))
+            if conf:                     # upsert: a mesma chave duas vezes no lote vira uma (a última)
+                chave = conf.split(",")
+                lote = list({tuple(l.get(c) for c in chave): l for l in lote}.values())
+            # o PostgREST exige as mesmas chaves em todos os objetos do lote (PGRST102) e um passo só leva os campos
+            # que teve: um insert por conjunto de chaves, na ordem em que chegaram
+            grupos: dict[tuple, list] = {}
+            for l in lote:
+                grupos.setdefault(tuple(sorted(l)), []).append(l)
+            falhou: list[dict] = []
+            for grupo in grupos.values():
+                try:
+                    self.sb.inserir(tabela, grupo, conflito=conf)
+                except Exception as ex:   # noqa: BLE001
+                    self.erros += 1
+                    log.warning("%s: falha ao gravar (%s); %d linha(s) ficam na fila", tabela, ex.__class__.__name__,
+                                len(grupo))
+                    falhou += grupo
+            if falhou:
+                setattr(self, attr, falhou + getattr(self, attr))
 
     def descarregar(self) -> int:
         n = self._descarregar_voz()

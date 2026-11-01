@@ -277,7 +277,7 @@ def limpar_anexos(sb) -> int:
                 por_bucket.setdefault(bucket, []).append(caminho)
         try:
             for bucket, caminhos in por_bucket.items():
-                sb.remover(bucket, caminhos)
+                sb.apagar_arquivos(bucket, caminhos)
             sb.rpc("marcar_anexos_apagados", {"pedido": linha["pedido_id"]})
             n += 1
         except Exception as ex:   # noqa: BLE001
