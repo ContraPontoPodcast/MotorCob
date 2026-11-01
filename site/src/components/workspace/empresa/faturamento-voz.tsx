@@ -4,13 +4,16 @@
 //  2. "Telefonia (pago à operadora)": consumo do mês por rota (consumo_voz_mes + voz_rotas), fora da fatura do
 //     MotorCX, com exportação CSV por dia e rota (telefonia_csv). Rota sem cadastro sai sem custo e com alerta.
 // Quem vê é quem tem ver_faturamento (a tela de Faturamento já confere).
+// Redesign v2: 2 KPIs que separam as duas contas; itens com 4 colunas e total; telefonia com 5 colunas e a cadência,
+// o preço do minuto e os segundos tarifados na gaveta da rota; "Exportar telefonia" é a ação principal.
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, friendlyError, moneyBR, today, type Row } from '@/lib/supabase';
 import { mesExtenso } from '@/lib/empresa-helpers';
 import { ITENS_FATURA_VOZ, TIPOS_ROTA, baixarTexto, cadenciaTxt, competencias, inteiro, paraCsv, reais } from '@/lib/voz';
-import { Aviso, Cartao, TabelaRolavel, Vazio, btnSec, tdCls, thCls } from '@/components/comuns/voz-ui';
+import { Aviso, Cartao, Vazio, btnPrim } from '@/components/comuns/voz-ui';
+import { Gaveta, Kpis, ListaValores, Pilula, Tabela } from '@/components/ds';
 
 const nomeMes = (comp: string) => { const m = mesExtenso(comp.slice(0, 7)); return m ? m.charAt(0).toUpperCase() + m.slice(1) : comp; };
 
@@ -22,6 +25,7 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 	const [rotas, setRotas] = useState<Row[]>([]);
 	const [temVoz, setTemVoz] = useState<boolean | null>(null);
 	const [exportando, setExportando] = useState(false);
+	const [rotaSel, setRotaSel] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (!supabase || !empresaId) { setItens([]); setTemVoz(false); return; }
@@ -86,128 +90,77 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 		toast.success('Arquivo pronto: uma linha por dia e rota. Rota sem cadastro sai com o custo vazio.');
 	}
 
+	type Linha = (typeof linhas)[number];
+	const sel = linhas.find(l => l.tech_prefix === rotaSel) ?? null;
+	const custoCel = (l: Linha) => l.custo != null ? moneyBR(l.custo) : <span className="font-normal text-[var(--base-texto-3)]">sem custo</span>;
+
 	return (
-		<div className="space-y-6" id="agente-virtual">
+		<div className="space-y-5" id="agente-virtual">
 			<div className="flex flex-wrap items-end justify-between gap-3">
-				<div>
+				<div className="min-w-0 flex-[1_1_300px]">
 					<h2 className="text-[19px] font-semibold text-[var(--base-texto)]">Agente virtual · extrato financeiro</h2>
 					<p className="mt-0.5 text-[13px] text-[var(--base-texto-2)]">O que o MotorCX fatura e, à parte, a telefonia que a empresa paga direto à operadora.</p>
 				</div>
-				<label className="flex items-center gap-2 rounded-full border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-3 py-1.5 text-[13px] text-[var(--base-texto)]">
-					<CalendarDays size={14} className="text-[var(--base-texto-2)]" />
-					<select aria-label="Competência" value={comp} onChange={e => setComp(e.target.value)} className="!border-0 bg-transparent pr-1 text-[13px] outline-none">
-						{opcoes.map((c, i) => <option key={c} value={c}>{nomeMes(c)}{i === 0 ? ' (até agora)' : ''}</option>)}
-					</select>
-				</label>
-			</div>
-
-			<div className="grid gap-3 sm:grid-cols-2">
-				<div className="rounded-2xl bg-[var(--base-cartao)] p-5" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}>
-					<p className="text-[13px] text-[var(--base-texto-2)]">{mes}{atual ? ' até agora' : ''} · fatura MotorCX</p>
-					<p className="mt-1 text-[26px] font-bold tracking-tight text-[var(--base-texto)] tnum">{moneyBR(totFat)}</p>
-					<p className="mt-0.5 text-[12px] text-[var(--base-texto-3)]">só os itens do agente virtual</p>
-				</div>
-				<div className="rounded-2xl border border-dashed border-[var(--base-field-border)] bg-[var(--base-fill)] p-5">
-					<p className="text-[13px] text-[var(--base-texto-2)]">Telefonia estimada · paga à operadora</p>
-					<p className="mt-1 text-[26px] font-bold tracking-tight text-[var(--base-texto)] tnum">{moneyBR(totTel)}</p>
-					<p className="mt-0.5 text-[12px] text-[var(--base-texto-3)]">fora da fatura do MotorCX{chSemCusto ? ` · ${inteiro(chSemCusto)} chamadas sem custo` : ''}</p>
+				<div className="flex flex-wrap items-center gap-2">
+					<label className="flex items-center gap-2 rounded-lg border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-3 py-1.5 text-[13px] text-[var(--base-texto)]">
+						<CalendarDays size={14} className="text-[var(--base-texto-2)]" aria-hidden="true" />
+						<select aria-label="Competência" value={comp} onChange={e => setComp(e.target.value)} className="!border-0 bg-transparent pr-1 text-[13px] text-[var(--base-texto)] outline-none">
+							{opcoes.map((c, i) => <option key={c} value={c}>{nomeMes(c)}{i === 0 ? ' (até agora)' : ''}</option>)}
+						</select>
+					</label>
+					<button onClick={() => void exportar()} disabled={exportando || linhas.length === 0} className={btnPrim}><FileDown size={15} /> {exportando ? 'Gerando...' : 'Exportar telefonia por rota e dia'}</button>
 				</div>
 			</div>
 
-			<Cartao titulo={`Itens faturados pelo MotorCX · ${mes.toLowerCase()}`}
-				desc="Só o que o MotorCX cobra do agente virtual: plataforma, minuto de IA, transcrição e gestão do tronco. Os outros produtos da empresa entram na mesma fatura, em Itens do mês.">
-				{itens.length === 0 ? (
-					<Vazio titulo="Nenhum item do agente virtual neste mês">Quando o agente ligar de verdade, o minuto de IA, a transcrição e a gestão do tronco aparecem aqui.</Vazio>
-				) : (
-					<TabelaRolavel minW={480}>
-						<thead><tr>
-							<th className={thCls}>Item</th><th className={`${thCls} text-right`}>Qtd.</th><th className={`${thCls} text-right`}>Preço</th><th className={`${thCls} text-right`}>Valor</th>
-						</tr></thead>
-						<tbody>
-							{itens.map((i, k) => {
-								const preco = Number(i.preco ?? 0);
-								return (
-									<tr key={k}>
-										<td className={tdCls}>{String(i.descricao ?? i.item)}</td>
-										<td className={`${tdCls} text-right tnum`}>{Number(i.quantidade ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</td>
-										<td className={`${tdCls} text-right tnum text-[var(--base-texto-2)]`}>{preco > 0 && preco < 1 ? reais(preco, 3) : moneyBR(preco)}</td>
-										<td className={`${tdCls} text-right font-semibold tnum`}>{moneyBR(i.valor)}</td>
-									</tr>
-								);
-							})}
-						</tbody>
-						<tfoot><tr>
-							<td className="py-2.5 pr-3 font-semibold text-[var(--base-texto)]">Total dos itens</td><td /><td />
-							<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{moneyBR(totFat)}</td>
-						</tr></tfoot>
-					</TabelaRolavel>
-				)}
-				<p className="mt-3 text-[12px] leading-relaxed text-[var(--base-texto-3)]">{temPico ? 'O pico está ligado: o minuto de IA acima do limite da empresa sai como item próprio, ao dobro do preço.' : 'Sem minuto no pico neste mês: nenhum minuto ao dobro.'} Minuto de telefonia não é item desta fatura.</p>
+			<Kpis itens={[
+				{ rotulo: `Fatura MotorCX · ${mes.toLowerCase()}${atual ? ' até agora' : ''}`, valor: moneyBR(totFat), detalhe: 'só os itens do agente virtual' },
+				{ rotulo: 'Telefonia estimada · paga à operadora', valor: moneyBR(totTel), detalhe: `fora da fatura do MotorCX${chSemCusto ? ` · ${inteiro(chSemCusto)} chamadas sem custo` : ''}`, tom: chSemCusto ? 'atencao' : undefined },
+			]} />
+
+			<Cartao semPad titulo="Itens faturados pelo MotorCX" desc="Plataforma, minuto de IA, transcrição e gestão do tronco. Os outros produtos entram na mesma fatura, em Itens do mês.">
+				<Tabela rotulo="Itens faturados" linhas={itens} chave={i => String(i.item) + String(i.descricao ?? '')}
+					vazio={<div className="px-1"><Vazio titulo="Nenhum item do agente virtual neste mês">Quando o agente ligar de verdade, o minuto de IA, a transcrição e a gestão do tronco aparecem aqui.</Vazio></div>}
+					colunas={[
+						{ id: 'item', titulo: 'Item', celula: i => String(i.descricao ?? i.item) },
+						{ id: 'qtd', titulo: 'Qtd.', num: true, celula: i => Number(i.quantidade ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) },
+						{ id: 'preco', titulo: 'Preço', num: true, celula: i => { const preco = Number(i.preco ?? 0); return <span className="text-[var(--base-texto-2)]">{preco > 0 && preco < 1 ? reais(preco, 3) : moneyBR(preco)}</span>; } },
+						{ id: 'valor', titulo: 'Valor', num: true, celula: i => <b>{moneyBR(i.valor)}</b> },
+					]}
+					rodape={itens.length ? <><span>{temPico ? 'Pico ligado: o minuto de IA acima do limite sai como item próprio, ao dobro.' : 'Sem minuto no pico neste mês.'}</span><b className="tnum text-[var(--base-texto)]">Total {moneyBR(totFat)}</b></> : undefined} />
 			</Cartao>
 
-			<section className="rounded-2xl border border-dashed border-[var(--base-field-border)] bg-[var(--base-fill)] p-5 sm:p-6">
-				<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-					<div className="min-w-0 flex-1 basis-full sm:basis-0">
-						<h2 className="flex flex-wrap items-center gap-2 text-[17px] font-semibold text-[var(--base-texto)]">Telefonia (pago à operadora) <span className="rounded-full bg-[var(--base-cartao)] px-2.5 py-0.5 text-[12px] font-semibold text-[var(--base-texto-2)]">não entra na fatura do MotorCX</span></h2>
-						<p className="mt-1 max-w-[760px] text-[13px] leading-relaxed text-[var(--base-texto-2)]">Consumo do mês por rota, calculado com a cadência e o preço que a empresa contratou com a operadora. Serve para ver o custo e conferir com a fatura da operadora.</p>
-					</div>
-					<button onClick={() => void exportar()} disabled={exportando || linhas.length === 0} className={`${btnSec} bg-[var(--base-cartao)]`}><FileDown size={15} /> {exportando ? 'Gerando...' : 'Exportar CSV por rota e dia'}</button>
-				</div>
+			<Cartao semPad titulo="Telefonia (paga à operadora)" desc="Não entra na fatura do MotorCX. Consumo do mês por rota, com a cadência e o preço do contrato da empresa, para conferir com a fatura da operadora.">
 				{semCad.length > 0 && (
-					<Aviso className="mb-3" titulo={`${semCad.length === 1 ? 'Rota' : 'Rotas'} ${semCad.map(l => l.tech_prefix || 'sem prefixo').join(', ')} sem cadastro: ${inteiro(chSemCusto)} chamadas sem custo calculado.`}>
-						O total abaixo não inclui essas chamadas. Peça à equipe MotorCX para cadastrar a rota com o preço do contrato da operadora.
-					</Aviso>
+					<div className="px-5 pb-3 sm:px-6"><Aviso titulo={`${semCad.length === 1 ? 'Rota' : 'Rotas'} ${semCad.map(l => l.tech_prefix || 'sem prefixo').join(', ')} sem cadastro: ${inteiro(chSemCusto)} chamadas sem custo calculado.`}>
+						O total não inclui essas chamadas. Peça à equipe MotorCX para cadastrar a rota com o preço do contrato.
+					</Aviso></div>
 				)}
-				{linhas.length === 0 ? (
-					<Vazio titulo="Sem consumo de telefonia neste mês">As ligações de verdade aparecem aqui no dia seguinte, por rota. No modo Simulado nada é tarifado.</Vazio>
-				) : (
-					<>
-						<div className="hidden rounded-xl bg-[var(--base-cartao)] px-3 pb-1 pt-1 sm:block">
-							<TabelaRolavel minW={760}>
-								<thead><tr>
-									<th className={thCls}>Tech prefix</th><th className={thCls}>Tipo</th><th className={`${thCls} text-right`}>Cadência</th><th className={`${thCls} text-right`}>Preço do minuto</th>
-									<th className={`${thCls} text-right`}>Chamadas</th><th className={`${thCls} text-right`}>Seg. tarifados</th><th className={`${thCls} text-right`}>Minutos</th><th className={`${thCls} text-right`}>Custo estimado</th>
-								</tr></thead>
-								<tbody>
-									{linhas.map(l => (
-										<tr key={String(l.tech_prefix)}>
-											<td className={`${tdCls} font-mono`}>{String(l.tech_prefix || '—')}</td>
-											<td className={tdCls}>{l.rota ? TIPOS_ROTA[String(l.rota.tipo)] ?? String(l.rota.tipo) : <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: 'var(--estado-atencao-fundo)', color: 'var(--estado-atencao-texto)' }}>sem cadastro</span>}</td>
-											<td className={`${tdCls} text-right tnum`}>{l.rota ? cadenciaTxt(l.rota.cadencia_inicial_s, l.rota.cadencia_incremento_s) : '—'}</td>
-											<td className={`${tdCls} text-right tnum`}>{l.rota ? reais(l.rota.preco_minuto, 3) : '—'}</td>
-											<td className={`${tdCls} text-right tnum`}>{inteiro(l.chamadas)}</td>
-											<td className={`${tdCls} text-right tnum`}>{inteiro(l.segundos_tarifados)}</td>
-											<td className={`${tdCls} text-right tnum`}>{inteiro(Number(l.segundos_tarifados ?? 0) / 60)}</td>
-											<td className={`${tdCls} text-right font-semibold tnum`}>{l.custo != null ? moneyBR(l.custo) : <span className="font-normal text-[var(--base-texto-3)]">sem custo</span>}{l.custo != null && l.semCusto > 0 ? <div className="text-[11.5px] font-normal text-[var(--base-texto-3)]">{inteiro(l.semCusto)} sem custo</div> : null}</td>
-										</tr>
-									))}
-								</tbody>
-								<tfoot><tr>
-									<td className="py-2.5 pr-3 font-semibold text-[var(--base-texto)]">Total</td><td /><td /><td />
-									<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{inteiro(totCh)}</td>
-									<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{inteiro(totSeg)}</td>
-									<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{inteiro(totSeg / 60)}</td>
-									<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{moneyBR(totTel)}</td>
-								</tr></tfoot>
-							</TabelaRolavel>
-						</div>
-						<div className="space-y-2 sm:hidden">
-							{linhas.map(l => (
-								<div key={String(l.tech_prefix)} className="rounded-xl bg-[var(--base-cartao)] p-3">
-									<div className="flex items-start justify-between gap-2">
-										<b className="font-mono text-[14px] text-[var(--base-texto)]">{String(l.tech_prefix || '—')}</b>
-										<span className="text-[14px] font-semibold text-[var(--base-texto)] tnum">{l.custo != null ? moneyBR(l.custo) : <span className="rounded-full px-2 py-0.5 text-[12px]" style={{ backgroundColor: 'var(--estado-atencao-fundo)', color: 'var(--estado-atencao-texto)' }}>sem custo</span>}</span>
-									</div>
-									<div className="mt-0.5 text-[12.5px] text-[var(--base-texto-2)]">{l.rota ? `${TIPOS_ROTA[String(l.rota.tipo)] ?? ''} · ${cadenciaTxt(l.rota.cadencia_inicial_s, l.rota.cadencia_incremento_s)} · ${reais(l.rota.preco_minuto, 3)}/min` : 'rota sem cadastro'}</div>
-									<div className="text-[12.5px] text-[var(--base-texto-2)] tnum">{inteiro(l.chamadas)} chamadas · {inteiro(l.segundos_tarifados)} s tarifados</div>
-								</div>
-							))}
-							<div className="flex justify-between px-1 pt-1 text-[13px] font-semibold text-[var(--base-texto)]"><span>Total</span><span className="tnum">{moneyBR(totTel)}</span></div>
-						</div>
-					</>
-				)}
-				<p className="mt-3 text-[12px] leading-relaxed text-[var(--base-texto-3)]">Sem carência: todo segundo atendido é tarifado (2 s em 30/6 = 30 s). Chamada não atendida não tem custo. O preço usado é o da vigência do dia da chamada. Diferença com a fatura da operadora costuma vir de rota sem cadastro, preço desatualizado ou ligações feitas fora do MotorCX.</p>
-			</section>
+				<Tabela rotulo="Telefonia por rota" linhas={linhas} chave={l => l.tech_prefix} onAbrir={l => setRotaSel(l.tech_prefix)} selecionada={rotaSel}
+					vazio={<div className="px-1"><Vazio titulo="Sem consumo de telefonia neste mês">As ligações de verdade aparecem aqui no dia seguinte, por rota. No modo Simulado nada é tarifado.</Vazio></div>}
+					colunas={[
+						{ id: 'pre', titulo: 'Prefixo', celula: l => <span className="font-mono">{l.tech_prefix || '—'}</span> },
+						{ id: 'tipo', titulo: 'Tipo', celula: l => l.rota ? TIPOS_ROTA[String(l.rota.tipo)] ?? String(l.rota.tipo) : <Pilula tom="atencao">sem cadastro</Pilula> },
+						{ id: 'ch', titulo: 'Chamadas', num: true, celula: l => inteiro(l.chamadas) },
+						{ id: 'min', titulo: 'Minutos', num: true, celula: l => inteiro(Number(l.segundos_tarifados ?? 0) / 60) },
+						{ id: 'custo', titulo: 'Custo estimado', num: true, celula: l => <b>{custoCel(l)}</b> },
+					]}
+					celular={l => ({ titulo: <span className="font-mono">{l.tech_prefix || '—'}</span>, valor: custoCel(l), resumo: `${l.rota ? TIPOS_ROTA[String(l.rota.tipo)] ?? '' : 'sem cadastro'} · ${inteiro(l.chamadas)} chamadas` })}
+					rodape={linhas.length ? <><span>Sem carência: todo segundo atendido é tarifado; não atendida não tem custo. Preço da vigência do dia.</span><b className="tnum text-[var(--base-texto)]">{inteiro(totCh)} chamadas · {inteiro(totSeg / 60)} min · {moneyBR(totTel)}</b></> : undefined} />
+			</Cartao>
+
+			<Gaveta aberta={!!sel} onFechar={() => setRotaSel(null)} titulo={sel ? `Rota ${sel.tech_prefix || 'sem prefixo'}` : ''} subtitulo={sel?.rota ? TIPOS_ROTA[String(sel.rota.tipo)] : 'Rota sem cadastro'}>
+				{sel && <>
+					<ListaValores itens={[
+						['Cadência', sel.rota ? cadenciaTxt(sel.rota.cadencia_inicial_s, sel.rota.cadencia_incremento_s) : '—'],
+						['Preço do minuto', sel.rota ? reais(sel.rota.preco_minuto, 3) : '—'],
+						['Chamadas', inteiro(sel.chamadas)],
+						['Segundos tarifados', inteiro(sel.segundos_tarifados)],
+						['Custo estimado', sel.custo != null ? moneyBR(sel.custo) : 'sem custo'],
+						['Chamadas sem custo', inteiro(sel.semCusto)],
+					]} />
+					<p className="text-[12px] text-[var(--base-texto-3)]">Diferença com a fatura da operadora costuma vir de rota sem cadastro ou preço desatualizado. Exporte o CSV por dia e rota para conferir.</p>
+				</>}
+			</Gaveta>
 		</div>
 	);
 }
