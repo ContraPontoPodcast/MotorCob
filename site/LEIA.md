@@ -43,7 +43,8 @@ npm run build               # gera build/client
 npm run preview             # serve build/client em http://127.0.0.1:4173 com o fallback do SPA
 ```
 
-Outros comandos: `npm run lint` (oxlint) e `npm run typecheck` (tsc; tem de dar zero erro, o CI barra).
+Outros comandos: `npm run lint` (oxlint), `npm run typecheck` (tsc; tem de dar zero erro, o CI barra) e `npm test`
+(testes dos componentes do design system em `src/components/ds/`; a API está documentada no `index.ts` de lá).
 
 ## Variáveis de ambiente
 
@@ -74,7 +75,7 @@ Todas são públicas (começam com `VITE_` e vão para o JavaScript do navegador
 ## CI
 
 O workflow `.github/workflows/site.yml` roda quando `site/**` muda: `npm ci` (lockfile congelado), `npm run lint`,
-`npm run typecheck`, a cópia das duas etapas e `npm run build`.
+`npm run typecheck`, `npm test`, a cópia das duas etapas e `npm run build`.
 
 ## O que saiu na migração do Horizons
 
