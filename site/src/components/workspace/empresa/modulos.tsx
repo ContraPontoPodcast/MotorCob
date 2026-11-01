@@ -237,6 +237,17 @@ export function ModulosPage() {
         </div>
       </section>
 
+      {/* Conectores do CRM do agente virtual (SQL 58): tela própria em Empresa › Integrações › Conectores do CRM. */}
+      <section className="mt-4 rounded-2xl bg-[var(--base-cartao)] p-6" style={{ boxShadow: cardShadow }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[16px] font-semibold text-[var(--base-texto)]">Conectores do CRM</p>
+            <p className="mt-0.5 text-[13px] text-[var(--base-texto-2)]">APIs que o agente virtual chama durante a ligação (ofertas, validar cadastro, registrar acordo). Cadastro e credencial pela equipe MotorCX.</p>
+          </div>
+          <Link to="/empresa/integracoes/conectores" className="text-[13px] font-medium text-[var(--destaque)] hover:underline">Ver conectores</Link>
+        </div>
+      </section>
+
       {/* Tokens de API (prompt 63): saíram de Minha conta e ficam aqui, em Empresa › Integrações. */}
       {!loading && <TokensApi apiAtivo={apiAtivo} />}
 

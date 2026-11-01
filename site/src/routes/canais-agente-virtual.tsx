@@ -1,5 +1,5 @@
 import type { Route } from './+types/canais-agente-virtual';
 import { seo } from '@/lib/seo';
-import { RoteiroAgente } from '@/components/voz/roteiro';
-export function meta({ matches, location }: Route.MetaArgs) { return seo({ matches, location }, { title: 'Roteiro do agente virtual · MotorCX', description: 'Roteiro do agente virtual por carteira: rascunho, aprovação e uso.', noindex: true }); }
-export default function CanaisAgenteVirtual() { return <RoteiroAgente />; }
+import { ListaFluxos } from '@/components/fluxo/lista';
+export function meta({ matches, location }: Route.MetaArgs) { return seo({ matches, location }, { title: 'Fluxos do agente virtual · MotorCX', description: 'Um fluxo de conversa por carteira: versões, aprovação e uso.', noindex: true }); }
+export default function CanaisAgenteVirtual() { return <ListaFluxos />; }

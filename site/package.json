@@ -9,7 +9,7 @@
     "preview": "node scripts/servir.mjs",
     "lint": "oxlint -c .oxlintrc.json --threads=1 --format default",
     "typecheck": "react-router typegen && tsc --noEmit --singleThreaded",
-    "test": "node scripts/testar-componentes.mjs"
+    "test": "node --experimental-strip-types --test fluxo/fluxo.test.ts && node scripts/testar-componentes.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",

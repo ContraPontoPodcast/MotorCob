@@ -1,4 +1,4 @@
-// Tela 2 · Cobrança › Canais › Agente virtual › Roteiro.
+// Tela 2 · Cobrança › Canais › Agente virtual › Roteiro (antigo). Vale na carteira até um fluxo (SQL 58) entrar em uso.
 // Rascunho → Aprovado pela empresa → Em uso (sem jurídico). Lê voz_roteiros e voz_config;
 // escreve só por RPC: salvar_roteiro_voz, aprovar_roteiro_voz e configurar_voz_empresa.
 // Redesign v2: no corpo só o que se decide no roteiro (tipo de agente, quando transferir, primeira fala); as 6 regras
@@ -15,7 +15,7 @@ import {
 	type RegrasTransferencia, type TipoAgente,
 } from '@/lib/voz';
 import { Botao, Cartao, Pilula, SubAbas, Trava, Vazio, campoCls, campoStyle } from './ui';
-import { Detalhes, Gaveta, Passos as PassosDs, SeloRegras, Botao as BotaoDs } from '@/components/ds';
+import { Aviso, Detalhes, Gaveta, Passos as PassosDs, SeloRegras, Botao as BotaoDs } from '@/components/ds';
 
 const REGRAS_FIXAS = [
 	{ titulo: 'Só fala da dívida depois que a pessoa confirma ser o titular.', texto: 'Antes disso, o agente não diz valor, credor da dívida nem atraso.' },
@@ -165,7 +165,7 @@ export function RoteiroAgente() {
 		: situacao === 'aprovado_empresa' && podeAprovar ? <BotaoDs onClick={() => setConfirma('em_uso')} disabled={ocupado}>Colocar em uso</BotaoDs>
 		: null;
 	const heading = (
-		<PageHeading title="Agente virtual" description={`Roteiro · ${escopoTxt}${sel ? ` · v${sel.versao}` : ''}`} actions={draft ? <>
+		<PageHeading title="Agente virtual" description={`Roteiro antigo · ${escopoTxt}${sel ? ` · v${sel.versao}` : ''}`} actions={draft ? <>
 			{roteiros.length > 0 && <select aria-label="Versão" value={selId ?? ''} onChange={e => trocarVersao(Number(e.target.value))} className={campoCls} style={campoStyle}>
 				{selId == null && <option value="">nova versão</option>}
 				{roteiros.map(r => <option key={r.id} value={r.id}>v{r.versao} · {SITUACAO_ROTEIRO[r.situacao]?.toLowerCase() ?? r.situacao}</option>)}
@@ -178,7 +178,8 @@ export function RoteiroAgente() {
 		<SubAbas atual="roteiro" itens={[
 			{ id: 'canal', nome: 'Configuração do canal', to: '/canais' },
 			{ id: 'frases', nome: 'Modelos de mensagem', to: '/canais?secao=frases' },
-			{ id: 'roteiro', nome: 'Roteiro' },
+			{ id: 'fluxos', nome: 'Fluxos', to: '/canais/agente-virtual' },
+			{ id: 'roteiro', nome: 'Roteiro (antigo)' },
 		]} />
 	);
 
@@ -193,6 +194,7 @@ export function RoteiroAgente() {
 			{heading}
 			{sub}
 			{error && <div className="mb-4"><Notice>{error}</Notice></div>}
+			<div className="mb-4"><Aviso tom="info" titulo="O roteiro foi substituído pelo fluxo do agente.">Ele continua valendo nesta carteira só até um fluxo entrar em uso nela. O roteiro em uso já virou um rascunho em <Link to="/canais/agente-virtual" className="font-semibold underline">Fluxos</Link>: escolha o conector de validação do CRM, aprove e coloque em uso.</Aviso></div>
 
 			{!draft ? (
 				<Vazio titulo="Ainda não há roteiro para o agente virtual." acao={podeEditar ? <Botao onClick={() => { setDraft(novoRascunho()); setSelId(null); setSujo(true); }}>Escrever o primeiro roteiro</Botao> : undefined}>

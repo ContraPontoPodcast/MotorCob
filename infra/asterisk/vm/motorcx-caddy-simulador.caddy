@@ -1,6 +1,6 @@
 # Simulador de texto do Fluxo e roleplay (voz/simulador_http.py, 127.0.0.1:8091): só com o metadado
 # motorcx-simulador-fluxo=1. Quem protege é a assinatura HMAC (VOZ_SIMULADOR_CHAVE); aqui só limite de tamanho.
-@simulador path /simular /roleplay
+@simulador path /simular /roleplay /ouvir
 handle @simulador {
 	request_body {
 		max_size 256KB

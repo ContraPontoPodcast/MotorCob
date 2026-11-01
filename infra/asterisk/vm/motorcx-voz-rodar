@@ -1,7 +1,8 @@
 #!/bin/bash
 # Sobe um dos contêineres da voz em primeiro plano (o systemd cuida de reiniciar).
 #   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite | speech-temas |
-#                     speech-buscas | simulador-fluxo | importador
+#                     speech-buscas | simulador-fluxo | importador | fluxo-noite
+# fluxo-noite (métricas do Fluxo do agente, SQL 66): só códigos e contagens, sem IA; roda sempre.
 # speech, speech-noite, speech-temas e speech-buscas (Speech Analytics, SQL 62/63) só rodam com o metadado motorcx-speech-analytics=1
 # (padrão: desligado).
 # importador (gravações do discador do cliente, SQL 64) só roda com o metadado motorcx-importador-gravacoes=1 (padrão:
@@ -49,6 +50,9 @@ case "${1:-}" in
     fi
     exec docker run --name motorcx-voz-speech-noite "${comum_voz[@]}" -e MOTORCX_SPEECH_ANALYTICS=1 "$IMG_VOZ" \
       python3 -m voz.analise.rotina noite --parte "$PARTE" ;;
+  fluxo-noite)
+    exec docker run --name motorcx-voz-fluxo-noite "${comum_voz[@]}" "$IMG_VOZ" \
+      python3 -m voz.fluxo_metricas --parte "$PARTE" ;;
   simulador-fluxo)
     # simulador de texto do Fluxo e roleplay (SQL 58/59), atrás do Caddy (:8443 /simular e /roleplay); desligado por
     # padrão: só com o metadado motorcx-simulador-fluxo=1 (a chave vem do cofre: motorcx-voz-simulador)
@@ -57,5 +61,5 @@ case "${1:-}" in
     fi
     exec docker run --name motorcx-voz-simulador-fluxo "${comum_voz[@]}" "$IMG_VOZ" \
       python3 -m voz.simulador_http --porta 8091 --roleplay --provedores /etc/motorcx/provedores.json ;;
-  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador" >&2; exit 2 ;;
+  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador|fluxo-noite" >&2; exit 2 ;;
 esac

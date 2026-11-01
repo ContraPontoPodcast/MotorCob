@@ -8,6 +8,12 @@
 //   functions.invoke('simular_fluxo_voz', { acao: 'roleplay', versao, personas: [ids], n })   (SQL 59)
 //     → { lote }: cria o lote com rodar_roleplay_voz (login de quem pede) e avisa a VM (/roleplay, assinado) para começar.
 //     O resultado sai depois em resultado_roleplay_voz(lote).
+//   functions.invoke('simular_fluxo_voz', { versao, falas, cenarios: { "<conector>": "sucesso"|"tempo"|"401" } })   (SQL 66)
+//     → a resposta escolhida para cada conector simulado.
+//   functions.invoke('simular_fluxo_voz', { acao: 'ouvir', versao, texto })   (SQL 66, "Ouvir a voz")
+//     → { audio (base64), mime }: a VM (/ouvir, assinado) sintetiza com o TTS da Montagem e a voz da empresa
+//     (voz_config.voz_id) e devolve; nada é guardado. O uso entra em registrar_uso_ia_voz (componente previa_voz,
+//     caracteres em tokens_entrada; nada cobrado do cliente: minutos_cobraveis = 0).
 // Quem pode: pessoa ativa do cliente, da empresa da versão, com pode('editar_canais'). Tudo é lido com o login de
 // quem pede (a RLS decide); a função só monta o pacote e chama o simulador da VM, que roda o MESMO executor da
 // ligação (voz/fluxo.py) em modo texto, com os conectores trocados pelo exemplo_resposta e um cliente fictício.
@@ -16,7 +22,8 @@
 // motorcx-voz-simulador da VM). Os valores nunca entram no código nem em log. Publicar com "Verify JWT" LIGADO.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
-  assinar, autorizar, conferirCaso, pacoteVM, PERMISSAO, respostaTela, urlRoleplay, validarPedido, variaveisTeste,
+  assinar, autorizar, conferirCaso, minutosPrevia, pacoteOuvir, pacoteVM, PERMISSAO, respostaTela, urlOuvir, urlRoleplay,
+  validarPedido, variaveisTeste,
   type Caso, type Perfil, type ResultadoVM, type Versao,
 } from "./regras.ts";
 
@@ -99,6 +106,30 @@ Deno.serve(async (req) => {
     return responder({ lote }, 202, origem);
   }
 
+  if (pedido.acao === "ouvir") {
+    const [{ data: cfg }, { data: emp }, { data: cred }] = await Promise.all([
+      comoUsuario.from("voz_config").select("voz_id").eq("empresa_id", versao.empresa_id).maybeSingle(),
+      comoUsuario.from("empresas").select("nome").eq("id", versao.empresa_id).maybeSingle(),
+      versao.credor_id ? comoUsuario.from("credores").select("nome").eq("id", versao.credor_id).maybeSingle() : Promise.resolve({ data: null }),
+    ]);
+    const vars = variaveisTeste((emp as { nome?: string } | null)?.nome ?? "Assessoria de teste", (cred as { nome?: string } | null)?.nome ?? null);
+    try {
+      const r = await chamarVM(pacoteOuvir(pedido.texto, (cfg as { voz_id?: string } | null)?.voz_id, vars), urlOuvir(VM_URL));
+      if (!r.ok) return responder({ erro: (r.corpo.erro as string) ?? "a prévia de voz não respondeu" }, r.status === 400 ? 400 : r.status === 503 ? 503 : 502, origem);
+      const caracteres = Number(r.corpo.caracteres) || pedido.texto.length;
+      const dia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+      const { error: eUso } = await admin.rpc("registrar_uso_ia_voz", {
+        empresa: versao.empresa_id, dia, componente: "previa_voz", chamadas: 1, minutos: minutosPrevia(caracteres),
+        minutos_cobraveis: 0, tokens_entrada: caracteres, tokens_saida: 0,
+      });
+      if (eUso) console.error("simular_fluxo_voz", "registrar_uso_ia_voz", eUso.code);
+      return responder({ audio: r.corpo.audio, mime: r.corpo.mime ?? "audio/mpeg" }, 200, origem);
+    } catch (e) {
+      console.error("simular_fluxo_voz", "ouvir", (e as Error).name);     // sem o texto no log
+      return responder({ erro: "não foi possível gerar a prévia agora" }, 502, origem);
+    }
+  }
+
   // Contexto da simulação, com o login de quem pede (RLS)
   const [{ data: cons }, { data: alc }, { data: base }, { data: emp }, { data: cred }] = await Promise.all([
     comoUsuario.from("crm_conectores").select("*").eq("empresa_id", versao.empresa_id),
@@ -107,15 +138,15 @@ Deno.serve(async (req) => {
     comoUsuario.from("empresas").select("nome").eq("id", versao.empresa_id).maybeSingle(),
     versao.credor_id ? comoUsuario.from("credores").select("nome").eq("id", versao.credor_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
-  const montar = (falas: string[], falhar: number[]) => pacoteVM({
+  const montar = (falas: string[], falhar: number[], cenarios: Record<string, "sucesso" | "tempo" | "401"> = {}) => pacoteVM({
     versao, conectores: (cons ?? []) as Record<string, unknown>[], alcada: (Array.isArray(alc) ? alc[0] : alc) as Record<string, unknown> | null,
-    base: (base ?? []) as { bloco_id: string; pergunta: string; resposta: string }[], falas, falhar,
+    base: (base ?? []) as { bloco_id: string; pergunta: string; resposta: string }[], falas, falhar, cenarios,
     variaveis: variaveisTeste((emp as { nome?: string } | null)?.nome ?? "Assessoria de teste", (cred as { nome?: string } | null)?.nome ?? null),
   });
 
   try {
     if (pedido.acao === "simular") {
-      const r = await chamarVM(montar(pedido.falas, pedido.falhar));
+      const r = await chamarVM(montar(pedido.falas, pedido.falhar, pedido.cenarios));
       if (!r.ok) return responder({ erro: (r.corpo.erro as string) ?? "o simulador não respondeu", erros: r.corpo.erros ?? [] }, r.status === 400 ? 400 : 502, origem);
       return responder(respostaTela(r.corpo), 200, origem);
     }

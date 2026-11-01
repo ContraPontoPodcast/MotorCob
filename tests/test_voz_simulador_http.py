@@ -91,6 +91,79 @@ class TestSimuladorHttp(unittest.TestCase):
             srv.shutdown()
             srv.server_close()
 
+    # SQL 66 · resposta escolhida para o conector simulado e a prévia em áudio ("Ouvir a voz")
+    def test_cenario_tempo_cai_na_carteira_como_falhar(self):
+        p = pedido(["Sou eu", "15 de março", "Quero parcelar", "Aceito"])
+        p["cenarios"] = {"1": "tempo"}
+        r = SH.rodar(p, hoje=date(2026, 10, 31))
+        self.assertEqual(r["caminho"], ["N1", "N2", "N3", "N4", "N6", "N7", "N11", "N12"])
+        self.assertEqual([c["classe"] for c in r["conectores"] if c["conector_id"] == 1], ["tempo"])
+
+    def test_cenario_401_e_sucesso_acima_de_falhar(self):
+        p = pedido(["Sou eu", "15 de março", "Quero parcelar"], falhar=[1])
+        p["cenarios"] = {"1": "sucesso", "2": "401"}
+        r = SH.rodar(p, hoje=date(2026, 10, 31))
+        c2 = [c for c in r["conectores"] if c["conector_id"] == 2]
+        self.assertEqual((c2[0]["classe"], c2[0]["http_status"]), ("http_4xx", 401))
+        self.assertNotIn("N3", r["caminho"])            # identidade não conferida: segue pela falha do conector
+
+    def test_cenario_invalido_e_recusado(self):
+        for ruim in ({"1": "500"}, {"x": "tempo"}, ["tempo"], {str(i): "tempo" for i in range(1, 12)}):
+            p = pedido(["Sou eu"])
+            p["cenarios"] = ruim
+            self.assertIn("erro", SH.rodar(p), ruim)
+
+    def test_ouvir_preenche_variaveis_e_nao_aceita_documento(self):
+        chamadas = []
+        def tts(texto, voz):
+            chamadas.append((texto, voz))
+            return b"ID3fake", "audio/mpeg"
+        r = SH.ouvir({"texto": "Olá, falo com {{primeiro_nome}}?", "voz_id": "voz_pt1", "variaveis": {"primeiro_nome": "Ana"}}, tts)
+        self.assertEqual(chamadas, [("Olá, falo com Ana?", "voz_pt1")])
+        self.assertEqual((r["mime"], r["caracteres"]), ("audio/mpeg", 18))
+        self.assertEqual(SH.base64.b64decode(r["audio"]), b"ID3fake")
+        self.assertIn("erro", SH.ouvir({"texto": "meu cpf é 12345678901"}, tts))
+        self.assertIn("erro", SH.ouvir({"texto": "x" * 501}, tts))
+        self.assertIn("erro", SH.ouvir({"texto": "oi", "voz_id": "../x"}, tts))
+        self.assertEqual(SH.ouvir({"texto": "oi"}, None)["erro"], "prévia de voz indisponível nesta VM")
+        self.assertEqual(len(chamadas), 1)
+
+    def test_ouvir_pelo_servidor_com_assinatura(self):
+        srv = SH.criar_servidor(0, "chave-x", relogio=lambda: 1793000000, sintetizar=lambda t, v: (b"mp3", "audio/mpeg"))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        url = f"http://127.0.0.1:{srv.server_address[1]}/ouvir"
+        corpo = json.dumps({"texto": "Um instante, por favor."}).encode()
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(urllib.request.Request(url, data=corpo, method="POST"))
+            self.assertEqual(e.exception.code, 401)
+            req = urllib.request.Request(url, data=corpo, method="POST", headers={
+                "X-MotorCX-Carimbo": "1793000000", "X-MotorCX-Assinatura": SH.assinatura("chave-x", "1793000000", corpo)})
+            with urllib.request.urlopen(req) as r:
+                d = json.loads(r.read())
+            self.assertEqual((d["mime"], SH.base64.b64decode(d["audio"])), ("audio/mpeg", b"mp3"))
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_sintetizador_elevenlabs_monta_o_pedido(self):
+        pedidos = []
+        class R:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, n): return b"mp3"
+        def abrir(req, timeout):
+            pedidos.append(req)
+            return R()
+        tts = SH.sintetizador_elevenlabs("segredo", "voz_padrao", "eleven_multilingual_v2", ("outra",), abrir=abrir)
+        self.assertEqual(tts("Oi", None), (b"mp3", "audio/mpeg"))
+        self.assertIn("/text-to-speech/voz_padrao?", pedidos[0].full_url)
+        self.assertEqual(json.loads(pedidos[0].data), {"text": "Oi", "model_id": "eleven_multilingual_v2"})
+        tts("Oi", "outra")
+        self.assertIn("/text-to-speech/outra?", pedidos[1].full_url)
+        tts("Oi", "nao_configurada")                       # voz fora da lista da VM cai na padrão
+        self.assertIn("/text-to-speech/voz_padrao?", pedidos[2].full_url)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,9 @@
+[Unit]
+Description=Fluxo do agente: métricas do dia às 02:50
+
+[Timer]
+OnCalendar=*-*-* 02:50:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

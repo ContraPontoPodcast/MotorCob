@@ -32,8 +32,8 @@ export type AbaSA = (typeof ABAS_SA)[number]['id'] | typeof BUSCA_SA.id;
 /** Endereços antigos que continuam abrindo: "Retroalimentação" virou Recomendações. */
 const ALIAS_SA: Record<string, AbaSA> = { retroalimentacao: 'recomendacoes' };
 /** O Roleplay saiu do Speech Analytics e foi para Fluxo do agente › Testar com personas (decisão do redesign v2).
- *  Enquanto a tela nova não entra, o endereço leva ao roteiro do agente virtual. */
-export const ROTA_TESTAR_PERSONAS = '/canais/agente-virtual';
+ *  A tela é /canais/agente-virtual/personas (SQL 59; o link antigo /speech-analytics/roleplay redireciona para lá). */
+export const ROTA_TESTAR_PERSONAS = '/canais/agente-virtual/personas';
 export function abaValida(a: string | undefined): AbaSA {
 	if (a === BUSCA_SA.id) return 'busca';
 	if (a && ALIAS_SA[a]) return ALIAS_SA[a];

@@ -1,4 +1,4 @@
-# Site motorcob.online (site/): instala pelo package-lock.json, confere o lint e os tipos e monta o build
+# Site motorcob.online (site/): instala pelo package-lock.json, confere o lint, os tipos e os testes e monta o build
 # estático do Netlify. Roda só quando algo em site/ (ou este arquivo) muda.
 name: site
 on:
@@ -29,7 +29,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test            # componentes do design system (src/components/ds)
+      - run: npm test            # regras do Fluxo do agente (site/fluxo) e componentes (src/**/*.test.tsx)
       - name: as duas etapas do site são cópia exata de site/duas-etapas (fonte testada)
         run: |
           diff <(tail -n +2 src/components/duasEtapasLogica.ts) duas-etapas/duasEtapasLogica.ts

@@ -65,6 +65,7 @@ class ConfigMontagem:
     tts_provedor: str = "elevenlabs"           # elevenlabs | google
     tts_voz: str = ""                          # id da voz pt-BR do provedor
     tts_modelo: str = ""
+    tts_vozes: tuple = ()                      # outras vozes pt-BR liberadas para as empresas (prévia "Ouvir a voz")
     ref_deepgram: str = "voz/deepgram"
     ref_llm: str = "voz/llm"
     ref_tts: str = "voz/tts"

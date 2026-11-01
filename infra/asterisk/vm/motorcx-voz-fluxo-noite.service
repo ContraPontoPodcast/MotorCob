@@ -1,0 +1,11 @@
+[Unit]
+Description=Fluxo do agente: métricas do dia por versão e bloco (funil e intenções)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-fluxo-noite
+ExecStart=/usr/local/bin/motorcx-voz-rodar fluxo-noite
+Nice=10
