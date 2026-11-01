@@ -86,6 +86,14 @@ export const RE_REFERENCIA = /^[a-z0-9][a-z0-9_-]{1,39}$/;
 export const RE_IP = /^([0-9]{1,3}\.){3}[0-9]{1,3}$/;
 export const RE_HOST = /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 export const RE_SEGREDO = /^[A-Za-z0-9_\-/.]{1,120}$/;
+// Senha de tronco: a referência vira o nome no cofre (barras viram hífen, prefixo motorcx-) e a VM só lê segredos
+// motorcx-voz-*. Por isso a referência começa com voz/ (ex.: voz/trunk/aurora-opc -> motorcx-voz-trunk-aurora-opc).
+// O banco confere o mesmo (SQL 67) só quando a referência muda: tronco antigo continua salvando com a dele.
+export const RE_SEGREDO_TRONCO = /^voz\/[A-Za-z0-9_\-/.]{1,116}$/;
+export function segredoTroncoOk(ref: string, atual?: string | null): boolean {
+	const r = ref.trim();
+	return RE_SEGREDO_TRONCO.test(r) || (!!atual && r === atual);
+}
 export const RE_USUARIO = /^[A-Za-z0-9_.\-+]{1,64}$/;
 export const RE_DDD = /^[1-9][1-9]$/;
 export const RE_BINA = /^([1-9][1-9][2-9][0-9]{7,8}|0[3589]00[0-9]{6,7}|[34]00[0-9][0-9]{4})$/;

@@ -5,11 +5,11 @@
   "private": true,
   "scripts": {
     "dev": "react-router dev --port 3000",
-    "build": "react-router build",
+    "build": "react-router build && node scripts/cabecalhos.mjs",
     "preview": "node scripts/servir.mjs",
     "lint": "oxlint -c .oxlintrc.json --threads=1 --format default",
     "typecheck": "react-router typegen && tsc --noEmit --singleThreaded",
-    "test": "node --experimental-strip-types --test fluxo/fluxo.test.ts && node scripts/testar-componentes.mjs"
+    "test": "node --experimental-strip-types --test fluxo/fluxo.test.ts scripts/cabecalhos.test.mjs && node scripts/testar-componentes.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",

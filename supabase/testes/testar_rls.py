@@ -2748,5 +2748,32 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 66: tela do Fluxo do agente (testar_voz_fluxo_site.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 67 · a referência da senha do tronco começa com voz/ (a VM só lê motorcx-voz-*); tronco antigo não quebra
+def _tronco67(segredo, canais=10):
+    return (f"select public.cadastrar_tronco_voz({EA}, 'sp-67', 'Operadora Exemplo', 'sip.exemplo.com.br', {canais}, "
+            f"'senha', '11', '1130030000', '{segredo}', 'alfa_sp67') is not null")
+checar_erro("SQL 67: tronco novo com referência fora de voz/ é recusado", _tronco67("sip/aurora-opc"), "authenticated", VTEC,
+            "precisa começar com voz/")
+checar("SQL 67: tronco novo com voz/... é aceito", True, _tronco67("voz/trunk/alfa-sp67"), "authenticated", VTEC, "t")
+# simula um tronco salvo antes do SQL 67 com referência antiga (o dono da tabela desliga o trigger só para isso)
+sql("alter table public.voz_troncos disable trigger voz_troncos_segredo_voz; "
+    f"update public.voz_troncos set segredo_ref = 'sip/antigo-sp67' where empresa_id = {EA} and referencia = 'sp-67'; "
+    "alter table public.voz_troncos enable trigger voz_troncos_segredo_voz")
+checar("SQL 67: tronco antigo salva de novo sem mudar a referência", True,
+       _tronco67("sip/antigo-sp67", 12) + f"; select canais from public.voz_troncos where empresa_id = {EA} and referencia = 'sp-67'",
+       "authenticated", VTEC, 12)
+checar("SQL 67: tronco antigo aceita update de outra coluna", True,
+       f"update public.voz_troncos set testado_em = now() where empresa_id = {EA} and referencia = 'sp-67'", "service_role")
+checar_erro("SQL 67: tronco antigo não troca para outra referência fora de voz/", _tronco67("sip/outro-sp67"),
+            "authenticated", VTEC, "precisa começar com voz/")
+checar_erro("SQL 67: nem pela tabela direto", f"update public.voz_troncos set segredo_ref = 'sip/x' where empresa_id = {EA} "
+            "and referencia = 'sp-67'", "service_role", None, "precisa começar com voz/")
+checar("SQL 67: tronco antigo passa para voz/", True, _tronco67("voz/trunk/alfa-sp67") +
+       f"; select segredo_ref from public.voz_troncos where empresa_id = {EA} and referencia = 'sp-67'",
+       "authenticated", VTEC, "voz/trunk/alfa-sp67")
+checar("SQL 67: função do trigger fechada para o site", True,
+       "select has_function_privilege('authenticated', 'public.voz_troncos_conferir_segredo()', 'execute')", None, None, "f")
+_sv(f"delete from public.voz_troncos where empresa_id = {EA} and referencia = 'sp-67'")
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

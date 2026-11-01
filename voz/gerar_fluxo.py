@@ -20,6 +20,11 @@ em registrar_geracao_fluxo_voz). Os tokens gastos vão em resultado.tokens_ia s�
 só o Master vê); o banco tira a chave antes de gravar o pedido e o cliente paga sempre o preço por geração.
 Anexos: apagados do Storage quando a versão gerada deixa de existir (limpar_anexos).
 A chave do LLM fica no Secret Manager (voz/llm-fluxo). Só biblioteca padrão.
+
+Na VM: serviço motorcx-voz-gerar-fluxo (infra/asterisk/vm), `motorcx-voz-rodar gerar-fluxo`, desligado por padrão
+(metadado motorcx-gerar-fluxo=1 liga). Funciona nos dois acessos da VM (voz/acesso.py): no acesso_proprio as RPCs viram
+voz_vm.pegar_pedido_fluxo, registrar_geracao_fluxo, anexos_fluxo_vencidos e marcar_anexos_apagados, e o anexo sai
+pelo bilhete 'apagar' da Edge Function voz-arquivos.
 """
 from __future__ import annotations
 
@@ -285,6 +290,30 @@ def limpar_anexos(sb) -> int:
     return n
 
 
+def rodar(sb, modelo, intervalo: float = 15, uma_vez: bool = False, esperar=time.sleep,
+          rodadas: int | None = None, max_por_rodada: int = 50) -> dict:
+    """O laço do serviço: esvazia a fila de pedidos (até max_por_rodada), apaga os anexos vencidos e espera.
+    Erro do banco numa rodada não derruba o serviço (só a classe do erro vai para o log; nada do pedido): espera e
+    tenta de novo. `rodadas` limita o laço (testes)."""
+    cont = {"pedidos": 0, "anexos": 0, "falhas": 0}
+    k = 0
+    while rodadas is None or k < rodadas:
+        k += 1
+        try:
+            n = 0
+            while n < max_por_rodada and processar_um(sb, modelo):
+                n += 1
+            cont["pedidos"] += n
+            cont["anexos"] += limpar_anexos(sb)
+        except Exception as ex:   # noqa: BLE001
+            cont["falhas"] += 1
+            log.warning("rodada da geração falhou (%s); tenta de novo em %ss", ex.__class__.__name__, intervalo)
+        if uma_vez:
+            break
+        esperar(intervalo)
+    return cont
+
+
 def main(argv=None) -> int:   # pragma: no cover - serviço
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--uma-vez", action="store_true")
@@ -293,18 +322,15 @@ def main(argv=None) -> int:   # pragma: no cover - serviço
     ap.add_argument("--modelo", default="gpt-4.1")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
+    if not a.base_url.startswith("https://"):
+        ap.error("--base-url precisa ser https://")
     from voz.configuracao import supabase_do_ambiente
     from voz.provedores.montagem import ModeloOpenAICompat
     from voz.segredos import SecretManager
     sb = supabase_do_ambiente()
     modelo = ModeloOpenAICompat(a.base_url, SecretManager().valor(REF_LLM), a.modelo, timeout=60)
-    while True:
-        while processar_um(sb, modelo):
-            pass
-        limpar_anexos(sb)
-        if a.uma_vez:
-            return 0
-        time.sleep(a.intervalo)
+    rodar(sb, modelo, a.intervalo, a.uma_vez)
+    return 0
 
 
 if __name__ == "__main__":   # pragma: no cover

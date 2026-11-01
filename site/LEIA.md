@@ -40,7 +40,7 @@ Para ver o build como no Netlify:
 
 ```sh
 npm run build               # gera build/client
-npm run preview             # serve build/client em http://127.0.0.1:4173 com o fallback do SPA
+npm run preview             # serve build/client em http://127.0.0.1:4173 com o fallback do SPA e os cabeçalhos do Netlify
 ```
 
 Outros comandos: `npm run lint` (oxlint), `npm run typecheck` (tsc; tem de dar zero erro, o CI barra) e `npm test`
@@ -69,7 +69,10 @@ Todas são públicas (começam com `VITE_` e vão para o JavaScript do navegador
 ## Publicação (Netlify)
 
 - Configuração toda no `site/netlify.toml`: base `site`, comando `npm run build`, publicação `build/client`,
-  Node 22, redirects, cabeçalhos de segurança e cache longo em `/assets/*`.
+  Node 22, redirects, cabeçalhos de segurança (HSTS, X-Frame-Options...) e cache longo em `/assets/*`.
+- A `Content-Security-Policy` é gerada no build (`scripts/cabecalhos.mjs` → `build/client/_headers`), com o hash dos
+  scripts inline do `index.html` e as origens que o site usa (Supabase https/wss do `VITE_SUPABASE_URL`,
+  `storage.googleapis.com` das gravações). Site passou a chamar outro domínio? Inclua no `cabecalhos.mjs`.
 - O Netlify só monta quando algo em `site/` mudou (`ignore` com `git diff`); mudança só no motor ou no banco
   não gera deploy.
 - Cada PR ganha um **Deploy Preview** com endereço próprio (o link aparece no PR). O preview usa o mesmo

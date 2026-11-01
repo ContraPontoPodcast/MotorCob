@@ -30,9 +30,14 @@
   to = "/index.html"
   status = 200
 
+# Cabeçalhos de segurança de todas as páginas. A Content-Security-Policy NÃO fica aqui: ela é gerada a cada build
+# (scripts/cabecalhos.mjs) em build/client/_headers, com o hash SHA-256 dos scripts inline do index.html (mudam a cada
+# build), e o Netlify aplica os dois juntos. Origens liberadas e o porquê: comentário do scripts/cabecalhos.mjs.
+# HSTS: 1 ano, com subdomínios (todo *.motorcob.online precisa ter HTTPS; sem preload por enquanto).
 [[headers]]
   for = "/*"
   [headers.values]
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"

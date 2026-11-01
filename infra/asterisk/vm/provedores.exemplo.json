@@ -1,0 +1,27 @@
+{
+  "montagem": {
+    "stt_modelo": "nova-3",
+    "idioma": "pt-BR",
+    "llm_base_url": "https://api.openai.com/v1",
+    "llm_modelo": "gpt-4.1-mini",
+    "tts_provedor": "elevenlabs",
+    "tts_voz": "ID-DA-VOZ-PT-BR",
+    "tts_modelo": "eleven_flash_v2_5",
+    "tts_vozes": ["ID-DE-OUTRA-VOZ-PT-BR"],
+    "ref_deepgram": "voz/deepgram",
+    "ref_llm": "voz/llm",
+    "ref_tts": "voz/tts",
+    "host_midia": "127.0.0.1",
+    "portas": [40000, 40999],
+    "max_sessoes": 50,
+    "max_turnos": 40
+  },
+  "elevenlabs": {
+    "numero_agente": "agenteVM1",
+    "max_simultaneas": 200,
+    "agent_id": "ID-DO-AGENTE-DA-VM-1",
+    "ref_api": "voz/elevenlabs-api",
+    "ref_webhook": "voz/elevenlabs-webhook",
+    "webhook_porta": 8092
+  }
+}

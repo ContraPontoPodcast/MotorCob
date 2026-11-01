@@ -38,10 +38,17 @@ gerada dentro do Secret Manager (`motorcx-voz-ari-senha`) e não aparece na tela
 - 2 IPs estáticos;
 - o firewall: SIP e RTP só das origens da lista, e SSH só pelo IAP;
 - a conta `motorcx-asterisk`, que só pode:
-  - ler os segredos `motorcx-voz-*`;
+  - ler os segredos `motorcx-voz-*` e `motorcx-crm-*` (credenciais dos conectores de CRM: a referência
+    `crm/<empresa>/<conector>/<versão>` que o banco gera vira `motorcx-crm-<empresa>-<conector>-<versão>`), numa
+    condição só do IAM (`motorcx-voz-crm-segredos`; a condição antiga, só `motorcx-voz-`, sai sozinha ao rodar de novo);
   - ler as imagens do Artifact Registry;
   - gravar e ler nos buckets de gravação das empresas;
   - escrever log e métrica;
+  - chamar os modelos da Vertex AI (`roles/aiplatform.user`, com a API `aiplatform.googleapis.com` ligada pelo
+    script): embedding do Speech Analytics e da busca semântica em São Paulo (`voz/analise/trechos.py`);
+- a conta `motorcx-gravacoes-leitura`, sem papel nenhum no projeto: só **lê** os buckets de gravação (o modo
+  `empresa` dá a leitura em cada bucket). A chave dela é o `GCS_GRAVACOES_CHAVE` da Edge Function `gravacoes`
+  (ouvir a gravação e ler a transcrição no site; seção 3);
 - as VMs `motorcx-ast-1` (zona a) e `motorcx-ast-2` (zona b): Shielded VM, Debian 12. No boot, o
   `vm/vm_inicio.sh` instala o Docker e os serviços (seção 4). A VM 1 disca para as empresas de id par e a VM 2,
   para as de id ímpar.
@@ -57,8 +64,10 @@ criar motorcx-voz-supabase-url "URL do Supabase (https://xxxx.supabase.co)"
 criar motorcx-voz-supabase-key "Chave do servidor do Supabase"     # só no piloto (seção 7)
 ```
 
-**Senha de tronco:** o banco guarda só a referência (`voz_troncos.segredo_ref`). Para a referência
-`voz/trunk/12-3`, o segredo se chama `motorcx-voz-trunk-12-3`:
+**Senha de tronco:** o banco guarda só a referência (`voz_troncos.segredo_ref`), que **começa com `voz/`** (a tela e
+o banco, SQL 67, recusam outra; tronco antigo com outra referência continua salvando enquanto ela não muda, mas a VM
+não lê o segredo dele: troque para `voz/...`). Para a referência `voz/trunk/12-3`, o segredo se chama
+`motorcx-voz-trunk-12-3`:
 
 ```bash
 criar motorcx-voz-trunk-12-3 "Senha do tronco"
@@ -70,7 +79,11 @@ Tronco autenticado por IP não tem senha.
 - `motorcx-voz-deepgram`, `motorcx-voz-llm` e `motorcx-voz-tts`: chaves da Montagem MotorCX;
 - `motorcx-voz-transcricao-api`: chave da reserva da transcrição por API;
 - `motorcx-voz-elevenlabs-api` e `motorcx-voz-elevenlabs-webhook`: chave da API de conversas e segredo do webhook
-  pós-chamada da ElevenLabs (SQL 63; veja "Webhook da ElevenLabs" na seção 4).
+  pós-chamada da ElevenLabs (SQL 63; veja "Webhook da ElevenLabs" na seção 4);
+- `motorcx-voz-llm-fluxo`: chave do LLM (API compatível com OpenAI) da geração do fluxo por texto (serviço
+  `motorcx-voz-gerar-fluxo`, seção 4);
+- `motorcx-crm-<empresa>-<conector>-<versão>`: credencial de cada conector de CRM, com o nome que a tela do conector
+  mostra (a referência `crm/12/5/2026...` vira `motorcx-crm-12-5-2026...`).
 
 **Usuário dos envios:** no metadado `motorcx-enviado-por` de cada VM, coloque o uuid do usuário da equipe
 MotorCX que assina os envios de eventos (`envios.enviado_por`):
@@ -93,6 +106,22 @@ de `<dias>` dias: o mínimo é 90 e não há teto. A partir de 365 dias, a grava
 Empresa sem bucket não tem a chamada gravada, e o orquestrador mostra um alerta. Para mudar a retenção, rode o
 mesmo comando com outro número de dias.
 
+O mesmo comando dá à conta `motorcx-gravacoes-leitura` a leitura do bucket (`roles/storage.objectViewer`; cria a
+conta se ainda não existir). Bucket criado antes desta versão: rode o comando de novo para a empresa (mesmos dias).
+
+**Chave do `GCS_GRAVACOES_CHAVE` (Supabase › Edge Functions › Secrets), uma vez, e de novo só para trocar:**
+
+```bash
+bash criar_gcp.sh chave-leitura SEU-PROJETO
+```
+
+O script cria uma chave nova da `motorcx-gravacoes-leitura` num arquivo `~/gcs-gravacoes-chave.XXXXXX.json`
+(permissão 600) e **não mostra o conteúdo**. Ele imprime os passos: abrir com `cloudshell edit <arquivo>`, copiar o
+JSON inteiro para o secret `GCS_GRAVACOES_CHAVE` no Supabase e apagar com `shred -u <arquivo>`. Ao trocar a chave,
+apague a antiga depois de conferir uma gravação no site (`gcloud iam service-accounts keys list/delete`, comandos
+impressos pelo script). Se a organização proíbe chave de conta de serviço (`iam.disableServiceAccountKeyCreation`),
+o script para e apaga o arquivo.
+
 ## 4. O que roda em cada VM
 
 As imagens são publicadas pelo GitHub (`.github/workflows/imagem-voz.yml`) no Artifact Registry:
@@ -113,6 +142,7 @@ antes da janela de discagem.
 | `motorcx-voz-speech-buscas` | Serviço contínuo da busca semântica do site (SQL 60/63): a cada 2 s pega as buscas pendentes da parte desta VM, calcula o embedding da pergunta na Vertex (São Paulo) e responde. O site consulta até a resposta chegar; a busca vira erro sozinha em 2 min. Custo do embedding na margem (componente `embeddings`). Mesmo interruptor: desligado, sai e fica parado (depois de ligar o metadado, `systemctl restart motorcx-voz-speech-buscas`). |
 | `caddy` + `motorcx-voz-https.timer` | Proxy HTTPS na 8443 (Caddy oficial 2.8.4): a cada 2 min liga só as rotas dos recursos ligados e recarrega quando muda. Certificado Let's Encrypt de `<IP>.sslip.io` (veja "Proxy HTTPS" abaixo). |
 | `motorcx-voz-simulador` | Simulador de texto do Fluxo e roleplay (`voz/simulador_http.py`, 127.0.0.1:8091), atrás do proxy. Só com o metadado `motorcx-simulador-fluxo=1`; a chave vem do segredo `motorcx-voz-simulador`. |
+| `motorcx-voz-gerar-fluxo` | Serviço contínuo da geração do fluxo por texto (pedido "Descrever e o MotorCX monta", SQL 58/66; `voz/gerar_fluxo.py`): a cada 15 s pega o próximo pedido, gera o rascunho com o LLM, valida (até 2 correções) e devolve; saída inválida nunca vira rascunho. Também apaga do Storage os anexos que o banco liberou. Funciona nos dois acessos ao banco (seção 7). Desligado por padrão: veja "Geração do fluxo por texto" abaixo. |
 | `motorcx-voz-speech-temas.timer` | Segunda 03:20, temas novos da semana passada (SQL 63): agrupa os trechos do cliente que ficaram sem tema e sem intenção. Grupo com 30 conversas ou mais vai para a Curadoria com um nome sugerido pela IA; quem dá o nome é uma pessoa. Mesmo interruptor. |
 
 O plantão do orquestrador:
@@ -133,8 +163,28 @@ subirem para o bucket da empresa.
 
 **Provedores de voz da VM:**
 - `/etc/motorcx/provedores.json`: `{"montagem": {...}, "elevenlabs": {"numero_agente": "..."}}` (a chave
-  `montagem` atende quem tem `voz_config.provedor = 'montagem_motorcx'`);
-- `/etc/motorcx/provedores_sip.json`: o endpoint SIP da ElevenLabs.
+  `montagem` atende quem tem `voz_config.provedor = 'montagem_motorcx'`). Exemplo completo, só com referências
+  (nenhuma chave): `vm/provedores.exemplo.json`. Campos da Montagem: `voz/provedores/montagem.py` › `ConfigMontagem`;
+  da ElevenLabs: `voz/provedores/__init__.py` › `criar_todos`.
+- `/etc/motorcx/provedores_sip.json`: lista dos provedores ligados por SIP (endpoint `pv-<nome>` no Asterisk).
+  Exemplo: `vm/provedores_sip.exemplo.json` (ElevenLabs; confira o host e o transporte no painel da ElevenLabs).
+- **Padrão no boot:** quando o arquivo **não existe**, o `vm_inicio.sh` instala o padrão seguro: `provedores.json`
+  só com a Montagem e as referências `voz/deepgram`, `voz/llm` e `voz/tts` (`vm/motorcx-provedores.padrao.json`) e
+  `provedores_sip.json` vazio (`[]`). Arquivo que já existe **nunca** é sobrescrito. Para mudar, edite na VM
+  (`sudo nano /etc/motorcx/provedores.json`, permissão 644, sem segredo) e reinicie o orquestrador. Na Montagem,
+  preencha `tts_voz` (id da voz pt-BR) e crie os segredos `motorcx-voz-deepgram`, `motorcx-voz-llm` e
+  `motorcx-voz-tts` antes de pôr uma empresa com `provedor = 'montagem_motorcx'`.
+
+**Geração do fluxo por texto (SQL 58/66):** o pedido "Descrever e o MotorCX monta" do site fica na fila
+(`voz_fluxo_pedidos`) até o serviço `motorcx-voz-gerar-fluxo` de uma VM pegar. Sem ele ligado, o pedido fica
+"pendente" para sempre. Para ligar (as duas VMs podem rodar: a fila usa `for update skip locked`):
+1. crie a chave do LLM: `criar motorcx-voz-llm-fluxo "Chave do LLM da geração de fluxo"`;
+2. ponha o metadado e reinicie o serviço:
+   `gcloud compute instances add-metadata "$VM" --zone="$ZONA" --metadata=motorcx-gerar-fluxo=1` e
+   `gcloud compute ssh "$VM" --zone="$ZONA" --tunnel-through-iap -- sudo systemctl restart motorcx-voz-gerar-fluxo`.
+Opcional: `motorcx-gerar-fluxo-base-url` (API compatível com OpenAI, `https://`; padrão `https://api.openai.com/v1`)
+e `motorcx-gerar-fluxo-modelo` (padrão `gpt-4.1`). Cada geração entra no extrato (`ia_geracao_fluxo`); os tokens
+vão só para o custo real (Master).
 
 **Speech Analytics (SQL 62):** desligado por padrão em dois lugares.
 1. Na VM: metadado `motorcx-speech-analytics=1` (sem ele, os dois timers saem sem fazer nada):

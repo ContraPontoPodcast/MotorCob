@@ -1,0 +1,16 @@
+{
+  "montagem": {
+    "stt_modelo": "nova-3",
+    "idioma": "pt-BR",
+    "llm_base_url": "https://api.openai.com/v1",
+    "llm_modelo": "gpt-4.1-mini",
+    "tts_provedor": "elevenlabs",
+    "tts_voz": "",
+    "tts_modelo": "",
+    "ref_deepgram": "voz/deepgram",
+    "ref_llm": "voz/llm",
+    "ref_tts": "voz/tts",
+    "max_sessoes": 50,
+    "max_turnos": 40
+  }
+}

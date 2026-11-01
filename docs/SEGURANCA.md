@@ -31,7 +31,9 @@ rotina do motor (Mac/nuvem, service_role em arquivo local fora do git)
 **Authentication › Providers › Email**
 - [ ] Desligar **Allow new users to sign up** (só entra quem for convidado pelo Admin).
 - [ ] Ligar **Confirm email** e **Secure email change**.
-- [ ] **Password requirements**: mínimo 12, letras maiúsculas, minúsculas, números e símbolos.
+- [ ] **Password requirements**: **Minimum password length = 12** e **Password requirements = Letters and digits**
+      (12+ caracteres, letra e número). É a regra única aprovada, a mesma que as telas do site mostram e a mesma do
+      `docs/pacote_desenvolvedor/02_supabase_painel/CONFIGURAR_SUPABASE.md`.
 - [ ] **Leaked password protection** ligado (bloqueia senhas vazadas — HaveIBeenPwned; plano Pro).
 
 **Authentication › Multi-Factor**
@@ -64,7 +66,12 @@ rotina do motor (Mac/nuvem, service_role em arquivo local fora do git)
 **Database / Project**
 - [ ] **Advisors › Security**: zerar os avisos (RLS desligado, funções com search_path mutável, etc.).
 - [ ] **API › Exposed schemas**: só `public` (e `storage`).
-- [ ] **Network restrictions**: liberar o banco direto (porta 5432/6543) só para o IP do servidor do motor.
+- [ ] **Network restrictions**: liberar o banco direto (porta 5432/6543) só para quem conecta no Postgres. Hoje são
+      as **VMs de voz** no acesso próprio (papel `motorcx_voz` pelo pooler/Supavisor): `35.198.40.10/32` (motorcx-ast-1)
+      e `34.39.217.31/32` (motorcx-ast-2) (`infra/asterisk/README.md`, seção do acesso próprio). O **motor não entra
+      aqui**: ele usa só a API REST do Supabase (HTTPS), que não passa por essa restrição. Confira no painel se a
+      restrição vale também para o pooler; se não valer, a proteção do pooler é a senha forte do `motorcx_voz` e o
+      TLS verificado.
 - [ ] **SSL enforcement** ligado.
 - [ ] Backups: plano pago com backup diário; **PITR** se o contrato exigir RPO baixo. Testar uma restauração.
 - [ ] Contas da organização Supabase com MFA; mínimo de membros com papel Owner.
@@ -73,16 +80,18 @@ rotina do motor (Mac/nuvem, service_role em arquivo local fora do git)
 
 - [ ] Só a chave **anon** no site. Conferir no bundle publicado que não existe `service_role` (busca por
       `service_role` e por JWT com `"role":"service_role"`).
-- [ ] Cabeçalhos de segurança (Hostinger: hPanel › Avançado › `.htaccess`; se o Horizons não permitir, colocar a
-      Cloudflare gratuita na frente e definir por **Transform Rules**):
-  ```
-  Strict-Transport-Security: max-age=31536000; includeSubDomains
-  Content-Security-Policy: default-src 'self'; connect-src 'self' https://<projeto>.supabase.co wss://<projeto>.supabase.co; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
-  X-Frame-Options: DENY
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
-  ```
+- [ ] Cabeçalhos de segurança no **Netlify** (o site é hospedado lá; nada a configurar no painel):
+  - `site/netlify.toml` › `[[headers]]` de `/*`: `Strict-Transport-Security: max-age=31536000; includeSubDomains`,
+    `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` e
+    `Permissions-Policy` (câmera, microfone, localização, pagamento e USB desligados).
+  - `Content-Security-Policy`: gerada a cada build por `site/scripts/cabecalhos.mjs` em `build/client/_headers`
+    (o Netlify aplica junto com o `netlify.toml`), com o hash SHA-256 dos scripts inline do `index.html` (sem
+    `'unsafe-inline'` em `script-src`). Origens: o próprio site, o Supabase do projeto (https e wss),
+    `storage.googleapis.com` (gravação e transcrição por URL assinada), `data:`/`blob:` em imagem, áudio e worker;
+    `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`. Origem nova no site
+    (outro domínio de API, fonte externa, CAPTCHA) precisa entrar no `cabecalhos.mjs`, senão o navegador bloqueia.
+  - Conferir no ar: `curl -sI https://motorcob.online | grep -i -E 'strict-transport|content-security|x-frame'`.
+    Local: `npm run build && npm run preview` serve com os mesmos cabeçalhos.
 - [ ] Menus e botões escondidos por `minhas_permissoes()` — mas a proteção real é o banco (o pentest vai chamar a
       API direto; é isso que os testes de RLS cobrem).
 - [ ] Sair do sistema limpa a sessão (`supabase.auth.signOut()`), e a tela de login não diz se o e-mail existe.
@@ -106,7 +115,7 @@ rotina do motor (Mac/nuvem, service_role em arquivo local fora do git)
 
 **Escopo:** `https://motorcob.online`, a API do projeto Supabase (`https://<projeto>.supabase.co/rest/v1`,
 `/auth/v1`, `/storage/v1`, `/functions/v1/admin-usuarios`). Fora do escopo: infraestrutura do Supabase e da
-Hostinger (seguem os programas deles).
+Netlify (seguem os programas deles).
 
 **Ambiente:** de preferência um **projeto Supabase de homologação** com as mesmas migrações e dados fictícios
 (nunca dado real de devedor — LGPD). Entregar ao time de pentest: 2 empresas (A e B) e um usuário de cada perfil
