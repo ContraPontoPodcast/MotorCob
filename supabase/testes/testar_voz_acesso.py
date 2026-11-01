@@ -350,6 +350,19 @@ checar("SQL 59: ... o lote ficou concluído, com as conversas e os tokens", True
        f"select l.situacao || '|' || l.conversas || '|' || l.tokens || '|' || (select quantidade from public.consumo_mensageria c "
        f"where c.empresa_id = {EA} and c.item = 'ia_roleplay') from public.roleplay_lotes l where l.id = {RLA}",
        "concluido|2|1800|2", usuario="postgres")
+checar("SQL 61: os tokens do roleplay pelo voz_vm entram no custo real (consumo_ia)", True,
+       f"select tokens || '|' || quantidade from public.consumo_ia where empresa_id = {EA} and item = 'ia_roleplay'",
+       "1800|1.8000", usuario="postgres")
+PDT = _sv(f"insert into public.voz_fluxo_pedidos (empresa_id, texto, tipo, situacao) values ({EA}, "
+          f"'Pedido para conferir os tokens da geração.', 'ia', 'gerando') returning id")
+checar("SQL 61: a geração pelo voz_vm manda os tokens só para o custo real", True,
+       f"select coalesce(voz_vm.registrar_geracao_fluxo('{{\"pedido\": {PDT}, \"definicao\": null, \"resultado\": "
+       f"{{\"erros\": [\"resposta_fora_do_esquema\"], \"tentativas\": 2, \"tokens_ia\": 12000}}}}')::text, 'nulo')", "nulo")
+checar("SQL 61: ... os tokens ficam no consumo_ia e fora do pedido (que o cliente lê)", True,
+       f"select (select tokens from public.consumo_ia where empresa_id = {EA} and item = 'ia_geracao_fluxo') || '|' || "
+       f"(resultado ? 'tokens_ia') from public.voz_fluxo_pedidos where id = {PDT}", "12000|false", usuario="postgres")
+checar("SQL 61: a VM não registra consumo de IA direto", False,
+       f"select public.registrar_consumo_ia({EA}, 'ia_roleplay', 1)", erro="permission denied")
 checar("SQL 59: lote concluído não conclui de novo", False,
        f"select voz_vm.concluir_roleplay_lote('{{\"lote\": {RLA}, \"tokens\": 5}}')", erro="não está rodando")
 checar("SQL 59: não chama a RPC do public direto", False, "select public.pegar_roleplay_voz()", erro="permission denied")
