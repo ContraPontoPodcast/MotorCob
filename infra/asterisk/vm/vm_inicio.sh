@@ -16,6 +16,8 @@
 #   motorcx-voz-simulador.service      simulador do Fluxo e roleplay em 127.0.0.1:8091 (metadado motorcx-simulador-fluxo=1)
 #   caddy + motorcx-voz-https.timer    proxy HTTPS na 8443 (Caddy oficial, versão fixa): só as rotas dos recursos
 #                                      ligados; certificado Let's Encrypt de <ip>.sslip.io (ou motorcx-dominio-https)
+#   motorcx-voz-importador.timer       a cada 15 min: importa as gravações do discador do cliente (metadado
+#                                      motorcx-importador-gravacoes=1; sem ele, sai sem fazer nada; SQL 64)
 set -euo pipefail
 exec > >(logger -t motorcx-voz-inicio) 2>&1
 
@@ -65,7 +67,7 @@ for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-s
          motorcx-voz-speech.service motorcx-voz-speech.timer motorcx-voz-speech-noite.service \
          motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.service motorcx-voz-speech-temas.timer \
          motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-https.service \
-         motorcx-voz-https.timer; do
+         motorcx-voz-https.timer motorcx-voz-importador.service motorcx-voz-importador.timer; do
   baixar "arquivo-$u" > "/etc/systemd/system/$u" 2>/dev/null || true
 done
 install -d -m 755 /usr/local/share/motorcx/caddy
@@ -74,7 +76,8 @@ for c in motorcx-caddy.Caddyfile motorcx-caddy-simulador.caddy motorcx-caddy-ele
 done
 systemctl daemon-reload
 systemctl enable --now motorcx-voz-config.timer motorcx-voz-transcricao.timer motorcx-voz-atualizar.timer \
-  motorcx-voz-speech.timer motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.timer motorcx-voz-https.timer
+  motorcx-voz-speech.timer motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.timer motorcx-voz-https.timer \
+  motorcx-voz-importador.timer
 systemctl enable --now motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
   motorcx-voz-speech-buscas.service motorcx-voz-simulador.service
 systemctl enable caddy >/dev/null 2>&1 || true

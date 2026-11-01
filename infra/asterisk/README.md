@@ -107,6 +107,7 @@ antes da janela de discagem.
 | `motorcx-voz-config.timer` | A cada 2 min, busca troncos, rotas, transferências e config no banco. Se algo mudou, regera o pjsip e o dialplan dentro do contêiner, com as senhas do cofre, e recarrega. Configuração inválida no banco mantém a que está no ar. |
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |
 | `motorcx-voz-speech.timer` | A cada 15 min, Speech Analytics (SQL 62) das transcrições em `/var/motorcx/transcricoes`: nota do checklist e códigos fechados numa chamada ao LLM da Montagem (`/etc/motorcx/provedores.json`, chave no cofre). Desligado por padrão (veja abaixo). |
+| `motorcx-voz-importador.timer` | A cada 15 min, importa as gravações do discador do cliente (SQL 64): envio pelo site, SFTP e HTTPS. Desligado por padrão (seção 8). |
 | `motorcx-voz-speech-noite.timer` | 02:40, agregados do dia do Speech Analytics (ontem e anteontem, idempotente), recomendações (`motor/retroalimentacao.py`) e impacto de 28 dias. Mesmo interruptor. |
 | `motorcx-voz-speech-buscas` | Serviço contínuo da busca semântica do site (SQL 60/63): a cada 2 s pega as buscas pendentes da parte desta VM, calcula o embedding da pergunta na Vertex (São Paulo) e responde. O site consulta até a resposta chegar; a busca vira erro sozinha em 2 min. Custo do embedding na margem (componente `embeddings`). Mesmo interruptor: desligado, sai e fica parado (depois de ligar o metadado, `systemctl restart motorcx-voz-speech-buscas`). |
 | `caddy` + `motorcx-voz-https.timer` | Proxy HTTPS na 8443 (Caddy oficial 2.8.4): a cada 2 min liga só as rotas dos recursos ligados e recarrega quando muda. Certificado Let's Encrypt de `<IP>.sslip.io` (veja "Proxy HTTPS" abaixo). |
@@ -143,6 +144,8 @@ subirem para o bucket da empresa.
 A transcrição de cada gravação é casada com `voz_gravacoes` pelo nome do arquivo em
 `/var/motorcx/transcricoes/empresa_<id>/<ref>.json`: `<ref>` = id da gravação (preferido), `transcricao_caminho`,
 o nome do arquivo da gravação sem extensão ou o `id_chamada`. Ao lado fica `<ref>.analise.json` (só a situação).
+
+**Importador das gravações do discador (SQL 64):** veja a seção 8.
 
 **Ligações da IA (SQL 63):** a transcrição é o texto da própria conversa (sem Whisper e sem custo de transcrição).
 O orquestrador grava `ia_<id da chamada>.json` (já mascarado) só quando a ligação é gravada, e a gravação sobe como
@@ -312,3 +315,43 @@ Faça uma vez, no Cloud Shell, com o projeto do GCP selecionado. Nenhum passo mo
 
 **Para voltar ao piloto:** `motorcx-voz-acesso=supabase_chave` no metadado, reative o segredo da chave e reinicie
 os serviços. O modo real volta a ficar parado.
+
+## 8. Importador das gravações do discador do cliente (SQL 64)
+
+Traz as gravações do discador do cliente (a parte do operador depois da transferência e, se a fonte aceitar, as
+ligações feitas direto pelo discador) para o bucket da empresa, grava `voz_gravacoes` com `origem = 'discador'` e o
+`operador_ref`, e deixa o áudio para o Whisper. O worker da transcrição devolve a situação ao banco e os minutos entram
+no item `voz_transcricao` (custo para a margem e quantidade da fatura). As casadas com a transferência entram no Speech
+Analytics ligadas à chamada da IA. A transcrição REDIGIDA (CPF e cartão já fora) sobe ao lado do áudio no bucket da
+empresa (`<caminho sem extensão>.transcricao.json`, mesma retenção pelo ciclo de vida do bucket) e o caminho vai ao
+banco (`voz_gravacoes.transcricao_caminho`, pelo `registrar_transcricao_voz`; no acesso próprio, pela função de
+`voz_vm`). O leitor do site abre pela Edge Function `gravacoes` (`ver_transcricoes`, acesso registrado), como as outras
+gravações; a fala aparece como "Ligação (discador)", porque o discador entrega o áudio sem separar as vozes.
+
+**Fontes** (Cargas › Gravações do discador, por empresa, quantas quiser; o Admin cadastra):
+- **Envio pelo site:** manifesto + áudios (ou zip) no bucket `gravacoes-discador` do Supabase. Depois de importado, o
+  envio é apagado do Storage. Funciona nos dois acessos (no acesso próprio, pelo bilhete da `voz-arquivos`: publique a
+  versão nova da função).
+- **SFTP:** servidor, usuário, pasta e a **chave pública do servidor** (`ssh-keyscan -t ed25519 <host>`), fixada.
+- **HTTPS:** URL que devolve o manifesto com a URL de cada áudio; só HTTPS e só nos domínios autorizados.
+
+**Manifesto** (CSV ou JSON; modelo na tela): `id_chamada;inicio;duracao_s;arquivo|url;operador_ref;id_cliente;id_acao;
+carteira;id_chamada_motorcx`. Coluna de CPF, nome, telefone ou e-mail recusa o arquivo; linha com padrão de dado pessoal
+vai para a quarentena. `id_chamada_motorcx` é o cabeçalho `X-MotorCX-Id-Chamada` que o discador recebeu (seção 5):
+com ele o par é exato; sem ele, o par é pela janela de tempo da transferência (`janela_par_s`, padrão 120 s).
+
+**Credencial (SFTP: senha ou chave privada; HTTPS: token Bearer):** só no Secret Manager. Quem tem
+`gerenciar_troncos_voz` clica em **Credencial** na fonte: o banco gera a referência (`voz/importador/<empresa>/<fonte>/
+<versão>`). Grave o valor com o nome correspondente (barras viram hífen, prefixo `motorcx-`), sem mostrar na tela:
+
+```bash
+criar motorcx-voz-importador-12-5-20261119103000 "Senha ou chave do SFTP"     # a função criar() da seção 2
+```
+
+Depois, o Admin ativa a fonte. Trocar servidor, usuário ou URL apaga a referência e pausa o SFTP.
+
+**Ligar (desligado por padrão em dois lugares):**
+1. Na VM: `gcloud compute instances add-metadata "$VM" --zone="$ZONA" --metadata=motorcx-importador-gravacoes=1`.
+2. Por fonte, na tela: **Leitura automática** (a cada N horas). "Ler agora" e o envio pelo site rodam no mesmo timer.
+Sem o bucket da empresa (`voz_config.bucket_gravacoes`, seção 3), a leitura fecha com erro no registro. A retenção é a
+da empresa (mínimo 90 dias). A transcrição é ligada pela equipe, por fonte (custo por minuto).

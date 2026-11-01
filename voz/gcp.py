@@ -15,7 +15,9 @@ METADATA = "http://metadata.google.internal/computeMetadata/v1/instance/service-
 
 
 class ErroGCP(RuntimeError):
-    pass
+    def __init__(self, mensagem: str, status: int | None = None):
+        super().__init__(mensagem)
+        self.status = status      # código HTTP (ex.: 412 = objeto já existe com ifGenerationMatch=0)
 
 
 class Token:
@@ -44,5 +46,5 @@ def requisitar(metodo: str, url: str, token: Token, corpo: bytes | None = None, 
             txt = r.read().decode() or "{}"
     except urllib.error.HTTPError as ex:
         # nunca repassa o corpo (pode ecoar dados); só o status
-        raise ErroGCP(f"{metodo} {urllib.parse.urlsplit(url).path.split('/')[1:3]} -> HTTP {ex.code}") from None
+        raise ErroGCP(f"{metodo} {urllib.parse.urlsplit(url).path.split('/')[1:3]} -> HTTP {ex.code}", ex.code) from None
     return json.loads(txt)

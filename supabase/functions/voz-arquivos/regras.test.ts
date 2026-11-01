@@ -41,6 +41,17 @@ test("apagar anexo de pedido de fluxo (SQL 58): entradas ou chamados, nome dado 
   assert.equal(usoValido([{ operacao: "enviar", bucket: "entradas", caminho: "alfa/Com Espaco.csv" }], "enviar"), null);
 });
 
+test("envio de gravações pelo site (SQL 64): só baixar e apagar, só a pasta do lote", () => {
+  const ok = { operacao: "baixar", bucket: "gravacoes-discador", caminho: "alfa/0f8e2a1c-1b2c-4d3e-8f9a-0123456789ab/7.wav" };
+  assert.deepEqual(usoValido([ok], "baixar"), ok);
+  assert.deepEqual(usoValido([{ ...ok, operacao: "apagar" }], "apagar")?.bucket, "gravacoes-discador");
+  assert.equal(usoValido([{ ...ok, operacao: "enviar" }], "enviar"), null);              // a VM nunca envia para lá
+  assert.equal(usoValido([{ ...ok, caminho: "alfa/0f8e2a1c-1b2c-4d3e-8f9a-0123456789ab/gravacao.wav" }], "baixar"), null);
+  assert.equal(usoValido([{ ...ok, caminho: "alfa/0f8e2a1c-1b2c-4d3e-8f9a-0123456789ab/7.exe" }], "baixar"), null);
+  assert.equal(usoValido([{ ...ok, caminho: "alfa/../0f8e2a1c-1b2c-4d3e-8f9a-0123456789ab/7.wav" }], "baixar"), null);
+  assert.equal(usoValido([{ ...ok, caminho: "alfa/x/7.wav" }], "baixar"), null);
+});
+
 test("url do objeto e tamanho", () => {
   assert.equal(urlObjeto("https://x.supabase.co/", "saidas", "alfa/2026-11-03/ids/agente_voz.csv"),
     "https://x.supabase.co/storage/v1/object/saidas/alfa/2026-11-03/ids/agente_voz.csv");
