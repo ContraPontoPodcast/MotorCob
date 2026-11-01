@@ -2,8 +2,10 @@
 // exige o mesmo); a transcrição exige ver_transcricoes. A gravação nunca fica aberta na tela: ouvir pede um
 // link de 5 minutos à Edge Function `gravacoes`, que confere a permissão e grava em `acessos`.
 // Só o ID do cliente aparece — nunca nome, CPF ou telefone.
+// Redesign v2: a lista ocupa a tela; o detalhe (Ouvir, transcrição, retenção, quem acessou) só abre na gaveta, quando a
+// pessoa escolhe a gravação. Transcrição, retenção e acessos ficam recolhidos dentro dela.
 import { rotuloLocutor } from '@/lib/importador';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Lock, Play, Search } from 'lucide-react';
@@ -12,7 +14,8 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import { FUNCAO_GRAVACOES, PERM_VOZ, dataCurta, dataHoraCurta, diasAte, duracao, resultadoVoz } from '@/lib/voz';
-import { Aviso, Botao, Cartao, CartaoLinha, Pilula, Tabela, Trilho, Vazio, campoCls, campoStyle } from './ui';
+import { Aviso, Botao, Cartao, Pilula, Trilho, Vazio, campoCls, campoStyle } from './ui';
+import { BarraFiltros, Detalhes, Gaveta, SeloRegras, Tabela as TabelaDs } from '@/components/ds';
 
 type Gravacao = {
 	id: number; credor_id: number | null; chamada_id: number | null; id_cliente: string; id_acao: string | null;
@@ -59,7 +62,6 @@ export function Gravacoes() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState('');
 	const [selId, setSelId] = useState<number | null>(null);
-	const detalheRef = useRef<HTMLDivElement>(null);
 
 	async function reload() {
 		if (!supabase || !empresa) return;
@@ -76,7 +78,7 @@ export function Gravacoes() {
 		// Embutido de N:1 vem como objeto; aceita lista também, por segurança.
 		const l = ((data ?? []) as unknown as (Gravacao & { voz_chamadas: unknown })[]).map(g => ({ ...g, voz_chamadas: (Array.isArray(g.voz_chamadas) ? g.voz_chamadas[0] : g.voz_chamadas) as Gravacao['voz_chamadas'] }));
 		setLista(l);
-		setSelId(prev => (prev != null && l.some(g => g.id === prev) ? prev : l[0]?.id ?? null));
+		setSelId(prev => (prev != null && l.some(g => g.id === prev) ? prev : null));
 		setLoading(false);
 	}
 
@@ -84,12 +86,7 @@ export function Gravacoes() {
 
 	const resultados = useMemo(() => [...new Set(lista.map(g => g.voz_chamadas?.resultado).filter((x): x is string => !!x))], [lista]);
 	const visiveis = resultado ? lista.filter(g => g.voz_chamadas?.resultado === resultado) : lista;
-	const sel = visiveis.find(g => g.id === selId) ?? visiveis[0] ?? null;
-
-	function escolher(id: number) {
-		setSelId(id);
-		if (window.matchMedia('(max-width: 1023px)').matches) window.setTimeout(() => detalheRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-	}
+	const sel = visiveis.find(g => g.id === selId) ?? null;
 
 	const nomeCarteira = (id: number | null) => (id == null ? '' : credores.find(c => String(c.id) === String(id))?.nome ?? '');
 
@@ -100,67 +97,57 @@ export function Gravacoes() {
 			<PageHeading title="Gravações" description="Agente virtual e discador · só o ID do cliente, nunca nome ou CPF" />
 			{!empresa ? <Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice> : (
 				<>
-					<form className="mb-4 flex flex-wrap items-center gap-2" onSubmit={e => { e.preventDefault(); setBuscaAplicada(busca); }}>
-						<label className="relative flex min-w-[220px] flex-1 items-center sm:max-w-[340px]">
-							<Search size={15} className="pointer-events-none absolute left-3 text-[var(--base-texto-3)]" />
-							<input value={busca} onChange={e => setBusca(e.target.value)} placeholder="ID do cliente ou da ação" aria-label="Buscar pelo ID do cliente ou da ação" className={`${campoCls} w-full pl-9`} style={campoStyle} />
-						</label>
-						<select aria-label="Gravador" value={origem} onChange={e => setOrigem(e.target.value)} className={campoCls} style={campoStyle}>
-							<option value="">Todos os gravadores</option>
-							<option value="ia">Agente virtual</option>
-							<option value="discador">Discador do cliente</option>
-						</select>
-						<select aria-label="Resultado" value={resultado} onChange={e => setResultado(e.target.value)} className={campoCls} style={campoStyle}>
-							<option value="">Todos os resultados</option>
-							{resultados.map(r => <option key={r} value={r}>{resultadoVoz(r).label}</option>)}
-						</select>
-						<Botao secundario type="submit">Buscar</Botao>
-						<span className="text-[12px] text-[var(--base-texto-3)]">{seletorCarteira}</span>
+					<form onSubmit={e => { e.preventDefault(); setBuscaAplicada(busca); }}>
+						<BarraFiltros nota={seletorCarteira} maisAtivos={resultado ? 1 : 0} onLimparMais={() => setResultado('')}
+							mais={<select aria-label="Resultado" value={resultado} onChange={e => setResultado(e.target.value)} className={campoCls} style={campoStyle}>
+								<option value="">Todos os resultados</option>
+								{resultados.map(r => <option key={r} value={r}>{resultadoVoz(r).label}</option>)}
+							</select>}
+							direita={<SeloRegras rotulo="Permissões" regras={[
+								{ titulo: 'Ver a lista e ouvir exige a permissão Ouvir gravações', texto: 'Cada escuta pede um link de 5 minutos e fica registrada (nome, gravação e hora).' },
+								{ titulo: 'Ler a transcrição exige a permissão Ler transcrições', texto: 'A transcrição é redigida: CPF, cartão, telefone, e-mail, nomes e saúde saem antes de gravar. Não há como copiar nem baixar.' },
+								{ titulo: 'Só o ID do cliente aparece', texto: 'Nunca nome, CPF ou telefone.' },
+								{ titulo: 'Guardar além do prazo é só do Admin', texto: 'Em disputa, reclamação ou pedido judicial.' },
+							]} />}>
+							<label className="relative flex min-w-0 flex-[1_1_220px] items-center sm:max-w-[320px]">
+								<Search size={15} className="pointer-events-none absolute left-3 text-[var(--base-texto-3)]" aria-hidden="true" />
+								<input value={busca} onChange={e => setBusca(e.target.value)} placeholder="ID do cliente ou da ação" aria-label="Buscar pelo ID do cliente ou da ação" className={`${campoCls} w-full pl-9`} style={campoStyle} />
+							</label>
+							<select aria-label="Gravador" value={origem} onChange={e => setOrigem(e.target.value)} className={campoCls} style={campoStyle}>
+								<option value="">Todos os gravadores</option>
+								<option value="ia">Agente virtual</option>
+								<option value="discador">Discador do cliente</option>
+							</select>
+							<Botao secundario type="submit">Buscar</Botao>
+						</BarraFiltros>
 					</form>
-
 					{error ? <Notice>{error}</Notice> : loading ? <Loading /> : visiveis.length === 0 ? (
 						<Vazio titulo={buscaAplicada || origem || resultado ? 'Nenhuma gravação com esses filtros.' : 'Ainda não há gravações.'}>
 							{buscaAplicada || origem || resultado ? 'Confira o ID do cliente ou tire um filtro.' : 'As ligações do agente virtual aparecem aqui quando a empresa grava. As do discador de vocês entram por Cargas › Gravações do discador.'}
 						</Vazio>
 					) : (
-						<div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-							<Cartao semPadding className="self-start">
-								<Tabela
-									cabecalho={['ID do cliente', 'Quando', 'Gravador', 'Resultado', 'Duração', 'Apaga em']}
-									numericas={[4, 5]}
-									selecionada={visiveis.findIndex(g => g.id === sel?.id)}
-									onLinha={i => escolher(visiveis[i].id)}
-									linhas={visiveis.map(g => {
-										const r = resultadoVoz(g.voz_chamadas?.resultado);
-										const d = diasAte(g.expira_em);
-										return [
-											<span key="i" className="font-mono">{g.id_cliente}</span>, dataHoraCurta(g.gravada_em), ORIGEM[g.origem],
-											g.voz_chamadas?.resultado ? <Pilula key="r" tom={r.tom}>{r.label}</Pilula> : '—', duracao(g.duracao_s),
-											g.guarda ? <Pilula key="g" tom="info">em guarda</Pilula> : d <= 7 ? <Pilula key="d" tom="atencao">{d} dias</Pilula> : `${d} dias`,
-										];
-									})}
-									cartoes={visiveis.map(g => (
-										<CartaoLinha key={g.id} ativo={g.id === sel?.id} onClick={() => escolher(g.id)}>
-											<div className="flex items-center justify-between gap-2"><b className="font-mono">{g.id_cliente}</b>{g.voz_chamadas?.resultado && <Pilula tom={resultadoVoz(g.voz_chamadas.resultado).tom}>{resultadoVoz(g.voz_chamadas.resultado).label}</Pilula>}</div>
-											<small className="mt-1 block text-[var(--base-texto-2)]">{dataHoraCurta(g.gravada_em)} · {ORIGEM[g.origem]} · {duracao(g.duracao_s)}</small>
-											<small className="block text-[var(--base-texto-3)]">{g.guarda ? 'em guarda para disputa' : `apaga em ${diasAte(g.expira_em)} dias`}</small>
-										</CartaoLinha>
-									))}
-								/>
-								<p className="border-t px-4 py-2.5 text-[12px] text-[var(--base-texto-3)] sm:px-5" style={{ borderColor: 'var(--base-borda)' }}>{visiveis.length} {visiveis.length === 1 ? 'gravação' : 'gravações'}{lista.length >= 200 ? ' (as 200 mais recentes; use a busca)' : ''}</p>
-							</Cartao>
-							<div ref={detalheRef} className="min-w-0 scroll-mt-4">
-								{sel && <Detalhe key={sel.id} g={sel} carteira={nomeCarteira(sel.credor_id)} podeLer={podeLer} ehAdmin={ehAdmin} onMudou={() => void reload()} />}
-							</div>
-						</div>
+						<Cartao semPadding>
+							<TabelaDs rotulo="Gravações" linhas={visiveis} chave={g => g.id} onAbrir={g => setSelId(g.id)} selecionada={sel?.id}
+								colunas={[
+									{ id: 'cli', titulo: 'ID do cliente', celula: g => <span className="font-mono">{g.id_cliente}</span> },
+									{ id: 'q', titulo: 'Quando', celula: g => dataHoraCurta(g.gravada_em) },
+									{ id: 'o', titulo: 'Gravador', celula: g => ORIGEM[g.origem] },
+									{ id: 'r', titulo: 'Resultado', celula: g => { const r = resultadoVoz(g.voz_chamadas?.resultado); return g.voz_chamadas?.resultado ? <Pilula tom={r.tom}>{r.label}</Pilula> : '—'; } },
+									{ id: 'd', titulo: 'Duração', num: true, celula: g => duracao(g.duracao_s) },
+									{ id: 'a', titulo: 'Apaga em', num: true, celula: g => { const d = diasAte(g.expira_em); return g.guarda ? <Pilula tom="info">em guarda</Pilula> : d <= 7 ? <Pilula tom="atencao">{d} dias</Pilula> : `${d} dias`; } },
+								]}
+								celular={g => ({ titulo: <span className="font-mono">{g.id_cliente}</span>, valor: g.voz_chamadas?.resultado ? <Pilula tom={resultadoVoz(g.voz_chamadas.resultado).tom}>{resultadoVoz(g.voz_chamadas.resultado).label}</Pilula> : undefined, resumo: `${dataHoraCurta(g.gravada_em)} · ${ORIGEM[g.origem]} · ${duracao(g.duracao_s)} · ${g.guarda ? 'em guarda' : `apaga em ${diasAte(g.expira_em)} dias`}` })}
+								rodape={<span>{visiveis.length} {visiveis.length === 1 ? 'gravação' : 'gravações'}{lista.length >= 200 ? ' (as 200 mais recentes; use a busca)' : ''}</span>} />
+						</Cartao>
 					)}
+					{sel && <Detalhe key={sel.id} g={sel} carteira={nomeCarteira(sel.credor_id)} podeLer={podeLer} ehAdmin={ehAdmin} onMudou={() => void reload()} onFechar={() => setSelId(null)} />}
 				</>
 			)}
 		</>
 	);
 }
 
-function Detalhe({ g, carteira, podeLer, ehAdmin, onMudou }: { g: Gravacao; carteira: string; podeLer: boolean; ehAdmin: boolean; onMudou: () => void }) {
+function Detalhe({ g, carteira, podeLer, ehAdmin, onMudou, onFechar }: { g: Gravacao; carteira: string; podeLer: boolean; ehAdmin: boolean; onMudou: () => void; onFechar: () => void }) {
 	const [confirmaOuvir, setConfirmaOuvir] = useState(false);
 	const [url, setUrl] = useState<string | null>(null);
 	const [restante, setRestante] = useState(0);
@@ -255,28 +242,24 @@ function Detalhe({ g, carteira, podeLer, ehAdmin, onMudou }: { g: Gravacao; cart
 	const r = resultadoVoz(g.voz_chamadas?.resultado);
 
 	return (
-		<div className="space-y-4">
-			<Cartao titulo={<span className="font-mono">{g.id_cliente} · {dataHoraCurta(g.gravada_em)}</span>} linha={[carteira, g.id_acao ? `ação ${g.id_acao}` : '', duracao(g.duracao_s)].filter(Boolean).join(' · ')} direita={<><Pilula>{ORIGEM[g.origem]}</Pilula>{g.voz_chamadas?.resultado && <Pilula tom={r.tom}>{r.label}</Pilula>}</>}>
-				{pendencia && <div className="mb-3"><Aviso tom="atencao" titulo={pendencia}>A Edge Function <span className="font-mono">gravacoes</span> (link de 5 minutos e registro em acessos) ainda não foi publicada. O botão já chama o caminho previsto.</Aviso></div>}
-				{url ? (
-					<div className="space-y-2">
-						<audio controls autoPlay src={url} controlsList="nodownload noplaybackrate" className="w-full" onContextMenu={e => e.preventDefault()} />
-						<div className="flex flex-wrap items-center justify-between gap-2">
-							<Pilula tom={restante < 60 ? 'atencao' : 'neutro'}>Link vale por mais {mmss(restante)}</Pilula>
-							<span className="text-[12px] text-[var(--base-texto-3)]">O acesso ficou registrado. O link é de uso pessoal.</span>
-						</div>
+		<Gaveta aberta onFechar={onFechar} largura={520} rotulo={`Gravação de ${g.id_cliente}`}
+			titulo={<span className="font-mono">{g.id_cliente} · {dataHoraCurta(g.gravada_em)}</span>}
+			subtitulo={[ORIGEM[g.origem], carteira, g.id_acao ? `ação ${g.id_acao}` : '', duracao(g.duracao_s), g.voz_chamadas?.resultado ? r.label : ''].filter(Boolean).join(' · ')}
+			rodape={url ? undefined : <Botao onClick={() => setConfirmaOuvir(true)} disabled={ocupado}><Play size={14} /> {expirou ? 'Pedir outro link' : 'Ouvir'}</Botao>}>
+			{pendencia && <Aviso tom="atencao" titulo={pendencia}>A Edge Function <span className="font-mono">gravacoes</span> (link de 5 minutos e registro em acessos) ainda não foi publicada.</Aviso>}
+			{url ? (
+				<div className="space-y-2">
+					<audio controls autoPlay src={url} controlsList="nodownload noplaybackrate" className="w-full" onContextMenu={e => e.preventDefault()} />
+					<div className="flex flex-wrap items-center justify-between gap-2">
+						<Pilula tom={restante < 60 ? 'atencao' : 'neutro'}>Link vale por mais {mmss(restante)}</Pilula>
+						<span className="text-[12px] text-[var(--base-texto-3)]">O acesso ficou registrado. O link é de uso pessoal.</span>
 					</div>
-				) : (
-					<div className="space-y-3">
-						<p className="text-[13px] text-[var(--base-texto-2)]">{expirou ? 'O link expirou. Para ouvir de novo, peça outro; o novo acesso também fica registrado.' : 'A gravação não fica aberta na tela. Ao pedir para ouvir, você recebe um link que vale 5 minutos.'}</p>
-						<Botao onClick={() => setConfirmaOuvir(true)} disabled={ocupado}><Play size={14} /> {expirou ? 'Pedir outro link' : 'Ouvir'}</Botao>
-					</div>
-				)}
-			</Cartao>
+				</div>
+			) : <p className="text-[13px] text-[var(--base-texto-2)]">{expirou ? 'O link expirou. Para ouvir de novo, peça outro; o novo acesso também fica registrado.' : 'A gravação não fica aberta na tela. Ao pedir para ouvir, você recebe um link que vale 5 minutos.'}</p>}
 
-			<Cartao titulo={<span className="flex items-center gap-2">Transcrição {podeLer && <Pilula>redigida</Pilula>}</span>} linha={podeLer ? 'CPF, cartão, telefone, e-mail, nomes e saúde saem antes de gravar.' : undefined}>
+			<Detalhes resumo="Transcrição redigida">
 				{!podeLer ? (
-					<p className="flex items-center gap-1.5 text-[13px] text-[var(--base-texto-2)]"><Lock size={14} /> Seu perfil pode ouvir, mas não ler transcrições (permissão Ler transcrições).</p>
+					<p className="flex items-center gap-1.5 text-[13px] text-[var(--base-texto-2)]"><Lock size={14} /> Seu perfil pode ouvir, mas não ler transcrições.</p>
 				) : segmentos ? (
 					<>
 						<div className="max-h-[420px] space-y-2 overflow-y-auto select-none" onCopy={e => e.preventDefault()} onContextMenu={e => e.preventDefault()}>
@@ -294,37 +277,37 @@ function Detalhe({ g, carteira, podeLer, ehAdmin, onMudou }: { g: Gravacao; cart
 					</>
 				) : (
 					<div className="space-y-2">
-						<p className="text-[13px] text-[var(--base-texto-2)]">A transcrição abre só quando você pede, e a leitura fica registrada.</p>
+						<p className="text-[13px] text-[var(--base-texto-2)]">Abre só quando você pede, e a leitura fica registrada.</p>
 						<Botao secundario onClick={() => void ler()} disabled={lendo}>{lendo ? 'Abrindo...' : 'Ler a transcrição'}</Botao>
 					</div>
 				)}
-			</Cartao>
+			</Detalhes>
 
-			<Cartao titulo="Retenção">
+			<Detalhes resumo="Retenção" qtd={g.guarda ? 'em guarda' : `apaga em ${faltam} ${faltam === 1 ? 'dia' : 'dias'}`}>
 				{g.guarda ? (
 					<Aviso tom="info" titulo={`Guardada além do prazo desde ${dataCurta(g.guarda_em)}.`}>Motivo: {g.guarda_motivo}. Não apaga no fim do prazo até o Admin tirar a guarda.</Aviso>
 				) : (
 					<>
-						<p className="text-[14px] text-[var(--base-texto)]"><b>Apaga em {faltam} {faltam === 1 ? 'dia' : 'dias'}</b> <span className="text-[12.5px] text-[var(--base-texto-3)]">({dataCurta(g.expira_em)}/{new Date(g.expira_em).getFullYear()})</span></p>
-						<Trilho valor={100 * (1 - faltam / total)} cor={faltam <= 7 ? 'var(--estado-atencao)' : 'var(--area)'} />
+						<p className="text-[13px] text-[var(--base-texto)]">Apaga em {dataCurta(g.expira_em)}/{new Date(g.expira_em).getFullYear()}</p>
+						<Trilho valor={100 * (1 - faltam / total)} cor={faltam <= 7 ? 'var(--estado-atencao)' : 'var(--destaque)'} />
 					</>
 				)}
-				<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Áudio e transcrição apagam juntos, sozinhos, no fim do prazo. Ficam só os códigos de resultado e os números agregados. O prazo é da empresa, em <Link to="/empresa/privacidade" className="underline">Empresa › Privacidade e gravações</Link>.</p>
+				<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Áudio e transcrição apagam juntos no fim do prazo; ficam só os códigos e os agregados. O prazo é da empresa, em <Link to="/empresa/privacidade" className="underline">Empresa › Privacidade e gravações</Link>.</p>
 				{ehAdmin ? (
-					<div className="mt-3">{g.guarda
+					<div className="mt-2">{g.guarda
 						? <Botao secundario onClick={() => setSoltarAberto(true)} disabled={ocupado}>Tirar a guarda</Botao>
 						: <Botao secundario onClick={() => setGuardaAberta(true)} disabled={ocupado}>Guardar além do prazo (disputa)</Botao>}</div>
-				) : !g.guarda && <p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Em disputa, reclamação ou pedido judicial, o Admin da empresa guarda a gravação além do prazo.</p>}
-			</Cartao>
+				) : !g.guarda && <p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Em disputa, o Admin da empresa guarda a gravação além do prazo.</p>}
+			</Detalhes>
 
-			<Cartao titulo="Quem acessou">
+			<Detalhes resumo="Quem acessou" qtd={acessos && !acessosBloq ? acessos.length : undefined}>
 				{acessos == null ? <p className="text-[13px] text-[var(--base-texto-3)]">Carregando...</p>
 					: acessosBloq ? <p className="text-[13px] text-[var(--base-texto-2)]">Só os perfis Admin e Gestão veem quem acessou. Todo acesso entra também na Auditoria.</p>
 					: acessos.length === 0 ? <p className="text-[13px] text-[var(--base-texto-2)]">Ninguém ouviu nem leu esta gravação ainda.</p>
 					: (
-						<ul className="divide-y text-[13px]" style={{ borderColor: 'var(--base-borda)' }}>
+						<ul className="divide-y text-[13px] [&>*]:border-[var(--base-borda)]">
 							{acessos.map((a, i) => (
-								<li key={i} className="flex flex-wrap items-center justify-between gap-2 py-1.5" style={{ borderColor: 'var(--base-borda)' }}>
+								<li key={i} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
 									<span className="text-[var(--base-texto)]">{a.nome}</span>
 									<span className="text-[var(--base-texto-2)]">{a.acao === 'ler_transcricao' ? 'leu a transcrição' : 'ouviu'}</span>
 									<span className="tnum text-[var(--base-texto-3)]">{dataHoraCurta(a.em)}</span>
@@ -332,7 +315,7 @@ function Detalhe({ g, carteira, podeLer, ehAdmin, onMudou }: { g: Gravacao; cart
 							))}
 						</ul>
 					)}
-			</Cartao>
+			</Detalhes>
 
 			<ConfirmaAcao aberto={confirmaOuvir} titulo="Ouvir esta gravação?" texto={'O seu acesso fica registrado (nome, gravação e hora) e aparece em "Quem acessou" e na Auditoria. O link vale 5 minutos.'} botao="Ouvir" onConfirm={() => void ouvir()} onClose={() => setConfirmaOuvir(false)} loading={ocupado} />
 			<ConfirmaAcao aberto={guardaAberta} titulo="Guardar além do prazo"
@@ -344,7 +327,7 @@ function Detalhe({ g, carteira, podeLer, ehAdmin, onMudou }: { g: Gravacao; cart
 				</>}
 				botao="Guardar" onConfirm={() => void guardar()} onClose={() => setGuardaAberta(false)} loading={ocupado} />
 			<ConfirmaAcao aberto={soltarAberto} titulo="Tirar a guarda?" texto="A gravação volta a seguir a retenção da empresa e pode apagar logo, se o prazo já passou." botao="Tirar a guarda" onConfirm={() => void soltar()} onClose={() => setSoltarAberto(false)} loading={ocupado} />
-		</div>
+		</Gaveta>
 	);
 }
 

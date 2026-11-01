@@ -18,19 +18,29 @@ export const PERM_SA = {
 	editarCanais: 'editar_canais',
 } as const;
 
+/** Abas do Speech Analytics (redesign v2). "Buscar nas conversas" fica no fim da barra (BUSCA_SA), não é aba. */
 export const ABAS_SA = [
 	{ id: 'visao', nome: 'Visão geral' },
-	{ id: 'qualidade', nome: 'Qualidade e compliance' },
+	{ id: 'qualidade', nome: 'Qualidade' },
 	{ id: 'operadores', nome: 'Operadores' },
 	{ id: 'alertas', nome: 'Alertas' },
-	{ id: 'busca', nome: 'Busca' },
-	{ id: 'retroalimentacao', nome: 'Retroalimentação' },
+	{ id: 'recomendacoes', nome: 'Recomendações' },
 	{ id: 'curadoria', nome: 'Curadoria' },
 ] as const;
-export type AbaSA = (typeof ABAS_SA)[number]['id'];
+export const BUSCA_SA = { id: 'busca', nome: 'Buscar nas conversas' } as const;
+export type AbaSA = (typeof ABAS_SA)[number]['id'] | typeof BUSCA_SA.id;
+/** Endereços antigos que continuam abrindo: "Retroalimentação" virou Recomendações. */
+const ALIAS_SA: Record<string, AbaSA> = { retroalimentacao: 'recomendacoes' };
+/** O Roleplay saiu do Speech Analytics e foi para Fluxo do agente › Testar com personas (decisão do redesign v2).
+ *  Enquanto a tela nova não entra, o endereço leva ao roteiro do agente virtual. */
+export const ROTA_TESTAR_PERSONAS = '/canais/agente-virtual';
 export function abaValida(a: string | undefined): AbaSA {
+	if (a === BUSCA_SA.id) return 'busca';
+	if (a && ALIAS_SA[a]) return ALIAS_SA[a];
 	return (ABAS_SA.find(x => x.id === a)?.id ?? 'visao') as AbaSA;
 }
+/** Endereço de cada aba (a Visão geral é a raiz). */
+export const rotaSA = (aba: AbaSA) => (aba === 'visao' ? '/speech-analytics' : `/speech-analytics/${aba}`);
 
 export const PERIODOS = [{ d: 7, n: 'Últimos 7 dias' }, { d: 30, n: 'Últimos 30 dias' }, { d: 90, n: 'Últimos 90 dias' }];
 export const ORIGENS = [{ v: '', n: 'IA e discador' }, { v: 'ia', n: 'Só agente de IA' }, { v: 'discador', n: 'Só discador (humano)' }];

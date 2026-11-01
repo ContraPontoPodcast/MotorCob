@@ -1,49 +1,22 @@
-// Peças visuais das telas do agente de voz. Só tokens do tema (var(--base-*), var(--estado-*),
-// var(--area), var(--destaque)), para valer no claro e no escuro.
+// Peças visuais das telas do agente de voz. As genéricas (Pilula, Cartao, Kpi, Aviso, Vazio, SubAbas, Botao,
+// campo e Tabela) agora vêm do design system em '@/components/ds'; aqui ficam só as próprias da voz e os
+// atalhos de compatibilidade (código novo importa direto de '@/components/ds').
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Lock } from 'lucide-react';
 import type { Tom } from '@/lib/voz';
+import { Aviso as AvisoDs, Botao as BotaoDs, Cartao as CartaoDs, Estado, Kpi as KpiDs, Pilula as PilulaDs } from '@/components/ds';
 
-const TOM: Record<Tom, { bg: string; fg: string }> = {
-	ok: { bg: 'var(--estado-pronto-fundo)', fg: 'var(--estado-pronto-texto)' },
-	info: { bg: 'var(--estado-info-fundo)', fg: 'var(--estado-info)' },
-	atencao: { bg: 'var(--estado-atencao-fundo)', fg: 'var(--estado-atencao-texto)' },
-	erro: { bg: 'var(--estado-erro-fundo)', fg: 'var(--estado-erro-texto)' },
-	neutro: { bg: 'var(--base-fill)', fg: 'var(--base-texto-2)' },
-};
+export { campoCls, campoStyle } from '@/components/ds';
 
 export function Pilula({ tom = 'neutro', children, title }: { tom?: Tom; children: ReactNode; title?: string }) {
-	const t = TOM[tom];
-	return <span title={title} className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-semibold" style={{ backgroundColor: t.bg, color: t.fg }}>{children}</span>;
+	return <PilulaDs tom={tom} title={title}>{children}</PilulaDs>;
 }
 
-export function Cartao({ titulo, linha, direita, children, semPadding, className = '', id }: { titulo?: ReactNode; linha?: ReactNode; direita?: ReactNode; children?: ReactNode; semPadding?: boolean; className?: string; id?: string }) {
-	return (
-		<section id={id} className={`min-w-0 rounded-2xl bg-[var(--base-cartao)] ${semPadding ? '' : 'p-4 sm:p-5'} ${className}`} style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}>
-			{(titulo || direita) && (
-				<div className={`mb-3 flex flex-wrap items-start justify-between gap-2 ${semPadding ? 'px-4 pt-4 sm:px-5 sm:pt-5' : ''}`}>
-					<div className="min-w-0">
-						{titulo && <h2 className="text-[15px] font-semibold text-[var(--base-texto)]">{titulo}</h2>}
-						{linha && <p className="mt-0.5 text-[12.5px] leading-relaxed text-[var(--base-texto-2)]">{linha}</p>}
-					</div>
-					{direita && <div className="flex shrink-0 flex-wrap items-center gap-2">{direita}</div>}
-				</div>
-			)}
-			{children}
-		</section>
-	);
-}
+export const Cartao = CartaoDs;
 
 export function Kpi({ rotulo, valor, detalhe, alerta, children }: { rotulo: string; valor: ReactNode; detalhe?: ReactNode; alerta?: boolean; children?: ReactNode }) {
-	return (
-		<div className="min-w-0 rounded-2xl bg-[var(--base-cartao)] p-4" style={{ boxShadow: `0 0 0 1px ${alerta ? 'var(--estado-erro)' : 'var(--base-borda)'}, 0 2px 12px rgba(0,0,0,.04)` }}>
-			<p className="text-[12px] font-medium text-[var(--base-texto-3)]">{rotulo}</p>
-			<p className="mt-1 text-[22px] font-bold leading-tight tnum" style={{ color: alerta ? 'var(--estado-erro-texto)' : 'var(--base-texto)' }}>{valor}</p>
-			{children}
-			{detalhe && <div className="mt-1 text-[12px] leading-relaxed text-[var(--base-texto-2)]">{detalhe}</div>}
-		</div>
-	);
+	return <KpiDs rotulo={rotulo} valor={valor} detalhe={detalhe} tom={alerta ? 'alerta' : undefined} extra={children} />;
 }
 
 /** Barra de progresso com marca opcional (ex.: previsto dentro do orçamento). */
@@ -70,34 +43,22 @@ export function Trava({ titulo, texto, icone }: { titulo: ReactNode; texto?: Rea
 }
 
 export function Aviso({ tom = 'atencao', titulo, children }: { tom?: Tom; titulo?: ReactNode; children?: ReactNode }) {
-	const t = TOM[tom];
-	return (
-		<div role="status" className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-[13px]" style={{ backgroundColor: t.bg, color: 'var(--base-texto)' }}>
-			<span className="mt-[3px] inline-block h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: t.fg }} />
-			<span className="min-w-0">{titulo && <b className="font-semibold">{titulo} </b>}{children}</span>
-		</div>
-	);
+	return <AvisoDs tom={tom} titulo={titulo}>{children}</AvisoDs>;
 }
 
-/** Estado vazio de cada tela: título, explicação e um próximo passo. */
+/** Estado vazio (atalho para Estado tipo="vazio" do design system). */
 export function Vazio({ titulo, children, acao }: { titulo: string; children?: ReactNode; acao?: ReactNode }) {
-	return (
-		<div className="rounded-2xl bg-[var(--base-fill)] px-6 py-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }}>
-			<p className="text-[15px] font-semibold text-[var(--base-texto)]">{titulo}</p>
-			{children && <p className="mx-auto mt-1.5 max-w-[520px] text-[13px] leading-relaxed text-[var(--base-texto-2)]">{children}</p>}
-			{acao && <div className="mt-4 flex flex-wrap justify-center gap-2">{acao}</div>}
-		</div>
-	);
+	return <Estado tipo="vazio" titulo={titulo} acoes={acao}>{children}</Estado>;
 }
 
-/** Sub-abas da tela (role tablist), como em Discagem. Com `to`, vira link. */
+/** Sub-abas (legado; tela nova usa Abas do design system, que vira select no celular). */
 export function SubAbas({ itens, atual, onTrocar }: { itens: { id: string; nome: ReactNode; to?: string }[]; atual: string; onTrocar?: (id: string) => void }) {
 	return (
 		<div role="tablist" className="no-scrollbar mb-4 flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--base-borda)' }}>
 			{itens.map(t => {
 				const ativo = t.id === atual;
 				const cls = `shrink-0 border-b-2 px-4 py-2 text-[13px] font-semibold transition-colors ${ativo ? '' : 'border-transparent text-[var(--base-texto-3)] hover:text-[var(--base-texto)]'}`;
-				const style = ativo ? { borderColor: 'var(--area)', color: 'var(--base-texto)' } : undefined;
+				const style = ativo ? { borderColor: 'var(--destaque)', color: 'var(--base-texto)' } : undefined;
 				if (t.to && !ativo) return <Link key={t.id} role="tab" aria-selected={false} to={t.to} className={cls} style={style}>{t.nome}</Link>;
 				return <button key={t.id} type="button" role="tab" aria-selected={ativo} onClick={() => onTrocar?.(t.id)} className={cls} style={style}>{t.nome}</button>;
 			})}
@@ -106,24 +67,10 @@ export function SubAbas({ itens, atual, onTrocar }: { itens: { id: string; nome:
 }
 
 export function Botao({ children, onClick, secundario, disabled, type = 'button', title }: { children: ReactNode; onClick?: () => void; secundario?: boolean; disabled?: boolean; type?: 'button' | 'submit'; title?: string }) {
-	return (
-		<button
-			type={type}
-			title={title}
-			onClick={onClick}
-			disabled={disabled}
-			className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-4 text-[13px] font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${secundario ? 'border text-[var(--base-texto)] hover:bg-[var(--base-fill)]' : 'text-[var(--destaque-texto)] hover:opacity-90'}`}
-			style={secundario ? { borderColor: 'var(--base-borda)' } : { backgroundColor: 'var(--destaque)' }}
-		>
-			{children}
-		</button>
-	);
+	return <BotaoDs tipo={secundario ? 'secundario' : 'primario'} onClick={onClick} disabled={disabled} type={type} title={title}>{children}</BotaoDs>;
 }
 
-export const campoCls = 'h-9 rounded-lg border bg-[var(--base-cartao)] px-3 text-[13px] text-[var(--base-texto)] outline-none focus:border-[var(--destaque)] disabled:opacity-60';
-export const campoStyle = { borderColor: 'var(--base-field-border, var(--base-borda))' };
-
-/** Tabela simples com rolagem horizontal própria (nunca a página). No celular, use `cartoes`. */
+/** Tabela legada (tela nova usa Tabela do design system: até 6 colunas, gaveta e lista no celular). */
 export function Tabela({ cabecalho, linhas, numericas = [], cartoes, vazio, onLinha, selecionada }: {
 	cabecalho: string[];
 	linhas: ReactNode[][];

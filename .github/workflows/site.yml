@@ -29,6 +29,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm test            # componentes do design system (src/components/ds)
       - name: as duas etapas do site são cópia exata de site/duas-etapas (fonte testada)
         run: |
           diff <(tail -n +2 src/components/duasEtapasLogica.ts) duas-etapas/duasEtapasLogica.ts

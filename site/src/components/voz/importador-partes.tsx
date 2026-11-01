@@ -3,8 +3,12 @@
 // Credencial NUNCA é digitada aqui: a equipe gera a referência (trocar_credencial_fonte_gravacoes) e grava o valor
 // direto no Secret Manager. No envio, o nome original dos arquivos não sai do navegador: o caminho no bucket é
 // <slug>/<lote>/<n>.<ext> e vai só o sha-256 do nome, que casa com a coluna arquivo do manifesto.
+// Redesign v2: a fonte abre numa gaveta (campos avançados recolhidos) e o envio virou uma tela própria em 3 passos
+// (escolher, conferir, enviar), com a conferência dos arquivos antes de subir.
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Download, FileAudio, FileSpreadsheet, UploadCloud, X } from 'lucide-react';
+import { Link } from 'react-router';
+import { BotaoLink, Detalhes, Gaveta, Kpis, Passos } from '@/components/ds';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { ADAPTADORES, baixarTexto } from '@/lib/voz';
@@ -75,8 +79,8 @@ export function FonteForm({ empresaId, fonte, onFechar, onSalvo }: { empresaId: 
 	}
 
 	return (
-		<Cartao titulo={nova ? 'Nova fonte de gravações' : `Editar ${fonte?.nome}`} linha="Vale para esta empresa. A credencial nunca é digitada aqui: peça à equipe MotorCX pelo Suporte."
-			direita={<button type="button" onClick={onFechar} aria-label="Fechar" className="rounded-lg p-1.5 text-[var(--base-texto-3)] hover:bg-[var(--base-fill)]"><X size={16} /></button>}>
+		<Gaveta aberta onFechar={onFechar} largura={560} titulo={nova ? 'Nova fonte de gravações' : `Editar ${fonte?.nome}`} subtitulo="Vale para esta empresa. A credencial nunca é digitada aqui: a equipe MotorCX grava no cofre."
+			rodape={<><Botao secundario onClick={onFechar}>Cancelar</Botao><Botao onClick={() => void salvar()} disabled={salvando || erros.length > 0}>{salvando ? 'Salvando…' : 'Salvar fonte'}</Botao></>}>
 			{nova && (
 				<div className="mb-3 grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Forma">
 					{FORMAS.map(f => (
@@ -98,19 +102,22 @@ export function FonteForm({ empresaId, fonte, onFechar, onSalvo }: { empresaId: 
 				</Campo>
 				{d.forma === 'sftp' && <>
 					<Campo rotulo="Servidor SFTP"><input className={campoCls} style={campoStyle} value={d.host} onChange={e => set({ host: e.target.value })} placeholder="sftp.discador.com.br" autoComplete="off" /></Campo>
-					<Campo rotulo="Porta"><input className={campoCls} style={campoStyle} inputMode="numeric" value={d.porta} onChange={e => set({ porta: Number(e.target.value.replace(/\D/g, '')) || 0 })} /></Campo>
-					<Campo rotulo="Usuário" ajuda="A senha ou a chave privada vai para o cofre pela equipe MotorCX."><input className={campoCls} style={campoStyle} value={d.usuario} onChange={e => set({ usuario: e.target.value })} autoComplete="off" /></Campo>
 					<Campo rotulo="Pasta" ajuda="O MotorCX lê esta pasta e as subpastas de 1 nível."><input className={campoCls} style={campoStyle} value={d.pasta} onChange={e => set({ pasta: e.target.value })} placeholder="/gravacoes" /></Campo>
-					<Campo rotulo="Chave pública do servidor" ajuda="A linha que o ssh-keyscan devolve (ex.: ssh-ed25519 AAAA…). Servidor com outra chave é recusado." largo>
-						<textarea className={`${campoCls} h-16 py-2 font-mono text-[12px]`} style={campoStyle} value={d.chave_host} onChange={e => set({ chave_host: e.target.value })} spellCheck={false} />
-					</Campo>
 				</>}
 				{d.forma === 'url' && <>
 					<Campo rotulo="URL da lista de gravações" ajuda="Devolve o manifesto em JSON ou CSV, com a URL de cada áudio. Só HTTPS." largo><input className={campoCls} style={campoStyle} value={d.url_lista} onChange={e => set({ url_lista: e.target.value })} placeholder="https://api.discador.com.br/gravacoes" /></Campo>
 					<Campo rotulo="Domínios autorizados para os áudios" ajuda="Separados por vírgula. O domínio da URL da lista entra sozinho." largo><input className={campoCls} style={campoStyle} value={d.dominios} onChange={e => set({ dominios: e.target.value })} placeholder="gravacoes.discador.com.br" /></Campo>
 				</>}
 			</div>
-			<div className="mt-4 grid gap-3 sm:grid-cols-2">
+			<Detalhes resumo="Campos avançados" qtd={d.forma === 'sftp' ? 'porta, usuário, chave pública, frequência e janela de casamento' : 'frequência e janela de casamento'}>
+			{d.forma === 'sftp' && <div className="grid gap-3 sm:grid-cols-2">
+				<Campo rotulo="Porta"><input className={campoCls} style={campoStyle} inputMode="numeric" value={d.porta} onChange={e => set({ porta: Number(e.target.value.replace(/\D/g, '')) || 0 })} /></Campo>
+				<Campo rotulo="Usuário" ajuda="A senha ou a chave privada vai para o cofre pela equipe MotorCX."><input className={campoCls} style={campoStyle} value={d.usuario} onChange={e => set({ usuario: e.target.value })} autoComplete="off" /></Campo>
+				<Campo rotulo="Chave pública do servidor" ajuda="A linha que o ssh-keyscan devolve (ex.: ssh-ed25519 AAAA…). Servidor com outra chave é recusado." largo>
+					<textarea className={`${campoCls} h-16 py-2 font-mono text-[12px]`} style={campoStyle} value={d.chave_host} onChange={e => set({ chave_host: e.target.value })} spellCheck={false} />
+				</Campo>
+			</div>}
+			<div className="mt-3 grid gap-3 sm:grid-cols-2">
 				{d.forma !== 'arquivo' && (
 					<div className="space-y-2">
 						<Marca marcado={d.leitura_automatica} onChange={v => set({ leitura_automatica: v })}>Leitura automática <small className="block text-[11.5px] text-[var(--base-texto-2)]">Desligada, só lê quando vocês pedem "Ler agora".</small></Marca>
@@ -121,22 +128,21 @@ export function FonteForm({ empresaId, fonte, onFechar, onSalvo }: { empresaId: 
 				<div className="space-y-2">
 					<Marca marcado={d.so_transferencias} onChange={v => set({ so_transferencias: v })}>Só ligações transferidas pelo agente de IA <small className="block text-[11.5px] text-[var(--base-texto-2)]">Desmarcado, a gravação sem transferência entra avulsa (precisa do id_cliente) e não vai para a análise.</small></Marca>
 					<Campo rotulo="Janela para casar com a transferência (segundos)" ajuda="Usada quando o discador não devolve o X-MotorCX-Id-Chamada."><input className={campoCls} style={campoStyle} inputMode="numeric" value={d.janela_par_s} onChange={e => set({ janela_par_s: Number(e.target.value.replace(/\D/g, '')) || 0 })} /></Campo>
-					{!nova && <Marca marcado={d.ativo} onChange={v => set({ ativo: v })}>Fonte ativa</Marca>}
 				</div>
 			</div>
-			{erros.length > 0 && <div className="mt-3"><Aviso tom="atencao">{erros.join(' ')}</Aviso></div>}
-			<div className="mt-4 flex flex-wrap gap-2">
-				<Botao onClick={() => void salvar()} disabled={salvando || erros.length > 0}>{salvando ? 'Salvando…' : 'Salvar fonte'}</Botao>
-				<Botao secundario onClick={onFechar}>Cancelar</Botao>
-			</div>
-		</Cartao>
+			</Detalhes>
+			{!nova && <Marca marcado={d.ativo} onChange={v => set({ ativo: v })}>Fonte ativa</Marca>}
+			{erros.length > 0 && <Aviso tom="atencao">{erros.join(' ')}</Aviso>}
+		</Gaveta>
 	);
 }
 
-/** Envio pelo site: manifesto + áudios, ou um zip com tudo. */
+/** Envio pelo site em 3 passos (escolher, conferir, enviar): manifesto + áudios, ou um zip com tudo. */
 export function EnvioGravacoes({ empresaId, slug, onEnviado }: { empresaId: string; slug: string; onEnviado: () => void }) {
 	const [arquivos, setArquivos] = useState<File[]>([]);
 	const [enviando, setEnviando] = useState<{ feitos: number; total: number } | null>(null);
+	const [passo, setPasso] = useState(0);
+	const [feito, setFeito] = useState(false);
 	const input = useRef<HTMLInputElement>(null);
 	const { itens, erros } = conferirEnvio(arquivos.map(a => ({ name: a.name, size: a.size })));
 
@@ -150,6 +156,7 @@ export function EnvioGravacoes({ empresaId, slug, onEnviado }: { empresaId: stri
 		if (!supabase || erros.length || !arquivos.length) return;
 		const sb = supabase;
 		const lote = crypto.randomUUID();
+		setPasso(2);
 		setEnviando({ feitos: 0, total: arquivos.length });
 		const registro: { caminho: string; nome_hash: string; tamanho: number }[] = [];
 		try {
@@ -163,44 +170,73 @@ export function EnvioGravacoes({ empresaId, slug, onEnviado }: { empresaId: stri
 			}
 			const { error } = await sb.rpc('registrar_envio_gravacoes', { empresa: Number(empresaId), arquivos: registro });
 			if (error) throw error;
-			toast.success('Gravações enviadas. O MotorCX lê em até 15 minutos; o resultado aparece no registro abaixo.');
-			setArquivos([]);
+			toast.success('Gravações enviadas. O MotorCX lê em até 15 minutos.');
+			setArquivos([]); setFeito(true);
 			onEnviado();
 		} catch (e) {
 			toast.error(erroRpc(e, 'Não foi possível enviar. Confira os arquivos e tente de novo.'));
+			setPasso(1);
 		} finally {
 			setEnviando(null);
 		}
 	}
 
+	const conta = (t: string) => itens.filter(i => i.tipo === t && !i.erro).length;
+	const comErro = itens.filter(i => i.erro).length;
+	const mb = itens.reduce((t, i) => t + i.tamanho, 0) / 1048576;
+
 	return (
-		<Cartao titulo="Enviar gravações" linha="O manifesto (CSV ou JSON) e os áudios, ou um zip com tudo. Até 200 MB por arquivo. O nome dos arquivos não sai do seu navegador."
-			direita={<Botao secundario onClick={() => baixarTexto('modelo-manifesto-gravacoes.csv', MODELO_MANIFESTO)}><Download size={14} /> Modelo do manifesto</Botao>}>
-			<input ref={input} type="file" multiple accept=".csv,.json,.zip,.wav,.mp3,.ogg,.opus,.flac,.m4a" className="sr-only" onChange={escolher} aria-label="Escolher arquivos" />
-			<button type="button" onClick={() => input.current?.click()} disabled={!!enviando}
-				className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed px-4 py-6 text-center text-[13px] text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]"
-				style={{ borderColor: 'var(--base-borda)' }}>
-				<UploadCloud size={22} aria-hidden />
-				<b className="font-semibold text-[var(--base-texto)]">Escolher arquivos</b>
-				<span>Colunas: id_chamada, inicio, duracao_s, arquivo, operador_ref, id_cliente, id_acao, carteira, id_chamada_motorcx</span>
-			</button>
-			{itens.length > 0 && (
-				<ul className="mt-3 max-h-56 space-y-1 overflow-y-auto">
-					{itens.map((it, i) => (
-						<li key={`${it.nome}-${i}`} className="flex min-w-0 items-center gap-2 rounded-lg bg-[var(--base-fill)] px-2.5 py-1.5 text-[12.5px]">
-							{it.tipo === 'audio' ? <FileAudio size={14} className="shrink-0 text-[var(--base-texto-3)]" /> : <FileSpreadsheet size={14} className="shrink-0 text-[var(--base-texto-3)]" />}
-							<span className="min-w-0 flex-1 truncate text-[var(--base-texto)]" title={it.nome}>{it.nome}</span>
-							{it.erro ? <span className="shrink-0 text-[11.5px] text-[var(--estado-erro-texto)]">{it.erro}</span> : <span className="shrink-0 tnum text-[11.5px] text-[var(--base-texto-3)]">{(it.tamanho / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB</span>}
-							<button type="button" disabled={!!enviando} onClick={() => setArquivos(a => a.filter((_, j) => j !== i))} aria-label={`Tirar ${it.nome}`} className="shrink-0 rounded p-0.5 text-[var(--base-texto-3)] hover:text-[var(--base-texto)]"><X size={13} /></button>
-						</li>
-					))}
-				</ul>
+		<div className="space-y-4">
+			<Passos rotulo="Etapas do envio" passos={['Escolher', 'Conferir', 'Enviar']} atual={feito ? 3 : passo} />
+			{passo === 0 && (
+				<Cartao titulo="Escolher os arquivos" linha="O manifesto (CSV ou JSON) e os áudios, ou um zip com tudo. Até 200 MB por arquivo. O nome dos arquivos não sai do seu navegador.">
+					<input ref={input} type="file" multiple accept=".csv,.json,.zip,.wav,.mp3,.ogg,.opus,.flac,.m4a" className="sr-only" onChange={escolher} aria-label="Escolher arquivos" />
+					<button type="button" onClick={() => input.current?.click()}
+						className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed px-4 py-6 text-center text-[13px] text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]"
+						style={{ borderColor: 'var(--base-borda)' }}>
+						<UploadCloud size={22} aria-hidden />
+						<b className="font-semibold text-[var(--base-texto)]">{arquivos.length ? `${arquivos.length} arquivo${arquivos.length > 1 ? 's' : ''} escolhido${arquivos.length > 1 ? 's' : ''} · escolher mais` : 'Escolher arquivos'}</b>
+					</button>
+					<div className="mt-3"><Detalhes resumo="Como montar o manifesto">
+						<p className="text-[12.5px] text-[var(--base-texto-2)]">Colunas: id_chamada, inicio, duracao_s, arquivo, operador_ref, id_cliente, id_acao, carteira, id_chamada_motorcx. CPF, nome, telefone ou e-mail no manifesto: a linha (ou a coluna inteira) é recusada.</p>
+						<div className="mt-2"><Botao secundario onClick={() => baixarTexto('modelo-manifesto-gravacoes.csv', MODELO_MANIFESTO)}><Download size={14} /> Modelo do manifesto</Botao></div>
+					</Detalhes></div>
+					<div className="mt-4 flex justify-end"><Botao onClick={() => setPasso(1)} disabled={!arquivos.length}>Conferir</Botao></div>
+				</Cartao>
 			)}
-			{arquivos.length > 0 && erros.length > 0 && <div className="mt-3"><Aviso tom="atencao">{erros.join(' ')}</Aviso></div>}
-			<div className="mt-3 flex flex-wrap items-center gap-2">
-				<Botao onClick={() => void enviar()} disabled={!!enviando || !arquivos.length || erros.length > 0}>{enviando ? `Enviando ${enviando.feitos} de ${enviando.total}…` : 'Enviar'}</Botao>
-				<span className="text-[12px] text-[var(--base-texto-3)]">CPF, nome, telefone ou e-mail no manifesto: a linha (ou a coluna inteira) é recusada.</span>
-			</div>
-		</Cartao>
+			{passo === 1 && (
+				<Cartao titulo="Conferir antes de enviar" linha="Confira o que vai subir. Linha do manifesto sem par vai para a quarentena depois da leitura.">
+					<Kpis itens={[
+						{ rotulo: 'Manifestos', valor: conta('manifesto') + conta('zip'), detalhe: conta('zip') ? `${conta('zip')} zip` : 'CSV ou JSON', tom: conta('manifesto') + conta('zip') ? undefined : 'alerta' },
+						{ rotulo: 'Áudios', valor: conta('audio') },
+						{ rotulo: 'Com problema', valor: comErro, tom: comErro ? 'alerta' : 'ok', detalhe: comErro ? 'tire para enviar' : 'nenhum' },
+						{ rotulo: 'Tamanho', valor: `${mb.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB` },
+					]} />
+					<ul className="mt-3 max-h-64 space-y-1 overflow-y-auto">
+						{itens.map((it, i) => (
+							<li key={`${it.nome}-${i}`} className="flex min-w-0 items-center gap-2 rounded-lg bg-[var(--base-fill)] px-2.5 py-1.5 text-[12.5px]">
+								{it.tipo === 'audio' ? <FileAudio size={14} className="shrink-0 text-[var(--base-texto-3)]" /> : <FileSpreadsheet size={14} className="shrink-0 text-[var(--base-texto-3)]" />}
+								<span className="min-w-0 flex-1 truncate text-[var(--base-texto)]" title={it.nome}>{it.nome}</span>
+								{it.erro ? <span className="shrink-0 text-[11.5px] text-[var(--estado-erro-texto)]">{it.erro}</span> : <span className="shrink-0 tnum text-[11.5px] text-[var(--base-texto-3)]">{(it.tamanho / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB</span>}
+								<button type="button" onClick={() => setArquivos(a => a.filter((_, j) => j !== i))} aria-label={`Tirar ${it.nome}`} className="shrink-0 rounded p-0.5 text-[var(--base-texto-3)] hover:text-[var(--base-texto)]"><X size={13} /></button>
+							</li>
+						))}
+					</ul>
+					{erros.length > 0 && <div className="mt-3"><Aviso tom="atencao">{erros.join(' ')}</Aviso></div>}
+					<p className="mt-3 text-[12px] text-[var(--base-texto-3)]">O nome do arquivo não pode ter telefone ou CPF: se tiver, a gravação vai para a quarentena e o nome é descartado. Vai ao servidor só o sha-256 do nome.</p>
+					<div className="mt-4 flex flex-wrap justify-end gap-2"><Botao secundario onClick={() => setPasso(0)}>Voltar</Botao><Botao onClick={() => void enviar()} disabled={!arquivos.length || erros.length > 0}>Enviar {arquivos.length} arquivo{arquivos.length === 1 ? '' : 's'}</Botao></div>
+				</Cartao>
+			)}
+			{passo === 2 && (
+				<Cartao titulo={feito ? 'Enviado' : 'Enviando'}>
+					{enviando ? <p className="text-[13px] text-[var(--base-texto)]">Enviando {enviando.feitos} de {enviando.total}… Não feche esta tela.</p>
+						: feito ? <>
+							<p className="text-[13px] text-[var(--base-texto-2)]">O MotorCX lê em até 15 minutos. O resultado (importadas, casadas e quarentena) aparece em Importações.</p>
+							<div className="mt-3 flex flex-wrap gap-2"><BotaoLink tipo="primario" to="/envios/gravacoes-discador">Ver as importações</BotaoLink><Botao secundario onClick={() => { setFeito(false); setPasso(0); }}>Enviar outras</Botao></div>
+						</> : null}
+				</Cartao>
+			)}
+			<p className="text-[12px] text-[var(--base-texto-3)]"><Link to="/envios/gravacoes-discador" className="underline">Voltar para Gravações do discador</Link></p>
+		</div>
 	);
 }

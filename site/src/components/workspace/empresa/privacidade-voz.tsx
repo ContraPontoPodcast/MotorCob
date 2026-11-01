@@ -2,9 +2,12 @@
 // Retenção (mínimo e padrão 90 dias, sem teto), aviso de gravação (desligado por padrão), transcrição a partir de
 // N segundos (padrão 5), quem ouve e quem lê (as mesmas permissões de Pessoas e perfis) e pedidos do titular,
 // abertos só pelo ID do cliente. Escreve por configurar_voz_empresa e abrir_pedido_titular (SQL 56).
+// Redesign v2: os 3 ajustes num cartão, com as consequências recolhidas; "Salvar alterações" é a ação principal;
+// "Registrar pedido" abre uma gaveta; pedidos com 4 colunas e o resto na gaveta do pedido.
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Download, Plus, ShieldCheck } from 'lucide-react';
+import { Download, Plus } from 'lucide-react';
+import { Detalhes, Gaveta, ListaRegras, ListaValores, Tabela as TabelaDs } from '@/components/ds';
 import { toast } from 'sonner';
 import { useMotorAuth } from '@/components/auth-provider';
 import { SemPermissao } from '@/components/role-gate';
@@ -13,7 +16,7 @@ import { supabase, friendlyError, dateBR, dateTimeBR, logAccess, today, type Row
 import { PERFIS_INFO } from '@/lib/perfis-info';
 import { idClienteValido, inteiro } from '@/lib/voz';
 import {
-	Aviso, Cadeado, Campo, Cartao, Dialogo, Pilula, Subtitulo, TabelaRolavel, Trava, Vazio, btnLink, btnPrim, btnSec, campoCls, tdCls, thCls,
+	Aviso, Cadeado, Campo, Cartao, Dialogo, Pilula, TabelaRolavel, Vazio, btnLink, btnPrim, btnSec, campoCls, tdCls, thCls,
 } from '@/components/comuns/voz-ui';
 import { EmpresaShell } from './empresa-shell';
 
@@ -129,77 +132,77 @@ export function PrivacidadeVozPage() {
 	const hoje = today();
 	const semConfig = carregado && !cfg;
 
+	const botaoSalvar = !admin ? <Cadeado>Só o Admin da empresa muda a privacidade</Cadeado> : (
+		<button onClick={() => { if (ajustesSalvar.retencao_dias != null && retN < retAtual) setConfirmaReducao(true); else void salvar(); }} disabled={!podeSalvar || salvando} className={btnPrim}>{salvando ? 'Salvando...' : 'Salvar alterações'}</button>
+	);
+
 	return (
 		<EmpresaShell>
-			<div className="mb-5">
-				<h2 className="text-[22px] font-bold tracking-tight text-[#1D1D1F]">Privacidade e gravações</h2>
-				<p className="mt-1 text-[14px] text-[#6E6E73]">Vale para o agente virtual e para as gravações do discador. {equipe ? 'Quem muda é o Admin da empresa; a equipe MotorCX vê em leitura.' : 'Quem muda é o Admin da empresa.'}</p>
+			<div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+				<div className="min-w-0 flex-[1_1_320px]">
+					<h2 className="text-[22px] font-bold tracking-tight text-[var(--base-texto)]">Privacidade e gravações</h2>
+					<p className="mt-1 text-[14px] text-[var(--base-texto-2)]">Vale para o agente virtual e para as gravações do discador. {equipe ? 'Quem muda é o Admin da empresa; a equipe MotorCX vê em leitura.' : 'Quem muda é o Admin da empresa.'}</p>
+				</div>
+				<div className="flex flex-wrap items-center gap-2">
+					{admin && <button onClick={() => setNovoPedido(true)} className={btnSec}><Plus size={15} /> Registrar pedido</button>}
+					{botaoSalvar}
+				</div>
 			</div>
-			{!carregado ? <p className="py-10 text-center text-[14px] text-[#8E8E93]">Carregando...</p> : (
-				<div className="space-y-6">
-					{semConfig && <Aviso tom="info">O agente virtual ainda não foi configurado para esta empresa. Os valores abaixo são o padrão e passam a valer assim que você salvar ou quando a equipe MotorCX ativar o agente.</Aviso>}
-					<div className="grid gap-6 lg:grid-cols-2">
-						<Cartao titulo="Por quanto tempo guardar">
-							<Campo htmlFor="voz-ret" rotulo={<>Dias de gravação e transcrição <Pilula className="ml-1">padrão: 90 · pode aumentar</Pilula></>}
+			{!carregado ? <p className="py-10 text-center text-[14px] text-[var(--base-texto-3)]">Carregando...</p> : (
+				<div className="space-y-5">
+					{semConfig && <Aviso tom="info">O agente virtual ainda não foi configurado para esta empresa. Os valores abaixo são o padrão e passam a valer quando você salvar ou quando a equipe MotorCX ativar o agente.</Aviso>}
+					<Cartao titulo="Gravações e transcrição" desc={mudou ? 'Há mudanças não salvas.' : undefined}>
+						<div className="grid gap-5 md:grid-cols-3">
+							<Campo htmlFor="voz-ret" rotulo={<>Guardar por (dias) <Pilula className="ml-1">padrão: 90</Pilula></>}
 								erro={retErr ? 'O mínimo é 90 dias. Não há limite máximo.' : undefined}
-								ajuda={`Áudio, transcrição e códigos por cliente apagam sozinhos depois de ${inteiro(retN)} dias. Os números agregados continuam.`}>
+								ajuda={`Áudio, transcrição e códigos por cliente apagam sozinhos depois de ${inteiro(retN)} dias.`}>
 								<input id="voz-ret" value={ret} inputMode="numeric" disabled={!admin} onChange={e => setRet(e.target.value.replace(/\D/g, '').slice(0, 5))} className={`${campoCls} max-w-[200px] tnum`} />
 							</Campo>
-							<p className="mt-3 text-[12px] leading-relaxed text-[#8E8E93]">Mudar o prazo vale para as gravações novas e para as que já existem. Diminuir apaga as mais antigas na noite seguinte; gravação guardada para disputa não é apagada.</p>
-
-							<div className="mt-5 border-t border-[#F0F0F2] pt-4">
-								<Subtitulo>Aviso no início da ligação</Subtitulo>
-								<Chave label={<span className="text-[14px] font-medium text-[#1D1D1F]">Avisar que a ligação é gravada <Pilula className="ml-1">padrão: desligado</Pilula></span>}
-									checked={aviso} on={setAviso} disabled={!admin} />
-								<p className="mt-2 text-[12px] leading-relaxed text-[#8E8E93]">Vale para todas as carteiras e entra na primeira fala. A apresentação como assistente virtual fica no roteiro de cada carteira. A decisão é da empresa.</p>
-							</div>
-							<Trava className="mt-4" icone={<ShieldCheck size={16} />} titulo="No provedor, a cópia some em até 7 dias.">
-								O MotorCX copia a gravação para o bucket da sua empresa, em São Paulo, e apaga no provedor.
-							</Trava>
-						</Cartao>
-
-						<Cartao titulo="Transcrição">
-							<Campo htmlFor="voz-trn" rotulo={<>Transcrever chamadas a partir de quantos segundos <Pilula className="ml-1">padrão: 5</Pilula></>}
+							<Campo htmlFor="voz-trn" rotulo={<>Transcrever a partir de (segundos) <Pilula className="ml-1">padrão: 5</Pilula></>}
 								erro={tErr ? 'Use de 0 a 600 segundos.' : undefined}
-								ajuda={`Chamadas com ${inteiro(tN)} s ou mais são transcritas. As mais curtas (caixa postal, quem desliga logo) ficam só com o áudio e o resultado e não são cobradas como transcrição. Vale para o agente virtual e para o discador.`}>
+								ajuda={`Chamadas com ${inteiro(tN)} s ou mais são transcritas; as mais curtas ficam só com o áudio e o resultado.`}>
 								<input id="voz-trn" value={transcN} inputMode="numeric" disabled={!admin} onChange={e => setTranscN(e.target.value.replace(/\D/g, '').slice(0, 3))} className={`${campoCls} max-w-[200px] tnum`} />
 							</Campo>
-							{cfg && cfg.transcrever === false && <Aviso tom="neutro" className="mt-3">A transcrição está desligada para esta empresa.</Aviso>}
-
-							<div className="mt-5 border-t border-[#F0F0F2] pt-4">
-								<Subtitulo desc={<>Mesmas permissões de <Link to="/empresa/pessoas" className="font-semibold text-[#0A60D0] hover:underline">Pessoas e perfis</Link>. Todo acesso fica registrado na Auditoria, com nome, gravação e hora.</>}>Quem pode ouvir e ler</Subtitulo>
-								<TabelaRolavel minW={320}>
-									<thead><tr><th className={thCls}>Perfil</th>{PERMS_VOZ.map(p => <th key={p.codigo} className={`${thCls} text-center`}>{p.nome}</th>)}</tr></thead>
-									<tbody>
-										{PERFIS_INFO.map(pf => (
-											<tr key={pf.id}>
-												<td className={tdCls}>{pf.nome}</td>
-												{PERMS_VOZ.map(p => {
-													const k = `${pf.id}|${p.codigo}`;
-													return (
-														<td key={p.codigo} className={`${tdCls} text-center`}>
-															<input type="checkbox" aria-label={`${pf.nome}: ${p.nome.toLowerCase()}`} checked={valorPerm(pf.id, p.codigo)}
-																disabled={!podePerms || busyPerm === k} onChange={() => void trocarPerm(pf.id, p.codigo)} className="h-4 w-4" />
-														</td>
-													);
-												})}
-											</tr>
-										))}
-									</tbody>
-								</TabelaRolavel>
-								{!podePerms && <div className="mt-2"><Cadeado>Só quem gerencia permissões muda</Cadeado></div>}
+							<div className="min-w-0">
+								<p className="mb-1 text-[13px] font-semibold text-[var(--base-texto)]">Aviso no início da ligação</p>
+								<Chave label={<span className="text-[14px] text-[var(--base-texto)]">Avisar que é gravada <Pilula className="ml-1">padrão: desligado</Pilula></span>}
+									checked={aviso} on={setAviso} disabled={!admin} />
+								<p className="mt-1 text-[12px] text-[var(--base-texto-3)]">Vale para todas as carteiras e entra na primeira fala.</p>
 							</div>
-						</Cartao>
-					</div>
+						</div>
+						{cfg && cfg.transcrever === false && <div className="mt-3"><Aviso tom="neutro">A transcrição está desligada para esta empresa.</Aviso></div>}
+						<div className="mt-4"><Detalhes resumo="O que acontece quando muda">
+							<ListaRegras regras={[
+								{ titulo: 'O prazo vale também para as gravações que já existem', texto: 'Diminuir apaga as mais antigas na noite seguinte (com confirmação); gravação guardada para disputa não é apagada. Os números agregados continuam.' },
+								{ titulo: 'No provedor, a cópia some em até 7 dias', texto: 'O MotorCX copia a gravação para o bucket da empresa, em São Paulo, e apaga no provedor.' },
+								{ titulo: 'Transcrição tem custo por minuto', texto: 'As chamadas abaixo do corte (caixa postal, quem desliga logo) não são cobradas como transcrição. Vale para o agente virtual e para o discador.' },
+								{ titulo: 'O aviso de gravação é decisão da empresa', texto: 'A apresentação como assistente virtual fica no roteiro de cada carteira.' },
+							]} />
+						</Detalhes></div>
+					</Cartao>
 
-					<div className="flex flex-wrap items-center justify-end gap-3">
-						{!admin ? <Cadeado>Só o Admin da empresa muda a privacidade</Cadeado> : (
-							<>
-								{mudou && <span className="text-[13px] text-[#6E6E73]">Há mudanças não salvas.</span>}
-								<button onClick={() => { if (ajustesSalvar.retencao_dias != null && retN < retAtual) setConfirmaReducao(true); else void salvar(); }} disabled={!podeSalvar || salvando} className={btnPrim}>{salvando ? 'Salvando...' : 'Salvar privacidade'}</button>
-							</>
-						)}
-					</div>
+					<Cartao titulo="Quem pode ouvir e ler" desc={<>Mesmas permissões de <Link to="/empresa/pessoas" className="font-semibold text-[var(--destaque)] hover:underline">Pessoas e perfis</Link>. Todo acesso fica registrado na Auditoria, com nome, gravação e hora.</>}
+						acoes={!podePerms ? <Cadeado>Só quem gerencia permissões muda</Cadeado> : undefined}>
+						<TabelaRolavel minW={300}>
+							<thead><tr><th className={thCls}>Perfil</th>{PERMS_VOZ.map(p => <th key={p.codigo} className={`${thCls} text-center`}>{p.nome}</th>)}</tr></thead>
+							<tbody>
+								{PERFIS_INFO.map(pf => (
+									<tr key={pf.id}>
+										<td className={tdCls}>{pf.nome}</td>
+										{PERMS_VOZ.map(p => {
+											const k = `${pf.id}|${p.codigo}`;
+											return (
+												<td key={p.codigo} className={`${tdCls} text-center`}>
+													<input type="checkbox" aria-label={`${pf.nome}: ${p.nome.toLowerCase()}`} checked={valorPerm(pf.id, p.codigo)}
+														disabled={!podePerms || busyPerm === k} onChange={() => void trocarPerm(pf.id, p.codigo)} className="h-4 w-4 accent-[var(--destaque)]" />
+												</td>
+											);
+										})}
+									</tr>
+								))}
+							</tbody>
+						</TabelaRolavel>
+					</Cartao>
 
 					<PedidosTitular pedidos={pedidos} hoje={hoje} admin={admin} empresaId={empresa ? String(empresa.id) : ''} onNovo={() => setNovoPedido(true)} />
 				</div>
@@ -238,54 +241,26 @@ function PedidosTitular({ pedidos, hoje, admin, empresaId, onNovo }: { pedidos: 
 		? <button onClick={() => void baixar(p)} disabled={baixando === String(p.id)} className={`${btnLink} inline-flex items-center gap-1`}><Download size={13} /> {baixando === String(p.id) ? 'Gerando...' : 'Baixar (link de 5 min)'}</button>
 		: null;
 
+	const [sel, setSel] = useState<Row | null>(null);
 	return (
-		<Cartao titulo="Pedidos do titular" desc="Quando um cliente pede cópia ou eliminação dos dados de voz dele. O pedido é aberto pelo ID do cliente, nunca por nome ou CPF, e tem prazo de 15 dias."
-			acoes={admin ? <button onClick={onNovo} className={btnPrim}><Plus size={15} /> Registrar pedido</button> : <Cadeado>Só o Admin da empresa registra</Cadeado>}>
-			{pedidos.length === 0 ? (
-				<Vazio titulo="Nenhum pedido do titular">Quando alguém pedir cópia ou eliminação das gravações, registre aqui com o ID do cliente.</Vazio>
-			) : (
-				<>
-					<div className="hidden sm:block">
-						<TabelaRolavel minW={600}>
-							<thead><tr>
-								<th className={thCls}>ID do cliente</th><th className={thCls}>Pedido</th><th className={thCls}>Aberto em</th>
-								<th className={thCls}>Prazo</th><th className={thCls}>Situação</th><th className={thCls} />
-							</tr></thead>
-							<tbody>
-								{pedidos.map(p => {
-									const s = situacaoPedido(p, hoje);
-									return (
-										<tr key={String(p.id)}>
-											<td className={`${tdCls} font-mono`}>{String(p.id_cliente)}</td>
-											<td className={tdCls}>{p.tipo === 'eliminar' ? 'Eliminar' : 'Exportar'}</td>
-											<td className={`${tdCls} tnum`}>{dateBR(p.aberto_em)}</td>
-											<td className={`${tdCls} tnum`}>{dateBR(p.prazo)}</td>
-											<td className={tdCls}><Pilula tom={s.tom}>{s.txt}</Pilula>{p.concluido_em ? <div className="mt-0.5 text-[11.5px] text-[#8E8E93]">{dateTimeBR(p.concluido_em)}</div> : null}</td>
-											<td className={`${tdCls} text-right`}>{acao(p)}</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</TabelaRolavel>
-					</div>
-					<div className="space-y-2 sm:hidden">
-						{pedidos.map(p => {
-							const s = situacaoPedido(p, hoje);
-							return (
-								<div key={String(p.id)} className="rounded-xl border border-[#E5E5EA] p-3">
-									<div className="flex items-start justify-between gap-2">
-										<span className="font-mono text-[13.5px] font-semibold text-[#1D1D1F]">{String(p.id_cliente)}</span>
-										<Pilula tom={s.tom}>{s.txt}</Pilula>
-									</div>
-									<div className="mt-1 text-[12.5px] text-[#6E6E73]">{p.tipo === 'eliminar' ? 'Eliminar' : 'Exportar'} · aberto em {dateBR(p.aberto_em)} · prazo {dateBR(p.prazo)}</div>
-									{acao(p) && <div className="mt-2">{acao(p)}</div>}
-								</div>
-							);
-						})}
-					</div>
-				</>
-			)}
-			<p className="mt-3 text-[12px] leading-relaxed text-[#8E8E93]">Eliminar apaga áudios, transcrições, códigos por cliente e a cópia no provedor. Enquanto houver gravação guardada para disputa, a eliminação fica bloqueada até o Admin tirar a guarda. A exportação sai por link de 5 minutos.</p>
+		<Cartao semPad titulo="Pedidos do titular" desc="Cópia ou eliminação dos dados de voz, aberto pelo ID do cliente, com prazo de 15 dias."
+			acoes={!admin ? <Cadeado>Só o Admin da empresa registra</Cadeado> : undefined}>
+			<TabelaDs rotulo="Pedidos do titular" linhas={pedidos} chave={p => String(p.id)} onAbrir={setSel} selecionada={sel ? String(sel.id) : null}
+				vazio={<div className="px-1"><Vazio titulo="Nenhum pedido do titular">Quando alguém pedir cópia ou eliminação das gravações, registre com o ID do cliente.{admin ? <> <button type="button" onClick={onNovo} className={btnLink}>Registrar pedido</button></> : null}</Vazio></div>}
+				colunas={[
+					{ id: 'cli', titulo: 'ID do cliente', celula: p => <span className="font-mono">{String(p.id_cliente)}</span> },
+					{ id: 'tipo', titulo: 'Pedido', celula: p => (p.tipo === 'eliminar' ? 'Eliminar' : 'Exportar') },
+					{ id: 'prazo', titulo: 'Prazo', celula: p => <span className="tnum">{dateBR(p.prazo)}</span> },
+					{ id: 'sit', titulo: 'Situação', celula: p => { const x = situacaoPedido(p, hoje); return <Pilula tom={x.tom}>{x.txt}</Pilula>; } },
+				]}
+				celular={p => { const x = situacaoPedido(p, hoje); return { titulo: <span className="font-mono">{String(p.id_cliente)}</span>, valor: <Pilula tom={x.tom}>{x.txt}</Pilula>, resumo: `${p.tipo === 'eliminar' ? 'Eliminar' : 'Exportar'} · prazo ${dateBR(p.prazo)}` }; }} />
+			<Gaveta aberta={!!sel} onFechar={() => setSel(null)} titulo={sel ? `Pedido de ${String(sel.id_cliente)}` : ''} subtitulo={sel ? (sel.tipo === 'eliminar' ? 'Eliminar os dados de voz' : 'Exportar os dados de voz') : undefined}>
+				{sel && <>
+					<ListaValores itens={[['Aberto em', dateBR(sel.aberto_em)], ['Prazo', dateBR(sel.prazo)], ['Situação', situacaoPedido(sel, hoje).txt], ['Concluído em', sel.concluido_em ? dateTimeBR(sel.concluido_em) : '—']]} />
+					{acao(sel)}
+					<p className="text-[12px] text-[var(--base-texto-3)]">Eliminar apaga áudios, transcrições, códigos por cliente e a cópia no provedor. Com gravação guardada para disputa, a eliminação fica bloqueada até o Admin tirar a guarda.</p>
+				</>}
+			</Gaveta>
 		</Cartao>
 	);
 }
@@ -309,8 +284,8 @@ function NovoPedido({ onClose, onFeito }: { onClose: () => void; onFeito: () => 
 	}
 
 	return (
-		<Dialogo titulo="Registrar pedido do titular" texto="Use o ID do cliente; não digite nome nem CPF aqui." onClose={() => !busy && onClose()}
-			acoes={<>
+		<Gaveta aberta titulo="Registrar pedido do titular" subtitulo="Use o ID do cliente; não digite nome nem CPF aqui. O prazo é de 15 dias." onFechar={() => !busy && onClose()}
+			rodape={<>
 				<button onClick={onClose} disabled={busy} className={btnSec}>Cancelar</button>
 				<button onClick={() => void registrar()} disabled={busy || !id.trim()} className={btnPrim}>{busy ? 'Registrando...' : 'Registrar'}</button>
 			</>}>
@@ -325,7 +300,14 @@ function NovoPedido({ onClose, onFeito }: { onClose: () => void; onFeito: () => 
 					</select>
 				</Campo>
 				{erro && <Aviso tom="erro">{erro}</Aviso>}
+				<Detalhes resumo="Regras de eliminação">
+					<ListaRegras regras={[
+						{ titulo: 'Eliminar apaga áudios, transcrições, códigos por cliente e a cópia no provedor' },
+						{ titulo: 'Gravação guardada para disputa bloqueia a eliminação', texto: 'Até o Admin tirar a guarda.' },
+						{ titulo: 'Exportar gera um arquivo com link de 5 minutos', texto: 'O download fica registrado.' },
+					]} />
+				</Detalhes>
 			</div>
-		</Dialogo>
+		</Gaveta>
 	);
 }

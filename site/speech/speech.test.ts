@@ -39,6 +39,8 @@ test('destaque do termo e etapas do relatório', () => {
 	assert.deepEqual(marcarTermo('Vou no Procon e no procon', 'procon'), [['Vou no ', false], ['Procon', true], [' e no ', false], ['procon', true]]);
 	assert.equal(etapaRel('enviado'), 2);
 	assert.equal(abaValida('xyz'), 'visao');
+	assert.equal(abaValida('retroalimentacao'), 'recomendacoes');
+	assert.equal(abaValida('busca'), 'busca');
 });
 
 test('oferta (SQL 63): só parcelas e faixa de desconto, como codigos_speech_ok', () => {
