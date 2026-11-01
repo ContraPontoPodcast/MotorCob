@@ -21,7 +21,7 @@ test('política: Supabase em https e wss, gravações do GCS e scripts só por h
 	const d = Object.fromEntries(p.split('; ').map(x => { const [k, ...v] = x.split(' '); return [k, v.join(' ')]; }));
 	assert.equal(d['script-src'], "'self' 'sha256-AAA='");
 	assert.equal(d['connect-src'], "'self' https://abcdefghij.supabase.co wss://abcdefghij.supabase.co https://storage.googleapis.com");
-	assert.ok(d['media-src'].split(' ').includes('https://storage.googleapis.com'));
+	assert.equal(d['media-src'], "'self' data: blob: https://storage.googleapis.com");
 	assert.equal(d['frame-ancestors'], "'none'");
 	assert.equal(d['object-src'], "'none'");
 	assert.doesNotMatch(d['script-src'], /unsafe/);
