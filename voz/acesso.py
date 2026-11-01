@@ -85,6 +85,8 @@ RPC = {
     "registrar_importacao_voz": "registrar_importacao", "registrar_arquivo_importacao_voz": "registrar_arquivo_importacao",
     "concluir_importacao_voz": "concluir_importacao", "marcar_envio_gravacoes_apagado": "marcar_envio_apagado",
     "registrar_transcricao_voz": "registrar_transcricao",
+    # SQL 66 · job noturno das métricas do Fluxo do agente (voz/fluxo_metricas.py)
+    "fluxo_empresas_voz": "fluxo_empresas", "agregar_fluxo_dia": "agregar_fluxo_dia",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual

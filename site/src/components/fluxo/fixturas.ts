@@ -172,16 +172,19 @@ export function criarApiFixturas(): FluxoApi {
 		casos: async f => espera(casos.filter(c => c.fluxo_id === f)),
 		resultadosCasos: async versao => espera(versao === 105 ? [{ caso_id: 31, fluxo_versao_id: 105, passou: true, caminho_obtido: casos[0].caminho_esperado, resultado_obtido: 'promessa', executado_em: agora }] : []),
 		salvarCaso: async () => { await espera(0); }, apagarCaso: async () => { await espera(0); },
-		simular: async (_versao, falas): Promise<Simulacao> => {
+		simular: async (_versao, falas, _falhar, cenarios = {}): Promise<Simulacao> => {
+			const cen = (c: { conector: number; nome?: string; classe: string; status?: number | null; ms?: number | null; codigo?: string | null }) => cenarios[String(c.conector)] === 'tempo' ? { ...c, classe: 'tempo', status: null, ms: 2500, codigo: 'falhou' } : cenarios[String(c.conector)] === '401' ? { ...c, classe: 'http_4xx', status: 401, ms: 120, codigo: 'falhou' } : c;
 			const turnos = conversaDemo.slice(0, Math.min(falas.length + 1, conversaDemo.length)).map(([, texto, bloco, modo], i) => ({
 				pessoa: i === 0 ? null : falas[i - 1], falas: [{ texto, bloco, modo }], bloco, caminho: [bloco],
 				intencao: bloco === 'N3' && i > 0 ? null : i === 3 ? { intencao: 'quero_negociar', confianca: 'alta', entidades: ['prazo: dia do salário'] } : null,
-				conectores: i === 2 ? [{ conector: 2, nome: 'Validar cadastro', classe: 'ok', status: 200, ms: 276, codigo: 'identidade_ok' }] : i === 3 ? [{ conector: 1, nome: 'Buscar ofertas', classe: 'ok', status: 200, ms: 402, codigo: 'ofertas_1_3' }] : [],
+				conectores: (i === 2 ? [{ conector: 2, nome: 'Validar cadastro', classe: 'ok', status: 200, ms: 276, codigo: 'identidade_ok' }] : i === 3 ? [{ conector: 1, nome: 'Buscar ofertas', classe: 'ok', status: 200, ms: 402, codigo: 'ofertas_1_3' }] : []).map(cen),
 				travas: /não me lig|nao me lig/i.test(falas[i - 1] ?? '') ? ['nao_me_ligue'] : [], devolucoes: [], fim: null,
 			}));
 			const caminho = ['N1', 'N2', 'N3', 'N4', 'N15', 'N5'].slice(0, Math.min(6, falas.length * 2 + 1));
 			return espera({ turnos, caminho, resultado: null, encerrada: false });
 		},
+		ouvir: async () => espera({ audio: '', mime: 'audio/mpeg' }),
+		cancelarPedido: async id => { const p = pedidos.find(x => x.id === id); if (p) { p.situacao = 'cancelado'; p.versao_gerada_id = null; p.cancelado_em = new Date().toISOString(); } await espera(0); },
 		rodarCasos: async () => espera([{ id: 31, nome: casos[0].nome, passou: true }]),
 		metricas: async vs => espera([...(vs.includes(104) ? metricasDe(104) : []), ...(vs.includes(103) ? metricasDe(103, 0.6) : []), ...(vs.includes(202) ? [{ fluxo_versao_id: 202, dia: '2026-10-30', bloco_id: 'N1', chegaram: 5410, saidas: { titular: 4200 } }, { fluxo_versao_id: 202, dia: '2026-10-30', bloco_id: 'N4', chegaram: 3311, saidas: {} }] : []), ...(vs.includes(301) ? [{ fluxo_versao_id: 301, dia: '2026-10-30', bloco_id: 'N1', chegaram: 2930, saidas: { titular: 2300 } }, { fluxo_versao_id: 301, dia: '2026-10-30', bloco_id: 'N2', chegaram: 2300, saidas: { confirmou: 1980 } }, { fluxo_versao_id: 301, dia: '2026-10-30', bloco_id: 'N4', chegaram: 299, saidas: { registrado: 299 } }] : [])]),
 		intencoesDia: async () => espera([['quero_negociar', 3370], ['sem_dinheiro', 1810], ['nao_entendido', 1150], ['ja_paguei', 900], ['nao_reconheco', 575]].map(([intencao, n]) => ({ bloco_id: 'N3', intencao: String(intencao), n: Number(n), fluxo_versao_id: 104 }))),

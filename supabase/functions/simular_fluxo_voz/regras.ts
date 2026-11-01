@@ -4,12 +4,20 @@
 // cara de documento, telefone ou e-mail são recusadas, como no banco (falas_teste_voz_ok). Nada é gravado, a não ser o
 // resultado dos casos de teste (só caminho e código).
 
-export type Acao = "simular" | "rodar_casos" | "roleplay";
-export interface PedidoSimular { acao: "simular"; versao: number; falas: string[]; falhar: number[] }
+export type Acao = "simular" | "rodar_casos" | "roleplay" | "ouvir";
+/** SQL 66: `cenarios` = resposta escolhida para cada conector simulado ({id: "sucesso" | "tempo" | "401"}). */
+export interface PedidoSimular { acao: "simular"; versao: number; falas: string[]; falhar: number[]; cenarios: Record<string, Cenario> }
+export type Cenario = "sucesso" | "tempo" | "401";
+export const CENARIOS: readonly Cenario[] = ["sucesso", "tempo", "401"];
+/** SQL 66: "Ouvir a voz" — prévia em áudio de uma fala com a voz da empresa (TTS da Montagem na VM; nada é guardado). */
+export interface PedidoOuvir { acao: "ouvir"; versao: number; texto: string }
 export interface PedidoCasos { acao: "rodar_casos"; versao: number }
 /** SQL 59: lote de roleplay com personas (rodar_roleplay_voz) e o aviso assinado à VM para começar já. */
 export interface PedidoRoleplay { acao: "roleplay"; versao: number; personas: number[]; n: number }
-export type Pedido = PedidoSimular | PedidoCasos | PedidoRoleplay;
+export type Pedido = PedidoSimular | PedidoCasos | PedidoRoleplay | PedidoOuvir;
+export const MAX_TEXTO_OUVIR = 500;
+/** Fala estimada a ~15 caracteres por segundo (minutos da prévia no uso de IA; o mesmo da VM). */
+export const minutosPrevia = (caracteres: number) => Math.round((caracteres / 900) * 1000) / 1000;
 export interface Perfil { id: string; ativo: boolean; equipe: boolean; empresa_id: number | null }
 export interface Versao { id: number; fluxo_id: number; empresa_id: number; credor_id: number | null; definicao: unknown }
 export interface Caso {
@@ -45,8 +53,16 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
     }
     return { pedido: { acao, versao: c.versao as number, personas: ps as number[], n: c.n as number } };
   }
-  if (acao !== "simular") return { erro: "ação inválida: simular, rodar_casos ou roleplay" };
-  if (Object.keys(c).some((k) => !["acao", "versao", "falas", "falhar"].includes(k))) return { erro: "pedido inválido" };
+  if (acao === "ouvir") {
+    if (Object.keys(c).some((k) => !["acao", "versao", "texto"].includes(k))) return { erro: "pedido inválido" };
+    const t = c.texto;
+    if (typeof t !== "string" || !t.trim() || t.length > MAX_TEXTO_OUVIR || /[0-9]{9,}/.test(t) || t.includes("@")) {
+      return { erro: `texto inválido: 1 a ${MAX_TEXTO_OUVIR} caracteres, sem documento, telefone ou e-mail` };
+    }
+    return { pedido: { acao, versao: c.versao as number, texto: t } };
+  }
+  if (acao !== "simular") return { erro: "ação inválida: simular, rodar_casos, roleplay ou ouvir" };
+  if (Object.keys(c).some((k) => !["acao", "versao", "falas", "falhar", "cenarios"].includes(k))) return { erro: "pedido inválido" };
   const falas = c.falas ?? [];
   if (!Array.isArray(falas) || falas.length > MAX_FALAS) return { erro: `até ${MAX_FALAS} falas` };
   if (!falas.every(falaOk)) return { erro: "fala inválida: 1 a 300 caracteres, sem documento, telefone ou e-mail" };
@@ -54,7 +70,12 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
   if (!Array.isArray(falhar) || falhar.length > 10 || !falhar.every((x) => Number.isSafeInteger(x) && (x as number) > 0)) {
     return { erro: "conectores para falhar inválidos" };
   }
-  return { pedido: { acao: "simular", versao: c.versao as number, falas: falas as string[], falhar: falhar as number[] } };
+  const cen = c.cenarios ?? {};
+  if (!cen || typeof cen !== "object" || Array.isArray(cen) || Object.keys(cen).length > 10
+      || !Object.entries(cen).every(([k, v]) => /^[1-9][0-9]{0,15}$/.test(k) && (CENARIOS as readonly string[]).includes(v as string))) {
+    return { erro: "cenários inválidos: sucesso, tempo ou 401, até 10 conectores" };
+  }
+  return { pedido: { acao: "simular", versao: c.versao as number, falas: falas as string[], falhar: falhar as number[], cenarios: cen as Record<string, Cenario> } };
 }
 
 /**
@@ -83,7 +104,7 @@ const CAMPOS_CONECTOR = ["id", "empresa_id", "nome", "finalidade", "metodo", "ur
 export function pacoteVM(args: {
   versao: Versao; conectores: Record<string, unknown>[]; alcada: Record<string, unknown> | null;
   base: { bloco_id: string; pergunta: string; resposta: string }[]; falas: string[]; falhar: number[];
-  variaveis: Record<string, string>;
+  variaveis: Record<string, string>; cenarios?: Record<string, Cenario>;
 }) {
   const base: Record<string, [string, string][]> = {};
   for (const r of args.base) (base[r.bloco_id] ??= []).push([r.pergunta, r.resposta]);
@@ -91,7 +112,7 @@ export function pacoteVM(args: {
     versao_id: args.versao.id, definicao: args.versao.definicao,
     conectores: args.conectores.map((c) => Object.fromEntries(CAMPOS_CONECTOR.map((k) => [k, c[k] ?? null]))),
     alcada: args.alcada && args.alcada.id ? args.alcada : null, base, falas: args.falas, falhar: args.falhar,
-    variaveis: args.variaveis,
+    cenarios: args.cenarios ?? {}, variaveis: args.variaveis,
   };
 }
 
@@ -102,6 +123,17 @@ export async function assinar(chave: string, carimbo: string, corpo: string): Pr
   const enc = new TextEncoder();
   const k = await crypto.subtle.importKey("raw", enc.encode(chave), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return hex(await crypto.subtle.sign("HMAC", k, enc.encode(`${carimbo}.${corpo}`)));
+}
+
+/** URL da prévia de voz na VM: mesmo serviço do simulador, caminho /ouvir. */
+export function urlOuvir(urlSimular: string): string {
+  return urlSimular.replace(/\/simular\/?$/, "") + "/ouvir";
+}
+
+/** Pacote da prévia de voz: o texto, a voz da empresa (voz_config.voz_id, se houver) e o cliente fictício. */
+export function pacoteOuvir(texto: string, vozId: unknown, variaveis: Record<string, string>) {
+  const voz = typeof vozId === "string" && /^[A-Za-z0-9_\-]{2,80}$/.test(vozId) ? vozId : null;
+  return { texto, ...(voz ? { voz_id: voz } : {}), variaveis };
 }
 
 /** URL do aviso de roleplay na VM: mesmo serviço do simulador, caminho /roleplay. */

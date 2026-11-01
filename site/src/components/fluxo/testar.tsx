@@ -1,19 +1,22 @@
 // Tela 4 · Agente virtual › Testar conversa. Por texto, sem ligar para ninguém: a Edge Function simular_fluxo_voz roda
 // o MESMO executor da ligação na VM, com o cliente de teste (CLI-00001), dados fictícios e os conectores trocados pelo
-// exemplo de resposta (ou falhando, em "Opções"). O simulador não guarda estado: cada fala reenvia a conversa toda.
+// exemplo de resposta (ou com a resposta escolhida em "Opções": sucesso, tempo esgotado ou 401; SQL 66). O simulador
+// não guarda estado: cada fala reenvia a conversa toda. "Ouvir" toca a fala com a voz da empresa (TTS da Montagem na VM,
+// pela mesma Edge Function; o áudio não fica guardado e o uso entra no item de IA da margem).
 // Casos de teste guardados (voz_fluxo_casos_teste) rodam por "rodar_casos"; caso que falha segura a aprovação.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Lock, RotateCcw, Settings2 } from 'lucide-react';
+import { Lock, RotateCcw, Settings2, Volume2 } from 'lucide-react';
 import { Loading, Notice } from '@/components/app-shell';
 import { Botao, Cartao, Pilula, Vazio, campoCls, campoStyle } from '@/components/voz/ui';
 import { MODOS, NOMES_TRAVA, SITUACOES, falaOk, type Modo } from '@/lib/fluxo';
-import type { CasoRow, Simulacao } from './api';
+import type { CasoRow, CenarioConector, Simulacao } from './api';
 import { Campo, Detalhes, Gaveta, Kv, Linhas } from './ds';
 import { CabecalhoAgente } from './cabecalho';
 import { useFluxo, usePermissoesFluxo } from './contexto';
 import { executar, mensagem, useCarregar, useNomeCarteira } from './comum';
 
+const NOMES_CENARIO: Record<CenarioConector, string> = { sucesso: 'sucesso', tempo: 'tempo esgotado', '401': '401' };
 const SUGESTOES_FIXAS = ['Sou eu.', 'Não, aqui não é essa pessoa.', 'Quero parcelar.', 'Já paguei.', 'Não reconheço essa dívida.', 'Agora não dá, estou sem dinheiro.'];
 
 export function useVersoesParaTeste() {
@@ -43,7 +46,9 @@ export function TestarConversa() {
 	const [ocupado, setOcupado] = useState(false);
 	const [texto, setTexto] = useState('');
 	const [painel, setPainel] = useState<'caminho' | 'intencao' | 'travas' | 'con'>('caminho');
-	const [falhar, setFalhar] = useState<number[]>([]);
+	const [cenarios, setCenarios] = useState<Record<string, CenarioConector>>({});
+	const falhar = useMemo(() => Object.entries(cenarios).filter(([, c]) => c === 'tempo').map(([id]) => Number(id)), [cenarios]);
+	const [tocando, setTocando] = useState<string | null>(null);
 	const [opcoes, setOpcoes] = useState(false);
 	const fim = useRef<HTMLDivElement>(null);
 	const { dados: conectores } = useCarregar(async () => (api && empresa ? api.conectores(empresa.id) : []), [api, empresa?.id]);
@@ -51,9 +56,21 @@ export function TestarConversa() {
 	async function rodar(lista: string[]) {
 		if (!api || !versao) return;
 		setOcupado(true); setErro('');
-		try { setSim(await api.simular(versao, lista, falhar)); setFalas(lista); } catch (e) { setErro(mensagem(e)); } finally { setOcupado(false); }
+		try { setSim(await api.simular(versao, lista, [], cenarios)); setFalas(lista); } catch (e) { setErro(mensagem(e)); } finally { setOcupado(false); }
 	}
-	useEffect(() => { setSim(null); setFalas([]); if (versao && perm.editar) void rodar([]); }, [versao, falhar.join(','), perm.editar]);
+	useEffect(() => { setSim(null); setFalas([]); if (versao && perm.editar) void rodar([]); }, [versao, JSON.stringify(cenarios), perm.editar]);
+	/** "Ouvir a voz": prévia em áudio desta fala (nada fica guardado). */
+	async function ouvir(texto: string, chave: string) {
+		if (!api || !versao || tocando) return;
+		setTocando(chave);
+		try {
+			const r = await api.ouvir(versao, texto);
+			if (!r.audio) throw new Error('Prévia sem áudio (modo de demonstração).');
+			const a = new Audio(`data:${r.mime};base64,${r.audio}`);
+			a.onended = () => setTocando(null);
+			await a.play();
+		} catch (e) { setErro(mensagem(e)); setTocando(null); }
+	}
 	useEffect(() => { fim.current?.scrollIntoView?.({ block: 'nearest' }); }, [sim]);
 
 	const travas = useMemo(() => (sim?.turnos ?? []).flatMap(t => t.travas), [sim]);
@@ -84,7 +101,7 @@ export function TestarConversa() {
 			</div>
 			{erro && <div className="mb-4"><Notice>{erro}</Notice></div>}
 			<div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-				<Cartao titulo="Conversa" linha={falhar.length ? `Simulando falha em ${falhar.map(id => `C${id}`).join(', ')}.` : undefined}>
+				<Cartao titulo="Conversa" linha={Object.keys(cenarios).length ? `Resposta simulada: ${Object.entries(cenarios).map(([id, c]) => `C${id} ${NOMES_CENARIO[c]}`).join(', ')}.` : undefined}>
 					<div className="flex max-h-[60vh] flex-col gap-2.5 overflow-y-auto pr-1" aria-live="polite">
 						{!sim && ocupado && <p className="text-[13px] text-[var(--base-texto-3)]">Começando a conversa…</p>}
 						{(sim?.turnos ?? []).map((t, i) => (
@@ -92,7 +109,10 @@ export function TestarConversa() {
 								{t.pessoa && <div className="max-w-[85%] self-end rounded-[12px_12px_4px_12px] px-3 py-2 text-[13.5px] text-[var(--base-texto)]" style={{ backgroundColor: 'var(--destaque-suave)' }}>{t.pessoa}</div>}
 								{t.falas.map((f, j) => (
 									<div key={j} className="max-w-[85%]">
-										<div className="rounded-[12px_12px_12px_4px] bg-[var(--base-fill)] px-3 py-2 text-[13.5px] text-[var(--base-texto)]">{f.texto}</div>
+										<div className="flex items-start gap-1.5">
+											<div className="min-w-0 rounded-[12px_12px_12px_4px] bg-[var(--base-fill)] px-3 py-2 text-[13.5px] text-[var(--base-texto)]">{f.texto}</div>
+											<button type="button" aria-label="Ouvir esta fala" title="Ouvir a voz" disabled={!!tocando} onClick={() => void ouvir(f.texto, `${i}-${j}`)} className="mt-1 shrink-0 rounded-full p-1 text-[var(--base-texto-3)] hover:text-[var(--base-texto)] disabled:opacity-50"><Volume2 size={15} className={tocando === `${i}-${j}` ? 'animate-pulse' : ''} /></button>
+										</div>
 										<div className="mt-0.5 text-[11.5px] text-[var(--base-texto-3)]">{[f.bloco, MODOS[f.modo as Modo]?.nome, j === t.falas.length - 1 && t.intencao ? `intenção: ${t.intencao.intencao} (${t.intencao.confianca})` : null, j === t.falas.length - 1 && t.conectores.length ? t.conectores.map(c => `C${c.conector} ${c.status ?? c.classe}`).join(' · ') : null].filter(Boolean).join(' · ')}</div>
 									</div>
 								))}
@@ -135,12 +155,20 @@ export function TestarConversa() {
 			<Gaveta aberta={opcoes} onFechar={() => setOpcoes(false)} titulo="Opções do teste">
 				<Campo rotulo="Cliente de teste"><input value="CLI-00001" readOnly className={`${campoCls} w-full`} style={campoStyle} /></Campo>
 				<div>
-					<b className="text-[12.5px] font-semibold">Simular falha do conector</b>
-					<p className="mb-1.5 text-[12px] text-[var(--base-texto-2)]">O conector marcado responde como se tivesse caído: o fluxo segue pelo ramo de falha (ou pela alternativa da carteira).</p>
+					<b className="text-[12.5px] font-semibold">Resposta dos conectores</b>
+					<p className="mb-1.5 text-[12px] text-[var(--base-texto-2)]">Escolha como cada conector simulado responde: com o exemplo do último teste, tempo esgotado ou 401 (credencial recusada). O fluxo segue pelo ramo de falha ou pela alternativa da carteira. Nada vai ao CRM.</p>
 					{(conectores ?? []).length ? (conectores ?? []).map(c => (
-						<label key={c.id} className="flex items-center gap-2 py-1 text-[13px]"><input type="checkbox" className="accent-[var(--destaque)]" checked={falhar.includes(c.id)} onChange={e => setFalhar(f => (e.target.checked ? [...f, c.id] : f.filter(x => x !== c.id)).slice(0, 10))} /> C{c.id} · {c.nome}</label>
+						<label key={c.id} className="flex items-center justify-between gap-2 py-1 text-[13px]">
+							<span className="min-w-0 truncate">C{c.id} · {c.nome}</span>
+							<select aria-label={`Resposta de C${c.id}`} value={cenarios[String(c.id)] ?? ''} onChange={e => setCenarios(x => { const n = { ...x }; if (e.target.value) n[String(c.id)] = e.target.value as CenarioConector; else delete n[String(c.id)]; return n; })} className={campoCls} style={campoStyle}>
+								<option value="">Normal (exemplo)</option><option value="sucesso">Sucesso</option><option value="tempo">Tempo esgotado</option><option value="401">401 · credencial recusada</option>
+							</select>
+						</label>
 					)) : <p className="text-[12.5px] text-[var(--base-texto-3)]">Nenhum conector cadastrado.</p>}
 				</div>
+				<Detalhes titulo="Ouvir a voz">
+					<p className="text-[12.5px] text-[var(--base-texto-2)]">O alto-falante ao lado de cada fala do agente toca a fala com a voz configurada da empresa, com os dados fictícios do cliente de teste. O áudio é gerado na hora e não fica guardado; o uso entra no custo de IA do MotorCX (não é cobrado à parte).</p>
+				</Detalhes>
 			</Gaveta>
 		</>
 	);

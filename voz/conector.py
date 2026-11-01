@@ -406,15 +406,24 @@ class ClienteConectores:
         return Resultado("ok", http_status=status, codigo=codigo, dados=dados, ofertas=ofertas)
 
 
+CENARIOS_SIMULADOR = ("sucesso", "tempo", "401")
+
+
 class ConectoresDeExemplo:
     """Para o simulador de texto: cada conector responde com o seu exemplo_resposta (valores de exemplo, gravados
-    pela VM no último teste) passando pelo mesmo mapa de saída. `falhar` = ids que respondem tempo esgotado."""
+    pela VM no último teste) passando pelo mesmo mapa de saída. `falhar` = ids que respondem tempo esgotado.
+    `cenarios` (SQL 66, tela Testar conversa) = {id: "sucesso" | "tempo" | "401"}: a resposta escolhida para o
+    conector, que vale acima de `falhar` ("401" = credencial recusada pelo CRM, classe http_4xx)."""
 
-    def __init__(self, falhar: set[int] | None = None):
+    def __init__(self, falhar: set[int] | None = None, cenarios: dict | None = None):
         self.falhar = set(falhar or ())
+        self.cenarios = {int(k): v for k, v in (cenarios or {}).items() if v in CENARIOS_SIMULADOR}
 
     def chamar(self, con: Conector, entrada: dict, chave_idempotencia: str) -> Resultado:
-        if con.id in self.falhar:
+        cen = self.cenarios.get(con.id)
+        if cen == "401":
+            return Resultado("http_4xx", http_status=401, latencia_ms=0)
+        if cen == "tempo" or (cen is None and con.id in self.falhar):
             return Resultado("tempo", latencia_ms=con.timeout_ms)
         if con.exemplo_resposta is None:
             return Resultado("recusado")

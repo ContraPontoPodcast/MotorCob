@@ -112,7 +112,7 @@ export default [
     route('relatorios/novo', 'routes/relatorios-novo.tsx'),
     route('console/voz', 'routes/console-voz.tsx'),
     // Agente de voz (telas do cliente)
-    // Fluxo do agente (SQL 58, 59 e 65): Fluxos, editor, testar conversa, desempenho, rascunho gerado e personas.
+    // Fluxo do agente (SQL 58, 59 e 66): Fluxos, editor, testar conversa, desempenho, rascunho gerado e personas.
     // O roteiro antigo fica em /roteiro até um fluxo entrar em uso na carteira.
     route('canais/agente-virtual', 'routes/canais-agente-virtual.tsx'),
     route('canais/agente-virtual/roteiro', 'routes/canais-agente-virtual-roteiro.tsx'),

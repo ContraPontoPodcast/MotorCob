@@ -1,4 +1,4 @@
-"""SQL 65 · o que a tela "Fluxo do agente" do site precisa: enviar o rascunho para aprovação e os anexos do pedido.
+"""SQL 66 · o que a tela "Fluxo do agente" do site precisa: enviar o rascunho para aprovação e os anexos do pedido.
 
 Cobre: quem edita (editar_canais) envia; Operação e a equipe MotorCX não; rascunho com bloqueio (validador ou
 pendência de contexto) é recusado com os códigos; enviado vira sino de quem aprova (aprovar_roteiro_voz), uma vez por
@@ -8,6 +8,10 @@ dígitos seguidos no nome.
 
 Chamado pelo testar_rls.py no fim; também roda só:
     PGHOST=... PGPORT=... PGUSER=postgres PGDATABASE=sb python supabase/testes/testar_voz_fluxo_site.py
+Também: descartar o pedido em texto (cancelar_pedido_fluxo_voz: pendente, gerado com o rascunho e o fluxo que nasceu
+dele, com a equipe com a mensagem no chamado; gerando e aprovado não) e o job noturno das métricas (agregar_fluxo_dia
+pelos dois acessos: service_role e o papel motorcx_voz por voz_vm; idempotente; "desligou" pelo bloco_final da chamada;
+fora da janela, authenticated e o papel da VM direto no public são recusados).
 Só dados fictícios (empresa vfs-*).
 """
 import json
@@ -21,24 +25,24 @@ BANCO = os.environ.get("PGDATABASE", "sb")
 BASE = ["psql", "-d", BANCO, "-v", "ON_ERROR_STOP=1", "-Atq"]
 
 
-def sql(cmd, papel=None, uid=None):
+def sql(cmd, papel=None, uid=None, usuario=None):
     pre = ""
     if papel:
         pre = f"set role {papel}; " + (f"select set_config('request.jwt.claim.sub', '{uid}', false); " if uid else "")
-    r = subprocess.run(BASE + ["-c", pre + cmd], capture_output=True, text=True)
+    r = subprocess.run(BASE + (["-U", usuario] if usuario else []) + ["-c", pre + cmd], capture_output=True, text=True)
     return r.returncode == 0, (r.stdout.strip().splitlines() or [""])[-1], r.stderr.strip()
 
 
 ok_total = falhas = 0
 
 
-def checar(nome, esperado_ok, cmd, papel=None, uid=None, valor=None, erro=None):
+def checar(nome, esperado_ok, cmd, papel=None, uid=None, valor=None, erro=None, usuario=None):
     global ok_total, falhas
-    ok, out, err = sql(cmd, papel, uid)
+    ok, out, err = sql(cmd, papel, uid, usuario)
     passou = ok == esperado_ok and (valor is None or out == str(valor)) and (erro is None or erro in err)
     ok_total += passou
     falhas += not passou
-    print(("PASSOU " if passou else "FALHOU ") + "SQL 65: " + nome + ("" if passou else f"  -> ok={ok} out={out!r} err={err[:240]}"))
+    print(("PASSOU " if passou else "FALHOU ") + "SQL 66: " + nome + ("" if passou else f"  -> ok={ok} out={out!r} err={err[:240]}"))
 
 
 def sv(cmd, papel=None, uid=None):
@@ -52,10 +56,12 @@ def j(v) -> str:
     return "$j$" + json.dumps(v, ensure_ascii=False) + "$j$::jsonb"
 
 
-# reaplica o SQL 65 (prova que roda de novo)
+# reaplica o SQL 66 (prova que roda de novo)
 r = subprocess.run(["psql", "-d", BANCO, "-v", "ON_ERROR_STOP=1", "-q", "-f",
                     str(RAIZ / "supabase" / "migrations" / "20270102000001_voz_fluxo_site.sql")], capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
+if os.environ.get("PGPASSWORD"):
+    sv("alter role motorcx_voz with password '" + os.environ["PGPASSWORD"].replace("'", "''") + "'")
 
 # ------------------------------------------------------------------ dados fictícios
 sv("delete from auth.users where email like 'vfs.%@exemplo.test'")
@@ -141,6 +147,74 @@ checar("o anexo enviado vale no pedido em texto", True,
        f"select public.pedir_fluxo_voz({EA}, {CA}, 'Quero confirmar a data de nascimento antes do valor.', "
        "array['entradas/vfs-alfa/fluxo/2026-11-01/abc_roteiro.pdf']) is not null", "authenticated", U["pla"], "t")
 
+# ------------------------------------------------------------------ descartar o pedido em texto
+PED = sv(f"select id from public.voz_fluxo_pedidos where empresa_id={EA} and situacao='pendente'")
+checar("Operação não descarta o pedido", False, f"select public.cancelar_pedido_fluxo_voz({PED})", "authenticated", U["ope"])
+checar("outra empresa não descarta", False, f"select public.cancelar_pedido_fluxo_voz({PED})", "authenticated", U["plb"])
+checar("quem edita descarta o pedido pendente", True, f"select public.cancelar_pedido_fluxo_voz({PED})", "authenticated", U["pla"], "cancelado")
+checar("o pedido fica guardado com quem cancelou", True,
+       f"select situacao || '|' || (cancelado_por = '{U['pla']}')::text from public.voz_fluxo_pedidos where id={PED}", "authenticated", U["ope"], "cancelado|true")
+checar("descartar de novo não muda nada", True, f"select public.cancelar_pedido_fluxo_voz({PED})", "authenticated", U["pla"], "cancelado")
+DEFV = sv(f"select definicao from public.voz_fluxo_versoes where id={V1}")
+PG = sv(f"select public.pedir_fluxo_voz({EA}, {CA}, 'Quero um localizador simples, que confirma a data e transfere.')", "authenticated", U["pla"])
+sv(f"update public.voz_fluxo_pedidos set situacao='gerando' where id={PG}")
+checar("pedido em geração espera terminar", False, f"select public.cancelar_pedido_fluxo_voz({PG})", "authenticated", U["pla"], erro="espere terminar")
+VG = sv(f"select public.registrar_geracao_fluxo_voz({PG}, $j${DEFV}$j$::jsonb, '{{\"entendi\": []}}'::jsonb)", "service_role")
+FG = sv(f"select fluxo_id from public.voz_fluxo_versoes where id={VG}")
+checar("descartar o gerado apaga o rascunho e o fluxo que nasceu do pedido", True,
+       f"select public.cancelar_pedido_fluxo_voz({PG}); select (select count(*) from public.voz_fluxo_versoes where id={VG}) || '|' || "
+       f"(select count(*) from public.voz_fluxos where id={FG}) || '|' || (select coalesce(versao_gerada_id::text, 'sem') from public.voz_fluxo_pedidos where id={PG})",
+       "authenticated", U["pla"], "0|0|sem")
+PE = sv(f"select public.pedir_fluxo_equipe({EA}, {CA}, 'Montem para nós um negociador com as ofertas do CRM.')", "authenticated", U["pla"])
+checar("descartar o pedido à equipe avisa no chamado", True,
+       f"select public.cancelar_pedido_fluxo_voz({PE}); select count(*) from public.chamado_mensagens m join public.voz_fluxo_pedidos p on p.chamado_id = m.chamado_id "
+       f"where p.id={PE} and m.texto like 'Pedido de fluxo cancelado%'", "authenticated", U["pla"], 1)
+PA = sv(f"select public.pedir_fluxo_voz({EA}, {CA}, 'Outro localizador para comparar as duas versões.')", "authenticated", U["pla"])
+sv(f"update public.voz_fluxo_pedidos set situacao='gerando' where id={PA}")
+VA = sv(f"select public.registrar_geracao_fluxo_voz({PA}, $j${DEFV}$j$::jsonb, '{{}}'::jsonb)", "service_role")
+sv(f"select public.aprovar_fluxo_voz({VA})", "authenticated", U["adm"])
+checar("versão gerada já aprovada não é descartada", False, f"select public.cancelar_pedido_fluxo_voz({PA})", "authenticated", U["pla"], erro="já foi aprovada")
+checar("anon não descarta", False, f"select public.cancelar_pedido_fluxo_voz({PA})", "anon")
+
+# ------------------------------------------------------------------ job noturno das métricas do fluxo
+sv(f"insert into public.voz_config (empresa_id) values ({EA}) on conflict do nothing")
+ONTEM = sv("select (now() at time zone 'America/Sao_Paulo')::date - 1")
+QUANDO = f"(('{ONTEM}'::date + time '10:00') at time zone 'America/Sao_Paulo')"
+for idc, final in (("vfs-ch-a", "N4"), ("vfs-ch-b", "N6"), ("vfs-ch-c", "N2")):
+    sv(f"insert into public.voz_chamadas (empresa_id, credor_id, id_chamada, id_cliente, modo, ocorrido_em, resultado, fluxo_versao_id, bloco_final) "
+       f"values ({EA}, {CA}, '{idc}', 'CLI-0{idc[-1]}', 'real', {QUANDO}, 'cpc', {V1}, '{final}')", "service_role")
+PASSOS = [("vfs-ch-a", 1, "N1", "arvore", "titular", None), ("vfs-ch-a", 2, "N2", "cognicao", "confirmou", None),
+          ("vfs-ch-a", 3, "N3", "arvore", "sim", "quero_negociar"), ("vfs-ch-a", 4, "N4", "arvore", None, None),
+          ("vfs-ch-b", 1, "N1", "arvore", "terceiro", None), ("vfs-ch-b", 2, "N6", "arvore", None, None),
+          ("vfs-ch-c", 1, "N1", "arvore", "titular", None), ("vfs-ch-c", 2, "N2", "cognicao", None, None)]
+for idc, ordem, bloco, modo, q, intencao in PASSOS:
+    sv(f"insert into public.voz_fluxo_passos (empresa_id, chamada_id, id_chamada, fluxo_versao_id, ordem, bloco_id, modo, entrou_em, saida_quando, intencao) "
+       f"values ({EA}, (select id from public.voz_chamadas where id_chamada='{idc}'), '{idc}', {V1}, {ordem}, '{bloco}', '{modo}', {QUANDO}, "
+       f"{'null' if q is None else repr(q)}, {'null' if intencao is None else repr(intencao)})", "service_role")
+checar("o servidor agrega o dia (blocos e intenções)", True, f"select public.agregar_fluxo_dia({EA}, '{ONTEM}')::text", "service_role", None,
+       '{"blocos": 5, "intencoes": 1}')
+checar("funil da abertura: chegaram 3, titular 2 e terceiro 1", True,
+       f"select chegaram || '|' || saidas::text from public.voz_fluxo_metricas_dia where fluxo_versao_id={V1} and dia='{ONTEM}' and bloco_id='N1'",
+       "authenticated", U["ope"], '3|{"titular": 2, "terceiro": 1}')
+checar("quem parou num bloco que não é final conta como desligou (pelo bloco_final da chamada)", True,
+       f"select saidas::text from public.voz_fluxo_metricas_dia where fluxo_versao_id={V1} and dia='{ONTEM}' and bloco_id='N2'",
+       "authenticated", U["ope"], '{"desligou": 1, "confirmou": 1}')
+checar("final (transferir) não vira desligou", True,
+       f"select saidas::text from public.voz_fluxo_metricas_dia where fluxo_versao_id={V1} and dia='{ONTEM}' and bloco_id='N4'", "authenticated", U["ope"], "{}")
+checar("intenções do dia por bloco", True,
+       f"select bloco_id || ':' || intencao || '=' || n from public.voz_fluxo_intencoes_dia where fluxo_versao_id={V1} and dia='{ONTEM}'", "authenticated", U["ope"], "N3:quero_negociar=1")
+checar("a VM (papel motorcx_voz) agrega pelo voz_vm e dá o mesmo resultado (idempotente)", True,
+       f"select voz_vm.agregar_fluxo_dia('{{\"empresa\": {EA}, \"dia\": \"{ONTEM}\"}}')::text", None, None, '{"blocos": 5, "intencoes": 1}', usuario="motorcx_voz")
+checar("rodar de novo não duplica", True, f"select count(*) from public.voz_fluxo_metricas_dia where empresa_id={EA} and dia='{ONTEM}'", "service_role", None, 5)
+checar("a VM lista as empresas da parte pelo voz_vm", True,
+       f"select voz_vm.fluxo_empresas('{{\"parte\": \"1/1\"}}') @> '[{EA}]'", None, None, "t", usuario="motorcx_voz")
+checar("o papel da VM não chama a função do public direto", False, f"select public.agregar_fluxo_dia({EA}, '{ONTEM}')", None, None, usuario="motorcx_voz")
+checar("usuário do site não agrega", False, f"select public.agregar_fluxo_dia({EA}, '{ONTEM}')", "authenticated", U["adm"])
+checar("dia fora da janela de 35 dias é recusado", False, f"select public.agregar_fluxo_dia({EA}, current_date - 60)", "service_role")
+checar("outra empresa não lê as métricas da A", True, f"select count(*) from public.voz_fluxo_metricas_dia where empresa_id={EA}", "authenticated", U["plb"], 0)
+checar("prévia de voz entra no uso de IA (componente previa_voz)", True,
+       f"select public.registrar_uso_ia_voz({EA}, '{ONTEM}', 'previa_voz', 1, 0.05, 0, 45, 0) >= 0", "service_role", None, "t")
+
 sv("delete from storage.objects where bucket_id = 'entradas' and name like 'vfs-%'")
-print(f"\nSQL 65: {ok_total} passaram, {falhas} falharam")
+print(f"\nSQL 66: {ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

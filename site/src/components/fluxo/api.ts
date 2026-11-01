@@ -1,4 +1,4 @@
-// Acesso a dados do Fluxo do agente (SQL 58, 59 e 65). Só leitura com RLS e escrita por RPC; o simulador e o
+// Acesso a dados do Fluxo do agente (SQL 58, 59 e 66). Só leitura com RLS e escrita por RPC; o simulador e o
 // roleplay pela Edge Function simular_fluxo_voz, com o login de quem pede. Nada de service_role no site.
 // A mesma interface tem a implementação de demonstração (fixturas.ts), usada só no modo de desenvolvimento.
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -14,7 +14,7 @@ export interface PedidoRow {
 	id: number; empresa_id: number; credor_id: number | null; texto: string; anexos: string[]; tipo: 'ia' | 'equipe'; fluxo_id: number | null;
 	versao_origem_id: number | null; versao_gerada_id: number | null; situacao: 'pendente' | 'gerando' | 'gerado' | 'com_erros' | 'na_equipe' | 'cancelado';
 	chamado_id: number | null; respostas: Record<string, string> | null; resultado: ResultadoPedido | null; pedido_em: string; gerado_em: string | null;
-	geracoes: number; prazo_em: string | null;
+	geracoes: number; prazo_em: string | null; cancelado_em?: string | null;
 }
 /** resultado_pedido_voz_ok: só estas chaves, listas curtas de texto (o formato de cada item é livre na geração). */
 export interface ResultadoPedido { entendi?: unknown[]; suposicoes?: unknown[]; perguntas?: unknown[]; mudancas?: unknown[]; erros?: unknown[]; tentativas?: number }
@@ -49,6 +49,7 @@ export interface TurnoSimulado {
 	conectores: { conector: number; nome?: string; classe: string; status?: number | null; ms?: number | null; codigo?: string | null; descartadas_alcada?: number }[];
 	travas: string[]; devolucoes: { motivo: string; para: string }[]; fim: string | null;
 }
+export type CenarioConector = 'sucesso' | 'tempo' | '401';
 export interface Simulacao { turnos: TurnoSimulado[]; caminho: string[]; resultado: string | null; encerrada: boolean }
 
 export interface FluxoApi {
@@ -84,7 +85,12 @@ export interface FluxoApi {
 	resultadosCasos(versao: number): Promise<CasoResultadoRow[]>;
 	salvarCaso(a: { fluxo: number; nome: string; falas: string[]; caminho: string[]; resultado: string | null; falhar: number[] }): Promise<void>;
 	apagarCaso(id: number): Promise<void>;
-	simular(versao: number, falas: string[], falhar: number[]): Promise<Simulacao>;
+	/** cenarios (SQL 66): resposta escolhida para cada conector simulado. */
+	simular(versao: number, falas: string[], falhar: number[], cenarios?: Record<string, CenarioConector>): Promise<Simulacao>;
+	/** "Ouvir a voz" (SQL 66): prévia em áudio de uma fala, com a voz da empresa. Nada fica guardado. */
+	ouvir(versao: number, texto: string): Promise<{ audio: string; mime: string }>;
+	/** Descartar o pedido em texto (SQL 66, cancelar_pedido_fluxo_voz): o rascunho gerado sai; o pedido fica. */
+	cancelarPedido(pedido: number): Promise<void>;
 	rodarCasos(versao: number): Promise<{ id: number; nome: string; passou: boolean }[]>;
 	metricas(versoes: number[], desde: string): Promise<(MetricaBloco & { fluxo_versao_id: number; dia: string })[]>;
 	intencoesDia(versoes: number[], desde: string): Promise<IntencaoDiaRow[]>;
@@ -115,7 +121,7 @@ function ok<T>(r: Resp<T>, padrao?: T): T {
 	if (r.error) throw new Error(r.error.message);
 	return (r.data ?? padrao) as T;
 }
-/** Banco sem o SQL 65 (coluna enviado_aprovacao_em): lê sem ela. */
+/** Banco sem o SQL 66 (coluna enviado_aprovacao_em): lê sem ela. */
 const semColuna65 = (e: { message?: string; code?: string } | null) => !!e && (e.code === '42703' || /enviado_aprovacao_em/.test(e.message ?? ''));
 
 /** Implementação real (Supabase, chave anon, login de quem usa; a RLS decide o que aparece). */
@@ -184,7 +190,9 @@ export function apiSupabase(sb: SupabaseClient, funcao = 'simular_fluxo_voz'): F
 		async resultadosCasos(versao) { return ok((await sb.from('voz_fluxo_casos_resultados').select('caso_id,fluxo_versao_id,passou,caminho_obtido,resultado_obtido,executado_em').eq('fluxo_versao_id', versao)) as Resp<CasoResultadoRow[]>, []); },
 		async salvarCaso(a) { await rpc('salvar_caso_teste_fluxo_voz', { fluxo: a.fluxo, nome: a.nome, falas: a.falas, caminho_esperado: a.caminho, resultado_esperado: a.resultado, conectores_falham: a.falhar, caso: null }); },
 		async apagarCaso(id) { await rpc('apagar_caso_teste_fluxo_voz', { caso: id }); },
-		async simular(versao, falas, falhar) { return invocar<Simulacao>({ acao: 'simular', versao, falas, falhar }); },
+		async simular(versao, falas, falhar, cenarios = {}) { return invocar<Simulacao>({ acao: 'simular', versao, falas, falhar, ...(Object.keys(cenarios).length ? { cenarios } : {}) }); },
+		async ouvir(versao, texto) { return invocar<{ audio: string; mime: string }>({ acao: 'ouvir', versao, texto }); },
+		async cancelarPedido(pedido) { await rpc('cancelar_pedido_fluxo_voz', { pedido }); },
 		async rodarCasos(versao) { return (await invocar<{ casos: { id: number; nome: string; passou: boolean }[] }>({ acao: 'rodar_casos', versao })).casos ?? []; },
 		async metricas(vs, desde) {
 			if (!vs.length) return [];

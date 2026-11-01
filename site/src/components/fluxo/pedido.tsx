@@ -1,11 +1,13 @@
 // Tela 6 · Agente virtual › Fluxos › Rascunho gerado ("Descrever e o MotorCX monta"). Lê voz_fluxo_pedidos (RLS).
 // A geração (voz/gerar_fluxo.py, na VM) só cria rascunho que passa no validador; o resultado traz "o que entendi"
 // (frase → etapa), suposições, perguntas, mudanças e erros. Responder as perguntas pede nova geração
-// (responder_pedido_fluxo_voz). Pedido à equipe vira chamado no Suporte (prazo de 2 dias úteis).
+// (responder_pedido_fluxo_voz). Pedido à equipe vira chamado no Suporte (prazo de 2 dias úteis). "Descartar"
+// (cancelar_pedido_fluxo_voz, SQL 66): o rascunho gerado sai e o pedido fica guardado como cancelado.
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Sparkles } from 'lucide-react';
 import { Loading, Notice } from '@/components/app-shell';
+import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { Aviso, Botao, Cartao, Pilula, Vazio, campoCls, campoStyle } from '@/components/voz/ui';
 import { TRAVAS, dataCurta, explicar, impedem } from '@/lib/fluxo';
 import { Campo, Detalhes, Linhas, Regras } from './ds';
@@ -29,6 +31,8 @@ export function PedidoGerado({ pedidoId }: { pedidoId: number }) {
 	}, [api, pedidoId]);
 	const p = dados?.p ?? null;
 	const [resp, setResp] = useState<Record<string, string>>({});
+	const [descartar, setDescartar] = useState(false);
+	const [ocupado, setOcupado] = useState(false);
 	useEffect(() => { setResp(p?.respostas ?? {}); }, [p?.id, p?.respostas]);
 	// enquanto gera, confere de novo a cada 4 s
 	useEffect(() => {
@@ -51,6 +55,14 @@ export function PedidoGerado({ pedidoId }: { pedidoId: number }) {
 	const quem = p.tipo === 'ia' ? 'Gerado pela IA do MotorCX' : 'Montado pela equipe MotorCX';
 	const titulo = p.situacao === 'gerado' ? `Rascunho gerado · ${nome(p.credor_id)}` : p.situacao === 'na_equipe' ? `Pedido com a equipe · ${nome(p.credor_id)}` : p.situacao === 'com_erros' ? `A geração não passou · ${nome(p.credor_id)}` : `Gerando o rascunho · ${nome(p.credor_id)}`;
 	const respondidas = perguntas.filter(q => (resp[q] ?? '').trim()).length;
+	const podeDescartar = perm.editar && ['pendente', 'gerado', 'com_erros', 'na_equipe'].includes(p.situacao);
+	async function confirmarDescarte() {
+		if (!api) return;
+		setOcupado(true);
+		const ok = await executar(() => api.cancelarPedido(p!.id), p!.versao_gerada_id ? 'Rascunho descartado. O pedido fica guardado.' : 'Pedido cancelado. Ele fica guardado.');
+		setOcupado(false); setDescartar(false);
+		if (ok) navigate(rota('lista'));
+	}
 	async function gerarDeNovo() {
 		if (!api) return;
 		if (await executar(() => api.responderPedido(p!.id, Object.fromEntries(Object.entries(resp).filter(([, v]) => v.trim()).map(([k, v]) => [k, v.trim().slice(0, 500)]))), 'Respostas enviadas. Gerando de novo…')) void recarregar();
@@ -59,9 +71,16 @@ export function PedidoGerado({ pedidoId }: { pedidoId: number }) {
 	return (
 		<>
 			{cab(titulo, `${quem} · pedido ${codigo}${p.gerado_em ? ` em ${dataCurta(p.gerado_em)}` : ''} · continua rascunho e passa pela mesma aprovação`,
-				p.versao_gerada_id ? <Botao onClick={() => navigate(rota('editor', p.versao_gerada_id))}>Abrir no editor</Botao> : undefined)}
+				<>
+					{podeDescartar && <button type="button" onClick={() => setDescartar(true)} className="inline-flex h-9 items-center rounded-lg px-3 text-[13px] font-semibold text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]">Descartar</button>}
+					{p.versao_gerada_id && <Botao onClick={() => navigate(rota('editor', p.versao_gerada_id))}>Abrir no editor</Botao>}
+				</>)}
+			<ConfirmaAcao aberto={descartar} titulo={p.versao_gerada_id ? 'Descartar o rascunho gerado?' : 'Cancelar este pedido?'}
+				texto={p.versao_gerada_id ? 'O rascunho gerado é apagado (se ainda não foi aprovado). O pedido, o texto e as respostas ficam guardados.' : p.tipo === 'equipe' ? 'A equipe MotorCX recebe o aviso no chamado e não monta o rascunho. O pedido fica guardado.' : 'O pedido sai da fila e fica guardado como cancelado.'}
+				botao="Descartar" onConfirm={() => void confirmarDescarte()} onClose={() => setDescartar(false)} loading={ocupado} />
 			<div className="space-y-4">
 				{(p.situacao === 'pendente' || p.situacao === 'gerando') && <Aviso tom="info" titulo="Gerando o rascunho…">Leva alguns segundos. Esta tela atualiza sozinha.</Aviso>}
+				{p.situacao === 'cancelado' && <Aviso tom="neutro" titulo="Pedido cancelado.">{p.cancelado_em ? `Em ${dataCurta(p.cancelado_em)}. ` : ''}O texto fica guardado; para pedir de novo, use "Novo fluxo".</Aviso>}
 				{p.situacao === 'na_equipe' && <Aviso tom="info" titulo={`Pedido aberto no Suporte (chamado ${p.chamado_id ?? '—'}).`}>A equipe MotorCX monta o rascunho até {dataCurta(p.prazo_em)}. Ele aparece em Fluxos quando ficar pronto.</Aviso>}
 				{p.situacao === 'com_erros' && <Aviso tom="erro" titulo="O rascunho não passou no validador e não foi criado.">{textos(r.erros).map(e => explicar(e).texto).join(' ')} Responda as perguntas ou ajuste o texto e peça de novo.</Aviso>}
 				{p.situacao === 'gerado' && (perguntas.length > 0 || pend.length > 0) && (

@@ -1,7 +1,7 @@
 // Tela 2 · Agente virtual › Editor do fluxo. Quadro por ramos (caminho principal em cima, ramos embaixo, saídas "→ N5").
 // Cada mudança de etapa salva o rascunho (salvar_fluxo_voz: rascunho edita no lugar; versão aprovada ou em uso vira
 // rascunho novo). As pendências vêm do banco: fluxo_voz_bloqueios (validador + conectores + alçada + intenções + casos
-// de teste) e fluxo_voz_avisos (roleplay, só aviso). "Enviar para aprovação" (enviar_fluxo_voz_aprovacao, SQL 65)
+// de teste) e fluxo_voz_avisos (roleplay, só aviso). "Enviar para aprovação" (enviar_fluxo_voz_aprovacao, SQL 66)
 // fica desabilitado com o motivo enquanto houver pendência. Aprovar: aprovar_fluxo_voz; colocar em uso: usar_fluxo_voz.
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';

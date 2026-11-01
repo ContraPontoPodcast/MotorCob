@@ -612,9 +612,13 @@ Netlify como site estático (React Router em modo SPA, `site/netlify.toml`). **O
 verdade**: mudança no site é commit aqui. Dados só pelo Supabase com a chave anon e a RLS; nada de service_role
 no site. O formulário de contato grava em `contatos_site` (SQL 29 + SQL 52). Como rodar, variáveis e deploy:
 `site/LEIA.md`. CI: `.github/workflows/site.yml` (lint + typecheck + testes + build).
-Fluxo do agente (Cobrança › Canais › Agente virtual; SQL 58, 59 e 65): `site/src/components/fluxo/` e `site/src/lib/fluxo.ts`;
+Fluxo do agente (Cobrança › Canais › Agente virtual; SQL 58, 59 e 66): `site/src/components/fluxo/` e `site/src/lib/fluxo.ts`;
 quadro por ramos, "Enviar para aprovação" bloqueado enquanto `fluxo_voz_bloqueios` tiver pendência; conectores em
 Empresa › Integrações (cadastro e credencial só da equipe). O roteiro antigo segue em `/canais/agente-virtual/roteiro`.
+SQL 66 também: descartar o pedido em texto (`cancelar_pedido_fluxo_voz`), job noturno das métricas do fluxo
+(`agregar_fluxo_dia` pelos passos e chamadas; `voz/fluxo_metricas.py`, timer `motorcx-voz-fluxo-noite` 02:50, nos dois
+acessos), resposta escolhida do conector no simulador (`cenarios`: sucesso/tempo/401) e "Ouvir a voz" (`/ouvir` na VM,
+TTS ElevenLabs da Montagem, áudio nunca guardado; uso em `registrar_uso_ia_voz` componente `previa_voz`).
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.

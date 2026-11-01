@@ -155,7 +155,7 @@ class TestScriptsDaVm(unittest.TestCase):
             r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, f"{f.name}: {r.stderr}")
         servicos = sorted(vm.glob("*.service"))
-        self.assertEqual(len(servicos), 13)
+        self.assertEqual(len(servicos), 14)
         for s in servicos:
             txt = s.read_text()
             self.assertIn("ExecStart=", txt, s.name)
@@ -170,7 +170,8 @@ class TestScriptsDaVm(unittest.TestCase):
                      "motorcx-voz-simulador.service", "motorcx-voz-https.service", "motorcx-voz-https.timer",
                      "motorcx-voz-https", "motorcx-caddy.Caddyfile", "motorcx-caddy-simulador.caddy",
                      "motorcx-caddy-elevenlabs.caddy", "motorcx-voz-importador.service",
-                     "motorcx-voz-importador.timer"):
+                     "motorcx-voz-importador.timer", "motorcx-voz-fluxo-noite.service",
+                     "motorcx-voz-fluxo-noite.timer"):
             self.assertIn(nome, inicio)
             self.assertTrue((vm / nome).exists(), nome)
         # Speech Analytics (SQL 62): desligado por padrão, só liga com o metadado da VM
@@ -210,7 +211,7 @@ class TestProxyHttps(unittest.TestCase):
         self.assertEqual(EL.MAX_CORPO_WEBHOOK, 2 * 1024 * 1024)
         self.assertIn(f"reverse_proxy 127.0.0.1:{EL.ElevenLabs('a1').webhook_porta}", el)
         sim = (VM / "motorcx-caddy-simulador.caddy").read_text(encoding="utf-8")
-        self.assertIn("@simulador path /simular /roleplay", sim)
+        self.assertIn("@simulador path /simular /roleplay /ouvir", sim)
         self.assertIn("max_size 256KB", sim)
         self.assertEqual(SH.MAX_CORPO, 256 * 1024)
         self.assertIn("reverse_proxy 127.0.0.1:8091", sim)

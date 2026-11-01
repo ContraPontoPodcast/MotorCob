@@ -1,4 +1,4 @@
-// Fluxo do agente virtual (SQL 58, 59 e 65): tipos da definição, nomes simples dos modos, catálogo dos blocos,
+// Fluxo do agente virtual (SQL 58, 59 e 66): tipos da definição, nomes simples dos modos, catálogo dos blocos,
 // textos das pendências, o "quadro por ramos" e os números do Desempenho. Sem imports: testado com
 // `node --experimental-strip-types --test site/fluxo/fluxo.test.ts`.
 // O banco é a fonte da verdade: quem decide se o fluxo vale é public.fluxo_voz_erros / fluxo_voz_pendencias /

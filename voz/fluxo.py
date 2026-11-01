@@ -829,12 +829,13 @@ def gerador_montagem(modelo_de):
 
 # ------------------------------------------------------------------ modo texto (simulador)
 def simular(fluxo: FluxoCarregado, falas: list[str], variaveis: dict, entendedor=None, modelo_de=None,
-            falhar: set | None = None, hoje: date | None = None, id_cliente: str = "CLI-TESTE") -> dict:
+            falhar: set | None = None, hoje: date | None = None, id_cliente: str = "CLI-TESTE",
+            cenarios: dict | None = None) -> dict:
     """Roda o fluxo em modo texto, com os conectores trocados pelo exemplo_resposta (ou falhando os de `falhar`).
     Devolve, por turno, fala, bloco, caminho, intenção, travas e chamadas a conectores, e os eventos de passo."""
     eventos: list = []
     s = Sessao(fluxo, "sim-texto", id_cliente, variaveis, lambda i, t, d: eventos.append((t, d)),
-               CN.ConectoresDeExemplo(falhar), entendedor=entendedor,
+               CN.ConectoresDeExemplo(falhar, cenarios), entendedor=entendedor,
                gerador=gerador_montagem(modelo_de) if modelo_de else None, hoje=hoje)
     turnos = []
     s._turno = Turno()

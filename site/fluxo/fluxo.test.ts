@@ -1,5 +1,5 @@
 // Regras do Fluxo do agente no site (src/lib/fluxo.ts): quadro por ramos, pendências do banco em texto, o bloqueio do
-// envio para aprovação, os números do Desempenho e os limites do roleplay (os mesmos de SQL 58, 59 e 65).
+// envio para aprovação, os números do Desempenho e os limites do roleplay (os mesmos de SQL 58, 59 e 66).
 // node --experimental-strip-types --test site/fluxo/fluxo.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

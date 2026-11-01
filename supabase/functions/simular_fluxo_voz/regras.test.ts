@@ -2,18 +2,19 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  assinar, autorizar, conferirCaso, falaOk, pacoteVM, PERMISSAO, respostaTela, urlRoleplay, validarPedido, variaveisTeste,
+  assinar, autorizar, conferirCaso, falaOk, minutosPrevia, pacoteOuvir, pacoteVM, PERMISSAO, respostaTela, urlOuvir, urlRoleplay,
+  validarPedido, variaveisTeste,
 } from "./regras.ts";
 
 const cliente = { id: "u1", ativo: true, equipe: false, empresa_id: 7 };
 const versao = { id: 31, fluxo_id: 4, empresa_id: 7, credor_id: 2, definicao: { esquema: 1, blocos: [] } };
 
 test("pedido: simular com falas e conectores para falhar; rodar_casos só com a versão", () => {
-  assert.deepEqual(validarPedido({ versao: 31, falas: ["Sou eu"] }).pedido, { acao: "simular", versao: 31, falas: ["Sou eu"], falhar: [] });
+  assert.deepEqual(validarPedido({ versao: 31, falas: ["Sou eu"] }).pedido, { acao: "simular", versao: 31, falas: ["Sou eu"], falhar: [], cenarios: {} });
   assert.deepEqual(validarPedido({ acao: "rodar_casos", versao: 31 }).pedido, { acao: "rodar_casos", versao: 31 });
   assert.equal(validarPedido({ versao: 31, falas: ["Sou eu"], falhar: [1] }).pedido?.acao, "simular");
   assert.equal(validarPedido({ versao: "31" }).erro, "versão inválida");
-  assert.equal(validarPedido({ versao: 31, acao: "apagar" }).erro, "ação inválida: simular, rodar_casos ou roleplay");
+  assert.equal(validarPedido({ versao: 31, acao: "apagar" }).erro, "ação inválida: simular, rodar_casos, roleplay ou ouvir");
   assert.equal(validarPedido({ versao: 31, falas: [], definicao: {} }).erro, "pedido inválido");
   assert.equal(validarPedido({ acao: "rodar_casos", versao: 31, falas: [] }).erro, "pedido inválido");
   assert.equal(validarPedido({ versao: 31, falhar: [0] }).erro, "conectores para falhar inválidos");
@@ -88,4 +89,26 @@ test("caso vindo do roleplay (caminho vazio) confere só o resultado", () => {
   const caso = { id: 2, nome: "Roleplay", falas: ["a"], caminho_esperado: [], resultado_esperado: "opt_out", conectores_falham: [], ativo: true };
   assert.equal(conferirCaso(caso, { caminho: ["N1", "N3"], resultado: "opt_out", turnos: [] }), true);
   assert.equal(conferirCaso(caso, { caminho: ["N1"], resultado: "recado", turnos: [] }), false);
+});
+
+test("SQL 66: cenário escolhido para o conector simulado (sucesso, tempo, 401)", () => {
+  assert.deepEqual(validarPedido({ versao: 31, falas: [], cenarios: { "1": "tempo", "2": "401" } }).pedido,
+    { acao: "simular", versao: 31, falas: [], falhar: [], cenarios: { "1": "tempo", "2": "401" } });
+  for (const ruim of [{ "1": "500" }, { x: "tempo" }, ["tempo"], { "0": "tempo" }, Object.fromEntries(Array.from({ length: 11 }, (_, i) => [String(i + 1), "tempo"]))]) {
+    assert.match(validarPedido({ versao: 31, cenarios: ruim }).erro ?? "", /cenários inválidos/);
+  }
+  const p = pacoteVM({ versao, conectores: [], alcada: null, base: [], falas: [], falhar: [], variaveis: {}, cenarios: { "1": "401" } });
+  assert.deepEqual(p.cenarios, { "1": "401" });
+});
+
+test("SQL 66: ouvir a voz — texto curto sem dado pessoal, voz da empresa e minutos estimados", () => {
+  assert.deepEqual(validarPedido({ acao: "ouvir", versao: 31, texto: "Um instante, por favor." }).pedido, { acao: "ouvir", versao: 31, texto: "Um instante, por favor." });
+  assert.match(validarPedido({ acao: "ouvir", versao: 31, texto: "cpf 12345678901" }).erro ?? "", /texto inválido/);
+  assert.match(validarPedido({ acao: "ouvir", versao: 31, texto: "x".repeat(501) }).erro ?? "", /texto inválido/);
+  assert.equal(validarPedido({ acao: "ouvir", versao: 31, texto: "oi", falas: [] }).erro, "pedido inválido");
+  assert.equal(urlOuvir("https://1-2-3-4.sslip.io:8443/simular"), "https://1-2-3-4.sslip.io:8443/ouvir");
+  assert.deepEqual(pacoteOuvir("Oi", "voz_pt1", { primeiro_nome: "Ana" }), { texto: "Oi", voz_id: "voz_pt1", variaveis: { primeiro_nome: "Ana" } });
+  assert.equal("voz_id" in pacoteOuvir("Oi", "../x", {}), false);
+  assert.equal(minutosPrevia(900), 1);
+  assert.equal(minutosPrevia(45), 0.05);
 });
