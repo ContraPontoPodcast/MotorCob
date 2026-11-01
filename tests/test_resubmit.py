@@ -404,5 +404,152 @@ class TestRegistro(BaseVM):
         self.assertEqual((len(reg.fila), len(reg.fila_resubmits)), (1, 1))
 
 
+
+# ------------------------------------------------------------------ pausa da rota (sem crédito / bloqueio)
+class TestPausaDaRota(BaseVM):
+    """A rota (o tronco) para de discar na hora, com ou sem a regra nova da carteira, até a equipe retomar."""
+
+    def _rotas_originadas(self):
+        return [c[1].rsplit("@", 1)[1] for c in self.originados()]
+
+    def test_sem_credito_pausa_e_vai_para_a_outra_rota(self):
+        for d in (None, {"por_sinalizacao": {}}):                     # paridade: vale também sem a regra nova
+            orq = self.montar_com([item("C1", TEL[0]), item("C2", TEL[1])], d) if d else \
+                self.montar([item("C1", TEL[0]), item("C2", TEL[1])])
+            self.assertEqual(orq.tick(), 2)
+            self.assertEqual(self._rotas_originadas(), ["tr-1-10", "tr-1-10"])
+            self._cair(tech=402, i=0)                                   # tronco 10 sem crédito
+            self.assertEqual(orq.agendador.pausados, {10: "sem_credito"})
+            self.assertEqual(orq.pausas_novas, [{"empresa_id": 1, "tronco_id": 10, "motivo": "sem_credito",
+                                                 "causa_sip": 402}])
+            self.assertTrue(any("pausada por sem crédito" in a for a in orq.alertas))
+            self.assertEqual(self._rotas_originadas()[-1], "tr-1-11")   # failover para a rota livre
+            self._cair(tech=402, i=1, andar=0)                          # a 2ª chamada também volta 402 pelo 10
+            self.assertEqual(len(orq.pausas_novas), 1)                  # uma pausa só por tronco
+            self.assertNotIn("tr-1-10", self._rotas_originadas()[3:])   # nada mais sai pelo 10
+
+    def test_todas_as_rotas_pausadas_o_numero_espera(self):
+        orq = self.montar([item("C1", TEL[0])])
+        orq.agendador.pausar(10, "sem_credito")
+        orq.agendador.pausar(11, "bloqueio_originacao")
+        self.assertEqual(orq.tick(), 0)
+        self.assertEqual(orq.contagem.get("rota_pausada"), 1)
+        self.assertFalse(self.lote.itens[0].encerrado)                  # não penaliza: espera a retomada
+        self.assertEqual(self.lote.itens[0].tentativas, 0)
+        self.assertEqual(orq.agendador.aplicar_pausas({11: "bloqueio_originacao"}), [10])   # a equipe retomou o 10
+        self.rel.andar(61)
+        self.assertEqual(orq.tick(), 1)
+        self.assertEqual(self._rotas_originadas(), ["tr-1-10"])
+
+    def test_bloqueio_de_originacao_pausa(self):
+        orq = self.montar([item("C1", TEL[0])])
+        orq.tick()
+        self._cair(tech=608)
+        self.assertEqual(orq.agendador.pausados.get(10), "bloqueio_originacao")
+        self.assertTrue(any("bloqueio de originação" in a for a in orq.alertas))
+
+    def test_outras_falhas_nao_pausam(self):
+        orq = self.montar([item("C1", TEL[0])])
+        orq.tick()
+        self._cair(tech=503)                                            # falha da operadora sem ser 402
+        self.assertEqual(orq.agendador.pausados, {})
+        self.assertEqual(orq.pausas_novas, [])
+
+    def test_plantao_grava_a_pausa_e_aplica_a_retomada(self):
+        from voz.orquestrador import principal as P
+        orq = self.montar([item("C1", TEL[0])])
+        orq.tick()
+        self._cair(tech=402)
+
+        class Sb(SbFalso):
+            def __init__(self, ativas, falhar=()):
+                super().__init__(falhar)
+                self.ativas = ativas
+
+            def rpc(self, f, args=None):
+                if f in self.falhar:
+                    raise OSError("fora")
+                self.rpcs.append((f, args))
+                return self.ativas if f == "troncos_pausados_voz" else 1
+
+        pl = P.Plantao(orq, None, orq.dados.config(1).modo, registro=SimpleNamespace(sb=Sb([], {"pausar_tronco_voz"})))
+        pl.sincronizar_pausas()                                         # banco fora: a rota segue pausada aqui
+        self.assertEqual((len(orq.pausas_novas), orq.agendador.pausados), (1, {10: "sem_credito"}))
+        sb = Sb([{"id": 5, "empresa_id": 1, "tronco_id": 10, "motivo": "sem_credito"}])
+        pl.registro = SimpleNamespace(sb=sb)
+        pl.sincronizar_pausas()
+        self.assertEqual(sb.rpcs[0], ("pausar_tronco_voz", {"empresa": 1, "tronco": 10, "motivo": "sem_credito",
+                                                            "causa_sip": 402}))
+        self.assertEqual(sb.rpcs[1], ("troncos_pausados_voz", {"empresas": [1]}))
+        self.assertEqual((orq.pausas_novas, orq.agendador.pausados), ([], {10: "sem_credito"}))
+        sb.ativas = []                                                   # a equipe retomou no site
+        pl.sincronizar_pausas()
+        self.assertEqual(orq.agendador.pausados, {})
+
+    def test_janelas_do_lote_so_contagem(self):
+        self.montar([item("C1", TEL[0], uf="SP"), item("C1", TEL[1], uf="SP", ordem=2),
+                     item("C2", TEL[2], uf="AC", janela_local=("10:00", "20:00")), item("C3", TEL[3], janela_local=None)])
+        j = self.lote.janelas()
+        self.assertEqual({k: (len(v["clientes"]), sorted(v["ufs"])) for k, v in j.items()},
+                         {("08:00", "20:00"): (1, ["SP"]), ("10:00", "20:00"): (1, ["AC"])})
+        self.assertNotIn(TEL[0], repr(j))
+
+    def test_sql_e_vm_da_pausa_nos_dois_acessos(self):
+        s = SQL65.read_text(encoding="utf-8")
+        for publica, da_vm in (("pausar_tronco_voz", "pausar_tronco"), ("troncos_pausados_voz", "troncos_pausados"),
+                               ("registrar_janelas_lote_voz", "registrar_janelas_lote")):
+            self.assertEqual(A.RPC[publica], da_vm)
+            self.assertIn(f"function public.{publica}(", s)
+            self.assertIn(f"function voz_vm.{da_vm}(args jsonb)", s)
+        self.assertEqual(set(DG.PAUSA_ROTA), set(re.search(r"motivo in \('(\w+)', '(\w+)'\)", s).groups()))
+
+
+# ------------------------------------------------------------------ previsão de chamadas curtas (spins + rediscagens)
+class TestPrevisaoCurtas(unittest.TestCase):
+    class Modelo:
+        def p(self, contato):
+            return {"t1": 0.5, "t2": 0.8, "t3": 1.0}[contato]
+
+    def _fila(self, n=3):
+        return [{"canal": "agente_voz", "id_cliente": "C1", "condicao": "", "prioridade": 1, "contato": f"t{i}",
+                 "ordem_contato": i} for i in range(1, n + 1)]
+
+    def test_paridade_sem_a_regra_nova(self):
+        cfg, _ = DG.normalizar({})
+        t2 = DG.previsao(self._fila(), self.Modelo(), lambda l: (2, 3))
+        t3 = DG.previsao(self._fila(), self.Modelo(), lambda l: (2, 3, cfg))
+        self.assertEqual(t2, t3)
+        self.assertEqual(t2[0], {"chamadas": 3, "curtas": 1.8, "fracao": 0.6})       # 2 no t1 + 1 no t2
+
+    def test_horizontal_soma_spins_e_rediscagens(self):
+        cfg, _ = DG.normalizar({"por_sinalizacao": {}, "tentativas_cliente_dia": 9})
+        self.assertEqual(DG.rediscagens_teto(cfg), 2)                    # não atendida e ocupado: até 2
+        self.assertEqual(DG.plano_voz(cfg, 3), {"por_telefone": [3, 3, 3], "spins": 3, "rediscagens": 6})
+        tot, _ = DG.previsao(self._fila(), self.Modelo(), lambda l: (3, 9, cfg))
+        self.assertEqual(tot, {"chamadas": 9, "curtas": 6.9, "fracao": 0.7667, "spins": 3, "rediscagens": 6})
+        cfg2, _ = DG.normalizar({"por_sinalizacao": {k: {"rediscar": {"ativo": False}} for k in DG.SITUACOES_RENITENCIA},
+                                 "tentativas_cliente_dia": 9})
+        self.assertEqual(DG.plano_voz(cfg2, 3), {"por_telefone": [1, 1, 1], "spins": 3, "rediscagens": 0})
+
+    def test_corta_pelas_tentativas_e_telefone_ausente(self):
+        cfg, _ = DG.normalizar({"por_sinalizacao": {}})                  # 3 por número, 3 por cliente
+        self.assertEqual(DG.plano_voz(cfg, 3), {"por_telefone": [3, 0, 0], "spins": 1, "rediscagens": 2})
+        cfg, _ = DG.normalizar({"modo_discagem": {"modo": "horizontal", "telefone_ausente": "pula"},
+                                "por_sinalizacao": {}, "tentativas_cliente_dia": 9})
+        self.assertEqual(DG.plano_voz(cfg, 1)["por_telefone"], [3])      # spins 2 e 3 sem telefone: pulam
+        cfg, _ = DG.normalizar({"modo_discagem": {"modo": "vertical", "max_telefones_dia": 2},
+                                "tentativas_cliente_dia": 9})
+        self.assertEqual(DG.plano_voz(cfg, 3), {"por_telefone": [3, 3, 0], "spins": 2, "rediscagens": 4})
+
+
+class TestCurtasNoBanco(unittest.TestCase):
+    def test_regras_curtas_iguais_ao_motor(self):
+        r = _json_da_funcao("regras_curtas_voz")
+        self.assertEqual(r, {"sempre": list(V.NAO_COMPLETADA), "abandono": list(V.CURTA_SE_ABANDONO),
+                             "tecnicos": list(V.TECNICOS), "segundos": DG.PADRAO["chamadas_curtas"]["segundos"],
+                             "aviso": DG.PADRAO["chamadas_curtas"]["aviso"], "prior": DG.PRIOR_CURTA,
+                             "forca_carteira": DG.FORCA_CARTEIRA, "forca_numero": DG.FORCA_NUMERO})
+
+
 if __name__ == "__main__":
     unittest.main()

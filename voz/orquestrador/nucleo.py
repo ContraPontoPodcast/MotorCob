@@ -4,6 +4,8 @@ Fluxo de uma tentativa (id_chamada = uuid hex; canais <id>-c<n> cliente, <id>-p 
   1. tick: a guarda libera um item, o agendador tem vaga (empresa, global, canal e CPS do tronco) e há rota para
      o tipo do número -> originate PJSIP/<tech prefix><DDD+número>@<tronco> no app Stasis.
   2. falha técnica antes de atender (pela_rede = falha_operadora/bloqueio_originacao) -> próxima rota (failover).
+     Sem crédito (falha da operadora com SIP 402) ou bloqueio de originação pausam a rota (o tronco) na hora: ela não
+     disca até a equipe retomar (SQL 65 › voz_troncos_pausas; a pausa vai ao banco pelo Plantão) e a equipe é avisada.
   3. atendeu (StasisStart 'saida') -> dialplan motorcx-atendeu: AMD (ou Khomp) e MixMonitor só em pessoa ->
      volta ao Stasis ('amd').
   4. pessoa -> provedor de voz (ponte SIP, mídia externa ou interno); sem agente livre: Alô fake (se ligado) por até
@@ -148,6 +150,7 @@ class Orquestrador:
         self.chamadas: dict[str, Chamada] = {}
         self.contagem: dict[str, int] = {}
         self.alertas: list[str] = []
+        self.pausas_novas: list[dict] = []       # rotas pausadas aqui e ainda não gravadas no banco (o Plantão grava)
 
     # ---------------------------------------------------------------- utilidades
     def _conta(self, k: str, n: int = 1):
@@ -220,6 +223,10 @@ class Orquestrador:
             item.encerrado = True
             self._conta("sem_rota")
             self._alerta(f"empresa {lote.empresa_id}: número sem rota cadastrada para o tipo (fica fora do dia)")
+            return None
+        if all(x.tronco.id in self.agendador.pausados for x in cands):
+            item.nao_antes_de = agora + timedelta(minutes=1)   # toda rota do número está pausada: espera a retomada
+            self._conta("rota_pausada")
             return None
         c = Chamada(novo_id(), lote.empresa_id, idx, item, cands, lote_chave=lote.chave)
         for i, cand in enumerate(cands):
@@ -559,6 +566,7 @@ class Orquestrador:
             c.destino = "ia_humano" if q == 16 else c.destino
         if c.t_atendeu is None:
             rede, _, _ = V.pela_rede(sip=c.causa_sip, q850=c.causa_q850)
+            self._pausar_rota(c, rede)
             if rede in TECNICOS_FAILOVER and c.i_rota + 1 < len(c.candidatas):
                 c.failover_ate = agora + timedelta(seconds=self.failover_espera_s)
                 self._tentar_failover(c, agora)
@@ -578,7 +586,25 @@ class Orquestrador:
 
     def _tem_canal(self, tronco_id: int) -> bool:
         t = self.agendador.troncos.get(tronco_id)
-        return t is not None and self.agendador.em_voo_tronco.get(tronco_id, 0) < t.canais
+        return (t is not None and tronco_id not in self.agendador.pausados
+                and self.agendador.em_voo_tronco.get(tronco_id, 0) < t.canais)
+
+    def _pausar_rota(self, c: Chamada, rede: str | None) -> None:
+        """Sem crédito (falha da operadora com SIP 402) ou bloqueio de originação: a rota (o tronco) para de discar
+        na hora, para todas as carteiras, até a equipe retomar. Vale com ou sem a regra nova da carteira."""
+        motivo = ("sem_credito" if rede == "falha_operadora" and c.causa_sip == 402
+                  else "bloqueio_originacao" if rede == "bloqueio_originacao" else None)
+        if motivo is None:
+            return
+        tr = c.candidata.tronco
+        if not self.agendador.pausar(tr.id, motivo):
+            return
+        self._conta("rotas_pausadas")
+        self.pausas_novas.append({"empresa_id": c.empresa_id, "tronco_id": tr.id, "motivo": motivo,
+                                  "causa_sip": c.causa_sip})
+        self._alerta(f"empresa {c.empresa_id}: rota {tr.nome} pausada por "
+                     f"{'sem crédito na operadora' if motivo == 'sem_credito' else 'bloqueio de originação'}"
+                     " — não disca até a equipe retomar")
 
     def _finalizar(self, c: Chamada, agora: datetime) -> None:
         """O canal do cliente acabou: libera canal, tronco e vaga na hora. Se o provedor manda o resultado depois
@@ -647,7 +673,7 @@ class Orquestrador:
             lote.em_voo.discard(c.idx)
             lote.registrar(c.item, ev.desfecho, self.relogio(), causa_sip=c.causa_sip,
                            retorno_em=_quando(c.extras.get("retorno_em")), id_chamada=c.id)
-            for al in lote.alertas:              # sem crédito / bloqueio de originação: pausa a rota e alerta
+            for al in lote.alertas:              # alertas do lote (a pausa da rota é do núcleo)
                 self._alerta(al)
             lote.alertas.clear()
         if c.veredito == A.PESSOA:

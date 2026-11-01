@@ -179,7 +179,7 @@ class Plantao:
         self.registro, self.publicador, self.relogio = registro, publicador, relogio
         self.carregados: dict[int, object] = {}     # empresa -> dia carregado
         self._mtime = dados_caminho.stat().st_mtime if dados_caminho and dados_caminho.exists() else None
-        self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9}
+        self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9}
         self.agregado: object = None                 # último dia agregado em voz_passadas_dia
 
     def _vence(self, k: str, agora_s: float, a_cada: float) -> bool:
@@ -197,6 +197,8 @@ class Plantao:
             self._ids_dos_lotes(hoje)
             self.registro.sincronizar(list(self.orq.lotes.values()))
             self.registro.descarregar()
+        if self.registro is not None and self._vence("pausas", agora_s, 30):
+            self.sincronizar_pausas()
         if self.registro is not None and self._vence("reenvio", agora_s, 30):
             self.pegar_reenvios()
             self.pegar_reciclagens()
@@ -222,6 +224,51 @@ class Plantao:
             lid = self.registro.lote_do_dia(emp, cid, hoje, sum(len(l.itens) for l in ls))
             for l in ls:
                 l.lote_id = lid
+            if lid is not None:
+                self._registrar_janelas(lid, ls)
+
+    def _registrar_janelas(self, lote_id: int, lotes: list) -> None:
+        """voz_lotes.janelas: clientes por janela de discagem (UF/DDD), só contagem (a prévia da reciclagem usa)."""
+        por: dict = {}
+        for l in lotes:
+            for k, j in l.janelas().items():
+                x = por.setdefault(k, {"clientes": set(), "ufs": set()})
+                x["clientes"] |= j["clientes"]
+                x["ufs"] |= j["ufs"]
+        janelas = [{"abre": a, "fecha": f, "ufs": sorted(j["ufs"]), "clientes": len(j["clientes"])}
+                   for (a, f), j in sorted(por.items()) if a < f][:40]
+        if not janelas:
+            return
+        try:
+            self.registro.sb.rpc("registrar_janelas_lote_voz", {"lote": int(lote_id), "janelas": janelas})
+        except Exception as ex:   # noqa: BLE001
+            log.warning("lote %s: janelas não registradas (%s)", lote_id, ex.__class__.__name__)
+
+    def sincronizar_pausas(self) -> None:
+        """Rotas pausadas (sem crédito / bloqueio): grava no banco as que esta VM pausou e depois aplica as ativas do
+        banco, das empresas desta VM (a retomada pela equipe volta a discar aqui, sem reiniciar)."""
+        orq = self.orq
+        while orq.pausas_novas:
+            p = orq.pausas_novas[0]
+            try:
+                self.registro.sb.rpc("pausar_tronco_voz", {"empresa": p["empresa_id"], "tronco": p["tronco_id"],
+                                                           "motivo": p["motivo"], "causa_sip": p["causa_sip"]})
+            except Exception as ex:   # noqa: BLE001
+                log.warning("rota %s: pausa não gravada (%s); fica pausada aqui", p["tronco_id"], ex.__class__.__name__)
+                return                                   # tenta de novo no próximo ciclo; a rota segue pausada
+            orq.pausas_novas.pop(0)
+        minhas = self._minhas()
+        if not minhas:
+            return
+        try:
+            ativas = self.registro.sb.rpc("troncos_pausados_voz", {"empresas": minhas}) or []
+        except Exception as ex:   # noqa: BLE001
+            log.warning("rotas pausadas não lidas (%s)", ex.__class__.__name__)
+            return
+        meus = {x.id for e in minhas for x in orq.dados.troncos_da(e, ativos=False)}
+        retomadas = orq.agendador.aplicar_pausas({int(a["tronco_id"]): a["motivo"] for a in ativas}, meus)
+        for t in retomadas:
+            log.warning("rota %s retomada pela equipe: volta a discar", t)
 
     def pegar_reenvios(self) -> int:
         """Reenviar agora: pega um pedido pendente das empresas desta VM, confere de novo e cria as voltas."""

@@ -299,6 +299,14 @@ de outra pessoa pela certificação e a rotação segue.
   À noite a VM agrega `voz_passadas_dia`; o site lê `contato_por_passada` (menos de 30 chamadas = sem %). O site grava
   só por `salvar_discagem` (`discagem_erros` = o motor; versões em `regras_voz_versoes`); a edição da regra por
   sinalização, do modo e da reciclagem chega com o redesign (hoje a aba só mostra o que vale).
+  **Pausa da rota:** sem crédito (falha da operadora + SIP 402) ou bloqueio de originação pausam o tronco na hora no
+  núcleo da VM (`Agendador.pausados`; com ou sem a regra nova; o número não é penalizado e espera outra rota ou a
+  retomada), o Plantão grava em `voz_troncos_pausas` (`pausar_tronco_voz`, aviso para a equipe; bloqueio = crítico) e
+  lê as ativas a cada 30 s (`troncos_pausados_voz`). Retomar é da equipe com `gerenciar_troncos_voz`
+  (`retomar_tronco_voz`, com nota e auditoria). Prévia da reciclagem: chamadas com as rediscagens, ondas, duração,
+  `cabe_pct` por janela UF/DDD (`voz_lotes.janelas`, a VM conta) e curtas previstas (`chamada_curta_voz` = `e_curta`).
+  `DG.previsao` com a regra nova soma spins e rediscagens (`DG.plano_voz`). A agregação da noite grava
+  `execucoes.resumo.voz.resubmit` (`resumo_resubmit_voz`: por situação e motivo de ficar fora, só contagens).
 - `motor/retroalimentacao.py` (Speech Analytics, SQL 60): regras sobre os agregados de voz (horário → trava de
   horário, renitência depois de ocupado, frases, ordem de ofertas, canal preferido, propensão em sombra) com piso
   n >= 200 por grupo e diferença >= 5 p.p.; registra por `registrar_recomendacao_voz` (o banco cuida dos 90 dias da

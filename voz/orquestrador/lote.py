@@ -291,7 +291,7 @@ class Lote:
         self.motivos: dict[str, int] = {}         # contagem do porquê não discou (observabilidade)
         self.lote_id: int | None = None           # voz_lotes.id (o Plantão pede ao banco: lote_voz_do_dia)
         self.decisoes: list[dict] = []            # para voz_resubmits (o registro esvazia)
-        self.alertas: list[str] = []              # o núcleo repassa (sem crédito / bloqueio: pausa a rota)
+        self.alertas: list[str] = []              # alertas do lote que o núcleo repassa
         # ondas do dia: chave (origem, passada, situacao_origem, prioridade, pedido_id) -> contagens e id do banco
         self.ondas: dict[tuple, dict] = {}
         self._voltas: dict[int, str] = {}         # índice -> prioridade da volta pendente
@@ -501,8 +501,8 @@ class Lote:
             item.encerrado = True
             return
         if sinal in DG.PAUSA_ROTA:
-            self.alertas.append(f"empresa {self.empresa_id}: {'sem crédito na operadora' if sinal == 'sem_credito' else 'bloqueio de originação'}"
-                                " — a rota fica em pausa até a equipe resolver")
+            # a rota já foi pausada pelo núcleo (Orquestrador._pausar_rota) e a equipe avisada; o número não é
+            # penalizado: volta por outra rota livre ou espera a retomada
             return
         if desfecho in ENCERRA_NUMERO or sinal in ("numero_inexistente", "pessoa_errada"):
             item.encerrado = True                       # o número não serve hoje; o cliente segue pela linha
@@ -671,6 +671,19 @@ class Lote:
         return cont
 
     # ------------------------------------------------------------ reciclagem
+    def janelas(self) -> dict:
+        """Clientes por janela de discagem (horário de Brasília, já pela UF/DDD): {(abre, fecha): {clientes, ufs}}.
+        Só contagem e UF (voz_lotes.janelas, para a prévia da reciclagem dizer se cabe); nunca cliente ou telefone."""
+        por: dict = {}
+        for it in self.itens:
+            if it.janela_local is None:
+                continue
+            j = por.setdefault(tuple(it.janela_local), {"clientes": set(), "ufs": set()})
+            j["clientes"].add(it.id_cliente)
+            if len(it.uf or "") == 2 and it.uf.isalpha():
+                j["ufs"].add(it.uf.upper())
+        return por
+
     def sem_contato_pct(self) -> float:
         """% dos clientes do lote sem contato hoje (para a reciclagem automática)."""
         clientes = {it.id_cliente for it in self.itens}

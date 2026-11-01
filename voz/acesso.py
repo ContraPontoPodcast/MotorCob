@@ -82,6 +82,8 @@ RPC = {
     "concluir_reenvio_voz": "concluir_reenvio", "agregar_passadas_voz": "agregar_passadas",
     "pegar_reciclagem_voz": "pegar_reciclagem", "concluir_reciclagem_voz": "concluir_reciclagem",
     "registrar_reciclagem_auto_voz": "registrar_reciclagem_auto",
+    "pausar_tronco_voz": "pausar_tronco", "troncos_pausados_voz": "troncos_pausados",            # pausa da rota
+    "registrar_janelas_lote_voz": "registrar_janelas_lote",                                       # janelas do lote
     # SQL 63 · ligações da IA (gravação), clusterização semanal dos temas e embedding dos trechos
     "registrar_gravacoes_ia_voz": "registrar_gravacoes_ia", "trechos_para_temas_voz": "trechos_para_temas",
     "propor_tema_voz": "propor_tema", "recalcular_temas_semana": "recalcular_temas_semana",

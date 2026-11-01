@@ -70,6 +70,7 @@ if os.environ.get("PGPASSWORD"):      # CI: login com senha (scram) também para
 
 # ------------------------------------------------------------------ dados fictícios
 _sv("update public.perfis set empresa_id = null where id in (select id from auth.users where email like 'rsb.%')")
+_sv("delete from public.execucoes where empresa_id in (select id from public.empresas where slug in ('rsb-alfa', 'rsb-beta'))")
 _sv("delete from public.empresas where slug in ('rsb-alfa', 'rsb-beta')")
 _sv("delete from auth.users where email like 'rsb.%'")
 EA = _sv("insert into public.empresas (slug, nome) values ('rsb-alfa', 'Resubmit Alfa') returning id")
@@ -357,23 +358,130 @@ site("R10: o filtro de situação vale da 2ª em diante", True,
 site("R10: outra empresa não vê", True, f"select count(*) from public.contato_por_passada({EA}, null, '{HOJE}', '{HOJE}')",
      U["outra"], 0)
 
+# ------------------------------------------------------------------ R18 e R13 completa: janelas, duração e curtas
+P13 = f"public.previa_reciclagem_voz({LT}, 'lote', null, null, {EXC})"
+site("R13: prévia com chamadas, ondas, duração, janela e curtas previstas", True,
+     f"select (p ->> 'chamadas')::int >= (p ->> 'volta')::int and (p ->> 'duracao_min')::numeric >= 0 "
+     f"and (p ->> 'ondas')::int >= 1 and p ? 'cabe_pct' and p ? 'cabe_na_janela' and (p ->> 'janela_fonte') = 'faixa_legal' "
+     f"and (p ->> 'curtas_previstas')::int = (p -> 'curtas' ->> 'previstas')::int from {P13} p", U["oper"], "t")
+site("R13: curtas de hoje pela regra do motor (5 de 7: não atendida, ocupado, máquina e inexistente)", True,
+     f"select (p -> 'curtas' -> 'hoje' ->> 'chamadas') || '|' || (p -> 'curtas' -> 'hoje' ->> 'curtas') from {P13} p",
+     U["oper"], "7|5")
+checar("R13: chamada curta no banco = motor (falha técnica fora quando a carteira manda)", True,
+       "select public.chamada_curta_voz('nao_atendida', null) || '|' || public.chamada_curta_voz('cpc', 40) || '|' || "
+       "public.chamada_curta_voz('cpc', 5) || '|' || public.chamada_curta_voz('falha_rede', 0, '{\"falha_conta\": false}') "
+       "|| '|' || public.chamada_curta_voz('abandonada', 30, '{\"abandono_conta\": false}')", "true|false|true|false|false")
+JAN = json.dumps([{"abre": "00:00", "fecha": "00:01", "ufs": ["SP"], "clientes": 2},
+                  {"abre": "08:00", "fecha": "20:00", "ufs": ["AC", "RJ"], "clientes": 2}])
+vm("R18: a VM registra as janelas do lote (só contagem por janela e UF)", True,
+   f"select voz_vm.registrar_janelas_lote('{{\"lote\": {LT}, \"janelas\": {JAN}}}')", 2)
+vm("R18: janela com telefone é recusada", False,
+   f"select voz_vm.registrar_janelas_lote('{{\"lote\": {LT}, \"janelas\": [{{\"abre\": \"08:00\", \"fecha\": \"20:00\", "
+   f"\"clientes\": 1, \"telefone\": \"11988887770\"}}]}}')", erro="janelas")
+vm("R18: janela que fecha antes de abrir é recusada", False,
+   f"select voz_vm.registrar_janelas_lote('{{\"lote\": {LT}, \"janelas\": [{{\"abre\": \"20:00\", \"fecha\": \"08:00\", "
+   f"\"clientes\": 1}}]}}')", erro="janelas")
+vm("R18: lote de empresa sem voz é recusado", False,
+   f"select voz_vm.registrar_janelas_lote('{{\"lote\": {LB}, \"janelas\": {JAN}}}')", erro="lote não encontrado")
+site("R13: com as janelas da UF/DDD, a que já fechou não cabe", True,
+     f"select (p ->> 'janela_fonte') || '|' || jsonb_array_length(p -> 'janelas') || '|' || "
+     f"((p -> 'janelas' -> 0 ->> 'cabe_pct')::numeric = 0 or (p ->> 'duracao_min')::numeric = 0) || '|' || "
+     f"((p ->> 'cabe_pct')::numeric <= 50 or (p ->> 'duracao_min')::numeric = 0) from {P13} p", U["oper"], "uf_ddd|2|true|true")
+
+# ------------------------------------------------------------------ R17: pausa da rota (sem crédito / bloqueio)
+TA = _sv(f"insert into public.voz_troncos (empresa_id, referencia, operadora, host, autenticacao, ddd_origem, bina, canais) "
+         f"values ({EA}, 'rsb-sp', 'Operadora Exemplo', '203.0.113.30', 'ip', '11', '1130030000', 8) returning id")
+TB = _sv(f"insert into public.voz_troncos (empresa_id, referencia, operadora, host, autenticacao, ddd_origem, bina, canais) "
+         f"values ({EB}, 'rsb-rj', 'Operadora Exemplo', '203.0.113.31', 'ip', '21', '2130030000', 4) returning id")
+U["tec"] = _sv("insert into auth.users (email) values ('rsb.tec@x.com') returning id")
+_sv(f"update public.perfis set equipe = true, papel = 'operacao', equipe_tecnico = true, empresa_id = null, "
+    f"equipe_alcance = 'todas', ativo = true where id = '{U['tec']}'")
+PAUSA = f"select voz_vm.pausar_tronco('{{\"empresa\": {EA}, \"tronco\": {TA}, \"motivo\": \"sem_credito\", \"causa_sip\": 402}}')"
+PA = sql(PAUSA, "motorcx_voz")[1]
+vm("R17: a VM pausa a rota de novo e recebe a mesma pausa (um aviso só)", True, PAUSA, PA)
+checar("R17: a equipe recebe um aviso de sem crédito", True,
+       f"select count(*) || '|' || min(tipo) || '|' || min(para) from public.avisos where chave = 'tronco_pausado:{PA}'",
+       "1|atencao|equipe")
+vm("R17: a VM lê as rotas pausadas das empresas dela", True,
+   f"select string_agg((x ->> 'tronco_id') || ':' || (x ->> 'motivo'), ',') from jsonb_array_elements("
+   f"voz_vm.troncos_pausados('{{\"empresas\": [{EA}, {EB}]}}')) x", f"{TA}:sem_credito")
+vm("R17: tronco de outra empresa é recusado", False,
+   f"select voz_vm.pausar_tronco('{{\"empresa\": {EA}, \"tronco\": {TB}, \"motivo\": \"sem_credito\"}}')",
+   erro="tronco não encontrado")
+vm("R17: empresa sem voz é recusada", False,
+   f"select voz_vm.pausar_tronco('{{\"empresa\": {EB}, \"tronco\": {TB}, \"motivo\": \"sem_credito\"}}')", erro="sem voz")
+vm("R17: motivo fora da lista é recusado", False,
+   f"select voz_vm.pausar_tronco('{{\"empresa\": {EA}, \"tronco\": {TA}, \"motivo\": \"ocupado\"}}')", erro="motivo")
+vm("R17: a VM não chama a função do public direto", False,
+   f"select public.pausar_tronco_voz({EA}, {TA}, 'sem_credito')", erro="permission denied")
+site("R17: o site não pausa rota", False, f"select public.pausar_tronco_voz({EA}, {TA}, 'sem_credito')", U["admin"],
+     erro="permission denied")
+TA2 = _sv(f"insert into public.voz_troncos (empresa_id, referencia, operadora, host, autenticacao, ddd_origem, bina, canais) "
+          f"values ({EA}, 'rsb-sp2', 'Operadora Exemplo', '203.0.113.32', 'ip', '11', '1130030001', 4) returning id")
+PB = _sv(f"set role service_role; select public.pausar_tronco_voz({EA}, {TA2}, 'bloqueio_originacao', 608)")
+checar("R17: bloqueio de originação é aviso crítico (chave do servidor)", True,
+       f"select tipo || '|' || (titulo like 'Crítico:%') from public.avisos where chave = 'tronco_pausado:{PB}'", "erro|true")
+site("R17: outra empresa não vê a pausa", True,
+     f"select count(*) from public.voz_troncos_pausas where tronco_id = {TA}", U["outra"], 0)
+site("R17: quem não cuida da voz não retoma", False,
+     f"select public.retomar_tronco_voz({PA}, 'Crédito recarregado com a operadora.')", U["admin"], erro="não encontrada")
+site("R17: nota com telefone é recusada", False,
+     f"select public.retomar_tronco_voz({PA}, 'Liguei para (11) 98888-7777 e resolveram.')", U["tec"], erro="telefone")
+site("R17: a equipe (gerenciar_troncos_voz) retoma com nota", True,
+     f"select public.retomar_tronco_voz({PA}, 'Crédito recarregado com a operadora.') ->> 'tronco_id'", U["tec"], TA)
+checar("R17: fica registrado quem retomou, quando e a auditoria", True,
+       f"select (retomado_por = '{U['tec']}') || '|' || (retomado_em is not null) || '|' || "
+       f"(select count(*) > 0 from public.auditoria where tabela = 'voz_troncos_pausas') "
+       f"from public.voz_troncos_pausas where id = {PA}", "true|true|true")
+site("R17: não retoma duas vezes", False,
+     f"select public.retomar_tronco_voz({PA}, 'De novo.')", U["tec"], erro="já foi retomada")
+vm("R17: depois da retomada a VM não vê mais a pausa", True,
+   f"select count(*) from jsonb_array_elements(voz_vm.troncos_pausados('{{\"empresas\": [{EA}]}}')) x "
+   f"where (x ->> 'tronco_id')::bigint = {TA}", 0)
+vm("R17: nova falha depois da retomada é pausa nova", True, f"select ({PAUSA[7:]})::text <> '{PA}'", "t")
+checar("R17: ninguém grava a pausa direto", False,
+       f"insert into public.voz_troncos_pausas (empresa_id, tronco_id, motivo) values ({EA}, {TA}, 'sem_credito')",
+       uid=U["tec"], papel="authenticated")
+
+# ------------------------------------------------------------------ R19: resumo da execução (só contagens)
+EX = _sv(f"insert into public.execucoes (empresa_id, credor_id, data_ref, status, resumo) values ({EA}, {CA}, '{HOJE}', 'ok', "
+         "'{\"discagem\": {\"x\": 1}}') returning id")
+vm("R19: a agregação da noite grava o resumo do Resubmit na execução do dia", True,
+   f"select voz_vm.agregar_passadas('{{\"empresa\": {EA}, \"dia\": \"{HOJE}\", \"regras\": {REGRAS}}}')", 2)
+checar("R19: resumo por situação e por motivo de ficar fora, sem tocar no resto do resumo", True,
+       f"select (resumo -> 'discagem' ->> 'x') || '|' || (resumo -> 'voz' -> 'resubmit' ->> 'decisoes') || '|' || "
+       f"(resumo -> 'voz' -> 'resubmit' -> 'por_situacao' -> 'nao_atendida' ->> 'redisca') || '|' || "
+       f"(resumo -> 'voz' -> 'resubmit' -> 'por_motivo_fora' ->> 'max_dia') || '|' || "
+       f"(resumo -> 'voz' -> 'resubmit' -> 'por_origem' ->> 'auto') from public.execucoes where id = {EX}",
+       "1|2|1|1|2")
+checar("R19: o resumo não tem telefone, hash nem cliente", True,
+       f"select (resumo::text ~ '[0-9a-f]{{64}}|CLI-|1198888') from public.execucoes where id = {EX}", "f")
+site("R19: a empresa lê o resumo pela RPC; outra empresa não", True,
+     f"select public.resumo_resubmit_voz({EA}, {CA}, '{HOJE}') ->> 'decisoes'", U["oper"], 2)
+site("R19: ... outra empresa é recusada", False, f"select public.resumo_resubmit_voz({EA}, {CA}, '{HOJE}')", U["outra"],
+     erro="empresa não encontrada")
+
 # ------------------------------------------------------------------ segurança
-for t in ("regras_voz_versoes", "voz_resubmits", "voz_reenvios", "voz_reciclagens", "voz_passadas_dia"):
+for t in ("regras_voz_versoes", "voz_resubmits", "voz_reenvios", "voz_reciclagens", "voz_passadas_dia",
+          "voz_troncos_pausas"):
     checar(f"segurança: anon não lê {t}", False, f"select * from public.{t} limit 1", papel="anon")
 checar("segurança: tabelas novas com RLS", True,
        "select count(*) from pg_tables where schemaname = 'public' and tablename in ('regras_voz_versoes', 'voz_resubmits', "
-       "'voz_reenvios', 'voz_reciclagens', 'voz_passadas_dia') and not rowsecurity", 0)
+       "'voz_reenvios', 'voz_reciclagens', 'voz_passadas_dia', 'voz_troncos_pausas') and not rowsecurity", 0)
 checar("segurança: nenhuma coluna nova com telefone, CPF ou nome", True,
        "select count(*) from information_schema.columns where table_schema = 'public' and table_name in ('voz_resubmits', "
-       "'voz_reenvios', 'voz_passadas_dia', 'regras_voz_versoes') and column_name ~ '(telefone|cpf|^nome|numero_discado)'", 0)
+       "'voz_reenvios', 'voz_passadas_dia', 'regras_voz_versoes', 'voz_troncos_pausas') and column_name ~ '(telefone|cpf|^nome|numero_discado)'", 0)
 checar("segurança: funções novas com search_path fixo", True,
        "select count(*) from pg_proc where pronamespace in ('public'::regnamespace, 'voz_vm'::regnamespace) and prosecdef "
        "and proname in ('salvar_discagem', 'previa_reenvio_voz', 'pedir_reenvio_voz', 'regras_discagem_voz', 'lote_voz_do_dia', "
        "'registrar_onda_voz', 'pegar_reenvio_voz', 'concluir_reenvio_voz', 'agregar_passadas_voz', 'gravar_resubmits', "
-       "'validar_resubmit_voz') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", 0)
+       "'validar_resubmit_voz', 'pausar_tronco_voz', 'retomar_tronco_voz', 'troncos_pausados_voz', 'pausar_tronco', "
+       "'troncos_pausados', 'registrar_janelas_lote_voz', 'registrar_janelas_lote', 'resumo_resubmit_voz', "
+       "'previa_reciclagem_voz') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", 0)
 checar("segurança: o site não chama as funções da VM", True,
        "select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname in ('regras_discagem_voz', "
-       "'lote_voz_do_dia', 'registrar_onda_voz', 'pegar_reenvio_voz', 'concluir_reenvio_voz', 'agregar_passadas_voz') "
+       "'lote_voz_do_dia', 'registrar_onda_voz', 'pegar_reenvio_voz', 'concluir_reenvio_voz', 'agregar_passadas_voz', "
+       "'pausar_tronco_voz', 'troncos_pausados_voz', 'registrar_janelas_lote_voz') "
        "and (has_function_privilege('authenticated', oid, 'execute') or has_function_privilege('anon', oid, 'execute'))", 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")

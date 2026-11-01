@@ -1227,20 +1227,84 @@ class ModeloCurtas:
         return self.p0 if o is None else (o[0] + FORCA_NUMERO * self.p0) / (o[1] + FORCA_NUMERO)
 
 
+def rediscagens_teto(cfg: dict) -> int:
+    """Rediscagens do mesmo telefone no teto do dia pela regra por sinalização: o maior `rediscar.max` entre as
+    situações sem contato que não finalizam (o pior caso de cada número)."""
+    ps = cfg.get("por_sinalizacao") or {}
+    return max([0] + [r["rediscar"]["max"] for k, r in ps.items()
+                      if k in SITUACOES_RENITENCIA and not r["finaliza"] and r["rediscar"]["ativo"]])
+
+
+def plano_voz(cfg: dict, n_telefones: int) -> dict | None:
+    """Teto de tentativas de um cliente no dia pela regra nova da carteira (None = sem a regra: o de hoje).
+    Soma os spins (horizontal: spin N no telefone da regra do spin; vertical: um passe por telefone, até
+    max_telefones_dia) e, em cada saída, as rediscagens da regra por sinalização; corta pelas tentativas por número e
+    por cliente. Devolve {"por_telefone": [tentativas do 1º, 2º, ... telefone], "spins": saídas, "rediscagens": n}."""
+    if not tem_regra_nova(cfg) or n_telefones <= 0:
+        return None
+    tn = cfg["tentativas_numero_dia"]
+    tc = cfg.get("tentativas_cliente_dia") or cfg.get("spins_discador_dia") or 3      # vazio: o de config()
+    red = rediscagens_teto(cfg) if cfg.get("por_sinalizacao") is not None else tn - 1   # sem a regra: a de hoje
+    m = cfg.get("modo_discagem") or MODO_PADRAO
+    if m["modo"] == "vertical":
+        alvos = list(range(min(m["max_telefones_dia"], n_telefones)))
+    else:
+        alvos, usados = [], set()
+        for r in m["spins"]["regras"][:m["spins"]["quantidade"]]:
+            tel = r["telefone"]
+            if tel[0] == "t":
+                i = int(tel[1:]) - 1
+            elif tel == "nao_tentado":
+                i = next((k for k in range(n_telefones) if k not in usados), n_telefones)
+            else:                                   # historico: o melhor telefone (o 1º no teto)
+                i = 0
+            if i >= n_telefones:
+                if m["telefone_ausente"] == "pula":
+                    continue
+                i = next((k for k in range(n_telefones) if k not in usados), n_telefones - 1)
+            usados.add(i)
+            alvos.append(i)
+    por_tel, resta, spins, redisc = [0] * n_telefones, tc, 0, 0
+    for i in alvos:
+        t = min(1 + red, tn - por_tel[i], resta)
+        if t <= 0:
+            continue
+        por_tel[i] += t
+        resta -= t
+        spins += 1
+        redisc += t - 1
+    return {"por_telefone": por_tel, "spins": spins, "rediscagens": redisc}
+
+
 def previsao(fila: list, modelo: ModeloCurtas, tentativas) -> tuple[dict, dict]:
     """Previsão (teto) do dia: por cliente × canal de voz, cada número recebe até tentativas_numero_dia,
-    até somar tentativas_cliente_dia. tentativas(linha) -> (por número, por cliente).
+    até somar tentativas_cliente_dia. tentativas(linha) -> (por número, por cliente) ou (por número, por cliente,
+    config da carteira): com a regra nova (por_sinalizacao/modo_discagem), o teto soma os spins e as rediscagens
+    (plano_voz) e o total ganha "spins" e "rediscagens".
     Devolve (total {chamadas, curtas, fracao}, por cliente {id: [chamadas, curtas, prioridade, data_fixa]})."""
     grupos = defaultdict(list)
     for l in fila:
         if l["canal"] in CANAIS_VOZ:
             grupos[(l["id_cliente"], l["canal"], bool(l["condicao"]))].append(l)
     por = {}
+    nova = {"spins": 0, "rediscagens": 0}
+    tem_nova = False
     for (idc, _, _), ls in grupos.items():
-        tn, tc = tentativas(ls[0])
-        resta = tc
+        t3 = tentativas(ls[0])
+        tn, tc = t3[0], t3[1]
+        ordem = sorted(ls, key=lambda l: int(l.get("ordem_contato") or 1))
         p = por.setdefault(idc, [0, 0.0, ls[0]["prioridade"], bool(ls[0].get("data_fixa"))])
-        for l in sorted(ls, key=lambda l: int(l.get("ordem_contato") or 1)):
+        plano = plano_voz(t3[2], len(ordem)) if len(t3) > 2 and t3[2] is not None else None
+        if plano is not None:
+            tem_nova = True
+            nova["spins"] += plano["spins"]
+            nova["rediscagens"] += plano["rediscagens"]
+            for l, t in zip(ordem, plano["por_telefone"]):
+                p[0] += t
+                p[1] += t * modelo.p(l["contato"])
+            continue
+        resta = tc
+        for l in ordem:
             t = min(tn, resta)
             if t <= 0:
                 break
@@ -1249,7 +1313,10 @@ def previsao(fila: list, modelo: ModeloCurtas, tentativas) -> tuple[dict, dict]:
             p[1] += t * modelo.p(l["contato"])
     T = sum(v[0] for v in por.values())
     S = sum(v[1] for v in por.values())
-    return {"chamadas": T, "curtas": round(S, 1), "fracao": round(S / T, 4) if T else 0.0}, por
+    total = {"chamadas": T, "curtas": round(S, 1), "fracao": round(S / T, 4) if T else 0.0}
+    if tem_nova:
+        total.update(nova)
+    return total, por
 
 
 def cortar(por: dict, total: dict, cc: dict) -> tuple[list, dict]:

@@ -32,9 +32,22 @@
 -- R12–R15 voz_reciclagens, previa_reciclagem_voz, pedir_reciclagem_voz, permissão reciclar_lote_voz.
 -- R16 reciclagem_auto {ativo, hora, sem_contato_pct 10–100, excluir [cpc|promessa|recusa|pessoa_errada|retorno]};
 --     uma automática por lote no dia, sempre mantendo o limite do dia.
+-- R17 Pausa da rota: sem crédito (falha da operadora com SIP 402) ou bloqueio de originação pausam o tronco na hora
+--     (a VM para de discar por ele, com ou sem a regra nova da carteira), a pausa fica em voz_troncos_pausas
+--     (pausar_tronco_voz, da VM) e a equipe recebe o aviso (bloqueio = crítico). A retomada é manual, pela equipe com
+--     gerenciar_troncos_voz (retomar_tronco_voz, com nota; quem, quando e a auditoria); a VM lê as pausas ativas
+--     (troncos_pausados_voz) e volta a discar sem reiniciar.
+-- R18 voz_lotes.janelas: clientes do lote por janela de discagem (UF/DDD, horário de Brasília), só contagem e UF,
+--     gravado pela VM (registrar_janelas_lote_voz). A prévia da reciclagem (R13) devolve também chamadas (com as
+--     rediscagens da regra), ondas, duração estimada (ritmo do lote ou concorrência), se cabe em cada janela
+--     (cabe_pct) e as chamadas curtas previstas (chamada_curta_voz = motor/discagem.py › e_curta).
+-- R19 execucoes.resumo.voz.resubmit: a agregação da noite (agregar_passadas_voz) grava na última execução do motor de
+--     cada carteira do dia as decisões por situação e por motivo de ficar fora, por origem, pedidos e rotas pausadas
+--     (resumo_resubmit_voz; só contagens).
 -- VM (os dois acessos: chave do servidor e papel motorcx_voz): regras_discagem_voz, lote_voz_do_dia,
 --     registrar_onda_voz, pegar_reenvio_voz, concluir_reenvio_voz, pegar_reciclagem_voz, registrar_reciclagem_auto_voz,
---     concluir_reciclagem_voz e agregar_passadas_voz (as do public aceitam só o servidor e a VM; as de voz_vm, só o
+--     concluir_reciclagem_voz, agregar_passadas_voz, pausar_tronco_voz, troncos_pausados_voz e
+--     registrar_janelas_lote_voz (as do public aceitam só o servidor e a VM; as de voz_vm, só o
 --     motorcx_voz), e gravar_chamadas com passada, situacao_origem e resubmit_id.
 -- LGPD: nenhuma coluna nova guarda CPF, nome ou telefone. Telefone só em hash (sha-256 em hex).
 -- Depende dos SQL 51 (discagem do credor), 56 (voz), 57 (voz_vm) e 58 (gravar_chamadas com o fluxo). Se o 57 ou o
@@ -42,9 +55,10 @@
 --
 -- Conferência (no SQL Editor do Supabase, depois de rodar):
 --   select (select count(*) from pg_tables where schemaname = 'public' and tablename in ('regras_voz_versoes',
---             'voz_resubmits', 'voz_reenvios', 'voz_reciclagens', 'voz_passadas_dia')) as tabelas,                 -- 5
+--             'voz_resubmits', 'voz_reenvios', 'voz_reciclagens', 'voz_passadas_dia', 'voz_troncos_pausas')) as tabelas, -- 6
 --          (select count(*) from pg_tables where schemaname = 'public' and tablename in ('regras_voz_versoes',
---             'voz_resubmits', 'voz_reenvios', 'voz_reciclagens', 'voz_passadas_dia') and not rowsecurity) as sem_rls, -- 0
+--             'voz_resubmits', 'voz_reenvios', 'voz_reciclagens', 'voz_passadas_dia', 'voz_troncos_pausas')
+--             and not rowsecurity) as sem_rls,                                                                   -- 0
 --          (select count(*) from information_schema.columns where table_schema = 'public'
 --             and ((table_name = 'voz_chamadas' and column_name in ('passada', 'situacao_origem', 'resubmit_id'))
 --               or (table_name = 'voz_ondas' and column_name in ('origem', 'passada', 'situacao_origem',
@@ -54,6 +68,8 @@
 --          cardinality(public.discagem_erros('{"por_sinalizacao": {"ocupado": {"rediscar": {"max": 99}}}}')) as erro, -- 1
 --          public.discagem_padrao() -> 'por_sinalizacao' -> 'nao_atendida' -> 'rediscar' ->> 'depois_min' as na,   -- 60
 --          has_function_privilege('motorcx_voz', 'voz_vm.pegar_reciclagem(jsonb)', 'execute') as vm_recicla,       -- true
+--          has_function_privilege('motorcx_voz', 'voz_vm.pausar_tronco(jsonb)', 'execute') as vm_pausa,            -- true
+--          public.chamada_curta_voz('nao_atendida', null) as curta,                                              -- true
 --          has_table_privilege('anon', 'public.voz_resubmits', 'select') as anon_le;                               -- false
 
 -- ================================================================ 0. auxiliar: troca de trecho em função existente
@@ -796,6 +812,8 @@ revoke all on public.permissoes_catalogo from anon;
 
 -- R13: prévia, só contagens. Nunca volta: não ligar e inexistente; promessa fica fora quando a carteira suspende por
 -- promessa (travada); o resto do "excluir" é escolha. Com limite "mantem", quem já atingiu o máximo do dia fica fora.
+-- R18: também chamadas (com as rediscagens da regra), ondas, duração estimada, se cabe em cada janela UF/DDD do lote e
+-- as chamadas curtas previstas (e como fica a parte de curtas do lote).
 create or replace function public.previa_reciclagem_voz(lote bigint, escopo text default 'lote', resultados text[] default null,
                                                         ondas bigint[] default null, excluir text[] default null,
                                                         limite_cliente text default 'mantem')
@@ -807,6 +825,15 @@ declare
     ex text[] := coalesce(excluir, '{}');
     tnum int; tcli int;
     r jsonb;
+    volta int; n_sel int; k_sel int; n_lote int; k_lote int; sem_lote int; ult_hora int; dur_media numeric;
+    ps jsonb; md jsonb; g jsonb; jan jsonb; jan_out jsonb;
+    redisc int; tent int; j int; n_ondas int; conc int;
+    p_sem numeric; chamadas numeric; por_hora numeric; dur_min numeric; cabe_pct numeric; resta_max numeric;
+    taxa_lote numeric; taxa_sel numeric; curtas numeric; aviso numeric; horizontal boolean;
+    agora_sp timestamp := now() at time zone 'America/Sao_Paulo';
+    dow int := extract(isodow from (now() at time zone 'America/Sao_Paulo'));
+    fim_legal time := case when extract(isodow from (now() at time zone 'America/Sao_Paulo')) = 6 then time '14:00'
+                           else time '20:00' end;
 begin
     select * into l from public.voz_lotes v where v.id = lote;
     if l.id is null or not (l.empresa_id in (select public.minhas_empresas()) or public.chamada_do_servidor()
@@ -826,11 +853,14 @@ begin
     tnum := coalesce((d ->> 'tentativas_numero_dia')::int,
                      case when d ? 'por_sinalizacao' or d ? 'modo_discagem' then 3 else 2 end);
     tcli := coalesce((d ->> 'tentativas_cliente_dia')::int, (d ->> 'spins_discador_dia')::int, 3);
+    -- contagens por número (o último resultado de cada número do lote), com o motivo de quem fica fora
     with ch as (
-        select c.* from public.voz_chamadas c where c.lote_id = lote and c.destino_hash is not null),
+        select c.*, public.situacao_voz(c.resultado, c.causa_sip) as sit_ch,
+               public.chamada_curta_voz(c.resultado, c.duracao_s, d -> 'chamadas_curtas') as curta
+          from public.voz_chamadas c where c.lote_id = lote and c.destino_hash is not null),
     ult as (
         select distinct on (c.id_cliente, c.destino_hash) c.id_cliente, c.destino_hash, c.onda_id, c.resultado,
-               public.situacao_voz(c.resultado, c.causa_sip) as sit
+               c.sit_ch as sit
           from ch c where c.resultado is not null
          order by c.id_cliente, c.destino_hash, c.ocorrido_em desc, c.id desc),
     cand as (
@@ -842,7 +872,7 @@ begin
          where escopo = 'lote' or (u.sit = any (resultados) and (ondas is null or cardinality(ondas) = 0
                                                                   or u.onda_id = any (ondas)))),
     cls as (
-        select case
+        select c.id_cliente, c.destino_hash, case
             when 'opt_out' = any (c.ds) then 'nao_ligar'
             when c.resultado in ('numero_inexistente', 'inexistente_voz') then 'inexistente'
             when 'cpc' = any (ex) and c.ds && array['cpc', 'identidade_confirmada', 'atendida_sem_cpc'] then 'cpc'
@@ -852,17 +882,115 @@ begin
             when 'retorno' = any (ex) and 'retorno_agendado' = any (c.ds) then 'retorno'
             when limite_cliente = 'mantem' and (c.n_num >= tnum or c.n_cli >= tcli) then 'max_dia'
             else 'volta' end as cl
-          from cand c)
+          from cand c),
+    sel as (
+        select count(*) as n, count(*) filter (where x.curta) as k
+          from ch x join cls c on c.id_cliente = x.id_cliente and c.destino_hash = x.destino_hash and c.cl = 'volta'),
+    lt as (
+        select count(*) filter (where x.resultado is not null) as n,
+               count(*) filter (where x.resultado is not null and x.curta) as k,
+               count(*) filter (where x.resultado is not null and x.sit_ch is not null) as sem,
+               count(*) filter (where x.ocorrido_em > now() - interval '1 hour') as ult_hora,
+               avg(least(greatest(extract(epoch from x.encerrada_em - x.ocorrido_em), 5), 1800))
+                   filter (where x.encerrada_em is not null) as dur
+          from ch x)
     select jsonb_build_object(
-        'base', count(*), 'volta', count(*) filter (where cl = 'volta'), 'chamadas', count(*) filter (where cl = 'volta'),
+        'base', (select count(*) from cls), 'volta', (select count(*) from cls where cl = 'volta'),
         'excluir_efetivo', to_jsonb(ex),
         'fora', jsonb_build_object(
-            'max_dia', count(*) filter (where cl = 'max_dia'), 'cpc', count(*) filter (where cl = 'cpc'),
-            'promessa', count(*) filter (where cl = 'promessa'), 'recusa', count(*) filter (where cl = 'recusa'),
-            'pessoa_errada', count(*) filter (where cl = 'pessoa_errada'), 'retorno', count(*) filter (where cl = 'retorno'),
-            'nao_ligar', count(*) filter (where cl = 'nao_ligar'), 'inexistente', count(*) filter (where cl = 'inexistente')))
-      into r from cls;
-    return r;
+            'max_dia', (select count(*) from cls where cl = 'max_dia'), 'cpc', (select count(*) from cls where cl = 'cpc'),
+            'promessa', (select count(*) from cls where cl = 'promessa'),
+            'recusa', (select count(*) from cls where cl = 'recusa'),
+            'pessoa_errada', (select count(*) from cls where cl = 'pessoa_errada'),
+            'retorno', (select count(*) from cls where cl = 'retorno'),
+            'nao_ligar', (select count(*) from cls where cl = 'nao_ligar'),
+            'inexistente', (select count(*) from cls where cl = 'inexistente'))),
+           (select count(*) from cls where cl = 'volta'), sel.n, sel.k, lt.n, lt.k, lt.sem, lt.ult_hora, lt.dur
+      into r, volta, n_sel, k_sel, n_lote, k_lote, sem_lote, ult_hora, dur_media
+      from sel, lt;
+
+    -- chamadas: cada número que volta sai uma vez e, sem contato, redisca pela regra da carteira (até o máximo por
+    -- número). A chance de seguir sem contato é a do lote hoje (com menos de 30 chamadas, 70%).
+    ps := d -> 'por_sinalizacao';
+    if ps is not null and jsonb_typeof(ps) = 'object' then
+        select coalesce(max(case when coalesce((ps -> k ->> 'finaliza')::boolean, (pp -> k ->> 'finaliza')::boolean)
+                                      or not coalesce((ps -> k -> 'rediscar' ->> 'ativo')::boolean,
+                                                      (pp -> k -> 'rediscar' ->> 'ativo')::boolean) then 0
+                                 else coalesce((ps -> k -> 'rediscar' ->> 'max')::int, (pp -> k -> 'rediscar' ->> 'max')::int) end), 0)
+          into redisc
+          from unnest(array['maquina', 'nao_atendida', 'ocupado', 'caixa_postal', 'desligou_sem_conversar',
+                            'atendeu_desligou']) k, (select public.discagem_padrao() -> 'por_sinalizacao' as pp) z;
+    else
+        redisc := tnum - 1;                              -- a VM de hoje: volta no mesmo número até o máximo do dia
+    end if;
+    tent := greatest(1, least(1 + redisc, tnum));
+    p_sem := case when n_lote >= 30 then sem_lote::numeric / n_lote else 0.7 end;
+    chamadas := 0;
+    for j in 0 .. tent - 1 loop
+        chamadas := chamadas + volta * power(p_sem, j);
+    end loop;
+    chamadas := round(chamadas);
+    md := d -> 'modo_discagem';
+    horizontal := md is not null and coalesce(md ->> 'modo', 'horizontal') = 'horizontal';
+    n_ondas := case when horizontal then coalesce((md -> 'spins' ->> 'quantidade')::int, 3) else 1 end;
+    -- duração: o ritmo do lote na última hora (30 chamadas ou mais) ou a concorrência da empresa pela duração média
+    if ult_hora >= 30 then
+        por_hora := ult_hora;
+    else
+        select v.limite into conc from public.divisao_concorrencia_voz() v where v.empresa_id = l.empresa_id;
+        por_hora := greatest(1, coalesce(conc, 1)) * 3600.0 / greatest(coalesce(case when n_lote >= 30 then dur_media end, 45), 15);
+    end if;
+    dur_min := ceil(chamadas * 60.0 / greatest(por_hora, 1));
+    if horizontal and n_ondas > 1 and chamadas > 0 then   -- um spin por onda, com o intervalo mínimo entre eles
+        dur_min := greatest(dur_min, (n_ondas - 1) * coalesce((md -> 'spins' ->> 'intervalo_min')::int, 120)
+                                     + ceil(chamadas * 60.0 / n_ondas / greatest(por_hora, 1)));
+    end if;
+
+    -- janela: a de cada grupo de UF/DDD do lote (a VM conta), cortada pela faixa legal de hoje; sem as janelas do
+    -- lote, só a faixa legal (seg–sex 08:00–20:00, sábado até 14:00, domingo não liga)
+    jan := case when jsonb_typeof(l.janelas) = 'array' and jsonb_array_length(l.janelas) > 0 then l.janelas
+                else jsonb_build_array(jsonb_build_object('abre', '08:00', 'fecha', '20:00', 'clientes', 1)) end;
+    select coalesce(jsonb_agg(jsonb_build_object('abre', w.abre, 'fecha', w.fecha, 'ufs', w.ufs, 'clientes', w.clientes,
+                                                 'resta_min', w.resta, 'cabe_pct',
+                                                 round(100 * case when dur_min <= 0 then 1
+                                                                  else least(1, w.resta / dur_min) end, 1))
+                              order by w.fecha, w.abre), '[]'),
+           case when sum(w.clientes) > 0
+                then round(100 * sum(w.clientes * case when dur_min <= 0 then 1 else least(1, w.resta / dur_min) end)
+                           / sum(w.clientes), 1) else 100 end,
+           coalesce(max(w.resta), 0)
+      into jan_out, cabe_pct, resta_max
+      from (select x ->> 'abre' as abre, x ->> 'fecha' as fecha, coalesce(x -> 'ufs', '[]') as ufs,
+                   (x ->> 'clientes')::numeric as clientes,
+                   case when dow = 7 then 0
+                        else greatest(0, extract(epoch from (least((x ->> 'fecha')::time, fim_legal)
+                                                             - greatest(agora_sp::time, (x ->> 'abre')::time, time '08:00')))
+                                         / 60)::numeric end as resta
+              from jsonb_array_elements(jan) x) w;
+
+    -- chamadas curtas previstas: a taxa dos números que voltam (encolhida para a do lote, como o motor faz por
+    -- número) vezes as chamadas; e como fica a parte de curtas do lote depois
+    g := public.regras_curtas_voz();
+    taxa_lote := (k_lote + (g ->> 'prior')::numeric * (g ->> 'forca_carteira')::numeric)
+                 / (n_lote + (g ->> 'forca_carteira')::numeric);
+    taxa_sel := (k_sel + taxa_lote * (g ->> 'forca_numero')::numeric) / (n_sel + (g ->> 'forca_numero')::numeric);
+    curtas := round(chamadas * taxa_sel);
+    aviso := coalesce((d -> 'chamadas_curtas' ->> 'aviso')::numeric, (g ->> 'aviso')::numeric);
+    return r || jsonb_build_object(
+        'chamadas', chamadas, 'ondas', n_ondas, 'tentativas_numero', tent,
+        'duracao_min', dur_min, 'por_hora', round(por_hora),
+        'janela_fonte', case when jan_out is not null and jsonb_typeof(l.janelas) = 'array'
+                                  and jsonb_array_length(l.janelas) > 0 then 'uf_ddd' else 'faixa_legal' end,
+        'janelas', jan_out, 'resta_min', round(resta_max), 'cabe_pct', cabe_pct, 'cabe_na_janela', cabe_pct >= 100,
+        'curtas_previstas', curtas,
+        'curtas', jsonb_build_object(
+            'previstas', curtas, 'fracao_prevista', round(taxa_sel, 4),
+            'hoje', jsonb_build_object('chamadas', n_lote, 'curtas', k_lote,
+                                       'fracao', case when n_lote > 0 then round(k_lote::numeric / n_lote, 4) end),
+            'fracao_depois', case when n_lote + chamadas > 0
+                                  then round((k_lote + curtas) / (n_lote + chamadas), 4) end,
+            'aviso', aviso,
+            'acima_do_aviso', n_lote + chamadas > 0 and (k_lote + curtas) / (n_lote + chamadas) >= aviso));
 end $$;
 
 -- R14: pedido manual (site)
@@ -1212,7 +1340,7 @@ create or replace function public.agregar_passadas_voz(empresa bigint, dia date,
 language plpgsql security definer set search_path = public as $$
 #variable_conflict use_variable
 declare
-    contato text[]; sempre text[]; aband text[]; seg int; n int;
+    contato text[]; sempre text[]; aband text[]; seg int; n int; cr bigint;
 begin
     if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só o servidor ou a VM de voz';
@@ -1246,6 +1374,21 @@ begin
        and (coalesce(c.passada, 1) = 1 or c.situacao_origem is not null)
      group by c.empresa_id, c.credor_id, 4, 5;
     get diagnostics n = row_count;
+    -- R19: o resumo do Resubmit do dia vai para a última execução do motor de cada carteira desse dia
+    -- (execucoes.resumo.voz.resubmit), só contagens
+    for cr in select distinct v.credor_id from public.voz_resubmits v
+               where v.empresa_id = empresa
+                 and v.criado_em >= (dia::timestamp at time zone 'America/Sao_Paulo')
+                 and v.criado_em < ((dia + 1)::timestamp at time zone 'America/Sao_Paulo') loop
+        update public.execucoes x
+           set resumo = jsonb_set(case when jsonb_typeof(x.resumo) = 'object' then x.resumo else '{}'::jsonb end, '{voz}',
+                                  (case when jsonb_typeof(x.resumo -> 'voz') = 'object' then x.resumo -> 'voz'
+                                        else '{}'::jsonb end)
+                                  || jsonb_build_object('resubmit', public.resumo_resubmit_voz(empresa, cr, dia)))
+         where x.id = (select y.id from public.execucoes y
+                        where y.empresa_id = empresa and y.credor_id is not distinct from cr and y.data_ref = dia
+                        order by y.iniciada_em desc limit 1);
+    end loop;
     return n;
 end $$;
 
@@ -1374,11 +1517,274 @@ grant execute on function voz_vm.regras_discagem(jsonb), voz_vm.lote_do_dia(json
     voz_vm.pegar_reenvio(jsonb), voz_vm.concluir_reenvio(jsonb), voz_vm.agregar_passadas(jsonb),
     voz_vm.gravar_resubmits(jsonb) to motorcx_voz;
 
--- ================================================================ 11. auditoria
+-- ================================================================ 12. pausa da rota (R17): sem crédito e bloqueio
+-- Sem crédito (falha da operadora com SIP 402) ou bloqueio de originação num tronco: a VM para de discar por ele na
+-- hora, grava a pausa aqui e a equipe recebe o aviso (bloqueio é crítico). A rota pausada não disca, em nenhuma VM,
+-- até alguém da equipe com gerenciar_troncos_voz retomar, com uma nota (fica registrado quem e quando, mais a
+-- auditoria). Vale para o tronco inteiro (a operadora), não para a carteira: independe da regra de discagem.
+create table if not exists public.voz_troncos_pausas (
+    id            bigint generated always as identity primary key,
+    empresa_id    bigint not null references public.empresas (id) on delete cascade,
+    tronco_id     bigint not null,
+    motivo        text not null check (motivo in ('sem_credito', 'bloqueio_originacao')),
+    causa_sip     int check (causa_sip between 100 and 699),
+    pausado_em    timestamptz not null default now(),
+    retomado_em   timestamptz,
+    retomado_por  uuid references auth.users (id) on delete set null,
+    nota          text check (nota is null or (char_length(trim(nota)) between 3 and 300
+                                               and public.texto_sem_dado_pessoal(nota))),
+    foreign key (tronco_id, empresa_id) references public.voz_troncos (id, empresa_id) on delete cascade,
+    check ((retomado_em is null) = (nota is null))
+);
+create unique index if not exists voz_troncos_pausa_ativa on public.voz_troncos_pausas (tronco_id) where retomado_em is null;
+create index if not exists voz_troncos_pausas_empresa on public.voz_troncos_pausas (empresa_id, pausado_em desc);
+comment on table public.voz_troncos_pausas is
+    'Rota (tronco) pausada pela VM por sem crédito ou bloqueio de originação. Não disca até a equipe retomar (nota e quem).';
+alter table public.voz_troncos_pausas enable row level security;
+drop policy if exists voz_troncos_pausas_ver on public.voz_troncos_pausas;
+create policy voz_troncos_pausas_ver on public.voz_troncos_pausas for select to authenticated
+    using (public.ve_faturamento(empresa_id) or public.cuida_voz(empresa_id));
+revoke all on public.voz_troncos_pausas from anon;
+revoke insert, update, delete on public.voz_troncos_pausas from authenticated;
+grant select on public.voz_troncos_pausas to authenticated;
+
+-- a VM (as duas chaves) pausa; devolve o id da pausa ativa (a mesma, se já estava pausado: um aviso só)
+create or replace function public.pausar_tronco_voz(empresa bigint, tronco bigint, motivo text, causa_sip int default null)
+returns bigint
+language plpgsql security definer set search_path = public as $$
+#variable_conflict use_variable
+declare
+    t public.voz_troncos;
+    novo bigint;
+    nome_empresa text;
+begin
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
+        raise exception 'só o servidor ou a VM de voz';
+    end if;
+    if motivo is null or motivo not in ('sem_credito', 'bloqueio_originacao') then
+        raise exception 'motivo da pausa: sem_credito ou bloqueio_originacao';
+    end if;
+    if causa_sip is not null and causa_sip not between 100 and 699 then
+        raise exception 'causa SIP de 100 a 699';
+    end if;
+    select * into t from public.voz_troncos x where x.id = tronco and x.empresa_id = empresa;
+    if t.id is null or not exists (select 1 from public.voz_config c where c.empresa_id = empresa) then
+        raise exception 'tronco não encontrado';
+    end if;
+    insert into public.voz_troncos_pausas as p (empresa_id, tronco_id, motivo, causa_sip)
+    values (empresa, tronco, motivo, causa_sip)
+    on conflict (tronco_id) where retomado_em is null do nothing
+    returning p.id into novo;
+    if novo is null then
+        return (select p.id from public.voz_troncos_pausas p where p.tronco_id = tronco and p.retomado_em is null);
+    end if;
+    select e.nome into nome_empresa from public.empresas e where e.id = empresa;
+    insert into public.avisos (para, empresa_id, tipo, titulo, texto, link, chave)
+    values ('equipe', empresa, case when motivo = 'bloqueio_originacao' then 'erro' else 'atencao' end,
+            left(case when motivo = 'bloqueio_originacao' then 'Crítico: rota de voz pausada por bloqueio de originação · '
+                      else 'Rota de voz pausada sem crédito · ' end || coalesce(nome_empresa, ''), 140),
+            left('O tronco ' || t.referencia || ' (' || t.operadora || ') '
+                 || case when motivo = 'bloqueio_originacao' then 'recusou a originação'
+                         else 'respondeu sem crédito' end
+                 || coalesce(' (SIP ' || causa_sip || ')', '')
+                 || ' e parou de discar. Resolva com a operadora e retome a rota no Console de voz: '
+                 || 'fica registrado quem retomou e por quê.', 400),
+            '/console/voz', 'tronco_pausado:' || novo);
+    return novo;
+end $$;
+
+-- a equipe retoma (gerenciar_troncos_voz no alcance da empresa), com nota; a auditoria guarda o antes e o depois
+create or replace function public.retomar_tronco_voz(pausa bigint, nota text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+#variable_conflict use_variable
+declare p public.voz_troncos_pausas;
+begin
+    select * into p from public.voz_troncos_pausas x where x.id = pausa for update;
+    if p.id is null or not public.cuida_voz(p.empresa_id) then
+        raise exception 'pausa não encontrada';
+    end if;
+    if p.retomado_em is not null then
+        raise exception 'a rota já foi retomada';
+    end if;
+    if nota is null or char_length(trim(nota)) not between 3 and 300 then
+        raise exception 'conte em poucas palavras o que foi resolvido (3 a 300 caracteres)';
+    end if;
+    if not public.texto_sem_dado_pessoal(nota) then
+        raise exception 'a nota não pode ter CPF, telefone ou e-mail';
+    end if;
+    update public.voz_troncos_pausas x set retomado_em = now(), retomado_por = auth.uid(), nota = trim(retomar_tronco_voz.nota)
+     where x.id = p.id returning * into p;
+    return jsonb_build_object('id', p.id, 'tronco_id', p.tronco_id, 'motivo', p.motivo, 'pausado_em', p.pausado_em,
+                              'retomado_em', p.retomado_em);
+end $$;
+
+-- a VM lê as pausas ativas das empresas dela (a cada minuto: a retomada vale sem reiniciar nada)
+create or replace function public.troncos_pausados_voz(empresas bigint[]) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
+        raise exception 'só o servidor ou a VM de voz';
+    end if;
+    return coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'empresa_id', p.empresa_id, 'tronco_id', p.tronco_id,
+                                                         'motivo', p.motivo, 'pausado_em', p.pausado_em) order by p.id)
+                       from public.voz_troncos_pausas p
+                      where p.retomado_em is null and p.empresa_id = any (coalesce(empresas, '{}'))), '[]'::jsonb);
+end $$;
+
+revoke all on function public.pausar_tronco_voz(bigint, bigint, text, int), public.troncos_pausados_voz(bigint[])
+    from public, anon, authenticated;
+grant execute on function public.pausar_tronco_voz(bigint, bigint, text, int), public.troncos_pausados_voz(bigint[])
+    to service_role;
+revoke all on function public.retomar_tronco_voz(bigint, text) from public, anon;
+grant execute on function public.retomar_tronco_voz(bigint, text) to authenticated;
+
+create or replace function voz_vm.pausar_tronco(args jsonb) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+    if not voz_vm.tem_voz((args ->> 'empresa')::bigint) then
+        raise exception 'empresa sem voz configurada';
+    end if;
+    return to_jsonb(public.pausar_tronco_voz((args ->> 'empresa')::bigint, (args ->> 'tronco')::bigint, args ->> 'motivo',
+                                             (args ->> 'causa_sip')::int));
+end $$;
+create or replace function voz_vm.troncos_pausados(args jsonb) returns jsonb
+language sql stable security definer set search_path = '' as $$
+    select public.troncos_pausados_voz(array(select e::bigint from jsonb_array_elements_text(coalesce(args -> 'empresas', '[]')) e
+                                              where voz_vm.tem_voz(e::bigint)))
+$$;
+revoke all on function voz_vm.pausar_tronco(jsonb), voz_vm.troncos_pausados(jsonb) from public, anon, authenticated, service_role;
+grant execute on function voz_vm.pausar_tronco(jsonb), voz_vm.troncos_pausados(jsonb) to motorcx_voz;
+
+-- ================================================================ 13. janelas do lote (R18): UF/DDD na prévia
+-- A VM conta os clientes do lote por janela de discagem (horário de Brasília, já cortado pela UF/DDD e pela faixa
+-- legal): só contagem por janela e as UFs, nunca cliente ou telefone. A prévia da reciclagem usa para dizer se cabe.
+create or replace function public.janelas_lote_voz_ok(j jsonb) returns boolean
+language sql immutable parallel safe as $$
+    select j is null or (jsonb_typeof(j) = 'array' and jsonb_array_length(j) <= 40
+        and not exists (select 1 from jsonb_array_elements(j) e
+                         where jsonb_typeof(e) <> 'object'
+                            or exists (select 1 from jsonb_object_keys(e) k where k not in ('abre', 'fecha', 'ufs', 'clientes'))
+                            or coalesce(e ->> 'abre', '') !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                            or coalesce(e ->> 'fecha', '') !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                            or e ->> 'fecha' <= e ->> 'abre'
+                            or jsonb_typeof(e -> 'clientes') <> 'number' or (e ->> 'clientes')::numeric < 0
+                            or (e ->> 'clientes')::numeric <> floor((e ->> 'clientes')::numeric)
+                            or (e ? 'ufs' and (jsonb_typeof(e -> 'ufs') <> 'array' or jsonb_array_length(e -> 'ufs') > 27
+                                or exists (select 1 from jsonb_array_elements(e -> 'ufs') u
+                                            where jsonb_typeof(u) <> 'string' or u #>> '{}' !~ '^[A-Z]{2}$')))))
+$$;
+revoke all on function public.janelas_lote_voz_ok(jsonb) from public, anon;
+grant execute on function public.janelas_lote_voz_ok(jsonb) to authenticated, service_role;
+alter table public.voz_lotes add column if not exists janelas jsonb;
+do $$ begin
+    if not exists (select 1 from pg_constraint where conname = 'voz_lotes_janelas_ok') then
+        alter table public.voz_lotes add constraint voz_lotes_janelas_ok check (public.janelas_lote_voz_ok(janelas));
+    end if;
+end $$;
+comment on column public.voz_lotes.janelas is
+    'Clientes do lote por janela de discagem (horário de Brasília, pela UF/DDD): [{abre, fecha, ufs, clientes}]. Da VM.';
+
+create or replace function public.registrar_janelas_lote_voz(lote bigint, janelas jsonb) returns int
+language plpgsql security definer set search_path = public as $$
+#variable_conflict use_variable
+declare l public.voz_lotes;
+begin
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
+        raise exception 'só o servidor ou a VM de voz';
+    end if;
+    select * into l from public.voz_lotes v where v.id = lote;
+    if l.id is null or not exists (select 1 from public.voz_config c where c.empresa_id = l.empresa_id) then
+        raise exception 'lote não encontrado';
+    end if;
+    if janelas is null or not public.janelas_lote_voz_ok(janelas) then
+        raise exception 'janelas: lista de {abre, fecha HH:MM, ufs, clientes}';
+    end if;
+    update public.voz_lotes v set janelas = registrar_janelas_lote_voz.janelas where v.id = l.id;
+    return jsonb_array_length(janelas);
+end $$;
+revoke all on function public.registrar_janelas_lote_voz(bigint, jsonb) from public, anon, authenticated;
+grant execute on function public.registrar_janelas_lote_voz(bigint, jsonb) to service_role;
+create or replace function voz_vm.registrar_janelas_lote(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select to_jsonb(public.registrar_janelas_lote_voz((args ->> 'lote')::bigint, args -> 'janelas'))
+$$;
+revoke all on function voz_vm.registrar_janelas_lote(jsonb) from public, anon, authenticated, service_role;
+grant execute on function voz_vm.registrar_janelas_lote(jsonb) to motorcx_voz;
+
+-- ================================================================ 14. chamada curta no banco (a mesma do motor)
+-- Gerado de motor/voz.py (NAO_COMPLETADA, CURTA_SE_ABANDONO, TECNICOS) e motor/discagem.py (chamadas_curtas,
+-- PRIOR_CURTA, FORCA_CARTEIRA, FORCA_NUMERO); tests/test_resubmit.py confere que são iguais.
+create or replace function public.regras_curtas_voz() returns jsonb
+language sql immutable parallel safe as $$
+    select '{"sempre":["numero_inexistente","nao_atendida","caixa_postal","ocupado","falha_rede","inexistente_voz","maquina","falha_operadora","bloqueio_originacao","cancelada_discador","indisponivel","rejeitada"],"abandono":["abandonada"],"tecnicos":["falha_rede","falha_operadora","bloqueio_originacao","cancelada_discador","indisponivel"],"segundos":6,"aviso":0.75,"prior":0.9,"forca_carteira":20.0,"forca_numero":5.0}'::jsonb
+$$;
+
+-- motor/discagem.py › e_curta: cc = credores.discagem › chamadas_curtas (o que faltar vale o padrão)
+create or replace function public.chamada_curta_voz(resultado text, duracao_s int, cc jsonb default '{}') returns boolean
+language sql immutable parallel safe as $$
+    with r as (select public.regras_curtas_voz() as g)
+    select case
+        when resultado in (select jsonb_array_elements_text(r.g -> 'tecnicos'))
+             and not coalesce((cc ->> 'falha_conta')::boolean, true) then false
+        when duracao_s is not null and duracao_s <= coalesce((cc ->> 'segundos')::int, (r.g ->> 'segundos')::int) then true
+        when resultado in (select jsonb_array_elements_text(r.g -> 'sempre')) then true
+        else coalesce(resultado in (select jsonb_array_elements_text(r.g -> 'abandono')), false)
+             and coalesce((cc ->> 'abandono_conta')::boolean, true) end
+      from r
+$$;
+revoke all on function public.regras_curtas_voz(), public.chamada_curta_voz(text, int, jsonb) from public, anon;
+grant execute on function public.regras_curtas_voz(), public.chamada_curta_voz(text, int, jsonb) to authenticated, service_role;
+
+-- ================================================================ 15. resumo do Resubmit do dia (R19)
+-- Só contagens (nunca telefone, hash ou cliente): decisões por situação de origem e por motivo de ficar fora, por
+-- origem (automática, Reenviar agora, reciclagem), pedidos do dia e rotas pausadas. A VM grava em
+-- execucoes.resumo.voz.resubmit na agregação da noite (agregar_passadas_voz); a empresa também lê pela RPC.
+create or replace function public.resumo_resubmit_voz(empresa bigint, credor bigint, dia date) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+#variable_conflict use_variable
+declare
+    ini timestamptz := dia::timestamp at time zone 'America/Sao_Paulo';
+    fim timestamptz := (dia + 1)::timestamp at time zone 'America/Sao_Paulo';
+    r jsonb;
+begin
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz() or empresa in (select public.minhas_empresas())) then
+        raise exception 'empresa não encontrada';
+    end if;
+    with d as (
+        select v.situacao_origem, v.decisao, v.motivo_fora, v.origem from public.voz_resubmits v
+         where v.empresa_id = empresa and v.credor_id is not distinct from credor and v.criado_em >= ini and v.criado_em < fim),
+    s as (
+        select d.situacao_origem, jsonb_build_object(
+                   'total', count(*), 'finaliza', count(*) filter (where d.decisao = 'finaliza'),
+                   'redisca', count(*) filter (where d.decisao = 'redisca'),
+                   'proximo_telefone', count(*) filter (where d.decisao = 'proximo_telefone'),
+                   'proximo_cliente', count(*) filter (where d.decisao = 'proximo_cliente'),
+                   'fora', count(*) filter (where d.decisao = 'fora')) as c
+          from d group by d.situacao_origem),
+    m as (select d.motivo_fora, count(*) as n from d where d.decisao = 'fora' group by d.motivo_fora),
+    o as (select d.origem, count(*) as n from d group by d.origem)
+    select jsonb_build_object(
+        'dia', dia, 'decisoes', (select count(*) from d),
+        'por_situacao', coalesce((select jsonb_object_agg(s.situacao_origem, s.c order by s.situacao_origem) from s), '{}'),
+        'por_motivo_fora', coalesce((select jsonb_object_agg(m.motivo_fora, m.n order by m.motivo_fora) from m), '{}'),
+        'por_origem', coalesce((select jsonb_object_agg(o.origem, o.n order by o.origem) from o), '{}'),
+        'reenvios', (select count(*) from public.voz_reenvios x where x.empresa_id = empresa
+                       and x.credor_id is not distinct from credor and x.pedido_em >= ini and x.pedido_em < fim),
+        'reciclagens', (select count(*) from public.voz_reciclagens x where x.empresa_id = empresa
+                          and x.credor_id is not distinct from credor and x.data = dia),
+        'rotas_pausadas', (select count(*) from public.voz_troncos_pausas x where x.empresa_id = empresa
+                             and x.pausado_em >= ini and x.pausado_em < fim))
+      into r;
+    return r;
+end $$;
+revoke all on function public.resumo_resubmit_voz(bigint, bigint, date) from public, anon;
+grant execute on function public.resumo_resubmit_voz(bigint, bigint, date) to authenticated, service_role;
+
+-- ================================================================ 16. auditoria
 do $$
 declare t text;
 begin
-    foreach t in array array['regras_voz_versoes', 'voz_reenvios', 'voz_reciclagens'] loop
+    foreach t in array array['regras_voz_versoes', 'voz_reenvios', 'voz_reciclagens', 'voz_troncos_pausas'] loop
         execute format('drop trigger if exists z_auditar on public.%I', t);
         execute format('create trigger z_auditar after insert or update or delete on public.%I '
                        'for each row execute function public.auditar()', t);

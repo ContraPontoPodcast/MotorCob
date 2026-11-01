@@ -2422,8 +2422,22 @@ end $$;
 
 -- arquivos: a VM apaga do Storage só o anexo que o banco já liberou (anexos_fluxo_vencidos), pelo bilhete do SQL 57.
 -- O anexo é 'entradas/<slug>/...' ou 'chamados/<slug>/...' (anexos_pedido_voz_ok); o bilhete guarda bucket e caminho.
-alter table voz_vm.bilhetes drop constraint if exists bilhetes_bucket_check;
-alter table voz_vm.bilhetes add constraint bilhetes_bucket_check check (bucket in ('saidas', 'entradas', 'chamados'));
+-- Rodar de novo não estreita a lista: mantém os buckets que SQL seguintes acrescentaram (o 64 põe gravacoes-discador)
+do $$
+declare
+    def text;
+    lista text;
+begin
+    select pg_get_constraintdef(c.oid) into def from pg_constraint c
+     where c.conrelid = 'voz_vm.bilhetes'::regclass and c.conname = 'bilhetes_bucket_check';
+    if def is null or position('chamados' in def) = 0 then
+        select string_agg(quote_literal(b), ', ' order by b) into lista
+          from (select distinct m[1] as b from regexp_matches(coalesce(def, ''), '''([a-z0-9-]+)''', 'g') as m
+                union select unnest(array['saidas', 'entradas', 'chamados'])) z;
+        alter table voz_vm.bilhetes drop constraint if exists bilhetes_bucket_check;
+        execute format('alter table voz_vm.bilhetes add constraint bilhetes_bucket_check check (bucket in (%s))', lista);
+    end if;
+end $$;
 select pg_temp.trocar('voz_vm.empresa_do_caminho(text, text, text)',
     '    if operacao = ''baixar'' and bucket = ''saidas'' then',
     '    if operacao = ''apagar'' and bucket in (''entradas'', ''chamados'') then       -- SQL 58: anexo de pedido de fluxo
