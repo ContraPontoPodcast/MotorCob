@@ -296,9 +296,14 @@ def main(argv=None) -> int:
         if "montagem_motorcx" in provedores:    # SQL 58: a versão em uso do fluxo da carteira (sem fluxo: roteiro)
             from voz.fluxo import CarregadorFluxos
             provedores["montagem_motorcx"].fluxo_de = CarregadorFluxos(sb)
+        from voz.transcricao.ia import GravadorTranscricaoIA
         orq = Orquestrador(ari, dados, Agendador(contratado=contratado), EscritorEventos(a.eventos), provedores,
                            relogio_brasilia, fila_envio=fila_envio, ao_registrar=registro.registrar,
-                           ao_fluxo=registro.registrar_fluxo)
+                           ao_fluxo=registro.registrar_fluxo,
+                           # SQL 63: conversa da IA mascarada para o Speech Analytics e a gravação em voz_gravacoes
+                           transcricoes=GravadorTranscricaoIA(os.environ.get("MOTORCX_DIR_TRANSCRICOES",
+                                                                             "/var/motorcx/transcricoes")),
+                           ao_gravacao=registro.registrar_gravacao)
         usuario = os.environ.get("MOTORCX_VOZ_ENVIADO_POR", "")
         pub = Publicador(sb, a.eventos, usuario) if usuario else None
         if pub is None:

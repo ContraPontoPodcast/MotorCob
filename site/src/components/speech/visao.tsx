@@ -5,7 +5,7 @@ import { Link } from 'react-router';
 import { ArrowUpRight, Download, Landmark, RefreshCw } from 'lucide-react';
 import { Loading, Notice } from '@/components/app-shell';
 import { supabase, friendlyError, type Row } from '@/lib/supabase';
-import { FRASES, FUNIL, MOTIVOS, OBJECOES, dc, nf, pc, sinal } from '@/lib/speech';
+import { FRASES, FUNIL, MOTIVOS, OBJECOES, dc, nf, pc, rotuloOferta, sinal } from '@/lib/speech';
 import { Botao, Cartao, Kpi, campoCls, campoStyle } from '@/components/voz/ui';
 import { BarraFiltros, Bloqueio, Segmentos, type Filtros } from './comum';
 import { BarraH, COR_HUMANO, COR_IA, COR_NEUTRA, Faisca, Halter, Legenda, LinhaSemanas, TabelaSemanas, semanaRotulo } from './graficos';
@@ -191,7 +191,7 @@ export function Visao({ f, setDias, setOrigem, persona, setPersona }: { f: Filtr
 					<Cartao titulo="O que converte" linha="Frases e ofertas: quanto aparecem nas ligações com acordo e sem acordo">
 						<Legenda itens={[{ nome: 'Com acordo', cor: COR_IA }, { nome: 'Sem acordo', cor: COR_NEUTRA }]} />
 						{(p.converte ?? []).length === 0 ? <p className="mt-2 text-[13px] text-[var(--base-texto-2)]">Sem frase ou oferta com 30 ligações ou mais.</p> : (p.converte ?? []).map(c => (
-							<Halter key={c.tipo + c.valor} nome={c.tipo === 'frase' ? FRASES[c.valor] ?? c.valor : c.valor.toUpperCase()} sub={c.tipo === 'frase' ? 'Frase' : 'Oferta'} a={c.com_acordo} b={c.sem_acordo} corA={COR_IA} corB={COR_NEUTRA}
+							<Halter key={c.tipo + c.valor} nome={c.tipo === 'frase' ? FRASES[c.valor] ?? c.valor : rotuloOferta(c.valor)} sub={c.tipo === 'frase' ? 'Frase' : 'Oferta'} a={c.com_acordo} b={c.sem_acordo} corA={COR_IA} corB={COR_NEUTRA}
 								texto={c.com_acordo != null && c.sem_acordo ? <><b className="text-[var(--base-texto)]">{dc(c.com_acordo / c.sem_acordo)}×</b> · {dc(c.com_acordo, 0)}% × {dc(c.sem_acordo, 0)}%</> : undefined} />
 						))}
 						<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Associação, não causa: quem já queria pagar também ouve mais o resumo do acordo. Por isso cada frase vira recomendação com teste, não regra.</p>

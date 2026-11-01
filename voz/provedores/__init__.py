@@ -15,7 +15,8 @@ CODIGOS = ("simulador", "montagem_motorcx", "elevenlabs")
 
 def criar_todos(config: dict | None, segredos=None, roteiro_de=None) -> dict:
     """{codigo: provedor} a partir do JSON de provedores da VM (/etc/motorcx/provedores.json):
-    {"montagem": {...ConfigMontagem...}, "elevenlabs": {"numero_agente": "...", "max_simultaneas": 200}}.
+    {"montagem": {...ConfigMontagem...}, "elevenlabs": {"numero_agente": "...", "max_simultaneas": 200,
+    "agent_id": "...", "ref_api": "voz/elevenlabs-api"}} (agent_id e ref_api: a conversa pela API, SQL 63).
     A chave "montagem" do arquivo vira o código do banco, montagem_motorcx (voz_config.provedor).
     O Simulador está sempre lá. Provedor sem configuração fica de fora (a empresa que o escolher cai no
     Simulador, com alerta do orquestrador)."""
@@ -31,8 +32,13 @@ def criar_todos(config: dict | None, segredos=None, roteiro_de=None) -> dict:
         padrao = ("Você é o assistente de cobrança da empresa. Seja breve, educado e objetivo.", "Alô?")
         out["montagem_motorcx"] = Montagem(ConfigMontagem(**c), segredos, roteiro_de or (lambda ctx: padrao))
     if "elevenlabs" in config:
-        from voz.provedores.elevenlabs import ElevenLabs
-        out["elevenlabs"] = ElevenLabs(**config["elevenlabs"])
+        from voz.provedores.elevenlabs import ApiElevenLabs, ElevenLabs
+        c = dict(config["elevenlabs"])
+        agent_id, ref_api = c.pop("agent_id", None), c.pop("ref_api", None)
+        api = None
+        if agent_id and ref_api and segredos is not None:     # resultado e transcrição pela API de conversas (SQL 63)
+            api = ApiElevenLabs(segredos.valor(ref_api), agent_id)
+        out["elevenlabs"] = ElevenLabs(**c, api=api)
     return out
 
 

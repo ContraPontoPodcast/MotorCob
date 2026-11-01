@@ -147,7 +147,7 @@ class TestScriptsDaVm(unittest.TestCase):
             r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, f"{f.name}: {r.stderr}")
         servicos = sorted(vm.glob("*.service"))
-        self.assertEqual(len(servicos), 8)
+        self.assertEqual(len(servicos), 9)
         for s in servicos:
             txt = s.read_text()
             self.assertIn("ExecStart=", txt, s.name)
@@ -157,7 +157,8 @@ class TestScriptsDaVm(unittest.TestCase):
         for nome in ("motorcx-voz-comum", "motorcx-voz-segredos", "motorcx-voz-rodar", "motorcx-voz-config",
                      "motorcx-voz-atualizar", "motorcx-voz-config.timer", "motorcx-voz-transcricao.timer",
                      "motorcx-voz-speech.timer", "motorcx-voz-speech-noite.timer", "motorcx-voz-speech.service",
-                     "motorcx-voz-speech-noite.service"):
+                     "motorcx-voz-speech-noite.service", "motorcx-voz-speech-temas.service",
+                     "motorcx-voz-speech-temas.timer"):
             self.assertIn(nome, inicio)
             self.assertTrue((vm / nome).exists(), nome)
         # Speech Analytics (SQL 62): desligado por padrão, só liga com o metadado da VM

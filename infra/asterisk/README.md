@@ -106,6 +106,7 @@ antes da janela de discagem.
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |
 | `motorcx-voz-speech.timer` | A cada 15 min, Speech Analytics (SQL 62) das transcrições em `/var/motorcx/transcricoes`: nota do checklist e códigos fechados numa chamada ao LLM da Montagem (`/etc/motorcx/provedores.json`, chave no cofre). Desligado por padrão (veja abaixo). |
 | `motorcx-voz-speech-noite.timer` | 02:40, agregados do dia do Speech Analytics (ontem e anteontem, idempotente), recomendações (`motor/retroalimentacao.py`) e impacto de 28 dias. Mesmo interruptor. |
+| `motorcx-voz-speech-temas.timer` | Segunda 03:20, temas novos da semana passada (SQL 63): agrupa os trechos do cliente que ficaram sem tema e sem intenção. Grupo com 30 conversas ou mais vai para a Curadoria com um nome sugerido pela IA; quem dá o nome é uma pessoa. Mesmo interruptor. |
 
 O plantão do orquestrador:
 - baixa a Lista do dia que o motor publicou (`saidas/<slug>/<data>[/<credor>]/`);
@@ -137,6 +138,14 @@ subirem para o bucket da empresa.
 A transcrição de cada gravação é casada com `voz_gravacoes` pelo nome do arquivo em
 `/var/motorcx/transcricoes/empresa_<id>/<ref>.json`: `<ref>` = id da gravação (preferido), `transcricao_caminho`,
 o nome do arquivo da gravação sem extensão ou o `id_chamada`. Ao lado fica `<ref>.analise.json` (só a situação).
+
+**Ligações da IA (SQL 63):** a transcrição é o texto da própria conversa (sem Whisper e sem custo de transcrição).
+O orquestrador grava `ia_<id da chamada>.json` (já mascarado) só quando a ligação é gravada, e a gravação sobe como
+`credor_<id>/<AAAA>/<MM>/<DD>/ia_<id da chamada>.wav` e entra em `voz_gravacoes`: o nome sem extensão é o `<ref>`.
+As transcrições (da IA e do Whisper) com mais de 90 dias são apagadas pela transcrição e pela análise.
+ElevenLabs: para receber a conversa (e o resultado) pela API, ponha no `provedores.json`
+`"elevenlabs": {"numero_agente": "...", "agent_id": "<id do agente>", "ref_api": "voz/elevenlabs-api"}` e crie o
+segredo `motorcx-voz-elevenlabs-api` no Secret Manager (a chave nunca vai para arquivo).
 
 ## 5. Transferência para o discador do cliente
 

@@ -6,9 +6,17 @@
              numa chamada ao LLM (voz/analise/analisador.py) → gravar_analise_voz. Ao lado da transcrição fica
              <ref>.analise.json (só a situação, sem dado pessoal) para não analisar de novo. Alerta novo → sino
              (avisar_alertas_voz).
+             Depois de cada análise que deu certo, as janelas da conversa (15 a 30 s por falante, mascaradas por
+             redigir_trecho) vão para voz_trechos, com o embedding da Vertex (busca semântica e temas) quando o banco
+             tem pgvector; o custo dos embeddings entra no componente embeddings (SQL 63). As transcrições da IA
+             (ia_<id>.json, voz/transcricao/ia.py) entram aqui como as do Whisper. Transcrição com mais de 90 dias é
+             apagada da pasta.
   noite      02:40 (motorcx-voz-speech-noite.timer): para cada empresa ligada desta VM (parte i/n), agregar_speech_dia
              de ontem e anteontem (idempotente: o banco apaga e recalcula), depois as regras de
              motor/retroalimentacao.py (recomendações com piso n >= 200 e 5 p.p.) e o impacto de 28 dias.
+  temas      segunda 03:20 (motorcx-voz-speech-temas.timer): clusterização semanal dos trechos sem tema e sem
+             intenção da semana passada (voz/analise/temas.py; SQL 63). Grupo com 30 conversas ou mais vira tema novo
+             na Curadoria, com nome sugerido pela IA; a promoção é de uma pessoa.
 
 Desligado por padrão: só roda com MOTORCX_SPEECH_ANALYTICS=1 (o motorcx-voz-rodar só passa isso com o metadado
 motorcx-speech-analytics=1 da VM) e, no banco, só para empresas com voz_config.speech_analytics. Funciona nos dois
@@ -17,6 +25,7 @@ Montagem (/etc/motorcx/provedores.json, chave no Secret Manager pela referência
 
     python3 -m voz.analise.rotina analisar --pasta /var/motorcx/transcricoes
     python3 -m voz.analise.rotina noite --parte 1/2
+    python3 -m voz.analise.rotina temas --parte 1/2
 """
 from __future__ import annotations
 
@@ -33,6 +42,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from voz.analise import analisador as AN
+from voz.analise import temas as TM
+from voz.analise import trechos as TR
+from voz.transcricao import ia as TIA
 
 log = logging.getLogger("motorcx.voz.speech")
 REF = re.compile(r"^[A-Za-z0-9_\-]{1,80}$")
@@ -93,9 +105,58 @@ def _contexto(empresa: int, c: dict, geral: dict, modelo_nome: str) -> AN.Contex
         transferida_s=c.get("transferida_s"), modelo=modelo_nome)
 
 
-def analisar_pendentes(sb, modelo, fonte: FonteLocal, limite: int = 200, modelo_nome: str = "") -> dict:
+def segmentos_com_falante(segs: list[dict], falantes: str | None) -> list[dict]:
+    """Segmentos mascarados com o locutor: o da transcrição (IA: agente/cliente) ou, sem ele, o que o LLM disse
+    (A = empresa, C = cliente). Sem saber quem fala, o segmento não vira trecho."""
+    out = []
+    for i, s in enumerate(segs):
+        loc = s.get("locutor")
+        if not loc and falantes and i < len(falantes):
+            loc = "agente" if falantes[i] == "A" else "cliente"
+        if loc:
+            out.append({**s, "locutor": loc})
+    return out
+
+
+def gravar_trechos(sb, ctx: AN.Contexto, segs: list[dict], embedder=None, com_vetor: bool = False) -> dict:
+    """Janelas mascaradas em voz_trechos (com embedding quando o banco tem pgvector) e o uso dos embeddings."""
+    lista = TR.janelas(segs, ctx.transferida_s)
+    if not lista:
+        return {"trechos": 0}
+    emb = embedder if (embedder is not None and com_vetor) else None
+    antes = int(getattr(emb, "tokens_entrada", 0) or 0) if emb else 0
+    try:
+        n = TR.gravar(sb, {"id": ctx.gravacao_id, "empresa_id": ctx.empresa_id, "credor_id": ctx.credor_id,
+                           "origem": ctx.origem}, lista, emb, com_vetor)
+    except Exception as ex:   # noqa: BLE001 — Vertex fora: grava sem embedding (a busca por termo funciona)
+        if emb is None:
+            raise
+        log.warning("speech: embedding dos trechos falhou (%s); grava sem", ex.__class__.__name__)
+        return {"trechos": TR.gravar(sb, {"id": ctx.gravacao_id, "empresa_id": ctx.empresa_id,
+                                          "credor_id": ctx.credor_id, "origem": ctx.origem}, lista, None, False)}
+    if emb is not None:
+        tok = int(getattr(emb, "tokens_entrada", 0) or 0) - antes
+        tok = tok or sum(len(j.texto) for j in lista) // 4 + len(lista)     # sem a contagem do provedor: estimativa
+        hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+        TR.registrar_uso(sb, ctx.empresa_id, hoje, "embeddings", len(lista), 0, 0, tok, 0)
+    return {"trechos": n}
+
+
+def analisar_pendentes(sb, modelo, fonte: FonteLocal, limite: int = 200, modelo_nome: str = "", embedder=None,
+                       com_vetor: bool | None = None) -> dict:
     """Uma rodada. Erro numa gravação não segura as outras. Devolve as contagens (sem dado pessoal)."""
     cont: Counter = Counter()
+    vetor = {"v": com_vetor}
+
+    def tem_vetor() -> bool:              # o banco tem pgvector? (pergunta uma vez, só se há embedder)
+        if embedder is None:
+            return False
+        if vetor["v"] is None:
+            try:
+                vetor["v"] = bool(sb.rpc("speech_vetor_voz", {}))
+            except Exception:   # noqa: BLE001 — banco sem o SQL 63: trechos sem embedding
+                vetor["v"] = False
+        return vetor["v"]
     feitos = alertas = 0
     for empresa, lista in fonte.pendentes().items():
         for i in range(0, len(lista), LOTE):
@@ -132,14 +193,25 @@ def analisar_pendentes(sb, modelo, fonte: FonteLocal, limite: int = 200, modelo_
                     fonte.marcar(arq, "falhou")
                     cont["desistiu"] += 1
                     continue
+                saida: dict = {}
                 try:
-                    r = AN.processar(sb, modelo, _contexto(empresa, c, geral, modelo_nome), fonte.ler(arq))
+                    ctx = _contexto(empresa, c, geral, modelo_nome)
+                    r = AN.processar(sb, modelo, ctx, fonte.ler(arq), saida)
                 except Exception as ex:   # noqa: BLE001
                     log.warning("speech: gravação %s falhou (%s)", c.get("gravacao_id"), ex.__class__.__name__)
                     cont["erro"] += 1
                     continue
                 feitos += 1
                 sit = (r or {}).get("situacao")
+                if sit == "ok" and saida.get("segmentos"):
+                    try:          # trechos da busca e dos temas (SQL 60/63); falha aqui não desfaz a análise
+                        cont["trechos"] += gravar_trechos(sb, ctx, segmentos_com_falante(saida["segmentos"],
+                                                                                         saida.get("falantes")),
+                                                          embedder, tem_vetor())["trechos"]
+                    except Exception as ex:   # noqa: BLE001
+                        log.warning("speech: trechos da gravação %s falharam (%s)", c.get("gravacao_id"),
+                                    ex.__class__.__name__)
+                        cont["erro_trechos"] += 1
                 if sit in ("ok", "ja_analisada"):
                     fonte.marcar(arq, "ok")
                     alertas += int(r.get("alertas") or 0)
@@ -234,7 +306,14 @@ def modelo_da_vm(provedores: str = "/etc/motorcx/provedores.json", segredos=None
     return ModeloOpenAICompat(cfg.llm_base_url, segredos.valor(cfg.ref_llm), cfg.llm_modelo, timeout=90), cfg.llm_modelo
 
 
-def main(argv=None, ambiente=None, sb=None, modelo=None) -> int:
+def embedder_da_vm(ambiente=None):   # pragma: no cover - VM
+    """Vertex AI em São Paulo pela conta de serviço da VM (sem chave em arquivo); None sem o projeto."""
+    amb = os.environ if ambiente is None else ambiente
+    projeto = (amb.get("MOTORCX_GCP_PROJETO") or "").strip()
+    return TR.EmbeddingVertex(projeto) if projeto else None
+
+
+def main(argv=None, ambiente=None, sb=None, modelo=None, embedder=None) -> int:
     ap = argparse.ArgumentParser(description="Speech Analytics na VM (análise das ligações e job noturno)")
     sub = ap.add_subparsers(dest="rotina", required=True)
     a1 = sub.add_parser("analisar")
@@ -247,6 +326,12 @@ def main(argv=None, ambiente=None, sb=None, modelo=None) -> int:
     a2.add_argument("--dias", type=int, default=2)
     a2.add_argument("--hoje", type=date.fromisoformat, default=None)
     a2.add_argument("--sem-retroalimentacao", action="store_true")
+    a3 = sub.add_parser("temas")
+    a3.add_argument("--parte", default="1/1")
+    a3.add_argument("--provedores", default="/etc/motorcx/provedores.json")
+    a3.add_argument("--hoje", type=date.fromisoformat, default=None)
+    for x in (a1, a3):
+        x.add_argument("--sem-embedding", action="store_true", help="não calcula embedding (só a busca por termo)")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if not ligado(ambiente):
@@ -255,11 +340,19 @@ def main(argv=None, ambiente=None, sb=None, modelo=None) -> int:
     if sb is None:
         from voz.configuracao import supabase_do_ambiente
         sb = supabase_do_ambiente()
+    if a.rotina in ("analisar", "temas") and embedder is None and not a.sem_embedding:
+        embedder = embedder_da_vm(ambiente)
     if a.rotina == "analisar":
         nome = ""
         if modelo is None:
             modelo, nome = modelo_da_vm(a.provedores)
-        out = analisar_pendentes(sb, modelo, FonteLocal(a.pasta, a.dias), a.limite, nome)
+        out = analisar_pendentes(sb, modelo, FonteLocal(a.pasta, a.dias), a.limite, nome, embedder)
+        out["expiradas"] = TIA.expirar(a.pasta, TIA.RETENCAO_DIAS)
+    elif a.rotina == "temas":
+        if modelo is None:
+            modelo, _ = modelo_da_vm(a.provedores)
+        hoje = a.hoje or datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+        out = TM.rodar(sb, hoje, a.parte, modelo, embedder)
     else:
         hoje = a.hoje or datetime.now(ZoneInfo("America/Sao_Paulo")).date()
         out = noite(sb, hoje, a.parte, a.dias, retro=not a.sem_retroalimentacao)

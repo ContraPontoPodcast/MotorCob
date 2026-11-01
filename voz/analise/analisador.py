@@ -84,12 +84,9 @@ def itens_aplicaveis(itens, origem: str) -> list[dict]:
 
 
 def mascarar_para_llm(texto: str) -> str:
-    """CPF, cartão, e-mail, telefone, sequências longas de dígitos e nome dito. Saúde fica (sinal de vulnerabilidade)."""
-    t, _ = RED.redigir(texto or "")
-    t = RED.EMAIL.sub(RED.MARCA_EMAIL, t)
-    t = RED.TELEFONE.sub(RED.MARCA_TELEFONE, t)
-    t = RED.DIGITOS_LONGOS.sub(RED.MARCA_NUMERO, t)
-    return RED.NOME_DITO.sub(lambda m: f"{m.group(1)} {RED.MARCA_NOME}", t)
+    """CPF, cartão, e-mail, telefone, sequências longas de dígitos e nome dito. Saúde fica (sinal de vulnerabilidade).
+    A mesma máscara da transcrição das ligações da IA (voz/transcricao/redacao.py › mascarar)."""
+    return RED.mascarar(texto or "")[0]
 
 
 def preparar_segmentos(transcricao: dict) -> list[dict]:
@@ -447,8 +444,9 @@ def _rotulo_modelo(ctx: Contexto) -> str:
     return re.sub(r"[^A-Za-z0-9_.:\-]", "-", f"{VERSAO}:{ctx.modelo}" if ctx.modelo else VERSAO)[:60]
 
 
-def montar(ctx: Contexto, segs: list[dict], res: Resultado, duracao_s: float) -> dict:
-    """O argumento `analise` de gravar_analise_voz. Só códigos, números e trechos mascarados."""
+def montar(ctx: Contexto, segs: list[dict], res: Resultado, duracao_s: float, oferta: str | None = None) -> dict:
+    """O argumento `analise` de gravar_analise_voz. Só códigos, números e trechos mascarados. `oferta`: o código da
+    primeira oferta do fluxo (transcrição da ligação da IA, SQL 63), nunca do LLM."""
     base = {"empresa_id": ctx.empresa_id, "gravacao_id": ctx.gravacao_id, "versao": _rotulo_modelo(ctx),
             "minutos": round(max(0.0, float(duracao_s or 0)) / 60.0, 2),
             "uso": {"chamadas_llm": res.chamadas_llm, "tokens_entrada": res.tokens_entrada, "tokens_saida": res.tokens_saida}}
@@ -476,6 +474,8 @@ def montar(ctx: Contexto, segs: list[dict], res: Resultado, duracao_s: float) ->
         cod["frases"] = a["frases"]
     if a["temas"]:
         cod["temas"] = a["temas"]
+    if ctx.origem == "ia" and isinstance(oferta, str) and CAT.OFERTA.match(oferta):
+        cod["oferta"] = oferta
     # avaliação
     respostas = {k: v["resposta"] for k, v in a["itens"].items()}
     aval = None
@@ -530,13 +530,17 @@ def montar(ctx: Contexto, segs: list[dict], res: Resultado, duracao_s: float) ->
             "avaliacao": aval, "alertas": alertas[:10], "curadoria": cur[:20]}
 
 
-def processar(sb, modelo, ctx: Contexto, transcricao: dict) -> dict:
-    """Analisa uma gravação e grava (gravar_analise_voz: tudo numa transação, inclusive o uso de IA)."""
+def processar(sb, modelo, ctx: Contexto, transcricao: dict, saida: dict | None = None) -> dict:
+    """Analisa uma gravação e grava (gravar_analise_voz: tudo numa transação, inclusive o uso de IA). `saida` (opcional)
+    recebe os segmentos mascarados e quem fala em cada um (para os trechos da busca e dos temas, SQL 63)."""
     segs = preparar_segmentos(transcricao)
     if not segs:
         return {"situacao": "sem_texto"}
     duracao = float(transcricao.get("duracao_s") or ctx.duracao_s or segs[-1]["fim"])
     res = analisar(modelo, ctx, segs)
+    if saida is not None:
+        saida["segmentos"] = segs
+        saida["falantes"] = (res.analise or {}).get("falantes")
     if res.analise is None and res.chamadas_llm == 0:
         return {"situacao": "llm_indisponivel"}           # nada gasto: tenta na próxima rodada
-    return sb.rpc("gravar_analise_voz", {"analise": montar(ctx, segs, res, duracao)}) or {}
+    return sb.rpc("gravar_analise_voz", {"analise": montar(ctx, segs, res, duracao, transcricao.get("oferta"))}) or {}

@@ -13,6 +13,9 @@ O texto bruto nunca é gravado: só a versão redigida (voz/transcricao/redacao.
 
 Fonte padrão (FontePasta): <entrada>/empresa_<id>/<id_gravacao>.wav (+ <id_gravacao>.json opcional com
 duracao_s), que os importadores por discador (decisão 5: genérico SFTP/URL/API primeiro) deixam na VM.
+Gravação da ligação da IA (<id> começando com "ia_") nunca é transcrita aqui: a transcrição dela é o texto da própria
+conversa (voz/transcricao/ia.py). A cada rodada, as transcrições (do Whisper e da IA) com mais de 90 dias são
+apagadas da pasta de saída (ia.expirar).
 """
 from __future__ import annotations
 
@@ -28,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from voz import banco as B
+from voz.transcricao import ia as TIA
 from voz.transcricao.redacao import redigir
 from voz.transcricao.transcritores import ApiTranscricao, ComReserva, Transcritor, WhisperLocal
 
@@ -60,7 +64,7 @@ class FontePasta:
     def pendentes(self) -> list[Gravacao]:
         out = []
         for arq in sorted(self.pasta.glob("empresa_*/*.wav")):
-            if not ID.match(arq.stem):
+            if not ID.match(arq.stem) or TIA.eh_da_ia(arq.stem):    # ligação da IA: o texto vem da conversa
                 continue
             sit = self._situacao(arq)
             if sit.get("situacao") in ("ok", "abaixo_limiar", "desligada") or \
@@ -151,7 +155,9 @@ def main(argv=None) -> int:
         reserva = ApiTranscricao(SecretManager().valor("voz/transcricao-api"))
     w = Worker(dados, FontePasta(a.entrada), DestinoPasta(a.saida),
                ComReserva(WhisperLocal(a.modelo, pasta_modelos=os.environ.get("MOTORCX_WHISPER_PASTA")), reserva))
-    print(json.dumps(w.processar(), ensure_ascii=False))
+    out = w.processar()
+    out["expiradas"] = TIA.expirar(a.saida, TIA.RETENCAO_DIAS)      # 90 dias, como a gravação mais curta
+    print(json.dumps(out, ensure_ascii=False))
     return 0
 
 

@@ -88,3 +88,30 @@ def redigir_trecho(texto: str, nomes: tuple[str, ...] | list[str] = ()) -> str:
         t = re.sub(rf"\b{re.escape(n)}\b", MARCA_NOME, t, flags=re.IGNORECASE)
     t = NOME_DITO.sub(lambda m: f"{m.group(1)} {MARCA_NOME}", t)
     return SAUDE.sub(MARCA_SAUDE, t)
+
+
+def mascarar(texto: str, nomes: tuple[str, ...] | list[str] = ()) -> tuple[str, dict]:
+    """Máscara da conversa inteira (a mesma do analisador antes do LLM): CPF, cartão, e-mail, telefone, sequências de
+    8+ dígitos, nomes conhecidos da chamada (primeiro_nome) e nome dito ("meu nome é X"). Saúde fica (é o sinal de
+    vulnerabilidade; só vira [SAÚDE] no trecho guardado, redigir_trecho). Devolve (texto, contagem)."""
+    t, cont = redigir(texto or "")
+    cont = dict(cont, email=0, telefone=0, numero=0, nome=0)
+
+    def _sub(rx, marca, chave, s):
+        def f(_m):
+            cont[chave] += 1
+            return marca
+        return rx.sub(f, s)
+
+    t = _sub(EMAIL, MARCA_EMAIL, "email", t)
+    t = _sub(TELEFONE, MARCA_TELEFONE, "telefone", t)
+    t = _sub(DIGITOS_LONGOS, MARCA_NUMERO, "numero", t)
+    for n in sorted({x.strip() for x in nomes if x and len(x.strip()) >= 2}, key=len, reverse=True):
+        t, k = re.subn(rf"\b{re.escape(n)}\b", MARCA_NOME, t, flags=re.IGNORECASE)
+        cont["nome"] += k
+
+    def _dito(m):
+        cont["nome"] += 1
+        return f"{m.group(1)} {MARCA_NOME}"
+
+    return NOME_DITO.sub(_dito, t), cont
