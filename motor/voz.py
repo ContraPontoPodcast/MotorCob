@@ -134,8 +134,10 @@ DESFECHOS: tuple[Desfecho, ...] = (
       generico="bloqueio_originacao"),
     D("cancelada_discador", "SEM_RETORNO", "Cancelada antes do toque mínimo", ignorar=True, curta="sempre",
       generico="cancelada_discador"),
-    # aparelho desligado/fora de área: nem confirma nem desfaz inexistente
-    D("indisponivel", "SEM_RETORNO", "Fora de área / desligado", marca="temporario", nao_atende=True, curta="sempre",
+    # aparelho desligado/fora de área: nem confirma nem desfaz inexistente. Decisão do dono (01/11/2026, Renitência e
+    # Resubmit): é falha TÉCNICA, nunca penaliza o número (fora da certificação) e não conta no descanso por "não
+    # atende"; continua contando como tentativa do dia e como chamada curta (pela opção chamadas_curtas.falha_conta)
+    D("indisponivel", "SEM_RETORNO", "Fora de área / desligado", ignorar=True, curta="sempre",
       generico="indisponivel"),
     D("rejeitada", "ENTREGUE", "Recusou a chamada", marca="entregue", curta="sempre", generico="rejeitada",
       prova_existencia=True),

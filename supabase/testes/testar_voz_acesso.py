@@ -272,8 +272,11 @@ for nome, extra in (("corpo da resposta", '"corpo": "{}"'), ("dados do CRM", '"d
     cc_extra = CC.replace('"classe"', extra + ', "classe"', 1)
     checar(f"SQL 58: chamada de conector com {nome} é recusada (LGPD)", False,
            f"select voz_vm.gravar_crm_chamadas('{cc_extra}')", erro="não grava em crm_chamadas")
+# troca só o conector_id (": {KA}," também casava com empresa_id ou conector_versao quando os ids coincidiam: era a
+# falha intermitente, que dependia da sequência de ids deixada pelos testes anteriores)
+CC_OUTRA = CC.replace(f'"conector_id": {KA},', f'"conector_id": {KB},')
 checar("SQL 58: chamada de conector de outra empresa é recusada", False,
-       f"select voz_vm.gravar_crm_chamadas('{CC.replace(f': {KA},', f': {KB},')}')", erro="outra empresa")
+       f"select voz_vm.gravar_crm_chamadas('{CC_OUTRA}')", erro="outra empresa")
 checar("SQL 58: código fora da lista é recusado pelo banco", False,
        f"select voz_vm.gravar_crm_chamadas('{CC.replace('ofertas_1_3', 'cliente_vip')}')")
 checar("SQL 58: grava a chamada com a versão do fluxo e o bloco final", True,
