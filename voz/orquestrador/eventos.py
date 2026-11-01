@@ -77,9 +77,18 @@ class EventoChamada:
     transferida_em: datetime | None = None
     fluxo_versao_id: int | None = None   # SQL 58: versão do fluxo que conduziu a chamada
     bloco_final: str | None = None
+    # SQL 65 · Resubmit e contato por passada (só códigos e hash; nunca o número)
+    lote_id: int | None = None
+    destino_hash: str | None = None
+    passada: int | None = None              # 1 = primeira tentativa do número no dia
+    situacao_origem: str | None = None      # situação da tentativa anterior (da 2ª passada em diante)
+    resubmit_ref: str | None = None         # volta que gerou esta tentativa (o registro troca pelo id do banco)
+    onda_chave: tuple | None = None         # onda do lote (o registro troca pelo id do banco)
 
 
-CAMPOS = tuple(f.name for f in fields(EventoChamada))
+# fora do CSV de retorno: referências internas da VM, trocadas por ids do banco no registro
+INTERNOS = ("resubmit_ref", "onda_chave")
+CAMPOS = tuple(f.name for f in fields(EventoChamada) if f.name not in INTERNOS)
 
 
 
@@ -136,7 +145,7 @@ def _txt(v) -> str:
 
 
 def linha(ev: EventoChamada) -> dict:
-    return {k: _txt(v) for k, v in asdict(ev).items()}
+    return {k: _txt(v) for k, v in asdict(ev).items() if k not in INTERNOS}
 
 
 class EscritorEventos:
@@ -181,4 +190,6 @@ def para_voz_chamadas(ev: EventoChamada) -> dict:
             "no_pico": ev.no_pico, "tronco_id": ev.tronco_id, "tech_prefix": ev.tech_prefix,
             "data_promessa": ev.data_promessa, "valor_promessa": ev.valor_promessa, "retorno_em": ev.retorno_em,
             "tem_gravacao": bool(ev.gravacao),
-            "fluxo_versao_id": ev.fluxo_versao_id, "bloco_final": ev.bloco_final}
+            "fluxo_versao_id": ev.fluxo_versao_id, "bloco_final": ev.bloco_final,
+            "lote_id": ev.lote_id, "destino_hash": ev.destino_hash, "passada": ev.passada,
+            "situacao_origem": ev.situacao_origem}

@@ -21,7 +21,7 @@ import os
 import queue
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -30,7 +30,7 @@ from voz.orquestrador.agendador import Agendador
 from voz.orquestrador.ari import AriHttp, AriSimulado
 from voz.orquestrador.eventos import EscritorEventos
 from voz.orquestrador.gravacao import EnviadorGCS, FilaEnvio
-from voz.orquestrador.lote import Lote, ler_ids, ler_mailing
+from voz.orquestrador.lote import Lote, RegrasLote, ler_ids, ler_mailing
 from voz.orquestrador.nucleo import APP, Orquestrador
 from voz.provedores.simulador import Simulador
 
@@ -109,6 +109,22 @@ class FonteListas:
         finally:
             arq.unlink(missing_ok=True)
 
+    def regras(self, empresa_id: int) -> dict:
+        """Renitência por situação e Resubmit de cada carteira (credores.discagem pela RPC regras_discagem_voz, SQL
+        65). Falhou ou carteira sem as chaves novas: sem regras, a discagem de hoje (paridade)."""
+        try:
+            linhas = self.sb.rpc("regras_discagem_voz", {"empresa": int(empresa_id)}) or []
+        except Exception as ex:   # noqa: BLE001 — banco sem o SQL 65 ou fora: discagem de hoje
+            log.warning("empresa %s: regras da discagem não lidas (%s); vale a discagem de hoje", empresa_id,
+                        ex.__class__.__name__)
+            return {}
+        saida = {}
+        for l in linhas:
+            r = RegrasLote.da_carteira(l.get("discagem"))
+            if r is not None:
+                saida[l.get("credor_id")] = r
+        return saida
+
     def lotes(self, empresa_id: int, dia) -> list[Lote] | None:
         """Lotes do dia da empresa (um por carteira e canal) ou None se a lista ainda não saiu."""
         emp = (self.sb.selecionar("empresas", {"id": f"eq.{int(empresa_id)}"}) or [None])[0]
@@ -120,6 +136,7 @@ class FonteListas:
         except Exception:   # noqa: BLE001 — banco sem credores: a empresa toda
             credores = []
         unidades = [(c["id"], c["codigo"], (c.get("nome") or "").strip()) for c in credores] or [(None, None, "")]
+        regras = self.regras(empresa_id)
         saida, achou = [], False
         for cid, cod, nome_credor in unidades:
             prefixo = f"{emp['slug']}/{dia.isoformat()}" + (f"/{cod}" if cid is not None else "")
@@ -146,9 +163,9 @@ class FonteListas:
                          **({"assessoria": emp["nome"][:80]} if emp.get("nome") else {})}    # SQL 58: nome da empresa
                 it.variaveis = {**fixas, **por_cliente[it.id_cliente]}
             if mailing is not None:
-                saida.append(Lote(empresa_id, mailing, credor_id=cid, canal="discador"))
+                saida.append(Lote(empresa_id, mailing, credor_id=cid, canal="discador", regras=regras.get(cid)))
             if itens:
-                saida.append(Lote(empresa_id, itens, credor_id=cid, canal="agente_voz"))
+                saida.append(Lote(empresa_id, itens, credor_id=cid, canal="agente_voz", regras=regras.get(cid)))
         return saida if achou else None
 
 
@@ -162,7 +179,8 @@ class Plantao:
         self.registro, self.publicador, self.relogio = registro, publicador, relogio
         self.carregados: dict[int, object] = {}     # empresa -> dia carregado
         self._mtime = dados_caminho.stat().st_mtime if dados_caminho and dados_caminho.exists() else None
-        self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9}
+        self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9}
+        self.agregado: object = None                 # último dia agregado em voz_passadas_dia
 
     def _vence(self, k: str, agora_s: float, a_cada: float) -> bool:
         if agora_s - self._ult[k] >= a_cada:
@@ -176,13 +194,200 @@ class Plantao:
             self._recarregar_config()
             self._carregar_listas(hoje)
         if self.registro is not None and self._vence("banco", agora_s, 15):
+            self._ids_dos_lotes(hoje)
+            self.registro.sincronizar(list(self.orq.lotes.values()))
             self.registro.descarregar()
+        if self.registro is not None and self._vence("pausas", agora_s, 30):
+            self.sincronizar_pausas()
+        if self.registro is not None and self._vence("reenvio", agora_s, 30):
+            self.pegar_reenvios()
+            self.pegar_reciclagens()
+            self.reciclar_automatico()
+        if self.registro is not None and self.agregado != hoje:
+            self.agregar_passadas(hoje - timedelta(days=1))
+            self.agregado = hoje
         if self._vence("consumo", agora_s, 300):
             self.descarregar_tudo(so_periodico=True)
+
+    # ------------------------------------------------------------ SQL 65
+    def _minhas(self) -> list[int]:
+        return [e for e, cfg in sorted(self.orq.dados.configs.items())
+                if cfg.modo == self.modo and e % self.parte[1] == self.parte[0] - 1]
+
+    def _ids_dos_lotes(self, hoje) -> None:
+        """voz_lotes do dia para cada carteira carregada (um por carteira; discador e agente_voz dividem)."""
+        grupos: dict = {}
+        for l in self.orq.lotes.values():
+            if l.lote_id is None:
+                grupos.setdefault((l.empresa_id, l.credor_id), []).append(l)
+        for (emp, cid), ls in grupos.items():
+            lid = self.registro.lote_do_dia(emp, cid, hoje, sum(len(l.itens) for l in ls))
+            for l in ls:
+                l.lote_id = lid
+            if lid is not None:
+                self._registrar_janelas(lid, ls)
+
+    def _registrar_janelas(self, lote_id: int, lotes: list) -> None:
+        """voz_lotes.janelas: clientes por janela de discagem (UF/DDD), só contagem (a prévia da reciclagem usa)."""
+        por: dict = {}
+        for l in lotes:
+            for k, j in l.janelas().items():
+                x = por.setdefault(k, {"clientes": set(), "ufs": set()})
+                x["clientes"] |= j["clientes"]
+                x["ufs"] |= j["ufs"]
+        janelas = [{"abre": a, "fecha": f, "ufs": sorted(j["ufs"]), "clientes": len(j["clientes"])}
+                   for (a, f), j in sorted(por.items()) if a < f][:40]
+        if not janelas:
+            return
+        try:
+            self.registro.sb.rpc("registrar_janelas_lote_voz", {"lote": int(lote_id), "janelas": janelas})
+        except Exception as ex:   # noqa: BLE001
+            log.warning("lote %s: janelas não registradas (%s)", lote_id, ex.__class__.__name__)
+
+    def sincronizar_pausas(self) -> None:
+        """Rotas pausadas (sem crédito / bloqueio): grava no banco as que esta VM pausou e depois aplica as ativas do
+        banco, das empresas desta VM (a retomada pela equipe volta a discar aqui, sem reiniciar)."""
+        orq = self.orq
+        while orq.pausas_novas:
+            p = orq.pausas_novas[0]
+            try:
+                self.registro.sb.rpc("pausar_tronco_voz", {"empresa": p["empresa_id"], "tronco": p["tronco_id"],
+                                                           "motivo": p["motivo"], "causa_sip": p["causa_sip"]})
+            except Exception as ex:   # noqa: BLE001
+                log.warning("rota %s: pausa não gravada (%s); fica pausada aqui", p["tronco_id"], ex.__class__.__name__)
+                return                                   # tenta de novo no próximo ciclo; a rota segue pausada
+            orq.pausas_novas.pop(0)
+        minhas = self._minhas()
+        if not minhas:
+            return
+        try:
+            ativas = self.registro.sb.rpc("troncos_pausados_voz", {"empresas": minhas}) or []
+        except Exception as ex:   # noqa: BLE001
+            log.warning("rotas pausadas não lidas (%s)", ex.__class__.__name__)
+            return
+        meus = {x.id for e in minhas for x in orq.dados.troncos_da(e, ativos=False)}
+        retomadas = orq.agendador.aplicar_pausas({int(a["tronco_id"]): a["motivo"] for a in ativas}, meus)
+        for t in retomadas:
+            log.warning("rota %s retomada pela equipe: volta a discar", t)
+
+    def pegar_reenvios(self) -> int:
+        """Reenviar agora: pega um pedido pendente das empresas desta VM, confere de novo e cria as voltas."""
+        minhas = self._minhas()
+        if not minhas:
+            return 0
+        n = 0
+        while True:
+            try:
+                ped = self.registro.sb.rpc("pegar_reenvio_voz", {"empresas": minhas})
+            except Exception as ex:   # noqa: BLE001
+                log.warning("reenvio: falha ao pegar pedido (%s)", ex.__class__.__name__)
+                return n
+            if not ped:
+                return n
+            n += 1
+            agora = self.relogio()
+            lotes = [l for l in self.orq.lotes.values() if l.lote_id == ped.get("lote_id")]
+            filtros = ped.get("filtros") or {}
+            tot = {"volta": 0, "volta_outro_numero": 0, "espera_intervalo": 0, "fora": {}}
+            for l in lotes:
+                c = l.reenviar(filtros.get("resultados") or [], filtros.get("ondas") or [],
+                               ped.get("prioridade") or "normal", bool(ped.get("outro_numero")), int(ped["id"]), agora)
+                for k in ("volta", "volta_outro_numero", "espera_intervalo"):
+                    tot[k] += c[k]
+                for k, v in c["fora"].items():
+                    tot["fora"][k] = tot["fora"].get(k, 0) + v
+            self.registro.sincronizar(lotes)
+            onda = next((o["id"] for l in lotes for k, o in l.ondas.items()
+                         if k[0] == "manual" and k[4] == int(ped["id"]) and o["id"] is not None), None)
+            try:
+                self.registro.sb.rpc("concluir_reenvio_voz", {
+                    "reenvio": int(ped["id"]), "situacao": "concluido" if lotes else "cancelado",
+                    "volta_real": tot["volta"], "onda": onda, "resultado": tot})
+            except Exception as ex:   # noqa: BLE001
+                log.warning("reenvio %s: falha ao concluir (%s)", ped.get("id"), ex.__class__.__name__)
+
+    def _processar_reciclagem(self, ped: dict, lotes: list) -> None:
+        agora = self.relogio()
+        filtros = ped.get("filtros") or {}
+        tot = {"volta": 0, "fora": {}}
+        for l in lotes:
+            c = l.reciclar(filtros.get("resultados") or [], filtros.get("ondas") or [], ped.get("excluir") or [],
+                           ped.get("limite_cliente") or "mantem", int(ped["id"]), agora, ped.get("escopo") or "lote")
+            tot["volta"] += c["volta"]
+            for k, v in c["fora"].items():
+                tot["fora"][k] = tot["fora"].get(k, 0) + v
+        self.registro.sincronizar(lotes)
+        onda = next((o["id"] for l in lotes for k, o in l.ondas.items()
+                     if k[0] == "reciclagem" and k[4] == int(ped["id"]) and o["id"] is not None), None)
+        try:
+            self.registro.sb.rpc("concluir_reciclagem_voz", {
+                "reciclagem": int(ped["id"]), "situacao": "concluido" if lotes else "cancelado",
+                "volta_real": tot["volta"], "onda": onda, "fora_real": tot["fora"]})
+        except Exception as ex:   # noqa: BLE001
+            log.warning("reciclagem %s: falha ao concluir (%s)", ped.get("id"), ex.__class__.__name__)
+
+    def pegar_reciclagens(self) -> int:
+        """Reciclar mailing (pedido no site): zera e redisca os números escolhidos do lote, pelas mesmas regras."""
+        minhas = self._minhas()
+        n = 0
+        while minhas:
+            try:
+                ped = self.registro.sb.rpc("pegar_reciclagem_voz", {"empresas": minhas})
+            except Exception as ex:   # noqa: BLE001
+                log.warning("reciclagem: falha ao pegar pedido (%s)", ex.__class__.__name__)
+                return n
+            if not ped:
+                return n
+            n += 1
+            self._processar_reciclagem(ped, [l for l in self.orq.lotes.values() if l.lote_id == ped.get("lote_id")])
+        return n
+
+    def reciclar_automatico(self) -> int:
+        """Reciclagem automática da carteira (reciclagem_auto): no horário, com a parte sem contato do lote acima do
+        percentual, uma vez por lote no dia; sempre mantém o limite de tentativas do dia."""
+        agora = self.relogio()
+        n = 0
+        grupos: dict = {}
+        for l in self.orq.lotes.values():
+            if l.lote_id is not None and l.regras is not None:
+                grupos.setdefault(l.lote_id, []).append(l)
+        for lote_id, ls in grupos.items():
+            cfg = (ls[0].regras.cfg.get("reciclagem_auto") or {})
+            if not cfg.get("ativo") or ls[0].reciclagem_auto_em == agora.date() or agora.strftime("%H:%M") < cfg["hora"]:
+                continue
+            pct = sum(l.sem_contato_pct() * len(l.itens) for l in ls) / max(1, sum(len(l.itens) for l in ls))
+            for l in ls:
+                l.reciclagem_auto_em = agora.date()
+            if pct < cfg["sem_contato_pct"]:
+                continue
+            try:
+                ped = self.registro.sb.rpc("registrar_reciclagem_auto_voz", {
+                    "lote": lote_id, "excluir": cfg["excluir"], "sem_contato_pct": round(pct, 1)})
+            except Exception as ex:   # noqa: BLE001
+                log.warning("reciclagem automática: falha ao registrar (%s)", ex.__class__.__name__)
+                continue
+            if ped:
+                n += 1
+                self._processar_reciclagem(ped, ls)
+        return n
+
+    def agregar_passadas(self, dia) -> None:
+        """Noite: voz_passadas_dia (contato por passada) de cada empresa desta VM, pelas regras do motor (e_cpc e
+        chamada curta de motor/voz.py). Idempotente: refaz o dia inteiro."""
+        from motor import discagem as DG
+        from motor import voz as V
+        regras = {"contato": sorted({d.chave for d in V.DESFECHOS if d.e_cpc}), "curta_sempre": list(V.NAO_COMPLETADA),
+                  "curta_abandono": list(V.CURTA_SE_ABANDONO), "segundos": DG.PADRAO["chamadas_curtas"]["segundos"]}
+        for emp in self._minhas():
+            try:
+                self.registro.sb.rpc("agregar_passadas_voz", {"empresa": emp, "dia": dia.isoformat(), "regras": regras})
+            except Exception as ex:   # noqa: BLE001
+                log.warning("empresa %s: contato por passada não agregado (%s)", emp, ex.__class__.__name__)
 
     def descarregar_tudo(self, so_periodico: bool = False) -> None:
         if self.registro is not None:
             if not so_periodico:
+                self.registro.sincronizar(list(self.orq.lotes.values()))
                 self.registro.descarregar()
             self.registro.atualizar_consumo()
         if self.publicador is not None:
