@@ -21,6 +21,7 @@ import logging
 import queue
 import re
 import threading
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ from datetime import date, datetime, timedelta
 from motor import voz as V
 from voz.provedores.base import MOTIVOS_TRANSFERENCIA, Conexao, ContextoChamada, Emitir, ProvedorVoz
 from voz.provedores.rtp import TAXA, PonteRTP
+from voz.transcricao.ia import ConversaComTurnos, TurnosConversa
 
 log = logging.getLogger("motorcx.voz")
 # o que a IA pode registrar (os desfechos de conversa da tabela de voz; nada técnico)
@@ -508,11 +510,12 @@ class Montagem(ProvedorVoz):
     codigo = "montagem_motorcx"          # voz_config.provedor (SQL 56)
 
     def __init__(self, cfg: ConfigMontagem, segredos, roteiro_de, modelo_de=None, executor=None, servicos=None,
-                 fluxo_de=None, conectores=None, entendedor_de=None):
+                 fluxo_de=None, conectores=None, entendedor_de=None, relogio=None):
         """fluxo_de(ctx) -> voz.fluxo.FluxoCarregado | None: a versão em uso do fluxo da carteira (SQL 58). Com fluxo,
         a sessão é o executor voz/fluxo.Sessao (a Conversa cuida só do bloco generativo); sem fluxo, a Conversa de
         antes com o roteiro (roteiro_de). conectores: voz.conector.ClienteConectores (padrão: com o cofre da VM)."""
         self.cfg, self.segredos, self.roteiro_de = cfg, segredos, roteiro_de
+        self.relogio = relogio or time.monotonic       # tempo dos turnos da transcrição (desde o início da sessão)
         self.fluxo_de = fluxo_de
         self._conectores = conectores
         self.entendedor_de = entendedor_de
@@ -543,6 +546,8 @@ class Montagem(ProvedorVoz):
         else:
             roteiro, primeira = self.roteiro_de(ctx)
             conv = Conversa(ctx, self.modelo_de(), emitir_fila, roteiro, primeira, self.cfg.max_turnos)
+        # Speech Analytics (SQL 63): cada fala do agente e da pessoa é anotada para a transcrição da ligação da IA
+        conv = ConversaComTurnos(conv, TurnosConversa(self.relogio))
         s = SessaoMontagem(ctx, porta, conv)
         self.sessoes[ctx.id_chamada] = s
         self._emitir[ctx.id_chamada] = emitir
@@ -560,9 +565,16 @@ class Montagem(ProvedorVoz):
 
     def encerrar(self, id_chamada: str) -> None:
         s = self.sessoes.pop(id_chamada, None)
-        self._emitir.pop(id_chamada, None)
+        emitir = self._emitir.pop(id_chamada, None)
         if s is None:
             return
+        if emitir is not None and isinstance(s.conversa, ConversaComTurnos):
+            # a conversa com a IA acabou (encerrou ou transferiu): a transcrição vai ao orquestrador, que mascara e
+            # grava só se a ligação é gravada (voz/transcricao/ia.py)
+            try:
+                emitir(id_chamada, "transcricao", s.conversa.resumo())
+            except Exception as ex:   # noqa: BLE001 — a transcrição nunca segura o fim da chamada
+                log.warning("montagem: transcrição não entregue (%s)", ex.__class__.__name__)
         if hasattr(s.conversa, "descartar"):
             s.conversa.descartar()                  # resposta do CRM some da memória
         if s.parar is not None and s.loop is not None:

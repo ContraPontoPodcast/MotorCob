@@ -1,0 +1,9 @@
+[Unit]
+Description=Proxy HTTPS da VM (Caddy :8443): liga as rotas dos recursos ligados e recarrega
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStart=/usr/local/bin/motorcx-voz-https

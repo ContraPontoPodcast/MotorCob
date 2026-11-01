@@ -409,7 +409,7 @@ class TestMontagemFluxo(unittest.TestCase):
         ctx = ContextoChamada(id_chamada="ch-1", empresa_id=1, id_cliente="CLI-1", credor_id=5, variaveis=VARS)
         mt.iniciar(ctx, lambda *a: ev.append(a))
         s = mt.sessoes["ch-1"].conversa
-        self.assertIsInstance(s, FX.Sessao)
+        self.assertIsInstance(s._interna, FX.Sessao)            # embrulhada para a transcrição da IA (SQL 63)
         self.assertEqual(s.comecar(), ["Olá, aqui é a central da Aurora Cobranças. Falo com Ana?"])
         s.ouvir("Não, é engano")
         self.assertEqual(ev, [])                                 # só no tick (thread do orquestrador)
@@ -417,13 +417,14 @@ class TestMontagemFluxo(unittest.TestCase):
         self.assertEqual([e[1] for e in ev], ["passo", "passo", "resultado", "fluxo", "encerrar"])
         mt.encerrar("ch-1")
         self.assertEqual(s.memoria, {})
+        self.assertEqual(ev[-1][1], "transcricao")              # a conversa vai ao orquestrador (que mascara)
 
     def test_sem_fluxo_cai_no_roteiro(self):
         cfg = M.ConfigMontagem(portas=(40000, 40003))
         mt = M.Montagem(cfg, Dicionario({}), lambda ctx: ("Roteiro " + "x" * 50, "Alô?"),
                         modelo_de=lambda: ModeloFalso([]), executor=lambda s: None, fluxo_de=lambda ctx: None)
         mt.iniciar(ContextoChamada(id_chamada="ch-2", empresa_id=1, id_cliente="C"), lambda *a: None)
-        self.assertIsInstance(mt.sessoes["ch-2"].conversa, M.Conversa)
+        self.assertIsInstance(mt.sessoes["ch-2"].conversa._interna, M.Conversa)
 
     def test_ferramentas_por_bloco_com_enum(self):
         f = M.ferramentas_do_bloco(["apresentar_oferta", "transferir_humano"], [{"id": "OF-2"}], ["fechou_acordo"])

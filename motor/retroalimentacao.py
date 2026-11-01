@@ -189,7 +189,10 @@ def regra_frases(conversao: list[dict]) -> list[Recomendacao]:
 
 
 def regra_ofertas(conversao: list[dict]) -> list[Recomendacao]:
-    of = {k: v for k, v in _somar(conversao, "oferta", ("valor",)).items() if v[0] >= PISO_N}
+    # a oferta é o código da primeira oferta do fluxo (SQL 63: "6x", "avista_d10_20"); "sem_oferta" (o CRM não
+    # devolveu oferta) não é uma oferta para pôr antes de outra
+    of = {k: v for k, v in _somar(conversao, "oferta", ("valor",)).items()
+          if v[0] >= PISO_N and not str(k).startswith("sem_")}
     if len(of) < 2:
         return []
     taxa = {k: v[1] / v[0] for k, v in of.items()}
@@ -338,7 +341,9 @@ def _periodo(de: date, ate: date) -> str:
 def publicar_recomendacoes(sb, empresa_id: int, hoje: date) -> int:
     de, ate = hoje - timedelta(days=JANELA_DIAS), hoje - timedelta(days=1)
     conv = _ler(sb, "voz_conversao_dia", {"empresa_id": f"eq.{int(empresa_id)}", "and": _periodo(de, ate)})
-    mot = _ler(sb, "voz_resultado_por_motivo", {"empresa_id": f"eq.{int(empresa_id)}", "and": _periodo(de, ate)})
+    # pagou em 30 dias só existe para dias com os 30 dias fechados (SQL 63): a mesma janela, 30 dias para trás
+    mot = _ler(sb, "voz_resultado_por_motivo", {"empresa_id": f"eq.{int(empresa_id)}",
+                                                "and": _periodo(de - timedelta(days=30), ate - timedelta(days=30))})
     ren = sb.rpc("renitencia_voz", {"empresa": empresa_id, "de": de.isoformat(), "ate": ate.isoformat()}) or []
     n = 0
     for r in gerar(conv, ren, mot):

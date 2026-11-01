@@ -131,6 +131,15 @@ export const FRASES: Record<string, string> = {
 	reconheceu_dificuldade: 'Reconheceu a dificuldade antes da oferta', resumiu_acordo: 'Resumiu o acordo antes de encerrar',
 	link_na_ligacao: 'Mandou o link durante a ligação', dia_vencimento: 'Deixou escolher o dia do vencimento',
 };
+// SQL 63 · código da primeira oferta do fluxo ("6x", "avista_d10_20", "sem_oferta"): só parcelas e faixa de desconto
+export function rotuloOferta(c: string): string {
+	if (c === 'sem_oferta') return 'Sem oferta do CRM';
+	const m = /^(avista|(\d{1,2})x)(?:_d(1_10|10_20|20_30|30_50|50_mais))?$/.exec(c);
+	if (!m) return c.toUpperCase();
+	const base = m[1] === 'avista' ? 'À vista' : `${m[2]}x`;
+	const faixa = m[3] ? (m[3] === '50_mais' ? 'desconto acima de 50%' : `desconto de ${m[3].replace('_', '–')}%`) : '';
+	return faixa ? `${base} · ${faixa}` : base;
+}
 export const FUNIL = [
 	{ id: 'identidade', nome: 'Identidade confirmada' }, { id: 'objecao', nome: 'Levantou objeção' },
 	{ id: 'oferta', nome: 'Recebeu oferta' }, { id: 'aceitou', nome: 'Aceitou a oferta' }, { id: 'acordo', nome: 'Acordo registrado' },

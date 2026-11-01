@@ -972,6 +972,13 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             mensageria.criar_lotes(sb, eid, cid, pasta, data, canais, out)
         except Exception as e:  # noqa: BLE001
             out(f"  aviso: lotes da mensageria não criados ({str(e)[:120]})")
+        try:   # Speech Analytics (SQL 63): pagou em 30 dias por motivo; só agregados, nunca derruba a rodada
+            from nuvem import resultado_motivo
+            rm = resultado_motivo.publicar(sb, eid, cid, pasta, data)
+            if rm and rm.get("linhas"):
+                out(f"  speech: realizado por motivo de {rm.get('de')} a {rm.get('ate')} ({rm['linhas']} linhas)")
+        except Exception as e:  # noqa: BLE001 — banco sem o SQL 63 ou sem Speech Analytics: segue
+            out(f"  aviso: realizado por motivo não gravado ({str(e)[:120]})")
 
         if aviso_layout:
             r["alertas"] = [aviso_layout] + r["alertas"]

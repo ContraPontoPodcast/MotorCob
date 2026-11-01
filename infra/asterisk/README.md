@@ -68,7 +68,9 @@ Tronco autenticado por IP não tem senha.
 
 **Opcionais:**
 - `motorcx-voz-deepgram`, `motorcx-voz-llm` e `motorcx-voz-tts`: chaves da Montagem MotorCX;
-- `motorcx-voz-transcricao-api`: chave da reserva da transcrição por API.
+- `motorcx-voz-transcricao-api`: chave da reserva da transcrição por API;
+- `motorcx-voz-elevenlabs-api` e `motorcx-voz-elevenlabs-webhook`: chave da API de conversas e segredo do webhook
+  pós-chamada da ElevenLabs (SQL 63; veja "Webhook da ElevenLabs" na seção 4).
 
 **Usuário dos envios:** no metadado `motorcx-enviado-por` de cada VM, coloque o uuid do usuário da equipe
 MotorCX que assina os envios de eventos (`envios.enviado_por`):
@@ -106,6 +108,10 @@ antes da janela de discagem.
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |
 | `motorcx-voz-speech.timer` | A cada 15 min, Speech Analytics (SQL 62) das transcrições em `/var/motorcx/transcricoes`: nota do checklist e códigos fechados numa chamada ao LLM da Montagem (`/etc/motorcx/provedores.json`, chave no cofre). Desligado por padrão (veja abaixo). |
 | `motorcx-voz-speech-noite.timer` | 02:40, agregados do dia do Speech Analytics (ontem e anteontem, idempotente), recomendações (`motor/retroalimentacao.py`) e impacto de 28 dias. Mesmo interruptor. |
+| `motorcx-voz-speech-buscas` | Serviço contínuo da busca semântica do site (SQL 60/63): a cada 2 s pega as buscas pendentes da parte desta VM, calcula o embedding da pergunta na Vertex (São Paulo) e responde. O site consulta até a resposta chegar; a busca vira erro sozinha em 2 min. Custo do embedding na margem (componente `embeddings`). Mesmo interruptor: desligado, sai e fica parado (depois de ligar o metadado, `systemctl restart motorcx-voz-speech-buscas`). |
+| `caddy` + `motorcx-voz-https.timer` | Proxy HTTPS na 8443 (Caddy oficial 2.8.4): a cada 2 min liga só as rotas dos recursos ligados e recarrega quando muda. Certificado Let's Encrypt de `<IP>.sslip.io` (veja "Proxy HTTPS" abaixo). |
+| `motorcx-voz-simulador` | Simulador de texto do Fluxo e roleplay (`voz/simulador_http.py`, 127.0.0.1:8091), atrás do proxy. Só com o metadado `motorcx-simulador-fluxo=1`; a chave vem do segredo `motorcx-voz-simulador`. |
+| `motorcx-voz-speech-temas.timer` | Segunda 03:20, temas novos da semana passada (SQL 63): agrupa os trechos do cliente que ficaram sem tema e sem intenção. Grupo com 30 conversas ou mais vai para a Curadoria com um nome sugerido pela IA; quem dá o nome é uma pessoa. Mesmo interruptor. |
 
 O plantão do orquestrador:
 - baixa a Lista do dia que o motor publicou (`saidas/<slug>/<data>[/<credor>]/`);
@@ -137,6 +143,80 @@ subirem para o bucket da empresa.
 A transcrição de cada gravação é casada com `voz_gravacoes` pelo nome do arquivo em
 `/var/motorcx/transcricoes/empresa_<id>/<ref>.json`: `<ref>` = id da gravação (preferido), `transcricao_caminho`,
 o nome do arquivo da gravação sem extensão ou o `id_chamada`. Ao lado fica `<ref>.analise.json` (só a situação).
+
+**Ligações da IA (SQL 63):** a transcrição é o texto da própria conversa (sem Whisper e sem custo de transcrição).
+O orquestrador grava `ia_<id da chamada>.json` (já mascarado) só quando a ligação é gravada, e a gravação sobe como
+`credor_<id>/<AAAA>/<MM>/<DD>/ia_<id da chamada>.wav` e entra em `voz_gravacoes`: o nome sem extensão é o `<ref>`.
+As transcrições (da IA e do Whisper) com mais de 90 dias são apagadas pela transcrição e pela análise.
+ElevenLabs: para receber a conversa (e o resultado) pela API, ponha no `provedores.json`
+`"elevenlabs": {"numero_agente": "...", "agent_id": "<id do agente>", "ref_api": "voz/elevenlabs-api"}` e crie o
+segredo `motorcx-voz-elevenlabs-api` no Secret Manager (a chave nunca vai para arquivo).
+
+**Proxy HTTPS da VM (Caddy na 8443, automático):** o `vm_inicio.sh` instala o Caddy oficial (versão fixa 2.8.4, repositório
+do Caddy) e o `motorcx-voz-https` (no boot e a cada 2 min) grava o Caddyfile versionado
+(`vm/motorcx-caddy.Caddyfile`), liga **só as rotas dos recursos ligados** e recarrega o Caddy quando algo muda
+(configuração inválida mantém a que está no ar). Qualquer outro caminho devolve 404; não há access log.
+- `/elevenlabs/pos-chamada` → receptor do webhook (127.0.0.1:8092, limite de 2 MB): sobe quando o `provedores.json` tem
+  `elevenlabs.ref_webhook`;
+- `/simular` e `/roleplay` → simulador do Fluxo e roleplay (`voz/simulador_http.py`, 127.0.0.1:8091, 256 KB), com o
+  serviço `motorcx-voz-simulador`: sobe com o metadado `motorcx-simulador-fluxo=1`.
+O `criar_gcp.sh` abre a 8443 para `ORIGENS_HTTPS` (padrão: a internet toda, porque nem a ElevenLabs nem as Edge
+Functions têm IP de origem fixo; quem protege é a assinatura HMAC de cada rota) e a 80 só para o desafio do Let's
+Encrypt.
+
+**Certificado:** o Let's Encrypt não emite certificado para IP puro, e tanto a ElevenLabs quanto as Edge Functions do
+Supabase só chamam HTTPS com certificado público válido (autoassinado ou `tls internal` é recusado por eles). Por isso o
+nome padrão é `<IP com hífens>.sslip.io` (o sslip.io responde o próprio IP, sem cadastro), com certificado do Let's
+Encrypt pelo desafio HTTP na porta 80, renovado sozinho pelo Caddy:
+- VM 1: `https://35-198-40-10.sslip.io:8443`
+- VM 2: `https://34-39-217-31.sslip.io:8443`
+Para usar um nome próprio (ex.: `voz1.motorcob.online`, com registro A para o IP da VM), ponha o metadado
+`motorcx-dominio-https` na VM. O metadado `motorcx-https-tls=interno` usa a CA interna do Caddy, só para teste:
+quem chama precisa confiar nela.
+
+**Webhook da ElevenLabs (pós-chamada, SQL 63):** o receptor roda dentro do orquestrador real, escuta só em
+`127.0.0.1:8092` e só sobe com o provedor ElevenLabs no `provedores.json` com `"ref_webhook": "voz/elevenlabs-webhook"`
+(porta interna `"webhook_porta"`, padrão 8092). Ele confere a assinatura `ElevenLabs-Signature` (HMAC-SHA256 com o
+segredo do webhook, carimbo de no máximo 30 min) e recusa corpo sem tamanho (411), acima de 2 MB (413) ou que não
+chega em 10 s (408). Não guarda nem registra o corpo, e entrega a transcrição e o resultado à chamada.
+O que continua manual (uma vez):
+1. criar o segredo: `criar motorcx-voz-elevenlabs-webhook "Segredo do webhook da ElevenLabs"` (o valor que a
+   ElevenLabs mostra ao criar o webhook);
+2. no painel da ElevenLabs, **um agente por VM** e, na aba **Segurança de cada agente**, substituir o "Webhook
+   pós-chamada" do espaço de trabalho pelo endereço da VM daquele agente (com a transcrição):
+   - agente da VM 1 → `https://35-198-40-10.sslip.io:8443/elevenlabs/pos-chamada`
+   - agente da VM 2 → `https://34-39-217-31.sslip.io:8443/elevenlabs/pos-chamada`
+   No `/etc/motorcx/provedores.json` de cada VM, `numero_agente` e `agent_id` são os do agente dela. Assim cada VM
+   recebe o aviso das próprias chamadas.
+Recomendado: ligar também a API de conversas (`agent_id` + `ref_api`) como **reserva**. Se o webhook não chegar
+(VM fora, certificado, rede), a VM busca a conversa pelo agente dela; quando o webhook chega primeiro, a busca daquela
+chamada para. Sem webhook por agente (só o do espaço de trabalho), a VM que não recebe o aviso depende só da API.
+
+**`motorcx_id` como variável dinâmica (avaliação, a confirmar no piloto):** a análise depende de a conversa da
+ElevenLabs trazer `conversation_initiation_client_data.dynamic_variables.motorcx_id` (é por ele que o webhook e a API
+acham a chamada). O orquestrador manda o id no INVITE (`X-MotorCX-Id`). Há dois caminhos para ele virar variável:
+- **cabeçalho SIP → variável:** se o SIP trunk da ElevenLabs passar os cabeçalhos `X-` do INVITE para as variáveis
+  dinâmicas, nada mais é preciso (o agente só declara a variável `motorcx_id`);
+- **"Webhook de Dados do Cliente de Iniciação de Conversa"** (configurações do espaço de trabalho): a ElevenLabs chama
+  esse endereço quando uma chamada pelo SIP trunk começa e usa a resposta como `dynamic_variables`. É o caminho certo
+  se os cabeçalhos não chegarem, MAS só funciona se o pedido trouxer algo que identifique a chamada do nosso lado (o
+  `X-MotorCX-Id`, o Call-ID do SIP ou outro cabeçalho). Número de quem chama e número chamado não servem: são os
+  mesmos para todas as chamadas da VM. Não foi implementado: no piloto, confira o que chega nesse pedido. Se vier um
+  identificador, o receptor ganha uma rota que responde `{"dynamic_variables": {"motorcx_id": …}}` (mesma assinatura e
+  mesmo proxy); se não vier, a correlação fica só pela API (início da conversa × início da chamada).
+Simulador do Fluxo: o secret `VOZ_SIMULADOR_URL` da Edge Function passa a ser `https://<nome da VM>:8443/simular`.
+
+**Checklist do piloto (ElevenLabs, SQL 63):**
+- [ ] a variável dinâmica `motorcx_id` chega na conversa (o `X-MotorCX-Id` do INVITE vira `motorcx_id`); se não
+      chegar, ver o que o "Webhook de Dados do Cliente de Iniciação de Conversa" recebe (há identificador da chamada?);
+- [ ] um agente por VM, cada um com o webhook pós-chamada da própria VM (aba Segurança do agente);
+- [ ] `GET /v1/convai/conversations?agent_id=…&call_start_after_unix=…` lista as conversas do agente e
+      `GET /v1/convai/conversations/{id}` traz `transcript` (`role`, `message`, `time_in_call_secs`), `status` = `done`
+      e `conversation_initiation_client_data.dynamic_variables.motorcx_id`;
+- [ ] o certificado do `<IP>.sslip.io` foi emitido (`journalctl -u caddy`) e a ElevenLabs aceitou o endereço;
+- [ ] o webhook assinado chega na VM (resposta 200; assinatura errada dá 401) e a transcrição aparece em
+      `/var/motorcx/transcricoes/empresa_<id>/ia_<id>.json` (mascarada);
+- [ ] o campo de análise com o resultado é `data_collection_results.resultado`.
 
 ## 5. Transferência para o discador do cliente
 

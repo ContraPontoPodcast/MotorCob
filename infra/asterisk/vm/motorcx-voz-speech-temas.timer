@@ -1,0 +1,9 @@
+[Unit]
+Description=Speech Analytics: temas novos da semana passada, toda segunda às 03:20
+
+[Timer]
+OnCalendar=Mon *-*-* 03:20:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
