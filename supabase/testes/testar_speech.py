@@ -428,6 +428,10 @@ checar("componente sem custo cadastrado fica marcado (nunca custo inventado)", T
 checar("cliente não vê o custo da IA", True, "select count(*) from public.voz_analise_consumo", au, A, 0)
 checar("cliente não vê o custo unitário", True, "select count(*) from public.custos_ia_voz", au, A, 0)
 checar("cliente não vê a margem", False, "select * from public.margem_speech_analytics('2026-10-01')", au, A)
+# SQL 61 (margem da IA): item de IA só recebe preço de empresa com custo cadastrado em custos_ia (o Master cadastra
+# em Console › Margem › IA); R$ 0,004 por minuto deixa R$ 0,05 acima do mínimo da IA
+sv("insert into public.custos_ia (item, custo_unitario, vigente_desde, premissa) "
+   "values ('ia_speech_analytics', 0.004, '2026-01-01', 'teste') on conflict (item, vigente_desde) do nothing")
 sv(f"insert into public.precos_empresa (empresa_id,item,modelo,preco,vigente_desde) values ({EA},'ia_speech_analytics','flat',0.05,'2026-10-01')")
 checar("Master vê receita pelo preço da empresa (43 × 0,05) e custo real", True,
        f"select receita || '|' || custo from public.margem_speech_analytics('2026-10-01') where empresa_id={EA}", au, EQ, "2.15|0.37")

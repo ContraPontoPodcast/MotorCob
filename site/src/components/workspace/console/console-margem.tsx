@@ -6,6 +6,7 @@ import { CANAIS_MSG, mesExtenso, ultimosMeses, primeiroDiaMes } from '@/lib/empr
 import { exportarCsv } from '@/lib/mensageria';
 import { Info } from '@/components/glossario/info';
 import { ConsoleShell, cardShadow } from './console-shell';
+import { MargemIa } from './console-margem-ia';
 
 const SIT_MARGEM: Record<string, { label: string; cor: string; bg: string }> = {
   ok: { label: 'OK', cor: '#248A3D', bg: '#E8F8EC' },
@@ -30,6 +31,7 @@ export function ConsoleMargemPage() {
   const [error, setError] = useState('');
   const [detalhe, setDetalhe] = useState<Row | null>(null);
   const [paramsOpen, setParamsOpen] = useState(false);
+  const [salvos, setSalvos] = useState(0);
   const meses = ultimosMeses(12);
 
   async function reload() {
@@ -83,6 +85,7 @@ export function ConsoleMargemPage() {
           <span>Impostos sobre a receita: <strong className="text-[#1D1D1F]">{params.impostos_pct}%</strong></span>
           <span>Meta de MC: <strong className="text-[#1D1D1F]">{params.mc_meta_pct}%</strong></span>
           <span>Mínimo: <strong className="text-[#1D1D1F]">{params.mc_minimo_pct}%</strong></span>
+          {params.mc_minima_ia_pct != null && <span>Mínimo da IA: <strong className="text-[#1D1D1F]">{params.mc_minima_ia_pct}%</strong></span>}
         </div>
       )}
 
@@ -124,8 +127,10 @@ export function ConsoleMargemPage() {
         </section>
       }
 
+      <MargemIa competencia={competencia} mcMinima={params?.mc_minima_ia_pct} recarregar={salvos} />
+
       {detalhe && <PainelDetalhe linha={detalhe} competencia={competencia} modo={modo} onClose={() => setDetalhe(null)} />}
-      {paramsOpen && <ParamsModal params={params} onClose={() => setParamsOpen(false)} onSaved={() => { setParamsOpen(false); void reload(); }} />}
+      {paramsOpen && <ParamsModal params={params} onClose={() => setParamsOpen(false)} onSaved={() => { setParamsOpen(false); setSalvos(n => n + 1); void reload(); }} />}
     </ConsoleShell>
   );
 }
@@ -249,6 +254,8 @@ function ParamsModal({ params, onClose, onSaved }: { params: Row | null; onClose
   const [impostos, setImpostos] = useState(String(params?.impostos_pct ?? 0));
   const [meta, setMeta] = useState(String(params?.mc_meta_pct ?? 0));
   const [minimo, setMinimo] = useState(String(params?.mc_minimo_pct ?? 0));
+  const temIa = params?.mc_minima_ia_pct != null;
+  const [minimoIa, setMinimoIa] = useState(String(params?.mc_minima_ia_pct ?? 70));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => { const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [onClose]);
@@ -256,9 +263,11 @@ function ParamsModal({ params, onClose, onSaved }: { params: Row | null; onClose
   async function salvar() {
     if (!supabase) return;
     setBusy(true); setError('');
-    const { error } = await supabase.from('parametros_margem').update({ impostos_pct: Number(impostos), mc_meta_pct: Number(meta), mc_minimo_pct: Number(minimo) }).eq('id', 1);
+    const valores: Record<string, number> = { impostos_pct: Number(impostos), mc_meta_pct: Number(meta), mc_minimo_pct: Number(minimo) };
+    if (temIa) valores.mc_minima_ia_pct = Number(minimoIa);
+    const { error } = await supabase.from('parametros_margem').update(valores).eq('id', 1);
     setBusy(false);
-    if (error) { setError(friendlyError(error)); return; }
+    if (error) { setError(/MC mínima da IA/.test(error.message ?? '') ? error.message : friendlyError(error)); return; }
     onSaved();
   }
 
@@ -270,6 +279,7 @@ function ParamsModal({ params, onClose, onSaved }: { params: Row | null; onClose
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Impostos sobre a receita (%)</span><input type="number" step="0.1" value={impostos} onChange={e => setImpostos(e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] tnum outline-none focus:border-[#1D1D1F]" /></label>
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Meta de MC (%)</span><input type="number" step="0.1" value={meta} onChange={e => setMeta(e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] tnum outline-none focus:border-[#1D1D1F]" /></label>
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Mínimo (%)</span><input type="number" step="0.1" value={minimo} onChange={e => setMinimo(e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] tnum outline-none focus:border-[#1D1D1F]" /></label>
+          {temIa && <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">MC mínima dos itens de IA (%)</span><input type="number" step="0.1" value={minimoIa} onChange={e => setMinimoIa(e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] tnum outline-none focus:border-[#1D1D1F]" /><span className="mt-1 block text-[12px] text-[#8E8E93]">Preço de IA abaixo do que ela exige é recusado. Mudar não altera preços: o que ficar abaixo aparece em Itens de IA.</span></label>}
         </div>
         {error && <p role="alert" className="mt-3 text-[14px] text-[#FF3B30]">{error}</p>}
         <div className="mt-5 flex justify-end gap-3"><button onClick={onClose} className="h-10 rounded-lg border border-[#D2D2D7] px-5 text-[14px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Cancelar</button><button onClick={salvar} disabled={busy} className="h-10 rounded-lg bg-[#1D1D1F] px-6 text-[14px] font-semibold text-white hover:opacity-85 disabled:opacity-50">{busy ? 'Salvando...' : 'Salvar'}</button></div>

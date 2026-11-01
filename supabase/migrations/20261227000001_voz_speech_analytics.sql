@@ -33,9 +33,12 @@
 -- só pelas funções que somam e escondem o grupo pequeno). Trecho, avaliação, exemplo e item aberto da curadoria vão
 -- embora com a gravação; o alerta fica só como contagem.
 -- Quem grava o dia a dia (agregados, trechos, avaliações, alertas, fila da curadoria) é a VM, com a chave do
--- servidor (service_role). O site só escreve por RPC security definer com search_path fixo. RLS em tudo.
--- Depende dos SQL 21 (equipe), 24/25 (permissões e auditoria), 35 (primeiro uso), 39 (avisos) e 56 (voz).
--- Pode rodar de novo sem erro.
+-- servidor (service_role) ou pelo acesso próprio (papel motorcx_voz do SQL 57, item 15: voz_vm.gravar_trechos,
+-- gravar_curadoria, buscas_voz_pendentes, responder_busca_voz e registrar_uso_ia_voz; voz/acesso.py). O PDF do
+-- relatório ao credor (voz/analise/relatorio_pdf.py) roda com a configuração do motor (servidor), não na VM.
+-- O site só escreve por RPC security definer com search_path fixo. RLS em tudo.
+-- Depende dos SQL 21 (equipe), 24/25 (permissões e auditoria), 35 (primeiro uso), 39 (avisos), 56 (voz) e 57 (voz_vm).
+-- Pode rodar de novo sem erro. Se o SQL 57 for rodado de novo, rode este depois.
 --
 -- Conferência (no SQL Editor do Supabase, depois de rodar):
 --   select (select count(*) from pg_tables where schemaname = 'public' and tablename in ('voz_conversao_dia',
@@ -55,7 +58,9 @@
 --          exists (select 1 from information_schema.columns where table_name = 'voz_trechos'
 --                  and column_name = 'embedding') as busca_semantica,                                      -- true com pgvector
 --          has_function_privilege('anon', 'public.relatorio_credor_publico(text)', 'execute') as link_credor, -- true
---          has_table_privilege('authenticated', 'public.voz_conversao_dia', 'select') as site_le_dia;    -- false
+--          has_table_privilege('authenticated', 'public.voz_conversao_dia', 'select') as site_le_dia,    -- false
+--          has_function_privilege('motorcx_voz', 'voz_vm.gravar_trechos(jsonb)', 'execute')
+--            and not has_table_privilege('motorcx_voz', 'public.voz_trechos', 'select') as vm_speech;   -- true
 
 -- ================================================================ 0. auxiliares
 -- permissão de outra pessoa (para o sino): mesma regra de public.pode(), pelo id
@@ -357,7 +362,7 @@ declare
     comp date := date_trunc('month', dia)::date;
     cob bigint;
 begin
-    if not public.chamada_do_servidor() then
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só o servidor registra o uso de IA';
     end if;
     if least(coalesce(chamadas, 0), coalesce(minutos, 0), coalesce(minutos_cobraveis, 0), coalesce(tokens_entrada, 0),
@@ -990,7 +995,7 @@ declare
     n int;
     v %1$I.vector(1536);
 begin
-    if not public.chamada_do_servidor() then
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só o servidor responde a busca semântica';
     end if;
     select * into b from public.voz_buscas where id = busca for update;
@@ -1034,7 +1039,7 @@ create or replace function public.buscas_voz_pendentes(limite int default 20)
 returns table (id bigint, termo text)
 language plpgsql security definer set search_path = public as $$
 begin
-    if not public.chamada_do_servidor() then
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só o servidor lê as buscas pendentes';
     end if;
     update public.voz_buscas b set situacao = 'erro'
@@ -2176,3 +2181,128 @@ begin
         execute format('grant execute on function %s to authenticated, service_role', f);
     end loop;
 end $$;
+
+-- ================================================================ 15. acesso próprio da VM (schema voz_vm do SQL 57)
+-- As peças do Speech Analytics que rodam na VM (voz/analise: trechos com embedding, busca semântica, fila da
+-- curadoria e registro do uso de IA) funcionam igual com a chave do servidor e com o papel motorcx_voz: escrita por
+-- funções security definer com search_path vazio e validação por linha, RPC pelas funções de voz_vm com os mesmos
+-- argumentos (um objeto jsonb, como o corpo do PostgREST) e a mesma resposta. As do public aceitam a VM
+-- (chamada_da_vm_voz). Nada aqui dá ao papel leitura de trechos, buscas ou da curadoria.
+
+-- trechos mascarados (upsert por gravação, início e falante, como voz/analise/contrato.py › CONFLITO). O embedding só
+-- é aceito quando o banco tem o pgvector (sem ele a coluna não existe e a chave é recusada, como no PostgREST).
+create or replace function voz_vm.gravar_trechos(linhas jsonb) returns int
+language plpgsql security definer set search_path = '' as $$
+declare
+    n int;
+    fora text;
+    com_vetor boolean := exists (select 1 from pg_attribute a where a.attrelid = 'public.voz_trechos'::regclass
+                                    and a.attname = 'embedding' and not a.attisdropped);
+begin
+    if jsonb_typeof(linhas) <> 'array' or jsonb_array_length(linhas) > 2000 then
+        raise exception 'linhas: lista de até 2000 trechos';
+    end if;
+    if exists (select 1 from jsonb_array_elements(linhas) e where jsonb_typeof(e) <> 'object') then
+        raise exception 'linhas: cada trecho é um objeto';
+    end if;
+    select string_agg(distinct k, ', ' order by k) into fora
+      from jsonb_array_elements(linhas) e, jsonb_object_keys(e) k
+     where k <> all (array['empresa_id', 'credor_id', 'gravacao_id', 'origem', 'inicio_s', 'fim_s', 'falante',
+                           'texto_redigido'] || case when com_vetor then array['embedding'] else array[]::text[] end);
+    if fora is not null then
+        raise exception 'colunas que a VM não grava em voz_trechos: %', fora;
+    end if;
+    if exists (select 1 from jsonb_to_recordset(linhas) r(empresa_id bigint)
+                where r.empresa_id is null or not voz_vm.tem_voz(r.empresa_id)) then
+        raise exception 'empresa sem voz configurada';
+    end if;
+    if exists (select 1 from jsonb_to_recordset(linhas) r(empresa_id bigint, credor_id bigint, gravacao_id bigint)
+                where not exists (select 1 from public.voz_gravacoes g where g.id = r.gravacao_id and g.empresa_id = r.empresa_id)
+                   or (r.credor_id is not null and not exists (select 1 from public.credores k
+                                                               where k.id = r.credor_id and k.empresa_id = r.empresa_id))) then
+        raise exception 'referência de outra empresa';
+    end if;
+    execute format(
+        'insert into public.voz_trechos as t (empresa_id, credor_id, gravacao_id, origem, inicio_s, fim_s, falante, '
+        'texto_redigido%1$s) '
+        'select r.empresa_id, r.credor_id, r.gravacao_id, r.origem, r.inicio_s, r.fim_s, r.falante, r.texto_redigido%2$s '
+        'from jsonb_populate_recordset(null::public.voz_trechos, $1) r '
+        'on conflict (gravacao_id, inicio_s, falante) do update set credor_id = excluded.credor_id, '
+        'origem = excluded.origem, fim_s = excluded.fim_s, texto_redigido = excluded.texto_redigido%3$s',
+        case when com_vetor then ', embedding' else '' end,
+        case when com_vetor then ', r.embedding' else '' end,
+        case when com_vetor then ', embedding = coalesce(excluded.embedding, t.embedding)' else '' end)
+    using linhas;
+    get diagnostics n = row_count;
+    return n;
+end $$;
+
+-- fila da curadoria: só os campos de voz/analise/contrato.py; a decisão é sempre de uma pessoa (situacao nasce aberto)
+create or replace function voz_vm.gravar_curadoria(linhas jsonb) returns int
+language plpgsql security definer set search_path = '' as $$
+declare n int; fora text;
+begin
+    if jsonb_typeof(linhas) <> 'array' or jsonb_array_length(linhas) > 2000 then
+        raise exception 'linhas: lista de até 2000 itens';
+    end if;
+    if exists (select 1 from jsonb_array_elements(linhas) e where jsonb_typeof(e) <> 'object') then
+        raise exception 'linhas: cada item é um objeto';
+    end if;
+    select string_agg(distinct k, ', ' order by k) into fora
+      from jsonb_array_elements(linhas) e, jsonb_object_keys(e) k
+     where k <> all (array['empresa_id', 'tipo', 'chamada_id', 'gravacao_id', 'avaliacao_id', 'tema_id',
+                           'trecho_redigido', 'decisao_ia', 'opcoes', 'confianca']);
+    if fora is not null then
+        raise exception 'colunas que a VM não grava em voz_curadoria_itens: %', fora;
+    end if;
+    if exists (select 1 from jsonb_populate_recordset(null::public.voz_curadoria_itens, linhas) r
+                where r.empresa_id is null or not voz_vm.tem_voz(r.empresa_id)) then
+        raise exception 'empresa sem voz configurada';
+    end if;
+    if exists (select 1 from jsonb_populate_recordset(null::public.voz_curadoria_itens, linhas) r
+                where (r.chamada_id is not null and not exists (select 1 from public.voz_chamadas x
+                                                                where x.id = r.chamada_id and x.empresa_id = r.empresa_id))
+                   or (r.gravacao_id is not null and not exists (select 1 from public.voz_gravacoes x
+                                                                 where x.id = r.gravacao_id and x.empresa_id = r.empresa_id))
+                   or (r.avaliacao_id is not null and not exists (select 1 from public.voz_avaliacoes x
+                                                                  where x.id = r.avaliacao_id and x.empresa_id = r.empresa_id))
+                   or (r.tema_id is not null and not exists (select 1 from public.voz_temas x
+                                                             where x.id = r.tema_id and x.empresa_id = r.empresa_id))) then
+        raise exception 'referência de outra empresa';
+    end if;
+    insert into public.voz_curadoria_itens (empresa_id, tipo, chamada_id, gravacao_id, avaliacao_id, tema_id,
+                                            trecho_redigido, decisao_ia, opcoes, confianca)
+    select r.empresa_id, r.tipo, r.chamada_id, r.gravacao_id, r.avaliacao_id, r.tema_id, r.trecho_redigido,
+           coalesce(r.decisao_ia, '{}'::jsonb), coalesce(r.opcoes, '[]'::jsonb), r.confianca
+      from jsonb_populate_recordset(null::public.voz_curadoria_itens, linhas) r;
+    get diagnostics n = row_count;
+    return n;
+end $$;
+
+-- RPCs: buscas semânticas pendentes (todas as empresas, como o servidor), resposta com o embedding da pergunta e o
+-- registro do uso de IA (empresa com voz)
+create or replace function voz_vm.buscas_voz_pendentes(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select coalesce(jsonb_agg(to_jsonb(b)), '[]'::jsonb)
+      from public.buscas_voz_pendentes(coalesce((args ->> 'limite')::int, 20)) b
+$$;
+create or replace function voz_vm.responder_busca_voz(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select to_jsonb(public.responder_busca_voz((args ->> 'busca')::bigint, args ->> 'emb'))
+$$;
+create or replace function voz_vm.registrar_uso_ia_voz(args jsonb) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+    if not voz_vm.tem_voz((args ->> 'empresa')::bigint) then
+        raise exception 'empresa sem voz configurada';
+    end if;
+    return to_jsonb(public.registrar_uso_ia_voz((args ->> 'empresa')::bigint, (args ->> 'dia')::date,
+                                                args ->> 'componente', (args ->> 'chamadas')::int,
+                                                (args ->> 'minutos')::numeric, (args ->> 'minutos_cobraveis')::numeric,
+                                                (args ->> 'tokens_entrada')::bigint, (args ->> 'tokens_saida')::bigint));
+end $$;
+
+revoke all on function voz_vm.gravar_trechos(jsonb), voz_vm.gravar_curadoria(jsonb), voz_vm.buscas_voz_pendentes(jsonb),
+    voz_vm.responder_busca_voz(jsonb), voz_vm.registrar_uso_ia_voz(jsonb) from public, anon, authenticated, service_role;
+grant execute on function voz_vm.gravar_trechos(jsonb), voz_vm.gravar_curadoria(jsonb), voz_vm.buscas_voz_pendentes(jsonb),
+    voz_vm.responder_busca_voz(jsonb), voz_vm.registrar_uso_ia_voz(jsonb) to motorcx_voz;

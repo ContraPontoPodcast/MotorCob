@@ -75,6 +75,8 @@ class EventoChamada:
     atendida_em: datetime | None = None       # horário de Brasília, sem fuso (o registro põe o fuso)
     encerrada_em: datetime | None = None      # com billsec, faz o gatilho do banco tarifar a chamada
     transferida_em: datetime | None = None
+    fluxo_versao_id: int | None = None   # SQL 58: versão do fluxo que conduziu a chamada
+    bloco_final: str | None = None
 
 
 CAMPOS = tuple(f.name for f in fields(EventoChamada))
@@ -178,4 +180,5 @@ def para_voz_chamadas(ev: EventoChamada) -> dict:
             "transferencia": ev.transferencia, "transferida_em": ev.transferida_em if ev.transferencia else None,
             "no_pico": ev.no_pico, "tronco_id": ev.tronco_id, "tech_prefix": ev.tech_prefix,
             "data_promessa": ev.data_promessa, "valor_promessa": ev.valor_promessa, "retorno_em": ev.retorno_em,
-            "tem_gravacao": bool(ev.gravacao)}
+            "tem_gravacao": bool(ev.gravacao),
+            "fluxo_versao_id": ev.fluxo_versao_id, "bloco_final": ev.bloco_final}

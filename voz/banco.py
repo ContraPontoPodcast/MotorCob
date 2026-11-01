@@ -63,6 +63,21 @@ COLUNAS: dict[str, dict[str, str]] = {
         "valor_promessa": "valor_promessa", "retorno_em": "retorno_em", "tem_gravacao": "tem_gravacao",
         "rota_id": "rota_id", "segundos_tarifados": "segundos_tarifados", "preco_minuto": "preco_minuto",
         "custo_operadora": "custo_operadora",
+        "fluxo_versao_id": "fluxo_versao_id", "bloco_final": "bloco_final",
+    },
+    # SQL 58 · um evento por bloco e uma linha por chamada a conector (só códigos)
+    "voz_fluxo_passos": {
+        "empresa_id": "empresa_id", "id_chamada": "id_chamada", "fluxo_versao_id": "fluxo_versao_id", "ordem": "ordem",
+        "bloco_id": "bloco_id", "modo": "modo", "entrou_em": "entrou_em", "saida_quando": "saida_quando",
+        "intencao": "intencao", "confianca_faixa": "confianca_faixa", "motivo_devolucao": "motivo_devolucao",
+        "trava": "trava", "turnos": "turnos",
+    },
+    "crm_chamadas": {
+        "empresa_id": "empresa_id", "conector_id": "conector_id", "conector_versao": "conector_versao",
+        "id_chamada": "id_chamada", "id_cliente": "id_cliente", "fluxo_versao_id": "fluxo_versao_id",
+        "bloco_id": "bloco_id", "tentativa": "tentativa", "http_status": "http_status", "classe": "classe",
+        "latencia_ms": "latencia_ms", "resultado_codigo": "resultado_codigo",
+        "ofertas_acima_alcada": "ofertas_acima_alcada", "usou_alternativa": "usou_alternativa",
     },
     # V22: por empresa, dia e tech prefix
     "consumo_voz": {
@@ -73,7 +88,8 @@ COLUNAS: dict[str, dict[str, str]] = {
 }
 
 # chave de conflito (upsert) de cada tabela gravada pela VM
-CONFLITO = {"voz_chamadas": ("empresa_id", "id_chamada", "canal"), "consumo_voz": ("empresa_id", "dia", "tech_prefix")}
+CONFLITO = {"voz_chamadas": ("empresa_id", "id_chamada", "canal"), "consumo_voz": ("empresa_id", "dia", "tech_prefix"),
+            "voz_fluxo_passos": ("empresa_id", "id_chamada", "ordem")}
 # colunas de voz_chamadas que só o gatilho do banco escreve (a VM nunca manda: reenvio não conflita com a tarifação)
 SO_DO_BANCO = {"voz_chamadas": ("rota_id", "segundos_tarifados", "preco_minuto", "custo_operadora")}
 
@@ -104,7 +120,7 @@ CODECS_OK = ("alaw", "ulaw", "g729", "g722", "opus", "gsm")
 # public.variaveis_voz() do SQL 56 (cópia de motor/voz.py › VARIAVEIS_VOZ: o contêiner do Asterisk leva só voz/,
 # sem o motor; tests/test_voz_gerador.py confere a paridade e testar_voz_contrato.py, a do banco). Nunca CPF.
 VARIAVEIS_VOZ = ("primeiro_nome", "credor", "saldo", "dias_atraso", "vencimento", "link_pagamento",
-                 "valor_minimo", "parcelas_max", "desconto_max")
+                 "valor_minimo", "parcelas_max", "desconto_max", "assessoria")   # assessoria: nome da empresa (SQL 58)
 # voz_config.variaveis: o padrão do banco (o que vai ao provedor se a empresa não escolheu)
 VARIAVEIS_PADRAO = ("primeiro_nome", "credor", "link_pagamento")
 
