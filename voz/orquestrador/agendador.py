@@ -72,6 +72,9 @@ class Agendador:
     troncos: dict[int, Tronco] = field(default_factory=dict)
     em_voo_tronco: dict[int, int] = field(default_factory=dict)
     baldes: dict[int, Balde] = field(default_factory=dict)
+    # rota (tronco) pausada por sem crédito ou bloqueio de originação (SQL 65 › voz_troncos_pausas): não disca até a
+    # equipe retomar. tronco_id -> motivo
+    pausados: dict[int, str] = field(default_factory=dict)
 
     def registrar_empresa(self, config: ConfigVoz, troncos: list[Tronco]) -> None:
         ativos = [t for t in troncos if t.ativo]
@@ -107,9 +110,27 @@ class Agendador:
     def tronco_livre(self, tronco_id: int, agora_s: float) -> bool:
         """Canal livre E ficha de CPS (consome a ficha: chame só quando for originar)."""
         t = self.troncos.get(tronco_id)
-        if t is None or self.em_voo_tronco.get(tronco_id, 0) >= t.canais:
+        if t is None or tronco_id in self.pausados or self.em_voo_tronco.get(tronco_id, 0) >= t.canais:
             return False
         return self.baldes[tronco_id].tirar(agora_s)
+
+    def pausar(self, tronco_id: int, motivo: str) -> bool:
+        """Pausa a rota na hora (sem crédito / bloqueio). Devolve True se ela ainda não estava pausada."""
+        novo = tronco_id not in self.pausados
+        self.pausados[tronco_id] = motivo
+        return novo
+
+    def aplicar_pausas(self, pausas: dict[int, str], troncos: set[int] | None = None) -> list[int]:
+        """As pausas ativas do banco valem (as retomadas pela equipe saem). `troncos` limita aos troncos desta VM.
+        Devolve os troncos retomados."""
+        alvo = set(self.troncos) if troncos is None else troncos
+        retomados = [t for t in self.pausados if t in alvo and t not in pausas]
+        for t in retomados:
+            self.pausados.pop(t, None)
+        for t, m in pausas.items():
+            if t in alvo:
+                self.pausados[t] = m
+        return retomados
 
     def ocupar(self, empresa_id: int, tronco_id: int) -> bool:
         """Conta a chamada. Devolve no_pico (acima do limite da empresa, dentro do teto)."""

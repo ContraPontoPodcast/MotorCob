@@ -197,8 +197,9 @@ def status_contato(cert, sinal: dict, flag: dict, est: EstadoCliente | None = No
 
 def _limite_padrao(canal: str, est: EstadoCliente, regua: Regua) -> int | None:
     if canal in CANAIS_VOZ:
-        # 1 número por cliente: o CPC da ocorrência marca exatamente esse número como Hot
-        return regua["localizacao"].get("numeros_voz") or None
+        # modo de discagem da carteira (SQL 65): vertical = max_telefones_dia; horizontal = o maior telefone pedido
+        # pelos spins. Sem o modo, 1 número por cliente (o CPC da ocorrência marca exatamente esse número como Hot)
+        return DG.telefones_dia(DG.config_de(regua)) or regua["localizacao"].get("numeros_voz") or None
     if est.estado in ("CPA", "CPB", "PRE", "QBR"):
         return 1
     return 1 if canal == "whatsapp" else regua["localizacao"]["numeros_digitais"]
@@ -214,6 +215,11 @@ def contatos_da_acao(acao: dict, cands: dict[str, list], est: EstadoCliente, fla
         cand = [c for c in est.candidatos_hot if c in lista]
         if cand:
             return cand[:1]
+    if acao["canal"] in CANAIS_VOZ:
+        modo = DG.config_de(regua).get("modo_discagem") or {}
+        if modo.get("ordem") == "carga":     # ordem da carga (ranking); certificado e histórico = a ordem de hoje
+            rk = {c: float((sinais.get(c) or {}).get("ranking") or 99) for c in lista}
+            lista.sort(key=lambda c: rk[c])
     limite = acao.get("numeros") or regua.canal_cfg(acao["canal"]).get("numeros_por_cliente") \
         or _limite_padrao(acao["canal"], est, regua)
     return lista[:limite] if limite else lista

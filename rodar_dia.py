@@ -1041,9 +1041,9 @@ def _discagem_do_dia(disc, fila, eventos, hoje, regua, estados, cfg, motivos, mo
         alertas.append("RENITÊNCIA: " + " · ".join(f"{v} clientes sem voz hoje por {k}" for k, v in n.items())
                        + " (WhatsApp, SMS e e-mail seguem a régua)")
     try:
-        def tentativas(l):
+        def tentativas(l):          # com a config: a regra nova da carteira soma spins e rediscagens na previsão
             c = DG.config_de(regua.para(estados[l["id_cliente"]].cluster_atual))
-            return c["tentativas_numero_dia"], c["tentativas_cliente_dia"]
+            return c["tentativas_numero_dia"], c["tentativas_cliente_dia"], c
         antes = {l["id_cliente"] for l in fila}
         fila, res, al = DG.curtas(fila, eventos, hoje, cfg, tentativas)
         alertas += al

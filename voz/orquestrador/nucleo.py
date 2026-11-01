@@ -4,6 +4,8 @@ Fluxo de uma tentativa (id_chamada = uuid hex; canais <id>-c<n> cliente, <id>-p 
   1. tick: a guarda libera um item, o agendador tem vaga (empresa, global, canal e CPS do tronco) e há rota para
      o tipo do número -> originate PJSIP/<tech prefix><DDD+número>@<tronco> no app Stasis.
   2. falha técnica antes de atender (pela_rede = falha_operadora/bloqueio_originacao) -> próxima rota (failover).
+     Sem crédito (falha da operadora com SIP 402) ou bloqueio de originação pausam a rota (o tronco) na hora: ela não
+     disca até a equipe retomar (SQL 65 › voz_troncos_pausas; a pausa vai ao banco pelo Plantão) e a equipe é avisada.
   3. atendeu (StasisStart 'saida') -> dialplan motorcx-atendeu: AMD (ou Khomp) e MixMonitor só em pessoa ->
      volta ao Stasis ('amd').
   4. pessoa -> provedor de voz (ponte SIP, mídia externa ou interno); sem agente livre: Alô fake (se ligado) por até
@@ -22,6 +24,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 from motor import voz as V
 from voz import tarifacao as T
@@ -31,11 +34,12 @@ from voz.orquestrador import gravacao as G
 from voz.orquestrador.agendador import Agendador
 from voz.orquestrador.ari import ClienteARI, ErroARI
 from voz.orquestrador.eventos import SEM_IA, EscritorEventos, EventoChamada, classificar
-from voz.orquestrador.lote import ItemLote, Lote
+from voz.orquestrador.lote import ItemLote, Lote, hash_destino
 from voz.provedores.base import ContextoChamada, ProvedorVoz
 from voz.transcricao import ia as TIA
 
 log = logging.getLogger("motorcx.voz")
+_FUSO = ZoneInfo("America/Sao_Paulo")
 APP = "motorcx"
 TECNICOS_FAILOVER = ("falha_operadora", "bloqueio_originacao")
 # Q.850 do destino da transferência que quer dizer "ninguém para atender" (o resto é falha)
@@ -80,6 +84,7 @@ class Chamada:
     espera_agente_ate: datetime | None = None
     failover_ate: datetime | None = None
     provedor: str | None = None
+    passagem: dict = field(default_factory=dict)   # passada, situação de origem, onda e volta (Lote.iniciar)
 
     @property
     def candidata(self):
@@ -90,6 +95,15 @@ def _id_de(canal_id: str) -> str:
     return canal_id.rsplit("-", 1)[0]
 
 
+def _quando(v) -> datetime | None:
+    """retorno_em do provedor (datetime ou texto ISO) -> horário de Brasília sem fuso."""
+    if isinstance(v, datetime):
+        return v.replace(tzinfo=None) if v.tzinfo is None else v.astimezone(_FUSO).replace(tzinfo=None)
+    try:
+        d = datetime.fromisoformat(str(v).strip().replace("Z", "+00:00")) if v else None
+    except ValueError:
+        return None
+    return None if d is None else (d if d.tzinfo is None else d.astimezone(_FUSO).replace(tzinfo=None))
 _DEZ_DIGITOS = re.compile(r"[0-9]{10}")
 
 
@@ -136,6 +150,7 @@ class Orquestrador:
         self.chamadas: dict[str, Chamada] = {}
         self.contagem: dict[str, int] = {}
         self.alertas: list[str] = []
+        self.pausas_novas: list[dict] = []       # rotas pausadas aqui e ainda não gravadas no banco (o Plantão grava)
 
     # ---------------------------------------------------------------- utilidades
     def _conta(self, k: str, n: int = 1):
@@ -209,6 +224,10 @@ class Orquestrador:
             self._conta("sem_rota")
             self._alerta(f"empresa {lote.empresa_id}: número sem rota cadastrada para o tipo (fica fora do dia)")
             return None
+        if all(x.tronco.id in self.agendador.pausados for x in cands):
+            item.nao_antes_de = agora + timedelta(minutes=1)   # toda rota do número está pausada: espera a retomada
+            self._conta("rota_pausada")
+            return None
         c = Chamada(novo_id(), lote.empresa_id, idx, item, cands, lote_chave=lote.chave)
         for i, cand in enumerate(cands):
             if self.agendador.tronco_livre(cand.tronco.id, agora.timestamp()):
@@ -218,6 +237,7 @@ class Orquestrador:
             self._conta("troncos_cheios")
             return False
         c.no_pico = self.agendador.ocupar(lote.empresa_id, c.candidata.tronco.id)
+        c.passagem = lote.iniciar(idx, agora)
         lote.em_voo.add(idx)
         self.chamadas[c.id] = c
         if not self._discar(c, agora):
@@ -546,6 +566,7 @@ class Orquestrador:
             c.destino = "ia_humano" if q == 16 else c.destino
         if c.t_atendeu is None:
             rede, _, _ = V.pela_rede(sip=c.causa_sip, q850=c.causa_q850)
+            self._pausar_rota(c, rede)
             if rede in TECNICOS_FAILOVER and c.i_rota + 1 < len(c.candidatas):
                 c.failover_ate = agora + timedelta(seconds=self.failover_espera_s)
                 self._tentar_failover(c, agora)
@@ -565,7 +586,25 @@ class Orquestrador:
 
     def _tem_canal(self, tronco_id: int) -> bool:
         t = self.agendador.troncos.get(tronco_id)
-        return t is not None and self.agendador.em_voo_tronco.get(tronco_id, 0) < t.canais
+        return (t is not None and tronco_id not in self.agendador.pausados
+                and self.agendador.em_voo_tronco.get(tronco_id, 0) < t.canais)
+
+    def _pausar_rota(self, c: Chamada, rede: str | None) -> None:
+        """Sem crédito (falha da operadora com SIP 402) ou bloqueio de originação: a rota (o tronco) para de discar
+        na hora, para todas as carteiras, até a equipe retomar. Vale com ou sem a regra nova da carteira."""
+        motivo = ("sem_credito" if rede == "falha_operadora" and c.causa_sip == 402
+                  else "bloqueio_originacao" if rede == "bloqueio_originacao" else None)
+        if motivo is None:
+            return
+        tr = c.candidata.tronco
+        if not self.agendador.pausar(tr.id, motivo):
+            return
+        self._conta("rotas_pausadas")
+        self.pausas_novas.append({"empresa_id": c.empresa_id, "tronco_id": tr.id, "motivo": motivo,
+                                  "causa_sip": c.causa_sip})
+        self._alerta(f"empresa {c.empresa_id}: rota {tr.nome} pausada por "
+                     f"{'sem crédito na operadora' if motivo == 'sem_credito' else 'bloqueio de originação'}"
+                     " — não disca até a equipe retomar")
 
     def _finalizar(self, c: Chamada, agora: datetime) -> None:
         """O canal do cliente acabou: libera canal, tronco e vaga na hora. Se o provedor manda o resultado depois
@@ -612,7 +651,11 @@ class Orquestrador:
             provedor=c.provedor, credor_id=c.lote_chave[1] if c.lote_chave else None,
             canal=c.lote_chave[2] if c.lote_chave else "agente_voz", custo=tar["custo_operadora"] or 0.0,
             modo=self.dados.config(c.empresa_id).modo, atendida_em=c.t_atendeu, encerrada_em=agora,
-            transferida_em=(c.t_transferencia or agora) if c.transferencia else None)
+            transferida_em=(c.t_transferencia or agora) if c.transferencia else None,
+            lote_id=self.lotes[c.lote_chave].lote_id if c.lote_chave in self.lotes else None,
+            destino_hash=hash_destino(c.item.telefone), passada=c.passagem.get("passada"),
+            situacao_origem=c.passagem.get("situacao_origem"), resubmit_ref=c.passagem.get("resubmit_ref"),
+            onda_chave=c.passagem.get("onda_chave"))
         if c.gravando and c.t_atendeu and self.fila_envio is not None:
             objeto = G.nome_objeto(c.lote_chave[1] if c.lote_chave else None, ev.data, c.id)
             ev.gravacao = f"gs://{c.bucket}/{objeto}"
@@ -628,7 +671,11 @@ class Orquestrador:
         lote = self.lotes.get(c.lote_chave)
         if lote is not None:
             lote.em_voo.discard(c.idx)
-            lote.guarda.registrar(c.item, ev.desfecho, self.relogio())
+            lote.registrar(c.item, ev.desfecho, self.relogio(), causa_sip=c.causa_sip,
+                           retorno_em=_quando(c.extras.get("retorno_em")), id_chamada=c.id)
+            for al in lote.alertas:              # alertas do lote (a pausa da rota é do núcleo)
+                self._alerta(al)
+            lote.alertas.clear()
         if c.veredito == A.PESSOA:
             mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho == "abandonada")
             if mudou == "freou":

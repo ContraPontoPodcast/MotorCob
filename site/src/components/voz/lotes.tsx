@@ -2,10 +2,12 @@
 // Lê voz_lotes, voz_ondas, resumo_lote_voz(), voz_divisao_concorrencia, voz_config e o preço do
 // minuto de IA (precos_empresa, só quem vê faturamento). Atualiza a cada 15 s, sem realtime.
 // Escreve só por RPC: pausar_lote_voz, retomar_lote_voz, cancelar_lote_voz e configurar_voz_empresa.
+// SQL 65: ondas por origem (1ª passada, spin, rediscagem, reenvio manual, reciclagem). Redesign aprovado: "Reenviar
+// agora" é a ação principal do lote (reenviar.tsx) e "Reciclar mailing" abre o modal em 3 passos (reciclar.tsx).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { ArrowLeft, Pause, Play } from 'lucide-react';
+import { ArrowLeft, Pause, Play, Recycle, RotateCw } from 'lucide-react';
 import { Loading, Notice, usePermissao } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
@@ -14,12 +16,15 @@ import {
 	ATUALIZA_MS, PERM_VOZ, SIT_LOTE_VOZ, SIT_ONDA, dataCurta, diaISO, funilDoResumo, horaCurta, inteiro, pct, reais,
 } from '@/lib/voz';
 import { Aviso, Botao, Cartao, CartaoLinha, Kpi, Pilula, Tabela, Trilho, Vazio, campoCls, campoStyle } from './ui';
+import { efetivo, nomeOnda, type DiscagemRen, type OndaVoz } from '@/lib/renitencia';
+import { ReenviarModal, SemPermissao, useReenvios } from './reenviar';
+import { HistoricoReciclagens, ReciclarModal } from './reciclar';
 
 type Lote = {
 	id: number; credor_id: number | null; data: string; modo: string; situacao: string; total: number; encerradas: number;
 	abandonos: number; custo_operadora: number; freado_em: string | null; roteiro_id: number | null; atualizado_em: string;
 };
-type Onda = { id: number; janela: string; tentativa: number; total: number; encerradas: number; situacao: string; abre_em: string | null; fecha_em: string | null };
+type Onda = OndaVoz;
 type Resumo = { resultado: string; chamadas: number; segundos: number; minutos_ia: number; custo_operadora: number; sem_custo: number };
 
 function Cabecalho({ titulo, linha, direita }: { titulo: string; linha?: string; direita?: React.ReactNode }) {
@@ -118,13 +123,19 @@ export function LoteVozCurso() {
 	const [ocupado, setOcupado] = useState(false);
 	const [limite, setLimite] = useState('');
 	const primeira = useRef(true);
+	const reenv = useReenvios(id ? Number(id) : null);
+	const podeReenviar = usePermissao(PERM_VOZ.reenviarLote);
+	const podeReciclar = usePermissao(PERM_VOZ.reciclarLote);
+	const [modal, setModal] = useState<null | 'reenviar' | 'reciclar'>(null);
+	const [regra, setRegra] = useState<DiscagemRen | null>(null);
+	const [versaoHist, setVersaoHist] = useState(0);
 
 	const carregar = useCallback(async () => {
 		if (!supabase || !empresa || !id) return;
 		const sb = supabase;
 		const [l, o, r] = await Promise.all([
 			sb.from('voz_lotes').select('id,credor_id,data,modo,situacao,total,encerradas,abandonos,custo_operadora,freado_em,roteiro_id,atualizado_em').eq('id', id).eq('empresa_id', empresa.id).maybeSingle(),
-			sb.from('voz_ondas').select('id,janela,tentativa,total,encerradas,situacao,abre_em,fecha_em').eq('lote_id', id).order('tentativa').order('abre_em'),
+			sb.from('voz_ondas').select('id,janela,tentativa,total,encerradas,situacao,abre_em,fecha_em,origem,passada,situacao_origem,prioridade,reenvio_id').eq('lote_id', id).order('tentativa').order('abre_em'),
 			sb.rpc('resumo_lote_voz', { lote: Number(id) }),
 		]);
 		if (l.error) { setError(friendlyError(l.error)); setLoading(false); return; }
@@ -143,7 +154,13 @@ export function LoteVozCurso() {
 			setLimite(String((c.data as Row | null)?.abandono_max_pct ?? 3).replace('.', ','));
 			const pr = (p.data as Row[] | null)?.[0];
 			setPrecoIa(pr && pr.modelo === 'flat' && pr.preco != null ? Number(pr.preco) : null);
+			const cid = (l.data as Lote | null)?.credor_id;
+			if (cid != null) {
+				const k = await sb.from('credores').select('discagem').eq('id', cid).maybeSingle();
+				setRegra(((k.data as Row | null)?.discagem as DiscagemRen | null) ?? {});
+			} else setRegra({});
 		}
+		await reenv.carregar();
 		setError(''); setAtualizadoEm(new Date()); setLoading(false);
 	}, [empresa?.id, id]);
 
@@ -208,6 +225,16 @@ export function LoteVozCurso() {
 		: pausado ? <Pilula tom="atencao">Pausado</Pilula>
 		: vivo ? <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[var(--base-texto-2)]"><span className="h-2 w-2 animate-pulse rounded-full" style={{ backgroundColor: 'var(--estado-pronto)' }} />Ao vivo · atualiza a cada 15 s{atualizadoEm ? ` · ${atualizadoEm.toLocaleTimeString('pt-BR')}` : ''}</span>
 		: <Pilula tom={sit?.tom}>{sit?.label ?? lote.situacao}</Pilula>;
+	const hoje = lote.data === diaISO();
+	const podeVoltarHoje = hoje && ['ligando', 'pausado'].includes(lote.situacao);
+	const podeReciclarHoje = hoje && ['ligando', 'pausado', 'concluido'].includes(lote.situacao);
+	const ef = efetivo(regra);
+	const acoesResubmit = <>
+		{!podeReciclar ? <SemPermissao>Sem permissão para reciclar</SemPermissao>
+			: <Botao secundario onClick={() => setModal('reciclar')} disabled={!podeReciclarHoje} title={podeReciclarHoje ? undefined : 'Só o lote de hoje (ligando, pausado ou concluído)'}><Recycle size={14} /> Reciclar mailing</Botao>}
+		{!podeReenviar ? <SemPermissao>Sem permissão para reenviar</SemPermissao>
+			: <Botao onClick={() => setModal('reenviar')} disabled={!podeVoltarHoje} title={podeVoltarHoje ? undefined : 'Só o lote de hoje, ligando ou pausado'}><RotateCw size={14} /> Reenviar agora</Botao>}
+	</>;
 	const botoes = !podeMudar || cancelado || lote.situacao === 'concluido' ? null
 		: pausado ? <><Botao onClick={() => void mudar('retomar')} disabled={ocupado}><Play size={14} /> Retomar</Botao><Botao secundario onClick={() => setConfirma('cancelar')} disabled={ocupado}>Cancelar o resto</Botao></>
 		: <><Botao onClick={() => setConfirma('pausar')} disabled={ocupado}><Pause size={14} /> Pausar</Botao><Botao secundario onClick={() => setConfirma('cancelar')} disabled={ocupado}>Cancelar o resto</Botao></>;
@@ -230,7 +257,7 @@ export function LoteVozCurso() {
 				{lote.modo !== 'real' && <Aviso tom="info" titulo={lote.modo === 'teste' ? 'Só números de teste:' : 'Simulado:'}>{lote.modo === 'teste' ? 'liga de verdade só para os números de teste da equipe.' : 'ninguém recebe ligação e nada entra na fatura.'}</Aviso>}
 				{freado && <Aviso tom="erro" titulo={`Lote freado: abandono em ${pct(taxaAb)}, acima do limite de ${pct(limAb)}.`}>As novas ligações começam a {Number(cfg?.freio_ritmo_pct ?? 60)}% do ritmo até a taxa voltar para baixo do limite. Mudar o limite ou pausar é decisão sua.</Aviso>}
 
-				<Cabecalho titulo={`Lote de ${dataCurta(lote.data)} · ${carteira}`} linha={`Agente virtual · ${inteiro(lote.total)} ligações em ${ondas.length} ${ondas.length === 1 ? 'onda' : 'ondas'}`} direita={<>{estado}{botoes}</>} />
+				<Cabecalho titulo={`Lote de ${dataCurta(lote.data)} · ${carteira}`} linha={`Agente virtual · ${inteiro(lote.total)} ligações em ${ondas.length} ${ondas.length === 1 ? 'onda' : 'ondas'} · ${inteiro(reenv.semContato.reduce((t, x) => t + x.numeros, 0))} números sem contato`} direita={<>{estado}{botoes}{acoesResubmit}</>} />
 
 				<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 					<Kpi rotulo="Ligações ao mesmo tempo" valor={<>{inteiro(emUso)} <small className="text-[14px] font-medium text-[var(--base-texto-2)]">/ {limiteEmp != null ? inteiro(limiteEmp) : '—'}</small></>}
@@ -257,7 +284,7 @@ export function LoteVozCurso() {
 						</>} />
 				</div>
 
-				<Cartao semPadding titulo="Ondas por janela UF/DDD" linha="Cada onda começa quando a janela local abre e para quando ela fecha. A retentativa é uma onda nova.">
+				<Cartao semPadding titulo="Ondas de hoje" linha={ef.modo === "horizontal" ? "Horizontal: cada spin é uma passada do mailing. Rediscagens, reenvios e reciclagens entram como ondas novas. Só contagens." : ef.modo === "vertical" ? "Vertical: uma passada, com os telefones de cada cliente em sequência. Rediscagens, reenvios e reciclagens entram como ondas novas. Só contagens." : "A 1ª passada abre com a janela UF/DDD. Rediscagens, reenvios e reciclagens entram como ondas novas. Só contagens."}>
 					{ondas.length === 0 ? <div className="px-4 pb-4 sm:px-5"><Vazio titulo="Nenhuma onda ainda.">As ondas aparecem quando a primeira janela UF/DDD abre.</Vazio></div> : (
 						<div className="divide-y" style={{ borderColor: 'var(--base-borda)' }}>
 							{ondas.map(o => {
@@ -268,16 +295,26 @@ export function LoteVozCurso() {
 								const quando = o.situacao === 'aguardando' && o.abre_em ? `Começa ${horaCurta(o.abre_em)}` : s.label;
 								return (
 									<div key={o.id} className="grid grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] sm:items-center sm:px-5" style={{ borderColor: 'var(--base-borda)' }}>
-										<div className="min-w-0"><b className="block truncate text-[13.5px] text-[var(--base-texto)]">{o.janela}</b><small className="text-[12px] text-[var(--base-texto-3)]">{o.abre_em ? `${horaCurta(o.abre_em)}–${horaCurta(o.fecha_em)}` : 'janela local'}</small></div>
-										<div className="text-[12.5px] text-[var(--base-texto-2)]">{o.tentativa}ª tentativa · <b className="tnum text-[var(--base-texto)]">{inteiro(o.encerradas)} de {inteiro(o.total)}</b></div>
+										<div className="min-w-0"><b className="block truncate text-[13.5px] text-[var(--base-texto)]">{nomeOnda(o).nome}</b><small className="text-[12px] text-[var(--base-texto-3)]">{o.origem ? nomeOnda(o).detalhe : o.abre_em ? `${horaCurta(o.abre_em)}–${horaCurta(o.fecha_em)}` : 'janela local'}</small></div>
+										<div className="text-[12.5px] text-[var(--base-texto-2)]">{o.origem ? 'encerradas' : `${o.tentativa}ª tentativa`} · <b className="tnum text-[var(--base-texto)]">{inteiro(o.encerradas)} de {inteiro(o.total)}</b></div>
 										<Trilho valor={p} />
 										<div><Pilula tom={s.tom}>{quando}</Pilula></div>
 									</div>
 								);
 							})}
+							{reenv.reenvios.filter(r => r.situacao === 'pendente' || r.situacao === 'em_onda').map(r => (
+								<div key={`r${r.id}`} className="grid grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] sm:items-center sm:px-5" style={{ borderColor: 'var(--base-borda)', backgroundColor: 'var(--base-fill)' }}>
+									<div className="min-w-0"><b className="block text-[13.5px] text-[var(--base-texto)]">Reenvio manual · {horaCurta(r.pedido_em)}</b><small className="text-[12px] text-[var(--base-texto-3)]">prioridade {r.prioridade}</small></div>
+									<div className="text-[12.5px] text-[var(--base-texto-2)]">números · <b className="tnum text-[var(--base-texto)]">{inteiro(r.previa?.volta ?? 0)}</b></div>
+									<Trilho valor={0} />
+									<div><Pilula tom="info">Na fila</Pilula></div>
+								</div>
+							))}
 						</div>
 					)}
 				</Cartao>
+
+				<HistoricoReciclagens credorId={lote.credor_id} versao={versaoHist} />
 
 				<Cartao titulo="Resultado até agora">
 					{f.total === 0 ? <Vazio titulo="Nenhuma ligação encerrada ainda.">O resultado aparece conforme as ligações terminam.</Vazio> : (
@@ -294,6 +331,9 @@ export function LoteVozCurso() {
 				</Cartao>
 			</div>
 
+			{modal === 'reenviar' && <ReenviarModal loteId={lote.id} ondas={ondas} semContato={reenv.semContato} onClose={() => setModal(null)} onPedido={() => void carregar()} />}
+			{modal === 'reciclar' && <ReciclarModal loteId={lote.id} ondas={ondas} semContato={reenv.semContato} promessaSuspende={ef.promessa} modo={ef.modo}
+				onClose={() => setModal(null)} onPedido={() => { setVersaoHist(v => v + 1); void carregar(); }} />}
 			<ConfirmaAcao
 				aberto={confirma === 'pausar'}
 				titulo="Pausar o lote?"
