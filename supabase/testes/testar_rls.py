@@ -2600,6 +2600,97 @@ checar("SQL 59: tabelas do roleplay com RLS", True, "select count(*) from pg_tab
 checar("SQL 59: RPCs do roleplay com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%roleplay%' or proname = 'fluxo_voz_avisos') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
 checar("SQL 59: anon não chama função do roleplay", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%roleplay%' or proname in ('fluxo_voz_avisos','perfis_roleplay','travas_voz','codigos_ok')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
 
+# SQL 61 · margem mínima dos itens de IA (a IA é revendida: %MC ≥ 70% em todo item de IA)
+def checar_erro(nome, cmd, papel, uid, trecho):
+    global ok_total, falhas
+    ok, out, err = sql(cmd, papel, uid)
+    passou = (not ok) and trecho in err
+    ok_total += passou; falhas += not passou
+    print(("PASSOU " if passou else "FALHOU ") + nome + ("" if passou else f"  -> ok={ok} out={out!r} err={err[:200]}"))
+# os testes acima rodam de novo os SQL 30, 58 e 59, que desfazem os trechos que o SQL 61 troca: roda o 61 de novo
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261228000001_ia_margem.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+_M = u["admin"]
+checar("SQL 61: itens de IA marcados", True, "select count(*) from public.cobranca_itens where eh_ia and codigo in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','ia_geracao_fluxo','ia_roleplay')", "authenticated", u["oper"], 5)
+checar("SQL 61: nenhum item fora da IA marcado", True, "select count(*) from public.cobranca_itens where eh_ia and codigo not like 'ia\\_%' and codigo not in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao')", "authenticated", u["oper"], 0)
+checar("SQL 61: MC mínima da IA nasce em 70%", True, "select mc_minima_ia_pct from public.parametros_margem", "authenticated", _M, "70.00")
+checar("SQL 61: Administrativo não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", ADM, 0)
+checar("SQL 61: cliente não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", u["admina"], 0)
+checar("SQL 61: impostos + MC mínima da IA ≥ 100% é recusado", False, "update public.parametros_margem set impostos_pct=30", "authenticated", _M)
+checar("SQL 61: Master zera os impostos (conta do preço padrão)", True, "update public.parametros_margem set impostos_pct=0, mc_minima_ia_pct=70; select impostos_pct||'|'||mc_minima_ia_pct from public.parametros_margem", "authenticated", _M, "0.00|70.00")
+checar("SQL 61: preço padrão = custo ÷ (1 − 0 − 0,70), para cima (centavos; 5 casas abaixo de R$ 0,10)", True, "select string_agg(codigo||'='||preco_tabela, ',' order by ordem) from public.cobranca_itens where codigo in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','ia_geracao_fluxo','ia_roleplay')", "authenticated", u["oper"], "voz_minuto_ia=1.50000,voz_minuto_ia_pico=1.50000,voz_transcricao=0.06851,ia_geracao_fluxo=0.56000,ia_roleplay=0.01120")
+checar("SQL 61: Master vê custo, mínimo e %MC da tabela", True, "select custo_unitario||'|'||moeda||'|'||custo_moeda||'|'||preco_minimo_ia||'|'||mc_tabela_pct from public.itens_ia() where codigo='voz_minuto_ia'", "authenticated", _M, "0.448000|USD|0.080000|1.50000|70.1")
+# custo só para o Master
+for nome_u, uid in (("Admin do cliente", u["admina"]), ("Operação", u["oper"]), ("Administrativo", ADM)):
+    checar(f"SQL 61: {nome_u} não lê custos_ia", True, "select count(*) from public.custos_ia", "authenticated", uid, 0)
+    checar(f"SQL 61: {nome_u} não lê consumo_ia", True, "select count(*) from public.consumo_ia", "authenticated", uid, 0)
+    checar(f"SQL 61: {nome_u} não vê itens_ia()", False, "select * from public.itens_ia()", "authenticated", uid)
+    checar(f"SQL 61: {nome_u} não vê a margem da IA", False, "select * from public.margem_ia(current_date)", "authenticated", uid)
+    checar(f"SQL 61: {nome_u} não vê os preços abaixo do mínimo", False, "select * from public.ia_precos_abaixo_minimo()", "authenticated", uid)
+    checar(f"SQL 61: {nome_u} não cadastra custo", False, "select public.salvar_custo_ia('voz_minuto_ia', 0.01)", "authenticated", uid)
+checar("SQL 61: ninguém grava custo direto pelo site", False, "insert into public.custos_ia (item,custo_unitario) values ('voz_minuto_ia',0.01)", "authenticated", _M)
+checar("SQL 61: site não lê o preço mínimo da IA direto", False, "select public.preco_minimo_ia('voz_minuto_ia')", "authenticated", u["admina"])
+# guarda do preço da empresa
+checar_erro("SQL 61: preço da empresa abaixo do mínimo é recusado com o menor preço aceito", f"select public.salvar_preco({EA},'voz_minuto_ia','flat',1.49)", "authenticated", _M, "o menor preço aceito é R$ 1,50 por minuto (MC mínima de 70% da IA)")
+checar("SQL 61: preço no mínimo é aceito", True, f"select public.salvar_preco({EA},'voz_minuto_ia','flat',1.50) > 0", "authenticated", _M, "t")
+checar("SQL 61: preço acima do mínimo é aceito", True, f"select public.salvar_preco({EA},'voz_transcricao','flat',0.09) > 0", "authenticated", ADM, "t")
+checar_erro("SQL 61: nem o Administrativo com motivo passa abaixo do mínimo da IA", f"select public.salvar_preco({EA},'voz_minuto_ia','flat',1.00,0,null,null,'cliente estratégico')", "authenticated", ADM, "item de IA")
+checar_erro("SQL 61: faixa abaixo do mínimo é recusada", f"select public.salvar_preco({EA},'voz_minuto_ia','faixa',null,0,'[{{\"ate\":1000,\"preco\":1.6}},{{\"ate\":null,\"preco\":1.2}}]')", "authenticated", _M, "R$ 1,50")
+checar("SQL 61: faixas no mínimo ou acima são aceitas", True, f"select public.salvar_preco({EA},'voz_minuto_ia','progressivo',null,0,'[{{\"ate\":1000,\"preco\":1.6}},{{\"ate\":null,\"preco\":1.5}}]') > 0", "authenticated", _M, "t")
+checar_erro("SQL 61: item de IA não aceita mensalidade", f"select public.salvar_preco({EA},'ia_roleplay','mensalidade',500)", "authenticated", _M, "nunca mensalidade")
+checar_erro("SQL 61: próxima vigência também passa pelo guarda", f"select * from public.salvar_preco_vigencia({EA},'ia_geracao_fluxo','flat',0.10)", "authenticated", _M, "R$ 0,56 por geração")
+checar_erro("SQL 61: gravação direta (servidor) abaixo do mínimo é recusada", f"insert into public.precos_empresa (empresa_id,item,modelo,preco,vigente_desde) values ({EB},'ia_roleplay','flat',0.001,date_trunc('month',current_date))", "service_role", None, "item de IA")
+checar_erro("SQL 61: faixa gravada direto abaixo do mínimo é recusada", f"update public.precos_faixas set preco=0.5 where preco_id=(select id from public.precos_empresa where empresa_id={EA} and item='voz_minuto_ia' order by vigente_desde desc limit 1)", "service_role", None, "item de IA")
+checar("SQL 61: preço de item que não é de IA não muda de regra", True, f"select public.salvar_preco({EA},'voz_plataforma','mensalidade',300) > 0", "authenticated", _M, "t")
+# guarda do preço de tabela (catálogo)
+checar_erro("SQL 61: preço de tabela abaixo do mínimo é recusado (Master direto)", "update public.cobranca_itens set preco_minimo=1, preco_tabela=1 where codigo='voz_minuto_ia'", "authenticated", _M, "R$ 1,50")
+checar_erro("SQL 61: preço de tabela abaixo do mínimo é recusado (RPC)", "select public.salvar_preco_tabela_ia('voz_minuto_ia', 1.20)", "authenticated", _M, "R$ 1,50")
+checar("SQL 61: Administrativo não define o preço de tabela da IA", False, "select public.salvar_preco_tabela_ia('voz_minuto_ia', 1.80)", "authenticated", ADM)
+checar("SQL 61: preço de tabela acima do mínimo; o mínimo do catálogo fica no da IA", True, "select public.salvar_preco_tabela_ia('voz_minuto_ia', 1.80); select preco_minimo||'|'||preco_tabela from public.cobranca_itens where codigo='voz_minuto_ia'", "authenticated", _M, "1.50000|1.80000")
+# gancho para itens novos (Speech Analytics): marcado sozinho, sem preço de empresa até ter custo
+_sv("insert into public.cobranca_itens (codigo,produto,nome,unidade,modulo,ordem) values ('sa_minuto','speech_analytics','Speech Analytics · minuto','minuto','agente_voz',60),('ia_resumo_teste','agente_voz','Resumo por IA (teste)','resumo','agente_voz',61) on conflict (codigo) do nothing")
+checar("SQL 61: item novo do Speech Analytics e item ia_… nascem marcados como IA", True, "select string_agg(codigo||'='||eh_ia, ',' order by codigo) from public.cobranca_itens where codigo in ('sa_minuto','ia_resumo_teste')", "service_role", None, "ia_resumo_teste=true,sa_minuto=true")
+checar_erro("SQL 61: item de IA sem custo não recebe preço de empresa", f"select public.salvar_preco({EA},'sa_minuto','flat',1)", "authenticated", _M, "sem custo cadastrado")
+checar("SQL 61: custo novo dá o preço padrão ao item sem tabela", True, "select public.salvar_custo_ia('sa_minuto', 0.10, 'BRL', 1, null, null, 'teste')->>'preco_minimo'; select preco_minimo||'|'||preco_tabela from public.cobranca_itens where codigo='sa_minuto'", "authenticated", _M, "0.34000|0.34000")
+checar("SQL 61: custo de item que não é de IA é recusado", False, "select public.salvar_custo_ia('sms', 0.01)", "authenticated", _M)
+checar("SQL 61: custo em dólar guarda a cotação; BRL sempre cotação 1", True, "select public.salvar_custo_ia('sa_minuto', 0.02, 'USD', 5.5, null, current_date); select custo_unitario||'|'||cotacao from public.itens_ia() where codigo='sa_minuto'", "authenticated", _M, "0.110000|5.5000")
+# custo/impostos novos: nenhum preço muda; o relatório lista o que ficou abaixo
+checar("SQL 61: impostos novos não mudam preço nenhum", True, f"update public.parametros_margem set impostos_pct=10; select (select f.preco from public.precos_faixas f join public.precos_empresa p on p.id=f.preco_id where p.empresa_id={EA} and p.item='voz_minuto_ia' and f.ate is null)||'|'||(select preco_tabela from public.cobranca_itens where codigo='voz_minuto_ia')", "authenticated", _M, "1.50000|1.80000")
+checar("SQL 61: relatório lista tabela, mínimo do catálogo e preço da empresa abaixo do novo mínimo", True, "select string_agg(origem||':'||preco||'<'||preco_minimo_ia, ',' order by origem) from public.ia_precos_abaixo_minimo() where item='voz_minuto_ia'", "authenticated", _M, "empresa:1.50000<2.24000,minimo_catalogo:1.50000<2.24000,tabela:1.80000<2.24000")
+checar("SQL 61: custo maior devolve quantos preços ficaram abaixo (sem recusar)", True, "select public.salvar_custo_ia('voz_transcricao', 0.01, 'USD', 5.6, null, current_date)->>'precos_abaixo'", "authenticated", _M, "3")
+checar("SQL 61: custo futuro já vale para o guarda", True, "select public.salvar_custo_ia('ia_geracao_fluxo', 0.05, 'USD', 5.6, 0.0006, current_date + 40)->>'preco_minimo'", "authenticated", _M, "1.40000")
+checar("SQL 61: itens_ia mostra que há custo futuro", True, "select custo_futuro from public.itens_ia() where codigo='ia_geracao_fluxo'", "authenticated", _M, "t")
+_sv("delete from public.custos_ia where item='ia_geracao_fluxo' and vigente_desde > current_date")
+# consumo com custo real: a fatura segue preço × quantidade
+RL3 = _sv(f"set role authenticated; select set_config('request.jwt.claim.sub', '{u['plan']}', false); select public.rodar_roleplay_voz({FV2}, array[{_PN['negocia_rapido']}]::bigint[], 1)")
+_sv("select public.pegar_roleplay_voz()")
+checar("SQL 61: roleplay grava o custo real (2,5 mil tokens × custo) e fatura ceil(mil tokens)", True, f"select public.concluir_roleplay_lote({RL3}, 2500); select (select quantidade||'|'||tokens||'|'||custo||'|'||registros from public.consumo_ia where empresa_id={EA} and item='ia_roleplay')||'|'||(select quantidade from public.consumo_mensageria where empresa_id={EA} and item='ia_roleplay')", "service_role", None, "2.5000|2500|0.00840|1|6")
+_sv(f"update public.voz_fluxo_pedidos set situacao='gerando' where id={PD2}")
+checar("SQL 61: geração com tokens da VM: custo pelos tokens, e os tokens não ficam no pedido", True, f"select public.registrar_geracao_fluxo_voz({PD2}, null, '{{\"erros\": [\"resposta_fora_do_esquema\"], \"tentativas\": 2, \"tokens_ia\": 12000}}'); select (resultado ? 'tokens_ia')::text||'|'||(select quantidade||'|'||tokens||'|'||custo from public.consumo_ia where empresa_id={EA} and item='ia_geracao_fluxo')||'|'||(select quantidade from public.consumo_mensageria where empresa_id={EA} and item='ia_geracao_fluxo') from public.voz_fluxo_pedidos where id={PD2}", "service_role", None, "false|1.0000|12000|0.04032|4")
+_sv(f"update public.voz_fluxo_pedidos set situacao='gerando' where id={PD2}")
+checar("SQL 61: geração sem tokens usa o custo por geração", True, f"select public.registrar_geracao_fluxo_voz({PD2}, null, '{{\"erros\": [\"resposta_fora_do_esquema\"], \"tentativas\": 2}}'); select quantidade||'|'||custo||'|'||registros from public.consumo_ia where empresa_id={EA} and item='ia_geracao_fluxo'", "service_role", None, "2.0000|0.20832|2")
+checar("SQL 61: site não registra consumo de IA", False, f"select public.registrar_consumo_ia({EA}, 'ia_roleplay', 1)", "authenticated", _M)
+checar("SQL 61: consumo de item que não é de IA é recusado", False, f"select public.registrar_consumo_ia({EA}, 'sms', 1)", "service_role")
+checar("SQL 61: custo informado pelo fornecedor vale sobre o cadastro; sem faturar", True, f"select public.registrar_consumo_ia({EB}, 'sa_minuto', 10, null, 1.234, false); select (select custo from public.consumo_ia where empresa_id={EB} and item='sa_minuto')||'|'||(select count(*) from public.consumo_mensageria where empresa_id={EB} and item='sa_minuto')", "service_role", None, "1.23400|0")
+checar("SQL 61: uso sem custo cadastrado fica marcado (nunca custo inventado)", True, f"select public.registrar_consumo_ia({EB}, 'ia_resumo_teste', 2); select custo||'|'||sem_custo from public.consumo_ia where empresa_id={EB} and item='ia_resumo_teste'", "service_role", None, "0.00000|1")
+checar("SQL 61: cliente vê a quantidade no consumo do mês, nunca o custo", True, f"select quantidade from public.consumo_mensageria where empresa_id={EA} and item='ia_roleplay'", "authenticated", u["admina"], 6)
+# margem da IA por empresa e item (mesma conta da mensageria)
+checar("SQL 61: sem preço da empresa a margem aponta sem_preco", True, f"select situacao from public.margem_ia((now() at time zone 'America/Sao_Paulo')::date) where empresa_id={EA} and item='ia_roleplay'", "authenticated", _M, "sem_preco")
+_sv(f"select public.registrar_consumo_ia({EB}, 'ia_geracao_fluxo', 1) from generate_series(1, 4)")
+checar("SQL 61: margem da IA: 4 gerações × R$ 1, impostos 10%, custo 4 × 0,168 → 73,2%", True, f"select public.salvar_preco({EB},'ia_geracao_fluxo','flat',1.00); select quantidade||'|'||receita||'|'||impostos||'|'||custo||'|'||mc||'|'||mc_pct||'|'||situacao||'|'||custo_estimado from public.margem_ia((now() at time zone 'America/Sao_Paulo')::date) where empresa_id={EB} and item='ia_geracao_fluxo'", "authenticated", _M, "4|4.00|0.40|0.67|2.93|73.2|ok|false")
+checar("SQL 61: uso sem custo cadastrado aparece na margem com sem_custo", True, f"select situacao||'|'||sem_custo from public.margem_ia((now() at time zone 'America/Sao_Paulo')::date) where empresa_id={EB} and item='ia_resumo_teste'", "authenticated", _M, "sem_preco|1")
+_sv(f"insert into public.consumo_mensageria (empresa_id,competencia,item,quantidade) values ({EB},date_trunc('month',(now() at time zone 'America/Sao_Paulo'))::date,'voz_minuto_ia',100)")
+checar("SQL 61: uso sem registro de custo é estimado pelo custo vigente", True, f"select custo||'|'||custo_estimado from public.margem_ia((now() at time zone 'America/Sao_Paulo')::date) where empresa_id={EB} and item='voz_minuto_ia'", "authenticated", _M, "44.80|true")
+# segurança
+for t in ("custos_ia", "consumo_ia"):
+    checar(f"SQL 61: anon não lê {t}", False, f"select * from public.{t} limit 1", "anon")
+checar("SQL 61: tabelas novas com RLS", True, "select count(*) from pg_tables where schemaname='public' and tablename in ('custos_ia','consumo_ia') and not rowsecurity", "service_role", None, 0)
+checar("SQL 61: funções da IA com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%\\_ia' or proname like '%\\_ia\\_%' or proname = 'ia_precos_abaixo_minimo') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
+checar("SQL 61: anon não chama função da IA", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%\\_ia' or proname like '%\\_ia\\_%' or proname = 'ia_precos_abaixo_minimo') and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
+_sv("update public.parametros_margem set impostos_pct=10")
+
 # SQL 57 · acesso próprio das VMs de voz: entra como o papel motorcx_voz (login de verdade) em arquivo próprio
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_acesso.py")],
                    capture_output=True, text=True)

@@ -16,7 +16,9 @@ gerar_fluxo_voz(contexto, modelo):
   4. devolve "o que entendi" (frase → bloco), "suposições e perguntas" (respondidas, geram de novo) e, para mudança
      num fluxo existente, o que mudou em relação à versão de origem.
 Sem limite de pedidos (decisão do dono): cada geração aparece no extrato (item ia_geracao_fluxo, contado pelo banco
-em registrar_geracao_fluxo_voz). Anexos: apagados do Storage quando a versão gerada deixa de existir (limpar_anexos).
+em registrar_geracao_fluxo_voz). Os tokens gastos vão em resultado.tokens_ia só para o custo real (SQL 61 · consumo_ia,
+só o Master vê); o banco tira a chave antes de gravar o pedido e o cliente paga sempre o preço por geração.
+Anexos: apagados do Storage quando a versão gerada deixa de existir (limpar_anexos).
 A chave do LLM fica no Secret Manager (voz/llm-fluxo). Só biblioteca padrão.
 """
 from __future__ import annotations
@@ -70,6 +72,7 @@ CRM ou da alçada); nunca peça senha ou cartão; ciclos precisam de repetir_max
 class Geracao:
     definicao: dict | None
     resultado: dict = field(default_factory=dict)
+    tokens: int = 0                                   # tokens do LLM em todas as tentativas (custo real, SQL 61)
 
 
 def _ferramenta() -> list[dict]:
@@ -206,6 +209,7 @@ def gerar_fluxo_voz(ctx: dict, modelo, max_correcoes: int = MAX_CORRECOES) -> Ge
     msgs = _mensagens(ctx)
     entendi, suposicoes, perguntas, erros = [], [], [], ["sem_resposta_do_llm"]
     d = None
+    tokens = 0
     for tentativa in range(max_correcoes + 1):
         try:
             r = modelo.responder(msgs, _ferramenta())
@@ -213,6 +217,7 @@ def gerar_fluxo_voz(ctx: dict, modelo, max_correcoes: int = MAX_CORRECOES) -> Ge
             log.warning("geração: LLM indisponível (%s)", ex.__class__.__name__)
             erros = ["llm_indisponivel"]
             break
+        tokens += int(getattr(r, "tokens", 0) or 0)
         args = next((a for nome, a in r.chamadas if nome == "entregar_fluxo"), None)
         if not isinstance(args, dict):
             erros = ["resposta_fora_do_esquema"]
@@ -226,13 +231,13 @@ def gerar_fluxo_voz(ctx: dict, modelo, max_correcoes: int = MAX_CORRECOES) -> Ge
         erros = erros_geracao(d, ctx)
         if not erros:
             return Geracao(d, {"entendi": entendi, "suposicoes": suposicoes, "perguntas": perguntas,
-                               "mudancas": mudancas(ctx.get("origem"), d), "erros": [], "tentativas": tentativa})
+                               "mudancas": mudancas(ctx.get("origem"), d), "erros": [], "tentativas": tentativa}, tokens)
         if tentativa < max_correcoes:
             msgs.append({"role": "assistant", "content": json.dumps(args.get("definicao"), ensure_ascii=False)[:20000]})
             msgs.append({"role": "user", "content": "O validador recusou o fluxo com estes erros (código:bloco): "
                                                     + ", ".join(erros) + ". Corrija e entregue de novo."})
     return Geracao(None, {"entendi": entendi, "suposicoes": suposicoes, "perguntas": perguntas, "mudancas": [],
-                          "erros": erros, "tentativas": max_correcoes})
+                          "erros": erros, "tentativas": max_correcoes}, tokens)
 
 
 # ------------------------------------------------------------------ laço da VM
@@ -246,7 +251,16 @@ def processar_um(sb, modelo) -> bool:
     except Exception as ex:   # noqa: BLE001
         log.warning("geração do pedido %s falhou (%s)", ctx.get("pedido"), ex.__class__.__name__)
         g = Geracao(None, {"erros": ["falha_na_geracao"], "tentativas": 0})
-    sb.rpc("registrar_geracao_fluxo_voz", {"pedido": ctx["pedido"], "definicao": g.definicao, "resultado": g.resultado})
+    args = {"pedido": ctx["pedido"], "definicao": g.definicao, "resultado": g.resultado}
+    if g.tokens > 0:
+        try:
+            sb.rpc("registrar_geracao_fluxo_voz", {**args, "resultado": {**g.resultado, "tokens_ia": g.tokens}})
+        except Exception as ex:   # noqa: BLE001 - banco sem o SQL 61 recusa a chave tokens_ia: grava sem o custo
+            log.warning("pedido %s: tokens não aceitos pelo banco (%s); gravando sem eles", ctx.get("pedido"),
+                        ex.__class__.__name__)
+            sb.rpc("registrar_geracao_fluxo_voz", args)
+    else:
+        sb.rpc("registrar_geracao_fluxo_voz", args)
     log.info("pedido %s: %s", ctx.get("pedido"), "rascunho" if g.definicao else f"{len(g.resultado.get('erros', []))} erro(s)")
     return True
 

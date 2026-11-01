@@ -131,6 +131,48 @@ class TestGerar(unittest.TestCase):
         self.assertEqual(a["resultado"]["erros"], ["valor_antes_identidade:N1"])
         self.assertFalse(G.processar_um(sb, LLM([])))
 
+    def test_processar_um_manda_os_tokens_so_para_o_custo(self):
+        """SQL 61: os tokens de todas as tentativas vão em resultado.tokens_ia (custo real, só o Master vê)."""
+        class LLMTokens(LLM):
+            def responder(self, msgs, ferramentas):
+                r = super().responder(msgs, ferramentas)
+                return Resposta(r.texto, r.chamadas, tokens=1000)
+
+        class SB:
+            def __init__(self):
+                self.chamadas = []
+
+            def rpc(self, f, a):
+                self.chamadas.append((f, a))
+                return CTX if f == "pegar_pedido_fluxo_voz" else None
+        sb = SB()
+        G.processar_um(sb, LLMTokens([ruim(), ruim(), ruim()]))
+        self.assertEqual(sb.chamadas[1][1]["resultado"]["tokens_ia"], 3000)
+        self.assertEqual(G.gerar_fluxo_voz(CTX, LLMTokens([ruim(), ruim(), ruim()])).tokens, 3000)
+
+    def test_processar_um_banco_sem_sql61_grava_sem_os_tokens(self):
+        class LLMTokens(LLM):
+            def responder(self, msgs, ferramentas):
+                r = super().responder(msgs, ferramentas)
+                return Resposta(r.texto, r.chamadas, tokens=500)
+
+        class SB:
+            def __init__(self):
+                self.chamadas = []
+
+            def rpc(self, f, a):
+                self.chamadas.append((f, a))
+                if f == "pegar_pedido_fluxo_voz":
+                    return CTX
+                if "tokens_ia" in (a.get("resultado") or {}):
+                    raise RuntimeError("check constraint")
+                return None
+        sb = SB()
+        self.assertTrue(G.processar_um(sb, LLMTokens([ruim(), ruim(), ruim()])))
+        self.assertEqual([f for f, _ in sb.chamadas], ["pegar_pedido_fluxo_voz", "registrar_geracao_fluxo_voz",
+                                                       "registrar_geracao_fluxo_voz"])
+        self.assertNotIn("tokens_ia", sb.chamadas[2][1]["resultado"])
+
     def test_limpar_anexos(self):
         class SB:
             def __init__(self):
