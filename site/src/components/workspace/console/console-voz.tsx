@@ -723,8 +723,8 @@ function LigarDeVerdade({ empresaId, empresaNome, d, modo, podeLigar, divisaoLin
 	const modoInfo = MODOS_VOZ.find(m => m.id === modo);
 	const faltam = itens.filter(i => !i.ok && (modo === 'simulado' ? i.para === 'teste' : true));
 	const prontos = itens.filter(i => i.ok).length;
-	const noAr = d.troncos.filter(t => t.ativo !== false && t.teste_ok === true).length;
-	const falta = faltam.length ? `Falta: ${faltam.map(f => f.txt.toLowerCase()).join(', ')}.` : '';
+	const noAr = d.troncos.filter(t => t.ativo !== false && t.teste_ok === true && !d.pausas.some(p => String(p.tronco_id) === String(t.id))).length;
+	const falta = faltam.length ? `falta: ${faltam.map(f => f.txt.toLowerCase()).join(', ')}` : '';
 	const acao = !podeLigar ? <Cadeado>{SEM_PERM_LIGAR}</Cadeado>
 		: modo === 'simulado' ? <button onClick={() => setConfirma('teste')} disabled={!okTeste} title={okTeste ? undefined : falta} className={btnPrim}>Passar para Só números de teste</button>
 		: modo === 'teste' ? <button onClick={() => setConfirma('real')} disabled={!okReal} title={okReal ? undefined : falta} className={btnPrim}>Ligar ligações reais</button>
@@ -734,7 +734,7 @@ function LigarDeVerdade({ empresaId, empresaNome, d, modo, podeLigar, divisaoLin
 		<>
 			<Cartao titulo="Caminho até as ligações reais" desc={modoInfo?.desc} acoes={acao}>
 				<Passos rotulo="Modo do agente" passos={MODOS_VOZ.map(m => m.nome)} atual={iAtual} />
-				{podeLigar && modo !== 'real' && faltam.length > 0 && <p className="mt-3 text-[12.5px] text-[var(--base-texto-2)]">O botão libera quando a lista abaixo estiver completa ({falta.toLowerCase()}). Isso é conferido no banco, não só na tela.</p>}
+				{podeLigar && modo !== 'real' && faltam.length > 0 && <p className="mt-3 text-[12.5px] text-[var(--base-texto-2)]">O botão libera quando a lista abaixo estiver completa ({falta}). Isso é conferido no banco, não só na tela.</p>}
 				{podeLigar && modo !== 'simulado' && <button type="button" onClick={() => setConfirma('simulado')} className="mt-3 text-[13px] font-semibold text-[var(--base-texto-2)] hover:underline">Voltar para Simulado</button>}
 			</Cartao>
 			<Kpis itens={[
