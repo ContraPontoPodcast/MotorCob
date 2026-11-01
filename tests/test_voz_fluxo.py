@@ -469,11 +469,17 @@ class TestRegistroFluxo(unittest.TestCase):
         for c in r["conectores"]:
             reg.registrar_fluxo(1, "ch-0001", "conector", c)
         reg.descarregar()
-        tabelas = {t: (l, c) for t, l, c in sb.gravou}
+        tabelas: dict = {}
+        for t, linhas, c in sb.gravou:
+            # cada insert com as mesmas chaves em todos os objetos (o PostgREST recusa lote misturado: PGRST102)
+            self.assertEqual(len({tuple(sorted(x)) for x in linhas}), 1, t)
+            tabelas.setdefault(t, ([], c))[0].extend(linhas)
         self.assertEqual(len(tabelas["voz_fluxo_passos"][0]), 5)
+        self.assertEqual(sorted(x["ordem"] for x in tabelas["voz_fluxo_passos"][0]), [1, 2, 3, 4, 5])
         self.assertEqual(tabelas["voz_fluxo_passos"][1], "empresa_id,id_chamada,ordem")
         self.assertEqual(tabelas["crm_chamadas"][0][0]["resultado_codigo"], "identidade_ok")
         self.assertNotIn("nome", tabelas["crm_chamadas"][0][0])
+        self.assertEqual(reg.fila_passos + reg.fila_conectores, [])
 
 
 if __name__ == "__main__":

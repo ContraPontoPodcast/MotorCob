@@ -2129,7 +2129,7 @@ checar("SQL 56: Operação não ouve nem lê", True, "select public.pode('ouvir_
 checar("SQL 56: Operação não guarda gravação", False, f"select public.guardar_gravacao({G1}, 'disputa judicial')", "authenticated", u["oper"])
 checar("SQL 56: Admin guarda a gravação para disputa", True, f"select public.guardar_gravacao({G1}, 'disputa judicial'); select guarda from public.voz_gravacoes where id={G1}", "authenticated", u["admina"], "t")
 checar("SQL 56: com guarda, a eliminação do titular fica bloqueada", False, "select public.abrir_pedido_titular('C1', 'eliminar')", "authenticated", u["admina"])
-checar("SQL 56: exportação do titular abre com prazo de 15 dias", True, "select public.abrir_pedido_titular('C1', 'exportar'); select (prazo - aberto_em::date) from public.titular_pedidos order by id desc limit 1", "authenticated", u["admina"], 15)
+checar("SQL 56: exportação do titular abre com prazo de 15 dias", True, "select public.abrir_pedido_titular('C1', 'exportar'); select (prazo - (aberto_em at time zone 'America/Sao_Paulo')::date) from public.titular_pedidos order by id desc limit 1", "authenticated", u["admina"], 15)
 checar("SQL 56: Operação não abre pedido do titular", False, "select public.abrir_pedido_titular('C1', 'exportar')", "authenticated", u["oper"])
 checar("SQL 56: Admin tira a guarda", True, f"select public.soltar_gravacao({G1}); select guarda from public.voz_gravacoes where id={G1}", "authenticated", u["admina"], "f")
 checar("SQL 56: retenção abaixo de 90 dias é recusada", False, f"select public.configurar_voz_empresa({EA}, '{{\"retencao_dias\": 60}}')", "authenticated", u["admina"])
@@ -2599,6 +2599,12 @@ for t in ("roleplay_personas", "roleplay_lotes", "roleplay_conversas"):
 checar("SQL 59: tabelas do roleplay com RLS", True, "select count(*) from pg_tables where schemaname='public' and tablename like 'roleplay\\_%' and not rowsecurity", "service_role", None, 0)
 checar("SQL 59: RPCs do roleplay com search_path fixo", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and prosecdef and (proname like '%roleplay%' or proname = 'fluxo_voz_avisos') and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", "service_role", None, 0)
 checar("SQL 59: anon não chama função do roleplay", True, "select count(*) from pg_proc where pronamespace='public'::regnamespace and (proname like '%roleplay%' or proname in ('fluxo_voz_avisos','perfis_roleplay','travas_voz','codigos_ok')) and has_function_privilege('anon', oid, 'execute')", "service_role", None, 0)
+
+# SQL 57 · acesso próprio das VMs de voz: entra como o papel motorcx_voz (login de verdade) em arquivo próprio
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_acesso.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 57: testes do papel motorcx_voz (testar_voz_acesso.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
