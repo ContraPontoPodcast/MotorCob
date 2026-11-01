@@ -16,6 +16,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from voz import gcp
 from voz.analise import contrato as K
@@ -75,8 +76,10 @@ class Embedder:
 
 
 class EmbeddingVertex(Embedder):
-    def __init__(self, projeto: str, regiao: str = REGIAO, modelo: str = MODELO, token=None, requisitar=gcp.requisitar):
+    def __init__(self, projeto: str, regiao: str = REGIAO, modelo: str = MODELO, token=None, requisitar=gcp.requisitar,
+                 tarefa: str = "RETRIEVAL_DOCUMENT"):
         self.projeto, self.regiao, self.modelo = projeto, regiao, modelo
+        self.tarefa = tarefa                                 # RETRIEVAL_QUERY para a pergunta da busca
         self.token = token or gcp.Token()
         self._req = requisitar
         self.tokens_entrada = 0
@@ -88,7 +91,7 @@ class EmbeddingVertex(Embedder):
     def vetores(self, textos):
         out = []
         for t in textos:                                     # o modelo aceita uma instância por pedido
-            corpo = json.dumps({"instances": [{"content": t, "task_type": "RETRIEVAL_DOCUMENT"}],
+            corpo = json.dumps({"instances": [{"content": t, "task_type": self.tarefa}],
                                 "parameters": {"outputDimensionality": self.dimensao}}).encode()
             d = self._req("POST", self._url(), self.token, corpo, "application/json")
             pred = d["predictions"][0]["embeddings"]
@@ -122,15 +125,33 @@ def gravar(sb, gravacao: dict, lista: list[Janela], embedder: Embedder | None, c
     return len(linhas)
 
 
-def atender_buscas(sb, embedder: Embedder, limite: int = 20) -> int:
+def atender_buscas(sb, embedder: Embedder, limite: int = 20, parte: str | None = None, dia=None) -> int:
+    """Responde as buscas semânticas pendentes. Com `parte` (SQL 63: buscas_semanticas_pendentes_voz), só as da parte
+    i/n desta VM e o custo do embedding da pergunta vai para a empresa (registrar_uso_ia_voz, componente embeddings,
+    nada cobrado a mais); sem `parte`, o caminho do SQL 60."""
     n = 0
-    for b in sb.rpc("buscas_voz_pendentes", {"limite": limite}) or []:
+    if parte is not None:
+        pendentes = sb.rpc("buscas_semanticas_pendentes_voz", {"parte": parte, "limite": limite}) or []
+    else:
+        pendentes = sb.rpc("buscas_voz_pendentes", {"limite": limite}) or []
+    uso: dict = {}
+    for b in pendentes:
         try:
+            antes = int(getattr(embedder, "tokens_entrada", 0) or 0)
             v = embedder.vetores([b["termo"]])[0]
+            tok = int(getattr(embedder, "tokens_entrada", 0) or 0) - antes or len(b["termo"]) // 4 + 1
+            if b.get("empresa_id") is not None:
+                u = uso.setdefault(int(b["empresa_id"]), [0, 0])
+                u[0], u[1] = u[0] + 1, u[1] + tok
             sb.rpc("responder_busca_voz", {"busca": b["id"], "emb": literal(v)})
             n += 1
         except Exception as ex:   # noqa: BLE001 — a busca vira "erro" sozinha depois de 2 min
             log.warning("busca semântica %s falhou (%s)", b.get("id"), ex.__class__.__name__)
+    for emp, (q, tok) in uso.items():
+        try:
+            registrar_uso(sb, emp, dia or datetime.now(ZoneInfo("America/Sao_Paulo")).date(), "embeddings", q, 0, 0, tok, 0)
+        except Exception as ex:   # noqa: BLE001 — o uso não segura a resposta (já foi dada)
+            log.warning("busca semântica: uso de IA não registrado (%s)", ex.__class__.__name__)
     return n
 
 

@@ -17,6 +17,7 @@ Fluxo de uma tentativa (id_chamada = uuid hex; canais <id>-c<n> cliente, <id>-p 
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -33,6 +34,7 @@ from voz.orquestrador.ari import ClienteARI, ErroARI
 from voz.orquestrador.eventos import SEM_IA, EscritorEventos, EventoChamada, classificar
 from voz.orquestrador.lote import ItemLote, Lote, hash_destino
 from voz.provedores.base import ContextoChamada, ProvedorVoz
+from voz.transcricao import ia as TIA
 
 log = logging.getLogger("motorcx.voz")
 _FUSO = ZoneInfo("America/Sao_Paulo")
@@ -100,6 +102,16 @@ def _quando(v) -> datetime | None:
     except ValueError:
         return None
     return None if d is None else (d if d.tzinfo is None else d.astimezone(_FUSO).replace(tzinfo=None))
+_DEZ_DIGITOS = re.compile(r"[0-9]{10}")
+
+
+def novo_id() -> str:
+    """uuid hex sem 10 dígitos seguidos: o id vai no nome da gravação e o banco recusa caminho com 10+ dígitos (pode
+    ser telefone). Sorteia de novo nesse caso (~8% dos uuid)."""
+    while True:
+        h = uuid.uuid4().hex
+        if not _DEZ_DIGITOS.search(h):
+            return h
 
 
 def _int(v):
@@ -116,7 +128,9 @@ class Orquestrador:
                  ao_registrar: Callable[[EventoChamada], None] | None = None, toque_max_s: int = 40,
                  toque_min_s: int = 15, transferencia_toque_s: int = 30, failover_espera_s: int = 5,
                  audio_alo: str = AUDIO_ALO_PADRAO,
-                 ao_fluxo: Callable[[int, str, str, dict], None] | None = None):
+                 ao_fluxo: Callable[[int, str, str, dict], None] | None = None,
+                 transcricoes: TIA.GravadorTranscricaoIA | None = None,
+                 ao_gravacao: Callable[[dict], None] | None = None):
         self.ari, self.dados, self.agendador, self.escritor = ari, dados, agendador, escritor
         self.provedores, self.relogio = provedores, relogio
         self.detector = detector or A.AmdAsterisk()
@@ -125,6 +139,10 @@ class Orquestrador:
         self.transferencia_toque_s, self.failover_espera_s = transferencia_toque_s, failover_espera_s
         self.audio_alo = audio_alo
         self.ao_fluxo = ao_fluxo                # passos e chamadas de conector do fluxo (SQL 58) → RegistroBanco
+        # Speech Analytics (SQL 63): transcrição mascarada da conversa com a IA (só de ligação gravada) e a gravação da
+        # IA em voz_gravacoes depois que subiu para o bucket
+        self.transcricoes, self.ao_gravacao = transcricoes, ao_gravacao
+        self._transcrever: dict[str, dict] = {}  # id_chamada -> {empresa_id, provedor, nomes (memória), ate}
         self.lotes: dict[tuple, Lote] = {}      # (empresa_id, credor_id, canal) -> lote
         self.aguardando: dict[str, tuple] = {}   # id_chamada -> (Chamada, prazo) esperando o resultado do provedor
         self.chamadas: dict[str, Chamada] = {}
@@ -169,6 +187,8 @@ class Orquestrador:
                 self._tentar_agente(c, agora)
             if c.failover_ate is not None:
                 self._tentar_failover(c, agora)
+        for cid in [k for k, v in self._transcrever.items() if agora >= v["ate"]]:
+            self._transcrever.pop(cid, None)        # a transcrição não veio (provedor sem texto): nomes saem da memória
         for cid, (c, prazo) in list(self.aguardando.items()):
             if agora >= prazo:
                 self._alerta(f"provedor {c.provedor}: resultado não chegou a tempo (tentativa fechada pela rede)")
@@ -201,7 +221,7 @@ class Orquestrador:
             self._conta("sem_rota")
             self._alerta(f"empresa {lote.empresa_id}: número sem rota cadastrada para o tipo (fica fora do dia)")
             return None
-        c = Chamada(uuid.uuid4().hex, lote.empresa_id, idx, item, cands, lote_chave=lote.chave)
+        c = Chamada(novo_id(), lote.empresa_id, idx, item, cands, lote_chave=lote.chave)
         for i, cand in enumerate(cands):
             if self.agendador.tronco_livre(cand.tronco.id, agora.timestamp()):
                 c.i_rota = i
@@ -364,6 +384,10 @@ class Orquestrador:
                               id_acao=c.item.id_acao, final_numero=c.item.telefone[-2:],
                               variaveis=self._variaveis_fala(c),
                               credor_id=c.lote_chave[1] if c.lote_chave else None)
+        if c.gravando and self.transcricoes is not None:
+            self._transcrever[c.id] = {"empresa_id": c.empresa_id, "provedor": prov.codigo,
+                                       "nomes": TIA.nomes_da_chamada(c.item.variaveis),
+                                       "ate": agora + timedelta(hours=2)}
         con = prov.iniciar(ctx, self.evento_provedor)
         c.provedor, c.estado, c.destino = prov.codigo, "conversa", "ia"
         c.ponte = f"{c.id}-b"
@@ -380,6 +404,9 @@ class Orquestrador:
 
     # ---------------------------------------------------------------- eventos do provedor
     def evento_provedor(self, id_chamada: str, tipo: str, dados: dict) -> None:
+        if tipo == "transcricao":                  # pode chegar depois do fim (ElevenLabs): não depende da chamada viva
+            self._gravar_transcricao(id_chamada, dados)
+            return
         c = self.chamadas.get(id_chamada)
         if c is None and id_chamada in self.aguardando:        # resultado que chegou depois do fim da chamada
             c = self.aguardando[id_chamada][0]
@@ -404,6 +431,17 @@ class Orquestrador:
             self._transferir(c, str(dados.get("motivo") or ""), self.relogio())
         elif tipo == "encerrar":
             self._desligar_cliente(c)
+
+    def _gravar_transcricao(self, id_chamada: str, dados: dict) -> None:
+        """Só ligação gravada (sem gravação não há com que casar a análise); mascarada antes de ir ao disco."""
+        meta = self._transcrever.pop(id_chamada, None)
+        if meta is None or self.transcricoes is None:
+            return
+        try:
+            self.transcricoes.salvar(meta["empresa_id"], id_chamada, meta["provedor"], dados or {}, meta["nomes"])
+            self._conta("transcricao_ia")
+        except Exception as ex:   # noqa: BLE001 — disco cheio etc.: a ligação segue, só fica sem análise
+            self._alerta(f"transcrição da IA não gravada ({ex.__class__.__name__})")
 
     def _guardar_resultado(self, c: Chamada, dados: dict) -> None:
         r = dados.get("resultado_ia")
@@ -595,7 +633,11 @@ class Orquestrador:
         if c.gravando and c.t_atendeu and self.fila_envio is not None:
             objeto = G.nome_objeto(c.lote_chave[1] if c.lote_chave else None, ev.data, c.id)
             ev.gravacao = f"gs://{c.bucket}/{objeto}"
-            self.fila_envio.agendar(G.nome_arquivo(c.id), objeto, bucket=c.bucket)
+            ao_enviar = None
+            if self.ao_gravacao is not None:       # depois do upload: voz_gravacoes (origem ia), casa com a transcrição
+                linha = {"empresa_id": c.empresa_id, "id_chamada": c.id, "caminho": objeto, "duracao_s": billsec}
+                ao_enviar = lambda _uri, linha=linha: self.ao_gravacao(linha)   # noqa: E731
+            self.fila_envio.agendar(G.nome_arquivo(c.id), objeto, ao_enviar=ao_enviar, bucket=c.bucket)
         classificar(ev, self.toque_min_s)
         self.escritor.escrever(ev)
         if self.ao_registrar is not None:

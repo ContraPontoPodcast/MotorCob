@@ -102,3 +102,15 @@ test("transcrição: formato fechado, quem normalizado e máscara de garantia", 
   assert.equal(lerTranscricao({ outra: 1 }), null);
   assert.equal(mascarar("pagar dia 5, parcela de 120"), "pagar dia 5, parcela de 120");
 });
+
+test("transcrição do discador importada (SQL 64): quem = ligacao, mascarada de novo por garantia", () => {
+  // o formato que voz/transcricao/worker.py › formato_site sobe ao lado do áudio no bucket da empresa
+  const s = lerTranscricao({ segmentos: [
+    { quem: "ligacao", em_s: 0, texto: "Central, bom dia. Pode confirmar o CPF [CPF REDIGIDO]?" },
+    { quem: "ligacao", em_s: 4.6, texto: "O meu é 123.456.789-09, anota aí" },
+  ], redigidos: { cpf: 1, cartao: 0 } })!;
+  assert.equal(s.length, 2);
+  assert.deepEqual(s.map((x) => x.quem), ["ligacao", "ligacao"]);
+  assert.equal(s[1].em_s, 5);
+  assert.doesNotMatch(s[1].texto, /\d{3}\.\d{3}/);
+});

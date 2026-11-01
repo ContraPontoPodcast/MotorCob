@@ -3,4 +3,5 @@
 # configuração e o plantão no modo acesso_proprio usam o pg8000.
 websocket-client==1.8.0   # eventos do ARI (WebSocket)
 pg8000==1.31.2            # acesso próprio (voz/acesso.py): Postgres pelo pooler, puro Python
+paramiko==3.5.1           # importador das gravações do discador (voz/importador/fontes.py): SFTP com a chave do servidor fixada
 # Montagem MotorCX e transcrição: voz/requirements-ia.txt (separado, pesado)

@@ -90,6 +90,10 @@ class SbFalso:
     def __init__(self, rpcs=None):
         self.rpcs = rpcs or {}
         self.chamadas = []
+        self.inseridos = []
+
+    def inserir(self, tabela, linhas, conflito=None):      # SQL 63: os trechos da análise que deu certo
+        self.inseridos.append((tabela, linhas, conflito))
 
     def rpc(self, nome, args=None):
         self.chamadas.append((nome, args))
@@ -369,7 +373,9 @@ class TestRotina(unittest.TestCase):
     def test_rodada_marca_o_que_terminou_e_avisa_alertas(self):
         sb = SbFalso({"speech_contexto_voz": self.contexto, "gravar_analise_voz": {"situacao": "ok", "alertas": 2}})
         out = RT.analisar_pendentes(sb, LLMFalso(), RT.FonteLocal(self.pasta))
+        trechos = out.pop("trechos", 0)                                      # SQL 63: janelas em voz_trechos
         self.assertEqual(out, {"ok": 1, "ambigua": 1, "ja_analisada": 1, "sem_gravacao": 1, "alertas": 2})
+        self.assertEqual(trechos, sum(len(l) for t, l, _ in sb.inseridos if t == "voz_trechos"))
         refs = [r["ref"] for r in sb.chamadas[0][1]["refs"]]
         self.assertEqual(sorted(refs), ["77", "78", "79", "80"])           # o arquivo de 30 dias atrás fica de fora
         self.assertEqual(sb.chamadas[0][1]["refs"][0]["caminho"].split("/")[0], "empresa_5")

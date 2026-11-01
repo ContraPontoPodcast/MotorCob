@@ -20,7 +20,7 @@ const TIPOS_MED: { id: string; nome: string; cor: string }[] = [{ id: 'intencao'
 
 function decisaoTexto(i: Item): string {
 	const d = i.decisao_ia;
-	if (i.tipo === 'tema') return `Tema novo com ${nf(d.conversas)} conversas, ainda sem nome`;
+	if (i.tipo === 'tema') return `Tema novo com ${nf(d.conversas)} conversas, ainda sem nome${typeof d.sugestao === 'string' && d.sugestao ? ` · sugestão da IA: "${d.sugestao}"` : ''}`;
 	if (i.tipo === 'nota') return `Item ${String(d.item)}: ${String(d.valor) === 'nao' ? 'não' : String(d.valor)}${d.contestada ? ' · contestada' : ''}`;
 	if (i.tipo === 'codigo') return `${String(d.campo ?? 'código')} = ${String(d.valor)} · dúvida com ${String(d.duvida_com ?? '—')}`;
 	if (i.tipo === 'trava') return `Trava ${String(d.trava ?? '')} trocou a resposta`;
@@ -126,7 +126,7 @@ export function Curadoria({ f }: { f: Filtros }) {
 								) : (
 									<div className="mt-2 flex flex-wrap gap-2">
 										{i.tipo !== 'tema' && <Botao onClick={() => void curar(i.id, 'confirmar')}>Confirmar</Botao>}
-										<Botao secundario onClick={() => setCorr({ id: i.id, valor: i.tipo === 'tema' ? '' : i.opcoes[0] ?? '' })}>{i.tipo === 'tema' ? 'Dar nome' : 'Corrigir'}</Botao>
+										<Botao secundario onClick={() => setCorr({ id: i.id, valor: i.tipo === 'tema' ? (typeof i.decisao_ia.sugestao === 'string' ? i.decisao_ia.sugestao : '') : i.opcoes[0] ?? '' })}>{i.tipo === 'tema' ? 'Dar nome' : 'Corrigir'}</Botao>
 										{['intencao', 'trava', 'codigo', 'tema'].includes(i.tipo) && <Botao secundario onClick={() => void curar(i.id, 'exemplo')}>Virar exemplo</Botao>}
 										{i.tipo !== 'transcricao' && <Botao secundario disabled title="Depende do Fluxo do agente (casos de teste), que ainda não está neste banco.">Virar caso de teste</Botao>}
 										<Botao secundario onClick={() => void curar(i.id, 'descartar')}>Descartar</Botao>

@@ -5,6 +5,8 @@ motor/retroalimentacao.py. A intenção vem do catálogo do banco (voz_intencoes
 Curadoria: os dois chegam no contexto de cada empresa (speech_contexto_voz)."""
 from __future__ import annotations
 
+import re
+
 MOTIVOS = ("desemprego", "reducao_renda", "outras_dividas", "esquecimento", "aguardando_recebimento", "nao_reconhece",
            "contestacao", "fraude_alegada", "insatisfacao_servico", "outro")
 OBJECOES = ("valor_alto", "parcela_alta", "juros", "sem_dinheiro_agora", "quer_desconto", "desconfia_golpe",
@@ -37,3 +39,7 @@ DESCRICAO = {
                "link_na_ligacao": "o atendente mandou o link de pagamento durante a ligação",
                "dia_vencimento": "o atendente deixou escolher o dia do vencimento"},
 }
+
+# SQL 63 · a primeira oferta apresentada pelo fluxo (vem da transcrição da ligação da IA, nunca do LLM): só parcelas e
+# faixa de desconto, nunca valor (codigos_speech_ok confere o mesmo padrão)
+OFERTA = re.compile(r"^(avista|([2-9]|[1-9][0-9])x)(_d(1_10|10_20|20_30|30_50|50_mais))?$")

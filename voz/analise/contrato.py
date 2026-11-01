@@ -25,6 +25,9 @@ RPCS = ("buscas_voz_pendentes", "responder_busca_voz", "gravar_relatorio_credor"
         "conferir_rascunhos_recomendacoes", "renitencia_voz", "avisar_alertas_voz", "apagar_analise_voz_expirada", "registrar_uso_ia_voz",
         # SQL 62 · dados do Speech Analytics (voz/analise/analisador.py e rotina.py)
         "speech_contexto_voz", "gravar_analise_voz", "agregar_speech_dia", "speech_empresas_voz",
-        "dados_retroalimentacao_voz", "recomendacoes_aplicadas_voz", "gravar_impacto_voz")
+        "dados_retroalimentacao_voz", "recomendacoes_aplicadas_voz", "gravar_impacto_voz",
+        # SQL 63 · ligações da IA, temas novos (clusterização semanal) e embedding dos trechos
+        "registrar_gravacoes_ia_voz", "trechos_para_temas_voz", "propor_tema_voz", "recalcular_temas_semana",
+        "speech_vetor_voz", "buscas_semanticas_pendentes_voz")
 
 CONFLITO = {"voz_trechos": "gravacao_id,inicio_s,falante"}

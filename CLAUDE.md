@@ -313,6 +313,38 @@ de outra pessoa pela certificação e a rotação segue.
   refaz os `_dia` (idempotente; operador só com ID do discador), depois as regras e o impacto de 28 dias de
   `motor/retroalimentacao.py` pelas RPCs. Desligado por padrão: metadado `motorcx-speech-analytics=1` na VM e
   `voz_config.speech_analytics` por empresa. Os dois acessos da VM (funções de `voz_vm`).
+- `voz/importador/` (SQL 64): importador das gravações do discador do cliente, na VM (timer
+  `motorcx-voz-importador`, metadado `motorcx-importador-gravacoes=1` e, por fonte, `leitura_automatica`; os dois acessos).
+  Fontes por empresa em `voz_import_config` (envio pelo site no bucket `gravacoes-discador`, SFTP com a chave do servidor
+  fixada, HTTPS só nos domínios autorizados); credencial só no Secret Manager pela referência (equipe com
+  `gerenciar_troncos_voz`); o Admin cadastra (`importar_gravacoes`). Manifesto estrito (`manifesto.py`: coluna de dado
+  pessoal recusa o arquivo, linha com CPF/telefone/e-mail vai para a quarentena; `id_chamada` vira hash só de letras =
+  `voz_gravacoes.chave_importacao`, reimportar não duplica). Par com a transferência da IA (`preparar_importacao_voz`:
+  `id_chamada_motorcx` ou janela `janela_par_s`; ambíguo/sem par nunca casa). Áudio no bucket da empresa
+  (`discador/<AAAA>/<MM>/<DD>/<chave>.<ext>`), `voz_gravacoes` origem discador + `operador_ref`, fila do Whisper
+  (`<gravacao>.<ext>`); o worker (`--registrar`) sobe a transcrição redigida ao lado do áudio no bucket
+  (`<caminho>.transcricao.json`, lida no site pela Edge Function `gravacoes`, quem = `ligacao`), devolve a situação e o
+  caminho e cobra os minutos em `voz_transcricao` uma vez só.
+  Registro por execução e arquivo (`voz_import_arquivos`) e quarentena com motivos novos, na tela Gravações do discador.
+- `voz/transcricao/ia.py` + `voz/analise/temas.py` (Speech Analytics da IA, SQL 63): os três provedores (Montagem
+  por `ConversaComTurnos`, ElevenLabs pelo transcript do webhook/API de conversas, Simulador pelos turnos do cenário)
+  entregam a conversa no evento `transcricao`; o orquestrador grava só de ligação GRAVADA, mascarada (`redacao.mascarar`)
+  em `/var/motorcx/transcricoes/empresa_<id>/ia_<id_chamada>.json` (90 dias; o Whisper nunca transcreve `ia_…`). A
+  gravação da IA (`credor_<id>/<data>/ia_<id_chamada>.wav`, id sem 10 dígitos seguidos) entra em `voz_gravacoes` depois
+  do upload (`registrar_gravacoes_ia_voz`); o nome sem extensão é o `<ref>` que casa as duas. Depois de cada análise,
+  janelas mascaradas em `voz_trechos` (embedding Vertex com pgvector; componente `embeddings`). Segunda 03:20: temas
+  novos pela clusterização dos trechos do cliente sem tema/intenção (vetor ou TF-IDF); grupo ≥ 30 conversas vira tema
+  `novo` + item `tema` na Curadoria com nome SUGERIDO (componente `temas`); nome e promoção são de pessoa. `oferta`
+  (primeira oferta do fluxo: `6x`, `avista_d10_20`; `sem_oferta` pelo CRM) em `voz_conversao_dia`. Pagou em 30 dias
+  por motivo: o motor manda quem pagou (`nuvem/resultado_motivo.py`) e o banco grava só contagens de dias fechados
+  (`voz_resultado_por_motivo`; o site lê por `resultado_por_motivo_voz`, grupo < 30 sem número). Busca semântica:
+  serviço contínuo `motorcx-voz-speech-buscas` (`rotina buscas`, a cada 2 s, parte i/n, custo do embedding da pergunta
+  na empresa). Webhook pós-chamada da ElevenLabs: receptor dentro do orquestrador real (`criar_receptor`, só com
+  `ref_webhook`; 127.0.0.1:8092; HMAC, 2 MB, 10 s; corpo nunca guardado). Proxy HTTPS da VM: Caddy 2.8.4 instalado
+  pelo `vm_inicio.sh`, Caddyfile versionado (`infra/asterisk/vm/motorcx-caddy*`), `motorcx-voz-https` liga só as rotas
+  dos recursos ligados (webhook; simulador com `motorcx-simulador-fluxo=1`); certificado Let's Encrypt de
+  `<ip-com-hífens>.sslip.io:8443` (ElevenLabs e Edge Functions exigem certificado público); firewall 8443/80 no
+  `criar_gcp.sh`.
 - `motor/propensao.py` (Propensão a pagamento, fase 1): chance de pagar (pagou = 1) em 30 dias por célula
   = situação em D (localização/CPC/giro/quebra) × atraso (0–30…361+) × saldo (tercis), com encolhimento
   Beta célula → situação → carteira (`FORCA` 50). Treino com fotos de toda segunda dos últimos 180 dias

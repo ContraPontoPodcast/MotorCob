@@ -1,0 +1,9 @@
+[Unit]
+Description=Importador das gravações do discador a cada 15 minutos (só com o metadado motorcx-importador-gravacoes=1)
+
+[Timer]
+OnBootSec=6min
+OnUnitInactiveSec=15min
+
+[Install]
+WantedBy=timers.target

@@ -1,7 +1,11 @@
 #!/bin/bash
 # Sobe um dos contêineres da voz em primeiro plano (o systemd cuida de reiniciar).
-#   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite
-# speech e speech-noite (Speech Analytics, SQL 62) só rodam com o metadado motorcx-speech-analytics=1 (padrão: desligado).
+#   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite | speech-temas |
+#                     speech-buscas | simulador-fluxo | importador
+# speech, speech-noite, speech-temas e speech-buscas (Speech Analytics, SQL 62/63) só rodam com o metadado motorcx-speech-analytics=1
+# (padrão: desligado).
+# importador (gravações do discador do cliente, SQL 64) só roda com o metadado motorcx-importador-gravacoes=1 (padrão:
+# desligado); no banco, cada fonte ainda tem a leitura automática desligada por padrão.
 set -euo pipefail
 . /usr/local/bin/motorcx-voz-comum
 comum_voz=(--rm --network host --user 10010:10010 --env-file "$RUN/voz.env" -e MOTORCX_ARI_SENHA_ARQUIVO="$RUN/ari_senha"
@@ -20,8 +24,14 @@ case "${1:-}" in
     reserva=(); [ "$(meta motorcx-transcricao-reserva)" = 1 ] && reserva=(--reserva-api)
     exec docker run --name motorcx-voz-transcricao "${comum_voz[@]}" -e MOTORCX_WHISPER_PASTA=/var/motorcx/modelos -e HF_HOME=/var/motorcx/modelos \
       "$IMG_VOZ" python3 -m voz.transcricao.worker --dados "$RUN/voz.json" --entrada /var/motorcx/importadas \
-      --saida /var/motorcx/transcricoes "${reserva[@]}" ;;
-  speech|speech-noite)
+      --saida /var/motorcx/transcricoes --registrar "${reserva[@]}" ;;
+  importador)
+    if [ "$(meta motorcx-importador-gravacoes)" != 1 ]; then
+      echo "Importador de gravações desligado nesta VM (metadado motorcx-importador-gravacoes)"; exit 0
+    fi
+    exec docker run --name motorcx-voz-importador "${comum_voz[@]}" -e MOTORCX_IMPORTADOR_GRAVACOES=1 "$IMG_VOZ" \
+      python3 -m voz.importador.rotina --parte "$PARTE" --saida /var/motorcx/importadas ;;
+  speech|speech-noite|speech-temas|speech-buscas)
     if [ "$(meta motorcx-speech-analytics)" != 1 ]; then
       echo "Speech Analytics desligado nesta VM (metadado motorcx-speech-analytics)"; exit 0
     fi
@@ -29,7 +39,23 @@ case "${1:-}" in
       exec docker run --name motorcx-voz-speech "${comum_voz[@]}" -e MOTORCX_SPEECH_ANALYTICS=1 "$IMG_VOZ" \
         python3 -m voz.analise.rotina analisar --pasta /var/motorcx/transcricoes --provedores /etc/motorcx/provedores.json
     fi
+    if [ "$1" = speech-buscas ]; then
+      exec docker run --name motorcx-voz-speech-buscas "${comum_voz[@]}" -e MOTORCX_SPEECH_ANALYTICS=1 "$IMG_VOZ" \
+        python3 -m voz.analise.rotina buscas --parte "$PARTE" --intervalo 2
+    fi
+    if [ "$1" = speech-temas ]; then
+      exec docker run --name motorcx-voz-speech-temas "${comum_voz[@]}" -e MOTORCX_SPEECH_ANALYTICS=1 "$IMG_VOZ" \
+        python3 -m voz.analise.rotina temas --parte "$PARTE" --provedores /etc/motorcx/provedores.json
+    fi
     exec docker run --name motorcx-voz-speech-noite "${comum_voz[@]}" -e MOTORCX_SPEECH_ANALYTICS=1 "$IMG_VOZ" \
       python3 -m voz.analise.rotina noite --parte "$PARTE" ;;
-  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite" >&2; exit 2 ;;
+  simulador-fluxo)
+    # simulador de texto do Fluxo e roleplay (SQL 58/59), atrás do Caddy (:8443 /simular e /roleplay); desligado por
+    # padrão: só com o metadado motorcx-simulador-fluxo=1 (a chave vem do cofre: motorcx-voz-simulador)
+    if [ "$(meta motorcx-simulador-fluxo)" != 1 ]; then
+      echo "simulador do Fluxo desligado nesta VM (metadado motorcx-simulador-fluxo)"; exit 0
+    fi
+    exec docker run --name motorcx-voz-simulador-fluxo "${comum_voz[@]}" "$IMG_VOZ" \
+      python3 -m voz.simulador_http --porta 8091 --roleplay --provedores /etc/motorcx/provedores.json ;;
+  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador" >&2; exit 2 ;;
 esac

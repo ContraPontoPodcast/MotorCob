@@ -309,7 +309,7 @@ checar("operação não altera o calendário", True, f"update public.credores se
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
 # permissões por perfil (padrão MotorCob + ajuste do Admin da empresa) e auditoria
 checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas,ver_clientes,ver_painel")
-checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 26)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60)
+checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 27)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60) + 1 do importador (SQL 64)
 checar("usuário inativo não tem permissão", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["inativo"], 0)
 checar("planejamento não ajusta permissões", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["plan"])
 checar("Admin libera Reenquadrar para a operação", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["admina"])
@@ -372,7 +372,7 @@ checar("convite: acessos do perfil Operação na empresa", True, "select string_
 checar("convite: Admin sempre com gerenciar usuários", True, "select permitido from public.permissoes_do_papel(papel => 'admin') where codigo='gerenciar_usuarios'", "authenticated", u["admina"], "t")
 checar("quem não gerencia usuários não lê acessos de perfil", True, "select count(*) from public.permissoes_do_papel(papel => 'operacao')", "authenticated", u["oper"], 0)
 checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
-checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 26)   # 21 + 5 do SQL 60
+checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 27)   # 21 + 5 do SQL 60 + 1 do SQL 64
 checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
 # página comercial: mídia pública e formulário de contato (visitante só insere)
 checar("bucket site é público", True, "select public from storage.buckets where id='site'", "service_role", "t")
@@ -2712,12 +2712,29 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 62: dados do Speech Analytics (testar_speech_dados.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 63 · Speech Analytics das ligações da IA, temas novos, oferta e resultado por motivo. Reaplica o SQL 63 antes: o
+# SQL 62, reaplicado acima, recria as funções que o 63 troca (agregar_speech_dia, codigos_speech_ok, retroalimentação)
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261230000001_voz_speech_ia.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_speech_ia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 63: Speech Analytics da IA, temas, oferta e resultado por motivo (testar_speech_ia.py)", True,
+       f"select {r.returncode}", None, None, 0)
+
 # SQL 57 · acesso próprio das VMs de voz: entra como o papel motorcx_voz (login de verdade) em arquivo próprio
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_acesso.py")],
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 57: testes do papel motorcx_voz (testar_voz_acesso.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 64 · importador das gravações do discador (site, RPCs da VM, papel motorcx_voz e a rodada do voz/importador)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_importador.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 64: importador das gravações do discador (testar_voz_importador.py)", True, f"select {r.returncode}", None, None, 0)
 # SQL 65 · Renitência por situação, Resubmit, Reenviar agora e contato por passada (inclui o papel motorcx_voz).
 # Depois do testar_voz_acesso.py, que reaplica o 57 em diante (o 65 reaplica a troca dele no gravar_chamadas)
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_resubmit.py")],

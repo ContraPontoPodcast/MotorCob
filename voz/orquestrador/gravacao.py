@@ -2,7 +2,9 @@
 
 Um bucket por empresa (voz_config.bucket_gravacoes, criado por criar_gcp.sh empresa <id> <dias>), com a retenção
 da empresa como regra de ciclo de vida e a cifra do bucket (CMEK opcional). Nome do objeto:
-credor=<id|0>/<AAAA>/<MM>/<DD>/<id_chamada>.wav — nunca telefone, CPF ou nome.
+credor_<id|0>/<AAAA>/<MM>/<DD>/ia_<id_chamada>.wav — nunca telefone, CPF ou nome. É o caminho que vai para
+voz_gravacoes (SQL 63: registrar_gravacoes_ia_voz; o banco só aceita letras, números, _ - / .) e o nome sem extensão
+(ia_<id_chamada>) é o <ref> da transcrição da ligação da IA (voz/transcricao/ia.py).
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ def nome_arquivo(id_chamada: str) -> str:
 
 
 def nome_objeto(credor_id: int | None, dia: date, id_chamada: str) -> str:
-    return f"credor={int(credor_id or 0)}/{dia:%Y/%m/%d}/{nome_arquivo(id_chamada)}.wav"
+    return f"credor_{int(credor_id or 0)}/{dia:%Y/%m/%d}/ia_{nome_arquivo(id_chamada)}.wav"
 
 
 class Enviador:

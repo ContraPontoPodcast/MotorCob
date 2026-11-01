@@ -153,13 +153,13 @@ class TestFluxo(Base):
         self.assertEqual((ev.valor_promessa, ev.data_promessa, ev.identidade_confirmada),
                          (150.0, date(2026, 11, 6), True))
         self.assertEqual((ev.billsec, ev.segundos_tarifados, ev.custo_operadora), (61, 66, 0.055))
-        self.assertEqual(ev.gravacao, f"gs://{BUCKET}/credor=0/2026/11/03/{cid}.wav")
+        self.assertEqual(ev.gravacao, f"gs://{BUCKET}/credor_0/2026/11/03/ia_{cid}.wav")
         self.assertEqual(ev.provedor, "simulador")
         self.assertIn(("destruir_ponte", f"{cid}-b"), self.ari.comandos)
         self.assertEqual(self.fila.processar(100.0), [])       # primeira leitura do tamanho
         uris = self.fila.processar(102.0)
         self.assertEqual(len(uris), 1)
-        self.assertTrue((self.pasta / "gcs" / BUCKET / f"credor=0/2026/11/03/{cid}.wav").exists())
+        self.assertTrue((self.pasta / "gcs" / BUCKET / f"credor_0/2026/11/03/ia_{cid}.wav").exists())
         self.assertFalse((self.pasta / "spool" / f"{cid}.wav").exists())
         # cliente com contato hoje não recebe outra ligação
         self.assertIn("C1", self.lote.guarda.clientes_encerrados)
