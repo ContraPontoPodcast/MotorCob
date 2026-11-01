@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { RESPOSTA_CREDOR, dc, mesExtenso, nf, pc } from '@/lib/speech';
-import { Pilula } from '@/components/voz/ui';
+import { Detalhes, Pilula } from '@/components/ds';
 import { BarraH, COR_HUMANO, COR_IA, FaixaEstimativa } from './graficos';
 
 export type ConteudoRel = {
@@ -12,12 +12,18 @@ export type ConteudoRel = {
 	recomendacoes?: { id: string; titulo: string; evidencia?: string; n: number; unidade?: string; estimativa: { centro: number; min: number; max: number } }[];
 };
 
-export function RelatorioView({ competencia, credor, assessoria, conteudo, comentario, respostas, acaoResposta }: {
+/** `recolher` (revisão da assessoria): resumo e recomendações à vista; seções de evidência e comentário recolhidos.
+ *  O credor (link público) e o PDF continuam vendo tudo aberto. */
+export function RelatorioView({ competencia, credor, assessoria, conteudo, comentario, respostas, acaoResposta, recolher }: {
 	competencia: string; credor: string; assessoria: string; conteudo: ConteudoRel; comentario?: string | null;
-	respostas: Record<string, string>; acaoResposta?: (rec: string, valor: string | null) => ReactNode;
+	respostas: Record<string, string>; acaoResposta?: (rec: string, valor: string | null) => ReactNode; recolher?: boolean;
 }) {
 	const r = conteudo.resumo ?? {};
 	const secoes = (conteudo.secoes ?? []).filter(s => s.itens.length > 0);
+	const corpoSecao = (s: NonNullable<ConteudoRel['secoes']>[number], k: number) => (<>
+		{s.id === 'vulnerabilidade' && <p className="text-[12px] text-[var(--base-texto-3)]">Só contagem. Nenhum caso individual, nenhum detalhe de saúde.</p>}
+		<div className="mt-1">{s.itens.map(i => <BarraH key={i.rotulo} nome={i.rotulo} valor={i.pct} max={Math.max(1, ...s.itens.map(x => x.pct))} cor={k === 1 ? COR_HUMANO : COR_IA} detalhe={nf(i.n)} />)}</div>
+	</>);
 	return (
 		<article className="overflow-hidden rounded-2xl bg-[var(--base-cartao)]" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}>
 			<header className="px-5 py-5 sm:px-7" style={{ backgroundColor: 'var(--base-fill)' }}>
@@ -36,11 +42,10 @@ export function RelatorioView({ competencia, credor, assessoria, conteudo, comen
 						))}
 					</div>
 				</section>
-				{secoes.map((s, k) => (
+				{!recolher && secoes.map((s, k) => (
 					<section key={s.id}>
 						<h3 className="text-[15px] font-semibold">{s.titulo}</h3>
-						{s.id === 'vulnerabilidade' && <p className="text-[12px] text-[var(--base-texto-3)]">Só contagem. Nenhum caso individual, nenhum detalhe de saúde.</p>}
-						<div className="mt-1">{s.itens.map(i => <BarraH key={i.rotulo} nome={i.rotulo} valor={i.pct} max={Math.max(1, ...s.itens.map(x => x.pct))} cor={k === 1 ? COR_HUMANO : COR_IA} detalhe={nf(i.n)} />)}</div>
+						{corpoSecao(s, k)}
 					</section>
 				))}
 				<section>
@@ -58,8 +63,14 @@ export function RelatorioView({ competencia, credor, assessoria, conteudo, comen
 						</div>
 					))}
 				</section>
-				{comentario && <section><h3 className="text-[15px] font-semibold">Comentário da assessoria</h3><p className="mt-1 text-[13px] leading-relaxed text-[var(--base-texto-2)]">{comentario}</p></section>}
-				<p className="flex items-start gap-2 rounded-xl bg-[var(--base-fill)] px-3 py-2 text-[12px] text-[var(--base-texto-2)]"><ShieldCheck size={15} className="mt-0.5 shrink-0" />Só números agregados. Grupos com menos de 30 conversas não aparecem. Nenhum dado de cliente, nenhum trecho de conversa e nenhum operador identificado saem neste relatório.</p>
+				{recolher && secoes.length > 0 && <section className="space-y-2">
+					<h3 className="text-[15px] font-semibold">Evidências <small className="font-normal text-[var(--base-texto-3)]">· na ordem do relatório</small></h3>
+					{secoes.map((s, k) => <Detalhes key={s.id} resumo={s.titulo} qtd={s.itens.length}>{corpoSecao(s, k)}</Detalhes>)}
+				</section>}
+				{comentario && (recolher
+					? <Detalhes resumo="Comentário da assessoria"><p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">{comentario}</p></Detalhes>
+					: <section><h3 className="text-[15px] font-semibold">Comentário da assessoria</h3><p className="mt-1 text-[13px] leading-relaxed text-[var(--base-texto-2)]">{comentario}</p></section>)}
+				{!recolher && <p className="flex items-start gap-2 rounded-xl bg-[var(--base-fill)] px-3 py-2 text-[12px] text-[var(--base-texto-2)]"><ShieldCheck size={15} className="mt-0.5 shrink-0" />Só números agregados. Grupos com menos de 30 conversas não aparecem. Nenhum dado de cliente, nenhum trecho de conversa e nenhum operador identificado saem neste relatório.</p>}
 			</div>
 		</article>
 	);

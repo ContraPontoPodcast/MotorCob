@@ -29,6 +29,7 @@
 //      Barra de abas; select no celular. `fim` = link no fim da barra (ex.: busca).
 //  Kpis({ itens: {rotulo, valor, detalhe?, tom?: 'alerta'|'atencao'|'ok'}[] }) · Kpi(item)
 //  Aviso({ tom?, titulo?, children, acao? })
+//  Passos({ passos: string[], atual }): etapas numa linha (feito ✓, agora em destaque).
 //  Peças básicas: Botao({ tipo: 'primario'|'secundario'|'fantasma'|'perigo', pequeno?, … }), BotaoLink, LinkTexto,
 //  Pilula({ tom }), Cartao({ titulo, linha, direita, semPadding }), Segmentos, Rotulo, ListaValores, campoCls/campoStyle,
 //  textareaCls. Tons: 'ok' | 'info' | 'atencao' | 'erro' | 'neutro' | 'destaque'.
@@ -41,4 +42,5 @@ export { Tabela, MAX_COLUNAS, type Coluna, type LinhaCelular, type TabelaProps }
 export { Kpis, Kpi, MAX_KPIS, type ItemKpi } from './kpis';
 export { Abas, type ItemAba } from './abas';
 export { BarraFiltros } from './barra-filtros';
+export { Passos } from './passos';
 export { TOM, SOMBRA, type Tom } from './tom';
