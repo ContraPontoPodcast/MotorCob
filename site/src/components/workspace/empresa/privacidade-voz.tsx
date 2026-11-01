@@ -132,10 +132,10 @@ export function PrivacidadeVozPage() {
 	return (
 		<EmpresaShell>
 			<div className="mb-5">
-				<h2 className="text-[22px] font-bold tracking-tight text-[#1D1D1F]">Privacidade e gravações</h2>
-				<p className="mt-1 text-[14px] text-[#6E6E73]">Vale para o agente virtual e para as gravações do discador. {equipe ? 'Quem muda é o Admin da empresa; a equipe MotorCX vê em leitura.' : 'Quem muda é o Admin da empresa.'}</p>
+				<h2 className="text-[22px] font-bold tracking-tight text-[var(--base-texto)]">Privacidade e gravações</h2>
+				<p className="mt-1 text-[14px] text-[var(--base-texto-2)]">Vale para o agente virtual e para as gravações do discador. {equipe ? 'Quem muda é o Admin da empresa; a equipe MotorCX vê em leitura.' : 'Quem muda é o Admin da empresa.'}</p>
 			</div>
-			{!carregado ? <p className="py-10 text-center text-[14px] text-[#8E8E93]">Carregando...</p> : (
+			{!carregado ? <p className="py-10 text-center text-[14px] text-[var(--base-texto-3)]">Carregando...</p> : (
 				<div className="space-y-6">
 					{semConfig && <Aviso tom="info">O agente virtual ainda não foi configurado para esta empresa. Os valores abaixo são o padrão e passam a valer assim que você salvar ou quando a equipe MotorCX ativar o agente.</Aviso>}
 					<div className="grid gap-6 lg:grid-cols-2">
@@ -145,13 +145,13 @@ export function PrivacidadeVozPage() {
 								ajuda={`Áudio, transcrição e códigos por cliente apagam sozinhos depois de ${inteiro(retN)} dias. Os números agregados continuam.`}>
 								<input id="voz-ret" value={ret} inputMode="numeric" disabled={!admin} onChange={e => setRet(e.target.value.replace(/\D/g, '').slice(0, 5))} className={`${campoCls} max-w-[200px] tnum`} />
 							</Campo>
-							<p className="mt-3 text-[12px] leading-relaxed text-[#8E8E93]">Mudar o prazo vale para as gravações novas e para as que já existem. Diminuir apaga as mais antigas na noite seguinte; gravação guardada para disputa não é apagada.</p>
+							<p className="mt-3 text-[12px] leading-relaxed text-[var(--base-texto-3)]">Mudar o prazo vale para as gravações novas e para as que já existem. Diminuir apaga as mais antigas na noite seguinte; gravação guardada para disputa não é apagada.</p>
 
-							<div className="mt-5 border-t border-[#F0F0F2] pt-4">
+							<div className="mt-5 border-t border-[var(--base-borda)] pt-4">
 								<Subtitulo>Aviso no início da ligação</Subtitulo>
-								<Chave label={<span className="text-[14px] font-medium text-[#1D1D1F]">Avisar que a ligação é gravada <Pilula className="ml-1">padrão: desligado</Pilula></span>}
+								<Chave label={<span className="text-[14px] font-medium text-[var(--base-texto)]">Avisar que a ligação é gravada <Pilula className="ml-1">padrão: desligado</Pilula></span>}
 									checked={aviso} on={setAviso} disabled={!admin} />
-								<p className="mt-2 text-[12px] leading-relaxed text-[#8E8E93]">Vale para todas as carteiras e entra na primeira fala. A apresentação como assistente virtual fica no roteiro de cada carteira. A decisão é da empresa.</p>
+								<p className="mt-2 text-[12px] leading-relaxed text-[var(--base-texto-3)]">Vale para todas as carteiras e entra na primeira fala. A apresentação como assistente virtual fica no roteiro de cada carteira. A decisão é da empresa.</p>
 							</div>
 							<Trava className="mt-4" icone={<ShieldCheck size={16} />} titulo="No provedor, a cópia some em até 7 dias.">
 								O MotorCX copia a gravação para o bucket da sua empresa, em São Paulo, e apaga no provedor.
@@ -166,8 +166,8 @@ export function PrivacidadeVozPage() {
 							</Campo>
 							{cfg && cfg.transcrever === false && <Aviso tom="neutro" className="mt-3">A transcrição está desligada para esta empresa.</Aviso>}
 
-							<div className="mt-5 border-t border-[#F0F0F2] pt-4">
-								<Subtitulo desc={<>Mesmas permissões de <Link to="/empresa/pessoas" className="font-semibold text-[#0A60D0] hover:underline">Pessoas e perfis</Link>. Todo acesso fica registrado na Auditoria, com nome, gravação e hora.</>}>Quem pode ouvir e ler</Subtitulo>
+							<div className="mt-5 border-t border-[var(--base-borda)] pt-4">
+								<Subtitulo desc={<>Mesmas permissões de <Link to="/empresa/pessoas" className="font-semibold text-[var(--destaque)] hover:underline">Pessoas e perfis</Link>. Todo acesso fica registrado na Auditoria, com nome, gravação e hora.</>}>Quem pode ouvir e ler</Subtitulo>
 								<TabelaRolavel minW={320}>
 									<thead><tr><th className={thCls}>Perfil</th>{PERMS_VOZ.map(p => <th key={p.codigo} className={`${thCls} text-center`}>{p.nome}</th>)}</tr></thead>
 									<tbody>
@@ -195,7 +195,7 @@ export function PrivacidadeVozPage() {
 					<div className="flex flex-wrap items-center justify-end gap-3">
 						{!admin ? <Cadeado>Só o Admin da empresa muda a privacidade</Cadeado> : (
 							<>
-								{mudou && <span className="text-[13px] text-[#6E6E73]">Há mudanças não salvas.</span>}
+								{mudou && <span className="text-[13px] text-[var(--base-texto-2)]">Há mudanças não salvas.</span>}
 								<button onClick={() => { if (ajustesSalvar.retencao_dias != null && retN < retAtual) setConfirmaReducao(true); else void salvar(); }} disabled={!podeSalvar || salvando} className={btnPrim}>{salvando ? 'Salvando...' : 'Salvar privacidade'}</button>
 							</>
 						)}
@@ -260,7 +260,7 @@ function PedidosTitular({ pedidos, hoje, admin, empresaId, onNovo }: { pedidos: 
 											<td className={tdCls}>{p.tipo === 'eliminar' ? 'Eliminar' : 'Exportar'}</td>
 											<td className={`${tdCls} tnum`}>{dateBR(p.aberto_em)}</td>
 											<td className={`${tdCls} tnum`}>{dateBR(p.prazo)}</td>
-											<td className={tdCls}><Pilula tom={s.tom}>{s.txt}</Pilula>{p.concluido_em ? <div className="mt-0.5 text-[11.5px] text-[#8E8E93]">{dateTimeBR(p.concluido_em)}</div> : null}</td>
+											<td className={tdCls}><Pilula tom={s.tom}>{s.txt}</Pilula>{p.concluido_em ? <div className="mt-0.5 text-[11.5px] text-[var(--base-texto-3)]">{dateTimeBR(p.concluido_em)}</div> : null}</td>
 											<td className={`${tdCls} text-right`}>{acao(p)}</td>
 										</tr>
 									);
@@ -272,12 +272,12 @@ function PedidosTitular({ pedidos, hoje, admin, empresaId, onNovo }: { pedidos: 
 						{pedidos.map(p => {
 							const s = situacaoPedido(p, hoje);
 							return (
-								<div key={String(p.id)} className="rounded-xl border border-[#E5E5EA] p-3">
+								<div key={String(p.id)} className="rounded-xl border border-[var(--base-borda)] p-3">
 									<div className="flex items-start justify-between gap-2">
-										<span className="font-mono text-[13.5px] font-semibold text-[#1D1D1F]">{String(p.id_cliente)}</span>
+										<span className="font-mono text-[13.5px] font-semibold text-[var(--base-texto)]">{String(p.id_cliente)}</span>
 										<Pilula tom={s.tom}>{s.txt}</Pilula>
 									</div>
-									<div className="mt-1 text-[12.5px] text-[#6E6E73]">{p.tipo === 'eliminar' ? 'Eliminar' : 'Exportar'} · aberto em {dateBR(p.aberto_em)} · prazo {dateBR(p.prazo)}</div>
+									<div className="mt-1 text-[12.5px] text-[var(--base-texto-2)]">{p.tipo === 'eliminar' ? 'Eliminar' : 'Exportar'} · aberto em {dateBR(p.aberto_em)} · prazo {dateBR(p.prazo)}</div>
 									{acao(p) && <div className="mt-2">{acao(p)}</div>}
 								</div>
 							);
@@ -285,7 +285,7 @@ function PedidosTitular({ pedidos, hoje, admin, empresaId, onNovo }: { pedidos: 
 					</div>
 				</>
 			)}
-			<p className="mt-3 text-[12px] leading-relaxed text-[#8E8E93]">Eliminar apaga áudios, transcrições, códigos por cliente e a cópia no provedor. Enquanto houver gravação guardada para disputa, a eliminação fica bloqueada até o Admin tirar a guarda. A exportação sai por link de 5 minutos.</p>
+			<p className="mt-3 text-[12px] leading-relaxed text-[var(--base-texto-3)]">Eliminar apaga áudios, transcrições, códigos por cliente e a cópia no provedor. Enquanto houver gravação guardada para disputa, a eliminação fica bloqueada até o Admin tirar a guarda. A exportação sai por link de 5 minutos.</p>
 		</Cartao>
 	);
 }

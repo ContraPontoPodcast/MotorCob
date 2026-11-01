@@ -86,7 +86,7 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 				<button onClick={onClose} className={btnSec}>Cancelar</button>
 				<button onClick={() => void salvar()} disabled={busy} className={btnPrim}>{busy ? 'Salvando...' : novo ? 'Testar e cadastrar' : 'Salvar'}</button>
 			</>}>
-			<p className="text-[13px] leading-relaxed text-[#6E6E73]">Os dados vêm do contrato da empresa com a operadora. A senha, quando houver, não é digitada aqui: a equipe grava no cofre (Secret Manager do MotorCX) e este formulário guarda só a referência.</p>
+			<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Os dados vêm do contrato da empresa com a operadora. A senha, quando houver, não é digitada aqui: a equipe grava no cofre (Secret Manager do MotorCX) e este formulário guarda só a referência.</p>
 			<div className="grid gap-3 sm:grid-cols-2">
 				<Campo rotulo="Referência" erro={err('referencia')} ajuda={novo ? undefined : 'A referência não muda depois de criada.'}>
 					<input value={referencia} disabled={!novo} onChange={x => setReferencia(x.target.value.toLowerCase())} placeholder="trk-aurora-03" className={`${campoCls} font-mono`} />
@@ -160,10 +160,10 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 			</div>
 
 			<div>
-				<span className="mb-1.5 block text-[13px] font-semibold text-[#1D1D1F]">Codecs</span>
+				<span className="mb-1.5 block text-[13px] font-semibold text-[var(--base-texto)]">Codecs</span>
 				<div className="flex flex-wrap gap-3">
 					{CODECS.map(c => (
-						<label key={c} className="flex items-center gap-1.5 text-[14px] text-[#1D1D1F]">
+						<label key={c} className="flex items-center gap-1.5 text-[14px] text-[var(--base-texto)]">
 							<input type="checkbox" checked={codecs.includes(c)} onChange={x => setCodecs(p => x.target.checked ? [...new Set([...p, c])] : p.filter(y => y !== c))} />
 							<span className="font-mono text-[13px]">{c}</span>
 						</label>
@@ -172,10 +172,10 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 				{err('codecs') && <p className="mt-1 text-[12px]" style={{ color: 'var(--estado-erro-texto)' }}>{err('codecs')}</p>}
 			</div>
 
-			<label className="flex items-center gap-2 text-[14px] text-[#1D1D1F]">
+			<label className="flex items-center gap-2 text-[14px] text-[var(--base-texto)]">
 				<input type="checkbox" checked={ativo} onChange={x => setAtivo(x.target.checked)} /> Tronco ativo
 			</label>
-			<p className="text-[12px] leading-relaxed text-[#8E8E93]">Ao salvar, o Asterisk confere o segredo no cofre, recarrega a configuração e faz uma chamada de teste. O item "Gestão de tronco SIP" entra na fatura do MotorCX no mês seguinte.</p>
+			<p className="text-[12px] leading-relaxed text-[var(--base-texto-3)]">Ao salvar, o Asterisk confere o segredo no cofre, recarrega a configuração e faz uma chamada de teste. O item "Gestão de tronco SIP" entra na fatura do MotorCX no mês seguinte.</p>
 			{erro && <Aviso tom="erro">{erro}</Aviso>}
 		</Gaveta>
 	);
@@ -230,7 +230,7 @@ export function RotaGaveta({ empresaId, troncos, rotaBase, prefixoSugerido, onCl
 				<button onClick={onClose} className={btnSec}>Cancelar</button>
 				<button onClick={() => void salvar()} disabled={busy} className={btnPrim}>{busy ? 'Salvando...' : 'Salvar rota'}</button>
 			</>}>
-			<p className="text-[13px] leading-relaxed text-[#6E6E73]">Use os dados do contrato da empresa com a operadora. Preço e cadência não se editam: se o tech prefix já existe, a vigência atual é encerrada no dia anterior e fica no histórico.</p>
+			<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Use os dados do contrato da empresa com a operadora. Preço e cadência não se editam: se o tech prefix já existe, a vigência atual é encerrada no dia anterior e fica no histórico.</p>
 			<div className="grid gap-3 sm:grid-cols-2">
 				<Campo rotulo="Tech prefix" erro={err('tech')} ajuda="O prefixo que a operadora usa para escolher a tarifa.">
 					<input value={tech} disabled={!!rotaBase} inputMode="numeric" maxLength={8} onChange={x => setTech(x.target.value.replace(/\D/g, ''))} className={`${campoCls} font-mono`} />
@@ -265,7 +265,7 @@ export function RotaGaveta({ empresaId, troncos, rotaBase, prefixoSugerido, onCl
 				</Campo>
 			</div>
 			{ex47 != null && (
-				<p className="text-[12px] leading-relaxed text-[#8E8E93]">Sem carência: em {cadenciaTxt(iniN, incN)}, 47 s atendidos viram {ex47} s tarifados, 2 s viram {segundosTarifados(2, iniN, incN)} s e quem não atendeu não paga. Custo de 47 s: {reais(ex47 / 60 * precoN, 4)}. O preço não entra na fatura do MotorCX.</p>
+				<p className="text-[12px] leading-relaxed text-[var(--base-texto-3)]">Sem carência: em {cadenciaTxt(iniN, incN)}, 47 s atendidos viram {ex47} s tarifados, 2 s viram {segundosTarifados(2, iniN, incN)} s e quem não atendeu não paga. Custo de 47 s: {reais(ex47 / 60 * precoN, 4)}. O preço não entra na fatura do MotorCX.</p>
 			)}
 			{erro && <Aviso tom="erro">{erro}</Aviso>}
 		</Gaveta>
@@ -314,7 +314,7 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 				<button onClick={onClose} className={btnSec}>Cancelar</button>
 				<button onClick={() => void salvar()} disabled={busy} className={btnPrim}>{busy ? 'Salvando...' : 'Salvar'}</button>
 			</>}>
-			<p className="text-[13px] leading-relaxed text-[#6E6E73]">Para onde o agente manda a chamada quando precisa de um operador. Vale para a empresa toda.</p>
+			<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Para onde o agente manda a chamada quando precisa de um operador. Vale para a empresa toda.</p>
 			<Campo rotulo="Nome" erro={err('nome')}>
 				<input value={nome} onChange={x => setNome(x.target.value)} className={campoCls} />
 			</Campo>
@@ -341,7 +341,7 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 			<Trava icone={<KeyRound size={16} />} titulo="Cabeçalhos enviados: ID da chamada, ID da ação, ação e motivo">
 				Nunca vão CPF, nome, valor ou transcrição.
 			</Trava>
-			<label className="flex items-center gap-2 text-[14px] text-[#1D1D1F]">
+			<label className="flex items-center gap-2 text-[14px] text-[var(--base-texto)]">
 				<input type="checkbox" checked={ativo} onChange={x => setAtivo(x.target.checked)} /> Transferência ativa
 			</label>
 			{erro && <Aviso tom="erro">{erro}</Aviso>}
@@ -381,7 +381,7 @@ export function NumerosTesteDialogo({ empresaId, onClose, onSaved }: { empresaId
 				<button onClick={() => void salvar()} disabled={busy || !texto.trim()} className={btnPrim}>{busy ? 'Salvando...' : 'Trocar'}</button>
 			</>}>
 			<textarea value={texto} onChange={x => setTexto(x.target.value)} rows={4} autoComplete="off" placeholder="Um por linha, com DDD"
-				className="w-full resize-none rounded-lg border border-[#D2D2D7] px-3 py-2 text-[14px] outline-none focus:border-[#1D1D1F]" />
+				className="w-full resize-none rounded-lg border border-[var(--base-field-border)] px-3 py-2 text-[14px] outline-none focus:border-[var(--destaque)]" />
 			{erro && <Aviso tom="erro" className="mt-2">{erro}</Aviso>}
 		</Dialogo>
 	);

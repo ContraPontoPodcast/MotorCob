@@ -56,7 +56,7 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 	}), [consumo, rotas]);
 
 	if (temVoz === false) return null;           // empresa sem agente virtual: o Faturamento segue como antes
-	if (itens == null) return <p className="py-6 text-center text-[13px] text-[#8E8E93]">Carregando o agente virtual...</p>;
+	if (itens == null) return <p className="py-6 text-center text-[13px] text-[var(--base-texto-3)]">Carregando o agente virtual...</p>;
 
 	const totFat = itens.reduce((t, i) => t + Number(i.valor ?? 0), 0);
 	const temPico = itens.some(i => i.item === 'voz_minuto_ia_pico' && Number(i.quantidade ?? 0) > 0);
@@ -90,11 +90,11 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 		<div className="space-y-6" id="agente-virtual">
 			<div className="flex flex-wrap items-end justify-between gap-3">
 				<div>
-					<h2 className="text-[19px] font-semibold text-[#1D1D1F]">Agente virtual · extrato financeiro</h2>
-					<p className="mt-0.5 text-[13px] text-[#6E6E73]">O que o MotorCX fatura e, à parte, a telefonia que a empresa paga direto à operadora.</p>
+					<h2 className="text-[19px] font-semibold text-[var(--base-texto)]">Agente virtual · extrato financeiro</h2>
+					<p className="mt-0.5 text-[13px] text-[var(--base-texto-2)]">O que o MotorCX fatura e, à parte, a telefonia que a empresa paga direto à operadora.</p>
 				</div>
-				<label className="flex items-center gap-2 rounded-full border border-[#D2D2D7] bg-white px-3 py-1.5 text-[13px] text-[#1D1D1F]">
-					<CalendarDays size={14} className="text-[#6E6E73]" />
+				<label className="flex items-center gap-2 rounded-full border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-3 py-1.5 text-[13px] text-[var(--base-texto)]">
+					<CalendarDays size={14} className="text-[var(--base-texto-2)]" />
 					<select aria-label="Competência" value={comp} onChange={e => setComp(e.target.value)} className="!border-0 bg-transparent pr-1 text-[13px] outline-none">
 						{opcoes.map((c, i) => <option key={c} value={c}>{nomeMes(c)}{i === 0 ? ' (até agora)' : ''}</option>)}
 					</select>
@@ -102,15 +102,15 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 			</div>
 
 			<div className="grid gap-3 sm:grid-cols-2">
-				<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
-					<p className="text-[13px] text-[#6E6E73]">{mes}{atual ? ' até agora' : ''} · fatura MotorCX</p>
-					<p className="mt-1 text-[26px] font-bold tracking-tight text-[#1D1D1F] tnum">{moneyBR(totFat)}</p>
-					<p className="mt-0.5 text-[12px] text-[#8E8E93]">só os itens do agente virtual</p>
+				<div className="rounded-2xl bg-[var(--base-cartao)] p-5" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}>
+					<p className="text-[13px] text-[var(--base-texto-2)]">{mes}{atual ? ' até agora' : ''} · fatura MotorCX</p>
+					<p className="mt-1 text-[26px] font-bold tracking-tight text-[var(--base-texto)] tnum">{moneyBR(totFat)}</p>
+					<p className="mt-0.5 text-[12px] text-[var(--base-texto-3)]">só os itens do agente virtual</p>
 				</div>
-				<div className="rounded-2xl border border-dashed border-[#D2D2D7] bg-[#F5F5F7] p-5">
-					<p className="text-[13px] text-[#6E6E73]">Telefonia estimada · paga à operadora</p>
-					<p className="mt-1 text-[26px] font-bold tracking-tight text-[#1D1D1F] tnum">{moneyBR(totTel)}</p>
-					<p className="mt-0.5 text-[12px] text-[#8E8E93]">fora da fatura do MotorCX{chSemCusto ? ` · ${inteiro(chSemCusto)} chamadas sem custo` : ''}</p>
+				<div className="rounded-2xl border border-dashed border-[var(--base-field-border)] bg-[var(--base-fill)] p-5">
+					<p className="text-[13px] text-[var(--base-texto-2)]">Telefonia estimada · paga à operadora</p>
+					<p className="mt-1 text-[26px] font-bold tracking-tight text-[var(--base-texto)] tnum">{moneyBR(totTel)}</p>
+					<p className="mt-0.5 text-[12px] text-[var(--base-texto-3)]">fora da fatura do MotorCX{chSemCusto ? ` · ${inteiro(chSemCusto)} chamadas sem custo` : ''}</p>
 				</div>
 			</div>
 
@@ -130,28 +130,28 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 									<tr key={k}>
 										<td className={tdCls}>{String(i.descricao ?? i.item)}</td>
 										<td className={`${tdCls} text-right tnum`}>{Number(i.quantidade ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</td>
-										<td className={`${tdCls} text-right tnum text-[#6E6E73]`}>{preco > 0 && preco < 1 ? reais(preco, 3) : moneyBR(preco)}</td>
+										<td className={`${tdCls} text-right tnum text-[var(--base-texto-2)]`}>{preco > 0 && preco < 1 ? reais(preco, 3) : moneyBR(preco)}</td>
 										<td className={`${tdCls} text-right font-semibold tnum`}>{moneyBR(i.valor)}</td>
 									</tr>
 								);
 							})}
 						</tbody>
 						<tfoot><tr>
-							<td className="py-2.5 pr-3 font-semibold text-[#1D1D1F]">Total dos itens</td><td /><td />
-							<td className="py-2.5 pr-3 text-right font-semibold text-[#1D1D1F] tnum">{moneyBR(totFat)}</td>
+							<td className="py-2.5 pr-3 font-semibold text-[var(--base-texto)]">Total dos itens</td><td /><td />
+							<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{moneyBR(totFat)}</td>
 						</tr></tfoot>
 					</TabelaRolavel>
 				)}
-				<p className="mt-3 text-[12px] leading-relaxed text-[#8E8E93]">{temPico ? 'O pico está ligado: o minuto de IA acima do limite da empresa sai como item próprio, ao dobro do preço.' : 'Sem minuto no pico neste mês: nenhum minuto ao dobro.'} Minuto de telefonia não é item desta fatura.</p>
+				<p className="mt-3 text-[12px] leading-relaxed text-[var(--base-texto-3)]">{temPico ? 'O pico está ligado: o minuto de IA acima do limite da empresa sai como item próprio, ao dobro do preço.' : 'Sem minuto no pico neste mês: nenhum minuto ao dobro.'} Minuto de telefonia não é item desta fatura.</p>
 			</Cartao>
 
-			<section className="rounded-2xl border border-dashed border-[#D2D2D7] bg-[#F5F5F7] p-5 sm:p-6">
+			<section className="rounded-2xl border border-dashed border-[var(--base-field-border)] bg-[var(--base-fill)] p-5 sm:p-6">
 				<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
 					<div className="min-w-0 flex-1 basis-full sm:basis-0">
-						<h2 className="flex flex-wrap items-center gap-2 text-[17px] font-semibold text-[#1D1D1F]">Telefonia (pago à operadora) <span className="rounded-full bg-white px-2.5 py-0.5 text-[12px] font-semibold text-[#6E6E73]">não entra na fatura do MotorCX</span></h2>
-						<p className="mt-1 max-w-[760px] text-[13px] leading-relaxed text-[#6E6E73]">Consumo do mês por rota, calculado com a cadência e o preço que a empresa contratou com a operadora. Serve para ver o custo e conferir com a fatura da operadora.</p>
+						<h2 className="flex flex-wrap items-center gap-2 text-[17px] font-semibold text-[var(--base-texto)]">Telefonia (pago à operadora) <span className="rounded-full bg-[var(--base-cartao)] px-2.5 py-0.5 text-[12px] font-semibold text-[var(--base-texto-2)]">não entra na fatura do MotorCX</span></h2>
+						<p className="mt-1 max-w-[760px] text-[13px] leading-relaxed text-[var(--base-texto-2)]">Consumo do mês por rota, calculado com a cadência e o preço que a empresa contratou com a operadora. Serve para ver o custo e conferir com a fatura da operadora.</p>
 					</div>
-					<button onClick={() => void exportar()} disabled={exportando || linhas.length === 0} className={`${btnSec} bg-white`}><FileDown size={15} /> {exportando ? 'Gerando...' : 'Exportar CSV por rota e dia'}</button>
+					<button onClick={() => void exportar()} disabled={exportando || linhas.length === 0} className={`${btnSec} bg-[var(--base-cartao)]`}><FileDown size={15} /> {exportando ? 'Gerando...' : 'Exportar CSV por rota e dia'}</button>
 				</div>
 				{semCad.length > 0 && (
 					<Aviso className="mb-3" titulo={`${semCad.length === 1 ? 'Rota' : 'Rotas'} ${semCad.map(l => l.tech_prefix || 'sem prefixo').join(', ')} sem cadastro: ${inteiro(chSemCusto)} chamadas sem custo calculado.`}>
@@ -162,7 +162,7 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 					<Vazio titulo="Sem consumo de telefonia neste mês">As ligações de verdade aparecem aqui no dia seguinte, por rota. No modo Simulado nada é tarifado.</Vazio>
 				) : (
 					<>
-						<div className="hidden rounded-xl bg-white px-3 pb-1 pt-1 sm:block">
+						<div className="hidden rounded-xl bg-[var(--base-cartao)] px-3 pb-1 pt-1 sm:block">
 							<TabelaRolavel minW={760}>
 								<thead><tr>
 									<th className={thCls}>Tech prefix</th><th className={thCls}>Tipo</th><th className={`${thCls} text-right`}>Cadência</th><th className={`${thCls} text-right`}>Preço do minuto</th>
@@ -178,35 +178,35 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 											<td className={`${tdCls} text-right tnum`}>{inteiro(l.chamadas)}</td>
 											<td className={`${tdCls} text-right tnum`}>{inteiro(l.segundos_tarifados)}</td>
 											<td className={`${tdCls} text-right tnum`}>{inteiro(Number(l.segundos_tarifados ?? 0) / 60)}</td>
-											<td className={`${tdCls} text-right font-semibold tnum`}>{l.custo != null ? moneyBR(l.custo) : <span className="font-normal text-[#8E8E93]">sem custo</span>}{l.custo != null && l.semCusto > 0 ? <div className="text-[11.5px] font-normal text-[#8E8E93]">{inteiro(l.semCusto)} sem custo</div> : null}</td>
+											<td className={`${tdCls} text-right font-semibold tnum`}>{l.custo != null ? moneyBR(l.custo) : <span className="font-normal text-[var(--base-texto-3)]">sem custo</span>}{l.custo != null && l.semCusto > 0 ? <div className="text-[11.5px] font-normal text-[var(--base-texto-3)]">{inteiro(l.semCusto)} sem custo</div> : null}</td>
 										</tr>
 									))}
 								</tbody>
 								<tfoot><tr>
-									<td className="py-2.5 pr-3 font-semibold text-[#1D1D1F]">Total</td><td /><td /><td />
-									<td className="py-2.5 pr-3 text-right font-semibold text-[#1D1D1F] tnum">{inteiro(totCh)}</td>
-									<td className="py-2.5 pr-3 text-right font-semibold text-[#1D1D1F] tnum">{inteiro(totSeg)}</td>
-									<td className="py-2.5 pr-3 text-right font-semibold text-[#1D1D1F] tnum">{inteiro(totSeg / 60)}</td>
-									<td className="py-2.5 pr-3 text-right font-semibold text-[#1D1D1F] tnum">{moneyBR(totTel)}</td>
+									<td className="py-2.5 pr-3 font-semibold text-[var(--base-texto)]">Total</td><td /><td /><td />
+									<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{inteiro(totCh)}</td>
+									<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{inteiro(totSeg)}</td>
+									<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{inteiro(totSeg / 60)}</td>
+									<td className="py-2.5 pr-3 text-right font-semibold text-[var(--base-texto)] tnum">{moneyBR(totTel)}</td>
 								</tr></tfoot>
 							</TabelaRolavel>
 						</div>
 						<div className="space-y-2 sm:hidden">
 							{linhas.map(l => (
-								<div key={String(l.tech_prefix)} className="rounded-xl bg-white p-3">
+								<div key={String(l.tech_prefix)} className="rounded-xl bg-[var(--base-cartao)] p-3">
 									<div className="flex items-start justify-between gap-2">
-										<b className="font-mono text-[14px] text-[#1D1D1F]">{String(l.tech_prefix || '—')}</b>
-										<span className="text-[14px] font-semibold text-[#1D1D1F] tnum">{l.custo != null ? moneyBR(l.custo) : <span className="rounded-full px-2 py-0.5 text-[12px]" style={{ backgroundColor: 'var(--estado-atencao-fundo)', color: 'var(--estado-atencao-texto)' }}>sem custo</span>}</span>
+										<b className="font-mono text-[14px] text-[var(--base-texto)]">{String(l.tech_prefix || '—')}</b>
+										<span className="text-[14px] font-semibold text-[var(--base-texto)] tnum">{l.custo != null ? moneyBR(l.custo) : <span className="rounded-full px-2 py-0.5 text-[12px]" style={{ backgroundColor: 'var(--estado-atencao-fundo)', color: 'var(--estado-atencao-texto)' }}>sem custo</span>}</span>
 									</div>
-									<div className="mt-0.5 text-[12.5px] text-[#6E6E73]">{l.rota ? `${TIPOS_ROTA[String(l.rota.tipo)] ?? ''} · ${cadenciaTxt(l.rota.cadencia_inicial_s, l.rota.cadencia_incremento_s)} · ${reais(l.rota.preco_minuto, 3)}/min` : 'rota sem cadastro'}</div>
-									<div className="text-[12.5px] text-[#6E6E73] tnum">{inteiro(l.chamadas)} chamadas · {inteiro(l.segundos_tarifados)} s tarifados</div>
+									<div className="mt-0.5 text-[12.5px] text-[var(--base-texto-2)]">{l.rota ? `${TIPOS_ROTA[String(l.rota.tipo)] ?? ''} · ${cadenciaTxt(l.rota.cadencia_inicial_s, l.rota.cadencia_incremento_s)} · ${reais(l.rota.preco_minuto, 3)}/min` : 'rota sem cadastro'}</div>
+									<div className="text-[12.5px] text-[var(--base-texto-2)] tnum">{inteiro(l.chamadas)} chamadas · {inteiro(l.segundos_tarifados)} s tarifados</div>
 								</div>
 							))}
-							<div className="flex justify-between px-1 pt-1 text-[13px] font-semibold text-[#1D1D1F]"><span>Total</span><span className="tnum">{moneyBR(totTel)}</span></div>
+							<div className="flex justify-between px-1 pt-1 text-[13px] font-semibold text-[var(--base-texto)]"><span>Total</span><span className="tnum">{moneyBR(totTel)}</span></div>
 						</div>
 					</>
 				)}
-				<p className="mt-3 text-[12px] leading-relaxed text-[#8E8E93]">Sem carência: todo segundo atendido é tarifado (2 s em 30/6 = 30 s). Chamada não atendida não tem custo. O preço usado é o da vigência do dia da chamada. Diferença com a fatura da operadora costuma vir de rota sem cadastro, preço desatualizado ou ligações feitas fora do MotorCX.</p>
+				<p className="mt-3 text-[12px] leading-relaxed text-[var(--base-texto-3)]">Sem carência: todo segundo atendido é tarifado (2 s em 30/6 = 30 s). Chamada não atendida não tem custo. O preço usado é o da vigência do dia da chamada. Diferença com a fatura da operadora costuma vir de rota sem cadastro, preço desatualizado ou ligações feitas fora do MotorCX.</p>
 			</section>
 		</div>
 	);

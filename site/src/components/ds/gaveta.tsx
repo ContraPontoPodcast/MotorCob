@@ -96,18 +96,20 @@ export type ModalProps = {
 	texto?: ReactNode;
 	children?: ReactNode;
 	onFechar: () => void;
-	onConfirmar: () => void;
+	onConfirmar?: () => void;
 	/** Texto do botão de confirmação (verbo da ação, nunca "OK"). */
-	confirmar: string;
+	confirmar?: string;
 	ocupado?: boolean;
 	desabilitado?: boolean;
 	/** Confirmação de ação destrutiva (botão em vermelho). */
 	perigo?: boolean;
+	/** Botões próprios no lugar de Cancelar/Confirmar (aí `confirmar`/`onConfirmar` não são usados). */
+	acoes?: ReactNode;
 };
 
-function JanelaModal({ titulo, texto, children, onFechar, onConfirmar, confirmar, ocupado, desabilitado, perigo }: ModalProps) {
+function JanelaModal({ titulo, texto, children, onFechar, onConfirmar, confirmar, ocupado, desabilitado, perigo, acoes }: ModalProps) {
 	const ref = useRef<HTMLDivElement>(null);
-	useJanela(ref, onFechar, 'input, textarea, select, button[data-confirmar]');
+	useJanela(ref, onFechar, 'input, textarea, select, button[data-confirmar], button');
 	return (
 		<div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onMouseDown={e => { if (e.target === e.currentTarget) onFechar(); }}>
 			<div ref={ref} data-ds-janela="" role="dialog" aria-modal="true" aria-label={titulo} className="w-full max-w-[460px] rounded-2xl bg-[var(--base-cartao)] p-5 text-[var(--base-texto)]" style={{ boxShadow: SOMBRA_ALTA }}>
@@ -115,8 +117,10 @@ function JanelaModal({ titulo, texto, children, onFechar, onConfirmar, confirmar
 				{texto && <p className="mt-1 text-[13px] leading-relaxed text-[var(--base-texto-2)]">{texto}</p>}
 				{children && <div className="mt-3 space-y-3">{children}</div>}
 				<div className="mt-4 flex flex-wrap justify-end gap-2">
+					{acoes ?? <>
 					<Botao tipo="secundario" onClick={onFechar}>Cancelar</Botao>
 					<button type="button" data-confirmar="" className={clsBotao(perigo ? 'perigo' : 'primario')} onClick={onConfirmar} disabled={ocupado || desabilitado}>{ocupado ? 'Aguarde…' : confirmar}</button>
+					</>}
 				</div>
 			</div>
 		</div>

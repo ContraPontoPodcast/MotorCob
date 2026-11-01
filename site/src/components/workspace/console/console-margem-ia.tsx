@@ -82,14 +82,14 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
   return (
     <section className="mt-8">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-[17px] font-semibold text-[#1D1D1F]">Itens de IA</h2>
-        <p className="text-[13px] text-[#6E6E73]">MC mínima da IA: <strong className="text-[#1D1D1F]">{Number(mcMinima ?? 70).toLocaleString('pt-BR')}%</strong> · preço mínimo = custo ÷ (1 − impostos − MC mínima)</p>
+        <h2 className="text-[17px] font-semibold text-[var(--base-texto)]">Itens de IA</h2>
+        <p className="text-[13px] text-[var(--base-texto-2)]">MC mínima da IA: <strong className="text-[var(--base-texto)]">{Number(mcMinima ?? 70).toLocaleString('pt-BR')}%</strong> · preço mínimo = custo ÷ (1 − impostos − MC mínima)</p>
       </div>
-      {error && <div className="mb-4 rounded-xl bg-[#FFE8E6] px-4 py-3 text-[14px] text-[#FF3B30]">{error}<ErrorDetail /></div>}
-      {loading ? <p className="py-6 text-center text-[14px] text-[#8E8E93]">Carregando...</p> : (
+      {error && <div className="mb-4 rounded-xl bg-[var(--estado-erro-fundo)] px-4 py-3 text-[14px] text-[#FF3B30]">{error}<ErrorDetail /></div>}
+      {loading ? <p className="py-6 text-center text-[14px] text-[var(--base-texto-3)]">Carregando...</p> : (
         <div className="space-y-4">
           {abaixo.length > 0 && (
-            <div role="alert" className="rounded-xl bg-[#FFE8E6] px-4 py-3 text-[13px] text-[#FF3B30]">
+            <div role="alert" className="rounded-xl bg-[var(--estado-erro-fundo)] px-4 py-3 text-[13px] text-[#FF3B30]">
               <p className="font-semibold">{abaixo.length === 1 ? '1 preço de IA ficou abaixo do mínimo' : `${abaixo.length} preços de IA ficaram abaixo do mínimo`} (custo, impostos ou MC mínima mudaram). Nenhum preço foi alterado.</p>
               <ul className="mt-1 space-y-0.5">
                 {abaixo.slice(0, 8).map((a, i) => (
@@ -102,21 +102,21 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
             </div>
           )}
 
-          <div className="rounded-2xl bg-white p-4" style={{ boxShadow: cardShadow }}>
+          <div className="rounded-2xl bg-[var(--base-cartao)] p-4" style={{ boxShadow: cardShadow }}>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-[13px]">
-                <thead><tr className="border-b border-[#F0F0F2] text-[12px] text-[#8E8E93]"><th className="pb-3 font-medium">Item</th><th className="pb-3 font-medium text-right">Custo</th><th className="pb-3 font-medium text-right">Preço mínimo</th><th className="pb-3 font-medium text-right">Tabela</th><th className="pb-3 font-medium text-right">%MC na tabela</th><th className="pb-3" /></tr></thead>
-                <tbody className="divide-y divide-[#F0F0F2]">
+                <thead><tr className="border-b border-[var(--base-borda)] text-[12px] text-[var(--base-texto-3)]"><th className="pb-3 font-medium">Item</th><th className="pb-3 font-medium text-right">Custo</th><th className="pb-3 font-medium text-right">Preço mínimo</th><th className="pb-3 font-medium text-right">Tabela</th><th className="pb-3 font-medium text-right">%MC na tabela</th><th className="pb-3" /></tr></thead>
+                <tbody className="divide-y divide-[var(--base-borda)]">
                   {itens.map(it => {
                     const baixa = it.mc_tabela_pct != null && Number(it.mc_tabela_pct) < Number(mcMinima ?? 70);
                     return (
                       <tr key={it.codigo}>
-                        <td className="py-2.5 pr-3"><p className="font-medium text-[#1D1D1F]">{it.nome}</p><p className="text-[11px] text-[#8E8E93]">por {it.unidade}{Number(it.precos_abaixo ?? 0) > 0 && <span className="ml-1 font-semibold text-[#FF3B30]">· {it.precos_abaixo} abaixo</span>}</p></td>
-                        <td className="py-2.5 pr-3 text-right tnum text-[#1D1D1F]">{it.custo_unitario == null ? <span className="text-[#9a631b]">sem custo</span> : precoIA(it.custo_unitario)}{it.moeda && it.moeda !== 'BRL' && <p className="text-[11px] text-[#8E8E93]">{it.moeda} {Number(it.custo_moeda).toLocaleString('pt-BR', { maximumFractionDigits: 6 })} × {Number(it.cotacao).toLocaleString('pt-BR')}</p>}</td>
-                        <td className="py-2.5 pr-3 text-right tnum font-semibold text-[#1D1D1F]">{precoIA(it.preco_minimo_ia)}</td>
-                        <td className="py-2.5 pr-3 text-right tnum text-[#1D1D1F]">{precoIA(it.preco_tabela)}</td>
+                        <td className="py-2.5 pr-3"><p className="font-medium text-[var(--base-texto)]">{it.nome}</p><p className="text-[11px] text-[var(--base-texto-3)]">por {it.unidade}{Number(it.precos_abaixo ?? 0) > 0 && <span className="ml-1 font-semibold text-[#FF3B30]">· {it.precos_abaixo} abaixo</span>}</p></td>
+                        <td className="py-2.5 pr-3 text-right tnum text-[var(--base-texto)]">{it.custo_unitario == null ? <span className="text-[#9a631b]">sem custo</span> : precoIA(it.custo_unitario)}{it.moeda && it.moeda !== 'BRL' && <p className="text-[11px] text-[var(--base-texto-3)]">{it.moeda} {Number(it.custo_moeda).toLocaleString('pt-BR', { maximumFractionDigits: 6 })} × {Number(it.cotacao).toLocaleString('pt-BR')}</p>}</td>
+                        <td className="py-2.5 pr-3 text-right tnum font-semibold text-[var(--base-texto)]">{precoIA(it.preco_minimo_ia)}</td>
+                        <td className="py-2.5 pr-3 text-right tnum text-[var(--base-texto)]">{precoIA(it.preco_tabela)}</td>
                         <td className="py-2.5 pr-3 text-right"><span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={baixa ? { color: '#FF3B30', backgroundColor: '#FFE8E6' } : { color: '#248A3D', backgroundColor: '#E8F8EC' }}>{pct1(it.mc_tabela_pct)}</span></td>
-                        <td className="py-2.5 text-right"><button onClick={() => setEditar(it)} className="h-8 rounded-full border border-[#D2D2D7] px-3 text-[13px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Editar</button></td>
+                        <td className="py-2.5 text-right"><button onClick={() => setEditar(it)} className="h-8 rounded-full border border-[var(--base-field-border)] px-3 text-[13px] font-medium text-[var(--base-texto)] hover:bg-[var(--base-fill)]">Editar</button></td>
                       </tr>
                     );
                   })}
@@ -125,27 +125,27 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
             </div>
           </div>
 
-          <div className="rounded-2xl bg-white p-4" style={{ boxShadow: cardShadow }}>
+          <div className="rounded-2xl bg-[var(--base-cartao)] p-4" style={{ boxShadow: cardShadow }}>
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-[14px] font-semibold text-[#1D1D1F]">Margem da IA no mês</p>
-              <p className="text-[13px] text-[#6E6E73]">Receita {moneyBR(tot.receita)} · MC {moneyBR(tot.mc)} · {pct1(tot.receita > 0 ? (tot.mc / tot.receita) * 100 : null)}</p>
+              <p className="text-[14px] font-semibold text-[var(--base-texto)]">Margem da IA no mês</p>
+              <p className="text-[13px] text-[var(--base-texto-2)]">Receita {moneyBR(tot.receita)} · MC {moneyBR(tot.mc)} · {pct1(tot.receita > 0 ? (tot.mc / tot.receita) * 100 : null)}</p>
             </div>
-            {margem.length === 0 ? <p className="py-4 text-center text-[13px] text-[#8E8E93]">Sem uso de IA no mês.</p> : (
+            {margem.length === 0 ? <p className="py-4 text-center text-[13px] text-[var(--base-texto-3)]">Sem uso de IA no mês.</p> : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[860px] text-left text-[13px]">
-                  <thead><tr className="border-b border-[#F0F0F2] text-[12px] text-[#8E8E93]"><th className="pb-3 font-medium">Empresa</th><th className="pb-3 font-medium">Item</th><th className="pb-3 font-medium text-right">Qtd</th><th className="pb-3 font-medium text-right">Receita</th><th className="pb-3 font-medium text-right">Impostos</th><th className="pb-3 font-medium text-right">Custo</th><th className="pb-3 font-medium text-right">MC</th><th className="pb-3 font-medium text-right">%MC</th></tr></thead>
-                  <tbody className="divide-y divide-[#F0F0F2]">
+                  <thead><tr className="border-b border-[var(--base-borda)] text-[12px] text-[var(--base-texto-3)]"><th className="pb-3 font-medium">Empresa</th><th className="pb-3 font-medium">Item</th><th className="pb-3 font-medium text-right">Qtd</th><th className="pb-3 font-medium text-right">Receita</th><th className="pb-3 font-medium text-right">Impostos</th><th className="pb-3 font-medium text-right">Custo</th><th className="pb-3 font-medium text-right">MC</th><th className="pb-3 font-medium text-right">%MC</th></tr></thead>
+                  <tbody className="divide-y divide-[var(--base-borda)]">
                     {margem.map((l, i) => {
                       const sit = SIT_IA[l.situacao as string] ?? SIT_IA.sem_receita;
                       return (
                         <tr key={i}>
-                          <td className="py-2.5 pr-3 font-medium text-[#1D1D1F]">{l.empresa ?? '—'}</td>
-                          <td className="py-2.5 pr-3 text-[#1D1D1F]">{l.nome}</td>
-                          <td className="py-2.5 pr-3 text-right tnum text-[#6E6E73]">{numberBR(l.quantidade ?? 0)}</td>
-                          <td className="py-2.5 pr-3 text-right tnum text-[#1D1D1F]">{moneyBR(l.receita ?? 0)}</td>
-                          <td className="py-2.5 pr-3 text-right tnum text-[#6E6E73]">{moneyBR(l.impostos ?? 0)}</td>
-                          <td className="py-2.5 pr-3 text-right tnum text-[#1D1D1F]">{moneyBR(l.custo ?? 0)}{!!l.custo_estimado && <span className="ml-1 text-[11px] text-[#8E8E93]">estimado</span>}</td>
-                          <td className="py-2.5 pr-3 text-right tnum text-[#1D1D1F]">{moneyBR(l.mc ?? 0)}</td>
+                          <td className="py-2.5 pr-3 font-medium text-[var(--base-texto)]">{l.empresa ?? '—'}</td>
+                          <td className="py-2.5 pr-3 text-[var(--base-texto)]">{l.nome}</td>
+                          <td className="py-2.5 pr-3 text-right tnum text-[var(--base-texto-2)]">{numberBR(l.quantidade ?? 0)}</td>
+                          <td className="py-2.5 pr-3 text-right tnum text-[var(--base-texto)]">{moneyBR(l.receita ?? 0)}</td>
+                          <td className="py-2.5 pr-3 text-right tnum text-[var(--base-texto-2)]">{moneyBR(l.impostos ?? 0)}</td>
+                          <td className="py-2.5 pr-3 text-right tnum text-[var(--base-texto)]">{moneyBR(l.custo ?? 0)}{!!l.custo_estimado && <span className="ml-1 text-[11px] text-[var(--base-texto-3)]">estimado</span>}</td>
+                          <td className="py-2.5 pr-3 text-right tnum text-[var(--base-texto)]">{moneyBR(l.mc ?? 0)}</td>
                           <td className="py-2.5 text-right"><span title={sit.label} className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: sit.cor, backgroundColor: sit.bg }}>{l.mc_pct == null ? sit.label : pct1(l.mc_pct)}</span></td>
                         </tr>
                       );
@@ -232,55 +232,55 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo }: { item: Row; mcMinim
     await recarregarItem();
   }
 
-  const campo = 'h-9 w-full rounded-lg border border-[#D2D2D7] bg-white px-3 text-[14px] tnum text-[#1D1D1F] outline-none focus:border-[#1D1D1F]';
+  const campo = 'h-9 w-full rounded-lg border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-3 text-[14px] tnum text-[var(--base-texto)] outline-none focus:border-[var(--destaque)]';
   const Aviso = ({ onde }: { onde: string }) => msg?.onde === onde ? (msg.erro
-    ? <p role="alert" className="mt-2 rounded-lg bg-[#FFE8E6] px-3 py-2 text-[13px] text-[#FF3B30]">{msg.erro}</p>
-    : <p className="mt-2 text-[12px] text-[#248A3D]">{msg.ok}</p>) : null;
+    ? <p role="alert" className="mt-2 rounded-lg bg-[var(--estado-erro-fundo)] px-3 py-2 text-[13px] text-[#FF3B30]">{msg.erro}</p>
+    : <p className="mt-2 text-[12px] text-[var(--estado-pronto-texto)]">{msg.ok}</p>) : null;
 
   return (
     <div className="fixed inset-0 z-[100] flex justify-end bg-black/40" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={`Item de IA ${it.nome}`} className="h-full w-full max-w-[440px] overflow-y-auto bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={`Item de IA ${it.nome}`} className="h-full w-full max-w-[440px] overflow-y-auto bg-[var(--base-cartao)] p-6 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="mb-1 flex items-start justify-between gap-3">
-          <h2 className="text-[17px] font-semibold text-[#1D1D1F]">{it.nome}</h2>
-          <button onClick={onClose} aria-label="Fechar" className="text-[#8E8E93]"><X size={20} /></button>
+          <h2 className="text-[17px] font-semibold text-[var(--base-texto)]">{it.nome}</h2>
+          <button onClick={onClose} aria-label="Fechar" className="text-[var(--base-texto-3)]"><X size={20} /></button>
         </div>
-        <p className="mb-5 text-[13px] text-[#6E6E73]">Preço mínimo: <strong className="text-[#1D1D1F]">{semCusto ? 'cadastre o custo' : `${precoIA(minimo)} por ${it.unidade}`}</strong> (MC mínima de {Number(mcMinima ?? 70).toLocaleString('pt-BR')}%)</p>
+        <p className="mb-5 text-[13px] text-[var(--base-texto-2)]">Preço mínimo: <strong className="text-[var(--base-texto)]">{semCusto ? 'cadastre o custo' : `${precoIA(minimo)} por ${it.unidade}`}</strong> (MC mínima de {Number(mcMinima ?? 70).toLocaleString('pt-BR')}%)</p>
 
         <div className="space-y-6">
           <div>
-            <p className="mb-2 text-[13px] font-semibold text-[#1D1D1F]">Custo real por {it.unidade} <span className="font-normal text-[#8E8E93]">(vale a partir de hoje)</span></p>
+            <p className="mb-2 text-[13px] font-semibold text-[var(--base-texto)]">Custo real por {it.unidade} <span className="font-normal text-[var(--base-texto-3)]">(vale a partir de hoje)</span></p>
             <div className="grid grid-cols-2 gap-2">
-              <label className="block"><span className="mb-1 block text-[12px] text-[#6E6E73]">Moeda</span>
+              <label className="block"><span className="mb-1 block text-[12px] text-[var(--base-texto-2)]">Moeda</span>
                 <select value={moeda} onChange={e => setMoeda(e.target.value)} className={campo}><option value="BRL">R$</option><option value="USD">US$</option><option value="EUR">€</option></select></label>
-              <label className="block"><span className="mb-1 block text-[12px] text-[#6E6E73]">Custo</span><input inputMode="decimal" value={custo} onChange={e => setCusto(e.target.value)} className={campo} /></label>
-              {moeda !== 'BRL' && <label className="block"><span className="mb-1 block text-[12px] text-[#6E6E73]">Cotação (R$)</span><input inputMode="decimal" value={cotacao} onChange={e => setCotacao(e.target.value)} className={campo} /></label>}
-              <label className="block"><span className="mb-1 block text-[12px] text-[#6E6E73]">Por mil tokens (opcional)</span><input inputMode="decimal" value={milTokens} onChange={e => setMilTokens(e.target.value)} className={campo} /></label>
+              <label className="block"><span className="mb-1 block text-[12px] text-[var(--base-texto-2)]">Custo</span><input inputMode="decimal" value={custo} onChange={e => setCusto(e.target.value)} className={campo} /></label>
+              {moeda !== 'BRL' && <label className="block"><span className="mb-1 block text-[12px] text-[var(--base-texto-2)]">Cotação (R$)</span><input inputMode="decimal" value={cotacao} onChange={e => setCotacao(e.target.value)} className={campo} /></label>}
+              <label className="block"><span className="mb-1 block text-[12px] text-[var(--base-texto-2)]">Por mil tokens (opcional)</span><input inputMode="decimal" value={milTokens} onChange={e => setMilTokens(e.target.value)} className={campo} /></label>
             </div>
-            <label className="mt-2 block"><span className="mb-1 block text-[12px] text-[#6E6E73]">De onde vem o custo</span><input value={premissa} maxLength={300} onChange={e => setPremissa(e.target.value)} className={campo} placeholder="Contrato, tabela do fornecedor…" /></label>
-            <button onClick={salvarCusto} disabled={busy !== '' || num(custo) <= 0 || (moeda !== 'BRL' && num(cotacao) <= 0)} className="mt-3 h-9 rounded-lg bg-[#1D1D1F] px-4 text-[13px] font-semibold text-white hover:opacity-85 disabled:opacity-50">{busy === 'custo' ? 'Salvando...' : 'Salvar custo'}</button>
-            <p className="mt-1 text-[12px] text-[#8E8E93]">Custo novo não muda preço nenhum: o que ficar abaixo do mínimo aparece no aviso.</p>
+            <label className="mt-2 block"><span className="mb-1 block text-[12px] text-[var(--base-texto-2)]">De onde vem o custo</span><input value={premissa} maxLength={300} onChange={e => setPremissa(e.target.value)} className={campo} placeholder="Contrato, tabela do fornecedor…" /></label>
+            <button onClick={salvarCusto} disabled={busy !== '' || num(custo) <= 0 || (moeda !== 'BRL' && num(cotacao) <= 0)} className="mt-3 h-9 rounded-lg bg-[var(--destaque)] px-4 text-[13px] font-semibold text-white hover:opacity-85 disabled:opacity-50">{busy === 'custo' ? 'Salvando...' : 'Salvar custo'}</button>
+            <p className="mt-1 text-[12px] text-[var(--base-texto-3)]">Custo novo não muda preço nenhum: o que ficar abaixo do mínimo aparece no aviso.</p>
             <Aviso onde="custo" />
           </div>
 
-          <div className="border-t border-[#F0F0F2] pt-4">
-            <p className="mb-2 text-[13px] font-semibold text-[#1D1D1F]">Preço de tabela</p>
+          <div className="border-t border-[var(--base-borda)] pt-4">
+            <p className="mb-2 text-[13px] font-semibold text-[var(--base-texto)]">Preço de tabela</p>
             <div className="flex gap-2">
               <input inputMode="decimal" value={tabela} onChange={e => setTabela(e.target.value)} aria-invalid={tabelaAbaixo} className={`${campo} ${tabelaAbaixo ? 'border-[#FF3B30] text-[#FF3B30]' : ''}`} />
-              <button onClick={salvarTabela} disabled={busy !== '' || vTabela <= 0 || tabelaAbaixo || semCusto} className="h-9 shrink-0 rounded-lg bg-[#1D1D1F] px-4 text-[13px] font-semibold text-white hover:opacity-85 disabled:opacity-50">{busy === 'tabela' ? '...' : 'Salvar'}</button>
+              <button onClick={salvarTabela} disabled={busy !== '' || vTabela <= 0 || tabelaAbaixo || semCusto} className="h-9 shrink-0 rounded-lg bg-[var(--destaque)] px-4 text-[13px] font-semibold text-white hover:opacity-85 disabled:opacity-50">{busy === 'tabela' ? '...' : 'Salvar'}</button>
             </div>
             {tabelaAbaixo && <p role="alert" className="mt-2 text-[12px] font-medium text-[#FF3B30]">{mensagemMinimoIA(minimo, it.unidade, mcMinima)}</p>}
             <Aviso onde="tabela" />
           </div>
 
-          <div className="border-t border-[#F0F0F2] pt-4">
-            <p className="mb-2 text-[13px] font-semibold text-[#1D1D1F]">Preço de uma empresa <span className="font-normal text-[#8E8E93]">(a partir do próximo ciclo)</span></p>
+          <div className="border-t border-[var(--base-borda)] pt-4">
+            <p className="mb-2 text-[13px] font-semibold text-[var(--base-texto)]">Preço de uma empresa <span className="font-normal text-[var(--base-texto-3)]">(a partir do próximo ciclo)</span></p>
             <select value={empresa} onChange={e => setEmpresa(e.target.value)} className={campo}>
               <option value="">Escolha a empresa…</option>
               {empresas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
             </select>
             <div className="mt-2 flex gap-2">
               <input inputMode="decimal" value={precoEmp} onChange={e => setPrecoEmp(e.target.value)} aria-invalid={empAbaixo} placeholder={`Preço por ${it.unidade}`} className={`${campo} ${empAbaixo ? 'border-[#FF3B30] text-[#FF3B30]' : ''}`} />
-              <button onClick={salvarEmpresa} disabled={busy !== '' || !empresa || vEmp <= 0 || empAbaixo || semCusto} className="h-9 shrink-0 rounded-lg bg-[#1D1D1F] px-4 text-[13px] font-semibold text-white hover:opacity-85 disabled:opacity-50">{busy === 'empresa' ? '...' : 'Salvar'}</button>
+              <button onClick={salvarEmpresa} disabled={busy !== '' || !empresa || vEmp <= 0 || empAbaixo || semCusto} className="h-9 shrink-0 rounded-lg bg-[var(--destaque)] px-4 text-[13px] font-semibold text-white hover:opacity-85 disabled:opacity-50">{busy === 'empresa' ? '...' : 'Salvar'}</button>
             </div>
             {empAbaixo && <p role="alert" className="mt-2 text-[12px] font-medium text-[#FF3B30]">{mensagemMinimoIA(minimo, it.unidade, mcMinima)}</p>}
             {semCusto && <p className="mt-2 text-[12px] text-[#9a631b]">Sem custo cadastrado: o preço da empresa fica bloqueado até cadastrar o custo.</p>}

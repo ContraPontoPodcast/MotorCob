@@ -14,7 +14,7 @@
 // API
 //  Gaveta({ aberta, onFechar, titulo, subtitulo?, rodape?, largura?, children })
 //      Painel lateral. Esc e clique fora fecham; foco preso dentro; volta o foco ao fechar.
-//  Modal({ titulo, texto?, confirmar, onConfirmar, onFechar, ocupado?, desabilitado?, perigo?, children? })
+//  Modal({ titulo, texto?, confirmar, onConfirmar, onFechar, ocupado?, desabilitado?, perigo?, acoes?, children? })
 //      Confirmação. Monte só quando aberto: {pedindo && <Modal …/>}.
 //  SeloRegras({ rotulo, titulo?, subtitulo?, regras: {titulo, texto?}[], children? })
 //      Chip com cadeado; abre a gaveta com a lista. ListaRegras({ regras }) mostra a mesma lista solta.
