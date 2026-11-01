@@ -13,10 +13,14 @@ limiar, desligada ou erro no limite de tentativas): o áudio local sai da VM (j�
       --saida /var/motorcx/transcricoes [--modelo medium] [--reserva-api] [--registrar]
 
 Fonte padrão (FontePasta): <entrada>/empresa_<id>/<id_gravacao>.<wav|mp3|ogg|opus|flac|m4a> (+ <id_gravacao>.json
-com duracao_s), que o importador (voz/importador/rotina.py, SQL 64) deixa na VM. Com --registrar, a situação de cada
-gravação vai ao banco (registrar_transcricao_voz, nos dois acessos da VM): voz_gravacoes.transcricao e, na 1ª vez
+com duracao_s, bucket e objeto), que o importador (voz/importador/rotina.py, SQL 64) deixa na VM. Com --registrar, a
+transcrição redigida sobe ao lado do áudio no bucket da empresa e a situação de cada gravação vai ao banco
+(registrar_transcricao_voz, nos dois acessos da VM): voz_gravacoes.transcricao, o caminho da transcrição e, na 1ª vez
 que dá certo, os minutos no item voz_transcricao (custo para a margem e quantidade da fatura, SQL 61). Banco fora:
 fica marcado na pasta e vai na próxima rodada.
+Gravação da ligação da IA (<id> começando com "ia_") nunca é transcrita aqui: a transcrição dela é o texto da própria
+conversa (voz/transcricao/ia.py). A cada rodada, as transcrições (do Whisper e da IA) com mais de 90 dias são
+apagadas da pasta de saída (ia.expirar).
 """
 from __future__ import annotations
 
@@ -32,6 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from voz import banco as B
+from voz.transcricao import ia as TIA
 from voz.transcricao.redacao import redigir
 from voz.transcricao.transcritores import ApiTranscricao, ComReserva, Transcritor, WhisperLocal
 
@@ -69,7 +74,7 @@ class FontePasta:
         out = []
         audios = [a for ext in EXT_AUDIO for a in self.pasta.glob(f"empresa_*/*.{ext}")]
         for arq in sorted(audios):
-            if not ID.match(arq.stem):
+            if not ID.match(arq.stem) or TIA.eh_da_ia(arq.stem):    # ligação da IA: o texto vem da conversa
                 continue
             sit = self._situacao(arq)
             if sit.get("situacao") in ("ok", "abaixo_limiar", "desligada") or \
@@ -259,6 +264,7 @@ def main(argv=None) -> int:
     w = Worker(dados, fonte, DestinoPasta(a.saida),
                ComReserva(WhisperLocal(a.modelo, pasta_modelos=os.environ.get("MOTORCX_WHISPER_PASTA")), reserva))
     out = w.processar()
+    out["expiradas"] = TIA.expirar(a.saida, TIA.RETENCAO_DIAS)      # 90 dias, como a gravação mais curta
     if a.registrar:
         try:
             from voz.configuracao import supabase_do_ambiente

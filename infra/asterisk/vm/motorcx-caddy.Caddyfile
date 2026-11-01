@@ -1,0 +1,25 @@
+# Proxy HTTPS das VMs de voz do MotorCX (Caddy, porta 8443). Instalado e recarregado pelo motorcx-voz-https; não edite
+# na VM. As rotas só existem quando o recurso está ligado: o motorcx-voz-https copia para /etc/caddy/motorcx-rotas/ só
+# os trechos ligados (motorcx-caddy-simulador.caddy, motorcx-caddy-elevenlabs.caddy) e o 00-base.caddy com o
+# certificado. Qualquer outro caminho devolve 404. O corpo dos pedidos não vai para log (sem access log).
+#   MOTORCX_HTTPS_HOST  o nome do certificado: <ip-com-hífens>.sslip.io (padrão, Let's Encrypt pelo desafio HTTP na
+#                       porta 80) ou o domínio do metadado motorcx-dominio-https.
+{
+	http_port 80
+	https_port 8443
+	admin localhost:2019
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 10s
+			idle 60s
+		}
+	}
+}
+
+{$MOTORCX_HTTPS_HOST}:8443 {
+	import /etc/caddy/motorcx-rotas/*.caddy
+	handle {
+		respond 404
+	}
+}

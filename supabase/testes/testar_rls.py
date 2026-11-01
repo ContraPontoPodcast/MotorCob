@@ -2712,6 +2712,18 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 62: dados do Speech Analytics (testar_speech_dados.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 63 · Speech Analytics das ligações da IA, temas novos, oferta e resultado por motivo. Reaplica o SQL 63 antes: o
+# SQL 62, reaplicado acima, recria as funções que o 63 troca (agregar_speech_dia, codigos_speech_ok, retroalimentação)
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20261230000001_voz_speech_ia.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_speech_ia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 63: Speech Analytics da IA, temas, oferta e resultado por motivo (testar_speech_ia.py)", True,
+       f"select {r.returncode}", None, None, 0)
+
 # SQL 57 · acesso próprio das VMs de voz: entra como o papel motorcx_voz (login de verdade) em arquivo próprio
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_acesso.py")],
                    capture_output=True, text=True)

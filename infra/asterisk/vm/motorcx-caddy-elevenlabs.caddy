@@ -1,0 +1,8 @@
+# Webhook pós-chamada da ElevenLabs (receptor dentro do orquestrador real, 127.0.0.1:8092): só com
+# elevenlabs.ref_webhook no /etc/motorcx/provedores.json. A assinatura ElevenLabs-Signature é conferida lá.
+handle /elevenlabs/pos-chamada {
+	request_body {
+		max_size 2MB
+	}
+	reverse_proxy 127.0.0.1:8092
+}

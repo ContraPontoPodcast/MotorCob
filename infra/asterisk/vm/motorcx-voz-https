@@ -1,0 +1,69 @@
+#!/bin/bash
+# Proxy HTTPS da VM (Caddy na 8443): liga só as rotas dos recursos ligados e recarrega o Caddy quando algo mudou.
+#   simulador do Fluxo  /simular e /roleplay -> 127.0.0.1:8091   (metadado motorcx-simulador-fluxo=1)
+#   ElevenLabs          /elevenlabs/pos-chamada -> 127.0.0.1:8092 (elevenlabs.ref_webhook no provedores.json)
+# Certificado: Let's Encrypt para <ip-com-hífens>.sslip.io (desafio HTTP na porta 80) ou para o domínio do metadado
+# motorcx-dominio-https; metadado motorcx-https-tls=interno usa a CA interna do Caddy (quem chama tem de aceitar).
+# Configuração inválida: mantém a que está no ar. Roda no boot (vm_inicio.sh) e a cada 2 min (motorcx-voz-https.timer).
+set -euo pipefail
+. "${MOTORCX_VOZ_COMUM:-/usr/local/bin/motorcx-voz-comum}"
+FONTE="${MOTORCX_CADDY_FONTE:-/usr/local/share/motorcx/caddy}"      # (as variáveis MOTORCX_* só nos testes)
+ETC="${MOTORCX_ETC_CADDY:-/etc/caddy}"
+PROVEDORES="${MOTORCX_PROVEDORES:-/etc/motorcx/provedores.json}"
+ROTAS="$ETC/motorcx-rotas"
+ENV="$ETC/motorcx.env"
+command -v caddy >/dev/null || { echo "caddy não instalado (vm_inicio.sh)"; exit 0; }
+[ -f "$FONTE/motorcx-caddy.Caddyfile" ] || { echo "falta $FONTE/motorcx-caddy.Caddyfile"; exit 0; }
+
+host="$(meta motorcx-dominio-https)"
+if [ -z "$host" ]; then
+  [ -n "$IP_EXTERNO" ] || { echo "sem IP externo nem domínio: proxy HTTPS parado"; exit 0; }
+  host="$(printf '%s' "$IP_EXTERNO" | tr . -).sslip.io"
+fi
+[[ "$host" =~ ^[a-z0-9.-]{3,253}$ ]] || { echo "domínio inválido: $host"; exit 1; }
+
+novo="$(mktemp -d)"
+trap 'rm -rf "$novo"' EXIT
+mkdir -p "$novo/rotas"
+if [ "$(meta motorcx-https-tls)" = interno ]; then
+  printf 'tls internal\n' > "$novo/rotas/00-base.caddy"
+else
+  printf 'tls {\n\tissuer acme {\n\t\tdisable_tlsalpn_challenge\n\t}\n}\n' > "$novo/rotas/00-base.caddy"
+fi
+[ "$(meta motorcx-simulador-fluxo)" = 1 ] && cp "$FONTE/motorcx-caddy-simulador.caddy" "$novo/rotas/"
+if python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if (c.get("elevenlabs") or {}).get("ref_webhook") else 1)' "$PROVEDORES" 2>/dev/null; then
+  cp "$FONTE/motorcx-caddy-elevenlabs.caddy" "$novo/rotas/"
+fi
+cp "$FONTE/motorcx-caddy.Caddyfile" "$novo/Caddyfile"
+printf 'MOTORCX_HTTPS_HOST=%s\n' "$host" > "$novo/motorcx.env"
+
+# confere com as rotas novas no lugar certo; inválido: volta as antigas
+install -d -m 755 "$ROTAS"
+antigas="$(mktemp -d)"
+cp -a "$ROTAS/." "$antigas/" 2>/dev/null || true
+if diff -rq "$novo/rotas" "$ROTAS" >/dev/null 2>&1 && cmp -s "$novo/Caddyfile" "$ETC/Caddyfile" \
+   && cmp -s "$novo/motorcx.env" "$ENV"; then
+  rm -rf "$antigas"
+  systemctl is-active --quiet caddy || systemctl start caddy
+  exit 0
+fi
+rm -f "$ROTAS"/*.caddy
+cp "$novo/rotas/"*.caddy "$ROTAS/"
+if ! MOTORCX_HTTPS_HOST="$host" caddy validate --adapter caddyfile --config "$novo/Caddyfile" >/dev/null 2>&1; then
+  echo "Caddyfile inválido: mantida a configuração anterior"
+  rm -f "$ROTAS"/*.caddy
+  cp -a "$antigas/." "$ROTAS/" 2>/dev/null || true
+  rm -rf "$antigas"
+  exit 2
+fi
+rm -rf "$antigas"
+install -m 644 "$novo/Caddyfile" "$ETC/Caddyfile"
+mudou_env=1
+cmp -s "$novo/motorcx.env" "$ENV" && mudou_env=0
+install -m 644 "$novo/motorcx.env" "$ENV"
+if [ "$mudou_env" = 1 ] || ! systemctl is-active --quiet caddy; then
+  systemctl restart caddy               # o nome do certificado vem do ambiente: só vale reiniciando
+else
+  systemctl reload caddy
+fi
+echo "proxy HTTPS em https://$host:8443 com: $(ls "$ROTAS" | tr '\n' ' ')"

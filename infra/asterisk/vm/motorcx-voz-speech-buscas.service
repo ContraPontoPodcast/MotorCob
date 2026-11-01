@@ -1,0 +1,18 @@
+[Unit]
+Description=Speech Analytics: busca semântica do site (embedding da pergunta a cada 2 s; desligado sem o metadado)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-speech-buscas
+ExecStart=/usr/local/bin/motorcx-voz-rodar speech-buscas
+ExecStop=/usr/bin/docker stop -t 10 motorcx-voz-speech-buscas
+# desligado (metadado motorcx-speech-analytics != 1) sai com 0 e fica parado; erro reinicia
+Restart=on-failure
+RestartSec=10
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

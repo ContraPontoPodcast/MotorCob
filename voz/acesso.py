@@ -75,6 +75,10 @@ RPC = {
     "conferir_rascunhos_recomendacoes": "conferir_rascunhos_recomendacoes",
     "recomendacoes_aplicadas_voz": "recomendacoes_aplicadas", "gravar_impacto_voz": "gravar_impacto",
     "avisar_alertas_voz": "avisar_alertas",
+    # SQL 63 · ligações da IA (gravação), clusterização semanal dos temas e embedding dos trechos
+    "registrar_gravacoes_ia_voz": "registrar_gravacoes_ia", "trechos_para_temas_voz": "trechos_para_temas",
+    "propor_tema_voz": "propor_tema", "recalcular_temas_semana": "recalcular_temas_semana",
+    "speech_vetor_voz": "speech_vetor", "buscas_semanticas_pendentes_voz": "buscas_semanticas_pendentes",
     # SQL 64 · importador das gravações do discador do cliente e o registro da transcrição (worker Whisper)
     "importacao_voz_pendente": "importacao_pendente", "iniciar_importacao_voz": "iniciar_importacao",
     "arquivos_lidos_importacao_voz": "arquivos_lidos_importacao", "preparar_importacao_voz": "preparar_importacao",

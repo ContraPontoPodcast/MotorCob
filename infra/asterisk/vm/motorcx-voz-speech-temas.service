@@ -1,0 +1,11 @@
+[Unit]
+Description=Speech Analytics: temas novos da semana (clusterização dos trechos sem tema; nome só pela Curadoria)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-speech-temas
+ExecStart=/usr/local/bin/motorcx-voz-rodar speech-temas
+Nice=10

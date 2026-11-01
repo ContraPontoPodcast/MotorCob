@@ -3,6 +3,8 @@
 Só pela interface de colunas de voz/banco.py (COLUNAS, CONFLITO): se o SQL 56 mudar um nome, muda lá.
   voz_chamadas  upsert por empresa, id_chamada e canal (reprocessar não duplica); nunca o número discado. A
                 tarifação é do gatilho do banco (encerrada_em + billsec); a VM só a lê para o consumo.
+  voz_gravacoes a gravação da ligação da IA, depois que subiu para o bucket (SQL 63: registrar_gravacoes_ia_voz, que
+                pega cliente e carteira da própria voz_chamadas); chamada que ainda não chegou ao banco tenta de novo.
   consumo_voz   recalculado a partir de voz_chamadas do dia (empresa × dia × tech prefix): as duas VMs gravam
                 chamadas e qualquer uma pode recalcular sem somar em dobro. Rota sem preço: custo nulo, conta em
                 sem_custo (nunca preço inventado). Chamada do modo simulado não entra (igual a consolidar_consumo_voz).
@@ -44,6 +46,7 @@ class RegistroBanco:
         self.erros = 0
         self.fila_passos: list[dict] = []
         self.fila_conectores: list[dict] = []
+        self.fila_gravacoes: list[dict] = []       # gravações da IA (SQL 63), com as tentativas
 
     def registrar(self, ev: EventoChamada) -> None:
         linha = {k: _valor(v) for k, v in para_voz_chamadas(ev).items()}      # horários com fuso (timestamptz)
@@ -89,9 +92,37 @@ class RegistroBanco:
             if falhou:
                 setattr(self, attr, falhou + getattr(self, attr))
 
+    def registrar_gravacao(self, linha: dict) -> None:
+        """{empresa_id, id_chamada, caminho, duracao_s} da gravação da IA que acabou de subir para o bucket."""
+        self.fila_gravacoes.append({"linha": dict(linha), "tentativas": 0})
+        del self.fila_gravacoes[:-self.max_fila]
+
+    def _descarregar_gravacoes(self) -> int:
+        if not self.fila_gravacoes:
+            return 0
+        fila, self.fila_gravacoes = self.fila_gravacoes, []
+        n = 0
+        for i in range(0, len(fila), 500):
+            lote = fila[i:i + 500]
+            try:
+                r = self.sb.rpc("registrar_gravacoes_ia_voz", {"linhas": [x["linha"] for x in lote]}) or {}
+            except Exception as ex:   # noqa: BLE001 — banco fora: tenta no próximo ciclo
+                self.erros += 1
+                log.warning("voz_gravacoes: falha ao registrar (%s); %d gravação(ões) ficam na fila",
+                            ex.__class__.__name__, len(lote))
+                self.fila_gravacoes += lote
+                continue
+            faltam = set(r.get("sem_chamada") or [])
+            n += int(r.get("gravadas") or 0)
+            for x in lote:                    # a chamada ainda não chegou ao banco: tenta de novo (até 40 ciclos)
+                if x["linha"]["id_chamada"] in faltam and x["tentativas"] < 40:
+                    self.fila_gravacoes.append({"linha": x["linha"], "tentativas": x["tentativas"] + 1})
+        return n
+
     def descarregar(self) -> int:
         n = self._descarregar_voz()
         self._descarregar_fluxo()      # depois das chamadas (mesma ordem do banco)
+        self._descarregar_gravacoes()
         return n
 
     def _descarregar_voz(self) -> int:

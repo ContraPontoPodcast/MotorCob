@@ -2,7 +2,7 @@
 // node --experimental-strip-types --test site/speech/speech.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { abaValida, ajustarItem, etapaRel, faixaDe, idItem, marcarTermo, porFaixa, termoProibido, textoTemDadoPessoal, type ItemChecklist } from '../src/lib/speech.ts';
+import { abaValida, ajustarItem, etapaRel, faixaDe, idItem, marcarTermo, porFaixa, rotuloOferta, termoProibido, textoTemDadoPessoal, type ItemChecklist } from '../src/lib/speech.ts';
 
 test('busca recusa CPF, telefone e e-mail, como termo_busca_proibido', () => {
 	for (const t of ['123.456.789-09', '12345678909', '(11) 98765-4321', '11 9 8765 4321', 'fulano@exemplo.com']) assert.equal(termoProibido(t), true, t);
@@ -39,4 +39,11 @@ test('destaque do termo e etapas do relatório', () => {
 	assert.deepEqual(marcarTermo('Vou no Procon e no procon', 'procon'), [['Vou no ', false], ['Procon', true], [' e no ', false], ['procon', true]]);
 	assert.equal(etapaRel('enviado'), 2);
 	assert.equal(abaValida('xyz'), 'visao');
+});
+
+test('oferta (SQL 63): só parcelas e faixa de desconto, como codigos_speech_ok', () => {
+	assert.equal(rotuloOferta('6x'), '6x');
+	assert.equal(rotuloOferta('avista_d10_20'), 'À vista · desconto de 10–20%');
+	assert.equal(rotuloOferta('12x_d50_mais'), '12x · desconto acima de 50%');
+	assert.equal(rotuloOferta('sem_oferta'), 'Sem oferta do CRM');
 });
