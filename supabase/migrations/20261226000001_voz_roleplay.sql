@@ -13,8 +13,10 @@
 -- * roleplay_para_caso_teste: conversa reprovada vira caso de teste (falas da persona + resultado esperado da persona);
 --   para isso voz_fluxo_casos_teste passa a aceitar caminho esperado vazio (= só o resultado é conferido).
 -- RPCs: rodar_roleplay_voz (editar_canais), resultado_roleplay_voz, roleplay_para_caso_teste, salvar_persona_roleplay;
--- da VM (service_role): pegar_roleplay_voz, registrar_roleplay_conversa, concluir_roleplay_lote.
--- Escrita só por RPC security definer com search_path fixo; RLS em tudo; nada para anon. Depende do SQL 58.
+-- da VM: pegar_roleplay_voz, registrar_roleplay_conversa, concluir_roleplay_lote, pela chave do servidor (service_role)
+-- ou pelo acesso próprio (papel motorcx_voz do SQL 57: voz_vm.pegar_roleplay, registrar_roleplay_conversa e
+-- concluir_roleplay_lote, item 8; voz/acesso.py › RPC).
+-- Escrita só por RPC security definer com search_path fixo; RLS em tudo; nada para anon. Depende do SQL 57 e do 58.
 -- Pode rodar de novo sem erro.
 --
 -- Conferência (no SQL Editor do Supabase, depois de rodar):
@@ -22,7 +24,8 @@
 --          (select count(*) from pg_tables where schemaname = 'public' and tablename like 'roleplay\_%'
 --             and not rowsecurity) as sem_rls,                                                                     -- 0
 --          (select count(*) from public.cobranca_itens where codigo = 'ia_roleplay') as item_fatura,              -- 1
---          has_table_privilege('anon', 'public.roleplay_conversas', 'select') as anon_le;                         -- false
+--          has_table_privilege('anon', 'public.roleplay_conversas', 'select') as anon_le,                         -- false
+--          has_function_privilege('motorcx_voz', 'voz_vm.pegar_roleplay(jsonb)', 'execute') as vm_roleplay;       -- true
 
 create or replace function pg_temp.trocar(assinatura text, de text, para text) returns void
 language plpgsql as $$
@@ -441,7 +444,7 @@ declare
     l public.roleplay_lotes;
     v public.voz_fluxo_versoes;
 begin
-    if not public.chamada_do_servidor() then
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só o servidor pega roleplay';
     end if;
     select * into l from public.roleplay_lotes x where x.situacao = 'pendente' order by x.pedido_em limit 1 for update skip locked;
@@ -470,7 +473,7 @@ declare
     l public.roleplay_lotes;
     cid bigint;
 begin
-    if not public.chamada_do_servidor() then
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só o servidor grava conversas do roleplay';
     end if;
     select * into l from public.roleplay_lotes x where x.id = registrar_roleplay_conversa.lote;
@@ -492,7 +495,7 @@ create or replace function public.concluir_roleplay_lote(lote bigint, tokens big
 language plpgsql security definer set search_path = public as $$
 declare l public.roleplay_lotes;
 begin
-    if not public.chamada_do_servidor() then
+    if not (public.chamada_do_servidor() or public.chamada_da_vm_voz()) then
         raise exception 'só o servidor conclui o roleplay';
     end if;
     if concluir_roleplay_lote.situacao not in ('concluido', 'erro') then
@@ -541,3 +544,41 @@ begin
         execute format('grant execute on function %s to authenticated, service_role', f);
     end loop;
 end $$;
+
+-- ================================================================ 8. acesso próprio da VM (schema voz_vm do SQL 57)
+-- O trabalhador do roleplay (voz/roleplay.py, na VM) chama as três RPCs acima pela chave do servidor ou, com o papel
+-- motorcx_voz, por estas funções de voz_vm: mesmos argumentos (um objeto jsonb, como o corpo do PostgREST) e a mesma
+-- resposta. As do public aceitam a VM (chamada_da_vm_voz) e validam tudo (lote rodando, persona do lote, códigos).
+create or replace function voz_vm.pegar_roleplay(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select public.pegar_roleplay_voz()
+$$;
+
+create or replace function voz_vm.registrar_roleplay_conversa(args jsonb) returns jsonb
+language sql volatile security definer set search_path = '' as $$
+    select to_jsonb(public.registrar_roleplay_conversa(
+        (args ->> 'lote')::bigint, (args ->> 'persona')::bigint, (args ->> 'rodada')::int, args ->> 'resultado',
+        (args ->> 'passou')::boolean,
+        case when jsonb_typeof(args -> 'caminho') = 'array'
+             then array(select jsonb_array_elements_text(args -> 'caminho')) end,
+        case when jsonb_typeof(args -> 'travas') = 'array'
+             then array(select jsonb_array_elements_text(args -> 'travas')) end,
+        case when jsonb_typeof(args -> 'intencoes') = 'array'
+             then array(select jsonb_array_elements_text(args -> 'intencoes')) end,
+        (args ->> 'fechou_acordo')::boolean, args ->> 'oferta_id', (args ->> 'oferta_parcelas')::int,
+        (args ->> 'turnos')::int, (args ->> 'tokens')::int,
+        case when jsonb_typeof(args -> 'transcricao') in ('array', 'object') then args -> 'transcricao' end))
+$$;
+
+create or replace function voz_vm.concluir_roleplay_lote(args jsonb) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+    perform public.concluir_roleplay_lote((args ->> 'lote')::bigint, (args ->> 'tokens')::bigint,
+                                          coalesce(args ->> 'situacao', 'concluido'));
+    return null;
+end $$;
+
+revoke all on function voz_vm.pegar_roleplay(jsonb), voz_vm.registrar_roleplay_conversa(jsonb),
+    voz_vm.concluir_roleplay_lote(jsonb) from public, anon, authenticated, service_role;
+grant execute on function voz_vm.pegar_roleplay(jsonb), voz_vm.registrar_roleplay_conversa(jsonb),
+    voz_vm.concluir_roleplay_lote(jsonb) to motorcx_voz;

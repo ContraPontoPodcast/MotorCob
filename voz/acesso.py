@@ -26,6 +26,7 @@ import json
 import os
 import re
 import ssl
+import threading
 import urllib.error
 import urllib.request
 
@@ -61,6 +62,8 @@ RPC = {
     "fluxo_voz_em_uso": "fluxo_em_uso", "alcada_voz_vigente": "alcada_vigente",                   # SQL 58 · executor
     "pegar_pedido_fluxo_voz": "pegar_pedido_fluxo", "registrar_geracao_fluxo_voz": "registrar_geracao_fluxo",
     "anexos_fluxo_vencidos": "anexos_fluxo_vencidos", "marcar_anexos_apagados": "marcar_anexos_apagados",   # geração
+    "pegar_roleplay_voz": "pegar_roleplay", "registrar_roleplay_conversa": "registrar_roleplay_conversa",  # SQL 59
+    "concluir_roleplay_lote": "concluir_roleplay_lote",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual
@@ -163,26 +166,30 @@ class AcessoProprio:
         self.url = (url_supabase or "").rstrip("/")
         self._abrir = abrir
         self.tentativas = tentativas
+        # uma conexão só, e o roleplay (SQL 59) grava as conversas de várias threads: um comando de cada vez
+        self._trava = threading.RLock()
 
     # ---------------------------------------------------------- banco
     def _run(self, sql: str, **params):
-        for tentativa in range(self.tentativas):
-            if self._conn is None:
-                self._conn = self._conectar()
-            try:
-                return self._conn.run(sql, **params)
-            except (_ConexaoCaiu, OSError):         # conexão caiu (pooler reiniciou, rede): reconecta
-                self.fechar()
-                if tentativa + 1 >= self.tentativas:
-                    raise
+        with self._trava:
+            for tentativa in range(self.tentativas):
+                if self._conn is None:
+                    self._conn = self._conectar()
+                try:
+                    return self._conn.run(sql, **params)
+                except (_ConexaoCaiu, OSError):         # conexão caiu (pooler reiniciou, rede): reconecta
+                    self.fechar()
+                    if tentativa + 1 >= self.tentativas:
+                        raise
 
     def fechar(self) -> None:
-        if self._conn is not None:
-            try:
-                self._conn.close()
-            except Exception:   # noqa: BLE001 — já estava fechada
-                pass
-            self._conn = None
+        with self._trava:
+            if self._conn is not None:
+                try:
+                    self._conn.close()
+                except Exception:   # noqa: BLE001 — já estava fechada
+                    pass
+                self._conn = None
 
     def selecionar(self, tabela, filtros: dict | None = None, ordem: str | None = None, limite: int | None = None):
         sql, params = montar_select(tabela, filtros, ordem, limite)
