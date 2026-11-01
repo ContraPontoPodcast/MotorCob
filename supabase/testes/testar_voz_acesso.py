@@ -113,7 +113,12 @@ checar("SQL 57: lê a divisão da concorrência (todas as empresas, como o servi
        f"select count(*) from voz_vm.divisao_concorrencia where empresa_id in ({EA}, {EB})", 2)
 checar("SQL 57: vê id e slug só das empresas com voz", True,
        f"select string_agg(slug, ',') from voz_vm.empresas where id in ({EA}, {EB})", "vza-alfa")
-checar("SQL 57: vê só id e código das carteiras ativas das empresas com voz", True,
+checar("SQL 57: a view de carteiras tem só id, empresa, código, ativo e nome", True,
+       "select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns "
+       "where table_schema = 'voz_vm' and table_name = 'carteiras'", "id,empresa_id,codigo,ativo,nome", usuario="postgres")
+checar("SQL 57: vê o nome da carteira (variável credor da fala)", True,
+       f"select nome from voz_vm.carteiras where id = {CA}", "Carteira A")
+checar("SQL 57: vê só as carteiras ativas das empresas com voz", True,
        f"select string_agg(codigo, ',' order by codigo) from voz_vm.carteiras where empresa_id in ({EA}, {EB})",
        "cart-a,principal")
 checar("SQL 57: a view de empresas tem só id, slug e nome (sem CNPJ, endereço nem contato)", True,
@@ -370,6 +375,80 @@ checar("SQL 59: outro login (não a VM nem o servidor) não pega roleplay", Fals
        usuario="postgres", erro="servidor")
 for t in ("roleplay_lotes", "roleplay_conversas", "roleplay_personas"):
     checar(f"SQL 59: não lê public.{t}", False, f"select * from public.{t} limit 1", erro="permission denied")
+
+# ------------------------------------------------------------------ SQL 60 · Speech Analytics pelo acesso próprio (voz_vm)
+GVA = _sv(f"select id from public.voz_gravacoes where empresa_id = {EA} order by id limit 1")
+COM_VETOR = _sv("select count(*) from information_schema.columns where table_schema = 'public' "
+                "and table_name = 'voz_trechos' and column_name = 'embedding'") == "1"
+VET = "[" + ",".join(["0.01"] * 1536) + "]"
+_TR = ("[{{\"empresa_id\": {e}, \"credor_id\": {c}, \"gravacao_id\": {g}, \"origem\": \"ia\", \"inicio_s\": {i}, "
+       "\"fim_s\": {f}, \"falante\": \"cliente\", \"texto_redigido\": \"{t}\"{x}}}]")
+_vet = (', \"embedding\": \"' + VET + '\"') if COM_VETOR else ""
+checar("SQL 60: grava trecho mascarado" + (" com embedding" if COM_VETOR else " (sem pgvector: sem embedding)"), True,
+       "select voz_vm.gravar_trechos('" + _TR.format(e=EA, c=CA, g=GVA, i=0, f=20, t="Vou pagar na sexta, pode ser?", x=_vet)
+       + "')", 1)
+checar("SQL 60: reenvio do trecho é upsert (gravação, início, falante)", True,
+       "select voz_vm.gravar_trechos('" + _TR.format(e=EA, c=CA, g=GVA, i=0, f=21, t="Vou pagar na sexta, pode ser?", x="")
+       + "')", 1)
+checar("SQL 60: ... e não duplica (o embedding fica)", True,
+       f"select count(*) || '|' || bool_and(fim_s = 21) || '|' || "
+       + ("bool_and(embedding is not null)" if COM_VETOR else "true")
+       + f" from public.voz_trechos where gravacao_id = {GVA}", "1|true|true", usuario="postgres")
+checar("SQL 60: trecho de empresa sem voz é recusado", False,
+       "select voz_vm.gravar_trechos('" + _TR.format(e=EB, c=CB, g=GVA, i=30, f=40, t="Texto qualquer.", x="") + "')",
+       erro="empresa sem voz")
+checar("SQL 60: trecho com carteira de outra empresa é recusado", False,
+       "select voz_vm.gravar_trechos('" + _TR.format(e=EA, c=CB, g=GVA, i=30, f=40, t="Texto qualquer.", x="") + "')",
+       erro="outra empresa")
+checar("SQL 60: trecho com coluna fora da lista é recusado", False,
+       "select voz_vm.gravar_trechos('" + _TR.format(e=EA, c=CA, g=GVA, i=30, f=40, t="Texto qualquer.",
+                                                     x=', \"id_cliente\": \"C1\"') + "')", erro="não grava em voz_trechos")
+checar("SQL 60: trecho sem máscara (CPF) é recusado pelo banco", False,
+       "select voz_vm.gravar_trechos('" + _TR.format(e=EA, c=CA, g=GVA, i=30, f=40, t="Meu CPF é 123.456.789-09", x="") + "')")
+_CU = (f"[{{\"empresa_id\": {EA}, \"tipo\": \"intencao\", \"gravacao_id\": {GVA}, \"avaliacao_id\": null, "
+       f"\"trecho_redigido\": \"Acho que dá para pagar.\", \"decisao_ia\": {{\"valor\": \"quero_negociar\"}}, "
+       f"\"opcoes\": [\"quero_negociar\", \"ja_paguei\"], \"confianca\": 0.41@X@}}]")
+checar("SQL 60: põe item na fila da curadoria (nasce aberto)", True,
+       "select voz_vm.gravar_curadoria('" + _CU.replace("@X@", "") + "')", 1)
+checar("SQL 60: ... aberto, para uma pessoa decidir", True,
+       f"select situacao from public.voz_curadoria_itens where empresa_id = {EA} and gravacao_id = {GVA}", "aberto",
+       usuario="postgres")
+checar("SQL 60: a VM não decide a curadoria (situacao fora da lista)", False,
+       "select voz_vm.gravar_curadoria('" + _CU.replace("@X@", ', \"situacao\": \"confirmado\"') + "')",
+       erro="não grava em voz_curadoria_itens")
+checar("SQL 60: curadoria com gravação de outra empresa é recusada", False,
+       "select voz_vm.gravar_curadoria('" + _CU.replace("@X@", "")
+       .replace(f'\"gravacao_id\": {GVA}', '\"gravacao_id\": 0') + "')", erro="outra empresa")
+BUA = _sv(f"insert into public.voz_buscas (empresa_id, usuario, termo, modo, situacao) values ({EA}, '{EQ}', "
+          f"'pagar na sexta', 'semantica', 'pendente') returning id")
+checar("SQL 60: lê as buscas semânticas pendentes", True,
+       f"select count(*) from jsonb_array_elements(voz_vm.buscas_voz_pendentes('{{\"limite\": 20}}')) b "
+       f"where (b ->> 'id')::bigint = {BUA} and b ->> 'termo' = 'pagar na sexta'", 1)
+if COM_VETOR:
+    checar("SQL 60: responde a busca com o embedding da pergunta", True,
+           f"select voz_vm.responder_busca_voz('{{\"busca\": {BUA}, \"emb\": \"{VET}\"}}')", 1)
+    checar("SQL 60: ... a busca ficou pronta com o resultado", True,
+           f"select situacao || '|' || resultados from public.voz_buscas where id = {BUA}", "pronta|1", usuario="postgres")
+else:
+    checar("SQL 60: sem pgvector, a resposta da busca semântica diz que está desligada", False,
+           f"select voz_vm.responder_busca_voz('{{\"busca\": {BUA}, \"emb\": \"[0]\"}}')", erro="pgvector")
+checar("SQL 60: registra o uso de IA (o banco calcula o custo)", True,
+       f"select voz_vm.registrar_uso_ia_voz('{{\"empresa\": {EA}, \"dia\": \"2026-11-05\", \"componente\": \"avaliador\", "
+       f"\"chamadas\": 1, \"minutos\": 2.5, \"minutos_cobraveis\": 2.5, \"tokens_entrada\": 1000, \"tokens_saida\": 100}}') "
+       f"is not null", "t")
+checar("SQL 60: ... a fatura recebe o minuto analisado", True,
+       f"select quantidade from public.consumo_mensageria where empresa_id = {EA} and item = 'ia_speech_analytics'", 3,
+       usuario="postgres")
+checar("SQL 60: uso de IA de empresa sem voz é recusado", False,
+       f"select voz_vm.registrar_uso_ia_voz('{{\"empresa\": {EB}, \"dia\": \"2026-11-05\", \"componente\": \"avaliador\", "
+       f"\"chamadas\": 1, \"minutos\": 1, \"minutos_cobraveis\": 1, \"tokens_entrada\": 0, \"tokens_saida\": 0}}')",
+       erro="empresa sem voz")
+for t in ("voz_trechos", "voz_buscas", "voz_curadoria_itens", "voz_analise_consumo", "custos_ia_voz", "relatorios_credor"):
+    checar(f"SQL 60: não lê public.{t}", False, f"select * from public.{t} limit 1", erro="permission denied")
+checar("SQL 60: não chama a RPC do public direto", False, "select * from public.buscas_voz_pendentes(1)",
+       erro="permission denied")
+checar("SQL 60: outro login (não a VM nem o servidor) não lê as buscas pendentes", False,
+       "select * from public.buscas_voz_pendentes(1)", usuario="postgres", erro="servidor")
 
 # ------------------------------------------------------------------ não pode: nada fora da voz
 for t in ("estado_cliente", "trilha", "fila_dia", "perfis", "empresas", "credores", "faturas", "envios", "api_tokens",
@@ -638,6 +717,29 @@ if PG is not None:
          RP.processar_um(sb, LLMFixo, LLMFixo, concorrencia=4) is True
          and servidor.run("select situacao || '|' || conversas from public.roleplay_lotes where id = :l", l=RLB)[0][0]
          == "concluido|4")
+    # SQL 60 · as peças do Speech Analytics da VM (voz/analise) pela mesma interface
+    from voz.analise import curadoria as CU
+    from voz.analise import trechos as TRC
+
+    class EmbFixo(TRC.Embedder):
+        def vetores(self, textos):
+            return [[0.02] * 1536 for _ in textos]
+    gv = {"id": int(GVA), "empresa_id": int(EA), "credor_id": int(CA), "origem": "ia"}
+    caso("VM: grava os trechos mascarados pelo acesso próprio",
+         TRC.gravar(sb, gv, [TRC.Janela(40, 60, "agente", "Posso te ajudar com o boleto."),
+                             TRC.Janela(60, 80, "cliente", "Pode mandar por mensagem.")], EmbFixo(), com_vetor=COM_VETOR) == 2
+         and servidor.run("select count(*) from public.voz_trechos where gravacao_id = :g and inicio_s >= 40", g=int(GVA))[0][0] == 2)
+    caso("VM: põe a fila da curadoria pelo acesso próprio", CU.enfileirar(sb, CU.itens_da_chamada(
+        {"empresa_id": int(EA), "gravacao_id": int(GVA)},
+        {"intencoes": [{"intencao": "quero_negociar", "confianca": 0.3, "trecho": "Talvez dê.", "alternativas": ["ja_paguei"]}]})) == 1)
+    BUB = servidor.run(f"insert into public.voz_buscas (empresa_id, usuario, termo, modo, situacao) values ({EA}, '{EQ}', "
+                       "'boleto por mensagem', 'semantica', 'pendente') returning id")[0][0]
+    n_buscas = TRC.atender_buscas(sb, EmbFixo())
+    caso("VM: atende a busca semântica pelo acesso próprio" if COM_VETOR else "VM: sem pgvector a busca falha sozinha",
+         (n_buscas >= 1 and servidor.run("select situacao from public.voz_buscas where id = :b", b=BUB)[0][0] == "pronta")
+         if COM_VETOR else n_buscas == 0)
+    caso("VM: registra o uso de IA pelo acesso próprio",
+         TRC.registrar_uso(sb, int(EA), "2026-11-05", "embeddings", 1, 1.0, 0, 500, 0) is not None)
     try:
         sb.rpc("salvar_fluxo_voz", {})
         caso("VM: RPC fora da lista é recusada no código", False, "chamou")
@@ -659,6 +761,7 @@ _senha_de_teste()
 
 # ------------------------------------------------------------------ limpeza
 _sv("delete from public.envios where caminho like 'vza-%'; delete from storage.objects where name like 'vza-%'")
+_sv(f"delete from public.voz_buscas where empresa_id in ({EA}, {EB})")   # SQL 60: a busca guarda quem buscou
 _sv(f"delete from auth.users where id in ('{EQ}', '{NE}')")
 _sv(f"delete from voz_vm.bilhetes; delete from public.empresas where id in ({EA}, {EB})")
 

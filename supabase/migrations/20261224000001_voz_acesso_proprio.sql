@@ -7,7 +7,7 @@
 --   infra/asterisk/README.md (lê o segredo; nunca passa pelo chat nem por arquivo do repositório);
 -- * não recebe nenhum grant em tabela do public: tudo passa pelo schema voz_vm (sem uso para public), com
 --   - leitura por views de colunas escolhidas: voz_config, voz_troncos, voz_rotas, voz_transferencias, voz_contrato,
---     roteiros em uso, divisão da concorrência, id/slug/nome das empresas com voz, id/código das carteiras ativas delas e
+--     roteiros em uso, divisão da concorrência, id/slug/nome das empresas com voz, id/código/nome das carteiras ativas delas e
 --     as colunas de tarifação das chamadas (sem id_cliente, sem destino) para recalcular consumo_voz;
 --   - escrita só por funções security definer (search_path vazio, nomes qualificados, validação por linha):
 --     voz_chamadas, voz_gravacoes, consumo_voz, voz_lotes, voz_ondas e fornecedor_saude;
@@ -209,9 +209,10 @@ create or replace view voz_vm.empresas with (security_barrier = true) as
     select e.id, e.slug, e.nome from public.empresas e
      where exists (select 1 from public.voz_config c where c.empresa_id = e.id);
 
--- só id e código (pasta da Lista do dia) das carteiras ativas das empresas com voz
+-- só id, código (pasta da Lista do dia) e nome (variável credor da fala, como no modo chave) das carteiras ativas
+-- das empresas com voz
 create or replace view voz_vm.carteiras with (security_barrier = true) as
-    select k.id, k.empresa_id, k.codigo, k.ativo from public.credores k
+    select k.id, k.empresa_id, k.codigo, k.ativo, k.nome from public.credores k
      where k.ativo and exists (select 1 from public.voz_config c where c.empresa_id = k.empresa_id);
 
 -- colunas de tarifação das chamadas (recalcular consumo_voz): sem id_cliente, sem destino, sem códigos
