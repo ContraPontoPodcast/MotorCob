@@ -1,25 +1,14 @@
-// Peças mínimas de design-system para o Fluxo do agente, no padrão do redesenho v2 (gaveta, selo de regras,
-// detalhes recolhidos, segmentado, barras). Ficam aqui enquanto os componentes compartilhados de site/src/components/ds/
-// (branch claude/site-redesign-v2) não chegam no main; depois é só trocar os imports. Só tokens do tema (claro e
-// escuro) e nada que passe de 390 px sem rolar dentro do próprio bloco.
+// Peças do Fluxo do agente sobre o design system compartilhado (@/components/ds): Gaveta, Detalhes, Seg e Kv delegam
+// para o DS (mesmo visual e comportamento: Esc, foco preso, abas e segmentos iguais às outras telas). Ficam aqui só as
+// peças próprias do fluxo (barras do funil e das personas, selo que abre uma gaveta local, linhas e campos). Só
+// tokens do tema (claro e escuro) e nada que passe de 390 px sem rolar dentro do próprio bloco.
 import type { ReactNode } from 'react';
-import { ChevronRight, Lock } from 'lucide-react';
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { Lock } from 'lucide-react';
+import { Detalhes as DetalhesDs, Gaveta as GavetaDs, ListaValores, Segmentos } from '@/components/ds';
 
-/** Gaveta lateral (no celular, ocupa a largura toda). Uma ação principal no pé. */
+/** Gaveta lateral (DS). No celular, ocupa a largura toda. Uma ação principal no pé. */
 export function Gaveta({ aberta, onFechar, titulo, sub, children, pe, largura = 560 }: { aberta: boolean; onFechar: () => void; titulo: ReactNode; sub?: ReactNode; children: ReactNode; pe?: ReactNode; largura?: number }) {
-	return (
-		<Sheet open={aberta} onOpenChange={v => { if (!v) onFechar(); }}>
-			<SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden border-l p-0 sm:max-w-none" style={{ maxWidth: `min(100vw, ${largura}px)`, backgroundColor: 'var(--base-cartao)', borderColor: 'var(--base-borda)', color: 'var(--base-texto)' }}>
-				<div className="border-b px-5 pb-3 pt-5 pr-12" style={{ borderColor: 'var(--base-borda)' }}>
-					<SheetTitle className="text-[16px] font-semibold text-[var(--base-texto)]">{titulo}</SheetTitle>
-					{sub ? <SheetDescription className="mt-0.5 text-[12.5px] text-[var(--base-texto-2)]">{sub}</SheetDescription> : <SheetDescription className="sr-only">Detalhes</SheetDescription>}
-				</div>
-				<div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 text-[13px]">{children}</div>
-				{pe && <div className="flex flex-wrap justify-end gap-2 border-t px-5 py-3" style={{ borderColor: 'var(--base-borda)' }}>{pe}</div>}
-			</SheetContent>
-		</Sheet>
-	);
+	return <GavetaDs aberta={aberta} onFechar={onFechar} titulo={titulo} subtitulo={sub} rodape={pe} largura={largura}>{children}</GavetaDs>;
 }
 
 /** Selo com cadeado que abre as regras fixas ou um esclarecimento ("Quem edita e aprova", "Regras fixas (7)"). */
@@ -31,33 +20,14 @@ export function Selo({ children, onClick }: { children: ReactNode; onClick: () =
 	);
 }
 
-/** Bloco recolhido (Detalhes). */
+/** Bloco recolhido (Detalhes do DS). */
 export function Detalhes({ titulo, qtd, aberto, children }: { titulo: ReactNode; qtd?: ReactNode; aberto?: boolean; children: ReactNode }) {
-	return (
-		<details open={aberto} className="group border-b last:border-b-0" style={{ borderColor: 'var(--base-borda)' }}>
-			<summary className="flex cursor-pointer list-none items-center gap-2 py-3 text-[13.5px] font-semibold text-[var(--base-texto)]">
-				<ChevronRight size={15} className="shrink-0 transition-transform group-open:rotate-90" aria-hidden />
-				<span className="min-w-0 flex-1">{titulo}</span>
-				{qtd && <span className="text-[12px] font-normal text-[var(--base-texto-3)]">{qtd}</span>}
-			</summary>
-			<div className="pb-4">{children}</div>
-		</details>
-	);
+	return <DetalhesDs resumo={titulo} qtd={qtd} aberto={aberto}>{children}</DetalhesDs>;
 }
 
-/** Segmentado (uma escolha). */
+/** Segmentado (uma escolha; Segmentos do DS). */
 export function Seg<T extends string>({ itens, valor, onChange, rotulo }: { itens: { v: T; n: ReactNode }[]; valor: T; onChange: (v: T) => void; rotulo: string }) {
-	return (
-		<div role="radiogroup" aria-label={rotulo} className="inline-flex max-w-full flex-wrap rounded-lg p-0.5" style={{ backgroundColor: 'var(--base-fill)' }}>
-			{itens.map(i => (
-				<button key={i.v} type="button" role="radio" aria-checked={valor === i.v} onClick={() => onChange(i.v)}
-					className="h-8 rounded-md px-3 text-[12.5px] font-semibold"
-					style={valor === i.v ? { backgroundColor: 'var(--base-cartao)', color: 'var(--base-texto)', boxShadow: '0 0 0 1px var(--base-borda)' } : { color: 'var(--base-texto-2)' }}>
-					{i.n}
-				</button>
-			))}
-		</div>
-	);
+	return <Segmentos itens={itens} valor={valor} onTrocar={onChange} rotulo={rotulo} />;
 }
 
 /** Lista de linhas "rótulo · valor · nota". */
@@ -86,13 +56,9 @@ export function Linhas({ itens }: { itens: { e: ReactNode; d?: ReactNode; s?: Re
 	);
 }
 
-/** Pares chave · valor. */
+/** Pares chave · valor (ListaValores do DS). */
 export function Kv({ itens }: { itens: [ReactNode, ReactNode][] }) {
-	return (
-		<dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 text-[13px]">
-			{itens.map(([k, v], i) => <div key={i} className="contents"><dt className="text-[var(--base-texto-2)]">{k}</dt><dd className="text-right font-semibold text-[var(--base-texto)] tnum">{v}</dd></div>)}
-		</dl>
-	);
+	return <ListaValores itens={itens} />;
 }
 
 /** Regra fixa (com cadeado) ou explicação em lista. */

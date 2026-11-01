@@ -127,6 +127,7 @@ export default [
     route('insights-voz', 'routes/insights-voz.tsx'),
     route('speech-analytics/:aba?', 'routes/speech-analytics.tsx'),
     route('envios/gravacoes-discador', 'routes/envios-gravacoes-discador.tsx'),
+    route('envios/gravacoes-discador/enviar', 'routes/envios-gravacoes-discador-enviar.tsx'),
     route('*', 'routes/app-not-found.tsx'),
   ]),
 ] satisfies RouteConfig;

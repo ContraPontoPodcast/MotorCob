@@ -44,8 +44,8 @@ npm run preview             # serve build/client em http://127.0.0.1:4173 com o 
 ```
 
 Outros comandos: `npm run lint` (oxlint), `npm run typecheck` (tsc; tem de dar zero erro, o CI barra) e `npm test`
-(regras e componentes do Fluxo do agente em `site/fluxo/`; os componentes são empacotados com o esbuild e rodam com
-`node --test`, sem navegador).
+(as regras do Fluxo do agente em `site/fluxo/` e os componentes `src/**/*.test.tsx`, como os do design system em
+`src/components/ds/` e os do Fluxo do agente em `src/components/fluxo/`; a API do DS está documentada no `index.ts` de lá).
 
 Modo de demonstração do Fluxo do agente (só desenvolvimento): `VITE_FLUXO_FIXTURES=1 npm run dev` cria a rota
 `/dev/fluxo/<tela>` (lista, editor/105, testar, desempenho, pedido/412, personas, conectores) com dados fictícios, sem
@@ -80,7 +80,7 @@ Todas são públicas (começam com `VITE_` e vão para o JavaScript do navegador
 ## CI
 
 O workflow `.github/workflows/site.yml` roda quando `site/**` muda: `npm ci` (lockfile congelado), `npm run lint`,
-`npm run typecheck`, a cópia das duas etapas e `npm run build`.
+`npm run typecheck`, `npm test`, a cópia das duas etapas e `npm run build`.
 
 ## O que saiu na migração do Horizons
 

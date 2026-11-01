@@ -11,7 +11,7 @@ import { Loader2 } from 'lucide-react';
 //  - botao: rótulo do botão de confirmação.
 //  - onConfirm: chamado ao confirmar.
 //  - onClose: chamado ao cancelar/fechar.
-//  - corBotao: cor de fundo do botão (padrão: #1D1D1F).
+//  - corBotao: cor de fundo do botão (padrão: a cor de destaque do tema).
 //  - loading: desabilita e mostra spinner enquanto true.
 
 type Props = {
@@ -25,7 +25,7 @@ type Props = {
 	loading?: boolean;
 };
 
-export function ConfirmaAcao({ aberto, titulo, texto, botao, onConfirm, onClose, corBotao = '#1D1D1F', loading }: Props) {
+export function ConfirmaAcao({ aberto, titulo, texto, botao, onConfirm, onClose, corBotao = 'var(--destaque)', loading }: Props) {
 	useEffect(() => {
 		if (!aberto) return;
 		const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !loading) onClose(); };
@@ -37,12 +37,12 @@ export function ConfirmaAcao({ aberto, titulo, texto, botao, onConfirm, onClose,
 
 	return (
 		<div className="fixed inset-0 z-[120] grid place-items-center bg-black/40 px-4 py-8 overflow-y-auto" onClick={() => !loading && onClose()}>
-			<div role="dialog" aria-modal="true" className="my-auto w-full max-w-[440px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
-				<h2 className="text-[17px] font-semibold text-[#1D1D1F]">{titulo}</h2>
-				<div className="mt-3 text-[14px] leading-relaxed text-[#1D1D1F]">{texto}</div>
+			<div role="dialog" aria-modal="true" className="my-auto w-full max-w-[440px] rounded-2xl bg-[var(--base-cartao)] p-6" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+				<h2 className="text-[17px] font-semibold text-[var(--base-texto)]">{titulo}</h2>
+				<div className="mt-3 text-[14px] leading-relaxed text-[var(--base-texto)]">{texto}</div>
 				<div className="mt-5 flex justify-end gap-3">
-					<button onClick={onClose} disabled={loading} className="h-10 rounded-lg border border-[#D2D2D7] px-5 text-[14px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7] disabled:opacity-50">Cancelar</button>
-					<button onClick={onConfirm} disabled={loading} className="flex h-10 items-center gap-2 rounded-lg px-6 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50" style={{ backgroundColor: corBotao }}>
+					<button onClick={onClose} disabled={loading} className="h-10 rounded-lg border border-[var(--base-field-border)] px-5 text-[14px] font-medium text-[var(--base-texto)] hover:bg-[var(--base-fill)] disabled:opacity-50">Cancelar</button>
+					<button onClick={onConfirm} disabled={loading} className="flex h-10 items-center gap-2 rounded-lg px-6 text-[14px] font-semibold hover:opacity-90 disabled:opacity-50" style={{ backgroundColor: corBotao, color: corBotao === 'var(--destaque)' ? 'var(--destaque-texto)' : '#FFFFFF' }}>
 						{loading && <Loader2 size={15} className="animate-spin" />}
 						{botao}
 					</button>
