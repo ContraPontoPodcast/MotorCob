@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase, friendlyError, moneyBR, dateBR, type Row } from '@/lib/supabase';
 import { useMotorAuth } from '@/components/auth-provider';
-import { num, precoCliente, type ScoreFormacao } from '@/lib/mensageria-produtos';
+import { num, precoCliente, razaoPct, type ScoreFormacao } from '@/lib/mensageria-produtos';
 import { ScoreFormacaoBox } from '@/components/comuns/score-formacao-box';
 
 const fmtDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 const money4 = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4, maximumFractionDigits: 4 });
-const pct1 = (v: number, t: number) => t ? `${((v / t) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : '—';
+const pct1 = (v: number, t: number) => { const p = razaoPct(v, t); return p == null ? '—' : `${p.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`; };
 
 const CARD_SHADOW = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
 

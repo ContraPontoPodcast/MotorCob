@@ -6,7 +6,7 @@ import { Loading, Notice, useAllowed } from '@/components/app-shell';
 import { EscolhaCarteira } from '@/components/escolha-carteira';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, supabase, type Row } from '@/lib/supabase';
-import { CANAL_COR, CANAL_NOME } from '@/lib/personas';
+import { CANAL_COR, CANAL_NOME, rotuloAtributoPersona } from '@/lib/personas';
 import { Info } from '@/components/glossario/info';
 
 type CondicaoModelo = { campo: string; op: string; valor: string | string[] };
@@ -22,17 +22,12 @@ type PersonaModelo = {
 	cor: string;
 };
 
-const CAMPO_LABEL: Record<string, string> = {
-	saldo: 'Saldo total', dias_atraso: 'Dias de atraso', qtd_contratos: 'Quantidade de contratos',
-	ddd: 'DDD', tem_whatsapp: 'tem WhatsApp', tem_rcs: 'tem RCS',
-	idade: 'idade', tem_email: 'tem e-mail', tem_celular: 'tem celular', so_fixo: 'só fixo', qtd_telefones: 'qtd. telefones',
-};
 const opSimbolo: Record<string, string> = { '=': '=', '!=': '≠', '>': '>', '>=': '≥', '<': '<', '<=': '≤', em: '∈', nao_em: '∉', contem: 'contém', vazio: 'está vazio', preenchido: 'está preenchido' };
 const CANAL_ORDEM = ['whatsapp', 'rcs', 'sms', 'email', 'agente_voz', 'discador'];
 
 function condFrase(conds: CondicaoModelo[] | null | undefined): string {
 	if (!conds || conds.length === 0) return 'Sem condições (vale para todos)';
-	const label = (campo: string) => CAMPO_LABEL[campo] ?? campo;
+	const label = rotuloAtributoPersona;
 	const valStr = (v: unknown) => Array.isArray(v) ? v.join('; ') : String(v ?? '');
 	return conds.map(c => {
 		if (c.op === 'vazio' || c.op === 'preenchido') return `${label(c.campo)} ${opSimbolo[c.op]}`;

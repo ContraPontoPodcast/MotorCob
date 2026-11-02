@@ -3,7 +3,7 @@ import { Check, ChevronDown, Sparkles, Star, X } from 'lucide-react';
 import { Empty, Loading, Notice, PageHeading, useAllowed } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { dateTimeBR, friendlyError, moneyBR, numberBR, pctBR, supabase } from '@/lib/supabase';
-import { CANAL_COR, nomeCanal, type Persona, type Sugestao } from '@/lib/personas';
+import { CANAL_COR, nomeCanal, rotuloAtributoPersona, type Persona, type Sugestao } from '@/lib/personas';
 import { SuasPersonas } from '@/components/personas/suas-personas';
 import { ModelosMotorCob } from '@/components/personas/modelos-motorcob';
 import { ComoMotorCobMede } from '@/components/personas/como-motorcob-mede';
@@ -192,7 +192,7 @@ function PersonaCard({ persona, cor }: { persona: Persona; cor: string }) {
 				<span className="shrink-0 rounded-full bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-bold text-[#1D1D1F]">{numberBR(persona.clientes)} clientes</span>
 			</div>
 			{persona.condicoes?.length > 0 && (
-				<p className="mb-3 text-xs text-slate-400">{persona.condicoes.map(c => `${c.campo} ${c.valor}`).join(' · ')}</p>
+				<p className="mb-3 text-xs text-slate-400">{persona.condicoes.map(c => `${rotuloAtributoPersona(c.campo)}: ${c.valor}`).join(' · ')}</p>
 			)}
 
 			{/* Medidor de maturidade */}

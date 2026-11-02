@@ -37,8 +37,8 @@ export function MedidorMaturidade({ maturidade, nome, cor }: { maturidade: Matur
 							strokeDasharray={`${dash} ${C - dash}`}
 							transform="rotate(-90 42 42)"
 						/>
-						<text x="42" y="40" textAnchor="middle" className="tnum" style={{ fontSize: 20, fontWeight: 600, fill: '#1D1D1F' }}>{numberBR(indice)}</text>
-						<text x="42" y="54" textAnchor="middle" style={{ fontSize: 9, fill: '#8E8E93' }}>/100</text>
+						<text x="42" y="40" textAnchor="middle" className="tnum" style={{ fontSize: 20, fontWeight: 600, fill: 'var(--base-texto)' }}>{numberBR(indice)}</text>
+						<text x="42" y="54" textAnchor="middle" style={{ fontSize: 9, fill: 'var(--base-texto-3)' }}>/100</text>
 					</svg>
 					<span className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: `${cor}1a`, color: cor }}>
 						{tendencia.Icon && <tendencia.Icon size={11} />} {faseLabel(fase)}

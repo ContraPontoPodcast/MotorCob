@@ -159,10 +159,20 @@ export function num(v: unknown): string {
 	return Number(v ?? 0).toLocaleString('pt-BR');
 }
 
-/** Formata percentual: 1 casa decimal (2 casas abaixo de 1%); total 0 → "—". */
-export function pct(v: number, total: number): string {
-	if (!total) return '—';
-	const p = (v / total) * 100;
+/** Percentual seguro (0–100+) de v sobre total. Devolve null quando o dado falta (v ou total
+ *  ausente/não numérico) ou o denominador é 0: quem exibe mostra "—" em vez de "NaN%". */
+export function razaoPct(v: unknown, total: unknown): number | null {
+	if (v == null || total == null || v === '' || total === '') return null;
+	const n = Number(v);
+	const d = Number(total);
+	if (!Number.isFinite(n) || !Number.isFinite(d) || d <= 0) return null;
+	return (n / d) * 100;
+}
+
+/** Formata percentual: 1 casa decimal (2 casas abaixo de 1%); total 0 ou dado ausente → "—"; 0 de N → "0,00%". */
+export function pct(v: unknown, total: unknown): string {
+	const p = razaoPct(v, total);
+	if (p == null) return '—';
 	const dec = p < 1 ? 2 : 1;
 	return `${p.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec })}%`;
 }

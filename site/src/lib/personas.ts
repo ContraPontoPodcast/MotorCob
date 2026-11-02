@@ -93,6 +93,40 @@ export function nomeCanal(canal: string): string {
 	return CANAL_NOME[canal] ?? canal;
 }
 
+/** Rótulo legível de cada coluna/atributo de persona (condições, colunas escolhidas pelo motor).
+ *  Mapa central: a tela nunca mostra o nome técnico da coluna. */
+export const ROTULO_ATRIBUTO_PERSONA: Record<string, string> = {
+	saldo: 'Saldo total',
+	faixa_saldo: 'Faixa de saldo',
+	dias_atraso: 'Dias de atraso',
+	faixa_atraso: 'Faixa de atraso',
+	qtd_contratos: 'Quantidade de contratos',
+	idade: 'Idade',
+	faixa_idade: 'Faixa de idade',
+	uf: 'UF',
+	ddd: 'DDD',
+	tem_whatsapp: 'Tem WhatsApp',
+	tem_rcs: 'Tem RCS',
+	tem_email: 'Tem e-mail',
+	tem_celular: 'Tem celular',
+	so_fixo: 'Só fixo',
+	qtd_telefones: 'Qtd. de telefones',
+	propensao: 'Propensão',
+	faixa_propensao: 'Faixa de propensão',
+};
+
+/** Texto humanizado para chave sem rótulo: troca `_` por espaço e põe maiúscula inicial. */
+export function humanizarChave(chave: string): string {
+	const t = String(chave ?? '').replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+	return t ? t.charAt(0).toLocaleUpperCase('pt-BR') + t.slice(1) : '';
+}
+
+/** Rótulo legível de uma coluna/atributo de persona (mapa central; chave desconhecida é humanizada). */
+export function rotuloAtributoPersona(chave: string): string {
+	const k = String(chave ?? '').trim();
+	return ROTULO_ATRIBUTO_PERSONA[k] ?? ROTULO_ATRIBUTO_PERSONA[k.toLowerCase()] ?? humanizarChave(k);
+}
+
 /** Rótulo legível da fase de maturidade. */
 export function faseLabel(fase?: FaseMaturidade): string {
 	if (fase === 'definida') return 'Definida';

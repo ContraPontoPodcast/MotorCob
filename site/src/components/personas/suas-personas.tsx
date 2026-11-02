@@ -7,6 +7,7 @@ import { EscolhaCarteira } from '@/components/escolha-carteira';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, numberBR, supabase, type CondicaoPersonaUsuario, type PersonaUsuario, type Row } from '@/lib/supabase';
 import { ErrorDetail } from '@/components/error-detail';
+import { rotuloAtributoPersona } from '@/lib/personas';
 
 const CORES = ['#0F4C5C', '#E9A23B', '#2E7D32', '#3B5BA9', '#A2552B', '#7A4FB0'];
 
@@ -44,7 +45,7 @@ type Coluna = { nome: string; tipo: 'numero' | 'texto' };
 
 function condFrase(conds: CondicaoPersonaUsuario[], colunas: Coluna[]): string {
 	if (!conds || conds.length === 0) return 'Sem condições (vale para todos)';
-	const label = (campo: string) => calculadosPersona.find(c => c.nome === campo)?.label ?? colunas.find(c => c.nome === campo)?.nome ?? campo;
+	const label = (campo: string) => calculadosPersona.find(c => c.nome === campo)?.label ?? rotuloAtributoPersona(campo);
 	const valStr = (v: unknown) => Array.isArray(v) ? v.join('; ') : String(v ?? '');
 	return conds.map(c => {
 		if (c.op === 'vazio' || c.op === 'preenchido') return `${label(c.campo)} ${opSimbolo[c.op]}`;
