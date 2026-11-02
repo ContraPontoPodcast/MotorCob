@@ -7,10 +7,17 @@ a senha do banco de teste no CI) chamando as funções novas de voz_vm, sem alca
 que a VM grava as decisões (voz_resubmits, só destino_hash) e as chamadas com passada e resubmit_id.
 Só dados fictícios (IDs CLI-, hash de números de exemplo).
 
+Relógio controlado: o pedido e a prévia (Reenviar agora e Reciclar) só valem no lote de hoje e na faixa legal de
+Brasília (seg–sex 08:00–20:00, sábado até 14:00, nunca domingo). Para o resultado não depender do dia e da hora em que
+o teste roda, o "hoje" do teste é uma data fixa (HOJE) e essas quatro funções rodam, só durante o teste, com o now()
+trocado por um instante fixo (relogio()); no fim o original volta (e o teste confere). A matriz R7/R14 prova a janela
+na segunda, no domingo, no sábado, nas bordas de horário e na virada do dia em UTC.
+
 Pré-requisito: o banco com a imitação do Supabase e todas as migrações (como no testar_rls.py). Chamado pelo
 testar_rls.py no fim; também roda só:
     PGHOST=... PGPORT=... PGUSER=postgres PGDATABASE=sb python supabase/testes/testar_voz_resubmit.py
 """
+import atexit
 import hashlib
 import json
 import os
@@ -50,6 +57,49 @@ def checar(nome, esperado_ok, cmd, valor=None, usuario="postgres", uid=None, pap
     ok_total += passou
     falhas += not passou
     print(("PASSOU " if passou else "FALHOU ") + nome + ("" if passou else f"  -> ok={ok} out={out!r} err={err[:200]}"))
+
+
+def _psql(cmd):
+    """Roda SQL como postgres pela entrada padrão (definições de função inteiras) e devolve a saída toda."""
+    r = subprocess.run(BASE + ["-U", "postgres", "-f", "-"], input=cmd, capture_output=True, text=True, check=False)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+# ------------------------------------------------------------------ relógio do teste
+# As únicas funções do SQL 65 que olham o relógio para decidir algo do site: lote de hoje, faixa legal e intervalo.
+RELOGIO = ("public.previa_reenvio_voz(bigint, text[], bigint[], text, boolean)",
+           "public.pedir_reenvio_voz(bigint, text[], bigint[], text, boolean)",
+           "public.previa_reciclagem_voz(bigint, text, text[], bigint[], text[], text)",
+           "public.pedir_reciclagem_voz(bigint, text, text[], bigint[], text[], text)")
+_ORIGINAIS = {}
+
+
+def _md5_relogio():
+    return _sv("select md5(string_agg(prosrc, '|' order by oid)) from pg_proc where oid in ("
+               + ", ".join(f"'{f}'::regprocedure" for f in RELOGIO) + ")")
+
+
+def relogio(instante):
+    """Faz as funções de RELOGIO verem o now() = instante (timestamptz com fuso, ex. '2026-11-02 10:00-03')."""
+    if not _ORIGINAIS:
+        for f in RELOGIO:
+            d = _psql(f"select pg_get_functiondef('{f}'::regprocedure);")
+            assert "now()" in d, f
+            for outro in ("current_date", "current_timestamp", "localtimestamp", "clock_timestamp", "statement_timestamp",
+                          "transaction_timestamp"):
+                assert outro not in d.lower(), f"{f} usa {outro}: inclua no relógio do teste"
+            _ORIGINAIS[f] = d.rstrip() + ";\n"
+        _ORIGINAIS["md5"] = _md5_relogio()
+    _psql("".join(_ORIGINAIS[f].replace("now()", f"'{instante}'::timestamptz") for f in RELOGIO))
+
+
+def relogio_real():
+    if _ORIGINAIS:
+        _psql("".join(_ORIGINAIS[f] for f in RELOGIO))
+
+
+atexit.register(relogio_real)
 
 
 def vm(nome, esperado_ok, cmd, valor=None, erro=None):
@@ -175,7 +225,8 @@ for p, pode in (("admin", "t"), ("oper", "t"), ("plan", "f")):
     site(f"R15: reciclar_lote_voz padrão para {p}", True, "select public.pode('reciclar_lote_voz')", U[p], pode)
 
 # ------------------------------------------------------------------ VM: lote do dia, ondas, decisões e chamadas
-HOJE = _sv("select (now() at time zone 'America/Sao_Paulo')::date")
+HOJE = "2026-11-02"                   # uma segunda-feira: o "hoje" do teste, fixo (ver relogio())
+relogio(f"{HOJE} 10:00:00-03")         # 10h de Brasília: dentro da faixa legal
 LB = _sv(f"insert into public.voz_lotes (empresa_id, data, modo) values ({EB}, '{HOJE}', 'simulado') returning id")
 vm("VM: regras de discagem só com id e o bloco (sem nome nem CNPJ)", True,
    f"select jsonb_agg(x -> 'discagem' -> 'por_sinalizacao' -> 'ocupado' -> 'rediscar' ->> 'depois_min') from jsonb_array_elements("
@@ -206,10 +257,11 @@ vm("VM: situação fora da lista é recusada na onda", False,
 REF = "ab" * 16
 DEC = json.dumps([{"ref": REF, "empresa_id": int(EA), "credor_id": int(CA), "lote_id": int(LT), "id_cliente": "CLI-1",
                    "destino_hash": H[0], "situacao_origem": "nao_atendida", "passada": 2, "origem": "auto",
-                   "decisao": "redisca", "nao_antes_de": "2026-11-05T12:00:00-03:00", "id_chamada_origem": "rsb-0001"},
+                   "decisao": "redisca", "nao_antes_de": "2026-11-05T12:00:00-03:00", "id_chamada_origem": "rsb-0001",
+                   "criado_em": f"{HOJE}T09:00:00-03:00"},
                   {"ref": "cd" * 16, "empresa_id": int(EA), "credor_id": int(CA), "lote_id": int(LT),
                    "id_cliente": "CLI-2", "destino_hash": H[1], "situacao_origem": "ocupado", "passada": 3,
-                   "origem": "auto", "decisao": "fora", "motivo_fora": "max_dia"}])
+                   "origem": "auto", "decisao": "fora", "motivo_fora": "max_dia", "criado_em": f"{HOJE}T09:00:00-03:00"}])
 ok, IDS, err = sql(f"select string_agg(id::text, ',') from voz_vm.gravar_resubmits('{DEC}')", "motorcx_voz")
 checar("VM: grava as decisões e devolve os ids na ordem", True, f"select {int(ok and len(IDS.split(',')) == 2)}", 1)
 RID = IDS.split(",")[0] if ok else "0"
@@ -264,21 +316,14 @@ site("R6: prévia só com contagens", True,
      f"'numero_incorreto']) -> 'fora' ->> 'inexistente')", U["oper"], "1|1")
 site("R6: prévia de lote de outra empresa é recusada", False,
      f"select public.previa_reenvio_voz({LT}, array['nao_atendida'])", U["outra"], erro="lote não encontrado")
-JANELA = _sv("select extract(isodow from now() at time zone 'America/Sao_Paulo') < 7 and "
-             "(now() at time zone 'America/Sao_Paulo')::time between time '08:00' and "
-             "(case when extract(isodow from now() at time zone 'America/Sao_Paulo') = 6 then time '13:59' else time '19:59' end)")
 site("R7: sem a permissão (Planejamento) não pede", False,
      f"select public.pedir_reenvio_voz({LT}, array['maquina'])", U["plan"], erro="sem permissão")
 site("R7: situação fora da lista é recusada", False, f"select public.pedir_reenvio_voz({LT}, array['cpc'])", U["oper"])
-if JANELA == "t":
-    site("R7: Operação pede o reenvio (com a prévia guardada)", True,
-         f"select previa ->> 'volta' from public.voz_reenvios where id = public.pedir_reenvio_voz({LT}, array['maquina'], null, 'topo', false)",
-         U["oper"], 1)
-else:
-    site("R7: fora da janela de hoje não pede", False, f"select public.pedir_reenvio_voz({LT}, array['maquina'])", U["oper"],
-         erro="fora da janela")
-    _sv(f"insert into public.voz_reenvios (empresa_id, credor_id, lote_id, filtros, prioridade) values ({EA}, {CA}, {LT}, "
-        "'{\"resultados\": [\"maquina\"], \"ondas\": []}', 'topo')")
+# o pedido em um comando e a leitura em outro: a função volátil no where de uma varredura não é chamada com a tabela
+# vazia (nem uma vez só com linhas), e o que ela grava não aparece no mesmo comando
+site("R7: Operação pede o reenvio (com a prévia guardada)", True,
+     f"select set_config('teste.id', public.pedir_reenvio_voz({LT}, array['maquina'], null, 'topo', false)::text, false); "
+     f"select previa ->> 'volta' from public.voz_reenvios where id = current_setting('teste.id')::bigint", U["oper"], 1)
 site("R7: ninguém grava reenvio direto", False,
      f"insert into public.voz_reenvios (empresa_id, lote_id, filtros) values ({EA}, {LT}, '{{}}')", U["admin"])
 vm("VM: pega o pedido só das empresas pedidas", True, f"select voz_vm.pegar_reenvio('{{\"empresas\": [{EB}]}}')", "")
@@ -303,17 +348,11 @@ site("R13: outra empresa não vê a prévia", False,
      f"select public.previa_reciclagem_voz({LT})", U["outra"], erro="lote não encontrado")
 site("R14: sem reciclar_lote_voz (Planejamento) não pede", False,
      f"select public.pedir_reciclagem_voz({LT})", U["plan"], erro="sem permissão")
-if JANELA == "t":
-    site("R14: Operação pede a reciclagem (mantém o limite do dia por padrão)", True,
-         f"select limite_cliente from public.voz_reciclagens where id = public.pedir_reciclagem_voz({LT}, 'lote', null, null, {EXC})",
-         U["oper"], "mantem")
-    site("R14: só uma reciclagem em andamento por lote", False, f"select public.pedir_reciclagem_voz({LT})", U["oper"],
-         erro="já há uma reciclagem")
-else:
-    site("R14: fora da janela de hoje não pede", False, f"select public.pedir_reciclagem_voz({LT})", U["oper"],
-         erro="fora da janela")
-    _sv(f"insert into public.voz_reciclagens (empresa_id, credor_id, lote_id, data, origem, excluir) values ({EA}, {CA}, "
-        f"{LT}, '{HOJE}', 'manual', {EXC})")
+site("R14: Operação pede a reciclagem (mantém o limite do dia por padrão)", True,
+     f"select set_config('teste.id', public.pedir_reciclagem_voz({LT}, 'lote', null, null, {EXC})::text, false); "
+     f"select limite_cliente from public.voz_reciclagens where id = current_setting('teste.id')::bigint", U["oper"], "mantem")
+site("R14: só uma reciclagem em andamento por lote", False, f"select public.pedir_reciclagem_voz({LT})", U["oper"],
+     erro="já há uma reciclagem")
 site("R12: ninguém grava reciclagem direto", False,
      f"insert into public.voz_reciclagens (empresa_id, lote_id, data, origem) values ({EA}, {LT}, '{HOJE}', 'manual')",
      U["admin"])
@@ -460,6 +499,35 @@ site("R19: a empresa lê o resumo pela RPC; outra empresa não", True,
      f"select public.resumo_resubmit_voz({EA}, {CA}, '{HOJE}') ->> 'decisoes'", U["oper"], 2)
 site("R19: ... outra empresa é recusada", False, f"select public.resumo_resubmit_voz({EA}, {CA}, '{HOJE}')", U["outra"],
      erro="empresa não encontrada")
+
+# ------------------------------------------------------------------ R7/R14: a janela pelo relógio de Brasília
+# Outra carteira da mesma empresa, um lote por dia (o de LT já tem reciclagem em andamento). Cada pedido aceito é
+# cancelado na hora, para não ficar pendente para a VM.
+CJ = _sv(f"insert into public.credores (empresa_id, codigo, nome) values ({EA}, 'rsb-a-janela', 'Carteira Janela') returning id")
+LJ = {d: sql(f"select voz_vm.lote_do_dia('{{\"empresa\": {EA}, \"credor\": {CJ}, \"dia\": \"{d}\", \"total\": 1}}')",
+             "motorcx_voz")[1] for d in ("2026-11-01", "2026-11-02", "2026-11-07")}
+JANELA = (  # (caso, instante, dia do lote, erro esperado ou None)
+    ("domingo 10:00", "2026-11-01 10:00:00-03", "2026-11-01", "fora da janela"),
+    ("segunda 07:59", "2026-11-02 07:59:00-03", "2026-11-02", "fora da janela"),
+    ("segunda 08:00", "2026-11-02 08:00:00-03", "2026-11-02", None),
+    ("segunda 19:59", "2026-11-02 19:59:00-03", "2026-11-02", None),
+    ("segunda 20:00", "2026-11-02 20:00:00-03", "2026-11-02", "fora da janela"),
+    ("segunda 21:30 (terça 00:30 em UTC)", "2026-11-03 00:30:00+00", "2026-11-02", "fora da janela"),
+    ("segunda 11:30 (14:30 em UTC)", "2026-11-02 14:30:00+00", "2026-11-02", None),
+    ("sábado 13:59", "2026-11-07 13:59:00-03", "2026-11-07", None),
+    ("sábado 14:00", "2026-11-07 14:00:00-03", "2026-11-07", "fora da janela"),
+    ("terça 10:00 com o lote de segunda", "2026-11-03 10:00:00-03", "2026-11-02", "só o lote de hoje"),
+)
+for caso, instante, dia, erro in JANELA:
+    relogio(instante)
+    for nome, cmd, tabela in (
+            ("R7: reenvio", f"select public.pedir_reenvio_voz({LJ[dia]}, array['maquina'])", "voz_reenvios"),
+            ("R14: reciclagem", f"select public.pedir_reciclagem_voz({LJ[dia]})", "voz_reciclagens")):
+        site(f"{nome} {caso}: " + ("pede" if erro is None else "recusa"), erro is None, cmd, U["oper"], erro=erro)
+        _sv(f"update public.{tabela} set situacao = 'cancelado' where lote_id = {LJ[dia]} and situacao = 'pendente'")
+relogio_real()
+checar("relógio do teste devolvido (as funções voltam a ser as da migração, com o now() de verdade)", True,
+       f"select '{_md5_relogio()}'", _ORIGINAIS["md5"])
 
 # ------------------------------------------------------------------ segurança
 for t in ("regras_voz_versoes", "voz_resubmits", "voz_reenvios", "voz_reciclagens", "voz_passadas_dia",
