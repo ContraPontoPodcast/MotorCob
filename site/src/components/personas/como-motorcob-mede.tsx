@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, FlaskConical, Layers3, Scale, TrendingUp } from 'lucide-react';
+import { rotuloAtributoPersona } from '@/lib/personas';
 
 const STORAGE_KEY = 'motorcob.personas.como-mede';
 
@@ -60,7 +61,7 @@ export function ComoMotorCobMede({ caracteristicas }: { caracteristicas: string[
 							<p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Colunas escolhidas pelo motor</p>
 							<div className="flex flex-wrap gap-1.5">
 								{caracteristicas.map(c => (
-									<span key={c} className="inline-flex items-center gap-1 rounded-full bg-[#eaf2f3] px-2.5 py-0.5 text-[11px] font-semibold text-[#0F4C5C]">{c}</span>
+									<span key={c} className="inline-flex items-center gap-1 rounded-full bg-[#eaf2f3] px-2.5 py-0.5 text-[11px] font-semibold text-[#0F4C5C]">{rotuloAtributoPersona(c)}</span>
 								))}
 							</div>
 							<p className="mt-2 text-[10px] text-slate-400">São as que mais mudam a resposta por canal.</p>

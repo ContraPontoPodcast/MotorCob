@@ -3,7 +3,7 @@ import { useParams } from 'react-router';
 import { Radar, ArrowLeft, Send } from 'lucide-react';
 import { supabase, friendlyError, dateTimeBR, type Row } from '@/lib/supabase';
 import { useMotorAuth } from '@/components/auth-provider';
-import { isCanalValido, RADAR_CLASSES, RADAR_ORDEM, mascararDestino } from '@/lib/mensageria-produtos';
+import { isCanalValido, RADAR_CLASSES, RADAR_ORDEM, mascararDestino, razaoPct } from '@/lib/mensageria-produtos';
 
 const PERIODO_OPCOES = [{ id: 'hoje', label: 'Hoje' }, { id: '7d', label: '7 dias' }, { id: '30d', label: '30 dias' }];
 
@@ -249,7 +249,7 @@ function GrupoModal({ conversas, onClose, onDone }: { conversas: Row[]; onClose:
 				{!resumo ? (<>
 					<p className="mt-2 text-[14px] text-[#6E6E73]">Enviar para <strong>{limite}</strong> conversas abertas.</p>
 					<textarea value={texto} onChange={e => setTexto(e.target.value)} rows={4} placeholder="Digite a resposta..." className="mt-3 w-full rounded-lg border border-[#D2D2D7] p-3 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-[#0071E5]/40" />
-					{busy && <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#F5F5F7]"><div className="h-full bg-[#1D1D1F] transition-all" style={{ width: `${(progresso / limite) * 100}%` }} /></div>}
+					{busy && <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#F5F5F7]"><div className="h-full bg-[#1D1D1F] transition-all" style={{ width: `${razaoPct(progresso, limite) ?? 0}%` }} /></div>}
 					<div className="mt-4 flex justify-end gap-2">
 						<button onClick={onClose} className="h-10 rounded-full border border-[#D2D2D7] px-5 text-[14px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Cancelar</button>
 						<button onClick={enviar} disabled={busy || !texto.trim()} className="h-10 rounded-full bg-[#1D1D1F] px-5 text-[14px] font-medium text-white disabled:opacity-50 hover:opacity-85">Enviar para {limite} clientes</button>

@@ -65,8 +65,8 @@ function Ranking({ p, taxa, displayTaxa, max }: { p: PersonaSite; taxa: number[]
 				const largura = Math.max(4, (taxa[i] / max) * 100);
 				return (
 					<div key={`${r.canal}-${i}`} className="grid items-center gap-3" style={{ gridTemplateColumns: '118px 1fr 84px' }}>
-						<div className="flex min-w-0 items-center gap-1.5">
-							<span className="truncate text-[14px] text-[#1D1D1F]">{r.canal}</span>
+						<div className="flex min-w-0 flex-wrap items-center gap-x-1.5" title={r.canal}>
+							<span className="text-[14px] leading-tight text-[#1D1D1F]">{r.canal}</span>
 							{r.pos === 'melhor' && <span className="shrink-0 text-[12px] text-[#8E8E93]">★ melhor</span>}
 							{r.pos === 'segundo' && <span className="shrink-0 text-[12px] text-[#8E8E93]">2º</span>}
 						</div>

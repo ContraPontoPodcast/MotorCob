@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import { useMotorAuth } from '@/components/auth-provider';
-import { PRODUTO_MAP, PERIODO_OPCOES, periodoDatas, num, pct, isCanalValido } from '@/lib/mensageria-produtos';
+import { PRODUTO_MAP, PERIODO_OPCOES, periodoDatas, num, pct, razaoPct, isCanalValido } from '@/lib/mensageria-produtos';
 import { INFO_DEFS } from '@/lib/mensageria-info';
 import { InfoButton } from '@/components/mensageria/info-button';
 import { exportarCsv } from '@/lib/mensageria';
@@ -11,6 +11,9 @@ type StatusRow = Record<string, any>;
 type LinkRow = { data: string; enviados: number; entregues: number; clicaram: number; responderam: number; cpc_negocio: number; cliques: number; links: number };
 
 function g(r: StatusRow, k: string): number { return Number(r?.[k] ?? 0); }
+
+/** Situação de um indicador: null quando falta dado (sem denominador), para não acusar "Atenção" à toa. */
+function dentro(p: number | null, regra: (p: number) => boolean): boolean | null { return p == null ? null : regra(p); }
 
 function Card({ label, valor, sub, cor, info }: { label: string; valor: string; sub?: string; cor?: string; info?: string }) {
 	return (
@@ -26,7 +29,8 @@ function Card({ label, valor, sub, cor, info }: { label: string; valor: string; 
 }
 
 function FunilBar({ label, valor, total, cor, info }: { label: string; valor: number; total: number; cor: string; info?: string }) {
-	const w = total > 0 ? Math.max(2, Math.round((valor / total) * 100)) : 0;
+	const p = razaoPct(valor, total);
+	const w = p == null ? 0 : Math.max(2, Math.round(p));
 	return (
 		<div className="flex items-center gap-3">
 			<div className="flex w-32 shrink-0 items-center gap-1.5">
@@ -237,16 +241,16 @@ export function PainelCanal() {
 								</tr></thead>
 								<tbody>
 									{[
-										{ nome: 'Taxa de entrega', valor: pct(t.entregues, t.disparados), ref: 'acima de 95%', ok: (t.entregues / Math.max(1, t.disparados)) >= 0.95 },
-										{ nome: 'Bounce permanente', valor: pct(t.bounce_permanente, t.disparados), ref: 'abaixo de 2%', ok: (t.bounce_permanente / Math.max(1, t.disparados)) < 0.02 },
-										{ nome: 'Marcados como spam', valor: pct(t.spam, t.entregues), ref: 'abaixo de 0,1% (limite 0,3%)', ok: (t.spam / Math.max(1, t.entregues)) < 0.001 },
-										{ nome: 'Descadastros', valor: pct(t.descadastros, t.entregues), ref: 'abaixo de 0,5%', ok: (t.descadastros / Math.max(1, t.entregues)) < 0.005 },
+										{ nome: 'Taxa de entrega', valor: pct(t.entregues, t.disparados), ref: 'acima de 95%', ok: dentro(razaoPct(t.entregues, t.disparados), p => p >= 95) },
+										{ nome: 'Bounce permanente', valor: pct(t.bounce_permanente, t.disparados), ref: 'abaixo de 2%', ok: dentro(razaoPct(t.bounce_permanente, t.disparados), p => p < 2) },
+										{ nome: 'Marcados como spam', valor: pct(t.spam, t.entregues), ref: 'abaixo de 0,1% (limite 0,3%)', ok: dentro(razaoPct(t.spam, t.entregues), p => p < 0.1) },
+										{ nome: 'Descadastros', valor: pct(t.descadastros, t.entregues), ref: 'abaixo de 0,5%', ok: dentro(razaoPct(t.descadastros, t.entregues), p => p < 0.5) },
 									].map(r => (
 										<tr key={r.nome} className="border-b border-[#F0F0F2]">
 											<td className="py-2.5 pr-4 text-[#1D1D1F]">{r.nome}</td>
 											<td className="py-2.5 pr-4 text-right tnum text-[#1D1D1F]">{r.valor}</td>
 											<td className="py-2.5 pr-4 text-[#6E6E73]">{r.ref}</td>
-											<td className="py-2.5"><span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ color: r.ok ? '#248A3D' : '#D70015', backgroundColor: r.ok ? '#E8F8EC' : '#FFE8E6' }}>{r.ok ? 'Dentro' : 'Atenção'}</span></td>
+											<td className="py-2.5">{r.ok == null ? <span className="text-[12px] text-[#8E8E93]">Sem dados</span> : <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ color: r.ok ? '#248A3D' : '#D70015', backgroundColor: r.ok ? '#E8F8EC' : '#FFE8E6' }}>{r.ok ? 'Dentro' : 'Atenção'}</span>}</td>
 										</tr>
 									))}
 								</tbody>
