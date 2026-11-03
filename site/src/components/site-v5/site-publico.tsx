@@ -84,7 +84,7 @@ function Rodape() {
 				<div><h6>Empresa</h6><a href={ROTAS.seguranca}>Segurança</a><a href={ROTAS.privacidade}>Privacidade</a><a href={`${ROTAS.demonstracao}?de=rodape`}>Agendar demonstração</a></div>
 				<div><h6>Acesso</h6><a href={ROTAS.login}>Entrar</a></div>
 			</div>
-			<div className="base"><span>© 2026 MotorCX. Ilustrações com dados fictícios.</span><span>E-mail comercial <span className="confirmar">a confirmar</span></span></div>
+			<div className="base"><span>© 2026 MotorCX. Ilustrações com dados fictícios.</span><span>E-mail comercial <a href="mailto:contato@motorcob.online">contato@motorcob.online</a></span></div>
 		</footer>
 	);
 }
