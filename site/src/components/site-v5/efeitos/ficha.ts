@@ -54,7 +54,7 @@ export function iniciarFicha(el: HTMLElement): Limpeza {
 		tmr = 0;
 		if (!vis || (ctl && ctl.pausado())) return;
 		if (etapa < lis.length) {
-			if (etapa === 0) { el.classList.add('decidindo'); estEl.textContent = 'decidindo'; }
+			if (etapa === 0) { el.classList.add('decidindo'); estEl.textContent = 'entendendo'; }
 			lis[etapa].classList.add('on'); etapa++;
 			tmr = window.setTimeout(passo, etapa === lis.length ? SEGURA : PASSO);
 			if (etapa === lis.length) { el.classList.remove('decidindo'); estEl.textContent = 'decidido'; }
