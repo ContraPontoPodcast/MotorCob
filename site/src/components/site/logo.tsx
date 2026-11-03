@@ -19,12 +19,3 @@ export function RotorMark({ tone = 'onLight', className }: { tone?: 'onLight' | 
 	);
 }
 
-export function Logo({ tone = 'onLight', className, markClass = 'h-7 w-7' }: { tone?: 'onLight' | 'onDark'; className?: string; markClass?: string }) {
-	const text = tone === 'onDark' ? '#FFFFFF' : '#1D1D1F';
-	return (
-		<span className={`inline-flex items-center gap-2 ${className ?? ''}`}>
-			<RotorMark tone={tone} className={markClass} />
-			<span style={{ color: text, fontWeight: 600, letterSpacing: '-0.02em' }} className="text-[19px]">MotorCX</span>
-		</span>
-	);
-}

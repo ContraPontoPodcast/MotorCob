@@ -17,8 +17,16 @@ workflow `testes`); ela não entra no build do site. O site usa uma cópia exata
   (redirect `/* /index.html 200`); o roteamento acontece no navegador.
 - Dados: só Supabase, direto do navegador, com a chave **anon** e a sessão de quem está logado. Quem protege os
   dados é a RLS do banco (`supabase/migrations/`), nunca o site.
-- Formulário "Fale com a gente" da home: grava em `public.contatos_site` (SQL 29 + SQL 52). O visitante só
-  insere; o Console › Contatos do site lê com a sessão do Master da equipe.
+- Site público (v5, `src/components/site-v5/`): home `/`, `/como-decide`, `/solucoes/cobranca`, `/solucoes/voz`,
+  `/solucoes/speech-analytics`, `/seguranca` e `/demonstracao` (`/solucoes` volta para a home). É o protótipo
+  aprovado portado para React: o CSS (`site-v5.css`) é todo escopado em `.mxv5` e não vaza para o app; as fontes
+  Geist e Geist Mono vêm dos pacotes `@fontsource-variable/*` (versão fixa) e só carregam nessas páginas. As
+  animações (ficha, Matriz, ciclo da IA, engrenagens, fios, revelação) ficam em `site-v5/efeitos/`, cada uma com
+  limpeza ao desmontar, pausa e respeito a `prefers-reduced-motion`. Os textos foram aprovados: não reescreva.
+- Formulário de demonstração (`/demonstracao?de=<origem>`): grava em `public.contatos_site` (SQL 29 + SQL 52),
+  com `origem` = o `?de=` do link. As respostas sem coluna própria (interesse, tipo de credor, tamanho, discador
+  e canais) vão em `mensagem`, uma por linha. O visitante só insere; o Console › Contatos do site lê com a
+  sessão do Master da equipe.
 - `public/robots.txt` e `public/sitemap.xml` são arquivos fixos (antes eram rotas do servidor). Página pública
   nova que deve ir para o Google: acrescente no `sitemap.xml`.
 - Canonical e `og:url` usam `https://motorcob.online` (`src/lib/seo.ts`; troque com `VITE_SITE_ORIGIN`).
