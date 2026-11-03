@@ -93,7 +93,8 @@ html:has(.mxv5:where([data-pagina="home"])), html:has(.mxv5:where([data-pagina="
   .mxv5:where([data-pagina="home"]) .ia { position: relative; padding: 200px var(--gutter) 120px; border-top: 1px solid rgba(255,255,255,.06);
     background: radial-gradient(60% 50% at 72% 46%, rgba(201,163,90,.09), rgba(0,0,0,0) 70%), #000; }
   .mxv5:where([data-pagina="home"]) .ia-grade { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); gap: 40px; align-items: center; }
-  .mxv5:where([data-pagina="home"]) .ia-nome { margin: 0 0 0 -.05em; padding: 0 .08em .14em 0; font-size: clamp(60px, 7.4vw, 124px); font-weight: 700; letter-spacing: -.065em; line-height: .96;
+  .mxv5:where([data-pagina="home"]) .ia-grade > div:first-child { container-type: inline-size; }
+  .mxv5:where([data-pagina="home"]) .ia-nome { margin: 0 0 0 -.05em; padding: 0 .08em .14em 0; font-size: clamp(56px, 6.4vw, 104px); font-size: min(124px, 18cqi); font-weight: 700; letter-spacing: -.065em; line-height: .96;
     background: linear-gradient(180deg, #FFFFFF 20%, #E3C98F 78%, #A4874D 110%); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .mxv5:where([data-pagina="home"]) .ia .lead { max-width: 25em; }
   .mxv5:where([data-pagina="home"]) .ia-mono { margin: 34px 0 0; font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--t3e); display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
@@ -134,7 +135,7 @@ html:has(.mxv5:where([data-pagina="home"])), html:has(.mxv5:where([data-pagina="
   }
   @media (max-width: 734px) {
     .mxv5:where([data-pagina="home"]) .ia { padding: 112px var(--gutter) 88px; }
-    .mxv5:where([data-pagina="home"]) .ia-nome { font-size: 14.5vw; }
+    .mxv5:where([data-pagina="home"]) .ia-nome { font-size: 14.5vw; font-size: min(124px, 18cqi); }
     .mxv5:where([data-pagina="home"]) .v { font-size: 15px; padding: 7px 11px; }
     .mxv5:where([data-pagina="home"]) .ciclo-centro { left: 24%; right: 24%; top: 24%; bottom: 24%; }
     .mxv5:where([data-pagina="home"]) .ciclo-centro .cc-d { display: none; }
