@@ -36,6 +36,8 @@ function TitleMotorCX() {
 		function normalize() {
 			const t = document.title;
 			if (!t) return;
+			// O site público (site-v5) já usa os títulos aprovados ("Cobrança · MotorCob · MotorCX"): não mexe.
+			if (document.querySelector('[data-titulo-fixo]')) return;
 			let next: string;
 			if (TRAILING.test(t)) {
 				const stripped = t.replace(TRAILING, '').trim();

@@ -1,7 +1,15 @@
 import { type RouteConfig, index, layout, route } from '@react-router/dev/routes';
 
 export default [
+  // Site público (v5): home, Como decide, soluções, Segurança e Demonstração. Não colidem com as rotas do app.
   index('routes/site.tsx'),
+  route('como-decide', 'routes/como-decide.tsx'),
+  route('solucoes', 'routes/solucoes.tsx'),
+  route('solucoes/cobranca', 'routes/solucoes-cobranca.tsx'),
+  route('solucoes/voz', 'routes/solucoes-voz.tsx'),
+  route('solucoes/speech-analytics', 'routes/solucoes-speech-analytics.tsx'),
+  route('seguranca', 'routes/seguranca.tsx'),
+  route('demonstracao', 'routes/demonstracao.tsx'),
   route('login', 'routes/login.tsx'),
   route('cadastro', 'routes/cadastro.tsx'),
   route('redefinir-senha', 'routes/redefinir-senha.tsx'),
