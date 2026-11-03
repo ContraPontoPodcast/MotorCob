@@ -1,4 +1,6 @@
-# Site motorcob.online no Netlify (site estático, modo SPA do React Router). Guia: site/LEIA.md
+# Site motorcob.online (sistema) e motorcx.com.br (site público) no Netlify: um só site estático, modo SPA do
+# React Router, com três domínios. Os redirects por domínio são gerados no build (scripts/dominios.mjs →
+# build/client/_redirects, lidos antes destes). Guia: site/LEIA.md
 # No painel do Netlify: Base directory = site (o resto vem deste arquivo).
 
 [build]
@@ -15,6 +17,7 @@
   # Nunca coloque aqui a chave service_role.
   VITE_SUPABASE_URL = "https://jxwppkrkuckfwmphqjva.supabase.co"
   VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d3Bwa3JrdWNrZndtcGhxanZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNTc3NTIsImV4cCI6MjEwNTkzMzc1Mn0.nLtZW67zleBlLB-wyUQYQnLtuqQ6-mMr0gzc3g6jFuU"
+  # Canonical das telas do sistema. O site público usa https://motorcx.com.br (src/lib/dominios.ts).
   VITE_SITE_ORIGIN = "https://motorcob.online"
 
 # www → domínio sem www (antes era o loader da raiz, com 308)
@@ -42,7 +45,7 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
-    Link = "<https://motorcob.online/sitemap.xml>; rel=\"sitemap\"; type=\"application/xml\""
+    Link = "<https://motorcx.com.br/sitemap.xml>; rel=\"sitemap\"; type=\"application/xml\""
 
 # Arquivos do build têm hash no nome: cache longo.
 [[headers]]

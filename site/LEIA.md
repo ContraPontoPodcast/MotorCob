@@ -28,10 +28,18 @@ workflow `testes`); ela não entra no build do site. O site usa uma cópia exata
   e canais) vão em `mensagem`, uma por linha. O visitante só insere; o Console › Contatos do site lê com a
   sessão do Master da equipe.
 - `public/robots.txt` e `public/sitemap.xml` são arquivos fixos (antes eram rotas do servidor). Página pública
-  nova que deve ir para o Google: acrescente no `sitemap.xml`.
+  nova que deve ir para o Google: acrescente no `sitemap.xml` (com `https://motorcx.com.br`).
 - Canonical e `og:url` usam `https://motorcob.online` (`src/lib/seo.ts`; troque com `VITE_SITE_ORIGIN`).
-- `www.motorcob.online` → `motorcob.online` (301) no `netlify.toml`; o componente `CanonicalDomain` do
-  `root.tsx` faz o mesmo no navegador, por garantia.
+- Domínios (um só site no Netlify): **motorcx.com.br** é o site público (`/`, `/como-decide`, `/solucoes/*`,
+  `/seguranca`, `/demonstracao`, `/privacidade`); **motorcob.online** é o sistema (login, cadastro, convites, app,
+  console; `/privacidade` também abre aqui); **motorcx.online** e os `www` redirecionam para motorcx.com.br. As
+  regras (301, mesmo caminho e query) são geradas no build por `scripts/dominios.mjs` em `build/client/_redirects`
+  (o Netlify lê antes do `netlify.toml`), a partir das rotas do `src/routes.ts`: rota nova do app já vai para
+  motorcob.online sozinha. Rota nova do site público: inclua em `SEGMENTOS_PUBLICOS` de `src/lib/dominios.ts`.
+  O `CanonicalDomain` do `root.tsx` faz o mesmo no navegador (navegação dentro do SPA). Deploy Preview e
+  localhost não são redirecionados. Canonical, `og:url`, sitemap e robots do site público usam
+  `https://motorcx.com.br`; as telas do sistema continuam com `VITE_SITE_ORIGIN` (motorcob.online).
+- `www.motorcob.online` → `motorcob.online` (301) no `netlify.toml`.
 
 ## Rodar no computador
 
