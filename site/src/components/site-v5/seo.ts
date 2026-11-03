@@ -1,5 +1,9 @@
 /* Título, descrição, Open Graph e schema das páginas do site público v5 (textos do protótipo aprovado). */
-import { seo, SITE_ORIGIN, type SeoArgs } from '@/lib/seo';
+import { seo, type SeoArgs } from '@/lib/seo';
+import { ORIGEM_SITE } from '@/lib/dominios';
+
+/* O site público mora em motorcx.com.br (o sistema fica em motorcob.online): canonical, og:url e schema apontam para lá. */
+const SITE_ORIGIN = ORIGEM_SITE;
 
 const ogImage = import.meta.env.VITE_SUPABASE_URL
 	? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/site/og-motorcob.jpg`
@@ -30,5 +34,5 @@ export function metaPublica(args: SeoArgs, pagina: keyof typeof PAGINAS) {
 	const jsonLd = pagina === 'home'
 		? [ORGANIZACAO, { '@context': 'https://schema.org', '@type': 'WebSite', name: 'MotorCX', url: `${SITE_ORIGIN}/`, inLanguage: 'pt-BR' }]
 		: [pagJson];
-	return seo(args, { ...p, image: ogImage, jsonLd });
+	return seo(args, { ...p, path: `${SITE_ORIGIN}${args.location.pathname}`, image: ogImage, jsonLd });
 }

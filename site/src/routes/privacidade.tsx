@@ -1,10 +1,13 @@
 import type { Route } from './+types/privacidade';
 import { seo } from '@/lib/seo';
+import { ORIGEM_SITE } from '@/lib/dominios';
 import { RotorMark } from '@/components/site/logo';
 
 export function meta({ matches, location }: Route.MetaArgs) {
 	return seo({ matches, location }, {
 		title: 'Privacidade · MotorCX',
+		// Abre nos dois domínios; o endereço oficial é o do site público.
+		path: `${ORIGEM_SITE}/privacidade`,
 		description: 'Como o MotorCX trata os dados de contato e de devedores, o isolamento por empresa e os direitos do titular.',
 	});
 }

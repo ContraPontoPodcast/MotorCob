@@ -16,13 +16,15 @@ import { TemaProvider, AreaTheme } from '@/components/tema-provider';
 import { GlossarioProvider } from '@/components/glossario/glossario-provider';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
+import { destinoCanonico } from '@/lib/dominios';
 
+/** Domínio certo no navegador (o Netlify já faz o mesmo com 301; aqui cobre a navegação dentro do SPA):
+ *  site público em motorcx.com.br, sistema em motorcob.online, sem www. Ver src/lib/dominios.ts. */
 function CanonicalDomain() {
 	const location = useLocation();
 	useEffect(() => {
-		if (window.location.hostname === 'www.motorcob.online') {
-			window.location.replace(`https://motorcob.online${location.pathname}${location.search}${location.hash}`);
-		}
+		const destino = destinoCanonico(window.location.hostname, location.pathname, location.search, location.hash);
+		if (destino) window.location.replace(destino);
 	}, [location]);
 	return null;
 }
