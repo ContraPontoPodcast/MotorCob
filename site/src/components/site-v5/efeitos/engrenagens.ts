@@ -151,8 +151,13 @@ export function iniciarEngrenagens(sec: HTMLElement): Limpeza {
 		bloom2.width = Math.max(1, Math.round(W / 12)); bloom2.height = Math.max(1, Math.round(H / 12));
 		/* Área da máquina: à direita no desktop, embaixo no celular. */
 		let ax: number, ay: number, aw: number, ah: number;
-		if (W > 900) { ax = W * 0.43; ay = 36; aw = W * 0.55; ah = H - 72; }
-		else { const topoTxt = sec.querySelector('.ou-luz-txt')!.getBoundingClientRect().bottom - fixo.getBoundingClientRect().top; ax = 12; ay = Math.max(H * 0.36, topoTxt + 12); aw = W - 24; ah = H - ay - 64; }
+		const txt = sec.querySelector('.ou-luz-txt')!.getBoundingClientRect(), fr = fixo.getBoundingClientRect();
+		if (W > 900) {
+			/* Na mesma caixa central do texto (até 1920 px, como o CSS); a máquina começa depois da coluna de texto,
+			   nunca embaixo dela (em 1024 px a coluna chega a 43% da largura). */
+			const F = Math.min(W, 1920), L0 = (W - F) / 2;
+			ax = Math.max(L0 + F * 0.43, txt.right - fr.left + 24); ay = 36; aw = L0 + F * 0.98 - ax; ah = H - 72;
+		} else { ax = 12; ay = Math.max(H * 0.36, txt.bottom - fr.top + 16); aw = W - 24; ah = H - ay - 64; }
 		k = Math.min(aw / b.w, ah / b.h); ox = ax + aw / 2 - b.cx * k; oy = ay + ah / 2 - b.cy * k;
 	}
 	const X = (v: number) => ox + v * k, Y = (v: number) => oy + v * k;

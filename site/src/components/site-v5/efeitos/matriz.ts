@@ -41,7 +41,7 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 	let semente = 7;
 	const rnd = () => { semente = (semente * 16807) % 2147483647; return (semente - 1) / 2147483646; };
 
-	let W = 0, H = 0, DPR = 1, desk = true, N = 0, st: Quadro | null = null;
+	let W = 0, H = 0, DPR = 1, desk = true, N = 0, st: Quadro | null = null, ez = 1;
 	let pts: Ponto[] | null = null;   // por ponto: k, b, d (atraso), ang, rad, nx, ny
 	let S: [Float32Array, Float32Array][] = [];   // alvos por estado: [x[], y[]]
 	let X = new Float32Array(0), Y = new Float32Array(0);
@@ -75,13 +75,23 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 		const ps = pts!;
 		const gut = Math.max(16, W * 0.05);
 		let sx: number, sy: number, sw: number, sh: number;
-		if (desk) { sx = W * 0.43; sw = W - gut - sx; sy = 52 + 48; sh = H - sy - 64; }
-		else {
+		if (desk) {
+			/* Em tela grande, a cena fica na mesma caixa central do texto (até 1920 px, como o CSS da .mz-txt),
+			   para o desenho não se afastar do texto; e a Matriz não passa de ~1,05 de altura por largura (a sobra
+			   vira margem em cima e embaixo, nunca sob o topo fixo). */
+			const F = Math.min(W, 1920), L0 = (W - F) / 2;
+			sx = L0 + F * 0.43; sw = L0 + F - gut - sx; sy = 52 + 48; sh = H - sy - 64;
+			const shMax = sw * 1.05;
+			if (sh > shMax) { sy += (sh - shMax) / 2; sh = shMax; }
+			/* Pontos e rótulos crescem um pouco com a cena (até 30%), para não ficarem minúsculos em monitor grande. */
+			ez = Math.max(1, Math.min(1.3, sw / 720, sh / 600));
+		} else {
+			ez = 1;
 			let tb = 0; beats.forEach(b => { tb = Math.max(tb, b.getBoundingClientRect().height); });
 			const top = txt.getBoundingClientRect().top - sec.querySelector('.mz-fixo')!.getBoundingClientRect().top;
 			sy = top + tb + 64; sx = gut; sw = W - 2 * gut; sh = H - sy - 48;
 		}
-		const q: Quadro = { sx, sy, sw, sh, cx: sx + sw / 2, cy: sy + sh / 2, dot: desk ? 1.75 : 1.35, m: { x: 0, y: 0, w: 0, h: 0, qw: 0, qh: 0 } };
+		const q: Quadro = { sx, sy, sw, sh, cx: sx + sw / 2, cy: sy + sh / 2, dot: desk ? 1.75 * ez : 1.35, m: { x: 0, y: 0, w: 0, h: 0, qw: 0, qh: 0 } };
 		st = q;
 
 		const porK: number[][] = [[], [], [], []]; ps.forEach((p, i) => { porK[p.k].push(i); });
@@ -107,7 +117,7 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 			ups[k] = up; dns[k] = dn; upMax = Math.max(upMax, Math.ceil(up.length / cols)); dnMax = Math.max(dnMax, Math.ceil(dn.length / cols));
 		});
 		const g = Math.min(colW / cols, (sh * 0.70) / (upMax + dnMax + 2));
-		const bloco = (upMax + dnMax) * g + 8 + (desk ? 96 : 76);
+		const bloco = (upMax + dnMax) * g + 8 + (desk ? 96 * ez : 76);
 		const base = sy + Math.max(0, (sh - bloco) / 2) + upMax * g + 4;
 		porK.forEach((_, k) => {
 			const x0 = colX(k) - cols * g / 2;
@@ -118,7 +128,7 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 		ps.forEach((p, i) => { const solto = P[p.k].def ? 0 : g * 1.25; S[3][0][i] = S[2][0][i] + p.nx * solto; S[3][1][i] = S[2][1][i] + p.ny * solto; });
 
 		/* 4 · a Matriz */
-		const padL = desk ? 30 : 22, padB = desk ? 34 : 30;
+		const padL = desk ? 30 * ez : 22, padB = desk ? 34 * ez : 30;
 		const mx = sx + padL, my = sy, mw = sw - padL, mh = sh - padB;
 		const qw = mw / 2, qh = mh / 2;
 		q.m = { x: mx, y: my, w: mw, h: mh, qw, qh };
@@ -127,10 +137,10 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 			const ordem = ids.slice().sort((a, b) => ps[a].b - ps[b].b || ps[a].rad - ps[b].rad);
 			const c4 = Math.min(qw, qh) * 0.27 / Math.sqrt(nMax);
 			sunflower(qx, qy, c4, ordem, S[4][0], S[4][1]);
-			P[k].mq = { x: qx, y: qy + c4 * Math.sqrt(ids.length) + (desk ? 26 : 18) };
+			P[k].mq = { x: qx, y: qy + c4 * Math.sqrt(ids.length) + (desk ? 26 * ez : 18) };
 		});
 
-		rotulos = { colX, y1: sy + sh * 0.44 + c1 * Math.sqrt(nMax) + (desk ? 30 : 22), y2: base + 4 + dnMax * g + (desk ? 30 : 24), base, g, cols };
+		rotulos = { colX, y1: sy + sh * 0.44 + c1 * Math.sqrt(nMax) + (desk ? 30 * ez : 22), y2: base + 4 + dnMax * g + (desk ? 30 * ez : 24), base, g, cols };
 		desenha();
 	}
 
@@ -202,7 +212,7 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 	}
 
 	function rotulosDesenha(T: number[]) {
-		const L = rotulos!, q = st!, f = desk ? 14 : 11, lh = desk ? 18 : 14;
+		const L = rotulos!, q = st!, f = desk ? 14 * ez : 11, lh = desk ? 18 * ez : 14;
 		/* nomes dos perfis */
 		const aNome = sm(T[0] * 1.6) * (1 - sm(T[3] * 2));
 		if (aNome > 0) P.forEach((p, k) => {
@@ -213,8 +223,8 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 			const aC = sm(T[2] * 1.5) * (1 - sm(T[3] * 2));
 			if (aC > 0) {
 				const c = p.canal ? p.canal : 'canal: aprendendo';
-				texto(c, x, y + lh * 2 + (desk ? 12 : 9), f, 600, p.def ? '#E3C98F' : '#86868B', 'center', aC);
-				texto(p.mat, x, y + lh * 3 + (desk ? 12 : 9), desk ? 12 : 10, 450, p.def ? '#C9A35A' : '#6E6E73', 'center', aC, MONO);
+				texto(c, x, y + lh * 2 + (desk ? 12 * ez : 9), f, 600, p.def ? '#E3C98F' : '#86868B', 'center', aC);
+				texto(p.mat, x, y + lh * 3 + (desk ? 12 * ez : 9), desk ? 12 * ez : 10, 450, p.def ? '#C9A35A' : '#6E6E73', 'center', aC, MONO);
 			}
 		});
 		/* linha de base e legenda de faixas */
@@ -222,14 +232,14 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 		if (aB > 0) {
 			ctx.globalAlpha = aB * 0.5; ctx.strokeStyle = '#48484A'; ctx.lineWidth = 1;
 			ctx.beginPath(); ctx.moveTo(q.sx, L.base + 0.5); ctx.lineTo(q.sx + q.sw, L.base + 0.5); ctx.stroke(); ctx.globalAlpha = 1;
-			const fs = desk ? 12 : 10;
-			const fl = desk ? 14 : 11;
+			const fs = desk ? 12 * ez : 10;
+			const fl = desk ? 14 * ez : 11;
 			if (desk) {
 				texto('A–C', q.sx - 10, L.base - 8, fl, 600, '#F0C66E', 'right', aB, MONO);
 				texto('D–E', q.sx - 10, L.base + 20, fl, 600, '#AEAEB2', 'right', aB, MONO);
 			}
 			/* legenda */
-			const lx = q.sx + q.sw, ly = q.sy - (desk ? 14 : 18), passo = desk ? 26 : 22;
+			const lx = q.sx + q.sw, ly = q.sy - (desk ? 14 * ez : 18), passo = desk ? 26 * ez : 22;
 			for (let b = 4; b >= 0; b--) {
 				const cx = lx - (4 - b) * passo - 6;
 				ctx.globalAlpha = aB; ctx.fillStyle = COR[b]; ctx.beginPath(); ctx.arc(cx - 12, ly - 4, 3.2, 0, 6.2832); ctx.fill();
@@ -245,25 +255,25 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 			ctx.moveTo(m.x + m.qw + 0.5, m.y); ctx.lineTo(m.x + m.qw + 0.5, m.y + m.h);
 			ctx.moveTo(m.x, m.y + m.qh + 0.5); ctx.lineTo(m.x + m.w, m.y + m.qh + 0.5);
 			ctx.stroke(); ctx.globalAlpha = 1;
-			const tN = desk ? 26 : 15, tS = desk ? 13 : 10, pad = desk ? 22 : 10;
+			const tN = desk ? 26 * ez : 15, tS = desk ? 13 * ez : 10, pad = desk ? 22 * ez : 10;
 			Q.forEach((qd, i) => {
 				const x = m.x + (i % 2) * m.qw + pad, y = m.y + Math.floor(i / 2) * m.qh + pad + tN;
 				texto(qd.nome, x, y, tN, 650, i === 1 ? '#E3C98F' : '#F5F5F7', 'left', aM);
-				texto(qd.sub, x, y + (desk ? 22 : 15), tS, 450, '#86868B', 'left', aM);
+				texto(qd.sub, x, y + (desk ? 22 * ez : 15), tS, 450, '#86868B', 'left', aM);
 			});
 			/* em cada caixa: o perfil e o canal que ele aprendeu */
-			const fp = desk ? 13 : 10, fl = desk ? 17 : 13;
+			const fp = desk ? 13 * ez : 10, fl = desk ? 17 * ez : 13;
 			P.forEach(p => {
 				const mq = p.mq!;
 				texto(p.n[0] + ', ' + p.n[1], mq.x, mq.y, fp, 500, '#D2D2D7', 'center', aM);
-				texto(p.canal ? p.canal + ' · ' + p.mat : 'canal: ' + p.mat, mq.x, mq.y + fl, desk ? 12 : 9.5, 500, p.def ? '#C9A35A' : '#6E6E73', 'center', aM, MONO);
+				texto(p.canal ? p.canal + ' · ' + p.mat : 'canal: ' + p.mat, mq.x, mq.y + fl, desk ? 12 * ez : 9.5, 500, p.def ? '#C9A35A' : '#6E6E73', 'center', aM, MONO);
 			});
 			/* eixos */
-			const fe = desk ? 12 : 10;
-			texto('aprendendo', m.x, m.y + m.h + (desk ? 24 : 20), fe, 500, '#86868B', 'left', aM, MONO);
-			texto('abordagem', m.x + m.w / 2, m.y + m.h + (desk ? 24 : 20), fe, 500, '#6E6E73', 'center', aM, MONO);
-			texto('definida', m.x + m.w, m.y + m.h + (desk ? 24 : 20), fe, 500, '#C9A35A', 'right', aM, MONO);
-			ctx.save(); ctx.translate(m.x - (desk ? 14 : 10), m.y + m.h / 2); ctx.rotate(-Math.PI / 2);
+			const fe = desk ? 12 * ez : 10;
+			texto('aprendendo', m.x, m.y + m.h + (desk ? 24 * ez : 20), fe, 500, '#86868B', 'left', aM, MONO);
+			texto('abordagem', m.x + m.w / 2, m.y + m.h + (desk ? 24 * ez : 20), fe, 500, '#6E6E73', 'center', aM, MONO);
+			texto('definida', m.x + m.w, m.y + m.h + (desk ? 24 * ez : 20), fe, 500, '#C9A35A', 'right', aM, MONO);
+			ctx.save(); ctx.translate(m.x - (desk ? 14 * ez : 10), m.y + m.h / 2); ctx.rotate(-Math.PI / 2);
 			texto('baixa', -m.h / 2, 0, fe, 500, '#86868B', 'left', aM, MONO);
 			texto('chance de pagar', 0, 0, fe, 500, '#6E6E73', 'center', aM, MONO);
 			texto('alta', m.h / 2, 0, fe, 500, '#C9A35A', 'right', aM, MONO);

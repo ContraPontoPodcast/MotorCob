@@ -22,9 +22,10 @@ export function iniciarFios(sec: HTMLElement): Limpeza {
 			const ic = caixa(it.querySelector<HTMLElement>('.fn-ico')!);
 			let d: string;
 			if (cel) {
-				/* celular: espinha à esquerda, descendo do núcleo, com um ramo para cada ícone */
-				const ey = ic.top + ic.height / 2, ex = ic.left - 6;
-				d = 'M' + ex + ' ' + ey + ' L' + (cx + 12) + ' ' + ey + ' Q' + cx + ' ' + ey + ' ' + cx + ' ' + (ey - 12) + ' L' + cx + ' ' + (cy + 20);
+				/* celular: espinha à esquerda, no recuo da lista (à esquerda dos ícones), que sobe até a altura do
+				   núcleo e entra nele pela lateral; um ramo curto para cada ícone. Assim o fio nunca cruza o texto. */
+				const ey = ic.top + ic.height / 2, ex = ic.left - 6, sx = Math.max(8, ic.left / 2), nx = cx - nr.width * 0.3;
+				d = 'M' + ex + ' ' + ey + ' L' + (sx + 12) + ' ' + ey + ' Q' + sx + ' ' + ey + ' ' + sx + ' ' + (ey - 12) + ' L' + sx + ' ' + (cy + 12) + ' Q' + sx + ' ' + cy + ' ' + (sx + 12) + ' ' + cy + ' L' + nx + ' ' + cy;
 			} else {
 				const esq = ic.left + ic.width / 2 < cx;
 				const x0 = esq ? ic.right + 10 : ic.left - 10, y0 = ic.top + ic.height / 2;
