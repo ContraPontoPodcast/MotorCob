@@ -45,7 +45,7 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 	let pts: Ponto[] | null = null;   // por ponto: k, b, d (atraso), ang, rad, nx, ny
 	let S: [Float32Array, Float32Array][] = [];   // alvos por estado: [x[], y[]]
 	let X = new Float32Array(0), Y = new Float32Array(0);
-	let rotulos: { tops: number[]; pcts: number[]; colX: (k: number) => number; y1: number; y2: number; base: number; g: number; cols: number } | null = null;
+	let rotulos: { colX: (k: number) => number; y1: number; y2: number; base: number; g: number; cols: number } | null = null;
 
 	function gerar(n: number) {
 		semente = 7; N = n; pts = [];
@@ -130,9 +130,7 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 			P[k].mq = { x: qx, y: qy + c4 * Math.sqrt(ids.length) + (desk ? 26 : 18) };
 		});
 
-		const tops = porK.map((_, k) => base - 4 - Math.ceil(ups[k].length / cols) * g);
-		const pcts = porK.map((ids, k) => Math.round(100 * ups[k].length / Math.max(1, ids.length)));
-		rotulos = { tops, pcts, colX, y1: sy + sh * 0.44 + c1 * Math.sqrt(nMax) + (desk ? 30 : 22), y2: base + 4 + dnMax * g + (desk ? 30 : 24), base, g, cols };
+		rotulos = { colX, y1: sy + sh * 0.44 + c1 * Math.sqrt(nMax) + (desk ? 30 : 22), y2: base + 4 + dnMax * g + (desk ? 30 : 24), base, g, cols };
 		desenha();
 	}
 
@@ -230,12 +228,6 @@ export function iniciarMatriz(sec: HTMLElement): Limpeza {
 				texto('A–C', q.sx - 10, L.base - 8, fl, 600, '#F0C66E', 'right', aB, MONO);
 				texto('D–E', q.sx - 10, L.base + 20, fl, 600, '#AEAEB2', 'right', aB, MONO);
 			}
-			/* percentual com alta chance de pagar, por perfil, acima de cada coluna */
-			const aP = sm((T[1] - 0.35) * 2) * (1 - sm(T[3] * 2));
-			if (aP > 0) P.forEach((_, k) => {
-				texto(L.pcts[k] + '%', L.colX(k), L.tops[k] - (desk ? 30 : 22), desk ? 30 : 18, 700, '#F0C66E', 'center', aP);
-				texto('alta chance', L.colX(k), L.tops[k] - (desk ? 12 : 8), desk ? 12 : 9.5, 500, '#C9A35A', 'center', aP, MONO);
-			});
 			/* legenda */
 			const lx = q.sx + q.sw, ly = q.sy - (desk ? 14 : 18), passo = desk ? 26 : 22;
 			for (let b = 4; b >= 0; b--) {
