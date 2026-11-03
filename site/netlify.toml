@@ -1,5 +1,5 @@
 # Site motorcob.online (sistema) e motorcx.com.br (site público) no Netlify: um só site estático, modo SPA do
-# React Router, com três domínios. Os redirects por domínio são gerados no build (scripts/dominios.mjs →
+# React Router, com os dois domínios (e os www). Os redirects por domínio são gerados no build (scripts/dominios.mjs →
 # build/client/_redirects, lidos antes destes). Guia: site/LEIA.md
 # No painel do Netlify: Base directory = site (o resto vem deste arquivo).
 

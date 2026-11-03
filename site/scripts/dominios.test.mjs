@@ -49,14 +49,15 @@ test('motorcx.com.br: rotas do sistema vão para motorcob.online com caminho e q
 /** Segue os 301 até parar (no máximo 3). */
 function final(url) { let u = url, n = 0; for (let d; (d = simula(u)) && n < 3; n++) u = d; return [u, n]; }
 
-test('motorcx.online e os www vão para motorcx.com.br (e as rotas do sistema seguem para motorcob.online)', () => {
-	assert.equal(simula('https://motorcx.online/'), 'https://motorcx.com.br/');
-	assert.equal(simula('https://motorcx.online/solucoes/voz?x=1'), 'https://motorcx.com.br/solucoes/voz?x=1');
-	assert.equal(simula('https://www.motorcx.online/assets/a.js'), 'https://motorcx.com.br/assets/a.js');
+test('www.motorcx.com.br vai para motorcx.com.br (e as rotas do sistema seguem para motorcob.online)', () => {
+	assert.equal(simula('https://www.motorcx.com.br/'), 'https://motorcx.com.br/');
 	assert.equal(simula('https://www.motorcx.com.br/seguranca'), 'https://motorcx.com.br/seguranca');
-	assert.deepEqual(final('https://motorcx.online/login'), ['https://motorcob.online/login', 2]);
+	assert.equal(simula('https://www.motorcx.com.br/solucoes/voz?x=1'), 'https://motorcx.com.br/solucoes/voz?x=1');
+	assert.equal(simula('https://www.motorcx.com.br/assets/a.js'), 'https://motorcx.com.br/assets/a.js');
 	assert.deepEqual(final('https://www.motorcx.com.br/nova-senha?t=1'), ['https://motorcob.online/nova-senha?t=1', 2]);
 	assert.deepEqual(final('https://www.motorcob.online/'), ['https://motorcx.com.br/', 1]);
+	// motorcx.online não está no Netlify (a Hostinger redireciona para o www): nenhuma regra aqui.
+	assert.equal(simula('https://motorcx.online/'), null);
 });
 
 test('Deploy Preview e outros endereços não têm regra', () => {
@@ -73,7 +74,7 @@ test('destinoCanonico (navegador) segue as mesmas regras', () => {
 	assert.equal(destinoCanonico('motorcx.com.br', '/demonstracao', '?de=home'), null);
 	assert.equal(destinoCanonico('motorcx.com.br', '/privacidade'), null);
 	assert.equal(destinoCanonico('motorcx.com.br', '/definir-senha', '?token=x'), 'https://motorcob.online/definir-senha?token=x');
-	assert.equal(destinoCanonico('motorcx.online', '/'), 'https://motorcx.com.br/');
+	assert.equal(destinoCanonico('www.motorcx.com.br', '/login'), 'https://motorcob.online/login');
 	assert.equal(destinoCanonico('www.motorcx.com.br', '/seguranca'), 'https://motorcx.com.br/seguranca');
 	assert.equal(destinoCanonico('deploy-preview-168--motorcob.netlify.app', '/'), null);
 	assert.equal(destinoCanonico('localhost', '/login'), null);

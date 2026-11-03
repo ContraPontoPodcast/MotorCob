@@ -3,7 +3,8 @@
 // A divisão (src/lib/dominios.ts):
 //   motorcx.com.br   → site público; as rotas do sistema vão para motorcob.online (301, mesmo caminho e query);
 //   motorcob.online  → sistema; as rotas do site público vão para motorcx.com.br (301, mesmo caminho e query);
-//   motorcx.online, www.motorcx.online e www.motorcx.com.br → motorcx.com.br (rota do sistema segue dali, 2º 301).
+//   www.motorcx.com.br → motorcx.com.br (o canônico é sem www; rota do sistema segue dali, 2º 301).
+// motorcx.online não está no Netlify: a Hostinger já o manda (301) para https://www.motorcx.com.br/.
 // As rotas do sistema saem do src/routes.ts (o primeiro segmento de cada route('...')): rota nova no app já entra
 // sozinha. O Netlify repassa a query string em todo 301; o "!" (force) vale mesmo onde há arquivo (a home).
 // Uso: node --experimental-strip-types scripts/dominios.mjs   (depois do react-router build)
@@ -35,7 +36,7 @@ export function regras(routesTs) {
 	const linhas = [];
 	const par = (de, para) => linhas.push([de, para, '301!']);
 	const [motorcx, ...outros] = HOSTS.site;
-	// www.motorcx.com.br, motorcx.online e www.motorcx.online: tudo para motorcx.com.br (mesmo caminho e query).
+	// www.motorcx.com.br: tudo para motorcx.com.br (mesmo caminho e query).
 	for (const host of outros) { linhas.push(`# ${host}`); par(`https://${host}/*`, `${ORIGEM_SITE}/:splat`); }
 	// motorcx.com.br: as rotas do sistema vão para motorcob.online; o resto ele mesmo serve.
 	linhas.push(`# ${motorcx}`);
