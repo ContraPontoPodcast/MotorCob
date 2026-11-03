@@ -8,7 +8,7 @@
 // As rotas do sistema saem do src/routes.ts (o primeiro segmento de cada route('...')): rota nova no app já entra
 // sozinha. O Netlify repassa a query string em todo 301; o "!" (force) vale mesmo onde há arquivo (a home).
 // Uso: node --experimental-strip-types scripts/dominios.mjs   (depois do react-router build)
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HOSTS, ORIGEM_SISTEMA, ORIGEM_SITE, SEGMENTOS_DOS_DOIS, SEGMENTOS_PUBLICOS } from '../src/lib/dominios.ts';
@@ -60,10 +60,14 @@ export function texto(routesTs) {
 
 export function gerar(dirBuild = path.join(raiz, 'build', 'client')) {
 	const routesTs = readFileSync(path.join(raiz, 'src', 'routes.ts'), 'utf8');
-	const arq = path.join(dirBuild, '_redirects');
-	if (existsSync(arq)) throw new Error('build/client/_redirects já existe (veio de public/?): junte as regras aqui');
 	const t = texto(routesTs);
-	writeFileSync(arq, t);
+	// "wx": cria o arquivo e falha se ele já existir (um _redirects vindo de public/ seria sobrescrito sem aviso).
+	try {
+		writeFileSync(path.join(dirBuild, '_redirects'), t, { flag: 'wx' });
+	} catch (e) {
+		if (e.code === 'EEXIST') throw new Error('build/client/_redirects já existe (veio de public/?): junte as regras aqui');
+		throw e;
+	}
 	return t.split('\n').filter(l => l && !l.startsWith('#')).length;
 }
 
