@@ -35,7 +35,7 @@ export function PaginaHome() {
 						</div>
 					</div>
 					<figure ref={ficha} className="ficha" data-ficha aria-label="Exemplos de decisão, um cliente fictício por vez. A ficha troca sozinha a cada poucos segundos.">
-						<div className="ficha-cab"><span data-f="id">CLIENTE 100004817</span><span className="ficha-ia"><i></i>IA · <span data-f="estado">decidido</span></span></div>
+						<div className="ficha-cab"><span data-f="id">CLIENTE 100004817</span><span className="ficha-ia"><i></i>Intelligence · <span data-f="estado">decidido</span></span></div>
 						<ol>
 							<li className="on"><span>Perfil</span><b data-f="perfil">Atraso curto, com WhatsApp</b></li>
 							<li className="on"><span>Chance de pagar</span><b data-f="faixa">Faixa A <small>muito alta</small></b></li>
