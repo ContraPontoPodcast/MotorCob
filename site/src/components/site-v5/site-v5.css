@@ -92,7 +92,7 @@ html:has(.mxv5:where([data-pagina="home"])), html:has(.mxv5:where([data-pagina="
   .mxv5:where([data-pagina="home"]) .ia { position: relative; padding: 200px var(--gutter) 120px; border-top: 1px solid rgba(255,255,255,.06);
     background: radial-gradient(60% 50% at 72% 46%, rgba(201,163,90,.09), rgba(0,0,0,0) 70%), #000; }
   .mxv5:where([data-pagina="home"]) .ia-grade { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); gap: 40px; align-items: center; }
-  .mxv5:where([data-pagina="home"]) .ia-nome { margin: 0 0 0 -.05em; font-size: clamp(60px, 7.4vw, 124px); font-weight: 700; letter-spacing: -.065em; line-height: .86;
+  .mxv5:where([data-pagina="home"]) .ia-nome { margin: 0 0 0 -.05em; padding: 0 .08em .14em 0; font-size: clamp(60px, 7.4vw, 124px); font-weight: 700; letter-spacing: -.065em; line-height: .96;
     background: linear-gradient(180deg, #FFFFFF 20%, #E3C98F 78%, #A4874D 110%); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .mxv5:where([data-pagina="home"]) .ia .lead { max-width: 25em; }
   .mxv5:where([data-pagina="home"]) .ia-mono { margin: 34px 0 0; font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--t3e); display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
@@ -225,27 +225,27 @@ html:has(.mxv5:where([data-pagina="home"])), html:has(.mxv5:where([data-pagina="
   .mxv5:where([data-pagina="home"]) .fn:nth-child(-n+3) .link { justify-self: end; }
   .mxv5:where([data-pagina="home"]) .breve { font-family: var(--mono); font-size: 11px; color: var(--ocre); background: rgba(201,163,90,.14); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
   .mxv5:where([data-pagina="home"]) .func-nucleo { grid-column: 2; grid-row: 1 / span 3; align-self: center; justify-self: center; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
-  .mxv5:where([data-pagina="home"]) .nucleo-pt { position: relative; width: 132px; height: 132px; border-radius: 50%;
-    background: radial-gradient(circle, #FFFDF7 0 5%, #F6E3B4 9%, rgba(227,201,143,.8) 15%, rgba(201,163,90,.32) 30%, rgba(201,163,90,.1) 50%, rgba(201,163,90,0) 70%); }
-  .mxv5:where([data-pagina="home"]) .nucleo-pt::before { content: ""; position: absolute; inset: 26px; border-radius: 50%; border: 1.5px dotted rgba(138,106,46,.6); animation: mx-gira 30s linear infinite; }
+  .mxv5:where([data-pagina="home"]) .nucleo-pt { position: relative; width: 220px; height: 220px; border-radius: 50%; display: grid; place-items: center;
+    background: radial-gradient(circle, #FFFFFF 0 50%, rgba(246,227,180,.55) 56%, rgba(201,163,90,.22) 64%, rgba(201,163,90,.06) 72%, rgba(201,163,90,0) 80%); }
+  .mxv5:where([data-pagina="home"]) .nucleo-txt { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .mxv5:where([data-pagina="home"]) .nucleo-pt::before { content: ""; position: absolute; inset: 22px; border-radius: 50%; border: 1.5px dotted rgba(138,106,46,.6); animation: mx-gira 30s linear infinite; }
   @keyframes mx-gira { to { transform: rotate(360deg); } }
   .mxv5:where([data-pagina="home"]) .func.parado .nucleo-pt::before, .mxv5:where([data-pagina="home"]) .func.fora .nucleo-pt::before { animation-play-state: paused; }
   @media (prefers-reduced-motion: reduce) { .mxv5:where([data-pagina="home"]) .nucleo-pt::before { animation: none; } }
-  .mxv5:where([data-pagina="home"]) .nucleo-pt::after { content: ""; position: absolute; inset: 26px; border-radius: 50%; border: 1px solid rgba(201,163,90,.55); animation: mx-onda 3.2s ease-out infinite; }
+  .mxv5:where([data-pagina="home"]) .nucleo-pt::after { content: ""; position: absolute; inset: 22px; border-radius: 50%; border: 1px solid rgba(201,163,90,.55); animation: mx-onda 3.2s ease-out infinite; }
   @keyframes mx-onda { from { transform: scale(.9); opacity: .9; } to { transform: scale(1.6); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .mxv5:where([data-pagina="home"]) .nucleo-pt::after { animation: none; opacity: 0; } }
-  .mxv5:where([data-pagina="home"]) .func-nucleo > span { display: flex; flex-direction: column; align-items: center; margin-top: 6px; padding: 6px 14px 8px; border-radius: 14px; background: #fff; }
-  .mxv5:where([data-pagina="home"]) .func-nucleo b { margin-top: 10px; font-size: 32px; font-weight: 700; letter-spacing: -.04em; white-space: nowrap; background: linear-gradient(180deg, #2a2a2a 0%, #8A6A2E 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .mxv5:where([data-pagina="home"]) .func-nucleo small { margin-top: 4px; font-size: 13px; color: var(--t2); }
+    .mxv5:where([data-pagina="home"]) .func-nucleo b { margin-top: 0; font-size: 30px; line-height: 1.05; padding-bottom: .06em; font-weight: 700; letter-spacing: -.04em; white-space: nowrap; background: linear-gradient(180deg, #2a2a2a 0%, #8A6A2E 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .mxv5:where([data-pagina="home"]) .func-nucleo small { margin-top: 2px; font-size: 18px; font-weight: 600; letter-spacing: -.01em; color: #8A6A2E; }
   .mxv5:where([data-pagina="home"]) .func .pausa { right: 0; bottom: -64px; background: rgba(0,0,0,.06); color: var(--grafite); }
   .mxv5:where([data-pagina="home"]) .func .pausa:hover { background: rgba(0,0,0,.12); }
   @media (max-width: 900px) {
     .mxv5:where([data-pagina="home"]) .func-palco { grid-template-columns: 1fr; grid-template-rows: none; row-gap: 40px; margin-top: 64px; max-width: 520px; padding-left: 52px; }
-    .mxv5:where([data-pagina="home"]) .func-nucleo { grid-column: 1; grid-row: 1; flex-direction: row; justify-self: start; gap: 8px; margin-left: -52px; }
-    .mxv5:where([data-pagina="home"]) .nucleo-pt { width: 76px; height: 76px; margin: -10px 0 -10px -10px; }
+    .mxv5:where([data-pagina="home"]) .func-nucleo { grid-column: 1; grid-row: 1; justify-self: center; margin-left: -52px; }
+    .mxv5:where([data-pagina="home"]) .nucleo-pt { width: 168px; height: 168px; }
     .mxv5:where([data-pagina="home"]) .nucleo-pt::before, .mxv5:where([data-pagina="home"]) .nucleo-pt::after { inset: 16px; }
-    .mxv5:where([data-pagina="home"]) .func-nucleo b { margin-top: 0; font-size: 26px; }
-    .mxv5:where([data-pagina="home"]) .func-nucleo > span { align-items: flex-start; text-align: left; margin-top: 0; padding: 0; background: none; }
+    .mxv5:where([data-pagina="home"]) .func-nucleo b { font-size: 23px; }
+    .mxv5:where([data-pagina="home"]) .func-nucleo small { font-size: 14px; }
     .mxv5:where([data-pagina="home"]) .fn, .mxv5:where([data-pagina="home"]) .fn:nth-child(-n+3), .mxv5:where([data-pagina="home"]) .fn:nth-child(n+4) { grid-column: 1; grid-row: auto; text-align: left; grid-template-columns: 48px minmax(0, 1fr); }
     .mxv5:where([data-pagina="home"]) .fn:nth-child(-n+3) .fn-ico { grid-column: 1; }
     .mxv5:where([data-pagina="home"]) .fn:nth-child(-n+3) > :not(.fn-ico) { grid-column: 2; }

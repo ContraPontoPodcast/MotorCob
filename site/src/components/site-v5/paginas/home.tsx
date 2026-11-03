@@ -187,7 +187,7 @@ export function PaginaHome() {
 							<a className="link" href="/solucoes/speech-analytics">Conhecer o Speech Analytics</a>
 						</li>
 					</ul>
-					<div className="func-nucleo" aria-hidden="true"><span className="nucleo-pt"></span><span><b>MotorCX</b><small style={{ fontSize: '20px', fontWeight: '600', color: '#8A6A2E', letterSpacing: '-.01em' } as CSSProperties}>Intelligence</small></span></div>
+					<div className="func-nucleo" aria-hidden="true"><span className="nucleo-pt"><span className="nucleo-txt"><b>MotorCX</b><small>Intelligence</small></span></span></div>
 					<button className="pausa" type="button"></button>
 				</div>
 			</section>
