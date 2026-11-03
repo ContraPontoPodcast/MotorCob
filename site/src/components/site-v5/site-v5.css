@@ -185,10 +185,14 @@ html:has(.mxv5:where([data-pagina="home"])), html:has(.mxv5:where([data-pagina="
   .mxv5:where([data-pagina="home"]) .ou-leg a:hover, .mxv5:where([data-pagina="home"]) .ou-leg a:focus-visible { color: #fff; }
   .mxv5:where([data-pagina="home"]) .ou-leg a:hover .n, .mxv5:where([data-pagina="home"]) .ou-leg a:focus-visible .n, .mxv5:where([data-pagina="home"]) .ou-leg a.acesa .n { color: var(--ou-ouro); }
   .mxv5:where([data-pagina="home"]) .ou-leg a.acesa { color: #E8E8ED; }
-  @media (min-width: 735px) and (max-height: 820px) {
-    .mxv5:where([data-pagina="home"]) .ou-h2 { font-size: clamp(40px, min(5.2vw, 9svh), 84px); }
-    .mxv5:where([data-pagina="home"]) .ou-cont b { font-size: clamp(64px, min(9vw, 14svh), 150px); }
-    .mxv5:where([data-pagina="home"]) .ou-luz-nome { margin-top: 12px; }
+  /* Notebook baixo: a coluna de texto (título, contador, nome, descrição e conexões, que trocam a cada engrenagem)
+     precisa caber na altura da cena (86svh, mínimo 660px) sem ser cortada embaixo. */
+  @media (min-width: 735px) and (max-height: 900px) {
+    .mxv5:where([data-pagina="home"]) .ou-luz-txt { top: 6%; bottom: 6%; }
+    .mxv5:where([data-pagina="home"]) .ou-h2 { font-size: clamp(36px, min(5.2vw, 8svh), 84px); }
+    .mxv5:where([data-pagina="home"]) .ou-cont b { font-size: clamp(56px, min(9vw, 12svh), 150px); }
+    .mxv5:where([data-pagina="home"]) .ou-luz-nome { margin-top: 10px; font-size: clamp(28px, min(3.2vw, 5.4svh), 52px); }
+    .mxv5:where([data-pagina="home"]) .ou-luz-flx { margin-top: 16px; }
   }
   @media (max-width: 1068px) { .mxv5:where([data-pagina="home"]) .ou-leg ol { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   @media (max-width: 734px) {

@@ -131,9 +131,8 @@ export function iniciarEngrenagens(sec: HTMLElement): Limpeza {
 	let fase: 'acende' | 'segura' | 'apaga' = 'acende', relogio = 0, nAuto = 1;
 	const DESTAQUE: Record<string, boolean> = {};
 
-	function monta() {
-		const cel = window.matchMedia('(max-width: 734px)').matches;
-		const geo = montarGeo(cel); G = geo.rodas; b = geo.b; perf = {};
+	function monta(vertical: boolean) {
+		const geo = montarGeo(vertical); G = geo.rodas; b = geo.b; perf = {};
 		DEF.forEach(d => {
 			const o = G[d.id], p = TAU / o.n, ra = o.r + o.m * 0.9, rd = o.r - o.m * 1.0, pts: [number, number][] = [];
 			for (let i = 0; i < o.n; i++) {
@@ -144,7 +143,6 @@ export function iniciarEngrenagens(sec: HTMLElement): Limpeza {
 		});
 	}
 	function medir() {
-		monta();
 		const r = fixo.getBoundingClientRect(); W = Math.round(r.width); H = Math.round(r.height);
 		cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
 		bloom1.width = Math.max(1, Math.round(W / 4)); bloom1.height = Math.max(1, Math.round(H / 4));
@@ -152,12 +150,18 @@ export function iniciarEngrenagens(sec: HTMLElement): Limpeza {
 		/* Área da máquina: à direita no desktop, embaixo no celular. */
 		let ax: number, ay: number, aw: number, ah: number;
 		const txt = sec.querySelector('.ou-luz-txt')!.getBoundingClientRect(), fr = fixo.getBoundingClientRect();
-		if (W > 900) {
-			/* Na mesma caixa central do texto (até 1920 px, como o CSS); a máquina começa depois da coluna de texto,
-			   nunca embaixo dela (em 1024 px a coluna chega a 43% da largura). */
+		let vertical = true;
+		if (W > 734) {
+			/* Texto em coluna à esquerda (o mesmo corte do CSS, 734 px). Na mesma caixa central do texto (até 1920 px);
+			   a máquina começa depois da coluna, nunca embaixo dela (em 1024 px a coluna chega a 43% da largura).
+			   Antes o corte aqui era 900 px: entre 735 e 900 px (tablet em pé) a área ficava embaixo de uma coluna
+			   que ocupa a altura toda, e a máquina virava um ponto. Coluna mais alta que larga: máquina em pé. */
 			const F = Math.min(W, 1920), L0 = (W - F) / 2;
 			ax = Math.max(L0 + F * 0.43, txt.right - fr.left + 24); ay = 36; aw = L0 + F * 0.98 - ax; ah = H - 72;
+			vertical = aw < ah * 0.8;
 		} else { ax = 12; ay = Math.max(H * 0.36, txt.bottom - fr.top + 16); aw = W - 24; ah = H - ay - 64; }
+		aw = Math.max(1, aw); ah = Math.max(1, ah);
+		monta(vertical);
 		k = Math.min(aw / b.w, ah / b.h); ox = ax + aw / 2 - b.cx * k; oy = ay + ah / 2 - b.cy * k;
 	}
 	const X = (v: number) => ox + v * k, Y = (v: number) => oy + v * k;
