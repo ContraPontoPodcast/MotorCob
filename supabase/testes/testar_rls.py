@@ -2775,5 +2775,12 @@ checar("SQL 67: função do trigger fechada para o site", True,
        "select has_function_privilege('authenticated', 'public.voz_troncos_conferir_segredo()', 'execute')", None, None, "f")
 _sv(f"delete from public.voz_troncos where empresa_id = {EA} and referencia = 'sp-67'")
 
+# SQL 68 · a equipe MotorCX monta o fluxo do cliente (cria, edita, testa e envia); aprovar e colocar em uso, só o cliente.
+# Os testes do SQL 58 acima rodam com o SQL 58 reaplicado (a equipe ainda sem editar); o arquivo aplica o 68 duas vezes.
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_fluxo_equipe.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 68: a equipe monta o fluxo do cliente (testar_voz_fluxo_equipe.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

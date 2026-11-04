@@ -1,6 +1,6 @@
 """SQL 66 · o que a tela "Fluxo do agente" do site precisa: enviar o rascunho para aprovação e os anexos do pedido.
 
-Cobre: quem edita (editar_canais) envia; Operação e a equipe MotorCX não; rascunho com bloqueio (validador ou
+Cobre: quem edita (editar_canais) envia; Operação não (a equipe MotorCX, desde o SQL 68: testar_voz_fluxo_equipe.py); rascunho com bloqueio (validador ou
 pendência de contexto) é recusado com os códigos; enviado vira sino de quem aprova (aprovar_roteiro_voz), uma vez por
 conteúdo; mudar a definição limpa o envio; versão aprovada não é "enviada" de novo; a aprovação continua igual; outra
 empresa não envia; anon não chama. Storage: entradas/<slug>/fluxo/... só para quem edita a própria empresa, sem 10+
@@ -97,7 +97,9 @@ V1 = sv(f"select public.criar_fluxo_de_modelo({EA}, 'localizador', {CA}, 'Locali
 checar("rascunho com pendência não vai para aprovação (lista os códigos)", False,
        f"select public.enviar_fluxo_voz_aprovacao({V1})", "authenticated", U["pla"], erro="identidade_sem_conferencia:N2")
 checar("Operação não envia", False, f"select public.enviar_fluxo_voz_aprovacao({V1})", "authenticated", U["ope"])
-checar("equipe MotorCX não envia o fluxo do cliente", False, f"select public.enviar_fluxo_voz_aprovacao({V1})", "authenticated", U["tec"])
+# SQL 68: a equipe MotorCX (Técnico, responder_chamados) também envia; com pendência, é recusada como o cliente
+checar("equipe MotorCX com pendência também não envia (SQL 68)", False, f"select public.enviar_fluxo_voz_aprovacao({V1})", "authenticated", U["tec"],
+       erro="identidade_sem_conferencia:N2")
 checar("outra empresa não envia", False, f"select public.enviar_fluxo_voz_aprovacao({V1})", "authenticated", U["plb"])
 checar("anon não chama", False, f"select public.enviar_fluxo_voz_aprovacao({V1})", "anon")
 

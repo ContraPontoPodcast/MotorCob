@@ -21,6 +21,7 @@ export default function DevFluxo() {
 		credores: [{ id: 11, nome: 'Cartão Aurora' }, { id: 12, nome: 'Empréstimo pessoal' }, { id: 13, nome: 'Consignado Norte' }],
 		permissoes: ['editar_canais', 'editar_credores'],
 		equipe: false,
+		equipeMonta: false,
 		api: criarApiFixturas(),
 		demo: true,
 		rota: (t: Tela, i?: number | string | null, busca?: Record<string, string | number | null | undefined>) => {
