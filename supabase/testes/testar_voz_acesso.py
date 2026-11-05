@@ -436,14 +436,14 @@ else:
     checar("SQL 60: sem pgvector, a resposta da busca semântica diz que está desligada", False,
            f"select voz_vm.responder_busca_voz('{{\"busca\": {BUA}, \"emb\": \"[0]\"}}')", erro="pgvector")
 checar("SQL 60: registra o uso de IA (o banco calcula o custo)", True,
-       f"select voz_vm.registrar_uso_ia_voz('{{\"empresa\": {EA}, \"dia\": \"2026-11-05\", \"componente\": \"avaliador\", "
+       f"select voz_vm.registrar_uso_ia_voz('{{\"empresa\": {EA}, \"dia\": \"2026-01-15\", \"componente\": \"avaliador\", "
        f"\"chamadas\": 1, \"minutos\": 2.5, \"minutos_cobraveis\": 2.5, \"tokens_entrada\": 1000, \"tokens_saida\": 100}}') "
        f"is not null", "t")
 checar("SQL 60: ... a fatura recebe o minuto analisado", True,
        f"select quantidade from public.consumo_mensageria where empresa_id = {EA} and item = 'ia_speech_analytics'", 3,
        usuario="postgres")
 checar("SQL 60: uso de IA de empresa sem voz é recusado", False,
-       f"select voz_vm.registrar_uso_ia_voz('{{\"empresa\": {EB}, \"dia\": \"2026-11-05\", \"componente\": \"avaliador\", "
+       f"select voz_vm.registrar_uso_ia_voz('{{\"empresa\": {EB}, \"dia\": \"2026-01-15\", \"componente\": \"avaliador\", "
        f"\"chamadas\": 1, \"minutos\": 1, \"minutos_cobraveis\": 1, \"tokens_entrada\": 0, \"tokens_saida\": 0}}')",
        erro="empresa sem voz")
 for t in ("voz_trechos", "voz_buscas", "voz_curadoria_itens", "voz_analise_consumo", "custos_ia_voz", "relatorios_credor"):
