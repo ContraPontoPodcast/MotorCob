@@ -551,17 +551,15 @@ class TestSegredosEmParalelo(unittest.TestCase):
     def test_trinta_execucoes_simultaneas_sem_falha(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
-            (d / "bin").mkdir()
-            gcloud = d / "bin" / "gcloud"
-            gcloud.write_text('#!/bin/bash\nsleep 0.0$((RANDOM%9)); echo "valor-${@: -1}"\n')
-            gcloud.chmod(0o755)
-            (d / "comum").write_text(f"meta() {{ true; }}\nPROJETO=p\nRUN={d}/run\n")
+            # gcloud falso como função do comum (o script o carrega): nada é executado a partir do /tmp, que na
+            # imagem é um tmpfs noexec (workflow imagem-voz: docker run --read-only --tmpfs /tmp)
+            (d / "comum").write_text('gcloud() { sleep 0.0$((RANDOM%9)); echo "valor-${@: -1}"; }\n'
+                                     f"meta() {{ true; }}\nPROJETO=p\nRUN={d}/run\n")
             script = (VM / "motorcx-voz-segredos").read_text()
             script = script.replace("/usr/local/bin/motorcx-voz-comum", str(d / "comum"))
             script = script.replace("install -m 400 -o 10010 -g 10010", "install -m 400")
             (d / "s.sh").write_text(script)
-            amb = {**os.environ, "PATH": f"{d}/bin:{os.environ['PATH']}"}
-            procs = [subprocess.Popen(["bash", str(d / "s.sh")], env=amb, stderr=subprocess.PIPE) for _ in range(30)]
+            procs = [subprocess.Popen(["bash", str(d / "s.sh")], stderr=subprocess.PIPE) for _ in range(30)]
             erros = [p.communicate()[1].decode() for p in procs if p.wait() != 0]
             self.assertEqual(erros, [])
             self.assertEqual(sorted(x.name for x in (d / "run").iterdir()), [".segredos.lock", "ari_senha", "voz.env"])
