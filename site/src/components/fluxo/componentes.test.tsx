@@ -7,6 +7,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { estadoEnvio, resumoPendencias, validarLocal, type Definicao } from '@/lib/fluxo';
 import { BarraEnvio, Quadro, type Marca } from '@/components/fluxo/quadro';
 import { criarApiFixturas, definicaoV5 } from '@/components/fluxo/fixturas';
+import { MemoryRouter } from 'react-router';
+import { PERMISSAO_EQUIPE_FLUXO, ProvedorFixturas, permissoesFluxo, type CtxFluxo } from '@/components/fluxo/contexto';
+import { ListaFluxos } from '@/components/fluxo/lista';
 
 const nada = () => {};
 const botao = (html: string, nome: string) => html.match(new RegExp(`<button[^>]*>${nome}</button>`))?.[0] ?? '';
@@ -53,4 +56,42 @@ test('quadro por ramos: caminho principal, ramos, saídas "→ N" e "↪ N" e a 
 	assert.match(html, /N9 · Agendar retorno<\/b><span[^>]*>impede</);
 	const lista = renderToStaticMarkup(<Quadro definicao={d} marcas={marcas} vista="lista" onAbrir={nada} />);
 	assert.match(lista, /<details open=""/);                     // no celular/lista: o caminho principal vem aberto
+});
+
+// SQL 68 · a equipe MotorCX monta o fluxo do cliente (cria, edita, duplica, testa e envia), mas não aprova nem coloca em uso
+test('permissões: equipe com responder_chamados edita e envia; nunca aprova, coloca em uso nem mexe na alçada', () => {
+	assert.equal(PERMISSAO_EQUIPE_FLUXO, 'responder_chamados');
+	assert.deepEqual(permissoesFluxo({ permissoes: [], equipe: true, equipeMonta: true }), { editar: true, aprovar: false, alcada: false, ver: true });
+	// mesmo que a lista de permissões do cliente venha cheia (o Master tem todas), a equipe não aprova
+	assert.deepEqual(permissoesFluxo({ permissoes: ['editar_canais', 'aprovar_roteiro_voz', 'editar_credores'], equipe: true, equipeMonta: true }),
+		{ editar: true, aprovar: false, alcada: false, ver: true });
+	assert.deepEqual(permissoesFluxo({ permissoes: ['editar_canais'], equipe: true, equipeMonta: false }), { editar: false, aprovar: false, alcada: false, ver: true });
+});
+
+test('permissões: o cliente continua igual (editar_canais edita; aprovar_roteiro_voz aprova; editar_credores, a alçada)', () => {
+	assert.deepEqual(permissoesFluxo({ permissoes: ['editar_canais'], equipe: false, equipeMonta: false }), { editar: true, aprovar: false, alcada: false, ver: true });
+	assert.deepEqual(permissoesFluxo({ permissoes: ['aprovar_roteiro_voz', 'editar_credores'], equipe: false, equipeMonta: true }), { editar: false, aprovar: true, alcada: true, ver: true });
+	assert.deepEqual(permissoesFluxo({ permissoes: [], equipe: false, equipeMonta: true }), { editar: false, aprovar: false, alcada: false, ver: false });
+});
+
+test('editor da equipe: envia para aprovação, mas não vê Aprovar nem Colocar em uso', () => {
+	const p = permissoesFluxo({ permissoes: [], equipe: true, equipeMonta: true });
+	const estado = estadoEnvio({ situacao: 'rascunho', erros: [], sujo: false, podeEditar: p.editar });
+	const html = renderToStaticMarkup(<BarraEnvio situacao="rascunho" estado={estado} podeEditar={p.editar} podeAprovar={p.aprovar} onEnviar={nada} onAprovar={nada} onUsar={nada} />);
+	assert.ok(botao(html, 'Enviar para aprovação'), html);
+	assert.doesNotMatch(botao(html, 'Enviar para aprovação'), /disabled=""/);
+	assert.doesNotMatch(html, />Aprovar</);
+	const aprovado = renderToStaticMarkup(<BarraEnvio situacao="aprovado_empresa" estado={{ ok: false, motivo: '' }} podeEditar={p.editar} podeAprovar={p.aprovar} onEnviar={nada} onAprovar={nada} onUsar={nada} />);
+	assert.doesNotMatch(aprovado, /Colocar em uso<\/button>/);
+});
+
+const ctxEquipe = (equipeMonta: boolean): CtxFluxo => ({
+	empresa: { id: 1, slug: 'aurora', nome: 'Aurora (teste)' }, credor: null, credores: [], permissoes: [], equipe: true, equipeMonta,
+	api: criarApiFixturas(), demo: true, rota: () => '/',
+});
+
+test('lista: a equipe com a permissão vê "Novo fluxo"; sem ela, não', () => {
+	const lista = (c: CtxFluxo) => renderToStaticMarkup(<MemoryRouter><ProvedorFixturas valor={c}><ListaFluxos /></ProvedorFixturas></MemoryRouter>);
+	assert.match(lista(ctxEquipe(true)), /Novo fluxo<\/button>/);
+	assert.doesNotMatch(lista(ctxEquipe(false)), /Novo fluxo<\/button>/);
 });

@@ -31,14 +31,21 @@ test("falas: sem documento, telefone ou e-mail (como falas_teste_voz_ok)", () =>
   assert.equal(validarPedido({ versao: 1, falas: ["meu telefone 11987654321"] }).erro?.startsWith("fala inválida"), true);
 });
 
-test("quem pode: cliente ativo, mesma empresa, editar_canais", () => {
-  assert.equal(PERMISSAO, "editar_canais");
+test("quem pode: quem edita o fluxo da empresa da versão (pode_editar_fluxo_voz, SQL 68)", () => {
+  assert.equal(PERMISSAO, "pode_editar_fluxo_voz");
   assert.equal(autorizar(cliente, true, versao), null);
   assert.equal(autorizar(cliente, false, versao), "sem permissão");
   assert.equal(autorizar({ ...cliente, empresa_id: 8 }, true, versao), "versão não encontrada");
   assert.equal(autorizar(cliente, true, null), "versão não encontrada");
-  assert.equal(autorizar({ ...cliente, equipe: true }, true, versao), "a equipe MotorCX testa pelo Console");
   assert.equal(autorizar({ ...cliente, ativo: false }, true, versao), "acesso desativado");
+});
+
+test("equipe MotorCX: testa a conversa do cliente quando o banco diz que ela edita o fluxo", () => {
+  const equipe = { id: "e1", ativo: true, equipe: true, empresa_id: null };
+  assert.equal(autorizar(equipe, true, versao), null);
+  assert.equal(autorizar(equipe, false, versao), "sem permissão");          // sem responder_chamados ou fora do alcance
+  assert.equal(autorizar(equipe, true, null), "versão não encontrada");     // a RLS não deixou ler a versão
+  assert.equal(autorizar({ ...equipe, ativo: false }, true, versao), "acesso desativado");
 });
 
 test("pacote da VM: sem credencial, com exemplo e cliente fictício", () => {

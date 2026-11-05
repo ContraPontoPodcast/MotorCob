@@ -232,7 +232,7 @@ export function SelCarteira({ valor, onChange, credores, rotulo = 'Carteira' }: 
 
 /** "Descrever e o MotorCX monta": pedido em texto (IA na hora ou equipe pelo Suporte). O resultado é sempre rascunho. */
 export function GavetaDescrever({ aberta, onFechar, versaoOrigem, credorFixo, aoPedir }: { aberta: boolean; onFechar: () => void; versaoOrigem: number | null; credorFixo?: number | null; aoPedir: (pedido: number) => void }) {
-	const { api, empresa, credor, credores } = useFluxo();
+	const { api, empresa, credor, credores, equipe } = useFluxo();
 	const [carteira, setCarteira] = useState<string>(credorFixo !== undefined ? (credorFixo == null ? '' : String(credorFixo)) : credor ? String(credor.id) : '');
 	const [tipo, setTipo] = useState<TipoAgente>('negociador');
 	const [texto, setTexto] = useState('');
@@ -282,12 +282,15 @@ export function GavetaDescrever({ aberta, onFechar, versaoOrigem, credorFixo, ao
 					<input type="file" multiple className="sr-only" onChange={e => void anexar(e.target.files)} />
 				</label>
 			</Detalhes>
-			<Campo rotulo="Quem monta">
-				<select value={quem} onChange={e => setQuem(e.target.value as 'ia' | 'equipe')} className={`${campoCls} w-full`} style={campoStyle}>
-					<option value="ia">IA do MotorCX agora (rascunho em segundos)</option>
-					<option value="equipe">Equipe MotorCX (pedido no Suporte, em até 2 dias úteis)</option>
-				</select>
-			</Campo>
+			{/* a equipe MotorCX monta direto (SQL 68): pedir à própria equipe pelo Suporte não faz sentido para ela */}
+			{!equipe && (
+				<Campo rotulo="Quem monta">
+					<select value={quem} onChange={e => setQuem(e.target.value as 'ia' | 'equipe')} className={`${campoCls} w-full`} style={campoStyle}>
+						<option value="ia">IA do MotorCX agora (rascunho em segundos)</option>
+						<option value="equipe">Equipe MotorCX (pedido no Suporte, em até 2 dias úteis)</option>
+					</select>
+				</Campo>
+			)}
 			<p className="text-[12px] text-[var(--base-texto-3)]">{quem === 'ia' ? 'Cada geração conta no item "geração de fluxo por IA" da fatura do MotorCX.' : 'Abre um chamado no Suporte com o texto e os anexos.'}</p>
 		</Gaveta>
 	);

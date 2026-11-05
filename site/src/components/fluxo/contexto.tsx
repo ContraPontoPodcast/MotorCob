@@ -3,6 +3,7 @@
 // fixturas, para ver as telas sem banco (Playwright).
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useMotorAuth } from '@/components/auth-provider';
+import { useConsolePerms } from '@/components/workspace/console/console-perms';
 import { supabase } from '@/lib/supabase';
 import { apiSupabase, type FluxoApi } from './api';
 
@@ -15,6 +16,8 @@ export interface CtxFluxo {
 	credores: { id: number; nome: string }[];
 	permissoes: string[];
 	equipe: boolean;
+	/** Equipe MotorCX com a permissão de Console que monta o fluxo do cliente (responder_chamados, SQL 68). */
+	equipeMonta: boolean;
 	api: FluxoApi | null;
 	demo: boolean;
 	/** Endereço de cada tela (no modo de demonstração, tudo fica em /dev/fluxo/...). */
@@ -34,30 +37,44 @@ export const FixturaCtx = createContext<CtxFluxo | null>(null);
 export function useFluxo(): CtxFluxo {
 	const fx = useContext(FixturaCtx);
 	const auth = useMotorAuth();
+	const consola = useConsolePerms();
 	const api = useMemo(() => (supabase ? apiSupabase(supabase) : null), []);
 	if (fx) return fx;
+	const equipe = !!auth.perfil?.equipe;
 	return {
 		empresa: auth.empresa ? { id: Number(auth.empresa.id), slug: auth.empresa.slug, nome: auth.empresa.nome } : null,
 		credor: auth.credor ? { id: Number(auth.credor.id), nome: auth.credor.nome } : null,
 		credores: auth.credores.map(c => ({ id: Number(c.id), nome: c.nome })),
 		permissoes: auth.permissoes,
-		equipe: !!auth.perfil?.equipe,
+		equipe,
+		equipeMonta: equipe && consola.can(PERMISSAO_EQUIPE_FLUXO),
 		api,
 		demo: false,
 		rota: rotaReal,
 	};
 }
 
+/** Permissão de Console com que a equipe MotorCX monta o fluxo do cliente: a mesma com que já entrega o pedido de fluxo
+ *  feito a ela (entregar_pedido_fluxo_equipe). O banco confere em pode_editar_fluxo_voz (SQL 68). */
+export const PERMISSAO_EQUIPE_FLUXO = 'responder_chamados';
+
+export interface PermissoesFluxo { editar: boolean; aprovar: boolean; alcada: boolean; ver: boolean }
+
 /** Permissões do backend: editar_canais edita; aprovar_roteiro_voz aprova e coloca em uso; editar_credores, a alçada.
- *  A equipe MotorCX não edita nem aprova o fluxo do cliente (pode_editar_fluxo_voz / pode_aprovar_fluxo_voz). */
-export function usePermissoesFluxo() {
-	const { permissoes, equipe } = useFluxo();
+ *  Equipe MotorCX (SQL 68): com responder_chamados monta o fluxo do cliente (cria, edita o rascunho, duplica, base de
+ *  respostas, casos de teste, testa e envia para aprovação). Aprovar, colocar em uso e a alçada continuam só com o
+ *  cliente (pode_aprovar_fluxo_voz). */
+export function permissoesFluxo({ permissoes, equipe, equipeMonta }: Pick<CtxFluxo, 'permissoes' | 'equipe' | 'equipeMonta'>): PermissoesFluxo {
 	return {
-		editar: !equipe && permissoes.includes('editar_canais'),
+		editar: equipe ? equipeMonta : permissoes.includes('editar_canais'),
 		aprovar: !equipe && permissoes.includes('aprovar_roteiro_voz'),
 		alcada: !equipe && permissoes.includes('editar_credores'),
 		ver: equipe || permissoes.includes('editar_canais') || permissoes.includes('aprovar_roteiro_voz'),
 	};
+}
+
+export function usePermissoesFluxo(): PermissoesFluxo {
+	return permissoesFluxo(useFluxo());
 }
 
 export function ProvedorFixturas({ valor, children }: { valor: CtxFluxo; children: ReactNode }) {

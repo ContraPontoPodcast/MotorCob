@@ -25,7 +25,9 @@ export interface Caso {
   conectores_falham: number[]; ativo: boolean;
 }
 
-export const PERMISSAO = "editar_canais";
+/** SQL 68: quem pode testar é quem edita o fluxo da empresa da versão, decidido pelo banco: pode_editar_fluxo_voz(empresa)
+ *  (cliente com editar_canais; equipe MotorCX com responder_chamados no alcance). */
+export const PERMISSAO = "pode_editar_fluxo_voz";
 export const MAX_FALAS = 30;
 
 /** Mesma regra de public.falas_teste_voz_ok: 1 a 300 caracteres, sem 9+ dígitos seguidos e sem @. */
@@ -79,13 +81,14 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
 }
 
 /**
- * Quem pode: pessoa ativa do cliente, da empresa da versão, com editar_canais (o mesmo de editar o fluxo).
- * "não encontrada" vira 404 para não revelar se a versão existe.
+ * Quem pode: quem edita o fluxo da empresa da versão (`pode` = pode_editar_fluxo_voz(empresa), SQL 68). Cliente: pessoa
+ * ativa da própria empresa com editar_canais. Equipe MotorCX: com responder_chamados e a empresa no alcance (a versão só
+ * chega aqui se a RLS deixou ler). "não encontrada" vira 404 para não revelar se a versão existe.
  */
 export function autorizar(quem: Perfil | null, pode: boolean, v: Versao | null): string | null {
   if (!quem || !quem.ativo) return "acesso desativado";
-  if (quem.equipe) return "a equipe MotorCX testa pelo Console";
-  if (!v || quem.empresa_id == null || Number(v.empresa_id) !== Number(quem.empresa_id)) return "versão não encontrada";
+  if (!v) return "versão não encontrada";
+  if (!quem.equipe && (quem.empresa_id == null || Number(v.empresa_id) !== Number(quem.empresa_id))) return "versão não encontrada";
   if (!pode) return "sem permissão";
   return null;
 }

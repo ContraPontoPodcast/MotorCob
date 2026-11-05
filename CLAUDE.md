@@ -660,6 +660,11 @@ Go-live (SQL 67): `voz_troncos.segredo_ref` começa com `voz/` (trigger só quan
 sem mostrar), a conta da VM lê `motorcx-voz-*` e `motorcx-crm-*` e chama a Vertex (`roles/aiplatform.user`);
 `vm_inicio.sh` instala `provedores.json` padrão (Montagem) e `provedores_sip.json` vazio só quando faltam; CSP do
 site gerada no build (`site/scripts/cabecalhos.mjs` → `_headers`, scripts inline por hash) e HSTS no `netlify.toml`.
+SQL 68: a equipe MotorCX com `responder_chamados` (a mesma de `entregar_pedido_fluxo_equipe`; Master tem todas) monta
+o fluxo do cliente no alcance — cria, edita o rascunho, duplica, base de respostas, casos de teste, testa (simulador e
+roleplay) e envia para aprovação. Tudo por `pode_editar_fluxo_voz`; aprovar, colocar em uso, voltar versão, revisar a
+resposta da base e a alçada continuam só do cliente (`pode_aprovar_fluxo_voz`). Site: `permissoesFluxo` em
+`site/src/components/fluxo/contexto.tsx`. Se o SQL 58 for rodado de novo, rode o 68 depois.
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.

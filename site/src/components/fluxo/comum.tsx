@@ -60,7 +60,7 @@ export function GavetaQuem({ aberta, onFechar }: { aberta: boolean; onFechar: ()
 		<Gaveta aberta={aberta} onFechar={onFechar} titulo="Quem edita e quem aprova">
 			<Regras itens={[
 				['Um fluxo em uso por carteira.', 'Sem carteira escolhida, o fluxo vale para a empresa toda.'],
-				['Edita quem tem a permissão Editar canais; aprova e coloca em uso quem tem Aprovar roteiro de voz.', 'A equipe MotorCX não edita nem aprova o fluxo de vocês.'],
+				['Edita quem tem a permissão Editar canais; aprova e coloca em uso quem tem Aprovar roteiro de voz.', 'A equipe MotorCX pode montar o rascunho e enviar para aprovação, mas aprovar e colocar em uso é sempre de vocês.'],
 				['A versão em uso vale até a próxima ser aprovada e colocada em uso.', 'Entra na próxima ligação; uma ligação em curso nunca muda de versão.'],
 				['Voltar para uma versão anterior é um botão.', 'A atual vai para o arquivo. Nada é apagado.'],
 				['A alçada da carteira é de quem edita as carteiras.', 'É o teto de toda oferta, inclusive das que vêm do CRM.'],

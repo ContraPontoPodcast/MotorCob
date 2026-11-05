@@ -14,7 +14,8 @@
 //     → { audio (base64), mime }: a VM (/ouvir, assinado) sintetiza com o TTS da Montagem e a voz da empresa
 //     (voz_config.voz_id) e devolve; nada é guardado. O uso entra em registrar_uso_ia_voz (componente previa_voz,
 //     caracteres em tokens_entrada; nada cobrado do cliente: minutos_cobraveis = 0).
-// Quem pode: pessoa ativa do cliente, da empresa da versão, com pode('editar_canais'). Tudo é lido com o login de
+// Quem pode: quem edita o fluxo da empresa da versão, pelo banco (pode_editar_fluxo_voz, SQL 68): pessoa ativa do
+// cliente com editar_canais, ou a equipe MotorCX com responder_chamados na empresa do alcance. Tudo é lido com o login de
 // quem pede (a RLS decide); a função só monta o pacote e chama o simulador da VM, que roda o MESMO executor da
 // ligação (voz/fluxo.py) em modo texto, com os conectores trocados pelo exemplo_resposta e um cliente fictício.
 // Por que na VM e não aqui: o executor é Python; portar para TypeScript duplicaria as travas (ver voz/simulador_http.py).
@@ -82,11 +83,14 @@ Deno.serve(async (req) => {
   if (!pedido) return responder({ erro }, 400, origem);
 
   const comoUsuario = createClient(SUPABASE_URL, ANON, { ...sem, global: { headers: { Authorization: `Bearer ${token}` } } });
-  const [{ data: quem }, { data: pode }, { data: v }] = await Promise.all([
+  const [{ data: quem }, { data: v }] = await Promise.all([
     admin.from("perfis").select("id, ativo, equipe, empresa_id").eq("id", sessao.user.id).maybeSingle(),
-    comoUsuario.rpc("pode", { perm: PERMISSAO }),
     comoUsuario.from("voz_fluxo_versoes").select("id, fluxo_id, empresa_id, credor_id, definicao").eq("id", pedido.versao).maybeSingle(),
   ]);
+  // SQL 68: o banco decide quem edita o fluxo da empresa da versão (cliente com editar_canais ou a equipe MotorCX)
+  const { data: pode } = v
+    ? await comoUsuario.rpc(PERMISSAO, { empresa: (v as Versao).empresa_id })
+    : { data: false };
   const negado = autorizar(quem as Perfil | null, pode === true, v as Versao | null);
   if (negado) return responder({ erro: negado }, negado === "versão não encontrada" ? 404 : 403, origem);
   const versao = v as Versao;
