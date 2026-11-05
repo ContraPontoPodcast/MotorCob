@@ -11,6 +11,12 @@ set -euo pipefail
 . /usr/local/bin/motorcx-voz-comum
 umask 077
 install -d -m 755 "$RUN"
+# Os serviços da voz sobem juntos (boot, startup, restart) e todos rodam este script: a trava faz um de cada vez,
+# e o temporário é único por execução, para um nunca mover ou sobrescrever o arquivo do outro no meio da escrita.
+exec 9>"$RUN/.segredos.lock"
+flock -w 120 9 || { echo "motorcx-voz-segredos: outra execução segurou a trava por mais de 120 s" >&2; exit 1; }
+TMP="$(mktemp "$RUN/voz.env.XXXXXX")"
+trap 'rm -f "$TMP"' EXIT
 gcloud secrets versions access latest --secret=motorcx-voz-ari-senha | \
   install -m 400 -o 10010 -g 10010 /dev/stdin "$RUN/ari_senha"
 URL="$(gcloud secrets versions access latest --secret=motorcx-voz-supabase-url)"
@@ -34,6 +40,6 @@ case "$ACESSO" in supabase_chave|acesso_proprio) ;; *) echo "motorcx-voz-acesso 
     printf 'MOTORCOB_SUPABASE_KEY=%s\n' "$CHAVE"
     unset CHAVE
   fi
-} > "$RUN/voz.env.tmp"
-mv "$RUN/voz.env.tmp" "$RUN/voz.env"
+} > "$TMP"
+mv -f "$TMP" "$RUN/voz.env"
 unset URL
