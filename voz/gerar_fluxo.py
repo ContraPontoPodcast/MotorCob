@@ -8,11 +8,16 @@ rascunho, e nada é aprovado nem colocado em uso por aqui.
 gerar_fluxo_voz(contexto, modelo):
   1. pede ao LLM a definição no esquema fechado (ferramenta entregar_fluxo), só com os conectores, intenções e
      variáveis que a empresa tem;
-  2. aplica as TRAVAS que sempre entram (independem do que o LLM escreveu): terceiro → Encerrar com recado neutro
-     fixo; Confirmar identidade nunca generativa; transferir_humano em todo Generativo; ferramentas fora da lista
-     saem; conector que a empresa não tem vira "a escolher" (nunca inventado);
-  3. valida (validador + catálogo + nada de oferta escrita à mão na fala) e, com erro, devolve os erros ao LLM
-     para corrigir, até 2 vezes. Sobrou erro: devolve sem definição e com os erros;
+  2. aplica os REPAROS de forma que não mudam o sentido (título cortado em 60, repetir_max entre 1 e 5, chaves
+     fora do esquema saem, tipo e rótulo da saída deduzidos, `quando` repetido sai, final sem saídas, falhou /
+     sem_resposta / nao_entendido obrigatórios vão para um Transferir · atendente comum, bloco que nenhum caminho
+     alcança sai; cada mudança relevante vira suposição) e as TRAVAS que sempre entram (independem do que o LLM
+     escreveu): terceiro → Encerrar com recado neutro fixo; Confirmar identidade nunca generativa;
+     transferir_humano em todo Generativo; ferramentas fora da lista saem; conector que a empresa não tem vira
+     "a escolher" (nunca inventado). Reparo nenhum mexe em fala, valor, variável ou ordem da identidade;
+  3. valida (validador + catálogo + nada de oferta escrita à mão na fala) e, com erro, devolve ao LLM o que
+     corrigir, bloco a bloco e em português (explicar_erros), até 2 vezes. Sobrou erro: devolve sem definição e
+     com os erros (códigos, que o site traduz);
   4. devolve "o que entendi" (frase → bloco), "suposições e perguntas" (respondidas, geram de novo) e, para mudança
      num fluxo existente, o que mudou em relação à versão de origem.
 Sem limite de pedidos (decisão do dono): cada geração aparece no extrato (item ia_geracao_fluxo, contado pelo banco
@@ -70,7 +75,32 @@ Tipos, modos, params e `quando` das saídas:
 - encerrar (arvore) {fala, resultado: promessa|retorno_agendado|recusa|recado|cpc|atendida_sem_cpc|identidade_confirmada}; sem saídas
 Regras: até 60 blocos; fala até 500 caracteres; variáveis só {{nome}} da lista dada; valor, oferta ou credor só depois
 de Confirmar identidade; nunca escreva valores, parcelas ou descontos na fala (use {{oferta.parcelas}} etc., que vêm do
-CRM ou da alçada); nunca peça senha ou cartão; ciclos precisam de repetir_max no bloco."""
+CRM ou da alçada); nunca peça senha ou cartão; ciclos precisam de repetir_max no bloco.
+Forma (o validador recusa o resto):
+- bloco só com as chaves id, tipo, modo, x, y, titulo, repetir_max, params, saidas; titulo até 60 caracteres;
+  repetir_max inteiro de 1 a 5 (só em bloco de ciclo); params só com as chaves do tipo, listadas acima;
+- saída só com rotulo, para, tipo, quando, as quatro sempre: rotulo 1 a 60 caracteres; para = id de um bloco que
+  existe; tipo "falha" se e só se quando = "falhou"; tipo "devolve" se e só se o bloco é generativa; senão "normal";
+- `quando` sem repetir no bloco e só os válidos do tipo; todas as saídas obrigatórias do tipo (as listadas acima;
+  em retorno, agendou; em link, enviado; em oferta, aceitou e recusou; em identidade, falhou se tem conector);
+- todo bloco alcançável a partir da abertura; transferir e encerrar com saidas []; uma abertura só."""
+
+MAPEAMENTO_TEXTO = """Pedido em texto livre (prompt de persona, etapas numeradas, regras): NÃO faça um bloco por tópico.
+Monte um fluxo compacto, em geral de 4 a 10 blocos:
+- abertura: saudação breve com {{primeiro_nome}} e {{assessoria}}, sem valores nem credor; saídas titular e terceiro;
+- identidade (sempre antes de qualquer valor, oferta ou {{credor}}); confirmou segue, nao_confirmou encerra/transfere;
+- UMA generativa para entendimento, negociação, objeções, contrapropostas e fechamento: objetivo com a persona, as
+  etapas e as regras do pedido (sem números), tom do texto (cordial, frases_curtas, nao_pressiona...), ferramentas
+  apresentar_oferta, registrar_promessa, agendar_retorno, transferir_humano, encerrar_chamada, contrapropostas_max
+  do texto (padrão 2); saídas devolve como fechou_acordo, sem_acordo, retorno, contestou;
+- finais: encerrar (promessa, retorno_agendado, recusa) e transferir; contestação da dívida → transferir motivo
+  contestacao; pedido de humano ou falha → um Transferir · atendente (motivo pedido_humano) comum.
+Valores fixos do pedido (R$, parcelas, entrada, %) NUNCA vão na fala nem no objetivo: as ofertas vêm do CRM
+(conector buscar_ofertas) ou da alçada da carteira, por {{oferta.*}} e apresentar_oferta. Liste-os numa pergunta
+("Cadastrar estes valores na alçada da carteira? R$ ...") e registre a troca em suposicoes.
+"Pedir o primeiro nome": o sistema já tem {{primeiro_nome}} e a identidade é confirmada pelo bloco identidade;
+diga isso em suposicoes. "Simulação"/"valor fictício": em ligação real as ofertas são as reais; testes vão no
+simulador do fluxo; diga isso em suposicoes."""
 
 
 @dataclass
@@ -96,6 +126,7 @@ def _mensagens(ctx: dict) -> list[dict]:
     cons = "\n".join(f"- {c['id']}: {c['nome']} ({c['finalidade']}; preenche {', '.join(c.get('campos') or []) or '-'})"
                      for c in ctx.get("conectores") or []) or "- nenhum (use null; a empresa escolhe depois)"
     sistema = (f"Você monta fluxos do agente de voz de cobrança do MotorCX, em português do Brasil.\n{ESQUEMA_TEXTO}\n"
+               f"{MAPEAMENTO_TEXTO}\n"
                f"Conectores da empresa (só estes, pelo id):\n{cons}\n"
                f"Intenções do catálogo (só estas): {', '.join(ctx.get('intencoes') or [])}\n"
                f"Variáveis: {', '.join(ctx.get('variaveis') or [])}\n"
@@ -110,32 +141,180 @@ def _mensagens(ctx: dict) -> list[dict]:
     return [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]
 
 
-# ------------------------------------------------------------------ travas que sempre entram
-def _proximo_id(d: dict) -> str:
-    usados = {int(b["id"][1:]) for b in d["blocos"] if isinstance(b, dict) and re.fullmatch(r"N\d{1,3}", str(b.get("id")))}
+# ------------------------------------------------------------------ reparos de forma e travas que sempre entram
+# saídas obrigatórias que o reparo liga a um Transferir · atendente comum (caminho seguro). Opção de pergunta,
+# intenção e as outras obrigatórias (confirmou, titular, aceitou...) nunca são inventadas: ficam para o LLM.
+QUANDOS_SEGUROS = ("falhou", "sem_resposta", "nao_entendido")
+FALA_ATENDENTE = "Vou passar você para um atendente agora, só um instante."
+# params inteiros com faixa: valor fora da faixa vai para a ponta mais próxima
+FAIXAS = {"tentativas": (1, 3), "max_turnos": (1, FV.MAX_TURNOS_GLOBAL), "contrapropostas_max": (0, 5),
+          "dias_max": (1, 7)}
+
+
+def _proximo_id(d: dict, removidos=()) -> str:
+    """Próximo id livre; os removidos pelo reparo não voltam (a suposição que os cita continua certa)."""
+    ids = [b.get("id") for b in d["blocos"] if isinstance(b, dict)] + list(removidos)
+    usados = {int(i[1:]) for i in ids if re.fullmatch(r"N\d{1,3}", str(i))}
     return f"N{max(usados | {0}) + 1}"
 
 
+def _id_ok(v) -> bool:
+    return isinstance(v, str) and FV.RE_ID.fullmatch(v) is not None
+
+
+def _inteiro(v) -> int | None:
+    """3, 3.0 ou "3" → 3; o resto → None."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return int(v) if v == v and abs(v) < 1e9 else None
+    if isinstance(v, str) and re.fullmatch(r"\s*-?\d{1,9}(\.0*)?\s*", v):
+        return int(float(v))
+    return None
+
+
+def _como_codigo(v) -> str | None:
+    """"Não entendido" → "nao_entendido"; None se não vira código."""
+    if not isinstance(v, str):
+        return None
+    c = re.sub(r"[^a-z0-9_]+", "_", v.strip().lower().translate(FV._ACENTOS)).strip("_")
+    return c if FV.RE_CODIGO.fullmatch(c) else None
+
+
+def _rotulo_de(quando: str) -> str:
+    return quando.replace("_", " ").capitalize()[:60]
+
+
+def _reparar_bloco(b: dict, sup: list[str]) -> None:
+    """Forma do bloco (chaves, título, repetir_max, x/y, modo, params fora do esquema e inteiros fora da faixa)."""
+    bid, tipo = b["id"], b["tipo"]
+    for k in [k for k in b if k not in FV.CHAVES_BLOCO]:
+        b.pop(k)
+    if "titulo" in b:
+        t = b["titulo"].strip() if isinstance(b["titulo"], str) else ""
+        if t:
+            b["titulo"] = t[:60].rstrip()
+        else:
+            b.pop("titulo")
+    if "repetir_max" in b:
+        n = _inteiro(b["repetir_max"])
+        if n is None:
+            b.pop("repetir_max")
+        else:
+            if not 1 <= n <= 5:
+                sup.append(f"{bid}: repetir_max {n} ajustado para {min(max(n, 1), 5)} (o limite é de 1 a 5).")
+            b["repetir_max"] = min(max(n, 1), 5)
+    for k in ("x", "y"):
+        if k in b and not FV._numero(b[k]):
+            b.pop(k)                                         # o site organiza o quadro por ramos; posição é opcional
+    modos = FV.TIPOS[tipo][0]
+    if b.get("modo") not in modos:
+        novo = "cognicao" if "cognicao" in modos else modos[0]
+        if len(modos) > 1 and tipo != "identidade" and b.get("modo") is not None:
+            sup.append(f"{bid}: modo {b.get('modo')} não vale para {tipo}; ficou {novo}.")
+        b["modo"] = novo                                     # identidade nunca generativa: vira cognicao
+    p = b.get("params")
+    if not isinstance(p, dict):
+        return
+    for k in [k for k in p if k not in FV.CHAVES_PARAMS[tipo]]:
+        p.pop(k)
+    for k, (de, ate) in FAIXAS.items():
+        if k in p:
+            n = _inteiro(p[k])
+            if n is None:
+                p.pop(k)
+            else:
+                p[k] = min(max(n, de), ate)
+
+
+def _reparar_saidas(b: dict, ids: set[str], sup: list[str]) -> None:
+    """Saídas no esquema: tipo deduzido (falha se e só se falhou; devolve se e só se generativa), rótulo a partir do
+    `quando` quando falta (ou cortado em 60), `quando` repetido sai (fica o primeiro), saída com `quando` que não
+    vale para o tipo ou destino inexistente sai; final (transferir/encerrar) sem saídas."""
+    bid, tipo = b["id"], b["tipo"]
+    sa = b.get("saidas")
+    if FV.TIPOS[tipo][1]:
+        if sa:
+            sup.append(f"{bid}: {tipo} encerra a ligação; as saídas dele foram removidas.")
+        b["saidas"] = []
+        return
+    validos, _ = FV._quandos(b)
+    # com opções/intenções malformadas a lista de válidos não é confiável: o LLM corrige os params e nada sai
+    tmp: list[str] = []
+    FV._params(b, tmp)
+    confia = tipo not in ("pergunta", "intencao") or not any(e.startswith("params_invalidos") for e in tmp)
+    novas, vistos, fora = [], set(), []
+    for s in sa if isinstance(sa, list) else []:
+        if not isinstance(s, dict):
+            continue
+        q = s.get("quando") if FV._codigo(s.get("quando")) else _como_codigo(s.get("quando"))
+        if (q is None or (tipo != "generativa" and confia and q not in validos) or not _id_ok(s.get("para"))
+                or s["para"] not in ids):
+            fora.append(str(s.get("quando") or s.get("rotulo") or "?")[:40])
+            continue
+        if q in vistos:
+            continue
+        vistos.add(q)
+        rot = s.get("rotulo").strip() if isinstance(s.get("rotulo"), str) else ""
+        novas.append({"rotulo": rot[:60].rstrip() if rot else _rotulo_de(q), "para": s["para"],
+                      "tipo": "devolve" if tipo == "generativa" else ("falha" if q == "falhou" else "normal"),
+                      "quando": q})
+    if fora:
+        sup.append(f"{bid}: saída(s) {', '.join(fora)} removida(s) (caso que não existe para {tipo} "
+                   "ou destino que não existe).")
+    b["saidas"] = novas
+
+
+def _bloco_atendente(d: dict, blocos: list[dict], removidos=()) -> dict:
+    """O Transferir · atendente comum (motivo pedido_humano): reaproveita o que já existe ou cria um."""
+    for b in blocos:
+        p = b.get("params") if isinstance(b.get("params"), dict) else {}
+        if b["tipo"] == "transferir" and p.get("motivo") == "pedido_humano":
+            return b
+    novo = {"id": _proximo_id(d, removidos), "tipo": "transferir", "modo": "arvore",
+            "titulo": "Transferir · atendente", "params": {"fala": FALA_ATENDENTE, "motivo": "pedido_humano"},
+            "saidas": []}
+    d["blocos"].append(novo)
+    blocos.append(novo)
+    return novo
+
+
+def _bloco_recado(d: dict, blocos: list[dict]) -> dict:
+    for b in blocos:
+        if b["tipo"] == "encerrar" and isinstance(b.get("params"), dict) and b["params"].get("resultado") == "recado":
+            return b
+    novo = {"id": _proximo_id(d), "tipo": "encerrar", "modo": "arvore", "titulo": "Encerrar · recado neutro",
+            "params": {"fala": RECADO, "resultado": "recado"}, "saidas": []}
+    d["blocos"].append(novo)
+    blocos.append(novo)
+    return novo
+
+
 def aplicar_travas(d, ctx: dict) -> tuple[object, list[str]]:
-    """Normaliza o que nunca depende do LLM. Devolve (definição, suposições acrescentadas)."""
+    """Reparos de forma que não mudam o sentido + travas que nunca dependem do LLM.
+    Devolve (definição, suposições acrescentadas). Não toca em fala, objetivo, variável nem na ordem da identidade:
+    o que o validador recusa por segurança continua recusado."""
     if not isinstance(d, dict) or not isinstance(d.get("blocos"), list):
         return d, []
-    d = copy.deepcopy(d)
+    d = {"esquema": FV.ESQUEMA, "blocos": [b for b in copy.deepcopy(d["blocos"]) if isinstance(b, dict)]}
     sup: list[str] = []
     cons = {int(c["id"]): c["finalidade"] for c in ctx.get("conectores") or [] if str(c.get("id", "")).isdigit()}
-    blocos = [b for b in d["blocos"] if isinstance(b, dict)]
-    por_id = {b.get("id"): b for b in blocos}
+    # só os blocos com id e tipo válidos são reparados; o resto o validador aponta (e o LLM corrige)
+    blocos = [b for b in d["blocos"]
+              if _id_ok(b.get("id")) and isinstance(b.get("tipo"), str) and b["tipo"] in FV.TIPOS]
+    for b in blocos:
+        _reparar_bloco(b, sup)
+    por_id = {b["id"]: b for b in blocos}
     for b in blocos:
         p = b.get("params") if isinstance(b.get("params"), dict) else None
         if p is None:
             continue
-        t = b.get("tipo")
+        t = b["tipo"]
         if t == "identidade":
-            if b.get("modo") not in ("arvore", "cognicao"):
-                b["modo"] = "cognicao"                       # nunca generativo
             p.pop("confere", None)                         # só o CRM confere
         if t == "generativa":
-            fe = [f for f in (p.get("ferramentas") or []) if f in FV.FERRAMENTAS]
+            fe = [f for f in (p["ferramentas"] if isinstance(p.get("ferramentas"), list) else [])
+                  if isinstance(f, str) and f in FV.FERRAMENTAS]
             if "transferir_humano" not in fe:
                 fe.append("transferir_humano")
             p["ferramentas"] = list(dict.fromkeys(fe))
@@ -147,26 +326,68 @@ def aplicar_travas(d, ctx: dict) -> tuple[object, list[str]]:
             if cid is not None and (not isinstance(cid, int) or cid not in cons
                                     or (t in FINALIDADE_DO_BLOCO and cons[cid] not in FINALIDADE_DO_BLOCO[t])):
                 p[chave] = None
-                sup.append(f"{b.get('id')}: o conector {cid} não existe para esta finalidade; escolha um antes de aprovar.")
+                sup.append(f"{b['id']}: o conector {cid} não existe para esta finalidade; escolha um antes de aprovar.")
         if isinstance(p.get("conectores"), list):
             novos = []
             for cid in p["conectores"]:
                 if cid is not None and (not isinstance(cid, int) or cid not in cons):
-                    sup.append(f"{b.get('id')}: o conector {cid} não existe; escolha um antes de aprovar.")
+                    sup.append(f"{b['id']}: o conector {cid} não existe; escolha um antes de aprovar.")
                     cid = None
                 novos.append(cid)
             p["conectores"] = novos[:2]
-    # terceiro sempre vai para um Encerrar com recado neutro
-    for ab in [b for b in blocos if b.get("tipo") == "abertura"]:
-        for s in ab.get("saidas") or []:
-            if isinstance(s, dict) and s.get("quando") == "terceiro":
-                alvo = por_id.get(s.get("para"))
-                if not (alvo and alvo.get("tipo") == "encerrar" and (alvo.get("params") or {}).get("resultado") == "recado"):
-                    nid = _proximo_id(d)
-                    d["blocos"].append({"id": nid, "tipo": "encerrar", "modo": "arvore", "titulo": "Encerrar · recado neutro",
-                                        "params": {"fala": RECADO, "resultado": "recado"}, "saidas": []})
-                    s["para"] = nid
-                    por_id[nid] = d["blocos"][-1]
+    # saídas (depois dos conectores: identidade sem conector não exige falhou)
+    for b in blocos:
+        _reparar_saidas(b, set(por_id), sup)
+    # terceiro sempre vai para um Encerrar com recado neutro (e a abertura sempre tem a saída terceiro)
+    for ab in [b for b in blocos if b["tipo"] == "abertura"]:
+        terc = [s for s in ab["saidas"] if s["quando"] == "terceiro"]
+        if not terc:
+            ab["saidas"].append({"rotulo": "Não é a pessoa", "para": _bloco_recado(d, blocos)["id"], "tipo": "normal",
+                                 "quando": "terceiro"})
+            sup.append(f"{ab['id']}: quem atende e não é a pessoa recebe o recado neutro e a ligação encerra.")
+        for s in terc:
+            alvo = por_id.get(s["para"])
+            prm = alvo.get("params") if alvo and isinstance(alvo.get("params"), dict) else {}
+            if not (alvo and alvo["tipo"] == "encerrar" and prm.get("resultado") == "recado"):
+                nid = _proximo_id(d)
+                novo = {"id": nid, "tipo": "encerrar", "modo": "arvore", "titulo": "Encerrar · recado neutro",
+                        "params": {"fala": RECADO, "resultado": "recado"}, "saidas": []}
+                d["blocos"].append(novo)
+                blocos.append(novo)
+                s["para"] = nid
+        por_id = {b["id"]: b for b in blocos}
+    # o que nenhum caminho alcança a partir da abertura sai (só com uma abertura que tem a saída titular). Antes de
+    # ligar as falhas: um Transferir · atendente sem caminho até ele sai aqui e é criado de novo, se preciso
+    aberturas, removidos = [b for b in blocos if b["tipo"] == "abertura"], []
+    if len(aberturas) == 1 and any(s["quando"] == "titular" for s in aberturas[0]["saidas"]):
+        por_id = {b["id"]: b for b in blocos}
+        alc, fila = {aberturas[0]["id"]}, [aberturas[0]["id"]]
+        while fila:
+            for s in por_id[fila.pop()]["saidas"]:
+                if s["para"] in por_id and s["para"] not in alc:
+                    alc.add(s["para"])
+                    fila.append(s["para"])
+        fica = [b for b in d["blocos"] if _id_ok(b.get("id")) and b["id"] in alc]
+        removidos = [b.get("id") for b in d["blocos"] if not any(b is f for f in fica)]
+        if removidos:
+            d["blocos"] = fica
+            blocos = [b for b in blocos if b["id"] in alc]
+            sup.append("Blocos sem caminho a partir da abertura, removidos: "
+                       + ", ".join(str(i)[:8] for i in removidos) + ".")
+    # falhou / sem_resposta / nao_entendido obrigatórios e ausentes: Transferir · atendente
+    ligados = []
+    for b in list(blocos):
+        if FV.TIPOS[b["tipo"]][1] or not isinstance(b.get("params"), dict):
+            continue
+        tem = {s["quando"] for s in b["saidas"]}
+        for q in sorted((FV._quandos(b)[1] - tem) & set(QUANDOS_SEGUROS)):
+            alvo = _bloco_atendente(d, blocos, removidos)
+            b["saidas"].append({"rotulo": _rotulo_de(q), "para": alvo["id"],
+                                "tipo": "falha" if q == "falhou" else "normal", "quando": q})
+            ligados.append((b["id"], q))
+    if ligados:
+        sup.append(f"Sem caminho para falha ou silêncio em {', '.join(f'{i} ({q})' for i, q in ligados)}: "
+                   "vai para Transferir · atendente.")
     return d, sup
 
 
@@ -185,6 +406,154 @@ def erros_geracao(d, ctx: dict) -> list[str]:
         if b["tipo"] == "oferta" and not ctx.get("tem_alcada"):
             out.append(f"oferta_sem_alcada:{b['id']}")
     return sorted(set(out))
+
+
+# ------------------------------------------------------------------ o que dizer ao LLM para corrigir
+# trecho com valor escrito, para mostrar ao LLM (a regra de recusa continua sendo RE_OFERTA_FIXA)
+RE_TRECHO_VALOR = re.compile(r"r\$\s*[\d.,]*\d|\d[\d.,]*\s*(?:x|vezes|parcelas?)\b|\d+\s*%|\d+[.,]\d{2}\b", re.I)
+DICA_PARAMS = {
+    "abertura": "fala obrigatória",
+    "identidade": f"fala obrigatória; pergunta um de {', '.join(FV.PERGUNTAS_IDENTIDADE)}; tentativas 1 a 3",
+    "pergunta": "fala obrigatória; opcoes 1 a 6, cada uma {codigo (minúsculas_com_sublinhado, nunca sem_resposta), "
+                "rotulo até 60, exemplos opcionais}; tentativas 1 a 3",
+    "intencao": "fala obrigatória; intencoes 1 a 12 do catálogo, sem nao_entendido; exemplos só das intenções; "
+                "confianca_min 0.5 a 0.95; tentativas 1 a 3",
+    "generativa": f"objetivo (20+ caracteres), max_turnos 1 a {FV.MAX_TURNOS_GLOBAL}, tom só {', '.join(FV.TONS)}, "
+                  "contrapropostas_max 0 a 5; sem fala",
+    "oferta": f"fala obrigatória; origem {' ou '.join(FV.ORIGENS_OFERTA)}",
+    "retorno": "fala obrigatória; dias_max 1 a 7",
+    "conector": "conector_id e fala_espera",
+    "registrar": f"registra {' ou '.join(FV.REGISTROS)}; conectores até 2 ids",
+    "link": f"fala obrigatória; canal um de {', '.join(FV.CANAIS_LINK)}",
+    "condicao": f"campo um de {', '.join(FV.CAMPOS_CONDICAO)}; op um de {' '.join(FV.OPERADORES)}; valor número "
+                "(identidade_confirmada: true/false com = ou <>)",
+    "transferir": f"fala obrigatória; motivo um de {', '.join(FV.MOTIVOS_TRANSFERENCIA)}",
+    "encerrar": f"fala obrigatória; resultado um de {', '.join(FV.RESULTADOS_ENCERRAR)}",
+}
+
+
+def _valor_escrito(b: dict) -> str | None:
+    """O primeiro valor escrito à mão numa fala do bloco (ex.: "R$ 450"), ou None. Mesma regra de erros_geracao."""
+    for campo, txt in FV.textos_do_bloco(b):
+        if campo == "objetivo":
+            continue
+        limpo = FV.trocar_variaveis(txt, lambda _: "")
+        if RE_OFERTA_FIXA.search(limpo.lower()):
+            m = RE_TRECHO_VALOR.search(limpo)
+            return (m.group(0) if m else limpo[:30]).strip()
+    return None
+
+
+def _uma_explicacao(cod: str, bid: str, b: dict | None, ctx: dict) -> str:
+    tipo = b.get("tipo") if b else None
+    nome = f"{bid} ({tipo})" if b and tipo in FV.TIPOS else bid
+    p = b.get("params") if b and isinstance(b.get("params"), dict) else {}
+    if cod == "esquema_invalido":
+        return 'A definição é {"esquema": 1, "blocos": [...]} e nada mais.'
+    if cod == "blocos_demais":
+        return f"Mais de {FV.MAX_BLOCOS} blocos: junte as etapas de conversa numa generativa (fluxo de 4 a 10 blocos)."
+    if cod == "id_invalido":
+        return "Todo bloco precisa de id N1, N2... (N e até 3 dígitos)."
+    if cod == "id_repetido":
+        return f"{bid}: id repetido; cada bloco tem o seu."
+    if cod == "tipo_invalido":
+        return f"{bid}: tipo {tipo!r} não existe; use um de {', '.join(FV.TIPOS)}."
+    if cod == "bloco_invalido":
+        return (f"{nome}: bloco fora do esquema; chaves só {', '.join(FV.CHAVES_BLOCO)}; modo, params e saidas "
+                "obrigatórios; titulo até 60 caracteres; repetir_max inteiro de 1 a 5.")
+    if cod in ("modo_incompativel", "identidade_generativa"):
+        return f"{nome}: modo precisa ser {' ou '.join(FV.TIPOS[tipo][0])}."
+    if cod == "params_invalidos":
+        return (f"{nome}: params inválidos; chaves permitidas {', '.join(FV.CHAVES_PARAMS.get(tipo, ()))}; "
+                f"{DICA_PARAMS.get(tipo, '')}.")
+    if cod == "fala_longa":
+        return f"{nome}: fala com mais de {FV.FALA_MAX} caracteres; encurte."
+    if cod == "generativo_sem_objetivo":
+        return f"{nome}: objetivo com pelo menos {FV.OBJETIVO_MIN} caracteres (sem valores escritos)."
+    if cod == "generativo_sem_limite":
+        return f"{nome}: max_turnos inteiro de 1 a {FV.MAX_TURNOS_GLOBAL}."
+    if cod in ("ferramenta_invalida", "transferir_humano_desligado"):
+        return f"{nome}: ferramentas só {', '.join(FV.FERRAMENTAS)}, sem repetir e sempre com transferir_humano."
+    if cod == "variavel_invalida":
+        ruins = sorted({v for _, t in FV.textos_do_bloco(b or {}) for v in FV.variaveis(t) if v not in FV.VARIAVEIS_FALA})
+        return (f"{nome}: variável fora da lista ({', '.join('{{' + v + '}}' for v in ruins)}); use só "
+                f"{', '.join(ctx.get('variaveis') or FV.VARIAVEIS_FALA)}.")
+    if cod == "fala_pede_senha":
+        return f"{nome}: o texto pede senha ou dados de cartão, o que é proibido; tire esse pedido."
+    if cod in ("saida_faltando", "saida_invalida", "sem_saida", "saida_inexistente") and tipo == "generativa":
+        return (f"{nome}: pelo menos uma saída; cada uma com rotulo (1 a 60), para (id que existe), tipo devolve e "
+                "quando = motivo em minúsculas (ex.: fechou_acordo, sem_acordo, contestou), sem repetir e nunca falhou.")
+    if cod in ("saida_faltando", "saida_invalida", "sem_saida") and tipo in FV.TIPOS:
+        validos, obrig = FV._quandos(b)
+        tem = {s.get("quando") for s in (b.get("saidas") or []) if isinstance(s, dict)}
+        txt = f"{nome}: saídas obrigatórias {', '.join(sorted(obrig)) or '(nenhuma)'}"
+        if obrig - tem:
+            txt += f" (falta {', '.join(sorted(obrig - tem))})"
+        txt += f"; válidas {', '.join(sorted(validos))}"
+        if cod == "saida_invalida":
+            txt += ("; cada saída com rotulo (1 a 60), para (id que existe), tipo e quando, sem repetir o quando; "
+                    "tipo falha só com quando falhou, senão normal")
+        return txt + "."
+    if cod == "saida_inexistente":
+        ids = sorted({str(s.get("para")) for s in (b.get("saidas") or []) if isinstance(s, dict)})
+        return f"{nome}: saída para bloco que não existe (para: {', '.join(ids)}); aponte para um id do fluxo."
+    if cod == "final_com_saida":
+        return f"{nome}: transferir e encerrar não têm saídas (saidas: [])."
+    if cod == "abertura_ausente":
+        return "Falta o bloco abertura (um só, de onde o fluxo começa)."
+    if cod == "abertura_repetida":
+        return "Mais de uma abertura: deixe uma só."
+    if cod == "inalcancavel":
+        return f"{nome}: nenhum caminho chega aqui; ligue a partir de outro bloco ou remova."
+    if cod == "terceiro_sem_recado":
+        return "A saída terceiro da abertura vai para um encerrar com resultado recado."
+    if cod == "valor_antes_identidade":
+        return (f"{nome}: valor, oferta ou credor antes de Confirmar identidade; só depois da saída confirmou de um "
+                "bloco identidade, em todos os caminhos.")
+    if cod == "ciclo_sem_limite":
+        return f"{nome}: ciclo sem limite; ponha repetir_max (1 a 5) num bloco do ciclo ou desfaça a volta."
+    if cod == "intencao_fora_catalogo":
+        fora = [i for i in (p.get("intencoes") or []) if i not in set(ctx.get("intencoes") or [])]
+        return (f"{nome}: intenção fora do catálogo ({', '.join(map(str, fora))}); use só "
+                f"{', '.join(ctx.get('intencoes') or [])}.")
+    if cod == "oferta_escrita_na_fala":
+        return (f"{nome}: fala com valor escrito ({_valor_escrito(b or {}) or 'valor'}); use {{{{oferta.*}}}} e deixe "
+                "os valores como pergunta sobre a alçada.")
+    if cod == "oferta_sem_alcada":
+        return (f"{nome}: a carteira não tem alçada; não use bloco oferta (use conector buscar_ofertas e a generativa "
+                "com apresentar_oferta).")
+    return f"{bid}: {cod}" if bid else cod
+
+
+def explicar_erros(erros: list[str], d, ctx: dict) -> list[str]:
+    """Os erros (códigos do validador) em frases que dizem o que corrigir, bloco a bloco. Também aponta valor escrito
+    na fala mesmo quando o validador parou antes (erros de forma), para o LLM corrigir tudo na mesma rodada."""
+    blocos = [b for b in (d.get("blocos") if isinstance(d, dict) and isinstance(d.get("blocos"), list) else [])
+              if isinstance(b, dict)]
+    por_id = {b.get("id"): b for b in blocos if isinstance(b.get("id"), str)}
+    todos = list(erros)
+    for b in blocos:
+        if isinstance(b.get("id"), str) and _valor_escrito(b) and f"oferta_escrita_na_fala:{b['id']}" not in todos:
+            todos.append(f"oferta_escrita_na_fala:{b['id']}")
+
+    def ordem(e):
+        bid = e.partition(":")[2]
+        return (int(bid[1:]) if FV.RE_ID.fullmatch(bid) else -1, e)
+    out = []
+    for e in sorted(dict.fromkeys(todos), key=ordem):
+        cod, _, bid = e.partition(":")
+        linha = _uma_explicacao(cod, bid, por_id.get(bid), ctx)
+        if linha not in out:
+            out.append(linha)
+    return out
+
+
+def mensagem_correcao(erros: list[str], d, ctx: dict, reparos: list[str]) -> str:
+    txt = ("O validador recusou o fluxo. Corrija cada ponto e entregue o fluxo inteiro de novo pela ferramenta "
+           "entregar_fluxo (mantenha o fluxo compacto):\n- " + "\n- ".join(explicar_erros(erros, d, ctx)))
+    if reparos:
+        txt += "\nO sistema já fez estes ajustes (pode mantê-los):\n- " + "\n- ".join(reparos)
+    return txt + "\nCódigos: " + ", ".join(erros) + "."
 
 
 def mudancas(origem: dict | None, nova: dict) -> list[str]:
@@ -238,9 +607,9 @@ def gerar_fluxo_voz(ctx: dict, modelo, max_correcoes: int = MAX_CORRECOES) -> Ge
             return Geracao(d, {"entendi": entendi, "suposicoes": suposicoes, "perguntas": perguntas,
                                "mudancas": mudancas(ctx.get("origem"), d), "erros": [], "tentativas": tentativa}, tokens)
         if tentativa < max_correcoes:
+            # o LLM vê o que ele mesmo entregou; os erros (e ids) são da versão reparada, e os reparos vão junto
             msgs.append({"role": "assistant", "content": json.dumps(args.get("definicao"), ensure_ascii=False)[:20000]})
-            msgs.append({"role": "user", "content": "O validador recusou o fluxo com estes erros (código:bloco): "
-                                                    + ", ".join(erros) + ". Corrija e entregue de novo."})
+            msgs.append({"role": "user", "content": mensagem_correcao(erros, d, ctx, extra)})
     return Geracao(None, {"entendi": entendi, "suposicoes": suposicoes, "perguntas": perguntas, "mudancas": [],
                           "erros": erros, "tentativas": max_correcoes}, tokens)
 

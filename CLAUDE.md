@@ -654,7 +654,12 @@ SQL 66 também: descartar o pedido em texto (`cancelar_pedido_fluxo_voz`), job n
 acessos), resposta escolhida do conector no simulador (`cenarios`: sucesso/tempo/401) e "Ouvir a voz" (`/ouvir` na VM,
 TTS ElevenLabs da Montagem, áudio nunca guardado; uso em `registrar_uso_ia_voz` componente `previa_voz`).
 Geração do fluxo por texto (`voz/gerar_fluxo.py`): serviço contínuo `motorcx-voz-gerar-fluxo` da VM
-(`motorcx-voz-rodar gerar-fluxo`, metadado `motorcx-gerar-fluxo=1`, chave `motorcx-voz-llm-fluxo`), nos dois acessos.
+(`motorcx-voz-rodar gerar-fluxo`, metadado `motorcx-gerar-fluxo=1`, chave `motorcx-voz-llm-fluxo`), nos dois acessos;
+reiniciado pelo `motorcx-voz-atualizar` (05:35) quando a imagem muda. Pedido livre (prompt de persona) vira fluxo
+compacto (abertura → identidade → UMA generativa → finais; valores do texto viram pergunta da alçada). Reparos de
+forma sem mudar sentido em `aplicar_travas` (título 60, repetir_max 1..5, chaves fora do esquema, tipo/rótulo da
+saída, falhou/sem_resposta/nao_entendido → Transferir · atendente, bloco sem caminho sai; tudo em suposições);
+correção ao LLM bloco a bloco em português (`explicar_erros`); `resultado.erros` continua em códigos.
 Go-live (SQL 67): `voz_troncos.segredo_ref` começa com `voz/` (trigger só quando a referência muda; site igual);
 `criar_gcp.sh` cria a `motorcx-gravacoes-leitura` (leitura dos buckets; `chave-leitura` gera o `GCS_GRAVACOES_CHAVE`
 sem mostrar), a conta da VM lê `motorcx-voz-*` e `motorcx-crm-*` e chama a Vertex (`roles/aiplatform.user`);
