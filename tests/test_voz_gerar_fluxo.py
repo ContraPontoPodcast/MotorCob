@@ -1,6 +1,7 @@
 """Geração do fluxo a partir do texto (voz/gerar_fluxo.py) com um LLM falso: saída inválida nunca vira rascunho
 (nem depois das 2 correções), as travas sempre entram, conector inventado não passa e mudanças são listadas."""
 import copy
+import json
 import unittest
 
 from voz import fluxo_casos as C
@@ -191,6 +192,235 @@ class TestGerar(unittest.TestCase):
         self.assertEqual(sb.marcados, [7])
 
 
+# Pedido real condensado (fictício: empresa, persona e valores inventados) de um "prompt de persona" colado no
+# Descrever em texto. Com ele o LLM fazia um bloco por tópico e falhava nas correções.
+TEXTO_PERSONA = (
+    "PROMPT - AGENTE IA NEGOCIADOR DE COBRANÇA. Você é Alex, agente de IA da Financeira Exemplo, especializado em "
+    "negociação de dívidas de cartão de crédito; humanizada, consultiva, persuasiva. 1. Abertura: apresente-se, diga "
+    "que quer ajudar, solicite o primeiro nome. 2. Entendimento: interesse em regularizar, motivo do atraso, "
+    "capacidade e preferência de pagamento. 3. Negociação: valor fictício R$ 3.500,00 só para simulação; à vista "
+    "R$ 2.100,00; entrada R$ 300,00 + 6 parcelas de R$ 450,00; trate objeções sem pressionar. 4. Fechamento: "
+    "confirme opção e valores, informe que é simulação. 5. Encerramento: agradeça e encerre. Regras: uma pergunta por "
+    "vez; não invente dados; não ameace; se contestar a dívida, oriente canais oficiais.")
+CTX_PERSONA = {**CTX, "texto": TEXTO_PERSONA}
+
+
+def _s(rotulo, para, quando, tipo="normal"):
+    return {"rotulo": rotulo, "para": para, "tipo": tipo, "quando": quando}
+
+
+def compacto():
+    """O que o pedido de persona deve virar: abertura → identidade → UMA generativa → finais."""
+    return {"esquema": 1, "blocos": [
+        {"id": "N1", "tipo": "abertura", "modo": "arvore", "titulo": "Abertura",
+         "params": {"fala": "Olá, aqui é o Alex, assistente virtual da {{assessoria}}. Falo com {{primeiro_nome}}?"},
+         "saidas": [_s("Sou eu", "N2", "titular"), _s("Não é a pessoa", "N7", "terceiro")]},
+        {"id": "N2", "tipo": "identidade", "modo": "cognicao",
+         "params": {"fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+                    "pergunta": "dia_mes_nascimento", "conector_id": 2, "tentativas": 2},
+         "saidas": [_s("Confirmou", "N3", "confirmou"), _s("Não confirmou", "N7", "nao_confirmou"),
+                    _s("Conector falhou", "N6", "falhou", "falha")]},
+        {"id": "N3", "tipo": "generativa", "modo": "generativo", "titulo": "Entender e negociar",
+         "params": {"objetivo": "Entender o interesse e o motivo do atraso, uma pergunta por vez, e negociar com as "
+                                "ofertas recebidas, tratando objeções sem pressionar. Contestação: devolva contestou.",
+                    "tom": ["cordial", "frases_curtas", "nao_pressiona"], "max_turnos": 20,
+                    "ferramentas": ["apresentar_oferta", "registrar_promessa", "agendar_retorno", "transferir_humano",
+                                    "encerrar_chamada"], "contrapropostas_max": 2},
+         "saidas": [_s("Fechou acordo", "N4", "fechou_acordo", "devolve"), _s("Sem acordo", "N5", "sem_acordo", "devolve"),
+                    _s("Contestou", "N8", "contestou", "devolve"), _s("Pediu humano", "N6", "pediu_humano", "devolve")]},
+        {"id": "N4", "tipo": "encerrar", "modo": "arvore",
+         "params": {"fala": "Obrigado. Você recebe a confirmação pelos canais oficiais. Até logo!", "resultado": "promessa"},
+         "saidas": []},
+        {"id": "N5", "tipo": "encerrar", "modo": "arvore",
+         "params": {"fala": "Tudo bem, obrigado pela atenção. Até logo!", "resultado": "recusa"}, "saidas": []},
+        {"id": "N6", "tipo": "transferir", "modo": "arvore", "titulo": "Transferir · atendente",
+         "params": {"fala": "Vou passar você para um atendente agora, só um instante.", "motivo": "pedido_humano"},
+         "saidas": []},
+        {"id": "N7", "tipo": "encerrar", "modo": "arvore", "params": {"fala": G.RECADO, "resultado": "recado"}, "saidas": []},
+        {"id": "N8", "tipo": "transferir", "modo": "arvore",
+         "params": {"fala": "Vou passar você para a equipe que cuida de contestações.", "motivo": "contestacao"},
+         "saidas": []},
+    ]}
+
+
+def baguncado():
+    """Os quatro erros do pedido real: bloco_invalido, saida_invalida, saida_faltando e inalcancavel."""
+    d = compacto()
+    n1, n2, n3, n4 = (bloco(d, i) for i in ("N1", "N2", "N3", "N4"))
+    n1["descricao"] = "Etapa 1 do prompt"                                    # chave fora do esquema
+    n1["x"] = "esquerda"                                                       # posição que não é número
+    n1["saidas"][0]["rotulo"] = "Sim, sou eu mesmo, pode falar comigo sobre o assunto que quiser, estou ouvindo"
+    n2["saidas"] = n2["saidas"][:2]                                            # falta falhou (tem conector)
+    n2["saidas"][0]["condicao"] = "se confirmar"                               # chave fora do esquema na saída
+    n3["titulo"] = "Negociação consultiva, humanizada e persuasiva com tratamento de objeções e contrapropostas"
+    n3["repetir_max"] = 9
+    for s in n3["saidas"]:
+        s["tipo"] = "normal"                                                   # generativa devolve
+    n3["saidas"].append(_s("Fechou de novo", "N5", "fechou_acordo", "devolve"))   # quando repetido
+    n4["saidas"] = [_s("Volta", "N1", "titular")]                              # final com saída
+    d["blocos"] += [
+        {"id": "N9", "tipo": "pergunta", "modo": "arvore", "titulo": "Etapa 5: encerramento",
+         "params": {"fala": "Posso ajudar em algo mais?", "opcoes": [{"codigo": "nao", "rotulo": "Não"}]},
+         "saidas": [_s("Não", "N10", "nao")]},
+        {"id": "N10", "tipo": "encerrar", "modo": "arvore", "params": {"fala": "Até logo!", "resultado": "cpc"}, "saidas": []},
+        {"id": "N11", "tipo": "conector", "modo": "sistema", "params": {"conector_id": 1}, "saidas": [_s("Ok", "N3", "respondeu")]},
+    ]
+    return d
+
+
+def por_topico():
+    """1ª resposta típica: um bloco por tópico do prompt, com os valores escritos na fala."""
+    return {"esquema": 1, "blocos": [
+        {"id": "N1", "tipo": "abertura", "modo": "arvore", "titulo": "1. Abertura: apresente-se, diga que quer ajudar e peça o nome",
+         "params": {"fala": "Oi! Aqui é o Alex, da {{assessoria}}. Falo com {{primeiro_nome}}?"},
+         "saidas": [_s("Sim", "N2", "titular"), _s("Não", "N9", "terceiro")]},
+        {"id": "N2", "tipo": "identidade", "modo": "cognicao",
+         "params": {"fala": "Me confirma o ano do seu nascimento?", "pergunta": "ano_nascimento", "conector_id": 2},
+         "saidas": [_s("Confirmou", "N3", "confirmou"), _s("Não confirmou", "N9", "nao_confirmou")]},
+        {"id": "N3", "tipo": "pergunta", "modo": "arvore", "titulo": "2. Entendimento",
+         "params": {"fala": "Você tem interesse em regularizar?",
+                    "opcoes": [{"codigo": "quer_regularizar", "rotulo": "Quer"}, {"codigo": "nao_quer", "rotulo": "Não quer"}]},
+         "saidas": [_s("Quer", "N4", "quer_regularizar")]},
+        {"id": "N4", "tipo": "pergunta", "modo": "arvore", "titulo": "3. Negociação",
+         "params": {"fala": "Temos à vista R$ 2.100,00 ou entrada de R$ 300,00 + 6 parcelas de R$ 450,00. Qual prefere?",
+                    "opcoes": [{"codigo": "aceitou", "rotulo": "Aceitou"}, {"codigo": "recusou", "rotulo": "Recusou"}]},
+         "saidas": [_s("Aceitou", "N5", "aceitou"), _s("Recusou", "N6", "recusou")]},
+        {"id": "N5", "tipo": "encerrar", "modo": "arvore", "params": {"fala": "Combinado, obrigado!", "resultado": "promessa"}, "saidas": []},
+        {"id": "N6", "tipo": "encerrar", "modo": "arvore", "params": {"fala": "Tudo bem, obrigado.", "resultado": "recusa"}, "saidas": []},
+        {"id": "N9", "tipo": "encerrar", "modo": "arvore", "params": {"fala": G.RECADO, "resultado": "recado"}, "saidas": []},
+    ]}
+
+
+class TestPedidoEmTextoLivre(unittest.TestCase):
+    """Prompt de persona colado no Descrever em texto: reparos de forma, prompt com as regras do validador e
+    correção com mensagens por bloco. As travas de segurança continuam recusando."""
+
+    def test_compacto_e_valido(self):
+        self.assertEqual(FV.erros(compacto()), [])
+        self.assertEqual(G.erros_geracao(compacto(), CTX_PERSONA), [])
+
+    def test_fluxo_valido_nao_ganha_reparo(self):
+        for d in (compacto(), C.negociador()):
+            out, sup = G.aplicar_travas(d, CTX)
+            self.assertEqual(sup, [])
+            self.assertEqual([b["id"] for b in out["blocos"]], [b["id"] for b in d["blocos"]])
+            self.assertEqual([b["saidas"] for b in out["blocos"]], [b["saidas"] for b in d["blocos"]])
+
+    def test_bagunca_vira_rascunho_valido_pelos_reparos(self):
+        d = baguncado()
+        codigos = {e.split(":")[0] for e in FV.erros(d)}
+        self.assertLessEqual({"bloco_invalido", "saida_invalida", "saida_faltando", "inalcancavel"}, codigos)
+        llm = LLM([d])
+        g = G.gerar_fluxo_voz(CTX_PERSONA, llm)
+        self.assertIsNotNone(g.definicao)
+        out = g.definicao
+        self.assertEqual(FV.erros(out), [])
+        self.assertEqual((g.resultado["erros"], g.resultado["tentativas"], len(llm.chamadas)), ([], 0, 1))
+        self.assertEqual(len(bloco(out, "N3")["titulo"]), 60)
+        self.assertEqual(bloco(out, "N3")["repetir_max"], 5)
+        self.assertEqual({s["tipo"] for s in bloco(out, "N3")["saidas"]}, {"devolve"})
+        self.assertEqual([s["para"] for s in bloco(out, "N3")["saidas"] if s["quando"] == "fechou_acordo"], ["N4"])
+        self.assertNotIn("descricao", bloco(out, "N1"))
+        self.assertNotIn("x", bloco(out, "N1"))
+        self.assertEqual(len(bloco(out, "N1")["saidas"][0]["rotulo"]), 60)
+        self.assertNotIn("condicao", bloco(out, "N2")["saidas"][0])
+        self.assertEqual(bloco(out, "N4")["saidas"], [])
+        falhou = next(s for s in bloco(out, "N2")["saidas"] if s["quando"] == "falhou")
+        self.assertEqual((falhou["para"], falhou["tipo"]), ("N6", "falha"))     # o Transferir · atendente que já existia
+        self.assertEqual(sorted(b["id"] for b in out["blocos"]), sorted(["N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8"]))
+        sup = " | ".join(g.resultado["suposicoes"])
+        self.assertIn("removidos: N9, N10, N11", sup)
+        self.assertIn("repetir_max 9 ajustado para 5", sup)
+        self.assertIn("N2 (falhou): vai para Transferir · atendente", sup)
+
+    def test_falha_obrigatoria_cria_transferir_atendente(self):
+        d = compacto()
+        d["blocos"] = [b for b in d["blocos"] if b["id"] != "N6"]
+        bloco(d, "N2")["saidas"] = bloco(d, "N2")["saidas"][:2]
+        bloco(d, "N3")["saidas"] = bloco(d, "N3")["saidas"][:3]
+        d["blocos"].insert(2, {"id": "N12", "tipo": "intencao", "modo": "cognicao",
+                               "params": {"fala": "Como prefere seguir?", "intencoes": ["quero_negociar"]},
+                               "saidas": [_s("Negociar", "N3", "quero_negociar")]})
+        bloco(d, "N2")["saidas"][0]["para"] = "N12"
+        d["blocos"].append({"id": "N20", "tipo": "encerrar", "modo": "arvore",                 # solto: sai
+                            "params": {"fala": "Até logo!", "resultado": "cpc"}, "saidas": []})
+        out, sup = G.aplicar_travas(d, CTX)
+        self.assertEqual(FV.erros(out), [])
+        self.assertNotIn("N20", [b["id"] for b in out["blocos"]])
+        novo = bloco(out, "N21")                                     # o id removido não volta
+        self.assertEqual((novo["tipo"], novo["titulo"], novo["params"]["motivo"]), ("transferir", "Transferir · atendente", "pedido_humano"))
+        self.assertEqual({s["quando"]: s["para"] for s in bloco(out, "N12")["saidas"]}, {"quero_negociar": "N3", "nao_entendido": "N21"})
+        self.assertIn("N2 (falhou), N12 (nao_entendido)", " ".join(sup))
+
+    def test_nao_inventa_opcao_nem_intencao(self):
+        """Saída obrigatória que não é falha/silêncio (opção da pergunta, confirmou...) fica para o LLM."""
+        d = por_topico()
+        out, _ = G.aplicar_travas(d, CTX)
+        self.assertIn("saida_faltando:N3", FV.erros(out))
+        self.assertEqual([s["quando"] for s in bloco(out, "N3")["saidas"]], ["quer_regularizar"])
+
+    def test_um_bloco_por_topico_corrige_na_segunda_com_mensagens_por_bloco(self):
+        llm = LLM([por_topico(), compacto()])
+        g = G.gerar_fluxo_voz(CTX_PERSONA, llm)
+        self.assertIsNotNone(g.definicao)
+        self.assertEqual((g.resultado["tentativas"], g.resultado["erros"]), (1, []))
+        msg = llm.chamadas[1][-1]["content"]
+        self.assertIn("N3 (pergunta): saídas obrigatórias nao_quer, quer_regularizar (falta nao_quer); "
+                      "válidas nao_quer, quer_regularizar, sem_resposta.", msg)
+        self.assertIn("N4 (pergunta): fala com valor escrito (R$ 2.100,00); use {{oferta.*}} e deixe os valores como "
+                      "pergunta sobre a alçada.", msg)
+        self.assertIn("O sistema já fez estes ajustes", msg)
+        self.assertIn("N2 (falhou): vai para Transferir · atendente", msg)
+        self.assertIn("Códigos: saida_faltando:N3.", msg)
+        # o LLM vê a própria resposta antes da correção
+        self.assertEqual(json.loads(llm.chamadas[1][-2]["content"]), por_topico())
+
+    def test_explicacoes(self):
+        d = compacto()
+        d["blocos"].append({"id": "N9", "tipo": "encerrar", "modo": "arvore",
+                            "params": {"fala": "Até logo!", "resultado": "cpc"}, "saidas": []})
+        linhas = G.explicar_erros(["inalcancavel:N9", "sem_saida:N3", "valor_antes_identidade:N1",
+                                   "intencao_fora_catalogo:N2", "params_invalidos:N8"], d, CTX)
+        self.assertEqual(linhas[0], "N1 (abertura): valor, oferta ou credor antes de Confirmar identidade; só depois "
+                                    "da saída confirmou de um bloco identidade, em todos os caminhos.")
+        self.assertIn("N9 (encerrar): nenhum caminho chega aqui; ligue a partir de outro bloco ou remova.", linhas)
+        self.assertTrue(any(x.startswith("N3 (generativa): pelo menos uma saída") for x in linhas))
+        self.assertTrue(any(x.startswith("N8 (transferir): params inválidos") and "contestacao" in x for x in linhas))
+        self.assertEqual(G.explicar_erros(["esquema_invalido"], "lixo", CTX), ['A definição é {"esquema": 1, "blocos": [...]} e nada mais.'])
+
+    def test_travas_de_seguranca_continuam_recusando(self):
+        casos = []
+        d = compacto()
+        bloco(d, "N1")["params"]["fala"] = "Olá {{primeiro_nome}}, sua dívida é de {{saldo}}."
+        casos.append((d, "valor_antes_identidade:N1"))
+        d = compacto()
+        bloco(d, "N4")["params"]["fala"] = "Fechado: entrada e 6 parcelas de R$ 450,00."
+        casos.append((d, "oferta_escrita_na_fala:N4"))
+        d = compacto()
+        bloco(d, "N2")["params"]["fala"] = "Me diga a senha do cartão, por favor."
+        casos.append((d, "fala_pede_senha:N2"))
+        d = compacto()
+        bloco(d, "N5")["params"]["fala"] = "Obrigado, {{cpf}}."
+        casos.append((d, "variavel_invalida:N5"))
+        for d, erro in casos:
+            out, _ = G.aplicar_travas(d, CTX_PERSONA)
+            self.assertIn(erro, G.erros_geracao(out, CTX_PERSONA))
+            g = G.gerar_fluxo_voz(CTX_PERSONA, LLM([d, d, d]))
+            self.assertIsNone(g.definicao, erro)
+            self.assertIn(erro, g.resultado["erros"])
+
+    def test_prompt_tem_regras_de_forma_e_mapeamento(self):
+        llm = LLM([compacto()])
+        G.gerar_fluxo_voz(CTX_PERSONA, llm)
+        sistema = llm.chamadas[0][0]["content"]
+        for trecho in ("titulo até 60 caracteres", "repetir_max inteiro de 1 a 5", "tipo \"falha\" se e só se",
+                       "tipo \"devolve\" se e só se o bloco é generativa", "todo bloco alcançável a partir da abertura",
+                       "NÃO faça um bloco por tópico", "UMA generativa", "Cadastrar estes valores na alçada da carteira?",
+                       "{{primeiro_nome}}", "simulador", "contestacao"):
+            self.assertIn(trecho, sistema)
+        self.assertIn(TEXTO_PERSONA, llm.chamadas[0][1]["content"])
+
+
 class TestServicoDaVm(unittest.TestCase):
     """O laço do serviço motorcx-voz-gerar-fluxo (G.rodar) nos dois acessos da VM: chave do servidor (PostgREST) e
     acesso próprio (papel motorcx_voz: RPC vira a função de voz_vm e o anexo sai por bilhete na voz-arquivos)."""
@@ -282,6 +512,9 @@ class TestServicoDaVm(unittest.TestCase):
         self.assertIn("gerar-fluxo)", rodar)
         self.assertIn('[ "$(meta motorcx-gerar-fluxo)" != 1 ]', rodar)
         self.assertIn("python3 -m voz.gerar_fluxo", rodar)
+        # a atualização das 05:35 reinicia o serviço quando a imagem da voz muda (senão roda a imagem antiga)
+        atualizar = (vm / "motorcx-voz-atualizar").read_text(encoding="utf-8").replace("\\\n", "")
+        self.assertIn("motorcx-voz-gerar-fluxo", next(x for x in atualizar.splitlines() if x.startswith('atualizar "$IMG_VOZ"')))
         unidade = (vm / "motorcx-voz-gerar-fluxo.service").read_text(encoding="utf-8")
         self.assertIn("ExecStart=/usr/local/bin/motorcx-voz-rodar gerar-fluxo", unidade)
         self.assertIn("ExecStartPre=/usr/local/bin/motorcx-voz-segredos", unidade)
