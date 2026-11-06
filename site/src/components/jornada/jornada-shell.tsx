@@ -46,7 +46,7 @@ export function JornadaHeading({ title, linha, actions }: { title: string; linha
 			</div>
 			<div className="flex flex-wrap items-center gap-2">
 				{!loading && carteiras.length > 0 && (
-					<label className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[#F2F2F7] px-3 text-[13px] font-medium text-[#1D1D1F]">
+					<label className="flex h-9 items-center gap-1.5 rounded-[10px] bg-[var(--base-fill)] px-3 text-[13px] font-medium text-[var(--base-texto)]">
 						<Wallet size={15} className="text-[#8E8E93]" />
 						<span className="sr-only">Carteira</span>
 						<select aria-label="Carteira" value={carteira?.codigo ?? ''} onChange={e => setCarteira(carteiras.find(c => c.codigo === e.target.value) ?? null)} className="h-9 max-w-[200px] bg-transparent text-[13px] font-medium outline-none">

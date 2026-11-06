@@ -221,6 +221,30 @@
 .mc-platform textarea::placeholder {
   color: var(--base-texto-3) !important;
 }
+/* Campo embutido numa pílula (select/input com bg-transparent dentro de um label com fundo próprio: seletor de
+   carteira do cabeçalho, da Orquestração e do MotorCli, data da Lista do dia, período, busca…). A regra acima
+   pintava o campo de branco por cima da pílula cinza (caixa branca de canto reto dentro da pílula). Aqui ele
+   herda o fundo e o raio do contêiner; a lista aberta usa as cores do tema (no Windows ela herda o fundo). */
+.mc-platform select.bg-transparent,
+.mc-platform input.bg-transparent:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])),
+.mc-platform textarea.bg-transparent {
+  background-color: transparent !important;
+  border-radius: inherit;
+}
+.mc-platform select.bg-transparent option {
+  background-color: var(--base-cartao);
+  color: var(--base-texto);
+}
+/* Foco: o anel vai na pílula inteira, não numa caixa dentro dela. */
+@supports selector(:has(*)) {
+  .mc-platform label > select.bg-transparent:focus-visible,
+  .mc-platform label > input.bg-transparent:focus-visible { outline: none; }
+  .mc-platform label:has(> select.bg-transparent:focus-visible),
+  .mc-platform label:has(> input.bg-transparent:focus-visible) {
+    outline: 3px solid rgba(0, 113, 227, .5);
+    outline-offset: 1px;
+  }
+}
 .mc-platform input:disabled,
 .mc-platform select:disabled,
 .mc-platform textarea:disabled {

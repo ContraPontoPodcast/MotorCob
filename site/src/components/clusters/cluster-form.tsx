@@ -4,6 +4,8 @@ import { X, Plus, Trash2 } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, supabase, type Cluster, type Condicao, type Row } from '@/lib/supabase';
 import { ErrorDetail } from '@/components/error-detail';
+import { CampoFaixa, CampoLista, CampoNumero } from '@/components/comuns/campos-condicao';
+import { normalizarCondicoes, trocarOperador } from '@/lib/condicoes';
 
 export type Coluna = { nome: string; tipo: 'numero' | 'texto' };
 const calculados: Coluna[] = [
@@ -19,8 +21,9 @@ const ops = [
   { id: '>=', label: 'maior ou igual', num: true, txt: false },
   { id: '<', label: 'menor que', num: true, txt: false },
   { id: '<=', label: 'menor ou igual', num: true, txt: false },
-  { id: 'em', label: 'está entre', num: true, txt: true },
-  { id: 'nao_em', label: 'não está entre', num: true, txt: true },
+  { id: 'entre', label: 'está entre (faixa)', num: true, txt: false },
+  { id: 'em', label: 'é um destes', num: true, txt: true },
+  { id: 'nao_em', label: 'não é nenhum destes', num: true, txt: true },
   { id: 'contem', label: 'contém', num: false, txt: true },
   { id: 'vazio', label: 'está vazio', num: true, txt: true },
   { id: 'preenchido', label: 'está preenchido', num: true, txt: true },
@@ -82,11 +85,13 @@ export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculo
     if (cluster && (usadoEmCarteiras ?? 0) > 1) {
       if (!window.confirm(`Este segmento é da empresa e está em ${usadoEmCarteiras} carteiras: mudar condições ou ordem muda em todas. Continuar?`)) return;
     }
+    const norm = normalizarCondicoes(condicoes, campo => fieldTipo(campo, colunas));
+    if ('erro' in norm) { setError(norm.erro); return; }
     setBusy(true); setError('');
     const payload = {
       empresa_id: empresa.id, codigo: code, nome: nome.trim(),
       estrategia_id: estrategiaId || null,
-      condicoes: condicoes as unknown as Record<string, unknown>[],
+      condicoes: norm.condicoes as unknown as Record<string, unknown>[],
       pacote: pacote.trim() || null, revalida_dias: Number(revalida) || null,
       so_digital: soDigital, voz_d0: vozD0, canais_bloqueados: bloqueados,
       credor_id: criarVinculoCredor ? null : (todosCredores ? null : credorId),
@@ -174,17 +179,21 @@ export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculo
           {semColunas && <p className="mb-3 rounded-lg bg-[#fff7e8] p-3 text-xs text-[#80520f]">Envie a primeira base bruta para liberar as colunas da empresa. Enquanto isso, digite o nome da coluna.</p>}
           {condicoes.length === 0 && <p className="text-xs text-slate-400">Nenhuma condição — vale para todos os clientes.</p>}
           <div className="space-y-2">{condicoes.map((c, i) => {
-            const tipo = fieldTipo(c.campo, colunas); const opsList = opsFor(tipo); const noValor = c.op === 'vazio' || c.op === 'preenchido'; const isLista = c.op === 'em' || c.op === 'nao_em';
-            return <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-[#e2eaec] bg-[#fafcfc] p-2">
+            const tipo = fieldTipo(c.campo, colunas); const opsList = opsFor(tipo); const noValor = c.op === 'vazio' || c.op === 'preenchido'; const isLista = c.op === 'em' || c.op === 'nao_em'; const isNum = tipo === 'numero' || ['>', '>=', '<', '<='].includes(c.op);
+            return <div key={i} className="flex flex-wrap items-start gap-2 rounded-lg border border-[#e2eaec] bg-[#fafcfc] p-2">
               {semColunas ? <input value={c.campo} onChange={e => updCond(i, { campo: e.target.value })} placeholder="Nome da coluna" className="h-9 w-[150px] rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>
                 : <select value={c.campo} onChange={e => updCond(i, { campo: e.target.value })} className="h-9 w-[170px] rounded border border-[#d8e3e5] bg-white px-2 text-xs outline-none focus:border-[#0F4C5C]">
                   <optgroup label="Calculados">{calculados.map(co => <option key={co.nome} value={co.nome}>{calculadoLabel[co.nome]}</option>)}</optgroup>
                   {colunas.length > 0 && <optgroup label="Colunas da base">{colunas.map(co => <option key={co.nome} value={co.nome}>{co.nome}</option>)}</optgroup>}
                 </select>}
-              <select value={c.op} onChange={e => updCond(i, { op: e.target.value })} className="h-9 w-[150px] rounded border border-[#d8e3e5] bg-white px-2 text-xs outline-none focus:border-[#0F4C5C]">{opsList.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
-              {!noValor && (isLista
-                ? <input value={Array.isArray(c.valor) ? c.valor.join(', ') : String(c.valor ?? '')} onChange={e => updCond(i, { valor: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} placeholder="valores separados por vírgula" className="h-9 min-w-[180px] flex-1 rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>
-                : <input value={Array.isArray(c.valor) ? c.valor.join(', ') : String(c.valor ?? '')} onChange={e => updCond(i, { valor: e.target.value })} placeholder="valor" className="h-9 min-w-[120px] flex-1 rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>)}
+              <select value={c.op} onChange={e => setCondicoes(prev => prev.map((x, idx) => idx === i ? trocarOperador(x, e.target.value) : x))} className="h-9 w-[150px] rounded border border-[#d8e3e5] bg-white px-2 text-xs outline-none focus:border-[#0F4C5C]">{opsList.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+              {!noValor && (c.op === 'entre'
+                ? <CampoFaixa valor={c.valor} onChange={v => updCond(i, { valor: v })} className="h-9 w-full min-w-[100px] rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>
+                : isLista
+                ? <CampoLista valor={c.valor} onChange={v => updCond(i, { valor: v })} className="h-9 min-w-[180px] flex-1 rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>
+                : isNum
+                ? <CampoNumero valor={c.valor} onChange={v => updCond(i, { valor: v })} placeholder="valor (ex.: 1.500,50)" aria-label="Valor" className="h-9 w-full min-w-[120px] rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>
+                : <input value={Array.isArray(c.valor) ? c.valor.join('; ') : String(c.valor ?? '')} onChange={e => updCond(i, { valor: e.target.value })} placeholder="valor" className="h-9 min-w-[120px] flex-1 rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>)}
               <button type="button" onClick={() => delCond(i)} aria-label="Remover condição" className="grid h-9 w-9 place-items-center rounded text-slate-400 hover:bg-red-50 hover:text-[#C62828]"><Trash2 size={15}/></button>
             </div>;
           })}</div>

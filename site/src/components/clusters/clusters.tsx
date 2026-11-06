@@ -3,20 +3,21 @@ import { ArrowDown, ArrowUp, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Empty, Loading, Notice, PageHeading, useAllowed } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, numberBR, supabase, type Cluster, type Row } from '@/lib/supabase';
+import { fraseValor } from '@/lib/condicoes';
 import { ClusterForm, type Coluna } from '@/components/clusters/cluster-form';
 
 const calculadoLabel: Record<string, string> = { saldo: 'Saldo total', dias_atraso: 'Dias de atraso', qtd_contratos: 'Quantidade de contratos' };
-const opPhrase: Record<string, string> = { '=': 'é', '!=': 'é diferente de', '>': '>', '>=': '≥', '<': '<', '<=': '≤', em: 'está entre', nao_em: 'não está entre', contem: 'contém', vazio: 'está vazio', preenchido: 'está preenchido' };
+const opPhrase: Record<string, string> = { '=': 'é', '!=': 'é diferente de', '>': '>', '>=': '≥', '<': '<', '<=': '≤', entre: 'entre', em: 'é um destes:', nao_em: 'não é nenhum destes:', contem: 'contém', vazio: 'está vazio', preenchido: 'está preenchido' };
 const canalLabel: Record<string, string> = { whatsapp: 'WhatsApp', rcs: 'RCS', agente_voz: 'Agente virtual', discador: 'Discador', sms: 'SMS', email: 'E-mail' };
 
 function condFrase(c: Cluster, colunas: Coluna[]): string {
   if (!c.condicoes || c.condicoes.length === 0) return 'Sem condições (vale para todos)';
   const label = (campo: string) => calculadoLabel[campo] ?? campo;
-  const valStr = (v: unknown) => Array.isArray(v) ? v.join(', ') : String(v ?? '');
+  
   return c.condicoes.map(cd => {
     const op = opPhrase[cd.op] ?? cd.op;
     if (cd.op === 'vazio' || cd.op === 'preenchido') return `${label(cd.campo)} ${op}`;
-    return `${label(cd.campo)} ${op} ${valStr(cd.valor)}`;
+    return `${label(cd.campo)} ${op} ${fraseValor(cd)}`;
   }).join(' e ');
 }
 function mudancas(c: Cluster): string[] {
