@@ -65,7 +65,11 @@ class TestRepositorio(unittest.TestCase):
 
     def test_le_as_chamadas_do_site_das_funcoes_e_do_python(self):
         arquivos = {c.arquivo.split("/")[0] for c in self.chamadas}
-        self.assertTrue({"site", "supabase", "nuvem", "voz", "motor"} <= arquivos, arquivos)
+        esperadas = {"site", "nuvem", "voz", "motor"}
+        # a imagem do motor não leva supabase/functions (.dockerignore): só cobra as Edge Functions quando existem
+        if (C.RAIZ / "supabase" / "functions").is_dir():
+            esperadas.add("supabase")
+        self.assertTrue(esperadas <= arquivos, arquivos)
 
     def test_assinatura_vigente_das_funcoes_corrigidas(self):
         sigs = C.assinaturas_migracoes()
