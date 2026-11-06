@@ -1096,6 +1096,18 @@ def aviso_lote_discagem(sb, eid, cid, nome: str, discagem: dict | None, out=prin
     return n
 
 
+def carteira_sem_carga(u: dict, baixados_u) -> bool:
+    """Carteira que nunca recebeu carga: sem base montada, sem arquivo baixado agora e sem bruto/incremental na
+    pasta. A rotina pula sem abrir execução com erro (QA B14: a "Carteira principal" vazia dava erro todo dia)."""
+    pasta = Path(u["pasta"])
+    if (pasta / "base" / "clientes.csv").exists() or baixados_u:
+        return False
+    for d in ("bruto", "incremental"):
+        if (pasta / d).exists() and any(p.is_file() for p in (pasta / d).iterdir()):
+            return False
+    return True
+
+
 def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, out=print,
                             pasta_empresas: Path = PASTA_EMPRESAS, so_credores: set | None = None):
     """Roda o dia de cada credor ativo da empresa (ou só os de so_credores). Um credor com erro
@@ -1130,6 +1142,11 @@ def sincronizar_empresa_dia(sb: Supabase, dados: Path, emp: dict, data: date, ou
         return _rodar_credor(sb, emp, unidades[0], data, baixados.get(None, []), entrada, out, pasta_emp)
     res, erros = {}, []
     for u in unidades:
+        if carteira_sem_carga(u, baixados.get(u["id"], [])):
+            # carteira que nunca recebeu carga (ex.: a "Carteira principal" criada sozinha): não é erro, só não roda
+            out(f"  carteira {u['codigo']}: sem carga ainda, nada a rodar")
+            res[u["codigo"]] = {"sem_carga": True}
+            continue
         try:
             res[u["codigo"]] = _rodar_credor(sb, emp, u, data, baixados.get(u["id"], []), entrada, out, pasta_emp)
         except Exception as ex:  # noqa: BLE001 — um credor com erro não para os outros
@@ -1666,6 +1683,8 @@ def _fechar_pedidos(sb: Supabase, emp: dict, pedidos: dict, r: dict):
         res = r["credores"].get(codigos.get(cid)) if "credores" in r else r
         if res is None:
             res = {"erro": "carteira inativa ou sem base: nada a reenquadrar"}
+        elif res.get("sem_carga"):
+            res = {"erro": "carteira sem carga: envie a carga geral pelo site (Enviar arquivos) para reenquadrar"}
         valores = {"status": "erro" if "erro" in res else "ok", "terminado_em": agora(),
                    "execucao_id": res.get("execucao"), "erro": (res.get("erro") or None) and str(res["erro"])[:500]}
         for i in ids:

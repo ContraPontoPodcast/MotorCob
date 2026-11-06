@@ -304,24 +304,27 @@ function BlocoEstrategiaComEstagios({ entry, estagios, downloading, onBaixarCana
 	const zipKey = `zip:${entry.pasta}`;
 	return (
 		<section className="rounded-xl border border-[#dfe8ea] bg-white p-6">
-			<button type="button" onClick={() => setAberto(v => !v)} className="flex w-full items-center justify-between gap-3 text-left">
-				<div className="flex items-center gap-3">
+			{/* cabeçalho: abrir/fechar e baixar são botões irmãos (botão dentro de botão é HTML inválido) */}
+			<div className="flex w-full items-center justify-between gap-3">
+				<button type="button" onClick={() => setAberto(v => !v)} aria-expanded={aberto} className="flex min-w-0 flex-1 items-center gap-3 text-left">
 					<span className="grid h-9 w-9 place-items-center rounded-lg bg-[#e9f1f3] text-xs font-bold text-[#0F4C5C]">{entry.estrategia_id}</span>
 					<div>
 						<h2 className="text-base font-semibold text-[#163943]">{entry.estrategia}</h2>
 						<p className="text-xs text-slate-500">{numberBR(entry.clientes)} clientes · {estagios.length} estágio{estagios.length !== 1 ? 's' : ''}</p>
 					</div>
-				</div>
+				</button>
 				<div className="flex items-center gap-3">
-					<span onClick={e => { e.stopPropagation(); }} className="hidden sm:block">
-						<button type="button" onClick={(e) => { e.stopPropagation(); onBaixarZipEstrategia(); }} disabled={!!downloading}
+					<span className="hidden sm:block">
+						<button type="button" onClick={onBaixarZipEstrategia} disabled={!!downloading}
 							className="flex h-9 items-center gap-2 rounded-lg border border-[#c9dadd] px-4 text-xs font-semibold text-[#0F4C5C] hover:bg-[#edf4f5] disabled:opacity-50">
 							<Download size={15} /> {downloading === zipKey ? 'Preparando...' : `Baixar ${entry.estrategia} (.zip)`}
 						</button>
 					</span>
-					<ChevronDown size={18} className={`text-slate-400 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+					<button type="button" onClick={() => setAberto(v => !v)} aria-label={aberto ? 'Fechar' : 'Abrir'} aria-expanded={aberto}>
+						<ChevronDown size={18} className={`text-slate-400 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+					</button>
 				</div>
-			</button>
+			</div>
 
 			{aberto && (
 				<div className="mt-5 space-y-4">

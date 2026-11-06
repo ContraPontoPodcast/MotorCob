@@ -50,7 +50,8 @@ from motor import discagem as DG
 from motor import voz as VOZ
 from motor.fila import MOTIVOS, categoria_do_motivo, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
-from motor.marcacao import aplicar_pendentes, ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas
+from motor.marcacao import (aplicar_pendentes, ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas,
+                            revisar_clusters_alterados)
 from motor.rastreio import carregar_acoes, ler_log_portal
 from motor.regua import carregar_regua
 
@@ -629,6 +630,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
         dia += timedelta(days=1)
     ultimo = max(ultimo or hoje - timedelta(days=1), hoje - timedelta(days=1))
     trilha += registrar_entradas(estados, clientes, hoje, regua, pela_lista=True)   # carga de hoje já entra hoje
+    # segmento/persona mudou depois da rotina de hoje ("Reenquadrar agora"): o dia já foi processado, então a
+    # revisão do processar_dia não roda; revisa aqui para a lista de hoje já sair com o segmento novo
+    trilha += revisar_clusters_alterados(estados, clientes, hoje, regua)
     salvar_estado(pasta_estado, estados, ultimo)
     _salvar(pasta_estado / "trilha.csv", trilha, anexar=True)
     pasta_estado.mkdir(parents=True, exist_ok=True)

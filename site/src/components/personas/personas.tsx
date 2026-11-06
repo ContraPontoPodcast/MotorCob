@@ -19,6 +19,7 @@ export function Personas() {
 	const [error, setError] = useState('');
 	const [busy, setBusy] = useState('');
 	const [historicoOpen, setHistoricoOpen] = useState(false);
+	const [versaoPersonas, setVersaoPersonas] = useState(0);
 	const [vista, setVista] = useState<'cartoes' | 'matriz'>(() => {
 		if (typeof window === 'undefined') return 'cartoes';
 		return localStorage.getItem('mc-personas-vista') === 'matriz' ? 'matriz' : 'cartoes';
@@ -77,9 +78,9 @@ export function Personas() {
 			<ComoMotorCobMede caracteristicas={caracteristicas} />
 			{ultimaAtualizacao && <p className="mb-6 text-[11px] text-slate-400">Última atualização das personas: {dateTimeBR(ultimaAtualizacao)}</p>}
 
-			<SuasPersonas />
+			<SuasPersonas versao={versaoPersonas} />
 
-			<ModelosMotorCob />
+			<ModelosMotorCob onAdicionadas={() => setVersaoPersonas(v => v + 1)} />
 
 			{vista === 'matriz' && <MatrizPropensao personas={personas} />}
 			{vista === 'cartoes' && (

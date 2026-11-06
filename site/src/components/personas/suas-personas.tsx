@@ -55,7 +55,8 @@ function condFrase(conds: CondicaoPersonaUsuario[], colunas: Coluna[]): string {
 	}).join(' · ');
 }
 
-export function SuasPersonas() {
+/** `versao` muda quando outra parte da página grava personas (ex.: "Usar nesta carteira" nos modelos): recarrega a lista. */
+export function SuasPersonas({ versao = 0 }: { versao?: number } = {}) {
 	const { empresa, credor } = useMotorAuth();
 	const canEdit = useAllowed(['admin', 'planejamento']);
 	const [lista, setLista] = useState<PersonaUsuario[]>([]);
@@ -72,7 +73,8 @@ export function SuasPersonas() {
 		setLoading(true); setError('');
 		const [p, e, emp] = await Promise.all([
 			supabase.from('personas_usuario').select('*').eq('credor_id', credor.id).order('ordem', { ascending: true }),
-			supabase.from('enquadramento').select('persona_usuario,clientes').eq('empresa_id', empresa.id).eq('credor_id', credor.id),
+			// só quem está na carteira em cobrança hoje (na_carga): quem saiu da carga não conta na persona
+			supabase.from('enquadramento').select('persona_usuario,clientes').eq('empresa_id', empresa.id).eq('credor_id', credor.id).eq('na_carga', true),
 			supabase.from('empresas').select('colunas_base').eq('id', empresa.id).maybeSingle(),
 		]);
 		if (p.error || e.error) { setError(friendlyError()); setLoading(false); return; }
@@ -91,7 +93,7 @@ export function SuasPersonas() {
 		setColunas(Array.isArray(cb?.colunas) ? cb.colunas : []);
 		setLoading(false);
 	}
-	useEffect(() => { void reload(); }, [empresa?.id, credor?.id]);
+	useEffect(() => { void reload(); }, [empresa?.id, credor?.id, versao]);
 
 	async function mover(id: string, dir: -1 | 1) {
 		if (!supabase) return;
@@ -205,7 +207,7 @@ function PersonaEditor({ persona, colunas, onClose, onSaved }: { persona: Person
 		if ('erro' in norm) { setError(norm.erro); return; }
 		setBusy(true); setError('');
 		const payload = {
-			credor_id: credor.id, nome: nome.trim(), descricao: descricao.trim() || null,
+			credor_id: credor.id, nome: nome.trim(), descricao: descricao.trim(),   // personas_usuario.descricao é NOT NULL default '': vazio = ''
 			cor, condicoes: norm.condicoes as unknown as Record<string, unknown>,
 			ativo: persona?.ativo ?? true,
 			...(persona ? {} : { ordem: 9999 }),

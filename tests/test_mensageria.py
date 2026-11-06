@@ -149,9 +149,24 @@ class TestMensageria(unittest.TestCase):
         # e-mail sem modelo: tudo bloqueado, nada a enviar
         em = self._lote("email")
         self.assertEqual((em["situacao"], em["bloqueadas"]), ("concluido", 2))
+        # QA B23: o motivo diz o que falta e o sino avisa o cliente e a equipe (uma vez só)
+        self.assertIn("Nenhuma mensagem de e-mail enviada", em["motivo"])
+        self.assertIn("modelo de e-mail", em["motivo"])
+        av = [a for a in self.sb.t.get("avisos", []) if "e-mail" in a["titulo"]]
+        self.assertEqual(sorted(a["para"] for a in av), ["empresa", "equipe"])
+        self.assertTrue(all(a["tipo"] == "atencao" and a["link"] == "/mensageria/email/templates" for a in av))
         # rodada repetida no mesmo dia não duplica
         self._criar()
         self.assertEqual(len(self.sb.t["mensageria_lotes"]), 2)
+
+    def test_motivo_do_lote_todo_bloqueado_diz_o_que_falta(self):
+        linhas = [{"situacao": "bloqueada", "motivo": "sem frase no dia"}] * 3 + [
+            {"situacao": "bloqueada", "motivo": "descadastrado"}]
+        txt = M.motivo_todos_bloqueados("sms", linhas)
+        self.assertTrue(txt.startswith("Nenhuma mensagem de SMS enviada: falta o texto da mensagem"))
+        self.assertIn("(3)", txt)
+        self.assertLessEqual(len(M.motivo_todos_bloqueados("sms", [{"situacao": "bloqueada", "motivo": "x" * 400}])),
+                             300)
 
     def test_so_envia_aprovado_e_dentro_da_janela(self):
         self._criar()

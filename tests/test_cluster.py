@@ -104,6 +104,43 @@ class TestRotina(unittest.TestCase):
         self.assertNotIn("X0002", {l["id_cliente"] for l in r["fila"] if l["canal"] == "whatsapp"})
         self.assertTrue(any("SCORE" in a for a in r["alertas"]))   # coluna que não existe na base
 
+    def test_reenquadrar_no_mesmo_dia_aplica_o_segmento_novo(self):
+        """QA B11: segmento criado depois da rotina do dia + "Reenquadrar agora" (rodada repetida no mesmo dia,
+        "dias processados: 0") já sai com o segmento novo; e uma 3ª rodada não muda nada (idempotente)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp) / "base"
+            rodar_dia.preparar_base(RAIZ / "empresas" / "exemplo.json", EX / "bruto", base)
+            dia = date(2026, 9, 2)
+
+            def rodar(regras):
+                return rodar_dia.rodar_dia(base / "clientes.csv", base / "contatos.csv", Path(tmp) / "ret", dia,
+                                           pasta_estado=Path(tmp) / "estado", pasta_saida=Path(tmp) / "saida",
+                                           clusters=regras, atributos=base / "atributos.csv", out=lambda *a: None)
+            r1 = rodar([])
+            self.assertNotIn("TD", {e.cluster_atual for e in r1["estados"].values()})
+            todos = [{"ordem": 1, "codigo": "TD", "condicoes": [{"campo": "saldo", "op": ">=", "valor": 0}]}]
+            r2 = rodar(todos)
+            self.assertEqual({e.cluster_atual for e in r2["estados"].values()}, {"TD"})
+            trilha = (Path(tmp) / "estado" / "trilha.csv").read_text(encoding="utf-8")
+            self.assertEqual(trilha.count("regras de cluster alteradas"), len(r2["estados"]))
+            r3 = rodar(todos)
+            self.assertEqual({e.cluster_atual for e in r3["estados"].values()}, {"TD"})
+            self.assertEqual((Path(tmp) / "estado" / "trilha.csv").read_text(encoding="utf-8").count(
+                "regras de cluster alteradas"), len(r2["estados"]))
+
+    def test_revisar_clusters_alterados_so_mexe_em_versao_diferente(self):
+        from motor.marcacao import revisar_clusters_alterados
+        regua = carregar_regua()
+        regras, _ = carregar_regras([{"codigo": "CA", "condicoes": [{"campo": "PRODUTO", "op": "=", "valor": "CARTAO"}]}])
+        rc = regua.com_clusters(regras)
+        c = _cli(100, 10, PRODUTO="CARTAO")
+        est = {"C1": EstadoCliente("C1", DIA, "B1", "B1", "2026-09"),
+               "C2": EstadoCliente("C2", DIA, "B1", "B1", "2026-09", estado="BLQ")}
+        ev = revisar_clusters_alterados(est, {"C1": c, "C2": c}, date(2026, 9, 2), rc)
+        self.assertEqual([e["motivo"] for e in ev], ["regras de cluster alteradas"])
+        self.assertEqual((est["C1"].cluster_atual, est["C2"].cluster_atual), ("CA", "B1"))   # bloqueado fica
+        self.assertEqual(revisar_clusters_alterados(est, {"C1": c}, date(2026, 9, 2), rc), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -54,7 +54,8 @@ function temColunaIdade(colunas: { nome: string }[]): boolean {
 	});
 }
 
-export function ModelosMotorCob() {
+/** `onAdicionadas`: avisa a página para recarregar a lista "Suas personas" depois de copiar um modelo. */
+export function ModelosMotorCob({ onAdicionadas }: { onAdicionadas?: () => void } = {}) {
 	const { empresa, credor } = useMotorAuth();
 	const navigate = useNavigate();
 	const canEdit = useAllowed(['admin', 'planejamento']);
@@ -105,7 +106,7 @@ export function ModelosMotorCob() {
 		const r = await inserirModelo(modelo);
 		if (r === 'existe') toast('Já está na carteira');
 		else if (r === 'erro') setError(friendlyError());
-		else toast.success('Persona adicionada à carteira · vale a partir da próxima rotina', { action: { label: 'Ir para a Orquestração', onClick: () => navigate('/orquestracao?montar=1') } });
+		else { onAdicionadas?.(); toast.success('Persona adicionada à carteira · vale a partir da próxima rotina', { action: { label: 'Ir para a Orquestração', onClick: () => navigate('/orquestracao?montar=1') } }); }
 		setBusy('');
 	}
 
@@ -118,6 +119,7 @@ export function ModelosMotorCob() {
 			const r = await inserirModelo(m);
 			if (r === 'ok') added++;
 		}
+		if (added > 0) onAdicionadas?.();
 		if (added > 0) toast.success(`${added} persona${added > 1 ? 's' : ''} adicionada${added > 1 ? 's' : ''} à carteira · vale a partir da próxima rotina`, { action: { label: 'Ir para a Orquestração', onClick: () => navigate('/orquestracao?montar=1') } });
 		else toast('Nenhuma persona nova para adicionar');
 		setBusy('');

@@ -6,6 +6,7 @@ import { supabase, friendlyError, moneyBR, dateBR, dateTimeBR, today, type Row }
 import { SIT_FATURA, mesExtenso, mesCurto } from '@/lib/empresa-helpers';
 import { EmpresaShell, cardShadow } from './empresa-shell';
 import { AgenteVozFaturamento } from './faturamento-voz';
+import { carregarPainel, destinatariosFaturas } from '@/lib/faturamento-painel';
 
 // ---------- contrato da Edge Function "cobranca" ----------
 //
@@ -13,7 +14,7 @@ import { AgenteVozFaturamento } from './faturamento-voz';
 // A função devolve { erro: string } (já em português) quando algo impede a ação,
 // ou o payload descrito abaixo. Erros de rede/HTTP viram mensagem genérica.
 //
-//   { acao: 'painel' }
+//   Painel (NÃO é ação da função: montado do banco por `carregarPainel`, lib/faturamento-painel.ts)
 //     → { modelo: 'pos'|'pre', ciclo: { inicio, fim, competencia } | null,
 //         fatura_aberta: Fatura | null, faturas: Fatura[],
 //         saldo: { saldo, recargas_pagas, uso, abaixo_do_aviso, pausar_envios,
@@ -104,7 +105,13 @@ export function FaturamentoPage() {
   const chamar = useCallback(async (body: Record<string, unknown>): Promise<Row> => {
     if (!supabase) throw new Error('Configuração ausente.');
     const { data, error } = await supabase.functions.invoke('cobranca', { body });
-    if (error) throw new Error(friendlyError(error));
+    if (error) {
+      // resposta 4xx da função traz { erro } em português: mostra a frase dela, não a genérica
+      const ctx = (error as { context?: { json?: () => Promise<unknown> } }).context;
+      const corpo = ctx && typeof ctx.json === 'function' ? await ctx.json().catch(() => null) as Row | null : null;
+      if (corpo && typeof corpo.erro === 'string' && corpo.erro) throw new Error(corpo.erro.charAt(0).toUpperCase() + corpo.erro.slice(1) + '.');
+      throw new Error(friendlyError(error));
+    }
     if (data && typeof (data as Row).erro === 'string' && (data as Row).erro) {
       throw new Error((data as Row).erro as string);
     }
@@ -115,15 +122,16 @@ export function FaturamentoPage() {
     if (!empresa) return;
     if (!silent) setLoading(true);
     try {
-      const data = await chamar({ acao: 'painel' });
-      setPainel(data);
+      if (!supabase) throw new Error('Configuração ausente.');
+      const data = await carregarPainel(supabase, String(empresa.id));
+      setPainel(data as unknown as Row);
       setErro('');
     } catch (e) {
-      if (!silent) setErro(e instanceof Error ? e.message : 'Não foi possível carregar o faturamento.');
+      if (!silent) setErro(friendlyError(e));
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [empresa, chamar]);
+  }, [empresa]);
 
   useEffect(() => { void recarregarPainel(); }, [recarregarPainel]);
 
@@ -167,12 +175,10 @@ export function FaturamentoPage() {
     if (!supabase || !empresa) { setDestinatarios([]); return; }
     let active = true;
     (async () => {
-      const { data } = await supabase.from('empresa_contatos').select('nome,email,papel,recebe_faturas').eq('empresa_id', empresa.id);
+      // a coluna é papel_contrato (não existe "papel" em empresa_contatos)
+      const { data } = await supabase.from('empresa_contatos').select('email,papel_contrato,recebe_faturas').eq('empresa_id', empresa.id);
       if (!active) return;
-      const rows = (data ?? []) as Row[];
-      const marcados = rows.filter(r => r.recebe_faturas && r.email).map(r => String(r.email));
-      const lista = marcados.length > 0 ? marcados : rows.filter(r => r.papel === 'financeiro' && r.email).map(r => String(r.email));
-      setDestinatarios(lista);
+      setDestinatarios(destinatariosFaturas((data ?? []) as Row[]));
     })();
     return () => { active = false; };
   }, [empresa?.id]);
@@ -227,7 +233,7 @@ export function FaturamentoPage() {
     setPagando(chave);
     try {
       const body: Record<string, unknown> = { acao: 'pagar', forma };
-      body[tipo] = id;
+      body[tipo] = Number(id);   // a função exige número inteiro (validarPedido)
       const data = await chamar(body);
       const c = (data.cobranca as Row) ?? {};
       setPagamento({ chave, forma, link: c.link ?? null, pix_copia_cola: c.pix_copia_cola ?? null, boleto_codigo: c.boleto_codigo ?? null, expira_em: c.expira_em ?? null });
@@ -241,7 +247,7 @@ export function FaturamentoPage() {
   async function demonstrativo(faturaId: string) {
     setErro('');
     try {
-      const data = await chamar({ acao: 'demonstrativo', fatura: faturaId });
+      const data = await chamar({ acao: 'demonstrativo', fatura: Number(faturaId) });
       if (data.url) window.open(String(data.url), '_blank', 'noopener,noreferrer');
       else throw new Error('Demonstrativo indisponível.');
     } catch (e) {

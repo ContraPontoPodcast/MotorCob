@@ -2804,5 +2804,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 69: Orquestração por CPF (testar_orquestracao_cpf.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 72 · estimativa do ciclo: CPF (contado uma vez no ciclo) pelo medido, consumo projetado; aplica o 72 duas vezes.
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_estimativa_ciclo.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 72: estimativa do ciclo sem projetar CPF (testar_estimativa_ciclo.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

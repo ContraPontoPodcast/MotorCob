@@ -182,7 +182,8 @@ de outra pessoa pela certificação e a rotação segue.
   primeira regra que bate, senão o padrão ticket × atraso de `regua.json`. Cada cluster
   define pacote, revalidação, só digital, voz no D0 e canais bloqueados
   (`Regua.com_clusters`). Mudou a regra → `cluster_versao` muda → todos revisam o cluster
-  atual na rotina seguinte. Regra inválida vira alerta, nunca derruba a rotina.
+  atual na rotina seguinte; rodada repetida no mesmo dia ("Reenquadrar agora") revisa já
+  (`marcacao.revisar_clusters_alterados`). Regra inválida vira alerta, nunca derruba a rotina.
   Números das condições (segmento, persona do usuário, estágio) em pt-BR: o site (`site/src/lib/condicoes.ts`,
   campos em `components/comuns/campos-condicao.tsx`) lê "1.500,50", "1500,5", "1500.50" e "1.500" (= 1500) e
   grava NÚMERO (JSON) nas condições numéricas; texto salvo antes segue com o sentido que o motor dava
@@ -657,6 +658,9 @@ Python e confere os NOMES dos argumentos com a assinatura vigente nas migraçõe
 acha a função pelo nome dos argumentos. Roda no job `motor` (`tests/test_conferir_rpc.py`) e no `banco` (`--banco`, contra
 o catálogo). Argumento que não dá para ler precisa de comentário `conferir-rpc: <motivo>` na chamada.
 SQL 71: `cancelar_rascunho(fatura)` (rascunho → cancelada; quem emite a fatura da empresa).
+SQL 72: `estimativa_ciclo` não projeta por dia o que conta uma vez no ciclo (Orquestração por CPF, Jornada): fixo + medido
++ consumo × dias do ciclo ÷ dias corridos; a conta vive em `estimativa_ciclo_em(empresa, hoje)` (só o servidor).
+Empresa › Faturas monta o painel do banco (`site/src/lib/faturamento-painel.ts`; a função `cobranca` não tem ação "painel").
 Fluxo do agente (Cobrança › Canais › Agente virtual; SQL 58, 59 e 66): `site/src/components/fluxo/` e `site/src/lib/fluxo.ts`;
 quadro por ramos, "Enviar para aprovação" bloqueado enquanto `fluxo_voz_bloqueios` tiver pendência; conectores em
 Empresa › Integrações (cadastro e credencial só da equipe). O roteiro antigo segue em `/canais/agente-virtual/roteiro`.
