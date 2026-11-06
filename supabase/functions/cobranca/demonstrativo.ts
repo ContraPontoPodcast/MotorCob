@@ -15,7 +15,7 @@ export interface Dados {
   frentes: string[];
   itens: Item[];
   ajustes: { tipo: "desconto" | "credito" | "cobranca_extra"; valor: number; motivo: string }[];
-  carteiras: { carteira: string; frente: string; contratos: number; clientes: number; dias: number }[];
+  carteiras: { carteira: string; frente: string; contratos: number; cpfs?: number; clientes: number; dias: number }[];
   canais: { canal: string; disparadas: number; entregues: number; falhas: number; respostas: number }[];
   campanhas: { origem: string; canal: string; disparadas: number }[];
 }
@@ -40,9 +40,12 @@ const NOMES_ITENS: Record<string, string> = {
   whatsapp_marketing: "WhatsApp Marketing", whatsapp_utilidade: "WhatsApp Utilidade", whatsapp_servico: "WhatsApp Serviço",
 };
 const UNIDADE: Record<string, [string, string]> = {
-  orquestracao: ["contrato", "contratos"], jornada: ["cliente acionado", "clientes"], email: ["e-mail", "e-mails"],
+  orquestracao: ["CPF", "CPFs"], jornada: ["cliente acionado", "clientes"], email: ["e-mail", "e-mails"],
 };
-const unidade = (item: string) => UNIDADE[item] ?? ["mensagem", "mensagens"];
+// SQL 69: a Orquestração é por CPF. Fatura fechada antes (descrição "contratos no ciclo") continua por contrato.
+const unidade = (item: string, descricao = "") =>
+  item === "orquestracao" && /contratos no ciclo/.test(descricao) ? ["contrato", "contratos"]
+    : UNIDADE[item] ?? ["mensagem", "mensagens"];
 const FRENTES: Record<string, string> = { motorcob: "MotorCob", motorcli: "MotorCli" };
 const CANAIS: Record<string, string> = { sms: "SMS", rcs: "RCS", email: "E-mail", whatsapp: "WhatsApp" };
 const AJUSTE: Record<string, string> = { desconto: "Desconto", credito: "Crédito", cobranca_extra: "Cobrança extra" };
@@ -87,7 +90,7 @@ export function linhaDoItem(i: Item): Linha {
              quantidade: "", preco: "", valor: brl(i.valor),
              detalhe: "O uso do ciclo ficou abaixo do mínimo contratado: cobrada a diferença" };
   }
-  const [um, varios] = unidade(base);
+  const [um, varios] = unidade(base, i.descricao);
   const modelo = ({ flat: "flat", faixa: "escalonado por faixa", progressivo: "escalonado progressivo",
                     mensalidade: "mensalidade" } as Record<string, string>)[i.modelo ?? ""] ?? "";
   const como = i.modelo === "mensalidade" ? "Mensalidade do ciclo"
@@ -146,8 +149,9 @@ export function montar(d: Dados): Secoes {
       { titulo: "Mensageria", linhas: msg.map(linhaDoItem) },
     ].filter((g) => g.linhas.length),
     ajustes: d.ajustes.map((a) => [`${AJUSTE[a.tipo] ?? a.tipo} · ${a.motivo}`, brl(sinal(a))]),
-    carteiras: d.carteiras.map((c) => [c.carteira, FRENTES[c.frente] ?? c.frente, c.contratos ? inteiro(c.contratos) : "—",
-                                       c.clientes ? inteiro(c.clientes) : "—", inteiro(c.dias)]),
+    carteiras: d.carteiras.map((c) => [c.carteira, FRENTES[c.frente] ?? c.frente, c.cpfs ? inteiro(c.cpfs) : "—",
+                                       c.contratos ? inteiro(c.contratos) : "—", c.clientes ? inteiro(c.clientes) : "—",
+                                       inteiro(c.dias)]),
     canais: d.canais.map((c) => [CANAIS[c.canal] ?? c.canal, inteiro(c.disparadas), inteiro(c.entregues), inteiro(c.falhas),
                                  c.canal === "email" ? "—" : inteiro(c.respostas)]),
     origens: {

@@ -78,7 +78,7 @@ export const MOTIVOS_CHAMADO: { id: string; label: string }[] = [
 
 /** Itens de consumo_mes → rótulo amigável. */
 export const CONSUMO_LABEL: Record<string, string> = {
-  contratos: 'Contratos',
+  contratos: 'CPFs ativos',
   sms: 'SMS',
   email: 'E-mail',
   rcs_basic: 'RCS Basic',

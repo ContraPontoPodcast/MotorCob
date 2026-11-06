@@ -117,7 +117,7 @@ export function PaginaDemonstracao() {
 					<div className="contrata">
 						<h2>Como contratamos</h2>
 						<p><b>Você liga só o que usa.</b> Orquestração, Mensageria, agente de voz e Speech Analytics são módulos separados.</p>
-						<p><b>Inteligência por contrato ou mensalidade. Canais e IA pelo consumo.</b></p>
+						<p><b>Inteligência por CPF ou mensalidade. Canais e IA pelo consumo.</b></p>
 						<p><b>Fatura por item, na plataforma.</b> Pré ou pós-pago.</p>
 					</div>
 				</div>

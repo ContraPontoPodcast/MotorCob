@@ -1,4 +1,5 @@
 """Testes da sincronização com o Supabase, contra um servidor falso em memória."""
+import re
 import json
 import shutil
 import tempfile
@@ -284,8 +285,15 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(sum("SQL 49" in a for a in ex["alertas"]), 1)
 
     def test_contratos_do_mes_para_o_faturamento(self):
+        self.falso.tabelas["faturamento_sal"] = [{"empresa_id": 1, "sal": "d4" * 32}, {"empresa_id": 2, "sal": "e5" * 32}]
         self._dia(date(2026, 9, 25))
         t = self.falso.tabelas
+        # SQL 69: Orquestração por CPF; um registro por cliente distinto no ciclo, chave HMAC (nunca CPF ou ID)
+        cpfs = [l for l in t["clientes_mes"] if l["empresa_id"] == 1]
+        self.assertTrue(cpfs)
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{32}", l["cliente"]) for l in cpfs))
+        self.assertEqual(len(cpfs), len({l["cliente"] for l in cpfs}))
+        self.assertNotRegex(json.dumps(cpfs), r"\b\d{11}\b|C\d{7}")
         alfa = [l for l in t["contratos_mes"] if l["empresa_id"] == 1]
         self.assertTrue(alfa)
         self.assertEqual({(l["competencia"], l["credor_id"]) for l in alfa}, {("2026-09-01", 0)})
@@ -293,8 +301,10 @@ class TestSincronizar(unittest.TestCase):
         self.assertNotRegex(json.dumps(alfa), r"\b\d{11}\b")            # nenhum CPF
         # dias seguintes do mesmo mês não duplicam; o mês seguinte conta de novo
         n = len(t["contratos_mes"])
+        n_cpfs = len(t["clientes_mes"])
         self._dia(date(2026, 9, 26))
         self.assertEqual(len(t["contratos_mes"]), n)
+        self.assertEqual(len(t["clientes_mes"]), n_cpfs)
         self._dia(date(2026, 10, 1))
         self.assertEqual(len([l for l in t["contratos_mes"] if l["competencia"] == "2026-10-01" and l["empresa_id"] == 1]),
                          len(alfa))

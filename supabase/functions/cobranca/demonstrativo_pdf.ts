@@ -142,8 +142,11 @@ export async function gerarPdf(s: Secoes): Promise<Uint8Array> {
   // ---------------------------------------------------------------- uso
   if (s.carteiras.length) {
     titulo("Uso por carteira");
-    tabela(["Carteira", "Frente", "Contratos avaliados", "Clientes na jornada", "Dias com rotina"], [0.3, 0.16, 0.2, 0.18, 0.16],
-           ["e", "e", "d", "d", "d"], s.carteiras.map((c) => ({ cel: c })));
+    tabela(["Carteira", "Frente", "CPFs ativos", "Contratos avaliados", "Clientes na jornada", "Dias com rotina"],
+           [0.24, 0.12, 0.14, 0.18, 0.18, 0.14], ["e", "e", "d", "d", "d", "d"], s.carteiras.map((c) => ({ cel: c })));
+    precisa(20); y -= 10;
+    quebrar("O mesmo CPF em mais de uma carteira é cobrado uma vez: a soma das carteiras pode passar do total da fatura.", L, 8)
+      .forEach((l) => { texto(l, M, y, 8, f, CINZA); y -= 10; });
   }
   if (s.canais.length) {
     titulo("Mensageria por canal");
