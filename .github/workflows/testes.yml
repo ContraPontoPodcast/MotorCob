@@ -1,4 +1,4 @@
-# Testes do motor, das regras de acesso (RLS) num Postgres 16 e das regras da função de usuários.
+# Testes do motor, das regras de acesso (RLS) num Postgres 16, dos argumentos das RPCs e das regras da função de usuários.
 name: testes
 on:
   pull_request:
@@ -46,6 +46,10 @@ jobs:
             psql -v ON_ERROR_STOP=1 -q -f "$f" > /dev/null
           done
           psql -v ON_ERROR_STOP=1 -q -f "$(ls supabase/migrations/*.sql | sort | tail -1)" > /dev/null
+      # nome dos argumentos de toda chamada de RPC (site, Edge Functions, Python) contra o catálogo do banco recém-aplicado
+      # (antes do testar_rls, que reaplica migrações antigas); prova também que a leitura das migrações (a mesma do
+      # tests/test_conferir_rpc.py, no job motor) bate com o catálogo
+      - run: python3 scripts/conferir_rpc.py --banco
       - run: python3 supabase/testes/testar_rls.py
   funcoes:
     runs-on: ubuntu-latest

@@ -57,8 +57,8 @@ export function ConsoleSaudePage() {
     setQualLoading(true);
     (async () => {
       const [s, r] = await Promise.all([
-        supabase.rpc('alertas_qualidade', { canal: 'sms' }),
-        supabase.rpc('alertas_qualidade', { canal: 'rcs' }),
+        supabase.rpc('alertas_qualidade', { canal_lote: 'sms' }),
+        supabase.rpc('alertas_qualidade', { canal_lote: 'rcs' }),
       ]);
       if (!active) return;
       setQualAlertas([...((s.data ?? []) as Row[]), ...((r.data ?? []) as Row[])]);

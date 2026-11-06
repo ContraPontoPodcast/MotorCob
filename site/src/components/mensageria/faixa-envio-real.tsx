@@ -54,7 +54,7 @@ export function FaixaEnvioReal() {
   async function pedir() {
     if (!supabase || !empresa) return;
     setBusy(true); setErro('');
-    const { error } = await supabase.rpc('pedir_envio_real', { empresa_id: empresa.id });
+    const { error } = await supabase.rpc('pedir_envio_real', { empresa: empresa.id });
     setBusy(false);
     if (error) { setErro(String(error.message ?? friendlyError(error))); return; }
     setConfirma(false);

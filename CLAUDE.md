@@ -646,6 +646,11 @@ Netlify como site estático (React Router em modo SPA, `site/netlify.toml`). **O
 verdade**: mudança no site é commit aqui. Dados só pelo Supabase com a chave anon e a RLS; nada de service_role
 no site. O formulário de contato grava em `contatos_site` (SQL 29 + SQL 52). Como rodar, variáveis e deploy:
 `site/LEIA.md`. CI: `.github/workflows/site.yml` (lint + typecheck + testes + build).
+Argumentos das RPCs: `scripts/conferir_rpc.py` lê toda chamada `rpc('nome', {...})` do site, das Edge Functions e do
+Python e confere os NOMES dos argumentos com a assinatura vigente nas migrações (sobrecargas, defaults, drops); o PostgREST
+acha a função pelo nome dos argumentos. Roda no job `motor` (`tests/test_conferir_rpc.py`) e no `banco` (`--banco`, contra
+o catálogo). Argumento que não dá para ler precisa de comentário `conferir-rpc: <motivo>` na chamada.
+SQL 71: `cancelar_rascunho(fatura)` (rascunho → cancelada; quem emite a fatura da empresa).
 Fluxo do agente (Cobrança › Canais › Agente virtual; SQL 58, 59 e 66): `site/src/components/fluxo/` e `site/src/lib/fluxo.ts`;
 quadro por ramos, "Enviar para aprovação" bloqueado enquanto `fluxo_voz_bloqueios` tiver pendência; conectores em
 Empresa › Integrações (cadastro e credencial só da equipe). O roteiro antigo segue em `/canais/agente-virtual/roteiro`.

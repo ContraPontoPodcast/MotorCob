@@ -51,7 +51,7 @@ export function ContaNotificacoesPage() {
     if (!supabase || !temMudanca) return;
     setBusy(true);
     const payload = mudancas.map(n => ({ assunto: n.assunto, sino: n.sino, email: n.email }));
-    const { error } = await supabase.rpc('salvar_notificacoes', { alteracoes: payload });
+    const { error } = await supabase.rpc('salvar_notificacoes', { prefs: payload });
     setBusy(false);
     if (error) { toast.error(friendlyError(error)); return; }
     const ligouEmail = mudancas.filter(n => {

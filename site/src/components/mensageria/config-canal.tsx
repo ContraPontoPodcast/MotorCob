@@ -33,7 +33,7 @@ export function ConfigCanal() {
 		setCentros(cc.data ?? []);
 		setCentroDia(c?.centro_custo_id ?? '');
 		setRcsFallback(c?.rcs_fallback ?? 'sms');
-		setRcsFallbackTemplate(c?.rcs_fallback_template ?? '');
+		setRcsFallbackTemplate(c?.rcs_fallback_template_id ?? '');
 		setRcsAgente(c?.rcs_agente ?? 'nao_conversacional');
 		setTemplatesSms(ts.data ?? []);
 		setLoading(false);
@@ -50,8 +50,8 @@ export function ConfigCanal() {
 	async function salvarListaDia() {
 		if (!supabase || !empresa) return;
 		setBusy(true); setErro(''); setSucesso('');
-		const payload: Record<string, unknown> = { empresa: empresa.id, centro_custo: centroDia || null };
-		if (canal === 'rcs') { payload.rcs_fallback = rcsFallback; payload.rcs_fallback_template = rcsFallbackTemplate || null; }
+		// rcs_fallback é obrigatório na função: fora do RCS vai o valor que já estava salvo (carregado no reload).
+		const payload: Record<string, unknown> = { empresa: empresa.id, centro_custo: centroDia || null, rcs_fallback: rcsFallback, rcs_fallback_template: rcsFallbackTemplate || null };
 		const { error } = await supabase.rpc('configurar_mensageria', payload);
 		setBusy(false);
 		if (error) { setErro(friendlyError(error)); return; }

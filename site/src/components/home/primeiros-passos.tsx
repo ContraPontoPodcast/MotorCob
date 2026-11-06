@@ -30,7 +30,7 @@ const PASSO_INFO: Record<string, { descricao: string; acao?: string; to?: string
   fatura: { descricao: 'Em Empresa › Contatos, marque Recebe faturas.', acao: 'Abrir contatos', to: '/empresa/contatos' },
   equipe: { descricao: 'Quem vai planejar, operar e acompanhar.', acao: 'Convidar membro', to: '/empresa/pessoas?aba=pessoas' },
   carga: { descricao: 'A carteira com os clientes e as dívidas, por arquivo ou pela API.', acao: 'Enviar carga', to: '/envios' },
-  lista: { descricao: 'Sai às 6h da manhã seguinte à primeira carga.' },
+  lista: { descricao: 'Sai minutos depois da primeira carga; depois, todo dia às 6h.' },
   token: { descricao: 'Para o seu sistema mandar a carga sozinho.', acao: 'Criar token', to: '/empresa/integracoes' },
   carga_jornada: { descricao: 'Os clientes entram já em uma etapa da jornada.', acao: 'Enviar carga', to: '/jornada/cargas' },
   template: { descricao: 'O texto da mensagem, com variáveis como {{nome}}.' },
@@ -86,7 +86,7 @@ export function PrimeirosPassos() {
   async function ocultar() {
     if (!supabase || !perfil) return;
     setBusy(true);
-    await supabase.rpc('ocultar_primeiros_passos', { valor: true });
+    await supabase.rpc('ocultar_primeiros_passos', { ocultar: true });
     setBusy(false);
     setOculto(true);
   }
@@ -94,7 +94,7 @@ export function PrimeirosPassos() {
   async function pularEquipe() {
     if (!supabase || !empresa) return;
     setBusy(true);
-    await supabase.rpc('pular_primeiro_passo', { empresa_id: empresa.id, passo: 'equipe' });
+    await supabase.rpc('pular_primeiro_passo', { empresa: empresa.id, passo: 'equipe' });
     setBusy(false);
     // Recarrega os passos.
     const { data } = await supabase.rpc('primeiros_passos', { empresa: empresa.id });

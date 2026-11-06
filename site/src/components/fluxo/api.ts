@@ -126,6 +126,7 @@ const semColuna65 = (e: { message?: string; code?: string } | null) => !!e && (e
 
 /** Implementação real (Supabase, chave anon, login de quem usa; a RLS decide o que aparece). */
 export function apiSupabase(sb: SupabaseClient, funcao = 'simular_fluxo_voz'): FluxoApi {
+	// conferir-rpc: embrulho; cada chamada rpc('nome', {...}) abaixo é conferida
 	const rpc = async <T>(nome: string, args: Record<string, unknown>) => ok<T>((await sb.rpc(nome, args)) as Resp<T>);
 	const versoes = async (consulta: (cols: string) => PromiseLike<unknown>) => {
 		let r = (await consulta(COLS_VERSAO)) as Resp<VersaoRow[]>;

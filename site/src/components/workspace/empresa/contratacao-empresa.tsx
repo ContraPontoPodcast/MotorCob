@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { X, Plus, Trash2, ChevronDown, Info } from 'lucide-react';
 import { supabase, moneyBR, dateBR, today, friendlyError, type Row } from '@/lib/supabase';
@@ -485,6 +485,10 @@ export function ContratacaoEmpresa({
     await salvarPrecos(supabase, empresaSalvaId);
   }
 
+  // Empresa já criada por esta tela numa tentativa que falhou no meio (frentes, módulos, ciclo, preços ou convite):
+  // a nova tentativa continua nela em vez de criar outra (o que deixava a primeira pela metade e gerava o slug "-2").
+  const criada = useRef<{ id: string; dados: string } | null>(null);
+
   async function criar() {
     if (!supabase) return;
     setError(''); setSuccess('');
@@ -498,27 +502,42 @@ export function ContratacaoEmpresa({
     if (v) { setError(v); return; }
     setBusy(true);
     try {
-      // slug único
-      let slug = slugEmpresa(emp.nome);
-      const { data: existente } = await supabase.from('empresas').select('slug').eq('slug', slug).maybeSingle();
-      if (existente) { let n = 2; while (true) { const s = `${slug}-${n}`; const { data } = await supabase.from('empresas').select('slug').eq('slug', s).maybeSingle(); if (!data) { slug = s; break; } n++; } }
-      const { data: empRow, error: e1 } = await supabase.from('empresas').insert({
-        slug, nome: emp.nome.trim(), razao_social: emp.razao_social.trim(), cnpj: cnpj || null,
-        segmento: emp.segmento || null, situacao: 'implantacao', ativa: true,
-        cliente_desde: new Date().toISOString().slice(0, 10),
-      }).select('id').single();
-      if (e1 || !empRow) { setError(`Falha ao criar empresa: ${errMsg(e1, 'tente novamente')}`); setBusy(false); return; }
-      const empresaSalvaId = (empRow as Row).id as string;
+      const dados = { nome: emp.nome.trim(), razao_social: emp.razao_social.trim(), cnpj: cnpj || null, segmento: emp.segmento || null };
+      let empresaSalvaId: string;
+      if (criada.current) {
+        // nova tentativa: a empresa já existe; só acerta os dados se mudaram no formulário
+        empresaSalvaId = criada.current.id;
+        if (criada.current.dados !== JSON.stringify(dados)) {
+          const { error: eUp } = await supabase.from('empresas').update(dados).eq('id', empresaSalvaId);
+          if (eUp) { setError(`Falha ao atualizar a empresa: ${errMsg(eUp, 'tente novamente')}`); setBusy(false); return; }
+          criada.current = { id: empresaSalvaId, dados: JSON.stringify(dados) };
+        }
+      } else {
+        // slug único
+        let slug = slugEmpresa(emp.nome);
+        const { data: existente } = await supabase.from('empresas').select('slug').eq('slug', slug).maybeSingle();
+        if (existente) { let n = 2; while (true) { const s = `${slug}-${n}`; const { data } = await supabase.from('empresas').select('slug').eq('slug', s).maybeSingle(); if (!data) { slug = s; break; } n++; } }
+        const { data: empRow, error: e1 } = await supabase.from('empresas').insert({
+          slug, ...dados, situacao: 'implantacao', ativa: true,
+          cliente_desde: new Date().toISOString().slice(0, 10),
+        }).select('id').single();
+        if (e1 || !empRow) { setError(`Falha ao criar empresa: ${errMsg(e1, 'tente novamente')}`); setBusy(false); return; }
+        empresaSalvaId = (empRow as Row).id as string;
+        criada.current = { id: empresaSalvaId, dados: JSON.stringify(dados) };
+      }
       await salvarTudo(empresaSalvaId);
       esquecerAreasLiberadas(empresaSalvaId);
       // convidar Admin
       const { error: eAdmin } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'convidar', email: emp.admin_email.trim(), nome: emp.admin_nome.trim(), papel: 'admin', empresa_id: empresaSalvaId } });
       if (eAdmin) { setError(`Empresa criada, mas falha ao convidar Admin: ${errMsg(eAdmin, 'tente novamente')}`); setBusy(false); return; }
+      criada.current = null;
       setSuccess('Empresa criada. Convite enviado ao Admin da empresa.');
       setBusy(false);
       setTimeout(() => onConcluido?.(empresaSalvaId), 1200);
     } catch (err) {
-      setError(errMsg(err, 'Não foi possível criar a empresa.'));
+      setError(criada.current
+        ? `Empresa criada, mas faltou concluir: ${errMsg(err, 'tente novamente')}. Tente de novo: continua nesta mesma empresa.`
+        : errMsg(err, 'Não foi possível criar a empresa.'));
       setBusy(false);
     }
   }
@@ -627,7 +646,7 @@ export function ContratacaoEmpresa({
           payload.minimo = parseNum(ed.minimo);
           payload.faixas = ed.faixas.map((f, i, arr) => ({ ate: i === arr.length - 1 ? null : Number(f.ate), preco: parseNum(f.preco) }));
         }
-        payload.motivo_abaixo_do_minimo = abaixo ? (ed.motivo ?? '').trim() || null : null;
+        payload.motivo = abaixo ? (ed.motivo ?? '').trim() || null : null;
         payload.motivo_vigencia = vig === 'atual' ? motivoVigencia.trim() : null;
         const { error: ePr, data } = await supabase.rpc('salvar_preco_vigencia', payload);
         if (ePr) throw new Error(`Falha ao salvar o preço do ${itemNome}: ${ePr.message}`);

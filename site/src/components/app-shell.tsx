@@ -198,11 +198,11 @@ export function AppShell() {
 		const sb = supabase;
 		let active = true;
 		(async () => {
-			const { data: ac } = await sb.rpc('acesso_da_empresa', { empresa_id: empresa.id });
+			const { data: ac } = await sb.rpc('acesso_da_empresa', { empresa: empresa.id }).maybeSingle();
 			if (!active) return;
 			setAcesso((ac as Row | null) ?? null);
 			try {
-				const { data: acs } = await sb.rpc('acordos', { empresa_id: empresa.id });
+				const { data: acs } = await sb.rpc('acordos', { empresa: empresa.id });
 				if (!active) return;
 				setAcordo((Array.isArray(acs) ? (acs as Row[]) : [])[0] ?? null);
 			} catch { if (active) setAcordo(null); }
