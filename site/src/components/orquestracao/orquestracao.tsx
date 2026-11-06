@@ -73,6 +73,8 @@ export function Orquestracao() {
 	const [busy, setBusy] = useState('');
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [formOpen, setFormOpen] = useState(false);
+	// Empresa nova sem segmento: "Copiar"/"Começar de um modelo" primeiro criam o segmento e depois abrem o caminho escolhido.
+	const [depoisDoSegmento, setDepoisDoSegmento] = useState<null | 'modelo' | 'copiar'>(null);
 	const [editing, setEditing] = useState<Cluster | null>(null);
 	const [estagioAtivo, setEstagioAtivo] = useState<EstagioId>('localizacao');
 	const [etapaReguaId, setEtapaReguaId] = useState<string | null>(null);
@@ -190,6 +192,7 @@ export function Orquestracao() {
 		const mapCont: Record<string, number> = {};
 		let sem = 0;
 		(eq.data ?? []).forEach((r: Row) => {
+			if (!r.na_carga) return;   // persona conta só quem está na carteira em cobrança hoje
 			const nome = (r.persona_usuario as string | null)?.trim();
 			const n = Number(r.clientes) || 0;
 			if (nome) mapCont[nome] = (mapCont[nome] ?? 0) + n; else sem += n;
@@ -834,9 +837,9 @@ export function Orquestracao() {
 						<TresCaminhos
 							aviso={<div className="rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-4 py-2.5 text-sm font-medium text-[var(--estado-atencao-texto)]">Esta carteira ainda não tem segmentos em uso.</div>}
 							disabled={!canEdit}
-							onCriarDoZero={() => { setEditing(null); setFormOpen(true); }}
-							onCopiar={() => { if (selectedSeg && estrId) setCopiarOpen(true); else toast('Crie um segmento primeiro para copiar de outra carteira.'); }}
-							onModelo={() => { if (selectedSeg) setModelosOpen(true); else toast('Crie um segmento primeiro para usar um modelo.'); }}
+							onCriarDoZero={() => { setDepoisDoSegmento(null); setEditing(null); setFormOpen(true); }}
+							onCopiar={() => { setDepoisDoSegmento('copiar'); setEditing(null); setFormOpen(true); toast('Primeiro diga quem vamos cobrar: salve o segmento e, em seguida, escolha de qual carteira copiar.'); }}
+							onModelo={() => { setDepoisDoSegmento('modelo'); setEditing(null); setFormOpen(true); toast('Primeiro diga quem vamos cobrar: salve o segmento e, em seguida, escolha o modelo.'); }}
 						/>
 					) : (
 						<>
@@ -888,8 +891,17 @@ export function Orquestracao() {
 				<>
 					{renderSeletorSegmentos()}
 					{!selectedId && <div className="mt-4"><Empty>Escolha um segmento acima.</Empty></div>}
-					{selectedId && !estrategiaAtual && (
-						<div className="mt-4"><Empty>Nenhuma estratégia cadastrada. {canEdit && 'Crie a primeira.'}</Empty></div>
+					{selectedId && !estrategiaAtual && selectedSeg && !isDemais && (
+						<TresCaminhos
+							aviso={<div className="rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-4 py-2.5 text-sm font-medium text-[var(--estado-atencao-texto)]">Este segmento ainda não tem estratégia: até você criar uma, ele segue a régua padrão do motor. Escolha como começar.</div>}
+							disabled={!canEdit || busy === 'separar'}
+							onCriarDoZero={() => void aplicarNoSegmento(definicaoVazia())}
+							onCopiar={() => setCopiarSegOpen(true)}
+							onModelo={() => setModelosOpen(true)}
+						/>
+					)}
+					{selectedId && !estrategiaAtual && !(selectedSeg && !isDemais) && (
+						<div className="mt-4"><Empty>Nenhuma estratégia cadastrada. Crie a do segmento escolhendo-o acima (Criar do zero, Copiar ou Começar de um modelo).</Empty></div>
 					)}
 					{selectedId && estrategiaAtual && (isDemais && !credor?.estrategia_id && !padrao) && (
 						<div className="mt-4"><Empty>Este credor ainda não tem uma estratégia padrão.</Empty></div>
@@ -1075,7 +1087,19 @@ export function Orquestracao() {
 				</div>
 			)}
 
-			{formOpen && empresa && credor && <ClusterForm cluster={editing} colunas={colunas} maxOrdem={0} credorId={credor.id} criarVinculoCredor usadoEmCarteiras={editing ? (vinculosPorCluster[editing.id] ?? 0) : undefined} onClose={() => setFormOpen(false)} onSaved={() => { setFormOpen(false); void reload(); }} />}
+			{formOpen && empresa && credor && <ClusterForm cluster={editing} colunas={colunas} maxOrdem={Math.max(0, ...Object.values(clustersMap).map(c => Number(c.ordem) || 0))} credorId={credor.id} criarVinculoCredor usadoEmCarteiras={editing ? (vinculosPorCluster[editing.id] ?? 0) : undefined} onClose={() => { setFormOpen(false); setDepoisDoSegmento(null); }} onSaved={(id) => {
+				const depois = depoisDoSegmento;
+				const novo = !editing && id;
+				setFormOpen(false); setDepoisDoSegmento(null);
+				void reload().then(() => {
+					if (!novo) return;
+					// segmento novo: já abre os Estágios dele (com os caminhos para criar a 1ª estratégia)
+					setSelectedId(id);
+					goStep('estagios');
+					if (depois === 'modelo') setModelosOpen(true);
+					if (depois === 'copiar') setCopiarSegOpen(true);
+				});
+			}} />}
 			<LeaveGuardDialog open={leaveOpen} saving={savingEstr} onSalvar={leaveSalvar} onSairSemSalvar={leaveSairSemSalvar} onCancelar={leaveCancelar} />
 			{matrixOpen && <MatrixCarteiras credores={credAtivos} clustersMap={clustersMap} onClose={() => setMatrixOpen(false)} onSaved={() => void reload()} />}
 			<CopiarCarteiraModal open={copiarOpen} onClose={() => setCopiarOpen(false)} credores={credores} currentCredorId={credor?.id ?? ''} estrategias={estrategias} defAtual={def} destinoPersonaIds={new Set(personasUsuario.map(p => p.id))} onAplicar={aplicarCopiar} />

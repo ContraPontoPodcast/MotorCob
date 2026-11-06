@@ -562,6 +562,21 @@ class TestSincronizar(unittest.TestCase):
         na = (cred / "banco-x" / "base" / "na_carga.csv").read_text().split()
         self.assertNotIn("X0003", na)
 
+    def test_carteira_sem_carga_nao_vira_execucao_com_erro(self):
+        """QA B14: a "Carteira principal" criada sozinha e sem carga é pulada (sem execução com erro); a outra roda."""
+        t = self.falso.tabelas
+        t["credores"] = [{"id": 21, "empresa_id": 2, "codigo": "principal", "nome": "Carteira principal", "ativo": True},
+                         {"id": 22, "empresa_id": 2, "codigo": "banco-x", "nome": "Banco X", "ativo": True}]
+        for e in t["envios"]:
+            if e["empresa_id"] == 2:
+                e["credor_id"] = 22
+        r = self._dia(date(2026, 9, 2), empresa="beta")["beta"]
+        self.assertEqual(r["credores"]["principal"], {"sem_carga": True})
+        self.assertNotIn("erro", r)
+        ex = [e for e in t["execucoes"] if e["empresa_id"] == 2]
+        self.assertEqual({e.get("credor_id") for e in ex}, {22})
+        self.assertFalse(any(e.get("status") == "erro" for e in ex))
+
     def test_rodizio_entre_credores_com_o_mesmo_cpf(self):
         """Mesmos clientes e mesma régua em dois credores: eles se alternam (ninguém fica sem acionar)."""
         t = self.falso.tabelas

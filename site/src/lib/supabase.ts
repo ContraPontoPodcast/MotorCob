@@ -190,10 +190,25 @@ export const moneyBR = (v: unknown) => Number(v ?? 0).toLocaleString('pt-BR', { 
 export const pctBR = (v: unknown) => `${(Number(v ?? 0) * (Number(v ?? 0) <= 1 ? 100 : 1)).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 const GENERIC_ERROR = 'Não foi possível concluir a operação. Tente novamente ou fale com o administrador.';
 const TIMEOUT_ERROR = 'A consulta demorou demais. Tente de novo em alguns segundos; se repetir, copie o detalhe técnico e envie ao suporte.';
-/** Devolve a mensagem amigável (genérica ou de tempo esgotado para o código 57014).
+/** Mensagem de regra de negócio do banco (RAISE EXCEPTION sem errcode = SQLSTATE P0001, escrita em
+ *  pt-BR para o usuário, ex.: "só dá para fechar mês que já terminou") → a frase, pronta para a tela.
+ *  Qualquer outro erro (constraint, coluna, RLS, rede, texto técnico) → null (fica a mensagem genérica). */
+export function mensagemDeNegocio(d: { code?: string | null; message?: string | null } | null | undefined): string | null {
+  if (!d || d.code !== 'P0001') return null;
+  const m = String(d.message ?? '').trim();
+  if (!m || m.length > 300) return null;
+  if (/\b(function|relation|column|syntax|violates|constraint|null value|operator|permission denied|does not exist|plpgsql|SQLSTATE)\b/i.test(m)) return null;
+  const frase = m.charAt(0).toUpperCase() + m.slice(1);
+  return /[.!?…]$/.test(frase) ? frase : `${frase}.`;
+}
+
+/** Devolve a mensagem para a tela: a regra de negócio do banco quando ela existe (P0001 em pt-BR),
+ *  a de tempo esgotado para o código 57014, senão a genérica.
  *  Quando recebe `err`, guarda também o erro original sanitizado para o Detalhe técnico. */
 export function friendlyError(err?: unknown): string {
   if (err != null) captureError(err);
+  const negocio = mensagemDeNegocio(lastDetail);
+  if (negocio) return negocio;
   return lastDetail?.code === '57014' ? TIMEOUT_ERROR : GENERIC_ERROR;
 }
 export const timeoutErrorMessage = TIMEOUT_ERROR;

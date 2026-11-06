@@ -72,7 +72,7 @@ export function ConsoleEmpresasPage() {
 
       <section className="rounded-2xl bg-white p-6" style={{ boxShadow: cardShadow }}>
         {loading ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">Carregando...</p> :
-          filtradas.length === 0 ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">Nenhuma empresa na sua carteira ainda. Peça ao Master para te colocar como Vendedor ou Gerente de uma conta.</p> :
+          filtradas.length === 0 ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">{q.trim() ? 'Nenhuma empresa com esse nome.' : podeCriar ? 'Nenhuma empresa ainda. Cadastre a primeira em Nova empresa.' : 'Nenhuma empresa na sua carteira ainda. Peça ao Master para te colocar como Vendedor ou Gerente de uma conta.'}</p> :
           <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b border-[#F0F0F2] text-[12px] text-[#8E8E93]"><th className="pb-3 font-medium">Empresa</th><th className="pb-3 font-medium">Frentes</th><th className="pb-3 font-medium">CNPJ</th><th className="pb-3 font-medium">Segmento</th><th className="pb-3 font-medium">Situação</th><th className="pb-3 font-medium">Cliente desde</th></tr></thead>
             <tbody className="divide-y divide-[#F0F0F2]">{filtradas.map(e => { const sit = SITUACOES[e.situacao as string] ?? SITUACOES.ativa; return (
               <tr key={e.id} className="cursor-pointer hover:bg-[#F5F5F7]" onClick={() => abrirEmpresa(e)}>

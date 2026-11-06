@@ -417,6 +417,33 @@ def _anotar_retorno(pasta: Path, canal: str, lote_id: int, dia: date, linhas: li
 
 
 # ------------------------------------------------------------------ 1. criar os lotes do dia
+NOME_CANAL = {"sms": "SMS", "email": "e-mail", "rcs": "RCS", "whatsapp": "WhatsApp"}
+# o que falta configurar para cada motivo de bloqueio (onde a pessoa resolve)
+COMO_RESOLVER = {
+    "sem frase no dia": "falta o texto da mensagem — cadastre a frase em Canais › Modelos de mensagem e escolha-a no passo da régua",
+    "sem modelo de e-mail": "falta o modelo de e-mail — cadastre em Mensageria › E-mail › Modelo de e-mail",
+    "produto não contratado": "o produto do canal não está contratado — fale com a equipe MotorCX",
+    "contato inválido na higienização": "os contatos da lista não passaram na higienização (formato inválido)",
+    "lista de bloqueio": "todos os destinos estão na lista de bloqueio",
+    "descadastrado": "todos os destinos pediram descadastro",
+}
+
+
+def motivo_todos_bloqueados(canal: str, linhas: list[dict]) -> str:
+    """Lote em que NENHUMA mensagem pode sair: a frase para o cliente, com o que falta configurar (QA B23).
+    Antes ficava só "nada a enviar: todos bloqueados" e o lote ia a "concluído" sem ninguém perceber."""
+    from collections import Counter
+    cont = Counter(l.get("motivo") or "" for l in linhas if l.get("situacao") == "bloqueada")
+    partes = []
+    for m, n in cont.most_common(3):
+        if m.startswith("frase acima de"):
+            partes.append(f"o texto do SMS passa de {LIMITE_SMS} caracteres ({n})")
+        else:
+            partes.append(f"{COMO_RESOLVER.get(m, m or 'bloqueada')} ({n})")
+    texto = f"Nenhuma mensagem de {NOME_CANAL.get(canal, canal)} enviada: " + "; ".join(partes or ["todas bloqueadas"])
+    return texto[:300]
+
+
 def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empresa: list[dict] | None = None,
                 out=print) -> list[dict]:
     pasta = Path(pasta)
@@ -489,7 +516,7 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
         bloq = sum(1 for l in linhas if l["situacao"] == "bloqueada")
         situacao, motivo_lote = ("aguardando_aprovacao" if aprovar else "agendado"), None
         if not locais:
-            situacao, motivo_lote = "concluido", "nada a enviar: todos bloqueados"
+            situacao, motivo_lote = "concluido", motivo_todos_bloqueados(canal, linhas)
         elif jan is None:
             situacao, motivo_lote = "cancelado", "sem envio hoje (domingo, sábado sem envio ou canal desligado)"
         jan = jan or JANELA_PADRAO
@@ -504,6 +531,16 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
         _gravar_json(pasta / "mensageria" / f"lote_{lote['id']}.json",
                      {str(m["id"]): locais[(m["id_cliente"], m["destino_hash"])] for m in gravadas
                       if (m["id_cliente"], m["destino_hash"]) in locais})
+        if not locais:      # 100% bloqueado: ninguém recebe nada — o cliente e a equipe precisam saber o porquê
+            from nuvem import avisos as AV
+            for para in ("empresa", "equipe"):
+                try:
+                    AV.criar(sb, para, f"Lote de {NOME_CANAL.get(canal, canal)} sem nenhuma mensagem enviada",
+                             motivo_lote, tipo="atencao", empresa_id=empresa_id,
+                             link="/mensageria/email/templates" if canal == "email" else "/canais?secao=frases",
+                             chave=f"lote_bloqueado:{para}:{empresa_id}:{cid}:{canal}:{dia.isoformat()}")
+                except Exception as e:  # noqa: BLE001 — o aviso nunca derruba a rodada
+                    out(f"  aviso do lote não gravado ({str(e)[:120]})")
         out(f"  mensageria: lote {canal.upper()} com {len(linhas)} mensagens ({bloq} bloqueadas) — "
             f"{'aguardando aprovação' if situacao == 'aguardando_aprovacao' else situacao}")
         criados.append(lote)

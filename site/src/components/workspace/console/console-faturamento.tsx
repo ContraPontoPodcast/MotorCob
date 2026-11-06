@@ -9,6 +9,7 @@ import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { ProcessoLongo } from '@/components/comuns/processo-longo';
 import { TabelaResponsiva } from '@/components/comuns/tabela-responsiva';
 import { AcordosTab, LancarAcordoModal, AcordoBloqueado } from './console-acordos';
+import { comNomeDaEmpresa, listaSemContato, mensagemRascunhos } from '@/lib/console-faturas';
 
 type Tab = 'faturas' | 'cobrancas' | 'notas' | 'config' | 'acordos';
 
@@ -103,9 +104,14 @@ function FaturasCiclo({ canEmitir, isMaster, setErro, setSucesso }: {
     if (!supabase) return;
     setLoading(true); setErro('');
     try {
-      const { data, error } = await supabase.from('faturas_painel').select('*').eq('competencia', competencia).order('empresa');
+      // a view não tem o nome da empresa (só empresa_id): busca o nome/situação à parte e ordena pelo nome
+      const { data, error } = await supabase.from('faturas_painel').select('*').eq('competencia', competencia).order('empresa_id');
       if (error) throw error;
-      setFaturas((data ?? []) as Row[]);
+      const linhas = (data ?? []) as Row[];
+      const ids = [...new Set(linhas.map(f => f.empresa_id))];
+      const emp = ids.length ? await supabase.from('empresas').select('id,nome,situacao').in('id', ids) : { data: [] as Row[], error: null };
+      if (emp.error) throw emp.error;
+      setFaturas(comNomeDaEmpresa(linhas, (emp.data ?? []) as Row[]));
     } catch (e) {
       setErro(friendlyError(e));
       setFaturas([]);
@@ -115,7 +121,8 @@ function FaturasCiclo({ canEmitir, isMaster, setErro, setSucesso }: {
 
   const porTab: Record<FatTab, Row[]> = {
     rascunhos: faturas.filter(f => String(f.situacao ?? '') === 'rascunho'),
-    aberto: faturas.filter(f => String(f.situacao ?? '') === 'emitida' && !['vencida', 'em_acordo'].includes(String(f.situacao_atual ?? ''))),
+    // emitida = situacao 'aberta' no banco (rascunho → aberta ao emitir); vencida/em acordo têm aba própria
+    aberto: faturas.filter(f => String(f.situacao ?? '') === 'aberta' && !['vencida', 'em_acordo'].includes(String(f.situacao_atual ?? ''))),
     vencidas: faturas.filter(f => String(f.situacao_atual ?? '') === 'vencida'),
     pagas: faturas.filter(f => String(f.situacao ?? '') === 'paga'),
   };
@@ -152,9 +159,9 @@ function FaturasCiclo({ canEmitir, isMaster, setErro, setSucesso }: {
     if (!supabase) return;
     setBusy(true); setErro(''); setSucesso('');
     try {
-      const { error } = await supabase.rpc('gerar_rascunhos', { competencia });
+      const { data, error } = await supabase.rpc('gerar_rascunhos', { competencia });
       if (error) throw error;
-      setSucesso('Rascunhos gerados para o ciclo.');
+      setSucesso(mensagemRascunhos(Number(data ?? 0)));
       void reload();
     } catch (e) { setErro(friendlyError(e)); } finally { setBusy(false); }
   }
@@ -205,7 +212,7 @@ function FaturasCiclo({ canEmitir, isMaster, setErro, setSucesso }: {
     if (!supabase) return;
     setErro('');
     try {
-      const { data, error } = await supabase.functions.invoke('cobranca', { body: { acao: 'demonstrativo', fatura: faturaId } });
+      const { data, error } = await supabase.functions.invoke('cobranca', { body: { acao: 'demonstrativo', fatura: Number(faturaId) } });
       if (error) throw error;
       const url = (data as Row)?.url;
       if (url) window.open(String(url), '_blank', 'noopener,noreferrer');
@@ -300,8 +307,8 @@ function FaturasCiclo({ canEmitir, isMaster, setErro, setSucesso }: {
               <p>{Number(resumo.quantidade ?? confirmaEmitir.length)} faturas serão emitidas, somando <strong>{moneyBR(resumo.total)}</strong>.</p>
               <p>O e-mail com o demonstrativo, o boleto e a nota sai para {Number(resumo.contatos ?? 0)} contato(s).</p>
               <p>Depois de emitida, a fatura não volta a rascunho.</p>
-              {Number(resumo.sem_contato ?? 0) > 0 && (
-                <p className="rounded-lg bg-[#FFF3E8] px-3 py-2 text-[13px] text-[#9a631b]">Sem e-mail de fatura: {String(resumo.sem_contato ?? '')} — marque Recebe faturas antes.</p>
+              {listaSemContato(resumo.sem_contato).length > 0 && (
+                <p className="rounded-lg bg-[#FFF3E8] px-3 py-2 text-[13px] text-[#9a631b]">Sem e-mail de fatura: {listaSemContato(resumo.sem_contato).join(', ')} — marque Recebe faturas antes.</p>
               )}
             </div>
           ) : 'Carregando resumo...'}
@@ -534,7 +541,7 @@ function sitFaturaBadge(f: Row): { label: string; cor: string; bg: string; title
     }
     return { label: 'Rascunho', cor: '#8E8E93', bg: '#F5F5F7' };
   }
-  if (s === 'emitida') return { label: 'Emitida', cor: '#248A3D', bg: '#E8F8EC' };
+  if (s === 'emitida' || s === 'aberta') return { label: 'Emitida', cor: '#248A3D', bg: '#E8F8EC' };
   if (s === 'paga') return { label: 'Paga', cor: '#248A3D', bg: '#E8F8EC' };
   if (s === 'vencida') return { label: 'Vencida', cor: '#FF3B30', bg: '#FFE8E6' };
   if (s === 'cancelada') return { label: 'Cancelada', cor: '#8E8E93', bg: '#F5F5F7' };

@@ -78,7 +78,7 @@ export function LoteCard({ lote, canAct, busyId, onAction }: {
 
 			<Progresso lote={lote} />
 
-			{lote.motivo && <p className="mt-2 text-[13px] text-[#6E6E73]">{lote.motivo}</p>}
+			{lote.motivo && <p className={`mt-2 text-[13px] ${lote.total > 0 && lote.bloqueadas >= lote.total ? 'rounded-lg bg-[#FFF3E8] px-3 py-2 font-medium text-[#9a631b]' : 'text-[#6E6E73]'}`}>{lote.motivo}</p>}
 
 			{canAct && !confirmCancel && (
 				<div className="mt-4 flex flex-wrap items-center gap-2">
@@ -132,6 +132,10 @@ export function LoteRow({ lote }: { lote: LoteMensageria }) {
 			<div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#EEEEF0]">
 				<div className="h-full rounded-full bg-[#0A60D0]" style={{ width: `${pct}%` }} />
 			</div>
+			{/* lote 100% bloqueado (sem frase, sem modelo…): ninguém recebeu nada — o motivo diz o que configurar */}
+			{lote.total > 0 && lote.bloqueadas >= lote.total && lote.motivo && (
+				<p className="mt-2 rounded-lg bg-[#FFF3E8] px-3 py-2 text-[13px] font-medium text-[#9a631b]">{lote.motivo}</p>
+			)}
 		</Link>
 	);
 }

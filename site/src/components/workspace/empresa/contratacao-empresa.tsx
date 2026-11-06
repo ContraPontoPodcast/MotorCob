@@ -263,7 +263,8 @@ export function ContratacaoEmpresa({
   // Cobrança
   const [modeloPag, setModeloPag] = useState<ModeloPag>('pos');
   const [emissao, setEmissao] = useState<'revisar' | 'automatica'>('revisar');
-  const [formas, setFormas] = useState<string[]>([]);
+  // mesmo padrão do banco (ciclo_empresa.formas default boleto + pix): a Nova empresa já vem com os dois marcados
+  const [formas, setFormas] = useState<string[]>(['boleto', 'pix']);
   const [prazoDias, setPrazoDias] = useState(10);
   const [recargaMinima, setRecargaMinima] = useState('');
   const [avisoSaldo, setAvisoSaldo] = useState('');
@@ -1124,21 +1125,24 @@ function GrupoPreco({ titulo, itens, precosEmpresa, competencia, alterados, edit
           const aberto = editando === id;
           return (
             <div key={id}>
-              <button type="button" onClick={() => onEditar(aberto ? null : id)} className="flex w-full items-center justify-between gap-3 py-3 text-left">
-                <div className="min-w-0">
-                  <p className="text-[15px] font-medium text-[#1D1D1F]">{item.nome}</p>
-                  <p className="text-[13px] text-[#6E6E73]">por {unidade}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
+              {/* abrir o preço e "Histórico" são botões irmãos (botão dentro de botão é HTML inválido) */}
+              <div className="flex w-full items-center gap-3 py-3">
+                <button type="button" onClick={() => onEditar(aberto ? null : id)} aria-expanded={aberto} className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left">
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-medium text-[#1D1D1F]">{item.nome}</p>
+                    <p className="text-[13px] text-[#6E6E73]">por {unidade}</p>
+                  </div>
                   {temPreco ? (
-                    <span className="text-right text-[13px] text-[#1D1D1F]">
+                    <span className="shrink-0 text-right text-[13px] text-[#1D1D1F]">
                       {alterado ? <span className="text-[#0A60D0]">editado</span> : <>{MODELO_LABEL[String(vigente!.modelo) as Modelo]} · {resumoPreco(vigente!, unidade)}</>}
                     </span>
-                  ) : <span className="text-[13px] font-medium text-[#FF3B30]">Sem preço</span>}
-                  <button type="button" onClick={(e) => { e.stopPropagation(); onHistorico(item); }} className="text-[12px] font-semibold text-[#0A60D0] hover:underline">Histórico</button>
+                  ) : <span className="shrink-0 text-[13px] font-medium text-[#FF3B30]">Sem preço</span>}
+                </button>
+                <button type="button" onClick={() => onHistorico(item)} className="shrink-0 text-[12px] font-semibold text-[#0A60D0] hover:underline">Histórico</button>
+                <button type="button" onClick={() => onEditar(aberto ? null : id)} aria-label={aberto ? 'Fechar o preço' : 'Abrir o preço'} className="shrink-0">
                   <ChevronDown size={16} className={`text-[#8E8E93] transition ${aberto ? 'rotate-180' : ''}`} />
-                </div>
-              </button>
+                </button>
+              </div>
               {aberto && (
                 <PrecoEditor
                   item={item}

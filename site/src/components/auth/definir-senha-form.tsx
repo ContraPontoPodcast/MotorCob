@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Check, X } from 'lucide-react';
 import { RotorMark } from '@/components/site/logo';
@@ -55,6 +55,7 @@ export function DefinirSenhaForm({ mode }: Props) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [ready, setReady] = useState(false);
+  const prontoRef = useRef(false);
   const [etapa, setEtapa] = useState<Etapa>('senha');
   const [passo, setPasso] = useState<PassoPendente | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -67,13 +68,18 @@ export function DefinirSenhaForm({ mode }: Props) {
     if (!supabase) return;
     const client = supabase;
     let active = true;
-    client.auth.getSession().then(({ data }) => { if (active && data.session) setReady(true); });
+    // O timer lê a ref (não o `ready` da 1ª renderização, que é sempre false) e só troca
+    // para "Link vencido" se a pessoa ainda estiver na etapa da senha: sessão que chegou
+    // depois, ou senha já salva, nunca vira "vencido".
+    const t = window.setTimeout(() => {
+      if (active && !prontoRef.current) setEtapa(e => (e === 'senha' ? 'expirado' : e));
+    }, 4000);
+    const confirmar = () => { prontoRef.current = true; window.clearTimeout(t); setReady(true); };
+    client.auth.getSession().then(({ data }) => { if (active && data.session) confirmar(); });
     const { data: listener } = client.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || (session && event === 'SIGNED_IN')) setReady(true);
+      if (event === 'PASSWORD_RECOVERY' || (session && event === 'SIGNED_IN')) confirmar();
     });
-    const t = window.setTimeout(() => { if (active && !ready) setEtapa('expirado'); }, 4000);
     return () => { active = false; listener.subscription.unsubscribe(); window.clearTimeout(t); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Busca o papel para mostrar as pílulas certas (admin vê o passo do código).

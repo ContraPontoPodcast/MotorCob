@@ -4,18 +4,16 @@ import { Activity, BookOpen, Clock, Upload } from 'lucide-react';
 import { Loading, Notice, PageHeading, useAllowed } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, supabase, type Row } from '@/lib/supabase';
-import { canalOpts, canalLabel } from '@/lib/estrategia';
+import { canalLabel } from '@/lib/estrategia';
+import {
+  canaisConfiguraveis as canalOpts, CONFLITO_CANAIS_EMPRESA, CONFLITO_CREDOR_CANAIS, lerCusto, linhasCarteira, linhasEmpresa,
+  naoPerturbeParaTela, VOZ as vozChannels, type CanalTela,
+} from '@/lib/canais-config';
 import { canalTipoMensagem } from '@/lib/frases';
 import { numerosPorClienteOpts } from '@/lib/operacao';
 import { FrasesTab } from '@/components/canais/frases';
 import { ImportarPlaybookModal } from '@/components/canais/importar-playbook';
-type CanalRow = {
-  canal: string; ativo: boolean; janela_inicio: string | null; janela_fim: string | null;
-  sabado: boolean; capacidade_dia: number | null; custo: number | null;
-  tentativas_dia: number | null; respeitar_nao_perturbe: string | null;
-  numeros_por_cliente: number | null;
-  produto_padrao: string | null;
-};
+type CanalRow = CanalTela;
 
 const defaults: Record<string, CanalRow> = Object.fromEntries(
   canalOpts.map(c => [c.id, {
@@ -27,8 +25,6 @@ const defaults: Record<string, CanalRow> = Object.fromEntries(
     produto_padrao: null,
   }]),
 );
-
-const vozChannels = new Set(['agente_voz', 'discador']);
 
 /** Indicador de herança no modo carteira. */
 function Heranca({ sobrescrito, onVoltar }: { sobrescrito: boolean; onVoltar: () => void }) {
@@ -46,6 +42,8 @@ export function Canais() {
   const [escopo, setEscopo] = useState<string>('empresa'); // 'empresa' | credor_id
   const [rows, setRows] = useState<Record<string, CanalRow>>({});
   const [sobrescritos, setSobrescritos] = useState<Record<string, string[]>>({});
+  const [carregados, setCarregados] = useState<Record<string, string[]>>({});
+  const [custoTexto, setCustoTexto] = useState<Record<string, string>>({});
   const [produtosPorCanal, setProdutosPorCanal] = useState<Record<string, Row[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -63,21 +61,25 @@ export function Canais() {
     setLoading(true); setError('');
     if (escopo === 'empresa') {
       const { data, error } = await supabase.from('canais_empresa').select('*').eq('empresa_id', empresa.id);
-      if (error) { setError(friendlyError()); setLoading(false); return; }
+      if (error) { setError(friendlyError(error)); setLoading(false); return; }
       const map: Record<string, CanalRow> = {};
-      (data ?? []).forEach((r: Row) => { map[r.canal as string] = r as CanalRow; });
-      setRows(map); setSobrescritos({});
+      const custos: Record<string, string> = {};
+      (data ?? []).forEach((r: Row) => {
+        map[r.canal as string] = { ...(defaults[r.canal as string] ?? {}), ...r, respeitar_nao_perturbe: naoPerturbeParaTela(r.respeitar_nao_perturbe) } as CanalRow;
+        if (r.custo != null) custos[r.canal as string] = Number(r.custo).toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+      });
+      setRows(map); setSobrescritos({}); setCarregados({}); setCustoTexto(custos);
     } else {
       const { data, error } = await supabase.from('canais_credor').select('*').eq('empresa_id', empresa.id).eq('credor_id', escopo);
-      if (error) { setError(friendlyError()); setLoading(false); return; }
+      if (error) { setError(friendlyError(error)); setLoading(false); return; }
       const map: Record<string, CanalRow> = {};
       const sob: Record<string, string[]> = {};
       (data ?? []).forEach((r: Row) => {
         const canal = r.canal as string;
-        map[canal] = { ...(defaults[canal] ?? {}), ...r } as CanalRow;
+        map[canal] = { ...(defaults[canal] ?? {}), ...r, respeitar_nao_perturbe: naoPerturbeParaTela(r.respeitar_nao_perturbe) } as CanalRow;
         sob[canal] = Array.isArray(r.sobrescritos) ? (r.sobrescritos as string[]) : [];
       });
-      setRows(map); setSobrescritos(sob);
+      setRows(map); setSobrescritos(sob); setCarregados(sob);
     }
     setLoading(false);
   }
@@ -120,39 +122,20 @@ export function Canais() {
     if (!supabase || !empresa) return;
     setBusy(true); setError(''); setSuccess('');
     if (escopo === 'empresa') {
-      const upserts = canalOpts.map(c => {
-        const r = rows[c.id] ?? defaults[c.id];
-        return {
-          empresa_id: empresa.id, canal: c.id, ativo: r.ativo,
-          janela_inicio: r.janela_inicio || null, janela_fim: r.janela_fim || null,
-          sabado: r.sabado, capacidade_dia: r.capacidade_dia || null,
-          custo: r.custo || null, tentativas_dia: vozChannels.has(c.id) ? (r.tentativas_dia || null) : null,
-          respeitar_nao_perturbe: r.respeitar_nao_perturbe,
-          numeros_por_cliente: r.numeros_por_cliente === 1 ? null : (r.numeros_por_cliente ?? null),
-        };
-      });
-      const { error } = await supabase.from('canais_empresa').upsert(upserts, { onConflict: 'empresa_id,canal' });
-      if (error) setError(friendlyError()); else setSuccess('Configuração dos canais salva com sucesso.');
+      const custos: Record<string, number | null> = {};
+      for (const c of canalOpts) {
+        const lido = lerCusto(custoTexto[c.id] ?? '');
+        if ('erro' in lido) { setError(`${canalLabel[c.id]} · custo por ação: ${lido.erro}`); setBusy(false); return; }
+        custos[c.id] = lido.valor;
+      }
+      const comCusto: Record<string, CanalRow> = Object.fromEntries(canalOpts.map(c => [c.id, { ...(rows[c.id] ?? defaults[c.id]), custo: custos[c.id] }]));
+      const { error } = await supabase.from('canais_empresa').upsert(linhasEmpresa(empresa.id, comCusto, defaults), { onConflict: CONFLITO_CANAIS_EMPRESA });
+      if (error) setError(friendlyError(error)); else { setSuccess('Configuração dos canais salva com sucesso.'); void reload(); }
     } else {
-      const upserts = canalOpts.map(c => {
-        const sob = sobrescritos[c.id] ?? [];
-        const r = rows[c.id] ?? defaults[c.id];
-        const ajustes: Record<string, unknown> = {};
-        for (const k of sob) {
-          if (k === 'ativo') ajustes.ativo = r.ativo;
-          else if (k === 'janela_inicio') ajustes.janela_inicio = r.janela_inicio || null;
-          else if (k === 'janela_fim') ajustes.janela_fim = r.janela_fim || null;
-          else if (k === 'sabado') ajustes.sabado = r.sabado;
-          else if (k === 'capacidade_dia') ajustes.capacidade_dia = r.capacidade_dia || null;
-          else if (k === 'tentativas_dia') ajustes.tentativas_dia = vozChannels.has(c.id) ? (r.tentativas_dia || null) : null;
-          else if (k === 'respeitar_nao_perturbe') ajustes.respeitar_nao_perturbe = r.respeitar_nao_perturbe;
-          else if (k === 'produto_padrao') ajustes.produto_padrao = r.produto_padrao || null;
-        }
-        return { empresa_id: empresa.id, credor_id: escopo, canal: c.id, ajustes };
-      }).filter(u => Object.keys(u.ajustes).length > 0);
+      const upserts = linhasCarteira(empresa.id, escopo, rows, defaults, sobrescritos, carregados);
       if (upserts.length === 0) { setSuccess('Nenhum ajuste desta carteira para salvar.'); setBusy(false); return; }
-      const { error } = await supabase.from('credor_canais').upsert(upserts, { onConflict: 'empresa_id,credor_id,canal' });
-      if (error) setError(friendlyError()); else { setSuccess('Ajustes da carteira salvos com sucesso.'); void reload(); }
+      const { error } = await supabase.from('credor_canais').upsert(upserts, { onConflict: CONFLITO_CREDOR_CANAIS });
+      if (error) setError(friendlyError(error)); else { setSuccess('Ajustes da carteira salvos com sucesso.'); void reload(); }
     }
     setBusy(false);
   }
@@ -235,7 +218,7 @@ export function Canais() {
                   {!isCarteira && (
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-600">Custo por ação (R$)</label>
-                      <input type="number" min={0} step="0.01" value={r.custo ?? ''} disabled={!canEdit || !r.ativo} onChange={e => patch(c.id, { custo: e.target.value ? Number(e.target.value) : null })} placeholder="0,00" className="h-10 w-full rounded border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C] disabled:bg-[#f5f7f8]"/>
+                      <input type="text" inputMode="decimal" value={custoTexto[c.id] ?? ''} disabled={!canEdit || !r.ativo} onChange={e => setCustoTexto(prev => ({ ...prev, [c.id]: e.target.value }))} placeholder="0,00" className="h-10 w-full rounded border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C] disabled:bg-[#f5f7f8]"/>
                     </div>
                   )}
                 </div>
@@ -250,7 +233,7 @@ export function Canais() {
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600">Respeitar Não Perturbe</label>
-                  <select value={r.respeitar_nao_perturbe ?? ''} disabled={!canEdit || !r.ativo} onChange={e => patch(c.id, { respeitar_nao_perturbe: e.target.value || null })} className="h-10 w-full rounded border border-[#d8e3e5] bg-white px-3 text-sm outline-none focus:border-[#0F4C5C] disabled:bg-[#f5f7f8]">
+                  <select value={r.respeitar_nao_perturbe ?? ''} disabled={!canEdit || !r.ativo} onChange={e => patch(c.id, { respeitar_nao_perturbe: naoPerturbeParaTela(e.target.value) })} className="h-10 w-full rounded border border-[#d8e3e5] bg-white px-3 text-sm outline-none focus:border-[#0F4C5C] disabled:bg-[#f5f7f8]">
                     <option value="">Padrão (voz respeita, digitais não)</option>
                     <option value="sim">Sim</option>
                     <option value="nao">Não</option>

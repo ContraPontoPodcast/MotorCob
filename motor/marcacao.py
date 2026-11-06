@@ -213,6 +213,24 @@ def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente
     return trilha.eventos
 
 
+def revisar_clusters_alterados(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente], dia: date,
+                               regua: Regua) -> list[dict]:
+    """Regras de segmento (ou personas) mudaram depois da rotina do dia: revisa o cluster atual JÁ, sem esperar
+    o próximo `processar_dia` ("Reenquadrar agora" no mesmo dia). Mesma regra e mesma marca da trilha que o
+    `processar_dia` usa; só toca em quem tem `cluster_versao` diferente da versão vigente, então rodar de novo
+    não muda nada (idempotente). A revisão mensal continua só no `processar_dia`."""
+    trilha = Trilha()
+    for idc, est in estados.items():
+        c = clientes.get(idc)
+        if c is None or est.estado in ("BLQ", "LIQ") or est.cluster_versao == regua.versao_clusters:
+            continue
+        antes = est.tag
+        est.cluster_revisado, est.cluster_versao = f"{dia:%Y-%m}", regua.versao_clusters
+        est.cluster_atual = regua.cluster_de(c, dia)
+        trilha.marcar(dia, est, antes, "regras de cluster alteradas", "Planejamento")
+    return trilha.eventos
+
+
 def _aplicar_retornos(est, eventos, dia, regua, disponiveis, trilha):
     if not eventos:
         return

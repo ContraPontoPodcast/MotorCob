@@ -32,7 +32,18 @@ const canalOpts = [
   { id: 'whatsapp', label: 'WhatsApp' }, { id: 'rcs', label: 'RCS' }, { id: 'agente_voz', label: 'Agente virtual' },
   { id: 'discador', label: 'Discador' }, { id: 'sms', label: 'SMS' }, { id: 'email', label: 'E-mail' },
 ];
+/** Pacote quando o campo fica vazio: o mesmo padrão da coluna `clusters.pacote` (NOT NULL) e do motor (`motor/cluster.py`). */
+export const PACOTE_PADRAO = 'básico';
 const pacoteSugestoes = ['básico', 'básico + WhatsApp válido', 'completo', 'completo + novos telefones', 'completo + localizador'];
+
+/** O código vai na TAG (até 4 letras ou números). Nada é cortado em silêncio: o que passar disso é avisado. */
+export function erroCodigo(codigo: string): string | null {
+  const c = codigo.toUpperCase().trim();
+  if (!c) return null;
+  if (/[^A-Z0-9]/.test(c)) return 'Use só letras e números no código (sem hífen, espaço ou acento).';
+  if (c.length > 4) return `O código tem no máximo 4 letras ou números (você digitou ${c.length}).`;
+  return null;
+}
 
 function fieldTipo(campo: string, colunas: Coluna[]): 'numero' | 'texto' {
   const all = [...calculados, ...colunas];
@@ -42,7 +53,7 @@ function opsFor(tipo: 'numero' | 'texto') {
   return ops.filter(o => tipo === 'numero' ? o.num : o.txt).sort((a, b) => (tipo === 'numero' ? 0 : 0));
 }
 
-export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculoCredor, usadoEmCarteiras, onClose, onSaved }: { cluster: Cluster | null; colunas: Coluna[]; maxOrdem: number; credorId?: string; criarVinculoCredor?: boolean; usadoEmCarteiras?: number; onClose: () => void; onSaved: () => void }) {
+export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculoCredor, usadoEmCarteiras, onClose, onSaved }: { cluster: Cluster | null; colunas: Coluna[]; maxOrdem: number; credorId?: string; criarVinculoCredor?: boolean; usadoEmCarteiras?: number; onClose: () => void; onSaved: (id?: string) => void }) {
   const { perfil, empresa } = useMotorAuth();
   const [codigo, setCodigo] = useState(cluster?.codigo ?? '');
   const [nome, setNome] = useState(cluster?.nome ?? '');
@@ -80,7 +91,8 @@ export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculo
   async function submit() {
     if (!supabase || !empresa || !perfil) return;
     const code = codigo.toUpperCase().trim();
-    if (!/^[A-Z0-9]{1,4}$/.test(code)) { setError('Use 1 a 4 letras ou números, sem hífen.'); return; }
+    const errCod = erroCodigo(code) ?? (code ? null : 'Informe o código do segmento (1 a 4 letras ou números).');
+    if (errCod) { setError(errCod); return; }
     if (!nome.trim()) { setError('Informe o nome do cluster.'); return; }
     if (cluster && (usadoEmCarteiras ?? 0) > 1) {
       if (!window.confirm(`Este segmento é da empresa e está em ${usadoEmCarteiras} carteiras: mudar condições ou ordem muda em todas. Continuar?`)) return;
@@ -92,7 +104,7 @@ export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculo
       empresa_id: empresa.id, codigo: code, nome: nome.trim(),
       estrategia_id: estrategiaId || null,
       condicoes: norm.condicoes as unknown as Record<string, unknown>[],
-      pacote: pacote.trim() || null, revalida_dias: Number(revalida) || null,
+      pacote: pacote.trim() || PACOTE_PADRAO, revalida_dias: Number(revalida) || null,
       so_digital: soDigital, voz_d0: vozD0, canais_bloqueados: bloqueados,
       credor_id: criarVinculoCredor ? null : (todosCredores ? null : credorId),
       ativo: cluster?.ativo ?? true, atualizado_por: perfil.id,
@@ -117,7 +129,7 @@ export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculo
           { onConflict: 'cluster_id,credor_id' },
         );
       }
-      onSaved();
+      onSaved(res.data?.id ?? undefined);   // o id como veio do banco (número), igual ao cluster_id das outras telas
     } catch (e) { setError(friendlyError(e)); setBusy(false); }
   }
 
@@ -166,7 +178,7 @@ export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculo
           <p className="rounded-lg bg-[#fff7e8] px-4 py-3 text-xs leading-relaxed text-[#80520f]">Este segmento é da empresa e está em <strong>{usadoEmCarteiras} carteiras</strong>: mudar condições ou ordem muda em todas.</p>
         )}
         <div className="grid gap-4 sm:grid-cols-2">
-          <div><label className="mb-2 block text-xs font-semibold">Código</label><input value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())} maxLength={4} placeholder="Ex. VEIC" className="h-11 w-full rounded-lg border border-[#d8e3e5] px-3 text-sm uppercase outline-none focus:border-[#0F4C5C]"/></div>
+          <div><label className="mb-2 block text-xs font-semibold">Código</label><input value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())} placeholder="Ex. VEIC" aria-invalid={!!erroCodigo(codigo)} className="h-11 w-full rounded-lg border border-[#d8e3e5] px-3 text-sm uppercase outline-none focus:border-[#0F4C5C]"/>{erroCodigo(codigo) && <p className="mt-1 text-[11px] font-medium text-[#B42318]">{erroCodigo(codigo)}</p>}</div>
           <div><label className="mb-2 block text-xs font-semibold">Nome</label><input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do cluster" className="h-11 w-full rounded-lg border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]"/></div>
         </div>
 
@@ -202,7 +214,7 @@ export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculo
         <div className="rounded-lg border border-[#e2eaec] p-4">
           <p className="mb-3 text-xs font-semibold">O que muda</p>
           <div className="space-y-4">
-            <div><label className="mb-1 block text-xs font-medium text-slate-600">Pacote de enriquecimento</label><input list="pacotes" value={pacote} onChange={e => setPacote(e.target.value)} placeholder="básico, completo..." className="h-10 w-full rounded border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]"/><datalist id="pacotes">{pacoteSugestoes.map(p => <option key={p} value={p}/>)}</datalist></div>
+            <div><label className="mb-1 block text-xs font-medium text-slate-600">Pacote de enriquecimento</label><input list="pacotes" value={pacote} onChange={e => setPacote(e.target.value)} placeholder="básico (padrão), completo..." className="h-10 w-full rounded border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]"/><datalist id="pacotes">{pacoteSugestoes.map(p => <option key={p} value={p}/>)}</datalist></div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div><label className="mb-1 block text-xs font-medium text-slate-600">Revalidar contatos a cada N dias</label><input type="number" min={1} value={revalida} onChange={e => setRevalida(e.target.value)} className="h-10 w-full rounded border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]"/></div>
             </div>
