@@ -29,6 +29,8 @@ Atenção ao copiar: copie do arquivo aberto num editor de texto. A prévia do c
    - **`tarifas_mensageria`**: preço por mensagem de cada tipo (SMS, e-mail, RCS Basic/Single/Conversacional,
      WhatsApp). A mensageria é sempre por consumo.
    - **`contratos_mes`** (a rotina grava) e **`consumo_mensageria`**: medição do mês; view **`consumo_mes`** junta tudo.
+     Desde o SQL 69 (`20270105000001_orquestracao_por_cpf.sql`) a Orquestração é cobrada **por CPF**: CPFs
+     distintos ativos no ciclo em **`clientes_mes`** (chave HMAC, nunca o CPF); `contratos_mes` fica informativo.
    - **`previa_fatura(empresa, competencia)`**: a conta do mês item a item; **`fechar_fatura(...)`** congela em
      **`faturas`** e **`fatura_itens`** (só o Admin da equipe). Boleto e nota ficam na ferramenta de cobrança.
    - **`mensageria_fornecedores`** (Ótima, Zenvia, Infobip, Sinch) e **`mensageria_rotas`** (principal e reserva).

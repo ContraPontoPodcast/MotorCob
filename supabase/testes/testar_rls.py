@@ -2782,5 +2782,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 68: a equipe monta o fluxo do cliente (testar_voz_fluxo_equipe.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 69 · Orquestração cobrada por CPF (clientes distintos ativos no ciclo); o arquivo aplica o 69 duas vezes.
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_orquestracao_cpf.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 69: Orquestração por CPF (testar_orquestracao_cpf.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

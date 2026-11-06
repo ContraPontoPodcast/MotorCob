@@ -22,7 +22,10 @@ test("faixas: progressivo mostra a conta; por faixa mostra onde o volume caiu", 
 test("cada item diz como é cobrado", () => {
   const l = linhaDoItem(EXEMPLO.itens[0]);
   assert.deepEqual([l.item, l.como, l.quantidade, l.preco, l.valor],
-    ["Orquestração (MotorCob)", "Por contrato · escalonado progressivo", "12.500 contratos", "—", "R$ 3.104,50"]);
+    ["Orquestração (MotorCob)", "Por CPF · escalonado progressivo", "12.500 CPFs", "—", "R$ 3.104,50"]);
+  // fatura fechada antes do SQL 69 (pelos contratos) continua dizendo contrato
+  const antiga = linhaDoItem({ ...EXEMPLO.itens[0], descricao: "Orquestração · contratos no ciclo" });
+  assert.deepEqual([antiga.como, antiga.quantidade], ["Por contrato · escalonado progressivo", "12.500 contratos"]);
   const sms = linhaDoItem(EXEMPLO.itens[2]);
   assert.match(sms.detalhe!, /inclui 311 respostas de clientes/);
   assert.equal(linhaDoItem(EXEMPLO.itens[5]).como, "Por e-mail · flat · mínimo R$ 50,00");
@@ -40,6 +43,8 @@ test("resumo por grupo bate com o total", () => {
   assert.deepEqual(s.origens.cabecalho, ["Origem", "E-mail", "RCS", "SMS"]);
   assert.deepEqual(s.origens.linhas[1], ["Renegocia Outubro", "700", "648", "3.383"]);
   assert.equal(s.cliente[1], "CNPJ 11.222.333/0001-81");
+  assert.deepEqual(s.carteiras[0], ["Banco X", "MotorCob", "3.120", "3.598", "—", "22"]);   // CPFs antes dos contratos
+  assert.deepEqual(s.carteiras[2], ["Relacionamento", "MotorCli", "—", "—", "1.236", "30"]);
 });
 
 test("e-mail com os dois PDFs separados e tudo escapado", () => {

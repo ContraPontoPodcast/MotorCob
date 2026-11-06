@@ -35,7 +35,7 @@ const MODELO_AJUDA: Record<Modelo, string> = {
 };
 
 const UNIDADE_LABEL: Record<string, string> = {
-  contratos: 'contrato no ciclo',
+  contratos: 'CPF ativo no ciclo',
   jornada_clientes: 'cliente acionado no ciclo',
   sms: 'mensagem',
   email: 'mensagem',
