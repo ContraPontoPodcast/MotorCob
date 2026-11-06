@@ -1,4 +1,5 @@
 // Tipos, playbook e helpers para a página de Estratégias.
+import { erroCondicao, OPS_NUMERICOS, type ValorCondicao } from '@/lib/condicoes';
 
 export type Contatos = {
 	whatsapp?: boolean;
@@ -103,7 +104,7 @@ export const FASE_ESTADO: Record<FaseId, string[]> = {
 };
 
 /** Condição de uma etapa (mesmo formato das condições de cluster). */
-export type CondicaoEtapa = { campo: string; op: string; valor: string | string[] | null };
+export type CondicaoEtapa = { campo: string; op: string; valor: ValorCondicao };
 
 /** Como contar o prazo de uma etapa. */
 export type ContandoJanela = { tipo: 'entrada' | 'atraso' | 'vencimento' | 'coluna'; coluna?: string };
@@ -420,11 +421,11 @@ export function validarEtapas(def: Definicao): ErroEtapa[] {
 					if (vals.length === 0) msgs.push('A condição "Propensão a pagamento" precisa de pelo menos uma faixa (A–E).');
 					continue;
 				}
-				if (['>', '>=', '<', '<='].includes(c.op)) {
-					const v = Array.isArray(c.valor) ? c.valor[0] : c.valor;
-					if (v === null || v === undefined || v === '' || Number.isNaN(Number(v))) {
-						msgs.push(`A condição "${c.campo} ${c.op}" precisa de um número.`);
-					}
+				// Números em pt-BR ("1.500,50"): a mesma leitura do editor (lib/condicoes). Só os operadores numéricos
+				// barram o Salvar; "=" em coluna numérica aceita texto, como no motor.
+				if ((OPS_NUMERICOS as readonly string[]).includes(c.op)) {
+					const erro = erroCondicao(c, 'numero');
+					if (erro) msgs.push(`A condição "${c.campo} ${c.op === 'entre' ? 'está entre' : c.op}": ${erro}`);
 				}
 			}
 		}

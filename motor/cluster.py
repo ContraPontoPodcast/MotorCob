@@ -22,7 +22,7 @@ from datetime import date
 from pathlib import Path
 
 CAMPOS_CALCULADOS = ("saldo", "dias_atraso", "qtd_contratos")
-OPERADORES = ("=", "!=", ">", ">=", "<", "<=", "em", "nao_em", "contem", "vazio", "preenchido")
+OPERADORES = ("=", "!=", ">", ">=", "<", "<=", "entre", "em", "nao_em", "contem", "vazio", "preenchido")
 CANAIS = ("whatsapp", "rcs", "agente_voz", "discador", "sms", "email")
 CANAIS_VOZ = ("agente_voz", "discador")
 CODIGO = re.compile(r"^[A-Z0-9]{1,4}$")
@@ -48,15 +48,26 @@ class RegraCluster:
         return {"pacote": self.pacote, "revalida_dias": self.revalida_dias, "so_digital": self.so_digital}
 
 
+_MILHARES = re.compile(r"[+-]?\d{1,3}(\.\d{3}){2,}")
+
+
 def numero(v) -> float | None:
-    """'1.234,56', '1234.56', 'R$ 10' -> float; None se não for número."""
+    """'1.234,56', '1234.56', '1.000.000', 'R$ 10' -> float; None se não for número.
+
+    Com vírgula: pt-BR (ponto = milhar). Sem vírgula e com 2+ pontos em grupos de 3: milhar ('1.000.000').
+    Sem vírgula e com UM ponto: decimal ('1.500' = 1,5) -- é como o motor sempre leu o texto salvo, e mudar
+    isso trocaria o sentido de regra antiga. O site grava número (JSON) nas condições numéricas desde a
+    correção da vírgula, então texto novo com essa ambiguidade não chega mais aqui (site/src/lib/condicoes.ts).
+    """
     if isinstance(v, (int, float)) and not isinstance(v, bool):
         return float(v)
-    s = str(v or "").replace("R$", "").replace(" ", "").strip()
+    s = str(v or "").replace("R$", "").replace(" ", "").replace("\u00a0", "").strip()
     if not s:
         return None
     if "," in s:
         s = s.replace(".", "").replace(",", ".")
+    elif _MILHARES.fullmatch(s):
+        s = s.replace(".", "")
     try:
         return float(s)
     except ValueError:
@@ -75,7 +86,15 @@ def ler_condicoes(lista) -> tuple[list[tuple], str | None]:
         if not campo or op not in OPERADORES:
             return [], f"condição inválida {c}"
         if op in (">", ">=", "<", "<=") and numero(valor) is None:
-            return [], f"'{campo} {op} {valor}': valor precisa ser número"
+            return [], f"'{campo} {op} {valor}': valor precisa ser número (ex.: 1.500,50)"
+        if op == "entre":
+            faixa = valor if isinstance(valor, (list, tuple)) else str(valor or "").split(";")
+            lim = [numero(x) for x in faixa]
+            if len(lim) != 2 or None in lim:
+                return [], f"'{campo} entre {valor}': informe dois números, de e até (ex.: [1500.5, 3000])"
+            if lim[0] > lim[1]:
+                return [], f"'{campo} entre {valor}': o primeiro valor precisa ser menor ou igual ao segundo"
+            valor = (lim[0], lim[1])
         if op in ("em", "nao_em"):
             valor = tuple(_texto(v) for v in (valor if isinstance(valor, list) else str(valor or "").split(";"))
                           if _texto(v))
@@ -172,6 +191,9 @@ def condicao_ok(cliente, dia: date, campo: str, op: str, valor) -> bool:
         if a is None or b is None:
             return False
         return {">": a > b, ">=": a >= b, "<": a < b, "<=": a <= b}[op]
+    if op == "entre":                    # faixa fechada: de <= valor <= até (ler_condicoes já validou)
+        a = numero(v)
+        return a is not None and valor[0] <= a <= valor[1]
     if op in ("em", "nao_em"):
         dentro = _texto(v) in valor
         return dentro if op == "em" else not dentro

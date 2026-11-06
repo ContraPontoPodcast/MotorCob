@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronDown, Copy, Grid3x3, Pencil, Plus, Printer, Rotat
 import { Empty, Loading, Notice, useAllowed } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, numberBR, supabase, type Cluster, type Credor, type PersonaUsuario, type Row, type SegmentoCarteira, type SegmentoEmUso } from '@/lib/supabase';
+import { fraseValor } from '@/lib/condicoes';
 import { definicaoVazia, gerarIdEtapa, isFaseId, isVazia, migrarEtapas, ordemStages, playbookDefinicao, validarEtapas, type Definicao, type Estrategia, type Etapa } from '@/lib/estrategia';
 import { fetchPropensaoCarteira, carteiraColetando, type LinhaPropensaoCarteira } from '@/lib/propensao';
 import { Info } from '@/components/glossario/info';
@@ -29,16 +30,16 @@ import { ModelosModal } from '@/components/estrategias/modelos-modal';
 import { PassosBar, type PassoId, type PassoState } from '@/components/orquestracao/passos-bar';
 
 const calculadoLabel: Record<string, string> = { saldo: 'Saldo total', dias_atraso: 'Dias de atraso', qtd_contratos: 'Quantidade de contratos' };
-const opPhrase: Record<string, string> = { '=': 'é', '!=': 'é diferente de', '>': '>', '>=': '≥', '<': '<', '<=': '≤', em: 'está entre', nao_em: 'não está entre', contem: 'contém', vazio: 'está vazio', preenchido: 'está preenchido' };
+const opPhrase: Record<string, string> = { '=': 'é', '!=': 'é diferente de', '>': '>', '>=': '≥', '<': '<', '<=': '≤', entre: 'entre', em: 'é um destes:', nao_em: 'não é nenhum destes:', contem: 'contém', vazio: 'está vazio', preenchido: 'está preenchido' };
 
 function condFrase(c: Cluster | null): string {
 	if (!c || !c.condicoes || c.condicoes.length === 0) return 'Sem condições (vale para todos)';
 	const label = (campo: string) => calculadoLabel[campo] ?? campo;
-	const valStr = (v: unknown) => Array.isArray(v) ? v.join(', ') : String(v ?? '');
+	
 	return c.condicoes.map(cd => {
 		const op = opPhrase[cd.op] ?? cd.op;
 		if (cd.op === 'vazio' || cd.op === 'preenchido') return `${label(cd.campo)} ${op}`;
-		return `${label(cd.campo)} ${op} ${valStr(cd.valor)}`;
+		return `${label(cd.campo)} ${op} ${fraseValor(cd)}`;
 	}).join(' e ');
 }
 
@@ -869,7 +870,7 @@ export function Orquestracao() {
 												{cl?.condicoes && cl.condicoes.length > 0 ? cl.condicoes.map((cd, i) => {
 													const label = calculadoLabel[cd.campo] ?? cd.campo;
 													const op = opPhrase[cd.op] ?? cd.op;
-													const valStr = Array.isArray(cd.valor) ? cd.valor.join(', ') : String(cd.valor ?? '');
+													const valStr = fraseValor(cd);
 													return <span key={i} className="rounded-full bg-[var(--base-fill)] px-2 py-0.5 text-[11px] text-[var(--base-texto-2)]">{label} {op}{cd.op !== 'vazio' && cd.op !== 'preenchido' ? ` ${valStr}` : ''}</span>;
 												}) : <span className="text-[11px] italic text-[var(--base-texto-3)]">Sem condições (vale para todos)</span>}
 											</div>

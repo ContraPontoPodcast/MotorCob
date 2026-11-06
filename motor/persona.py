@@ -429,15 +429,41 @@ def condicoes_cluster(condicoes: list[dict]) -> list[dict]:
     return saida
 
 
-def _faixa(v: str):
-    """'até X' / 'X a Y' / 'acima de Y' (faixas numéricas criadas pelo motor) -> (>lo, <=hi)."""
+def _numero_faixa(t: str, pt_br: bool) -> float | None:
+    """Número de uma faixa. `pt_br` (a faixa tem vírgula em algum lado): '1.500,50' e '3.000' = 3 mil.
+    Senão, o formato do próprio motor (`_faixas_numericas`, f"{x:g}": ponto decimal, '1e+06'; '1.234' = 1,234)."""
     import re
-    m = re.fullmatch(r"até (-?[\d.]+)", v) or re.fullmatch(r"(-?[\d.]+) a (-?[\d.]+)", v) \
-        or re.fullmatch(r"acima de (-?[\d.]+)", v)
-    if not m:
+    if pt_br:
+        if not re.fullmatch(r"-?(\d{1,3}(\.\d{3})+|\d+)(,\d+)?", t):
+            return None
+        return float(t.replace(".", "").replace(",", "."))
+    try:
+        return float(t)
+    except ValueError:
         return None
-    if v.startswith("até"):
-        return None, float(m.group(1))
-    if v.startswith("acima"):
-        return float(m.group(1)), None
-    return float(m.group(1)), float(m.group(2))
+
+
+_NUM_FAIXA = r"(-?[\d.,]+(?:e[+-]?\d+)?)"
+
+
+def _faixa(v: str):
+    """'até X' / 'X a Y' / 'acima de Y' (faixas numéricas criadas pelo motor) -> (>lo, <=hi).
+
+    Aceita os números como o motor escreve (ponto decimal, notação 1e+06) e em pt-BR (com vírgula em algum lado,
+    a faixa toda é pt-BR: '1.500,50 a 3.000' = 1500,5 a 3000)."""
+    import re
+    v = str(v or "").strip()
+    for padrao, lado in ((rf"até {_NUM_FAIXA}", "hi"), (rf"acima de {_NUM_FAIXA}", "lo"),
+                         (rf"{_NUM_FAIXA} a {_NUM_FAIXA}", "ambos")):
+        m = re.fullmatch(padrao, v, re.IGNORECASE)
+        if not m:
+            continue
+        nums = [_numero_faixa(g, "," in v) for g in m.groups()]
+        if None in nums:
+            return None
+        if lado == "hi":
+            return None, nums[0]
+        if lado == "lo":
+            return nums[0], None
+        return nums[0], nums[1]
+    return None

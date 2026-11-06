@@ -9,6 +9,8 @@ import type { Coluna } from '@/components/clusters/cluster-form';
 import { numberBR } from '@/lib/supabase';
 import { isFaixa, type LinhaPropensaoCarteira } from '@/lib/propensao';
 import { Info } from '@/components/glossario/info';
+import { CampoFaixa, CampoLista, CampoNumero } from '@/components/comuns/campos-condicao';
+import { trocarOperador } from '@/lib/condicoes';
 
 // ---- Campos e operadores de condição (mesmo padrão dos Segmentos) ----
 const CALCULADOS: Coluna[] = [
@@ -27,8 +29,9 @@ const OPS = [
 	{ id: '>=', label: 'maior ou igual', num: true, txt: false },
 	{ id: '<', label: 'menor que', num: true, txt: false },
 	{ id: '<=', label: 'menor ou igual', num: true, txt: false },
-	{ id: 'em', label: 'está entre', num: true, txt: true },
-	{ id: 'nao_em', label: 'não está entre', num: true, txt: true },
+	{ id: 'entre', label: 'está entre (faixa)', num: true, txt: false },
+	{ id: 'em', label: 'é um destes', num: true, txt: true },
+	{ id: 'nao_em', label: 'não é nenhum destes', num: true, txt: true },
 	{ id: 'contem', label: 'contém', num: false, txt: true },
 	{ id: 'vazio', label: 'está vazio', num: true, txt: true },
 	{ id: 'preenchido', label: 'está preenchido', num: true, txt: true },
@@ -221,8 +224,9 @@ function CondicoesEditor({ condicoes, onChange, colunas, canEdit, propensaoColet
 					const isLista = c.op === 'em' || c.op === 'nao_em';
 					const isFase = c.campo === 'fase';
 					const isPropensao = c.campo === 'propensao';
+					const isNum = tipo === 'numero' || ['>', '>=', '<', '<='].includes(c.op);
 					return (
-						<div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--base-borda)] bg-[var(--base-fill)] p-2">
+						<div key={i} className="flex flex-wrap items-start gap-2 rounded-lg border border-[var(--base-borda)] bg-[var(--base-fill)] p-2">
 							{semColunas ? (
 								<input value={c.campo} disabled={!canEdit} onChange={e => upd(i, { campo: e.target.value })} placeholder="Nome da coluna" className="h-9 w-[150px] rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60" />
 							) : (
@@ -236,7 +240,7 @@ function CondicoesEditor({ condicoes, onChange, colunas, canEdit, propensaoColet
 									{colunas.length > 0 && <optgroup label="Colunas da base">{colunas.map(co => <option key={co.nome} value={co.nome}>{co.nome}</option>)}</optgroup>}
 								</select>
 							)}
-							<select value={isPropensao ? 'em' : c.op} disabled={!canEdit || isPropensao} onChange={e => upd(i, { op: e.target.value })} className="h-9 w-[150px] rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60">
+							<select value={isPropensao ? 'em' : c.op} disabled={!canEdit || isPropensao} onChange={e => onChange(condicoes.map((x, idx) => idx === i ? trocarOperador(x, e.target.value) : x))} className="h-9 w-[150px] rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60">
 								{opsList.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
 							</select>
 							{!noValor && (
@@ -261,10 +265,14 @@ function CondicoesEditor({ condicoes, onChange, colunas, canEdit, propensaoColet
 									<select value={Array.isArray(c.valor) ? (c.valor[0] as string ?? '') : (c.valor as string ?? '')} disabled={!canEdit} onChange={e => upd(i, { valor: e.target.value })} className="h-9 min-w-[180px] flex-1 rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60">
 										{FASES_SELECT.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
 									</select>
+								) : c.op === 'entre' ? (
+									<CampoFaixa valor={c.valor} disabled={!canEdit} onChange={v => upd(i, { valor: v })} className="h-9 w-full min-w-[100px] rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60" />
 								) : isLista ? (
-									<input value={Array.isArray(c.valor) ? c.valor.join(', ') : String(c.valor ?? '')} disabled={!canEdit} onChange={e => upd(i, { valor: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} placeholder="valores separados por vírgula" className="h-9 min-w-[180px] flex-1 rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60" />
+									<CampoLista valor={c.valor} disabled={!canEdit} onChange={v => upd(i, { valor: v })} className="h-9 min-w-[180px] flex-1 rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60" />
+								) : isNum ? (
+									<CampoNumero valor={c.valor} disabled={!canEdit} onChange={v => upd(i, { valor: v })} placeholder="valor (ex.: 1.500,50)" aria-label="Valor" className="h-9 w-full min-w-[120px] rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60" />
 								) : (
-									<input value={Array.isArray(c.valor) ? c.valor.join(', ') : String(c.valor ?? '')} disabled={!canEdit} onChange={e => upd(i, { valor: e.target.value })} placeholder="valor" className="h-9 min-w-[120px] flex-1 rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60" />
+									<input value={Array.isArray(c.valor) ? c.valor.join('; ') : String(c.valor ?? '')} disabled={!canEdit} onChange={e => upd(i, { valor: e.target.value })} placeholder="valor" className="h-9 min-w-[120px] flex-1 rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 text-xs outline-none focus:border-[var(--area)] disabled:opacity-60" />
 								)
 							)}
 							{canEdit && <button type="button" onClick={() => del(i)} aria-label="Remover condição" className="grid h-9 w-9 place-items-center rounded text-[var(--base-texto-3)] hover:bg-[var(--estado-erro-fundo)] hover:text-[var(--estado-erro)]"><Trash2 size={15} /></button>}

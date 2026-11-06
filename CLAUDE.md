@@ -183,6 +183,12 @@ de outra pessoa pela certificação e a rotação segue.
   define pacote, revalidação, só digital, voz no D0 e canais bloqueados
   (`Regua.com_clusters`). Mudou a regra → `cluster_versao` muda → todos revisam o cluster
   atual na rotina seguinte. Regra inválida vira alerta, nunca derruba a rotina.
+  Números das condições (segmento, persona do usuário, estágio) em pt-BR: o site (`site/src/lib/condicoes.ts`,
+  campos em `components/comuns/campos-condicao.tsx`) lê "1.500,50", "1500,5", "1500.50" e "1.500" (= 1500) e
+  grava NÚMERO (JSON) nas condições numéricas; texto salvo antes segue com o sentido que o motor dava
+  (`cluster.numero`: com vírgula = pt-BR; sem vírgula, um ponto = decimal; 2+ pontos em grupos de 3 = milhar).
+  `entre` = faixa fechada [de, até] (site "está entre (faixa)"); `em`/`nao_em` = "é um destes", itens
+  separados por ";". `persona._faixa` lê as faixas do motor (ponto decimal, 1e+06) e em pt-BR.
 - **Fluxo da operação (o que importa no dia a dia):** carga do credor do dia
   (`base/na_carga.csv` = universo de ações; quem saiu não é acionado nem bloqueado) →
   lista do dia com **1 contato por cliente por canal** (inclusive voz: `numeros_voz` em

@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { dataLocal } from '@/lib/empresa-helpers';
+import type { ValorCondicao } from '@/lib/condicoes';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -149,14 +150,14 @@ export type Cluster = {
   credor_id?: string | null;
   atualizado_em?: string; atualizado_por?: string | null;
 };
-export type Condicao = { campo: string; op: string; valor: string | string[] | null };
+export type Condicao = { campo: string; op: string; valor: ValorCondicao };
 
 /** Vínculo de um segmento (cluster) a um credor — substitui o credor_id fixo do cluster. */
 export type SegmentoCarteira = { empresa_id: string; cluster_id: string; credor_id: string; ativo: boolean };
 /** Linha da view segmentos_em_uso: para cada (credor, cluster) diz se está vinculado e em uso. */
 export type SegmentoEmUso = { credor_id: string; cluster_id: string; codigo: string; nome: string; ordem: number; estrategia_id: string | null; em_uso: boolean; vinculado: boolean; compartilhada_com?: string | null; estrategia_propria?: boolean };
 /** Persona criada pelo usuário, por carteira (credor). */
-export type CondicaoPersonaUsuario = { campo: string; op: string; valor: string | string[] | null };
+export type CondicaoPersonaUsuario = { campo: string; op: string; valor: ValorCondicao };
 export type PersonaUsuario = { id: string; credor_id: string; nome: string; descricao: string | null; ordem: number; condicoes: CondicaoPersonaUsuario[]; cor: string; ativo: boolean };
 export type Frase = { id: string; empresa_id: string; canal: string; nome: string; estagio: string | null; texto: string; origem: 'importado' | 'criado'; ativo: boolean; criado_em?: string; atualizado_em?: string };
 
