@@ -961,11 +961,18 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                                 regras_retorno=u.get("regras_retorno"), frases=frases,
                                 discagem=u.get("discagem"))
         _guardar_compartilhado(pasta_emp, u, r, data)
-        try:   # medição para o faturamento por contrato; nunca derruba a rodada
+        try:   # medição da Orquestração (SQL 69: cobrada por CPF); nunca derruba a rodada
+            from nuvem import faturamento
+            n_cpf = faturamento.publicar_clientes(sb, eid, cid, pasta, data)
+            if n_cpf:
+                out(f"  faturamento: {n_cpf} CPFs novos no ciclo")
+        except Exception as e:  # noqa: BLE001 — banco sem o SQL 69: segue (a prévia conta os contratos)
+            out(f"  aviso: medição de CPFs não gravada ({str(e)[:120]})")
+        try:   # contratos avaliados no ciclo (informativo no demonstrativo); nunca derruba a rodada
             from nuvem import faturamento
             n_ct = faturamento.publicar_contratos(sb, eid, cid, pasta, data)
             if n_ct:
-                out(f"  faturamento: {n_ct} contratos novos no mês")
+                out(f"  faturamento: {n_ct} contratos novos no ciclo")
         except Exception as e:  # noqa: BLE001
             out(f"  aviso: medição de contratos não gravada ({str(e)[:120]})")
         try:   # lotes da mensageria (SMS e e-mail) a partir da Lista do dia; nunca derruba a rodada

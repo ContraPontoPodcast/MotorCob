@@ -8,6 +8,8 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, numberBR, supabase, type CondicaoPersonaUsuario, type PersonaUsuario, type Row } from '@/lib/supabase';
 import { ErrorDetail } from '@/components/error-detail';
 import { rotuloAtributoPersona } from '@/lib/personas';
+import { CampoFaixa, CampoLista, CampoNumero } from '@/components/comuns/campos-condicao';
+import { fraseValor, normalizarCondicoes, trocarOperador, type TipoCampo } from '@/lib/condicoes';
 
 const CORES = ['#0F4C5C', '#E9A23B', '#2E7D32', '#3B5BA9', '#A2552B', '#7A4FB0'];
 
@@ -32,6 +34,7 @@ const opsPersona = [
 	{ id: '>=', label: 'maior ou igual a' },
 	{ id: '<', label: 'menor que' },
 	{ id: '<=', label: 'menor ou igual a' },
+	{ id: 'entre', label: 'está entre (faixa)' },
 	{ id: 'em', label: 'é um destes' },
 	{ id: 'nao_em', label: 'não é nenhum destes' },
 	{ id: 'contem', label: 'contém' },
@@ -39,17 +42,16 @@ const opsPersona = [
 	{ id: 'preenchido', label: 'está preenchido' },
 ];
 
-const opSimbolo: Record<string, string> = { '=': '=', '!=': '≠', '>': '>', '>=': '≥', '<': '<', '<=': '≤', em: '∈', nao_em: '∉', contem: 'contém', vazio: 'está vazio', preenchido: 'está preenchido' };
+const opSimbolo: Record<string, string> = { '=': '=', '!=': '≠', '>': '>', '>=': '≥', '<': '<', '<=': '≤', em: '∈', nao_em: '∉', contem: 'contém', vazio: 'está vazio', preenchido: 'está preenchido', entre: 'entre' };
 
 type Coluna = { nome: string; tipo: 'numero' | 'texto' };
 
 function condFrase(conds: CondicaoPersonaUsuario[], colunas: Coluna[]): string {
 	if (!conds || conds.length === 0) return 'Sem condições (vale para todos)';
 	const label = (campo: string) => calculadosPersona.find(c => c.nome === campo)?.label ?? rotuloAtributoPersona(campo);
-	const valStr = (v: unknown) => Array.isArray(v) ? v.join('; ') : String(v ?? '');
 	return conds.map(c => {
 		if (c.op === 'vazio' || c.op === 'preenchido') return `${label(c.campo)} ${opSimbolo[c.op]}`;
-		return `${label(c.campo)} ${opSimbolo[c.op] ?? c.op} ${valStr(c.valor)}`;
+		return `${label(c.campo)} ${opSimbolo[c.op] ?? c.op} ${fraseValor(c)}`;
 	}).join(' · ');
 }
 
@@ -199,10 +201,12 @@ function PersonaEditor({ persona, colunas, onClose, onSaved }: { persona: Person
 	async function submit() {
 		if (!supabase || !credor) return;
 		if (!nome.trim()) { setError('Informe o nome da persona.'); return; }
+		const norm = normalizarCondicoes(condicoes, tipoCampo);
+		if ('erro' in norm) { setError(norm.erro); return; }
 		setBusy(true); setError('');
 		const payload = {
 			credor_id: credor.id, nome: nome.trim(), descricao: descricao.trim() || null,
-			cor, condicoes: condicoes as unknown as Record<string, unknown>,
+			cor, condicoes: norm.condicoes as unknown as Record<string, unknown>,
 			ativo: persona?.ativo ?? true,
 			...(persona ? {} : { ordem: 9999 }),
 		};
@@ -216,6 +220,9 @@ function PersonaEditor({ persona, colunas, onClose, onSaved }: { persona: Person
 	}
 
 	const semColunas = colunas.length === 0;
+	function tipoCampo(campo: string): TipoCampo {
+		return (calculadosPersona.find(c => c.nome === campo)?.tipo ?? colunas.find(c => c.nome === campo)?.tipo ?? 'texto') as TipoCampo;
+	}
 
 	return <div className="fixed inset-0 z-50 grid place-items-center bg-[#102e38]/60 p-4" onClick={onClose}>
 		<div role="dialog" aria-modal="true" aria-label="Persona" className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-6 shadow-xl sm:p-8" onClick={e => e.stopPropagation()}>
@@ -234,14 +241,19 @@ function PersonaEditor({ persona, colunas, onClose, onSaved }: { persona: Person
 					<div className="space-y-2">{condicoes.map((c, i) => {
 						const noValor = c.op === 'vazio' || c.op === 'preenchido';
 						const isLista = c.op === 'em' || c.op === 'nao_em';
-						return <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-[#e2eaec] bg-[#fafcfc] p-2">
+						const isNum = tipoCampo(c.campo) === 'numero' || ['>', '>=', '<', '<='].includes(c.op);
+						return <div key={i} className="flex flex-wrap items-start gap-2 rounded-lg border border-[#e2eaec] bg-[#fafcfc] p-2">
 							<select value={c.campo} onChange={e => updCond(i, { campo: e.target.value })} className="h-9 w-[180px] rounded border border-[#d8e3e5] bg-white px-2 text-xs outline-none focus:border-[#0F4C5C]">
 								<optgroup label="Calculadas">{calculadosPersona.map(co => <option key={co.nome} value={co.nome}>{co.label}</option>)}</optgroup>
 								{colunas.length > 0 && <optgroup label="Da carga">{colunas.map(co => <option key={co.nome} value={co.nome}>{co.nome}</option>)}</optgroup>}
 							</select>
-							<select value={c.op} onChange={e => updCond(i, { op: e.target.value })} className="h-9 w-[150px] rounded border border-[#d8e3e5] bg-white px-2 text-xs outline-none focus:border-[#0F4C5C]">{opsPersona.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
-							{!noValor && (isLista
-								? <input value={Array.isArray(c.valor) ? c.valor.join('; ') : String(c.valor ?? '')} onChange={e => updCond(i, { valor: e.target.value.split(';').map(s => s.trim()).filter(Boolean) })} placeholder="valores separados por ;" className="h-9 min-w-[180px] flex-1 rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>
+							<select value={c.op} onChange={e => setCondicoes(prev => prev.map((x, idx) => idx === i ? trocarOperador(x, e.target.value) : x))} className="h-9 w-[150px] rounded border border-[#d8e3e5] bg-white px-2 text-xs outline-none focus:border-[#0F4C5C]">{opsPersona.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+							{!noValor && (c.op === 'entre'
+								? <CampoFaixa valor={c.valor} onChange={v => updCond(i, { valor: v })} className="h-9 w-full min-w-[100px] rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>
+								: isLista
+								? <CampoLista valor={c.valor} onChange={v => updCond(i, { valor: v })} className="h-9 min-w-[180px] flex-1 rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>
+								: isNum
+								? <CampoNumero valor={c.valor} onChange={v => updCond(i, { valor: v })} placeholder="valor (ex.: 1.500,50)" aria-label="Valor" className="h-9 w-full min-w-[120px] rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>
 								: <input value={Array.isArray(c.valor) ? c.valor.join('; ') : String(c.valor ?? '')} onChange={e => updCond(i, { valor: e.target.value })} placeholder="valor" className="h-9 min-w-[120px] flex-1 rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C]"/>)}
 							<button type="button" onClick={() => delCond(i)} aria-label="Remover" className="grid h-9 w-9 place-items-center rounded text-slate-400 hover:bg-red-50 hover:text-[#C62828]"><Trash2 size={15}/></button>
 						</div>;

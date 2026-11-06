@@ -2798,5 +2798,11 @@ checar("SQL 71: quem cancelou fica na auditoria", True,
        f"select count(*) from public.auditoria where tabela = 'faturas' and registro = '{FC}' and mudou ? 'situacao'",
        None, None, 1)
 
+# SQL 69 · Orquestração cobrada por CPF (clientes distintos ativos no ciclo); o arquivo aplica o 69 duas vezes.
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_orquestracao_cpf.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 69: Orquestração por CPF (testar_orquestracao_cpf.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

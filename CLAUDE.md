@@ -183,6 +183,12 @@ de outra pessoa pela certificação e a rotação segue.
   define pacote, revalidação, só digital, voz no D0 e canais bloqueados
   (`Regua.com_clusters`). Mudou a regra → `cluster_versao` muda → todos revisam o cluster
   atual na rotina seguinte. Regra inválida vira alerta, nunca derruba a rotina.
+  Números das condições (segmento, persona do usuário, estágio) em pt-BR: o site (`site/src/lib/condicoes.ts`,
+  campos em `components/comuns/campos-condicao.tsx`) lê "1.500,50", "1500,5", "1500.50" e "1.500" (= 1500) e
+  grava NÚMERO (JSON) nas condições numéricas; texto salvo antes segue com o sentido que o motor dava
+  (`cluster.numero`: com vírgula = pt-BR; sem vírgula, um ponto = decimal; 2+ pontos em grupos de 3 = milhar).
+  `entre` = faixa fechada [de, até] (site "está entre (faixa)"); `em`/`nao_em` = "é um destes", itens
+  separados por ";". `persona._faixa` lê as faixas do motor (ponto decimal, 1e+06) e em pt-BR.
 - **Fluxo da operação (o que importa no dia a dia):** carga do credor do dia
   (`base/na_carga.csv` = universo de ações; quem saiu não é acionado nem bloqueado) →
   lista do dia com **1 contato por cliente por canal** (inclusive voz: `numeros_voz` em
@@ -675,6 +681,13 @@ o fluxo do cliente no alcance — cria, edita o rascunho, duplica, base de respo
 roleplay) e envia para aprovação. Tudo por `pode_editar_fluxo_voz`; aprovar, colocar em uso, voltar versão, revisar a
 resposta da base e a alçada continuam só do cliente (`pode_aprovar_fluxo_voz`). Site: `permissoesFluxo` em
 `site/src/components/fluxo/contexto.tsx`. Se o SQL 58 for rodado de novo, rode o 68 depois.
+SQL 69 (decisão do dono): a Orquestração é cobrada SÓ por CPF = preço × CPFs distintos que estiveram na carteira em
+cobrança (na_carga) em pelo menos um dia do ciclo; mesmo cliente em várias rodadas, vários contratos ou o mesmo CPF
+em duas carteiras da empresa contam UMA vez; quem saiu para de contar no ciclo seguinte. `nuvem/faturamento.py`
+(`publicar_clientes`) grava `clientes_mes` com a chave HMAC-SHA256(sal da empresa em `faturamento_sal`, só a rotina
+lê; `chave_pessoa` do CPF da carteira ou o id_cliente): nunca CPF, nome ou telefone (check de 32 hexadecimais).
+`previa_fatura` conta distinct por empresa ("Orquestração · CPFs ativos no mês", unidade 'CPF'); ciclo medido só
+antes do SQL 69 segue pelos contratos; fatura fechada não muda. `contratos_mes` continua (informativo no demonstrativo).
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.

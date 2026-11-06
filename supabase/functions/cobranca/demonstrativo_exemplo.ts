@@ -9,7 +9,7 @@ export const EXEMPLO: Dados = {
              endereco: "Av. Paulista, 1000 · Bela Vista · São Paulo · SP · 01310-100" },
   frentes: ["motorcli", "motorcob"],
   itens: [
-    { ordem: 1, item: "orquestracao", descricao: "Orquestração · contratos no ciclo", quantidade: 12500, preco: 0.24836, valor: 3104.50,
+    { ordem: 1, item: "orquestracao", descricao: "Orquestração · CPFs ativos no mês", quantidade: 12500, preco: 0.24836, valor: 3104.50,
       grupo: "motor", modelo: "progressivo", minimo: 0, faixas: [{ ate: 10000, preco: 0.26 }, { ate: null, preco: 0.2018 }] },
     { ordem: 2, item: "jornada", descricao: "Jornada · clientes acionados no ciclo", quantidade: 1236, preco: 0.5, valor: 618,
       grupo: "motor", modelo: "flat", minimo: 0, faixas: null },
@@ -27,9 +27,9 @@ export const EXEMPLO: Dados = {
     { tipo: "cobranca_extra", valor: 36.72, motivo: "carga emergencial fora do horário" },
   ],
   carteiras: [
-    { carteira: "Banco X", frente: "motorcob", contratos: 3598, clientes: 0, dias: 22 },
-    { carteira: "Principal", frente: "motorcob", contratos: 8902, clientes: 0, dias: 26 },
-    { carteira: "Relacionamento", frente: "motorcli", contratos: 0, clientes: 1236, dias: 30 },
+    { carteira: "Banco X", frente: "motorcob", contratos: 3598, cpfs: 3120, clientes: 0, dias: 22 },
+    { carteira: "Principal", frente: "motorcob", contratos: 8902, cpfs: 9380, clientes: 0, dias: 26 },
+    { carteira: "Relacionamento", frente: "motorcli", contratos: 0, cpfs: 0, clientes: 1236, dias: 30 },
   ],
   canais: [
     { canal: "email", disparadas: 3820, entregues: 3611, falhas: 209, respostas: 0 },
