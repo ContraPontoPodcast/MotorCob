@@ -71,6 +71,7 @@ function ParaEstrategia({ f, setAcoes }: { f: Filtros; setAcoes: DefinirAcoes })
 	async function rpc(nome: string, args: Record<string, unknown>, ok: string) {
 		if (!supabase) return;
 		setOcupado(true);
+		// conferir-rpc: embrulho; as chamadas rpc('nome', {...}) desta tela são conferidas
 		const { error } = await supabase.rpc(nome, args);
 		setOcupado(false);
 		if (error) { toast.error(friendlyError(error)); return; }
@@ -186,6 +187,7 @@ function ParaCredor({ f, setAcoes }: { f: Filtros; setAcoes: DefinirAcoes }) {
 	async function mudar(acao: string, extra: Record<string, unknown> = {}, ok = '') {
 		if (!supabase || !rel) return;
 		setOcupado(true);
+		// conferir-rpc: extra é {} ou { comentario } (mudar_relatorio_credor(relatorio, acao, comentario = null))
 		const { data, error } = await supabase.rpc('mudar_relatorio_credor', { relatorio: rel.id, acao, ...extra });
 		setOcupado(false); setModal(false);
 		if (error) { toast.error(friendlyError(error)); return; }

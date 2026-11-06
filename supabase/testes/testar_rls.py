@@ -2782,6 +2782,22 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 68: a equipe monta o fluxo do cliente (testar_voz_fluxo_equipe.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 71 · cancelar o rascunho da fatura (o botão do Console chamava uma função que não existia)
+FC = _sv(f"insert into public.faturas (empresa_id,competencia,valor_total,vencimento,modelo,situacao) "
+         f"values ({EA},'2024-11-01',70,'2024-12-10','contrato','rascunho') returning id")
+checar("SQL 71: cliente não cancela o rascunho", False, f"select public.cancelar_rascunho({FC})", "authenticated", u["admina"])
+checar("SQL 71: outra empresa não cancela", False, f"select public.cancelar_rascunho({FC})", "authenticated", u["operb"])
+checar("SQL 71: anônimo não chama", False, f"select public.cancelar_rascunho({FC})", "anon")
+checar("SQL 71: fatura inexistente é recusada", False, "select public.cancelar_rascunho(-1)", "authenticated", u["admin"])
+checar("SQL 71: equipe cancela o rascunho (pelo nome do argumento, como o site)", True,
+       f"select public.cancelar_rascunho(fatura => {FC}); select situacao from public.faturas where id={FC}",
+       "authenticated", u["admin"], "cancelada")
+checar("SQL 71: cancelada não é cancelada de novo", False, f"select public.cancelar_rascunho({FC})", "authenticated", u["admin"])
+checar("SQL 71: fatura emitida não é cancelada por aqui", False, f"select public.cancelar_rascunho({FA})", "authenticated", u["admin"])
+checar("SQL 71: quem cancelou fica na auditoria", True,
+       f"select count(*) from public.auditoria where tabela = 'faturas' and registro = '{FC}' and mudou ? 'situacao'",
+       None, None, 1)
+
 # SQL 69 · Orquestração cobrada por CPF (clientes distintos ativos no ciclo); o arquivo aplica o 69 duas vezes.
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_orquestracao_cpf.py")],
                    capture_output=True, text=True)

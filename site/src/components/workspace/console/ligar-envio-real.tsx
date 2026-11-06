@@ -38,7 +38,7 @@ export function LigarEnvioRealButton({
 	async function ligar() {
 		if (!supabase) return;
 		setBusy(true);
-		const { error } = await supabase.rpc('ligar_envio_real', { empresa_id: empresaId });
+		const { error } = await supabase.rpc('ligar_envio_real', { empresa: empresaId });
 		setBusy(false);
 		if (error) { toast.error(friendlyError(error)); return; }
 		setConfirma(false);
@@ -49,7 +49,7 @@ export function LigarEnvioRealButton({
 	async function recusar() {
 		if (!supabase) return;
 		setDevolverBusy(true);
-		const { error } = await supabase.rpc('recusar_envio_real', { empresa_id: empresaId, motivo: motivo.trim() });
+		const { error } = await supabase.rpc('recusar_envio_real', { empresa: empresaId, motivo: motivo.trim() });
 		setDevolverBusy(false);
 		if (error) { toast.error(friendlyError(error)); return; }
 		setDevolver(false);

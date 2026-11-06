@@ -41,9 +41,9 @@ export function ConfigAtendimento() {
 		const mv = c?.meta_resposta_min;
 		setUsarMeta(mv != null);
 		if (mv != null) setMetaMin(String(mv));
-		setAvisoJudicial(c?.aviso_judicial == null ? true : !!c.aviso_judicial);
-		setAvisoAcimaMeta(c?.aviso_acima_meta == null ? true : !!c.aviso_acima_meta);
-		setAvisoNegocio(!!c?.aviso_negocio_sem_resp);
+		setAvisoJudicial(c?.avisar_judicial == null ? true : !!c.avisar_judicial);
+		setAvisoAcimaMeta(c?.avisar_acima_meta == null ? true : !!c.avisar_acima_meta);
+		setAvisoNegocio(!!c?.avisar_negocio_sem_responsavel);
 		setRapidas((rp.data ?? []) as Row[]);
 		setLoading(false);
 	}, [empresa?.id]);
@@ -56,10 +56,10 @@ export function ConfigAtendimento() {
 		const meta = usarMeta ? Math.min(240, Math.max(5, Number(metaMin) || 15)) : null;
 		const { error } = await supabase.rpc('salvar_config_atendimento', {
 			empresa: empresa.id,
-			meta: meta,
-			judicial: avisoJudicial,
-			acima_meta: avisoAcimaMeta,
-			negocio: avisoNegocio,
+			meta_min: meta,
+			avisar_judicial: avisoJudicial,
+			avisar_acima_meta: avisoAcimaMeta,
+			avisar_negocio: avisoNegocio,
 		});
 		setBusy(false);
 		if (error) { setErro(friendlyError(error)); return; }

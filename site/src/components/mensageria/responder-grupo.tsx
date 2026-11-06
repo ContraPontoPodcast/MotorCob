@@ -40,7 +40,7 @@ export function ResponderGrupo({ ids, temSms, onClose, onDone }: {
 		let active = true;
 		const t = setTimeout(async () => {
 			setLoadingCusto(true);
-			const { data, error } = await sb.rpc('custo_resposta_grupo', { ids, texto: texto.trim() });
+			const { data, error } = await sb.rpc('custo_resposta_grupo', { conversas: ids, texto: texto.trim() });
 			if (!active) return;
 			setLoadingCusto(false);
 			if (error) { setCusto(null); return; }

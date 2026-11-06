@@ -819,7 +819,7 @@ function TransferirModal({ colegas, selId, onClose, onDone }: { colegas: Row[]; 
 	async function transferir() {
 		if (!supabase || !colega) return;
 		setBusy(true); setErro('');
-		const { error } = await supabase.rpc('transferir_conversa', { conversa: selId, colega, nota: nota.trim() || null });
+		const { error } = await supabase.rpc('transferir_conversa', { conversa: selId, para: colega, nota: nota.trim() || null });
 		setBusy(false);
 		if (error) { setErro(friendlyError(error)); return; }
 		onDone();

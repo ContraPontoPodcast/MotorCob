@@ -175,7 +175,7 @@ function FaturasCiclo({ canEmitir, isMaster, setErro, setSucesso }: {
     if (!supabase) return;
     setBusy(true); setErro('');
     try {
-      const { data, error } = await supabase.rpc('resumo_emissao', { ids });
+      const { data, error } = await supabase.rpc('resumo_emissao', { faturas: ids }).maybeSingle();
       if (error) throw error;
       setResumo((data as Row) ?? null);
     } catch (e) { setErro(friendlyError(e)); } finally { setBusy(false); }

@@ -132,7 +132,7 @@ export function FaturamentoPage() {
     if (!supabase || !empresa || isPre) { setEstimativa(null); return; }
     let active = true;
     (async () => {
-      const { data } = await supabase.rpc('estimativa_ciclo', { empresa_id: empresa.id });
+      const { data } = await supabase.rpc('estimativa_ciclo', { empresa: empresa.id }).maybeSingle();
       if (active) setEstimativa((data as Row | null) ?? null);
     })();
     return () => { active = false; };
@@ -143,7 +143,7 @@ export function FaturamentoPage() {
     if (!supabase || !empresa || !isPre) { setDuracao(null); return; }
     let active = true;
     (async () => {
-      const { data } = await supabase.rpc('duracao_saldo', { empresa_id: empresa.id });
+      const { data } = await supabase.rpc('duracao_saldo', { empresa: empresa.id }).maybeSingle();
       if (active) setDuracao((data as Row | null) ?? null);
     })();
     return () => { active = false; };
@@ -156,7 +156,7 @@ export function FaturamentoPage() {
     const ate = today();
     const de = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
     (async () => {
-      const { data } = await supabase.rpc('extrato_saldo', { empresa_id: empresa.id, de, ate });
+      const { data } = await supabase.rpc('extrato_saldo', { empresa: empresa.id, de, ate });
       if (active) setExtrato((data as Row[]) ?? []);
     })();
     return () => { active = false; };
@@ -182,7 +182,7 @@ export function FaturamentoPage() {
     if (!supabase || !empresa) { setAcordos([]); return; }
     let active = true;
     (async () => {
-      const { data } = await supabase.rpc('acordos', { empresa_id: empresa.id });
+      const { data } = await supabase.rpc('acordos', { empresa: empresa.id });
       if (!active) return;
       setAcordos((data as Row[]) ?? []);
     })();

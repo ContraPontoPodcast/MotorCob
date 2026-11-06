@@ -130,6 +130,7 @@ function trackClient(client: SupabaseClient): SupabaseClient {
         return (table: string) => trackBuilder(target.from(table), table);
       }
       if (prop === 'rpc') {
+        // conferir-rpc: repasse do proxy; quem chama supabase.rpc('nome', {...}) é conferido
         return (fn: string, ...args: any[]) => trackBuilder(target.rpc(fn, ...args), fn);
       }
       const v = target[prop];
