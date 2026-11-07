@@ -63,8 +63,8 @@ export function JornadaHeading({ title, linha, actions }: { title: string; linha
 /** Card "Crie a primeira carteira" mostrado quando a empresa não tem carteira MotorCli. */
 export function SemCarteiraCard() {
 	return (
-		<div className="rounded-2xl bg-[#F5F5F7] px-6 py-16 text-center" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
-			<div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA' }}>
+		<div className="rounded-2xl bg-[#F5F5F7] px-6 py-16 text-center" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator)' }}>
 				<Wallet size={26} className="text-[#8E8E93]" />
 			</div>
 			<h2 className="text-lg font-semibold text-[#1D1D1F]">Nenhuma carteira da Jornada</h2>

@@ -8,7 +8,7 @@ const fmtDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Ameri
 const money4 = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const pct1 = (v: number, t: number) => { const p = razaoPct(v, t); return p == null ? '—' : `${p.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`; };
 
-const CARD_SHADOW = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
+const CARD_SHADOW = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 
 type EconomiaRow = {
 	campanha_id: string; nome: string; dia: string; analisados: number; represados: number;

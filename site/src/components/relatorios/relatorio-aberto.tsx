@@ -260,7 +260,7 @@ export function RelatorioAberto({ modelo, bases, camposByBase, filtroInicial, on
 						const ehTaxa = m.funcao === 'taxa';
 						const varInfo = ant != null && comparar ? variacao(val, ant, m.sentido, ehTaxa) : null;
 						return (
-							<div key={m.nome} className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+							<div key={m.nome} className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 								<div className="flex items-center gap-1.5">
 									<p className="text-[12px] font-medium text-[#6E6E73]">{metricaRotulo(m)}</p>
 									<InfoPopover texto={infoMetrica(m)} />
@@ -275,7 +275,7 @@ export function RelatorioAberto({ modelo, bases, camposByBase, filtroInicial, on
 
 			{/* Gráfico */}
 			{chartData.length > 0 && (
-				<div className="mb-6 rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="mb-6 rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<h3 className="mb-4 text-[15px] font-semibold text-[#1D1D1F]">{stackedSeries.length > 0 ? `${metricaRotulo(metricas[0])} por ${campos.find(c => c.nome === campoData)?.rotulo ?? campoData} e ${campos.find(c => c.nome === (agrupar.find(a => a !== campoData) ?? agrupar[1]))?.rotulo ?? ''}` : campoData ? `${metricaRotulo(metricas[0])} por ${campos.find(c => c.nome === campoData)?.rotulo ?? campoData}` : `${metricaRotulo(metricas[0])} por ${campos.find(c => c.nome === agrupar[0])?.rotulo ?? agrupar[0]}`}</h3>
 					<ResponsiveContainer width="100%" height={280}>
 						{stackedSeries.length > 0 ? (
@@ -308,7 +308,7 @@ export function RelatorioAberto({ modelo, bases, camposByBase, filtroInicial, on
 			)}
 
 			{/* Tabela */}
-			<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				{busy ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">Rodando relatório…</p> :
 					linhas.length === 0 ? (
 						<div className="py-10 text-center">

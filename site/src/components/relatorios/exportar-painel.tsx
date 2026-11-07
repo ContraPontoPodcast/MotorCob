@@ -99,7 +99,7 @@ export function ExportarPainel({ modelo, filtrosAtivos, deIso, ateIso, fotoDoDia
 
 	return (
 		<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4 py-8 overflow-y-auto" onClick={onClose}>
-			<div className="my-auto w-full max-w-[480px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+			<div className="my-auto w-full max-w-[480px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
 				<div className="mb-4 flex items-center justify-between">
 					<h2 className="text-[18px] font-semibold text-[#1D1D1F]">Exportar relatório</h2>
 					<button onClick={onClose} className="text-[#8E8E93]"><X size={20} /></button>
@@ -160,7 +160,7 @@ function ExportacaoProgress({ id, onClose }: { id: string; onClose: () => void }
 	if (exp?.situacao === 'pronto' && exp.arquivo_url) {
 		return (
 			<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={onClose}>
-				<div className="w-full max-w-[440px] rounded-2xl bg-white p-6 text-center" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+				<div className="w-full max-w-[440px] rounded-2xl bg-white p-6 text-center" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
 					<h2 className="text-[18px] font-semibold text-[#1D1D1F]">Exportação pronta</h2>
 					<p className="mt-2 text-[14px] text-[#6E6E73]">{Number(exp.linhas ?? 0).toLocaleString('pt-BR')} linhas.</p>
 					<a href={String(exp.arquivo_url)} download className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-[#1D1D1F] px-6 text-[14px] font-semibold text-white hover:opacity-85"><Download size={15} /> Baixar arquivo</a>

@@ -31,7 +31,7 @@ export function MedidorMaturidade({ maturidade, nome, cor }: { maturidade: Matur
 				{/* Anel 84px */}
 				<div className="flex shrink-0 flex-col items-center">
 					<svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label={`Maturidade ${indice} de 100, ${faseLabel(fase)}`}>
-						<circle cx="42" cy="42" r={R} fill="none" stroke="#E5E5EA" strokeWidth="8" />
+						<circle cx="42" cy="42" r={R} fill="none" style={{ stroke: 'var(--base-separator)' }} strokeWidth="8" />
 						<circle
 							cx="42" cy="42" r={R} fill="none" stroke={cor} strokeWidth="8" strokeLinecap="round"
 							strokeDasharray={`${dash} ${C - dash}`}

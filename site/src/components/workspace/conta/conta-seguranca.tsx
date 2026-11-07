@@ -145,7 +145,7 @@ function MfaCard({ isAdmin }: { isAdmin: boolean }) {
       </div>
       {modal && supabase && (
         <div className="fixed inset-0 z-[110] grid place-items-center bg-black/40 px-4 py-8" onClick={() => setModal(false)}>
-          <div className="w-full max-w-[420px] rounded-2xl bg-white p-8" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+          <div className="w-full max-w-[420px] rounded-2xl bg-white p-8" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
             <DuasEtapas
               supabase={supabase}
               passo={{ etapa: 'cadastro' }}

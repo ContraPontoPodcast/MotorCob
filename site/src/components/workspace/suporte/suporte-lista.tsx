@@ -6,7 +6,7 @@ import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import { MOTIVOS_CHAMADO } from '@/lib/empresa-helpers';
 import { WorkspaceHeading } from '@/components/workspace/workspace-shell';
 
-const cardShadow = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
+const cardShadow = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 
 const CAMPOS = 'id,protocolo,assunto,motivo,prioridade,situacao,responsavel_nome,ultima_de,ultima_em,visto_cliente_em,criado_em,prazo_resposta';
 

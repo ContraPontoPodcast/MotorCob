@@ -64,6 +64,11 @@ Outros comandos: `npm run lint` (oxlint), `npm run typecheck` (tsc; tem de dar z
 (as regras do Fluxo do agente em `site/fluxo/` e os componentes `src/**/*.test.tsx`, como os do design system em
 `src/components/ds/` e os do Fluxo do agente em `src/components/fluxo/`; a API do DS está documentada no `index.ts` de lá).
 
+Tema escuro: as telas logadas ficam dentro de `.mc-platform` e usam as variáveis `--base-*`/`--estado-*` (em
+`src/index.css`, que também remapeia no escuro as classes de cor fixa antigas). Fundo claro fixo novo (`bg-white`,
+`hover:bg-[#f…]`, `bg-green-50`…) sem mapeamento faz o `npm test` falhar (`scripts/cores-claras.mjs`; rode
+`node scripts/cores-claras.mjs` para ver a lista): use a variável ou acrescente o mapeamento no `index.css`.
+
 Modo de demonstração do Fluxo do agente (só desenvolvimento): `VITE_FLUXO_FIXTURES=1 npm run dev` cria a rota
 `/dev/fluxo/<tela>` (lista, editor/105, testar, desempenho, pedido/412, personas, conectores) com dados fictícios, sem
 login nem banco, para ver e fotografar as telas. Sem a variável a rota não existe, e o build de produção nunca a inclui.

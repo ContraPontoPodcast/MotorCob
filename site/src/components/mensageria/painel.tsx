@@ -17,7 +17,7 @@ function dentro(p: number | null, regra: (p: number) => boolean): boolean | null
 
 function Card({ label, valor, sub, cor, info }: { label: string; valor: string; sub?: string; cor?: string; info?: string }) {
 	return (
-		<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+		<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 			<div className="flex items-center gap-1.5">
 				<p className="text-[12px] font-semibold uppercase tracking-wide text-[#8E8E93]">{label}</p>
 				{info && <InfoButton def={INFO_DEFS[info]} />}
@@ -217,7 +217,7 @@ export function PainelCanal() {
 					</div>
 
 					{/* Engajamento */}
-					<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<h2 className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Engajamento</h2>
 						<div className="space-y-2.5">
 							<FunilBar label="Entregues" valor={t.entregues} total={t.entregues} cor={cor} />
@@ -232,7 +232,7 @@ export function PainelCanal() {
 					</section>
 
 					{/* Saúde do remetente */}
-					<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<h2 className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Saúde do remetente</h2>
 						<div className="overflow-x-auto">
 							<table className="w-full border-collapse text-[14px]">
@@ -273,7 +273,7 @@ export function PainelCanal() {
 					</div>
 
 					{/* Funil de envio */}
-					<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<h2 className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Funil de envio</h2>
 						<div className="space-y-2.5">
 							<FunilBar label="Carregados" valor={t.carregados} total={t.carregados} cor={cor} />
@@ -291,7 +291,7 @@ export function PainelCanal() {
 
 					{/* Gráfico por dia */}
 					{porDia.dias.length > 0 && (
-						<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+						<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 							<h2 className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Por dia</h2>
 							<LineChart dias={porDia.dias} series={porDia.series} cor={cor} />
 							<div className="mt-3 flex gap-4 text-[13px]">
@@ -304,7 +304,7 @@ export function PainelCanal() {
 
 					{/* Entrega por operadora (SMS) */}
 					{isSms && porOperadora.length > 0 && (
-						<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+						<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 							<h2 className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Entrega por operadora</h2>
 							<div className="overflow-x-auto">
 								<table className="w-full border-collapse text-[14px]">
@@ -331,7 +331,7 @@ export function PainelCanal() {
 
 			{/* Funil de engajamento (links) */}
 			{linkTotais.links > 0 && (
-				<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<h2 className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Funil de engajamento</h2>
 					<div className="space-y-2.5">
 						<FunilBar label="Enviados" valor={linkTotais.enviados} total={linkTotais.enviados} cor={cor} />
@@ -348,7 +348,7 @@ export function PainelCanal() {
 			)}
 
 			{/* Tabela por origem */}
-			<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div className="mb-4 flex items-center justify-between">
 					<h2 className="text-[16px] font-semibold text-[#1D1D1F]">Por origem</h2>
 					<button onClick={() => exportarCsv('painel-origem.csv', ['Origem', 'Carregados', 'Disparados', 'Entregues', '% entrega', 'Não entregues', 'CTR', 'Respostas', 'CPC Negócio', 'Conversão'], porOrigem.map(r => [r.origem, r.carregados, r.disparados, r.entregues, pct(r.entregues, r.disparados), r.nao_entregues, pct(r.clicaram, r.entregues), r.respostas, '—', '—']))} className="flex h-9 items-center gap-2 rounded-full border border-[#D2D2D7] px-4 text-[14px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Exportar CSV</button>

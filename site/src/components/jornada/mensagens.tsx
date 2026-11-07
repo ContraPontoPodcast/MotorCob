@@ -135,7 +135,7 @@ export function JornadaMensagens() {
 			{error && <div className="mb-5"><Notice>{error}</Notice></div>}
 
 			{/* Abas por momento */}
-			<div className="mb-5 flex flex-wrap gap-1 rounded-xl border border-[#E5E5EA] bg-white p-2" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="mb-5 flex flex-wrap gap-1 rounded-xl border border-[#E5E5EA] bg-white p-2" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				{MOMENTOS.map(m => (
 					<button key={m.id} onClick={() => setAba(m.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition ${aba === m.id ? 'bg-[#1D1D1F] text-white' : 'text-[#6E6E73] hover:bg-[#F5F5F7]'}`}>
 						{m.nome}
@@ -157,7 +157,7 @@ export function JornadaMensagens() {
 					<p className="text-[13px] text-[#8E8E93]">Nenhuma mensagem em {MOMENTO_NOME[aba]}. {canEdit && 'Crie a primeira.'}</p>
 				</div>
 			) : (
-				<div className="overflow-x-auto rounded-2xl border border-[#E5E5EA] bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="overflow-x-auto rounded-2xl border border-[#E5E5EA] bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<table className="w-full border-collapse text-[13px]">
 						<thead>
 							<tr className="border-b border-[#E5E5EA] text-left text-[11px] font-bold uppercase tracking-wider text-[#8E8E93]">

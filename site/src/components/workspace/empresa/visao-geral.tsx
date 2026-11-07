@@ -127,7 +127,7 @@ function EditModal({ emp, onClose, onSaved }: { emp: Row; onClose: () => void; o
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4 py-8 overflow-y-auto" onClick={onClose}>
-      <div role="dialog" aria-modal="true" className="my-auto w-full max-w-[640px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className="my-auto w-full max-w-[640px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-[18px] font-semibold text-[#1D1D1F]">Editar empresa</h2>
           <button onClick={onClose} aria-label="Fechar" className="text-[#8E8E93] hover:text-[#1D1D1F]"><X size={20} /></button>

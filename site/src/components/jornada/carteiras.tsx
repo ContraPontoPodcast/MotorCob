@@ -80,7 +80,7 @@ export function JornadaCarteiras() {
 			{error && <div className="mb-5"><Notice>{error}</Notice></div>}
 			{success && <div className="mb-5"><Notice variant="success">{success}</Notice></div>}
 			{!empresa ? <Notice variant="warning">Escolha a empresa no topo.</Notice> : loading ? <Loading /> : lista.length === 0 ? <Empty>Nenhuma carteira da Jornada. {canEdit && 'Crie a primeira.'}</Empty> : (
-				<section className="rounded-2xl border border-[#E5E5EA] bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<section className="rounded-2xl border border-[#E5E5EA] bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<div className="overflow-x-auto">
 						<table className="w-full min-w-[640px] text-left text-[13px]">
 							<thead><tr className="border-b border-[#E5E5EA] text-[11px] uppercase tracking-wide text-[#8E8E93]"><th className="pb-4 font-medium">Carteira</th><th className="pb-4 font-medium">Estratégia</th><th className="pb-4 font-medium">Ativa</th><th className="pb-4 font-medium">Criada em</th>{canEdit && <th className="pb-4"></th>}</tr></thead>

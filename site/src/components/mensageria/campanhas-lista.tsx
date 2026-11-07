@@ -43,14 +43,14 @@ export function CampanhasLista() {
 
 			{loading ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">Carregando...</p> :
 				lista.length === 0 ? (
-					<div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<span className="mc-area-tag mb-3">Mensageria</span>
 						<h2 className="text-[18px] font-semibold text-[#1D1D1F]">Campanhas</h2>
 						<p className="mx-auto mt-2 max-w-sm text-[14px] text-[#6E6E73]">Suba uma lista com os contatos, confira as colunas e escolha o template. Em simulação, nada sai para os seus clientes.</p>
 						{canAct && <Link to={`/mensageria/${canal}/campanhas/nova`} className="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-[#1D1D1F] px-5 text-[14px] font-medium text-white hover:opacity-85"><Plus size={16} /> Nova campanha</Link>}
 					</div>
 				) : (
-					<div className="rounded-2xl bg-white p-4 sm:p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="rounded-2xl bg-white p-4 sm:p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<TabelaResponsiva
 							cabecalho={['Nome', 'Situação', 'Carregados', 'Template', 'Centro de custo', 'Criada em']}
 							destaque={[0, 1, 5, 2]}

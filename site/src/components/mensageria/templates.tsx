@@ -35,14 +35,14 @@ export function TemplatesCanal() {
 			{erro && <div className="rounded-xl bg-[#FFE8E6] px-4 py-3 text-[14px] text-[#FF3B30]">{erro}</div>}
 			{loading ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">Carregando...</p> :
 				lista.length === 0 ? (
-					<div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<span className="mc-area-tag mb-3">Mensageria</span>
 						<h2 className="text-[18px] font-semibold text-[#1D1D1F]">Templates</h2>
 						<p className="mx-auto mt-2 max-w-sm text-[14px] text-[#6E6E73]">O template é o texto da mensagem, com variáveis como {'{{nome}}'} e {'{{valor}}'}.</p>
 						{canEdit && <button onClick={() => setEditando('novo')} className="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-[#1D1D1F] px-5 text-[14px] font-medium text-white hover:opacity-85"><Plus size={16} /> Criar o primeiro template</button>}
 					</div>
 				) : (
-					<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<table className="w-full border-collapse text-[14px]">
 							<thead><tr className="border-b border-[#E5E5EA] text-left text-[12px] font-semibold uppercase tracking-wide text-[#8E8E93]">
 								<th className="px-5 py-3">Nome</th>
@@ -120,7 +120,7 @@ function TemplateEditor({ canal, existente, onClose, onSaved }: { canal: string;
 
 	return (
 		<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={onClose}>
-			<div className="max-h-[92vh] w-full max-w-[640px] overflow-auto rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+			<div className="max-h-[92vh] w-full max-w-[640px] overflow-auto rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 				<div className="mb-4 flex items-center justify-between">
 					<h2 className="text-[17px] font-semibold text-[#1D1D1F]">{existente ? 'Editar template' : 'Novo template'}</h2>
 					<button onClick={onClose} aria-label="Fechar"><X size={20} className="text-[#8E8E93]" /></button>

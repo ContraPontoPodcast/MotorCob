@@ -73,14 +73,14 @@ export function MinhasPerguntas() {
 		<div className="mx-auto max-w-[960px] px-4 py-8 sm:px-6">
 			<PageHeading title="Minhas perguntas" description="Suas conversas com o Assistente dos últimos 90 dias." />
 			{loading ? (
-				<div className="rounded-2xl bg-white p-8 text-center text-[14px] text-[#8E8E93]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>Carregando...</div>
+				<div className="rounded-2xl bg-white p-8 text-center text-[14px] text-[#8E8E93]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>Carregando...</div>
 			) : lista.length === 0 ? (
-				<div className="rounded-2xl bg-[#F5F5F7] p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="rounded-2xl bg-[#F5F5F7] p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<MessageCircle size={28} className="mx-auto mb-3 text-[#8E8E93]" />
 					Você ainda não fez perguntas ao Assistente.
 				</div>
 			) : (
-				<div className="overflow-hidden rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="overflow-hidden rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					{/* Desktop: tabela */}
 					<div className="hidden md:block">
 						<div className="grid grid-cols-[1fr_180px_120px_140px_40px] gap-3 border-b border-[#E5E5EA] px-5 py-3 text-[12px] font-semibold text-[#8E8E93]">

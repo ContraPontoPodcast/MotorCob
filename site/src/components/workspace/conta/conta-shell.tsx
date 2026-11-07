@@ -91,4 +91,4 @@ export function ContaShell({ children }: { children: ReactNode }) {
 	);
 }
 
-export const cardShadow = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
+export const cardShadow = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';

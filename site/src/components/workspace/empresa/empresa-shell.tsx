@@ -7,7 +7,7 @@ import { SITUACOES, SEGMENTOS, formatCNPJ } from '@/lib/empresa-helpers';
 import { useConsolePerms, useFrentesMap } from '@/components/workspace/console/console-perms';
 import { FrenteBadges } from '@/components/workspace/console/frente-badge';
 
-const cardShadow = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
+const cardShadow = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 
 export function EmpresaShell({ children, onEdit }: { children: ReactNode; onEdit?: () => void }) {
   const { empresa, perfil, refresh } = useMotorAuth();
@@ -94,7 +94,7 @@ export function EmpresaShell({ children, onEdit }: { children: ReactNode; onEdit
               <div className="relative" ref={menuRef}>
                 <button onClick={() => setMenuOpen(o => !o)} aria-label="Mais ações" aria-expanded={menuOpen} className="grid h-9 w-9 place-items-center rounded-full border border-[#D2D2D7] bg-white text-[#1D1D1F] hover:bg-[#F5F5F7]"><MoreHorizontal size={18} /></button>
                 {menuOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-[220px] overflow-hidden rounded-2xl bg-white py-1 text-[#1D1D1F]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+                  <div className="absolute right-0 top-11 z-50 w-[220px] overflow-hidden rounded-2xl bg-white py-1 text-[#1D1D1F]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
                     {podeSuspender && <MenuItem onClick={() => { setMenuOpen(false); setAcao('suspender'); }}>Suspender</MenuItem>}
                     {podeSuspender && <MenuItem onClick={() => { setMenuOpen(false); setAcao('encerrar'); }}>Encerrar</MenuItem>}
                     {podeReativar && <MenuItem onClick={() => { setMenuOpen(false); setAcao('reativar'); }}>Reativar</MenuItem>}
@@ -188,7 +188,7 @@ function SituacaoModal({ acao, slug, empresaId, onClose, onDone }: {
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4 py-8 overflow-y-auto" onClick={onClose}>
-      <div role="dialog" aria-modal="true" className={`my-auto w-full max-w-[440px] rounded-2xl bg-white p-6 ${vermelho ? 'border-2 border-[#FF3B30]' : ''}`} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className={`my-auto w-full max-w-[440px] rounded-2xl bg-white p-6 ${vermelho ? 'border-2 border-[#FF3B30]' : ''}`} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
         <div className="mb-4">
           <h2 className={`text-[18px] font-semibold ${vermelho ? 'text-[#FF3B30]' : 'text-[#1D1D1F]'}`}>{titulo}</h2>
           {aviso && <p className="mt-2 text-[14px] text-[#6E6E73]">{aviso}</p>}
@@ -243,7 +243,7 @@ function LiberarModal({ empresaId, onClose, onDone }: {
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4 py-8 overflow-y-auto" onClick={onClose}>
-      <div role="dialog" aria-modal="true" className="my-auto w-full max-w-[440px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className="my-auto w-full max-w-[440px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-[18px] font-semibold text-[#1D1D1F]">Liberar empresa inadimplente</h2>
           <button onClick={onClose} aria-label="Fechar" className="text-[#8E8E93]"><MoreHorizontal size={20} /></button>

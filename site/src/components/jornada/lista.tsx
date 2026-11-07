@@ -87,7 +87,7 @@ export function JornadaLista() {
 				</div>
 			</div>
 
-			<div className="rounded-2xl border border-[#E5E5EA] bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl border border-[#E5E5EA] bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				{loading ? <div className="p-6"><Loading /></div> : filtered.length === 0 ? <div className="p-6"><Empty>Nenhum cliente na lista em {date}.</Empty></div> : (
 					<div className="overflow-x-auto">
 						<table className="w-full min-w-[560px] text-left text-[13px]">

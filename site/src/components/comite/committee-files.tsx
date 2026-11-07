@@ -35,7 +35,7 @@ function ComiteProdutos() {
   const totalCpcs = linhas.reduce((s, l) => s + Number(l.cpcs ?? 0), 0) || 1;
 
   return (
-    <section className="mb-6 rounded-2xl bg-white p-5 sm:p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+    <section className="mb-6 rounded-2xl bg-white p-5 sm:p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[17px] font-semibold text-[#1D1D1F]">Mensageria por produto</h2>
         <select value={mes} onChange={e => setMes(e.target.value)} className="h-9 rounded-lg border border-[#D2D2D7] bg-white px-3 text-[14px] outline-none">

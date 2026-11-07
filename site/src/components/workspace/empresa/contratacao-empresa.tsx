@@ -1065,7 +1065,7 @@ export function ContratacaoEmpresa({
 
 function Secao({ numero, titulo, children }: { numero: number; titulo: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+    <section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
       <div className="mb-4 flex items-center gap-2.5">
         <span className="grid h-6 w-6 place-items-center rounded-full bg-[#1D1D1F] text-[12px] font-bold text-white">{numero}</span>
         <h2 className="text-[16px] font-semibold text-[#1D1D1F]">{titulo}</h2>
@@ -1307,7 +1307,7 @@ function ResumoCard({ frentes, modulos, canais, itensContratados, itensSemPreco,
   const formasLabel = formas.map(f => FORMAS_PAG.find(x => x.id === f)?.curto ?? f).join(', ');
   bits.push(`Cobrança: ${modeloPag === 'pre' ? 'Pré-pago' : 'Pós-pago'}${formasLabel ? ' · ' + formasLabel : ''}`);
   return (
-    <div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+    <div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
       <h3 className="mb-3 text-[15px] font-semibold text-[#1D1D1F]">Resumo</h3>
       <ul className="space-y-1.5 text-[13px] text-[#1D1D1F]">
         {bits.map((b, i) => <li key={i} className="flex gap-2"><span className="text-[#34C759]">✓</span><span>{b}</span></li>)}
@@ -1323,7 +1323,7 @@ export function HistoricoModal({ item, precos, onClose }: { item: Row; precos: R
   const unidade = UNIDADE_LABEL[String(item.codigo)] ?? String(item.unidade ?? 'unidade');
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4 py-8 overflow-y-auto" onClick={onClose}>
-      <div role="dialog" aria-modal="true" className="my-auto w-full max-w-[440px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className="my-auto w-full max-w-[440px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
         <div className="mb-5 flex items-center justify-between"><h2 className="text-[18px] font-semibold text-[#1D1D1F]">Histórico · {item.nome}</h2><button onClick={onClose} aria-label="Fechar" className="text-[#8E8E93]"><X size={20} /></button></div>
         {ordenados.length === 0 ? <p className="py-6 text-center text-[14px] text-[#8E8E93]">Sem vigências registradas.</p> :
           <div className="divide-y divide-[#F0F0F2]">{ordenados.map((p, i) => (

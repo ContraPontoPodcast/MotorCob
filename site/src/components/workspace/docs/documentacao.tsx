@@ -42,7 +42,7 @@ function CodeBlock({ code }: { code: string }) {
 	}
 	return (
 		<div className="relative mt-3">
-			<button onClick={copy} className="absolute right-2 top-2 inline-flex h-7 items-center gap-1.5 rounded-md bg-white px-2.5 text-[12px] font-medium text-[#1D1D1F] hover:bg-[#EEEEF0]" style={{ boxShadow: '0 0 0 1px #E5E5EA' }}>
+			<button onClick={copy} className="absolute right-2 top-2 inline-flex h-7 items-center gap-1.5 rounded-md bg-white px-2.5 text-[12px] font-medium text-[#1D1D1F] hover:bg-[#EEEEF0]" style={{ boxShadow: '0 0 0 1px var(--base-separator)' }}>
 				{ok ? <Check size={13} className="text-[#248A3D]" /> : <Copy size={13} />} {ok ? 'Copiado' : 'Copiar'}
 			</button>
 			<pre className="overflow-x-auto rounded-xl bg-[#F5F5F7] p-4 pr-20 text-[13px] leading-relaxed"><code className="font-mono text-[#1D1D1F]">{code}</code></pre>

@@ -126,7 +126,7 @@ export function SinoAvisos({ onDark = false }: { onDark?: boolean } = {}) {
 			</button>
 
 			{aberto && (
-				<div className="absolute right-0 top-11 z-50 w-[380px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+				<div className="absolute right-0 top-11 z-50 w-[380px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 					<div className="flex items-center justify-between border-b border-[#E5E5EA] px-4 py-3">
 						<h2 className="text-[15px] font-semibold text-[#1D1D1F]">Avisos</h2>
 						{temNaoLidos && (
