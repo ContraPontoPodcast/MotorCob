@@ -43,7 +43,7 @@ export function PainelEdicao({
 	useEffect(() => { setFase('resumo'); }, [resetSignal]);
 
 	return (
-		<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+		<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 			<div className="mb-4 flex items-center justify-between gap-3">
 				<h2 className="text-[16px] font-semibold text-[#1D1D1F]">{titulo}</h2>
 				{fase === 'resumo' && podeEditar && (

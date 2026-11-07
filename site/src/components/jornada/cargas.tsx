@@ -89,7 +89,7 @@ export function JornadaCargas() {
 
 			<div className="grid gap-4 lg:grid-cols-2">
 				{TIPOS.map(t => (
-					<div key={t.id} className="rounded-2xl border border-[#E5E5EA] bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div key={t.id} className="rounded-2xl border border-[#E5E5EA] bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<div className="mb-4 flex items-center gap-3">
 							<div className="grid h-10 w-10 place-items-center rounded-lg bg-[#F2F2F7] text-[#1D1D1F]"><UploadCloud size={20} /></div>
 							<h2 className="text-[15px] font-semibold">{t.label}</h2>
@@ -105,7 +105,7 @@ export function JornadaCargas() {
 				))}
 			</div>
 
-			<section className="mt-8 rounded-2xl border border-[#E5E5EA] bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<section className="mt-8 rounded-2xl border border-[#E5E5EA] bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<h2 className="mb-1 text-[15px] font-semibold">Histórico de envios</h2>
 				<p className="mb-5 text-[12px] text-[#8E8E93]">Últimos 50 arquivos da jornada</p>
 				{loading ? <Loading /> : rows.length === 0 ? <Empty>Nenhum arquivo enviado ainda.</Empty> : (

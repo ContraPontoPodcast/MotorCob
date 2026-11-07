@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router';
 import { ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { DOC_ARTIGOS } from '@/data/docs';
 
-const cardShadow = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
+const cardShadow = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 
 export function DocsArtigoPage() {
   const { slug } = useParams();

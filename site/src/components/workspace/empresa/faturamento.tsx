@@ -840,7 +840,7 @@ function ExtratoSaldo({ extrato }: { extrato: Row[] }) {
 
 function RecargaAutomaticaCard({ cartao, avisoSaldo, recargaMinima }: { cartao: Row | null; avisoSaldo: number | null; recargaMinima: number | null }) {
   return (
-    <div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+    <div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
       <h3 className="mb-3 text-[15px] font-semibold text-[#1D1D1F]">Recarga automática</h3>
       {cartao ? (
         <div className="space-y-2">
@@ -866,7 +866,7 @@ function RecargaAutomaticaCard({ cartao, avisoSaldo, recargaMinima }: { cartao: 
 function DadosCobrancaCard({ dados }: { dados: Row }) {
   const formas: string[] = Array.isArray(dados.formas) ? (dados.formas as string[]) : [];
   return (
-    <div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+    <div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
       <h3 className="mb-3 text-[15px] font-semibold text-[#1D1D1F]">Dados da cobrança</h3>
       <dl className="space-y-2 text-[13px]">
         <div className="flex justify-between gap-2"><dt className="text-[#6E6E73]">CNPJ</dt><dd className="text-right font-medium text-[#1D1D1F] tnum">{dados.cnpj ? String(dados.cnpj) : '—'}</dd></div>
@@ -914,7 +914,7 @@ function RecargaModal({ minimo, formas, onClose, onPagar }: {
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4 py-8 overflow-y-auto" onClick={onClose}>
-      <div role="dialog" aria-modal="true" className="my-auto w-full max-w-[420px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className="my-auto w-full max-w-[420px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
         <div className="mb-5 flex items-center justify-between"><h2 className="text-[18px] font-semibold text-[#1D1D1F]">Recarregar saldo</h2><button onClick={onClose} className="text-[#8E8E93]"><X size={20} /></button></div>
         <div className="space-y-4">
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Valor (R$){minimo > 0 && <span className="font-normal text-[#8E8E93]"> · mínimo {moneyBR(minimo)}</span>}</span><input value={valor} onChange={e => setValor(e.target.value)} inputMode="decimal" className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] outline-none focus:border-[#1D1D1F]" placeholder="0,00" /></label>

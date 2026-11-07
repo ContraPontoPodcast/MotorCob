@@ -67,7 +67,7 @@ export function LoteDetalhe() {
 
 	if (loading) return <p className="py-8 text-center text-[14px] text-[#8E8E93]">Carregando...</p>;
 	if (error) return <div className="rounded-xl bg-[#FFE8E6] px-4 py-3 text-[14px] text-[#FF3B30]">{error}</div>;
-	if (!lote) return <div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>Lote não encontrado.</div>;
+	if (!lote) return <div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>Lote não encontrado.</div>;
 
 	return (
 		<div className="space-y-4">
@@ -75,7 +75,7 @@ export function LoteDetalhe() {
 
 			<LoteCabecalho lote={lote} />
 
-			<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<h2 className="text-[16px] font-semibold text-[#1D1D1F]">Mensagens</h2>
 					<div className="flex flex-wrap items-center gap-2">

@@ -54,7 +54,7 @@ export function CompanyPill() {
 				<ChevronDown size={13} className="text-[#8E8E93]" />
 			</button>
 			{open && (
-				<div className="absolute left-0 top-10 z-50 w-[280px] overflow-hidden rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+				<div className="absolute left-0 top-10 z-50 w-[280px] overflow-hidden rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 					<div className="border-b border-[#E5E5EA] p-2">
 						<input autoFocus value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar empresa" className="h-9 w-full rounded-lg bg-[#F5F5F7] px-3 text-[14px] outline-none placeholder:text-[#8E8E93]" />
 					</div>
@@ -96,7 +96,7 @@ function AreasDropdown({ areas }: { areas: AreaItem[] }) {
 				{atual !== 'workspace' && atual !== 'console' ? areaLabel(location.pathname) : 'Áreas'} <ChevronDown size={14} className={`text-[#8E8E93] transition-transform ${open ? 'rotate-180' : ''}`} />
 			</button>
 			{open && (
-				<div className="absolute left-0 top-10 z-50 w-[300px] overflow-hidden rounded-2xl bg-white py-1" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+				<div className="absolute left-0 top-10 z-50 w-[300px] overflow-hidden rounded-2xl bg-white py-1" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 					{areas.map(a => {
 						const Icon = a.icon;
 						return (
@@ -147,7 +147,7 @@ function EmpresaDropdown() {
 				Empresa <ChevronDown size={14} className={`text-[#8E8E93] transition-transform ${open ? 'rotate-180' : ''}`} />
 			</button>
 			{open && (
-				<div className="absolute left-0 top-10 z-50 w-[220px] overflow-hidden rounded-2xl bg-white py-1" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+				<div className="absolute left-0 top-10 z-50 w-[220px] overflow-hidden rounded-2xl bg-white py-1" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 					{items.map(it => (
 						<Link key={it.to} to={it.to} onClick={() => setOpen(false)} className="block px-4 py-2.5 text-[14px] text-[#1D1D1F] hover:bg-[#F5F5F7]">{it.label}</Link>
 					))}
@@ -180,7 +180,7 @@ export function AvatarMenu({ abrirPara = 'baixo' }: { abrirPara?: 'baixo' | 'cim
 				{initials(perfil?.nome)}
 			</button>
 			{open && (
-				<div className={`absolute z-50 w-[240px] overflow-hidden rounded-2xl bg-white ${abrirPara === 'cima' ? 'bottom-10 left-0' : 'right-0 top-10'}`} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+				<div className={`absolute z-50 w-[240px] overflow-hidden rounded-2xl bg-white ${abrirPara === 'cima' ? 'bottom-10 left-0' : 'right-0 top-10'}`} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 					<div className="flex items-center gap-3 border-b border-[#E5E5EA] p-4">
 						<div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#3A3A3C] text-[15px] font-semibold text-white">{initials(perfil?.nome)}</div>
 						<div className="min-w-0">

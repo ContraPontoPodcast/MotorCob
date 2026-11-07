@@ -138,7 +138,7 @@ export function PorQueHojeApple() {
 			</div>
 
 			{/* Por que hoje */}
-			<section className="rounded-2xl bg-white p-6 sm:p-7" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<section className="rounded-2xl bg-white p-6 sm:p-7" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<h2 className="mb-4 text-[20px] font-semibold text-[#1D1D1F]">Por que hoje</h2>
 
 				{/* Controle segmentado */}

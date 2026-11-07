@@ -24,11 +24,11 @@ const PERIODOS = [7, 30, 90] as const;
 type VerifStatus = 'ok' | 'ausente' | 'duplicado' | 'sem_seletor' | string;
 
 function verifPill(status: VerifStatus): { cor: string; bg: string; nota: string } {
-  if (status === 'ok') return { cor: '#248A3D', bg: '#E8F8EC', nota: 'ok' };
-  if (status === 'ausente') return { cor: '#FF3B30', bg: '#FFE8E6', nota: 'ausente' };
-  if (status === 'duplicado') return { cor: '#9a631b', bg: '#FFF3E8', nota: 'dois registros SPF: junte em um' };
-  if (status === 'sem_seletor') return { cor: '#8E8E93', bg: '#F5F5F7', nota: 'preencha o seletor DKIM' };
-  return { cor: '#8E8E93', bg: '#F5F5F7', nota: status || '—' };
+  if (status === 'ok') return { cor: 'var(--so-escuro-texto-ok, #248A3D)', bg: 'var(--so-escuro-fundo-ok, #E8F8EC)', nota: 'ok' };
+  if (status === 'ausente') return { cor: 'var(--so-escuro-texto-erro, #FF3B30)', bg: 'var(--so-escuro-fundo-erro, #FFE8E6)', nota: 'ausente' };
+  if (status === 'duplicado') return { cor: 'var(--so-escuro-texto-atencao, #9a631b)', bg: 'var(--so-escuro-fundo-atencao, #FFF3E8)', nota: 'dois registros SPF: junte em um' };
+  if (status === 'sem_seletor') return { cor: '#8E8E93', bg: 'var(--so-escuro-fundo-neutro, #F5F5F7)', nota: 'preencha o seletor DKIM' };
+  return { cor: '#8E8E93', bg: 'var(--so-escuro-fundo-neutro, #F5F5F7)', nota: status || '—' };
 }
 
 function statusVerif(v: unknown): VerifStatus {
@@ -232,7 +232,7 @@ function TabelaVoltaram({ rows, temEndereco }: { rows: Row[]; temEndereco: boole
     celulas.push(<span className="tnum text-[#6E6E73] whitespace-nowrap">{r.quando ? dateTimeBR(r.quando) : '—'}</span>);
     celulas.push(<span className="text-[#1D1D1F]">{String(r.empresa ?? '—')}</span>);
     celulas.push(<span className="text-[#1D1D1F]">{String(r.titulo ?? r.tipo ?? '—')}</span>);
-    celulas.push(<span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: '#F5F5F7', color: sit.cor }}>{sit.label}</span>);
+    celulas.push(<span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: 'var(--so-escuro-fundo-neutro, #F5F5F7)', color: sit.cor }}>{sit.label}</span>);
     if (temEndereco) celulas.push(<span className="tnum text-[#6E6E73]">{r.endereco ? mascararEmail(String(r.endereco)) : '—'}</span>);
     celulas.push(<span className="text-[#6E6E73]">{String(r.motivo ?? '—')}</span>);
     return { celulas };

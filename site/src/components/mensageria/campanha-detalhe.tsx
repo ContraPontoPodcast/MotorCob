@@ -63,7 +63,7 @@ export function CampanhaDetalhe() {
 	if (!isCanalValido(canal)) return null;
 	if (loading) return <p className="py-8 text-center text-[14px] text-[#8E8E93]">Carregando...</p>;
 	if (erro) return <div className="rounded-xl bg-[#FFE8E6] px-4 py-3 text-[14px] text-[#FF3B30]">{erro}</div>;
-	if (!camp) return <div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>Campanha não encontrada.</div>;
+	if (!camp) return <div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>Campanha não encontrada.</div>;
 
 	const cor = PRODUTO_MAP[canal].cor;
 	const sit = SIT_CAMPANHA[camp.situacao as string] ?? { label: camp.situacao, cor: '#6E6E73', bg: '#F5F5F7' };
@@ -77,7 +77,7 @@ export function CampanhaDetalhe() {
 		<div className="space-y-5">
 			<Link to={`/mensageria/${canal}/campanhas`} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[#0A60D0] hover:underline"><ArrowLeft size={15} /> Voltar</Link>
 
-			<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div className="flex flex-wrap items-center gap-3">
 					<h1 className="text-[20px] font-bold text-[#1D1D1F]">{camp.nome}</h1>
 					<span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[12px] font-semibold" style={{ color: sit.cor, backgroundColor: sit.bg }}>{sit.label}</span>
@@ -91,7 +91,7 @@ export function CampanhaDetalhe() {
 			</div>
 
 			{/* Funil de entrega */}
-			<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<h2 className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Funil de entrega</h2>
 				<div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
 					{([
@@ -109,7 +109,7 @@ export function CampanhaDetalhe() {
 
 			{/* Funil de engajamento */}
 			{l.links > 0 && (
-				<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<h2 className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Funil de engajamento</h2>
 					<div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
 						{[['Enviados', +l.enviados], ['Entregues', +l.entregues], ['Clicaram', +l.clicaram], ['Responderam', +l.responderam], ['CPC Negócio', +l.cpc_negocio]].map(([label, v]) => (
@@ -122,7 +122,7 @@ export function CampanhaDetalhe() {
 
 			{/* Cliques por hora e dispositivo */}
 			{cliques.length > 0 && (
-				<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<h2 className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Cliques por hora e aparelho</h2>
 					<div className="grid gap-6 lg:grid-cols-2">
 						<div>
@@ -146,7 +146,7 @@ export function CampanhaDetalhe() {
 
 			{/* Quem clicou */}
 			{canAct && quemClicou.length > 0 && (
-				<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<div className="mb-4 flex items-center justify-between">
 						<h2 className="text-[16px] font-semibold text-[#1D1D1F]">Quem clicou</h2>
 						<button onClick={() => exportarCsv('quem-clicou.csv', ['ID do cliente', 'Primeiro clique', 'Cliques', 'Aparelho'], quemClicou.map(r => { const cl = (r.mensageria_cliques as Row[]) ?? []; const primeiro = cl[0]?.clicado_em ? dateTimeBR(cl[0].clicado_em) : '—'; return [r.id_cliente, primeiro, cl.length, cl[0]?.dispositivo ?? '—']; }))} className="flex h-9 items-center gap-2 rounded-full border border-[#D2D2D7] px-4 text-[14px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Exportar CSV</button>

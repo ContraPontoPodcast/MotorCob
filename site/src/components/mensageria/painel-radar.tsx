@@ -5,7 +5,7 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { useAreaLabel } from '@/components/tema-provider';
 import { RADAR_CLASSES, RADAR_ORDEM, num, pct, periodoDatas } from '@/lib/mensageria-produtos';
 
-const CARD_SHADOW = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
+const CARD_SHADOW = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 
 type Resumo = {
 	respostas: number;

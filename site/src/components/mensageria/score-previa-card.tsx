@@ -44,7 +44,7 @@ export function ScorePreviaCard({ previa, scoreOn, onScoreOn, faixasSel, onToggl
 	const todosOn = faixasSel.length === 4;
 
 	return (
-		<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+		<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 			<div className="flex items-center justify-between">
 				<div className="flex items-center gap-1.5">
 					<h3 className="text-[15px] font-semibold text-[#1D1D1F]">Score de Entrega</h3>

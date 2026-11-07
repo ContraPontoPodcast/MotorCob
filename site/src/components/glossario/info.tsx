@@ -69,7 +69,7 @@ export function Info({ slug }: { slug: string }) {
 				aria-label={`O que é ${term.termo}`}
 				aria-expanded={open}
 				aria-describedby={open ? labelId : undefined}
-				className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border border-[var(--base-field-border)] text-[11px] italic leading-none text-[var(--base-texto-2)] transition-colors hover:bg-[var(--base-texto)] hover:text-white data-[open=true]:bg-[var(--base-texto)] data-[open=true]:text-white"
+				className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border border-[var(--base-field-border)] text-[11px] italic leading-none text-[var(--base-texto-2)] transition-colors hover:bg-[var(--base-texto)] hover:text-[var(--base-cartao)] data-[open=true]:bg-[var(--base-texto)] data-[open=true]:text-[var(--base-cartao)]"
 				data-open={open}
 			>
 				i

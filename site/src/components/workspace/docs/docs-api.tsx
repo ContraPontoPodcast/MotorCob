@@ -51,7 +51,7 @@ export function DocsApiPage() {
     <div className="mx-auto max-w-[760px] px-4 py-8">
       <WorkspaceHeading title="API MotorCX" description="Integração e API" />
 
-      <section className="rounded-2xl bg-white p-6 sm:p-8" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+      <section className="rounded-2xl bg-white p-6 sm:p-8" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
         <h1 className="text-[28px] font-bold tracking-tight text-[#1D1D1F]">Documentação da API</h1>
         <p className="mt-2 text-[15px] text-[#6E6E73]">Envie cargas e leia a Lista do dia direto do sistema da sua empresa, com um token de API.</p>
 

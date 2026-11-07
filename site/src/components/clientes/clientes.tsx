@@ -25,6 +25,7 @@ import { FaixaBadge } from '@/components/propensao/faixa-badge';
 import { Info } from '@/components/glossario/info';
 import { ReenquadramentoButton, type ReenquadramentoHandle } from '@/components/reenquadramento/reenquadramento-button';
 import { ComparacaoAntesDepois } from '@/components/clientes/comparacao-antes-depois';
+import { MotivoHoje } from '@/components/comuns/motivo-hoje';
 
 const POR_PAGINA = 50;
 
@@ -265,8 +266,8 @@ export function Clientes() {
 												const intensidade = Math.min(1, cel.clientes / matriz.maxClientes);
 												return <td key={m} className="px-1 py-2">
 													<button onClick={() => toggleFiltro('estado', m)} className="block w-full rounded-lg px-2 py-2 text-center transition-transform hover:scale-[1.03]" style={{ backgroundColor: `rgba(15, 76, 92, ${0.08 + intensidade * 0.85})` }}>
-														<div className="text-sm font-bold" style={{ color: intensidade > 0.55 ? '#fff' : '#163943' }}>{numberBR(cel.clientes)}</div>
-														<div className="text-[10px]" style={{ color: intensidade > 0.55 ? 'rgba(255,255,255,.8)' : '#6b7e85' }}>{moneyBR(cel.saldo)}</div>
+														<div className="text-sm font-bold" style={{ color: intensidade > 0.55 ? '#fff' : 'var(--mapa-texto, #163943)' }}>{numberBR(cel.clientes)}</div>
+														<div className="text-[10px]" style={{ color: intensidade > 0.55 ? 'rgba(255,255,255,.8)' : 'var(--mapa-texto-2, #6b7e85)' }}>{moneyBR(cel.saldo)}</div>
 													</button>
 												</td>;
 											})}
@@ -317,10 +318,10 @@ export function Clientes() {
 				</div>
 
 				{loading ? <Loading/> : rows.length === 0 ? <Empty>{temFiltro ? 'Nenhum cliente com esses filtros.' : 'Nenhum cliente nesta carteira ainda.'}</Empty> : (
-					<div className="overflow-x-auto rounded-xl border border-[#dfe8ea] bg-white">
+					<div className="overflow-x-auto rounded-xl border border-[var(--base-borda)] bg-[var(--base-cartao)]">
 						<table className="w-full min-w-[1600px] text-left text-sm">
 							<thead>
-								<tr className="border-b border-[#e4ebed] text-xs text-slate-400">
+								<tr className="border-b border-[var(--base-borda)] text-xs text-[var(--base-texto-3)]">
 									<th className="px-4 py-3 font-medium">ID do cliente</th>
 									<th className="px-4 py-3 font-medium">Segmento</th>
 									<th className="px-4 py-3 font-medium">Esteira</th>
@@ -339,10 +340,10 @@ export function Clientes() {
 									<th className="px-4 py-3 font-medium">Na carga</th>
 								</tr>
 							</thead>
-							<tbody className="divide-y divide-[#eef3f4]">
+							<tbody className="divide-y divide-[color:var(--base-separator)]">
 								{rows.map((r, i) => (
-									<tr key={r.id_cliente ?? i} onClick={() => navigate(`/cliente?id=${encodeURIComponent(r.id_cliente)}`)} className="cursor-pointer hover:bg-[#f6fafb]">
-										<td className="px-4 py-3 font-mono text-xs font-semibold text-[#0F4C5C]">{r.id_cliente}</td>
+									<tr key={r.id_cliente ?? i} onClick={() => navigate(`/cliente?id=${encodeURIComponent(r.id_cliente)}`)} className="cursor-pointer align-top transition-colors hover:bg-[var(--base-fill)] [&>td]:whitespace-nowrap">
+										<td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-semibold text-[var(--base-texto)]">{r.id_cliente}</td>
 										<td className="px-4 py-3">{segmentoNome(r.cluster_atual, clusters)}</td>
 										<td className="px-4 py-3 text-slate-500">{r.estrategia ?? '—'}</td>
 										<td className="px-4 py-3">{momentoComCiclo(r.estado, r.ciclo)}</td>
@@ -352,9 +353,9 @@ export function Clientes() {
 										<td className="px-4 py-3 text-slate-500">{r.enriq_enviado ? dateBR(r.enriq_enviado) : '—'}</td>
 										<td className="px-4 py-3 text-slate-500">{r.enriq_retorno ? dateBR(r.enriq_retorno) : '—'}</td>
 										<td className="px-4 py-3">{r.canal ? (canalNome[r.canal] ?? r.canal) : '—'}</td>
-										<td className="px-4 py-3">{r.acao_hoje?.trim() ? <span>{r.acao_hoje}{r.acao_hoje.toLowerCase().includes('reserva') ? <span className="ml-1 text-xs text-slate-400">(reserva)</span> : null}</span> : <span className="text-slate-300">—</span>}</td>
-										<td className="px-4 py-3">{r.motivo_hoje?.trim() ? <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${r.motivo_hoje.toLowerCase().startsWith('com ação') ? 'bg-green-50 text-[#2E7D32]' : 'bg-amber-50 text-[#9a631b]'}`}>{r.motivo_hoje}</span> : <span className="text-slate-300">—</span>}</td>
-									<td className="px-4 py-3 text-slate-500">{r.passo_hoje?.trim() ?? '—'}</td>
+										<td className="px-4 py-3">{r.acao_hoje?.trim() ? <span>{r.acao_hoje}{r.acao_hoje.toLowerCase().includes('reserva') ? <span className="ml-1 text-xs text-slate-400">(reserva)</span> : null}</span> : <span className="text-[var(--base-texto-3)]">—</span>}</td>
+										<td className="px-4 py-3"><MotivoHoje motivo={r.motivo_hoje} compacto /></td>
+										<td className="px-4 py-3 text-slate-500">{r.passo_hoje?.trim() ?? '—'}</td>
 										<td className="px-4 py-3 text-right font-semibold">{moneyBR(r.saldo)}</td>
 										<td className="px-4 py-3 text-right text-slate-500">{r.dias_atraso != null ? numberBR(r.dias_atraso) : '—'}</td>
 										<td className="px-4 py-3">{r.na_carga ? <span className="text-[#2E7D32]">✓</span> : <span className="text-xs text-slate-400">fora</span>}</td>

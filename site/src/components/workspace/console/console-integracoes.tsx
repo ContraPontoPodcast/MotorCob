@@ -41,7 +41,7 @@ export function ConsoleIntegracoesPage() {
 			{loading ? <p className="py-10 text-center text-[14px] text-[#8E8E93]">Carregando…</p> : linhas.length === 0 ? (
 				<div className="rounded-2xl bg-[#F5F5F7] px-6 py-10 text-center text-[14px] text-[#6E6E73]">Nenhuma empresa criou token de API ainda.</div>
 			) : (
-				<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<table className="w-full min-w-[720px] text-left text-[14px]">
 						<thead><tr className="border-b border-[#E5E5EA] text-[12px] font-semibold text-[#8E8E93]">
 							<th className="px-5 py-3">Empresa</th><th className="px-5 py-3">Tokens ativos</th><th className="px-5 py-3">Chamadas · 7 dias</th><th className="px-5 py-3">Erros</th><th className="px-5 py-3">Vence primeiro</th><th className="px-5 py-3" />

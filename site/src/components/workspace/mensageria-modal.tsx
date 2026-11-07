@@ -71,7 +71,7 @@ export function MensageriaModal({ open, onClose }: { open: boolean; onClose: () 
 
 	return (
 		<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={fechar}>
-			<div role="dialog" aria-modal="true" className="w-full max-w-[420px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+			<div role="dialog" aria-modal="true" className="w-full max-w-[420px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 				<div className="flex items-start justify-between">
 					<div className="grid h-10 w-10 place-items-center rounded-xl bg-[#F5F5F7] text-[#1D1D1F]"><MessageSquare size={20} /></div>
 					<button onClick={fechar} aria-label="Fechar"><X size={20} className="text-[#8E8E93]" /></button>

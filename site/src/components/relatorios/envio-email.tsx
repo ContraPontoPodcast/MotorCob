@@ -48,7 +48,7 @@ export function EnvioEmail({ modelo, onClose, onSaved }: Props) {
 	if (!ehSalvo) {
 		return (
 			<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={onClose}>
-				<div className="w-full max-w-[440px] rounded-2xl bg-white p-6 text-center" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+				<div className="w-full max-w-[440px] rounded-2xl bg-white p-6 text-center" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
 					<Mail className="mx-auto mb-3 text-[#8E8E93]" size={28} />
 					<h2 className="text-[17px] font-semibold text-[#1D1D1F]">Salve o relatório para agendar</h2>
 					<p className="mt-2 text-[14px] text-[#6E6E73]">O envio por e-mail precisa de um relatório salvo da empresa.</p>

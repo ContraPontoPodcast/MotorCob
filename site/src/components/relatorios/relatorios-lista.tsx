@@ -242,7 +242,7 @@ export function RelatoriosLista() {
 						{Object.entries(categorias).map(([cat, modelos]) => modelos.map(m => {
 							const bloqueado = m.requer === 'score' && !scoreAtivo;
 							return (
-								<button key={m.id} onClick={() => bloqueado ? null : setAberto(m)} disabled={bloqueado} className={`relative rounded-2xl bg-white p-5 text-left transition ${bloqueado ? 'cursor-not-allowed opacity-70' : 'hover:-translate-y-0.5'}`} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+								<button key={m.id} onClick={() => bloqueado ? null : setAberto(m)} disabled={bloqueado} className={`relative rounded-2xl bg-white p-5 text-left transition ${bloqueado ? 'cursor-not-allowed opacity-70' : 'hover:-translate-y-0.5'}`} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 									{m.destaque && <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-[#FFF3E8] px-2 py-0.5 text-[11px] font-semibold text-[#9a631b]"><Star size={10} /> Mais usado</span>}
 									<p className="pr-16 text-[15px] font-semibold text-[#1D1D1F]">{m.nome}</p>
 									<p className="mt-1 text-[13px] text-[#6E6E73]">{m.descricao ?? '—'}</p>
@@ -266,11 +266,11 @@ export function RelatoriosLista() {
 			</div>
 
 			{daEmpresaFiltrada.length === 0 ? (
-				<div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					Nenhum relatório da empresa ainda. Monte um com “Montar relatório”.
 				</div>
 			) : (
-				<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<table className="w-full border-collapse text-[14px]">
 						<thead><tr className="border-b border-[#E5E5EA] text-left text-[12px] font-semibold uppercase tracking-wide text-[#8E8E93]">
 							<th className="px-5 py-3">Nome</th><th className="px-5 py-3">Sobre</th><th className="px-5 py-3">Criado por</th><th className="px-5 py-3">Envio por e-mail</th><th className="px-5 py-3 text-right">Ações</th>

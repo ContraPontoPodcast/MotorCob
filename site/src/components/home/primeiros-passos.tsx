@@ -109,7 +109,7 @@ export function PrimeirosPassos() {
   const pct = total > 0 ? Math.round((feitos / total) * 100) : 0;
 
   return (
-    <section className="mb-6 rounded-2xl border border-[#E5E5EA] bg-white p-6 sm:p-8" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+    <section className="mb-6 rounded-2xl border border-[#E5E5EA] bg-white p-6 sm:p-8" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
       <div className="mb-1 flex items-center gap-2">
         <span className="mc-area-tag">Primeiros passos</span>
       </div>

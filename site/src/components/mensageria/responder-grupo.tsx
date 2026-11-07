@@ -7,7 +7,7 @@ import { num } from '@/lib/mensageria-produtos';
 import { ProcessoLongo } from '@/components/comuns/processo-longo';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 
-const SHADOW = '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)';
+const SHADOW = '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)';
 
 /** Painel de resposta em grupo: envia o mesmo texto para várias conversas
  *  abertas sem resposta nossa de um filtro de classe. Mostra o custo previsto

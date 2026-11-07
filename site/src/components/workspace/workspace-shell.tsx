@@ -50,7 +50,7 @@ function BlockedScreen({ title, subtitle, onSair }: { title: string; subtitle: s
 				<Shield className="mx-auto mb-5" style={{ color: 'var(--base-texto)' }} size={36} />
 				<h1 className="text-xl font-semibold" style={{ color: 'var(--base-texto)' }}>{title}</h1>
 				<p className="mt-2 text-sm text-[var(--base-texto-2)]">{subtitle}</p>
-				<button onClick={onSair} className="mt-6 rounded-full bg-[var(--base-texto)] px-6 py-3 text-[15px] font-medium text-white">Sair</button>
+				<button onClick={onSair} className="mt-6 rounded-full bg-[var(--base-texto)] px-6 py-3 text-[15px] font-medium text-[var(--base-cartao)]">Sair</button>
 			</div>
 		</div>
 	);

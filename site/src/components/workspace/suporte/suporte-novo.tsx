@@ -7,7 +7,7 @@ import { MOTIVOS_CHAMADO } from '@/lib/empresa-helpers';
 import { WorkspaceHeading } from '@/components/workspace/workspace-shell';
 import { CHAMADO_ASSISTENTE_KEY, type ChamadoAssistente } from '@/lib/assistente';
 
-const cardShadow = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
+const cardShadow = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 const MAX_SIZE = 10 * 1024 * 1024;
 const MAX_FILES = 5;
 const ACEITOS = ['.csv', '.txt', '.pdf', '.jpg', '.png', '.zip', '.xls', '.xlsx'];

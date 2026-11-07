@@ -92,7 +92,7 @@ export function InfoButton({ def }: { def: InfoDef }) {
 					id={labelId}
 					role="tooltip"
 					className="fixed z-[120] rounded-[14px] bg-white p-4 text-left"
-					style={{ left: pos.left, top: pos.top, width: pos.width, boxShadow: '0 0 0 1px #E5E5EA, 0 12px 40px -8px rgba(0,0,0,.2)' }}
+					style={{ left: pos.left, top: pos.top, width: pos.width, boxShadow: '0 0 0 1px var(--base-separator), 0 12px 40px -8px rgba(0,0,0,.2)' }}
 				>
 					<p className="text-[14px] font-semibold text-[#1D1D1F]">{def.titulo}</p>
 					<p className="mt-1.5 text-[13px] leading-relaxed text-[#1D1D1F]">{def.texto}</p>

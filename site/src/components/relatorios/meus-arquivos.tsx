@@ -32,11 +32,11 @@ export function MeusArquivos({ onBack }: { onBack: () => void }) {
 
 			{loading ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">Carregando…</p> :
 				lista.length === 0 ? (
-					<div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						Nenhuma exportação ainda. Exporte um relatório acima de 50.000 linhas e ele aparece aqui.
 					</div>
 				) : (
-					<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<table className="w-full border-collapse text-[14px]">
 							<thead><tr className="border-b border-[#E5E5EA] text-left text-[12px] font-semibold uppercase tracking-wide text-[#8E8E93]">
 								<th className="px-5 py-3">Nome</th><th className="px-5 py-3">Linhas</th><th className="px-5 py-3">Situação</th><th className="px-5 py-3">Expira em</th><th className="px-5 py-3 text-right">Ação</th>

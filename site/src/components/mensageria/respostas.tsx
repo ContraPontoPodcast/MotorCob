@@ -95,7 +95,7 @@ export function RespostasCanal() {
 	return (
 		<div className="space-y-4">
 			{/* Radar */}
-			<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div className="mb-3 flex items-center gap-2">
 					<Radar size={18} className="text-[#0A60D0]" />
 					<p className="text-[14px] text-[#1D1D1F]"><strong>Radar</strong> lê cada resposta e mostra a intenção do cliente. O pedido de negócio pesa mais que o palavrão: “me manda o boleto FDP” é CPC Negócio.</p>
@@ -124,7 +124,7 @@ export function RespostasCanal() {
 
 			<div className="grid gap-4 lg:grid-cols-[360px_1fr]">
 				{/* Lista de conversas */}
-				<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<div className="mb-3 space-y-2">
 						<div className="flex gap-2">
 							<select value={situacao} onChange={e => setSituacao(e.target.value)} className="h-8 flex-1 rounded-lg border border-[#D2D2D7] px-2 text-[13px] outline-none">
@@ -163,7 +163,7 @@ export function RespostasCanal() {
 				</div>
 
 				{/* Conversa aberta */}
-				<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					{!sel ? (
 						<p className="py-12 text-center text-[14px] text-[#8E8E93]">Selecione uma conversa à esquerda.</p>
 					) : (
@@ -244,7 +244,7 @@ function GrupoModal({ conversas, onClose, onDone }: { conversas: Row[]; onClose:
 
 	return (
 		<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={resumo ? onDone : onClose}>
-			<div className="w-full max-w-[440px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+			<div className="w-full max-w-[440px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 				<h2 className="text-[17px] font-semibold text-[#1D1D1F]">Responder a todos deste filtro</h2>
 				{!resumo ? (<>
 					<p className="mt-2 text-[14px] text-[#6E6E73]">Enviar para <strong>{limite}</strong> conversas abertas.</p>

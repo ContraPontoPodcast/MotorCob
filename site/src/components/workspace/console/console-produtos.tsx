@@ -67,7 +67,7 @@ function McInfo() {
 		<span className="relative inline-flex align-middle">
 			<button type="button" onClick={() => setOpen(o => !o)} aria-label="O que é MC no mínimo" aria-expanded={open} className="grid h-[16px] w-[16px] shrink-0 place-items-center rounded-full border border-[#D2D2D7] text-[10px] italic leading-none text-[#6E6E73] hover:bg-[#1D1D1F] hover:text-white"><Info size={9} /></button>
 			{open && (
-				<span role="tooltip" className="absolute left-1/2 top-6 z-[120] w-[260px] -translate-x-1/2 rounded-xl bg-white p-3 text-left text-[12.5px] leading-relaxed text-[#1D1D1F]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 12px 40px -8px rgba(0,0,0,.2)' }}>
+				<span role="tooltip" className="absolute left-1/2 top-6 z-[120] w-[260px] -translate-x-1/2 rounded-xl bg-white p-3 text-left text-[12.5px] leading-relaxed text-[#1D1D1F]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 12px 40px -8px rgba(0,0,0,.2)' }}>
 					<b>MC no mínimo</b> é a margem de contribuição no preço mínimo: quanto sobra entre o preço mínimo vendido e o custo previsto da rota. Abaixo de 20% o número fica âmbar; abaixo de zero, vermelho.
 				</span>
 			)}
@@ -182,7 +182,7 @@ export function ConsoleProdutosPage() {
 														<span className="group relative inline-flex">
 															<span className="inline-flex items-center gap-1 rounded-full bg-[#FFF3E8] px-2 py-0.5 text-[11px] font-semibold text-[#9a631b]">Incompleta</span>
 															{p.problemas && p.problemas.length > 0 && (
-																<span className="pointer-events-none absolute right-0 top-7 z-[110] w-[220px] rounded-xl bg-white p-3 text-left text-[12px] leading-relaxed text-[#1D1D1F] opacity-0 transition-opacity duration-150 group-hover:opacity-100" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 12px 40px -8px rgba(0,0,0,.2)' }}>
+																<span className="pointer-events-none absolute right-0 top-7 z-[110] w-[220px] rounded-xl bg-white p-3 text-left text-[12px] leading-relaxed text-[#1D1D1F] opacity-0 transition-opacity duration-150 group-hover:opacity-100" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 12px 40px -8px rgba(0,0,0,.2)' }}>
 																	<b className="block mb-1 text-[12px]">Falta na rota:</b>
 																	{p.problemas.map((pr, i) => <span key={i} className="block text-[#6E6E73]">· {pr}</span>)}
 																</span>
@@ -272,7 +272,7 @@ function ProdutoDrawer({ produto, novo, onClose, onSaved }: { produto: Produto |
 
 				{salvo ? (
 					<div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-						<div className="grid h-14 w-14 place-items-center rounded-full" style={{ backgroundColor: '#E8F8EC' }}><RouteIcon size={26} className="text-[#248A3D]" /></div>
+						<div className="grid h-14 w-14 place-items-center rounded-full" style={{ backgroundColor: 'var(--so-escuro-fundo-ok, #E8F8EC)' }}><RouteIcon size={26} className="text-[#248A3D]" /></div>
 						<div>
 							<p className="text-[16px] font-semibold text-[#1D1D1F]">Produto salvo</p>
 							<p className="mt-1 text-[14px] text-[#6E6E73]">Agora monte a rota de fornecedores para este produto.</p>

@@ -9,7 +9,7 @@
     "preview": "node scripts/servir.mjs",
     "lint": "oxlint -c .oxlintrc.json --threads=1 --format default",
     "typecheck": "react-router typegen && tsc --noEmit --singleThreaded",
-    "test": "node --experimental-strip-types --test fluxo/fluxo.test.ts scripts/cabecalhos.test.mjs scripts/dominios.test.mjs && node scripts/testar-componentes.mjs"
+    "test": "node --experimental-strip-types --test fluxo/fluxo.test.ts scripts/cabecalhos.test.mjs scripts/dominios.test.mjs scripts/cores-claras.test.mjs && node scripts/testar-componentes.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "5.3.0",
