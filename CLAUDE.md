@@ -143,6 +143,9 @@ de outra pessoa pela certificação e a rotação segue.
 - `motor/acordos.py`: situação do acordo a partir das parcelas e da data de baixa.
 - `motor/kpis.py`: KPIs das 5 frentes por safra/cluster, migração de estados, realizado por
   ação (régua × canal), benchmarks e sugestão de ordem de rotação.
+- `motor/recuperacao.py` (SQL 77): resultado de cada ação até o dinheiro, só agregado (dia da ação × canal × fase/etapa
+  × segmento × persona × volta × dia do ciclo: ações, contato, CPC, promessa, opt-out, custo, acordo, valor do acordo,
+  pagamento, valor pago) e contato por posição do número × dias seguidos no mesmo número.
 - `relatorio.py` + `relatorios/excel_comite.py`: relatório do comitê (CSVs + Excel com
   fórmulas: Resumo, Premissas, Real x Previsto, KPIs, Migração, Benchmarks). O Excel exige
   `openpyxl` (única dependência, fora do núcleo).
@@ -777,6 +780,20 @@ segmento · Usar segmento da empresa · Descrever segmentos e régua, este "em b
 `components/clusters/caminhos-segmentacao.tsx`); no formulário do segmento, "clientes hoje" ao vivo pela prévia
 (`lib/previa-segmentacao.ts`: monta a lista em uso da carteira na ordem com o segmento editado no lugar dele). Ordem de
 implantação: banco (SQL 76) antes do motor; motor sem o banco só alerta; site sem o banco esconde a estimativa.
+
+SQL 77 (Etapa 3 da IA na Orquestração, decisão do dono): recuperação por ação para otimizar "valor recuperado por real".
+`motor/recuperacao.py` (rodar_dia → `recuperacao.json`; `nuvem/sincronizar.publicar_recuperacao`) grava `recuperacao_dia`
+e `contato_posicao_dia` (só agregados; sem id, telefone ou CPF). **Regra de atribuição:** o acordo nasce no dia da rotina
+que o viu pela 1ª vez nas parcelas (`estado/acordos_vistos.csv`, local, gravado uma vez; o que já existia quando o
+controle começou é "legado" e segue a regra do comitê pela trilha) e vai para o ÚLTIMO TOQUE COM CPC nos 7 dias antes
+dessa rotina (sem CPC, o último toque; empate no dia: canal marcado na trilha, depois a ordem de rotação); sem toque
+(inclusive acordo que veio na carga) → regua `sem_acao`, canal vazio. Pagamento = parcela paga (promessa não é
+pagamento) e vai para a linha do acordo; pagamento que chega depois atualiza o dia da AÇÃO: a rotina recalcula e regrava
+180 dias (idempotente) e apaga o que passou de 760 dias. Ação e retorno → ação = as do `acoes_dia` (mesmo número de ações e
+CPC). volta/dia_ciclo vêm do passo exportado (`escolhas.csv` ganhou a coluna `passo`). RPCs (security definer;
+`pode_ver_empresa` + `pode('ver_painel')`; taxas só com ≥ 30): `recuperacao_por_acao(empresa, de, ate, credor, agrupar,
+so_canal, so_regua, so_cluster, so_persona)`, `contato_por_posicao`, `respostas_por_hora` (Mensageria, hora de Brasília);
+`limpar_recuperacao(dias)` só do servidor. Site: Resultados › Painel › "Recuperação por canal e persona".
 
 SQL 78 (etapa 4 da IA: créditos de IA, decisão do dono 07/11/2026; SPEC do Especialista §11): franquia de créditos por ciclo
 do faturamento da empresa (`cobranca_itens.franquia_padrao` = 100 no item `ia_creditos`; `precos_empresa.franquia`, nulo = a

@@ -43,6 +43,7 @@ from motor.cluster import carregar_atributos, carregar_regras, colunas_usadas
 from motor.entrada import (Entrada, aplicar_enriquecimento, carregar_entrada, carregar_escolhas, converter_base,
                            ingerir_ocorrencias, salvar_escolhas)
 from motor.acoes import agregar as agregar_acoes, sem_ocorrencia, totais as totais_acoes
+from motor.recuperacao import agregar as agregar_recuperacao, carregar_trilha, registrar_acordos
 from motor.estrategia import CANAIS_SEM_MENSAGEM, CANAIS_TEMPLATE, frase_da_acao, validar_estrategia
 from motor.persona import aprender, resumo as resumo_personas, sugerir
 from motor import propensao
@@ -940,6 +941,18 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
     if ocorrencias:
         alertas += sem_ocorrencia(acoes, _dia_util_anterior(hoje, regua))
     (saida / "acoes.json").write_text(json.dumps(acoes, ensure_ascii=False), encoding="utf-8")
+    # recuperação por ação (SQL 77): ação → contato → CPC → promessa → acordo → pagamento, só agregado; regrava a
+    # janela inteira (pagamento que chega depois atualiza o dia da ação). Erro aqui nunca segura a lista.
+    try:
+        trilha_toda = carregar_trilha(pasta_estado)
+        vistos = registrar_acordos(pasta_estado, parcelas, hoje, trilha_toda, regua)   # dia em que cada acordo apareceu
+        recuperacao = agregar_recuperacao(escolhas_hist, eventos, parcelas, trilha_toda, regua, hoje, custos,
+                                          cluster_de={k: e.cluster_atual for k, e in estados.items()}, vistos=vistos)
+        (saida / "recuperacao.json").write_text(json.dumps(recuperacao, ensure_ascii=False), encoding="utf-8")
+    except Exception as ex:   # noqa: BLE001
+        recuperacao = None
+        alertas.append(f"RECUPERAÇÃO: resultado por ação não calculado hoje ({ex.__class__.__name__}: "
+                       f"{str(ex)[:120]}); a lista saiu normalmente")
     # bloco Contato da persona: acionados (ação exportada ou ocorrência até ontem), localizados (Hot ou
     # contato certificado) e ações até o 1º CPC; só a contagem sai daqui
     acionados = {idc for (d_, idc), ls_ in escolhas_hist.items()
@@ -1062,7 +1075,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
                       if l["id_cliente"] in pessoa_de and not l["condicao"] and l["estado"] in ESTADOS_MASSIVOS},
         # quem este credor queria acionar hoje e ficou de fora: na próxima, é a vez dele
         "esperando": {pessoa_de[i]: hoje for i in adiados if i in pessoa_de}}
-    return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "compartilhar": compartilhar,
+    return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "recuperacao": recuperacao,
+            "compartilhar": compartilhar,
             "enquadramento": enquadramento, "previa": previa_linhas, "previa_fora": previa_fora,
             "personas": personas, "sugestoes": sugestoes,
             "propensao": prop["resumo"],

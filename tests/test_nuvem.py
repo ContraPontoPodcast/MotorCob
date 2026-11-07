@@ -83,7 +83,7 @@ class SupabaseFalso:
             if campo in ("select", "order", "limit", "on_conflict"):
                 continue
             op, _, valor = cond.partition(".")
-            assert op in ("eq", "neq", "gte", "in"), op
+            assert op in ("eq", "neq", "gte", "lt", "in"), op
             if op == "neq":
                 linhas = [l for l in linhas if json.dumps(l.get(campo)).strip('"') != valor]
                 continue
@@ -93,6 +93,9 @@ class SupabaseFalso:
                 continue
             if op == "gte":
                 linhas = [l for l in linhas if str(l.get(campo)) >= valor]
+                continue
+            if op == "lt":   # retenção da recuperação (SQL 77)
+                linhas = [l for l in linhas if str(l.get(campo)) < valor]
                 continue
             linhas = [l for l in linhas if json.dumps(l.get(campo)).strip('"') == valor]
         return linhas
