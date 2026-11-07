@@ -4,7 +4,8 @@ TAG = SAFRA-CLUSTER-ESTADO-CANAL-CICLO    ex.: S260801-A1-CPB-WA-T2
 
 - SAFRA   S+AAMMDD da entrada na carteira. Imutável.
 - CLUSTER ticket (A/M/B) x atraso (1/2/3). O de origem é imutável e fica guardado;
-          a TAG mostra o atual, revisado no fechamento mensal.
+          a TAG mostra o atual, revisado no fechamento mensal (segmento com condição que muda
+          com o tempo, como dias de atraso: todo dia; ver reavaliar_diario).
 - ESTADO  LOC · CPA · CPB · NCP · PRE · QBR · COL · LIQ · BLQ — um por vez.
 - CANAL   WA · RC · AV · DC · SM · EM · ND — canal da última localização.
 - CICLO   L0–L8 localização · T1–T3 tentativas · G1… giro · D-3/D0 preventivo · D1–D5 quebra.
@@ -186,6 +187,8 @@ def processar_dia(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente
             antes, est.cluster_revisado, est.cluster_versao = est.tag, mes, regua.versao_clusters
             est.cluster_atual = regua.cluster_de(c, dia)
             trilha.marcar(dia, est, antes, motivo, "Planejamento")
+        else:
+            _reavaliar_no_dia(est, c, dia, regua, trilha)
 
         rc = regua.para(est.cluster_atual)  # estratégia do cluster do cliente
         novo = (atualizados or {}).get(idc)
@@ -228,6 +231,65 @@ def revisar_clusters_alterados(estados: dict[str, EstadoCliente], clientes: dict
         est.cluster_revisado, est.cluster_versao = f"{dia:%Y-%m}", regua.versao_clusters
         est.cluster_atual = regua.cluster_de(c, dia)
         trilha.marcar(dia, est, antes, "regras de cluster alteradas", "Planejamento")
+    return trilha.eventos
+
+
+MOTIVO_DIARIO = "reavaliação diária do segmento"
+
+
+def reavaliar_diario(est: EstadoCliente, cliente: Cliente, dia: date, regua: Regua) -> str | None:
+    """Segmento novo do cliente hoje por um campo que muda com o tempo (dias de atraso, idade, persona que usa um
+    deles); None = fica onde está. Só o que o TEMPO muda entra no dia; o resto espera a revisão mensal:
+
+    - o cliente está num segmento diário: vale a 1ª regra que bate hoje (ou o cluster padrão, se nenhuma bate);
+    - está num segmento mensal (ou em Demais): só sai se um segmento diário ACIMA dele (na ordem) passou a bater,
+      e só para esse segmento. Se o mensal deixou de bater por outro motivo (saldo, coluna da carga), espera o mês.
+    Sempre a mesma ordem da empresa ("fica no 1º segmento em que se encaixa"): o resultado é o que
+    `regua.cluster_de` daria hoje, nunca um segmento abaixo do 1º que bate."""
+    diarios = regua.segmentos_diarios
+    if not diarios or est.estado in ("BLQ", "LIQ"):
+        return None
+    from .cluster import classificar
+    regras = list(regua.clusters)
+    pos = {r.codigo: i for i, r in enumerate(regras)}
+    atual = pos.get(est.cluster_atual)              # None = Demais (cluster padrão ticket x atraso)
+    no_diario = atual is not None and est.cluster_atual in diarios
+    if not no_diario and not any(r.codigo in diarios for r in regras[:atual]):
+        return None                                 # nenhum segmento diário pode tirá-lo de onde está
+    novo = classificar(regras, cliente, dia)
+    if no_diario:
+        cod = novo.codigo if novo else regua.cluster(cliente.saldo, cliente.atraso_em(dia))
+    elif novo is not None and novo.codigo in diarios and (atual is None or pos[novo.codigo] < atual):
+        cod = novo.codigo
+    else:
+        return None
+    return cod if cod != est.cluster_atual else None
+
+
+def _reavaliar_no_dia(est, cliente, dia, regua, trilha) -> bool:
+    """Troca o segmento pelo `reavaliar_diario`. O resto do estado (momento, ciclo, Hot, giro, dia da esteira) é do
+    cliente e continua: a régua do segmento novo vale a partir do mesmo dia (ver CLAUDE.md, Reavaliação diária)."""
+    novo = reavaliar_diario(est, cliente, dia, regua)
+    if novo is None:
+        return False
+    antes = est.tag
+    est.cluster_atual = novo
+    trilha.marcar(dia, est, antes, MOTIVO_DIARIO, "Automático")
+    return True
+
+
+def reavaliar_segmentos_diarios(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente], dia: date,
+                                regua: Regua) -> list[dict]:
+    """A rotina processa até ontem; esta revisão põe cada cliente no segmento de HOJE antes da lista sair
+    (quem passou de 30 dias de atraso hoje já sai na régua do segmento novo hoje). Idempotente: rodar de novo no
+    mesmo dia não muda nada."""
+    trilha = Trilha()
+    if not regua.segmentos_diarios:
+        return trilha.eventos
+    for idc, est in estados.items():
+        c = clientes.get(idc)
+        if c is not None:
+            _reavaliar_no_dia(est, c, dia, regua, trilha)
     return trilha.eventos
 
 
@@ -379,7 +441,7 @@ def reativar_apos_enriquecimento(est: EstadoCliente, dia: date, trilha: Trilha):
 
 
 __all__ = ["Cliente", "EstadoCliente", "Trilha", "iniciar", "processar_dia", "proximo_canal",
-           "reativar_apos_enriquecimento", "CANAIS_VOZ"]
+           "reativar_apos_enriquecimento", "reavaliar_diario", "reavaliar_segmentos_diarios", "CANAIS_VOZ"]
 
 
 def aplicar_pendentes(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente], tardios: list[Evento],

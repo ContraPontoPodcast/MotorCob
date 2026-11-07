@@ -485,6 +485,15 @@ def gerar_fila(estados: dict[str, EstadoCliente], clientes: dict[str, Cliente],
         eventos_et = set()
         if etapas_estado is not None:
             st_et = etapas_estado.setdefault(idc, {"etapas": {}})
+            # mudou de estratégia (segmento novo: reavaliação diária, revisão mensal, regra alterada): as etapas
+            # próprias da estratégia antiga não valem na nova; o cliente começa as da nova do zero (o momento do
+            # motor, o histórico de eventos e as travas por cliente continuam). Estado sem a marca (antes desta
+            # versão): só grava a marca, sem zerar ninguém.
+            eid_et = regua.estrategia_de(est.cluster_atual)
+            if "estrategia" in st_et and st_et["estrategia"] != eid_et:
+                st_et = etapas_estado[idc] = {"etapas": {}, **{k: st_et[k] for k in ("estado_motor", "eventos_ate")
+                                                                if k in st_et}}
+            st_et["estrategia"] = eid_et
             eventos_et = ET.eventos_cob(st_et.get("estado_motor"), est.estado)
             st_et["estado_motor"] = est.estado
             if rc.dados.get("etapas"):        # promessa / retorno agendado da IA ou do operador desde a última rodada

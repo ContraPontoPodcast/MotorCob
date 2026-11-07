@@ -83,7 +83,10 @@ class SupabaseFalso:
             if campo in ("select", "order", "limit", "on_conflict"):
                 continue
             op, _, valor = cond.partition(".")
-            assert op in ("eq", "gte", "in"), op
+            assert op in ("eq", "neq", "gte", "in"), op
+            if op == "neq":
+                linhas = [l for l in linhas if json.dumps(l.get(campo)).strip('"') != valor]
+                continue
             if op == "in":
                 ok = valor.strip("()").split(",")
                 linhas = [l for l in linhas if str(l.get(campo)) in ok]

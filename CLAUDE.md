@@ -29,7 +29,9 @@ comitê + commit.** Este texto e o JSON têm de dizer a mesma coisa.
   2 = 91–180, 3 = > 180. Ticket = saldo atualizado; cliente com vários contratos: soma dos
   saldos e o maior atraso. O cluster de origem é imutável e fica guardado; **a TAG mostra
   o cluster atual**, revisado no fechamento mensal (o playbook diz as duas coisas em
-  slides diferentes; esta é a leitura adotada).
+  slides diferentes; esta é a leitura adotada). Exceção (decisão do dono, 07/11/2026): segmento
+  da empresa com condição que muda com o tempo (dias de atraso…) é reavaliado todo dia (ver
+  "Reavaliação diária" em `motor/cluster.py`).
 - ESTADOS: LOC · CPA · CPB · NCP · PRE · QBR · COL · LIQ · **BLQ** (bloqueado: opt-out
   geral, óbito, judicial, reclamação — fora de todas as réguas). Um estado por vez.
 - CANAIS: WA · RC · **AV** (agente virtual) · DC · SM · **EM** (e-mail) · ND.
@@ -193,6 +195,35 @@ de outra pessoa pela certificação e a rotação segue.
   (`Regua.com_clusters`). Mudou a regra → `cluster_versao` muda → todos revisam o cluster
   atual na rotina seguinte; rodada repetida no mesmo dia ("Reenquadrar agora") revisa já
   (`marcacao.revisar_clusters_alterados`). Regra inválida vira alerta, nunca derruba a rotina.
+  **Reavaliação diária (SQL 76, decisão do dono 07/11/2026):** segmento cuja condição usa um campo que muda sozinho
+  com o tempo (`cluster.CAMPOS_DIARIOS` = dias_atraso, idade; e "persona" quando alguma persona da carteira usa um
+  deles; `cluster.segmentos_diarios` → `Regua.segmentos_diarios`) é reavaliado TODA rotina (`marcacao.reavaliar_diario`:
+  nos dias pendentes do `processar_dia` e em `reavaliar_segmentos_diarios(hoje)` antes da lista, então quem passa de
+  30 dias hoje já sai hoje na régua do segmento novo; trilha "reavaliação diária do segmento", quem marcou
+  "Automático"; idempotente). Ordem sempre a da empresa: no segmento diário, vale a 1ª regra que bate hoje (ou o
+  cluster padrão); num segmento mensal (ou em Demais), o cliente só sai para um segmento diário ACIMA dele que passou a
+  bater (mensal que deixou de bater por saldo/coluna espera o mês). Os outros segmentos e o cluster padrão seguem
+  mensais; `cluster_revisado`/`cluster_versao` não mudam. **Mudou de segmento (diário, mensal ou regra alterada):** só a
+  régua troca, no mesmo dia: momento (LOC/CPA/CPB/NCP/PRE/QBR), ciclo, canal, tentativas, Hot, candidatos, giro
+  (`giro_inicio`; o nº do ciclo é recalculado com o `ciclo_dias`/`max_ciclos` da nova, e passar do máximo pausa o giro
+  para re-enriquecimento), `inicio_esteira` (o Dia N continua; localização mais curta na nova leva ao Não CPC na
+  rotina seguinte) e acordo são do cliente e continuam; as etapas próprias da estratégia antiga são zeradas
+  (`etapas.json` guarda `estrategia`; a nova começa do dia 0 dela; estado sem a marca só ganha a marca). Pacote de
+  enriquecimento não é pedido de novo. Cobrança e contadores: a Orquestração é cobrada por CPF distinto no ciclo
+  (SQL 69), não por segmento, então trocar de segmento não muda a fatura; ações e KPIs ficam com o segmento do dia
+  da ação (escolhas.csv/acoes_dia), o Real x Previsto com a régua do começo do dia, e o resumo/enquadramento com o de hoje.
+  **Prévia (SQL 76):** a rotina grava `atributos_previa` (`motor/previa.py` → `nuvem.publicar_previa`; carteira
+  inteira com a data de hoje e depois apaga as outras datas): por cliente em cobrança (na carga, fora BLQ/LIQ),
+  id pseudônimo, segmento de hoje (null = Demais), saldo, dias de atraso NO DIA, contratos e só os atributos que valem
+  em condição sem identificar ninguém (`previa.CALCULADOS` + colunas da carga que passam em `colunas_publicaveis`: nome
+  de dado pessoal nunca; texto com até 50 categorias; número sem cara de código). O site não lê a tabela (RLS sem
+  política); `previa_segmentacao(empresa, credor, proposta)` (security definer: `pode('editar_orquestracao')` ou equipe
+  que vê a empresa; nada para anon) avalia `{"segmentos": [{codigo, nome, ref, condicoes}]}` NA ORDEM com a mesma regra
+  de `condicao_ok` (`previa_condicao_sql`, `previa_numero` = `cluster.numero`) e devolve só contagens: por segmento (1º
+  que bate e quantos batem), Demais, sobreposições, "de onde vêm" (hoje → proposto), campos sem dado e a data-base.
+  Paridade com `cluster.classificar` em `supabase/testes/testar_segmentos_previa.py`. Diferenças conhecidas:
+  `casefold` × `lower` ICU ("ß"), número com expoente de 3+ dígitos/`inf`/`1_000` (motor lê, prévia não). Banco sem o
+  SQL 76: a rotina segue e alerta.
   Números das condições (segmento, persona do usuário, estágio) em pt-BR: o site (`site/src/lib/condicoes.ts`,
   campos em `components/comuns/campos-condicao.tsx`) lê "1.500,50", "1500,5", "1500.50" e "1.500" (= 1500) e
   grava NÚMERO (JSON) nas condições numéricas; texto salvo antes segue com o sentido que o motor dava
@@ -733,6 +764,13 @@ carteira, Demais clientes ou padrão; senão só Trocar); `criar_estrategia_segm
 recebe ação, etapa sem régua é ignorada; os passos Estágios, Régua e Revisar mostram a MESMA lista (nomes, ordem, ligado) e
 salvar nunca grava `passos: {}` numa fase que não tinha (`porFaseComPassos`). "Montar esteira pelas personas": por estágio,
 só em estágio com dias, aplica no editor (Salvar grava).
+
+SQL 76 (etapa 2 da IA na Orquestração, aprovada pelo dono): reavaliação diária dos segmentos com dias de atraso (motor) e
+prévia de cobertura `previa_segmentacao` (ver `motor/cluster.py` acima). Site, Segmentação: três cartões iguais (Novo
+segmento · Usar segmento da empresa · Descrever segmentos e régua, este "em breve" até a etapa 5;
+`components/clusters/caminhos-segmentacao.tsx`); no formulário do segmento, "clientes hoje" ao vivo pela prévia
+(`lib/previa-segmentacao.ts`: monta a lista em uso da carteira na ordem com o segmento editado no lugar dele). Ordem de
+implantação: banco (SQL 76) antes do motor; motor sem o banco só alerta; site sem o banco esconde a estimativa.
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.

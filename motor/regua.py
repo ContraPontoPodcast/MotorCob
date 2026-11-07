@@ -24,6 +24,8 @@ class Regua:
     dados: dict
     clusters: tuple = field(default=(), compare=False)   # regras de cluster da empresa (motor/cluster.py)
     versao_clusters: str = ""
+    # códigos dos segmentos reavaliados todo dia (condição com campo que muda com o tempo; cluster.segmentos_diarios)
+    segmentos_diarios: frozenset = field(default=frozenset(), compare=False)
     estrategias: dict = field(default_factory=dict, compare=False)  # id -> partes do playbook (estrategia.py)
     estrategia_padrao: int | None = None                           # da empresa, p/ quem não tem estratégia
     persona: object = field(default=None, compare=False)           # ModeloPersona (motor/persona.py)
@@ -66,8 +68,9 @@ class Regua:
 
     def com_clusters(self, regras, estrategias: dict | None = None, padrao: int | None = None,
                      canais: dict | None = None) -> "Regua":
-        from .cluster import versao
+        from .cluster import segmentos_diarios, versao
         return replace(self, clusters=tuple(regras), versao_clusters=versao(list(regras)),
+                       segmentos_diarios=segmentos_diarios(list(regras)),
                        estrategias=dict(estrategias or {}), estrategia_padrao=padrao,
                        canais_cfg=dict(canais or {}), _cache={})
 
