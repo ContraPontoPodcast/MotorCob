@@ -6,6 +6,8 @@ import { friendlyError, supabase, type Cluster, type Condicao, type Row } from '
 import { ErrorDetail } from '@/components/error-detail';
 import { CampoFaixa, CampoLista, CampoNumero } from '@/components/comuns/campos-condicao';
 import { normalizarCondicoes, trocarOperador } from '@/lib/condicoes';
+import type { SegmentoParaPrevia } from '@/lib/previa-segmentacao';
+import { PreviaClientes } from '@/components/clusters/previa-clientes';
 
 export type Coluna = { nome: string; tipo: 'numero' | 'texto' };
 const calculados: Coluna[] = [
@@ -53,7 +55,8 @@ function opsFor(tipo: 'numero' | 'texto') {
   return ops.filter(o => tipo === 'numero' ? o.num : o.txt).sort((a, b) => (tipo === 'numero' ? 0 : 0));
 }
 
-export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculoCredor, usadoEmCarteiras, onClose, onSaved }: { cluster: Cluster | null; colunas: Coluna[]; maxOrdem: number; credorId?: string; criarVinculoCredor?: boolean; usadoEmCarteiras?: number; onClose: () => void; onSaved: (id?: string) => void }) {
+/** previaEmUso: segmentos em uso na carteira (na Orquestração) para o "clientes hoje" do formulário (SQL 76). */
+export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculoCredor, usadoEmCarteiras, previaEmUso, onClose, onSaved }: { cluster: Cluster | null; colunas: Coluna[]; maxOrdem: number; credorId?: string; criarVinculoCredor?: boolean; usadoEmCarteiras?: number; previaEmUso?: SegmentoParaPrevia[]; onClose: () => void; onSaved: (id?: string) => void }) {
   const { perfil, empresa } = useMotorAuth();
   const [codigo, setCodigo] = useState(cluster?.codigo ?? '');
   const [nome, setNome] = useState(cluster?.nome ?? '');
@@ -134,6 +137,8 @@ export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculo
   }
 
   const semColunas = colunas.length === 0;
+  // condições como o banco grava (números JSON) para a prévia; incompleta = sem estimativa ainda
+  const normPrevia = normalizarCondicoes(condicoes, campo => fieldTipo(campo, colunas));
 
   async function abrirExcluir() {
     if (!supabase || !cluster) return;
@@ -210,6 +215,12 @@ export function ClusterForm({ cluster, colunas, maxOrdem, credorId, criarVinculo
             </div>;
           })}</div>
         </div>
+
+        {previaEmUso && credorId && empresa && (
+          <PreviaClientes empresaId={empresa.id} credorId={credorId} emUso={previaEmUso}
+            editado={{ id: cluster?.id ?? null, codigo: codigo.toUpperCase().trim() || 'NOVO', nome: nome.trim(), ordem: cluster ? Number(cluster.ordem) || 0 : maxOrdem + 10 }}
+            condicoes={'erro' in normPrevia ? null : normPrevia.condicoes as Condicao[]} erroCondicoes={'erro' in normPrevia ? normPrevia.erro : null}/>
+        )}
 
         <div className="rounded-lg border border-[#e2eaec] p-4">
           <p className="mb-3 text-xs font-semibold">O que muda</p>

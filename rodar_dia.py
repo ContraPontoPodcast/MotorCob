@@ -52,7 +52,7 @@ from motor import voz as VOZ
 from motor.fila import MOTIVOS, categoria_do_motivo, gerar_fila, lista_enriquecimento, previsao
 from motor.ingestao import carregar_carteira, carregar_clientes, carregar_layouts, carregar_parcelas, ingerir_pasta
 from motor.marcacao import (aplicar_pendentes, ESTADOS_MASSIVOS, EstadoCliente, processar_dia, registrar_entradas,
-                            revisar_clusters_alterados)
+                            reavaliar_segmentos_diarios, revisar_clusters_alterados)
 from motor.rastreio import carregar_acoes, ler_log_portal
 from motor.regua import carregar_regua
 
@@ -615,9 +615,10 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
             publico[k] = p.id if p else None
             clientes[k] = replace(c, atributos={**(c.atributos or {}), "persona": p.nome if p else "Sem persona"})
     nome_persona = {p.id: p.nome for p in pers_usuario}
-    from motor.cluster import versao_com_personas
+    from motor.cluster import segmentos_diarios, versao_com_personas
     regua = replace(regua, versao_clusters=versao_com_personas(regua.versao_clusters, list(regua.clusters),
-                                                               pers_usuario))
+                                                               pers_usuario),
+                    segmentos_diarios=segmentos_diarios(list(regua.clusters), pers_usuario))
     por_dia = defaultdict(list)
     for e in eventos:
         por_dia[e.data].append(e)
@@ -661,6 +662,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
     # segmento/persona mudou depois da rotina de hoje ("Reenquadrar agora"): o dia já foi processado, então a
     # revisão do processar_dia não roda; revisa aqui para a lista de hoje já sair com o segmento novo
     trilha += revisar_clusters_alterados(estados, clientes, hoje, regua)
+    # segmento com condição que muda com o tempo (dias de atraso…): o cliente já sai hoje no segmento de hoje
+    trilha += reavaliar_segmentos_diarios(estados, clientes, hoje, regua)
     salvar_estado(pasta_estado, estados, ultimo)
     _salvar(pasta_estado / "trilha.csv", trilha, anexar=True)
     pasta_estado.mkdir(parents=True, exist_ok=True)
@@ -1055,6 +1058,15 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
             "faixa_propensao": (prop["clientes"][k]["faixa"] or None) if k in prop["clientes"] else None,
             "enriq_enviado": enviados_bureau.get(k),
             "enriq_retorno": ultimo_retorno[k].isoformat() if k in ultimo_retorno else None}
+    # retrato por cliente para a prévia de segmentação do site (SQL 76): só campos de condição, sem dado pessoal;
+    # um erro aqui nunca segura a lista
+    try:
+        from motor import previa as PREVIA
+        previa_linhas, previa_fora = PREVIA.linhas(estados, clientes, hoje, regua, ativos)
+    except Exception as ex:   # noqa: BLE001
+        previa_linhas, previa_fora = None, []
+        alertas.append(f"PRÉVIA DE SEGMENTAÇÃO: retrato não montado hoje ({ex.__class__.__name__}); "
+                       "a contagem do site fica com a rotina anterior")
     compartilhar = {
         "hot": {(pessoa_de[k], e.contato_localizador) for k, e in estados.items()
                 if e.contato_localizador and k in pessoa_de},
@@ -1065,7 +1077,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
         "esperando": {pessoa_de[i]: hoje for i in adiados if i in pessoa_de}}
     return {"estados": estados, "clientes": clientes, "fila": fila, "acoes": acoes, "recuperacao": recuperacao,
             "compartilhar": compartilhar,
-            "enquadramento": enquadramento, "personas": personas, "sugestoes": sugestoes,
+            "enquadramento": enquadramento, "previa": previa_linhas, "previa_fora": previa_fora,
+            "personas": personas, "sugestoes": sugestoes,
             "propensao": prop["resumo"],
             "caracteristicas_persona": modelo.colunas,
             "motivos": motivos, "proximos": proximos,

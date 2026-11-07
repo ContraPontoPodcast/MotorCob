@@ -12,6 +12,10 @@ Campos calculados (valem para qualquer empresa):
   dias_atraso    atraso no dia da revisão
   qtd_contratos  número de contratos do cliente
 As colunas da base bruta são lidas do contrato de maior saldo do cliente.
+
+Reavaliação diária (decisão do dono, 07/11/2026): segmento cuja condição usa um campo que muda sozinho com o tempo
+(`CAMPOS_DIARIOS`: dias de atraso, idade; e "persona" quando alguma persona da carteira usa um deles) é reavaliado
+TODA rotina, não só no fechamento do mês. Ver `segmentos_diarios` e `marcacao.reavaliar_diario`.
 """
 import csv
 import hashlib
@@ -26,6 +30,8 @@ OPERADORES = ("=", "!=", ">", ">=", "<", "<=", "entre", "em", "nao_em", "contem"
 CANAIS = ("whatsapp", "rcs", "agente_voz", "discador", "sms", "email")
 CANAIS_VOZ = ("agente_voz", "discador")
 CODIGO = re.compile(r"^[A-Z0-9]{1,4}$")
+# campos que mudam sozinhos com o tempo: o segmento que usa um deles é reavaliado todo dia
+CAMPOS_DIARIOS = ("dias_atraso", "idade")
 
 
 @dataclass(frozen=True)
@@ -218,6 +224,21 @@ def versao_com_personas(versao_regras: str, regras: list[RegraCluster], personas
         return versao_regras
     pers = json.dumps([(p.id, p.nome, p.condicoes) for p in personas], default=list, ensure_ascii=False)
     return versao_regras + "-" + hashlib.sha256(pers.encode()).hexdigest()[:8]
+
+
+def campos_diarios(personas: list = ()) -> set[str]:
+    """Campos que mudam sozinhos com o tempo. "persona" entra quando alguma persona da carteira usa um deles (a
+    persona do cliente pode mudar no dia em que ele passa da faixa)."""
+    diarios = set(CAMPOS_DIARIOS)
+    if any(c[0] in diarios for p in personas for c in p.condicoes):
+        diarios.add("persona")
+    return diarios
+
+
+def segmentos_diarios(regras: list[RegraCluster], personas: list = ()) -> frozenset[str]:
+    """Códigos dos segmentos reavaliados todo dia: alguma condição usa um campo que muda com o tempo."""
+    diarios = campos_diarios(personas)
+    return frozenset(r.codigo for r in regras if any(c[0] in diarios for c in r.condicoes))
 
 
 def colunas_usadas(regras: list[RegraCluster]) -> set[str]:

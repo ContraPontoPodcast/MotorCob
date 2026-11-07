@@ -494,6 +494,30 @@ ALERTA_SQL49 = ("BANCO: rode o SQL 49 (supabase/migrations/20261216000001_aborda
                 "Contato das personas")
 
 
+ALERTA_SQL76 = ("BANCO: rode o SQL 76 (supabase/migrations/20270112000001_segmentos_diarios_previa.sql) para o site "
+                "estimar quantos clientes caem em cada segmento ao editar as condições")
+
+
+def publicar_previa(sb: Supabase, empresa_id, cid, data, r) -> str | None:
+    """Retrato por cliente para a prévia de segmentação (SQL 76): grava a carteira inteira com a data de hoje e
+    só depois apaga as linhas de outras datas (quem saiu da carga), então a prévia nunca vê a carteira pela metade.
+    Sem carteira (banco antigo) ou sem retrato hoje: não mexe. Devolve um alerta ou None; nunca derruba a rotina."""
+    linhas = r.get("previa")
+    if cid is None or linhas is None:
+        return None
+    base = {"empresa_id": empresa_id, "credor_id": cid, "data_base": data.isoformat()}
+    try:
+        sb.inserir("atributos_previa", [{**base, **l} for l in linhas],
+                   conflito="empresa_id,credor_id,id_cliente")
+        sb.apagar("atributos_previa", {"empresa_id": f"eq.{empresa_id}", "credor_id": f"eq.{cid}",
+                                       "data_base": f"neq.{data.isoformat()}"})
+    except ErroSupabase as ex:
+        if "atributos_previa" in str(ex):     # banco sem o SQL 76
+            return ALERTA_SQL76
+        return f"PRÉVIA DE SEGMENTAÇÃO: retrato não gravado ({str(ex)[:120]})"
+    return None
+
+
 def publicar_personas(sb: Supabase, empresa_id, r, cid=None) -> int:
     """Personas do dia (substitui as anteriores) e sugestões novas; devolve quantas sugestões novas."""
     ts = agora()
@@ -1083,6 +1107,9 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         elif i > 2:
             r["alertas"].append("BANCO: rode supabase/atualizar_producao_2026-10.sql para ver onde cada cliente "
                                 "se enquadrou (esteira, persona, ação de hoje e o motivo)")
+        aviso_previa = publicar_previa(sb, eid, cid, data, r)
+        if aviso_previa:
+            r["alertas"].append(aviso_previa)
         n_trilha = publicar_trilha(sb, pasta / "estado", eid, cid)
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
         fila = _linhas_fila(r["fila"], data, eid, cid)
