@@ -162,12 +162,19 @@ export function lerCsv(bytes: Uint8Array, maxLinhas = 20): LeituraArquivo {
 	return { cabecalho, linhas: linhasTxt.slice(1, maxLinhas + 1).map(l => partirCsv(l, sep)), separador: sep === '\t' ? 'tab' : sep };
 }
 
+const ENTIDADES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+/** Entidades do XML numa passada só (nunca decodifica duas vezes). */
+export function decodificarXml(t: string): string {
+	return t.replace(/&(amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);/g, (_, e: string) =>
+		e[0] === '#' ? String.fromCodePoint(e[1] === 'x' ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ENTIDADES[e]);
+}
+
 /** Lê a 1ª aba de um .xlsx (cabeçalho + primeiras linhas) sem biblioteca de planilha. */
 export function lerXlsx(bytes: Uint8Array, maxLinhas = 20): LeituraArquivo {
 	const zip = unzipSync(bytes, { filter: f => f.name === 'xl/sharedStrings.xml' || /^xl\/worksheets\/sheet1\.xml$/.test(f.name) || f.name === 'xl/workbook.xml' });
 	const strings: string[] = [];
 	const ss = zip['xl/sharedStrings.xml'] ? strFromU8(zip['xl/sharedStrings.xml']) : '';
-	for (const si of ss.match(/<si>[\s\S]*?<\/si>/g) ?? []) strings.push((si.match(/<t[^>]*>([\s\S]*?)<\/t>/g) ?? []).map(t => t.replace(/<[^>]+>/g, '')).join('').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'"));
+	for (const si of ss.match(/<si>[\s\S]*?<\/si>/g) ?? []) strings.push(Array.from(si.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g), m => decodificarXml(m[1])).join(''));
 	const sheet = zip['xl/worksheets/sheet1.xml'] ? strFromU8(zip['xl/worksheets/sheet1.xml']) : '';
 	const linhas: string[][] = [];
 	const col = (ref: string) => { const l = ref.replace(/\d+/g, ''); let n = 0; for (const ch of l) n = n * 26 + (ch.charCodeAt(0) - 64); return n - 1; };
@@ -177,7 +184,7 @@ export function lerXlsx(bytes: Uint8Array, maxLinhas = 20): LeituraArquivo {
 		for (const c of row.match(/<c [^>]*?(\/>|>[\s\S]*?<\/c>)/g) ?? []) {
 			const ref = /r="([A-Z]+\d+)"/.exec(c)?.[1] ?? '';
 			const tipo = /t="([a-zA-Z]+)"/.exec(c)?.[1];
-			const v = /<v>([\s\S]*?)<\/v>/.exec(c)?.[1] ?? (/<t[^>]*>([\s\S]*?)<\/t>/.exec(c)?.[1] ?? '');
+			const v = decodificarXml(/<v>([\s\S]*?)<\/v>/.exec(c)?.[1] ?? (/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/.exec(c)?.[1] ?? ''));
 			vals[ref ? col(ref) : vals.length] = tipo === 's' ? (strings[Number(v)] ?? '') : v;
 		}
 		linhas.push(Array.from(vals, x => (x ?? '').trim()));

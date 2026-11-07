@@ -9,7 +9,7 @@ import {
 	CANAIS_ASSISTENTE, FERIADOS, FRASES_PADRAO_SMS, checklist, heroi, passoInicial, passosFeitos, podeMotorcx, proximaLista,
 	quemEnviaAtual, resumoCarga, textoPrevia, type Situacao,
 } from '@/lib/implantacao';
-import { combinar, exemplo, faltam, lerCsv, lerXlsx, mensagemFaltam, paraSalvar, reconhecer, validar } from '@/lib/mapeamento-carga';
+import { combinar, decodificarXml, exemplo, faltam, lerCsv, lerXlsx, mensagemFaltam, paraSalvar, reconhecer, validar } from '@/lib/mapeamento-carga';
 import { quemEnviaTela, linhasEmpresa, CANAIS_CONFIGURAVEIS, type CanalTela } from '@/lib/canais-config';
 import { filtrarAtalhos, ATALHOS } from '@/components/workspace/workspace-command-palette';
 import { ABAS } from '@/lib/abas';
@@ -183,6 +183,7 @@ test('lê CSV (; e Latin-1) e XLSX no navegador, sem biblioteca de planilha', ()
 		'xl/sharedStrings.xml': strToU8('<sst><si><t>COD</t></si><si><t>SALDO</t></si><si><t>A1</t></si></sst>'),
 		'xl/worksheets/sheet1.xml': strToU8('<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row><row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2"><v>10.5</v></c></row></sheetData></worksheet>'),
 	});
+	assert.equal(decodificarXml('A &amp;lt; B &amp;amp; C &#233;'), 'A &lt; B &amp; C é');   // uma passada só
 	const x = lerXlsx(xlsx);
 	assert.deepEqual(x.cabecalho, ['COD', 'SALDO']);
 	assert.deepEqual(x.linhas[0], ['A1', '10.5']);
