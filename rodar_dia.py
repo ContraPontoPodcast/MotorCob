@@ -154,7 +154,7 @@ def estagio_da_linha(l: dict) -> str:
     return r if r in {e[0] for e in ESTAGIOS} else (r or "outros")
 
 
-def exportar_por_estrategia(pasta: Path, fila: list[dict]) -> list[dict]:
+def exportar_por_estrategia(pasta: Path, fila: list[dict], contratos: dict[str, str] | None = None) -> list[dict]:
     """A lista do dia separada por estratégia e, dentro dela, por estágio (cliente novo, CPC A, CPC B,
     Não CPC, preventivo, quebra) e canal:
       ids/estrategias/<id-nome>/<estágio>/<canal>.csv   (mesmo formato de exportar_ids)
@@ -172,7 +172,7 @@ def exportar_por_estrategia(pasta: Path, fila: list[dict]) -> list[dict]:
         por_canal = defaultdict(list)
         for l in linhas:
             por_canal[l["canal"]].append(l)
-        exportar_ids(pasta / sub, por_canal)
+        exportar_ids(pasta / sub, por_canal, contratos=contratos)
         estagios = []
         por_estagio = defaultdict(list)
         for l in linhas:
@@ -184,7 +184,7 @@ def exportar_por_estrategia(pasta: Path, fila: list[dict]) -> list[dict]:
             canais_e = defaultdict(list)
             for l in ls_e:
                 canais_e[l["canal"]].append(l)
-            exportar_ids(pasta / sub / pasta_e, canais_e)
+            exportar_ids(pasta / sub / pasta_e, canais_e, contratos=contratos)
             passos = defaultdict(set)
             for l in ls_e:
                 if not l["condicao"]:
@@ -209,8 +209,8 @@ def exportar_por_estrategia(pasta: Path, fila: list[dict]) -> list[dict]:
     return indice
 
 
-def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]], voz: dict[str, dict] | None = None
-                 ) -> dict[str, list[str]]:
+def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]], voz: dict[str, dict] | None = None,
+                 contratos: dict[str, str] | None = None) -> dict[str, list[str]]:
     """Um arquivo por canal com o ID do cliente e o contato a acionar hoje (id_cliente;contato).
 
     A ferramenta de cada canal recebe o contato que o MotorCob escolheu; no discador e no
@@ -219,6 +219,9 @@ def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]], voz: dict[str, d
     não contatou no dia) vão para um arquivo à parte.
     voz: {id_cliente: variaveis_voz_cliente(...)}. Só o agente_voz (e o agente_voz_reserva) ganha as colunas
     das variáveis (motor/voz.py › VARIAVEIS_DO_MOTOR) no fim; os outros canais não mudam.
+    contratos: {id_cliente: contratos} dos clientes cujo id é o código pseudônimo (a carga não tinha código de
+    cliente; o CPF nunca é o id): o arquivo ganha a coluna `contrato` no FIM, para o cliente achar a pessoa no
+    sistema dele (o CPF não vai para a lista). Credor com código de cliente: o arquivo não muda.
     """
     pasta.mkdir(parents=True, exist_ok=True)
     for antigo in pasta.glob("*.csv"):  # reprocessar o dia não deixa arquivo velho
@@ -237,25 +240,48 @@ def exportar_ids(pasta: Path, por_canal: dict[str, list[dict]], voz: dict[str, d
                 continue
             nome = f"{canal}_reserva" if condicional else canal
             frase, produto = any(p[2] for p in pares), any(p[3] for p in pares)
+            ct = contratos if contratos and any(p[0] in contratos for p in pares) else None
+            cab_ct, col_ct = (["contrato"], lambda i: [ct.get(i, "")]) if ct else ([], lambda i: [])
             vars_voz = voz if canal == "agente_voz" and voz and any(voz.get(p[0]) for p in pares) else None
             with open(pasta / f"{nome}.csv", "w", newline="", encoding="utf-8") as f:
                 if vars_voz is not None:   # agente_voz: as variáveis da fala, por cliente, depois das colunas de sempre
                     w = csv.writer(f, delimiter=";", lineterminator="\n")
                     base = ["id_cliente", "contato"] + (["template" if template else "mensagem"] if frase or produto
                                                         else []) + (["produto"] if produto else [])
-                    w.writerow(base + list(VOZ.VARIAVEIS_DO_MOTOR))
+                    w.writerow(base + list(VOZ.VARIAVEIS_DO_MOTOR) + cab_ct)
                     for p in pares:
                         vv = vars_voz.get(p[0]) or {}
-                        w.writerow(list(p[:len(base)]) + [vv.get(k, "") for k in VOZ.VARIAVEIS_DO_MOTOR])
+                        w.writerow(list(p[:len(base)]) + [vv.get(k, "") for k in VOZ.VARIAVEIS_DO_MOTOR]
+                                   + col_ct(p[0]))
                 elif frase or produto:   # frase ou template do provedor: 3ª coluna; produto da ação (sms_otp…): 4ª
                     w = csv.writer(f, delimiter=";", lineterminator="\n")
                     w.writerow(["id_cliente", "contato", "template" if template else "mensagem"]
-                               + (["produto"] if produto else []))
-                    w.writerows(p if produto else p[:3] for p in pares)
+                               + (["produto"] if produto else []) + cab_ct)
+                    w.writerows(list(p if produto else p[:3]) + col_ct(p[0]) for p in pares)
+                elif ct:
+                    w = csv.writer(f, delimiter=";", lineterminator="\n")
+                    w.writerow(["id_cliente", "contato", "contrato"])
+                    w.writerows([i, c, ct.get(i, "")] for i, c, _, _ in pares)
                 else:
                     f.write("id_cliente;contato\n" + "".join(f"{i};{c}\n" for i, c, _, _ in pares))
             arquivos[nome] = sorted({p[0] for p in pares})
     return arquivos
+
+
+def contratos_dos_codigos(clientes_csv) -> dict[str, str]:
+    """{id_cliente: contratos} só dos clientes cujo id é o código pseudônimo (motor/pseudonimo.py), pela base
+    canônica (base/clientes.csv); vários contratos separados por "|". Vazio para quem manda código de cliente."""
+    from motor.pseudonimo import e_pseudonimo
+    arq = Path(clientes_csv) if clientes_csv else None
+    if arq is None or not arq.exists():
+        return {}
+    por = defaultdict(list)
+    with open(arq, newline="", encoding="utf-8") as f:
+        for l in csv.DictReader(f, delimiter=";"):
+            idc, ct = l.get("id_cliente") or "", (l.get("id_contrato") or "").strip()
+            if e_pseudonimo(idc) and ct and ct not in por[idc]:
+                por[idc].append(ct)
+    return {k: "|".join(v) for k, v in por.items()}
 
 
 def preparar_base(entrada, pasta_bruta, pasta_base) -> dict:
@@ -269,11 +295,12 @@ def preparar_base(entrada, pasta_bruta, pasta_base) -> dict:
     return converter_base(arquivos, ent.base, pasta_base)
 
 
-def preparar_carteira(entrada, pasta) -> dict:
-    """Carteira do credor (carga geral, incremental, retirada, acordo e baixa) -> <pasta>/base/."""
+def preparar_carteira(entrada, pasta, chave=None) -> dict:
+    """Carteira do credor (carga geral, incremental, retirada, acordo e baixa) -> <pasta>/base/.
+    chave: sal da empresa para o código do cliente que era CPF (a nuvem passa o do banco; sem ela, o sal local)."""
     from motor.carteira import montar
     ent = entrada if isinstance(entrada, Entrada) else carregar_entrada(entrada)
-    return montar(pasta, ent)
+    return montar(pasta, ent, chave)
 
 
 def preparar_enriquecimento(entrada, pasta_enriq, pasta_base) -> dict | None:
@@ -842,8 +869,9 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
     # agente lê e guarda em memória durante o lote; nunca no banco nem em log)
     voz_vars = {idc: variaveis_voz_cliente(clientes.get(idc), parcelas.get(idc), hoje)
                 for idc in {l["id_cliente"] for l in por_canal.get("agente_voz", [])}}
-    exportar_ids(saida / "ids", por_canal, voz=voz_vars)
-    exportar_por_estrategia(saida / "ids" / "estrategias", fila)
+    contratos = contratos_dos_codigos(clientes_csv)   # id pseudônimo (sem código de cliente): o contrato vai junto
+    exportar_ids(saida / "ids", por_canal, voz=voz_vars, contratos=contratos)
+    exportar_por_estrategia(saida / "ids" / "estrategias", fila, contratos)
     # mailing estendido do discador (arquivo NOVO; o ids/discador.csv de hoje não muda)
     (saida / "discador_mailing.csv").unlink(missing_ok=True)
     if cfg_disc is not None and por_canal.get("discador"):

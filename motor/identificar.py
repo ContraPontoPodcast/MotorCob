@@ -4,6 +4,8 @@ Acordo, pagamento e ocorrência nem sempre usam a mesma chave da carga: um traz 
 cliente, outro o contrato, outro o CPF; a planilha come zero à esquerda, põe ponto e traço.
 Ordem: código exato → contrato → código sem formatação (maiúsculas, só letras/dígitos, sem
 zeros à esquerda) → CPF/CNPJ. CPF de mais de um cliente não decide sozinho (ambíguo).
+Cliente cujo id virou código pseudônimo (o id era o CPF; motor/pseudonimo.py): o valor original que vier no arquivo
+(base/ids_originais.csv) acha o código, como se fosse o próprio código.
 """
 import csv
 import re
@@ -29,6 +31,17 @@ class Identificador:
         self.contratos: dict[str, str] = {}
         self.soltos: dict[str, str | None] = {}
         self.docs: dict[str, set[str]] = {}
+        self.originais: dict[str, str] = {}
+
+    def apelido(self, original: str, idc: str):
+        """O arquivo traz o valor original (CPF) de um cliente cujo id virou código pseudônimo."""
+        original, idc = (original or "").strip(), norm.id_cliente(idc)
+        if original and idc:
+            self.originais[original] = idc
+            d = _doc(original)
+            if d:
+                self.docs.setdefault(d, set()).add(idc)
+                self.originais.setdefault(d, idc)    # o mesmo documento com ou sem pontuação
 
     def incluir(self, idc: str, contrato: str = "", documento: str = ""):
         idc = norm.id_cliente(idc)
@@ -59,6 +72,9 @@ class Identificador:
             with open(pasta / "pessoas.csv", newline="", encoding="utf-8") as f:
                 for linha in csv.DictReader(f, delimiter=";"):
                     ident.incluir(linha["id_cliente"], documento=linha.get("documento") or "")
+        from .pseudonimo import ler_originais
+        for idc, original in ler_originais(pasta).items():
+            ident.apelido(original, idc)
         return ident
 
     def __bool__(self):
@@ -70,6 +86,8 @@ class Identificador:
         ct = (contrato or "").strip()
         if v in self.ids:
             return v, "codigo"
+        if v in self.originais:
+            return self.originais[v], "codigo"
         for c in (ct, v):
             if c and c in self.contratos:
                 return self.contratos[c], "contrato"

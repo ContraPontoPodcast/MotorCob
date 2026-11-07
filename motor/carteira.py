@@ -25,6 +25,7 @@ from . import normalizacao as norm
 from .entrada import Entrada, LayoutArquivo, _data, _num, converter_base, data_do_arquivo, gravar_na_carga
 from .identificar import Identificador
 from .ingestao import LayoutInvalido
+from .pseudonimo import Pseudonimizador, id_do_cpf, migrar_pasta
 
 PASTAS = {"geral": "bruto", "incremental": "incremental", "retirada": "retirada", "acordo": "acordo",
           "baixa": "baixa"}
@@ -106,15 +107,20 @@ def checar_arquivo(arq: Path, lay: LayoutArquivo | None, tipo: str) -> list[str]
     return ausentes
 
 
-def _identificador(arquivos: list[tuple[Path, object]]) -> Identificador:
-    """Quem está nas cargas: código, contrato e CPF/CNPJ (só essas colunas)."""
+def _identificador(arquivos: list[tuple[Path, object]], pseudo: Pseudonimizador) -> Identificador:
+    """Quem está nas cargas: código, contrato e CPF/CNPJ (só essas colunas). Id que é CPF entra já como o código
+    pseudônimo (o mesmo da base), com o valor original como apelido."""
     ident = Identificador()
     for arq, lay in arquivos:
         cc, ci, cd = (lay.colunas.get(k) for k in ("id_contrato", "id_cliente", "cpf"))
+        todos = id_do_cpf(lay)
         with open(arq, newline="", encoding=lay.encoding) as f:
             for linha in csv.DictReader(f, delimiter=lay.delimitador):
-                ident.incluir(linha.get(ci) or "", (linha.get(cc) or "") if cc else "",
-                              (linha.get(cd) or "") if cd else "")
+                bruto = norm.id_cliente(linha.get(ci) or "")
+                idc = pseudo(bruto, todos=todos) if bruto else ""
+                ident.incluir(idc or "", (linha.get(cc) or "") if cc else "", (linha.get(cd) or "") if cd else "")
+                if idc and idc != bruto:
+                    ident.apelido(bruto, idc)
     return ident
 
 
@@ -130,8 +136,12 @@ def _gravar_pagamentos(arq: Path, registro: list[dict]):
     tmp.replace(arq)
 
 
-def montar(pasta: str | Path, entrada: Entrada) -> dict:
-    """Lê as cinco pastas do credor e grava a base canônica em <pasta>/base/. Retorna o relatório."""
+def montar(pasta: str | Path, entrada: Entrada, chave=None) -> dict:
+    """Lê as cinco pastas do credor e grava a base canônica em <pasta>/base/. Retorna o relatório.
+
+    chave: o sal da empresa para o código do cliente que era CPF (texto ou função; a nuvem passa o faturamento_sal do
+    banco). Sem chave: o sal local da pasta (config/sal_id_cliente.txt; Mac e testes). Na primeira montagem com esta
+    regra, os ids antigos que eram CPF são trocados no estado e nas saídas (motor/pseudonimo.migrar_pasta)."""
     pasta = Path(pasta)
     base = pasta / "base"
     arqs = {t: _arquivos(pasta / p) for t, p in PASTAS.items()}
@@ -141,7 +151,9 @@ def montar(pasta: str | Path, entrada: Entrada) -> dict:
         if arqs[t] and getattr(entrada, t) is None:
             raise LayoutInvalido(f"chegou arquivo de {t}, mas o layout de {t} não está em empresas/<slug>.json")
     lay_inc = entrada.incremental or entrada.base
-    ident = _identificador([(a, entrada.base) for a in arqs["geral"]] + [(a, lay_inc) for a in arqs["incremental"]])
+    pseudo = Pseudonimizador(chave) if chave is not None else Pseudonimizador.local(pasta)
+    ident = _identificador([(a, entrada.base) for a in arqs["geral"]] + [(a, lay_inc) for a in arqs["incremental"]],
+                           pseudo)
     avisos = Counter()
     achados = Counter()
 
@@ -220,7 +232,8 @@ def montar(pasta: str | Path, entrada: Entrada) -> dict:
                          "arquivo": r["arquivo"], "_item": pagamentos[-1]})
 
     rel = converter_base(arqs["geral"], entrada.base, base, incrementais=arqs["incremental"],
-                         retiradas=retiradas, pagamentos=pagamentos, layout_incremental=entrada.incremental)
+                         retiradas=retiradas, pagamentos=pagamentos, layout_incremental=entrada.incremental,
+                         pseudo=pseudo)
     rel["avisos"] = dict(avisos)
     # por arquivo: quantas linhas acharam o cliente e por qual chave (código, contrato, CPF...)
     rel["identificacao"] = {}
@@ -264,4 +277,9 @@ def montar(pasta: str | Path, entrada: Entrada) -> dict:
     rel["arquivos"] += [{"arquivo": a.name, "tipo": t, "data": data_do_arquivo(a).isoformat(),
                          "linhas": sum(1 for r in linhas[t] if r["arquivo"] == a.name)}
                         for t in ("retirada", "acordo", "baixa") for a in arqs[t]]
+    # LGPD: o estado que ainda guarda o CPF como id (rodadas antes desta regra) passa para o código, uma vez
+    mig = migrar_pasta(pasta, pseudo, id_do_cpf(entrada.base) or id_do_cpf(lay_inc))
+    if mig:
+        rel["ids_rechaveados"] = mig["clientes"]
+    rel["ids_pseudonimos"] = len(pseudo.originais)
     return rel

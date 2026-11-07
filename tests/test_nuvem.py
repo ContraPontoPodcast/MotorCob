@@ -838,6 +838,40 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(est()["X0001"], "CPA")
         self.assertEqual(self._status(7001)["status"], "processado")
 
+    def test_carga_sem_codigo_de_cliente_nao_leva_cpf_ao_banco_nem_as_listas(self):
+        """LGPD (decisão do dono): sem código de cliente, o id é o código pseudônimo do motor (sal da empresa), igual
+        todo dia; nenhum CPF em tabela nem nas listas do Storage; a lista leva o contrato para o cliente cruzar."""
+        from motor.pseudonimo import e_pseudonimo, parece_cpf, pseudonimo
+        (self.cfg / "beta.json").unlink()
+        sal = "5a" * 32
+        self.falso.tabelas["faturamento_sal"] = [{"empresa_id": 2, "sal": sal}]
+        cpfs = set()
+        for k in [k for k in self.falso.objetos if k.startswith("entradas/beta/base/")]:
+            linhas = [l.split(b";") for l in self.falso.objetos[k].split(b"\n")]
+            cab = linhas[0].index(b"CPF")
+            cpfs |= {l[cab].decode() for l in linhas[1:] if len(l) > cab and l[cab]}
+            self.falso.objetos[k] = b"\n".join(b";".join(l[1:]) for l in linhas)      # sem COD_CLIENTE
+        self.assertTrue(cpfs)
+        res = self._dia(date(2026, 9, 2), empresa="beta")["beta"]
+        self.assertNotIn("erro", res)
+        t = self.falso.tabelas
+        ids = {l["id_cliente"] for l in t["estado_cliente"] if l["empresa_id"] == 2}
+        self.assertEqual(ids, {pseudonimo(sal, c) for c in cpfs})
+        self.assertTrue(all(e_pseudonimo(i) for i in ids))
+        texto = json.dumps({k: v for k, v in t.items() if k != "faturamento_sal"})
+        self.assertFalse([c for c in cpfs if c in texto])
+        self.assertFalse([x for x in re.findall(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", texto) if parece_cpf(x)])
+        listas = {k: v.decode() for k, v in self.falso.objetos.items()
+                  if k.startswith("saidas/beta/") and "/bureau/" not in k and not k.endswith("enriquecimento.csv")}
+        self.assertTrue(any("/ids/" in k for k in listas))
+        self.assertFalse([k for k, v in listas.items() if any(c in v for c in cpfs)])
+        sms = next(v for k, v in listas.items() if k.endswith("/ids/whatsapp.csv") or k.endswith("/ids/sms.csv"))
+        self.assertTrue(sms.splitlines()[0].endswith(";contrato"))
+        self.assertRegex(sms, r"MX[A-Z]{16};[^;]+;.*CT0\d")
+        # outro dia: os mesmos códigos (TAG, trilha e régua continuam)
+        self._dia(date(2026, 9, 3), empresa="beta")
+        self.assertEqual({l["id_cliente"] for l in t["estado_cliente"] if l["empresa_id"] == 2}, ids)
+
     def test_layout_automatico_entende_tabulacao_de_cpc_e_data_do_pagamento(self):
         """Arquivos como o cliente manda: CPF na ocorrência, tabulação 'ALÔ - PROMESSA', e no pagamento a
         coluna VALOR_PAGO vem antes da DATA_PAGTO (as duas têm PAG no nome)."""

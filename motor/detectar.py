@@ -157,13 +157,17 @@ def layout_base(arq: Path, explicar: dict) -> dict:
 
     cpf = pega("CPF", CPFS)
     idc = pega("ID do cliente", IDS)
-    if idc is None:                      # sem código de cliente: o CPF identifica o cliente
+    if idc is None:   # sem código de cliente: o CPF acha o cliente, mas o id é um código do MotorCX (LGPD)
         if cpf is None:
             raise LayoutInvalido(f"{Path(arq).name}: não achei a coluna do cliente (código ou CPF). "
                                  f"Colunas do arquivo: {nomes}")
         idc = cpf
-        explicar["ID do cliente"] = f"{cpf} (o CPF)"
     contrato = pega("contrato", CONTRATOS, contem=("CONTRATO",), evitar=("TIPO", "DATA", "DT_", "QTD", "STATUS"))
+    if idc == cpf:    # motor/pseudonimo.py: o CPF nunca é o id; a lista leva o contrato para o cruzamento
+        explicar["ID do cliente"] = (f"código do MotorCX a partir de {cpf} (o CPF não vai para as listas; "
+                                     + ("a coluna contrato das listas cruza com o seu sistema)" if contrato else
+                                        "sem código de cliente nem contrato, cruze pelo telefone/e-mail ou inclua "
+                                        "o código do cliente na carga)"))
     saldo = pega("saldo", SALDOS, contem=("SALDO", "VALOR", "VL_", "VLR"), evitar=("PARCELA", "PAGO", "MINIMO"))
     atraso = pega("dias de atraso", ATRASOS, contem=("ATRASO",))
     venc = None if atraso else pega("vencimento", VENCS, contem=("VENC",))

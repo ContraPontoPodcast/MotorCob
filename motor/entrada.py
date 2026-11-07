@@ -33,6 +33,7 @@ from . import normalizacao as norm
 from . import voz as VOZ
 from .certificacao import Evento
 from .cluster import tipos_das_colunas
+from .pseudonimo import Pseudonimizador, gravar_originais, id_do_cpf
 from .ingestao import AVISO_DADOS_MINIMOS, COLUNAS_REDE, LayoutInvalido, _mascarar, _sim, colunas_voz, ler_voz
 from .taxonomia import CANAIS_EMAIL, TAXONOMIA
 
@@ -293,8 +294,12 @@ def checar_base(arq: str | Path, layout: LayoutBase) -> list[str]:
 
 def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | Path,
                    incrementais: list[Path] = (), retiradas: list[dict] = (), pagamentos: list[dict] = (),
-                   layout_incremental: LayoutBase | None = None) -> dict:
+                   layout_incremental: LayoutBase | None = None, pseudo=None) -> dict:
     """Carteira do credor -> base/clientes.csv, contatos.csv, na_carga.csv, pessoas.csv, atributos.csv.
+
+    LGPD: o CPF nunca é o id do cliente. Layout cuja coluna do cliente é a do CPF (sem código de cliente) ou código
+    com cara de CPF viram o código pseudônimo (motor/pseudonimo.py; `pseudo`, padrão: sal local da pasta); o valor
+    original fica só em base/ids_originais.csv, para achar o cliente nos outros arquivos.
 
     O ESTOQUE (quem recebe ação) é montado por contrato, em ordem de data:
       carga geral (`arquivos`)    substitui o estoque inteiro pelo que vem no arquivo
@@ -325,6 +330,8 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     documentos: dict[str, str] = {}   # id_cliente -> CPF/CNPJ (só dígitos), para ligar o enriquecimento
     saiu: dict[str, tuple[date, str]] = {}       # cliente que saiu do estoque: (data, motivo)
     quitados: dict[str, date] = {}
+    if pseudo is None:
+        pseudo = Pseudonimizador.local(Path(pasta_saida).parent)
     for dia, _, _, tipo, item in eventos:
         if tipo == "retirada":
             idc, ct = item["id_cliente"], item.get("id_contrato") or ""
@@ -393,6 +400,7 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                 if idc is None:
                     rel["rejeitadas"]["id_cliente vazio"] += 1
                     continue
+                idc = pseudo(idc, todos=id_do_cpf(lay))
                 try:
                     saldo = _num(linha[col["saldo"]], lay.decimal)
                     if "dias_atraso" in col:
@@ -478,6 +486,7 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
         w.writerow(["id_cliente", "documento"])
         for idc in sorted(documentos):
             w.writerow([idc, documentos[idc]])
+    gravar_originais(pasta, pseudo.originais)
     with open(pasta / "fora_do_estoque.csv", "w", newline="", encoding="utf-8") as f:
         f.write("id_cliente;data;motivo\n" + "".join(f"{i};{d.isoformat()};{m}\n" for i, (d, m) in sorted(saiu.items())))
     # atributos do contrato de maior saldo de cada cliente
