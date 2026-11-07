@@ -161,6 +161,7 @@ export function telaNome(pathname: string): string {
 		{ match: /^\/empresa\/contatos$/, nome: 'Empresa · Contatos' },
 		{ match: /^\/empresa\/membros$/, nome: 'Empresa · Membros' },
 		{ match: /^\/empresa\/modulos$/, nome: 'Empresa · Módulos' },
+		{ match: /^\/empresa\/uso-ia$/, nome: 'Empresa · Uso de IA' },
 		{ match: /^\/empresa\/faturamento$/, nome: 'Empresa · Faturas' },
 		{ match: /^\/empresa\/contratacao$/, nome: 'Empresa · Contratação' },
 		{ match: /^\/empresa\/integracoes\/\d+$/, nome: 'Empresa · Integrações · Uso do token' },

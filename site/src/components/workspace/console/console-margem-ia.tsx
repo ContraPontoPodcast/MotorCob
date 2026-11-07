@@ -5,12 +5,14 @@
 // Redesign v2: 4 KPIs (receita, margem, preços abaixo do mínimo, itens sem custo), um aviso com "Ver lista", "Revisar N
 // preços" como ação principal, tabela de preços com 5 colunas, a fórmula em "Como calculamos", a margem do mês com 5
 // colunas e a gaveta de edição com um seletor de seção e um botão de salvar só. Só tokens do tema.
+// SQL 78: terceira parte "Créditos" (franquia, excedente, custo real do cliente e do sistema, teto por empresa).
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Aviso, Botao, Cartao, Detalhes, Estado, Gaveta, Kpis, ListaRegras, ListaValores, Pilula, Rotulo, Segmentos, Tabela, campoCls, campoStyle, type Tom } from '@/components/ds';
 import { supabase, friendlyError, moneyBR, numberBR, type Row } from '@/lib/supabase';
 import { ErrorDetail } from '@/components/error-detail';
 import { useConsolePerms } from './console-perms';
+import { CreditosIaMaster } from './console-creditos-ia';
 
 const SIT_IA: Record<string, { label: string; tom: Tom }> = {
   ok: { label: 'OK', tom: 'ok' },
@@ -55,7 +57,7 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
   const [error, setError] = useState('');
   const [editar, setEditar] = useState<{ item: Row; secao?: Secao; empresa?: string } | null>(null);
   const [tick, setTick] = useState(0);
-  const [parte, setParte] = useState<'precos' | 'mes'>('precos');
+  const [parte, setParte] = useState<'precos' | 'mes' | 'creditos'>('precos');
   const [revisar, setRevisar] = useState(false);
   const [como, setComo] = useState(false);
   const [linhaMes, setLinhaMes] = useState<Row | null>(null);
@@ -110,11 +112,11 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
         acao={<Botao pequeno onClick={() => setRevisar(true)}>Revisar {abaixo.length} {abaixo.length === 1 ? 'preço' : 'preços'}</Botao>}>Custo, impostos ou MC mínima mudaram; o banco não mexe em preço sozinho.</Aviso>}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Segmentos rotulo="Itens de IA" itens={[{ v: 'precos', n: 'Preços' }, { v: 'mes', n: 'Margem do mês' }]} valor={parte} onTrocar={setParte} />
+        <Segmentos rotulo="Itens de IA" itens={[{ v: 'precos', n: 'Preços' }, { v: 'mes', n: 'Margem do mês' }, { v: 'creditos', n: 'Créditos' }]} valor={parte} onTrocar={setParte} />
         <Botao tipo="fantasma" pequeno onClick={() => setComo(true)}>Como calculamos</Botao>
       </div>
 
-      {parte === 'precos' ? (
+      {parte === 'creditos' ? <CreditosIaMaster competencia={competencia} mcMinima={mcMinima} recarregar={recarregar + tick} /> : parte === 'precos' ? (
         <Cartao semPadding>
           <Tabela rotulo="Preços dos itens de IA" linhas={itens} chave={it => String(it.codigo)} onAbrir={it => setEditar({ item: it })} selecionada={editar ? String(editar.item.codigo) : null}
             vazio="Nenhum item de IA no catálogo."

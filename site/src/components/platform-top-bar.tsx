@@ -135,6 +135,7 @@ function EmpresaDropdown() {
 		{ to: '/empresa/contatos', label: 'Contatos' },
 		{ to: '/empresa/pessoas', label: 'Pessoas e perfis' },
 		{ to: '/empresa/integracoes', label: 'Integrações' },
+		{ to: '/empresa/uso-ia', label: 'Uso de IA' },
 		{ to: '/empresa/faturamento', label: 'Faturas', perm: PERM.verFaturamento },
 		{ to: '/empresa/auditoria', label: 'Auditoria', perm: PERM.verAuditoria },
 	].filter(it => !it.perm || permissoes.includes(it.perm));
@@ -370,6 +371,7 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 					<Link to="/empresa/contatos" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Contatos</Link>
 					<Link to="/empresa/pessoas" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Pessoas e perfis</Link>
 					<Link to="/empresa/integracoes" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Integrações</Link>
+					<Link to="/empresa/uso-ia" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Uso de IA</Link>
 					{permissoes.includes(PERM.verFaturamento) && <Link to="/empresa/faturamento" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Faturas</Link>}
 					{permissoes.includes(PERM.verAuditoria) && <Link to="/empresa/auditoria" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Auditoria</Link>}
 

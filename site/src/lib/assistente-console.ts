@@ -81,6 +81,7 @@ export const TELAS_OPCOES: { rota: string; nome: string }[] = [
 	{ rota: '/empresa/contatos', nome: 'Empresa · Contatos' },
 	{ rota: '/empresa/pessoas?aba=pessoas', nome: 'Empresa · Pessoas e perfis' },
 	{ rota: '/empresa/modulos', nome: 'Empresa · Módulos' },
+	{ rota: '/empresa/uso-ia', nome: 'Empresa · Uso de IA' },
 	{ rota: '/empresa/faturamento', nome: 'Empresa · Faturas' },
 	{ rota: '/conta', nome: 'Minha conta' },
 	{ rota: '/conta?aba=seguranca', nome: 'Minha conta · Segurança' },

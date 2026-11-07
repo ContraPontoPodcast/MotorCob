@@ -17,6 +17,7 @@ export const ATALHOS: Atalho[] = [
 	{ id: 'chamados', label: 'Meus chamados', to: '/suporte', keywords: 'chamados suporte tickets meus' },
 	{ id: 'convidar', label: 'Convidar membro', to: '/empresa/pessoas?aba=pessoas', keywords: 'convidar membro usuário equipe' },
 	{ id: 'contatos', label: 'Contatos da empresa', to: '/empresa/contatos', keywords: 'contatos empresa' },
+	{ id: 'uso-ia', label: 'Uso de IA', to: '/empresa/uso-ia', keywords: 'uso de ia créditos de ia crédito franquia excedente especialista descrever inteligência artificial consumo' },
 	{ id: 'faturas', label: 'Faturas', to: '/empresa/faturamento', perm: PERM.verFaturamento, keywords: 'faturas faturamento boleto nota' },
 	{ id: 'conta', label: 'Minha conta', to: '/conta', keywords: 'conta perfil minha' },
 	{ id: '2fa', label: 'Verificação em duas etapas', to: '/conta?aba=seguranca', keywords: 'verificação duas etapas segurança mfa autenticador' },
