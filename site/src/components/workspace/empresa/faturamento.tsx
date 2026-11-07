@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { X, FileText, ExternalLink, Plus, CreditCard, Copy, Check, Loader2, Lock } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError, moneyBR, dateBR, dateTimeBR, today, type Row } from '@/lib/supabase';
+import { erroDaFuncao } from '@/lib/funcoes';
 import { SIT_FATURA, mesExtenso, mesCurto } from '@/lib/empresa-helpers';
 import { EmpresaShell, cardShadow } from './empresa-shell';
 import { AgenteVozFaturamento } from './faturamento-voz';
@@ -105,16 +106,9 @@ export function FaturamentoPage() {
   const chamar = useCallback(async (body: Record<string, unknown>): Promise<Row> => {
     if (!supabase) throw new Error('Configuração ausente.');
     const { data, error } = await supabase.functions.invoke('cobranca', { body });
-    if (error) {
-      // resposta 4xx da função traz { erro } em português: mostra a frase dela, não a genérica
-      const ctx = (error as { context?: { json?: () => Promise<unknown> } }).context;
-      const corpo = ctx && typeof ctx.json === 'function' ? await ctx.json().catch(() => null) as Row | null : null;
-      if (corpo && typeof corpo.erro === 'string' && corpo.erro) throw new Error(corpo.erro.charAt(0).toUpperCase() + corpo.erro.slice(1) + '.');
-      throw new Error(friendlyError(error));
-    }
-    if (data && typeof (data as Row).erro === 'string' && (data as Row).erro) {
-      throw new Error((data as Row).erro as string);
-    }
+    // resposta 4xx/5xx (ou 2xx com { erro }) traz a frase da função em português: mostra ela, não a genérica
+    const msg = await erroDaFuncao(error, data);
+    if (msg) throw new Error(msg);
     return (data ?? {}) as Row;
   }, []);
 

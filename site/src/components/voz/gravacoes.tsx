@@ -13,6 +13,7 @@ import { Loading, Notice, PageHeading, usePermissao } from '@/components/app-she
 import { useMotorAuth } from '@/components/auth-provider';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { supabase, friendlyError, type Row } from '@/lib/supabase';
+import { frase, lerErroDaFuncao } from '@/lib/funcoes';
 import { FUNCAO_GRAVACOES, PERM_VOZ, dataCurta, dataHoraCurta, diasAte, duracao, resultadoVoz } from '@/lib/voz';
 import { Aviso, Botao, Cartao, Pilula, Trilho, Vazio, campoCls, campoStyle } from './ui';
 import { BarraFiltros, Detalhes, Gaveta, SeloRegras, Tabela as TabelaDs } from '@/components/ds';
@@ -35,14 +36,16 @@ function mmss(s: number) { return `${Math.floor(s / 60)}:${String(s % 60).padSta
 async function pedirGravacao(gravacao: number, tipo: 'audio' | 'transcricao'): Promise<{ ok: true; dados: Row } | { ok: false; motivo: 'sem_funcao' | 'sem_permissao' | 'erro'; msg: string }> {
 	if (!supabase) return { ok: false, motivo: 'erro', msg: 'Configuração ausente.' };
 	const { data, error } = await supabase.functions.invoke(FUNCAO_GRAVACOES, { body: { gravacao, tipo } });
-	if (!error) return { ok: true, dados: (data ?? {}) as Row };
-	const ctx = (error as { context?: { status?: number; json?: () => Promise<unknown> } }).context;
-	const status = Number(ctx?.status ?? 0);
 	// A função responde { erro } em português (sem permissão, transcrição ainda não pronta, já apagada...).
-	let erroDaFuncao = '';
-	try { const j = (await ctx?.json?.()) as { erro?: unknown } | undefined; if (typeof j?.erro === 'string') erroDaFuncao = j.erro; } catch { /* corpo não é JSON */ }
-	if (status === 403 || status === 401) return { ok: false, motivo: 'sem_permissao', msg: erroDaFuncao ? `Não foi possível: ${erroDaFuncao}.` : 'Seu perfil não tem permissão para isso.' };
-	if (erroDaFuncao) return { ok: false, motivo: 'erro', msg: `${erroDaFuncao.charAt(0).toUpperCase()}${erroDaFuncao.slice(1)}.` };
+	const lido = await lerErroDaFuncao(error, data);
+	if (!error && !lido.mensagem) return { ok: true, dados: (data ?? {}) as Row };
+	const status = lido.status ?? 0;
+	const erroDaFuncao = lido.mensagem ?? '';
+	if (status === 403 || status === 401) return { ok: false, motivo: 'sem_permissao', msg: erroDaFuncao ? `Não foi possível: ${erroDaFuncao.replace(/[.!]$/, '')}.` : 'Seu perfil não tem permissão para isso.' };
+	// 404 do gateway ("Requested function was not found"): a função não está publicada
+	if (status === 404 && /function was not found|not found/i.test(erroDaFuncao)) return { ok: false, motivo: 'sem_funcao', msg: 'O serviço de escuta ainda não está no ar.' };
+	if (erroDaFuncao) return { ok: false, motivo: 'erro', msg: frase(erroDaFuncao) };
+	if (!error) return { ok: false, motivo: 'erro', msg: friendlyError() };
 	if (status === 404 || /FunctionsFetchError|FunctionsRelayError|Failed to send|not found/i.test(`${error.name} ${error.message}`)) {
 		return { ok: false, motivo: 'sem_funcao', msg: 'O serviço de escuta ainda não está no ar.' };
 	}

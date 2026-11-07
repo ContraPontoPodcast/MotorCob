@@ -50,7 +50,7 @@ export function Negociacoes() {
 		if (!supabase) return;
 		setLoading(true); setError('');
 		const [fn, pr, vg] = await Promise.all([
-			supabase.from('mensageria_fornecedores').select('id,codigo,nome,canais,ativo').order('nome'),
+			supabase.from('mensageria_fornecedores').select('codigo,nome,canais,ativo').order('nome'),
 			supabase.rpc('produtos_catalogo'),
 			supabase.from('negociacoes_vigentes').select('*'),
 		]);
@@ -131,7 +131,7 @@ export function Negociacoes() {
 								<span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Fornecedor</span>
 								<select value={forn} onChange={e => setForn(e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] bg-white px-3 text-[15px] outline-none focus:border-[#1D1D1F]">
 									<option value="">—</option>
-									{fornecedores.map(f => <option key={f.id} value={f.codigo}>{f.nome}</option>)}
+									{fornecedores.map(f => <option key={f.codigo} value={f.codigo}>{f.nome}</option>)}
 								</select>
 							</label>
 							<label className="block">

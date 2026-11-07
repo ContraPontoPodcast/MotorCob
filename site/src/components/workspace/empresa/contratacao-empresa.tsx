@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { X, Plus, Trash2, ChevronDown, Info } from 'lucide-react';
 import { supabase, moneyBR, dateBR, today, friendlyError, type Row } from '@/lib/supabase';
+import { erroDaFuncao } from '@/lib/funcoes';
 import { SEGMENTOS, formatCNPJ, validarCNPJ, slugEmpresa, mesExtenso, dataLocal } from '@/lib/empresa-helpers';
 import { FRENTES, type FrenteId } from '@/lib/frentes';
 import { esquecerAreasLiberadas } from '@/hooks/use-areas-liberadas';
@@ -529,8 +530,9 @@ export function ContratacaoEmpresa({
       await salvarTudo(empresaSalvaId);
       esquecerAreasLiberadas(empresaSalvaId);
       // convidar Admin
-      const { error: eAdmin } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'convidar', email: emp.admin_email.trim(), nome: emp.admin_nome.trim(), papel: 'admin', empresa_id: empresaSalvaId } });
-      if (eAdmin) { setError(`Empresa criada, mas falha ao convidar Admin: ${errMsg(eAdmin, 'tente novamente')}`); setBusy(false); return; }
+      const { data: dAdmin, error: eAdmin } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'convidar', email: emp.admin_email.trim(), nome: emp.admin_nome.trim(), papel: 'admin', empresa_id: empresaSalvaId } });
+      const msgAdmin = await erroDaFuncao(eAdmin, dAdmin, 'Tente novamente.');
+      if (msgAdmin) { setError(`Empresa criada, mas falha ao convidar Admin: ${msgAdmin}`); setBusy(false); return; }
       criada.current = null;
       setSuccess('Empresa criada. Convite enviado ao Admin da empresa.');
       setBusy(false);

@@ -667,6 +667,12 @@ Argumentos das RPCs: `scripts/conferir_rpc.py` lê toda chamada `rpc('nome', {..
 Python e confere os NOMES dos argumentos com a assinatura vigente nas migrações (sobrecargas, defaults, drops); o PostgREST
 acha a função pelo nome dos argumentos. Roda no job `motor` (`tests/test_conferir_rpc.py`) e no `banco` (`--banco`, contra
 o catálogo). Argumento que não dá para ler precisa de comentário `conferir-rpc: <motivo>` na chamada.
+Colunas: `scripts/conferir_colunas.py` lê toda corrente `x.from('tabela')` do site e das Edge Functions (`.select('a,b')`,
+chaves de `.insert/.update/.upsert` com objeto literal ou variável local, `onConflict`, `.eq/.in/.order/.or/.match`…) e confere
+os nomes com as tabelas/views vigentes nas migrações (create/alter/rename/drop, views, colunas calculadas `f(tabela)`);
+mesmos jobs (`tests/test_conferir_colunas.py` e `--banco`). Escape: `// conferir-colunas: <motivo>`.
+Erro de Edge Function no site: sempre `erroDaFuncao(error, data)` (`site/src/lib/funcoes.ts`), nunca `friendlyError(error)`
+direto: no status != 2xx a frase `{ erro }` da função está em `error.context` (Response).
 SQL 71: `cancelar_rascunho(fatura)` (rascunho → cancelada; quem emite a fatura da empresa).
 SQL 72: `estimativa_ciclo` não projeta por dia o que conta uma vez no ciclo (Orquestração por CPF, Jornada): fixo + medido
 + consumo × dias do ciclo ÷ dias corridos; a conta vive em `estimativa_ciclo_em(empresa, hoje)` (só o servidor).

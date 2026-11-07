@@ -206,3 +206,35 @@ export function dadosConviteEquipe(quem: Perfil, nome: string | undefined): Reco
   if (nome?.trim()) dados.nome = nome.trim();
   return dados;
 }
+
+/** Erro do GoTrue (Supabase Auth) → status e frase em pt-BR para a tela, sem dado pessoal (nunca repete o e-mail).
+ *  Só reconhece erro do Auth (AuthApiError/AuthError: `__isAuthError` ou nome Auth*); qualquer outro → null (500).
+ *  Códigos: https://supabase.com/docs/guides/auth/debugging/error-codes */
+export function erroDoAuth(e: unknown): { status: number; erro: string; codigo: string } | null {
+  if (!e || typeof e !== "object") return null;
+  const x = e as { __isAuthError?: unknown; name?: unknown; code?: unknown; status?: unknown; message?: unknown };
+  const nome = typeof x.name === "string" ? x.name : "";
+  if (x.__isAuthError !== true && !nome.startsWith("Auth")) return null;
+  const codigo = typeof x.code === "string" ? x.code : "";
+  const status = typeof x.status === "number" ? x.status : 0;
+  const msg = typeof x.message === "string" ? x.message : "";
+  if (["email_exists", "user_already_exists", "phone_exists"].includes(codigo) || /already (been )?registered|already exists/i.test(msg)) {
+    return { status: 409, erro: "e-mail já cadastrado: este endereço já tem login no MotorCX (nesta empresa, em outra ou na equipe). Use outro e-mail; se a pessoa esqueceu a senha, ela usa “Esqueci a senha” na entrada", codigo: codigo || "email_exists" };
+  }
+  if (codigo === "over_email_send_rate_limit" || codigo === "over_request_rate_limit" || status === 429 || /rate limit/i.test(msg)) {
+    return { status: 429, erro: "limite de e-mails do Supabase atingido; tente em alguns minutos ou configure o SMTP próprio", codigo: codigo || "rate_limit" };
+  }
+  if (codigo === "email_address_not_authorized") {
+    return { status: 400, erro: "o envio para este endereço não é permitido pelo e-mail padrão do Supabase; configure o SMTP próprio em Supabase › Authentication › Emails", codigo };
+  }
+  if (codigo === "email_address_invalid" || (codigo === "validation_failed" && /email/i.test(msg)) || /invalid.*email|email.*invalid|validate email/i.test(msg)) {
+    return { status: 400, erro: "e-mail inválido: confira o endereço", codigo: codigo || "email_invalid" };
+  }
+  if (/sending|send .*e-?mail|smtp|mail(er)? (error|failed)/i.test(msg)) {
+    return { status: 502, erro: "o e-mail de convite não pôde ser enviado: confira o SMTP em Supabase › Authentication › Emails", codigo: codigo || "smtp" };
+  }
+  if (codigo === "signup_disabled" || codigo === "email_provider_disabled") {
+    return { status: 400, erro: "o login por e-mail está desligado no Supabase (Authentication › Providers › Email)", codigo };
+  }
+  return null;
+}

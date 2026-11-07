@@ -47,7 +47,7 @@ export function ConsoleFornecedoresPage() {
 
 	async function toggleAtivo(forn: Row, on: boolean) {
 		if (!supabase) return;
-		const { error } = await supabase.from('mensageria_fornecedores').update({ ativo: on }).eq('id', forn.id);
+		const { error } = await supabase.from('mensageria_fornecedores').update({ ativo: on }).eq('codigo', forn.codigo);
 		if (error) { setError(friendlyError(error)); return; }
 		void reload();
 	}

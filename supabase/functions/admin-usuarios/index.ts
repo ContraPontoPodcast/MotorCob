@@ -3,7 +3,7 @@
 // (pode('gerenciar_usuarios')) e por regras.ts. A chave service_role vem só da variável de ambiente do
 // servidor (Supabase › Edge Functions › Secrets) e nunca sai daqui.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { aalDoToken, autorizar, dadosConviteEquipe, dadosDoConvite, empresaAlvo, type Pedido, type Perfil, validarPedido } from "./regras.ts";
+import { aalDoToken, autorizar, dadosConviteEquipe, dadosDoConvite, empresaAlvo, erroDoAuth, type Pedido, type Perfil, validarPedido } from "./regras.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -63,10 +63,7 @@ async function executar(quem: Perfil, pedido: Pedido, alvo: Perfil | null): Prom
         redirectTo: `${SITE}/definir-senha`,
         data: dadosDoConvite(quem, pedido.nome, emp?.nome ?? null, pedido.papel!),
       });
-      if (error) {
-        if (/already|registered|exists/i.test(error.message)) return [409, { erro: "e-mail já cadastrado" }];
-        throw error;
-      }
+      if (error) throw error;   // e-mail já cadastrado, SMTP, limite: erroDoAuth no fim
       const id = data.user.id;
       const { error: e } = await admin.from("perfis")
         .update({ papel: pedido.papel, empresa_id: empresa, ativo: true }).eq("id", id);
@@ -111,10 +108,7 @@ async function executar(quem: Perfil, pedido: Pedido, alvo: Perfil | null): Prom
         redirectTo: `${SITE}/definir-senha`,
         data: dadosConviteEquipe(quem, pedido.nome),
       });
-      if (error) {
-        if (/already|registered|exists/i.test(error.message)) return [409, { erro: "e-mail já cadastrado" }];
-        throw error;
-      }
+      if (error) throw error;   // e-mail já cadastrado, SMTP, limite: erroDoAuth no fim
       const papel = pedido.funcao === "master" ? "admin" : pedido.funcao === "comercial" ? "gestao" : "operacao";
       const { error: e } = await admin.from("perfis")
         .update({ papel, equipe: true, empresa_id: null, ativo: true,
@@ -190,7 +184,11 @@ Deno.serve(async (req) => {
     const [status, resultado] = await executar(quem as Perfil, pedido, alvo);
     return responder(resultado, status, origem);
   } catch (e) {
-    console.error(pedido.acao, (e as { code?: string })?.code ?? "erro"); // sem dado pessoal no log
+    // erro do Auth (convite, link de senha) vira frase clara; o log leva só ação, código e status, sem dado pessoal
+    const auth = erroDoAuth(e);
+    const x = e as { code?: string; status?: number };
+    console.error(pedido.acao, auth?.codigo ?? x?.code ?? "erro", x?.status ?? "");
+    if (auth) return responder({ erro: auth.erro }, auth.status, origem);
     return responder({ erro: "não foi possível concluir; tente de novo" }, 500, origem);
   }
 });

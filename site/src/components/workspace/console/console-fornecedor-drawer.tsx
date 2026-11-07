@@ -56,7 +56,7 @@ export function FornecedorDrawer({ fornecedor, novo, onClose, onSaved }: {
 			ativo,
 		};
 		const res = fornecedor
-			? supabase.from('mensageria_fornecedores').update(payload).eq('id', fornecedor.id)
+			? supabase.from('mensageria_fornecedores').update(payload).eq('codigo', fornecedor.codigo)   // a chave é o código (não há id)
 			: supabase.from('mensageria_fornecedores').insert(payload);
 		const { error: e } = await res;
 		setBusy(false);

@@ -1,7 +1,7 @@
 // node --experimental-strip-types --test supabase/functions/admin-usuarios/regras.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aalDoToken, autorizar, dadosConviteEquipe, dadosDoConvite, empresaAlvo, validarPedido, type Perfil } from "./regras.ts";
+import { aalDoToken, autorizar, dadosConviteEquipe, dadosDoConvite, empresaAlvo, erroDoAuth, validarPedido, type Perfil } from "./regras.ts";
 
 const ID = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
 const admA: Perfil = { id: ID(1), papel: "admin", ativo: true, empresa_id: 1, equipe: false };
@@ -136,4 +136,29 @@ test("convite da equipe não chega com campos em branco", () => {
   const d = dadosConviteEquipe({ ...equipe, nome: "Rafa" }, " Ana ");
   assert.deepEqual(d, { empresa_nome: "equipe MotorCob", papel: "integrante da equipe", convidado_por: "Rafa", nome: "Ana" });
   assert.equal(dadosConviteEquipe({ ...equipe, nome: null } as Perfil, undefined).convidado_por, "a equipe MotorCob");
+});
+
+test("erro do Auth vira frase clara, sem repetir o e-mail", () => {
+  const auth = (o: Record<string, unknown>) => Object.assign(new Error(String(o.message ?? "")), { name: "AuthApiError", __isAuthError: true }, o);
+  const ja = erroDoAuth(auth({ message: "A user with this email address has already been registered", status: 422, code: "email_exists" }));
+  assert.equal(ja?.status, 409);
+  assert.match(ja!.erro, /^e-mail já cadastrado/);
+  assert.equal(erroDoAuth(auth({ message: "User already registered", status: 422 }))?.status, 409);
+  const limite = erroDoAuth(auth({ message: "email rate limit exceeded", status: 429, code: "over_email_send_rate_limit" }));
+  assert.equal(limite?.status, 429);
+  assert.match(limite!.erro, /limite de e-mails do Supabase/);
+  const smtp = erroDoAuth(auth({ message: "Error sending invite email", status: 500, code: "unexpected_failure" }));
+  assert.equal(smtp?.status, 502);
+  assert.match(smtp!.erro, /SMTP em Supabase › Authentication › Emails/);
+  assert.equal(erroDoAuth(auth({ message: "Error sending recovery email", status: 500 }))?.status, 502);
+  assert.equal(erroDoAuth(auth({ message: "Unable to validate email address: invalid format", status: 400, code: "email_address_invalid" }))?.status, 400);
+  assert.match(erroDoAuth(auth({ message: "Email address not authorized", status: 400, code: "email_address_not_authorized" }))!.erro, /SMTP próprio/);
+  // erro que não é do Auth (banco, rede) e erro do Auth desconhecido → null (500 genérico)
+  assert.equal(erroDoAuth({ code: "23505", message: "duplicate key value violates unique constraint ... already exists" }), null);
+  assert.equal(erroDoAuth(new Error("Error sending invite email")), null);
+  assert.equal(erroDoAuth(auth({ message: "Database error saving new user", status: 500, code: "unexpected_failure" })), null);
+  assert.equal(erroDoAuth(null), null);
+  // nenhuma frase carrega o endereço
+  const comEmail = auth({ message: "Error sending invite email to fulano@exemplo.com.br", status: 500 });
+  assert.doesNotMatch(erroDoAuth(comEmail)!.erro, /@/);
 });

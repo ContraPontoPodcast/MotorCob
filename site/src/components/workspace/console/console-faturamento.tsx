@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, FileText, RefreshCw, Loader2, X, Lock } from 'lucide-react';
 import { supabase, friendlyError, moneyBR, dateBR, dateTimeBR, type Row } from '@/lib/supabase';
+import { erroDaFuncao } from '@/lib/funcoes';
 import { mesExtenso, mesCurto, ultimosMeses } from '@/lib/empresa-helpers';
 import { ConsoleShell, cardShadow } from './console-shell';
 import { Chave } from './chave';
@@ -213,7 +214,8 @@ function FaturasCiclo({ canEmitir, isMaster, setErro, setSucesso }: {
     setErro('');
     try {
       const { data, error } = await supabase.functions.invoke('cobranca', { body: { acao: 'demonstrativo', fatura: Number(faturaId) } });
-      if (error) throw error;
+      const msg = await erroDaFuncao(error, data);
+      if (msg) throw new Error(msg);
       const url = (data as Row)?.url;
       if (url) window.open(String(url), '_blank', 'noopener,noreferrer');
       else throw new Error('Demonstrativo indisponível.');
@@ -668,8 +670,9 @@ function NotasTab({ canEmitir, setErro, setSucesso }: { canEmitir: boolean; setE
       const body: Record<string, unknown> = { acao: 'emitir_nf' };
       if (n.fatura_id) body.fatura = n.fatura_id;
       else if (n.recarga_id) body.recarga = n.recarga_id;
-      const { error } = await supabase.functions.invoke('cobranca', { body });
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('cobranca', { body });
+      const msg = await erroDaFuncao(error, data);
+      if (msg) throw new Error(msg);
       setSucesso('Nova emissão da nota iniciada.');
       void reload();
     } catch (e) {
@@ -760,6 +763,42 @@ const CAMPOS_OBRIG: { key: string; label: string }[] = [
   { key: 'descricao_recarga', label: 'Descrição na nota da recarga' },
 ];
 
+/** Campo do formulário ← coluna de nf_config (o formulário usa os nomes curtos; o banco, os do padrão da NFS-e). */
+const NF_COLUNA: Record<string, string> = {
+  quando_emitir: 'emitir_quando', razao_social: 'razao_social_prestador', cnpj: 'cnpj_prestador', endereco: 'endereco_prestador',
+  inscricao_municipal: 'inscricao_municipal_prestador', municipio_ibge: 'codigo_municipio_emissora',
+  municipio_prestacao_ibge: 'codigo_municipio_prestacao', codigo_tributacao_nacional: 'codigo_tributacao_nacional_iss',
+  codigo_tributacao_municipal: 'codigo_tributacao_municipal_iss', simples_nacional: 'codigo_opcao_simples_nacional',
+  regime_apuracao: 'regime_tributario_simples_nacional', regime_especial: 'regime_especial_tributacao',
+  retencao_iss: 'tipo_retencao_iss', aliquota_iss: 'percentual_aliquota_iss',
+};
+/** Linha do banco → valores do formulário (números viram texto, para os selects e campos). */
+function nfDoBanco(linha: Row): Row {
+  const out: Row = { ...linha };
+  for (const [campo, coluna] of Object.entries(NF_COLUNA)) {
+    const v = linha[coluna];
+    out[campo] = v == null ? '' : String(v);
+  }
+  return out;
+}
+/** Texto vazio → null (as colunas têm check de formato). */
+function nfTexto(v: unknown): string | null {
+  const t = v == null ? '' : String(v).trim();
+  return t ? t : null;
+}
+function nfInteiro(v: unknown): number | null {
+  const t = nfTexto(v);
+  if (t == null) return null;
+  const n = Number(t);
+  return Number.isInteger(n) ? n : null;
+}
+function nfNumero(v: unknown): number | null {
+  const t = nfTexto(v);
+  if (t == null) return null;
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
 function ConfigNotaTab({ isMaster, setErro, setSucesso }: { isMaster: boolean; setErro: (s: string) => void; setSucesso: (s: string) => void }) {
   const [cfg, setCfg] = useState<Row | null>(null);
   const [loading, setLoading] = useState(true);
@@ -771,7 +810,7 @@ function ConfigNotaTab({ isMaster, setErro, setSucesso }: { isMaster: boolean; s
     try {
       const { data, error } = await supabase.from('nf_config').select('*').eq('id', 1).maybeSingle();
       if (error) throw error;
-      setCfg((data as Row) ?? null);
+      setCfg(data ? nfDoBanco(data as Row) : null);
     } catch (e) {
       setErro(friendlyError(e));
     } finally { setLoading(false); }
@@ -792,27 +831,28 @@ function ConfigNotaTab({ isMaster, setErro, setSucesso }: { isMaster: boolean; s
     if (!supabase || !cfg) return;
     setBusy(true); setErro(''); setSucesso('');
     try {
+      // os nomes das colunas de nf_config (SQL 20261120/20261122) diferem dos campos do formulário: ver nfDoBanco
       const { error } = await supabase.from('nf_config').update({
         ativo: !!cfg.ativo,
         ambiente: cfg.ambiente ?? 'homologacao',
-        quando_emitir: cfg.quando_emitir ?? 'pagamento',
-        razao_social: cfg.razao_social ?? null,
-        cnpj: cfg.cnpj ? String(cfg.cnpj).replace(/\D/g, '') : null,
-        endereco: cfg.endereco ?? null,
-        email_financeiro: cfg.email_financeiro ?? null,
-        inscricao_municipal: cfg.inscricao_municipal ?? null,
-        municipio_ibge: cfg.municipio_ibge ?? null,
-        municipio_prestacao_ibge: cfg.municipio_prestacao_ibge ?? null,
-        codigo_tributacao_nacional: cfg.codigo_tributacao_nacional ?? null,
-        codigo_tributacao_municipal: cfg.codigo_tributacao_municipal ?? null,
-        codigo_nbs: cfg.codigo_nbs ?? null,
-        simples_nacional: cfg.simples_nacional ?? null,
-        regime_apuracao: cfg.simples_nacional === '3' ? (cfg.regime_apuracao ?? null) : null,
-        regime_especial: cfg.regime_especial ?? '0',
-        retencao_iss: cfg.retencao_iss ?? null,
-        aliquota_iss: cfg.aliquota_iss ?? null,
-        descricao_fatura: cfg.descricao_fatura ?? null,
-        descricao_recarga: cfg.descricao_recarga ?? null,
+        emitir_quando: cfg.quando_emitir ?? 'pagamento',
+        razao_social_prestador: nfTexto(cfg.razao_social),
+        cnpj_prestador: nfTexto(String(cfg.cnpj ?? '').replace(/\D/g, '')),
+        endereco_prestador: nfTexto(cfg.endereco),
+        email_financeiro: nfTexto(cfg.email_financeiro),
+        inscricao_municipal_prestador: nfTexto(cfg.inscricao_municipal),
+        codigo_municipio_emissora: nfInteiro(cfg.municipio_ibge),
+        codigo_municipio_prestacao: nfInteiro(cfg.municipio_prestacao_ibge),
+        codigo_tributacao_nacional_iss: nfTexto(cfg.codigo_tributacao_nacional),
+        codigo_tributacao_municipal_iss: nfTexto(cfg.codigo_tributacao_municipal),
+        codigo_nbs: nfTexto(cfg.codigo_nbs),
+        codigo_opcao_simples_nacional: nfInteiro(cfg.simples_nacional) ?? 1,
+        regime_tributario_simples_nacional: String(cfg.simples_nacional ?? '') === '3' ? nfInteiro(cfg.regime_apuracao) : null,
+        regime_especial_tributacao: nfInteiro(cfg.regime_especial) ?? 0,
+        tipo_retencao_iss: nfInteiro(cfg.retencao_iss) ?? 1,
+        percentual_aliquota_iss: nfNumero(cfg.aliquota_iss),
+        descricao_fatura: nfTexto(cfg.descricao_fatura) ?? undefined,
+        descricao_recarga: nfTexto(cfg.descricao_recarga) ?? undefined,
       }).eq('id', 1);
       if (error) throw error;
       setSucesso('Configuração da nota salva.');

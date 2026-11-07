@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { FileSpreadsheet, UploadCloud } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, logAccess, numberBR, safeFileName, supabase, today, type Row } from '@/lib/supabase';
+import { erroDaFuncao } from '@/lib/funcoes';
 import { lerNumeroBR } from '@/lib/condicoes';
 import { Aviso, Botao, BotaoLink, Detalhes, Kpis, Pilula, Segmentos, campoCls, campoStyle, textareaCls } from '@/components/ds';
 import { MapeamentoCarga } from '@/components/comuns/mapeamento-carga';
@@ -82,8 +83,9 @@ export function PassoEmpresa({ sit, equipe, onCriada, onContinuar, onNovaOutra }
 
 	async function convidar(id: string): Promise<string> {
 		if (!supabase) return '';
-		const { error } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'convidar', email: f.email.trim(), nome: f.admin.trim(), papel: 'admin', empresa_id: id } });
-		return error ? 'A empresa foi criada, mas o convite do Admin não saiu. Tente de novo; nada fica duplicado.' : '';
+		const { data, error } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'convidar', email: f.email.trim(), nome: f.admin.trim(), papel: 'admin', empresa_id: id } });
+		const msg = await erroDaFuncao(error, data, 'Tente de novo; nada fica duplicado.');
+		return msg ? `A empresa foi criada, mas o convite do Admin não saiu: ${msg}` : '';
 	}
 
 	async function criar() {
@@ -386,8 +388,9 @@ export function PassoPronto({ sit, equipe, recarregar, onVoltar, onIr }: { sit: 
 			const { error } = await supabase.rpc('definir_contato_fatura', { empresa: sit.empresa.id, email: email.trim(), nome: null });
 			if (error) setMsg({ tom: 'erro', texto: friendlyError(error) }); else { setMsg({ tom: 'ok', texto: 'Contato da fatura salvo.' }); await recarregar(); }
 		} else if (i.acao.fazer === 'reenviar_convite' && sit.admin.id) {
-			const { error } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'resetar_senha', usuario_id: sit.admin.id } });
-			setMsg(error ? { tom: 'erro', texto: 'O convite não saiu. Tente de novo em instantes.' } : { tom: 'ok', texto: 'Enviamos de novo o link para criar a senha.' });
+			const { data, error } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'resetar_senha', usuario_id: sit.admin.id } });
+			const falha = await erroDaFuncao(error, data, 'Tente de novo em instantes.');
+			setMsg(falha ? { tom: 'erro', texto: `O convite não saiu: ${falha}` } : { tom: 'ok', texto: 'Enviamos de novo o link para criar a senha.' });
 		}
 		setBusy('');
 	}

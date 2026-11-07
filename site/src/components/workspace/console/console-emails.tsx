@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Mail, Send, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, friendlyError, dateTimeBR, type Row } from '@/lib/supabase';
+import { erroDaFuncao } from '@/lib/funcoes';
 import { ConsoleShell, cardShadow } from './console-shell';
 import { useConsolePerms } from './console-perms';
 import { PainelEdicao } from '@/components/comuns/painel-edicao';
@@ -60,10 +61,11 @@ export function ConsoleEmailsPage() {
     if (!supabase) return;
     let active = true;
     (async () => {
-      const { data } = await supabase.from('notificacao_assuntos').select('assunto,nome');
+      // a chave do assunto é "codigo" (o mesmo valor de notificacoes.assunto)
+      const { data } = await supabase.from('notificacao_assuntos').select('codigo,nome');
       if (!active || !data) return;
       const m: Record<string, string> = {};
-      (data as Row[]).forEach(r => { if (r.assunto) m[String(r.assunto)] = String(r.nome ?? r.assunto); });
+      (data as Row[]).forEach(r => { if (r.codigo) m[String(r.codigo)] = String(r.nome ?? r.codigo); });
       setAssuntosMap(m);
     })();
     return () => { active = false; };
@@ -402,8 +404,9 @@ function EnviarTeste() {
     if (!supabase) return;
     setEnviando(tipo);
     try {
-      const { error } = await supabase.functions.invoke('emails', { body: { acao: 'teste', tipo } });
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('emails', { body: { acao: 'teste', tipo } });
+      const msg = await erroDaFuncao(error, data);
+      if (msg) throw new Error(msg);
       toast.success('Enviado para o seu e-mail, com dados fictícios.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : friendlyError(e));

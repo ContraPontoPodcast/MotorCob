@@ -2,6 +2,7 @@
 // roleplay pela Edge Function simular_fluxo_voz, com o login de quem pede. Nada de service_role no site.
 // A mesma interface tem a implementação de demonstração (fixturas.ts), usada só no modo de desenvolvimento.
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { lerErroDaFuncao } from '@/lib/funcoes';
 import { nomeAnexo, type Definicao, type MetricaBloco, type SituacaoVersao, type TipoAgente } from '@/lib/fluxo';
 
 export interface FluxoRow { id: number; empresa_id: number; credor_id: number | null; nome: string; tipo_agente: TipoAgente; modelo_origem: string | null; roteiro_origem_id: number | null; criado_em: string }
@@ -136,11 +137,10 @@ export function apiSupabase(sb: SupabaseClient, funcao = 'simular_fluxo_voz'): F
 	const tabV = () => sb.from('voz_fluxo_versoes');
 	const invocar = async <T>(body: Record<string, unknown>): Promise<T> => {
 		const { data, error } = await sb.functions.invoke(funcao, { body });
-		if (error) {
-			let msg = 'O simulador não respondeu agora.';
-			try { const j = await (error as { context?: Response }).context?.json(); if (j?.erro) msg = String(j.erro) + (Array.isArray(j.erros) && j.erros.length ? `: ${j.erros.join(', ')}` : ''); } catch { /* sem corpo */ }
-			throw new Error(msg);
-		}
+		// a frase da função ({ erro, erros }), também num 2xx com { erro }; sem frase: o simulador não respondeu
+		const { mensagem } = await lerErroDaFuncao(error, data);
+		if (mensagem) throw new Error(mensagem);
+		if (error) throw new Error('O simulador não respondeu agora.');
 		return data as T;
 	};
 	return {

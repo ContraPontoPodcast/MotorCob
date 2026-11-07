@@ -221,7 +221,8 @@ export function LateralIcones() {
 						{!recolhido && <span className="text-[13px]">Esconder</span>}
 					</button>
 					<div className={recolhido ? 'flex justify-center' : 'flex w-full justify-center'}>
-						<AvatarMenu />
+						{/* no pé da lateral o menu abre para cima e para a direita (para baixo saía da tela e escondia o Sair) */}
+						<AvatarMenu abrirPara="cima" />
 					</div>
 				</div>
 			</aside>

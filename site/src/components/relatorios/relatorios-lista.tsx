@@ -83,9 +83,9 @@ export function RelatoriosLista() {
 
 		// Envios por e-mail.
 		if (emList.length) {
-			const { data: evs } = await supabase.from('relatorio_envios').select('*').in('modelo', emList.map(m => m.id));
+			const { data: evs } = await supabase.from('relatorio_envios').select('*').in('modelo_id', emList.map(m => m.id));
 			const evMap: Record<string, EnvioRelatorio> = {};
-			(evs ?? []).forEach((e: Row) => { evMap[e.modelo] = e as EnvioRelatorio; });
+			(evs ?? []).forEach((e: Row) => { evMap[e.modelo_id] = e as EnvioRelatorio; });
 			setEnvios(evMap);
 			// Nomes dos criadores.
 			const uids = [...new Set(emList.map(m => m.criado_por).filter(Boolean))] as string[];

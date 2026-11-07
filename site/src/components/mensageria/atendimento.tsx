@@ -129,8 +129,7 @@ export function Atendimento() {
 		if (!supabase || !empresa) { setRapidas([]); return; }
 		const { data } = await supabase.from('mensageria_respostas_rapidas')
 			.select('*')
-			.eq('empresa_id', empresa.id)
-			.eq('ativo', true)
+			.eq('empresa_id', empresa.id)   // a tabela não tem "ativo": toda resposta cadastrada vale
 			.order('classe', { ascending: true });
 		setRapidas((data ?? []) as Row[]);
 	}, [empresa?.id]);

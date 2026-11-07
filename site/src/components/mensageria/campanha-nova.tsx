@@ -19,7 +19,7 @@ export function CampanhaNova() {
 	const [nome, setNome] = useState('');
 	const [templateId, setTemplateId] = useState('');
 	const [centroId, setCentroId] = useState('');
-	const [rcsFallback, setRcsFallback] = useState('config');
+	const [rcsFallback, setRcsFallback] = useState('empresa');
 	const [rcsFallbackTemplate, setRcsFallbackTemplate] = useState('');
 	const [rastrear, setRastrear] = useState(false);
 	const [templates, setTemplates] = useState<Row[]>([]);
@@ -88,7 +88,8 @@ export function CampanhaNova() {
 		if (!templateId && !isEmail) { setErro('Escolha o template.'); return; }
 		setBusy(true); setErro('');
 		const payload: Record<string, unknown> = { empresa_id: empresa.id, canal, nome: nome.trim(), template_id: isEmail ? null : templateId, centro_custo_id: centroId || null, rastrear_links: rastrear };
-		if (isRcs) { payload.rcs_fallback = rcsFallback; payload.rcs_fallback_template = rcsFallbackTemplate || null; }
+		// colunas da tabela: fallback (empresa|nenhum|sms|whatsapp) e fallback_template_id (template de SMS)
+		if (isRcs) { payload.fallback = rcsFallback; payload.fallback_template_id = rcsFallback === 'sms' && rcsFallbackTemplate ? rcsFallbackTemplate : null; }
 		const { data, error } = await supabase.from('mensageria_campanhas').insert(payload).select('id').single();
 		setBusy(false);
 		if (error) { setErro(friendlyError(error)); return; }
@@ -114,7 +115,7 @@ export function CampanhaNova() {
 		if (!sb || !campanhaId) return;
 		let tentativas = 0;
 		const tick = async () => {
-			const { data } = await sb.from('mensageria_campanhas').select('situacao,carregados,layout_sugerido,erro_texto').eq('id', campanhaId).maybeSingle();
+			const { data } = await sb.from('mensageria_campanhas').select('situacao,carregados,layout_sugerido,erro').eq('id', campanhaId).maybeSingle();
 			const c = data as Row | null;
 			if (!c) return;
 			if (c.situacao === 'aguardando_layout') {
@@ -128,7 +129,7 @@ export function CampanhaNova() {
 				setPasso(2);
 				return;
 			}
-			if (c.situacao === 'erro') { setAnalisando(false); setErro(c.erro_texto || 'Erro ao ler a lista.'); return; }
+			if (c.situacao === 'erro') { setAnalisando(false); setErro(c.erro || 'Erro ao ler a lista.'); return; }
 			if (++tentativas < 40) setTimeout(tick, 3000);
 		};
 		tick();
@@ -160,7 +161,7 @@ export function CampanhaNova() {
 		if (!sb || !campanhaId) return;
 		let tentativas = 0;
 		const tick = async () => {
-			const { data } = await sb.from('mensageria_campanhas').select('situacao,score_previa,erro_texto').eq('id', campanhaId).maybeSingle();
+			const { data } = await sb.from('mensageria_campanhas').select('situacao,score_previa,erro').eq('id', campanhaId).maybeSingle();
 			const c = data as Row | null;
 			if (!c) return;
 			if (c.situacao === 'pronta') {
@@ -168,7 +169,7 @@ export function CampanhaNova() {
 				setPreviaEstado('pronta');
 				return;
 			}
-			if (c.situacao === 'erro') { setErro(c.erro_texto || 'Erro ao calcular a prévia do Score.'); setPreviaEstado('pronta'); return; }
+			if (c.situacao === 'erro') { setErro(c.erro || 'Erro ao calcular a prévia do Score.'); setPreviaEstado('pronta'); return; }
 			if (c.situacao === 'calculando_previa') { setPreviaEstado('calculando'); }
 			if (++tentativas < 120) setTimeout(tick, 15000);
 		};
@@ -271,7 +272,7 @@ export function CampanhaNova() {
 							<div>
 								<label className="mb-1.5 block text-[13px] font-semibold text-[#1D1D1F]">Se o aparelho não tiver RCS</label>
 								<select value={rcsFallback} onChange={e => setRcsFallback(e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-[#0071E5]/40">
-									<option value="config">Usar a configuração da empresa</option>
+									<option value="empresa">Usar a configuração da empresa</option>
 									<option value="sms">Enviar por SMS</option>
 									<option value="whatsapp">Enviar por WhatsApp</option>
 									<option value="nenhum">Não enviar</option>

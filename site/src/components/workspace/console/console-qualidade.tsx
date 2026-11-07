@@ -56,7 +56,7 @@ export function ConsoleQualidadePage() {
 		setLoading(true); setError('');
 		const deIso = toISO(de), ateIso = toISO(ate);
 		const [fr, al, tb, ph, cfg] = await Promise.all([
-			supabase.from('mensageria_fornecedores').select('id,nome,codigo,canais,ativo').order('nome'),
+			supabase.from('mensageria_fornecedores').select('nome,codigo,canais,ativo').order('nome'),
 			supabase.rpc('alertas_qualidade', { canal_lote: canal }),
 			supabase.rpc('qualidade_fornecedores', { de: deIso, ate: ateIso, canal_lote: canal }),
 			supabase.rpc('qualidade_por_hora', { de: deIso, ate: ateIso, canal_lote: canal }),
@@ -136,7 +136,7 @@ export function ConsoleQualidadePage() {
 						<span className="mb-1 block text-[12px] font-semibold text-[#6E6E73]">Fornecedor</span>
 						<select value={fornecedorSel} onChange={e => setFornecedorSel(e.target.value)} className="h-10 rounded-lg border border-[#D2D2D7] bg-white px-3 text-[14px] outline-none focus:border-[#1D1D1F]">
 							<option value="">Todos</option>
-							{fornecedoresCanal.map(f => <option key={f.id} value={String(f.codigo)}>{String(f.nome)}</option>)}
+							{fornecedoresCanal.map(f => <option key={String(f.codigo)} value={String(f.codigo)}>{String(f.nome)}</option>)}
 						</select>
 					</label>
 					<button onClick={() => void reload()} className="h-10 rounded-full px-5 text-[14px] font-semibold text-white hover:opacity-90" style={{ backgroundColor: MENSAGEM_COR }}>Atualizar</button>

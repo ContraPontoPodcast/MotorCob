@@ -46,11 +46,12 @@ export type DescadastroMensageria = {
 	criado_em: string;
 };
 
+/** Linha de mensageria_modelos_email (colunas do banco: remetente_nome, assunto, corpo). */
 export type ModeloEmail = {
 	empresa_id: string;
-	nome_remetente: string;
+	remetente_nome: string;
 	assunto: string;
-	texto: string;
+	corpo: string;
 };
 
 /** Situação do lote → rótulo, cor do texto e fundo do selo. */

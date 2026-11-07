@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router';
 import { Plus, X, ShieldCheck, RotateCcw, Lock } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError, dateTimeBR, type Row } from '@/lib/supabase';
+import { erroDaFuncao, frase, lerErroDaFuncao } from '@/lib/funcoes';
 import { haQuanto } from '@/lib/empresa-helpers';
 import { ConsoleShell, cardShadow } from './console-shell';
 import { Chave } from './chave';
@@ -183,12 +184,14 @@ function EquipePainel({ membro, catalogo, souEu, onReload, onSairEEntrar }: {
   async function executar(acao: string) {
     if (!supabase) return;
     setBusy(true); setErroLocal('');
+    let daFuncao = '';
     try {
       if (acao === 'resetar_2fa' || acao === 'desativar' || acao === 'reativar') {
         const { data, error: invError } = await supabase.functions.invoke('admin-usuarios', { body: { acao, usuario_id: membro.id } });
+        // a frase crua da função (403 "reautentique…", "último Master"…) para classificarErro
+        daFuncao = (await lerErroDaFuncao(invError, data)).mensagem ?? '';
+        if (daFuncao) throw new Error(daFuncao);
         if (invError) throw invError;
-        const d = data as { erro?: string } | null;
-        if (d?.erro) throw new Error(d.erro);
       }
       setConfirmAcao(null);
       await onReload();
@@ -198,7 +201,7 @@ function EquipePainel({ membro, catalogo, souEu, onReload, onSairEEntrar }: {
       if (tipo === 'reauth') setErroLocal('entre com o seu código de duas etapas para mudar a equipe');
       else if (tipo === 'master') setErroLocal('a equipe precisa de pelo menos um Master ativo');
       else if (tipo === 'self') setErroLocal('ninguém muda a própria função');
-      else setErroLocal(friendlyError(e));
+      else setErroLocal(daFuncao ? frase(daFuncao) : friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -336,10 +339,9 @@ function ConvidarModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     if (!nome.trim()) { setError('Informe o nome.'); return; }
     setBusy(true);
     const { data, error: invError } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'convidar_equipe', email: email.trim(), nome: nome.trim(), funcao } });
+    const msg = await erroDaFuncao(invError, data);
     setBusy(false);
-    if (invError) { setError(friendlyError(invError)); return; }
-    const d = data as { erro?: string } | null;
-    if (d?.erro) { setError(typeof d.erro === 'string' ? d.erro : friendlyError()); return; }
+    if (msg) { setError(msg); return; }
     setOk(true);
     setTimeout(onSaved, 1500);
   }

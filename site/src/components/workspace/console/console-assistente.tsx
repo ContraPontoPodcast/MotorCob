@@ -525,7 +525,7 @@ function RespostasTab({ preset, onLimparPreset }: { preset: { pergunta: string; 
 	async function toggleAtiva(r: Row) {
 		if (!supabase) return;
 		try {
-			const { error } = await supabase.from('assistente_respostas').update({ ativa: !r.ativa }).eq('id', r.id);
+			const { error } = await supabase.from('assistente_respostas').update({ ativo: !r.ativo }).eq('id', r.id);
 			if (error) throw error;
 			void reload();
 		} catch (e) { toast.error(friendlyError(e)); }
@@ -554,11 +554,11 @@ function RespostasTab({ preset, onLimparPreset }: { preset: { pergunta: string; 
 				<span key="f" className="text-[#6E6E73]">{frenteLabel}</span>,
 				<span key="u" className="tnum text-[#6E6E73]">{num(r, 'usos')}</span>,
 				<span key="a" className="tnum text-[#1D1D1F]">{tot > 0 ? `${Math.round((ap / tot) * 100)}%` : '—'}</span>,
-				<span key="s" className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.ativa ? 'bg-[#E8F8EC] text-[#248A3D]' : 'bg-[#F5F5F7] text-[#8E8E93]'}`}>{r.ativa ? 'Ativa' : 'Inativa'}</span>,
+				<span key="s" className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.ativo ? 'bg-[#E8F8EC] text-[#248A3D]' : 'bg-[#F5F5F7] text-[#8E8E93]'}`}>{r.ativo ? 'Ativa' : 'Inativa'}</span>,
 				<div key="x" className="flex items-center justify-end gap-1">
 					<button onClick={() => testar(str(r, 'pergunta'))} title="Testar a pergunta" className="grid h-7 w-7 place-items-center rounded-full text-[#8E8E93] hover:bg-[#F5F5F7]"><FlaskConical size={14} /></button>
 					<button onClick={() => setEditando(r)} title="Editar" className="grid h-7 w-7 place-items-center rounded-full text-[#8E8E93] hover:bg-[#F5F5F7]"><Pencil size={14} /></button>
-					<button onClick={() => toggleAtiva(r)} title={r.ativa ? 'Desativar' : 'Ativar'} className="grid h-7 w-7 place-items-center rounded-full text-[#8E8E93] hover:bg-[#F5F5F7]"><Lock size={14} /></button>
+					<button onClick={() => toggleAtiva(r)} title={r.ativo ? 'Desativar' : 'Ativar'} className="grid h-7 w-7 place-items-center rounded-full text-[#8E8E93] hover:bg-[#F5F5F7]"><Lock size={14} /></button>
 					<button onClick={() => excluir(r)} title="Excluir" className="grid h-7 w-7 place-items-center rounded-full text-[#FF3B30] hover:bg-[#FFE8E6]"><Trash2 size={14} /></button>
 				</div>,
 			],
@@ -592,7 +592,7 @@ function RespostaFormCard({ editando, preset, onFechar, onSalvo }: { editando: R
 		passos: Array.isArray(editando.passos) ? (editando.passos as unknown[]).map(String) : [],
 		tela: str(editando, 'tela'),
 		frente: str(editando, 'frente') || 'todas',
-		ativa: editando.ativa !== false,
+		ativa: editando.ativo !== false,
 	} : {
 		pergunta: preset?.pergunta ?? '',
 		resposta: '',
@@ -622,7 +622,7 @@ function RespostaFormCard({ editando, preset, onFechar, onSalvo }: { editando: R
 				passos: form.passos.map(p => p.trim()).filter(Boolean).slice(0, 6),
 				tela: form.tela || null,
 				frente: form.frente,
-				ativa: form.ativa,
+				ativo: form.ativa,   // a coluna é "ativo"
 			};
 			if (editando) {
 				const { error } = await supabase.from('assistente_respostas').update(payload).eq('id', editando.id);

@@ -44,7 +44,7 @@ export function Rotas() {
 
 	async function reloadFornecedores() {
 		if (!supabase) return;
-		const { data } = await supabase.from('mensageria_fornecedores').select('id,codigo,nome,canais,ativo').order('nome');
+		const { data } = await supabase.from('mensageria_fornecedores').select('codigo,nome,canais,ativo').order('nome');
 		setFornecedores((data ?? []) as Row[]);
 	}
 
@@ -53,7 +53,7 @@ export function Rotas() {
 		setLoading(true); setError('');
 		const [pr, fn, vg] = await Promise.all([
 			supabase.rpc('produtos_catalogo'),
-			supabase.from('mensageria_fornecedores').select('id,codigo,nome,canais,ativo').order('nome'),
+			supabase.from('mensageria_fornecedores').select('codigo,nome,canais,ativo').order('nome'),
 			supabase.from('negociacoes_vigentes').select('*'),
 		]);
 		if (pr.error) { setError(friendlyError(pr.error)); setLoading(false); return; }
@@ -319,7 +319,7 @@ function RotaEditor({ produto, fornecedores, vigentes, onNovoForn, onVigentesUpd
 											<div key={li} className="flex flex-wrap items-center gap-2">
 												<select value={l.fornecedor} onChange={e => setLinha(bi, li, { fornecedor: e.target.value })} className="h-9 flex-1 rounded-lg border border-[#D2D2D7] bg-white px-2 text-[14px] outline-none focus:border-[#1D1D1F]">
 													<option value="">—</option>
-													{fornCanal.map(f => <option key={f.id} value={f.codigo}>{f.nome}</option>)}
+													{fornCanal.map(f => <option key={f.codigo} value={f.codigo}>{f.nome}</option>)}
 												</select>
 												<input type="range" min={0} max={100} value={l.percentual} onChange={e => setLinha(bi, li, { percentual: Number(e.target.value) })} className="w-20 accent-[#1D1D1F]" />
 												<input type="number" min={0} max={100} value={l.percentual} onChange={e => setLinha(bi, li, { percentual: Number(e.target.value) })} className="h-9 w-14 rounded-lg border border-[#D2D2D7] px-2 text-[14px] tnum outline-none focus:border-[#1D1D1F]" />

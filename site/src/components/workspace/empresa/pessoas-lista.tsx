@@ -4,6 +4,7 @@ import { UserPlus, X, KeyRound, ShieldCheck, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError, type Perfil } from '@/lib/supabase';
+import { erroDaFuncao } from '@/lib/funcoes';
 import { PERFIS_INFO, type PerfilId } from '@/lib/perfis-info';
 import { cardShadow } from './empresa-shell';
 
@@ -243,10 +244,10 @@ function ConvidarPanel({ onClose, onDone }: { onClose: () => void; onDone: (msg:
     if (!nome.trim() || !email.trim()) { setError('Nome e e-mail são obrigatórios.'); return; }
     setBusy(true);
     const { data, error: fnError } = await supabase.functions.invoke('admin-usuarios', { body: { acao: 'convidar', email: email.trim(), nome: nome.trim(), papel } });
+    // a função responde { erro } (409 e-mail já cadastrado, 400, 403...): mostra a frase dela
+    const msg = await erroDaFuncao(fnError, data);
     setBusy(false);
-    if (fnError) { setError(friendlyError(fnError)); return; }
-    const d = data as { ok?: boolean; error?: string } | null;
-    if (d?.error) { setError(typeof d.error === 'string' ? d.error : friendlyError()); return; }
+    if (msg) { setError(msg); return; }
     onDone(`Convite enviado para ${email.trim()}.`);
   }
 
