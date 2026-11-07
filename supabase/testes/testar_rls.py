@@ -2845,5 +2845,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 75: trocar e excluir a estratégia (testar_estrategia_trocar.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 76 · Prévia de segmentação: paridade com o motor (cluster.classificar) e permissões (aplica o 76 duas vezes)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_segmentos_previa.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 76: prévia de segmentação (testar_segmentos_previa.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

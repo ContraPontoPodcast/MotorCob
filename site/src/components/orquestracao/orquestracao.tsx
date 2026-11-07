@@ -13,6 +13,7 @@ import { removerMensagensCanaisSemMensagem } from '@/lib/mensagem-dia';
 import { DesenhoDaEsteira } from '@/components/estrategias/desenho-esteira';
 import { LeaveGuardDialog } from '@/components/estrategias/leave-guard-dialog';
 import { ClusterForm, type Coluna } from '@/components/clusters/cluster-form';
+import { CaminhosSegmentacao, UsarSegmentoModal } from '@/components/clusters/caminhos-segmentacao';
 import { ReenquadramentoButton, type ReenquadramentoHandle } from '@/components/reenquadramento/reenquadramento-button';
 import { PersonasDaCarteira, limparPersonas, normalizarDefinicao } from '@/components/orquestracao/personas-carteira';
 import { ExportarButton } from '@/components/estrategias/exportar-button';
@@ -73,6 +74,7 @@ export function Orquestracao() {
 	const [busy, setBusy] = useState('');
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [formOpen, setFormOpen] = useState(false);
+	const [usarOpen, setUsarOpen] = useState(false);
 	// Empresa nova sem segmento: "Copiar"/"Começar de um modelo" primeiro criam o segmento e depois abrem o caminho escolhido.
 	const [depoisDoSegmento, setDepoisDoSegmento] = useState<null | 'modelo' | 'copiar'>(null);
 	const [editing, setEditing] = useState<Cluster | null>(null);
@@ -893,14 +895,13 @@ export function Orquestracao() {
 					{!demaisAtivo && emUso.length === 0 && (
 						<div className="flex items-center gap-2 rounded-xl border border-[var(--estado-erro)] bg-[var(--estado-erro-fundo)] px-4 py-3 text-sm font-semibold text-[var(--estado-erro-texto)]"><AlertTriangle size={16} /> Nenhum cliente desta carteira recebe ação: ligue um segmento ou os Demais clientes</div>
 					)}
+					<CaminhosSegmentacao
+						disabled={!canEdit}
+						onNovo={() => { setDepoisDoSegmento(null); setEditing(null); setFormOpen(true); }}
+						onUsar={() => setUsarOpen(true)}
+					/>
 					{emUso.length === 0 ? (
-						<TresCaminhos
-							aviso={<div className="rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-4 py-2.5 text-sm font-medium text-[var(--estado-atencao-texto)]">Esta carteira ainda não tem segmentos em uso.</div>}
-							disabled={!canEdit}
-							onCriarDoZero={() => { setDepoisDoSegmento(null); setEditing(null); setFormOpen(true); }}
-							onCopiar={() => { setDepoisDoSegmento('copiar'); setEditing(null); setFormOpen(true); toast('Primeiro diga quem vamos cobrar: salve o segmento e, em seguida, escolha de qual carteira copiar.'); }}
-							onModelo={() => { setDepoisDoSegmento('modelo'); setEditing(null); setFormOpen(true); toast('Primeiro diga quem vamos cobrar: salve o segmento e, em seguida, escolha o modelo.'); }}
-						/>
+						<div className="rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-4 py-2.5 text-sm font-medium text-[var(--estado-atencao-texto)]">Esta carteira ainda não tem segmentos em uso.</div>
 					) : (
 						<>
 							<div className="flex items-center justify-between gap-2">
@@ -1184,7 +1185,9 @@ export function Orquestracao() {
 				</div>
 			)}
 
-			{formOpen && empresa && credor && <ClusterForm cluster={editing} colunas={colunas} maxOrdem={Math.max(0, ...Object.values(clustersMap).map(c => Number(c.ordem) || 0))} credorId={credor.id} criarVinculoCredor usadoEmCarteiras={editing ? (vinculosPorCluster[editing.id] ?? 0) : undefined} onClose={() => { setFormOpen(false); setDepoisDoSegmento(null); }} onSaved={(id) => {
+			{usarOpen && empresa && credor && <UsarSegmentoModal open empresaId={empresa.id} credorId={credor.id} credorNome={credor.nome} onClose={() => setUsarOpen(false)} onUsado={() => { setUsarOpen(false); void reload(); }} />}
+			{formOpen && empresa && credor && <ClusterForm cluster={editing} colunas={colunas} maxOrdem={Math.max(0, ...Object.values(clustersMap).map(c => Number(c.ordem) || 0))} credorId={credor.id} criarVinculoCredor usadoEmCarteiras={editing ? (vinculosPorCluster[editing.id] ?? 0) : undefined}
+				previaEmUso={emUso.map(s => ({ id: s.cluster_id, codigo: s.codigo, nome: s.nome, ordem: s.ordem, condicoes: clustersMap[s.cluster_id]?.condicoes ?? [] }))} onClose={() => { setFormOpen(false); setDepoisDoSegmento(null); }} onSaved={(id) => {
 				const depois = depoisDoSegmento;
 				const novo = !editing && id;
 				setFormOpen(false); setDepoisDoSegmento(null);
