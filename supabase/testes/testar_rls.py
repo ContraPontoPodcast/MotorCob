@@ -2839,5 +2839,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 74: assistente de implantação (testar_assistente_implantacao.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 75 · Trocar e excluir a estratégia do segmento; nome legível da estratégia criada (aplica o 75 duas vezes)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_estrategia_trocar.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 75: trocar e excluir a estratégia (testar_estrategia_trocar.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

@@ -212,10 +212,11 @@ export function removerMensagensCanaisSemMensagem(def: Definicao): Definicao {
 		return out;
 	};
 	const next: Definicao = { ...def };
-	if (next.localizacao) next.localizacao = { ...next.localizacao, passos: limparPassos(next.localizacao.passos) ?? {} };
-	if (next.giro) next.giro = { ...next.giro, passos: limparPassos(next.giro.passos) ?? {} };
-	if (next.preventivo) next.preventivo = { ...next.preventivo, passos: limparPassos(next.preventivo.passos) ?? {} };
-	if (next.quebra) next.quebra = { ...next.quebra, passos: limparPassos(next.quebra.passos) ?? {} };
+	// Fase sem "passos" fica sem: para o motor é a régua padrão; "passos": {} seria "ninguém recebe ação".
+	if (next.localizacao?.passos) next.localizacao = { ...next.localizacao, passos: limparPassos(next.localizacao.passos) ?? {} };
+	if (next.giro?.passos) next.giro = { ...next.giro, passos: limparPassos(next.giro.passos) ?? {} };
+	if (next.preventivo?.passos) next.preventivo = { ...next.preventivo, passos: limparPassos(next.preventivo.passos) ?? {} };
+	if (next.quebra?.passos) next.quebra = { ...next.quebra, passos: limparPassos(next.quebra.passos) ?? {} };
 	if (next.cpc) {
 		const cpc = { ...next.cpc };
 		cpc.ordem = (cpc.ordem ?? []).map(a => canalTipoMensagem(a.canal) === 'nenhuma' ? { ...a, mensagem: undefined } : a);

@@ -725,6 +725,15 @@ vence, a detecção completa o resto (coluna que sumiu volta para a detecção).
 mapeamento abre um pedido de rotina. Lote da Mensageria não nasce para canal com quem_envia = lista; SMS sem frase na
 esteira usa a frase ativa da etapa (`frases.estagio`). Menu: Discagem → "Regras de discagem"; ⌘K com sinônimos e sem acento.
 
+SQL 75 (Orquestração, relato do dono): "Trocar estratégia" (segmentos_carteira.estrategia_id = null; volta às três opções e a
+estratégia fica na empresa) e "Excluir estratégia" (`excluir_estrategia`, só se `usos_estrategia` não acha outro segmento ×
+carteira, Demais clientes ou padrão; senão só Trocar); `criar_estrategia_segmento` cria com o nome da tela ("<Modelo> ·
+<Segmento>"); `separar_estrategia` não corta mais a carteira em 16 letras. Estágios no site = o que o motor faz
+(`site/src/lib/estagios-regua.ts`): fase sem a chave `passos` segue a régua padrão do motor, `passos: {}` = ninguém da fase
+recebe ação, etapa sem régua é ignorada; os passos Estágios, Régua e Revisar mostram a MESMA lista (nomes, ordem, ligado) e
+salvar nunca grava `passos: {}` numa fase que não tinha (`porFaseComPassos`). "Montar esteira pelas personas": por estágio,
+só em estágio com dias, aplica no editor (Salvar grava).
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

@@ -63,6 +63,20 @@ class TestTolerante(unittest.TestCase):
         self.assertTrue(any("cor" in a for a in avisos))
 
 
+class TestFaseSemPassos(unittest.TestCase):
+    """O contrato que o site mostra nos passos Estágios, Régua e Revisar (site/src/lib/estagios-regua.ts)."""
+
+    def test_sem_passos_segue_o_padrao_passos_vazio_nao_aciona(self):
+        import json
+        from motor.estrategia import aplicar
+        dados = json.loads((Path(__file__).resolve().parents[1] / "regras" / "regua.json").read_text(encoding="utf-8"))
+        over, _ = validar_estrategia({"localizacao": {"ativo": True}, "giro": {"ativo": True, "passos": {}}}, "Clássicos")
+        d = aplicar(dados, over)
+        self.assertEqual(d["localizacao"]["passos"], dados["localizacao"]["passos"])   # "padrão do motor"
+        self.assertTrue(d["localizacao"]["passos"])
+        self.assertEqual(d["giro"]["passos"], {})                                     # "ninguém aqui recebe ação"
+
+
 class TestBlend(unittest.TestCase):
     def test_whatsapp_primeiro_quando_ha_numero_com_whatsapp(self):
         fila, _ = _cenario(flags={WA: {"whatsapp_valido": True}}, sinais={WA2: {"rcs": True, "pertence": "sim"}})

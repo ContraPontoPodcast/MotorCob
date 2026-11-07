@@ -1,6 +1,6 @@
 import { type Definicao } from '@/lib/estrategia';
 import { numberBR, type PersonaUsuario, type Credor, type SegmentoEmUso } from '@/lib/supabase';
-import { statusEstagios, ESTAGIOS } from './regua-topo';
+import { estagiosDaEstrategia } from '@/lib/estagios-regua';
 import { Check, AlertTriangle } from 'lucide-react';
 
 type Cartao = { ok: boolean; titulo: string; linhas: React.ReactNode[] };
@@ -39,12 +39,14 @@ export function VisaoGeral({ def, personas, credor, segmentos, countBySeg, demai
 	onVerEstagios: () => void;
 	onMontarAgora: () => void;
 }) {
-	const status = statusEstagios(def);
+	// Os mesmos estágios dos passos Estágios e Régua (nomes, ordem, ligado/desligado), com o que o motor faz em cada um.
+	const estagios = estagiosDaEstrategia(def);
 	const totalClientes = Object.values(countBySeg).reduce((a, b) => a + b, 0) + (demaisCount ?? 0);
-	const estagiosAtivos = ESTAGIOS.filter(e => status[e.id].ativo).length;
-	const estagiosDesligados = ESTAGIOS.length - estagiosAtivos;
-	const comRegua = ESTAGIOS.filter(e => status[e.id].temRegua).length;
-	const semRegua = ESTAGIOS.filter(e => status[e.id].ativo && !status[e.id].temRegua);
+	const estagiosAtivos = estagios.filter(e => e.ativo).length;
+	const estagiosDesligados = estagios.length - estagiosAtivos;
+	const ligados = estagios.filter(e => e.ativo);
+	const comRegua = ligados.filter(e => e.regua !== 'vazia').length;
+	const semRegua = ligados.filter(e => e.regua === 'vazia');
 
 	const cartoes: Cartao[] = [
 		{
@@ -72,10 +74,8 @@ export function VisaoGeral({ def, personas, credor, segmentos, countBySeg, demai
 		},
 		{
 			ok: semRegua.length === 0,
-			titulo: `O que fazer · ${comRegua} de ${ESTAGIOS.length} estágios com régua`,
-			linhas: semRegua.length === 0
-				? ['Todos os estágios ativos têm régua.']
-				: semRegua.map(e => <span key={e.id}>{e.nome}: sem régua — o motor ignora este estágio.</span>),
+			titulo: `O que fazer · ${comRegua} de ${ligados.length} estágios ligados com régua`,
+			linhas: estagios.map((e, i) => <span key={e.id}>{i + 1}. <strong>{e.nome}</strong>: {e.texto}.</span>),
 		},
 		{
 			ok: true,
