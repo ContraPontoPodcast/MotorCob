@@ -8,10 +8,13 @@ import { dateBR, friendlyError, supabase, type Credor, type Row } from '@/lib/su
 import { toastError, ErrorDetail } from '@/components/error-detail';
 import { AbCalendario } from '@/components/credores/calendario';
 import { AbCanais, type CanalCodigo as CanalCodigoRow } from '@/components/credores/aba-canais';
+import { MapeamentoCarga } from '@/components/comuns/mapeamento-carga';
+import { combinar, paraSalvar, validar, type ColunasCarga } from '@/lib/mapeamento-carga';
 
 type TipoArquivo = 'ocorrencia' | 'acordo' | 'baixa';
+type TipoMapeado = TipoArquivo | 'base' | `canal_${string}`;
 type MapeamentoArquivo = {
-	id: string; empresa_id: string; credor_id: string; tipo: TipoArquivo;
+	id: string; empresa_id: string; credor_id: string; tipo: TipoMapeado;
 	colunas: Record<string, string> | null; confirmado: boolean;
 	sugerido: Record<string, string> | null; cabecalho: string[] | null;
 	arquivo: string | null; visto_em: string | null; atualizado_em: string | null;
@@ -119,7 +122,8 @@ export function CredorConfiguracoes() {
 		void reload();
 	}
 
-	const pendenciasArquivos = mapeamentos.filter(m => !m.tipo.startsWith('canal_') && !m.confirmado).length;
+	// a carga geral (tipo 'base') só pende quando uma carga espera as colunas (a detecção automática basta nas outras)
+	const pendenciasArquivos = mapeamentos.filter(m => !m.tipo.startsWith('canal_') && m.tipo !== 'base' && !m.confirmado).length;
 	const pendenciasCodigos = codigos.filter(c => !c.mapeado).length;
 	const pendenciasCanaisMap = mapeamentos.filter(m => m.tipo.startsWith('canal_') && !m.confirmado).length;
 	const pendenciasCanaisCod = canalCodigos.filter(c => !c.mapeado).length;
@@ -128,7 +132,7 @@ export function CredorConfiguracoes() {
 
 	if (!empresa) return <><PageHeading eyebrow="CONFIGURAÇÃO / CARTEIRAS" title="Configurações" description="Aponte as colunas e marque os CPCs." /><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></>;
 	if (loading) return <><PageHeading eyebrow="CONFIGURAÇÃO / CARTEIRAS" title="Configurações" description="Aponte as colunas e marque os CPCs." /><Loading /></>;
-	if (!credor) return <><PageHeading eyebrow="CONFIGURAÇÃO / CARTEIRAS" title="Configurações" description="Aponte as colunas e marque os CPCs." /><Notice>Credor não encontrado.</Notice></>;
+	if (!credor) return <><PageHeading eyebrow="CONFIGURAÇÃO / CARTEIRAS" title="Configurações" description="Aponte as colunas e marque os CPCs." /><Notice>Carteira não encontrada.</Notice></>;
 
 	return (
 		<div>
@@ -184,11 +188,58 @@ function AbArquivos({ credor, mapeamentos, canEdit, onSaved }: {
 	const tipos: TipoArquivo[] = ['ocorrencia', 'acordo', 'baixa'];
 	return (
 		<div className="space-y-5">
+			<CartaoCargaGeral credor={credor} mapeamento={mapeamentos.find(x => x.tipo === 'base') ?? null} canEdit={canEdit} onSaved={onSaved} />
 			{tipos.map(tipo => {
 				const m = mapeamentos.find(x => x.tipo === tipo) ?? null;
 				return <CartaoArquivo key={tipo} credor={credor} tipo={tipo} mapeamento={m} canEdit={canEdit} onSaved={onSaved} />;
 			})}
 		</div>
+	);
+}
+
+/** Carga geral (SQL 74): as colunas que o motor usa. O salvo vence a detecção automática; o que faltar, ela completa. */
+function CartaoCargaGeral({ credor, mapeamento, canEdit, onSaved }: { credor: Credor; mapeamento: MapeamentoArquivo | null; canEdit: boolean; onSaved: () => void }) {
+	const cabecalho = mapeamento?.cabecalho ?? [];
+	const sugerido = (mapeamento?.sugerido ?? {}) as ColunasCarga;
+	const inicial = useMemo(() => combinar(mapeamento?.confirmado ? (mapeamento.colunas as ColunasCarga) : null, sugerido, cabecalho), [mapeamento?.id, mapeamento?.confirmado, mapeamento?.visto_em]); // eslint-disable-line react-hooks/exhaustive-deps
+	const [colunas, setColunas] = useState<ColunasCarga>(inicial);
+	const [editando, setEditando] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const [err, setErr] = useState('');
+	useEffect(() => { setColunas(inicial); }, [inicial]);
+	const problema = cabecalho.length ? validar(colunas, cabecalho) : '';
+	async function salvar() {
+		if (!supabase) return;
+		setBusy(true); setErr('');
+		const { data, error } = await supabase.rpc('salvar_mapeamento_base', { credor: credor.id, colunas: paraSalvar(colunas) });
+		setBusy(false);
+		if (error) { setErr(friendlyError(error)); return; }
+		toast.success((data as Row | null)?.reprocessar ? 'Colunas salvas · a carga que esperava entra em instantes' : 'Colunas salvas · valem a partir da próxima carga');
+		setEditando(false);
+		onSaved();
+	}
+	return (
+		<section className="rounded-xl border border-[#dfe8ea] bg-white p-6" data-cartao="carga-geral">
+			<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+				<div className="flex items-center gap-3">
+					<h3 className="text-base font-semibold text-[#163943]">Carga geral</h3>
+					{mapeamento?.confirmado
+						? <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-0.5 text-[11px] font-bold text-[#2E7D32]"><Check size={12} /> Colunas apontadas</span>
+						: mapeamento ? <span className="rounded-full bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-bold text-slate-500">Reconhecidas sozinhas</span> : null}
+				</div>
+				{mapeamento?.arquivo && <span className="text-xs text-slate-500">Último arquivo: <strong className="font-medium text-slate-600">{mapeamento.arquivo}</strong></span>}
+			</div>
+			{!mapeamento || !cabecalho.length ? (
+				<p className="rounded-lg bg-[#f5f8f9] px-4 py-5 text-sm text-slate-400">Ainda não chegou carga geral nesta carteira. Envie a primeira pelo <Link to="/implantacao" className="font-semibold text-[#0F4C5C] underline">Assistente de implantação</Link> (as colunas são conferidas antes) ou em <Link to="/envios" className="font-semibold text-[#0F4C5C] underline">Cargas</Link>.</p>
+			) : <>
+				<MapeamentoCarga cabecalho={cabecalho} colunas={colunas} reconhecido={sugerido} onTrocar={c => { setColunas(c); setEditando(true); }} somenteLeitura={!canEdit} />
+				{err && <p role="alert" className="mt-3 text-sm text-[#C62828]">{err}</p>}
+				{canEdit && (editando || !mapeamento.confirmado) && <div className="mt-4 flex flex-wrap items-center gap-3">
+					<button onClick={() => void salvar()} disabled={busy || !!problema} className="h-10 rounded-lg bg-[#0F4C5C] px-5 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Salvando…' : 'Usar estas colunas'}</button>
+					{problema ? <span className="text-sm text-[#9a631b]">{problema}</span> : <span className="text-xs text-slate-500">O que você apontar vale mais que a detecção automática, nesta carteira.</span>}
+				</div>}
+			</>}
+		</section>
 	);
 }
 

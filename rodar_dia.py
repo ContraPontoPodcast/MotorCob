@@ -746,6 +746,12 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
     ativas = [f for f in _ler_lista(frases) if f.get("ativo") is not False]
     playbook = {f.get("id"): f.get("texto") for f in ativas if f.get("texto")}
     templates = {f.get("id"): f.get("codigo_template") for f in ativas if f.get("codigo_template")}
+    # SMS sem frase na esteira: vale a frase ativa da empresa para a etapa (frases.estagio; as padrão do Assistente
+    # de implantação, SQL 74). A da esteira sempre vence; sem frase da etapa, sai sem frase (como antes).
+    sms_etapa = {}
+    for f in sorted(ativas, key=lambda f: (str(f.get("nome") or "").startswith("Padrão MotorCX"), f.get("id") or 0)):
+        if f.get("canal") == "sms" and f.get("estagio") and f.get("texto") and f.get("id") is not None:
+            sms_etapa.setdefault(f["estagio"], {"frase_id": f["id"]})
     for l in fila:
         e_ = estados.get(l["id_cliente"])
         eid_ = regua.estrategia_de(e_.cluster_atual) if e_ else None
@@ -757,6 +763,8 @@ def rodar_dia(clientes_csv, carteira_csv, retornos, hoje: date, layouts=LAYOUTS_
         if texto is None:
             msgs = regua.para(e_.cluster_atual).dados.get("mensagens") if e_ else None
             texto = ((msgs or {}).get(estagio_da_linha(l)) or {}).get(l["canal"])
+        if texto is None and l["canal"] == "sms":
+            texto = sms_etapa.get(estagio_da_linha(l))
         l["template"] = False
         l["frase_id"], l["frase_versao"] = None, ""   # registro da frase (escolhas.csv): mede o que cada uma rende
         if l["canal"] in CANAIS_SEM_MENSAGEM:      # discador e e-mail: sem frase nem template

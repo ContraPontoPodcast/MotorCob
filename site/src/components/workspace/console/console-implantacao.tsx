@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import { ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { supabase, friendlyError, dateTimeBR, type Row } from '@/lib/supabase';
 import { ConsoleShell, cardShadow } from './console-shell';
@@ -120,6 +121,10 @@ export function ConsoleImplantacaoPage() {
 		<ConsoleShell>
 			{error && <div className="mb-4 rounded-xl bg-[#FFE8E6] px-4 py-3 text-[14px] text-[#FF3B30]">{error}</div>}
 
+			<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+				<p className="text-[14px] text-[#6E6E73]">O Assistente de implantação leva cada empresa da criação até a primeira Lista do dia, em 5 passos.</p>
+				<Link to="/implantacao?nova=1" className="flex h-9 items-center rounded-full bg-[#1D1D1F] px-4 text-[14px] font-medium text-white hover:opacity-85">Nova implantação</Link>
+			</div>
 			<section className="rounded-2xl bg-white p-6" style={{ boxShadow: cardShadow }}>
 				{loading ? (
 					<p className="py-10 text-center text-[14px] text-[#8E8E93]">Carregando...</p>
@@ -291,9 +296,12 @@ function RowFragment({ r, sit, pct, exp, vendedor, onVerPassos, onDone, passos, 
 					{r.pedido_em ? (
 						<LigarEnvioRealButton empresaId={r.empresa_id} empresaNome={r.nome} onDone={onDone} size="sm" />
 					) : (
-						<button onClick={onVerPassos} className="inline-flex items-center gap-1 text-[13px] font-medium text-[#0A60D0] hover:underline">
-							{exp ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Ver passos
-						</button>
+						<span className="inline-flex flex-wrap items-center justify-end gap-3">
+							<Link to={`/implantacao?empresa=${r.empresa_id}`} className="text-[13px] font-semibold text-[#0A60D0] hover:underline">Continuar implantação</Link>
+							<button onClick={onVerPassos} className="inline-flex items-center gap-1 text-[13px] font-medium text-[#0A60D0] hover:underline">
+								{exp ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Ver passos
+							</button>
+						</span>
 					)}
 				</td>
 			</tr>
@@ -347,9 +355,12 @@ function MobileCard({ r, sit, pct, exp, vendedor, onVerPassos, onDone, passos, p
 				{r.pedido_em ? (
 					<LigarEnvioRealButton empresaId={r.empresa_id} empresaNome={r.nome} onDone={onDone} size="sm" />
 				) : (
-					<button onClick={onVerPassos} className="inline-flex items-center gap-1 text-[13px] font-medium text-[#0A60D0] hover:underline">
-						{exp ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Ver passos
-					</button>
+					<span className="inline-flex flex-wrap items-center gap-3">
+						<Link to={`/implantacao?empresa=${r.empresa_id}`} className="text-[13px] font-semibold text-[#0A60D0] hover:underline">Continuar implantação</Link>
+						<button onClick={onVerPassos} className="inline-flex items-center gap-1 text-[13px] font-medium text-[#0A60D0] hover:underline">
+							{exp ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Ver passos
+						</button>
+					</span>
 				)}
 			</div>
 			{exp && (

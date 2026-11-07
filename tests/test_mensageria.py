@@ -135,6 +135,29 @@ class TestMensageria(unittest.TestCase):
         self.assertEqual(M.mascarar("sms", "11988887766"), "(11) 9••••-••66")
         self.assertEqual(M.mascarar("email", " Ana@Exemplo.com "), "an••@exemplo.com")
 
+    def test_quem_envia_lista_nao_cria_lote(self):
+        """SQL 74: SMS com "quem envia = lista para baixar" fica só na Lista do dia (o fornecedor da empresa envia)."""
+        self._criar(canais_empresa=[{"canal": "sms", "ativo": True, "quem_envia": "lista"},
+                                    {"canal": "email", "ativo": True, "quem_envia": "motorcx"}])
+        self.assertEqual({l["canal"] for l in self.sb.t["mensageria_lotes"]}, {"email"})
+
+    def test_quem_envia_vazio_segue_como_antes(self):
+        self._criar(canais_empresa=[{"canal": "sms", "ativo": True, "quem_envia": None}])
+        self.assertEqual({l["canal"] for l in self.sb.t["mensageria_lotes"]}, {"sms", "email"})
+
+    def test_aprovar_so_o_primeiro_lote(self):
+        """"Aprovar o primeiro, depois automático": sem lote aprovado espera; depois de um aprovado, sai agendado."""
+        self.sb.t["mensageria_config"] = [{"empresa_id": 1, "aprovar_lotes": True, "aprovar_primeiro": True}]
+        self._criar()
+        self.assertEqual(self._lote("sms")["situacao"], "aguardando_aprovacao")
+        self._lote("sms")["aprovado_em"] = "2026-09-25T09:00:00"
+        self.sb.t["mensageria_lotes"] = [l for l in self.sb.t["mensageria_lotes"] if l["canal"] == "sms"]
+        for l in self.sb.t["mensageria_lotes"]:
+            l["data"] = "2026-09-24"                       # o aprovado é de ontem; hoje cria de novo
+        self._criar()
+        hoje = next(l for l in self.sb.t["mensageria_lotes"] if l["canal"] == "sms" and l["data"] == DIA.isoformat())
+        self.assertEqual(hoje["situacao"], "agendado")
+
     def test_lote_nasce_sem_contato_no_banco_e_aguardando_aprovacao(self):
         self._criar()
         sms = self._lote("sms")

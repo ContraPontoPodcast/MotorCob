@@ -15,7 +15,7 @@ export const ACOES: Record<string, string> = {
   abrir_acoes: "Abrir Ações",
   abrir_clientes: "Abrir Clientes",
   abrir_personas: "Abrir Personas",
-  abrir_credores: "Abrir Credores",
+  abrir_credores: "Abrir Carteiras",
   abrir_mapa_esteira: "Abrir o Mapa da Esteira",
   abrir_orquestracao: "Abrir Orquestração",
   abrir_comite: "Abrir Comitê",
@@ -39,6 +39,9 @@ export const ACOES: Record<string, string> = {
   abrir_documentacao: "Abrir a Documentação",
   abrir_permissoes: "Abrir Usuários e permissões",
   abrir_auditoria: "Abrir Auditoria",
+  abrir_regras_discagem: "Abrir Regras de discagem",
+  abrir_agente_virtual: "Abrir o Agente virtual",
+  abrir_implantacao: "Abrir o Assistente de implantação",
   abrir_chamado: "Abrir chamado",
 };
 
@@ -49,7 +52,7 @@ export const MODELO = "claude-sonnet-5-5";
 export const TEMAS = [
   "Visão geral e login", "Navegação", "Glossário e ajuda", "Score de Entrega", "Orquestração", "Jornada", "Mensageria",
   "Status de entrega", "Relatórios", "Empresa", "Minha conta", "E-mails e notificações", "Suporte",
-  "Usuários e permissões", "Auditoria", "API", "LGPD", "Outro",
+  "Usuários e permissões", "Auditoria", "API", "LGPD", "Implantação", "Regras de discagem", "Agente virtual", "Outro",
 ] as const;
 
 // Formato que o modelo devolve (structured outputs). "texto" vem logo depois de "respondida" para aparecer cedo.
@@ -220,6 +223,8 @@ const REQUER: Record<string, { modulo?: string; pode?: string }> = {
   abrir_credores: { modulo: "orquestracao" }, abrir_mapa_esteira: { modulo: "orquestracao" },
   abrir_orquestracao: { modulo: "orquestracao" }, abrir_comite: { modulo: "orquestracao" },
   abrir_enviar_arquivos: { modulo: "orquestracao" }, abrir_canais_frases: { modulo: "orquestracao", pode: "editar_canais" },
+  abrir_regras_discagem: { modulo: "orquestracao" }, abrir_agente_virtual: { modulo: "orquestracao" },
+  abrir_implantacao: { modulo: "orquestracao" },
   abrir_mensageria_painel: { modulo: "mensageria" }, abrir_campanhas: { modulo: "mensageria" },
   abrir_lotes: { modulo: "mensageria" }, abrir_respostas: { modulo: "mensageria" },
   abrir_templates: { modulo: "mensageria" }, abrir_listas: { modulo: "mensageria" },

@@ -21,16 +21,30 @@ export const ATALHOS: Atalho[] = [
 	{ id: 'conta', label: 'Minha conta', to: '/conta', keywords: 'conta perfil minha' },
 	{ id: '2fa', label: 'Verificação em duas etapas', to: '/conta?aba=seguranca', keywords: 'verificação duas etapas segurança mfa autenticador' },
 	{ id: 'docs', label: 'Documentação', to: '/docs', keywords: 'documentação docs ajuda manual' },
+	// Cobrança (ganhos rápidos da implantação): as telas que mais se procuram, com sinônimos
+	{ id: 'implantacao', label: 'Assistente de implantação', to: '/implantacao', keywords: 'implantação implantar onboarding começar primeiros passos nova empresa configurar cliente novo colunas mapeamento', area: 'cobranca' },
+	{ id: 'carteiras', label: 'Carteiras', to: '/credores', keywords: 'carteira carteiras credor credores nova carteira configurações da carteira colunas ocorrências', area: 'cobranca' },
+	{ id: 'cargas', label: 'Cargas', to: '/envios', perm: PERM.enviarArquivos, keywords: 'carga cargas enviar arquivo upload base mailing planilha csv xlsx ocorrência acordo baixa pagamento', area: 'cobranca' },
+	{ id: 'orquestracao', label: 'Orquestração', to: '/orquestracao', keywords: 'orquestração régua réguas esteira estratégia segmentos estágios playbook reenquadrar', area: 'cobranca' },
+	{ id: 'discagem', label: 'Regras de discagem', to: '/discagem', keywords: 'discagem discador regras de discagem renitência rediscagem rediscar tentativas spins horário de ligar resubmit reciclagem chamadas curtas ligação voz', area: 'cobranca' },
+	{ id: 'agente-virtual', label: 'Agente virtual', to: '/canais/agente-virtual', keywords: 'agente virtual voz ia robô ligação fluxo fluxos editor pedido em texto testar conversa roteiro', area: 'cobranca' },
+	{ id: 'canais', label: 'Canais', to: '/canais', perm: PERM.editarCanais, keywords: 'canais canal janela horário custo capacidade sábado quem envia lista para baixar fornecedor', area: 'cobranca' },
+	{ id: 'frases', label: 'Frases', to: '/canais?secao=frases', perm: PERM.editarCanais, keywords: 'frases frase mensagem mensagens texto sms playbook de frases modelo', area: 'cobranca' },
 ];
+
+/** Sem acento e em minúsculas (quem digita "renitencia" acha "renitência"). */
+function semAcento(t: string): string {
+	return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
 
 /** Filtra os atalhos pela permissão do usuário, pelas áreas contratadas e pelo texto digitado. */
 export function filtrarAtalhos(atalhos: Atalho[], q: string, permissoes: string[], areas?: Pick<AreasLiberadas, 'cobranca' | 'jornada' | 'mensageria'>): Atalho[] {
-	const query = q.trim().toLowerCase();
+	const query = semAcento(q.trim());
 	return atalhos.filter(a => {
 		if (a.perm && !permissoes.includes(a.perm)) return false;
 		if (a.area && areas && !areas[a.area]) return false;
 		if (!query) return true;
-		return (a.label + ' ' + a.keywords).toLowerCase().includes(query);
+		return semAcento(a.label + ' ' + a.keywords).includes(query);
 	});
 }
 

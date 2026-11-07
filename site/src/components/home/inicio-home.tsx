@@ -198,6 +198,20 @@ export function InicioHome() {
 				</button>
 			</div>
 
+			{/* Assistente de implantação (equipe) */}
+			{perfil?.equipe && (
+				<div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white px-5 py-4" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="min-w-0">
+						<p className="text-[15px] font-semibold text-[#1D1D1F]">Assistente de implantação</p>
+						<p className="text-[13px] text-[#6E6E73]">Empresa e contrato, carteira, primeira carga, como acionar e o que falta: 5 passos num lugar só.</p>
+					</div>
+					<div className="flex flex-wrap gap-2">
+						{empresa && <button onClick={() => navigate(`/implantacao?empresa=${empresa.id}`)} className="h-9 rounded-full border border-[#D2D2D7] px-4 text-[14px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Continuar a da {empresa.nome}</button>}
+						<button onClick={() => navigate('/implantacao?nova=1')} className="h-9 rounded-full bg-[#1D1D1F] px-4 text-[14px] font-medium text-white hover:opacity-85">Nova implantação</button>
+					</div>
+				</div>
+			)}
+
 			{/* Primeiros passos */}
 			<div className="mt-8">
 				<PrimeirosPassos />

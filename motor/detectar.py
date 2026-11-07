@@ -144,12 +144,43 @@ NAO_FONE = ("TIPO", "OPERADORA", "RANKING", "SCORE", "DDD", "POSSUI", "PERTURBE"
             "QTD", "DATA", "DT_", "RCS", "HOT", "CEP")
 
 
-def layout_base(arq: Path, explicar: dict) -> dict:
+# Mapeamento da carga geral feito no site (SQL 74, mapeamento_arquivos tipo 'base'): campo do motor → coluna.
+CAMPO_FIXO = {"CPF": "cpf", "ID do cliente": "id_cliente", "contrato": "id_contrato", "saldo": "saldo",
+              "dias de atraso": "dias_atraso", "vencimento": "vencimento", "data de entrada": "data_entrada"}
+
+
+def _fixas_validas(fixas: dict | None, nomes: list[str]) -> dict:
+    """Só o que o cliente apontou e existe neste arquivo (coluna que sumiu volta para a detecção automática)."""
+    saida = {}
+    for k, v in (fixas or {}).items():
+        if k in ("telefones", "emails"):
+            cols = [c for c in (v or []) if isinstance(c, str) and c in nomes]
+            if cols:
+                saida[k] = cols
+        elif k in CAMPO_FIXO.values() and isinstance(v, str) and v in nomes:
+            saida[k] = v
+    if saida.get("id_cliente") and saida.get("id_cliente") == saida.get("cpf"):
+        saida.pop("id_cliente")          # o código do cliente nunca é a coluna do CPF: o motor decide o ID
+    return saida
+
+
+def layout_base(arq: Path, explicar: dict, fixas: dict | None = None) -> dict:
+    """Layout da carga geral. `fixas` = mapeamento salvo no site (vence a detecção; o que faltar, a detecção completa)."""
     enc, delim, nomes, amostra = ler(arq)
+    fix = _fixas_validas(fixas, nomes)
     usados = set()
+    reservadas = {c for k, v in fix.items() for c in ([v] if isinstance(v, str) else v)}
 
     def pega(campo, *a, **k):
-        c = _achar(nomes, *a, usados=usados, **k)
+        chave = CAMPO_FIXO.get(campo)
+        if chave in fix:
+            c = fix[chave]
+            usados.add(c)
+            explicar[campo] = f"{c} (você apontou)"
+            return c
+        if chave == "dias_atraso" and "vencimento" in fix:
+            return None                  # o cliente apontou o vencimento: o atraso sai dele
+        c = _achar(nomes, *a, usados=usados | reservadas, **k)
         if c:
             usados.add(c)
             explicar[campo] = c
@@ -174,15 +205,18 @@ def layout_base(arq: Path, explicar: dict) -> dict:
     entrada = pega("data de entrada", ("DATA_ENTRADA", "DT_ENTRADA", "DATA_CARGA", "DT_CARGA", "DATA_REMESSA"))
     falta = [n for n, c in (("saldo", saldo), ("dias de atraso ou vencimento", atraso or venc)) if not c]
     telefones, emails = [], []
+    fix_tel, fix_mail = fix.get("telefones"), fix.get("emails")
     for i, c in enumerate(nomes):
         n = _n(c)
         if c in usados or not c:
             continue
-        if ("EMAIL" in n or "E_MAIL" in n) and "VALID" not in n:
+        if (c in fix_mail) if fix_mail else (("EMAIL" in n or "E_MAIL" in n) and "VALID" not in n
+                                              and c not in reservadas):
             emails.append(c)
             continue
-        if any(k in n for k in ("TEL", "FONE", "CELULAR", "CEL", "WHATSAPP_NUMERO", "NUMERO_TELEFONE")) \
-                and not any(x in n for x in NAO_FONE) and _parece_telefone(amostra, c):
+        if (c in fix_tel) if fix_tel else (
+                any(k in n for k in ("TEL", "FONE", "CELULAR", "CEL", "WHATSAPP_NUMERO", "NUMERO_TELEFONE"))
+                and not any(x in n for x in NAO_FONE) and c not in reservadas and _parece_telefone(amostra, c)):
             t = {"coluna": c}
             sufixo = re.sub(r"^\D*", "", n)
             ddd = next((d for d in nomes if _n(d) in (f"DDD{sufixo}", f"DDD_{sufixo}", f"DDD_TEL{sufixo}")), None) \
@@ -216,6 +250,52 @@ def layout_base(arq: Path, explicar: dict) -> dict:
     return {"arquivo": "*", "delimitador": delim, "encoding": enc,
             "formato_data": _formato_data(amostra, [venc, entrada]), "decimal": _decimal(amostra, [saldo]),
             "colunas": colunas, "telefones": telefones, "emails": emails}
+
+
+FALTA_BASE = ("cliente", "saldo", "atraso", "contato")   # o que a carga geral precisa (um de cada)
+
+
+def sugerir_base(arq: Path, fixas: dict | None = None) -> dict:
+    """Para o site (SQL 74): o cabeçalho, o que a detecção acha de cada campo e o que falta, SEM erro.
+    {"cabecalho": [...], "sugerido": {campo: coluna, "telefones": [...], "emails": [...]}, "faltam": [...]}
+    faltam usa FALTA_BASE. Nunca devolve valores das linhas (só nomes de coluna)."""
+    try:
+        _, _, nomes, amostra = ler(arq)
+    except (OSError, UnicodeDecodeError, IndexError, csv.Error):
+        return {"cabecalho": [], "sugerido": {}, "faltam": list(FALTA_BASE)}
+    try:
+        lay = layout_base(arq, {}, fixas)
+        sug = {k: v for k, v in lay["colunas"].items() if k in CAMPO_FIXO.values()}
+        sug["telefones"] = [t["coluna"] for t in lay["telefones"]]
+        sug["emails"] = list(lay["emails"])
+    except LayoutInvalido:
+        fix = _fixas_validas(fixas, nomes)
+        usados = {c for k, v in fix.items() for c in ([v] if isinstance(v, str) else v)}
+        sug = {k: v for k, v in fix.items()}
+        for chave, args, kw in (("cpf", (CPFS,), {}), ("id_cliente", (IDS,), {}),
+                                ("id_contrato", (CONTRATOS,), {"contem": ("CONTRATO",),
+                                                              "evitar": ("TIPO", "DATA", "DT_", "QTD", "STATUS")}),
+                                ("saldo", (SALDOS,), {"contem": ("SALDO", "VALOR", "VL_", "VLR"),
+                                                      "evitar": ("PARCELA", "PAGO", "MINIMO")}),
+                                ("dias_atraso", (ATRASOS,), {"contem": ("ATRASO",)}),
+                                ("vencimento", (VENCS,), {"contem": ("VENC",)})):
+            if chave in sug:
+                continue
+            c = _achar(nomes, *args, usados=usados, **kw)
+            if c:
+                usados.add(c)
+                sug[chave] = c
+        if "telefones" not in sug:
+            sug["telefones"] = [c for c in nomes if c and c not in usados
+                                and any(k in _n(c) for k in ("TEL", "FONE", "CELULAR", "CEL"))
+                                and not any(x in _n(c) for x in NAO_FONE) and _parece_telefone(amostra, c)]
+        if "emails" not in sug:
+            sug["emails"] = [c for c in nomes if c and c not in usados
+                             and ("EMAIL" in _n(c) or "E_MAIL" in _n(c)) and "VALID" not in _n(c)]
+    faltam = [f for f, ok in (("cliente", sug.get("id_cliente") or sug.get("cpf")), ("saldo", sug.get("saldo")),
+                              ("atraso", sug.get("dias_atraso") or sug.get("vencimento")),
+                              ("contato", sug.get("telefones") or sug.get("emails"))) if not ok]
+    return {"cabecalho": nomes, "sugerido": {k: v for k, v in sug.items() if v}, "faltam": faltam}
 
 
 # ------------------------------------------------------------------ ocorrência
@@ -436,20 +516,22 @@ def _arqs(pasta: Path) -> list[Path]:
                   key=lambda p: (data_do_arquivo(p), p.name))
 
 
-def entrada_automatica(pasta: str | Path, nome: str = "automatico") -> tuple[Entrada, dict]:
-    """Monta o layout da pasta do credor pelos arquivos que chegaram. Retorna (Entrada, explicação)."""
+def entrada_automatica(pasta: str | Path, nome: str = "automatico",
+                       mapa_base: dict | None = None) -> tuple[Entrada, dict]:
+    """Monta o layout da pasta do credor pelos arquivos que chegaram. Retorna (Entrada, explicação).
+    mapa_base = colunas da carga geral apontadas no site (SQL 74): vencem a detecção automática."""
     pasta = Path(pasta)
     explic = {}
     cargas = _arqs(pasta / "bruto") or _arqs(pasta / "incremental")
     if not cargas:
         raise LayoutInvalido("ainda não chegou carga geral para reconhecer as colunas")
     explic["carga"] = {}
-    base = layout_base(cargas[-1], explic["carga"])
+    base = layout_base(cargas[-1], explic["carga"], mapa_base)
     dados = {"empresa": nome, "base": base}
     inc = _arqs(pasta / "incremental")
     if inc and ler(inc[-1])[2] != ler(cargas[-1])[2]:
         explic["incremental"] = {}
-        dados["incremental"] = layout_base(inc[-1], explic["incremental"])
+        dados["incremental"] = layout_base(inc[-1], explic["incremental"], mapa_base)
     # os demais arquivos: o que não der para entender fica de fora (com o motivo), sem parar a carga
     oc = _arqs(pasta / "ocorrencias")
     if oc:

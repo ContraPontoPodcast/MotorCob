@@ -48,7 +48,7 @@ export function Credores() {
       supabase.from('credores').select('*').eq('empresa_id', empresa.id).order('nome'),
       supabase.from('estrategias').select('id,nome,padrao,frente').eq('empresa_id', empresa.id).order('nome'),
       supabase.from('ultima_execucao').select('credor_id,resumo').eq('empresa_id', empresa.id),
-      supabase.from('mapeamento_arquivos').select('credor_id').eq('empresa_id', empresa.id).eq('confirmado', false),
+      supabase.from('mapeamento_arquivos').select('credor_id').eq('empresa_id', empresa.id).eq('confirmado', false).neq('tipo', 'base'),
       supabase.from('ocorrencia_codigos').select('credor_id').eq('empresa_id', empresa.id).eq('mapeado', false),
     ]);
     if (c.error || e.error || r.error || pm.error || po.error) { setError(friendlyError()); setLoading(false); return; }
@@ -67,13 +67,18 @@ export function Credores() {
   }
   useEffect(() => { void reload(); }, [empresa?.id]);
 
-  function openNew() { setEditing(null); setNome(''); setCodigo(''); setCodigoTouched(false); setEstrategiaId(''); setEntradaCarga('arquivo'); setFormError(''); setFormOpen(true); }
+  // A empresa nasce com a "Carteira principal": a primeira Nova carteira dá o nome a ela, em vez de criar outra vazia.
+  const principalSemNome = lista.length === 1 && lista[0].codigo === 'principal' && lista[0].nome === 'Carteira principal' ? lista[0] : null;
+  function openNew() {
+    if (principalSemNome) { openEdit(principalSemNome); setNome(''); return; }
+    setEditing(null); setNome(''); setCodigo(''); setCodigoTouched(false); setEstrategiaId(''); setEntradaCarga('arquivo'); setFormError(''); setFormOpen(true);
+  }
   function openEdit(c: Credor) { setEditing(c); setNome(c.nome); setCodigo(c.codigo); setCodigoTouched(true); setEstrategiaId(c.estrategia_id ?? ''); setEntradaCarga(c.entrada_carga ?? 'arquivo'); setFormError(''); setFormOpen(true); }
 
   async function submit() {
     if (!supabase || !empresa) return;
     setFormError('');
-    if (nome.trim().length < 2) { setFormError('Informe o nome do credor.'); return; }
+    if (nome.trim().length < 2) { setFormError('Dê um nome à carteira (ex.: Banco Horizonte · Cartões).'); return; }
     if (editing) {
       setBusy(editing.id);
       const { error } = await supabase.from('credores').update({ nome: nome.trim(), estrategia_id: estrategiaId || null, entrada_carga: entradaCarga, ativo: editing.ativo }).eq('id', editing.id);
@@ -81,12 +86,12 @@ export function Credores() {
       setBusy(''); return;
     }
     const code = codigo.trim().toLowerCase();
-    if (!/^[a-z0-9-]{2,40}$/.test(code)) { setFormError('Código: 2 a 40 caracteres, só a-z, 0-9 e hífen.'); return; }
+    if (!/^[a-z0-9-]{2,40}$/.test(code)) { setFormError('O identificador sai do nome: use pelo menos 2 letras ou números no nome.'); return; }
     setBusy('new');
     const { data: created, error } = await supabase.from('credores').insert({ empresa_id: empresa.id, nome: nome.trim(), codigo: code, estrategia_id: estrategiaId || null, entrada_carga: entradaCarga, ativo: true }).select().single();
     if (error) {
       const msg = (error.message || '').toLowerCase();
-      if (msg.includes('duplicate') || msg.includes('unique') || msg.includes('repetido')) setFormError('Já existe um credor com este código.');
+      if (msg.includes('duplicate') || msg.includes('unique') || msg.includes('repetido')) setFormError('Já existe uma carteira com este identificador. Mude o nome.');
       else setFormError(friendlyError());
       setBusy(''); return;
     }
@@ -122,7 +127,7 @@ export function Credores() {
         </table></div>
       </section>}
 
-    {formOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-[#102e38]/60 p-4" onClick={() => setFormOpen(false)}><div role="dialog" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">{editing ? 'Editar carteira' : 'Nova carteira'}</h2><button onClick={() => setFormOpen(false)} aria-label="Fechar"><X size={20}/></button></div><div className="space-y-4"><div><label className="mb-2 block text-xs font-semibold">Nome</label><input value={nome} onChange={e => { setNome(e.target.value); if (!codigoTouched) setCodigo(slugify(e.target.value)); }} className="h-11 w-full rounded-lg border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]" placeholder="Nome da carteira"/></div><div><label className="mb-2 block text-xs font-semibold">Código</label><input value={codigo} onChange={e => { setCodigoTouched(true); setCodigo(slugify(e.target.value)); }} disabled={!!editing} className="h-11 w-full rounded-lg border border-[#d8e3e5] px-3 font-mono text-sm outline-none focus:border-[#0F4C5C] disabled:bg-[#f5f7f8]" placeholder="nome-da-carteira"/><p className="mt-1 text-xs text-slate-400">{editing ? 'O código não pode ser alterado depois de criado.' : 'Minúsculas, sem acento, espaços viram hífen. 2 a 40 caracteres.'}</p></div><div><label className="mb-2 block text-xs font-semibold">Estratégia padrão da carteira</label><select value={estrategiaId} onChange={e => setEstrategiaId(e.target.value)} className="h-11 w-full rounded-lg border border-[#d8e3e5] bg-white px-3 text-sm outline-none focus:border-[#0F4C5C]"><option value="">Padrão da empresa</option>{estrMotorcob.map(es => <option key={es.id} value={es.id}>{es.nome}</option>)}</select><p className="mt-1 text-xs text-slate-400">Vale para os segmentos desta carteira sem estratégia própria e para Demais clientes. Sem ela, vale o padrão da empresa.</p></div>
+    {formOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-[#102e38]/60 p-4" onClick={() => setFormOpen(false)}><div role="dialog" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">{editing ? (editing.nome === 'Carteira principal' ? 'Dar nome à carteira' : 'Editar carteira') : 'Nova carteira'}</h2><button onClick={() => setFormOpen(false)} aria-label="Fechar"><X size={20}/></button></div><div className="space-y-4"><div><label className="mb-2 block text-xs font-semibold">Nome</label><input value={nome} onChange={e => { setNome(e.target.value); if (!codigoTouched) setCodigo(slugify(e.target.value)); }} className="h-11 w-full rounded-lg border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]" placeholder="Nome da carteira"/></div><div>{editing?.nome === 'Carteira principal' && <p className="rounded-lg bg-[#f5f7f8] px-3 py-2 text-xs text-slate-500">A empresa já tem a Carteira principal: dê o nome certo a ela. Para rodar, uma carteira basta.</p>}<label className="mb-2 block text-xs font-semibold">Identificador (usado nos arquivos)</label><input value={codigo} onChange={e => { setCodigoTouched(true); setCodigo(slugify(e.target.value)); }} disabled={!!editing} className="h-11 w-full rounded-lg border border-[#d8e3e5] px-3 font-mono text-sm outline-none focus:border-[#0F4C5C] disabled:bg-[#f5f7f8]" placeholder="nome-da-carteira"/><p className="mt-1 text-xs text-slate-400">{editing ? 'O identificador não muda depois de criado.' : 'Sai sozinho do nome. Minúsculas, sem acento, espaços viram hífen.'}</p></div><div><label className="mb-2 block text-xs font-semibold">Estratégia padrão da carteira</label><select value={estrategiaId} onChange={e => setEstrategiaId(e.target.value)} className="h-11 w-full rounded-lg border border-[#d8e3e5] bg-white px-3 text-sm outline-none focus:border-[#0F4C5C]"><option value="">Padrão da empresa</option>{estrMotorcob.map(es => <option key={es.id} value={es.id}>{es.nome}</option>)}</select><p className="mt-1 text-xs text-slate-400">Vale para os segmentos desta carteira sem estratégia própria e para Demais clientes. Sem ela, vale o padrão da empresa.</p></div>
 <div>
   <label className="mb-2 block text-xs font-semibold">Como a carga chega</label>
   <div className="flex rounded-lg bg-[#f5f7f8] p-1">

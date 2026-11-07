@@ -55,10 +55,14 @@ O Início mostra:
 
 Dentro das áreas (Cobrança, Jornada do Cliente, Mensageria, Relatórios) fica a mesma barra do topo e, à esquerda, um menu lateral claro. No topo do menu: "‹ Início" e a troca de área (só para quem tem as duas).
 
-- Cobrança: Operação (Lista do dia, Clientes, Ações, Enviar carga) · Estratégia (Orquestração, Personas, Segmentos, Carteiras, Mapa da Esteira, Comitê) · Mensageria (Campanhas, Lotes, Respostas, Templates, Listas, Configurações) · Resultados (Painel, Relatórios).
-- Jornada do Cliente: Jornada (Mapa, Lista do dia, Clientes, Enviar carga) · Estratégia (Momentos e fases, Mensagens por momento) · Mensageria (as mesmas telas) · Resultados (Painel, Relatórios).
+- Cobrança: Lista do dia, Clientes, Ações, Cargas · Estratégia (Orquestração, Personas, Frases, Regras de discagem) · Resultados (Painel, Mapa da esteira, Comitê, Gravações, Speech Analytics) · Configurações (Carteiras, Canais).
+- Jornada do Cliente: Visão geral, Lista do dia, Clientes, Cargas · Estratégia (Momentos e fases, Mensagens, Carteiras) · Resultados (Painel).
+- Mensageria: Campanhas, Lotes · Respostas (Caixa, Radar) · Templates, Listas · Resultados (Painel do canal, Score) · Configurações (Do canal, Atendimento) · Agente virtual (os lotes de ligações do dia).
+- Relatórios: Cobrança, Jornada, Mensageria e Meus arquivos (uma aba por produto contratado).
+- Empresa: Visão geral, Contatos, Pessoas e perfis, Integrações, Faturas, Contratação (só equipe), Auditoria, Privacidade e gravações.
 - Na Mensageria, o controle de canal SMS · RCS · E-mail · WhatsApp. Canal não liberado aparece desabilitado; o último canal fica lembrado.
-- Console MotorCX (só equipe): Operação (Saúde, Empresas, Atendimento) · Financeiro (Faturamento, Fornecedores, Margem) · Administração (Equipe).
+- Console MotorCX (só equipe): Clientes (Empresas, Saúde, Implantação, Carteiras, Contatos do site, Integrações) · Suporte (Atendimento, Assistente) · Financeiro (Faturamento, Margem) · Mensageria (Produtos e preços, Fornecedores e rotas, Qualidade, Filtro de inteligência) · Administração (Equipe, Auditoria) · Sistema (E-mails).
+- Busca ⌘K (Ctrl+K): leva direto às telas; entende sinônimos e palavras sem acento (por exemplo "renitencia" ou "rediscagem" abrem Regras de discagem; "credor" abre Carteiras; "upload" ou "mailing" abrem Cargas; "onboarding" abre o Assistente de implantação). Atalhos da busca: Lista do dia, Lista do dia da Jornada, Respostas dos clientes, Abrir chamado, Meus chamados, Convidar membro, Contatos da empresa, Faturas, Minha conta, Verificação em duas etapas, Documentação, Assistente de implantação, Carteiras, Cargas, Orquestração, Regras de discagem, Agente virtual, Canais e Frases (cada um só aparece para quem tem a área e a permissão).
 
 No celular, o menu lateral vai para a gaveta do botão ☰.
 
@@ -128,14 +132,16 @@ Consulta de um cliente pelo ID (ou contrato). A tela "Cliente {ID}" mostra o seg
 
 Perfis de devedor da carteira. O anel de cada persona mostra a maturidade (não a quantidade de clientes); o ranking de canais destaca o melhor e o segundo canal, com o resultado em CPC. Quem tem "Editar a orquestração" cria e ajusta as personas.
 
-### Credores
+### Carteiras
 
-As carteiras da empresa. Cada credor tem nome, código (aparece ao lado do nome, com botão de copiar), estratégia padrão e o campo "Como a carga chega":
+Cobrança › Configurações › Carteiras. As carteiras da empresa (antes chamadas de "credores"; é o mesmo lugar). Cada carteira tem nome, identificador (aparece ao lado do nome, com botão de copiar; sai sozinho do nome e é usado nos arquivos), estratégia padrão e o campo "Como a carga chega":
 
-- Arquivo: envie pelo site, em Enviar arquivos (CSV, TXT ou XLSX).
-- API: o sistema do credor envia direto pela API, com token. O relatório de linhas aceitas e rejeitadas é o mesmo do arquivo.
+- Arquivo: envie pelo site, em Cargas (CSV, TXT ou XLSX).
+- API: o sistema da carteira envia direto pela API, com token. O relatório de linhas aceitas e rejeitadas é o mesmo do arquivo.
 
-Quem tem "Editar credores" cria e edita credores; os demais só veem.
+Toda empresa nasce com a "Carteira principal". Para rodar, uma carteira basta: dê o nome certo a ela (a primeira "Nova carteira" e o Assistente de implantação renomeiam a principal em vez de criar outra). Crie outras só se houver mais de um credor. Quem tem "Editar credores" cria e edita carteiras; os demais só veem.
+
+Configurações da carteira (botão Configurações): abas Arquivos (colunas da carga geral, da ocorrência, do acordo e do pagamento), Ocorrências (marcar o que é CPC), Canais (retorno de cada canal) e Calendário.
 
 ### Mapa da Esteira
 
@@ -166,16 +172,25 @@ Depois de ajustar, quem tem a permissão "Reenquadrar agora" pode pedir a rodada
 
 Planilha mensal do comitê para download (permissão "Baixar o relatório de comitê").
 
-### Enviar arquivos
+### Cargas (enviar arquivos)
 
-Envio dos arquivos da carteira (permissão "Enviar arquivos"): carga do credor, ocorrência (o retorno dizendo, por cliente, se deu CPC), atualização de contatos (enriquecimento), acordos, pagamentos e retornos dos canais. Formatos CSV, TXT ou XLSX.
+Envio dos arquivos da carteira (permissão "Enviar arquivos"): carga geral, ocorrência (o retorno dizendo, por cliente, se deu CPC), atualização de contatos (enriquecimento), acordos, pagamentos e retornos dos canais. Formatos CSV, TXT ou XLSX.
 
-1. Cobrança › Enviar carga.
-2. Escolha o credor e o tipo de arquivo.
+1. Cobrança › Cargas.
+2. Escolha a carteira e o tipo de arquivo.
 3. Arraste o arquivo ou clique para escolher.
-4. Acompanhe na tabela de envios: pendente, processado ou erro. Clique no envio para ver o relatório de linhas lidas, aceitas e rejeitadas.
+4. Acompanhe na tabela de envios: na fila, aguardando mapeamento, processado ou com erro. Clique no envio para ver o relatório de linhas lidas, aceitas e rejeitadas.
 
-Arquivo com layout novo fica aguardando o mapeamento de colunas antes de ser processado. Só quem está na carga do dia recebe ação.
+A primeira Lista do dia sai minutos depois da carga (a rotina roda logo depois de cada envio); depois, todo dia útil às 6h. Arquivo com layout novo fica aguardando o mapeamento de colunas antes de ser processado. Só quem está na carga do dia recebe ação.
+
+### Mapeamento de colunas da carga geral
+
+O MotorCX reconhece sozinho as colunas usuais de cobrança (código do cliente, contrato, CPF, saldo, dias de atraso ou vencimento, telefones e e-mails). Quando o nome é diferente:
+
+- No Assistente de implantação (passo 3) o navegador lê o cabeçalho ANTES de enviar e mostra "O que reconhecemos": o que achou e um seletor para o que falta. Ao enviar, as colunas ficam guardadas para a carteira.
+- Se a carga já foi enviada e o MotorCX não achou alguma coluna, ela NÃO é rejeitada: fica "Aguardando mapeamento" com a frase "Faltou apontar N colunas da carga: …". Aponte em Carteiras › (carteira) › Configurações › Arquivos › Carga geral (ou no assistente) e clique "Usar estas colunas": a carga que esperava entra em instantes.
+- O que a pessoa aponta vale mais que a detecção automática naquela carteira; o que ela não apontar, o MotorCX completa sozinho. Obrigatórios: o código do cliente (ou o CPF), o saldo, os dias de atraso (ou o vencimento) e ao menos um telefone ou e-mail. Cada coluna vale para um campo só; o código do cliente nunca é a mesma coluna do CPF.
+- Os exemplos mostrados na tela vêm mascarados (CPF, telefone, e-mail); nenhum valor das linhas sai do navegador antes do envio.
 
 ### Canais e frases
 
@@ -184,6 +199,42 @@ Cadastro dos canais da empresa (horário de envio e custo) e das mensagens (perm
 - WhatsApp e RCS: aba "Templates". Campos Nome, "Código do template no provedor" (obrigatório) e "Prévia do texto".
 - SMS e Agente virtual: aba "Frases". No SMS há um contador "{n}/160"; acima de 160 caracteres o SMS não é enviado. No RCS, até 160 caracteres é RCS Basic; acima, RCS Single.
 - Discador e E-mail não têm aba de frases.
+- Quem envia (Canais, para WhatsApp, RCS, SMS e E-mail): "Lista para baixar (seu fornecedor envia)" ou "MotorCX envia" (só com a Mensageria contratada para o canal). Desligado = a chave do canal. Com "lista para baixar", o canal sai todo dia na Lista do dia ({canal}.csv, com a frase na coluna mensagem) e o fornecedor da empresa envia; a MotorCX não cria lote nem cobra envio. Padrão do assistente de implantação: SMS e e-mail em lista para baixar.
+- SMS sem frase na esteira usa a frase ativa da empresa para a etapa (Cliente novo, Deu CPC, Acordo · antes do vencimento, Acordo · parcela vencida…); o assistente de implantação cria as frases "Padrão MotorCX" de cada etapa, editáveis em Frases.
+
+### Regras de discagem
+
+Cobrança › Estratégia › Regras de discagem (antes "Discagem"; endereço /discagem). Por carteira: quantas vezes ligar por dia e por número (renitência por situação), quando rediscar depois de não atendeu, ocupado ou caixa postal (regra por sinalização, "rediscar depois de N minutos"), modo de discagem (vertical ou horizontal, spins), resubmit e reciclagem do mailing, chamadas curtas, horários por UF/DDD e o resultado do dia. Sem nada salvo, vale o padrão MotorCX (3 tentativas por número, seg–sex 8h–20h, sábado 8h–14h). Quem edita: "Editar canais e frases" (ou a equipe). Para achar pela busca: digite discagem, renitência, rediscagem, tentativas, spins ou horário de ligar.
+
+### Agente virtual
+
+Onde fica cada parte:
+
+- Fluxos (Cobrança › Canais › Agente virtual ou a busca "agente virtual"; endereço /canais/agente-virtual): a lista de fluxos do agente, com as abas Configuração do canal, Modelos de mensagem, Fluxos, Testar conversa e Desempenho.
+- Pedido em texto: descreva em português o que o agente deve fazer ("persona"); a IA gera um rascunho do fluxo (abertura → identidade → conversa → finais), que abre para revisar. Dá para descartar o pedido.
+- Editor: quadro por ramos. "Enviar para aprovação" fica travado enquanto houver pendência (por exemplo, falta a alçada de desconto ou um ramo sem fim).
+- Testar: simulador (você conversa como cliente), casos de teste, roleplay com personas e "Ouvir a voz".
+- Aprovar e colocar em uso na carteira: só o cliente. A equipe MotorCX pode montar e testar o fluxo pelo cliente.
+- Linha (tronco e número) e conectores: a equipe cadastra (Console › Fornecedores e rotas › Voz; Empresa › Integrações › Conectores).
+- Depois de ligado: os lotes de ligações do dia ficam em Mensageria › Agente virtual (reenviar, reciclar) e as regras de quantas vezes ligar em Regras de discagem.
+
+---
+
+## Implantação: Assistente de implantação
+
+Um lugar só para pôr um cliente novo para rodar (endereço /implantacao). A equipe abre pelo Console › Empresas › Nova empresa, pelo Console › Implantação › "Continuar implantação" ou pelo Início; o cliente, pelo botão "Assistente de implantação" dos Primeiros passos. O progresso fica salvo: dá para parar e voltar.
+
+1. Empresa e contrato (equipe MotorCX): nome, razão social, CNPJ (opcional), o Admin e o preço da Orquestração por CPF ativo no mês. Já vem assim: ciclo mensal com corte no dia 1, pós-pago, boleto ou Pix, a equipe revisa a fatura antes de emitir, situação Em implantação. Salva tudo de uma vez: se algo falhar, nada fica pela metade, e tentar de novo não cria outra empresa. Depois sai o convite do Admin ("Reenviar convite" se ele não saiu).
+2. Carteira: dá o nome certo à Carteira principal (o identificador não muda) e diz como a carga chega (arquivo ou API).
+3. Primeira carga: solte o arquivo; as colunas são conferidas antes de enviar (veja Mapeamento de colunas da carga geral). Depois mostra o resultado em números (clientes em cobrança, com ação na Lista do dia, contatos válidos, sem contato) e quando sai a próxima Lista do dia: a primeira sai minutos depois da carga.
+4. Como acionar: a Régua padrão MotorCX (Playbook) já vem ligada ("Personalizar depois na Orquestração"); para cada canal, quem envia: lista para baixar (o fornecedor da empresa envia), MotorCX envia (com a Mensageria) ou desligado. Frases padrão do SMS por etapa, editáveis. Com a MotorCX enviando, a aprovação dos lotes: todo dia, só o primeiro (depois automático) ou automática.
+5. Pronto para rodar: a lista "O que falta", montada pelo que já aconteceu (ninguém marca à mão): verde pronto, âmbar atenção, vermelho impede. Cada linha tem o conserto ali mesmo (apontar colunas, dizer quem recebe a fatura, pedir ou ligar o envio real, reenviar o convite). Em cima: a próxima Lista do dia, as ações de hoje e a fatura prevista do mês (CPFs ativos × preço). A equipe ativa a empresa (Implantação → Ativa) no fim.
+
+O mínimo para rodar: empresa com a Orquestração, uma carteira e uma carga com as colunas reconhecidas e algum contato válido. Orquestração, segmentos, personas, canais e calendário são refinamento: sem estratégia, vale o Playbook MotorCX.
+
+## Faturamento da Orquestração (por CPF ativo)
+
+A Orquestração é cobrada por CPF ativo no mês: preço × CPFs distintos que estiveram na carga em cobrança em pelo menos um dia do ciclo. O mesmo cliente em várias cargas, com vários contratos ou em duas carteiras da empresa conta uma vez; quem sai da carga deixa de contar no ciclo seguinte. O CPF nunca é guardado: a contagem usa uma chave protegida. Em Empresa › Faturas aparece o mês até agora e a estimativa do ciclo; valores e preço são com o time comercial.
 
 ---
 

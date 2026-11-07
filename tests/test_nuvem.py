@@ -823,7 +823,7 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(self._status(7001)["status"], "aguardando")
         self.assertIn("Configurações → Arquivos", self._status(7001)["relatorio"]["aguardando"])
         self.assertNotEqual(est()["X0001"], "CPA")
-        m = next(x for x in self.falso.tabelas["mapeamento_arquivos"] if x["empresa_id"] == 2)
+        m = next(x for x in self.falso.tabelas["mapeamento_arquivos"] if x["empresa_id"] == 2 and x["tipo"] == "ocorrencia")
         self.assertEqual(m["sugerido"], {"id_cliente": "COD_CLIENTE", "data": "DT_ACAO", "resultado": "OCORRENCIA",
                                          "canal": "CANAL"})
         self.assertEqual(m["cabecalho"], ["COD_CLIENTE", "DT_ACAO", "CANAL", "OCORRENCIA"])
@@ -962,15 +962,66 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(env["relatorio"]["clientes"], 3)
         self.assertIn("saidas/beta/2026-09-02/ids/whatsapp.csv", self.falso.objetos)
 
-    def test_carga_que_nao_da_para_entender_fica_com_erro(self):
+    def test_carga_que_nao_da_para_entender_espera_o_mapeamento_e_entra_depois(self):
+        """SQL 74: carga geral com colunas que a detecção não reconhece não é rejeitada: espera (aguardando) com o
+        que falta em português; o cliente aponta as colunas no site e a carga entra na rodada seguinte."""
         (self.cfg / "beta.json").unlink()
         self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["empresa_id"] != 2]
-        self._envio(7101, 2, "base", "estranha.csv", b"COLUNA_A;COLUNA_B\n1;2\n")
+        bruto = (EX / "empresa" / "bruto" / "base_2026-09-02.csv").read_text(encoding="utf-8").splitlines()
+        cab = "IDENT;CT;DOCUMENTO;MONTANTE;DATA_REF;PRODUTO;UF;NUM1;WHATS_TEL1;NUM2;NUM3;CORREIO;BLOQUEIO"
+        self._envio(7101, 2, "base", "estranha_2026-09-02.csv", ("\n".join([cab] + bruto[1:]) + "\n").encode())
         res = self._dia(date(2026, 9, 2), empresa="beta")
-        self.assertIn("COLUNA_A", res["beta"]["erro"])
-        env = next(e for e in self.falso.tabelas["envios"] if e["id"] == 7101)
-        self.assertEqual(env["status"], "erro")
-        self.assertIn("não reconheci as colunas", env["relatorio"]["erro"])
+        self.assertIn("Faltou apontar", res["beta"]["erro"])
+        env = self._status(7101)
+        self.assertEqual(env["status"], "aguardando")
+        self.assertEqual(env["relatorio"]["faltam"], ["saldo", "atraso", "contato"])
+        self.assertIn("Faltou apontar 3 colunas da carga: o saldo, os dias de atraso (ou o vencimento) e o "
+                      "telefone ou o e-mail", env["relatorio"]["aguardando"])
+        self.assertNotIn("[", env["relatorio"]["aguardando"])                 # nada de lista do Python
+        pasta = self.dados / "empresas" / "beta"
+        self.assertTrue((pasta / "bruto" / "aguardando").exists())             # guardada, não rejeitada
+        self.assertFalse((pasta / "bruto" / "rejeitados").exists())
+        m = next(x for x in self.falso.tabelas["mapeamento_arquivos"] if x["empresa_id"] == 2 and x["tipo"] == "base")
+        self.assertEqual(m["cabecalho"], cab.split(";"))
+        self.assertEqual(m["sugerido"]["cpf"], "DOCUMENTO")
+        self.assertFalse(m.get("confirmado"))
+        # rodar de novo sem mapear: continua esperando (não some, não vira erro de outro tipo)
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self.assertEqual(self._status(7101)["status"], "aguardando")
+        # o cliente aponta as colunas no site (SQL 74: salvar_mapeamento_base)
+        self._mapear(2, "base", colunas={"id_cliente": "IDENT", "cpf": "DOCUMENTO", "id_contrato": "CT",
+                                          "saldo": "MONTANTE", "vencimento": "DATA_REF",
+                                          "telefones": ["NUM1", "NUM2", "NUM3"], "emails": ["CORREIO"]})
+        res = self._dia(date(2026, 9, 2), empresa="beta")
+        self.assertNotIn("erro", res["beta"])
+        env = self._status(7101)
+        self.assertEqual(env["status"], "processado", env.get("relatorio"))
+        self.assertEqual(env["relatorio"]["clientes"], 3)
+        self.assertIn("saidas/beta/2026-09-02/ids/whatsapp.csv", self.falso.objetos)
+        lay = json.loads((pasta / "config" / "entrada_automatica.json").read_text())["base"]
+        self.assertEqual((lay["colunas"]["saldo"], lay["colunas"]["vencimento"]), ("MONTANTE", "DATA_REF"))
+        self.assertEqual([t["coluna"] for t in lay["telefones"]], ["NUM1", "NUM2", "NUM3"])
+        self.assertEqual(lay["telefones"][0].get("whatsapp"), "WHATS_TEL1")  # a marca do telefone segue detectada
+        ex = [e for e in self.falso.tabelas["execucoes"] if e["empresa_id"] == 2][-1]
+        self.assertIn("MONTANTE (você apontou)", ex["alertas"][0])
+
+    def test_mapeamento_salvo_vence_a_deteccao(self):
+        """O que o cliente apontou vale mais que o nome usual: SALDO_DEVEDOR existe, mas ele escolheu outra coluna."""
+        (self.cfg / "beta.json").unlink()
+        self.falso.tabelas["envios"] = [e for e in self.falso.tabelas["envios"] if e["empresa_id"] != 2]
+        bruto = (EX / "empresa" / "bruto" / "base_2026-09-02.csv").read_text(encoding="utf-8").splitlines()
+        linhas = [bruto[0] + ";SALDO_CORRIGIDO"] + [l + ";10,00" for l in bruto[1:]]
+        self._envio(7102, 2, "base", "carga_2026-09-02.csv", ("\n".join(linhas) + "\n").encode())
+        self.falso.tabelas.setdefault("mapeamento_arquivos", []).append(
+            {"id": 9901, "empresa_id": 2, "credor_id": None, "tipo": "base", "confirmado": True,
+             "colunas": {"id_cliente": "COD_CLIENTE", "saldo": "SALDO_CORRIGIDO", "vencimento": "DT_VENCIMENTO",
+                         "telefones": ["TEL1"]}})
+        self._dia(date(2026, 9, 2), empresa="beta")
+        self.assertEqual(self._status(7102)["status"], "processado", self._status(7102).get("relatorio"))
+        lay = json.loads((self.dados / "empresas" / "beta" / "config" / "entrada_automatica.json").read_text())["base"]
+        self.assertEqual(lay["colunas"]["saldo"], "SALDO_CORRIGIDO")
+        self.assertEqual([t["coluna"] for t in lay["telefones"]], ["TEL1"])   # só o que ele apontou
+        self.assertEqual(lay["colunas"]["cpf"], "CPF")                       # o resto a detecção completa
 
     def test_retorno_de_canal_oxigena_o_contato(self):
         """DLR do fornecedor (só telefone e status): número 'não entregue' sai do canal e o próximo assume."""

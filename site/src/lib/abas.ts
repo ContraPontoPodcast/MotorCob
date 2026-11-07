@@ -69,7 +69,7 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Orquestração', to: '/orquestracao', icon: Route },
 					{ nome: 'Personas', to: '/personas', icon: UsersRound, perm: PERM.verClientes },
 					{ nome: 'Frases', to: '/canais?secao=frases', icon: MessageCircle, perm: PERM.editarCanais },
-				{ nome: 'Discagem', to: '/discagem', icon: Phone },
+					{ nome: 'Regras de discagem', to: '/discagem', icon: Phone },
 				],
 			},
 			{

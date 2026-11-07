@@ -742,23 +742,47 @@ def _personas_usuario(sb: Supabase, pasta: Path, empresa_id, cid) -> list[dict]:
     return linhas
 
 
-def _layout_automatico(sb: Supabase, pasta: Path, baixados, out):
-    """Empresa sem empresas/<slug>.json: o MotorCob reconhece as colunas pelos arquivos (motor/detectar).
+def _layout_automatico(sb: Supabase, pasta: Path, baixados, out, eid=None, cid=None, u=None):
+    """Empresa sem empresas/<slug>.json: o MotorCob reconhece as colunas pelos arquivos (motor/detectar), com o
+    mapeamento da carga geral salvo no site por cima (SQL 74: o salvo vence; a detecção completa o resto).
     Grava o que entendeu em config/entrada_automatica.json e devolve (Entrada, alerta para conferir).
-    Carga que não dá para entender vai para rejeitados/ com a lista das colunas no envio."""
-    from motor.detectar import entrada_automatica, frase
+    Carga que não dá para entender ESPERA o mapeamento (<bruto|incremental>/aguardando/, envio "aguardando" com o que
+    falta em português); quando o cliente aponta as colunas no site, um pedido de rotina processa de novo."""
+    from motor.detectar import entrada_automatica, frase, sugerir_base
+    from motor.entrada import data_do_arquivo
     from motor.ingestao import LayoutInvalido
+    from nuvem import mapeamento
+    fixas = mapeamento.mapa_base(sb, eid, cid)
+    cargas = sorted((p for d in ("bruto", "incremental") if (pasta / d).exists() for p in (pasta / d).iterdir()
+                     if p.is_file() and not p.name.startswith(".")), key=lambda p: (data_do_arquivo(p), p.name))
     try:
-        entrada, info = entrada_automatica(pasta)
+        entrada, info = entrada_automatica(pasta, mapa_base=fixas)
     except LayoutInvalido as ex:
-        for e, destino in baixados:
-            if e["tipo"] in ("base", "incremental") and destino.exists():
-                rej = destino.parent / "rejeitados" / destino.name
-                rej.parent.mkdir(parents=True, exist_ok=True)
-                destino.replace(rej)
-                sb.atualizar("envios", {"id": f"eq.{e['id']}"},
-                             {"status": "erro", "relatorio": {"erro": f"não reconheci as colunas: {ex}"}})
-        raise RuntimeError(f"não reconheci as colunas da carga: {ex}") from None
+        if not cargas:
+            raise RuntimeError(f"não reconheci as colunas da carga: {ex}") from None
+        sug = sugerir_base(cargas[-1], fixas)
+        mapeamento.registrar_base(sb, eid, cid, cargas[-1], sug)
+        msg = mapeamento.msg_carga(sug["faltam"], fixas, sug["cabecalho"], (u or {}).get("nome") or "")
+        arq_ag = pasta / "config" / "envios_aguardando.json"
+        lista = json.loads(arq_ag.read_text(encoding="utf-8")) if arq_ag.exists() else []
+        destinos = {e["id"]: (e, d) for e, d in baixados if e["tipo"] in mapeamento.CARGAS}
+        for x in lista:   # cargas que já esperavam e voltaram nesta rodada (liberar): esperam de novo
+            if x.get("tipo") in mapeamento.CARGAS and x["id"] not in destinos:
+                destinos[x["id"]] = ({"id": x["id"], "tipo": x["tipo"]},
+                                     pasta / PASTA_DO_TIPO[x["tipo"]] / x["arquivo"])
+        mapeamento.segurar_carga([d for _, d in destinos.values()])
+        ids = {str(x["id"]) for x in lista}
+        for e, d in destinos.values():
+            sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": "aguardando", "relatorio": {
+                "aguardando": msg, "faltam": sug["faltam"], "cabecalho": sug["cabecalho"][:200],
+                "mapear": "carga"}})
+            if str(e["id"]) not in ids:
+                lista.append({"id": e["id"], "tipo": e["tipo"], "arquivo": d.name})
+        arq_ag.parent.mkdir(parents=True, exist_ok=True)
+        arq_ag.write_text(json.dumps(lista, ensure_ascii=False), encoding="utf-8")
+        raise RuntimeError(msg) from None
+    if cargas:
+        mapeamento.registrar_base(sb, eid, cid, cargas[-1], sugerir_base(cargas[-1], fixas))
     (pasta / "config").mkdir(parents=True, exist_ok=True)
     (pasta / "config" / "entrada_automatica.json").write_text(
         json.dumps(info["layout"], ensure_ascii=False, indent=1), encoding="utf-8")
@@ -908,7 +932,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         retorno_canal.liberar(pasta)
         repo = entrada is not None
         if entrada is None and any(tem(d) for d in PASTAS_CARTEIRA + ("ocorrencias", "enriquecimento")):
-            entrada, aviso_layout = _layout_automatico(sb, pasta, baixados, out)
+            entrada, aviso_layout = _layout_automatico(sb, pasta, baixados, out, eid, cid, u)
         entrada, mapa = mapeamento.aplicar(sb, eid, cid, pasta, entrada, repo, out)
         canais = canais_da_carteira(sb, _baixar(sb, pasta, "canais_empresa", eid, "canal.asc"), eid, cid)
         reg_canal, info_canal = retorno_canal.preparar(sb, eid, cid, pasta, regras_de(canais, u.get("regras_retorno")),
@@ -1113,7 +1137,7 @@ def carteira_sem_carga(u: dict, baixados_u) -> bool:
     pasta = Path(u["pasta"])
     if (pasta / "base" / "clientes.csv").exists() or baixados_u:
         return False
-    for d in ("bruto", "incremental"):
+    for d in ("bruto", "incremental", "bruto/aguardando", "incremental/aguardando"):   # aguardando = espera colunas
         if (pasta / d).exists() and any(p.is_file() for p in (pasta / d).iterdir()):
             return False
     return True

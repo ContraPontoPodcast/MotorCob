@@ -127,15 +127,15 @@ export function Discagem() {
 		await reload();
 	}
 
-	if (!empresa) return <><PageHeading title="Discagem" description="Regras de discagem da carteira." /><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></>;
-	if (!credor) return <><PageHeading title="Discagem" description="Regras de discagem da carteira." /><Notice variant="warning">Escolha a carteira no topo.</Notice></>;
+	if (!empresa) return <><PageHeading title="Regras de discagem" description="Quantas vezes ligar, quando rediscar e em que horário, por carteira." /><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></>;
+	if (!credor) return <><PageHeading title="Regras de discagem" description="Quantas vezes ligar, quando rediscar e em que horário, por carteira." /><Notice variant="warning">Escolha a carteira no topo.</Notice></>;
 
 	const edita = tab !== 'passadas' && tab !== 'resultado';
 	const nPend = pendentes.length + (mudouOutra ? 1 : 0);
 
 	return (
 		<>
-			<PageHeading title="Discagem" description="Regras de discagem e renitência da carteira. Chaves ausentes seguem o padrão MotorCX (o que o motor faz hoje)." actions={
+			<PageHeading title="Regras de discagem" description="Regras de discagem e renitência da carteira. Chaves ausentes seguem o padrão MotorCX (o que o motor faz hoje)." actions={
 				<div className="flex flex-wrap items-center gap-2">
 					<button type="button" className={btnSec} style={{ borderColor: 'var(--base-borda)' }} onClick={() => setSobre('historico')}><History size={14} /> Histórico{atual ? ` · v${atual}` : ''}</button>
 					{canEdit && <button type="button" className={btnSec} style={{ borderColor: 'var(--base-borda)' }} onClick={() => setSobre('padrao')}><RotateCcw size={14} /> Voltar ao padrão MotorCX</button>}

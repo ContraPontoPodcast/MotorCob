@@ -67,7 +67,10 @@ export function ConsoleEmpresasPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8E8E93]" />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar empresa" className="h-9 w-[260px] rounded-lg bg-white pl-9 pr-3 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-[#0071E5]/30" style={{ boxShadow: cardShadow }} />
         </div>
-        {podeCriar && <button onClick={() => setOpen(true)} className="flex h-9 items-center gap-2 rounded-full bg-[#1D1D1F] px-4 text-[14px] font-medium text-white hover:opacity-85"><Plus size={16} /> Nova empresa</button>}
+        {podeCriar && <div className="flex items-center gap-3">
+          <button onClick={() => setOpen(true)} className="text-[13px] font-medium text-[#6E6E73] hover:text-[#1D1D1F] hover:underline">Formulário completo</button>
+          <button onClick={() => navigate('/implantacao?nova=1')} className="flex h-9 items-center gap-2 rounded-full bg-[#1D1D1F] px-4 text-[14px] font-medium text-white hover:opacity-85"><Plus size={16} /> Nova empresa</button>
+        </div>}
       </div>
 
       <section className="rounded-2xl bg-white p-6" style={{ boxShadow: cardShadow }}>
