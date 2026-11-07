@@ -74,7 +74,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
 	return (
 		<div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 px-4 pt-[12vh]" onClick={onClose}>
-			<div className="w-full max-w-[520px] overflow-hidden rounded-2xl bg-white" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+			<div className="w-full max-w-[520px] overflow-hidden rounded-2xl bg-white" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 				<div className="flex items-center gap-3 border-b border-[#E5E5EA] px-4">
 					<Search size={18} className="text-[#8E8E93]" />
 					<input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={onKey} placeholder="O que você quer fazer?" className="h-12 flex-1 bg-transparent text-[15px] text-[#1D1D1F] outline-none placeholder:text-[#8E8E93]" />

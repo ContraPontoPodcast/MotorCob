@@ -5,7 +5,7 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError, dateTimeBR, safeFileName, type Row } from '@/lib/supabase';
 import { MOTIVOS_CHAMADO } from '@/lib/empresa-helpers';
 
-const cardShadow = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
+const cardShadow = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 const MAX_SIZE = 10 * 1024 * 1024;
 const MAX_FILES = 5;
 const ACEITOS = ['.csv', '.txt', '.pdf', '.jpg', '.png', '.zip', '.xls', '.xlsx'];

@@ -86,7 +86,7 @@ export function CanalShell() {
             <div className="flex items-center gap-2.5">
               <h1 className="text-[28px] font-bold leading-tight tracking-tight text-[#1D1D1F]">{titulo}</h1>
               {modo && (
-                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12px] font-semibold" style={modo === 'real' ? { color: '#248A3D', backgroundColor: '#E8F8EC' } : { color: '#9a631b', backgroundColor: '#FFF3E8' }}>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12px] font-semibold" style={modo === 'real' ? { color: 'var(--so-escuro-texto-ok, #248A3D)', backgroundColor: 'var(--so-escuro-fundo-ok, #E8F8EC)' } : { color: 'var(--so-escuro-texto-atencao, #9a631b)', backgroundColor: 'var(--so-escuro-fundo-atencao, #FFF3E8)' }}>
                   <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: modo === 'real' ? '#34C759' : '#FF9500' }} />
                   {modo === 'real' ? 'Envio real' : 'Simulação'}<Info slug="simulacao-e-envio-real" />
                 </span>

@@ -52,7 +52,7 @@ export function LotesLista() {
 
 			{loading ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">Carregando...</p> :
 				visiveis.length === 0 ? (
-					<div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						Nenhum lote encontrado.
 					</div>
 				) : (
@@ -79,7 +79,7 @@ export function LoteCabecalho({ lote }: { lote: LoteMensageria }) {
 	const sit = SIT_LOTE[lote.situacao] ?? { label: lote.situacao, cor: '#6E6E73', bg: '#F5F5F7' };
 	const canalNome = CANAL_NOME[lote.canal] ?? lote.canal;
 	return (
-		<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+		<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 			<div className="flex flex-wrap items-center gap-2">
 				<span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[12px] font-semibold text-white" style={{ backgroundColor: CANAL_COR[lote.canal] ?? '#8E8E93' }}>{canalNome}</span>
 				{lote.credor_nome && <span className="text-[15px] font-medium text-[#1D1D1F]">{lote.credor_nome}</span>}

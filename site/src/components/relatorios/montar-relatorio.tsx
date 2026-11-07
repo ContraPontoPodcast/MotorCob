@@ -142,7 +142,7 @@ export function MontarRelatorio({ bases, camposByBase, onBack, onSaved, modeloEd
 					</div>
 				</div>
 			)}
-			<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div className="mb-5 flex flex-wrap items-center gap-2">
 					{passos.map((p, i) => (
 						<div key={p} className="flex items-center gap-2">

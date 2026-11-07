@@ -57,9 +57,9 @@ export function ListasContato() {
 
 			{loading ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">Carregando...</p> :
 				visiveis.length === 0 ? (
-					<div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>Nenhum contato nesta lista.</div>
+					<div className="rounded-2xl bg-white p-10 text-center text-[14px] text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>Nenhum contato nesta lista.</div>
 				) : (
-					<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="overflow-x-auto rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<table className="w-full border-collapse text-[14px]">
 							<thead><tr className="border-b border-[#E5E5EA] text-left text-[12px] font-semibold uppercase tracking-wide text-[#8E8E93]">
 								<th className="px-5 py-3">Destino</th><th className="px-5 py-3">Canal</th><th className="px-5 py-3">Motivo</th><th className="px-5 py-3">Incluído em</th>{canEdit && <th className="px-5 py-3 text-right">Remover</th>}
@@ -121,7 +121,7 @@ function AdicionarModal({ tipo, canal, onClose, onDone }: { tipo: string; canal:
 
 	return (
 		<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={onClose}>
-			<div className="w-full max-w-[480px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+			<div className="w-full max-w-[480px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 				<div className="mb-4 flex items-center justify-between">
 					<h2 className="text-[17px] font-semibold text-[#1D1D1F]">Adicionar à lista · {TIPO_LISTA[tipo].label}</h2>
 					<button onClick={onClose} aria-label="Fechar"><X size={20} className="text-[#8E8E93]" /></button>

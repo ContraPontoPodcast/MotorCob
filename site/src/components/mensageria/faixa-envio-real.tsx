@@ -83,7 +83,7 @@ export function FaixaEnvioReal() {
   // Pedido aberto: faixa neutra.
   if (pedidoAberto) {
     return (
-      <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl bg-[#F5F5F7] px-5 py-4" style={{ boxShadow: '0 0 0 1px #E5E5EA' }}>
+      <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl bg-[#F5F5F7] px-5 py-4" style={{ boxShadow: '0 0 0 1px var(--base-separator)' }}>
         <Clock size={18} className="shrink-0 text-[#8E8E93]" />
         <p className="flex-1 text-[14px] text-[#1D1D1F]">Envio real pedido em {dateTimeBR(pedido!.pedido_em)}. O Suporte responde em até 1 hora; o aviso chega no sino.</p>
         <span className="rounded-full bg-[#FFF3E8] px-2.5 py-1 text-[12px] font-semibold text-[#9a631b]">Com o Suporte</span>
@@ -135,7 +135,7 @@ export function FaixaEnvioReal() {
 
       {/* Cartão "Antes de pedir o envio real" com pré-requisitos */}
       {!prontoParaPedir && (
-        <div className="mb-5 rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+        <div className="mb-5 rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
           <h3 className="mb-3 text-[15px] font-semibold text-[#1D1D1F]">Antes de pedir o envio real</h3>
           <ul className="space-y-2">
             {PRE_REQ.map(k => {

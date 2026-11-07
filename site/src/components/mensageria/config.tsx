@@ -59,7 +59,7 @@ export function ConfigMensageria() {
 			{sucesso && <div className="rounded-xl bg-[#E8F8EC] px-4 py-3 text-[14px] text-[#248A3D]">{sucesso}</div>}
 
 			{/* Aprovação de lotes */}
-			<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div className="flex items-start justify-between gap-4">
 					<div className="min-w-0">
 						<p className="text-[16px] font-semibold text-[#1D1D1F]">Aprovar cada lote antes do envio</p>
@@ -72,7 +72,7 @@ export function ConfigMensageria() {
 			</div>
 
 			{/* Horário dos canais */}
-			<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<div>
 						<p className="text-[16px] font-semibold text-[#1D1D1F]">Horário dos canais</p>

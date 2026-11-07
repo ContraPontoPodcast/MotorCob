@@ -210,7 +210,7 @@ function MomentoBloco({ momento, ordem, total, def, setDef, frases, canEdit }: {
 	}
 
 	return (
-		<div className={`rounded-2xl border p-5 ${ativo ? 'border-[#E5E5EA] bg-white' : 'border-[#E5E5EA] bg-[#F5F5F7] opacity-80'}`} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+		<div className={`rounded-2xl border p-5 ${ativo ? 'border-[#E5E5EA] bg-white' : 'border-[#E5E5EA] bg-[#F5F5F7] opacity-80'}`} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 			<div className="mb-4 flex items-center justify-between gap-3">
 				<div className="flex items-center gap-2">
 					{canEdit && (
@@ -269,7 +269,7 @@ function TravasEditor({ def, setDef, canEdit }: { def: DefinicaoJornada; setDef:
 		setDef({ ...def, travas: Object.keys(next).length ? next : undefined });
 	}
 	return (
-		<div className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+		<div className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 			<p className="mb-1 text-[14px] font-bold text-[#1D1D1F]">Travas da jornada</p>
 			<p className="mb-4 text-[12px] text-[#8E8E93]">Valem para todos os momentos. Faixas de segurança sempre aplicadas: 08:00–20:00, intervalo mínimo de 12 h.</p>
 			<div className="grid gap-4 sm:grid-cols-2">
@@ -301,12 +301,12 @@ function VisaoGeralJornada({ def, carteiraNome }: { def: DefinicaoJornada; carte
 	const h = hierarquiaEfetiva(def);
 	return (
 		<div className="space-y-4">
-			<section className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<section className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#8E8E93]">Carteira</p>
 				<p className="text-[14px] font-semibold text-[#1D1D1F]">{carteiraNome || '—'}</p>
 				<p className="mt-1 text-[12px] text-[#8E8E93]">Visão somente leitura da estratégia em vigor.</p>
 			</section>
-			<section className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<section className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<p className="mb-3 text-[14px] font-bold text-[#1D1D1F]">Como vai funcionar</p>
 				<p className="mb-3 text-[12px] text-[#8E8E93]">Quando o cliente está em dois momentos no mesmo dia, vale o de cima.</p>
 				<div className="space-y-2">
@@ -454,7 +454,7 @@ export function JornadaMomentos() {
 			{error && <div className="mb-5"><Notice>{error}</Notice></div>}
 
 			{/* Barra única (prompt 41) */}
-			<section className="sticky top-0 z-20 mb-5 rounded-xl border border-[#E5E5EA] bg-white p-3" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<section className="sticky top-0 z-20 mb-5 rounded-xl border border-[#E5E5EA] bg-white p-3" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div className="flex flex-wrap gap-1 rounded-lg bg-[#F5F5F7] p-1">
 						{VISTAS.map(v => (
@@ -475,7 +475,7 @@ export function JornadaMomentos() {
 
 			{vista === 'desenho' && (
 				<div className="space-y-4">
-					<div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#E5E5EA] bg-white p-4" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+					<div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#E5E5EA] bg-white p-4" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<RouteIcon size={18} className="text-[#8E8E93]" />
 						<input value={estrNome} disabled={!canEdit} onChange={e => { setEstrNome(e.target.value); setDirty(true); }} className="h-9 flex-1 min-w-[180px] rounded-lg border border-[#D2D2D7] px-3 text-[14px] font-medium outline-none focus:border-[#1D1D1F] disabled:bg-transparent disabled:border-transparent" />
 						{padrao && <span className="rounded-full bg-[#FFF3DF] px-2.5 py-0.5 text-[10px] font-bold uppercase text-[#9a631b]">Padrão</span>}
@@ -498,7 +498,7 @@ export function JornadaMomentos() {
 						const personalizado = momentoPersonalizado(def, mid);
 						const passos = def.momentos[mid]?.passos ?? {};
 						return (
-							<div key={mid} className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+							<div key={mid} className="rounded-2xl border border-[#E5E5EA] bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 								<div className="mb-3 flex items-center gap-2">
 									<span className="rounded-full bg-[#1D1D1F] px-2 py-0.5 text-[10px] font-bold text-white">{i + 1}º</span>
 									<h3 className="text-[15px] font-semibold text-[#1D1D1F]">{m.nome}</h3>
@@ -547,7 +547,7 @@ function CopiarModal({ carteiras, atualId, onClose, onCopiado }: { carteiras: Cr
 
 	return (
 		<div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
-			<div role="dialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+			<div role="dialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
 				<div className="mb-4 flex items-center justify-between">
 					<h2 className="text-[16px] font-semibold text-[#1D1D1F]">Copiar de outra carteira</h2>
 					<button onClick={onClose} aria-label="Fechar"><X size={18} className="text-[#8E8E93]" /></button>

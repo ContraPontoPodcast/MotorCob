@@ -30,7 +30,7 @@ export function DescadastrarModal({ empresaId, onClose, onDone }: { empresaId: s
 
 	return (
 		<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={onClose}>
-			<div className="w-full max-w-[420px] rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+			<div className="w-full max-w-[420px] rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 				<div className="mb-4 flex items-center justify-between">
 					<h2 className="text-[17px] font-semibold text-[#1D1D1F]">Descadastrar contato</h2>
 					<button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-[#8E8E93] hover:bg-[#F5F5F7]"><X size={16} /></button>

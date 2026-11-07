@@ -516,3 +516,58 @@
 [data-tema="escuro"] .mc-platform :is(.bg-\[\#E8E8ED\],.bg-\[\#E5E5EA\],.bg-\[\#EEEEF0\],.bg-\[\#F0F0F2\],.hover\:bg-\[\#E8E8ED\]:hover,.hover\:bg-\[\#E5E5EA\]:hover,.hover\:bg-\[\#EEEEF0\]:hover){background-color:var(--base-fill)}
 [data-tema="escuro"] .mc-platform :is(.bg-\[\#FAFAFC\],.bg-\[\#FAFAFB\],.bg-\[\#F8F8F9\],.bg-\[\#F8F9FB\],.hover\:bg-\[\#FAFAFC\]:hover){background-color:var(--base-cartao)}
 [data-tema="escuro"] .mc-platform .border-\[\#FFE08A\]{border-color:var(--base-borda)}
+
+/* ---- Tema escuro: varredura de cores fixas que sobraram (só escuro; o claro não muda) ----
+   Variantes (hover:/disabled:/focus:) das cores claras, chips verde/vermelho/âmbar da paleta Tailwind,
+   bordas de estado e o separador das listas. Regra para tela nova continua a mesma: só --base-* / --estado-*.
+   O `npm test` (scripts/cores-claras.mjs) barra fundo claro novo sem mapeamento aqui. */
+
+/* Separador das listas (divide-*): o seletor do Tailwind (> :not([hidden]) ~ :not([hidden])) é mais
+   específico que o "> * + *" acima, por isso o mapeamento antigo não pegava. */
+[data-tema="escuro"] .mc-platform :is(.divide-\[\#F0F0F2\],.divide-\[\#E5E5EA\],.divide-\[\#ecf0f1\],.divide-\[\#eef3f4\],.divide-\[\#e9eff0\],.divide-\[\#e5edef\]) > :not([hidden]) ~ :not([hidden]) { border-color: var(--base-separator); }
+
+/* Fundos claros em hover / desabilitado → preenchimento do tema */
+[data-tema="escuro"] .mc-platform :is(.hover\:bg-\[\#f6fafb\],.hover\:bg-\[\#f5f8f9\],.hover\:bg-\[\#f7fafb\],.hover\:bg-\[\#fafcfc\],.hover\:bg-\[\#dceaec\],.hover\:bg-white,.disabled\:hover\:bg-white):hover { background-color: var(--base-fill); }
+[data-tema="escuro"] .mc-platform :is(.disabled\:bg-\[\#F5F5F7\],.disabled\:bg-\[\#f5f7f8\],.disabled\:bg-\[\#f5f8f9\]):disabled { background-color: var(--base-fill); }
+[data-tema="escuro"] .mc-platform .focus-visible\:bg-white:focus-visible { background-color: var(--base-cartao); }
+[data-tema="escuro"] .mc-platform :is(.bg-slate-200,.bg-\[\#dfe8ea\]) { background-color: var(--base-separator); }
+/* Trilho do interruptor desligado */
+[data-tema="escuro"] .mc-platform .bg-\[\#D2D2D7\] { background-color: var(--base-field-border); }
+/* Branco translúcido sobre fundo de estado (âmbar) */
+[data-tema="escuro"] .mc-platform .bg-white\/70 { background-color: color-mix(in srgb, var(--base-cartao) 70%, transparent); }
+[data-tema="escuro"] .mc-platform .hover\:bg-white\/60:hover { background-color: color-mix(in srgb, var(--base-texto) 10%, transparent); }
+
+/* Chips e fundos de estado da paleta Tailwind / hex soltos */
+[data-tema="escuro"] .mc-platform :is(.bg-green-50,.hover\:bg-green-50:hover,.hover\:bg-\[\#eaf6ee\]:hover) { background-color: var(--estado-pronto-fundo); }
+[data-tema="escuro"] .mc-platform :is(.bg-red-100,.bg-\[\#ffe8e6\],.hover\:bg-red-50:hover,.hover\:bg-\[\#ffe8e6\]:hover) { background-color: var(--estado-erro-fundo); }
+[data-tema="escuro"] .mc-platform :is(.bg-amber-100,.hover\:bg-\[\#fff1d8\]:hover,.hover\:bg-\[\#fff7e8\]:hover,.hover\:bg-\[\#fff3df\]:hover) { background-color: var(--estado-atencao-fundo); }
+
+/* Bordas claras de estado e neutras */
+[data-tema="escuro"] .mc-platform :is(.border-amber-200,.border-amber-300,.border-\[\#e2c9a0\],.border-\[\#fff0d6\]) { border-color: color-mix(in srgb, var(--estado-atencao) 35%, var(--base-borda)); }
+[data-tema="escuro"] .mc-platform .border-red-200 { border-color: color-mix(in srgb, var(--estado-erro) 35%, var(--base-borda)); }
+[data-tema="escuro"] .mc-platform .border-green-200 { border-color: color-mix(in srgb, var(--estado-pronto) 35%, var(--base-borda)); }
+[data-tema="escuro"] .mc-platform :is(.border-slate-200,.border-slate-300,.border-white) { border-color: var(--base-borda); }
+[data-tema="escuro"] .mc-platform .ring-white { --tw-ring-color: var(--base-cartao); }
+[data-tema="escuro"] .mc-platform .hover\:border-\[\#dfe8ea\]:hover { border-color: var(--base-borda); }
+
+/* Borda de foco e de hover escuras (sumiam no fundo escuro) */
+[data-tema="escuro"] .mc-platform :is(.focus\:border-\[\#1D1D1F\],.focus\:border-\[\#0F4C5C\]):focus { border-color: var(--base-texto-2); }
+[data-tema="escuro"] .mc-platform :is(.hover\:border-\[\#0F4C5C\],.hover\:border-\[\#1D1D1F\]):hover { border-color: var(--base-texto-2); }
+
+/* Textos escuros em hover e de estado */
+[data-tema="escuro"] .mc-platform :is(.hover\:text-\[\#1D1D1F\],.hover\:text-\[\#0F4C5C\],.hover\:text-\[\#0d4252\],.hover\:text-slate-700,.hover\:text-slate-600):hover { color: var(--base-texto); }
+[data-tema="escuro"] .mc-platform .hover\:text-\[\#C62828\]:hover,
+[data-tema="escuro"] .mc-platform .text-\[\#B42318\] { color: var(--estado-erro-texto); }
+[data-tema="escuro"] .mc-platform .text-\[\#5a3d10\] { color: var(--estado-atencao-texto); }
+
+/* Mapa "Como a carteira se dividiu" (Clientes): texto das células claras */
+[data-tema="escuro"] .mc-platform { --mapa-texto: var(--base-texto); --mapa-texto-2: var(--base-texto-2); }
+
+/* Cores em style={{}} (não dá para remapear por classe): o componente usa var(--so-escuro-*, <hex do claro>).
+   Só existem no escuro; no claro vale o hex de reserva, idêntico ao de antes. */
+[data-tema="escuro"] {
+  --so-escuro-fundo-ok: var(--estado-pronto-fundo); --so-escuro-texto-ok: var(--estado-pronto-texto);
+  --so-escuro-fundo-erro: var(--estado-erro-fundo); --so-escuro-texto-erro: var(--estado-erro-texto);
+  --so-escuro-fundo-atencao: var(--estado-atencao-fundo); --so-escuro-texto-atencao: var(--estado-atencao-texto);
+  --so-escuro-fundo-neutro: var(--base-fill);
+}

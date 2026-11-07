@@ -44,7 +44,7 @@ export function ProdutoSeletor() {
 	if (!empresa) {
 		return (
 			<div className="mx-auto max-w-[1080px] px-4 py-10">
-				<div className="rounded-2xl bg-white p-10 text-center text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="rounded-2xl bg-white p-10 text-center text-[#6E6E73]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					Escolha a empresa no topo para ver a Mensageria.
 				</div>
 			</div>
@@ -66,7 +66,7 @@ export function ProdutoSeletor() {
 						const liberado = liberados.includes(p.id);
 						const Icon = ICONS[p.id] ?? MessageSquare;
 						return (
-							<div key={p.id} className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+							<div key={p.id} className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 								<div className="flex items-start gap-4">
 									<div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl text-white" style={{ backgroundColor: p.cor }}>
 										<Icon size={24} strokeWidth={1.8} />

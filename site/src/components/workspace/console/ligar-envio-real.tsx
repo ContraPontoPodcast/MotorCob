@@ -89,7 +89,7 @@ export function LigarEnvioRealButton({
 
 			{devolver && (
 				<div className="fixed inset-0 z-[120] grid place-items-center bg-black/40 px-4 py-8 overflow-y-auto" onClick={() => !devolverBusy && setDevolver(false)}>
-					<div role="dialog" aria-modal="true" className="my-auto w-full max-w-[440px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
+					<div role="dialog" aria-modal="true" className="my-auto w-full max-w-[440px] rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }} onClick={e => e.stopPropagation()}>
 						<h2 className="text-[17px] font-semibold text-[#1D1D1F]">Devolver ao cliente</h2>
 						<label className="mt-3 block text-[14px] text-[#6E6E73]">O que falta (o cliente vê esta frase)</label>
 						<textarea

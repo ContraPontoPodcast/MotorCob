@@ -260,7 +260,7 @@ export function ModulosPage() {
       <MensageriaModal open={mensageriaOpen} onClose={() => setMensageriaOpen(false)} />
       {confirmarOrq && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={() => setConfirmarOrq(false)}>
-          <div className="w-full max-w-[420px] rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+          <div className="w-full max-w-[420px] rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
             <h2 className="text-[17px] font-semibold text-[#1D1D1F]">Desligar a Orquestração?</h2>
             <p className="mt-2 text-[14px] text-[#6E6E73]">Com a Orquestração desligada, o MotorCX não roda a rotina do dia desta empresa e a mensalidade da Orquestração sai da fatura. Os usuários deixam de ver a Cobrança; com a Mensageria ligada, a empresa fica só com a Mensageria.</p>
             <div className="mt-5 flex justify-end gap-2">
@@ -272,7 +272,7 @@ export function ModulosPage() {
       )}
       {confirmarReal && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={() => setConfirmarReal(false)}>
-          <div className="w-full max-w-[400px] rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+          <div className="w-full max-w-[400px] rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
             <h2 className="text-[17px] font-semibold text-[#1D1D1F]">Ligar envio real?</h2>
             <p className="mt-2 text-[14px] text-[#6E6E73]">Só ligue quando o fornecedor da rota estiver integrado. Envio real entra no consumo e na fatura.</p>
             <div className="mt-5 flex justify-end gap-2">

@@ -70,7 +70,7 @@ export function HojeMensageria() {
 			)}
 
 			{lotes.length === 0 ? (
-				<div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<p className="text-[15px] text-[#1D1D1F]">Nenhum lote hoje.</p>
 					<p className="mt-1 text-[14px] text-[#6E6E73]">Os lotes nascem da Lista do dia, por volta das 6h.</p>
 				</div>

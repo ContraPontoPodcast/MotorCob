@@ -242,10 +242,10 @@ export function AppShell() {
 
 	if (loading) return <div className="mc-platform grid min-h-screen place-items-center" style={{ backgroundColor: 'var(--base-conteudo)', color: 'var(--base-texto)' }}><div className="flex items-center gap-3"><Activity className="animate-pulse" /> Carregando seu espaço...</div></div>;
 	if (!session) return <Navigate to="/login" replace />;
-	if (desativado) return <div className="mc-platform grid min-h-screen place-items-center p-6" style={{ backgroundColor: 'var(--base-conteudo)' }}><div className="rounded-2xl bg-[var(--base-cartao)] p-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}><ShieldCheck className="mx-auto mb-5" style={{ color: 'var(--base-texto)' }} size={36} /><h1 className="text-xl font-semibold">Seu acesso foi desativado.</h1><p className="mt-2 text-sm text-[var(--base-texto-2)]">Fale com o Admin da sua empresa.</p><button onClick={logout} className="mt-6 rounded-full bg-[var(--base-texto)] px-6 py-3 text-[15px] font-medium text-white">Sair</button></div></div>;
+	if (desativado) return <div className="mc-platform grid min-h-screen place-items-center p-6" style={{ backgroundColor: 'var(--base-conteudo)' }}><div className="rounded-2xl bg-[var(--base-cartao)] p-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}><ShieldCheck className="mx-auto mb-5" style={{ color: 'var(--base-texto)' }} size={36} /><h1 className="text-xl font-semibold">Seu acesso foi desativado.</h1><p className="mt-2 text-sm text-[var(--base-texto-2)]">Fale com o Admin da sua empresa.</p><button onClick={logout} className="mt-6 rounded-full bg-[var(--base-texto)] px-6 py-3 text-[15px] font-medium text-[var(--base-cartao)]">Sair</button></div></div>;
 	if (error) return <div className="mc-platform grid min-h-screen place-items-center p-6" style={{ backgroundColor: 'var(--base-conteudo)', color: 'var(--base-texto)' }}><p>Não foi possível verificar seu acesso. Atualize a página e tente novamente.</p></div>;
 	const bloqueado = !perfil?.ativo || (!perfil.equipe && !perfil.empresa_id);
-	if (bloqueado) return <div className="mc-platform grid min-h-screen place-items-center p-6" style={{ backgroundColor: 'var(--base-conteudo)' }}><div className="rounded-2xl bg-[var(--base-cartao)] p-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}><ShieldCheck className="mx-auto mb-5" style={{ color: 'var(--base-texto)' }} size={36} /><h1 className="text-xl font-semibold">Acesso não liberado. Fale com o administrador.</h1><button onClick={logout} className="mt-6 rounded-full bg-[var(--base-texto)] px-6 py-3 text-[15px] font-medium text-white">Sair</button></div></div>;
+	if (bloqueado) return <div className="mc-platform grid min-h-screen place-items-center p-6" style={{ backgroundColor: 'var(--base-conteudo)' }}><div className="rounded-2xl bg-[var(--base-cartao)] p-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }}><ShieldCheck className="mx-auto mb-5" style={{ color: 'var(--base-texto)' }} size={36} /><h1 className="text-xl font-semibold">Acesso não liberado. Fale com o administrador.</h1><button onClick={logout} className="mt-6 rounded-full bg-[var(--base-texto)] px-6 py-3 text-[15px] font-medium text-[var(--base-cartao)]">Sair</button></div></div>;
 
 	const area = areaDaRota(loc.pathname);
 
@@ -356,7 +356,7 @@ export function AppShell() {
 									<h2 className="text-[18px] font-semibold">Acesso bloqueado por fatura vencida</h2>
 									<p className="mt-2 text-[14px] text-[var(--base-texto-2)]">Pague a fatura em aberto para liberar o acesso.{acesso?.motivo ? ` · ${acesso.motivo}` : ''}</p>
 									{podePagar
-										? <Link to="/empresa/faturamento" className="mt-5 inline-flex h-10 items-center rounded-lg bg-[var(--base-texto)] px-6 text-[14px] font-semibold text-white hover:opacity-85">Pagar agora</Link>
+										? <Link to="/empresa/faturamento" className="mt-5 inline-flex h-10 items-center rounded-lg bg-[var(--base-texto)] px-6 text-[14px] font-semibold text-[var(--base-cartao)] hover:opacity-85">Pagar agora</Link>
 										: <p className="mt-5 text-[14px] font-medium">Quem paga as faturas é {quemPaga ?? 'o Admin da sua empresa'}.</p>}
 								</div>
 							)}

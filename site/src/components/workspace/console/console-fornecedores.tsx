@@ -106,7 +106,7 @@ export function ConsoleFornecedoresPage() {
 															<span className="group relative inline-flex items-center gap-1">
 																<span className="rounded-full bg-[#FFF3E8] px-2 py-0.5 text-[11px] font-semibold text-[#9a631b]">Simulado</span>
 																<span className="text-[#8E8E93]"><Info size={12} /></span>
-																<span className="pointer-events-none absolute left-0 top-7 z-[110] w-[220px] rounded-xl bg-white p-3 text-[12px] leading-relaxed text-[#1D1D1F] opacity-0 transition-opacity duration-150 group-hover:opacity-100" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 12px 40px -8px rgba(0,0,0,.2)' }}>Sem integração o envio é simulado e a reserva assume.</span>
+																<span className="pointer-events-none absolute left-0 top-7 z-[110] w-[220px] rounded-xl bg-white p-3 text-[12px] leading-relaxed text-[#1D1D1F] opacity-0 transition-opacity duration-150 group-hover:opacity-100" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 12px 40px -8px rgba(0,0,0,.2)' }}>Sem integração o envio é simulado e a reserva assume.</span>
 															</span>
 														)}
 													</td>

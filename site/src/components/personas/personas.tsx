@@ -187,7 +187,7 @@ function PersonaCard({ persona, cor }: { persona: Persona; cor: string }) {
 	const naoFormada = m?.persona_formada === false;
 
 	return (
-		<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+		<section className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 			<div className="mb-1 flex items-center justify-between gap-2">
 				<h3 className="flex items-center gap-2 text-base font-semibold text-[#1D1D1F]"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cor }} />{persona.nome}</h3>
 				<span className="shrink-0 rounded-full bg-[#F5F5F7] px-2.5 py-0.5 text-[11px] font-bold text-[#1D1D1F]">{numberBR(persona.clientes)} clientes</span>

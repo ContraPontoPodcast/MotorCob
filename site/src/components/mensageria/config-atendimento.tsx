@@ -6,7 +6,7 @@ import { useAreaLabel } from '@/components/tema-provider';
 import { RADAR_ORDEM, RADAR_CLASSES } from '@/lib/mensageria-produtos';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 
-const CARD_SHADOW = '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)';
+const CARD_SHADOW = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 
 function dateExtensa() {
 	try { return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()); } catch { return ''; }
@@ -268,7 +268,7 @@ function RespostaRapidaModal({ existente, onClose, onSaved }: { existente: Row |
 
 	return (
 		<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4 py-8 overflow-y-auto" onClick={onClose}>
-			<div className="my-auto w-full max-w-[480px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+			<div className="my-auto w-full max-w-[480px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 				<h2 className="mb-4 text-[17px] font-semibold text-[#1D1D1F]">{existente ? 'Editar resposta rápida' : 'Nova resposta rápida'}</h2>
 				<div className="space-y-4">
 					<div>

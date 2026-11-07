@@ -80,7 +80,7 @@ export function ModeloEmailEditor() {
 
 			<div className="grid gap-5 lg:grid-cols-2">
 				{/* Formulário */}
-				<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<div className="space-y-4">
 						<div>
 							<label className="mb-1.5 block text-[13px] font-semibold text-[#1D1D1F]">Nome do remetente *</label>
@@ -109,7 +109,7 @@ export function ModeloEmailEditor() {
 				</div>
 
 				{/* Prévia */}
-				<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<p className="mb-3 text-[13px] font-semibold text-[#6E6E73]">Prévia</p>
 					<div className="overflow-hidden rounded-xl border border-[#E5E5EA]">
 						<div className="border-b border-[#E5E5EA] bg-[#F5F5F7] px-4 py-3">

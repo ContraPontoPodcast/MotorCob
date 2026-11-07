@@ -67,7 +67,7 @@ export function ConfigCanal() {
 			{sucesso && <div className="rounded-xl bg-[#E8F8EC] px-4 py-3 text-[14px] text-[#248A3D]">{sucesso}</div>}
 
 			{/* Centros de custo */}
-			<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div className="mb-4 flex items-center justify-between">
 					<div><p className="text-[16px] font-semibold text-[#1D1D1F]">Centros de custo</p><p className="mt-0.5 text-[13px] text-[#6E6E73]">Gasto estimado pelos preços do seu contrato.</p></div>
 					{canEdit && <button onClick={() => setEditCentro('novo')} className="h-9 rounded-full bg-[#1D1D1F] px-4 text-[14px] font-medium text-white hover:opacity-85">Novo centro</button>}
@@ -98,7 +98,7 @@ export function ConfigCanal() {
 			</section>
 
 			{/* Lista do dia */}
-			<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<section className="rounded-2xl bg-white p-6" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<p className="mb-4 text-[16px] font-semibold text-[#1D1D1F]">Lista do dia</p>
 				<div className="max-w-[480px] space-y-4">
 					<div>
@@ -162,7 +162,7 @@ function CentroModal({ existente, onClose, onSaved }: { existente: Row | null; o
 
 	return (
 		<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={onClose}>
-			<div className="w-full max-w-[420px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+			<div className="w-full max-w-[420px] rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 				<h2 className="mb-4 text-[17px] font-semibold text-[#1D1D1F]">{existente ? 'Editar centro' : 'Novo centro de custo'}</h2>
 				<div className="space-y-4">
 					<div><label className="mb-1.5 block text-[13px] font-semibold">Nome *</label><input value={nome} onChange={e => setNome(e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[14px] outline-none" /></div>

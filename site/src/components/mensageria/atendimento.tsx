@@ -309,7 +309,7 @@ export function Atendimento() {
 					<h1 className="mc-page-title text-[28px] font-bold leading-tight tracking-tight text-[#1D1D1F]">Caixa de atendimento</h1>
 					<p className="mt-1 text-[14px] text-[#6E6E73]">{empresa?.nome ?? '—'} · SMS, RCS e WhatsApp</p>
 				</div>
-				<div className="mc-halo rounded-2xl bg-[#F5F5F7] px-6 py-16 text-center" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+				<div className="mc-halo rounded-2xl bg-[#F5F5F7] px-6 py-16 text-center" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 					<Inbox className="mx-auto mb-4 text-[#8E8E93]" size={36} />
 					<p className="text-[15px] text-[#1D1D1F]">Só quem pode enviar mensagens atende as conversas.</p>
 					<p className="mt-1 text-[13px] text-[#8E8E93]">Fale com o Admin da sua empresa para liberar o acesso.</p>
@@ -450,7 +450,7 @@ function FilaCol(props: {
 		{ id: 'aguardando', label: 'Aguardando' },
 	];
 	return (
-		<div className="rounded-2xl bg-white p-3" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+		<div className="rounded-2xl bg-white p-3" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 			{/* Responder em grupo (só com filtro de classe ativo) */}
 			{fClasse !== 'all' && (
 				<button onClick={onResponderGrupo} disabled={grupoCount === 0} className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#1D1D1F] px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-50 hover:opacity-85">
@@ -581,7 +581,7 @@ function ConversaCol(props: {
 
 	if (!sel) {
 		return (
-			<div className="grid h-full min-h-[400px] place-items-center rounded-2xl bg-white p-8 text-center" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="grid h-full min-h-[400px] place-items-center rounded-2xl bg-white p-8 text-center" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<div>
 					<Inbox className="mx-auto mb-3 text-[#8E8E93]" size={32} />
 					<p className="text-[14px] text-[#6E6E73]">Selecione uma conversa à esquerda para atender.</p>
@@ -596,7 +596,7 @@ function ConversaCol(props: {
 	const resolvida = sel.situacao === 'resolvida';
 
 	return (
-		<div className="flex h-full flex-col rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+		<div className="flex h-full flex-col rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 			{/* Topo */}
 			<div className="border-b border-[#E5E5EA] p-4">
 				<div className="flex items-start justify-between gap-2">
@@ -617,7 +617,7 @@ function ConversaCol(props: {
 						<div className="relative" ref={maisRef}>
 							<button onClick={() => setMaisOpen(!maisOpen)} aria-label="Mais ações" className="grid h-8 w-8 place-items-center rounded-full text-[#6E6E73] hover:bg-[#F5F5F7]"><MoreHorizontal size={16} /></button>
 							{maisOpen && (
-								<div className="absolute right-0 top-9 z-30 w-56 overflow-hidden rounded-xl bg-white py-1 text-[#1D1D1F]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 12px 40px -8px rgba(0,0,0,.3)' }}>
+								<div className="absolute right-0 top-9 z-30 w-56 overflow-hidden rounded-xl bg-white py-1 text-[#1D1D1F]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 12px 40px -8px rgba(0,0,0,.3)' }}>
 									<button onClick={onTransferir} className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-[#F5F5F7]"><UsersIcon size={14} /> Transferir para colega</button>
 									<div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#8E8E93]">Corrigir a classe</div>
 									<div className="max-h-48 overflow-y-auto">
@@ -744,7 +744,7 @@ function TimelineRow({ item, userMap }: { item: TimelineItem; userMap: Record<st
 function PainelCliente({ sel, outras, onAbrir }: { sel: Row | null; outras: Row[]; onAbrir: (id: string) => void }) {
 	if (!sel) {
 		return (
-			<div className="rounded-2xl bg-white p-4 text-center text-[13px] text-[#8E8E93]" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-4 text-center text-[13px] text-[#8E8E93]" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				Selecione uma conversa.
 			</div>
 		);
@@ -753,7 +753,7 @@ function PainelCliente({ sel, outras, onAbrir }: { sel: Row | null; outras: Row[
 	const origem = sel.origem === 'ia' ? 'IA' : sel.origem === 'regras' ? 'Regras' : (sel.origem_radar === 'ia' ? 'IA' : 'Regras');
 	return (
 		<div className="space-y-3">
-			<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Cliente</h3>
 				<dl className="space-y-1.5 text-[13px]">
 					<Linha label="ID" value={String(sel.id_cliente ?? '—')} />
@@ -764,7 +764,7 @@ function PainelCliente({ sel, outras, onAbrir }: { sel: Row | null; outras: Row[
 				</dl>
 			</div>
 
-			<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Classe pelo Radar</h3>
 				<div className="flex items-center gap-2">
 					<span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: info.cor }} />
@@ -774,7 +774,7 @@ function PainelCliente({ sel, outras, onAbrir }: { sel: Row | null; outras: Row[
 				<p className="mt-1 text-[12px] text-[#8E8E93]">Origem: {origem}</p>
 			</div>
 
-			<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 2px 12px rgba(0,0,0,.04)' }}>
+			<div className="rounded-2xl bg-white p-4" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 				<h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-[#8E8E93]">Outras conversas deste cliente</h3>
 				{outras.length === 0 ? (
 					<p className="text-[12px] text-[#8E8E93]">Nenhuma em outro canal.</p>
@@ -826,7 +826,7 @@ function TransferirModal({ colegas, selId, onClose, onDone }: { colegas: Row[]; 
 
 	return (
 		<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 px-4" onClick={onClose}>
-			<div className="w-full max-w-[420px] rounded-2xl bg-white p-5" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+			<div className="w-full max-w-[420px] rounded-2xl bg-white p-5" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 				<div className="mb-3 flex items-center justify-between">
 					<h2 className="text-[16px] font-semibold text-[#1D1D1F]">Transferir conversa</h2>
 					<button onClick={onClose} className="text-[#8E8E93] hover:text-[#1D1D1F]"><X size={18} /></button>
