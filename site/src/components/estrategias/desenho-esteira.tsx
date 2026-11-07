@@ -3,8 +3,8 @@ import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { ChevronDown, FileText, MessageCircle, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Users, X } from 'lucide-react';
 import {
-	canalLabel, diaFrase, faseLabel, playbookDefinicao,
-	type Acao, type CriterioPrioridade, type Definicao, type MensagemAcao, type Passos, type PrioridadeContatos,
+	canalLabel, diaFrase, faseLabel, isFaseId, playbookDefinicao,
+	type Acao, type CriterioPrioridade, type Definicao, type Etapa, type MensagemAcao, type Passos, type PrioridadeContatos,
 } from '@/lib/estrategia';
 import type { PersonaUsuario } from '@/lib/supabase';
 import { numberBR, supabase } from '@/lib/supabase';
@@ -20,6 +20,10 @@ import {
 	migrarMensagensParaDias, cpcHotStatus, cpcMensagemStatus, cpcMensagemLabel,
 } from '@/lib/mensagem-dia';
 import { FrasesDaFaixa, FrasesCpcFaixa } from '@/components/estrategias/frases-da-faixa';
+import {
+	adicionarRaia, comPassosDe, diaForaDoPrazo, diasDoEstagio, finalDoEstagio, leituraDaCelula, passosDe,
+	personasComRaiaNoEstagio, repeticaoDoEstagio, resumoDoEstagio, rotuloCurto, rotuloDiaEstagio,
+} from '@/lib/raias-estagio';
 
 /** Personas da inteligência (tabela `personas`) para o popover ★/☆. */
 const PersonasIntelContext = createContext<PersonaResumo[]>([]);
@@ -114,7 +118,9 @@ function AcoesCelula({ acoes, canEdit, onCycle, onRemove, onChipDrag, highlightC
 	);
 }
 
-type Track = 'localizacao' | 'giro' | 'preventivo' | 'quebra';
+/** Estágio com régua por dia: uma das 4 fases com dias ou o id de um estágio próprio (definicao.etapas). */
+type Track = string;
+const FASES_COM_DIAS = ['localizacao', 'giro', 'preventivo', 'quebra'];
 
 /** Aceita o formato antigo (lista de nomes de canal) e normaliza em Acao. */
 function normAcao(x: unknown): Acao {
@@ -160,14 +166,20 @@ function diaLabel(d: number): string {
 	return `D${d}`;
 }
 
-function getTrackObj(def: Definicao, track: Track) {
-	return track === 'localizacao' ? def.localizacao : track === 'giro' ? def.giro : track === 'preventivo' ? def.preventivo : def.quebra;
+function getTrackObj(def: Definicao, track: Track): { passos: Passos } {
+	return { passos: passosDe(def, track) };
 }
 function applyTrack(def: Definicao, track: Track, passos: Passos): Definicao {
-	if (track === 'localizacao') return { ...def, localizacao: { ...(def.localizacao ?? { passos: {}, dias_sem_contato_para_ncp: 8 }), passos } };
-	if (track === 'giro') return { ...def, giro: { ...(def.giro ?? { passos: {}, ciclo_dias: 8, max_ciclos: 3 }), passos } };
-	if (track === 'preventivo') return { ...def, preventivo: { ...(def.preventivo ?? { passos: {} }), passos } };
-	return { ...def, quebra: { ...(def.quebra ?? { passos: {}, dias_para_estoque: 6 }), passos } };
+	return comPassosDe(def, track, passos);
+}
+/** Nome do estágio na tela (fase ou estágio próprio). */
+function nomeTrack(def: Definicao, track: Track): string {
+	if (FASES_COM_DIAS.includes(track)) return FAIXA_NOME[track] ?? track;
+	return (def.etapas ?? []).find(e => e.id === track)?.nome ?? track;
+}
+/** Estágio da frase no playbook (estágio próprio → "qualquer"). */
+function estagioFrase(track: Track): string {
+	return FASES_COM_DIAS.includes(track) ? track : 'qualquer';
 }
 
 /** Reconstrói a lista de ações de um dia: público geral primeiro, depois cada persona na ordem. */
@@ -298,8 +310,8 @@ function readPayload(e: React.DragEvent): DragPayload | null {
 }
 
 /** Célula da raia do público geral num dia. */
-function CelulaPublico({ day, acoes, canEdit, onDropPayload, onTap, onRemove, onCycle, onClear, onChipDrag, highlightCanal, onDragOverCell, frasesPorId, onEditMensagem, onOpenQuadro }: {
-	day: number; acoes: Acao[]; canEdit: boolean;
+function CelulaPublico({ day, rotulo, acoes, canEdit, onDropPayload, onTap, onRemove, onCycle, onClear, onChipDrag, highlightCanal, onDragOverCell, frasesPorId, onEditMensagem, onOpenQuadro }: {
+	day: number; rotulo?: string; acoes: Acao[]; canEdit: boolean;
 	onDropPayload: (e: React.DragEvent) => void; onTap: () => void;
 	onRemove: (i: number) => void; onCycle: (i: number) => void; onClear: () => void; onChipDrag: (e: React.DragEvent, i: number) => void;
 	highlightCanal?: string | null; onDragOverCell?: () => void;
@@ -316,9 +328,10 @@ function CelulaPublico({ day, acoes, canEdit, onDropPayload, onTap, onRemove, on
 			onDragOver={e => { if (canEdit) { e.preventDefault(); onDragOverCell?.(); } }}
 			onDrop={e => { if (canEdit) { e.preventDefault(); onDropPayload(e); } }}
 			onClick={onTap}
+			title={acoes.length ? leituraDaCelula(acoes, c => canalNome[c] ?? c).join('\n') : undefined}
 		>
 			<div className="mb-1.5 flex items-center justify-between">
-				<span className="text-[10px] font-bold text-[#0F4C5C]">{diaLabel(day)}</span>
+				<span className="text-[10px] font-bold text-[#0F4C5C]">{rotulo ?? diaLabel(day)}</span>
 				<div className="flex items-center gap-1">
 					<button type="button" onClick={e => { e.stopPropagation(); onOpenQuadro(); }} className="rounded text-[var(--base-texto-3)] opacity-0 transition hover:text-[#0F4C5C] focus:opacity-100 group-hover:opacity-100" aria-label="Editar célula" title="Editar"><Pencil size={11} /></button>
 					{canEdit && !vazia && (
@@ -359,6 +372,7 @@ function CelulaPersona({ day, persona, acoesProprias, acoesPub, canEdit, onDropP
 		<div
 			className={`group relative flex w-[168px] shrink-0 cursor-pointer flex-col rounded-lg border p-2 transition hover:border-[#0F4C5C] ${temPropria ? 'bg-white' : 'border-dashed border-[#d8e3e5] bg-[#fafcfc]'}`}
 			style={temPropria ? { borderColor: persona.cor } : undefined}
+			title={ativas.length ? leituraDaCelula(ativas, c => canalNome[c] ?? c).join('\n') : semAcao ? 'Sem ação neste dia para esta persona' : 'Sem raia neste dia: segue o Público geral'}
 			onDragOver={e => { if (canEdit) { e.preventDefault(); onDragOverCell?.(); } }}
 			onDrop={e => { if (canEdit) { e.preventDefault(); onDropPayload(e); } }}
 			onClick={onTap}
@@ -398,10 +412,10 @@ function CelulaPersona({ day, persona, acoesProprias, acoesPub, canEdit, onDropP
 					{acoesPub.length > 0 ? (
 						<>
 							{acoesPub.map((a, i) => <span key={i} className="max-w-[100px] truncate text-[9px] text-slate-400">{canalNome[a.canal] ?? a.canal}</span>)}
-							<span className="text-[9px] italic text-slate-400">segue o geral</span>
+							<span className="text-[9px] italic text-slate-400">segue o Público geral</span>
 						</>
 					) : (
-						<span className="text-[9px] italic text-slate-400">segue o geral</span>
+						<span className="text-[9px] italic text-slate-400">segue o Público geral (sem ação)</span>
 					)}
 					{canEdit && <span className="text-[9px] font-semibold text-[#0F4C5C]">+ raia</span>}
 				</div>
@@ -428,26 +442,32 @@ function CelulaDesativada({ aviso }: { aviso: string }) {
 }
 
 /** Controle "+ dia" com input livre do número do dia. */
-function AddDiaButton({ prefixo, max, onAdd, disabled }: { prefixo: string; max: number; onAdd: (n: number) => void; disabled?: boolean }) {
+function AddDiaButton({ prefixo, min = 1, max, onAdd, disabled }: { prefixo: string; min?: number; max: number; onAdd: (n: number) => void; disabled?: boolean }) {
 	const [val, setVal] = useState('');
 	function add() {
 		const n = Number(val);
-		if (val === '' || Number.isNaN(n) || n < 1 || n > max) return;
+		if (val === '' || Number.isNaN(n) || n < min || n > max) { if (val !== '') toast.error(`O dia precisa estar entre ${min} e ${max}.`); return; }
 		onAdd(n);
 		setVal('');
 	}
 	return (
 		<div className="flex items-center gap-2">
 			<span className="text-xs font-semibold text-slate-400">{prefixo}</span>
-			<input type="number" min={1} max={max} value={val} disabled={disabled} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add(); }} placeholder="nº" className="h-9 w-20 rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C] disabled:opacity-50" />
+			<input type="number" min={min} max={max} value={val} disabled={disabled} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add(); }} placeholder="nº" className="h-9 w-20 rounded border border-[#d8e3e5] px-2 text-xs outline-none focus:border-[#0F4C5C] disabled:opacity-50" />
 			<button type="button" onClick={add} disabled={disabled} className="flex items-center gap-1.5 rounded-lg border border-[#0F4C5C] px-3 py-2 text-xs font-semibold text-[#0F4C5C] hover:bg-[#eaf2f3] disabled:opacity-40"><Plus size={14} /> dia</button>
 		</div>
 	);
 }
 
 /** Grade de uma faixa com raias (público geral + personas). */
-function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCanal, selectedPersona, personas, contagens, expanded, setExpanded, setDragOverCell, onRemoveDay, disabledDays, disabledLabel, frasesPorId, onEditMensagem }: {
+function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCanal, selectedPersona, personas, contagens, expanded, setExpanded, setDragOverCell, onRemoveDay, disabledDays, disabledLabel, frasesPorId, onEditMensagem, rotuloDia, repete, foraDias }: {
 	track: Track; dias: number[]; finalLabel?: string;
+	/** Rótulo da coluna (ex.: "D+1" · "Dia 1"; "Dia 2 do ciclo"); sem ele, D+N/D-N. */
+	rotuloDia?: (d: number) => { titulo: string; sub?: string };
+	/** Indicador de repetição do ciclo ("↻ × 6"). */
+	repete?: string | null;
+	/** Dias fora do prazo do estágio (o motor ignora). */
+	foraDias?: Set<number>;
 	def: Definicao; setDef: (d: Definicao) => void; canEdit: boolean;
 	selectedCanal: string | null; selectedPersona: string | null;
 	personas: PersonaUsuario[]; contagens: Record<string, number>;
@@ -461,11 +481,14 @@ function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCan
 	const personaOrder = personas.map(p => p.id);
 	const [dupHighlight, setDupHighlight] = useState<{ day: number; lane: string; canal: string } | null>(null);
 	const [quadro, setQuadro] = useState<{ day: number; lane: string } | null>(null);
+	const [addRaiaOpen, setAddRaiaOpen] = useState(false);
 	const scrollRef = useRef<HTMLDivElement>(null);
+	const rot = (d: number) => rotuloDia?.(d) ?? { titulo: diaLabel(d) };
+	const rotTexto = (d: number) => { const r = rot(d); return r.sub ? `${r.titulo} · ${r.sub}` : r.titulo; };
 	function rejectDup(day: number, canal: string, lane: string) {
 		setDupHighlight({ day, lane, canal });
 		window.setTimeout(() => setDupHighlight(null), 1000);
-		toast(`${canalNome[canal]} já está no ${diaLabel(day)} desta raia`);
+		toast(`${canalNome[canal]} já está no ${rotTexto(day)} desta raia`);
 	}
 	const personaNome = (id: string) => personas.find(p => p.id === id)?.nome ?? id;
 	const passos = useMemo(() => normPassos(getTrackObj(def, track)?.passos), [def, track]);
@@ -473,11 +496,10 @@ function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCan
 	function getPassos(): Passos { return normPassos(getTrackObj(def, track)?.passos); }
 	function setPassos(p: Passos) { setDef(applyTrack(def, track, p)); }
 
-	// personas com raia nesta faixa (ações em algum dia) OU expandidas
-	const lanePersonas = personas.filter(p => {
-		const hasActs = Object.values(passos).some(arr => arr.some(a => a.personas?.includes(p.id)));
-		return hasActs || expanded.has(`${track}:${p.id}`);
-	});
+	// personas com raia neste estágio (ações em algum dia) OU abertas pelo "+ raia de persona" (lib/raias-estagio)
+	// (o id da persona vem do banco como número; na definição pode estar como número ou texto: compara como texto)
+	const comRaia = personasComRaiaNoEstagio(passos, personas.map(p => String(p.id)));
+	const lanePersonas = personas.filter(p => comRaia.includes(String(p.id)) || expanded.has(`${track}:${p.id}`));
 
 	function addCanal(day: number, canal: string, lane: string) {
 		const ps = getPassos();
@@ -493,7 +515,7 @@ function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCan
 		const ps = getPassos();
 		const key = String(day);
 		const arr = splitMultiPersona(ps[key] ?? []);
-		if (acoesPersona(arr, pid).length > 0) { toast(`${personaNome(pid)} já tem raia no ${diaLabel(day)}`); return; }
+		if (acoesPersona(arr, pid).length > 0) { toast(`${personaNome(pid)} já tem raia no ${rotTexto(day)}`); return; }
 		const pub = acoesPublico(arr);
 		const novas = pub.map(a => ({ ...a, personas: [pid] }));
 		setPassos({ ...ps, [key]: rebuildDay(arr, pid, novas, personaOrder) });
@@ -603,6 +625,14 @@ function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCan
 	function expandPersona(pid: string) {
 		const ne = new Set(expanded); ne.add(`${track}:${pid}`); setExpanded(ne);
 	}
+	/** "+ raia de persona": copia o Público geral para ela em todos os dias do estágio (fica editável). */
+	function adicionarRaiaPersona(pid: string) {
+		setAddRaiaOpen(false);
+		setPassos(adicionarRaia(getPassos(), pid, dias, personaOrder));
+		expandPersona(pid);
+		toast(`Raia de ${personaNome(pid)} criada com os canais do Público geral. Ajuste e clique em Salvar para valer.`);
+	}
+	const semRaia = personas.filter(p => !lanePersonas.some(l => l.id === p.id));
 	function onLabelDrop(e: React.DragEvent) {
 		const p = readPayload(e);
 		if (p?.kind === 'persona') expandPersona(p.pid);
@@ -625,19 +655,28 @@ function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCan
 				<div className="inline-flex flex-col gap-2 min-w-max">
 					{/* cabeçalho de dias */}
 					<div className="flex gap-2">
-						<div className="w-[150px] shrink-0 sticky left-0 z-20 bg-white" />
-						{dias.map(d => (
-							<div key={d} data-scroll-target={`${track}:${d}`} className="flex w-[168px] shrink-0 items-center justify-center gap-1">
-								<span className="text-[11px] font-bold text-[#0F4C5C]">{diaLabel(d)}</span>
-								{onRemoveDay && canEdit && <button type="button" onClick={() => onRemoveDay(d)} className="text-slate-300 hover:text-[#C62828]" aria-label={`Remover ${diaLabel(d)}`}><X size={11} /></button>}
-							</div>
-						))}
+						<div className="flex w-[108px] sm:w-[150px] shrink-0 sticky left-0 z-20 items-end bg-white pb-0.5">
+							{repete && <span className="rounded-full bg-[var(--base-fill)] px-2 py-0.5 text-[10px] font-bold text-[var(--base-texto-2)]" title="O ciclo se repete este número de vezes">{repete}</span>}
+						</div>
+						{dias.map(d => {
+							const r = rot(d);
+							const fora = foraDias?.has(d);
+							return (
+								<div key={d} data-scroll-target={`${track}:${d}`} data-dia-rotulo={r.titulo} className="flex w-[168px] shrink-0 flex-col items-center justify-center">
+									<div className="flex items-center gap-1">
+										<span className={`text-[11px] font-bold ${fora ? 'text-[var(--estado-erro)]' : 'text-[#0F4C5C]'}`}>{r.titulo}{r.sub && track === 'localizacao' ? ` · ${r.sub}` : ''}</span>
+										{onRemoveDay && canEdit && <button type="button" onClick={() => onRemoveDay(d)} className="text-slate-300 hover:text-[#C62828]" aria-label={`Remover ${r.titulo}`}><X size={11} /></button>}
+									</div>
+									{fora && <span className="text-[9px] font-bold uppercase text-[var(--estado-erro)]">fora do prazo</span>}
+								</div>
+							);
+						})}
 						{finalLabel && <div className="w-[150px] shrink-0" />}
 					</div>
 					{/* raia público geral */}
 					<div className="flex gap-2 items-stretch">
 						<div
-							className="flex w-[150px] shrink-0 sticky left-0 z-20 items-center gap-2 rounded-lg border border-[#0F4C5C] bg-[#eaf2f3] px-3 py-2"
+							className="flex w-[108px] sm:w-[150px] shrink-0 sticky left-0 z-20 items-center gap-2 rounded-lg border border-[#0F4C5C] bg-[#eaf2f3] px-3 py-2"
 							onDragOver={e => { if (canEdit) e.preventDefault(); }}
 							onDrop={e => { if (canEdit) { e.preventDefault(); onLabelDrop(e); } }}
 						>
@@ -651,6 +690,7 @@ function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCan
 								<CelulaPublico
 									key={d}
 									day={d}
+									rotulo={rot(d).titulo}
 									acoes={acts}
 									canEdit={canEdit}
 									onDropPayload={e => onCellDrop(e, d, 'pub')}
@@ -672,10 +712,10 @@ function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCan
 					{/* raias de personas */}
 					{lanePersonas.map(p => (
 						<div key={p.id} className="flex gap-2 items-stretch">
-							<div className="flex w-[150px] shrink-0 sticky left-0 z-20 items-center gap-1.5 rounded-lg border bg-white px-3 py-2" style={{ borderColor: p.cor }}>
+							<div className="flex w-[108px] sm:w-[150px] shrink-0 sticky left-0 z-20 items-center gap-1.5 rounded-lg border bg-white px-3 py-2" style={{ borderColor: p.cor }}>
 								<span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: p.cor }} />
 								<div className="min-w-0 flex-1">
-									<div className="truncate text-xs font-semibold text-[#163943]">{p.nome}</div>
+									<div className="line-clamp-2 text-xs font-semibold leading-tight text-[#163943]" title={p.nome}>{p.nome}</div>
 									<div className="text-[9px] text-slate-400">{numberBR(contagens[p.nome] ?? 0)} clientes</div>
 								</div>
 								{canEdit && (
@@ -717,15 +757,42 @@ function GradeFaixa({ track, dias, finalLabel, def, setDef, canEdit, selectedCan
 							{finalLabel && <div className="w-[150px] shrink-0" />}
 						</div>
 					))}
+					{canEdit && personas.length > 0 && (
+						<div className="flex gap-2">
+							<div className="relative w-[108px] sm:w-[150px] shrink-0 sticky left-0 z-20">
+								<button type="button" onClick={() => setAddRaiaOpen(v => !v)} disabled={semRaia.length === 0} aria-expanded={addRaiaOpen} className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2 py-2 text-[11px] font-semibold text-[var(--base-texto-2)] hover:bg-[var(--base-fill)] disabled:opacity-50" title={semRaia.length ? 'Criar a raia de uma persona neste estágio' : 'Todas as personas já têm raia neste estágio'}>
+									<Plus size={12} /> Raia de persona
+								</button>
+								{addRaiaOpen && (
+									<>
+										<button className="fixed inset-0 z-20 cursor-default" onClick={() => setAddRaiaOpen(false)} aria-hidden />
+										<div role="menu" className="absolute left-0 top-10 z-30 w-56 rounded-lg border border-[var(--base-borda)] bg-[var(--base-cartao)] p-1 shadow-lg">
+											<p className="px-2 py-1 text-[10px] text-[var(--base-texto-3)]">Começa com os canais do Público geral em cada dia.</p>
+											{semRaia.map(p => (
+												<button key={p.id} type="button" role="menuitem" onClick={() => adicionarRaiaPersona(p.id)} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[var(--base-texto)] hover:bg-[var(--base-fill)]">
+													<span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.cor }} />
+													<span className="truncate">{p.nome}</span>
+												</button>
+											))}
+										</div>
+									</>
+								)}
+							</div>
+						</div>
+					)}
 				</div>
 				</div>
 				<button type="button" onClick={() => scrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })} className="grid h-8 w-6 shrink-0 place-items-center self-center rounded-lg border border-[#d8e3e5] bg-white text-[#0F4C5C] hover:bg-[#edf4f5]" aria-label="Próximos dias">›</button>
 			</div>
+			<p className="mt-2 text-[11px] leading-relaxed text-[var(--base-texto-3)]">
+				Persona com raia no dia recebe só a raia dela; sem contato para os canais dela, segue o Público geral (regra do motor). Quem não tem persona segue o Público geral.
+				{' '}Na célula, de cima para baixo: <strong>↳ senão</strong> só se nada acima foi · <strong>+ junto</strong> com a de cima, se ela foi · <strong>↻ reserva</strong> se a de cima não contatar no dia (ou no lugar dela, se ela não foi) · <strong>e sempre</strong> vai também.
+			</p>
 		</div>
 	);
 }
 
-const FAIXA_NOME: Record<Track, string> = { localizacao: 'Cliente novo', giro: 'Não CPC', preventivo: 'Preventivo', quebra: 'Quebra' };
+const FAIXA_NOME: Record<string, string> = { localizacao: 'Cliente novo', giro: 'Não CPC', preventivo: 'Preventivo', quebra: 'Quebra' };
 
 /** Quadro de edição de uma célula (item 2). Popover em portal; folha de baixo no celular. */
 function QuadroCelula({ track, day, lane, def, setDef, canEdit, personas, frasesPorId, onEditMensagem, onClose }: {
@@ -774,7 +841,7 @@ function QuadroCelula({ track, day, lane, def, setDef, canEdit, personas, frases
 	function copiarDoPublico() { if (!canEdit || !isPersona) return; const pub = acoesPublico(arr).map(a => ({ ...a, personas: [lane] })); commit(pub); }
 
 	const canaisPills = isPersona ? [...CANAIS, ENRIQ, ...PERSONA_CANAIS] : [...CANAIS, ENRIQ];
-	const titulo = `${FAIXA_NOME[track]} · ${isPersona ? persona?.nome ?? lane : 'Público geral'} · ${diaLabel(day)}`;
+	const titulo = `${nomeTrack(def, track)} · ${isPersona ? persona?.nome ?? lane : 'Público geral'} · ${rotuloCurto(def, track, day)}`;
 	const paraQuem = isPersona ? `Vale só para clientes da persona ${persona?.nome ?? lane} neste dia.` : 'Vale para todos os clientes deste segmento neste dia.';
 	const temMsg0 = laneActs.length > 0 && canalTipoMensagem(laneActs[0].canal) !== 'nenhuma';
 
@@ -922,7 +989,44 @@ function FaixaColapsivel({ titulo, resumo, warning, open, onToggle, ativo, onTog
 	);
 }
 
-export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, personas, contagens, estrId, dirty, stickyTop = 0, forma = 'raias', onFormaChange, focusFaixa }: {
+/** Estágio próprio no passo Régua: a régua por dia dele com Público geral + raias por persona (mesma grade das fases). */
+function EtapaRaias({ etapa, def, setDef, canEdit, grade, frases }: {
+	etapa: Etapa; def: Definicao; setDef: (d: Definicao) => void; canEdit: boolean;
+	grade: (dias: number[], foraDias: Set<number>) => React.ReactNode;
+	frases: React.ReactNode;
+}) {
+	const dias = diasDoEstagio(def, etapa.id);
+	const foraDias = new Set(dias.filter(d => diaForaDoPrazo(def, etapa.id, d)));
+	const temAcao = Object.values(etapa.passos ?? {}).some(arr => Array.isArray(arr) && arr.some(a => a.canal && a.canal !== 'sem_acao'));
+	const ativo = etapa.ativo !== false;
+	function addDia(n: number) {
+		const ps = passosDe(def, etapa.id);
+		if (ps[String(n)] !== undefined || dias.includes(n)) { toast(`${rotuloCurto(def, etapa.id, n)} já está na régua.`); return; }
+		setDef(comPassosDe(def, etapa.id, { ...ps, [String(n)]: [] }));
+	}
+	return (
+		<section data-faixa="etapa" data-estagio={etapa.id} className="rounded-xl border border-[var(--base-borda)] bg-[var(--base-cartao)] p-5">
+			<div className="mb-1 flex flex-wrap items-center gap-2">
+				<h3 className="text-sm font-bold text-[var(--base-texto)]">{etapa.nome}</h3>
+				<span className="rounded-full bg-[var(--base-fill)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--base-texto-2)]">estágio próprio</span>
+			</div>
+			<p className="mb-4 text-xs leading-relaxed text-[var(--base-texto-2)]">{resumoDoEstagio(def, etapa.id)}</p>
+			{!ativo ? (
+				<p className="rounded-lg bg-[var(--estado-atencao-fundo)] px-4 py-3 text-xs leading-relaxed text-[var(--estado-atencao-texto)]">Estágio desligado: ninguém recebe ação aqui. Ligue no passo Estágios; a régua desenhada continua salva.</p>
+			) : (
+				<>
+					{!temAcao && <p className="mb-3 rounded-lg bg-[var(--estado-atencao-fundo)] px-4 py-2 text-[11px] font-medium text-[var(--estado-atencao-texto)]">Sem régua: o motor ignora este estágio (quem cairia nele segue para o próximo). Solte um canal num dia.</p>}
+					{foraDias.size > 0 && <p className="mb-3 rounded-lg bg-[var(--estado-erro-fundo)] px-4 py-2 text-[11px] font-medium text-[var(--estado-erro-texto)]">Dias fora do prazo do estágio: o motor ignora. Remova-os ou mude o prazo no passo Estágios.</p>}
+					{dias.length > 0 ? grade(dias, foraDias) : <p className="rounded-lg border border-dashed border-[var(--base-borda)] bg-[var(--base-fill)] p-6 text-center text-xs text-[var(--base-texto-3)]">Nenhum dia ainda. {canEdit ? 'Adicione o primeiro dia abaixo.' : ''}</p>}
+					{frases}
+					{canEdit && !etapa.ciclo && <div className="mt-3"><AddDiaButton prefixo="Dia" min={etapa.de ?? 1} max={etapa.ate ?? 30} onAdd={addDia} /></div>}
+				</>
+			)}
+		</section>
+	);
+}
+
+export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, personas, contagens, estrId, dirty, stickyTop = 0, forma = 'raias', onFormaChange, focusFaixa, estagio }: {
 	def: Definicao;
 	setDef: (d: Definicao) => void;
 	canEdit: boolean;
@@ -936,7 +1040,19 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 	forma?: 'raias' | 'fluxo';
 	onFormaChange?: (f: 'raias' | 'fluxo') => void;
 	focusFaixa?: string | null;
+	/**
+	 * Estágio escolhido no passo Régua (id de fase ou de estágio próprio). Com ele, as Raias mostram SÓ esse estágio,
+	 * aberto: Público geral + uma linha por persona com raia, colunas = dias do estágio ("Dia N do ciclo" quando há ciclo).
+	 */
+	estagio?: string | null;
 }) {
+	const faixaFoco = !estagio ? null : estagio === 'preventivo' || estagio === 'quebra' ? 'acordo' : isFaseId(estagio) ? estagio : 'etapa';
+	const etapaFoco = faixaFoco === 'etapa' ? (def.etapas ?? []).find(e => e.id === estagio) ?? null : null;
+	/** A faixa aparece? (sem estágio escolhido: todas, como antes) */
+	const ver = (k: string) => !faixaFoco || faixaFoco === k;
+	/** A faixa está aberta? (com estágio escolhido: sempre) */
+	const aberta = (k: string) => !!faixaFoco || openFaixas.has(k);
+	const ativoFase = (k: 'localizacao' | 'giro') => (def[k] as { ativo?: boolean } | undefined)?.ativo !== false;
 	const [selectedCanal, setSelectedCanal] = useState<string | null>(null);
 	const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
 	const [openFaixas, setOpenFaixas] = useState<Set<string>>(() => {
@@ -1007,7 +1123,6 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 	function toggleFrasesFaixa(key: string) { setOpenFrases(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; }); }
 
 	// ---- handler para editar mensagem de uma ação ----
-	const estagioFaixa: Record<Track, string> = { localizacao: 'localizacao', giro: 'giro', preventivo: 'preventivo', quebra: 'quebra' };
 	function getAcaoEditing(): { acao: Acao; canal: string; isCpc: boolean; isPersona: boolean; titulo: string } | null {
 		if (!editingMsg) return null;
 		const { track, day, lane, index } = editingMsg;
@@ -1017,7 +1132,7 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 		const acao = laneActs[index];
 		if (!acao) return null;
 		const isPersona = acao.canal === 'persona_1' || acao.canal === 'persona_2';
-		const titulo = `${diaLabel(day)} · ${canalNome[acao.canal] ?? acao.canal}${lane !== 'pub' ? ` · ${personaNome(lane)}` : ''}`;
+		const titulo = `${rotuloCurto(def, track, day)} · ${canalNome[acao.canal] ?? acao.canal}${lane !== 'pub' ? ` · ${personaNome(lane)}` : ''}`;
 		return { acao, canal: acao.canal, isCpc: false, isPersona, titulo };
 	}
 	function setMensagemEditing(m: MensagemAcao | null) {
@@ -1036,7 +1151,7 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 		const { acao } = getAcaoEditing() ?? {};
 		const canal = acao?.canal ?? '';
 		const { track } = editingMsg;
-		const { frase, error } = await salvarFrase({ empresa_id: empresa.id, canal, nome, estagio: estagioFaixa[track], texto, origem: 'criado', ativo: true });
+		const { frase, error } = await salvarFrase({ empresa_id: empresa.id, canal, nome, estagio: estagioFrase(track), texto, origem: 'criado', ativo: true });
 		if (error || !frase) { toast.error(error || 'Erro ao salvar.'); return null; }
 		toast.success('Frase salva no playbook.');
 		void reloadFrases();
@@ -1125,6 +1240,15 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 		const np = { ...normPassos(cur.passos) };
 		delete np[String(day)];
 		setDef({ ...def, quebra: { ...cur, passos: np } });
+	}
+
+	function removeDiaEtapa(id: string, day: number) {
+		const ps = passosDe(def, id);
+		const arr = ps[String(day)] ?? [];
+		if (arr.length && !window.confirm(`Remover a coluna ${rotuloCurto(def, id, day)}? As ações desenhadas nela serão apagadas.`)) return;
+		const np = { ...ps };
+		delete np[String(day)];
+		setDef(comPassosDe(def, id, np));
 	}
 
 	// --- CPC ---
@@ -1378,11 +1502,11 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 					<p className="text-[11px] text-[#9a631b]">Arraste uma persona para um dia para tratá-la diferente; nos dias em que ela não está, segue o público geral.</p>
 				</div>
 
-				{/* Atalhos de expandir/recolher */}
-				<div className="flex justify-end gap-4">
+				{/* Atalhos de expandir/recolher (só com todas as faixas) */}
+				{!faixaFoco && <div className="flex justify-end gap-4">
 					<button type="button" onClick={() => { setOpenFaixas(new Set([...FAIXA_KEYS, 'comofunciona'])); setOpenFrases(new Set(FAIXA_KEYS.filter(k => k !== 'prioridade'))); }} className="text-xs font-semibold text-[#0F4C5C] hover:underline">Expandir tudo</button>
 					<button type="button" onClick={() => { setOpenFaixas(new Set()); setOpenFrases(new Set()); }} className="text-xs font-semibold text-[#0F4C5C] hover:underline">Recolher tudo</button>
-				</div>
+				</div>}
 
 				{/* Migração de frases por estágio (modelo antigo) */}
 				{temMensagensAntigas && (
@@ -1393,17 +1517,17 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 				)}
 
 				{/* Faixa 1 — Cliente novo */}
-				<FaixaColapsivel titulo={faseLabel(def, 'localizacao')} resumo={resumoLocTopo} warning={warnLoc} open={openFaixas.has('localizacao')} onToggle={() => toggleFaixa('localizacao')} ativo={locAtivo} onToggleAtivo={() => updateLocalizacao({ ativo: !locAtivo })} canEdit={canEdit} desligadoMsg="Cliente novo desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="localizacao">
+				{ver('localizacao') && <FaixaColapsivel titulo={faseLabel(def, 'localizacao')} resumo={faixaFoco && ativoFase('localizacao') ? resumoDoEstagio(def, 'localizacao') : resumoLocTopo} warning={warnLoc} open={aberta('localizacao')} onToggle={() => toggleFaixa('localizacao')} ativo={locAtivo} onToggleAtivo={() => updateLocalizacao({ ativo: !locAtivo })} canEdit={canEdit} desligadoMsg="Cliente novo desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="localizacao">
 					<p className="mb-4 text-xs leading-relaxed text-slate-500">Cada dia conta desde a entrada do cliente na carga. A cada passagem o MotorCX usa o próximo telefone (1, 2, 3, 4…), até alguém dar CPC.</p>
 					<div className="mb-3">
 						<Stepper label="Vira Não CPC no dia" value={ncp} min={2} max={30} disabled={!canEdit} onChange={v => updateLocalizacao({ dias_sem_contato_para_ncp: v })} />
 					</div>
-					<GradeFaixa track="localizacao" setDragOverCell={setDragOverCell} dias={diasLoc} finalLabel={`D+${ncp} · sem CPC → Não CPC`} def={def} setDef={setDef} canEdit={canEdit} selectedCanal={selectedCanal} selectedPersona={selectedPersona} personas={personas} contagens={contagens} expanded={expanded} setExpanded={setExpanded} frasesPorId={frasesPorId} onEditMensagem={(d, l, i) => onEditMensagem('localizacao', d, l, i)} />
+					<GradeFaixa track="localizacao" setDragOverCell={setDragOverCell} dias={diasLoc} finalLabel={finalDoEstagio(def, 'localizacao') ?? undefined} rotuloDia={d => rotuloDiaEstagio(def, 'localizacao', d)} def={def} setDef={setDef} canEdit={canEdit} selectedCanal={selectedCanal} selectedPersona={selectedPersona} personas={personas} contagens={contagens} expanded={expanded} setExpanded={setExpanded} frasesPorId={frasesPorId} onEditMensagem={(d, l, i) => onEditMensagem('localizacao', d, l, i)} />
 					<FrasesDaFaixa faixaKey="localizacao" passos={locPassos} frasesPorId={frasesPorId} canEdit={canEdit} open={openFrases.has('localizacao')} onToggle={() => toggleFrasesFaixa('localizacao')} onEdit={(d, l, i) => onEditMensagem('localizacao', d, l, i)} onClear={(d, l, i) => clearMensagem('localizacao', d, l, i)} />
-				</FaixaColapsivel>
+				</FaixaColapsivel>}
 
 				{/* Faixa 2 — Deu CPC */}
-				<FaixaColapsivel titulo={faseLabel(def, 'cpc')} resumo={resumoCpcTopo} warning={warnCpc} open={openFaixas.has('cpc')} onToggle={() => toggleFaixa('cpc')} ativo={cpcAtivo} onToggleAtivo={() => updateCpc({ ativo: !cpcAtivo })} canEdit={canEdit} desligadoMsg="Deu CPC desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="cpc">
+				{ver('cpc') && <FaixaColapsivel titulo={faseLabel(def, 'cpc')} resumo={resumoCpcTopo} warning={warnCpc} open={aberta('cpc')} onToggle={() => toggleFaixa('cpc')} ativo={cpcAtivo} onToggleAtivo={() => updateCpc({ ativo: !cpcAtivo })} canEdit={canEdit} desligadoMsg="Deu CPC desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="cpc">
 					<p className="mb-4 text-xs leading-relaxed text-slate-500">O primeiro é sempre o canal em que o cliente deu CPC, no contato principal. Se ele parar de responder, o MotorCX segue a ordem de reserva abaixo.</p>
 				<div className="mb-4 grid gap-4 sm:grid-cols-2">
 					<Stepper label="CPC A: acionar a cada" value={intervaloCpa} min={1} max={30} disabled={!canEdit} onChange={v => updateCpc({ intervalo_cpa: v })} />
@@ -1444,21 +1568,21 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 					</div>
 				</div>
 				<FrasesCpcFaixa cpc={{ ordem: cpcOrdem, junto: cpcJunto, mensagem_hot: def.cpc?.mensagem_hot }} frasesPorId={frasesPorId} canEdit={canEdit} open={openFrases.has('cpc')} onToggle={() => toggleFrasesFaixa('cpc')} onEditHot={c => setEditingCpc({ tipo: 'hot', canal: c })} onClearHot={c => setCpcHot(c, null)} onEditReserva={i => setEditingCpc({ tipo: 'reserva', index: i })} onClearReserva={i => setCpcReservaMensagem(i, null)} onEditJunto={i => setEditingCpc({ tipo: 'junto', index: i })} onClearJunto={i => setCpcJuntoMensagem(i, null)} />
-			</FaixaColapsivel>
+			</FaixaColapsivel>}
 
 				{/* Faixa 3 — Não CPC */}
-				<FaixaColapsivel titulo={faseLabel(def, 'giro')} resumo={resumoGiroTopo} warning={warnGiro} open={openFaixas.has('giro')} onToggle={() => toggleFaixa('giro')} ativo={giroAtivo} onToggleAtivo={() => updateGiro({ ativo: !giroAtivo })} canEdit={canEdit} desligadoMsg="Não CPC desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="giro">
+				{ver('giro') && <FaixaColapsivel titulo={faseLabel(def, 'giro')} resumo={faixaFoco && ativoFase('giro') ? resumoDoEstagio(def, 'giro') : resumoGiroTopo} warning={warnGiro} open={aberta('giro')} onToggle={() => toggleFaixa('giro')} ativo={giroAtivo} onToggleAtivo={() => updateGiro({ ativo: !giroAtivo })} canEdit={canEdit} desligadoMsg="Não CPC desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="giro">
 					<p className="mb-4 text-xs leading-relaxed text-slate-500">Quem passou do prazo sem CPC entra num ciclo. Ao fim dos ciclos, o cliente espera um novo enriquecimento.</p>
 					<div className="mb-3 flex flex-wrap gap-x-6 gap-y-2">
 						<Stepper label="Ciclo de N dias" value={ciclo} min={2} max={15} disabled={!canEdit} onChange={v => updateGiro({ ciclo_dias: v })} />
 						<Stepper label="repetido N vezes" value={maxCiclos} min={1} max={6} disabled={!canEdit} onChange={v => updateGiro({ max_ciclos: v })} />
 					</div>
-					<GradeFaixa track="giro" setDragOverCell={setDragOverCell} dias={diasGiro} finalLabel={`↻ × ${maxCiclos} · repete o ciclo; depois aguarda enriquecimento`} def={def} setDef={setDef} canEdit={canEdit} selectedCanal={selectedCanal} selectedPersona={selectedPersona} personas={personas} contagens={contagens} expanded={expanded} setExpanded={setExpanded} frasesPorId={frasesPorId} onEditMensagem={(d, l, i) => onEditMensagem('giro', d, l, i)} />
+					<GradeFaixa track="giro" setDragOverCell={setDragOverCell} dias={diasGiro} finalLabel={finalDoEstagio(def, 'giro') ?? undefined} rotuloDia={d => rotuloDiaEstagio(def, 'giro', d)} repete={repeticaoDoEstagio(def, 'giro')} def={def} setDef={setDef} canEdit={canEdit} selectedCanal={selectedCanal} selectedPersona={selectedPersona} personas={personas} contagens={contagens} expanded={expanded} setExpanded={setExpanded} frasesPorId={frasesPorId} onEditMensagem={(d, l, i) => onEditMensagem('giro', d, l, i)} />
 					<FrasesDaFaixa faixaKey="giro" passos={giroPassos} frasesPorId={frasesPorId} canEdit={canEdit} open={openFrases.has('giro')} onToggle={() => toggleFrasesFaixa('giro')} onEdit={(d, l, i) => onEditMensagem('giro', d, l, i)} onClear={(d, l, i) => clearMensagem('giro', d, l, i)} />
-				</FaixaColapsivel>
+				</FaixaColapsivel>}
 
 				{/* Preventivo e Quebra (recolhido) */}
-				<div data-faixa="acordo" className="rounded-xl border border-[#dfe8ea] bg-white">
+				{ver('acordo') && <div data-faixa="acordo" className="rounded-xl border border-[#dfe8ea] bg-white">
 					<button type="button" aria-expanded={openFaixas.has('acordo')} onClick={() => toggleFaixa('acordo')} onDragOver={handleDragOverFaixa('acordo')} className="flex w-full items-center justify-between px-5 py-4 text-left">
 						<div className="min-w-0 flex-1">
 							<div className="flex items-center gap-2">
@@ -1467,12 +1591,12 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 							</div>
 							<p className="mt-0.5 truncate text-[11px] text-slate-500">{resumoAcordoTopo}</p>
 						</div>
-						<ChevronDown size={18} className="shrink-0 text-slate-400 transition-transform" style={{ transform: openFaixas.has('acordo') ? 'rotate(180deg)' : 'none' }} />
+						<ChevronDown size={18} className="shrink-0 text-slate-400 transition-transform" style={{ transform: aberta('acordo') ? 'rotate(180deg)' : 'none' }} />
 					</button>
-					{openFaixas.has('acordo') && (
+					{aberta('acordo') && (
 						<div className="space-y-5 border-t border-[#ecf0f1] p-5">
 							{/* Preventivo */}
-							<section className={`rounded-lg border p-4 ${prevAtivo ? 'border-[#e2eaec] bg-white' : 'border-[#e2c9a0] bg-[#faf3e8]'}`}>
+							{estagio !== 'quebra' && <section className={`rounded-lg border p-4 ${prevAtivo ? 'border-[#e2eaec] bg-white' : 'border-[#e2c9a0] bg-[#faf3e8]'}`}>
 								<div className="mb-3 flex items-center justify-between gap-3">
 									<div>
 										<h3 className="text-sm font-bold text-[#163943]">Preventivo</h3>
@@ -1489,15 +1613,15 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 									<p className="rounded-lg bg-[#fff7e8] px-4 py-3 text-xs leading-relaxed text-[#9a631b]">Preventivo desligado neste segmento: clientes em acordo não recebem lembrete antes do vencimento. Os passos desenhados continuam salvos, só não valem.</p>
 								) : (
 									<>
-										<GradeFaixa track="preventivo" setDragOverCell={setDragOverCell} dias={diasPrev} def={def} setDef={setDef} canEdit={canEdit} selectedCanal={selectedCanal} selectedPersona={selectedPersona} personas={personas} contagens={contagens} expanded={expanded} setExpanded={setExpanded} onRemoveDay={canEdit ? removeDiaPreventivo : undefined} frasesPorId={frasesPorId} onEditMensagem={(d, l, i) => onEditMensagem('preventivo', d, l, i)} />
+										<GradeFaixa track="preventivo" rotuloDia={d => rotuloDiaEstagio(def, 'preventivo', d)} setDragOverCell={setDragOverCell} dias={diasPrev} def={def} setDef={setDef} canEdit={canEdit} selectedCanal={selectedCanal} selectedPersona={selectedPersona} personas={personas} contagens={contagens} expanded={expanded} setExpanded={setExpanded} onRemoveDay={canEdit ? removeDiaPreventivo : undefined} frasesPorId={frasesPorId} onEditMensagem={(d, l, i) => onEditMensagem('preventivo', d, l, i)} />
 									<FrasesDaFaixa faixaKey="preventivo" passos={prevPassos} frasesPorId={frasesPorId} canEdit={canEdit} open={openFrases.has('preventivo')} onToggle={() => toggleFrasesFaixa('preventivo')} onEdit={(d, l, i) => onEditMensagem('preventivo', d, l, i)} onClear={(d, l, i) => clearMensagem('preventivo', d, l, i)} />
 										{canEdit && <div className="mt-3"><AddDiaButton prefixo="D-" max={30} onAdd={addDiaPreventivo} /></div>}
 									</>
 								)}
-							</section>
+							</section>}
 
 							{/* Quebra */}
-							<section className={`rounded-lg border p-4 ${quebraAtivo ? 'border-[#e2eaec] bg-white' : 'border-[#e2c9a0] bg-[#faf3e8]'}`}>
+							{estagio !== 'preventivo' && <section className={`rounded-lg border p-4 ${quebraAtivo ? 'border-[#e2eaec] bg-white' : 'border-[#e2c9a0] bg-[#faf3e8]'}`}>
 								<div className="mb-3 flex items-center justify-between gap-3">
 									<div>
 										<h3 className="text-sm font-bold text-[#163943]">Quebra</h3>
@@ -1519,15 +1643,25 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 								) : (
 									<>
 										{quebraDisabledDays.size > 0 && <p className="mb-3 rounded-lg bg-[#fff7e8] px-4 py-2 text-[11px] font-medium text-[#9a631b]">Dias fora da janela da quebra (carência ou após o retorno ao estoque) aparecem em cinza e não serão acionados.</p>}
-										<GradeFaixa track="quebra" setDragOverCell={setDragOverCell} dias={diasQuebra} def={def} setDef={setDef} canEdit={canEdit} selectedCanal={selectedCanal} selectedPersona={selectedPersona} personas={personas} contagens={contagens} expanded={expanded} setExpanded={setExpanded} onRemoveDay={canEdit ? removeDiaQuebra : undefined} disabledDays={quebraDisabledDays} disabledLabel="fora da janela da quebra — não será acionado" frasesPorId={frasesPorId} onEditMensagem={(d, l, i) => onEditMensagem('quebra', d, l, i)} />
+										<GradeFaixa track="quebra" rotuloDia={d => rotuloDiaEstagio(def, 'quebra', d)} setDragOverCell={setDragOverCell} dias={diasQuebra} def={def} setDef={setDef} canEdit={canEdit} selectedCanal={selectedCanal} selectedPersona={selectedPersona} personas={personas} contagens={contagens} expanded={expanded} setExpanded={setExpanded} onRemoveDay={canEdit ? removeDiaQuebra : undefined} disabledDays={quebraDisabledDays} disabledLabel="fora da janela da quebra — não será acionado" frasesPorId={frasesPorId} onEditMensagem={(d, l, i) => onEditMensagem('quebra', d, l, i)} />
 									<FrasesDaFaixa faixaKey="quebra" passos={quebraPassos} frasesPorId={frasesPorId} canEdit={canEdit} open={openFrases.has('quebra')} onToggle={() => toggleFrasesFaixa('quebra')} onEdit={(d, l, i) => onEditMensagem('quebra', d, l, i)} onClear={(d, l, i) => clearMensagem('quebra', d, l, i)} />
 										{canEdit && <div className="mt-3"><AddDiaButton prefixo="D+" max={Math.max(1, diasEstoque - 1)} onAdd={addDiaQuebra} /></div>}
 									</>
 								)}
-							</section>
+							</section>}
 						</div>
 					)}
-				</div>
+				</div>}
+
+				{/* Estágio próprio (definicao.etapas): a régua dele com as raias por persona */}
+				{etapaFoco && (
+					<EtapaRaias etapa={etapaFoco} def={def} setDef={setDef} canEdit={canEdit}
+						grade={(dias, foraDias) => (
+							<GradeFaixa track={etapaFoco.id} setDragOverCell={setDragOverCell} dias={dias} finalLabel={finalDoEstagio(def, etapaFoco.id) ?? undefined} rotuloDia={d => rotuloDiaEstagio(def, etapaFoco.id, d)} repete={repeticaoDoEstagio(def, etapaFoco.id)} foraDias={foraDias} def={def} setDef={setDef} canEdit={canEdit} selectedCanal={selectedCanal} selectedPersona={selectedPersona} personas={personas} contagens={contagens} expanded={expanded} setExpanded={setExpanded} onRemoveDay={canEdit && !etapaFoco.ciclo ? d => removeDiaEtapa(etapaFoco.id, d) : undefined} frasesPorId={frasesPorId} onEditMensagem={(d, l, i) => onEditMensagem(etapaFoco.id, d, l, i)} />
+						)}
+						frases={<FrasesDaFaixa faixaKey={`etapa:${etapaFoco.id}`} passos={normPassos(etapaFoco.passos)} frasesPorId={frasesPorId} canEdit={canEdit} open={openFrases.has(`etapa:${etapaFoco.id}`)} onToggle={() => toggleFrasesFaixa(`etapa:${etapaFoco.id}`)} onEdit={(d, l, i) => onEditMensagem(etapaFoco.id, d, l, i)} onClear={(d, l, i) => clearMensagem(etapaFoco.id, d, l, i)} />}
+					/>
+				)}
 
 				{/* Prioridade dos telefones (recolhível) */}
 				<div className="rounded-xl border border-[#dfe8ea] bg-white">
@@ -1586,7 +1720,7 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 		</div>
 		{editingMsg && (() => { const ed = getAcaoEditing(); if (!ed) return null;
 			if (ed.isPersona) return (
-				<MensagemDiaEditor canal={ed.canal} mensagem={ed.acao.mensagem} frases={frases} estagio={estagioFaixa[editingMsg.track]} isCpc={false} isPersona canaisEmpresa={canaisEmpresaAtivos} titulo={ed.titulo} onClose={() => setEditingMsg(null)} onSet={m => setMensagemEditing(m)} onSalvarNoPlaybook={onSalvarNoPlaybook} />
+				<MensagemDiaEditor canal={ed.canal} mensagem={ed.acao.mensagem} frases={frases} estagio={estagioFrase(editingMsg.track)} isCpc={false} isPersona canaisEmpresa={canaisEmpresaAtivos} titulo={ed.titulo} onClose={() => setEditingMsg(null)} onSet={m => setMensagemEditing(m)} onSalvarNoPlaybook={onSalvarNoPlaybook} />
 			);
 			const m = ed.acao.mensagem;
 			const fraseId = m && typeof m === 'object' && 'frase_id' in m ? (m as { frase_id: string }).frase_id : undefined;

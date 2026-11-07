@@ -764,6 +764,12 @@ carteira, Demais clientes ou padrão; senão só Trocar); `criar_estrategia_segm
 recebe ação, etapa sem régua é ignorada; os passos Estágios, Régua e Revisar mostram a MESMA lista (nomes, ordem, ligado) e
 salvar nunca grava `passos: {}` numa fase que não tinha (`porFaseComPassos`). "Montar esteira pelas personas": por estágio,
 só em estágio com dias, aplica no editor (Salvar grava).
+Raias por persona dentro do estágio (etapa 1 do plano de IA): no passo Régua o estágio escolhido (fase com dias ou estágio
+próprio) mostra SÓ a sua grade — Público geral + uma linha por persona com raia, "+ Raia de persona" (copia o Público geral
+em cada dia; Salvar grava), colunas = dias do estágio ("D+N · Dia N" no Cliente novo; "Dia N do ciclo" + "↻ × N" no Não CPC
+e no estágio próprio com ciclo). Estágio próprio usa a mesma grade (sem o antigo `EtapaReguaEditor`). Regras da tela em
+`site/src/lib/raias-estagio.ts`; ordem dos canais na célula (sempre/senão/junto/reserva) e raia da persona pinadas pelos
+mesmos casos no motor e no site (`tests/dados/raias_semantica.json`, `tests/test_raias_estagio.py`, `raias-estagio.test.tsx`).
 
 SQL 76 (etapa 2 da IA na Orquestração, aprovada pelo dono): reavaliação diária dos segmentos com dias de atraso (motor) e
 prévia de cobertura `previa_segmentacao` (ver `motor/cluster.py` acima). Site, Segmentação: três cartões iguais (Novo
