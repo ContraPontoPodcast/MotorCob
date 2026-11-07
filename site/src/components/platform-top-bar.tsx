@@ -158,7 +158,7 @@ function EmpresaDropdown() {
 }
 
 /** Menu do avatar: Minha conta, Documentação, Console (equipe), Sair. */
-export function AvatarMenu() {
+export function AvatarMenu({ abrirPara = 'baixo' }: { abrirPara?: 'baixo' | 'cima' } = {}) {
 	const { perfil } = useMotorAuth();
 	const navigate = useNavigate();
 	const [open, setOpen] = useState(false);
@@ -180,7 +180,7 @@ export function AvatarMenu() {
 				{initials(perfil?.nome)}
 			</button>
 			{open && (
-				<div className="absolute right-0 top-10 z-50 w-[240px] overflow-hidden rounded-2xl bg-white" style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
+				<div className={`absolute z-50 w-[240px] overflow-hidden rounded-2xl bg-white ${abrirPara === 'cima' ? 'bottom-10 left-0' : 'right-0 top-10'}`} style={{ boxShadow: '0 0 0 1px #E5E5EA, 0 24px 60px -20px rgba(0,0,0,.4)' }}>
 					<div className="flex items-center gap-3 border-b border-[#E5E5EA] p-4">
 						<div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#3A3A3C] text-[15px] font-semibold text-white">{initials(perfil?.nome)}</div>
 						<div className="min-w-0">
