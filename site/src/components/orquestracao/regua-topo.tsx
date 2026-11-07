@@ -1,4 +1,5 @@
 import { type Definicao, type Passos } from '@/lib/estrategia';
+import { estagiosDaEstrategia } from '@/lib/estagios-regua';
 
 /** Estágios da régua, na ordem de prioridade do motor. */
 export const ESTAGIOS = [
@@ -78,39 +79,61 @@ export function resumoEstagio(def: Definicao, id: EstagioId): string {
 	return partes.join(' · ');
 }
 
-export function ReguaTopo({ def, estagioAtivo, onEstagio, canEdit, onEditar }: {
+/** Id da faixa da esteira (EstagioId) de um estágio da estratégia; etapa → null. */
+export function faixaDoEstagio(id: string): EstagioId | null {
+	if (id === 'preventivo' || id === 'quebra') return 'acordo';
+	if (id === 'localizacao' || id === 'cpc' || id === 'giro') return id;
+	return null;
+}
+
+/**
+ * Os estágios da estratégia (os mesmos do passo Estágios: nomes, ordem, ligado/desligado) com o que o motor faz em
+ * cada um. Fase abre a faixa dela no desenho abaixo; estágio próprio abre a régua dele.
+ */
+export function ReguaTopo({ def, selecionado, onEscolher, onEditar }: {
 	def: Definicao;
-	estagioAtivo: EstagioId;
-	onEstagio: (id: EstagioId) => void;
-	canEdit: boolean;
+	selecionado: string;
+	onEscolher: (id: string) => void;
 	onEditar: () => void;
 }) {
-	const status = statusEstagios(def);
+	const estagios = estagiosDaEstrategia(def);
+	const atual = estagios.find(e => e.id === selecionado) ?? estagios.find(e => e.ativo) ?? estagios[0];
+	const faixa = atual ? faixaDoEstagio(atual.id) : null;
 	return (
 		<div className="rounded-xl border border-[var(--base-borda)] bg-[var(--base-cartao)] p-4">
-			<div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1">
+			<div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Estágios da estratégia">
 				<span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-[var(--base-texto-3)]">Estágios</span>
-				{ESTAGIOS.map(e => {
-					const st = status[e.id];
-					const active = estagioAtivo === e.id;
+				{estagios.map((e, i) => {
+					const active = atual?.id === e.id;
+					const alerta = e.regua === 'vazia';
 					return (
 						<button
 							key={e.id}
 							type="button"
-							onClick={() => onEstagio(e.id)}
-							className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${active ? '' : 'border border-[var(--base-borda)] text-[var(--base-texto)] hover:bg-[var(--base-fill)]'} ${!st.ativo ? 'opacity-50' : ''}`}
+							role="tab"
+							aria-selected={active}
+							onClick={() => onEscolher(e.id)}
+							title={`${e.nome}: ${e.texto}`}
+							className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${active ? '' : 'border border-[var(--base-borda)] text-[var(--base-texto)] hover:bg-[var(--base-fill)]'} ${!e.ativo ? 'opacity-50' : ''}`}
 							style={active ? { backgroundColor: 'var(--base-texto)', color: 'var(--base-cartao)' } : undefined}
 						>
-							{e.nome}
-							{!st.temRegua && <span className={`text-[10px] ${active ? 'opacity-70' : 'text-[var(--base-texto-3)]'}`}>· sem régua</span>}
+							<span className="opacity-60">{i + 1}</span> {e.nome}
+							{!e.ativo && <span className={`text-[10px] ${active ? 'opacity-70' : 'text-[var(--base-texto-3)]'}`}>· desligado</span>}
+							{e.ativo && e.regua === 'padrao' && <span className={`text-[10px] ${active ? 'opacity-70' : 'text-[var(--base-texto-3)]'}`}>· padrão do motor</span>}
+							{alerta && <span className={`text-[10px] ${active ? 'opacity-70' : 'text-[var(--estado-atencao-texto)]'}`}>· sem régua</span>}
 						</button>
 					);
 				})}
 			</div>
-			<div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[var(--base-fill)] px-3 py-2">
-				<p className="flex-1 text-[12px] leading-relaxed text-[var(--base-texto-2)]">{resumoEstagio(def, estagioAtivo)}</p>
-				<button type="button" onClick={onEditar} className="shrink-0 text-[12px] font-semibold text-[var(--destaque)] hover:underline">editar</button>
-			</div>
+			{atual && (
+				<div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[var(--base-fill)] px-3 py-2">
+					<p className="flex-1 text-[12px] leading-relaxed text-[var(--base-texto-2)]">
+						<strong className="text-[var(--base-texto)]">{atual.nome}</strong> · {atual.texto}
+						{faixa && atual.ativo && <> · {resumoEstagio(def, faixa)}</>}
+					</p>
+					<button type="button" onClick={onEditar} className="shrink-0 text-[12px] font-semibold text-[var(--destaque)] hover:underline">editar estágios</button>
+				</div>
+			)}
 		</div>
 	);
 }
