@@ -52,6 +52,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
+from motor.pseudonimo import checar_csv  # noqa: E402
 from nuvem.supabase_api import ErroSupabase, Supabase  # noqa: E402
 
 DESTINO_BASE = {"clientes": "base/clientes.csv", "contatos": "base/contatos.csv", "leads": "base/leads.csv",
@@ -293,7 +294,10 @@ def publicar_arquivos(sb: Supabase, pasta: Path, prefixo: str, limpar: bool = Fa
         rel = arq.relative_to(pasta).as_posix()
         tipo = {"xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "txt": "text/plain; charset=utf-8"}.get(arq.suffix.lstrip("."), "text/csv; charset=utf-8")
-        sb.enviar("saidas", f"{prefixo}/{rel}", arq.read_bytes(), tipo)
+        conteudo = arq.read_bytes()
+        if arq.suffix == ".csv":
+            checar_csv(rel, conteudo)   # LGPD: lista com id_cliente com cara de CPF não sobe
+        sb.enviar("saidas", f"{prefixo}/{rel}", conteudo, tipo)
         enviados.add(f"{prefixo}/{rel}")
         n += 1
     if limpar:
@@ -917,12 +921,17 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
             baixados = _separar_cargas_ruins(sb, entrada, pasta, baixados, out)
         rel_base = None
         if tem("bruto") or tem("incremental"):
-            rel_base = rodar_dia.preparar_carteira(entrada, pasta)
+            from nuvem import faturamento as fat_sal   # o sal da empresa: o CPF nunca é o id (código pseudônimo)
+            rel_base = rodar_dia.preparar_carteira(entrada, pasta, chave=lambda: fat_sal.sal_da_empresa(sb, eid))
             out(f"  carteira: {rel_base['clientes']} clientes, {rel_base['na_carga']} em cobrança, "
                 f"{rel_base['contatos']} contatos")
             # só nomes e tipos das colunas, para o site montar as regras de cluster
             sb.atualizar("empresas", {"id": f"eq.{eid}"},
                          {"colunas_base": {"colunas": rel_base["colunas"], "atualizado_em": agora()}})
+        from nuvem import ids_cliente   # ids antigos que eram CPF: troca no banco e republica as listas, uma vez
+        aviso_ids = ids_cliente.aplicar_pendente(
+            sb, eid, cid, pasta, lambda d: f"{slug}/{d}" + (f"/{u['codigo']}" if cid is not None else ""),
+            publicar_arquivos, out)
         rel_enriq = None
         if tem("enriquecimento") and (pasta / "base" / "contatos.csv").exists():
             rel_enriq = rodar_dia.preparar_enriquecimento(entrada, pasta / "enriquecimento", pasta / "base")
@@ -989,6 +998,8 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
 
         if aviso_layout:
             r["alertas"] = [aviso_layout] + r["alertas"]
+        if aviso_ids:
+            r["alertas"].append(aviso_ids)
         r["alertas"] = (mapeamento.alertas(mapa, u.get("nome") or u.get("codigo") or "")
                         + retorno_canal.alertas(info_canal, u.get("nome") or u.get("codigo") or "") + r["alertas"])
         r["retorno_canal_arquivos"] = info_canal["relatorios"]

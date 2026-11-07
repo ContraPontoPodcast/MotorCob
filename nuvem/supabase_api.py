@@ -10,6 +10,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from motor.pseudonimo import checar_linhas
+
 
 class ErroSupabase(RuntimeError):
     def __init__(self, status, corpo, url):
@@ -69,6 +71,7 @@ class Supabase:
 
     def inserir(self, tabela, linhas, conflito: str | None = None, retornar=False, lote=1000):
         linhas = linhas if isinstance(linhas, list) else [linhas]
+        checar_linhas(tabela, linhas)   # LGPD: id_cliente com cara de CPF nunca sai do motor (o banco também barra)
         prefer = ["return=representation" if retornar else "return=minimal"]
         caminho = f"/rest/v1/{tabela}"
         if conflito:
@@ -82,6 +85,7 @@ class Supabase:
         return saida
 
     def atualizar(self, tabela, filtros: dict, valores: dict):
+        checar_linhas(tabela, valores)
         self._req("PATCH", f"/rest/v1/{tabela}?{urllib.parse.urlencode(filtros)}", valores,
                   {"Prefer": "return=minimal"})
 

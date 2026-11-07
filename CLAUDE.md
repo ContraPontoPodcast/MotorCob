@@ -116,7 +116,16 @@ de outra pessoa pela certificação e a rotação segue.
   e é a certificação que libera o WhatsApp.
 - **`sem_conta` no WhatsApp restringe o canal, não invalida o telefone** (expira em 90 dias).
 - **O motor roda pelo `id_cliente`**, nunca pelo CPF. O CPF vira chave pseudônima em
-  memória e não vai para nenhuma saída.
+  memória e não vai para nenhuma saída. **O CPF nunca é o id (decisão do dono, 07/11/2026; SQL 73):** carga sem
+  código de cliente (a coluna do cliente é a do CPF) ou código com cara de CPF (11 dígitos com DV válido ou
+  000.000.000-00) → código pseudônimo `MX` + 16 letras = HMAC-SHA256(`faturamento_sal` da empresa,
+  "motorcx:id_cliente:v1:" + documento) (`motor/pseudonimo.py`; o banco tem a mesma conta em `id_cliente_pseudonimo`).
+  Estável (mesmo cliente = mesmo código; o sal nunca muda); código de cliente de verdade não muda. O valor original
+  fica só local (`base/ids_originais.csv`, como `pessoas.csv`) para acordo/baixa/ocorrência acharem o cliente; as
+  listas `ids/` ganham a coluna `contrato` no fim quando o id é o código (o cliente cruza pelo contrato; CPF nunca
+  vai na lista). Estado antigo com CPF: `migrar_pasta` troca uma vez (marcador `estado/ids_sem_cpf.txt`), a nuvem
+  manda os pares a `rechavear_clientes` e republica os dias de saída (`nuvem/ids_cliente.py`). Trava: o check
+  `<tabela>_id_cliente_sem_cpf` no banco e `checar_linhas`/`checar_csv` antes do PostgREST e do Storage.
 - **Contato certificado para uma pessoa é evidência contra as outras** e a favor dos outros
   IDs da mesma pessoa.
 - **Retorno reimportado não conta duas vezes.** Resultado desconhecido nunca é classificado
@@ -390,7 +399,8 @@ de outra pessoa pela certificação e a rotação segue.
   monta a Entrada pelos arquivos do credor (cabeçalho: nomes usuais de cobrança; separador,
   encoding, formato de data e decimal pela amostra; DDD em coluna separada; marcas S/N de
   WhatsApp/RCS/Hot por telefone; códigos de CPC da ocorrência; bureau no formato conhecido).
-  Sem código de cliente, o CPF vira o ID. Grava config/entrada_automatica.json e põe o que
+  Sem código de cliente, o CPF acha o cliente mas o ID é o código pseudônimo (`motor/pseudonimo.py`; nunca o CPF).
+  Grava config/entrada_automatica.json e põe o que
   entendeu no 1º alerta ("LAYOUT AUTOMÁTICO (confira)", só nomes de coluna). Carga que não
   dá para entender → rejeitados/ + envio com erro listando as colunas. O .json do repositório
   sempre vence.
@@ -660,6 +670,9 @@ o catálogo). Argumento que não dá para ler precisa de comentário `conferir-r
 SQL 71: `cancelar_rascunho(fatura)` (rascunho → cancelada; quem emite a fatura da empresa).
 SQL 72: `estimativa_ciclo` não projeta por dia o que conta uma vez no ciclo (Orquestração por CPF, Jornada): fixo + medido
 + consumo × dias do ciclo ÷ dias corridos; a conta vive em `estimativa_ciclo_em(empresa, hoje)` (só o servidor).
+SQL 73: o CPF nunca é o id do cliente (`parece_cpf`, `id_cliente_pseudonimo`, `rechavear_clientes`, check em toda tabela com
+id_cliente; troca o que já estava gravado) e o rascunho cancelado (nunca emitido) não segura mais a competência:
+`gerar_rascunhos`/`fechar_fatura` geram outro (`competencia_tem_fatura`; único só entre as não canceladas).
 Empresa › Faturas monta o painel do banco (`site/src/lib/faturamento-painel.ts`; a função `cobranca` não tem ação "painel").
 Fluxo do agente (Cobrança › Canais › Agente virtual; SQL 58, 59 e 66): `site/src/components/fluxo/` e `site/src/lib/fluxo.ts`;
 quadro por ramos, "Enviar para aprovação" bloqueado enquanto `fluxo_voz_bloqueios` tiver pendência; conectores em

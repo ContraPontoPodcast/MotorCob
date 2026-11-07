@@ -104,10 +104,12 @@ def pessoas_da_carteira(contatos_csv: Path) -> dict[str, str]:
     return pessoa_de
 
 
-def chave_cliente(sal: str, idc: str, pessoa_de: dict[str, str]) -> str:
+def chave_cliente(sal: str, idc: str, pessoa_de: dict[str, str], originais: dict[str, str] | None = None) -> str:
     """Chave do cliente em clientes_mes: HMAC-SHA256(sal da empresa, pessoa do CPF ou id_cliente), 32 hexadecimais.
-    Sem o sal (que só a rotina lê) não dá para voltar ao CPF nem testar CPFs."""
-    base = pessoa_de.get(idc) or f"id:{idc}"
+    Sem o sal (que só a rotina lê) não dá para voltar ao CPF nem testar CPFs. Id que virou código pseudônimo (era o
+    CPF; motor/pseudonimo.py) usa o valor original (base/ids_originais.csv): a chave não muda com a troca do id e o
+    cliente não conta duas vezes no ciclo."""
+    base = pessoa_de.get(idc) or f"id:{(originais or {}).get(idc, idc)}"
     return hmac.new(sal.encode(), base.encode(), hashlib.sha256).hexdigest()[:32]
 
 
@@ -118,7 +120,9 @@ def clientes_avaliados(pasta: Path, sal: str) -> set[str]:
     if not ids:
         return set()
     pessoa_de = pessoas_da_carteira(pasta / "base" / "contatos.csv")
-    return {chave_cliente(sal, idc, pessoa_de) for idc in ids}
+    from motor.pseudonimo import ler_originais
+    originais = ler_originais(pasta / "base")
+    return {chave_cliente(sal, idc, pessoa_de, originais) for idc in ids}
 
 
 def sal_da_empresa(sb, empresa_id) -> str:

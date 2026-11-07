@@ -2810,5 +2810,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 72: estimativa do ciclo sem projetar CPF (testar_estimativa_ciclo.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 73 · LGPD: o CPF nunca é o id do cliente (código pseudônimo; check) e o rascunho cancelado é gerado de novo.
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_id_cliente_sem_cpf.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 73: id do cliente sem CPF e rascunho cancelado (testar_id_cliente_sem_cpf.py)", True, f"select {r.returncode}",
+       None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
