@@ -18,7 +18,6 @@ import { PersonasDaCarteira, limparPersonas, normalizarDefinicao } from '@/compo
 import { ExportarButton } from '@/components/estrategias/exportar-button';
 import { computarResumoFicha } from '@/components/estrategias/ficha-estrategia';
 import { EstagiosEditor } from '@/components/orquestracao/estagios-editor';
-import { EtapaReguaEditor } from '@/components/orquestracao/etapa-regua-editor';
 import { TravasTabela } from '@/components/orquestracao/travas-tabela';
 import { VisaoGeral } from '@/components/orquestracao/visao-geral';
 import { ReguaTopo, faixaDoEstagio, type EstagioId } from '@/components/orquestracao/regua-topo';
@@ -1044,20 +1043,18 @@ export function Orquestracao() {
 									<>
 										{/* Os estágios da estratégia (os mesmos do passo Estágios). Fase: a faixa dela no desenho; estágio próprio: a régua dele. */}
 										<ReguaTopo def={def} selecionado={etapaReguaId ?? reguaSel} onEscolher={escolherEstagioRegua} onEditar={() => goStep('estagios')} />
-										{etapaReguaId ? (
-											<div className="mt-3"><EtapaReguaEditor def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} etapaId={etapaReguaId} canEdit={canEdit} onVoltar={() => { setEtapaReguaId(null); goStep('estagios'); }} /></div>
-										) : (
-											<>
-												{reguaFaseInfo}
+										{/* Fase ou estágio próprio: a MESMA grade (Público geral + raias por persona), só do estágio escolhido. */}
+										<>
+												{!etapaReguaId && reguaFaseInfo}
 												<div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-													<div className="flex gap-1 rounded-lg bg-[var(--base-fill)] p-1">
+													{etapaReguaId ? <span /> : <div className="flex gap-1 rounded-lg bg-[var(--base-fill)] p-1">
 														<button type="button" onClick={() => setForma('raias')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${forma === 'raias' ? 'bg-[var(--base-texto)] text-[var(--base-cartao)]' : 'text-[var(--base-texto-2)] hover:text-[var(--base-texto)]'}`}>Raias</button>
 														<button type="button" onClick={() => setForma('fluxo')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${forma === 'fluxo' ? 'bg-[var(--base-texto)] text-[var(--base-cartao)]' : 'text-[var(--base-texto-2)] hover:text-[var(--base-texto)]'}`}>Fluxo</button>
-													</div>
-													{canEdit && <button type="button" onClick={() => setUsarReguaOpen(true)} className={btnNeutroCls}>Usar a régua de…</button>}
+													</div>}
+													{canEdit && !etapaReguaId && <button type="button" onClick={() => setUsarReguaOpen(true)} className={btnNeutroCls}>Usar a régua de…</button>}
 												</div>
 												<PersonasDaCarteira personas={personasUsuario} contagens={contagens} semPersona={semPersona} def={def} modelosMap={modelosMap} canEdit={canEdit} montarOpen={montarOpen} setMontarOpen={setMontarOpen} estagio={reguaSel} onAplicar={(d) => { setDef(d); setEstrDirty(true); }} onIrParaRegua={escolherEstagioRegua} />
-												<DesenhoDaEsteira def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} canEdit={canEdit} onSalvar={() => void salvarEstrategia()} saving={savingEstr} personas={personasUsuario} contagens={contagens} estrId={estrId} dirty={estrDirty} stickyTop={stickyTop} forma={forma} onFormaChange={setForma} focusFaixa={estagioAtivo === 'acordo' ? 'acordo' : estagioAtivo} />
+												<DesenhoDaEsteira def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} canEdit={canEdit} onSalvar={() => void salvarEstrategia()} saving={savingEstr} personas={personasUsuario} contagens={contagens} estrId={estrId} dirty={estrDirty} stickyTop={stickyTop} forma={etapaReguaId ? 'raias' : forma} onFormaChange={setForma} focusFaixa={etapaReguaId ? null : estagioAtivo === 'acordo' ? 'acordo' : estagioAtivo} estagio={etapaReguaId ?? reguaSel} />
 												<div className="mt-4 rounded-xl border border-[var(--base-borda)] bg-[var(--base-cartao)]">
 													<button type="button" onClick={() => setTravasOpen(v => !v)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
 														<div className="min-w-0">
@@ -1068,8 +1065,7 @@ export function Orquestracao() {
 													</button>
 													{travasOpen && <div className="border-t border-[var(--base-borda)] p-4"><TravasTabela def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} canEdit={canEdit} /></div>}
 												</div>
-											</>
-										)}
+										</>
 										<div className="mt-4 flex flex-wrap items-center justify-between gap-2">
 											<button type="button" onClick={() => goStep('estagios')} className="flex h-9 items-center gap-2 rounded-lg border border-[var(--base-borda)] px-4 text-[13px] font-semibold text-[var(--base-texto)] hover:bg-[var(--base-fill)]">Voltar: estágios</button>
 											<button type="button" onClick={() => goStep('revisar')} className="flex h-9 items-center gap-2 rounded-lg px-5 text-[13px] font-semibold text-[var(--destaque-texto)]" style={{ backgroundColor: 'var(--destaque)' }}>Continuar: revisar</button>
