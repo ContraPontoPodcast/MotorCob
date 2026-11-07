@@ -58,7 +58,7 @@ GENERICOS: dict[str, dict[str, str]] = {g: {**VOZ.GENERICOS_VOZ.get(g, {}), **_D
 CANAIS_VOZ = VOZ.CANAIS_VOZ
 DIAS_BUSCA_ESCOLHA = 3   # ocorrência de hoje pode ser de uma ação exportada até 3 dias antes
 CAMPOS_ESCOLHA = ("data", "id_cliente", "canal", "contato", "ordem_contato", "reserva", "regua", "cluster",
-                  "estado", "persona", "frase_id", "frase_versao")
+                  "estado", "persona", "frase_id", "frase_versao", "passo")
 _DATA_NO_NOME = re.compile(r"(20\d{2})-?(\d{2})-?(\d{2})")
 
 
@@ -692,7 +692,9 @@ def salvar_escolhas(pasta_estado: str | Path, dia: date, fila: list[dict]):
               "persona": (l.get("persona") or "").split(" · ")[0],
               # frase que saiu na ação (0 = texto livre da esteira; vazio = sem frase) e a versão do texto
               "frase_id": "" if l.get("frase_id") is None else l["frase_id"],
-              "frase_versao": l.get("frase_versao") or ""} for l in fila]
+              "frase_versao": l.get("frase_versao") or "",
+              # passo exportado (D+3, G2-dia4, C2-D5, CPC B · T2): volta e dia do ciclo da recuperação (SQL 77)
+              "passo": l.get("passo") or ""} for l in fila]
     tmp = arq.with_suffix(".tmp")
     with open(tmp, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=CAMPOS_ESCOLHA, delimiter=";")

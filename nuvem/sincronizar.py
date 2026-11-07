@@ -582,6 +582,37 @@ def publicar_acoes(sb: Supabase, empresa_id, r, cid=None) -> int:
     return len(linhas)
 
 
+ALERTA_SQL77 = ("BANCO: rode o SQL 77 (supabase/migrations/20270113000001_recuperacao_por_acao.sql) para ver acordo, "
+                "pagamento e valor recuperado por canal, persona e estágio")
+RETENCAO_RECUPERACAO_DIAS = 760   # ~25 meses: o mesmo mês do ano anterior continua comparável
+
+
+def publicar_recuperacao(sb: Supabase, empresa_id, r, cid=None, hoje: date | None = None) -> int:
+    """Recuperação por ação e contato por posição (SQL 77; só agregado): regrava a janela que a rotina recalculou
+    (pagamento que chega depois atualiza o dia da ação) e apaga o que passou da retenção. Banco sem o SQL 77: avisa
+    e segue (a lista nunca depende disto)."""
+    rec = r.get("recuperacao") or {}
+    desde = rec.get("desde")
+    if not desde:
+        return 0
+    ts = agora()
+    limite = ((hoje or date.today()) - timedelta(days=RETENCAO_RECUPERACAO_DIAS)).isoformat()
+    try:
+        for tabela, chave in (("recuperacao_dia", "linhas"), ("contato_posicao_dia", "posicao")):
+            sb.apagar(tabela, {"empresa_id": f"eq.{empresa_id}", **_fc(cid), "data": f"gte.{desde}"})
+            sb.apagar(tabela, {"empresa_id": f"eq.{empresa_id}", **_fc(cid), "data": f"lt.{limite}"})
+            linhas = rec.get(chave) or []
+            if linhas:
+                sb.inserir(tabela, [{**l, "empresa_id": empresa_id, **_c(cid), "atualizado_em": ts} for l in linhas])
+    except ErroSupabase as ex:
+        if "recuperacao_dia" not in str(ex) and "contato_posicao_dia" not in str(ex):
+            raise
+        if ALERTA_SQL77 not in r.setdefault("alertas", []):
+            r["alertas"].append(ALERTA_SQL77)
+        return 0
+    return len(rec.get("linhas") or [])
+
+
 def aplicar_sugestoes(sb: Supabase, empresa_id, out=print, cid=None) -> int:
     """Sugestões aprovadas no site viram um segmento (condições da persona, no topo da lista) com
     uma estratégia igual à que a persona seguia, com a troca de canal sugerida."""
@@ -1095,6 +1126,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         n_arq = publicar_arquivos(sb, r["saida"], prefixo, limpar=True)
         n_sug = publicar_personas(sb, eid, r, cid)
         publicar_acoes(sb, eid, r, cid)
+        publicar_recuperacao(sb, eid, r, cid, data)
         for e, destino in baixados:
             status, rel = _status_mapeamento(e, destino, mapa, *_relatorio_envio(e, destino, r, rel_base, rel_enriq))
             sb.atualizar("envios", {"id": f"eq.{e['id']}"}, {"status": status, "relatorio": rel})
@@ -1114,6 +1146,7 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
                   "personas": len(r.get("personas") or []), "sugestoes_novas": n_sug,
                   "sugestoes_aplicadas": n_aplicadas,
                   "acoes_ontem": _acoes_de(r.get("acoes"), data - timedelta(days=1)),
+                  "recuperacao": (r.get("recuperacao") or {}).get("totais"),
                   "quarentena": len(r["quarentena"]), "sem_layout": r["sem_layout"], "arquivos": n_arq,
                   "sem_acao": r.get("motivos") or {}, "proximos": r.get("proximos") or [],
                   "propensao": r.get("propensao"), "discagem": r.get("discagem") or None,

@@ -2851,5 +2851,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 76: prévia de segmentação (testar_segmentos_previa.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 77 · Recuperação por ação: acordo, pagamento e valor recuperado por canal × persona × estágio (aplica o 77 duas vezes)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_recuperacao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 77: recuperação por ação (testar_recuperacao.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
