@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
-import { AlertTriangle, ChevronDown, Copy, Grid3x3, Pencil, Plus, Printer, RotateCcw, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ChevronDown, Copy, Grid3x3, Pencil, Plus, Printer, Repeat, RotateCcw, Trash2, X } from 'lucide-react';
 import { Empty, Loading, Notice, useAllowed } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, numberBR, supabase, type Cluster, type Credor, type PersonaUsuario, type Row, type SegmentoCarteira, type SegmentoEmUso } from '@/lib/supabase';
@@ -21,7 +21,8 @@ import { EstagiosEditor } from '@/components/orquestracao/estagios-editor';
 import { EtapaReguaEditor } from '@/components/orquestracao/etapa-regua-editor';
 import { TravasTabela } from '@/components/orquestracao/travas-tabela';
 import { VisaoGeral } from '@/components/orquestracao/visao-geral';
-import { ReguaTopo, type EstagioId } from '@/components/orquestracao/regua-topo';
+import { ReguaTopo, faixaDoEstagio, type EstagioId } from '@/components/orquestracao/regua-topo';
+import { copiarReguaPadrao, estagiosDaEstrategia, nomeEstrategiaModelo, textoSituacao } from '@/lib/estagios-regua';
 import { UsarReguaModal, copiarReguaEstagio } from '@/components/orquestracao/usar-regua-modal';
 import { EscolhaCarteira } from '@/components/escolha-carteira';
 import { CopiarCarteiraModal } from '@/components/orquestracao/copiar-carteira-modal';
@@ -78,6 +79,11 @@ export function Orquestracao() {
 	const [editing, setEditing] = useState<Cluster | null>(null);
 	const [estagioAtivo, setEstagioAtivo] = useState<EstagioId>('localizacao');
 	const [etapaReguaId, setEtapaReguaId] = useState<string | null>(null);
+	// Estágio escolhido no passo Régua (id de fase ou de etapa; os mesmos do passo Estágios).
+	const [reguaSel, setReguaSel] = useState<string>('localizacao');
+	// Trocar / excluir a estratégia deste segmento (confirmação na própria página).
+	const [acaoEstr, setAcaoEstr] = useState<null | 'trocar' | 'excluir'>(null);
+	const [usosEstr, setUsosEstr] = useState<string[] | null>(null);
 	const [usarReguaOpen, setUsarReguaOpen] = useState(false);
 	const [guardarModelo, setGuardarModelo] = useState(false);
 	const [travasOpen, setTravasOpen] = useState(false);
@@ -354,6 +360,7 @@ export function Orquestracao() {
 	}, [estrId, selectedId, credor?.id]);
 
 	function onMontarRegua(stageId: string) {
+		setReguaSel(stageId);
 		if (isFaseId(stageId)) {
 			setEtapaReguaId(null);
 			const estagio = (stageId === 'preventivo' || stageId === 'quebra') ? 'acordo' : stageId;
@@ -455,14 +462,49 @@ export function Orquestracao() {
 		void reload();
 	}
 
-	/** Aplica uma definição neste segmento+carteira via separar_estrategia (sempre com definição). */
-	async function aplicarNoSegmento(defAplicar: Definicao, toastMsg?: string) {
+	/** Cria a estratégia deste segmento+carteira (Criar do zero, Copiar, Começar de um modelo) com a definição da tela.
+	 *  nome: o do modelo ("<Modelo> · <Segmento>"); sem nome, o banco usa "<segmento> · <carteira>" (SQL 75). */
+	async function aplicarNoSegmento(defAplicar: Definicao, toastMsg?: string, nome?: string) {
 		if (!supabase || !credor || !selectedSeg) return;
 		setBusy('separar');
-		const { error } = await supabase.rpc('separar_estrategia', { segmento: selectedSeg.cluster_id, carteira: credor.id, definicao: defAplicar as unknown as Record<string, unknown> });
+		const { error } = await supabase.rpc('criar_estrategia_segmento', { segmento: selectedSeg.cluster_id, carteira: credor.id, definicao: defAplicar as unknown as Record<string, unknown>, nome: nome ?? null });
 		if (error) { setError(friendlyError()); setBusy(''); return; }
 		toast.success(toastMsg ?? 'Estratégia criada só para esta carteira.');
 		setBusy('');
+		goStep('estagios');
+		void reload();
+	}
+
+	/** Trocar estratégia: tira a estratégia própria deste segmento nesta carteira e volta às três opções.
+	 *  A estratégia continua na empresa (aparece em "Começar de um modelo › Da sua empresa"). */
+	async function trocarEstrategia() {
+		if (!supabase || !credor || !selectedSeg) return;
+		setBusy('trocar');
+		const { error } = await supabase.from('segmentos_carteira').update({ estrategia_id: null }).eq('cluster_id', selectedSeg.cluster_id).eq('credor_id', credor.id);
+		setBusy('');
+		if (error) { setError(friendlyError(error)); return; }
+		setAcaoEstr(null); setUsosEstr(null); setEstrDirty(false); setCopiaPendente(false);
+		toast.success(`“${estrNome || 'Estratégia'}” saiu de ${selectedSeg.nome}. Escolha como começar de novo.`);
+		goStep('estagios');
+		void reload();
+	}
+
+	/** Excluir: primeiro pergunta ao banco onde mais a estratégia vale; só exclui se em nenhum outro lugar. */
+	async function pedirExcluir() {
+		if (!supabase || !credor || !selectedSeg || !estrId) return;
+		setAcaoEstr('excluir'); setUsosEstr(null);
+		const { data, error } = await supabase.rpc('usos_estrategia', { estrategia: estrId, segmento: selectedSeg.cluster_id, carteira: credor.id });
+		if (error) { setError(friendlyError(error)); setAcaoEstr(null); return; }
+		setUsosEstr(((data ?? []) as Row[]).map(r => String(r.onde)));
+	}
+	async function excluirEstrategia() {
+		if (!supabase || !credor || !selectedSeg || !estrId) return;
+		setBusy('excluir');
+		const { error } = await supabase.rpc('excluir_estrategia', { estrategia: estrId, segmento: selectedSeg.cluster_id, carteira: credor.id });
+		setBusy('');
+		if (error) { setError(friendlyError(error)); void pedirExcluir(); return; }
+		setAcaoEstr(null); setUsosEstr(null); setEstrDirty(false); setCopiaPendente(false);
+		toast.success(`Estratégia “${estrNome || 'Estratégia'}” excluída. Escolha como começar de novo.`);
 		goStep('estagios');
 		void reload();
 	}
@@ -612,12 +654,10 @@ export function Orquestracao() {
 	}, [empresa?.id]);
 
 	// --- Estados dos passos (linhas de estado de cada cartão) ---
-	const fasesKeys = ['localizacao', 'cpc', 'giro', 'preventivo', 'quebra'] as const;
-	const mAtivas = fasesKeys.filter(f => { const o = (def as Record<string, unknown>)[f] as Record<string, unknown> | undefined; return o && o.ativo !== false; }).length;
-	const nComRegua = fasesKeys.filter(f => {
-		const o = (def as Record<string, unknown>)[f] as Record<string, unknown> | undefined;
-		return o && o.ativo !== false && o.passos && Object.keys(o.passos as object).length > 0;
-	}).length;
+	// Mesma conta dos passos Régua e Revisar (lib/estagios-regua): "padrão do motor" também é régua; só "vazia" não é.
+	const estagiosLigados = estagiosDaEstrategia(def).filter(e => e.ativo);
+	const mAtivas = estagiosLigados.length;
+	const nComRegua = estagiosLigados.filter(e => e.regua !== 'vazia').length;
 	const segComEstr = emUso.filter(s => s.estrategia_id).length;
 	const segSemEstr = emUso.length - segComEstr;
 	const est3Base = emUso.length === 0 ? 'falta criar segmentos' : segSemEstr > 0 ? `falta em ${segSemEstr} segmento${segSemEstr > 1 ? 's' : ''}` : `${emUso.length} estágio${emUso.length > 1 ? 's' : ''}`;
@@ -649,6 +689,27 @@ export function Orquestracao() {
 
 	// --- Botão neutro (contorno) usado na barra e na gaveta ---
 	const btnNeutroCls = 'flex items-center gap-1.5 rounded-lg border h-9 px-3 text-xs font-semibold transition-colors border-[var(--base-borda)] text-[var(--base-texto)] hover:bg-[var(--base-fill)]';
+
+	/** Passo Régua: escolher um estágio. Fase → abre a faixa dela no desenho; estágio próprio → a régua dele. */
+	function escolherEstagioRegua(id: string) {
+		setReguaSel(id);
+		const faixa = faixaDoEstagio(id);
+		if (faixa) { setEtapaReguaId(null); setEstagioAtivo(faixa); }
+		else setEtapaReguaId(id);
+		if (passo !== 'regua') goStep('regua');
+	}
+	// O que o motor faz com a fase escolhida, quando ela não tem régua própria (o desenho abaixo fica vazio nesses casos).
+	const faseSel = isFaseId(reguaSel) ? reguaSel : null;
+	const estagioSel = faseSel ? estagiosDaEstrategia(def).find(e => e.id === faseSel) ?? null : null;
+	const reguaFaseInfo = faseSel && estagioSel && estagioSel.regua !== 'propria' ? (
+		<div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-4 py-2.5 text-[12px] font-medium text-[var(--estado-atencao-texto)]">
+			<span className="flex-1"><strong>{estagioSel.nome}</strong>: {textoSituacao(estagioSel.regua, 'fase', faseSel)}.{estagioSel.regua === 'padrao' && ' O desenho abaixo fica vazio até você trazer a régua padrão para editar.'}{estagioSel.regua === 'vazia' && ' Monte os dias no desenho abaixo ou comece da régua padrão.'}</span>
+			{canEdit && (estagioSel.regua === 'padrao' || estagioSel.regua === 'vazia') && (
+				<button type="button" onClick={() => { setDef(copiarReguaPadrao(def, faseSel)); setEstrDirty(true); }} className={btnNeutroCls}>Começar da régua padrão do motor</button>
+			)}
+		</div>
+	) : null;
+
 
 	/** Fileira de segmentos da carteira (seletor dos passos 3, 4 e 5). */
 	function renderSeletorSegmentos() {
@@ -922,6 +983,7 @@ export function Orquestracao() {
 								<div className="mt-3 flex items-center gap-2 rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-4 py-3 text-sm font-medium text-[var(--estado-atencao-texto)]"><Copy size={15} /> Copiado de <strong>{copiadoDe}</strong>. Revise e clique em Salvar para valer.</div>
 							)}
 							<div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-[var(--base-fill)] px-4 py-3">
+								<button type="button" onClick={() => goStep('segmentos')} className={btnNeutroCls} aria-label="Voltar aos segmentos"><ArrowLeft size={14} /> Segmentos</button>
 								<span className="text-[13px] font-semibold text-[var(--base-texto-3)]">{passo === 'estagios' ? `Estágios de ${selectedSeg?.nome ?? 'Demais'}` : passo === 'regua' ? `O que fazer em “${selectedSeg?.nome ?? 'Demais'}”` : 'Revisar e salvar'}</span>
 						{passo === 'estagios' && <Info slug="estagio-de-cobranca" />}
 								<input value={estrNome} onChange={e => { setEstrNome(e.target.value); setEstrDirty(true); }} disabled={!canEdit} className="h-9 flex-1 min-w-[180px] rounded border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-3 text-sm font-medium text-[var(--base-texto)] outline-none focus:border-[var(--area)] disabled:bg-transparent disabled:border-transparent" />
@@ -932,7 +994,41 @@ export function Orquestracao() {
 									credorId={credor?.id}
 									estrId={estrId}
 								/>
+								{/* Trocar / excluir: só a estratégia própria deste segmento nesta carteira (a padrão e a do segmento não). */}
+								{canEdit && !isDemais && selectedSeg?.estrategia_propria && estrId && (
+									<>
+										<button type="button" onClick={() => { setAcaoEstr('trocar'); setUsosEstr(null); }} disabled={!!busy} className={`${btnNeutroCls} disabled:opacity-50`}><Repeat size={14} /> Trocar estratégia</button>
+										<button type="button" onClick={() => void pedirExcluir()} disabled={!!busy} className="flex h-9 items-center gap-1.5 rounded-lg border border-[var(--estado-erro)] px-3 text-xs font-semibold text-[var(--estado-erro)] hover:bg-[var(--estado-erro-fundo)] disabled:opacity-50"><Trash2 size={14} /> Excluir estratégia</button>
+									</>
+								)}
 							</div>
+							{acaoEstr && selectedSeg && (
+								<div role="alertdialog" aria-label={acaoEstr === 'trocar' ? 'Trocar estratégia' : 'Excluir estratégia'} className="mt-3 rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-4 py-3 text-sm text-[var(--estado-atencao-texto)]">
+									{acaoEstr === 'trocar' && (
+										<p><strong>Trocar a estratégia de {selectedSeg.nome}?</strong> “{estrNome || 'Estratégia'}” sai deste segmento nesta carteira e você volta às três opções (Criar do zero, Copiar, Começar de um modelo). Ela continua guardada na empresa, em “Começar de um modelo › Da sua empresa”.{estrDirty && ' As alterações não salvas se perdem.'}</p>
+									)}
+									{acaoEstr === 'excluir' && usosEstr === null && <p>Conferindo onde a estratégia é usada…</p>}
+									{acaoEstr === 'excluir' && usosEstr !== null && usosEstr.length > 0 && (
+										<>
+											<p><strong>Não dá para excluir “{estrNome || 'Estratégia'}”:</strong> ela também vale em</p>
+											<ul className="mt-1 list-disc pl-5">{usosEstr.map(u => <li key={u}>{u}</li>)}</ul>
+											<p className="mt-1">Aqui você pode só trocar: ela sai de {selectedSeg.nome} e continua valendo nesses lugares.</p>
+										</>
+									)}
+									{acaoEstr === 'excluir' && usosEstr !== null && usosEstr.length === 0 && (
+										<p><strong>Excluir “{estrNome || 'Estratégia'}” de vez?</strong> Ela só vale em {selectedSeg.nome} nesta carteira. Os estágios e as réguas dela somem; {selectedSeg.nome} volta às três opções e, até você escolher, segue a estratégia padrão da empresa (ou a régua padrão do motor). Não dá para desfazer.</p>
+									)}
+									<div className="mt-3 flex flex-wrap gap-2">
+										{(acaoEstr === 'trocar' || (usosEstr !== null && usosEstr.length > 0)) && (
+											<button type="button" onClick={() => void trocarEstrategia()} disabled={busy === 'trocar'} className="flex h-9 items-center gap-1.5 rounded-lg px-4 text-xs font-semibold text-[var(--destaque-texto)] disabled:opacity-50" style={{ backgroundColor: 'var(--destaque)' }}><Repeat size={14} /> {busy === 'trocar' ? 'Trocando...' : 'Trocar estratégia'}</button>
+										)}
+										{acaoEstr === 'excluir' && usosEstr !== null && usosEstr.length === 0 && (
+											<button type="button" onClick={() => void excluirEstrategia()} disabled={busy === 'excluir'} className="flex h-9 items-center gap-1.5 rounded-lg px-4 text-xs font-semibold text-white disabled:opacity-50" style={{ backgroundColor: 'var(--estado-erro)' }}><Trash2 size={14} /> {busy === 'excluir' ? 'Excluindo...' : 'Excluir de vez'}</button>
+										)}
+										<button type="button" onClick={() => { setAcaoEstr(null); setUsosEstr(null); }} className={btnNeutroCls}>Cancelar</button>
+									</div>
+								</div>
+							)}
 
 							<div className="mt-4">
 								{passo === 'estagios' && (selectedSeg && !selectedSeg.estrategia_propria && !isDemais
@@ -943,32 +1039,37 @@ export function Orquestracao() {
 										onCopiar={() => setCopiarSegOpen(true)}
 										onModelo={() => setModelosOpen(true)}
 									/>
-									: <EstagiosEditor def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} canEdit={canEdit} colunas={colunas} semEstagio={semEstagioExibir} contagemEstado={contagemEstadoSeg} onMontarRegua={onMontarRegua} propensaoSegRows={propensaoSegRows} propensaoColetando={propensaoColetando} propensaoError={propensaoError} />)}
-								{passo === 'regua' && etapaReguaId && (
-								<EtapaReguaEditor def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} etapaId={etapaReguaId} canEdit={canEdit} onVoltar={() => { setEtapaReguaId(null); goStep('estagios'); }} />
-							)}
-							{passo === 'regua' && !etapaReguaId && (
+									: <EstagiosEditor def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} canEdit={canEdit} colunas={colunas} semEstagio={semEstagioExibir} contagemEstado={contagemEstadoSeg} onMontarRegua={onMontarRegua} propensaoSegRows={propensaoSegRows} propensaoColetando={propensaoColetando} propensaoError={propensaoError} clientesSegmento={selectedSeg ? (countBySeg[selectedSeg.codigo] ?? null) : null} />)}
+								{passo === 'regua' && (
 									<>
-										<ReguaTopo def={def} estagioAtivo={estagioAtivo} onEstagio={setEstagioAtivo} canEdit={canEdit} onEditar={() => goStep('estagios')} />
-										<div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-											<div className="flex gap-1 rounded-lg bg-[var(--base-fill)] p-1">
-												<button type="button" onClick={() => setForma('raias')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${forma === 'raias' ? 'bg-[var(--base-texto)] text-[var(--base-cartao)]' : 'text-[var(--base-texto-2)] hover:text-[var(--base-texto)]'}`}>Raias</button>
-												<button type="button" onClick={() => setForma('fluxo')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${forma === 'fluxo' ? 'bg-[var(--base-texto)] text-[var(--base-cartao)]' : 'text-[var(--base-texto-2)] hover:text-[var(--base-texto)]'}`}>Fluxo</button>
-											</div>
-											{canEdit && <button type="button" onClick={() => setUsarReguaOpen(true)} className={btnNeutroCls}>Usar a régua de…</button>}
-										</div>
-										<PersonasDaCarteira personas={personasUsuario} contagens={contagens} semPersona={semPersona} def={def} modelosMap={modelosMap} canEdit={canEdit} montarOpen={montarOpen} setMontarOpen={setMontarOpen} estrId={estrId} onSaved={() => void reload()} />
-										<DesenhoDaEsteira def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} canEdit={canEdit} onSalvar={() => void salvarEstrategia()} saving={savingEstr} personas={personasUsuario} contagens={contagens} estrId={estrId} dirty={estrDirty} stickyTop={stickyTop} forma={forma} onFormaChange={setForma} focusFaixa={estagioAtivo === 'acordo' ? 'acordo' : estagioAtivo} />
-										<div className="mt-4 rounded-xl border border-[var(--base-borda)] bg-[var(--base-cartao)]">
-											<button type="button" onClick={() => setTravasOpen(v => !v)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
-												<div className="min-w-0">
-													<span className="text-[13px] font-bold text-[var(--base-texto)]">Regras de contato desta régua</span>
-													<p className="mt-0.5 truncate text-[11px] text-[var(--base-texto-2)]">{travasResumo(def)}</p>
+										{/* Os estágios da estratégia (os mesmos do passo Estágios). Fase: a faixa dela no desenho; estágio próprio: a régua dele. */}
+										<ReguaTopo def={def} selecionado={etapaReguaId ?? reguaSel} onEscolher={escolherEstagioRegua} onEditar={() => goStep('estagios')} />
+										{etapaReguaId ? (
+											<div className="mt-3"><EtapaReguaEditor def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} etapaId={etapaReguaId} canEdit={canEdit} onVoltar={() => { setEtapaReguaId(null); goStep('estagios'); }} /></div>
+										) : (
+											<>
+												{reguaFaseInfo}
+												<div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+													<div className="flex gap-1 rounded-lg bg-[var(--base-fill)] p-1">
+														<button type="button" onClick={() => setForma('raias')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${forma === 'raias' ? 'bg-[var(--base-texto)] text-[var(--base-cartao)]' : 'text-[var(--base-texto-2)] hover:text-[var(--base-texto)]'}`}>Raias</button>
+														<button type="button" onClick={() => setForma('fluxo')} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${forma === 'fluxo' ? 'bg-[var(--base-texto)] text-[var(--base-cartao)]' : 'text-[var(--base-texto-2)] hover:text-[var(--base-texto)]'}`}>Fluxo</button>
+													</div>
+													{canEdit && <button type="button" onClick={() => setUsarReguaOpen(true)} className={btnNeutroCls}>Usar a régua de…</button>}
 												</div>
-												<ChevronDown size={16} className="shrink-0 text-[var(--base-texto-3)] transition-transform" style={{ transform: travasOpen ? 'rotate(180deg)' : 'none' }} />
-											</button>
-											{travasOpen && <div className="border-t border-[var(--base-borda)] p-4"><TravasTabela def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} canEdit={canEdit} /></div>}
-										</div>
+												<PersonasDaCarteira personas={personasUsuario} contagens={contagens} semPersona={semPersona} def={def} modelosMap={modelosMap} canEdit={canEdit} montarOpen={montarOpen} setMontarOpen={setMontarOpen} estagio={reguaSel} onAplicar={(d) => { setDef(d); setEstrDirty(true); }} onIrParaRegua={escolherEstagioRegua} />
+												<DesenhoDaEsteira def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} canEdit={canEdit} onSalvar={() => void salvarEstrategia()} saving={savingEstr} personas={personasUsuario} contagens={contagens} estrId={estrId} dirty={estrDirty} stickyTop={stickyTop} forma={forma} onFormaChange={setForma} focusFaixa={estagioAtivo === 'acordo' ? 'acordo' : estagioAtivo} />
+												<div className="mt-4 rounded-xl border border-[var(--base-borda)] bg-[var(--base-cartao)]">
+													<button type="button" onClick={() => setTravasOpen(v => !v)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+														<div className="min-w-0">
+															<span className="text-[13px] font-bold text-[var(--base-texto)]">Regras de contato desta régua</span>
+															<p className="mt-0.5 truncate text-[11px] text-[var(--base-texto-2)]">{travasResumo(def)}</p>
+														</div>
+														<ChevronDown size={16} className="shrink-0 text-[var(--base-texto-3)] transition-transform" style={{ transform: travasOpen ? 'rotate(180deg)' : 'none' }} />
+													</button>
+													{travasOpen && <div className="border-t border-[var(--base-borda)] p-4"><TravasTabela def={def} setDef={(d) => { setDef(d); setEstrDirty(true); }} canEdit={canEdit} /></div>}
+												</div>
+											</>
+										)}
 										<div className="mt-4 flex flex-wrap items-center justify-between gap-2">
 											<button type="button" onClick={() => goStep('estagios')} className="flex h-9 items-center gap-2 rounded-lg border border-[var(--base-borda)] px-4 text-[13px] font-semibold text-[var(--base-texto)] hover:bg-[var(--base-fill)]">Voltar: estágios</button>
 											<button type="button" onClick={() => goStep('revisar')} className="flex h-9 items-center gap-2 rounded-lg px-5 text-[13px] font-semibold text-[var(--destaque-texto)]" style={{ backgroundColor: 'var(--destaque)' }}>Continuar: revisar</button>
@@ -1103,7 +1204,7 @@ export function Orquestracao() {
 			<LeaveGuardDialog open={leaveOpen} saving={savingEstr} onSalvar={leaveSalvar} onSairSemSalvar={leaveSairSemSalvar} onCancelar={leaveCancelar} />
 			{matrixOpen && <MatrixCarteiras credores={credAtivos} clustersMap={clustersMap} onClose={() => setMatrixOpen(false)} onSaved={() => void reload()} />}
 			<CopiarCarteiraModal open={copiarOpen} onClose={() => setCopiarOpen(false)} credores={credores} currentCredorId={credor?.id ?? ''} estrategias={estrategias} defAtual={def} destinoPersonaIds={new Set(personasUsuario.map(p => p.id))} onAplicar={aplicarCopiar} />
-		{modelosOpen && <ModelosModal open={modelosOpen} onClose={() => setModelosOpen(false)} onAplicar={(d) => { void aplicarNoSegmento(d, 'Virou cópia sua: tudo editável e desligável.'); setModelosOpen(false); }} />}
+		{modelosOpen && <ModelosModal open={modelosOpen} onClose={() => setModelosOpen(false)} onAplicar={(d, nome) => { void aplicarNoSegmento(d, 'Virou cópia sua: tudo editável e desligável.', selectedSeg ? nomeEstrategiaModelo(nome, selectedSeg.nome) : undefined); setModelosOpen(false); }} />}
 		{copiarSegOpen && selectedSeg && <CopiarSegmentoModal open={copiarSegOpen} onClose={() => setCopiarSegOpen(false)} clusterId={selectedSeg.cluster_id} clusterNome={selectedSeg.nome} credores={credores} currentCredorId={credor?.id ?? ''} estrategias={estrategias} onAplicar={(d, nome) => { void aplicarNoSegmento(d, 'Copiado de ' + nome + '.'); setCopiarSegOpen(false); }} />}
 			{/* Salvar flutuante — só no celular */}
 			{canEdit && estrId && estrDirty && (

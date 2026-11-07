@@ -11,6 +11,7 @@ import { isFaixa, type LinhaPropensaoCarteira } from '@/lib/propensao';
 import { Info } from '@/components/glossario/info';
 import { CampoFaixa, CampoLista, CampoNumero } from '@/components/comuns/campos-condicao';
 import { trocarOperador } from '@/lib/condicoes';
+import { avisoSemEstagio, situacaoReguaFase } from '@/lib/estagios-regua';
 
 // ---- Campos e operadores de condição (mesmo padrão dos Segmentos) ----
 const CALCULADOS: Coluna[] = [
@@ -64,13 +65,13 @@ function faseTemConteudo(def: Definicao, fase: FaseId): boolean {
 	return !!(o.passos && Object.keys(o.passos as object).length);
 }
 /** Rótulo de "sem régua"/"sem canais" para uma fase ativa (ou null). */
+// O mesmo que o motor faz (lib/estagios-regua): sem a chave "passos" a fase segue a régua padrão do motor;
+// com "passos" vazio, ninguém da fase recebe ação.
 function faseSemReguaInfo(def: Definicao, fase: FaseId): string | null {
-	if (!faseAtivo(def, fase)) return null;
-	if (fase === 'cpc') {
-		const semCanais = !(def.cpc?.ordem?.some(a => a.canal) ?? false);
-		return semCanais ? '· sem canais: segue a ordem padrão do motor' : null;
-	}
-	return faseTemConteudo(def, fase) ? null : '· sem régua';
+	const s = situacaoReguaFase(def, fase);
+	if (s === 'padrao') return fase === 'cpc' ? '· sem canais: segue a ordem padrão do motor' : '· segue a régua padrão do motor';
+	if (s === 'vazia') return '· sem régua: ninguém aqui recebe ação';
+	return null;
 }
 function toggleFase(def: Definicao, fase: FaseId, on: boolean): Definicao {
 	if (on) {
@@ -413,7 +414,7 @@ function SaidasEditor({ saidas, etapas, etapaId, onChange, canEdit }: {
 }
 
 // ===================== Componente principal =====================
-export function EstagiosEditor({ def, setDef, canEdit, colunas, semEstagio, contagemEstado, onMontarRegua, propensaoSegRows, propensaoColetando, propensaoError }: {
+export function EstagiosEditor({ def, setDef, canEdit, colunas, semEstagio, contagemEstado, onMontarRegua, propensaoSegRows, propensaoColetando, propensaoError, clientesSegmento }: {
 	def: Definicao;
 	setDef: (d: Definicao) => void;
 	canEdit: boolean;
@@ -424,6 +425,8 @@ export function EstagiosEditor({ def, setDef, canEdit, colunas, semEstagio, cont
 	propensaoSegRows?: LinhaPropensaoCarteira[] | null;
 	propensaoColetando?: boolean;
 	propensaoError?: string;
+	/** Clientes do segmento na última lista (para o aviso único de "nenhum estágio ligado"). */
+	clientesSegmento?: number | null;
 }) {
 	const ordem = useMemo(() => ordemStages(def), [def]);
 	const [selId, setSelId] = useState<string | null>(ordem[0] ?? null);
@@ -432,6 +435,7 @@ export function EstagiosEditor({ def, setDef, canEdit, colunas, semEstagio, cont
 
 	const etapas = def.etapas ?? [];
 	const descobertas = useMemo(() => fasesDescobertas(def, ordem), [def, ordem]);
+	const aviso = useMemo(() => avisoSemEstagio(def, descobertas, clientesSegmento), [def, descobertas, clientesSegmento]);
 
 	// garante seleção válida
 	const selValido = selId && ordem.includes(selId);
@@ -572,8 +576,11 @@ export function EstagiosEditor({ def, setDef, canEdit, colunas, semEstagio, cont
 						{canEdit && <button type="button" onClick={criarParaSemEstagio} className="mt-2 flex h-8 items-center gap-1.5 rounded-lg px-3 text-[11px] font-semibold text-[var(--destaque-texto)]" style={{ backgroundColor: 'var(--destaque)' }}><Plus size={13} /> Criar um estágio para eles</button>}
 					</div>
 				)}
-				{descobertas.map(f => (
-					<div key={f} className="mt-2 rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-3 py-2 text-[11px] font-semibold text-[var(--estado-atencao-texto)]">Quem está em {faseLabel(def, f)} fica sem estágio.</div>
+				{(aviso.tipo === 'nenhum' || aviso.tipo === 'varias') && (
+					<div role="status" className="mt-2 rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-3 py-2 text-[11px] font-semibold text-[var(--estado-atencao-texto)]">{aviso.texto}</div>
+				)}
+				{aviso.tipo === 'detalhe' && aviso.itens.map(t => (
+					<div key={t} className="mt-2 rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-3 py-2 text-[11px] font-semibold text-[var(--estado-atencao-texto)]">{t}</div>
 				))}
 			</div>
 

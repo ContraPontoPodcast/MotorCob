@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { ChevronDown, FileText, MessageCircle, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Users, X } from 'lucide-react';
 import {
-	canalLabel, diaFrase, playbookDefinicao,
+	canalLabel, diaFrase, faseLabel, playbookDefinicao,
 	type Acao, type CriterioPrioridade, type Definicao, type MensagemAcao, type Passos, type PrioridadeContatos,
 } from '@/lib/estrategia';
 import type { PersonaUsuario } from '@/lib/supabase';
@@ -1393,7 +1393,7 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 				)}
 
 				{/* Faixa 1 — Cliente novo */}
-				<FaixaColapsivel titulo="Cliente novo · ainda não deu CPC" resumo={resumoLocTopo} warning={warnLoc} open={openFaixas.has('localizacao')} onToggle={() => toggleFaixa('localizacao')} ativo={locAtivo} onToggleAtivo={() => updateLocalizacao({ ativo: !locAtivo })} canEdit={canEdit} desligadoMsg="Cliente novo desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="localizacao">
+				<FaixaColapsivel titulo={faseLabel(def, 'localizacao')} resumo={resumoLocTopo} warning={warnLoc} open={openFaixas.has('localizacao')} onToggle={() => toggleFaixa('localizacao')} ativo={locAtivo} onToggleAtivo={() => updateLocalizacao({ ativo: !locAtivo })} canEdit={canEdit} desligadoMsg="Cliente novo desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="localizacao">
 					<p className="mb-4 text-xs leading-relaxed text-slate-500">Cada dia conta desde a entrada do cliente na carga. A cada passagem o MotorCX usa o próximo telefone (1, 2, 3, 4…), até alguém dar CPC.</p>
 					<div className="mb-3">
 						<Stepper label="Vira Não CPC no dia" value={ncp} min={2} max={30} disabled={!canEdit} onChange={v => updateLocalizacao({ dias_sem_contato_para_ncp: v })} />
@@ -1403,7 +1403,7 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 				</FaixaColapsivel>
 
 				{/* Faixa 2 — Deu CPC */}
-				<FaixaColapsivel titulo="Deu CPC · CPC A e CPC B" resumo={resumoCpcTopo} warning={warnCpc} open={openFaixas.has('cpc')} onToggle={() => toggleFaixa('cpc')} ativo={cpcAtivo} onToggleAtivo={() => updateCpc({ ativo: !cpcAtivo })} canEdit={canEdit} desligadoMsg="Deu CPC desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="cpc">
+				<FaixaColapsivel titulo={faseLabel(def, 'cpc')} resumo={resumoCpcTopo} warning={warnCpc} open={openFaixas.has('cpc')} onToggle={() => toggleFaixa('cpc')} ativo={cpcAtivo} onToggleAtivo={() => updateCpc({ ativo: !cpcAtivo })} canEdit={canEdit} desligadoMsg="Deu CPC desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="cpc">
 					<p className="mb-4 text-xs leading-relaxed text-slate-500">O primeiro é sempre o canal em que o cliente deu CPC, no contato principal. Se ele parar de responder, o MotorCX segue a ordem de reserva abaixo.</p>
 				<div className="mb-4 grid gap-4 sm:grid-cols-2">
 					<Stepper label="CPC A: acionar a cada" value={intervaloCpa} min={1} max={30} disabled={!canEdit} onChange={v => updateCpc({ intervalo_cpa: v })} />
@@ -1447,7 +1447,7 @@ export function DesenhoDaEsteira({ def, setDef, canEdit, onSalvar, saving, perso
 			</FaixaColapsivel>
 
 				{/* Faixa 3 — Não CPC */}
-				<FaixaColapsivel titulo="Não CPC · ciclo que se repete" resumo={resumoGiroTopo} warning={warnGiro} open={openFaixas.has('giro')} onToggle={() => toggleFaixa('giro')} ativo={giroAtivo} onToggleAtivo={() => updateGiro({ ativo: !giroAtivo })} canEdit={canEdit} desligadoMsg="Não CPC desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="giro">
+				<FaixaColapsivel titulo={faseLabel(def, 'giro')} resumo={resumoGiroTopo} warning={warnGiro} open={openFaixas.has('giro')} onToggle={() => toggleFaixa('giro')} ativo={giroAtivo} onToggleAtivo={() => updateGiro({ ativo: !giroAtivo })} canEdit={canEdit} desligadoMsg="Não CPC desligada neste segmento: os clientes desta fase não recebem ação." dataFaixa="giro">
 					<p className="mb-4 text-xs leading-relaxed text-slate-500">Quem passou do prazo sem CPC entra num ciclo. Ao fim dos ciclos, o cliente espera um novo enriquecimento.</p>
 					<div className="mb-3 flex flex-wrap gap-x-6 gap-y-2">
 						<Stepper label="Ciclo de N dias" value={ciclo} min={2} max={15} disabled={!canEdit} onChange={v => updateGiro({ ciclo_dias: v })} />

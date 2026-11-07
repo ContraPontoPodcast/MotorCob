@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Users, Wand2, X } from 'lucide-react';
-import { friendlyError, numberBR, supabase, type PersonaUsuario } from '@/lib/supabase';
-import { ErrorDetail } from '@/components/error-detail';
-import { type Acao, type Definicao, type Passos } from '@/lib/estrategia';
+import { numberBR, type PersonaUsuario } from '@/lib/supabase';
+import { diaLabelEtapa, isFaseId, type Acao, type Definicao, type Passos } from '@/lib/estrategia';
+import { copiarReguaPadrao, estagiosDaEstrategia, type EstagioDaEstrategia } from '@/lib/estagios-regua';
 
 /** Os 6 canais de contato (sem enriquecimento). */
 const CANAIS_6 = [
@@ -45,6 +45,7 @@ export function personaIdsNaEsteira(def: Definicao | null | undefined): Set<stri
 	collect(def.giro?.passos);
 	collect(def.preventivo?.passos);
 	collect(def.quebra?.passos);
+	(def.etapas ?? []).forEach(e => collect(e.passos));
 	return ids;
 }
 
@@ -75,8 +76,7 @@ function dedupLane(arr: Acao[]): Acao[] {
 
 /** Normaliza a definição para gravar: uma ação por persona, público geral primeiro, personas na ordem, sem canal repetido na mesma raia. */
 export function normalizarDefinicao(def: Definicao, personaOrder: string[]): Definicao {
-	const norm = (passos?: Passos): Passos | undefined => {
-		if (!passos) return passos;
+	const norm = (passos: Passos): Passos => {
 		const out: Passos = {};
 		for (const [k, arr] of Object.entries(passos)) {
 			const split = splitMultiPersona(arr);
@@ -92,13 +92,22 @@ export function normalizarDefinicao(def: Definicao, personaOrder: string[]): Def
 		}
 		return out;
 	};
-	return {
-		...def,
-		localizacao: def.localizacao ? { ...def.localizacao, passos: norm(def.localizacao.passos) ?? {} } : def.localizacao,
-		giro: def.giro ? { ...def.giro, passos: norm(def.giro.passos) ?? {} } : def.giro,
-		preventivo: def.preventivo ? { ...def.preventivo, passos: norm(def.preventivo.passos) ?? {} } : def.preventivo,
-		quebra: def.quebra ? { ...def.quebra, passos: norm(def.quebra.passos) ?? {} } : def.quebra,
-	};
+	return porFaseComPassos(def, norm);
+}
+
+/**
+ * Aplica `f` aos passos de cada fase QUE TEM passos e aos das etapas. Fase sem a chave "passos" continua sem ela: para o
+ * motor, sem "passos" = régua padrão do motor; "passos": {} = ninguém da fase recebe ação (lib/estagios-regua). Antes
+ * o salvar gravava {} nas fases do modelo "Estágios clássicos" e elas paravam de acionar.
+ */
+export function porFaseComPassos(def: Definicao, f: (p: Passos) => Passos): Definicao {
+	const out: Definicao = { ...def };
+	for (const fase of ['localizacao', 'giro', 'preventivo', 'quebra'] as const) {
+		const o = def[fase] as { passos?: Passos } | undefined;
+		if (o && o.passos) (out as Record<string, unknown>)[fase] = { ...o, passos: f(o.passos) };
+	}
+	if (def.etapas) out.etapas = def.etapas.map(e => (e.passos ? { ...e, passos: f(e.passos) } : e));
+	return out;
 }
 
 /** Remove ids de persona que não estão mais ativos na carteira. */
@@ -118,16 +127,63 @@ export function limparPersonas(def: Definicao, idsValidos: Set<string>): Definic
 		}
 		return out;
 	};
-	return {
-		...def,
-		localizacao: def.localizacao ? { ...def.localizacao, passos: limparPassos(def.localizacao.passos) ?? {} } : def.localizacao,
-		giro: def.giro ? { ...def.giro, passos: limparPassos(def.giro.passos) ?? {} } : def.giro,
-		preventivo: def.preventivo ? { ...def.preventivo, passos: limparPassos(def.preventivo.passos) ?? {} } : def.preventivo,
-		quebra: def.quebra ? { ...def.quebra, passos: limparPassos(def.quebra.passos) ?? {} } : def.quebra,
-	};
+	return porFaseComPassos(def, p => limparPassos(p) ?? {});
 }
 
-export function PersonasDaCarteira({ personas, contagens, semPersona, def, modelosMap, canEdit, montarOpen, setMontarOpen, estrId, onSaved }: {
+/** Estágios que aceitam raia por persona (os que têm régua por dia): fases ligadas (menos Deu CPC) e etapas ligadas. */
+export function estagiosParaPersonas(def: Definicao): EstagioDaEstrategia[] {
+	return estagiosDaEstrategia(def).filter(e => e.ativo && e.id !== 'cpc');
+}
+
+/** Passos (régua por dia) de um estágio: fase → definicao.<fase>.passos; etapa → etapa.passos. */
+export function passosDoEstagio(def: Definicao, id: string): Passos | undefined {
+	if (isFaseId(id)) return (def[id] as { passos?: Passos } | undefined)?.passos;
+	return (def.etapas ?? []).find(e => e.id === id)?.passos;
+}
+
+function comPassos(def: Definicao, id: string, passos: Passos): Definicao {
+	if (isFaseId(id)) return { ...def, [id]: { ...(def[id] ?? {}), passos } } as Definicao;
+	return { ...def, etapas: (def.etapas ?? []).map(e => (e.id === id ? { ...e, passos } : e)) };
+}
+
+/** Dias com ação do estágio, em ordem. */
+export function diasComAcao(passos: Passos | undefined): number[] {
+	if (!passos) return [];
+	return Object.keys(passos).map(Number).filter(d => !Number.isNaN(d) && (passos[String(d)] ?? []).length > 0).sort((a, b) => a - b);
+}
+
+/** Personas que já têm raia em algum dia do estágio (o que vem marcado ao abrir). */
+export function personasComRaia(passos: Passos | undefined): Set<string> {
+	const ids = new Set<string>();
+	for (const arr of Object.values(passos ?? {})) for (const a of arr) (a.personas ?? []).forEach(id => ids.add(id));
+	return ids;
+}
+
+/** Cria a raia de cada persona marcada nos dias escolhidos (canal sugerido do dia); o resto do dia não muda. */
+export function montarRaias(passos: Passos, marcadas: PersonaUsuario[], dias: number[], modelosMap: Record<string, string[]>): Passos {
+	const novos: Passos = { ...passos };
+	for (const p of marcadas) {
+		const sug = canaisSugeridosDe(p, modelosMap);
+		if (!sug.length) continue;
+		dias.forEach((day, idx) => {
+			const canal = sug[Math.min(idx, sug.length - 1)];
+			const key = String(day);
+			const arr = splitMultiPersona(novos[key] ?? []);
+			novos[key] = [...arr.filter(a => !a.personas?.includes(p.id)), { canal, modo: 'sempre', personas: [p.id] }];
+		});
+	}
+	return novos;
+}
+
+function rotuloDia(def: Definicao, id: string, d: number): string {
+	if (id === 'preventivo') return d === 0 ? 'D0' : `D-${d}`;
+	if (id === 'giro') return `Dia ${d} do ciclo`;
+	if (isFaseId(id)) return `D+${d}`;
+	const e = (def.etapas ?? []).find(x => x.id === id);
+	return e ? diaLabelEtapa(e, d) : `Dia ${d}`;
+}
+
+export function PersonasDaCarteira({ personas, contagens, semPersona, def, modelosMap, canEdit, montarOpen, setMontarOpen, estagio, onAplicar, onIrParaRegua }: {
 	personas: PersonaUsuario[];
 	contagens: Record<string, number>;
 	semPersona: number;
@@ -136,8 +192,12 @@ export function PersonasDaCarteira({ personas, contagens, semPersona, def, model
 	canEdit: boolean;
 	montarOpen: boolean;
 	setMontarOpen: (v: boolean) => void;
-	estrId: string | null;
-	onSaved: () => void;
+	/** Estágio escolhido no passo Régua (o modal abre nele). */
+	estagio: string;
+	/** Aplica a definição no editor (fica em "Alterações não salvas" até Salvar). */
+	onAplicar: (def: Definicao) => void;
+	/** Leva à régua do estágio (para criar os dias antes das raias). */
+	onIrParaRegua: (id: string) => void;
 }) {
 	const naEsteira = useMemo(() => personaIdsNaEsteira(def), [def]);
 
@@ -177,33 +237,42 @@ export function PersonasDaCarteira({ personas, contagens, semPersona, def, model
 			</div>
 			<p className="mt-3 text-xs text-slate-400">Cada cliente fica na primeira persona que combina com ele. Arraste a persona para um dia no Desenho da Esteira para tratá-la diferente, ou monte a esteira pelas personas. <Link to="/personas" className="font-semibold text-[#0F4C5C] underline">Gerenciar personas</Link></p>
 
-			{montarOpen && <MontarPorPersonas personas={personas} def={def} modelosMap={modelosMap} estrId={estrId} onClose={() => setMontarOpen(false)} onSaved={onSaved} />}
+			{montarOpen && <MontarPorPersonas personas={personas} def={def} modelosMap={modelosMap} estagioInicial={estagio} onClose={() => setMontarOpen(false)} onAplicar={onAplicar} onIrParaRegua={onIrParaRegua} />}
 		</section>
 	);
 }
 
-function MontarPorPersonas({ personas, def, modelosMap, estrId, onClose, onSaved }: {
-	personas: PersonaUsuario[]; def: Definicao; modelosMap: Record<string, string[]>; estrId: string | null; onClose: () => void; onSaved: () => void;
+function MontarPorPersonas({ personas, def, modelosMap, estagioInicial, onClose, onAplicar, onIrParaRegua }: {
+	personas: PersonaUsuario[]; def: Definicao; modelosMap: Record<string, string[]>; estagioInicial: string;
+	onClose: () => void; onAplicar: (def: Definicao) => void; onIrParaRegua: (id: string) => void;
 }) {
-	const [faixa, setFaixa] = useState<'localizacao' | 'giro'>('localizacao');
-	const [marked, setMarked] = useState<Set<string>>(new Set());
-	const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set());
-	const [busy, setBusy] = useState(false);
+	// Rascunho local: "Usar a régua padrão" muda só aqui até "Criar as raias".
+	const [rascunho, setRascunho] = useState<Definicao>(def);
+	const estagios = useMemo(() => estagiosParaPersonas(rascunho), [rascunho]);
+	const [estagioId, setEstagioId] = useState<string>(() => (estagiosParaPersonas(def).some(e => e.id === estagioInicial) ? estagioInicial : estagiosParaPersonas(def)[0]?.id ?? ''));
+	// Seleção POR estágio: marcar/desmarcar num estágio não mexe no outro. Ao abrir um estágio, vêm marcadas as
+	// personas que já têm raia nele e todos os dias com ação.
+	const [marcadas, setMarcadas] = useState<Record<string, Set<string>>>({});
+	const [diasSel, setDiasSel] = useState<Record<string, Set<number>>>({});
 	const [error, setError] = useState('');
 
-	const passos = def[faixa]?.passos ?? {};
-	const dias = useMemo(() => Object.keys(passos).map(Number).filter(d => (passos[String(d)] ?? []).length > 0).sort((a, b) => a - b), [passos]);
-	useEffect(() => { setSelectedDays(new Set(dias)); }, [faixa, dias.join(',')]);
+	const estagio = estagios.find(e => e.id === estagioId) ?? null;
+	const passos = estagio ? passosDoEstagio(rascunho, estagio.id) : undefined;
+	const dias = useMemo(() => diasComAcao(passos), [passos]);
+	const marked = marcadas[estagioId] ?? personasComRaia(passos);
+	const selectedDays = diasSel[estagioId] ?? new Set(dias);
 
 	function toggleMark(pid: string) {
-		setMarked(prev => { const n = new Set(prev); if (n.has(pid)) n.delete(pid); else n.add(pid); return n; });
+		const n = new Set(marked); if (n.has(pid)) n.delete(pid); else n.add(pid);
+		setMarcadas(prev => ({ ...prev, [estagioId]: n }));
 	}
 	function toggleDay(d: number) {
-		setSelectedDays(prev => { const n = new Set(prev); if (n.has(d)) n.delete(d); else n.add(d); return n; });
+		const n = new Set(selectedDays); if (n.has(d)) n.delete(d); else n.add(d);
+		setDiasSel(prev => ({ ...prev, [estagioId]: n }));
 	}
 
 	const markedPersonas = personas.filter(p => marked.has(p.id));
-	const dayList = Array.from(selectedDays).sort((a, b) => a - b);
+	const dayList = dias.filter(d => selectedDays.has(d));
 
 	const preview = useMemo(() => {
 		if (markedPersonas.length === 0) return 'Marque ao menos uma persona para ver a prévia.';
@@ -211,101 +280,96 @@ function MontarPorPersonas({ personas, def, modelosMap, estrId, onClose, onSaved
 		return markedPersonas.map(p => {
 			const sug = canaisSugeridosDe(p, modelosMap);
 			if (sug.length === 0) return `${p.nome}: sem canais sugeridos`;
-			const parts = dayList.map((d, idx) => {
-				const canal = sug[Math.min(idx, sug.length - 1)];
-				return `D+${d} ${canalLabelPorId[canal] ?? canal}`;
-			});
+			const parts = dayList.map((d, idx) => `${rotuloDia(rascunho, estagioId, d)} ${canalLabelPorId[sug[Math.min(idx, sug.length - 1)]] ?? sug[Math.min(idx, sug.length - 1)]}`);
 			return `${p.nome}: ${parts.join(', ')}`;
 		}).join('  ·  ');
-	}, [markedPersonas, dayList]);
+	}, [markedPersonas, dayList, modelosMap, rascunho, estagioId]);
 
-	async function confirmar() {
-		if (!supabase || !estrId) { setError('Estratégia não encontrada.'); return; }
+	function confirmar() {
+		if (!estagio || !passos) return;
 		if (markedPersonas.length === 0) { setError('Marque ao menos uma persona.'); return; }
 		if (dayList.length === 0) { setError('Selecione ao menos um dia.'); return; }
 		const semSug = markedPersonas.find(p => canaisSugeridosDe(p, modelosMap).length === 0);
 		if (semSug) { setError(`${semSug.nome} não tem canais sugeridos.`); return; }
-		if (!window.confirm('Isso cria a raia de cada persona marcada nesses dias, sem mexer no público geral nem nas personas não marcadas. Continuar?')) return;
-		setBusy(true); setError('');
-		const novosPassos: Passos = { ...passos };
-		for (const p of markedPersonas) {
-			const sug = canaisSugeridosDe(p, modelosMap);
-			dayList.forEach((day, idx) => {
-				const canal = sug[Math.min(idx, sug.length - 1)];
-				const key = String(day);
-				const arr = splitMultiPersona(novosPassos[key] ?? []);
-				const without = arr.filter(a => !a.personas?.includes(p.id));
-				const novo: Acao = { canal, modo: 'sempre', personas: [p.id] };
-				novosPassos[key] = [...without, novo];
-			});
-		}
-		const baseDef: Definicao = { ...def };
-		if (faixa === 'localizacao') baseDef.localizacao = { ...(def.localizacao ?? { passos: {}, dias_sem_contato_para_ncp: 8 }), passos: novosPassos };
-		else baseDef.giro = { ...(def.giro ?? { passos: {}, ciclo_dias: 8, max_ciclos: 3 }), passos: novosPassos };
-		const novoDef = normalizarDefinicao(baseDef, personas.map(p => p.id));
-		const { error: upErr } = await supabase.from('estrategias').update({ definicao: novoDef as unknown as Record<string, unknown> }).eq('id', estrId);
-		setBusy(false);
-		if (upErr) { setError(friendlyError()); return; }
-		toast.success('Esteira salva · vale a partir da próxima rotina (em até 1 minuto)');
-		onSaved();
+		const novoDef = normalizarDefinicao(comPassos(rascunho, estagio.id, montarRaias(passos, markedPersonas, dayList, modelosMap)), personas.map(p => p.id));
+		onAplicar(novoDef);
+		toast.success(`Raias criadas em “${estagio.nome}”. Revise e clique em Salvar para valer.`);
 		onClose();
 	}
+
+	const btnEstagio = (on: boolean) => `rounded-lg px-4 py-2 text-sm font-semibold ${on ? 'bg-[#0F4C5C] text-white' : 'border border-[#c9dadd] text-[#0F4C5C] hover:bg-[#edf4f5]'}`;
 
 	return (
 		<div className="fixed inset-0 z-50 grid place-items-center bg-[#102e38]/60 p-4" onClick={onClose}>
 			<div role="dialog" aria-modal="true" aria-label="Montar esteira pelas personas" className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-6 shadow-xl sm:p-8" onClick={e => e.stopPropagation()}>
 				<div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">Montar esteira pelas personas</h2><button onClick={onClose} aria-label="Fechar"><X size={20}/></button></div>
-				<p className="mb-5 text-sm text-slate-500">Marque quais personas devem ter raia própria. Para cada persona marcada, criamos a raia dela nos dias escolhidos, usando o canal sugerido do dia (1º dia = 1º canal sugerido, 2º dia = 2º…; quando acaba, repete o último). O público geral e as personas não marcadas não mudam.</p>
+				<p className="mb-5 text-sm text-slate-500">Em cada estágio, marque quais personas devem ter raia própria. Para cada persona marcada, criamos a raia dela nos dias escolhidos, usando o canal sugerido do dia (1º dia = 1º canal sugerido, 2º dia = 2º…; quando acaba, repete o último). O público geral e as personas não marcadas não mudam.</p>
 
 				<div className="mb-5">
-					<label className="mb-2 block text-xs font-semibold">Faixa</label>
-					<div className="flex gap-2">
-						<button onClick={() => setFaixa('localizacao')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${faixa === 'localizacao' ? 'bg-[#0F4C5C] text-white' : 'border border-[#c9dadd] text-[#0F4C5C] hover:bg-[#edf4f5]'}`}>Cliente novo</button>
-						<button onClick={() => setFaixa('giro')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${faixa === 'giro' ? 'bg-[#0F4C5C] text-white' : 'border border-[#c9dadd] text-[#0F4C5C] hover:bg-[#edf4f5]'}`}>Não CPC</button>
+					<label className="mb-2 block text-xs font-semibold">Estágio</label>
+					{estagios.length === 0
+						? <p className="text-xs italic text-slate-400">Nenhum estágio ligado com régua por dia. Ligue um estágio no passo Estágios.</p>
+						: <div className="flex flex-wrap gap-2" role="tablist">
+							{estagios.map(e => <button key={e.id} type="button" role="tab" aria-selected={e.id === estagioId} onClick={() => { setEstagioId(e.id); setError(''); }} className={btnEstagio(e.id === estagioId)}>{e.nome}</button>)}
+						</div>}
+				</div>
+
+				{estagio && dias.length === 0 ? (
+					// Sem dias com ação não há onde pôr a raia: não lista as personas; oferece o caminho para criar os dias.
+					<div className="mb-5 rounded-lg border border-dashed border-[#cbd9dd] bg-[#fafcfc] p-4">
+						<p className="text-sm font-semibold text-[#163943]">“{estagio.nome}” ainda não tem dias com ação.</p>
+						{estagio.regua === 'padrao' ? (
+							<>
+								<p className="mt-1 text-xs text-slate-500">Hoje ele segue a régua padrão do motor, igual para todos. Para separar por persona, traga a régua padrão para este estágio e depois escolha as personas.</p>
+								<button type="button" onClick={() => setRascunho(copiarReguaPadrao(rascunho, estagio.id as Parameters<typeof copiarReguaPadrao>[1]))} className="mt-3 h-9 rounded-lg bg-[#0F4C5C] px-4 text-xs font-semibold text-white">Usar a régua padrão do motor neste estágio</button>
+							</>
+						) : (
+							<>
+								<p className="mt-1 text-xs text-slate-500">Monte os dias da régua deste estágio primeiro; depois as personas aparecem aqui.</p>
+								<button type="button" onClick={() => { onClose(); onIrParaRegua(estagio.id); }} className="mt-3 h-9 rounded-lg bg-[#0F4C5C] px-4 text-xs font-semibold text-white">Montar a régua de “{estagio.nome}”</button>
+							</>
+						)}
 					</div>
-				</div>
-
-				<div className="mb-5 space-y-2">
-					<label className="block text-xs font-semibold">Personas</label>
-					{personas.map(p => {
-						const on = marked.has(p.id);
-						const sug = canaisSugeridosDe(p, modelosMap);
-						return (
-							<label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e2eaec] bg-[#fafcfc] px-3 py-2.5">
-								<input type="checkbox" checked={on} onChange={() => toggleMark(p.id)} className="accent-[#0F4C5C]" />
-								<span className="h-3 w-3 rounded-full" style={{ backgroundColor: p.cor }} />
-								<span className="text-sm font-semibold text-[#163943]">{p.nome}</span>
-								<span className="ml-auto text-[11px] text-slate-400">{sug.length ? sug.map(c => canalLabelPorId[c] ?? c).join(' → ') : 'sem canais sugeridos'}</span>
-							</label>
-						);
-					})}
-				</div>
-
-				<div className="mb-5">
-					<label className="mb-2 block text-xs font-semibold">Dias ({dias.length ? dias.map(d => `D+${d}`).join(', ') : 'nenhum dia com ação nesta faixa'})</label>
-					{dias.length === 0 ? (
-						<p className="text-xs italic text-slate-400">Esta faixa ainda não tem dias com ação. Adicione canais no Desenho da Esteira primeiro.</p>
-					) : (
-						<div className="flex flex-wrap gap-2">
-							{dias.map(d => (
-								<label key={d} className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold ${selectedDays.has(d) ? 'border-[#0F4C5C] bg-[#eaf2f3] text-[#0F4C5C]' : 'border-[#c9dadd] text-slate-400'}`}>
-									<input type="checkbox" checked={selectedDays.has(d)} onChange={() => toggleDay(d)} className="accent-[#0F4C5C]" /> D+{d}
-								</label>
-							))}
+				) : estagio && (
+					<>
+						<div className="mb-5 space-y-2">
+							<label className="block text-xs font-semibold">Personas em “{estagio.nome}”</label>
+							{personas.map(p => {
+								const on = marked.has(p.id);
+								const sug = canaisSugeridosDe(p, modelosMap);
+								return (
+									<label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e2eaec] bg-[#fafcfc] px-3 py-2.5">
+										<input type="checkbox" checked={on} onChange={() => toggleMark(p.id)} className="accent-[#0F4C5C]" />
+										<span className="h-3 w-3 rounded-full" style={{ backgroundColor: p.cor }} />
+										<span className="text-sm font-semibold text-[#163943]">{p.nome}</span>
+										<span className="ml-auto text-[11px] text-slate-400">{sug.length ? sug.map(c => canalLabelPorId[c] ?? c).join(' → ') : 'sem canais sugeridos'}</span>
+									</label>
+								);
+							})}
 						</div>
-					)}
-				</div>
 
-				<div className="mb-5 rounded-lg bg-[#f5f8f9] p-4">
-					<p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Prévia</p>
-					<p className="text-xs leading-relaxed text-slate-600">{preview}</p>
-				</div>
+						<div className="mb-5">
+							<label className="mb-2 block text-xs font-semibold">Dias</label>
+							<div className="flex flex-wrap gap-2">
+								{dias.map(d => (
+									<label key={d} className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold ${selectedDays.has(d) ? 'border-[#0F4C5C] bg-[#eaf2f3] text-[#0F4C5C]' : 'border-[#c9dadd] text-slate-400'}`}>
+										<input type="checkbox" checked={selectedDays.has(d)} onChange={() => toggleDay(d)} className="accent-[#0F4C5C]" /> {rotuloDia(rascunho, estagioId, d)}
+									</label>
+								))}
+							</div>
+						</div>
+
+						<div className="mb-5 rounded-lg bg-[#f5f8f9] p-4">
+							<p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Prévia</p>
+							<p className="text-xs leading-relaxed text-slate-600">{preview}</p>
+						</div>
+					</>
+				)}
 
 				{error && <p role="alert" className="mb-4 text-sm text-[#C62828]">{error}</p>}
-				{error && <ErrorDetail/>}
 				<div className="flex justify-end gap-3">
 					<button onClick={onClose} className="h-11 rounded-lg border border-[#c9dadd] px-5 text-sm font-semibold text-[#304b55] hover:bg-[#edf4f5]">Cancelar</button>
-					<button onClick={confirmar} disabled={busy || markedPersonas.length === 0 || dayList.length === 0} className="h-11 rounded-lg bg-[#0F4C5C] px-6 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Montando...' : 'Montar esteira'}</button>
+					{estagio && dias.length > 0 && <button onClick={confirmar} disabled={markedPersonas.length === 0 || dayList.length === 0} className="h-11 rounded-lg bg-[#0F4C5C] px-6 text-sm font-semibold text-white disabled:opacity-50">Criar as raias</button>}
 				</div>
 			</div>
 		</div>
