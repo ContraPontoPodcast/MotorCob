@@ -444,6 +444,15 @@ def motivo_todos_bloqueados(canal: str, linhas: list[dict]) -> str:
     return texto[:300]
 
 
+def _ja_aprovou(sb, empresa_id, canal) -> bool:
+    """"Aprovar o primeiro, depois automático" (SQL 74): já houve um lote deste canal aprovado por alguém."""
+    try:
+        return bool(sb.selecionar("mensageria_lotes", {"empresa_id": f"eq.{empresa_id}", "canal": f"eq.{canal}",
+                                                       "aprovado_em": "not.is.null"}, limite=1))
+    except Exception:  # noqa: BLE001 — na dúvida, pede aprovação (como antes)
+        return False
+
+
 def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empresa: list[dict] | None = None,
                 out=print) -> list[dict]:
     pasta = Path(pasta)
@@ -453,10 +462,12 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
         return []
     novo = banco_novo(sb)
     v14 = novo and banco_campanhas(sb)
-    liberados = [c for c in CANAIS if c in (mod[0].get("canais") or []) and (novo or c != "rcs")]
+    canais_cfg = {c.get("canal"): c for c in canais_empresa or []}
+    # SQL 74: canal com "quem envia = lista para baixar" sai só na Lista do dia (o fornecedor da empresa envia)
+    liberados = [c for c in CANAIS if c in (mod[0].get("canais") or []) and (novo or c != "rcs")
+                 and (canais_cfg.get(c) or {}).get("quem_envia") != "lista"]
     cfg = (sb.selecionar("mensageria_config", {"empresa_id": f"eq.{empresa_id}"}) or [{}])[0]
     modo, aprovar = cfg.get("modo") or "simulado", cfg.get("aprovar_lotes") is not False
-    canais_cfg = {c.get("canal"): c for c in canais_empresa or []}
     cat, contratados = (catalogo(sb), produtos_contratados(sb, empresa_id)) if novo else ({}, None)
     criados = []
     for canal in liberados:
@@ -514,7 +525,8 @@ def criar_lotes(sb, empresa_id, credor_id, pasta: Path, dia: date, canais_empres
             continue
         jan = janela(canais_cfg.get(canal), dia)
         bloq = sum(1 for l in linhas if l["situacao"] == "bloqueada")
-        situacao, motivo_lote = ("aguardando_aprovacao" if aprovar else "agendado"), None
+        aprova = aprovar and not (cfg.get("aprovar_primeiro") and _ja_aprovou(sb, empresa_id, canal))
+        situacao, motivo_lote = ("aguardando_aprovacao" if aprova else "agendado"), None
         if not locais:
             situacao, motivo_lote = "concluido", motivo_todos_bloqueados(canal, linhas)
         elif jan is None:

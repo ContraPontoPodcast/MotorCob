@@ -36,11 +36,83 @@ def _arquivos(p: Path) -> list[Path]:
                   key=lambda x: (data_do_arquivo(x), x.name))
 
 
+CARGAS = {"base": "bruto", "incremental": "incremental"}   # carga geral: espera o mapeamento das colunas (SQL 74)
+
+
 def liberar(pasta: Path):
     """Volta os arquivos segurados para a pasta do tipo (a rodada decide de novo o que segurar)."""
     for t in TIPOS:
         for a in _arquivos(pasta / PASTA[t] / ESPERA):
             a.replace(pasta / PASTA[t] / a.name)
+    for d in CARGAS.values():
+        for a in _arquivos(pasta / d / ESPERA):
+            a.replace(pasta / d / a.name)
+
+
+# ------------------------------------------------------------------ carga geral (SQL 74)
+NOME_FALTA = {"cliente": "o código do cliente (ou o CPF)", "saldo": "o saldo",
+              "atraso": "os dias de atraso (ou o vencimento)", "contato": "o telefone ou o e-mail"}
+
+
+def mapa_base(sb, eid, cid) -> dict | None:
+    """Colunas da carga geral apontadas no site (confirmadas), ou None. Banco sem o SQL 74: None (só a detecção)."""
+    from nuvem.supabase_api import ErroSupabase
+    if eid is None:
+        return None
+    try:
+        linhas = [m for m in _do_credor(sb, "mapeamento_arquivos", eid, cid) if m.get("tipo") == "base"]
+    except ErroSupabase:
+        return None
+    m = linhas[0] if linhas else {}
+    return m.get("colunas") if m.get("confirmado") and isinstance(m.get("colunas"), dict) else None
+
+
+def registrar_base(sb, eid, cid, arq: Path, sugestao: dict):
+    """O que o motor viu na última carga (cabeçalho e sugestão; só nomes de coluna). Colunas/confirmado são do site."""
+    from nuvem.supabase_api import ErroSupabase
+    if eid is None or arq is None:
+        return
+    visto = {"arquivo": arq.name, "cabecalho": sugestao.get("cabecalho") or [], "visto_em": _agora(),
+             "sugerido": sugestao.get("sugerido") or {}}
+    try:
+        atual = [m for m in _do_credor(sb, "mapeamento_arquivos", eid, cid) if m.get("tipo") == "base"]
+        if atual and atual[0].get("id"):
+            sb.atualizar("mapeamento_arquivos", {"id": f"eq.{atual[0]['id']}"}, visto)
+        else:
+            sb.inserir("mapeamento_arquivos", [{"empresa_id": eid, "credor_id": cid, "tipo": "base", **visto}])
+    except ErroSupabase:   # banco sem o SQL 74 (tipo 'base' fora do CHECK): segue sem registrar
+        pass
+
+
+def segurar_carga(destinos: list[Path]) -> list[Path]:
+    """Carga geral que não deu para ler: espera em <bruto|incremental>/aguardando/ (não é apagada nem rejeitada)."""
+    saida = []
+    for d in destinos:
+        if d.exists():
+            (d.parent / ESPERA).mkdir(parents=True, exist_ok=True)
+            novo = d.parent / ESPERA / d.name
+            d.replace(novo)
+            saida.append(novo)
+    return saida
+
+
+def msg_carga(faltam: list[str], fixas: dict | None, cabecalho: list[str], carteira: str = "") -> str:
+    """Mensagem da carga que espera o mapeamento: o que falta, em português, e onde apontar."""
+    itens = [NOME_FALTA[f] for f in faltam if f in NOME_FALTA]
+    partes = []
+    if itens:
+        n = len(itens)
+        lista = itens[0] if n == 1 else ", ".join(itens[:-1]) + " e " + itens[-1]
+        partes.append(f"Faltou apontar {n} coluna{'s' if n > 1 else ''} da carga: {lista}.")
+    sumiram = sorted({c for k, v in (fixas or {}).items() for c in ([v] if isinstance(v, str) else v or [])
+                      if isinstance(c, str) and c not in cabecalho})
+    if sumiram:
+        partes.append("As colunas que você apontou e não vieram neste arquivo: " + ", ".join(sumiram[:6]) + ".")
+    if not partes:
+        partes.append("Não conseguimos ler as colunas desta carga.")
+    onde = f"Carteiras › {carteira} › Configurações › Arquivos" if carteira else "Configurações da carteira › Arquivos"
+    return (" ".join(partes) + " O arquivo está guardado: ele entra assim que você apontar as colunas (no "
+            f"Assistente de implantação ou em {onde}).")
 
 
 def _segurar(pasta: Path, tipo: str) -> list[str]:

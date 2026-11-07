@@ -7,12 +7,13 @@ import { friendlyError, supabase, type Row } from '@/lib/supabase';
 import { canalLabel } from '@/lib/estrategia';
 import {
   canaisConfiguraveis as canalOpts, CONFLITO_CANAIS_EMPRESA, CONFLITO_CREDOR_CANAIS, lerCusto, linhasCarteira, linhasEmpresa,
-  naoPerturbeParaTela, VOZ as vozChannels, type CanalTela,
+  naoPerturbeParaTela, VOZ as vozChannels, type CanalTela, QUEM_ENVIA_CANAIS, quemEnviaTela,
 } from '@/lib/canais-config';
 import { canalTipoMensagem } from '@/lib/frases';
 import { numerosPorClienteOpts } from '@/lib/operacao';
 import { FrasesTab } from '@/components/canais/frases';
 import { ImportarPlaybookModal } from '@/components/canais/importar-playbook';
+import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
 type CanalRow = CanalTela;
 
 const defaults: Record<string, CanalRow> = Object.fromEntries(
@@ -38,6 +39,8 @@ function Heranca({ sobrescrito, onVoltar }: { sobrescrito: boolean; onVoltar: ()
 
 export function Canais() {
   const { empresa, credores } = useMotorAuth();
+  const areasLib = useAreasLiberadas();
+  const canaisMensageria: string[] = areasLib.mensageria ? areasLib.canais : [];
   const canEdit = useAllowed(['admin', 'planejamento']);
   const [escopo, setEscopo] = useState<string>('empresa'); // 'empresa' | credor_id
   const [rows, setRows] = useState<Record<string, CanalRow>>({});
@@ -247,6 +250,17 @@ export function Canais() {
                     <select value={String(r.numeros_por_cliente ?? 1)} disabled={!canEdit || !r.ativo} onChange={e => patch(c.id, { numeros_por_cliente: Number(e.target.value) })} className="h-10 w-full rounded border border-[#d8e3e5] bg-white px-3 text-sm outline-none focus:border-[#0F4C5C] disabled:bg-[#f5f7f8]">
                       {numerosPorClienteOpts.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                     </select>
+                  </div>
+                )}
+
+                {!isCarteira && QUEM_ENVIA_CANAIS.has(c.id) && (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Quem envia</label>
+                    <select aria-label={`Quem envia o ${canalLabel[c.id]}`} value={quemEnviaTela(c.id, r.quem_envia, canaisMensageria)} disabled={!canEdit || !r.ativo} onChange={e => patch(c.id, { quem_envia: e.target.value as 'lista' | 'motorcx' })} className="h-10 w-full rounded border border-[#d8e3e5] bg-white px-3 text-sm outline-none focus:border-[#0F4C5C] disabled:bg-[#f5f7f8]">
+                      <option value="lista">Lista para baixar (seu fornecedor envia)</option>
+                      <option value="motorcx" disabled={!canaisMensageria.includes(c.id)}>MotorCX envia{canaisMensageria.includes(c.id) ? '' : ' (precisa da Mensageria)'}</option>
+                    </select>
+                    <p className="mt-1 text-[11px] text-[#8E8E93]">Desligado: use a chave do canal.</p>
                   </div>
                 )}
 

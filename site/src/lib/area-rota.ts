@@ -35,7 +35,8 @@ export function areaDaRota(pathname: string): AreaRota {
 		pathname.startsWith('/conta') ||
 		pathname.startsWith('/docs') ||
 		pathname === '/documentacao' ||
-		pathname.startsWith('/assistente')
+		pathname.startsWith('/assistente') ||
+		pathname === '/implantacao'
 	)
 		return 'workspace';
 	// Cobrança (frente motorcob).

@@ -49,6 +49,8 @@ export default [
     route('docs/:slug', 'routes/docs-artigo.tsx'),
     route('documentacao', 'routes/documentacao.tsx'),
     route('empresa/privacidade', 'routes/empresa-privacidade.tsx'),
+    // Assistente de implantação (SQL 74): 5 passos, progresso salvo no banco; equipe e cliente.
+    route('implantacao', 'routes/implantacao.tsx'),
   ]),
   layout('routes/app-layout.tsx', [
     route('mapa', 'routes/mapa.tsx'),

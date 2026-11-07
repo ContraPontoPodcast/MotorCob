@@ -63,6 +63,24 @@ class TestMensagens(unittest.TestCase):
         self.assertEqual((r["saida"] / "ids" / "whatsapp.csv").read_text(encoding="utf-8").splitlines()[0],
                          "id_cliente;contato")
 
+    def test_sms_sem_frase_na_esteira_usa_a_frase_da_etapa(self):
+        """SQL 74 (Assistente de implantação): frase ativa do SMS para a etapa vale quando a esteira não tem frase;
+        a da própria empresa vence a padrão; outros canais não mudam."""
+        sms = {"localizacao": {"passos": {"1": [{"canal": "sms", "modo": "sempre"}]}}}
+        frases = [{"id": 30, "canal": "sms", "estagio": "localizacao", "nome": "Padrão MotorCX · Cliente novo",
+                   "texto": "Padrão: saldo {saldo}.", "ativo": True},
+                  {"id": 31, "canal": "sms", "estagio": "quebra", "nome": "Padrão MotorCX · Quebra",
+                   "texto": "Parcela vencida.", "ativo": True}]
+        r = _rodar(sms, frases)
+        self.assertEqual([(l["canal"], l["mensagem"], l["frase_id"]) for l in r["fila"]],
+                         [("sms", "Padrão: saldo R$ 1.234,50.", 30)])
+        propria = frases + [{"id": 40, "canal": "sms", "estagio": "localizacao", "nome": "Minha frase",
+                             "texto": "Minha.", "ativo": True}]
+        self.assertEqual([l["mensagem"] for l in _rodar(sms, propria)["fila"]], ["Minha."])
+        com_texto = {**sms, "mensagens": {"localizacao": {"sms": "Da esteira."}}}
+        self.assertEqual([l["mensagem"] for l in _rodar(com_texto, frases)["fila"]], ["Da esteira."])
+        self.assertEqual([l["mensagem"] for l in _rodar(PASSO, frases)["fila"]], [""])   # WhatsApp: como antes
+
     def test_frase_do_playbook(self):
         defin = {**PASSO, "mensagens": {"localizacao": {"whatsapp": {"frase_id": "12"}}}}
         playbook = [{"id": 12, "canal": "whatsapp", "nome": "Boas-vindas", "texto": "Saldo {saldo}. {link}",

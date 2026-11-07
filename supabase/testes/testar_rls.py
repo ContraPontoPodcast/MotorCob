@@ -291,7 +291,7 @@ checar("rotina sugere o mapeamento da ocorrência", True, f"insert into public.m
 checar("planejamento confirma o mapeamento", True, f"update public.mapeamento_arquivos set colunas='{{\"id_cliente\":\"CPF\",\"data\":\"DT\",\"resultado\":\"TAB\"}}', confirmado=true, atualizado_em=now() where credor_id={CX}", "authenticated", u["plan"])
 checar("operação não altera o mapeamento", True, f"update public.mapeamento_arquivos set confirmado=false where credor_id={CX} returning id", "authenticated", u["oper"], None)
 checar("mapeamento repetido do mesmo tipo é recusado", False, f"insert into public.mapeamento_arquivos (empresa_id,credor_id,tipo) values ({EA},{CX},'ocorrencia')", "service_role")
-checar("tipo de arquivo desconhecido é recusado", False, f"insert into public.mapeamento_arquivos (empresa_id,credor_id,tipo) values ({EA},{CX},'base')", "service_role")
+checar("tipo de arquivo desconhecido é recusado", False, f"insert into public.mapeamento_arquivos (empresa_id,credor_id,tipo) values ({EA},{CX},'planilha_x')", "service_role")  # 'base' vale desde o SQL 74 (carga geral)
 checar("rotina registra código novo sem marca", True, f"insert into public.ocorrencia_codigos (empresa_id,credor_id,codigo,qtd,visto_em) values ({EA},{CX},'ALO',12,now()),({EA},{CX},'CAIXA POSTAL',30,now())", "service_role")
 checar("planejamento marca CPC", True, f"update public.ocorrencia_codigos set resultado='cpc', mapeado=true, atualizado_em=now() where codigo='ALO' returning resultado", "authenticated", u["plan"], "cpc")
 checar("marca inválida é recusada", False, f"update public.ocorrencia_codigos set resultado='talvez' where codigo='ALO'", "service_role")
@@ -2816,6 +2816,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 73: id do cliente sem CPF e rascunho cancelado (testar_id_cliente_sem_cpf.py)", True, f"select {r.returncode}",
        None, None, 0)
+
+# SQL 74 · Assistente de implantação e mapeamento da carga geral (aplica o 74 duas vezes)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_assistente_implantacao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 74: assistente de implantação (testar_assistente_implantacao.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

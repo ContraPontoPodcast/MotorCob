@@ -29,7 +29,8 @@ const PASSO_INFO: Record<string, { descricao: string; acao?: string; to?: string
   conta: { descricao: 'Feito no convite.' },
   fatura: { descricao: 'Em Empresa › Contatos, marque Recebe faturas.', acao: 'Abrir contatos', to: '/empresa/contatos' },
   equipe: { descricao: 'Quem vai planejar, operar e acompanhar.', acao: 'Convidar membro', to: '/empresa/pessoas?aba=pessoas' },
-  carga: { descricao: 'A carteira com os clientes e as dívidas, por arquivo ou pela API.', acao: 'Enviar carga', to: '/envios' },
+  // Mesma ordem do Assistente de implantação: carteira → primeira carga (colunas conferidas antes) → lista.
+  carga: { descricao: 'Dê o nome da carteira e solte a primeira carga: as colunas são conferidas antes de enviar.', acao: 'Abrir o assistente', to: '/implantacao' },
   lista: { descricao: 'Sai minutos depois da primeira carga; depois, todo dia às 6h.' },
   token: { descricao: 'Para o seu sistema mandar a carga sozinho.', acao: 'Criar token', to: '/empresa/integracoes' },
   carga_jornada: { descricao: 'Os clientes entram já em uma etapa da jornada.', acao: 'Enviar carga', to: '/jornada/cargas' },
@@ -112,8 +113,13 @@ export function PrimeirosPassos() {
       <div className="mb-1 flex items-center gap-2">
         <span className="mc-area-tag">Primeiros passos</span>
       </div>
-      <h2 className="text-[20px] font-semibold text-[#1D1D1F]">Primeiros passos da {empresa?.nome ?? 'empresa'}</h2>
-      {contratado && <p className="mt-1 text-[14px] text-[#6E6E73]">Contratado: {contratado}</p>}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[20px] font-semibold text-[#1D1D1F]">Primeiros passos da {empresa?.nome ?? 'empresa'}</h2>
+          {contratado && <p className="mt-1 text-[14px] text-[#6E6E73]">Contratado: {contratado}</p>}
+        </div>
+        {grupos.some(g => g.grupo === 'cobranca') && <Link to="/implantacao" className="inline-flex h-9 items-center rounded-full bg-[#1D1D1F] px-4 text-[14px] font-medium text-white hover:opacity-85">Assistente de implantação</Link>}
+      </div>
 
       {/* Barra de progresso */}
       <div className="mt-4">

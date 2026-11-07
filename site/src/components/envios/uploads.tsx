@@ -66,7 +66,7 @@ function DetalheRelatorio({ r, credorCodigo }: { r: Row; credorCodigo: string | 
 		return (
 			<div className="mt-1">
 				{rel.aguardando && <p className="whitespace-normal text-xs text-slate-500">{String(rel.aguardando)}</p>}
-				{credorCodigo && <Link to={`/credores/${credorCodigo}/configuracoes?tab=${tab}`} onClick={e => e.stopPropagation()} className="text-xs font-semibold text-[#0F4C5C] underline hover:text-[#0d4252]">Abrir configurações da carteira</Link>}
+				{credorCodigo && <Link to={`/credores/${credorCodigo}/configuracoes?tab=${tab}`} onClick={e => e.stopPropagation()} className="text-xs font-semibold text-[#0F4C5C] underline hover:text-[#0d4252]">{rel.mapear === 'carga' ? 'Apontar as colunas da carga' : 'Abrir configurações da carteira'}</Link>}
 			</div>
 		);
 	}
@@ -190,7 +190,7 @@ export function Uploads() {
 		if (!supabase || !empresa || !empresa.slug || !files.length) return;
 		const tipoDef = mainTypes.find(t => t.id === type);
 		const required = tipoDef?.credorRequired ?? true;
-		if (required && !credorId) { setError('Escolha a carteira no topo do bloco de envio.'); return; }
+		if (required && !credorId) { setError('Para qual carteira é este arquivo? Escolha no topo do bloco de envio.'); return; }
 		setBusy(true); setError(''); setSuccess(''); let done = 0;
 		for (const file of files) {
 			const safe = safeFileName(file.name);
@@ -251,13 +251,13 @@ export function Uploads() {
 			{success && <Notice variant="success">{success}</Notice>}
 
 			<div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#dfe8ea] bg-white p-4">
-				<span className="flex items-center gap-2 text-sm font-semibold text-[#0F4C5C]"><Landmark size={17}/> Credor</span>
+				<span className="flex items-center gap-2 text-sm font-semibold text-[#0F4C5C]"><Landmark size={17}/> Carteira</span>
 				{credorFixo ? <span className="text-sm font-medium text-slate-600">{credores[0]?.nome ?? '—'}</span>
 					: <select value={formCredorId} onChange={e => setFormCredorId(e.target.value)} className="h-10 rounded-lg border border-[#d8e3e5] bg-white px-3 text-sm outline-none focus:border-[#0F4C5C]">
 						<option value="">Todas as carteiras</option>
 						{credores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
 					</select>}
-				<p className="text-xs text-slate-400">{formCredorId ? 'Os arquivos vão para este credor.' : 'Para carga, retirada, acordo, baixa e ocorrência, escolha um credor. A atualização de contatos pode ser de todos.'}</p>
+				<p className="text-xs text-slate-400">{formCredorId ? 'Os arquivos vão para esta carteira.' : 'Para carga, retirada, acordo, baixa e ocorrência, escolha a carteira. A atualização de contatos pode ser de todas.'}</p>
 			</div>
 
 			<div className="grid gap-4 lg:grid-cols-3">

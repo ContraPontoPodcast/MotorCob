@@ -33,7 +33,18 @@ export type CanalTela = {
 	tentativas_dia: number | null; respeitar_nao_perturbe: '' | 'sim' | 'nao' | null;
 	numeros_por_cliente: number | null;
 	produto_padrao: string | null;
+	/** SQL 74: quem envia o canal digital (lista = o fornecedor da empresa, pela Lista do dia; motorcx = a Mensageria). */
+	quem_envia?: 'lista' | 'motorcx' | null;
 };
+
+/** Canais em que a empresa escolhe quem envia (SQL 74). Voz sai sempre em lista (discador) ou pelo agente virtual. */
+export const QUEM_ENVIA_CANAIS = new Set(['whatsapp', 'rcs', 'sms', 'email']);
+
+/** O que a tela mostra quando nada foi salvo: MotorCX envia o que a Mensageria contratada cobre; o resto, lista. */
+export function quemEnviaTela(canal: string, salvo: 'lista' | 'motorcx' | null | undefined, canaisMensageria: readonly string[]): 'lista' | 'motorcx' {
+	if (salvo === 'lista' || salvo === 'motorcx') return salvo;
+	return canaisMensageria.includes(canal) ? 'motorcx' : 'lista';
+}
 
 /** Linhas do upsert de `canais_empresa`: só os 6 canais que o banco aceita. */
 export function linhasEmpresa(empresaId: string, rows: Record<string, CanalTela | undefined>, padrao: Record<string, CanalTela>) {
@@ -46,6 +57,7 @@ export function linhasEmpresa(empresaId: string, rows: Record<string, CanalTela 
 			custo: r.custo || null, tentativas_dia: VOZ.has(c.id) ? (r.tentativas_dia || null) : null,
 			respeitar_nao_perturbe: naoPerturbeParaBanco(r.respeitar_nao_perturbe),
 			numeros_por_cliente: r.numeros_por_cliente === 1 ? null : (r.numeros_por_cliente ?? null),
+			...(QUEM_ENVIA_CANAIS.has(c.id) && r.quem_envia ? { quem_envia: r.quem_envia } : {}),
 		};
 	});
 }

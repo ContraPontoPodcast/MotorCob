@@ -706,6 +706,19 @@ lê; `chave_pessoa` do CPF da carteira ou o id_cliente): nunca CPF, nome ou tele
 `previa_fatura` conta distinct por empresa ("Orquestração · CPFs ativos no mês", unidade 'CPF'); ciclo medido só
 antes do SQL 69 segue pelos contratos; fatura fechada não muda. `contratos_mes` continua (informativo no demonstrativo).
 
+SQL 74 (Assistente de implantação, aprovado pelo dono): `/implantacao` (site/src/components/implantacao/, regras em
+`site/src/lib/implantacao.ts`), 5 passos com o progresso em `implantacao_progresso`. `criar_empresa_implantacao` cria
+empresa + módulo + ciclo padrão + preço por CPF + contato numa transação, idempotente pela `chave` (e pelo CNPJ);
+`salvar_carteira_implantacao` renomeia a "Carteira principal"; `salvar_canais_implantacao` grava quem envia
+(`canais_empresa.quem_envia`: lista = a empresa baixa a lista e o fornecedor dela envia, motorcx = Mensageria; NULL = como
+antes) e `mensageria_config.aprovar_primeiro`; `implantacao_situacao` alimenta a lista "O que falta". Mapeamento da carga
+geral: `mapeamento_arquivos.tipo = 'base'` (`salvar_mapeamento_base`, colunas validadas; o código do cliente nunca é a
+coluna do CPF); o motor lê o salvo em `nuvem.mapeamento.mapa_base` e passa para `detectar.layout_base(fixas=)`: o salvo
+vence, a detecção completa o resto (coluna que sumiu volta para a detecção). Carga que não dá para ler ESPERA em
+`<bruto|incremental>/aguardando/` (envio "aguardando" com "Faltou apontar N colunas…"), nunca é rejeitada; salvar o
+mapeamento abre um pedido de rotina. Lote da Mensageria não nasce para canal com quem_envia = lista; SMS sem frase na
+esteira usa a frase ativa da etapa (`frases.estagio`). Menu: Discagem → "Regras de discagem"; ⌘K com sinônimos e sem acento.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
