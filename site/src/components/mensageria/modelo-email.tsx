@@ -24,9 +24,9 @@ export function ModeloEmailEditor() {
 			if (!active) return;
 			const m = (data as Row | null) as ModeloEmail | null;
 			setModelo(m);
-			setNome(m?.nome_remetente ?? '');
+			setNome(m?.remetente_nome ?? '');
 			setAssunto(m?.assunto ?? '');
-			setTexto(m?.texto ?? '');
+			setTexto(m?.corpo ?? '');
 			setLoading(false);
 		})();
 		return () => { active = false; };
@@ -57,9 +57,9 @@ export function ModeloEmailEditor() {
 		setBusy(true); setError(''); setSucesso('');
 		const { error } = await supabase.from('mensageria_modelos_email').upsert({
 			empresa_id: empresa.id,
-			nome_remetente: nome.trim(),
+			remetente_nome: nome.trim(),
 			assunto: assunto.trim(),
-			texto: texto.trim(),
+			corpo: texto.trim(),
 		}, { onConflict: 'empresa_id' });
 		setBusy(false);
 		if (error) { setError(friendlyError(error)); return; }

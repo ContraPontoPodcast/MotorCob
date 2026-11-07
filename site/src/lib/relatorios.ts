@@ -61,7 +61,7 @@ export type ModeloRelatorio = {
 
 export type EnvioRelatorio = {
 	id: string;
-	modelo: string;
+	modelo_id: string;
 	frequencia: string; // dia | semana | mes
 	destinatarios: string[];
 	dia_semana: number | null;

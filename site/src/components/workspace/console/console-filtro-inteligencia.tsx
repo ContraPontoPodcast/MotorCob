@@ -26,48 +26,49 @@ type ScoreConfig = {
 	grupo_controle: number;
 };
 
+// os padrões são os do banco (mensageria_score_config, SQL 20261130)
 const DEFAULTS: ScoreConfig = {
 	plano_id: null,
-	janela: 90,
-	meia_vida: 30,
-	peso_falha: 3,
-	forca_base: 5,
+	janela: 30,
+	meia_vida: 10,
+	peso_falha: 2,
+	forca_base: 1,
 	alto_pct: 70,
-	baixo_pct: 30,
-	historico_minimo_baixo: 5,
-	sem_historico_abaixo: 20,
-	quarentena: 30,
-	grupo_controle: 2,
+	baixo_pct: 20,
+	historico_minimo_baixo: 1.5,
+	sem_historico_abaixo: 0.5,
+	quarentena: 20,
+	grupo_controle: 1,
 };
 
+/** Linha de mensageria_score_config → formulário (as colunas do banco têm outros nomes). */
 function normalizeConfig(r: Row): ScoreConfig {
 	return {
 		id: r.id != null ? String(r.id) : undefined,
 		plano_id: r.plano_id == null ? null : String(r.plano_id),
-		janela: Number(r.janela ?? DEFAULTS.janela),
-		meia_vida: Number(r.meia_vida ?? DEFAULTS.meia_vida),
-		peso_falha: Number(r.peso_falha ?? DEFAULTS.peso_falha),
+		janela: Number(r.janela_dias ?? DEFAULTS.janela),
+		meia_vida: Number(r.meia_vida_dias ?? DEFAULTS.meia_vida),
+		peso_falha: Number(r.peso_permanente ?? DEFAULTS.peso_falha),
 		forca_base: Number(r.forca_base ?? DEFAULTS.forca_base),
-		alto_pct: Number(r.alto_pct ?? DEFAULTS.alto_pct),
-		baixo_pct: Number(r.baixo_pct ?? DEFAULTS.baixo_pct),
-		historico_minimo_baixo: Number(r.historico_minimo_baixo ?? DEFAULTS.historico_minimo_baixo),
+		alto_pct: Number(r.alto_min ?? DEFAULTS.alto_pct),
+		baixo_pct: Number(r.baixo_max ?? DEFAULTS.baixo_pct),
+		historico_minimo_baixo: Number(r.historico_min ?? DEFAULTS.historico_minimo_baixo),
 		sem_historico_abaixo: Number(r.sem_historico_abaixo ?? DEFAULTS.sem_historico_abaixo),
-		quarentena: Number(r.quarentena ?? DEFAULTS.quarentena),
-		grupo_controle: Number(r.grupo_controle ?? DEFAULTS.grupo_controle),
+		quarentena: Number(r.quarentena_dias ?? DEFAULTS.quarentena),
+		grupo_controle: Number(r.controle_pct ?? DEFAULTS.grupo_controle),
 	};
 }
 
-type Nomes = { id?: string; alto: string; medio: string; baixo: string; sem: string };
-const NOMES_DEFAULT: Nomes = { alto: 'Alta qualidade', medio: 'Média qualidade', baixo: 'Baixa qualidade', sem: 'Sem histórico' };
+type Faixa = 'alto' | 'medio' | 'baixo' | 'sem';
+type Nomes = Record<Faixa, string>;
+const FAIXAS: Faixa[] = ['alto', 'medio', 'baixo', 'sem'];
+const NOMES_DEFAULT: Nomes = { alto: 'Não enviado · faixa Alto fora da campanha', medio: 'Não enviado · faixa Médio fora da campanha', baixo: 'Não enviado · baixa propensão de entrega', sem: 'Não enviado · número sem histórico' };
 
-function normalizeNomes(r: Row): Nomes {
-	return {
-		id: r.id != null ? String(r.id) : undefined,
-		alto: String(r.alto ?? ''),
-		medio: String(r.medio ?? ''),
-		baixo: String(r.baixo ?? ''),
-		sem: String(r.sem ?? ''),
-	};
+/** mensageria_score_nomes tem uma linha por faixa (faixa, texto). */
+function normalizeNomes(linhas: Row[]): Nomes {
+	const out: Nomes = { ...NOMES_DEFAULT };
+	for (const l of linhas) if (FAIXAS.includes(l.faixa as Faixa) && l.texto) out[l.faixa as Faixa] = String(l.texto);
+	return out;
 }
 
 /** Nomes que imitam status de operadora — recusados pelo banco. */
@@ -114,9 +115,9 @@ export function ConsoleFiltroInteligenciaPage() {
 		const [rt, cf, fn, sf, nm] = await Promise.all([
 			supabase.from('mensageria_planos_rota').select('id,nome').order('nome'),
 			supabase.from('mensageria_score_config').select('*'),
-			supabase.from('mensageria_fornecedores').select('id,codigo,nome,ativo').order('nome'),
-			supabase.from('mensageria_score_fornecedores').select('*'),
-			supabase.from('mensageria_score_nomes').select('*').limit(1),
+			supabase.from('mensageria_fornecedores').select('codigo,nome,ativo').order('nome'),
+			supabase.from('mensageria_score_fornecedores').select('fornecedor,considerar'),
+			supabase.from('mensageria_score_nomes').select('faixa,texto'),
 		]);
 		if (rt.error) { setError(friendlyError(rt.error)); setLoading(false); return; }
 		setRotas((rt.data ?? []) as Row[]);
@@ -129,11 +130,11 @@ export function ConsoleFiltroInteligenciaPage() {
 		setFornecedores((fn.data ?? []) as Row[]);
 		const cons: Record<string, boolean> = {};
 		((sf.data ?? []) as Row[]).forEach(r => {
-			const fid = String(r.fornecedor_id ?? r.fornecedor ?? '');
+			const fid = String(r.fornecedor ?? '');
 			cons[fid] = r.considerar !== false;
 		});
 		setFornConsiderar(cons);
-		if (nm.data && nm.data.length > 0) setNomes(normalizeNomes(nm.data[0] as Row));
+		if (nm.data && nm.data.length > 0) setNomes(normalizeNomes(nm.data as Row[]));
 		setLoading(false);
 	}
 	useEffect(() => { void reload(); }, []);
@@ -173,16 +174,16 @@ export function ConsoleFiltroInteligenciaPage() {
 		setBusy(true);
 		const row: Record<string, unknown> = {
 			plano_id: isPadrao ? null : selected,
-			janela: form.janela,
-			meia_vida: form.meia_vida,
-			peso_falha: form.peso_falha,
+			janela_dias: form.janela,
+			meia_vida_dias: form.meia_vida,
+			peso_permanente: form.peso_falha,
 			forca_base: form.forca_base,
-			alto_pct: form.alto_pct,
-			baixo_pct: form.baixo_pct,
-			historico_minimo_baixo: form.historico_minimo_baixo,
+			alto_min: form.alto_pct,
+			baixo_max: form.baixo_pct,
+			historico_min: form.historico_minimo_baixo,
 			sem_historico_abaixo: form.sem_historico_abaixo,
-			quarentena: form.quarentena,
-			grupo_controle: form.grupo_controle,
+			quarentena_dias: form.quarentena,
+			controle_pct: form.grupo_controle,
 		};
 		let res;
 		if (ownConfig?.id) {
@@ -199,14 +200,14 @@ export function ConsoleFiltroInteligenciaPage() {
 
 	async function toggleForn(f: Row, on: boolean) {
 		if (!supabase || !podeEditar) return;
-		setBusyForn(String(f.id));
-		const fid = String(f.id);
+		setBusyForn(String(f.codigo));
+		const fid = String(f.codigo);   // a chave do fornecedor é o código
 		const existente = fornConsiderar[fid] !== undefined;
 		let res;
 		if (existente) {
-			res = await supabase.from('mensageria_score_fornecedores').update({ considerar: on }).eq('fornecedor_id', fid);
+			res = await supabase.from('mensageria_score_fornecedores').update({ considerar: on }).eq('fornecedor', fid);
 		} else {
-			res = await supabase.from('mensageria_score_fornecedores').insert({ fornecedor_id: fid, considerar: on });
+			res = await supabase.from('mensageria_score_fornecedores').insert({ fornecedor: fid, considerar: on });
 		}
 		setBusyForn(null);
 		if (res.error) { setError(friendlyError(res.error)); return; }
@@ -217,17 +218,17 @@ export function ConsoleFiltroInteligenciaPage() {
 		if (!supabase) return;
 		setErrorNomes(''); setSuccessNomes('');
 		// validação client-side espelha a do banco.
-		const campos: ('alto' | 'medio' | 'baixo' | 'sem')[] = ['alto', 'medio', 'baixo', 'sem'];
-		const imita = campos.find(c => nomeImitaStatus(nomes[c]));
+		const imita = FAIXAS.find(c => nomeImitaStatus(nomes[c]));
 		if (imita) { setErrorNomes('Esse nome imita status de operadora. Escolha outro.'); return; }
+		if (FAIXAS.some(c => nomes[c].trim().length < 5 || nomes[c].trim().length > 80)) { setErrorNomes('Cada nome tem de 5 a 80 caracteres.'); return; }
 		setBusyNomes(true);
-		const row = { alto: nomes.alto.trim(), medio: nomes.medio.trim(), baixo: nomes.baixo.trim(), sem: nomes.sem.trim() };
-		let res;
-		if (nomes.id) {
-			res = await supabase.from('mensageria_score_nomes').update(row).eq('id', nomes.id);
-		} else {
-			res = await supabase.from('mensageria_score_nomes').insert(row);
-		}
+		// uma linha por faixa (faixa, texto)
+		const res = await supabase.from('mensageria_score_nomes').upsert([
+			{ faixa: 'alto', texto: nomes.alto.trim() },
+			{ faixa: 'medio', texto: nomes.medio.trim() },
+			{ faixa: 'baixo', texto: nomes.baixo.trim() },
+			{ faixa: 'sem', texto: nomes.sem.trim() },
+		], { onConflict: 'faixa' });
 		setBusyNomes(false);
 		if (res.error) {
 			// o banco recusa nomes que imitam status de operadora.
@@ -317,7 +318,7 @@ export function ConsoleFiltroInteligenciaPage() {
 						{fornecedores.length === 0 ? <p className="py-4 text-center text-[14px] text-[#8E8E93]">Nenhum fornecedor cadastrado.</p> : (
 							<div className="divide-y divide-[#F0F0F2]">
 								{fornecedores.map(f => {
-									const fid = String(f.id);
+									const fid = String(f.codigo);
 									const considerar = fornConsiderar[fid] !== false;
 									return (
 										<div key={fid} className="flex items-center justify-between gap-3 py-3">

@@ -1,4 +1,5 @@
-# Testes do motor, das regras de acesso (RLS) num Postgres 16, dos argumentos das RPCs e das regras da função de usuários.
+# Testes do motor, das regras de acesso (RLS) num Postgres 16, dos argumentos das RPCs, dos nomes de coluna do site e das
+# regras da função de usuários.
 name: testes
 on:
   pull_request:
@@ -50,6 +51,9 @@ jobs:
       # (antes do testar_rls, que reaplica migrações antigas); prova também que a leitura das migrações (a mesma do
       # tests/test_conferir_rpc.py, no job motor) bate com o catálogo
       - run: python3 scripts/conferir_rpc.py --banco
+      # nomes de coluna de todo supabase.from('tabela') do site (select, insert/update/upsert, filtros) contra o catálogo;
+      # a leitura das migrações (tests/test_conferir_colunas.py, no job motor) também é conferida contra o catálogo
+      - run: python3 scripts/conferir_colunas.py --banco
       - run: python3 supabase/testes/testar_rls.py
   funcoes:
     runs-on: ubuntu-latest

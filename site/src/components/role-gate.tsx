@@ -33,13 +33,13 @@ export function SemPermissao({ perm, tela }: { perm?: string; tela?: string }) {
     (async () => {
       try {
         const [{ data: padrao }, { data: ajustes }] = await Promise.all([
-          supabase.from('permissoes_padrao').select('permissao,permitido').eq('permissao', perm).maybeSingle(),
+          // padrão MotorCX por perfil: colunas admin/planejamento/operacao/gestao do catálogo (não existe permissoes_padrao)
+          supabase.from('permissoes_catalogo').select('codigo,admin,planejamento,operacao,gestao').eq('codigo', perm).maybeSingle(),
           supabase.from('permissoes_papel').select('papel,permitido').eq('permissao', perm),
         ]);
         if (!active) return;
-        const base = (padrao as Row | null)?.permitido === true;
         const map: Record<string, boolean> = {};
-        for (const p of PAPEIS) map[p] = base;
+        for (const p of PAPEIS) map[p] = (padrao as Row | null)?.[p] === true;
         for (const r of (ajustes as Row[] | null) ?? []) {
           const papel = String(r.papel ?? '');
           if (PAPEIS.includes(papel as typeof PAPEIS[number])) map[papel] = r.permitido === true;

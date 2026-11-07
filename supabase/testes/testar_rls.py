@@ -416,6 +416,22 @@ checar("admin da empresa cadastra contato", True, f"insert into public.empresa_c
 checar("operação não lê os contatos", True, "select count(*) from public.empresa_contatos", "authenticated", u["oper"], 0)
 checar("empresa B não grava contato na A", False, f"insert into public.empresa_contatos (empresa_id,nome) values ({EA},'X')", "authenticated", u["operb"])
 checar("anônimo não lê contatos", False, "select * from public.empresa_contatos", "anon")
+# Empresa › Contatos › Novo contato: o MESMO formato do payload do site (contatos.tsx), como o PostgREST grava (colunas do
+# JSON); o site gravava "papel", que não existe (a coluna é papel_contrato) e a tela só mostrava a mensagem genérica
+_PAYLOAD_CONTATO = ('{"empresa_id": %s, "nome": "Paula", "sobrenome": null, "setor": "Financeiro", "papel_contrato": "financeiro", '
+                    '"telefone": "11999990000", "email": "paula@alfa.invalid", "observacao": null, "recebe_faturas": true}') % EA
+checar("Novo contato: payload do site (papel_contrato) grava como Admin da empresa", True,
+       "insert into public.empresa_contatos (empresa_id,nome,sobrenome,setor,papel_contrato,telefone,email,observacao,recebe_faturas) "
+       f"select empresa_id,nome,sobrenome,setor,papel_contrato,telefone,email,observacao,recebe_faturas from json_populate_record(null::public.empresa_contatos, '{_PAYLOAD_CONTATO}') "
+       "returning papel_contrato||'|'||recebe_faturas", "authenticated", u["admina"], "financeiro|true")
+checar("Novo contato: papel padrão é operacional", True,
+       f"insert into public.empresa_contatos (empresa_id,nome,papel_contrato) values ({EA},'Sem Papel','operacional') returning papel_contrato",
+       "authenticated", u["admina"], "operacional")
+checar("Novo contato: a coluna antiga \"papel\" não existe (era o erro do site)", False,
+       f"insert into public.empresa_contatos (empresa_id,nome,papel) values ({EA},'Velho','financeiro')", "authenticated", u["admina"])
+checar("Editar contato: update com papel_contrato", True,
+       "update public.empresa_contatos set papel_contrato='legal', setor=null where nome='Paula' returning papel_contrato",
+       "authenticated", u["admina"], "legal")
 checar("toda empresa já tem a Orquestração", True, f"select count(*) from public.empresa_modulos where empresa_id={EA} and modulo='orquestracao'", "authenticated", u["oper"], 1)
 checar("admin da empresa não liga módulo", False, f"insert into public.empresa_modulos (empresa_id,modulo) values ({EA},'mensageria')", "authenticated", u["admina"])
 checar("canal desconhecido na mensageria é recusado", False, f"insert into public.empresa_modulos (empresa_id,modulo,canais) values ({EA},'mensageria','{{sms,pombo}}')", "authenticated", u["admin"])

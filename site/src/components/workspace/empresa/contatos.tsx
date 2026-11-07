@@ -50,7 +50,7 @@ export function ContatosPage() {
       {error && <div className="mb-4 rounded-xl bg-[#FFE8E6] px-4 py-3 text-[14px] text-[#FF3B30]">{error}</div>}
       {voltouFaturas.map(c => (
         <div key={`v-${c.id}`} className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#FFF3E8] px-4 py-3 text-[14px] text-[#9a631b]">
-          <span className="flex items-center gap-2"><AlertTriangle size={16} className="shrink-0" /> O e-mail de {[c.nome, c.sobrenome].filter(Boolean).join(' ')} ({PAPEL_CONTATO[c.papel as string] ?? 'contato'}) voltou. A fatura não chega para ele. Confira o endereço.</span>
+          <span className="flex items-center gap-2"><AlertTriangle size={16} className="shrink-0" /> O e-mail de {[c.nome, c.sobrenome].filter(Boolean).join(' ')} ({PAPEL_CONTATO[c.papel_contrato as string] ?? 'contato'}) voltou. A fatura não chega para ele. Confira o endereço.</span>
           {canEdit && <button onClick={() => { setEdit(c); setOpen(true); }} className="shrink-0 rounded-full bg-[#1D1D1F] px-4 py-1.5 text-[13px] font-semibold text-white hover:opacity-85">Corrigir</button>}
         </div>
       ))}
@@ -69,14 +69,14 @@ export function ContatosPage() {
           rows.length === 0 ? <p className="py-8 text-center text-[14px] text-[#8E8E93]">Nenhum contato cadastrado.</p> :
           <div className="divide-y divide-[#F0F0F2]">
             {rows.map(c => {
-              const papel = PAPEL_CONTATO[c.papel as string];
+              const papel = PAPEL_CONTATO[c.papel_contrato as string];
               return (
                 <div key={c.id} className="py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-[15px] font-semibold text-[#1D1D1F]">{[c.nome, c.sobrenome].filter(Boolean).join(' ')}</p>
-                        {papel && <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: `${PAPEL_COR[c.papel as string] ?? '#8E8E93'}1A`, color: PAPEL_COR[c.papel as string] ?? '#8E8E93' }}>{papel}</span>}
+                        {papel && <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: `${PAPEL_COR[c.papel_contrato as string] ?? '#8E8E93'}1A`, color: PAPEL_COR[c.papel_contrato as string] ?? '#8E8E93' }}>{papel}</span>}
                         {c.recebe_faturas && <span className="rounded-full bg-[#E8F8EC] px-2 py-0.5 text-[11px] font-semibold text-[#248A3D]">Faturas</span>}
                         {c.setor && <span className="text-[13px] text-[#8E8E93]">{c.setor}</span>}
                         <EmailSituacao c={c} />
@@ -111,8 +111,14 @@ export function ContatosPage() {
   );
 }
 
+/** Papel do contato no formulário: a coluna é `papel_contrato` (not null, padrão 'operacional' no banco). */
+function papelInicial(contato: Row | null): string {
+  const v = contato?.papel_contrato as string | undefined;
+  return v && v in PAPEL_CONTATO ? v : 'operacional';
+}
+
 function ContatoModal({ empresaId, contato, onClose, onSaved }: { empresaId: string; contato: Row | null; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState({ nome: contato?.nome ?? '', sobrenome: contato?.sobrenome ?? '', setor: contato?.setor ?? '', papel: contato?.papel ?? '', telefone: contato?.telefone ? formatTelefone(contato.telefone) : '', email: contato?.email ?? '', observacao: contato?.observacao ?? '', recebe_faturas: contato?.recebe_faturas ?? false });
+  const [f, setF] = useState({ nome: contato?.nome ?? '', sobrenome: contato?.sobrenome ?? '', setor: contato?.setor ?? '', papel_contrato: papelInicial(contato), telefone: contato?.telefone ? formatTelefone(contato.telefone) : '', email: contato?.email ?? '', observacao: contato?.observacao ?? '', recebe_faturas: contato?.recebe_faturas ?? false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => { const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [onClose]);
@@ -124,7 +130,7 @@ function ContatoModal({ empresaId, contato, onClose, onSaved }: { empresaId: str
     if (f.nome.trim().length < 2) { setError('Informe o nome.'); return; }
     if (f.observacao.length > 1000) { setError('Observação até 1000 caracteres.'); return; }
     setBusy(true);
-    const payload = { empresa_id: empresaId, nome: f.nome.trim(), sobrenome: f.sobrenome.trim() || null, setor: f.setor.trim() || null, papel: f.papel || null, telefone: f.telefone.replace(/\D/g, '') || null, email: f.email.trim() || null, observacao: f.observacao.trim() || null, recebe_faturas: f.recebe_faturas && !!f.email.trim() };
+    const payload = { empresa_id: empresaId, nome: f.nome.trim(), sobrenome: f.sobrenome.trim() || null, setor: f.setor.trim() || null, papel_contrato: f.papel_contrato, telefone: f.telefone.replace(/\D/g, '') || null, email: f.email.trim() || null, observacao: f.observacao.trim() || null, recebe_faturas: f.recebe_faturas && !!f.email.trim() };
     const res = contato
       ? supabase.from('empresa_contatos').update(payload).eq('id', contato.id)
       : supabase.from('empresa_contatos').insert(payload);
@@ -148,7 +154,7 @@ function ContatoModal({ empresaId, contato, onClose, onSaved }: { empresaId: str
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Nome*</span><input value={f.nome} onChange={e => set('nome', e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] outline-none focus:border-[#1D1D1F]" /></label>
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Sobrenome</span><input value={f.sobrenome} onChange={e => set('sobrenome', e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] outline-none focus:border-[#1D1D1F]" /></label>
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Setor</span><input value={f.setor} onChange={e => set('setor', e.target.value)} className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] outline-none focus:border-[#1D1D1F]" /></label>
-          <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Papel</span><select value={f.papel} onChange={e => { const v = e.target.value; setF(p => ({ ...p, papel: v, recebe_faturas: !contato && v === 'financeiro' ? true : p.recebe_faturas })); }} className="h-10 w-full rounded-lg border border-[#D2D2D7] bg-white px-3 text-[15px] outline-none focus:border-[#1D1D1F]"><option value="">—</option>{Object.entries(PAPEL_CONTATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+          <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Papel</span><select value={f.papel_contrato} onChange={e => { const v = e.target.value; setF(p => ({ ...p, papel_contrato: v, recebe_faturas: !contato && v === 'financeiro' ? true : p.recebe_faturas })); }} className="h-10 w-full rounded-lg border border-[#D2D2D7] bg-white px-3 text-[15px] outline-none focus:border-[#1D1D1F]">{Object.entries(PAPEL_CONTATO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Telefone</span><input value={f.telefone} onChange={e => set('telefone', formatTelefone(e.target.value))} placeholder="(11) 99999-9999" className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] outline-none focus:border-[#1D1D1F]" /></label>
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">E-mail</span><input value={f.email} onChange={e => set('email', e.target.value)} type="email" className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] outline-none focus:border-[#1D1D1F]" /></label>
           <label className="block sm:col-span-2"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Observação</span><textarea value={f.observacao} onChange={e => set('observacao', e.target.value)} rows={3} maxLength={1000} className="w-full rounded-lg border border-[#D2D2D7] px-3 py-2 text-[15px] outline-none focus:border-[#1D1D1F]" /></label>

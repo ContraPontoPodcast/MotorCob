@@ -33,7 +33,7 @@ export function EnvioEmail({ modelo, onClose, onSaved }: Props) {
 	useEffect(() => {
 		async function load() {
 			if (!supabase || !empresa) return;
-			const { data: ev } = await supabase.from('relatorio_envios').select('*').eq('modelo', modelo.id).maybeSingle();
+			const { data: ev } = await supabase.from('relatorio_envios').select('*').eq('modelo_id', modelo.id).maybeSingle();
 			const e = ev as EnvioRelatorio | null;
 			setEnvio(e);
 			if (e) { setFrequencia(e.frequencia as 'dia' | 'semana' | 'mes'); setDiaSemana(e.dia_semana ?? 1); setDiaMes(e.dia_mes ?? 1); setHora(e.hora ?? 8); setDestinatarios(e.destinatarios ?? []); setSoParaMim((e.destinatarios ?? []).length === 1 && e.destinatarios[0] === perfil?.id); }

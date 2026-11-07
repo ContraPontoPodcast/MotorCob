@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2, Lock, Send } from 'lucide-react';
 import { supabase, friendlyError, moneyBR, dateBR, dateTimeBR, today, type Row } from '@/lib/supabase';
+import { erroDaFuncao } from '@/lib/funcoes';
 import { mesExtenso, mesCurto } from '@/lib/empresa-helpers';
 import { cardShadow } from './console-shell';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
@@ -115,8 +116,9 @@ function AcordoDetalheModal({ acordo, onClose, onDone, setErro, setSucesso }: {
     if (!supabase) return;
     setEnviando(true); setErroLocal('');
     try {
-      const { error } = await supabase.functions.invoke('cobranca', { body: { acao: 'informar_acordo', acordo: acordo.id } });
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('cobranca', { body: { acao: 'informar_acordo', acordo: acordo.id } });
+      const msg = await erroDaFuncao(error, data);
+      if (msg) throw new Error(msg);
       setSucesso('E-mail com as parcelas enviado.');
       onDone();
     } catch (e) {
@@ -362,8 +364,9 @@ export function LancarAcordoModal({ empresaId, empresaNome, preSelecionadas, onC
       let msg = 'Acordo lançado. Ficou na Auditoria.';
       if (informar && id) {
         try {
-          const { error: e2 } = await supabase.functions.invoke('cobranca', { body: { acao: 'informar_acordo', acordo: id } });
-          if (e2) throw e2;
+          const { data: d2, error: e2 } = await supabase.functions.invoke('cobranca', { body: { acao: 'informar_acordo', acordo: id } });
+          const m2 = await erroDaFuncao(e2, d2);
+          if (m2) throw new Error(m2.replace(/\.$/, ''));
           msg = 'Acordo lançado. Cliente informado por e-mail e no sino; ficou na Auditoria.';
         } catch (e2) {
           msg = `Acordo lançado. O e-mail não saiu agora: ${e2 instanceof Error ? e2.message : friendlyError(e2)}. O sistema tenta de novo sozinho. Ficou na Auditoria.`;

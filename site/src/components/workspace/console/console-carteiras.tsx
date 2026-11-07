@@ -24,15 +24,13 @@ export function ConsoleCarteirasPage() {
   async function reload() {
     if (!supabase) return;
     setLoading(true); setError('');
-    const [em, rs] = await Promise.all([
-      supabase.from('empresas').select('id,nome,razao_social,situacao,slug,ativa').order('nome'),
-      supabase.from('empresa_responsaveis').select('empresa_id,vendedor,gerente'),
-    ]);
+    // vendedor e gerente da conta ficam na própria empresa (vendedor_id, gerente_id; grava por definir_responsaveis)
+    const em = await supabase.from('empresas').select('id,nome,razao_social,situacao,slug,ativa,vendedor_id,gerente_id').order('nome');
     if (em.error) { setError(friendlyError(em.error)); setLoading(false); return; }
     setEmpresas(em.data ?? []);
     const map: RespMap = {};
-    ((rs.data ?? []) as Row[]).forEach(r => {
-      map[String(r.empresa_id)] = { vendedor: (r.vendedor as string | null) ?? null, gerente: (r.gerente as string | null) ?? null };
+    ((em.data ?? []) as Row[]).forEach(r => {
+      map[String(r.id)] = { vendedor: (r.vendedor_id as string | null) ?? null, gerente: (r.gerente_id as string | null) ?? null };
     });
     setResp(map);
     setLoading(false);
