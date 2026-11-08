@@ -7,7 +7,7 @@ import { supabase, friendlyError, today, type Row } from '@/lib/supabase';
 import {
 	CODECS, FORMATOS_DISCAGEM, IPS_SAIDA_MOTORCX, RE_BINA, RE_CSP, RE_DDD, RE_DESTINO_SIP, RE_HOST, RE_IP, RE_REFERENCIA,
 	RE_TECH, RE_USUARIO, TIPOS_ROTA, TRANSPORTES, cadenciaTxt, lerNumero, reais, segundosTarifados, hashNumeroTeste,
-	segredoTroncoOk,
+	segredoTroncoOk, CPS_MAX,
 } from '@/lib/voz';
 import { Aviso, Campo, Dialogo, Gaveta, Trava, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 
@@ -57,7 +57,7 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 		if (!segredoTroncoOk(segredo, tronco?.segredo_ref == null ? null : String(tronco.segredo_ref))) e.segredo = 'Nome do segredo no cofre, começando com voz/. Ex.: voz/trunk/aurora-opb';
 	}
 	const canaisN = Number(canais); if (!Number.isInteger(canaisN) || canaisN < 1 || canaisN > 10000) e.canais = 'De 1 a 10.000.';
-	const cpsN = Number(cps); if (!Number.isInteger(cpsN) || cpsN < 1 || cpsN > 1000) e.cps = 'De 1 a 1.000.';
+	const cpsN = Number(cps); if (!Number.isInteger(cpsN) || cpsN < 1 || cpsN > CPS_MAX) e.cps = 'De 1 a 500.';
 	if (!RE_BINA.test(binaFinal)) e.bina = 'DDD + número da empresa (10 ou 11 dígitos), 0800/0300 ou 4004.';
 	if (!RE_DDD.test(ddd.trim())) e.ddd = 'Dois dígitos. Ex.: 11';
 	if (formato === 'tech_0_csp_ddd_numero' && !RE_CSP.test(csp.trim())) e.csp = 'O formato com CSP precisa do código da prestadora (2 dígitos).';
@@ -135,7 +135,7 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 				<Campo rotulo="Canais" erro={err('canais')} ajuda="Ligações simultâneas do contrato.">
 					<input value={canais} inputMode="numeric" onChange={x => setCanais(x.target.value.replace(/\D/g, ''))} placeholder="100" className={`${campoCls} tnum`} />
 				</Campo>
-				<Campo rotulo="Chamadas por segundo (CPS)" erro={err('cps')}>
+				<Campo rotulo="Chamadas por segundo (CPS)" erro={err('cps')} ajuda="De 1 a 500 (o limite do Asterisk do MotorCX). Padrão: 10.">
 					<input value={cps} inputMode="numeric" onChange={x => setCps(x.target.value.replace(/\D/g, ''))} className={`${campoCls} tnum`} />
 				</Campo>
 			</div>

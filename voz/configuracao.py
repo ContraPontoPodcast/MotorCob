@@ -6,7 +6,10 @@ Lê voz_troncos, voz_rotas, voz_transferencias, voz_config, voz_contrato (concor
 voz_divisao_concorrencia (o limite de cada empresa) pelo acesso que a VM usa (voz/acesso.py: chave do servidor no
 piloto, papel motorcx_voz antes do modo real; só em memória).
 Valida tudo com voz/banco.py ANTES de gravar: configuração quebrada no banco não derruba o Asterisk que está no
-ar. Só grava se mudou (hash) e então sai com código 10, para o serviço da VM regerar o pjsip/dialplan dentro do
+ar. Um tronco, rota ou transferência inválido fica de fora sozinho (log com id e motivo, sem segredo; aviso em
+fornecedor_saude, item configuracao_invalida, que some quando a linha volta a valer) e o resto é publicado: uma linha
+de uma empresa não para as outras. Formato de cima errado (e voz_config inválido) mantém a configuração anterior, como
+antes. Só grava se mudou (hash) e então sai com código 10, para o serviço da VM regerar o pjsip/dialplan dentro do
 contêiner e recarregar (infra/asterisk/vm/motorcx-voz-config).
 Nenhuma senha passa por aqui: o banco só tem a referência do segredo.
 """
@@ -26,7 +29,9 @@ TABELAS = ("voz_troncos", "voz_rotas", "voz_transferencias", "voz_config")
 MUDOU = 10
 
 
-def buscar(sb, provedores_sip: list | None = None) -> dict:
+def buscar(sb, provedores_sip: list | None = None, ignoradas: list | None = None) -> dict:
+    """Configuração de voz do banco, validada. Linhas inválidas de troncos, rotas e transferências ficam de fora e vão
+    para `ignoradas` (lista de banco.LinhaIgnorada), se dada. Formato de cima errado: DadosInvalidos."""
     dados = {t: sb.selecionar(t, ordem="empresa_id.asc") or [] for t in TABELAS}
     try:
         contrato = sb.selecionar("voz_contrato", limite=1) or []
@@ -44,8 +49,61 @@ def buscar(sb, provedores_sip: list | None = None) -> dict:
     for c in dados["voz_config"]:
         c["limite_simultaneas"] = limite.get(int(c[B.COLUNAS["voz_config"]["empresa_id"]]))
     dados["provedores_sip"] = provedores_sip or []
-    B.carregar(dados)            # valida (erro alto, nada é gravado)
+    dados, fora = B.separar_validos(dados)     # linha inválida fica de fora sozinha
+    B.carregar(dados)            # valida o resto (erro alto, nada é gravado)
+    if ignoradas is not None:
+        ignoradas.extend(fora)
     return dados
+
+
+def _arquivo_avisos(saida: Path) -> Path:
+    return saida.with_name(saida.name + ".ignoradas.json")
+
+
+def avisar_ignoradas(sb, ignoradas: list, saida: Path) -> None:
+    """Log de cada linha que ficou de fora (id e motivo, sem segredo) e aviso em fornecedor_saude só quando muda:
+    linha nova com erro -> ok=false; linha que voltou a valer (ou foi apagada) -> ok=true. A linha do aviso é por
+    empresa e referência (tronco.12, rota.5, transferencia.3), sem tronco_id: o aviso não depende do tronco existir.
+    O estado fica ao lado do voz.json. Falha ao avisar nunca segura a publicação: o que falhou tenta de novo na
+    próxima rodada."""
+    for x in ignoradas:
+        print(f"AVISO: {x.texto()}. Os outros seguem.", file=sys.stderr)
+    arq = _arquivo_avisos(saida)
+    try:
+        antes = {(int(e), str(ref)) for e, ref in json.loads(arq.read_text(encoding="utf-8"))}
+    except (OSError, ValueError, TypeError):
+        antes = set()
+    agora = {(x.empresa_id, x.referencia): x for x in ignoradas if x.empresa_id is not None}
+    estado = set(antes)
+    mudou = False
+    for chave in sorted(set(agora) - antes) + sorted(antes - set(agora)):
+        e, ref = chave
+        x = agora.get(chave)
+        linha = {"empresa_id": e, "tronco_id": None, "item": B.ITEM_SAUDE, "referencia": ref, "ok": x is None,
+                 "contagem": 1 if x else 0,
+                 "detalhe": (f"Não subiu: {x.motivo}. Os outros continuam ligando." if x else "Voltou a valer.")[:200]}
+        try:
+            _gravar_saude(sb, linha)
+        except Exception as ex:   # noqa: BLE001 — aviso é melhor-esforço; tenta de novo na próxima rodada
+            print(f"AVISO: fornecedor_saude {ref} (empresa {e}) não gravado ({ex.__class__.__name__})", file=sys.stderr)
+            continue
+        (estado.add if x else estado.discard)(chave)
+        mudou = True
+    if mudou:
+        try:
+            arq.parent.mkdir(parents=True, exist_ok=True)
+            arq.write_text(json.dumps(sorted([e, ref] for e, ref in estado)), encoding="utf-8")
+        except OSError as ex:
+            print(f"AVISO: estado dos avisos não gravado ({ex.__class__.__name__})", file=sys.stderr)
+
+
+def _gravar_saude(sb, linha: dict) -> None:
+    try:
+        sb.inserir("fornecedor_saude", [linha])     # acesso próprio: upsert por voz_vm.gravar_saude
+    except Exception:   # noqa: BLE001 — chave do servidor: o insert simples bate no índice único; troca a linha
+        sb.apagar("fornecedor_saude", {"empresa_id": f"eq.{linha['empresa_id']}", "item": f"eq.{linha['item']}",
+                                       "referencia": f"eq.{linha['referencia']}"})
+        sb.inserir("fornecedor_saude", [linha])
 
 
 def gravar_se_mudou(dados: dict, saida: Path) -> bool:
@@ -78,14 +136,18 @@ def main(argv=None, sb=None) -> int:
     a = ap.parse_args(argv)
     prov = json.loads(Path(a.provedores_sip).read_text(encoding="utf-8")) if a.provedores_sip and \
         Path(a.provedores_sip).exists() else []
+    sb = sb or supabase_do_ambiente()
+    ignoradas: list = []
     try:
-        dados = buscar(sb or supabase_do_ambiente(), prov)
+        dados = buscar(sb, prov, ignoradas)
     except (B.DadosInvalidos, TypeError, AttributeError, KeyError) as ex:   # formato inesperado também não derruba
         print(f"ERRO: configuração de voz inválida no banco (mantida a anterior): {ex.__class__.__name__}: {ex}",
               file=sys.stderr)
         return 2
     mudou = gravar_se_mudou(dados, Path(a.saida))
-    print(json.dumps({"mudou": mudou, **{t: len(dados[t]) for t in TABELAS}}, ensure_ascii=False))
+    avisar_ignoradas(sb, ignoradas, Path(a.saida))
+    print(json.dumps({"mudou": mudou, **{t: len(dados[t]) for t in TABELAS},
+                      "ignoradas": [x.referencia for x in ignoradas]}, ensure_ascii=False))
     return MUDOU if mudou else 0
 
 

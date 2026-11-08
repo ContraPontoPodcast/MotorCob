@@ -126,11 +126,34 @@ class TestConfig(unittest.TestCase):
     def test_padrao_recomendado(self):
         cfg = carregar_regua()["discagem"]
         self.assertTrue(cfg["inexistente"]["ativo"] and cfg["nao_ligar"]["ativo"])
-        self.assertFalse(cfg["horarios"]["ativo"])          # desligado até o jurídico validar a prévia
+        self.assertTrue(cfg["horarios"]["ativo"])           # ligado com a prévia (decisão do dono, 08/11/2026)
         self.assertFalse(cfg["descanso_nao_atende"]["ativo"] or cfg["descanso_recusa"]["ativo"]
-                         or cfg["promessa_suspende"]["ativo"] or cfg["chamadas_curtas"]["corte_ativo"])
-        self.assertEqual((cfg["descanso_nao_atende"]["n"], cfg["chamadas_curtas"]["aviso"]), (6, 0.75))
+                         or cfg["promessa_suspende"]["ativo"])
+        # Despacho Anatel 100/2026 (vigência 12/11/2026): corte ligado em 80%, aviso em 70%
+        cc = cfg["chamadas_curtas"]
+        self.assertEqual((cc["corte_ativo"], cc["corte"], cc["aviso"], cc["segundos"]), (True, 0.8, 0.7, 6))
+        self.assertEqual(cfg["descanso_nao_atende"]["n"], 6)
+        for k in ("horarios", "chamadas_curtas"):          # regua.json e o padrão do código dizem o mesmo
+            self.assertEqual({kk: v for kk, v in cfg[k].items() if kk != "falha_conta"},
+                             {kk: v for kk, v in DG.PADRAO[k].items() if kk != "falha_conta"})
         self.assertEqual(DG.config(carregar_regua().dados)["tentativas_cliente_dia"], 3)   # = spins_discador_dia
+
+    def test_padrao_novo_so_para_quem_nao_salvou(self):
+        # a carteira que salvou a escolha mantém; a que não salvou (chave ausente) fica com o padrão novo
+        base = carregar_regua()["discagem"]
+        sem, _ = DG.normalizar({}, base)
+        self.assertTrue(sem["chamadas_curtas"]["corte_ativo"] and sem["horarios"]["ativo"])
+        outra, _ = DG.normalizar({"chamadas_curtas": {"max_por_numero_dia": 500}}, base)
+        self.assertEqual((outra["chamadas_curtas"]["corte_ativo"], outra["chamadas_curtas"]["aviso"]), (True, 0.7))
+        salvou, _ = DG.normalizar({"chamadas_curtas": {"corte_ativo": False, "aviso": 0.75},
+                                   "horarios": {"ativo": False}}, base)
+        self.assertEqual((salvou["chamadas_curtas"]["corte_ativo"], salvou["chamadas_curtas"]["aviso"]), (False, 0.75))
+        self.assertFalse(salvou["horarios"]["ativo"])
+        com_tabela, _ = DG.normalizar({"horarios": {"tabela": {"hora": "local", "ufs": {}, "ddds": {}}}}, base)
+        self.assertTrue(com_tabela["horarios"]["ativo"])
+        # falha técnica conta como curta: travado em sim, mesmo com false salvo
+        trav, _ = DG.normalizar({"chamadas_curtas": {"falha_conta": False}}, base)
+        self.assertTrue(trav["chamadas_curtas"]["falha_conta"])
 
     def test_credor_tolerante_e_regua_json_falha_alto(self):
         cfg, av = DG.normalizar({"tentativas_numero_dia": 99, "spins_discador_dia": 5, "xpto": 1,
@@ -283,8 +306,9 @@ class TestCurtas(unittest.TestCase):
         cfg2, _ = DG.normalizar({"chamadas_curtas": {"abandono_conta": False}})
         self.assertEqual(DG.medir(evs, SAB, cfg2)[0]["curtas"], 2)
 
-    def test_previsao_alerta_e_corte_desligado_por_padrao(self):
-        cfg, _ = DG.normalizar({"chamadas_curtas": {"max_por_numero_dia": 10, "max_total_dia": 20}})
+    def test_previsao_alerta_e_corte_desligado_pela_carteira(self):
+        cfg, _ = DG.normalizar({"chamadas_curtas": {"max_por_numero_dia": 10, "max_total_dia": 20,
+                                                    "corte_ativo": False}})
         fila = [_linha(f"C{i:02d}", f"119888800{i:02d}") for i in range(12)]
         fila += [_linha("C01", "11977770001", ordem=2)]
         evs = [_ev("C00", "11988880000", "atendida_sem_cpc", SEX, n=i, duracao_s=60) for i in range(10)]
@@ -292,12 +316,21 @@ class TestCurtas(unittest.TestCase):
         fila2, res, al = DG.curtas(fila, evs, SAB, cfg, lambda l: (2, 3))
         self.assertEqual(res["previsao"]["chamadas"], 2 * 12 + 1)                    # C01: 2 + 1 (teto do cliente)
         self.assertLess(DG.ModeloCurtas(evs, SAB, cfg).p("11988880000"), 0.5)       # histórico próprio
-        self.assertEqual(fila2, fila)                                                # padrão: nada sai da lista
+        self.assertEqual(fila2, fila)                                       # corte desligado: nada sai da lista
         self.assertTrue(al and al[0].startswith("CHAMADAS CURTAS"))
+        self.assertIn("bloqueia todas as linhas da empresa por 15 dias", al[0])
+        self.assertIn("1.000 ligações", al[0])
+        self.assertIn("10.000", al[0])
+        # padrão (sem a chave): o corte é ligado e tira clientes da voz pelo fim da prioridade
+        cfg_p, _ = DG.normalizar({"chamadas_curtas": {"max_por_numero_dia": 10, "max_total_dia": 20}})
+        fila_p, res_p, al_p = DG.curtas(fila, evs, SAB, cfg_p, lambda l: (2, 3))
+        self.assertTrue(res_p["corte_ativo"] and res_p["cortados"])
+        self.assertLess(len(fila_p), len(fila))
+        self.assertIn("Corte ligado", al_p[0])
         self.assertIn("ligar o corte pelo fim da fila", al[0])
         self.assertIn("pelo menos 3 linha(s)", al[0])
         # abaixo do volume de uma linha: sem alerta (sem ruído em lista pequena)
-        cfg3, _ = DG.normalizar({"chamadas_curtas": {"max_por_numero_dia": 900}})
+        cfg3, _ = DG.normalizar({"chamadas_curtas": {"max_por_numero_dia": 900, "corte_ativo": False}})
         self.assertEqual(DG.curtas(fila, evs, SAB, cfg3, lambda l: (2, 3))[2], [])
 
     def test_corte_ligado_pela_prioridade(self):
@@ -324,7 +357,7 @@ def _rotina(tmp, nome="a", **kw):
 
 
 DESLIGADO = {"horarios": {"ativo": False}, "chamadas_curtas": {"ativo": False}}
-LIGADO = {"horarios": {"ativo": True}}   # horários por UF/DDD vêm desligados por padrão
+LIGADO = {"horarios": {"ativo": True}}   # horários por UF/DDD vêm ligados por padrão (explícito aqui)
 
 
 class TestRotina(unittest.TestCase):

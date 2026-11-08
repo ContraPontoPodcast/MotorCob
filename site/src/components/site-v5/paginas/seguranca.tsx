@@ -41,7 +41,7 @@ export function PaginaSeguranca() {
 			<section className="cena branco" aria-labelledby="h-limites">
 				<div className="texto centro">
 					<h2 className="h2 rv" id="h-limites">O que é seu continua seu.</h2>
-					<p className="lead rv" style={i(1)}>O horário por UF é uma referência, desligada por padrão. Chamadas curtas: o MotorCX monitora e alerta. <b>Cumprir a regra continua sendo da sua operação.</b></p>
+					<p className="lead rv" style={i(1)}>O horário por UF vem ligado com uma tabela de referência (confirme com o seu jurídico). Chamadas curtas: o MotorCX monitora, alerta e corta a voz em 80% por padrão (regra da Anatel em vigor a partir de 12/11/2026). <b>Cumprir a regra continua sendo da sua operação.</b></p>
 				</div>
 			</section>
 			<section className="preto escuro fim" aria-labelledby="h-fim">
