@@ -5,6 +5,7 @@ import { supabase, moneyBR, dateBR, today, friendlyError, type Row } from '@/lib
 import { erroDaFuncao } from '@/lib/funcoes';
 import { SEGMENTOS, formatCNPJ, validarCNPJ, slugEmpresa, mesExtenso, dataLocal } from '@/lib/empresa-helpers';
 import { FRENTES, type FrenteId } from '@/lib/frentes';
+import { linhasModulos, MODULOS_VAZIO, MODULOS_VOZ, nomesModulos, type ModulosState } from '@/lib/contratacao-modulos';
 import { esquecerAreasLiberadas } from '@/hooks/use-areas-liberadas';
 import { Chave } from '@/components/workspace/console/chave';
 import { useConsolePerms } from '@/components/workspace/console/console-perms';
@@ -19,7 +20,6 @@ type Faixa = { ate: string; preco: string };
 type PrecoEdit = { modelo: Modelo; preco: string; minimo: string; faixas: Faixa[]; motivo: string };
 type Periodicidade = 'mensal' | 'semanal' | 'quinzenal' | 'outro';
 type ModeloPag = 'pos' | 'pre';
-type ModulosState = { orquestracao: boolean; jornada: boolean; mensageria: boolean; api: boolean; enriquecimento: boolean };
 
 const MODELO_LABEL: Record<Modelo, string> = {
   flat: 'Preço único',
@@ -244,7 +244,7 @@ export function ContratacaoEmpresa({
   const [frentes, setFrentes] = useState<FrenteId[]>(['motorcob']);
 
   // Módulos — nada vem ligado sozinho
-  const [modulos, setModulos] = useState<ModulosState>({ orquestracao: false, jornada: false, mensageria: false, api: false, enriquecimento: false });
+  const [modulos, setModulos] = useState<ModulosState>(MODULOS_VAZIO);
   const [canais, setCanais] = useState<string[]>([]);
 
   // Preços
@@ -342,6 +342,8 @@ export function ContratacaoEmpresa({
           mensageria: !!moMap.mensageria,
           api: !!moMap.api,
           enriquecimento: !!moMap.enriquecimento,
+          agente_voz: !!moMap.agente_voz,
+          speech_analytics: !!moMap.speech_analytics,
         });
         setCanais(canaisAtivos);
         setPrecosEmpresa((pr.data ?? []) as Row[]);
@@ -443,14 +445,8 @@ export function ContratacaoEmpresa({
     // 1. frentes
     const { error: eFr } = await supabase.rpc('salvar_frentes', { empresa: empresaSalvaId, frentes });
     if (eFr) throw new Error(`Falha ao salvar frentes: ${eFr.message}`);
-    // 2. módulos (orquestracao, jornada, mensageria, api, enriquecimento)
-    const modRows: Record<string, unknown>[] = [
-      { empresa_id: empresaSalvaId, modulo: 'orquestracao', ativo: !!modulos.orquestracao, canais: [] },
-      { empresa_id: empresaSalvaId, modulo: 'jornada', ativo: !!modulos.jornada, canais: [] },
-      { empresa_id: empresaSalvaId, modulo: 'mensageria', ativo: !!modulos.mensageria, canais },
-      { empresa_id: empresaSalvaId, modulo: 'api', ativo: !!modulos.api, canais: [] },
-      { empresa_id: empresaSalvaId, modulo: 'enriquecimento', ativo: !!modulos.enriquecimento, canais: [] },
-    ];
+    // 2. módulos (orquestracao, jornada, mensageria, api, enriquecimento, agente_voz, speech_analytics)
+    const modRows = linhasModulos(empresaSalvaId, modulos, canais);
     const { error: eMo } = await supabase.from('empresa_modulos').upsert(modRows, { onConflict: 'empresa_id,modulo' });
     if (eMo) throw new Error(`Falha ao salvar módulos: ${eMo.message}`);
     // 3. ciclo + cobrança num único upsert em ciclo_empresa
@@ -580,13 +576,7 @@ export function ContratacaoEmpresa({
     try {
       const { error: eFr } = await supabase.rpc('salvar_frentes', { empresa: empresaId, frentes });
       if (eFr) throw new Error(`Falha ao salvar frentes: ${eFr.message}`);
-      const modRows: Record<string, unknown>[] = [
-        { empresa_id: empresaId, modulo: 'orquestracao', ativo: !!modulos.orquestracao, canais: [] },
-        { empresa_id: empresaId, modulo: 'jornada', ativo: !!modulos.jornada, canais: [] },
-        { empresa_id: empresaId, modulo: 'mensageria', ativo: !!modulos.mensageria, canais },
-        { empresa_id: empresaId, modulo: 'api', ativo: !!modulos.api, canais: [] },
-        { empresa_id: empresaId, modulo: 'enriquecimento', ativo: !!modulos.enriquecimento, canais: [] },
-      ];
+      const modRows = linhasModulos(empresaId, modulos, canais);
       const { error: eMo } = await supabase.from('empresa_modulos').upsert(modRows, { onConflict: 'empresa_id,modulo' });
       if (eMo) throw new Error(`Falha ao salvar módulos: ${eMo.message}`);
       esquecerAreasLiberadas(empresaId);
@@ -675,13 +665,7 @@ export function ContratacaoEmpresa({
   if (!isNova) {
     const podeMotorCiclo = can('editar_contratacao');
     const podePrecos = can('editar_precos');
-    const modsList = [
-      modulos.orquestracao && 'Orquestração',
-      modulos.jornada && 'Jornada',
-      modulos.mensageria && 'Mensageria',
-      modulos.api && 'API',
-      modulos.enriquecimento && 'Enriquecimento',
-    ].filter(Boolean) as string[];
+    const modsList = nomesModulos(modulos);
     const cicloLabel = periodicidade === 'mensal' ? `Mensal · dia ${diaCorte}` : periodicidade === 'semanal' ? 'Semanal' : periodicidade === 'quinzenal' ? 'Quinzenal' : `A cada ${cicloDias} dias`;
     const formasLabel = formas.map(f => FORMAS_PAG.find(x => x.id === f)?.curto ?? f).join(', ');
     const precosAlterados = Object.keys(alterados).length > 0;
@@ -732,6 +716,7 @@ export function ContratacaoEmpresa({
                 )}
                 <SwitchLinha label="API" desc="Cargas e Lista do dia pelo seu sistema" checked={modulos.api} on={v => setModulos(p => ({ ...p, api: v }))} />
                 <SwitchLinha label="Enriquecimento" desc="Contatos novos para quem está sem canal" checked={modulos.enriquecimento} on={v => setModulos(p => ({ ...p, enriquecimento: v }))} />
+                {MODULOS_VOZ.map(m => <SwitchLinha key={m.id} label={m.nome} desc={m.desc} checked={modulos[m.id]} on={v => setModulos(p => ({ ...p, [m.id]: v }))} />)}
               </div>
             </div>
           )}
@@ -947,6 +932,7 @@ export function ContratacaoEmpresa({
             )}
             <SwitchLinha label="API" desc="Cargas e Lista do dia pelo seu sistema" checked={modulos.api} on={v => setModulos(p => ({ ...p, api: v }))} />
             <SwitchLinha label="Enriquecimento" desc="Contatos novos para quem está sem canal" checked={modulos.enriquecimento} on={v => setModulos(p => ({ ...p, enriquecimento: v }))} />
+            {MODULOS_VOZ.map(m => <SwitchLinha key={m.id} label={m.nome} desc={m.desc} checked={modulos[m.id]} on={v => setModulos(p => ({ ...p, [m.id]: v }))} />)}
           </div>
         </Secao>}
 
@@ -1295,12 +1281,7 @@ function ResumoCard({ frentes, modulos, canais, itensContratados, itensSemPreco,
 }) {
   const bits: string[] = [];
   if (frentes.length) bits.push(frentes.map(f => FRENTES[f].nome).join(' + '));
-  const mods: string[] = [];
-  if (modulos.orquestracao) mods.push('Orquestração');
-  if (modulos.jornada) mods.push('Jornada');
-  if (modulos.mensageria) mods.push('Mensageria');
-  if (modulos.api) mods.push('API');
-  if (modulos.enriquecimento) mods.push('Enriquecimento');
+  const mods = nomesModulos(modulos);
   if (mods.length) bits.push(mods.join(', '));
   if (modulos.mensageria && canais.length) bits.push(canais.join(', ').toUpperCase());
   bits.push(`${itensContratados.length} itens de cobrança`);

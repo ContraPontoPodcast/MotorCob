@@ -48,7 +48,7 @@ function AtalhosInicio({ areas }: { areas: AreaInfo[] | null }) {
 		{ area: 'jornada', nome: 'Jornada do Cliente', desc: 'Boas-vindas, ativação e retenção', to: '/jornada', contratada: areasLib.jornada },
 		{ area: 'mensageria', nome: 'Mensageria', desc: 'Campanhas, lotes e respostas', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
 		{ area: 'voz', nome: 'Agente Voz/CX', desc: 'Agente de voz, discagem e ligações', to: '/voz', contratada: areasLib.cobranca },
-		{ area: 'speech', nome: 'Speech Analytics', desc: 'O que as ligações dizem', to: '/speech-analytics', contratada: areasLib.cobranca },
+		{ area: 'speech', nome: 'Speech Analytics', desc: 'O que as ligações dizem', to: '/speech-analytics', contratada: areasLib.speech },
 		{ area: 'relatorios', nome: 'Relatórios', desc: 'Os números de todas as áreas', to: '/relatorios', contratada: true },
 		{ area: 'empresa', nome: 'Empresa', desc: 'Pessoas, faturas e integrações', to: '/empresa', contratada: true },
 		{ area: 'suporte', nome: 'Suporte', desc: 'Seus chamados', to: '/suporte', contratada: true },

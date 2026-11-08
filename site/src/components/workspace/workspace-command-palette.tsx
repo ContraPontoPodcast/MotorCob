@@ -7,7 +7,7 @@ import { ROTA_AGENTE, ROTA_DISCAGEM, ROTA_ENTRADA_GRAVACOES, ROTA_GRAVACOES, ROT
 import { useAreasLiberadas, type AreasLiberadas } from '@/hooks/use-areas-liberadas';
 
 /** area: a tela é de uma área; sem a área contratada o atalho não aparece. */
-export type Atalho = { id: string; label: string; to: string; perm?: string; keywords: string; area?: 'cobranca' | 'jornada' | 'mensageria' };
+export type Atalho = { id: string; label: string; to: string; perm?: string; keywords: string; area?: 'cobranca' | 'jornada' | 'mensageria' | 'speech' };
 
 /** Lista fixa de atalhos do Workspace, usada pela busca da página inicial e pelo ⌘K. */
 export const ATALHOS: Atalho[] = [
@@ -28,15 +28,15 @@ export const ATALHOS: Atalho[] = [
 	{ id: 'carteiras', label: 'Carteiras', to: '/credores', keywords: 'carteira carteiras credor credores nova carteira configurações da carteira colunas ocorrências', area: 'cobranca' },
 	{ id: 'cargas', label: 'Cargas', to: '/envios', perm: PERM.enviarArquivos, keywords: 'carga cargas enviar arquivo upload base mailing planilha csv xlsx ocorrência acordo baixa pagamento', area: 'cobranca' },
 	{ id: 'orquestracao', label: 'Orquestração', to: '/orquestracao', keywords: 'orquestração régua réguas esteira estratégia segmentos estágios playbook reenquadrar', area: 'cobranca' },
-	// Agente Voz/CX e Speech Analytics (áreas próprias; vêm com a Cobrança).
+	// Agente Voz/CX (vem com a Cobrança) e Speech Analytics (módulo speech_analytics; as Gravações seguem com a Cobrança).
 	{ id: 'discagem', label: 'Regras de discagem', to: ROTA_DISCAGEM, keywords: 'discagem discador regras de discagem renitência rediscagem rediscar tentativas spins horário de ligar resubmit reciclagem chamadas curtas ligação voz', area: 'cobranca' },
 	{ id: 'agente-voz-cx', label: 'Agente Voz/CX', to: ROTA_VOZ, keywords: 'agente voz cx voz ligações ligar discador robô área', area: 'cobranca' },
 	{ id: 'agente-virtual', label: 'Agente de voz', to: ROTA_AGENTE, keywords: 'agente virtual agente de voz voz ia robô ligação fluxo fluxos editor pedido em texto testar conversa personas roteiro', area: 'cobranca' },
 	{ id: 'ligacoes-voz', label: 'Ligações do agente', to: ROTA_LIGACOES, keywords: 'ligações lotes do agente lote de voz reenviar reciclar mailing pausar em curso ao vivo', area: 'cobranca' },
 	{ id: 'telefonia', label: 'Telefonia', to: ROTA_TELEFONIA, keywords: 'telefonia tronco sip operadora rota bina transferência conexão ip', area: 'cobranca' },
-	{ id: 'speech', label: 'Speech Analytics', to: ROTA_SPEECH, keywords: 'speech analytics insights de voz qualidade operadores alertas recomendações curadoria transcrição', area: 'cobranca' },
+	{ id: 'speech', label: 'Speech Analytics', to: ROTA_SPEECH, keywords: 'speech analytics insights de voz qualidade operadores alertas recomendações curadoria transcrição', area: 'speech' },
 	{ id: 'gravacoes', label: 'Gravações', to: ROTA_GRAVACOES, perm: 'ouvir_gravacoes', keywords: 'gravações gravação ouvir áudio ligação', area: 'cobranca' },
-	{ id: 'entrada-gravacoes', label: 'Entrada de gravações', to: ROTA_ENTRADA_GRAVACOES, keywords: 'entrada de gravações gravações do discador enviar gravações importar sftp quarentena', area: 'cobranca' },
+	{ id: 'entrada-gravacoes', label: 'Entrada de gravações', to: ROTA_ENTRADA_GRAVACOES, keywords: 'entrada de gravações gravações do discador enviar gravações importar sftp quarentena', area: 'speech' },
 	{ id: 'canais', label: 'Canais', to: '/canais', perm: PERM.editarCanais, keywords: 'canais canal janela horário custo capacidade sábado quem envia lista para baixar fornecedor', area: 'cobranca' },
 	{ id: 'frases', label: 'Frases', to: '/canais?secao=frases', perm: PERM.editarCanais, keywords: 'frases frase mensagem mensagens texto sms playbook de frases modelo', area: 'cobranca' },
 ];
@@ -47,7 +47,7 @@ function semAcento(t: string): string {
 }
 
 /** Filtra os atalhos pela permissão do usuário, pelas áreas contratadas e pelo texto digitado. */
-export function filtrarAtalhos(atalhos: Atalho[], q: string, permissoes: string[], areas?: Pick<AreasLiberadas, 'cobranca' | 'jornada' | 'mensageria'>): Atalho[] {
+export function filtrarAtalhos(atalhos: Atalho[], q: string, permissoes: string[], areas?: Pick<AreasLiberadas, 'cobranca' | 'jornada' | 'mensageria'> & Partial<Pick<AreasLiberadas, 'speech'>>): Atalho[] {
 	const query = semAcento(q.trim());
 	return atalhos.filter(a => {
 		if (a.perm && !permissoes.includes(a.perm)) return false;
@@ -66,7 +66,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 	const [sel, setSel] = useState(0);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	const lista = useMemo(() => filtrarAtalhos(ATALHOS, q, permissoes, areasLib), [q, permissoes, areasLib.cobranca, areasLib.jornada, areasLib.mensageria]);
+	const lista = useMemo(() => filtrarAtalhos(ATALHOS, q, permissoes, areasLib), [q, permissoes, areasLib.cobranca, areasLib.jornada, areasLib.mensageria, areasLib.speech]);
 
 	useEffect(() => { if (open) { setQ(''); setSel(0); setTimeout(() => inputRef.current?.focus(), 0); } }, [open]);
 	useEffect(() => { setSel(0); }, [q]);
