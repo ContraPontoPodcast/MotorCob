@@ -76,7 +76,7 @@ export function AbCanais({ credor, mapeamentos, canalCodigos, canEdit, onSaved }
 		<div className="space-y-5">
 			<div className="rounded-xl border border-[#d9e5e8] bg-[#eaf2f3] p-5 text-sm text-[#315d68]">
 				<div className="flex flex-wrap items-start justify-between gap-4">
-					<p className="max-w-2xl">Defina as regras de cada canal antes de enviar os arquivos dos fornecedores. Quando os arquivos chegarem, o MotorCX já aplica estas regras.</p>
+					<p className="max-w-2xl">Defina as regras de cada canal antes de enviar os arquivos dos fornecedores. Quando os arquivos chegarem, o MotorCX já aplica estas regras. Também ficam na tela de cada canal, em <Link to="/canais" className="font-semibold underline">Canais</Link> › (canal) › Retorno do canal.</p>
 					{canEdit && <button onClick={() => setCopyOpen(true)} className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-[#0F4C5C] px-4 text-xs font-semibold text-[#0F4C5C] hover:bg-[#eaf2f3]"><Copy size={15} /> Copiar de outro credor</button>}
 				</div>
 			</div>
@@ -154,7 +154,7 @@ function CartaoCanal({ tipo, canal, label, mapeamento, codigos, canEdit, onSaved
 
 // --- a) Retornos esperados e regras ---
 
-function RegrasCanal({ canal, regras, canEdit, onChange, onRestaurar }: {
+export function RegrasCanal({ canal, regras, canEdit, onChange, onRestaurar }: {
 	canal: string; regras: RegrasRetorno | null; canEdit: boolean; onChange: (canal: string, patch: Partial<RegrasRetorno>) => void; onRestaurar: () => void;
 }) {
 	const padrao = regrasPadrao(canal);
@@ -300,7 +300,7 @@ function CampoEditavel({ label, mudou, sugestao, children }: {
 
 // --- b) Mapeamento de colunas ---
 
-function MapeamentoColunas({ mapeamento, canEdit, onSaved }: {
+export function MapeamentoColunas({ mapeamento, canEdit, onSaved }: {
 	mapeamento: MapeamentoCanal; canEdit: boolean; onSaved: () => void;
 }) {
 	const [editing, setEditing] = useState(!mapeamento?.confirmado);
@@ -394,7 +394,7 @@ function MapeamentoColunas({ mapeamento, canEdit, onSaved }: {
 
 // --- c) Status do fornecedor ---
 
-function TabelaCodigos({ canal, codigos, canEdit, onSaved }: {
+export function TabelaCodigos({ canal, codigos, canEdit, onSaved }: {
 	canal: string; codigos: CanalCodigo[]; canEdit: boolean; onSaved: () => void;
 }) {
 	const [busyId, setBusyId] = useState('');

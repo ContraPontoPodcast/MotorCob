@@ -2918,5 +2918,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 84: estado dos canais (testar_estado_canais.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 86 · Canais: a tela do canal (Pausar/Retomar com "Pausado desde" guardado; carteira grava com editar_canais)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_canal_tela.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 86: tela do canal (testar_canal_tela.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

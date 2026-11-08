@@ -1,7 +1,7 @@
 // Cobrança › Configurações › Canais: visão geral (SPEC Canais §3.2; protótipo aprovado em 08/11, PR 5).
 // Nenhum campo nesta tela: um cartão por canal com estado, quem executa, última atividade, problema + o que fazer, a
-// ação principal e "Configurar". O estado vem da RPC estado_canais (SQL 84). "Configurar" abre a configuração de hoje
-// do canal (/canais/:canal) até a tela nova do canal (PR 6). Só tokens do tema: vale no claro e no escuro.
+// ação principal e "Configurar". O estado vem da RPC estado_canais (SQL 84). "Configurar" abre a tela do canal
+// (/canais/:canal, PRs 6 e 7). O Importar playbook existe só aqui, no topo. Só tokens do tema: claro e escuro.
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Pause, RefreshCw, Upload } from 'lucide-react';
@@ -17,7 +17,7 @@ import {
 	type CanalEstado, type EstadoCanais, type EstadoCanal, type Trecho,
 } from '@/lib/estado-canais';
 
-function PilulaEstado({ estado, children }: { estado: EstadoCanal; children?: ReactNode }) {
+export function PilulaEstado({ estado, children }: { estado: EstadoCanal; children?: ReactNode }) {
 	const e = ESTADOS[estado];
 	const marca = estado === 'pausado'
 		? <Pause size={10} aria-hidden strokeWidth={3} />
