@@ -32,6 +32,8 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/implantacao': ctx => (ctx.equipe ? { to: '/console/implantacao', rotulo: 'Console › Implantação' } : INICIO),
 	// A equipe entra na empresa pelo Console › Empresas; para o cliente, Empresa é uma área do menu.
 	'/empresa': ctx => (ctx.equipe ? { to: '/console', rotulo: 'Console › Empresas' } : null),
+	// Cobrança › Configurações › Canais: a configuração de um canal volta para a visão geral.
+	'/canais/:canal': { to: '/canais', rotulo: 'Canais' },
 	// Agente Voz/CX › Agente de voz: fluxo (editor), testes, desempenho, rascunho gerado e roteiro antigo voltam à lista
 	// de fluxos. Visão geral, Agente de voz, Discagem, Ligações e Telefonia são abas da área (sem voltar).
 	'/voz/agente/editor/:versao': AGENTE_DE_VOZ,

@@ -2911,5 +2911,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 83: destinos, gravação e identidade (testar_voz_seguranca.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 84 · Estado dos canais: estado_canais(empresa) com os sinais que existem hoje, limiares aprovados, só agregados e
+# permissões (editar_canais da própria empresa ou equipe)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_estado_canais.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 84: estado dos canais (testar_estado_canais.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
