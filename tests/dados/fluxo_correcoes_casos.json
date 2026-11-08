@@ -1,0 +1,6445 @@
+{
+ "_sobre": "Correções de um clique do editor do fluxo (PR4 do redesenho). Gerado por site/scripts/casos-correcoes.mjs a partir de site/src/lib/fluxo.ts › correcaoDe. tests/test_fluxo_correcoes.py confere com voz/fluxo_validador.py que \"depois\" não tem a pendência e não tem pendência nova; site/fluxo/fluxo.test.ts confere que a correção ainda dá este \"depois\".",
+ "conectores": [
+  {
+   "id": 1,
+   "nome": "Buscar ofertas",
+   "finalidade": "buscar_ofertas",
+   "situacao": "ativo"
+  },
+  {
+   "id": 2,
+   "nome": "Validar cadastro",
+   "finalidade": "validar_cadastro",
+   "situacao": "ativo"
+  },
+  {
+   "id": 3,
+   "nome": "Registrar acordo",
+   "finalidade": "registrar_acordo",
+   "situacao": "ativo"
+  },
+  {
+   "id": 4,
+   "nome": "Gerar boleto ou link",
+   "finalidade": "gerar_boleto",
+   "situacao": "rascunho"
+  }
+ ],
+ "casos": [
+  {
+   "nome": "abertura cita o credor",
+   "codigo": "valor_antes_identidade:N1",
+   "botao": "Tirar o credor da abertura",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, bom dia! Aqui é a Lia, da {{assessoria}}, em nome do {{credor}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, bom dia! Aqui é a Lia, da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "identidade cita o saldo antes de confirmar",
+   "codigo": "valor_antes_identidade:N2",
+   "botao": "Tirar o saldo desta fala",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Sobre o saldo de {{saldo}}: para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "agendar retorno sem saída, final de retorno solto (v5 das fixturas)",
+   "codigo": "sem_saida:N9",
+   "botao": "Ligar \"Agendou\" a Encerrar · retorno e \"Não agendou\" a Transferir · atendente",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": []
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "agendar retorno sem saída e sem final que sirva: cria Encerrar",
+   "codigo": "sem_saida:N9",
+   "botao": "Ligar \"Agendou\" a Encerrar · retorno agendado e \"Não agendou\" a Transferir · atendente",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N15",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N15",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno agendado",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "registrar sem a saída \"falhou\"",
+   "codigo": "saida_faltando:N7",
+   "botao": "Ligar \"Falhou\" a Transferir · atendente",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "abertura sem \"Não é a pessoa\"",
+   "codigo": "saida_faltando:N1",
+   "botao": "Ligar \"Não é a pessoa\" a Encerrar · recado neutro",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "saída para etapa que foi removida",
+   "codigo": "saida_inexistente:N6",
+   "botao": "Ligar \"Recusou\" a Encerrar · recusa",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N30",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N18",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N18",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recusa",
+      "params": {
+       "fala": "Tudo bem. Obrigada pela atenção. Até logo.",
+       "resultado": "recusa"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "terceiro vai para Transferir",
+   "codigo": "terceiro_sem_recado",
+   "botao": "Ligar \"Não é a pessoa\" ao recado neutro",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "etapa solta que não leva a nada usado",
+   "codigo": "inalcancavel:N20",
+   "botao": "Remover a etapa",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N20",
+      "tipo": "pergunta",
+      "modo": "arvore",
+      "params": {
+       "fala": "Posso continuar?",
+       "tentativas": 1,
+       "opcoes": [
+        {
+         "codigo": "sim",
+         "rotulo": "Sim"
+        }
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "sim",
+        "rotulo": "Sim",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "conversa livre sem \"Transferir para humano\"",
+   "codigo": "transferir_humano_desligado:N5",
+   "botao": "Ligar \"Transferir para humano\"",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N5",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N5",
+      "tipo": "generativa",
+      "modo": "generativo",
+      "params": {
+       "objetivo": "Fechar acordo com uma das ofertas recebidas, sem pressionar.",
+       "tom": [
+        "cordial"
+       ],
+       "max_turnos": 8,
+       "ferramentas": [
+        "apresentar_oferta",
+        "encerrar_chamada"
+       ],
+       "contrapropostas_max": 2
+      },
+      "saidas": [
+       {
+        "quando": "fechou_acordo",
+        "rotulo": "Fechou acordo",
+        "para": "N7",
+        "tipo": "devolve"
+       },
+       {
+        "quando": "sem_acordo",
+        "rotulo": "Sem acordo",
+        "para": "N6",
+        "tipo": "devolve"
+       }
+      ]
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N5",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N5",
+      "tipo": "generativa",
+      "modo": "generativo",
+      "params": {
+       "objetivo": "Fechar acordo com uma das ofertas recebidas, sem pressionar.",
+       "tom": [
+        "cordial"
+       ],
+       "max_turnos": 8,
+       "ferramentas": [
+        "apresentar_oferta",
+        "encerrar_chamada",
+        "transferir_humano"
+       ],
+       "contrapropostas_max": 2
+      },
+      "saidas": [
+       {
+        "quando": "fechou_acordo",
+        "rotulo": "Fechou acordo",
+        "para": "N7",
+        "tipo": "devolve"
+       },
+       {
+        "quando": "sem_acordo",
+        "rotulo": "Sem acordo",
+        "para": "N6",
+        "tipo": "devolve"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "nome": "identidade sem conector: o único \"Validar cadastro\" ativo",
+   "codigo": "identidade_sem_conferencia:N2",
+   "botao": "Usar \"Validar cadastro\"",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": null,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "registrar com o boleto do CRM em rascunho",
+   "codigo": "conector_inativo:N7",
+   "botao": "Usar o link do MotorCX por enquanto",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3,
+        4
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "depois": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  }
+ ],
+ "sem_botao": [
+  {
+   "nome": "intenção sem saída (cada intenção pede um destino)",
+   "codigo": "sem_saida:N3",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": []
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "oferta sem \"Aceitou\" (continua a conversa)",
+   "codigo": "saida_faltando:N6",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "oferta cita o valor antes da identidade (o tipo já é sensível)",
+   "codigo": "valor_antes_identidade:N6",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   }
+  },
+  {
+   "nome": "etapa solta que outra etapa solta usa",
+   "codigo": "inalcancavel:N20",
+   "antes": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N14",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N14",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "intencao",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Como fica melhor para você?",
+       "intencoes": [
+        "quero_negociar",
+        "sem_dinheiro"
+       ],
+       "confianca_min": 0.7,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "quero_negociar",
+        "rotulo": "Quer negociar",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "sem_dinheiro",
+        "rotulo": "Sem dinheiro agora",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_entendido",
+        "rotulo": "Não entendi",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "oferta",
+      "modo": "cognicao",
+      "params": {
+       "origem": "carteira",
+       "fala": "Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "registrar",
+      "modo": "sistema",
+      "params": {
+       "registra": "acordo_crm",
+       "conectores": [
+        3
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "registrado",
+        "rotulo": "Registrado",
+        "para": "N11",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "CRM falhou",
+        "para": "N13",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N11",
+      "tipo": "link",
+      "modo": "arvore",
+      "params": {
+       "canal": "whatsapp_sms",
+       "fala": "Acabei de mandar o link do acordo no seu WhatsApp."
+      },
+      "saidas": [
+       {
+        "quando": "enviado",
+        "rotulo": "Enviado",
+        "para": "N12",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N12",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · acordo",
+      "params": {
+       "fala": "Obrigada pela atenção. Até logo.",
+       "resultado": "promessa"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "retorno",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Quando fica melhor eu ligar de novo?",
+       "dias_max": 7
+      },
+      "saidas": [
+       {
+        "quando": "agendou",
+        "rotulo": "Agendou",
+        "para": "N17",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_agendou",
+        "rotulo": "Não agendou",
+        "para": "N13",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N17",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · retorno",
+      "params": {
+       "fala": "Combinado, eu ligo nesse horário. Até lá!",
+       "resultado": "retorno_agendado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N13",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "titulo": "Transferir · atendente",
+      "params": {
+       "fala": "Vou passar você para um atendente agora, só um instante.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N14",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "titulo": "Encerrar · recado neutro",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N20",
+      "tipo": "pergunta",
+      "modo": "arvore",
+      "params": {
+       "fala": "Posso continuar?",
+       "tentativas": 1,
+       "opcoes": [
+        {
+         "codigo": "sim",
+         "rotulo": "Sim"
+        }
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "sim",
+        "rotulo": "Sim",
+        "para": "N21",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N21",
+      "tipo": "pergunta",
+      "modo": "arvore",
+      "params": {
+       "fala": "Tudo bem?",
+       "tentativas": 1,
+       "opcoes": [
+        {
+         "codigo": "sim",
+         "rotulo": "Sim"
+        }
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "sim",
+        "rotulo": "Sim",
+        "para": "N20",
+        "tipo": "normal"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

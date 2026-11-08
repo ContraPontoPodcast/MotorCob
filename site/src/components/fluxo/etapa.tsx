@@ -7,13 +7,16 @@ import { Trash2 } from 'lucide-react';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { Botao, Pilula, campoCls, campoStyle } from '@/components/voz/ui';
 import {
-	MODOS, OPCOES, TIPOS, caminhosPara, comoCorrigir, explicar, modosDoTipo, nomesEtapas, saidasPossiveis, tipoDaSaida, trocarBloco, validarLocal, variaveisSensiveis,
-	type Bloco, type Definicao, type Modo, type Saida,
+	MODOS, OPCOES, TIPOS, caminhosPara, comoCorrigir, correcaoDe, explicar, modosDoTipo, nomesEtapas, saidasPossiveis, tipoDaSaida, trocarBloco, validarLocal, variaveisSensiveis,
+	type Bloco, type Correcao, type Definicao, type Modo, type Saida,
 } from '@/lib/fluxo';
 import type { ConectorRow, IntencaoRow, RespostaRow } from './api';
 import { Campo, Detalhes, Gaveta, Linhas } from './ds';
 import { useFluxo } from './contexto';
 import { executar, useCarregar } from './comum';
+import { ConfirmaCorrecao, OQueCorrigir, type AcaoCorrigir } from './corrigir';
+
+export { OQueCorrigir };
 
 const sel = `${campoCls} w-full`;
 const FINALIDADES: Record<string, string> = { buscar_ofertas: 'Buscar ofertas', validar_cadastro: 'Validar cadastro', registrar_acordo: 'Registrar acordo', gerar_boleto: 'Gerar boleto', gerar_link: 'Gerar link', outro: 'Outro' };
@@ -52,9 +55,11 @@ function SelConector({ conectores, finalidades, valor, onChange, disabled }: { c
 	);
 }
 
-export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, editavel, versao, situacao, onFechar, onSalvar, onRemover }: {
+export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, editavel, versao, situacao, onFechar, onSalvar, onRemover, acao }: {
 	bloco: Bloco; definicao: Definicao; conectores: ConectorRow[]; intencoes: IntencaoRow[]; erros: string[]; editavel: boolean;
 	versao: number; situacao: string; onFechar: () => void; onSalvar: (b: Bloco) => Promise<boolean>; onRemover: (id: string) => Promise<boolean>;
+	/** Botão do "O que corrigir" (correção de um clique sobre o rascunho salvo). */
+	acao?: (codigo: string) => AcaoCorrigir | null;
 }) {
 	const [b, setB] = useState<Bloco>(bloco);
 	const [ocupado, setOcupado] = useState(false);
@@ -71,6 +76,20 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 	const chegam = useMemo(() => caminhosPara(definicao, b.id), [definicao, b.id]);
 	const [confirmaRemover, setConfirmaRemover] = useState(false);
 	const dis = !editavel;
+	// a correção de um clique parte do rascunho salvo: com mudança não salva na gaveta, o botão espera
+	const sujo = useMemo(() => JSON.stringify(b) !== JSON.stringify(bloco), [b, bloco]);
+	const botao = (codigo: string): AcaoCorrigir | null => {
+		const a = editavel && acao ? acao(codigo) : null;
+		return a && sujo ? { ...a, disabled: true, motivo: 'Salve a etapa antes: a correção parte do rascunho salvo.' } : a;
+	};
+	// trava 1 ao digitar: a correção vale sobre o texto da gaveta (antes de salvar); troca só o texto aqui
+	const [previa, setPrevia] = useState<Correcao | null>(null);
+	const botaoCredor = (): AcaoCorrigir | null => {
+		if (!editavel) return null;
+		if (!sujo) return botao(`valor_antes_identidade:${b.id}`);
+		const c = correcaoDe(trocarBloco(definicao, b), `valor_antes_identidade:${b.id}`);
+		return c ? { rotulo: c.botao, onClick: () => setPrevia(c) } : null;
+	};
 
 	// saídas: uma linha por saída possível (pergunta e intenção dependem das opções); conversa livre tem lista própria
 	const possiveis = useMemo(() => saidasPossiveis(b), [b]);
@@ -225,8 +244,8 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 				<Botao secundario onClick={() => setConfirmaRemover(true)} disabled={ocupado}><Trash2 size={14} aria-hidden /> Remover etapa</Botao>
 				<Botao onClick={() => void salvar()} disabled={ocupado}>Salvar etapa</Botao>
 			</> : undefined}>
-			{credorAntes && <OQueCorrigir impede texto={textoCredorAntes(b)} como={comoCorrigir('valor_antes_identidade')} />}
-			{meus.map(e => <OQueCorrigir key={e.codigo} impede={e.impede} texto={e.texto} como={comoCorrigir(e.codigo)} />)}
+			{credorAntes && <OQueCorrigir impede texto={textoCredorAntes(b)} como={comoCorrigir('valor_antes_identidade')} acao={botaoCredor()} />}
+			{meus.map(e => <OQueCorrigir key={e.codigo} impede={e.impede} texto={e.texto} como={comoCorrigir(e.codigo)} acao={botao(e.codigo)} />)}
 			{!editavel && <p className="text-[12.5px] text-[var(--base-texto-3)]">Somente leitura{situacao !== 'rascunho' ? ': para mudar, edite o rascunho do fluxo.' : '.'}</p>}
 			<div className="grid gap-3 sm:grid-cols-2">
 				<Campo rotulo="Título (opcional)"><input value={b.titulo ?? ''} maxLength={60} disabled={dis} placeholder={TIPOS[b.tipo]?.nome} onChange={e => setB(x => ({ ...x, titulo: e.target.value }))} className={sel} style={campoStyle} /></Campo>
@@ -274,6 +293,8 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 				<p className="flex items-start gap-1.5 text-[12px] text-[var(--base-texto-3)]">Etapa com trava fixa. Nenhum fluxo desliga; as 7 travas ficam no topo do editor.</p>
 			)}
 			{gen && <p className="text-[12px] text-[var(--base-texto-3)]">"Transferir para humano" fica sempre ligado nesta etapa (trava 6). O resto da conversa é editável.</p>}
+			<ConfirmaCorrecao local correcao={previa} onFechar={() => setPrevia(null)}
+				onConfirmar={c => { const nb = c.definicao.blocos.find(x => x.id === b.id); if (nb) setB(nb); setPrevia(null); }} />
 			<ConfirmaAcao
 				aberto={confirmaRemover}
 				titulo={`Remover "${nome}"?`}
@@ -287,20 +308,6 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 				onConfirm={() => void (async () => { setOcupado(true); const ok = await onRemover(b.id); setOcupado(false); setConfirmaRemover(false); if (ok) onFechar(); })()}
 			/>
 		</Gaveta>
-	);
-}
-
-/** "O que corrigir" dentro da etapa: o quê, como corrigir e se segura o envio para aprovação. */
-export function OQueCorrigir({ impede, texto, como }: { impede: boolean; texto: ReactNode; como?: string }) {
-	return (
-		<div role={impede ? 'alert' : 'status'} className="rounded-xl px-3 py-2.5 text-[13px] text-[var(--base-texto)]" style={{ backgroundColor: impede ? 'var(--estado-erro-fundo)' : 'var(--estado-atencao-fundo)' }}>
-			<span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-				<b className="font-semibold" style={{ color: impede ? 'var(--estado-erro-texto)' : 'var(--estado-atencao-texto)' }}>{impede ? 'O que corrigir:' : 'Atenção:'}</b>
-				<span className="min-w-0">{texto}</span>
-				{impede && <Pilula tom="erro">impede o envio</Pilula>}
-			</span>
-			{como && <small className="mt-1 block text-[12.5px] text-[var(--base-texto-2)]">{como}</small>}
-		</div>
 	);
 }
 

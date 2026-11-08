@@ -7,7 +7,7 @@ import { Lock } from 'lucide-react';
 import { Pilula } from '@/components/voz/ui';
 import {
 	MODOS, ehFinal, nomeDestino, nomesEtapas, quadroPorRamos, resumoBloco, tituloRamo,
-	type Bloco, type Definicao, type SituacaoVersao,
+	type Bloco, type Definicao, type Pendencia, type SituacaoVersao,
 } from '@/lib/fluxo';
 import { Ponto } from './ds';
 
@@ -17,7 +17,8 @@ export type Marca = 'erro' | 'atencao';
  * (IA) não leva cadeado: ela é editável; a trava ali é só a ferramenta "Transferir para humano" (revisão U6). */
 export const temTrava = (b: Bloco) => b.tipo === 'abertura' || b.tipo === 'identidade' || (b.tipo === 'encerrar' && b.params?.resultado === 'recado');
 
-function CartaoEtapa({ b, marca, nomes, onAbrir }: { b: Bloco; marca?: Marca; nomes: Map<string, string>; onAbrir: (id: string) => void }) {
+function CartaoEtapa({ b, marca, nomes, onAbrir, pendencias }: { b: Bloco; marca?: Marca; nomes: Map<string, string>; onAbrir: (id: string) => void; pendencias?: Pendencia[] }) {
+	const pend = pendencias?.find(p => p.impede) ?? pendencias?.[0];
 	const resumo = resumoBloco(b);
 	return (
 		<button type="button" onClick={() => onAbrir(b.id)} data-etapa={b.id}
@@ -35,13 +36,20 @@ function CartaoEtapa({ b, marca, nomes, onAbrir }: { b: Bloco; marca?: Marca; no
 					? <span>Fim da ligação</span>
 					: <span className="font-semibold text-[var(--estado-erro-texto)]">Nenhuma resposta ligada: a ligação pararia aqui.</span>}
 			</span>
+			{pend && (
+				<span className="rounded-lg px-2 py-1 text-[12px] text-[var(--base-texto)]" style={{ backgroundColor: pend.impede ? 'var(--estado-erro-fundo)' : 'var(--estado-atencao-fundo)' }}>
+					<b className="font-semibold" style={{ color: pend.impede ? 'var(--estado-erro-texto)' : 'var(--estado-atencao-texto)' }}>{pend.impede ? 'O que corrigir: ' : 'Atenção: '}</b>{pend.texto}
+					{(pendencias?.length ?? 0) > 1 && <span className="text-[var(--base-texto-2)]"> (+{(pendencias?.length ?? 0) - 1})</span>}
+					<span className="block text-[11.5px] text-[var(--base-texto-2)]">Toque para corrigir.</span>
+				</span>
+			)}
 		</button>
 	);
 }
 
 /** Mapa do fluxo (aba Mapa): o caminho principal em cima e os ramos embaixo, para ver o desenho inteiro; cada etapa
  * mostra as saídas como "Sim → Oferta". No celular, vira uma coluna. Para ler e editar a conversa, o Roteiro. */
-export function Quadro({ definicao, marcas, onAbrir }: { definicao: Definicao; marcas: Map<string, Marca>; onAbrir: (id: string) => void }) {
+export function Quadro({ definicao, marcas, onAbrir, pendencias }: { definicao: Definicao; marcas: Map<string, Marca>; onAbrir: (id: string) => void; pendencias?: Map<string, Pendencia[]> }) {
 	const ramos = quadroPorRamos(definicao);
 	const nomes = nomesEtapas(definicao);
 	const qtd = (n: number) => `${n} ${n === 1 ? 'etapa' : 'etapas'}`;
@@ -52,7 +60,7 @@ export function Quadro({ definicao, marcas, onAbrir }: { definicao: Definicao; m
 				<span className="shrink-0 font-normal">{qtd(r.blocos.length)}</span>
 			</div>
 			<div className="grid items-start gap-2" style={{ gridTemplateColumns: principal ? 'repeat(auto-fill, minmax(min(210px, 100%), 1fr))' : 'minmax(0, 1fr)' }}>
-				{r.blocos.map(b => <CartaoEtapa key={b.id} b={b} marca={marcas.get(b.id)} nomes={nomes} onAbrir={onAbrir} />)}
+				{r.blocos.map(b => <CartaoEtapa key={b.id} b={b} marca={marcas.get(b.id)} nomes={nomes} onAbrir={onAbrir} pendencias={pendencias?.get(b.id)} />)}
 			</div>
 		</section>
 	);
