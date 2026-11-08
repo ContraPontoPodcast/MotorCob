@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-	MODOS, SEMPRE, TIPOS, TRAVAS, caminhosPara, comoCorrigir, estadoEnvio, explicar, falaOk, nomesEtapas, textoSaida, tituloRamo, variaveisDoTexto, variaveisSensiveis, funil, impedem, kpisDoFluxo, misturaModos, modoPredominante, nomeAnexo, novoBloco,
+	MODOS, SEMPRE, TIPOS, TRAVAS, acaoSistema, caminhosPara, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, textoVolta, comoCorrigir, estadoEnvio, explicar, falaOk, nomesEtapas, textoSaida, tituloRamo, variaveisDoTexto, variaveisSensiveis, funil, impedem, kpisDoFluxo, misturaModos, modoPredominante, nomeAnexo, novoBloco,
 	proximoId, quadroPorRamos, removerBloco, roleplayValido, saidasFaltando, saidasPossiveis, somarMetricas, tipoDaSaida, validarLocal,
 	type Bloco, type Definicao,
 } from '../src/lib/fluxo.ts';
@@ -186,4 +186,75 @@ test('travas: uma lista só, 7 itens, sem prometer o que o executor ainda não f
 	assert.doesNotMatch(tudo, /CPF|tema sensível|caixa postal/i);         // B2 e B4 ainda não estão no ar
 	assert.ok(SEMPRE.some(([q]) => /Não me ligue/.test(q)) && SEMPRE.some(([q]) => /pessoa/.test(q)));
 	assert.notEqual(MODOS.arvore.cor, MODOS.sistema.cor);
+});
+
+test('roteiro: capítulos na ordem da conversa (começo, motivo, negociação), ramos com nome, finais e soltos', () => {
+	const d = negociador();
+	const caps = roteiro(d);
+	assert.deepEqual(caps.map(c => [c.titulo, c.blocos.map(b => b.id)]), [
+		['Começo da ligação', ['N1', 'N2']],                   // até Confirmar identidade
+		['Motivo da ligação', ['N3']],                         // antes da 1ª etapa de negociação
+		['Negociação', ['N4', 'N5']],                          // do conector em diante
+		['Se disser "Já paguei"', ['N8']],
+		['Se disser "Sem dinheiro"', ['N9']],
+		['Se Chamar conector falhar', ['N6']],
+		['Finais usados por vários caminhos', ['N7', 'N13', 'N14']],
+		['Etapas que nenhum caminho alcança', ['N17']],
+	]);
+	assert.equal(caps[1].sub, 'Só depois da identidade confirmada');
+	assert.equal(caps[3].sub, 'A partir de Entender intenção');
+	assert.deepEqual(caps.map(c => c.tipo), ['conversa', 'conversa', 'conversa', 'ramo', 'ramo', 'ramo', 'finais', 'solto']);
+	// cada etapa aparece uma vez só, e todas aparecem
+	const ids = caps.flatMap(c => c.blocos.map(b => b.id));
+	assert.equal(new Set(ids).size, ids.length);
+	assert.deepEqual([...ids].sort(), d.blocos.map(b => b.id).sort());
+	// numeração na ordem de leitura
+	const n = numerosRoteiro(caps);
+	assert.deepEqual([...n.entries()].slice(0, 6), [['N1', 1], ['N2', 2], ['N3', 3], ['N4', 4], ['N5', 5], ['N8', 6]]);
+	assert.equal(n.get('N17'), d.blocos.length);
+});
+
+test('roteiro: sem identidade, sem negociação e só finais depois do começo; fluxo vazio', () => {
+	const loc: Definicao = { esquema: 1, blocos: [
+		blk('N1', 'abertura', 'arvore', [s('titular', 'Sou eu', 'N2'), s('terceiro', 'Não é a pessoa', 'N3')]),
+		blk('N2', 'identidade', 'cognicao', [s('confirmou', 'Confirmou', 'N4'), s('nao_confirmou', 'Não confirmou', 'N3')], { conector_id: 2 }),
+		blk('N3', 'encerrar', 'arvore', [], { resultado: 'recado' }),
+		blk('N4', 'transferir', 'arvore', [], { motivo: 'cpc' }),
+	] };
+	assert.deepEqual(roteiro(loc).map(c => [c.titulo, c.blocos.map(b => b.id)]), [['Começo da ligação', ['N1', 'N2']], ['Fim da ligação', ['N4']], ['Finais usados por vários caminhos', ['N3']]]);
+	const semId: Definicao = { esquema: 1, blocos: [
+		blk('N1', 'abertura', 'arvore', [s('titular', 'Sou eu', 'N2'), s('terceiro', 'Não é a pessoa', 'N3')]),
+		blk('N2', 'pergunta', 'arvore', [s('sim', 'Sim', 'N3'), s('nao', 'Não', 'N3')]),
+		blk('N3', 'encerrar', 'arvore', [], { resultado: 'recado' }),
+	] };
+	const c = roteiro(semId);
+	assert.deepEqual(c.map(x => [x.titulo, x.sub, x.blocos.map(b => b.id)]), [['Começo da ligação', 'Quem atende e quem é a pessoa', ['N1']], ['Motivo da ligação', 'Depois da abertura', ['N2']], ['Finais usados por vários caminhos', 'Transferir e encerrar', ['N3']]]);
+	assert.deepEqual(roteiro({ esquema: 1, blocos: [] }), []);
+});
+
+test('roteiro: volta dita na seta (sem repetir a etapa), "se não entender" igual ao executor, sistema e finais em palavras', () => {
+	const d = negociador();
+	d.blocos.find(b => b.id === 'N6')!.saidas.push(s('quer_outra', 'Quer outra condição', 'N5'));
+	d.blocos.find(b => b.id === 'N5')!.repetir_max = 2;
+	d.blocos.find(b => b.id === 'N5')!.saidas.push(s('sem_acordo', 'Sem acordo', 'N6', 'devolve'));   // N5 ↔ N6: uma volta
+	const n = numerosRoteiro(roteiro(d));
+	const n6 = d.blocos.find(b => b.id === 'N6')!;
+	assert.equal(textoVolta(n6.saidas.find(x => x.quando === 'quer_outra')!, 'N6', n, d), 'volta; no máximo 2 vezes');
+	assert.equal(textoVolta(n6.saidas.find(x => x.quando === 'aceitou')!, 'N6', n, d), '');   // N7 vem depois
+	const sem = negociador();                                                                 // sem a volta, ir a uma etapa lida antes não é "volta"
+	sem.blocos.find(b => b.id === 'N6')!.saidas.push(s('quer_outra', 'Quer outra condição', 'N5'));
+	assert.equal(textoVolta(sem.blocos.find(b => b.id === 'N6')!.saidas.at(-1)!, 'N6', numerosRoteiro(roteiro(sem)), sem), '');
+	// voz/fluxo.py › _tentar_de_novo: tentativas (padrão 2) − 1 repetições; depois, a saída de cada tipo
+	const b = (id: string) => d.blocos.find(x => x.id === id)!;
+	assert.deepEqual(seNaoEntender(b('N1')), { repete: 1, fala: 'Desculpe. Falo com {{primeiro_nome}}?', quando: 'terceiro' });
+	assert.deepEqual(seNaoEntender(b('N2')), { repete: 1, fala: 'Desculpe, não entendi. Pode repetir, por exemplo, 15 de março?', quando: 'nao_confirmou' });
+	assert.equal(seNaoEntender(b('N3'))?.quando, 'nao_entendido');
+	assert.equal(seNaoEntender(b('N6'))?.quando, 'recusou');
+	assert.equal(seNaoEntender(b('N9'))?.quando, 'nao_agendou');
+	assert.deepEqual(seNaoEntender(blk('N20', 'pergunta', 'arvore', [], { fala: 'Posso seguir?', tentativas: 1 })), { repete: 0, fala: 'Posso seguir?', quando: 'sem_resposta' });
+	for (const id of ['N4', 'N5', 'N7', 'N13']) assert.equal(seNaoEntender(b(id)), null, id);   // sistema, IA e finais não "ouvem"
+	assert.equal(acaoSistema(blk('N30', 'condicao', 'sistema', [], { campo: 'ofertas_quantidade', op: '>=', valor: 1 })), 'Confere: Ofertas recebidas ≥ 1');
+	assert.match(acaoSistema(b('N4')), /^Chama um conector do CRM\. Enquanto espera, diz: "Um instante, por favor\."$/);
+	assert.equal(resultadoFinal(b('N14')), 'resultado: Recado neutro (terceiro)');
+	assert.equal(resultadoFinal(b('N13')), 'transferida: Pediu um atendente');
 });

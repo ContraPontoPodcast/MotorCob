@@ -1,6 +1,6 @@
 // Componentes do Fluxo do agente renderizados de verdade (react-dom/server), sem banco: o editor não deixa enviar para
 // aprovação com pendência de validação, o quadro por ramos mostra as setas com o nome da etapa e marca a que impede,
-// as 7 travas ficam à vista e o "O que corrigir" diz o quê e como.
+// as 7 travas ficam à vista, o "O que corrigir" diz o quê e como, e o Roteiro (vista principal) lê como a conversa.
 // npm test (site/scripts/testar-componentes.mjs empacota com esbuild e roda com node --test)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,6 +9,8 @@ import { SEMPRE, TRAVAS, estadoEnvio, resumoPendencias, trocarBloco, validarLoca
 import { EmQualquerMomento, FaixaTravas } from '@/components/fluxo/travas';
 import { OQueCorrigir, textoCredorAntes } from '@/components/fluxo/etapa';
 import { BarraEnvio, Quadro, type Marca } from '@/components/fluxo/quadro';
+import { Roteiro } from '@/components/fluxo/roteiro';
+import { ABAS_EDITOR, AbasEditor, abaDaUrl } from '@/components/fluxo/abas-editor';
 import { criarApiFixturas, definicaoV5 } from '@/components/fluxo/fixturas';
 import { MemoryRouter } from 'react-router';
 import { PERMISSAO_EQUIPE_FLUXO, ProvedorFixturas, permissoesFluxo, type CtxFluxo } from '@/components/fluxo/contexto';
@@ -45,10 +47,10 @@ test('editor: quem só edita não vê "Colocar em uso"; quem aprova vê', () => 
 	assert.match(renderToStaticMarkup(<BarraEnvio situacao="aprovado_empresa" estado={ok} podeEditar={false} podeAprovar onEnviar={nada} onAprovar={nada} onUsar={nada} />), /Colocar em uso<\/button>/);
 });
 
-test('quadro por ramos: caminho principal, ramos, setas com o nome da etapa e a etapa que impede', () => {
+test('mapa (quadro por ramos): caminho principal, ramos, setas com o nome da etapa e a etapa que impede', () => {
 	const d: Definicao = definicaoV5();
 	const marcas = new Map<string, Marca>(validarLocal(d).map(e => [e.split(':')[1], 'erro'] as [string, Marca]).filter(([id]) => !!id));
-	const html = renderToStaticMarkup(<Quadro definicao={d} marcas={marcas} vista="quadro" onAbrir={nada} />);
+	const html = renderToStaticMarkup(<Quadro definicao={d} marcas={marcas} onAbrir={nada} />);
 	assert.match(html, /aria-label="Caminho principal"/);
 	assert.match(html, /aria-label="Já paguei"/);
 	assert.match(html, /aria-label="Finais compartilhados"/);
@@ -70,8 +72,6 @@ test('quadro por ramos: caminho principal, ramos, setas com o nome da etapa e a 
 	const cartao = (id: string) => html.slice(html.indexOf(`data-etapa="${id}"`), html.indexOf('</button>', html.indexOf(`data-etapa="${id}"`)));
 	assert.match(cartao('N1'), /Etapa com trava fixa/);
 	assert.doesNotMatch(cartao('N5'), /Etapa com trava fixa/);
-	const lista = renderToStaticMarkup(<Quadro definicao={d} marcas={marcas} vista="lista" onAbrir={nada} />);
-	assert.match(lista, /<details open=""/);                     // no celular/lista: o caminho principal vem aberto
 });
 
 test('travas: as 7 sempre à vista, numeradas, recolhíveis e sem botão de remover; e "Em qualquer momento da ligação"', () => {
@@ -142,4 +142,61 @@ test('lista: a equipe com a permissão vê "Novo fluxo"; sem ela, não', () => {
 	const lista = (c: CtxFluxo) => renderToStaticMarkup(<MemoryRouter><ProvedorFixturas valor={c}><ListaFluxos /></ProvedorFixturas></MemoryRouter>);
 	assert.match(lista(ctxEquipe(true)), /Novo fluxo<\/button>/);
 	assert.doesNotMatch(lista(ctxEquipe(false)), /Novo fluxo<\/button>/);
+});
+
+test('roteiro: capítulos na ordem da conversa, ramos com nome, "o agente diz / pode responder → então", sem códigos', () => {
+	const d: Definicao = definicaoV5();
+	const marcas = new Map<string, Marca>(validarLocal(d).map(e => [e.split(':')[1], 'erro'] as [string, Marca]).filter(([id]) => !!id));
+	const html = renderToStaticMarkup(<Roteiro definicao={d} marcas={marcas} onAbrir={nada} />);
+	const caps = [...html.matchAll(/<section aria-label="([^"]+)"/g)].map(m => m[1]);
+	assert.deepEqual(caps.slice(0, 3), ['Começo da ligação', 'Motivo da ligação', 'Negociação']);
+	assert.ok(caps.includes('Se disser &quot;Já paguei&quot;'), caps.join(' | '));
+	assert.equal(caps[caps.length - 1], 'Etapas que nenhum caminho alcança');      // N17
+	// ordem: Abertura (1) antes de Confirmar identidade (2) antes de Entender intenção (3)
+	const pos = (id: string) => html.indexOf(`data-etapa="${id}"`);
+	assert.ok(pos('N1') < pos('N2') && pos('N2') < pos('N3') && pos('N3') < pos('N4'));
+	assert.match(html, /aria-label="Etapa 1: Abertura"/);
+	// o agente diz, com as variáveis em destaque; o cliente pode responder → então [nome], com link para a etapa
+	assert.match(html, /O agente diz/);
+	assert.match(html, /\{\{primeiro_nome\}\}<\/span>/);
+	assert.match(html, /O cliente pode responder/);
+	assert.match(html, />Sou eu<\/span><span[^>]*><span aria-hidden="true"> → <\/span><span class="sr-only">, <\/span>então <a href="#etapa-N2"[^>]*>Confirmar identidade<\/a>/);
+	assert.doesNotMatch(html, /[→↪]\s*(<[^>]+>\s*)*(então\s*)?(<[^>]+>\s*)*N\d/);   // nunca "→ N5"
+	// IA: objetivo e "a conversa termina quando"; sistema: o que faz, sem fala
+	assert.match(html, /Objetivo da IA/);
+	assert.match(html, /A conversa termina quando/);
+	assert.match(html, /Chama um conector do CRM\. Enquanto espera, diz:/);
+	assert.match(html, />Se CRM falhou</);                        // a falha diz "Se …", sem estragar a sigla
+	const n8 = html.slice(pos('N8'), html.indexOf('</article>', pos('N8')));   // 1 tentativa: não repete; "Sem resposta" não ligada
+	assert.match(n8, /Se não entender<\/span><span[^>]*>transfere para um atendente/);
+	assert.doesNotMatch(html, /\(volta\)/);                       // no v5 não há volta: "Quer outra condição" só vai adiante
+	// se não entender: o que o executor faz hoje; se não ouvir nada: ainda sem tratamento próprio
+	const n2 = html.slice(pos('N2'), pos('N3'));
+	assert.match(n2, /Se não entender/);
+	assert.match(n2, /pede de novo 1 vez/);
+	assert.match(n2, /então <a href="#etapa-N14"[^>]*>Encerrar · recado neutro<\/a>/);
+	assert.match(n2, /Se não ouvir nada.*Ainda sem tratamento próprio/);
+	const n3 = html.slice(pos('N3'), pos('N4'));
+	assert.doesNotMatch(n3, />Não entendi 2×</);                  // "Não entendi" vai para "Se não entender", não é resposta
+	// finais e a etapa sem saída (U3)
+	assert.match(html, /Fim da ligação/);
+	assert.match(html, /Sem atendente livre/);
+	const n9 = html.slice(pos('N9'), html.indexOf('</article>', pos('N9')));
+	assert.match(n9, /Nenhuma resposta ligada/);
+	assert.match(n9, /impede o envio/);
+	// a etapa abre pelo nome; os capítulos recolhem
+	assert.match(html, /<button type="button"[^>]*>Abertura<\/button>/);
+	assert.match(html, /aria-expanded="true" aria-controls="cap-comeco"/);
+	assert.match(renderToStaticMarkup(<Roteiro definicao={d} marcas={marcas} onAbrir={nada} recolhidos={['comeco']} />), /<ol id="cap-comeco" hidden=""/);
+});
+
+test('abas do editor: Roteiro é a padrão; Mapa, Respostas prontas, Testes e Versões e aprovação', () => {
+	assert.deepEqual(ABAS_EDITOR.map(a => a.nome), ['Roteiro', 'Mapa', 'Respostas prontas', 'Testes', 'Versões e aprovação']);
+	assert.equal(abaDaUrl(null), 'roteiro');
+	assert.equal(abaDaUrl('mapa'), 'mapa');
+	assert.equal(abaDaUrl('qualquer'), 'roteiro');
+	const html = renderToStaticMarkup(<MemoryRouter><AbasEditor atual="roteiro" onTrocar={nada} /></MemoryRouter>);
+	assert.match(html, /role="tablist" aria-label="Partes do fluxo"/);
+	assert.match(html, /aria-selected="true"[^>]*>Roteiro</);
+	assert.match(html, /<option value="versoes">Versões e aprovação<\/option>/);   // no celular, um select
 });

@@ -1,4 +1,5 @@
-// Quadro por ramos do editor (decisão do dono, no lugar do canvas livre com linhas) e a barra de envio para aprovação.
+// Quadro por ramos (a aba Mapa do editor desde o PR3 do redesenho; a vista principal é o Roteiro, em roteiro.tsx) e a
+// barra de envio para aprovação.
 // Componentes só de apresentação (sem dados nem rotas), testados em site/fluxo/componentes.test.tsx.
 // As setas dizem o nome da etapa ("Sou eu → Confirmar identidade"), nunca o código (revisão U1); o código fica na
 // gaveta da etapa, para quem precisa dele (casos de teste, suporte).
@@ -8,7 +9,7 @@ import {
 	MODOS, ehFinal, nomeDestino, nomesEtapas, quadroPorRamos, resumoBloco, tituloRamo,
 	type Bloco, type Definicao, type SituacaoVersao,
 } from '@/lib/fluxo';
-import { Detalhes, Ponto } from './ds';
+import { Ponto } from './ds';
 
 export type Marca = 'erro' | 'atencao';
 
@@ -38,22 +39,12 @@ function CartaoEtapa({ b, marca, nomes, onAbrir }: { b: Bloco; marca?: Marca; no
 	);
 }
 
-/** O caminho principal em cima e os ramos embaixo; cada etapa mostra as saídas como "Sim → Oferta". No celular, vira uma coluna. */
-export function Quadro({ definicao, marcas, vista, onAbrir }: { definicao: Definicao; marcas: Map<string, Marca>; vista: 'quadro' | 'lista'; onAbrir: (id: string) => void }) {
+/** Mapa do fluxo (aba Mapa): o caminho principal em cima e os ramos embaixo, para ver o desenho inteiro; cada etapa
+ * mostra as saídas como "Sim → Oferta". No celular, vira uma coluna. Para ler e editar a conversa, o Roteiro. */
+export function Quadro({ definicao, marcas, onAbrir }: { definicao: Definicao; marcas: Map<string, Marca>; onAbrir: (id: string) => void }) {
 	const ramos = quadroPorRamos(definicao);
 	const nomes = nomesEtapas(definicao);
 	const qtd = (n: number) => `${n} ${n === 1 ? 'etapa' : 'etapas'}`;
-	if (vista === 'lista') {
-		return (
-			<div className="rounded-2xl bg-[var(--base-cartao)] px-4" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }}>
-				{ramos.map(r => (
-					<Detalhes key={r.nome + (r.origem ?? '')} titulo={r.nome} qtd={qtd(r.blocos.length)} aberto={r.tipo === 'principal'}>
-						<div className="flex flex-col gap-2">{r.blocos.map(b => <CartaoEtapa key={b.id} b={b} marca={marcas.get(b.id)} nomes={nomes} onAbrir={onAbrir} />)}</div>
-					</Detalhes>
-				))}
-			</div>
-		);
-	}
 	const raia = (r: (typeof ramos)[number], principal: boolean) => (
 		<section key={r.nome + (r.origem ?? '')} aria-label={r.nome} className="flex min-w-0 flex-col gap-2 rounded-2xl p-2.5" style={{ backgroundColor: 'var(--base-fill)' }}>
 			<div className="flex justify-between gap-2 px-0.5 text-[12px] font-semibold text-[var(--base-texto-2)]">
