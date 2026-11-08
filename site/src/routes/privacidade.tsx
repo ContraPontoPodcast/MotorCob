@@ -1,6 +1,7 @@
 import type { Route } from './+types/privacidade';
 import { seo } from '@/lib/seo';
 import { ORIGEM_SITE } from '@/lib/dominios';
+import { Link } from 'react-router';
 import { RotorMark } from '@/components/site/logo';
 
 export function meta({ matches, location }: Route.MetaArgs) {
@@ -24,6 +25,7 @@ export default function Privacidade() {
 	return (
 		<main className="min-h-screen bg-white px-5 py-24 text-[#1D1D1F]">
 			<div className="mx-auto max-w-[720px]">
+				<Link to="/" className="mb-8 inline-flex items-center gap-1 text-[14px] text-[#1D1D1F] hover:underline"><span aria-hidden>‹</span> Voltar ao site</Link>
 				<div className="flex items-center gap-3"><RotorMark tone="onLight" className="h-9 w-9" /><span className="text-[19px] font-semibold" style={{ letterSpacing: '-0.02em' }}>MotorCX</span></div>
 				<h1 className="ls-tight mt-10 text-[40px] font-bold" style={{ lineHeight: 1.1 }}>Privacidade</h1>
 				<p className="mt-4 text-[17px] leading-relaxed text-[#6E6E73]">O MotorCX trata dados de contato para a atividade de cobrança, com isolamento por empresa e sem expor dado pessoal na operação.</p>

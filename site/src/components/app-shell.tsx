@@ -22,6 +22,7 @@ import { SinoAvisos } from '@/components/comuns/sino-avisos';
 import { CommandPalette } from '@/components/workspace/workspace-command-palette';
 import { CanalPills } from '@/components/mensageria/canal-pills';
 import { MarcaMotorCX } from '@/components/site/marca-motorcx';
+import { Voltar } from '@/components/comuns/voltar';
 
 function dateExtensa() {
 	try { return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()); }
@@ -398,6 +399,7 @@ export function PageHeading({ title, description, actions, titleExtra, semContro
 	return (
 		<div className="mb-7 flex flex-wrap items-start justify-between gap-4">
 			<div className="min-w-0">
+				<Voltar />
 				<span className="mc-area-tag mb-1.5">{areaLabel}</span>
 				<div className="flex items-center gap-2">
 					<h1 className="mc-page-title text-[24px] font-bold leading-tight tracking-tight">{title}</h1>

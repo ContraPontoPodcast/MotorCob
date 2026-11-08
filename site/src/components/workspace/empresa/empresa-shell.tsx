@@ -6,6 +6,7 @@ import { supabase, friendlyError, dateBR, type Row } from '@/lib/supabase';
 import { SITUACOES, SEGMENTOS, formatCNPJ } from '@/lib/empresa-helpers';
 import { useConsolePerms, useFrentesMap } from '@/components/workspace/console/console-perms';
 import { FrenteBadges } from '@/components/workspace/console/frente-badge';
+import { Voltar } from '@/components/comuns/voltar';
 
 const cardShadow = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 
@@ -56,6 +57,7 @@ export function EmpresaShell({ children, onEdit }: { children: ReactNode; onEdit
 
   return (
     <div className="mx-auto max-w-[1080px] px-4 py-8">
+      <Voltar />
       {/* Cabeçalho */}
       <div className="mb-6">
         <div className="flex flex-wrap items-start justify-between gap-3">

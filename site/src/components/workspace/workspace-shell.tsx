@@ -15,6 +15,7 @@ import { SinoAvisos } from '@/components/comuns/sino-avisos';
 import { CommandPalette } from '@/components/workspace/workspace-command-palette';
 import { useAreaLabel } from '@/components/tema-provider';
 import { AbasTelas } from '@/components/abas-telas';
+import { Voltar } from '@/components/comuns/voltar';
 import { areaDaRota } from '@/lib/area-rota';
 import { Link, useLocation } from 'react-router';
 import { Menu, Search, HelpCircle } from 'lucide-react';
@@ -161,6 +162,7 @@ export function WorkspaceHeading({ title, description, actions }: { title: strin
 		<div className="mx-auto mb-6 max-w-[1200px] px-4">
 			<div className="flex flex-wrap items-start justify-between gap-3">
 				<div className="min-w-0">
+					<Voltar />
 					<h1 className="text-[24px] font-bold tracking-tight" style={{ color: 'var(--base-texto)' }}>{title}</h1>
 					{description && <p className="mt-1 text-[14px] text-[var(--base-texto-2)]">{description}</p>}
 				</div>

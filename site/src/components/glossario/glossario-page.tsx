@@ -5,6 +5,7 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { buscarGlossario, parseAntes, slugValido, type GlossarioTerm } from '@/lib/glossario';
 import { useGlossario } from '@/components/glossario/glossario-provider';
+import { Voltar } from '@/components/comuns/voltar';
 
 const cardShadow = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 
@@ -85,6 +86,7 @@ export function GlossarioPage() {
 
 	return (
 		<div className="mx-auto max-w-[960px] px-4 py-8">
+			<Voltar />
 			<div className="mb-6">
 				<h1 className="text-[28px] font-bold tracking-tight text-[#1D1D1F]">O que significa</h1>
 				<p className="mt-1 text-[15px] text-[#6E6E73]">Um nome para cada coisa. Procure pelo nome de hoje ou por um nome antigo.</p>
