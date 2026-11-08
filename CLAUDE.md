@@ -864,8 +864,20 @@ mapear; rota de voz pausada; tronco com `configuracao_invalida`) > atenção (or
 aprovação ou pausado, simulação / só números de teste, rota sem cadastro, freio por abandono, chamadas curtas ≥ 70% em
 7 dias) > funcionando. `quem`: `quem_envia` (nulo = MotorCX no que a Mensageria cobre), `voz_motorcx` com o módulo
 `agente_voz`, senão lista. Site: `/canais` é a visão geral sem campos (`components/canais/visao-geral.tsx`, rótulos e
-rotas das ações em `lib/estado-canais.ts`); "Configurar" abre `/canais/:canal` (a configuração de hoje, só daquele canal,
-até a tela nova do canal); `/canais?secao=frases` segue com os 6 canais. Editar Canais e Frases = `editar_canais`.
+rotas das ações em `lib/estado-canais.ts`); "Configurar" abre `/canais/:canal` (a tela do canal, SQL 86). Editar Canais e
+Frases = `editar_canais`.
+**SQL 86 (Canais, SPEC §6.2 PRs 6 e 7): a tela do canal.** `/canais/:canal` (`components/canais/canal-tela.tsx`, regras em
+`lib/canal-tela.ts`): topo com o estado (`estado_canais`), última atividade, 4 sinais, problema + "o que fazer", Pausar /
+Retomar (`canais_empresa.ativo`) e "Testar agora" desligado ("em breve", PR 9). Seções fechadas com resumo, só as do canal
+(§4.3, `secoesDoCanal`): Regras de envio · Mensagens (o editor de frases, com `AvisoIdentidade`; RCS sem aparelho) · Lista
+e retorno do fornecedor (mapeamento e códigos, por carteira) · Retorno do canal (`credores.regras_retorno`, por carteira;
+`editar_credores`) · Custos e limites (centro de custo da Lista do dia) · Conexão (técnico, leitura). Cada seção grava só
+os seus campos ("Salvar <seção>"); "Configuração de:" Empresa ou carteira com "da empresa" / "desta carteira · voltar ao da
+empresa" (`ajustesCarteiraSecao` preserva o ajuste das outras seções). Retorno e mapeamento continuam também na carteira;
+centro de custo e RCS sem aparelho, também em Mensageria (1 ciclo). `/canais?secao=frases` = só as frases
+(`frases-pagina.tsx`, `?canal=`); Importar playbook só no topo da visão geral. Banco: `canais_empresa.pausado_em` /
+`pausado_por` (gatilho `canal_pausado_desde`: grava ao pausar, apaga ao retomar, ninguém escreve à mão; o já pausado ganhou
+o `atualizado_em`), `estado_canais` usa o `pausado_em`, e `credor_canais` grava com `pode('editar_canais')` (era papel fixo).
 
 **SQL 83 (decisões do dono, 08/11/2026; SPEC §6.1 B4, B6, B7): destinos perigosos, gravação e identidade antes da dívida.**
 B4: host do tronco e da transferência nunca interno, reservado, de loopback ou do MotorCX (`voz_enderecos_motorcx`, a equipe

@@ -135,7 +135,7 @@ test('cartão funcionando não mostra caixa de problema; pausado mostra Retomar'
 });
 
 test('Canais e Frases: editar exige editar_canais (o código do menu), não qualquer editar_*', () => {
-	for (const arq of ['src/components/canais/canais.tsx', 'src/components/canais/frases.tsx', 'src/components/canais/visao-geral.tsx']) {
+	for (const arq of ['src/components/canais/canal-tela.tsx', 'src/components/canais/frases.tsx', 'src/components/canais/visao-geral.tsx']) {
 		const s = readFileSync(arq, 'utf8');
 		assert.doesNotMatch(s, /useAllowed\(/, arq);
 		assert.match(s, /usePermissao\(PERM\.editarCanais\)/, arq);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
+import { CANAL_NOME } from '@/lib/mensageria';
 import { supabase, friendlyError, moneyBR, type Row } from '@/lib/supabase';
 import { useMotorAuth } from '@/components/auth-provider';
 import { isCanalValido } from '@/lib/mensageria-produtos';
@@ -63,6 +64,7 @@ export function ConfigCanal() {
 
 	return (
 		<div className="space-y-4">
+			<p className="text-[13px] text-[var(--base-texto-2)]">O centro de custo da Lista do dia{canal === 'rcs' ? ' e o RCS sem aparelho também ficam' : ' também fica'} em <Link to={`/canais/${canal}`} className="font-medium text-[var(--destaque)] hover:underline">Canais › {CANAL_NOME[canal] ?? canal}</Link>.</p>
 			{erro && <div className="rounded-xl bg-[#FFE8E6] px-4 py-3 text-[14px] text-[#FF3B30]">{erro}</div>}
 			{sucesso && <div className="rounded-xl bg-[#E8F8EC] px-4 py-3 text-[14px] text-[#248A3D]">{sucesso}</div>}
 
