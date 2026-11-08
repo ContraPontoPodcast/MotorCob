@@ -3,6 +3,7 @@ import { Check, Copy } from 'lucide-react';
 import { Link } from 'react-router';
 import { useMotorAuth } from '@/components/auth-provider';
 import { PERM } from '@/lib/permissoes';
+import { Voltar } from '@/components/comuns/voltar';
 
 const API_URL = 'https://jxwppkrkuckfwmphqjva.supabase.co/functions/v1/api';
 
@@ -69,6 +70,7 @@ export function DocumentacaoPage() {
 
 	return (
 		<div className="mx-auto max-w-[1280px] px-4 py-8 sm:py-10">
+			<Voltar />
 			<h1 className="text-[34px] font-semibold tracking-tight text-[#1D1D1F]">Documentação</h1>
 			<p className="mt-2 text-[17px] text-[#6E6E73]">Integre o seu sistema pela API do MotorCX.</p>
 

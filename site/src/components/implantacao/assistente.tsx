@@ -7,6 +7,7 @@ import { Check } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { Estado } from '@/components/ds';
+import { Voltar } from '@/components/comuns/voltar';
 import { PASSOS, passoInicial, passosFeitos, type Situacao } from '@/lib/implantacao';
 import { PassoEmpresa, PassoCarteira, PassoCarga, PassoAcionar, PassoPronto } from './passos';
 
@@ -67,6 +68,7 @@ export function AssistenteImplantacao() {
 	const prontos = feitos.size;
 	return (
 		<div className="mx-auto max-w-[1180px] px-4 py-6">
+			<Voltar />
 			<div className="grid items-start gap-5 md:grid-cols-[260px_minmax(0,1fr)]">
 				<aside className="min-w-0 rounded-2xl bg-[var(--base-cartao)] p-4 md:sticky md:top-[68px]" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 2px 12px rgba(0,0,0,.04)' }} aria-label="Passos da implantação">
 					<h2 className="text-[15px] font-semibold text-[var(--base-texto)]">Implantação{sit ? ` da ${sit.empresa.nome}` : ''}</h2>
