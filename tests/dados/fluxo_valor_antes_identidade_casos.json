@@ -1,0 +1,801 @@
+{
+ "_sobre": "Trava 1 (valor_antes_identidade): os mesmos casos rodam no validador Python (tests/test_fluxo_valor_antes_identidade.py) e na cópia do site (site/fluxo/fluxo.test.ts › validarLocal). esperado = só os códigos valor_antes_identidade, em ordem.",
+ "casos": [
+  {
+   "nome": "abertura cita o credor",
+   "definicao": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a {{assessoria}}, em nome de {{credor}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N8",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N8",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Obrigada. Até logo.",
+       "resultado": "cpc"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "esperado": [
+    "valor_antes_identidade:N1"
+   ]
+  },
+  {
+   "nome": "saldo só depois de Confirmou",
+   "definicao": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N3",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "pergunta",
+      "modo": "arvore",
+      "params": {
+       "fala": "Consta {{saldo}} em aberto. Posso continuar?",
+       "tentativas": 1,
+       "opcoes": [
+        {
+         "codigo": "sim",
+         "rotulo": "Sim"
+        }
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "sim",
+        "rotulo": "Sim",
+        "para": "N8",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N8",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Obrigada. Até logo.",
+       "resultado": "cpc"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "esperado": []
+  },
+  {
+   "nome": "oferta pelo caminho de Não confirmou",
+   "definicao": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N8",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N4",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N4",
+      "tipo": "oferta",
+      "modo": "arvore",
+      "params": {
+       "origem": "carteira",
+       "fala": "Tenho uma condição. Fica bom?"
+      },
+      "saidas": [
+       {
+        "quando": "aceitou",
+        "rotulo": "Aceitou",
+        "para": "N8",
+        "tipo": "normal"
+       },
+       {
+        "quando": "recusou",
+        "rotulo": "Recusou",
+        "para": "N8",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N8",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Obrigada. Até logo.",
+       "resultado": "cpc"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "esperado": [
+    "valor_antes_identidade:N4"
+   ]
+  },
+  {
+   "nome": "credor com espaços no caminho de falha do conector",
+   "definicao": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N8",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N9",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Conector falhou",
+        "para": "N5",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N5",
+      "tipo": "transferir",
+      "modo": "arvore",
+      "params": {
+       "fala": "Vou passar você para um atendente de {{ credor }}.",
+       "motivo": "pedido_humano"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N8",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Obrigada. Até logo.",
+       "resultado": "cpc"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "esperado": [
+    "valor_antes_identidade:N5"
+   ]
+  },
+  {
+   "nome": "recado neutro só com variáveis livres",
+   "definicao": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N8",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N8",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Obrigada. Até logo.",
+       "resultado": "cpc"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "esperado": []
+  },
+  {
+   "nome": "conversa livre antes da identidade (pelo tipo)",
+   "definicao": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N6",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N6",
+      "tipo": "generativa",
+      "modo": "generativo",
+      "params": {
+       "objetivo": "Entender o momento da pessoa sem falar de valores.",
+       "max_turnos": 4,
+       "ferramentas": [
+        "transferir_humano"
+       ]
+      },
+      "saidas": [
+       {
+        "quando": "sem_acordo",
+        "rotulo": "Sem acordo",
+        "para": "N8",
+        "tipo": "devolve"
+       }
+      ]
+     },
+     {
+      "id": "N8",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Obrigada. Até logo.",
+       "resultado": "cpc"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "esperado": [
+    "valor_antes_identidade:N6"
+   ]
+  },
+  {
+   "nome": "fala de espera de conector com oferta antes da identidade",
+   "definicao": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N7",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N7",
+      "tipo": "conector",
+      "modo": "sistema",
+      "params": {
+       "conector_id": 1,
+       "fala_espera": "Vou ver {{oferta.parcelas}} parcelas."
+      },
+      "saidas": [
+       {
+        "quando": "respondeu",
+        "rotulo": "Respondeu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "falhou",
+        "rotulo": "Falhou",
+        "para": "N8",
+        "tipo": "falha"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N8",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N8",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Obrigada. Até logo.",
+       "resultado": "cpc"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "esperado": [
+    "valor_antes_identidade:N7"
+   ]
+  },
+  {
+   "nome": "variável sem fechar não conta",
+   "definicao": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a {{assessoria}} {{credor}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N8",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N8",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Obrigada. Até logo.",
+       "resultado": "cpc"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "esperado": []
+  },
+  {
+   "nome": "duas aberturas: a trava não é conferida (abertura_repetida decide)",
+   "definicao": {
+    "esquema": 1,
+    "blocos": [
+     {
+      "id": "N1",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Em nome de {{credor}}."
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N3",
+      "tipo": "abertura",
+      "modo": "arvore",
+      "params": {
+       "fala": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"
+      },
+      "saidas": [
+       {
+        "quando": "titular",
+        "rotulo": "Sou eu",
+        "para": "N2",
+        "tipo": "normal"
+       },
+       {
+        "quando": "terceiro",
+        "rotulo": "Não é a pessoa",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N2",
+      "tipo": "identidade",
+      "modo": "cognicao",
+      "params": {
+       "fala": "Me confirma o dia e o mês do seu nascimento?",
+       "pergunta": "dia_mes_nascimento",
+       "conector_id": 2,
+       "tentativas": 2
+      },
+      "saidas": [
+       {
+        "quando": "confirmou",
+        "rotulo": "Confirmou",
+        "para": "N8",
+        "tipo": "normal"
+       },
+       {
+        "quando": "nao_confirmou",
+        "rotulo": "Não confirmou",
+        "para": "N9",
+        "tipo": "normal"
+       }
+      ]
+     },
+     {
+      "id": "N8",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Obrigada. Até logo.",
+       "resultado": "cpc"
+      },
+      "saidas": []
+     },
+     {
+      "id": "N9",
+      "tipo": "encerrar",
+      "modo": "arvore",
+      "params": {
+       "fala": "Peço que {{primeiro_nome}} retorne para a {{assessoria}}.",
+       "resultado": "recado"
+      },
+      "saidas": []
+     }
+    ]
+   },
+   "esperado": []
+  }
+ ]
+}

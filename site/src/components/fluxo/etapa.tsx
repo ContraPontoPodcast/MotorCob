@@ -1,11 +1,13 @@
-// Gaveta da etapa (editor): modo, fala ou objetivo, campos do tipo, saídas ("Sim → N5") e, na conversa livre, a base
+// Gaveta da etapa (editor): modo, fala ou objetivo, campos do tipo, saídas ("Sim → nome da etapa") e, na conversa livre, a base
 // de respostas (salvar_resposta_fluxo_voz; revisa quem aprova). Os campos seguem o esquema 1 de public.fluxo_voz_erros:
-// o que o banco recusa aparece nas pendências depois de salvar.
+// o que o banco recusa aparece nas pendências depois de salvar. A trava 1 (valor, oferta ou credor antes da identidade)
+// é conferida aqui enquanto se digita (validarLocal, cópia do validador) e aparece como "O que corrigir".
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Trash2 } from 'lucide-react';
-import { Aviso, Botao, Pilula, campoCls, campoStyle } from '@/components/voz/ui';
+import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
+import { Botao, Pilula, campoCls, campoStyle } from '@/components/voz/ui';
 import {
-	MODOS, OPCOES, TIPOS, explicar, modosDoTipo, saidasPossiveis, tipoDaSaida, tituloBloco,
+	MODOS, OPCOES, TIPOS, caminhosPara, comoCorrigir, explicar, modosDoTipo, nomesEtapas, saidasPossiveis, tipoDaSaida, trocarBloco, validarLocal, variaveisSensiveis,
 	type Bloco, type Definicao, type Modo, type Saida,
 } from '@/lib/fluxo';
 import type { ConectorRow, IntencaoRow, RespostaRow } from './api';
@@ -61,7 +63,13 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 	const setP = (k: string, v: unknown) => setB(x => ({ ...x, params: { ...x.params, [k]: v } }));
 	const final = !!TIPOS[b.tipo]?.final;
 	const outros = definicao.blocos.filter(x => x.id !== b.id);
-	const meus = erros.map(explicar).filter(e => e.bloco === b.id);
+	const nomes = useMemo(() => nomesEtapas(definicao), [definicao]);
+	const nome = nomes.get(b.id) ?? b.id;
+	// trava 1 ao digitar: a mesma regra do banco, sobre o rascunho desta gaveta (antes de salvar)
+	const credorAntes = useMemo(() => validarLocal(trocarBloco(definicao, b)).includes(`valor_antes_identidade:${b.id}`), [definicao, b]);
+	const meus = erros.map(explicar).filter(e => e.bloco === b.id && e.codigo.split(':')[0] !== 'valor_antes_identidade');
+	const chegam = useMemo(() => caminhosPara(definicao, b.id), [definicao, b.id]);
+	const [confirmaRemover, setConfirmaRemover] = useState(false);
 	const dis = !editavel;
 
 	// saídas: uma linha por saída possível (pergunta e intenção dependem das opções); conversa livre tem lista própria
@@ -78,7 +86,7 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 	const destino = (quando: string) => (
 		<select aria-label={`Destino de ${quando}`} value={b.saidas.find(s => s.quando === quando)?.para ?? ''} disabled={dis} onChange={e => setSaida(quando, { para: e.target.value })} className={sel} style={campoStyle}>
 			<option value="">— sem saída —</option>
-			{outros.map(o => <option key={o.id} value={o.id}>→ {o.id} · {tituloBloco(o)}</option>)}
+			{outros.map(o => <option key={o.id} value={o.id}>→ {nomes.get(o.id)}</option>)}
 		</select>
 	);
 
@@ -212,12 +220,13 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 	const [novoQuando, setNovoQuando] = useState('');
 
 	return (
-		<Gaveta aberta onFechar={onFechar} titulo={`${b.id} · ${tituloBloco(b)}`} sub={`${MODOS[b.modo]?.nome ?? b.modo} (no editor antigo: ${MODOS[b.modo]?.antigo ?? b.modo}) · ${TIPOS[b.tipo]?.nome}`}
+		<Gaveta aberta onFechar={onFechar} titulo={nome} sub={`${MODOS[b.modo]?.nome ?? b.modo} (no editor antigo: ${MODOS[b.modo]?.antigo ?? b.modo}) · ${TIPOS[b.tipo]?.nome} · código ${b.id}`}
 			pe={editavel ? <>
-				<Botao secundario onClick={() => void (async () => { setOcupado(true); const ok = await onRemover(b.id); setOcupado(false); if (ok) onFechar(); })()} disabled={ocupado}><Trash2 size={14} aria-hidden /> Remover etapa</Botao>
+				<Botao secundario onClick={() => setConfirmaRemover(true)} disabled={ocupado}><Trash2 size={14} aria-hidden /> Remover etapa</Botao>
 				<Botao onClick={() => void salvar()} disabled={ocupado}>Salvar etapa</Botao>
 			</> : undefined}>
-			{meus.map(e => <Aviso key={e.codigo} tom={e.impede ? 'erro' : 'atencao'} titulo={e.impede ? 'Impede o envio:' : 'Atenção:'}>{e.texto}</Aviso>)}
+			{credorAntes && <OQueCorrigir impede texto={textoCredorAntes(b)} como={comoCorrigir('valor_antes_identidade')} />}
+			{meus.map(e => <OQueCorrigir key={e.codigo} impede={e.impede} texto={e.texto} como={comoCorrigir(e.codigo)} />)}
 			{!editavel && <p className="text-[12.5px] text-[var(--base-texto-3)]">Somente leitura{situacao !== 'rascunho' ? ': para mudar, edite o rascunho do fluxo.' : '.'}</p>}
 			<div className="grid gap-3 sm:grid-cols-2">
 				<Campo rotulo="Título (opcional)"><input value={b.titulo ?? ''} maxLength={60} disabled={dis} placeholder={TIPOS[b.tipo]?.nome} onChange={e => setB(x => ({ ...x, titulo: e.target.value }))} className={sel} style={campoStyle} /></Campo>
@@ -261,11 +270,45 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 				</select>
 			</Detalhes>
 			{gen && <BaseRespostas versao={versao} bloco={b.id} editavel={editavel && situacao === 'rascunho'} />}
-			{(b.tipo === 'abertura' || b.tipo === 'identidade' || b.tipo === 'generativa') && (
-				<p className="flex items-start gap-1.5 text-[12px] text-[var(--base-texto-3)]">Etapa com trava fixa. Nenhum fluxo desliga; veja "Regras fixas".</p>
+			{(b.tipo === 'abertura' || b.tipo === 'identidade' || (b.tipo === 'encerrar' && p.resultado === 'recado')) && (
+				<p className="flex items-start gap-1.5 text-[12px] text-[var(--base-texto-3)]">Etapa com trava fixa. Nenhum fluxo desliga; as 7 travas ficam no topo do editor.</p>
 			)}
+			{gen && <p className="text-[12px] text-[var(--base-texto-3)]">"Transferir para humano" fica sempre ligado nesta etapa (trava 6). O resto da conversa é editável.</p>}
+			<ConfirmaAcao
+				aberto={confirmaRemover}
+				titulo={`Remover "${nome}"?`}
+				texto={chegam.length
+					? <>{chegam.length === 1 ? 'Um caminho chega' : `${chegam.length} caminhos chegam`} a esta etapa e {chegam.length === 1 ? 'fica' : 'ficam'} sem destino: {chegam.map(c => `"${c.rotulo}" em ${nomes.get(c.de)}`).join(', ')}. Depois, ligue {chegam.length === 1 ? 'esse caminho' : 'esses caminhos'} a outra etapa. A mudança vai para o rascunho.</>
+					: 'Nenhum caminho chega a esta etapa. A mudança vai para o rascunho.'}
+				botao="Remover etapa"
+				corBotao="var(--estado-erro)"
+				loading={ocupado}
+				onClose={() => setConfirmaRemover(false)}
+				onConfirm={() => void (async () => { setOcupado(true); const ok = await onRemover(b.id); setOcupado(false); setConfirmaRemover(false); if (ok) onFechar(); })()}
+			/>
 		</Gaveta>
 	);
+}
+
+/** "O que corrigir" dentro da etapa: o quê, como corrigir e se segura o envio para aprovação. */
+export function OQueCorrigir({ impede, texto, como }: { impede: boolean; texto: ReactNode; como?: string }) {
+	return (
+		<div role={impede ? 'alert' : 'status'} className="rounded-xl px-3 py-2.5 text-[13px] text-[var(--base-texto)]" style={{ backgroundColor: impede ? 'var(--estado-erro-fundo)' : 'var(--estado-atencao-fundo)' }}>
+			<span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+				<b className="font-semibold" style={{ color: impede ? 'var(--estado-erro-texto)' : 'var(--estado-atencao-texto)' }}>{impede ? 'O que corrigir:' : 'Atenção:'}</b>
+				<span className="min-w-0">{texto}</span>
+				{impede && <Pilula tom="erro">impede o envio</Pilula>}
+			</span>
+			{como && <small className="mt-1 block text-[12.5px] text-[var(--base-texto-2)]">{como}</small>}
+		</div>
+	);
+}
+
+/** O que a etapa diz antes da identidade, em palavras: "Esta fala cita {{credor}} antes de confirmar a identidade." */
+export function textoCredorAntes(b: Bloco): string {
+	const vs = variaveisSensiveis(b);
+	if (vs.length) return `Esta ${b.tipo === 'generativa' ? 'etapa' : 'fala'} cita ${vs.map(v => `{{${v}}}`).join(', ')} antes de confirmar a identidade, em algum caminho.`;
+	return `${TIPOS[b.tipo]?.nome ?? 'Esta etapa'} fala de valor ou oferta e algum caminho chega aqui antes de confirmar a identidade.`;
 }
 
 /** Base de respostas da conversa livre (FL8): edita quem edita; só as revisadas por quem aprova vão para a ligação. */

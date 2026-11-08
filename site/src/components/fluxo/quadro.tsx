@@ -1,49 +1,54 @@
 // Quadro por ramos do editor (decisão do dono, no lugar do canvas livre com linhas) e a barra de envio para aprovação.
 // Componentes só de apresentação (sem dados nem rotas), testados em site/fluxo/componentes.test.tsx.
+// As setas dizem o nome da etapa ("Sou eu → Confirmar identidade"), nunca o código (revisão U1); o código fica na
+// gaveta da etapa, para quem precisa dele (casos de teste, suporte).
 import { Lock } from 'lucide-react';
 import { Pilula } from '@/components/voz/ui';
 import {
-	MODOS, quadroPorRamos, resumoBloco, textoSaida, tituloBloco,
+	MODOS, ehFinal, nomeDestino, nomesEtapas, quadroPorRamos, resumoBloco, tituloRamo,
 	type Bloco, type Definicao, type SituacaoVersao,
 } from '@/lib/fluxo';
 import { Detalhes, Ponto } from './ds';
 
 export type Marca = 'erro' | 'atencao';
 
-/** Etapa com trava fixa (o cadeado do cartão): abertura, identidade, transferir para humano e o recado neutro. */
-export const temTrava = (b: Bloco) => b.tipo === 'abertura' || b.tipo === 'identidade' || (b.tipo === 'encerrar' && b.params?.resultado === 'recado') || b.tipo === 'generativa';
+/** Etapa com trava fixa (o cadeado do cartão): abertura, identidade e o recado neutro para terceiro. A conversa livre
+ * (IA) não leva cadeado: ela é editável; a trava ali é só a ferramenta "Transferir para humano" (revisão U6). */
+export const temTrava = (b: Bloco) => b.tipo === 'abertura' || b.tipo === 'identidade' || (b.tipo === 'encerrar' && b.params?.resultado === 'recado');
 
-function CartaoEtapa({ b, marca, compartilhados, onAbrir }: { b: Bloco; marca?: Marca; compartilhados: Set<string>; onAbrir: (id: string) => void }) {
+function CartaoEtapa({ b, marca, nomes, onAbrir }: { b: Bloco; marca?: Marca; nomes: Map<string, string>; onAbrir: (id: string) => void }) {
 	const resumo = resumoBloco(b);
 	return (
 		<button type="button" onClick={() => onAbrir(b.id)} data-etapa={b.id}
 			className="flex min-w-0 flex-col items-stretch gap-1.5 rounded-xl px-3 py-2.5 text-left hover:shadow-sm"
 			style={{ backgroundColor: 'var(--base-cartao)', border: `1px solid ${marca === 'erro' ? 'var(--estado-erro)' : 'var(--base-borda)'}`, borderLeft: `4px solid ${MODOS[b.modo]?.cor ?? 'var(--base-borda)'}` }}>
 			<span className="flex items-center justify-between gap-1.5">
-				<b className="min-w-0 truncate text-[13px] font-semibold text-[var(--base-texto)]">{b.id} · {tituloBloco(b)}</b>
-				{marca === 'erro' ? <Pilula tom="erro">impede</Pilula> : marca === 'atencao' ? <Pilula tom="atencao">atenção</Pilula> : temTrava(b) ? <Lock size={13} className="shrink-0 text-[var(--base-texto-3)]" aria-label="Etapa com trava fixa" /> : null}
+				<b className="min-w-0 truncate text-[13px] font-semibold text-[var(--base-texto)]">{nomes.get(b.id)}</b>
+				{marca === 'erro' ? <Pilula tom="erro">impede</Pilula> : marca === 'atencao' ? <Pilula tom="atencao">atenção</Pilula> : temTrava(b) ? <Lock size={13} className="shrink-0 text-[var(--area-voz)]" aria-label="Etapa com trava fixa" /> : null}
 			</span>
 			{resumo && <span className="text-[12px] text-[var(--base-texto-2)]" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{resumo}</span>}
-			<span className="flex flex-wrap gap-x-2.5 gap-y-0.5 text-[12px] text-[var(--base-texto-2)]">
+			<span className="flex flex-col gap-0.5 text-[12px] text-[var(--base-texto-2)]">
 				{b.saidas.length ? b.saidas.map(s => (
-					<span key={s.quando} title={textoSaida(s, compartilhados)}>{s.rotulo} <b className="text-[var(--base-texto)]">{compartilhados.has(s.para) ? '↪' : '→'} {s.para}</b></span>
-				)) : <span>fim</span>}
+					<span key={s.quando} className="min-w-0">{s.rotulo} <span aria-hidden>→</span><span className="sr-only">, então</span> <b className="font-semibold text-[var(--base-texto)]">{nomeDestino(nomes, s.para)}</b></span>
+				)) : ehFinal(b)
+					? <span>Fim da ligação</span>
+					: <span className="font-semibold text-[var(--estado-erro-texto)]">Nenhuma resposta ligada: a ligação pararia aqui.</span>}
 			</span>
 		</button>
 	);
 }
 
-/** O caminho principal em cima e os ramos embaixo; cada etapa mostra as saídas como "Sim → N5". No celular, vira uma coluna. */
+/** O caminho principal em cima e os ramos embaixo; cada etapa mostra as saídas como "Sim → Oferta". No celular, vira uma coluna. */
 export function Quadro({ definicao, marcas, vista, onAbrir }: { definicao: Definicao; marcas: Map<string, Marca>; vista: 'quadro' | 'lista'; onAbrir: (id: string) => void }) {
 	const ramos = quadroPorRamos(definicao);
-	const compartilhados = new Set(ramos.filter(r => r.tipo === 'finais').flatMap(r => r.blocos.map(b => b.id)));
+	const nomes = nomesEtapas(definicao);
 	const qtd = (n: number) => `${n} ${n === 1 ? 'etapa' : 'etapas'}`;
 	if (vista === 'lista') {
 		return (
 			<div className="rounded-2xl bg-[var(--base-cartao)] px-4" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }}>
 				{ramos.map(r => (
 					<Detalhes key={r.nome + (r.origem ?? '')} titulo={r.nome} qtd={qtd(r.blocos.length)} aberto={r.tipo === 'principal'}>
-						<div className="flex flex-col gap-2">{r.blocos.map(b => <CartaoEtapa key={b.id} b={b} marca={marcas.get(b.id)} compartilhados={compartilhados} onAbrir={onAbrir} />)}</div>
+						<div className="flex flex-col gap-2">{r.blocos.map(b => <CartaoEtapa key={b.id} b={b} marca={marcas.get(b.id)} nomes={nomes} onAbrir={onAbrir} />)}</div>
 					</Detalhes>
 				))}
 			</div>
@@ -52,11 +57,11 @@ export function Quadro({ definicao, marcas, vista, onAbrir }: { definicao: Defin
 	const raia = (r: (typeof ramos)[number], principal: boolean) => (
 		<section key={r.nome + (r.origem ?? '')} aria-label={r.nome} className="flex min-w-0 flex-col gap-2 rounded-2xl p-2.5" style={{ backgroundColor: 'var(--base-fill)' }}>
 			<div className="flex justify-between gap-2 px-0.5 text-[12px] font-semibold text-[var(--base-texto-2)]">
-				<span className="min-w-0 truncate">{r.nome}{r.origem ? <span className="font-normal text-[var(--base-texto-3)]"> · de {r.origem}</span> : null}</span>
+				<span className="min-w-0">{tituloRamo(r, definicao)}{r.origem ? <span className="font-normal text-[var(--base-texto-3)]"> · em {nomes.get(r.origem)}</span> : null}</span>
 				<span className="shrink-0 font-normal">{qtd(r.blocos.length)}</span>
 			</div>
 			<div className="grid items-start gap-2" style={{ gridTemplateColumns: principal ? 'repeat(auto-fill, minmax(min(210px, 100%), 1fr))' : 'minmax(0, 1fr)' }}>
-				{r.blocos.map(b => <CartaoEtapa key={b.id} b={b} marca={marcas.get(b.id)} compartilhados={compartilhados} onAbrir={onAbrir} />)}
+				{r.blocos.map(b => <CartaoEtapa key={b.id} b={b} marca={marcas.get(b.id)} nomes={nomes} onAbrir={onAbrir} />)}
 			</div>
 		</section>
 	);

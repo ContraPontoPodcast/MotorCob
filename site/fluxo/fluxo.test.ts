@@ -3,8 +3,9 @@
 // node --experimental-strip-types --test site/fluxo/fluxo.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
-	MODOS, TIPOS, estadoEnvio, explicar, falaOk, funil, impedem, kpisDoFluxo, misturaModos, modoPredominante, nomeAnexo, novoBloco,
+	MODOS, SEMPRE, TIPOS, TRAVAS, caminhosPara, comoCorrigir, estadoEnvio, explicar, falaOk, nomesEtapas, textoSaida, tituloRamo, variaveisDoTexto, variaveisSensiveis, funil, impedem, kpisDoFluxo, misturaModos, modoPredominante, nomeAnexo, novoBloco,
 	proximoId, quadroPorRamos, removerBloco, roleplayValido, saidasFaltando, saidasPossiveis, somarMetricas, tipoDaSaida, validarLocal,
 	type Bloco, type Definicao,
 } from '../src/lib/fluxo.ts';
@@ -129,4 +130,60 @@ test('falas de teste, roleplay e anexos seguem os limites do banco', () => {
 	assert.equal(roleplayValido(10, 20), true);
 	assert.equal(/[0-9]{10,}/.test(nomeAnexo('Política 2026 1234567890123.pdf', 'abc')), false);
 	assert.match(nomeAnexo('Política de ofertas.xlsx', 'xyz'), /^xyz_Politica_de_ofertas\.xlsx$/);
+});
+
+// ------------------------------------------------------------ redesenho PR1/PR2 (SPEC do novo editor do fluxo)
+test('setas com nome: "Sou eu → Confirmar identidade"; nomes repetidos ganham o código só neles', () => {
+	const d = negociador();
+	const nomes = nomesEtapas(d);
+	assert.equal(nomes.get('N2'), 'Confirmar identidade');
+	assert.equal(nomes.get('N3'), 'Entender intenção');
+	// três "Encerrar" sem título: o código entra entre parênteses para distinguir
+	assert.equal(nomes.get('N7'), 'Encerrar (N7)');
+	assert.equal(nomes.get('N14'), 'Encerrar (N14)');
+	assert.equal(textoSaida(d.blocos[0].saidas[0], nomes), 'Sou eu → Confirmar identidade');
+	assert.equal(textoSaida(s('x', 'Volta', 'N99'), nomes), 'Volta → etapa que não existe mais');
+	for (const b of d.blocos) for (const x of b.saidas) assert.doesNotMatch(textoSaida(x, nomes), /[→↪] N\d/);
+	// com título, o título vale
+	const t = { ...d, blocos: d.blocos.map(b => (b.id === 'N14' ? { ...b, titulo: 'Recado neutro' } : b)) };
+	assert.equal(nomesEtapas(t).get('N14'), 'Recado neutro');
+});
+
+test('ramos com nome de conversa e caminhos que ficam sem destino ao remover', () => {
+	const d = negociador();
+	const r = quadroPorRamos(d);
+	const ramo = (n: string) => r.find(x => x.nome === n)!;
+	assert.equal(tituloRamo(ramo('Já paguei'), d), 'Se disser "Já paguei"');
+	assert.equal(tituloRamo(ramo('Se Chamar conector falhar'), d), 'Se Chamar conector falhar');
+	assert.equal(tituloRamo(r[0], d), 'Caminho principal');
+	assert.equal(tituloRamo({ nome: 'Sem acordo', origem: 'N5', blocos: [], tipo: 'ramo' }, d), 'Se a conversa terminar em "Sem acordo"');
+	assert.equal(tituloRamo({ nome: 'Respondeu', origem: 'N4', blocos: [], tipo: 'ramo' }, d), 'Se der "Respondeu"');
+	assert.deepEqual(caminhosPara(d, 'N9'), [{ de: 'N3', rotulo: 'Sem dinheiro' }, { de: 'N6', rotulo: 'Recusou' }]);
+	assert.deepEqual(caminhosPara(d, 'N17'), []);
+});
+
+test('trava 1 ao digitar: validarLocal confere valor_antes_identidade com os mesmos casos do validador Python', () => {
+	const { casos } = JSON.parse(readFileSync(new URL('../../tests/dados/fluxo_valor_antes_identidade_casos.json', import.meta.url), 'utf8')) as { casos: { nome: string; definicao: Definicao; esperado: string[] }[] };
+	assert.ok(casos.length >= 8);
+	for (const c of casos) assert.deepEqual(validarLocal(c.definicao).filter(e => e.startsWith('valor_antes_identidade')), c.esperado, c.nome);
+	// o negociador do desenho não tem a pendência (o saldo só vem depois de "Confirmou")
+	assert.ok(!validarLocal(negociador()).some(e => e.startsWith('valor_antes_identidade')));
+	// variáveis: mesmo recorte do validador (conteúdo até o 1º "}", sem espaços nas pontas)
+	assert.deepEqual(variaveisDoTexto('a {{ credor }} b {{saldo}} {{x} {{{{assessoria}}'), ['credor', 'saldo', '{{assessoria']);   // igual a FV.variaveis
+	assert.deepEqual(variaveisSensiveis(blk('N1', 'abertura', 'arvore', [], { fala: '{{assessoria}} {{primeiro_nome}} {{credor}} {{credor}}' })), ['credor']);
+	assert.equal(explicar('valor_antes_identidade:N1').bloco, 'N1');
+	assert.match(comoCorrigir('valor_antes_identidade:N1'), /Confirmar identidade/);
+});
+
+test('o que corrigir: toda pendência de etapa que o editor marca diz como corrigir', () => {
+	for (const c of ['sem_saida:N9', 'inalcancavel:N17', 'saida_faltando:N4', 'conector_inativo:N7', 'sem_alcada', 'valor_antes_identidade:N1', 'identidade_sem_conferencia:N2', 'transferir_humano_desligado:N5', 'generativo_sem_objetivo:N5']) assert.ok(comoCorrigir(c).length > 20, c);
+	assert.equal(comoCorrigir('roleplay_ausente'), '');
+});
+
+test('travas: uma lista só, 7 itens, sem prometer o que o executor ainda não faz', () => {
+	assert.equal(TRAVAS.length, 7);
+	const tudo = [...TRAVAS.flat(), ...SEMPRE.flat()].join(' ');
+	assert.doesNotMatch(tudo, /CPF|tema sensível|caixa postal/i);         // B2 e B4 ainda não estão no ar
+	assert.ok(SEMPRE.some(([q]) => /Não me ligue/.test(q)) && SEMPRE.some(([q]) => /pessoa/.test(q)));
+	assert.notEqual(MODOS.arvore.cor, MODOS.sistema.cor);
 });
