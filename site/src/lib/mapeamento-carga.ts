@@ -5,7 +5,16 @@
 import { unzipSync, strFromU8 } from 'fflate';
 
 export type CampoCarga = 'id_cliente' | 'cpf' | 'id_contrato' | 'saldo' | 'dias_atraso' | 'vencimento' | 'telefones' | 'emails';
-export type ColunasCarga = Partial<Record<Exclude<CampoCarga, 'telefones' | 'emails'>, string>> & { telefones?: string[]; emails?: string[] };
+/** SQL 88 · "Para o agente de voz" (opcionais): só viram código de validação; nunca atributo, segmento ou prévia. */
+export type CampoVoz = 'nascimento' | 'documento_validacao';
+export type ColunasCarga = Partial<Record<Exclude<CampoCarga, 'telefones' | 'emails'> | CampoVoz, string>> & { telefones?: string[]; emails?: string[] };
+
+export const CAMPOS_VOZ: { key: CampoVoz; nome: string; ajuda: string; formato: string }[] = [
+	{ key: 'nascimento', nome: 'Data de nascimento', ajuda: 'dá "dia e mês" e "ano". Reconhece DT_NASC, DATA_NASCIMENTO e parecidos.', formato: 'Formato: DD/MM/AAAA (ou AAAA-MM-DD). Inválida = data que não existe (31/02), futura ou idade fora de 14–110.' },
+	{ key: 'documento_validacao', nome: '3 últimos dígitos do documento', ajuda: 'Use o CPF/CNPJ já apontado, ou uma coluna só com os 3 dígitos.', formato: 'Do CPF/CNPJ o motor tira só os 3 últimos dígitos, em memória. O documento continua nunca sendo o id.' },
+];
+/** Nomes usuais da data de nascimento (os mesmos de motor/entrada.py › NOMES_NASCIMENTO). */
+const NASCIMENTOS = ['DATA_NASCIMENTO', 'DT_NASCIMENTO', 'DT_NASC', 'DATA_NASC', 'NASCIMENTO', 'DATANASCIMENTO', 'DT_NASCTO', 'DATA_DE_NASCIMENTO'];
 /** O que a carga precisa (um de cada): mesmos códigos do motor (detectar.FALTA_BASE). */
 export type Falta = 'cliente' | 'saldo' | 'atraso' | 'contato';
 
@@ -67,6 +76,8 @@ export function reconhecer(cabecalho: string[]): ColunasCarga {
 	}
 	if (tels.length) r.telefones = tels;
 	if (mails.length) r.emails = mails;
+	const nasc = achar(cabecalho.filter(c => !tels.includes(c) && !mails.includes(c)), usados, NASCIMENTOS);
+	if (nasc) r.nascimento = nasc;
 	return r;
 }
 
@@ -103,7 +114,8 @@ export function mensagemFaltam(f: Falta[]): string {
 /** Erro de validação em português ('' = pode salvar). As mesmas regras de salvar_mapeamento_base. */
 export function validar(c: ColunasCarga, cabecalho: string[]): string {
 	const usadas: string[] = [];
-	for (const v of Object.values(c)) {
+	for (const [k, v] of Object.entries(c)) {
+		if (k === 'documento_validacao' && v && v === c.cpf) continue;   // "usar o CPF/CNPJ já apontado"
 		for (const col of Array.isArray(v) ? v : v ? [v] : []) {
 			if (usadas.includes(col)) return `A coluna "${col}" foi apontada para mais de um campo. Cada campo usa uma coluna.`;
 			if (cabecalho.length && !cabecalho.includes(col)) return `A coluna "${col}" não está no arquivo. Escolha uma das colunas do arquivo.`;
@@ -124,10 +136,12 @@ export function paraSalvar(c: ColunasCarga): ColunasCarga {
 }
 
 /** Exemplo da coluna para a tela: dado pessoal sempre mascarado (CPF, telefone, e-mail). */
-export function exemplo(campo: CampoCarga, valor: string | undefined): string {
+export function exemplo(campo: CampoCarga | CampoVoz, valor: string | undefined): string {
 	const v = (valor ?? '').trim();
 	if (!v) return '';
 	if (campo === 'cpf') return '•••.•••.•••-••';
+	if (campo === 'nascimento') return '••/••/••••';      // dado de validação: nunca aparece, nem de exemplo
+	if (campo === 'documento_validacao') return '•••';
 	if (campo === 'telefones') { const d = v.replace(/\D/g, ''); return d.length >= 4 ? `(••) •••••-••${d.slice(-2)}` : '••••'; }
 	if (campo === 'emails') return '••••@' + (v.split('@')[1] ?? '••••');
 	return v.length > 24 ? v.slice(0, 24) + '…' : v;

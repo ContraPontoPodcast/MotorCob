@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { resumoCarga } from '@/lib/identidade-mailing';
 import { Link, useSearchParams } from 'react-router';
 import { CloudUpload, FileSpreadsheet, UploadCloud, ChevronDown, ChevronUp, Landmark } from 'lucide-react';
 import { Empty, Loading, Notice, PageHeading } from '@/components/app-shell';
@@ -130,6 +131,10 @@ function DetalheRelatorio({ r, credorCodigo }: { r: Row; credorCodigo: string | 
 				if (keys.length) parts.push(`· resultado não reconhecido: ${keys.slice(0, 5).map(k => `'${k}'`).join(', ')}`);
 			}
 			return <p className="mt-1 whitespace-normal text-xs text-slate-500">{parts.join(' ')}</p>;
+		}
+		if (tipo === 'base') {      // SQL 88: só contagens da validação do agente de voz
+			const voz = resumoCarga(rel.identidade_voz);
+			return voz ? <p className="mt-1 whitespace-normal text-xs text-slate-500">{voz}</p> : null;
 		}
 	}
 	return null;

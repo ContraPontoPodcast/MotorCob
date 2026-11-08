@@ -4,6 +4,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { lerErroDaFuncao } from '@/lib/funcoes';
 import { nomeAnexo, type Definicao, type MetricaBloco, type SituacaoVersao, type TipoAgente } from '@/lib/fluxo';
+import type { ConfigIdentidade, IdentidadeVigente, VersaoIdentidade } from '@/lib/identidade-mailing';
 
 export interface FluxoRow { id: number; empresa_id: number; credor_id: number | null; nome: string; tipo_agente: TipoAgente; modelo_origem: string | null; roteiro_origem_id: number | null; criado_em: string }
 export interface VersaoRow {
@@ -105,6 +106,12 @@ export interface FluxoApi {
 	responderPedido(pedido: number, respostas: Record<string, string>): Promise<void>;
 	anexar(slug: string, arquivo: File): Promise<string>;
 	salvarAlcada(a: { empresa: number; credor: number | null; desconto: number; parcelas: number; parcelaMin: number; entradaMin: number; validade: number; desde: string | null }): Promise<void>;
+	/** SQL 88 · Confirmar identidade: a configuração vigente da carteira (sem ela, null = o de hoje). */
+	identidade(empresa: number, credor: number | null): Promise<IdentidadeVigente | null>;
+	/** Versões da configuração da carteira (Histórico, com "o que mudou" em palavras). */
+	historicoIdentidade(empresa: number, credor: number | null): Promise<VersaoIdentidade[]>;
+	/** Salva (só quem aprova o roteiro de voz). null = voltar ao de hoje (só o CRM). */
+	salvarIdentidade(empresa: number, credor: number | null, identidade: ConfigIdentidade | null): Promise<void>;
 	salvarConector(empresa: number, ajustes: Record<string, unknown>, id: number | null): Promise<number>;
 	testarConector(id: number): Promise<void>;
 	situacaoConector(id: number, situacao: 'ativo' | 'pausado'): Promise<void>;
@@ -174,6 +181,17 @@ export function apiSupabase(sb: SupabaseClient, funcao = 'simular_fluxo_voz'): F
 			return a && a.id ? a : null;
 		},
 		async pendencias(empresa, credor, d) { return (await rpc<string[] | null>('fluxo_voz_pendencias', { empresa, credor, d })) ?? []; },
+		async identidade(empresa, credor) {
+			const r = await rpc<IdentidadeVigente | IdentidadeVigente[] | null>('identidade_voz_vigente', { empresa, credor });
+			const a = Array.isArray(r) ? r[0] : r;
+			return a && a.id ? a : null;
+		},
+		async historicoIdentidade(empresa, credor) {
+			let q = sb.from('voz_mailing_config').select('id,credor_id,identidade,mudancas,vigente_desde,vigente_ate').eq('empresa_id', empresa);
+			q = credor == null ? q.is('credor_id', null) : q.eq('credor_id', credor);
+			return ok((await q.order('vigente_desde', { ascending: false }).limit(20)) as Resp<VersaoIdentidade[]>, []);
+		},
+		async salvarIdentidade(empresa, credor, identidade) { await rpc('salvar_config_mailing_voz', { empresa, credor, identidade }); },
 		async bloqueios(versao) { return (await rpc<string[] | null>('fluxo_voz_bloqueios', { versao })) ?? []; },
 		async avisos(versao) { try { return (await rpc<string[] | null>('fluxo_voz_avisos', { versao })) ?? []; } catch { return []; } },
 		async salvarFluxo(a) { return Number(await rpc('salvar_fluxo_voz', { empresa: a.empresa, credor: a.credor, nome: a.nome, tipo_agente: a.tipo, definicao: a.definicao, versao: a.versao })); },

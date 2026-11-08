@@ -127,6 +127,7 @@ export default [
     route('voz', 'routes/voz.tsx'),
     route('voz/agente', 'routes/voz-agente.tsx'),
     route('voz/agente/roteiro', 'routes/voz-agente-roteiro.tsx'),
+    route('voz/agente/identidade', 'routes/voz-agente-identidade.tsx'),
     route('voz/agente/editor/:versao', 'routes/voz-agente-editor.tsx'),
     route('voz/agente/testar', 'routes/voz-agente-testar.tsx'),
     route('voz/agente/desempenho', 'routes/voz-agente-desempenho.tsx'),

@@ -9,6 +9,7 @@ import {
 	MODOS, ehFinal, nomeDestino, nomesEtapas, quadroPorRamos, resumoBloco, tituloRamo,
 	type Bloco, type Definicao, type Pendencia, type SituacaoVersao,
 } from '@/lib/fluxo';
+import { textoFonte, usaArquivo, type ConfigIdentidade } from '@/lib/identidade-mailing';
 import { Ponto } from './ds';
 
 export type Marca = 'erro' | 'atencao';
@@ -17,7 +18,7 @@ export type Marca = 'erro' | 'atencao';
  * (IA) não leva cadeado: ela é editável; a trava ali é só a ferramenta "Transferir para humano" (revisão U6). */
 export const temTrava = (b: Bloco) => b.tipo === 'abertura' || b.tipo === 'identidade' || (b.tipo === 'encerrar' && b.params?.resultado === 'recado');
 
-function CartaoEtapa({ b, marca, nomes, onAbrir, pendencias }: { b: Bloco; marca?: Marca; nomes: Map<string, string>; onAbrir: (id: string) => void; pendencias?: Pendencia[] }) {
+function CartaoEtapa({ b, marca, nomes, onAbrir, pendencias, identidade }: { b: Bloco; marca?: Marca; nomes: Map<string, string>; onAbrir: (id: string) => void; pendencias?: Pendencia[]; identidade?: ConfigIdentidade | null }) {
 	const pend = pendencias?.find(p => p.impede) ?? pendencias?.[0];
 	const resumo = resumoBloco(b);
 	return (
@@ -29,6 +30,12 @@ function CartaoEtapa({ b, marca, nomes, onAbrir, pendencias }: { b: Bloco; marca
 				{marca === 'erro' ? <Pilula tom="erro">impede</Pilula> : marca === 'atencao' ? <Pilula tom="atencao">atenção</Pilula> : temTrava(b) ? <Lock size={13} className="shrink-0 text-[var(--area-voz)]" aria-label="Etapa com trava fixa" /> : null}
 			</span>
 			{resumo && <span className="text-[12px] text-[var(--base-texto-2)]" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{resumo}</span>}
+			{b.tipo === 'identidade' && identidade !== undefined && (
+				<span className="rounded-lg px-2 py-1 text-[12px] text-[var(--base-texto)]" style={{ backgroundColor: 'var(--base-fill)' }} data-quem-confere={identidade?.fonte ?? 'hoje'}>
+					<b className="font-semibold">Quem confere:</b> {textoFonte(identidade)}{identidade ? ` · ${identidade.quantas} ${identidade.quantas === 1 ? 'pergunta' : 'perguntas'}` : ''}
+					{usaArquivo(identidade) && <span className="block text-[11.5px] text-[var(--base-texto-2)]">pelo arquivo, só como código</span>}
+				</span>
+			)}
 			<span className="flex flex-col gap-0.5 text-[12px] text-[var(--base-texto-2)]">
 				{b.saidas.length ? b.saidas.map(s => (
 					<span key={s.quando} className="min-w-0">{s.rotulo} <span aria-hidden>→</span><span className="sr-only">, então</span> <b className="font-semibold text-[var(--base-texto)]">{nomeDestino(nomes, s.para)}</b></span>
@@ -49,7 +56,7 @@ function CartaoEtapa({ b, marca, nomes, onAbrir, pendencias }: { b: Bloco; marca
 
 /** Mapa do fluxo (aba Mapa): o caminho principal em cima e os ramos embaixo, para ver o desenho inteiro; cada etapa
  * mostra as saídas como "Sim → Oferta". No celular, vira uma coluna. Para ler e editar a conversa, o Roteiro. */
-export function Quadro({ definicao, marcas, onAbrir, pendencias }: { definicao: Definicao; marcas: Map<string, Marca>; onAbrir: (id: string) => void; pendencias?: Map<string, Pendencia[]> }) {
+export function Quadro({ definicao, marcas, onAbrir, pendencias, identidade }: { definicao: Definicao; marcas: Map<string, Marca>; onAbrir: (id: string) => void; pendencias?: Map<string, Pendencia[]>; identidade?: ConfigIdentidade | null }) {
 	const ramos = quadroPorRamos(definicao);
 	const nomes = nomesEtapas(definicao);
 	const qtd = (n: number) => `${n} ${n === 1 ? 'etapa' : 'etapas'}`;
@@ -60,7 +67,7 @@ export function Quadro({ definicao, marcas, onAbrir, pendencias }: { definicao: 
 				<span className="shrink-0 font-normal">{qtd(r.blocos.length)}</span>
 			</div>
 			<div className="grid items-start gap-2" style={{ gridTemplateColumns: principal ? 'repeat(auto-fill, minmax(min(210px, 100%), 1fr))' : 'minmax(0, 1fr)' }}>
-				{r.blocos.map(b => <CartaoEtapa key={b.id} b={b} marca={marcas.get(b.id)} nomes={nomes} onAbrir={onAbrir} pendencias={pendencias?.get(b.id)} />)}
+				{r.blocos.map(b => <CartaoEtapa key={b.id} b={b} marca={marcas.get(b.id)} nomes={nomes} onAbrir={onAbrir} pendencias={pendencias?.get(b.id)} identidade={identidade} />)}
 			</div>
 		</section>
 	);
