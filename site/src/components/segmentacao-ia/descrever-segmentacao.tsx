@@ -1,6 +1,6 @@
 // Descrever segmentos e régua (etapa 5; protótipo proto-segmentacao v2, telas 2 a 6). A IA só PROPÕE: nada muda até
-// Aplicar, que roda numa transação do banco (aplicar_segmentacao, SQL 79) e deixa os segmentos e estratégias novos
-// PAUSADOS até o usuário conferir e ligar. Responder perguntas, recalcular contagens e aplicar não usam IA nem crédito;
+// Aplicar, que roda numa transação do banco (aplicar_segmentacao, SQL 79/82) e deixa os segmentos e estratégias novos
+// PAUSADOS até o usuário conferir e ligar; segmento alterado segue na versão atual até ligar a nova (SQL 82). Responder perguntas, recalcular contagens e aplicar não usam IA nem crédito;
 // cada geração usa 2 créditos de IA (SQL 78), estornados se a geração não entregar proposta.
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowRight, Check, Sparkles, X } from 'lucide-react';
@@ -14,8 +14,8 @@ import { friendlyError, numberBR, supabase, type Condicao } from '@/lib/supabase
 import { dataCurta, type ResultadoPrevia } from '@/lib/previa-segmentacao';
 import {
 	CREDITOS_DESCREVER, LIMITE_TEXTO, MOTIVO_FORA, ROTULO_ACAO, bloqueiosAplicar, comRespostas, conectorModo, conferencias,
-	contarAcoes, corpoPrevia, desligados, emOrdem, estagiosDoSegmento, explicarErrosGeracao, lerContagens, matrizDeOnde,
-	naoCriados, nomeAcao, respostasPadrao, tabelaRegua, textoCondicao, trocarOrdem,
+	contarAcoes, corpoPrevia, desligados, efeitoAplicar, emOrdem, estagiosDoSegmento, explicarErrosGeracao, lerContagens, matrizDeOnde,
+	naoCriados, nomeAcao, respostasPadrao, tabelaRegua, temOQueLigar, textoCondicao, trocarOrdem,
 	type Contagens, type PedidoSegmentacao, type PersonaInfo, type Pergunta, type Proposta, type Respostas, type SegmentoProposto,
 } from '@/lib/segmentacao-ia';
 import type { Acao } from '@/lib/estrategia';
@@ -163,7 +163,7 @@ export function DescreverSegmentacao(p: DescreverProps) {
 		});
 		setAplicando(false);
 		if (error) { toast.error(erroDaFuncao(error, data) || friendlyError(error)); return; }
-		toast.success(`Aplicado em ${p.credorNome}. Os segmentos novos estão pausados até você conferir e ligar.`);
+		toast.success(`Aplicado em ${p.credorNome}. Segmentos novos pausados e alterados na versão atual até você conferir e ligar.`);
 		p.onAplicado(String((data as { aplicacao: number }).aplicacao));
 	}
 
@@ -284,7 +284,7 @@ function TelaTexto(p: DescreverProps & { texto: string; setTexto: (t: string) =>
 						<li>Ciclo do Não CPC: 2 a 15 dias, até 6 voltas. Intervalo entre ações ≥ 12 h; horário 08:00–20:00.</li>
 						<li>Não escreve valores, descontos nem ofertas (alçada/CRM). Não escolhe mensagens.</li>
 						<li>Não apaga segmento: o que sair desta carteira é <b>desligado aqui</b>, e você confirma.</li>
-						<li>Nada vale até você clicar em <b>Aplicar</b> na revisão; o que for aplicado nasce <b>pausado</b> até você conferir e ligar.</li>
+						<li>Nada vale até você clicar em <b>Aplicar</b> na revisão; segmento novo nasce <b>pausado</b> e segmento alterado segue na <b>versão atual</b> até você conferir e ligar a nova.</li>
 					</ul>
 				</div>
 			</div>
@@ -612,16 +612,18 @@ function TelaSegmento({ prop, c, aba, setAba, respostas, setResposta, personas, 
 }
 
 // ================================================================== tela 5 · revisar e aplicar
-function frasesMudanca(s: SegmentoProposto, credorNome: string): ReactNode {
+const VERSAO_ATUAL = ' A versão atual continua valendo até você ligar a nova.';
+
+function frasesMudanca(s: SegmentoProposto, credorNome: string, esperaLigar: boolean): ReactNode {
 	const conds = s.condicoes.map(textoCondicao).join(' e ');
 	const estr = s.estrategia === 'nova' ? ` e cria a estratégia “${s.nome} · ${credorNome}”` : '';
 	if (s.acao === 'novo') return <>Cria o segmento {s.codigo} na empresa com <b>{conds || 'sem condições'}</b>, liga em {credorNome}{estr}.</>;
 	if (s.acao === 'alterar') {
 		const antes = (s.condicoes_antes ?? []).map(textoCondicao).join(' e ');
-		return <>Condição: {antes !== conds ? <><span className="line-through">{antes}</span> → <b>{conds}</b></> : 'igual'}{s.nome_antes && s.nome_antes !== s.nome ? ` · nome: “${s.nome_antes}” → “${s.nome}”` : ''}.{s.estrategia === 'nova' ? ` ${s.estrategia_antes ? `Troca a estratégia por “${s.nome} · ${credorNome}”; a atual fica guardada.` : `Cria a estratégia “${s.nome} · ${credorNome}” (antes: régua padrão do motor).`}` : ''}{s.compartilhado_com.length ? ` Muda também em ${s.compartilhado_com.join(', ')}.` : ''}</>;
+		return <>Condição: {antes !== conds ? <><span className="line-through">{antes}</span> → <b>{conds}</b></> : 'igual'}{s.nome_antes && s.nome_antes !== s.nome ? ` · nome: “${s.nome_antes}” → “${s.nome}”` : ''}.{s.estrategia === 'nova' ? ` ${s.estrategia_antes ? `Troca a estratégia por “${s.nome} · ${credorNome}”; a atual fica guardada.` : `Cria a estratégia “${s.nome} · ${credorNome}” (antes: régua padrão do motor).`}` : ''}{s.compartilhado_com.length ? ` Muda também em ${s.compartilhado_com.join(', ')}.` : ''}{VERSAO_ATUAL}</>;
 	}
-	if (s.acao === 'desligar') return <>Desliga só em {credorNome}{s.compartilhado_com.length ? `. Continua em ${s.compartilhado_com.join(', ')}` : ''}. A estratégia não é apagada. Religar desfaz.</>;
-	return s.nao_citado ? <>Nada muda.</> : <>Mantido.{s.estrategia === 'nova' ? ` Cria a estratégia “${s.nome} · ${credorNome}”.` : ''}</>;
+	if (s.acao === 'desligar') return <>Desliga só em {credorNome}{s.compartilhado_com.length ? `. Continua em ${s.compartilhado_com.join(', ')}` : ''}.{esperaLigar ? ` Em ${credorNome} continua valendo até você ligar o que é novo.` : ''} A estratégia não é apagada. Religar desfaz.</>;
+	return s.nao_citado ? <>Nada muda.</> : <>Mantido.{s.estrategia === 'nova' ? ` Cria a estratégia “${s.nome} · ${credorNome}”; a atual continua valendo até você ligar a nova.` : ''}</>;
 }
 
 function TelaRevisar({ prop, c, credorNome, outras, extras, setExtras, confirmou, setConfirmou, aplicando, onVoltar, onAplicar, bloqueios, nPerguntas }: {
@@ -630,7 +632,9 @@ function TelaRevisar({ prop, c, credorNome, outras, extras, setExtras, confirmou
 }) {
 	const fica = emOrdem(prop);
 	const novos = fica.filter(s => s.acao === 'novo');
-	const pausados = fica.filter(s => s.acao === 'novo' || s.acao === 'alterar' || s.estrategia === 'nova');
+	const pausados = fica.filter(s => efeitoAplicar(s) === 'pausado');
+	const versaoNova = fica.filter(s => efeitoAplicar(s) === 'versao_nova');
+	const esperaLigar = temOQueLigar(prop);
 	return (
 		<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,400px)]">
 			<div className={`${cartao} min-w-0 p-4 sm:p-5`}>
@@ -640,8 +644,8 @@ function TelaRevisar({ prop, c, credorNome, outras, extras, setExtras, confirmou
 					{[...fica, ...desligados(prop)].map((s, i) => (
 						<li key={s.ref} className="flex gap-3 py-2.5" data-mudanca={s.codigo}>
 							<span className="grid h-6 w-6 flex-none place-items-center rounded-md bg-[var(--base-fill)] text-[11px] text-[var(--base-texto-2)]">{s.acao === 'desligar' ? '–' : i + 1}</span>
-							<div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-1.5"><Codigo s={s} apagado={s.acao === 'desligar'} /><b className="text-[13.5px]">{s.nome}</b><SeloAcao s={s} />{pausados.includes(s) && <Pilula tom="atencao" className="!text-[10px] uppercase">nasce pausado</Pilula>}</div>
-								<p className="mt-1 text-[12.5px] text-[var(--base-texto-2)]">{frasesMudanca(s, credorNome)}</p></div>
+							<div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-1.5"><Codigo s={s} apagado={s.acao === 'desligar'} /><b className="text-[13.5px]">{s.nome}</b><SeloAcao s={s} />{pausados.includes(s) && <Pilula tom="atencao" className="!text-[10px] uppercase">nasce pausado</Pilula>}{versaoNova.includes(s) && <Pilula tom="atencao" className="!text-[10px] uppercase">vale ao ligar</Pilula>}</div>
+								<p className="mt-1 text-[12.5px] text-[var(--base-texto-2)]">{frasesMudanca(s, credorNome, esperaLigar)}</p></div>
 							<span className="flex-none text-[13px] tabular-nums text-[var(--base-texto-2)]">{c ? numberBR(s.acao === 'desligar' ? c.hoje[s.codigo] ?? 0 : c.porRef[s.ref] ?? 0) : '…'}</span>
 						</li>
 					))}
@@ -668,9 +672,13 @@ function TelaRevisar({ prop, c, credorNome, outras, extras, setExtras, confirmou
 						<dt className="text-[var(--base-texto-2)]">Validação</dt><dd><Pilula tom="ok">aceitas pelo motor</Pilula></dd>
 						<dt className="text-[var(--base-texto-2)]">Vale a partir de</dt><dd className="text-right">quando você ligar</dd>
 					</dl>
-					<Aviso tom="atencao" titulo={`${pausados.length} segmento${pausados.length === 1 ? '' : 's'} nasce${pausados.length === 1 ? '' : 'm'} pausado${pausados.length === 1 ? '' : 's'}`}>
-						Até você conferir a régua e ligar, quem cairia neles segue no próximo segmento ligado ou em Demais (estratégia da carteira).
-					</Aviso>
+					{pausados.length > 0 && <Aviso tom="atencao" titulo={`${pausados.length} segmento${pausados.length === 1 ? '' : 's'} novo${pausados.length === 1 ? '' : 's'} nasce${pausados.length === 1 ? '' : 'm'} pausado${pausados.length === 1 ? '' : 's'}`}>
+						Até você conferir a régua e ligar, quem cairia neles segue no segmento em que está hoje (ou em Demais).
+					</Aviso>}
+					{versaoNova.length > 0 && <div className="mt-2"><Aviso tom="info" titulo={`${versaoNova.length} segmento${versaoNova.length === 1 ? '' : 's'} alterado${versaoNova.length === 1 ? '' : 's'}: a versão atual continua valendo`}>
+						{versaoNova.map(s => s.codigo).join(', ')}: a versão atual continua valendo até você ligar a nova (condição, nome e régua trocam juntos no Ligar).
+					</Aviso></div>}
+					{esperaLigar && <p className="mt-2 text-[12px] text-[var(--base-texto-2)]">A ordem nova, o que sai desta carteira e o Demais também mudam só no Ligar.</p>}
 					<label className="mt-3 flex cursor-pointer gap-2 text-[12.5px]">
 						<input type="checkbox" checked={confirmou} onChange={e => setConfirmou(e.target.checked)} className="mt-0.5" data-confirmar />
 						<span>Entendi que <b>{c ? numberBR(c.mudam) : '…'}</b> clientes mudam de segmento e passam a seguir outra régua quando os segmentos forem ligados. Mensagens já enviadas não voltam.</span>

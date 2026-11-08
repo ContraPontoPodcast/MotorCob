@@ -10,6 +10,13 @@ já ter criado segmentos e estratégias) não deixa NADA; aplicado: ordem, condi
 da estratégia, canal "a ativar" desligado recusa; ligar; desfazer volta exatamente ao estado de antes (hash igual),
 só até a próxima rotina, com conflito listado; permissões (operação, outra empresa, anon) e RLS das tabelas novas.
 
+SQL 82 (decisão do dono, 08/11/2026): segmento ALTERADO que está valendo segue na versão atual até "Conferi, ligar"
+(A1 e B1: condição, nome e estratégia de hoje; a versão nova em criados.espera); o compartilhado A2 (padrão "desligar
+aqui + criar novo") segue valendo em Cartões até ligar e em Consignado sempre; a ordem nova vale a partir do 1º Ligar;
+ligar troca tudo numa transação (falha no meio do Ligar não deixa nada); desfazer volta tudo e apaga o que a aplicação
+criou e ninguém mexeu, então a 2ª geração reusa D90B e o nome da estratégia sem "(2)"; aplicar de novo com uma
+aplicação esperando substitui a espera dela.
+
 Chamado pelo testar_rls.py no fim; também roda só:
     PGHOST=... PGPORT=... PGUSER=postgres PGDATABASE=sb python supabase/testes/testar_segmentacao_aplicar.py
 Só dados fictícios (empresas e79-*, e-mails @exemplo.test, ids C00001…).
@@ -29,6 +36,7 @@ from motor import segmentacao_ia as SI  # noqa: E402
 BANCO = os.environ.get("PGDATABASE", "sb")
 BASE = ["psql", "-d", BANCO, "-v", "ON_ERROR_STOP=1", "-Atq"]
 SQL79 = RAIZ / "supabase" / "migrations" / "20270115000001_descrever_segmentacao.sql"
+SQL82 = RAIZ / "supabase" / "migrations" / "20270118000001_segmento_alterado_vale.sql"
 FX = json.loads((RAIZ / "tests" / "dados" / "segmentacao_exemplo_dono.json").read_text(encoding="utf-8"))
 
 
@@ -69,8 +77,9 @@ def lit(x) -> str:
 
 
 for vez in (1, 2):
-    r = subprocess.run(["psql", "-d", BANCO, "-v", "ON_ERROR_STOP=1", "-q", "-f", str(SQL79)], capture_output=True, text=True)
-    afirmar(f"a migração roda sem erro (vez {vez})", r.returncode == 0, r.stderr[-400:])
+    for arq in (SQL79, SQL82):         # o 82 redefine aplicar/ligar/desfazer: sempre depois do 79
+        r = subprocess.run(["psql", "-d", BANCO, "-v", "ON_ERROR_STOP=1", "-q", "-f", str(arq)], capture_output=True, text=True)
+        afirmar(f"a migração {arq.name[:14]} roda sem erro (vez {vez})", r.returncode == 0, r.stderr[-400:])
 
 T = uuid.uuid4().hex[:6]
 EA = sv(f"insert into public.empresas (slug, nome) values ('e79-a-{T}', 'E79 A {T}') returning id")
@@ -141,7 +150,16 @@ def estado(fora="0"):
               f"(select string_agg(demais_ativo::text, ',' order by id) from public.credores where empresa_id = {EA}))")
 
 
+def viva(cred=CART):
+    """O que vale HOJE na carteira (o que o motor lê): segmentos em uso na ordem, condição, nome, estratégia e Demais."""
+    return sv(f"select md5(coalesce((select string_agg(concat_ws('|', s.codigo, s.nome, c.condicoes::text, c.so_digital, "
+              f"c.canais_bloqueados::text, s.estrategia_id), ';' order by s.ordem, s.codigo) from public.segmentos_em_uso s "
+              f"join public.clusters c on c.id = s.cluster_id where s.credor_id = {cred} and s.em_uso), '') || "
+              f"(select demais_ativo::text from public.credores where id = {cred}))")
+
+
 H0, S0 = hash_(), estado()
+V0, V0_CONS = viva(), viva(CONS)
 
 # ------------------------------------------------------------------ pedir (créditos) e permissões
 checar("operação (sem editar a orquestração) não pede", False,
@@ -278,26 +296,48 @@ def vinc(cod, cred=CART):
               f"where c.empresa_id = {EA} and c.codigo = '{cod}' and v.credor_id = {cred}), 'sem vínculo')")
 
 
-ordem = sv(f"select string_agg(s.codigo, ',' order by s.ordem, s.codigo) from public.segmentos_em_uso s where s.credor_id = {CART} and s.vinculado and s.codigo <> 'A2'")
-afirmar("ordem final JUR, A1, D90B, D90A, B1, X180", ordem == "JUR,A1,D90B,D90A,B1,X180", ordem)
-afirmar("A1 alterado (0–30, nome novo)", seg("A1").startswith('Atraso 0–30|[{"op": "entre", "campo": "dias_atraso", "valor": [0, 30]}]'), seg("A1"))
+def cid_(cod):
+    return sv(f"select id from public.clusters where empresa_id = {EA} and codigo = '{cod}'")
+
+
+def espera(ap=None):
+    return json.loads(sv(f"select coalesce(criados -> 'espera', 'null') from public.segmentacao_aplicacoes where id = {ap or AP}"))
+
+
+def ordem_cart():
+    return sv(f"select string_agg(s.codigo, ',' order by s.ordem, s.codigo) from public.segmentos_em_uso s "
+              f"where s.credor_id = {CART} and s.vinculado and s.codigo <> 'A2'")
+
+
+A1_ANTES = 'Primeiro atraso|[{"op": "entre", "campo": "dias_atraso", "valor": [1, 30]}]|20'
+# SQL 82: o que vale hoje não muda até ligar (alterados na versão atual, A2 compartilhado segue aqui, ordem de hoje)
+afirmar("SQL 82: depois de aplicar, o que vale HOJE em Cartões e em Consignado não mudou",
+        viva() == V0 and viva(CONS) == V0_CONS)
+afirmar("SQL 82: A1 alterado segue na versão atual (condição, nome e ordem de hoje), ligado e sem estratégia nova",
+        seg("A1") == A1_ANTES and vinc("A1") == "true:-", (seg("A1"), vinc("A1")))
+afirmar("SQL 82: B1 segue ligado com a estratégia atual ('Atraso longo · Cartões'); a antiga não foi apagada",
+        vinc("B1") == "true:Atraso longo · Cartões" and sv(f"select count(*) from public.estrategias where id = {E_B1}") == "1", vinc("B1"))
+E = espera()
+afirmar("SQL 82: versão nova de A1 e B1 em espera (A1: 0–30 e nome novo; os dois com a estratégia nova)",
+        R.get("versoes") == sorted([int(A1), int(B1)]) and E["versoes"][A1]["nome"] == "Atraso 0–30"
+        and E["versoes"][A1]["condicoes"] == [{"op": "entre", "campo": "dias_atraso", "valor": [0, 30]}]
+        and "estrategia_id" in E["versoes"][A1] and "estrategia_id" in E["versoes"][B1] and "condicoes" in E["versoes"][B1], E)
+d = json.loads(sv(f"select definicao from public.estrategias where id = {E['versoes'][A1]['estrategia_id']}"))
+afirmar("estratégia nova de A1 (em espera) = a régua compilada (raias por persona, Não CPC ciclo 3 × 6, acordo padrão)",
+        d == PROP["segmentos"]["s1"]["definicao"] and d["giro"]["ciclo_dias"] == 3, d)
+afirmar("SQL 82: A2 compartilhado segue valendo em Cartões até ligar (desligar espera) e em Consignado",
+        vinc("A2") == "true:Atraso médio" and vinc("A2", CONS) == "true:Atraso médio" and E["desligar"] == [int(A2)],
+        (vinc("A2"), vinc("A2", CONS), E.get("desligar")))
 afirmar("D90B criado com saldo ≤ 2000 (ticket = saldo)", '"campo": "saldo"' in seg("D90B") and '"valor": 2000' in seg("D90B"), seg("D90B"))
-afirmar("novos e alterados PAUSADOS nesta carteira, com a estratégia nova", all(
-    vinc(c) == f"false:{n} · Cartões" for c, n in (("A1", "Atraso 0–30"), ("D90B", "31–90 · até R$ 2 mil"),
-                                                  ("D90A", "31–90 · acima de R$ 2 mil"), ("B1", "91 a 180 dias"),
-                                                  ("X180", "Acima de 180 dias"))), [vinc(c) for c in ("A1", "D90B", "B1")])
+afirmar("novos PAUSADOS nesta carteira, com a estratégia nova", all(
+    vinc(c) == f"false:{n} · Cartões" for c, n in (("D90B", "31–90 · até R$ 2 mil"), ("D90A", "31–90 · acima de R$ 2 mil"),
+                                                  ("X180", "Acima de 180 dias"))), [vinc(c) for c in ("D90B", "D90A", "X180")])
+afirmar("só os novos estão em 'pausados'", sorted(R.get("pausados", [])) == sorted(int(cid_(c)) for c in ("D90B", "D90A", "X180")), R)
 afirmar("JUR não citado: segue ligado, com a estratégia dele", vinc("JUR") == "true:Jurídico · Cartões", vinc("JUR"))
-afirmar("A2 desligado SÓ em Cartões; continua em Consignado com 'Atraso médio'",
-        vinc("A2") == "false:Atraso médio" and vinc("A2", CONS) == "true:Atraso médio", (vinc("A2"), vinc("A2", CONS)))
-afirmar("estratégia antiga de B1 não foi apagada", sv(f"select count(*) from public.estrategias where id = {E_B1}") == "1")
 afirmar("carteira extra: segmentos novos pausados lá, com CÓPIA da estratégia (outra linha)",
         vinc("D90B", CONS) == "false:31–90 · até R$ 2 mil · Consignado"
         and sv(f"select count(distinct v.estrategia_id) from public.segmentos_carteira v join public.clusters c on c.id = v.cluster_id "
                f"where c.codigo = 'D90B' and c.empresa_id = {EA}") == "2", vinc("D90B", CONS))
-d = json.loads(sv(f"select e.definicao from public.segmentos_carteira v join public.clusters c on c.id = v.cluster_id "
-                  f"join public.estrategias e on e.id = v.estrategia_id where c.codigo = 'A1' and c.empresa_id = {EA} and v.credor_id = {CART}"))
-afirmar("estratégia de A1 = a régua compilada (raias por persona, Não CPC ciclo 3 × 6, acordo padrão)",
-        d == PROP["segmentos"]["s1"]["definicao"] and d["giro"]["ciclo_dias"] == 3, d)
 afirmar("aplicação registrada com snapshot e pedido 'aplicado'",
         sv(f"select situacao || ':' || jsonb_array_length(antes -> 'clusters') from public.segmentacao_aplicacoes where id = {AP}") == "aplicada:4"
         and sv(f"select situacao from public.segmentacao_pedidos where id = {P1}") == "aplicado")
@@ -311,47 +351,91 @@ afirmar("prévia da proposta (6 clientes fictícios): JUR 0, A1 1, D90B 1, D90A 
 
 # ligar
 checar("operação não liga", False, f"select public.ligar_segmentacao({AP})", "authenticated", U["oper"])
-checar("ligar um segmento (D90B)", True, f"select public.ligar_segmentacao({AP}, array[(select id from public.clusters "
-       f"where empresa_id = {EA} and codigo = 'D90B')])", *PL, valor=1)
-afirmar("só D90B ligado; os outros seguem pausados", vinc("D90B").startswith("true") and vinc("A1").startswith("false"))
-checar("ligar o resto", True, f"select public.ligar_segmentacao({AP})", *PL, valor=4)
+# falha no meio do Ligar (depois de trocar a ordem e as versões de A1/B1): nada fica
+sv(f"create or replace function public.t82_falhar() returns trigger language plpgsql as $f$ begin "
+   f"if new.ativo and new.cluster_id = {cid_('X180')} then raise exception 'falha simulada no meio do ligar'; end if; "
+   f"return new; end $f$; create trigger t82_falhar before update on public.segmentos_carteira "
+   f"for each row execute function public.t82_falhar()")
+S_ANTES_LIGAR, CR_ANTES = estado(), sv(f"select criados::text from public.segmentacao_aplicacoes where id = {AP}")
+ok, out, err = sql(f"select public.ligar_segmentacao({AP})", *PL)
+afirmar("SQL 82: falha no meio do Ligar: erro e NADA muda (ordem, versões, vínculos, Demais, espera)",
+        not ok and "falha simulada" in err and estado() == S_ANTES_LIGAR and viva() == V0 and seg("A1") == A1_ANTES
+        and sv(f"select criados::text from public.segmentacao_aplicacoes where id = {AP}") == CR_ANTES, err)
+sv("drop trigger t82_falhar on public.segmentos_carteira; drop function public.t82_falhar()")
+checar("ligar um segmento (D90B)", True, f"select public.ligar_segmentacao({AP}, array[{cid_('D90B')}::bigint])", *PL, valor=1)
+afirmar("só D90B ligado; os outros novos seguem pausados", vinc("D90B").startswith("true") and vinc("D90A").startswith("false"))
+afirmar("SQL 82: a ordem nova vale a partir do 1º Ligar", ordem_cart() == "JUR,A1,D90B,D90A,B1,X180", ordem_cart())
+afirmar("SQL 82: A1 ainda na versão atual e A2 ainda em Cartões (sobra coisa para ligar)",
+        vinc("A1") == "true:-" and seg("A1").startswith("Primeiro atraso|") and vinc("A2") == "true:Atraso médio", (vinc("A1"), vinc("A2")))
+checar("ligar o resto (2 versões novas + 2 pausados)", True, f"select public.ligar_segmentacao({AP})", *PL, valor=4)
+afirmar("SQL 82: depois de ligar vale a versão nova: A1 0–30 com nome novo e a estratégia nova; B1 com a nova",
+        seg("A1").startswith('Atraso 0–30|[{"op": "entre", "campo": "dias_atraso", "valor": [0, 30]}]')
+        and vinc("A1") == "true:Atraso 0–30 · Cartões" and vinc("B1") == "true:91 a 180 dias · Cartões", (seg("A1"), vinc("A1"), vinc("B1")))
 afirmar("ligados em Cartões (Consignado segue pausado: conferir lá)", all(vinc(c).startswith("true") for c in ("A1", "D90A", "B1", "X180"))
         and vinc("D90B", CONS).startswith("false") and sv(f"select ligada_em is not null from public.segmentacao_aplicacoes where id = {AP}") == "t")
+afirmar("SQL 82: com tudo ligado, A2 sai de Cartões e continua em Consignado",
+        vinc("A2") == "false:Atraso médio" and vinc("A2", CONS) == "true:Atraso médio" and espera()["concluida_em"], (vinc("A2"), vinc("A2", CONS)))
+afirmar("ligar de novo não faz nada", sv(f"select public.ligar_segmentacao({AP})", *PL) == "0")
 
-# desfazer: até a próxima rotina, volta exatamente
+# desfazer: até a próxima rotina, volta exatamente (e apaga o que criou, sem ninguém ter mexido)
 sv(f"insert into public.execucoes (empresa_id, data_ref, iniciada_em, status) values ({EA}, current_date, now() + interval '1 minute', 'ok')")
 checar("depois da rotina, desfazer é recusado", False, f"select public.desfazer_segmentacao({AP})", *PL, erro="próxima rotina")
 sv(f"delete from public.execucoes where empresa_id = {EA}")
 checar("operação não desfaz", False, f"select public.desfazer_segmentacao({AP})", "authenticated", U["oper"])
-r = json.loads(checar("desfaz", True, f"select public.desfazer_segmentacao({AP})", *PL))
-CRIADOS = ",".join(str(x) for x in R.get("pausados", []) if str(x) not in (A1, B1))
-afirmar("desfeito: segmentos, ordem, vínculos e Demais como antes (só os criados ficam, desligados)",
-        r["ok"] and estado(CRIADOS) == S0, r)
-afirmar("desfeito: criados desligados (não apagados) em todas as carteiras; estratégias criadas ficam",
-        vinc("D90B") == "false:31–90 · até R$ 2 mil · Cartões" and vinc("D90B", CONS).startswith("false")
-        and sv(f"select count(*) from public.clusters where empresa_id = {EA} and codigo in ('D90B', 'D90A', 'X180')") == "3")
+r = json.loads(checar("desfaz (depois de ligar: sem conflito com o próprio Ligar)", True, f"select public.desfazer_segmentacao({AP})", *PL))
+afirmar("desfeito: segmentos, ordem, vínculos, Demais e hash EXATAMENTE como antes", r["ok"] and r["conflitos"] == []
+        and estado() == S0 and hash_() == H0 and viva() == V0 and viva(CONS) == V0_CONS, r)
+afirmar("SQL 82: desfeito: os 3 segmentos e as 8 estratégias criados saem (código e nome livres de novo)",
+        r.get("segmentos_apagados") == 3 and r.get("estrategias_apagadas") == 8
+        and sv(f"select count(*) from public.clusters where empresa_id = {EA} and codigo in ('D90B', 'D90A', 'X180')") == "0"
+        and sv(f"select count(*) from public.estrategias where empresa_id = {EA} and descricao like 'Gerada por%'") == "0", r)
 afirmar("desfeito: A2 ligado de novo em Cartões; A1 e B1 como eram",
-        vinc("A2") == "true:Atraso médio" and seg("A1") == f'Primeiro atraso|[{{"op": "entre", "campo": "dias_atraso", "valor": [1, 30]}}]|20'
-        and vinc("B1") == "true:Atraso longo · Cartões", (vinc("A2"), seg("A1")))
+        vinc("A2") == "true:Atraso médio" and seg("A1") == A1_ANTES and vinc("B1") == "true:Atraso longo · Cartões", (vinc("A2"), seg("A1")))
 checar("desfazer duas vezes é recusado", False, f"select public.desfazer_segmentacao({AP})", *PL, erro="já foi desfeita")
 
+
+def gerar(cred=CART):
+    pid = json.loads(sv(f"select public.pedir_segmentacao({EA}, {cred}, {lit(FX['contexto']['texto'])} #>> '{{}}')", *PL))["pedido"]
+    cx = json.loads(sv("select public.pegar_pedido_segmentacao()", "service_role"))
+    pr, er = SI.compilar(resolver(FX["entrega"]), {**cx, "canais": {**cx["canais"], "agente_voz": "desligado"}})
+    if pr is not None:
+        sv(f"select public.registrar_segmentacao({pid}, {lit(pr)}, '{{}}')", "service_role")
+    return pid, pr, er
+
+
 # conflito: outra pessoa mexeu num segmento depois de aplicar
-P4 = json.loads(sv(f"select public.pedir_segmentacao({EA}, {CART}, {lit(FX['contexto']['texto'])} #>> '{{}}')", *PL))["pedido"]
-ctx4 = json.loads(sv("select public.pegar_pedido_segmentacao()", "service_role"))
-prop4, erros4 = SI.compilar(resolver(FX["entrega"]), {**ctx4, "canais": {**ctx4["canais"], "agente_voz": "desligado"}})
-afirmar("2ª geração: os códigos que já existem (D90B, D90A, X180) ganham outro código",
-        erros4 == [] and prop4["segmentos"]["s2"]["codigo"] != "D90B", prop4 and prop4["segmentos"]["s2"]["codigo"])
-sv(f"select public.registrar_segmentacao({P4}, {lit(prop4)}, '{{}}')", "service_role")
-H4, S4 = hash_(), estado(CRIADOS)
+P4, prop4, erros4 = gerar()
+afirmar("SQL 82: 2ª geração depois de desfazer reusa os códigos (D90B, D90A, X180)",
+        erros4 == [] and [prop4["segmentos"][r]["codigo"] for r in ("s2", "s3", "s6")] == ["D90B", "D90A", "X180"],
+        prop4 and [prop4["segmentos"][r]["codigo"] for r in ("s2", "s3", "s6")])
+H4, S4, V4 = hash_(), estado(), viva()
 ok, out, err = aplicar(prop4, h=H4, pedido=P4)
 AP4 = json.loads(out)["aplicacao"] if ok else None
 afirmar("aplica a 2ª", ok, err)
+afirmar("SQL 82: estratégias da 2ª sem sufixo '(2)'", vinc("D90B") == "false:31–90 · até R$ 2 mil · Cartões"
+        and sv(f"select count(*) from public.estrategias where empresa_id = {EA} and nome like '%(_)'") == "0", vinc("D90B"))
 sv(f"select pg_sleep(0.01); update public.clusters set nome = 'Mexido à mão' where empresa_id = {EA} and codigo = 'B1'")
 r = json.loads(checar("conflito listado, nada desfeito", True, f"select public.desfazer_segmentacao({AP4})", *PL))
 afirmar("conflito: B1", r == {"ok": False, "conflitos": ["B1"]} and seg("B1").startswith("Mexido à mão"), r)
 r = json.loads(checar("forçar desfaz mesmo assim", True, f"select public.desfazer_segmentacao({AP4}, true)", *PL))
-CRIADOS4 = ",".join([CRIADOS] + [str(x) for x in json.loads(out)["pausados"] if str(x) not in (A1, B1)])
-afirmar("forçado: volta ao estado de antes", r["ok"] and estado(CRIADOS4) == S4, r)
+afirmar("forçado: volta ao estado de antes", r["ok"] and estado() == S4 and hash_() == H4 and viva() == V4, r)
+
+# aplicar de novo com uma aplicação esperando: a espera da anterior é substituída (não sobrescreve a nova depois)
+P5, prop5, _ = gerar()
+ok, out, err = aplicar(prop5, h=hash_(), pedido=P5)
+AP5 = json.loads(out)["aplicacao"] if ok else None
+afirmar("aplica a 3ª (fica esperando o Ligar)", ok and espera(AP5)["substituida_por"] is None, err)
+P6, prop6, er6 = gerar()
+ok, out, err = aplicar(prop6, h=hash_(), pedido=P6)
+AP6 = json.loads(out)["aplicacao"] if ok else None
+afirmar("SQL 82: a 4ª substitui a espera da 3ª", ok and espera(AP5)["substituida_por"] == AP6 and espera(AP6)["substituida_por"] is None,
+        (err, AP5 and espera(AP5)))
+n = sv(f"select public.ligar_segmentacao({AP5})", *PL)
+afirmar("SQL 82: ligar a 3ª substituída só liga os novos pausados dela; A1 segue na versão atual",
+        n == "3" and seg("A1") == A1_ANTES and vinc("A2") == "true:Atraso médio", (n, seg("A1"), vinc("A2")))
+r6 = json.loads(sv(f"select public.desfazer_segmentacao({AP6})", *PL))
+r5 = json.loads(sv(f"select public.desfazer_segmentacao({AP5})", *PL))
+afirmar("desfaz a 4ª e a 3ª: volta ao estado de antes", r6["ok"] and r5["ok"] and estado() == S4 and hash_() == H4, (r6, r5))
 
 # funções da VM no schema voz_vm (acesso próprio)
 afirmar("voz_vm: a VM executa pegar/registrar; o site não",

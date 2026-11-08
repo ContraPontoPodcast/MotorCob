@@ -834,6 +834,19 @@ transação (falha no meio não deixa nada), recusa hash velho e canal "a ativar
 false`) até `ligar_segmentacao`; `desfazer_segmentacao(aplicacao, forcar)` volta do snapshot (criados ficam desligados) só
 até a próxima rotina, com conflito listado. Permissão: `pode_descrever_segmentacao` = vê a empresa + `editar_orquestracao`
 + admin/planejamento. Site: `components/segmentacao-ia/` (telas 2–6 e a faixa "Aplicado" com Ligar/Desfazer/Reenquadrar).
+**SQL 82 (decisão do dono, 08/11/2026): segmento alterado segue valendo até ligar.** Só segmento NOVO (e a estratégia
+dele) nasce pausado. Segmento atual que está valendo (em uso em alguma carteira) e foi alterado não é mexido no Aplicar:
+a versão nova (nome, condições, flags) e a estratégia nova (criada, mas o vínculo fica na atual quando o segmento vale
+nesta carteira) ficam em `segmentacao_aplicacoes.criados › espera › versoes`; segmento atual pausado em todas é alterado já
+e segue pausado. Com algo para ligar, a ordem nova, os desligados nesta carteira (inclusive o compartilhado do padrão
+"desligar aqui + criar novo", que segue aqui até ligar e nas outras carteiras sempre) e o Demais também esperam;
+sem nada para ligar, valem na hora. `ligar_segmentacao` troca tudo numa transação (ordem no 1º Ligar; desligar e Demais
+quando não sobra nada). Aplicar de novo com uma aplicação esperando substitui a espera dela (`substituida_por`).
+`desfazer_segmentacao` volta do snapshot (conflito = mexido depois da última escrita da aplicação, `criados › marcas`;
+restaura só o que mudou) e APAGA os segmentos e estratégias que ela criou e ninguém mexeu nem ligou em outra carteira
+(código e nome livres de novo: a geração seguinte reusa D90B e o nome sem "(2)"). Motor sem mudança (só lê `clusters` e
+`segmentos_carteira`). Site: "vale ao ligar" na revisão e "versão nova espera" na faixa (`efeitoAplicar`,
+`esperaAplicacao` em `lib/segmentacao-ia.ts`); o editor da régua ainda mostra a versão que vale hoje.
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
