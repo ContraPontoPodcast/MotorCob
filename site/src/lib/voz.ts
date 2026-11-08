@@ -98,6 +98,8 @@ export const RE_USUARIO = /^[A-Za-z0-9_.\-+]{1,64}$/;
 export const RE_DDD = /^[1-9][1-9]$/;
 export const RE_BINA = /^([1-9][1-9][2-9][0-9]{7,8}|0[3589]00[0-9]{6,7}|[34]00[0-9][0-9]{4})$/;
 export const RE_TECH = /^[0-9]{1,8}$/;
+// CPS do tronco: 1 a 500, o mesmo do banco (voz_troncos.cps, SQL 80) e da VM (voz/banco.py › ler_tronco)
+export const CPS_MAX = 500;
 export const RE_CSP = /^[0-9]{2}$/;
 export const RE_DESTINO_SIP = /^sips?:[A-Za-z0-9_.+-]{1,64}@[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?(;transport=(udp|tcp|tls))?$/;
 

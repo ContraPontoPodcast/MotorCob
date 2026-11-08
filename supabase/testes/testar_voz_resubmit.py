@@ -115,6 +115,11 @@ r = subprocess.run(["psql", "-d", BANCO, "-U", "postgres", "-v", "ON_ERROR_STOP=
                     str(RAIZ / "supabase" / "migrations" / "20270101000001_voz_resubmit.sql")],
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
+# o SQL 80 redefine regras_curtas_voz e chamada_curta_voz (aviso 70%, falha técnica sempre curta): reaplica depois
+r = subprocess.run(["psql", "-d", BANCO, "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    str(RAIZ / "supabase" / "migrations" / "20270116000001_voz_cps_500_curtas.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
 if os.environ.get("PGPASSWORD"):      # CI: login com senha (scram) também para o papel da VM
     _sv("alter role motorcx_voz with password '" + os.environ["PGPASSWORD"].replace("'", "''") + "'")
 
@@ -406,10 +411,10 @@ site("R13: prévia com chamadas, ondas, duração, janela e curtas previstas", T
 site("R13: curtas de hoje pela regra do motor (5 de 7: não atendida, ocupado, máquina e inexistente)", True,
      f"select (p -> 'curtas' -> 'hoje' ->> 'chamadas') || '|' || (p -> 'curtas' -> 'hoje' ->> 'curtas') from {P13} p",
      U["oper"], "7|5")
-checar("R13: chamada curta no banco = motor (falha técnica fora quando a carteira manda)", True,
+checar("R13: chamada curta no banco = motor (falha técnica conta sempre: travado desde o SQL 80)", True,
        "select public.chamada_curta_voz('nao_atendida', null) || '|' || public.chamada_curta_voz('cpc', 40) || '|' || "
        "public.chamada_curta_voz('cpc', 5) || '|' || public.chamada_curta_voz('falha_rede', 0, '{\"falha_conta\": false}') "
-       "|| '|' || public.chamada_curta_voz('abandonada', 30, '{\"abandono_conta\": false}')", "true|false|true|false|false")
+       "|| '|' || public.chamada_curta_voz('abandonada', 30, '{\"abandono_conta\": false}')", "true|false|true|true|false")
 JAN = json.dumps([{"abre": "00:00", "fecha": "00:01", "ufs": ["SP"], "clientes": 2},
                   {"abre": "08:00", "fecha": "20:00", "ufs": ["AC", "RJ"], "clientes": 2}])
 vm("R18: a VM registra as janelas do lote (só contagem por janela e UF)", True,

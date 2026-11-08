@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError } from '@/lib/supabase';
-import type { Discagem } from '@/lib/discagem';
+import { avisoCurtasPct, type Discagem } from '@/lib/discagem';
 import {
 	EXCLUSOES, NOME, SITUACOES_RENITENCIA, TRAVADAS, efetivo, mudarRec, previaOntem, recDaCarteira,
 	type DiscagemRen, type SemContatoDia,
@@ -77,8 +77,8 @@ export function TelaResubmit({ draft, salvo, setDraft, canEdit, irSinal }: Props
 						<Kpi rotulo="Voltariam ao mailing" valor={nf(pv.voltam)} detalhe={`hoje: ${nf(pv.hojeVoltam)} (retentativa de hoje)`} />
 						<Kpi rotulo="Contatos a mais" valor={nf(pv.contatos)} detalhe={`${pv.contatos >= pv.hojeContatos ? '+' : ''}${nf(pv.contatos - pv.hojeContatos)} em relação à regra de hoje`} />
 						<Kpi rotulo="Sem contato ontem" valor={nf(pv.semContato)} detalhe="números nas sinalizações da regra" />
-						<Kpi rotulo="Chamadas curtas previstas" valor={curtDepois != null ? pc(curtDepois) : '—'} alerta={(curtDepois ?? 0) >= 75}
-							detalhe={curtAntes != null ? `hoje ${pc(curtAntes)} · aviso 75% · MP 85%` : 'sem histórico de curtas ainda'} />
+						<Kpi rotulo="Chamadas curtas previstas" valor={curtDepois != null ? pc(curtDepois) : '—'} alerta={(curtDepois ?? 0) >= avisoCurtasPct(draft)}
+							detalhe={curtAntes != null ? `hoje ${pc(curtAntes)} · aviso ${avisoCurtasPct(draft)}% · Anatel 85%` : 'sem histórico de curtas ainda'} />
 					</div>
 					<div className="mt-3 overflow-x-auto">
 						<table className="w-full min-w-[420px] border-collapse text-[13px]">
@@ -114,7 +114,7 @@ export function TelaResubmit({ draft, salvo, setDraft, canEdit, irSinal }: Props
 						{!e.promessa && <p className="mt-1.5 text-[11.5px] text-[var(--base-texto-3)]">Promessa: a carteira não suspende por promessa; marque para deixar quem prometeu de fora. Retorno agendado de fora mantém o horário pedido.</p>}
 					</div>
 					<ul className="space-y-1 text-[12.5px] text-[var(--base-texto-2)]">
-						<li><Travado>Nunca zera: “não ligar”, número inexistente, limite de chamadas curtas da MP 1.396/2026 e janela UF/DDD.</Travado></li>
+						<li><Travado>Nunca zera: “não ligar”, número inexistente, limite de chamadas curtas da Anatel (Despacho 100/2026) e janela UF/DDD.</Travado></li>
 						<li><Travado>Sempre mantém o limite de hoje por cliente. Recomeçar a contagem só à mão, no lote, com a permissão “Reciclar lote”.</Travado></li>
 						<li><Travado>Uma por lote por dia; fica no histórico do lote como “Automática”.</Travado></li>
 					</ul>

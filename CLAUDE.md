@@ -296,15 +296,21 @@ de outra pessoa pela certificação e a rotação segue.
   (por_dia/por_numero/intervalo_min/intervalo_ocupado). Taxonomia de voz: promessa e recusa (CPC), recado,
   ocupado, abandonada, falha_rede (fora da certificação), opt_out (`voz:opt_out` → todos os canais de voz).
   Evento ganha `hora`, `duracao_s`, `data_promessa` (colunas opcionais `hora`/`duracao`/`data_promessa` nos
-  layouts). Horário por UF/DDD vem DESLIGADO por padrão até o jurídico validar a prévia e o cliente poder
-  ligar/editar na tela (`discagem.horarios.ativo`); ligado: (`Regua.janela_do_numero` = estratégia ∩ canal ∩ UF do DDD
+  layouts). Horário por UF/DDD vem LIGADO por padrão com a prévia (decisão do dono, 08/11/2026; "confirme com o seu
+  jurídico"; desligar é escolha gravada `{"ativo": false}` e o site mostra a faixa vermelha do fuso de Brasília)
+  (`discagem.horarios.ativo`); ligado: (`Regua.janela_do_numero` = estratégia ∩ canal ∩ UF do DDD
   em hora local → Brasília ∩ 08:00–20:00, sem domingo/feriado; tabela do cliente, senão a PRÉVIA
   `regras/horarios_uf.json`, que não é orientação jurídica; número sem janela não sai na voz, o próximo
   assume, motivo na Lista do dia). Ligados por padrão: bloqueio de inexistente (layout com `inexistente_confirmado` só aceita
-  esses códigos; o resto vira falha_rede), "não ligar" e o aviso de chamadas curtas. Desligados, com o valor
-  recomendado: descanso por N "não atende" (pausa da voz no número via `retorno_canal`,
-  `temporarios_janela_dias`), recusa (descanso da voz do cliente), promessa (voz suspensa até a data + 1)
-  e o corte de curtas. Chamadas curtas (MP 1.396/2026; ≤ 6 s, caixa postal, não completada, abandono
+  esses códigos; o resto vira falha_rede), "não ligar", o aviso de chamadas curtas (70%) e o corte (80%). Desligados, com
+  o valor recomendado: descanso por N "não atende" (pausa da voz no número via `retorno_canal`,
+  `temporarios_janela_dias`), recusa (descanso da voz do cliente) e promessa (voz suspensa até a data + 1).
+  Chamadas curtas (Despacho Anatel 100/2026 e MP 1.396/2026, vigência 12/11/2026; decisão do dono 08/11/2026: corte
+  ligado em 80%, aviso 70%; a carteira que gravou `corte_ativo: false` mantém, a que não gravou a chave fica com o
+  padrão; o site grava só os campos que mudou): conta como curta a não completada, a caixa postal e a de até 6 s
+  (falha técnica sempre: `falha_conta` travado em sim, motor e `chamada_curta_voz` do SQL 80); uma linha com mais
+  de 1.000 no dia, ou o total da empresa com mais de 10.000, e 85% ou mais de curtas → a operadora bloqueia todas as
+  linhas da empresa por 15 dias (texto em `DG.REGRA_CURTAS` = site `REGRA_CURTAS`; abandono
   configurável): KPI medido pelos retornos de voz, previsão = Σ tentativas × P(curta) do número (Beta,
   prior da carteira), alerta "CHAMADAS CURTAS" (≥ aviso e volume ≥ uma linha) com sugestões; corte (se
   ligado) pelo fim da prioridade, preventivo/quebra ficam (motivo `corte_curtas`). O motor não sabe a

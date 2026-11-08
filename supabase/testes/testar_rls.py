@@ -2048,6 +2048,20 @@ checar("SQL 56: Atendimento sem a permissão não cadastra tronco", False, _tron
 checar("SQL 56: Admin do cliente não cadastra tronco", False, _tronco(EA, "sp-7", 5), "authenticated", u["admina"])
 checar("SQL 56: nem o Master grava direto na tabela de troncos", False, f"insert into public.voz_troncos (empresa_id,referencia,operadora,host,autenticacao,canais) values ({EA},'x1','Op','203.0.113.12','ip',5)", "authenticated", u["admin"])
 checar("SQL 56: Master cadastra tronco (B e Gama)", True, _tronco(EB, "rj-1", 10) + "; " + _tronco(EG, "mg-1", 5) + "; select 'ok'", "authenticated", u["admin"], "ok")
+# SQL 80 · CPS de 1 a 500 (o limite da VM): acima é recusado; o SQL 80 rodado de novo põe em 500 o que passou
+checar("SQL 80: CPS acima de 500 é recusado", False, _tronco(EA, "sp-1", 20, ", cps => 501"), "authenticated", VTEC)
+checar("SQL 80: CPS 500 é aceito", True, _tronco(EA, "sp-1", 20, ", cps => 500") + " is not null", "authenticated", VTEC, "t")
+assert sql("alter table public.voz_troncos drop constraint voz_troncos_cps_check; "
+           f"update public.voz_troncos set cps = 900 where id = {TA1}")[0]
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20270116000001_voz_cps_500_curtas.sql")],
+                   capture_output=True, text=True)
+checar("SQL 80: tronco acima de 500 passa a 500, com aviso (raise notice com o id)", True,
+       f"select cps from public.voz_troncos where id = {TA1}", "service_role", None, 500)
+checar("SQL 80: o aviso diz quantos e quais", True,
+       f"select {int(r.returncode == 0 and f'1 tronco(s) com CPS acima de 500 passaram a 500 (ids: {TA1})' in r.stderr)}",
+       None, None, 1)
+_sv(f"update public.voz_troncos set cps = 10 where id = {TA1}")
 TB1 = _sv(f"select id from public.voz_troncos where empresa_id={EB} and referencia='rj-1'")
 checar("SQL 56: Gestão da A (ver_faturamento) lê os troncos da A", True, "select count(*) from public.voz_troncos", "authenticated", u["gest"], 2)
 checar("SQL 56: tronco guarda usuário, DDD, bina inteira (só dígitos), formato e CSP", True, f"select usuario||'|'||ddd_origem||'|'||bina||'|'||formato_discagem||'|'||csp from public.voz_troncos where referencia='sp-2'", "authenticated", u["gest"], "alfa_sp2|11|1140040000|tech_0_csp_ddd_numero|21")
