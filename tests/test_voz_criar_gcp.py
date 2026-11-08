@@ -238,7 +238,7 @@ class TestScriptsDaVm(unittest.TestCase):
             r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, f"{f.name}: {r.stderr}")
         servicos = sorted(vm.glob("*.service"))
-        self.assertEqual(len(servicos), 15)
+        self.assertEqual(len(servicos), 16)
         for s in servicos:
             txt = s.read_text()
             self.assertIn("ExecStart=", txt, s.name)
@@ -255,7 +255,7 @@ class TestScriptsDaVm(unittest.TestCase):
                      "motorcx-caddy-elevenlabs.caddy", "motorcx-voz-importador.service",
                      "motorcx-voz-importador.timer", "motorcx-voz-fluxo-noite.service",
                      "motorcx-voz-fluxo-noite.timer", "motorcx-voz-gerar-fluxo.service",
-                     "motorcx-provedores.padrao.json"):
+                     "motorcx-voz-gerar-segmentacao.service", "motorcx-provedores.padrao.json"):
             self.assertIn(nome, inicio)
             self.assertTrue((vm / nome).exists(), nome)
         # Speech Analytics (SQL 62): desligado por padrão, só liga com o metadado da VM
@@ -267,6 +267,10 @@ class TestScriptsDaVm(unittest.TestCase):
         self.assertIn("MOTORCX_IMPORTADOR_GRAVACOES=1", rodar)
         self.assertIn("--registrar", rodar)
         self.assertIn("motorcx-voz-importador.timer", inicio.split("systemctl enable --now")[1])
+        # Descrever segmentos e régua (SQL 79): desligado por padrão, só liga com o metadado da VM
+        self.assertIn('[ "$(meta motorcx-gerar-segmentacao)" != 1 ]', rodar)
+        self.assertIn("python3 -m voz.gerar_segmentacao", rodar)
+        self.assertIn("motorcx-voz-gerar-segmentacao.service", inicio.split("systemctl enable --now")[3])
         # nenhum segredo escrito nos scripts: só lidos do Secret Manager para /run
         for f in vm.iterdir():
             self.assertNotRegex(f.read_text(), r"(?i)(password|senha)\s*=\s*\S{6,}", f.name)
@@ -492,6 +496,7 @@ class TestPrefixosDosSegredos(unittest.TestCase):
     def test_refs_que_a_vm_le_cabem_na_condicao(self):
         import re
         from voz import gerar_fluxo as G
+        from voz import gerar_segmentacao as GS
         from voz.segredos import nome_secret_manager
         prefixos = self.prefixos()
         self.assertEqual(prefixos, ["motorcx-voz-", "motorcx-crm-"])
@@ -499,7 +504,7 @@ class TestPrefixosDosSegredos(unittest.TestCase):
         sql = (RAIZ / "supabase" / "migrations" / "20261225000001_voz_fluxo.sql").read_text(encoding="utf-8")
         fmt = re.search(r"ref := format\('(crm/[^']+)'", sql).group(1)
         crm = fmt.replace("%s", "12", 2).replace("%s", "20261225103000123")
-        refs = [crm, "voz/trunk/12-3", G.REF_LLM, "voz/importador/12/5/20261119103000", "voz/db-senha"]
+        refs = [crm, "voz/trunk/12-3", G.REF_LLM, GS.REF_LLM, "voz/importador/12/5/20261119103000", "voz/db-senha"]
         for ref in refs:
             nome = nome_secret_manager(ref)
             self.assertTrue(any(nome.startswith(p) for p in prefixos), (ref, nome))

@@ -2863,5 +2863,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 78: créditos de IA (testar_creditos_ia.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 79 · Descrever segmentos e régua: fila, créditos, aplicar numa transação (falha no meio não deixa nada), ligar,
+# desfazer até a próxima rotina e permissões (aplica o 79 duas vezes)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_segmentacao_aplicar.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 79: descrever segmentos e régua (testar_segmentacao_aplicar.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

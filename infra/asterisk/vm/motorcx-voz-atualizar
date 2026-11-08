@@ -14,5 +14,5 @@ atualizar() {   # imagem serviço...
 }
 atualizar "$IMG_ASTERISK" motorcx-asterisk
 atualizar "$IMG_VOZ" motorcx-voz-orquestrador motorcx-voz-simulado motorcx-voz-speech-buscas motorcx-voz-simulador \
-  motorcx-voz-gerar-fluxo
+  motorcx-voz-gerar-fluxo motorcx-voz-gerar-segmentacao
 docker image prune -f >/dev/null

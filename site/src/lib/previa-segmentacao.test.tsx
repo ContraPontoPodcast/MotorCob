@@ -44,13 +44,17 @@ test('resumirEditado: quem fica, quem fica acima e de onde vêm', () => {
 	assert.equal(dataCurta(s.dataBase), '06/11');
 });
 
-test('Segmentação: três cartões iguais e "Descrever" em breve', () => {
-	const html = renderToStaticMarkup(<CaminhosSegmentacao onNovo={() => {}} onUsar={() => {}} />);
+test('Segmentação: três cartões iguais, "Descrever" ligado (etapa 5) e escondido sem permissão', () => {
+	const html = renderToStaticMarkup(<CaminhosSegmentacao onNovo={() => {}} onUsar={() => {}} onDescrever={() => {}} />);
 	const botoes = html.match(/<button[^>]*>/g) ?? [];
 	assert.equal(botoes.length, 3);
-	assert.equal(new Set(botoes.map(b => (b.match(/class="([^"]*)"/) ?? [])[1].replace(' disabled:opacity-50', ''))).size, 1);   // mesmo tamanho e miolo
+	assert.equal(new Set(botoes.map(b => (b.match(/class="([^"]*)"/) ?? [])[1])).size, 1);   // mesmo tamanho e miolo
 	assert.match(html, /Novo segmento/);
 	assert.match(html, /Usar segmento da empresa/);
-	assert.match(html, /Descrever segmentos e régua.*em breve/);
-	assert.equal((html.match(/disabled=""/g) ?? []).length, 1);   // só o Descrever
+	assert.match(html, /Descrever segmentos e régua.*IA/);
+	assert.doesNotMatch(html, /em breve/);
+	assert.equal((html.match(/disabled=""/g) ?? []).length, 0);
+	const sem = renderToStaticMarkup(<CaminhosSegmentacao onNovo={() => {}} onUsar={() => {}} onDescrever={() => {}} podeDescrever={false} />);
+	assert.equal((sem.match(/<button[^>]*>/g) ?? []).length, 2);
+	assert.doesNotMatch(sem, /Descrever segmentos/);
 });

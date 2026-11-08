@@ -161,6 +161,7 @@ antes da janela de discagem.
 | `caddy` + `motorcx-voz-https.timer` | Proxy HTTPS na 8443 (Caddy oficial 2.8.4): a cada 2 min liga só as rotas dos recursos ligados e recarrega quando muda. Certificado Let's Encrypt de `<IP>.sslip.io` (veja "Proxy HTTPS" abaixo). |
 | `motorcx-voz-simulador` | Simulador de texto do Fluxo e roleplay (`voz/simulador_http.py`, 127.0.0.1:8091), atrás do proxy. Só com o metadado `motorcx-simulador-fluxo=1`; a chave vem do segredo `motorcx-voz-simulador`. |
 | `motorcx-voz-gerar-fluxo` | Serviço contínuo da geração do fluxo por texto (pedido "Descrever e o MotorCX monta", SQL 58/66; `voz/gerar_fluxo.py`): a cada 15 s pega o próximo pedido, gera o rascunho com o LLM, valida (até 2 correções) e devolve; saída inválida nunca vira rascunho. Também apaga do Storage os anexos que o banco liberou. Funciona nos dois acessos ao banco (seção 7). Desligado por padrão: veja "Geração do fluxo por texto" abaixo. |
+| `motorcx-voz-gerar-segmentacao` | Serviço contínuo de "Descrever segmentos e régua" (SQL 79; `voz/gerar_segmentacao.py` + `motor/segmentacao_ia.py`): a cada 10 s pega o próximo pedido, gera a proposta com o LLM (sem ferramenta de escrita), compila e valida com o Python do motor (até 2 correções) e devolve; o banco confirma ou estorna os 2 créditos. Nada é aplicado por aqui. Desligado por padrão (metadado `motorcx-gerar-segmentacao=1`). |
 | `motorcx-voz-speech-temas.timer` | Segunda 03:20, temas novos da semana passada (SQL 63): agrupa os trechos do cliente que ficaram sem tema e sem intenção. Grupo com 30 conversas ou mais vai para a Curadoria com um nome sugerido pela IA; quem dá o nome é uma pessoa. Mesmo interruptor. |
 
 O plantão do orquestrador:
@@ -203,6 +204,17 @@ subirem para o bucket da empresa.
 Opcional: `motorcx-gerar-fluxo-base-url` (API compatível com OpenAI, `https://`; padrão `https://api.openai.com/v1`)
 e `motorcx-gerar-fluxo-modelo` (padrão `gpt-4.1`). Cada geração entra no extrato (`ia_geracao_fluxo`); os tokens
 vão só para o custo real (Master).
+
+**Descrever segmentos e régua (SQL 79):** o pedido da Segmentação (Orquestração › Segmentos) fica na fila
+(`segmentacao_pedidos`) até o serviço `motorcx-voz-gerar-segmentacao` de uma VM pegar. Sem ele ligado, o pedido fica
+"pendente" e a reserva de 2 créditos de IA é estornada em 15 min pelo plantão (SQL 78); o usuário pode descartar.
+Usa a MESMA chave do LLM da geração do fluxo (`motorcx-voz-llm-fluxo`; crie como acima se ainda não existir). Para ligar
+(as duas VMs podem rodar: `for update skip locked`):
+`gcloud compute instances add-metadata "$VM" --zone="$ZONA" --metadata=motorcx-gerar-segmentacao=1` e
+`gcloud compute ssh "$VM" --zone="$ZONA" --tunnel-through-iap -- sudo systemctl restart motorcx-voz-gerar-segmentacao`.
+Opcional: `motorcx-gerar-segmentacao-base-url` e `motorcx-gerar-segmentacao-modelo` (padrão: os mesmos da geração do
+fluxo). Cada geração com proposta confirma 2 créditos (`seg:geracao:<id>`); sem proposta, estorna. Desligar: tire o
+metadado (ou `=0`) e reinicie o serviço. VM antiga (sem o arquivo da unidade): rode o `vm_inicio.sh` de novo.
 
 **Speech Analytics (SQL 62):** desligado por padrão em dois lugares.
 1. Na VM: metadado `motorcx-speech-analytics=1` (sem ele, os dois timers saem sem fazer nada):
