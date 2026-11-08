@@ -73,6 +73,7 @@ export default [
     route('estrategias', 'routes/estrategias.tsx'),
     route('estrategias/:id', 'routes/estrategia.tsx'),
     route('canais', 'routes/canais.tsx'),
+    route('canais/:canal', 'routes/canal.tsx'),
     route('empresas', 'routes/empresas.tsx'),
     route('jornada', 'routes/jornada.tsx'),
     route('jornada/lista', 'routes/jornada-lista.tsx'),

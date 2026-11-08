@@ -853,6 +853,19 @@ restaura só o que mudou) e APAGA os segmentos e estratégias que ela criou e ni
 (código e nome livres de novo: a geração seguinte reusa D90B e o nome sem "(2)"). Motor sem mudança (só lê `clusters` e
 `segmentos_carteira`). Site: "vale ao ligar" na revisão e "versão nova espera" na faixa (`efeitoAplicar`,
 `esperaAplicacao` em `lib/segmentacao-ia.ts`); o editor da régua ainda mostra a versão que vale hoje.
+**SQL 84 (Canais, SPEC §6.2 PRs 4 e 5; padrões aprovados pelo dono em 08/11/2026): estado dos canais.**
+`estado_canais(empresa)` (security definer; `pode_ver_empresa` + `editar_canais` ou equipe; só agregados) devolve por canal
+`{canal, grupo, quem, estado, motivo, problema, o_que_fazer, acao, ultima_atividade, sinais[], problemas[]}` e o `resumo`.
+Estado (o mais grave vale): pausado (`canais_empresa.ativo = false`) > não configurado (canal não liberado na Mensageria /
+RCS sem verificação, nunca enviou, Voz sem `voz_config`, sem tronco ativo ou sem rota vigente) > com problema (entrega
+24 h < 80% ou 15 pontos abaixo da média dos 7 dias anteriores, com ≥ 30 mensagens; orçamento do centro da Lista do dia
+> 90% com "bloquear"; retorno do fornecedor sem chegar há mais de 1 dia útil, `dias_uteis_entre`; código de retorno sem
+mapear; rota de voz pausada; tronco com `configuracao_invalida`) > atenção (orçamento no alerta, lote de hoje esperando
+aprovação ou pausado, simulação / só números de teste, rota sem cadastro, freio por abandono, chamadas curtas ≥ 70% em
+7 dias) > funcionando. `quem`: `quem_envia` (nulo = MotorCX no que a Mensageria cobre), `voz_motorcx` com o módulo
+`agente_voz`, senão lista. Site: `/canais` é a visão geral sem campos (`components/canais/visao-geral.tsx`, rótulos e
+rotas das ações em `lib/estado-canais.ts`); "Configurar" abre `/canais/:canal` (a configuração de hoje, só daquele canal,
+até a tela nova do canal); `/canais?secao=frases` segue com os 6 canais. Editar Canais e Frases = `editar_canais`.
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
