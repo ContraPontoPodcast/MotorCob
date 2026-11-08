@@ -62,7 +62,8 @@ FERRAMENTAS = ("apresentar_oferta", "registrar_promessa", "agendar_retorno", "co
 TONS = ("cordial", "frases_curtas", "sem_giria", "nao_pressiona", "formal")
 ENTIDADES = ("data", "valor", "parcelas", "hora")
 PERGUNTAS_IDENTIDADE = ("dia_mes_nascimento", "ano_nascimento", "ultimos3_documento")
-# a identidade é conferida só pelo CRM (conector de finalidade validar_cadastro), nunca pela IA (decisão do dono)
+# a identidade é conferida pelo CRM (conector de finalidade validar_cadastro) ou, com a configuração da carteira
+# (SQL 88), pelo arquivo; nunca pela IA (decisão do dono)
 ORIGENS_OFERTA = ("conector", "carteira")
 REGISTROS = ("acordo_crm", "promessa_motorcx")
 CANAIS_LINK = ("whatsapp_sms", "sms", "whatsapp")
@@ -489,13 +490,16 @@ def usa_oferta(d: dict) -> bool:
     return False
 
 
-def pendencias(d: dict, conectores: dict[int, tuple[str, str]], tem_alcada: bool, intencoes: set[str]) -> list[str]:
+def pendencias(d: dict, conectores: dict[int, tuple[str, str]], tem_alcada: bool, intencoes: set[str],
+               identidade_arquivo: bool = False) -> list[str]:
     """Erros que dependem do banco. conectores: id → (situacao, finalidade) da empresa; intencoes: catálogo ativo.
+    identidade_arquivo: a carteira confere a identidade pelo arquivo (SQL 88, identidade_voz_usa_arquivo).
     Só para fluxo que passa em erros()."""
     out = []
     for b in d["blocos"]:
         if b["tipo"] == "identidade":
-            if b["params"].get("conector_id") is None:          # só o CRM confere a identidade
+            # o CRM ou, com a configuração da carteira (SQL 88), o arquivo confere a identidade
+            if b["params"].get("conector_id") is None and not identidade_arquivo:
                 out.append(f"identidade_sem_conferencia:{b['id']}")
         for c in conectores_do_bloco(b):
             info = conectores.get(c) if c is not None else None

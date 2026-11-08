@@ -29,7 +29,9 @@ LIMITE_CATEGORIAS = 50          # coluna de texto com mais valores distintos que
 PESSOAIS = {"NOME", "NAME", "CPF", "CNPJ", "RG", "DOC", "DOCUMENTO", "EMAIL", "MAIL", "TEL", "TELEFONE", "FONE",
             "CELULAR", "CEL", "WHATSAPP", "ENDERECO", "LOGRADOURO", "RUA", "COMPLEMENTO", "CEP", "NASC",
             "NASCIMENTO", "MAE", "PAI", "CONJUGE", "SENHA", "PLACA", "CHASSI", "RENAVAM", "IP", "PIS", "NIS",
-            "TITULO", "PASSAPORTE", "CNH", "SOBRENOME", "APELIDO"}
+            "TITULO", "PASSAPORTE", "CNH", "SOBRENOME", "APELIDO",
+            # SQL 88 · risco R1: colunas de validação que não foram apontadas (ULT3_DOC, DIG_CPF, DT_NASC, ULTIMOS_DIGITOS…)
+            "ULT3", "ULTIMOS", "DIGITOS", "DIG", "DV", "DTNASC", "VALIDACAO"}
 # partes que denunciam código (número que identifica): número com muitos valores distintos e esse nome não vai
 CODIGOS = {"ID", "COD", "CODIGO", "NUM", "NUMERO", "NR", "NRO", "CONTRATO", "CONTA", "AGENCIA", "CARTAO",
            "MATRICULA", "PROTOCOLO", "PROPOSTA", "OPERACAO", "TITULO", "BOLETO", "LINHA", "CHAVE"}

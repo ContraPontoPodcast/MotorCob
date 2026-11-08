@@ -101,6 +101,9 @@ RPC = {
     "fluxo_empresas_voz": "fluxo_empresas", "agregar_fluxo_dia": "agregar_fluxo_dia",
     # SQL 79 · Descrever segmentos e régua (voz/gerar_segmentacao.py): fila e devolução da proposta
     "pegar_pedido_segmentacao": "pegar_pedido_segmentacao", "registrar_segmentacao": "registrar_segmentacao",
+    # SQL 88 · identidade pelo arquivo: a VM manda o código da resposta e recebe só a palavra (nunca os códigos)
+    "identidade_voz_vigente": "identidade_vigente", "abrir_identidade_voz": "abrir_identidade",
+    "conferir_identidade_voz": "conferir_identidade", "limpar_identidade_voz": "limpar_identidade",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual

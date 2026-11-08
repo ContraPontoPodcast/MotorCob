@@ -296,12 +296,13 @@ def preparar_base(entrada, pasta_bruta, pasta_base) -> dict:
     return converter_base(arquivos, ent.base, pasta_base)
 
 
-def preparar_carteira(entrada, pasta, chave=None) -> dict:
+def preparar_carteira(entrada, pasta, chave=None, identidade=None) -> dict:
     """Carteira do credor (carga geral, incremental, retirada, acordo e baixa) -> <pasta>/base/.
-    chave: sal da empresa para o código do cliente que era CPF (a nuvem passa o do banco; sem ela, o sal local)."""
+    chave: sal da empresa para o código do cliente que era CPF (a nuvem passa o do banco; sem ela, o sal local).
+    identidade: chave de identidade do agente de voz (SQL 88; motor/identidade_mailing.Chave) ou None."""
     from motor.carteira import montar
     ent = entrada if isinstance(entrada, Entrada) else carregar_entrada(entrada)
-    return montar(pasta, ent, chave)
+    return montar(pasta, ent, chave, identidade=identidade)
 
 
 def preparar_enriquecimento(entrada, pasta_enriq, pasta_base) -> dict | None:

@@ -24,6 +24,11 @@ class Resolvedor:
     def valor(self, ref: str) -> str:  # pragma: no cover - interface
         raise NotImplementedError
 
+    def valor_com_versao(self, ref: str) -> tuple[str, int]:
+        """(valor, número da versão). Quem não sabe a versão (testes) devolve 1. SQL 88: a chave de identidade leva a
+        versão junto com o código, para conferir só com o código feito pela mesma chave."""
+        return self.valor(ref), 1
+
 
 def nome_secret_manager(ref: str, prefixo: str = "motorcx-") -> str:
     """Nome do segredo no Secret Manager: 'voz/trunk/12' -> 'motorcx-voz-trunk-12' (barras e pontos viram hífen;
@@ -56,6 +61,17 @@ class SecretManager(Resolvedor):
             raise SegredoAusente(f"segredo '{ref}' indisponível ({ex.__class__.__name__})") from None
         return base64.b64decode(d["payload"]["data"]).decode("utf-8").strip()
 
+    def valor_com_versao(self, ref: str) -> tuple[str, int]:
+        nome = nome_secret_manager(ref, self.prefixo)
+        url = (f"https://secretmanager.googleapis.com/v1/projects/{self.projeto}/secrets/{nome}"
+               "/versions/latest:access")
+        try:
+            d = gcp.requisitar("GET", url, self._token, abrir=self._abrir)
+            versao = int(str(d["name"]).rsplit("/", 1)[-1])
+            return base64.b64decode(d["payload"]["data"]).decode("utf-8").strip(), versao
+        except Exception as ex:   # não repassa detalhes que possam conter o valor
+            raise SegredoAusente(f"segredo '{ref}' indisponível ({ex.__class__.__name__})") from None
+
 
 class Dicionario(Resolvedor):
     """Para testes e para o modo de pré-visualização (sem senha: devolve um marcador)."""
@@ -82,3 +98,8 @@ class Tardio(Resolvedor):
         if self._r is None:
             self._r = self._fabrica()
         return self._r.valor(ref)
+
+    def valor_com_versao(self, ref: str) -> tuple[str, int]:
+        if self._r is None:
+            self._r = self._fabrica()
+        return self._r.valor_com_versao(ref)

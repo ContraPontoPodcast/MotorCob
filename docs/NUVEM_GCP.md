@@ -93,3 +93,38 @@ Comandos no Cloud Shell (troque `CMD`):
   `motorcob-dados` da VM pelo novo (VM parada).
 - **Voltar para o Mac (emergência):** pare a VM (Compute Engine › VM › Parar) e religue o plantão do Mac com o
   comando que o `exportar_dados_mac.sh` mostrou. Nunca deixe os dois ligados ao mesmo tempo.
+
+## Chave de identidade do agente de voz (SQL 88, uma por empresa)
+Só para a empresa que vai conferir a identidade pelo arquivo (Agente de voz › Confirmar identidade). Sem a chave, nada
+muda: a carga só conta as colunas de validação e o agente segue com o CRM. A chave é NOVA e só serve para isso (nunca o
+`faturamento_sal`). O valor é gerado e gravado direto no Secret Manager, sem aparecer na tela, no chat ou em arquivo.
+No Cloud Shell (troque `12` pelo id da empresa no MotorCX e os dois projetos; se o motor e as VMs de voz estão no mesmo
+projeto, os dois são iguais):
+
+```bash
+EMPRESA=12
+PROJETO_VOZ=id-do-projeto-das-vms-de-voz      # o do infra/asterisk/criar_gcp.sh
+PROJETO_MOTOR=id-do-projeto-do-motor          # o do nuvem/gcp/preparar_projeto.sh
+# 1. cria a chave (32 bytes aleatórios em hexadecimal), direto no cofre; nada aparece na tela
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets create "motorcx-voz-identidade-e$EMPRESA" \
+  --project="$PROJETO_VOZ" --replication-policy=user-managed --locations=southamerica-east1 --data-file=-
+# 2. o motor lê a mesma chave (as VMs de voz já leem todo segredo motorcx-voz-*, pela regra do criar_gcp.sh)
+gcloud secrets add-iam-policy-binding "motorcx-voz-identidade-e$EMPRESA" --project="$PROJETO_VOZ" \
+  --member="serviceAccount:motorcob-vm@$PROJETO_MOTOR.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor
+# 3. diz ao motor quais empresas têm chave (várias: "12 15") e onde ela está
+gcloud compute instances add-metadata motorcob --project="$PROJETO_MOTOR" --zone=southamerica-east1-a \
+  --metadata=motorcob-identidade-empresas="$EMPRESA",motorcob-identidade-projeto="$PROJETO_VOZ"
+# 4. reinicia o plantão para ele ler a chave (o motorcob-rodar põe MOTORCX_IDENTIDADE_E<id> só na memória)
+gcloud compute ssh motorcob --project="$PROJETO_MOTOR" --zone=southamerica-east1-a --tunnel-through-iap \
+  --command='sudo systemctl restart motorcob'
+```
+
+- Antes do passo 3, o `vm_inicio.sh` da VM do motor precisa ser o deste repositório (com o trecho da identidade):
+  `bash preparar_projeto.sh ID` atualiza o script de início e `gcloud compute instances reset motorcob --zone=southamerica-east1-a`
+  aplica.
+- Conferir sem ver o valor: `gcloud secrets versions list motorcx-voz-identidade-e$EMPRESA --project=$PROJETO_VOZ`
+  (só a versão e a data). Nunca rode `gcloud secrets versions access` com a saída na tela.
+- Trocar a chave: `openssl rand -hex 32 | tr -d '\n' | gcloud secrets versions add motorcx-voz-identidade-e$EMPRESA
+  --project=$PROJETO_VOZ --data-file=-` e o passo 4. Até a próxima carga refazer os códigos, a VM confere com a versão
+  nova e o banco responde "sem dado" (o agente usa a próxima fonte, o CRM); depois da carga, desative a versão antiga
+  (`gcloud secrets versions disable <n> --secret=motorcx-voz-identidade-e$EMPRESA --project=$PROJETO_VOZ`).

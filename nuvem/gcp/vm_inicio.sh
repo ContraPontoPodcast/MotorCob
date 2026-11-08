@@ -58,6 +58,21 @@ FORN="$(gcloud secrets versions access latest --secret=motorcob-fornecedores 2>/
 [ -n "$FORN" ] && printf '%s\n' "$FORN" | tr -d '\r' \
   | grep -E '^(ZENVIA|INFOBIP|SINCH|LOCAWEB|RETORNO)_[A-Z_]+=[^[:space:]]+$' >> /run/motorcob/supabase.env || true
 unset FORN
+# opcional (SQL 88): chave de identidade do agente de voz de cada empresa (segredo motorcx-voz-identidade-e<ID>, o mesmo
+# que a VM de voz lê). Metadado motorcob-identidade-empresas = "12 15" e, se o segredo está em outro projeto,
+# motorcob-identidade-projeto. Vai como MOTORCX_IDENTIDADE_E<ID>=<versão>:<valor>; nunca aparece em tela nem em log.
+EMPRESAS_ID="$(meta motorcob-identidade-empresas 2>/dev/null || true)"
+PROJ_ID="$(meta motorcob-identidade-projeto 2>/dev/null || true)"
+for EID in $(printf '%s' "$EMPRESAS_ID" | tr ',' ' '); do
+  [[ "$EID" =~ ^[0-9]{1,12}$ ]] || continue
+  LINHA="$(gcloud secrets versions access latest --secret="motorcx-voz-identidade-e$EID" ${PROJ_ID:+--project="$PROJ_ID"} \
+           --format='csv[no-heading,separator=" "](name,payload.data)' 2>/dev/null || true)"
+  VER="${LINHA%% *}"; VER="${VER##*/}"; VAL="${LINHA#* }"
+  if [[ "$VER" =~ ^[0-9]+$ ]] && [ -n "$VAL" ] && [ "$VAL" != "$LINHA" ]; then
+    printf 'MOTORCX_IDENTIDADE_E%s=%s:%s\n' "$EID" "$VER" "$VAL" >> /run/motorcob/supabase.env
+  fi
+  unset LINHA VAL
+done
 DOMINIO="$(meta motorcob-link-dominio 2>/dev/null || true)"
 [ -n "$DOMINIO" ] && printf 'MOTORCOB_LINK_DOMINIO=%s\n' "$DOMINIO" >> /run/motorcob/supabase.env
 gcloud auth configure-docker "${IMAGEM%%/*}" --quiet >/dev/null 2>&1

@@ -12,7 +12,12 @@ aqui e não no prompt:
   5. nunca passa da alçada (ofertas do CRM acima dela são descartadas, código oferta_acima_alcada);
   6. "quero falar com uma pessoa" transfere a qualquer momento;
   7. o Generativo só usa as ofertas recebidas (enum por chamada; número fora delas troca a frase).
-A identidade é conferida só pelo CRM (conector Validar cadastro), nunca pela IA. A Cognição só classifica intenção (saída fechada) e a fala continua a do roteiro.
+A identidade é conferida pelo CRM (conector Validar cadastro) ou, com a configuração da carteira (SQL 88,
+voz_mailing_config), pelo arquivo (fonte interna: o banco compara o código da resposta), nunca pela IA. Sem
+configuração, o executor faz exatamente o de hoje. Com ela: as fontes na ordem configurada (fonte que não existe,
+falhou ou não tem o dado é pulada), N perguntas que precisam conferir todas, 2 tentativas por pergunta, "não confere"
+é resposta e NUNCA troca de fonte, e o limite de erros do dia (somando as ligações) é contado no banco.
+A Cognição só classifica intenção (saída fechada) e a fala continua a do roteiro.
 
 Eventos para o orquestrador (emitir(id_chamada, tipo, dados)):
   passo      um por bloco (voz_fluxo_passos: ordem, bloco_id, modo, saida_quando, intencao, confianca_faixa,
@@ -24,6 +29,7 @@ A resposta do CRM fica em `memoria` e é apagada no fim (`descartar`).
 """
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 from dataclasses import dataclass, field
@@ -197,6 +203,11 @@ class FluxoCarregado:
     base: dict = field(default_factory=dict)                # bloco_id -> [(pergunta, resposta)] revisadas
     hash: str = ""
     hosts: tuple = ()                                       # crm_hosts_permitidos da empresa
+    # SQL 88: identidade pelo arquivo. Sem configuração (None) o executor faz o de hoje.
+    identidade: dict | None = None                          # voz_mailing_config.identidade vigente da carteira
+    fonte_interna: object | None = None                     # conector.FonteArquivo (a VM; None no simulador)
+    empresa_id: int | None = None
+    credor_id: int | None = None
 
 
 @dataclass
@@ -213,6 +224,49 @@ class Turno:
 
 class FluxoInvalido(ValueError):
     pass
+
+
+# ------------------------------------------------------------------ identidade pelo arquivo (SQL 88)
+PERGUNTAS_FALA = {      # fala fixa de cada pergunta quando ela não é a da etapa (a 2ª pergunta, ou a da reserva)
+    "dia_mes_nascimento": "Para sua segurança, me confirma o dia e o mês do seu nascimento?",
+    "ultimos3_documento": "Certo. E me diz os três últimos números do seu CPF?",
+    "ano_nascimento": "E o ano em que você nasceu?",
+}
+FALA_NAO_CONFERIU = "Não conferiu. Pode me dizer de novo?"
+TENTATIVAS_IDENTIDADE = 2
+
+
+def config_identidade(c) -> dict | None:
+    """A parte "identidade" de voz_mailing_config, conferida como no banco (public.identidade_mailing_valida). Fora do
+    formato: None (= o de hoje)."""
+    if not isinstance(c, dict) or set(c) != {"fonte", "perguntas", "quantas", "se_faltar", "erros_dia"}:
+        return None
+    ps = c.get("perguntas")
+    q = c.get("quantas")
+    ok = (c.get("fonte") in CN.FONTES_IDENTIDADE and c.get("se_faltar") in ("proxima", "menos", "transferir")
+          and c.get("erros_dia") in (3, 4, 6) and not isinstance(c.get("erros_dia"), bool)
+          and q in (1, 2) and not isinstance(q, bool) and isinstance(ps, list) and q <= len(ps) <= 3
+          and all(p in FV.PERGUNTAS_IDENTIDADE for p in ps) and len(set(ps)) == len(ps))
+    return dict(c) if ok else None
+
+
+def informado_de(pergunta: str, texto: str, hoje: date) -> str | None:
+    """O que a pessoa disse → o valor normalizado (DDMM, AAAA, ddd), igual ao da carga (motor/identidade_mailing).
+    Só em memória: nunca vai para log, evento, banco (fora o código) ou modelo."""
+    t = normal(texto)
+    if pergunta == "dia_mes_nascimento":
+        d = extrair_data(texto, hoje)
+        return d.strftime("%d%m") if d else None
+    if pergunta == "ano_nascimento":
+        m = re.search(r"\b(19\d{2}|20\d{2})\b", t)
+        return m.group(1) if m else None
+    if pergunta == "ultimos3_documento":
+        m = re.search(r"\b(\d{3})\b", t)
+        if m:
+            return m.group(1)
+        dig = re.findall(r"\d", t)            # "4, 7, 2"
+        return "".join(dig) if len(dig) == 3 else None
+    return None
 
 
 class Sessao:
@@ -247,6 +301,7 @@ class Sessao:
         self.conversa = None                   # ConversaBloco do bloco generativo atual
         self.avisos: list[str] = []
         self.falar_agora = None                # voz: fala de espera tocada antes da API responder
+        self._ident: dict | None = None        # SQL 88: estado da etapa de identidade com configuração (só códigos)
         self._turno = Turno()
 
     # ---------------------------------------------------------------- interface (igual à Conversa)
@@ -275,6 +330,7 @@ class Sessao:
 
     def descartar(self) -> None:
         """Fim da ligação: a resposta do CRM some da memória."""
+        self._ident = None
         self.memoria.clear()
         self.ofertas = []
         self.oferta_atual = None
@@ -459,11 +515,17 @@ class Sessao:
             self._marca_trava("terceiro")
             self._seguir(b, "terceiro")
 
-    # ---------------------------------------------------------------- identidade: só o CRM confere, nunca a IA
+    # ---------------------------------------------------------------- identidade: o CRM ou o arquivo, nunca a IA
     def _entrar_identidade(self, b):
+        if self.fluxo.identidade is not None:
+            self._entrar_identidade_cfg(b)
+            return
         self._falar_bloco(b)
 
     def _ouvir_identidade(self, b, texto, t):
+        if self._ident is not None and self._ident.get("bloco") == b["id"]:
+            self._ouvir_identidade_cfg(b, texto, t)
+            return
         p = b["params"]
         d = extrair_data(texto, self.hoje) if p["pergunta"] != "ultimos3_documento" else None
         informado = None
@@ -490,6 +552,157 @@ class Sessao:
             self._seguir(b, "confirmou")
         elif not self._tentar_de_novo(b, "Não conferiu. Pode me dizer de novo?"):
             self._seguir(b, "nao_confirmou")
+
+    # ---------------------------------------------------------------- identidade com a configuração da carteira (SQL 88)
+    def _perguntas_alvo(self, disponiveis: list | None) -> list | None:
+        """As perguntas que esta fonte faz: as ligadas, na ordem, que têm dado (o CRM: todas), até "quantas".
+        Faltou dado: `proxima` = None (pula a fonte); `menos` = as que têm (mínimo 1); `transferir` = "transferir"."""
+        cfg = self.fluxo.identidade
+        ligadas = list(cfg["perguntas"])
+        quantas = int(cfg["quantas"])
+        com_dado = ligadas if disponiveis is None else [x for x in ligadas if x in disponiveis]
+        alvo = com_dado[:quantas]
+        if len(alvo) == quantas:
+            return alvo
+        if cfg["se_faltar"] == "menos" and alvo:
+            return alvo
+        return "transferir" if cfg["se_faltar"] == "transferir" else None
+
+    def _entrar_identidade_cfg(self, b):
+        if self.identidade_confirmada:         # 2ª etapa de identidade: a configuração já perguntou o que pede
+            self._seguir(b, "confirmou")
+            return
+        cfg = self.fluxo.identidade
+        p = b["params"]
+        fontes: list = []
+        for f in CN.FONTES_IDENTIDADE[cfg["fonte"]]:
+            if f == "crm":
+                if p.get("conector_id") is not None and self.fluxo.conectores.get(p["conector_id"]) is not None:
+                    fontes.append({"fonte": "crm", "perguntas": self._perguntas_alvo(None)})
+                continue
+            fi = self.fluxo.fonte_interna
+            if fi is None or self.fluxo.credor_id is None:
+                continue                       # sem a fonte interna (simulador, banco sem SQL 88): pula
+            aberta = fi.abrir(self.fluxo.empresa_id, self.fluxo.credor_id, self.id_cliente, self.id_chamada)
+            if aberta is None:
+                continue                       # falhou: próxima fonte
+            if aberta["bloqueado"]:
+                fontes.append({"fonte": "arquivo", "bloqueado": True})
+                continue
+            alvo = self._perguntas_alvo(aberta["disponiveis"])
+            if alvo == "transferir":
+                fontes.append({"fonte": "arquivo", "transferir": True})
+            elif alvo:
+                fontes.append({"fonte": "arquivo", "perguntas": alvo})
+        self._ident = {"bloco": b["id"], "fontes": fontes, "f": 0, "confirmadas": [], "tent": {}, "atual": None}
+        self._proxima_fonte_ou_fim(b, primeira=True)
+
+    def _fonte_atual(self) -> dict | None:
+        st = self._ident
+        return st["fontes"][st["f"]] if st and st["f"] < len(st["fontes"]) else None
+
+    def _proxima_fonte_ou_fim(self, b, primeira: bool = False) -> None:
+        """Na fonte atual: bloqueada → atendente; "transferir" → atendente; senão pergunta o que falta. Sem fonte:
+        falhou (ou não confirmou), nunca confirma."""
+        st = self._ident
+        if st is not None:
+            f = self._fonte_atual()
+            if f is None:
+                log.info("identidade: fonte=nenhuma confirmou=nao")
+                self._ident = None
+                self._seguir(b, "falhou") if any(s["quando"] == "falhou" for s in b["saidas"]) else self._seguir(b, "nao_confirmou")
+                return
+            if f.get("bloqueado") or f.get("transferir"):
+                log.info("identidade: fonte=%s confirmou=nao motivo=%s", f["fonte"],
+                         "limite_do_dia" if f.get("bloqueado") else "sem_dado")
+                self._ident = None
+                self._falar(FALA_HUMANO, b["id"])
+                self._finalizar("transferir", motivo="pedido_humano")
+                return
+            falta = [x for x in f["perguntas"] if x not in st["confirmadas"]]
+            if not falta:
+                self._identidade_ok(b, f["fonte"])
+                return
+            q = falta[0]
+            st["atual"] = q
+            if primeira and q == b["params"].get("pergunta"):
+                self._falar_bloco(b)
+            else:
+                self._falar(PERGUNTAS_FALA[q], b["id"])
+            return
+
+    def _consultar(self, b, q: str, informado: str) -> bool:
+        """Pergunta à fonte atual. True = ela respondeu (confere / não confere / bloqueado já tratados); False = a fonte
+        foi pulada (falhou, sem dado) e a próxima entra."""
+        st = self._ident
+        f = self._fonte_atual()
+        st["tent"][q] = st["tent"].get(q, 0) + 1
+        if f["fonte"] == "crm":
+            r = self._chamar(b, b["params"].get("conector_id"), {"data_informada": informado, "ano_informado": informado,
+                                                                  "digitos_informados": informado})
+            resp = r.codigo if r is not None and r.ok and r.codigo in ("identidade_ok", "identidade_nao_confere") else None
+        else:
+            r = self.fluxo.fonte_interna.conferir(self.fluxo.empresa_id, self.fluxo.credor_id, self.id_cliente,
+                                                  self.id_chamada, q, informado)
+            resp = r.codigo if r.ok else None
+            self._turno.conectores.append({"conector": "arquivo", "nome": CN.FonteArquivo.nome, "classe": r.classe,
+                                           "status": None, "ms": r.latencia_ms, "codigo": resp})
+        informado = None
+        log.info("identidade: fonte=%s confirmou=%s tentativa=%s", f["fonte"],
+                 {"identidade_ok": "sim", "identidade_nao_confere": "nao"}.get(resp, "sem_resposta"), st["tent"][q])
+        if resp == "bloqueado":
+            f["bloqueado"] = True
+            st["tent"][q] -= 1
+            self._proxima_fonte_ou_fim(b)
+            return True
+        if resp not in ("identidade_ok", "identidade_nao_confere"):
+            st["tent"][q] -= 1                    # a fonte não conferiu: a tentativa não conta
+            st["f"] += 1
+            return False
+        if resp == "identidade_ok":
+            st["confirmadas"].append(q)
+            self._proxima_fonte_ou_fim(b)
+            return True
+        # não confere: é resposta. Nunca troca de fonte (senão a pessoa ganharia tentativas)
+        if st["tent"][q] >= TENTATIVAS_IDENTIDADE:
+            self._ident = None
+            self._seguir(b, "nao_confirmou")
+        else:
+            self._falar(FALA_NAO_CONFERIU, b["id"])
+        return True
+
+    def _identidade_ok(self, b, fonte: str) -> None:
+        self._ident = None
+        self.identidade_confirmada = True
+        log.info("identidade: fonte=%s confirmou=sim", fonte)
+        self._seguir(b, "confirmou")
+
+    def _ouvir_identidade_cfg(self, b, texto, t):
+        st = self._ident
+        q = st["atual"]
+        informado = informado_de(q, texto, self.hoje)
+        if informado is None:
+            st["tent"][q] = st["tent"].get(q, 0) + 1
+            if st["tent"][q] >= TENTATIVAS_IDENTIDADE:
+                self._ident = None
+                self._seguir(b, "nao_confirmou")
+            else:
+                self._falar("Desculpe, não entendi. Pode repetir, por exemplo, 15 de março?" if q != "ultimos3_documento"
+                            else "Desculpe, não entendi. Pode repetir os três últimos números?", b["id"])
+            return
+        self._turno.intencao = {"intencao": "informou_data", "confianca": "alta", "entidades": ["dado: ••••"]}
+        while self._ident is not None:
+            if self._fonte_atual() is None:
+                self._proxima_fonte_ou_fim(b)
+                return
+            if self._consultar(b, q, informado):
+                return
+            # fonte pulada: a próxima confere a MESMA resposta (a pessoa não repete)
+            f = self._fonte_atual()
+            if f is None or f.get("bloqueado") or f.get("transferir") or q not in f.get("perguntas", ()):
+                self._proxima_fonte_ou_fim(b)
+                return
+        informado = None
 
     # ---------------------------------------------------------------- pergunta (árvore)
     def _entrar_pergunta(self, b):
@@ -772,12 +985,33 @@ class CarregadorFluxos:
     resto (conectores ativos, hosts, alçada vigente, base revisada) uma vez por versão e hash. Sem fluxo em uso:
     None (a Montagem cai no roteiro). Erro do banco também cai no roteiro, com aviso no log."""
 
-    def __init__(self, sb, ttl_s: float = 60, relogio=None):
+    def __init__(self, sb, ttl_s: float = 60, relogio=None, segredos=None):
         import time as _t
         self.sb, self.ttl = sb, ttl_s
         self.relogio = relogio or _t.monotonic
         self._em_uso: dict = {}
         self._versoes: dict = {}
+        self._identidade: dict = {}
+        # SQL 88: a fonte interna da identidade (arquivo) só existe com o cofre (a chave de identidade da empresa)
+        self.fonte_interna = CN.FonteArquivo(sb, segredos) if segredos is not None else None
+
+    def identidade(self, ctx, agora: float) -> dict | None:
+        """A configuração de identidade da carteira (cache curto, como a versão em uso). Erro, banco sem o SQL 88 ou
+        fora do formato: None, e o executor faz o de hoje."""
+        chave = (ctx.empresa_id, ctx.credor_id)
+        hit = self._identidade.get(chave)
+        if hit is not None and agora - hit[0] <= self.ttl:
+            return hit[1]
+        cfg = None
+        try:
+            r = self.sb.rpc("identidade_voz_vigente", {"empresa": ctx.empresa_id, "credor": ctx.credor_id})
+            r = r[0] if isinstance(r, list) and r else r
+            cfg = config_identidade(r.get("identidade")) if isinstance(r, dict) else None
+        except Exception as ex:   # noqa: BLE001
+            log.warning("identidade da empresa %s indisponível (%s): só o CRM confere", ctx.empresa_id,
+                        ex.__class__.__name__)
+        self._identidade[chave] = (agora, cfg)
+        return cfg
 
     def __call__(self, ctx) -> FluxoCarregado | None:
         chave = (ctx.empresa_id, ctx.credor_id)
@@ -794,7 +1028,12 @@ class CarregadorFluxos:
             ch = (v["versao_id"], v["hash"])
             if ch not in self._versoes:
                 self._versoes[ch] = self._montar(ctx, v)
-            return self._versoes[ch]
+            fl = self._versoes[ch]
+            cfg = self.identidade(ctx, agora)
+            if cfg is None:
+                return fl                      # sem configuração: exatamente o de hoje
+            return dataclasses.replace(fl, identidade=cfg, fonte_interna=self.fonte_interna,
+                                       empresa_id=ctx.empresa_id, credor_id=ctx.credor_id)
         except Exception as ex:   # noqa: BLE001
             log.warning("fluxo da empresa %s indisponível (%s): usando o roteiro", ctx.empresa_id, ex.__class__.__name__)
             return None

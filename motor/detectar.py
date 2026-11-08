@@ -144,6 +144,10 @@ NAO_FONE = ("TIPO", "OPERADORA", "RANKING", "SCORE", "DDD", "POSSUI", "PERTURBE"
             "QTD", "DATA", "DT_", "RCS", "HOT", "CEP")
 
 
+# Colunas do agente de voz (SQL 88): só vêm do que o cliente apontou (nunca da detecção) e só viram código de
+# validação; documento_validacao pode ser a mesma coluna do CPF ("usar o CPF/CNPJ já apontado").
+CAMPOS_VOZ = ("nascimento", "documento_validacao")
+
 # Mapeamento da carga geral feito no site (SQL 74, mapeamento_arquivos tipo 'base'): campo do motor → coluna.
 CAMPO_FIXO = {"CPF": "cpf", "ID do cliente": "id_cliente", "contrato": "id_contrato", "saldo": "saldo",
               "dias de atraso": "dias_atraso", "vencimento": "vencimento", "data de entrada": "data_entrada"}
@@ -157,7 +161,7 @@ def _fixas_validas(fixas: dict | None, nomes: list[str]) -> dict:
             cols = [c for c in (v or []) if isinstance(c, str) and c in nomes]
             if cols:
                 saida[k] = cols
-        elif k in CAMPO_FIXO.values() and isinstance(v, str) and v in nomes:
+        elif (k in CAMPO_FIXO.values() or k in CAMPOS_VOZ) and isinstance(v, str) and v in nomes:
             saida[k] = v
     if saida.get("id_cliente") and saida.get("id_cliente") == saida.get("cpf"):
         saida.pop("id_cliente")          # o código do cliente nunca é a coluna do CPF: o motor decide o ID
@@ -247,6 +251,9 @@ def layout_base(arq: Path, explicar: dict, fixas: dict | None = None) -> dict:
                  ("data_entrada", entrada)):
         if v:
             colunas[k] = v
+    for k in CAMPOS_VOZ:
+        if fix.get(k):
+            colunas[k] = fix[k]
     return {"arquivo": "*", "delimitador": delim, "encoding": enc,
             "formato_data": _formato_data(amostra, [venc, entrada]), "decimal": _decimal(amostra, [saldo]),
             "colunas": colunas, "telefones": telefones, "emails": emails}
