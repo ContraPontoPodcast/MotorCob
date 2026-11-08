@@ -5,6 +5,8 @@ export type AreaRota =
 	| 'cobranca'
 	| 'jornada'
 	| 'mensageria'
+	| 'voz'
+	| 'speech'
 	| 'relatorios'
 	| 'console'
 	| 'empresa'
@@ -24,9 +26,16 @@ const CONSOLE_MENSAGEM = [
 /** Determina a área ativa pela rota (pathname). */
 export function areaDaRota(pathname: string): AreaRota {
 	if (pathname === '/inicio') return 'inicio';
+	// Endereços antigos que redirecionam para Agente Voz/CX e Speech Analytics (lib/rotas-voz.ts): já marcam a área
+	// nova enquanto o redirecionamento acontece (sem piscar a Cobrança ou a Mensageria).
+	if (pathname === '/discagem' || pathname.startsWith('/mensageria/voz/') || pathname.startsWith('/discagem/') || pathname === '/canais/agente-virtual' || pathname.startsWith('/canais/agente-virtual/')) return 'voz';
+	if (pathname === '/gravacoes' || pathname.startsWith('/gravacoes/') || pathname === '/insights-voz' || pathname.startsWith('/envios/gravacoes-discador')) return 'speech';
 	if (pathname === '/console' || pathname.startsWith('/console/')) return 'console';
 	if (pathname === '/empresas' || pathname.startsWith('/empresas/')) return 'console';
 	if (pathname === '/mensageria' || pathname.startsWith('/mensageria/')) return 'mensageria';
+	// Agente Voz/CX e Speech Analytics: áreas próprias (antes dentro da Cobrança e da Mensageria).
+	if (pathname === '/voz' || pathname.startsWith('/voz/')) return 'voz';
+	if (pathname === '/speech-analytics' || pathname.startsWith('/speech-analytics/')) return 'speech';
 	if (pathname === '/relatorios' || pathname.startsWith('/relatorios/')) return 'relatorios';
 	if (pathname === '/jornada' || pathname.startsWith('/jornada/')) return 'jornada';
 	if (pathname === '/empresa' || pathname.startsWith('/empresa/')) return 'empresa';
@@ -42,9 +51,8 @@ export function areaDaRota(pathname: string): AreaRota {
 	// Cobrança (frente motorcob).
 	const cobrancaPrefixes = [
 		'/fila', '/clientes', '/acoes', '/envios', '/orquestracao', '/personas',
-		'/clusters', '/credores', '/canais', '/discagem', '/mapa', '/comite', '/painel',
+		'/clusters', '/credores', '/canais', '/mapa', '/comite', '/painel',
 		'/estrategias', '/estrategia',
-		'/gravacoes', '/insights-voz', '/speech-analytics',
 	];
 	if (cobrancaPrefixes.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'cobranca';
 	// 404, /cliente e qualquer outra → nenhuma (não marca área nem troca a frente).
@@ -52,13 +60,15 @@ export function areaDaRota(pathname: string): AreaRota {
 }
 
 /** Área de tema (cor) — workspace, relatorios, inicio, empresa, suporte, nenhuma viram neutro. */
-export type AreaTema = 'cobranca' | 'jornada' | 'mensageria' | 'neutro';
+export type AreaTema = 'cobranca' | 'jornada' | 'mensageria' | 'voz' | 'speech' | 'neutro';
 
 export function areaTemaDeRota(pathname: string): AreaTema {
 	const a = areaDaRota(pathname);
 	if (a === 'cobranca') return 'cobranca';
 	if (a === 'jornada') return 'jornada';
 	if (a === 'mensageria') return 'mensageria';
+	if (a === 'voz') return 'voz';
+	if (a === 'speech') return 'speech';
 	// Console usa a cor da Mensageria quando a rota é de produtos/fornecedores.
 	if (CONSOLE_MENSAGEM.some(p => pathname.startsWith(p))) return 'mensageria';
 	return 'neutro';
@@ -68,6 +78,8 @@ const AREA_LABEL: Record<AreaRota, string> = {
 	cobranca: 'Cobrança',
 	jornada: 'Jornada do Cliente',
 	mensageria: 'Mensageria',
+	voz: 'Agente Voz/CX',
+	speech: 'Speech Analytics',
 	relatorios: 'Relatórios',
 	console: 'Console MotorCX',
 	empresa: 'Empresa',
@@ -86,6 +98,8 @@ export const AREA_DESTINO: Record<AreaRota, string> = {
 	cobranca: '/fila',
 	jornada: '/jornada',
 	mensageria: '/mensageria',
+	voz: '/voz',
+	speech: '/speech-analytics',
 	relatorios: '/relatorios',
 	console: '/console',
 	empresa: '/empresa',
@@ -94,3 +108,12 @@ export const AREA_DESTINO: Record<AreaRota, string> = {
 	workspace: '/inicio',
 	nenhuma: '/inicio',
 };
+
+/** Áreas que dependem de um contrato: Agente Voz/CX e Speech Analytics vêm com a Cobrança (a Discagem vale também
+ *  para quem tem discador próprio; agente, ligações e telefonia mostram "não contratado" sem o módulo agente_voz). */
+export type AreaContrato = 'cobranca' | 'jornada' | 'mensageria';
+export function areaDoContrato(area: AreaRota): AreaContrato | null {
+	if (area === 'cobranca' || area === 'voz' || area === 'speech') return 'cobranca';
+	if (area === 'jornada' || area === 'mensageria') return area;
+	return null;
+}

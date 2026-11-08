@@ -1,4 +1,4 @@
-// Mensageria › Agente virtual › Lotes › Reenviar agora (SQL 65; protótipo aprovado em 01/11/2026).
+// Agente Voz/CX › Ligações › Lote › Reenviar agora (SQL 65; protótipo aprovado em 01/11/2026).
 // É o Resubmit feito à mão: escolhe os resultados (e a onda), vê quantos voltam e quantos ficam fora e por quê
 // (previa_reenvio_voz) e pede (pedir_reenvio_voz, permissão reenviar_lote_voz). A VM confere tudo de novo na hora.
 // Só contagens: os números ficam no lote (sem_contato_lote_voz). Redesign aprovado: é a ação principal do lote.

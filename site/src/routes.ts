@@ -73,7 +73,6 @@ export default [
     route('estrategias', 'routes/estrategias.tsx'),
     route('estrategias/:id', 'routes/estrategia.tsx'),
     route('canais', 'routes/canais.tsx'),
-    route('discagem', 'routes/discagem.tsx'),
     route('empresas', 'routes/empresas.tsx'),
     route('jornada', 'routes/jornada.tsx'),
     route('jornada/lista', 'routes/jornada-lista.tsx'),
@@ -122,9 +121,27 @@ export default [
     route('relatorios', 'routes/relatorios.tsx'),
     route('relatorios/novo', 'routes/relatorios-novo.tsx'),
     route('console/voz', 'routes/console-voz.tsx'),
-    // Agente de voz (telas do cliente)
-    // Fluxo do agente (SQL 58, 59 e 66): Fluxos, editor, testar conversa, desempenho, rascunho gerado e personas.
-    // O roteiro antigo fica em /roteiro até um fluxo entrar em uso na carteira.
+    // Agente Voz/CX (área própria do trilho; SPEC Canais §3.3). Visão geral, Agente de voz (fluxos, SQL 58, 59 e 66;
+    // o roteiro antigo fica em /roteiro até um fluxo entrar em uso na carteira), Discagem, Ligações e Telefonia.
+    route('voz', 'routes/voz.tsx'),
+    route('voz/agente', 'routes/voz-agente.tsx'),
+    route('voz/agente/roteiro', 'routes/voz-agente-roteiro.tsx'),
+    route('voz/agente/editor/:versao', 'routes/voz-agente-editor.tsx'),
+    route('voz/agente/testar', 'routes/voz-agente-testar.tsx'),
+    route('voz/agente/desempenho', 'routes/voz-agente-desempenho.tsx'),
+    route('voz/agente/pedido/:id', 'routes/voz-agente-pedido.tsx'),
+    route('voz/agente/personas', 'routes/voz-agente-personas.tsx'),
+    route('voz/discagem', 'routes/voz-discagem.tsx'),
+    route('voz/ligacoes', 'routes/voz-ligacoes.tsx'),
+    route('voz/ligacoes/:id', 'routes/voz-ligacao.tsx'),
+    route('voz/telefonia', 'routes/voz-telefonia.tsx'),
+    route('voz/conexao', 'routes/voz-conexao.tsx'),
+    // Speech Analytics (área própria do trilho; SPEC Canais §3.5): as abas de análise, Gravações e Entrada de gravações.
+    route('speech-analytics/gravacoes', 'routes/speech-gravacoes.tsx'),
+    route('speech-analytics/entrada', 'routes/speech-entrada.tsx'),
+    route('speech-analytics/entrada/enviar', 'routes/speech-entrada-enviar.tsx'),
+    route('speech-analytics/:aba?', 'routes/speech-analytics.tsx'),
+    // Endereços antigos: continuam abrindo e levam ao novo, com a mesma query (lib/rotas-voz.ts).
     route('canais/agente-virtual', 'routes/canais-agente-virtual.tsx'),
     route('canais/agente-virtual/roteiro', 'routes/canais-agente-virtual-roteiro.tsx'),
     route('canais/agente-virtual/editor/:versao', 'routes/canais-agente-virtual-editor.tsx'),
@@ -134,9 +151,9 @@ export default [
     route('canais/agente-virtual/personas', 'routes/canais-agente-virtual-personas.tsx'),
     route('mensageria/voz/lotes', 'routes/mensageria-voz-lotes.tsx'),
     route('mensageria/voz/lotes/:id', 'routes/mensageria-voz-lote.tsx'),
+    route('discagem', 'routes/discagem.tsx'),
     route('gravacoes', 'routes/gravacoes.tsx'),
     route('insights-voz', 'routes/insights-voz.tsx'),
-    route('speech-analytics/:aba?', 'routes/speech-analytics.tsx'),
     route('envios/gravacoes-discador', 'routes/envios-gravacoes-discador.tsx'),
     route('envios/gravacoes-discador/enviar', 'routes/envios-gravacoes-discador-enviar.tsx'),
     route('*', 'routes/app-not-found.tsx'),

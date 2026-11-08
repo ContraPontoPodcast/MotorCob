@@ -4,12 +4,17 @@
 // o PageHeading e o WorkspaceHeading já o mostram sozinhos quando a rota está aqui.
 //
 // Rota nova que abre "para dentro" de outra: acrescente aqui (o teste confere que a rota e o destino existem).
+// A chave é a rota como está no routes.ts: exata ("/suporte/novo") ou com parâmetros ("/voz/ligacoes/:id",
+// "/speech-analytics/:aba?"). A rota exata ganha da com parâmetro.
+
+import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH } from './rotas-voz';
 
 export type RotaPai = { to: string; rotulo: string };
 export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean };
 
 const INICIO: RotaPai = { to: '/inicio', rotulo: 'Início' };
 const INTEGRACOES: RotaPai = { to: '/empresa/integracoes', rotulo: 'Integrações' };
+const AGENTE_DE_VOZ: RotaPai = { to: ROTA_AGENTE, rotulo: 'Agente de voz' };
 
 /** Rota exata (sem query) → tela-mãe. Função quando o destino depende de quem está logado. */
 export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai | null)> = {
@@ -27,12 +32,39 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/implantacao': ctx => (ctx.equipe ? { to: '/console/implantacao', rotulo: 'Console › Implantação' } : INICIO),
 	// A equipe entra na empresa pelo Console › Empresas; para o cliente, Empresa é uma área do menu.
 	'/empresa': ctx => (ctx.equipe ? { to: '/console', rotulo: 'Console › Empresas' } : null),
+	// Agente Voz/CX › Agente de voz: fluxo (editor), testes, desempenho, rascunho gerado e roteiro antigo voltam à lista
+	// de fluxos. Visão geral, Agente de voz, Discagem, Ligações e Telefonia são abas da área (sem voltar).
+	'/voz/agente/editor/:versao': AGENTE_DE_VOZ,
+	'/voz/agente/testar': AGENTE_DE_VOZ,
+	'/voz/agente/desempenho': AGENTE_DE_VOZ,
+	'/voz/agente/personas': AGENTE_DE_VOZ,
+	'/voz/agente/pedido/:id': AGENTE_DE_VOZ,
+	'/voz/agente/roteiro': AGENTE_DE_VOZ,
+	// Ligações de um lote → lotes de hoje.
+	'/voz/ligacoes/:id': { to: ROTA_LIGACOES, rotulo: 'Ligações' },
+	// Speech Analytics: toda aba (Qualidade, Operadores, Alertas, Recomendações, Curadoria, Buscar, Gravações e Entrada
+	// de gravações) volta para a Visão geral; o envio volta para a Entrada.
+	'/speech-analytics/:aba?': { to: ROTA_SPEECH, rotulo: 'Visão geral do Speech Analytics' },
+	'/speech-analytics/entrada/enviar': { to: ROTA_ENTRADA_GRAVACOES, rotulo: 'Entrada de gravações' },
 };
+
+/** "/voz/ligacoes/:id" → /^\/voz\/ligacoes\/[^/]+$/ ("/x/:p?" também casa "/x"). */
+function padrao(rota: string): RegExp {
+	const corpo = rota.split('/').filter(Boolean).map(seg => {
+		if (seg.startsWith(':')) return seg.endsWith('?') ? '(?:/[^/]+)?' : '/[^/]+';
+		return '/' + seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	}).join('');
+	return new RegExp(`^${corpo}$`);
+}
+const COM_PARAMETRO = Object.keys(ROTAS_PAI).filter(r => r.includes('/:')).map(r => [r, padrao(r)] as const);
 
 /** Tela-mãe da rota, ou null quando a tela já é o topo da área (abas, menu lateral). */
 export function rotaPai(pathname: string, ctx: ContextoRota = {}): RotaPai | null {
 	const caminho = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
-	const regra = ROTAS_PAI[caminho];
+	const chave = Object.hasOwn(ROTAS_PAI, caminho) ? caminho : COM_PARAMETRO.find(([, re]) => re.test(caminho))?.[0];
+	const regra = chave ? ROTAS_PAI[chave] : undefined;
 	if (!regra) return null;
-	return typeof regra === 'function' ? regra(ctx) : regra;
+	const pai = typeof regra === 'function' ? regra(ctx) : regra;
+	// "/x/:p?" também casa "/x", que é a própria tela-mãe: não volta para ela mesma.
+	return pai && pai.to.split('?')[0] !== caminho ? pai : null;
 }

@@ -107,7 +107,7 @@ export function Alertas({ f, setDias, setAcoes }: { f: Filtros; setDias: (d: num
 								</div>
 								<div className="flex shrink-0 flex-wrap gap-2">
 									<Botao pequeno tipo={a.situacao === 'novo' ? 'secundario' : 'fantasma'} onClick={() => abrir(a)}>{a.situacao === 'novo' ? 'Revisar' : 'Ver'}</Botao>
-									{a.id_cliente && <BotaoLink pequeno tipo="fantasma" to={`/gravacoes?cliente=${encodeURIComponent(a.id_cliente)}`}><Play size={13} aria-hidden="true" />Ouvir</BotaoLink>}
+									{a.id_cliente && <BotaoLink pequeno tipo="fantasma" to={`/speech-analytics/gravacoes?cliente=${encodeURIComponent(a.id_cliente)}`}><Play size={13} aria-hidden="true" />Ouvir</BotaoLink>}
 								</div>
 							</div>
 						))}
@@ -133,7 +133,7 @@ export function Alertas({ f, setDias, setAcoes }: { f: Filtros; setDias: (d: num
 						{textoTemDadoPessoal(obs) && <p className="text-[12px] text-[var(--estado-erro-texto)]">Tire o CPF, telefone ou e-mail da observação.</p>}
 					</>}
 					{rev.id_cliente && <div className="flex flex-wrap gap-2">
-						<BotaoLink pequeno to={`/gravacoes?cliente=${encodeURIComponent(rev.id_cliente)}`}><Play size={13} aria-hidden="true" />Ouvir</BotaoLink>
+						<BotaoLink pequeno to={`/speech-analytics/gravacoes?cliente=${encodeURIComponent(rev.id_cliente)}`}><Play size={13} aria-hidden="true" />Ouvir</BotaoLink>
 						<BotaoLink pequeno tipo="fantasma" to={`/cliente?id=${encodeURIComponent(rev.id_cliente)}`}>Abrir o Extrato do cliente</BotaoLink>
 					</div>}
 				</>}

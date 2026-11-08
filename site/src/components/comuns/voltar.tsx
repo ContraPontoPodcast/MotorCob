@@ -20,6 +20,23 @@ export function VoltarPara({ to, rotulo }: { to: string; rotulo: string }) {
 	);
 }
 
+/** Mesmo visual do VoltarPara, para voltar a um passo da própria tela (sem mudar de rota). Ex.: "Descrever segmentos
+ *  e régua" volta para a lista de Segmentos da Orquestração. */
+export function VoltarBotao({ rotulo, onClick }: { rotulo: string; onClick: () => void }) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			aria-label={`Voltar para ${rotulo}`}
+			data-voltar
+			className="mb-2 inline-flex min-h-[32px] max-w-full items-center gap-1.5 text-[13px] font-medium text-[var(--base-texto-2)] hover:text-[var(--base-texto)]"
+		>
+			<ArrowLeft size={14} aria-hidden className="shrink-0" />
+			<span className="truncate">{rotulo}</span>
+		</button>
+	);
+}
+
 /** "← tela-mãe" da rota atual (src/lib/rota-pai.ts); nada quando a rota não tem tela-mãe. */
 export function Voltar() {
 	const { pathname } = useLocation();

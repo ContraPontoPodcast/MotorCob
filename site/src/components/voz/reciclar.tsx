@@ -1,4 +1,4 @@
-// Mensageria › Agente virtual › Lotes › Reciclar mailing (SQL 65; redesign aprovado, renitencia-v2).
+// Agente Voz/CX › Ligações › Lote › Reciclar mailing (SQL 65; redesign aprovado, renitencia-v2).
 // Modal em 3 passos: 1) o que reciclar (lote inteiro ou filtro por resultado e onda), 2) quem fica de fora (não
 // ligar e inexistente travados) e 3) o limite por cliente no dia. A prévia completa vem de previa_reciclagem_voz:
 // voltam e ficam fora por motivo, ondas, duração estimada, se cabe na janela UF/DDD e chamadas curtas previstas.

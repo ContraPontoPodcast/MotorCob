@@ -249,7 +249,7 @@ export function PlatformTopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 
 	function irArea(a: AreaItem) {
 		// A troca de área é navegação: só sincroniza a frente da sessão (não apaga a preferência).
-		if (a.id === 'cobranca') aplicarFrente('motorcob');
+		if (a.id === 'cobranca' || a.id === 'voz' || a.id === 'speech') aplicarFrente('motorcob');
 		if (a.id === 'jornada') aplicarFrente('motorcli');
 		navigate(a.to);
 	}
@@ -258,6 +258,8 @@ export function PlatformTopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 		{ id: 'cobranca', nome: 'Cobrança', icon: AREA_ICON.cobranca, cor: '#C9A35A', to: '/fila', contratada: areasLib.cobranca },
 		{ id: 'jornada', nome: 'Jornada do Cliente', icon: AREA_ICON.jornada, cor: '#8E8E93', to: '/jornada', contratada: areasLib.jornada },
 		{ id: 'mensageria', nome: 'Mensageria', icon: AREA_ICON.mensageria, cor: '#7A4FB0', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
+		{ id: 'voz', nome: 'Agente Voz/CX', icon: AREA_ICON.voz, cor: '#2F5D7C', to: '/voz', contratada: areasLib.cobranca },
+		{ id: 'speech', nome: 'Speech Analytics', icon: AREA_ICON.speech, cor: '#5B4B8A', to: '/speech-analytics', contratada: areasLib.cobranca },
 		{ id: 'relatorios', nome: 'Relatórios', icon: AREA_ICON.relatorios, cor: '#0A60D0', to: '/relatorios', contratada: true },
 	];
 
@@ -324,7 +326,7 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 	const isEquipe = !!perfil?.equipe;
 
 	function irArea(id: string, to: string) {
-		if (id === 'cobranca') aplicarFrente('motorcob');
+		if (id === 'cobranca' || id === 'voz' || id === 'speech') aplicarFrente('motorcob');
 		if (id === 'jornada') aplicarFrente('motorcli');
 		navigate(to);
 		onClose();
@@ -336,6 +338,8 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 		{ id: 'cobranca', nome: 'Cobrança', to: '/fila', contratada: areasLib.cobranca },
 		{ id: 'jornada', nome: 'Jornada do Cliente', to: '/jornada', contratada: areasLib.jornada },
 		{ id: 'mensageria', nome: 'Mensageria', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
+		{ id: 'voz', nome: 'Agente Voz/CX', to: '/voz', contratada: areasLib.cobranca },
+		{ id: 'speech', nome: 'Speech Analytics', to: '/speech-analytics', contratada: areasLib.cobranca },
 		{ id: 'relatorios', nome: 'Relatórios', to: '/relatorios', contratada: true },
 	];
 

@@ -67,6 +67,15 @@
   --area-mensageria-ativo: #7A2E3B;
   --area-mensageria-ativo-texto: #FFFFFF;
   --area-mensageria-forte: #5E2330;
+  /* Agente Voz/CX e Speech Analytics (SPEC Canais §3.1). As outras áreas também vêm de tema_tokens; estas só do CSS. */
+  --area-voz: #2F5D7C;
+  --area-voz-ativo: #2F5D7C;
+  --area-voz-ativo-texto: #FFFFFF;
+  --area-voz-forte: #24485F;
+  --area-speech: #5B4B8A;
+  --area-speech-ativo: #5B4B8A;
+  --area-speech-ativo-texto: #FFFFFF;
+  --area-speech-forte: #47396E;
   --area-neutro: #1D1D1F;
   --area-neutro-ativo: #1D1D1F;
   --area-neutro-ativo-texto: #FFFFFF;
@@ -136,6 +145,16 @@
   --estado-erro-texto: #FF453A;
   --estado-info: #0A84FF;
   --estado-info-fundo: #11243A;
+
+  /* Agente Voz/CX e Speech Analytics no escuro: tom claro, texto escuro por cima (botão principal, item ativo). */
+  --area-voz: #6FA3C8;
+  --area-voz-ativo: #6FA3C8;
+  --area-voz-ativo-texto: #0E1E2A;
+  --area-voz-forte: #8DB8D6;
+  --area-speech: #A495D6;
+  --area-speech-ativo: #A495D6;
+  --area-speech-ativo-texto: #17122B;
+  --area-speech-forte: #B8ABE0;
 
   /* Faixas do Score no tema escuro. */
   --score-alto: #2BB3BD;

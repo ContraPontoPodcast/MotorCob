@@ -3,7 +3,7 @@
 // abas de Relatórios e páginas "não faz parte do plano".
 import {
 	House, CircleDollarSign, Route, MessagesSquare, FileChartColumn,
-	Building, Headset, ShieldCheck, type LucideIcon,
+	Building, Headset, ShieldCheck, Bot, AudioLines, type LucideIcon,
 } from 'lucide-react';
 import type { AreaRota } from './area-rota';
 
@@ -11,6 +11,8 @@ export const AREA_ICON: Record<AreaRota, LucideIcon> = {
 	cobranca: CircleDollarSign,
 	jornada: Route,
 	mensageria: MessagesSquare,
+	voz: Bot,
+	speech: AudioLines,
 	relatorios: FileChartColumn,
 	empresa: Building,
 	suporte: Headset,

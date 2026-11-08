@@ -178,7 +178,7 @@ export function RoteiroAgente() {
 		<SubAbas atual="roteiro" itens={[
 			{ id: 'canal', nome: 'Configuração do canal', to: '/canais' },
 			{ id: 'frases', nome: 'Modelos de mensagem', to: '/canais?secao=frases' },
-			{ id: 'fluxos', nome: 'Fluxos', to: '/canais/agente-virtual' },
+			{ id: 'fluxos', nome: 'Fluxos', to: '/voz/agente' },
 			{ id: 'roteiro', nome: 'Roteiro (antigo)' },
 		]} />
 	);
@@ -194,7 +194,7 @@ export function RoteiroAgente() {
 			{heading}
 			{sub}
 			{error && <div className="mb-4"><Notice>{error}</Notice></div>}
-			<div className="mb-4"><Aviso tom="info" titulo="O roteiro foi substituído pelo fluxo do agente.">Ele continua valendo nesta carteira só até um fluxo entrar em uso nela. O roteiro em uso já virou um rascunho em <Link to="/canais/agente-virtual" className="font-semibold underline">Fluxos</Link>: escolha o conector de validação do CRM, aprove e coloque em uso.</Aviso></div>
+			<div className="mb-4"><Aviso tom="info" titulo="O roteiro foi substituído pelo fluxo do agente.">Ele continua valendo nesta carteira só até um fluxo entrar em uso nela. O roteiro em uso já virou um rascunho em <Link to="/voz/agente" className="font-semibold underline">Fluxos</Link>: escolha o conector de validação do CRM, aprove e coloque em uso.</Aviso></div>
 
 			{!draft ? (
 				<Vazio titulo="Ainda não há roteiro para o agente virtual." acao={podeEditar ? <Botao onClick={() => { setDraft(novoRascunho()); setSelId(null); setSujo(true); }}>Escrever o primeiro roteiro</Botao> : undefined}>
@@ -297,7 +297,7 @@ export function RoteiroAgente() {
 						)}
 						<div className="mt-3 flex flex-wrap items-center gap-3 text-[12.5px] text-[var(--base-texto-2)]">
 							<BotaoDs tipo="secundario" pequeno onClick={() => setVerVariaveis(true)}>Ver as variáveis</BotaoDs>
-							<span>O limite de abandono que freia o lote fica em <Link to="/mensageria/voz/lotes" className="underline">Ligações em curso</Link>.</span>
+							<span>O limite de abandono que freia o lote fica em <Link to="/voz/ligacoes" className="underline">Agente Voz/CX › Ligações</Link>.</span>
 						</div>
 					</Detalhes>
 				</div>

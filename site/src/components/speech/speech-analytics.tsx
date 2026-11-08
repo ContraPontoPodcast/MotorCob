@@ -1,4 +1,4 @@
-// Cobrança › Resultados › Speech Analytics (substitui "Insights de voz"). Redesign v2: seis abas (Visão geral,
+// Speech Analytics (área própria do trilho; antes Cobrança › Resultados) (substitui "Insights de voz"). Redesign v2: seis abas (Visão geral,
 // Qualidade, Operadores, Alertas, Recomendações e Curadoria) e "Buscar nas conversas" como link no fim da barra.
 // O Roleplay saiu daqui e foi para Fluxo do agente › Testar com personas (ROTA_TESTAR_PERSONAS).
 // Banco: SQL 60 (supabase/migrations/20261227000001_voz_speech_analytics.sql).

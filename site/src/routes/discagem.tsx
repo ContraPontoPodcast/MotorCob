@@ -1,9 +1,3 @@
-import type { Route } from './+types/discagem';
-import { seo } from '@/lib/seo';
-import { Discagem } from '@/components/discagem/discagem';
-
-export function meta({ matches, location }: Route.MetaArgs) {
-	return seo({ matches, location }, { title: 'Regras de discagem · MotorCX', description: 'Regras de discagem da carteira: renitência, horários por UF/DDD e chamadas curtas.' });
-}
-
-export default function DiscagemRoute() { return <Discagem />; }
+import { RedirecionarRotaAntiga } from '@/components/comuns/redirecionar';
+// Endereço antigo: a tela mudou de lugar (Agente Voz/CX ou Speech Analytics). Leva ao novo com a mesma query (lib/rotas-voz.ts).
+export default function RotaAntiga() { return <RedirecionarRotaAntiga />; }

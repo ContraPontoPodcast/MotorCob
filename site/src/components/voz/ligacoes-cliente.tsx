@@ -91,7 +91,7 @@ export function LigacoesAgenteVirtual({ idCliente, credorId }: { idCliente: stri
 	const doMes = chamadas.filter(c => c.ocorrido_em.slice(0, 7) === mes);
 	const totTel = doMes.reduce((t, c) => t + Number(c.custo_operadora ?? 0), 0);
 	const semCadastro = chamadas.filter(c => custoCelula(c).semCadastro);
-	const linkGrav = `/gravacoes?cliente=${encodeURIComponent(idCliente)}`;
+	const linkGrav = `/speech-analytics/gravacoes?cliente=${encodeURIComponent(idCliente)}`;
 
 	const rotaTxt = (c: Chamada) => {
 		if (!c.tech_prefix) return '—';

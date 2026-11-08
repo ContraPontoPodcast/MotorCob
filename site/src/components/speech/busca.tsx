@@ -121,7 +121,7 @@ export function Busca({ f, setAcoes }: { f: Filtros; setAcoes: DefinirAcoes }) {
 										<div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--base-texto-2)]"><b className="text-[var(--base-texto)]">{r.id_cliente}</b><span>{dataBR(r.em)}</span><span>{r.origem === 'ia' ? 'Agente de IA' : 'Discador'}</span>{r.credor && <span>{r.credor}</span>}{r.similaridade != null && <span className="rounded-full bg-[var(--base-fill)] px-2">similaridade {dc(r.similaridade, 2)}</span>}</div>
 										<Trecho>{modo === 'termo' ? marcarTermo(r.texto, feita).map(([t, m], i) => (m ? <mark key={i} className="rounded bg-[var(--estado-atencao-fundo)] px-0.5 text-[var(--base-texto)]">{t}</mark> : <span key={i}>{t}</span>)) : r.texto}</Trecho>
 									</div>
-									<BotaoLink pequeno to={`/gravacoes?cliente=${encodeURIComponent(r.id_cliente)}`}><Play size={13} aria-hidden="true" />Abrir em Gravações</BotaoLink>
+									<BotaoLink pequeno to={`/speech-analytics/gravacoes?cliente=${encodeURIComponent(r.id_cliente)}`}><Play size={13} aria-hidden="true" />Abrir em Gravações</BotaoLink>
 								</div>
 							))}
 						</div>

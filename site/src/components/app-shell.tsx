@@ -8,7 +8,7 @@ import { ErrorDetail } from '@/components/error-detail';
 import { useFrente } from '@/components/frente-provider';
 import { PERM } from '@/lib/permissoes';
 import { isCanalValido, CANAL_STORAGE_KEY } from '@/lib/mensageria-produtos';
-import { areaDaRota } from '@/lib/area-rota';
+import { areaDaRota, areaDoContrato } from '@/lib/area-rota';
 import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
 import { AssistenteProvider } from '@/components/workspace/assistente/assistente-context';
 import { AssistenteAvatar } from '@/components/workspace/assistente/assistente-avatar';
@@ -235,8 +235,9 @@ export function AppShell() {
 	// Sincroniza a frente da sessão com a rota (só cobranca e jornada).
 	useEffect(() => {
 		const a = areaDaRota(loc.pathname);
-		if (a === 'cobranca') aplicarFrente('motorcob');
-		else if (a === 'jornada') aplicarFrente('motorcli');
+		const contrato = areaDoContrato(a);
+		if (contrato === 'cobranca') aplicarFrente('motorcob');
+		else if (contrato === 'jornada') aplicarFrente('motorcli');
 	}, [loc.pathname, aplicarFrente]);
 
 	async function logout() { await supabase?.auth.signOut(); navigate('/login', { replace: true }); }
@@ -252,12 +253,12 @@ export function AppShell() {
 
 	// Cliente sem a área contratada → página de área não contratada (só depois de ler os módulos da empresa,
 	// para a página não piscar para quem tem a área).
-	if (!areasLib.pronto && (area === 'cobranca' || area === 'jornada' || area === 'mensageria')) {
+	// Agente Voz/CX e Speech Analytics vêm com a Cobrança (areaDoContrato).
+	const contrato = areaDoContrato(area);
+	if (!areasLib.pronto && contrato) {
 		return <div className="mc-platform grid min-h-screen place-items-center" style={{ backgroundColor: 'var(--base-conteudo)', color: 'var(--base-texto)' }}><div className="flex items-center gap-3"><Activity className="animate-pulse" /> Carregando seu espaço...</div></div>;
 	}
-	const areaContratada = area === 'cobranca' ? areasLib.cobranca :
-		area === 'jornada' ? areasLib.jornada :
-		area === 'mensageria' ? areasLib.mensageria : true;
+	const areaContratada = contrato ? areasLib[contrato] : true;
 	if (!areaContratada) {
 		return (
 			<AssistenteProvider>
@@ -296,7 +297,7 @@ export function AppShell() {
 	const acordoPagueAte = acordo?.quebra_em ? dateBR(minusDayISO(String(acordo.quebra_em))) : '';
 
 	// Áreas que mostram abas.
-	const mostraAbas = ['cobranca', 'jornada', 'mensageria', 'relatorios', 'empresa', 'console'].includes(area);
+	const mostraAbas = ['cobranca', 'jornada', 'mensageria', 'voz', 'speech', 'relatorios', 'empresa', 'console'].includes(area);
 	const badgesConsole = { atendimento: atendimentoPendentes, implantacao: implantacaoPedidos };
 
 	return (

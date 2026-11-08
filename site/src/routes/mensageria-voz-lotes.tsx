@@ -1,5 +1,3 @@
-import type { Route } from './+types/mensageria-voz-lotes';
-import { seo } from '@/lib/seo';
-import { LotesVoz } from '@/components/voz/lotes';
-export function meta({ matches, location }: Route.MetaArgs) { return seo({ matches, location }, { title: 'Lotes do agente virtual · MotorCX', description: 'Lotes de ligações do agente virtual.', noindex: true }); }
-export default function MensageriaVozLotes() { return <LotesVoz />; }
+import { RedirecionarRotaAntiga } from '@/components/comuns/redirecionar';
+// Endereço antigo: a tela mudou de lugar (Agente Voz/CX ou Speech Analytics). Leva ao novo com a mesma query (lib/rotas-voz.ts).
+export default function RotaAntiga() { return <RedirecionarRotaAntiga />; }

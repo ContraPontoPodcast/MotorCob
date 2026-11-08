@@ -7,7 +7,7 @@ import { useConsolePerms } from '@/components/workspace/console/console-perms';
 import { supabase } from '@/lib/supabase';
 import { apiSupabase, type FluxoApi } from './api';
 
-export const BASE_FLUXO = '/canais/agente-virtual';
+export const BASE_FLUXO = '/voz/agente'; // Agente Voz/CX › Agente de voz (antes /canais/agente-virtual, que redireciona)
 export type Tela = 'lista' | 'editor' | 'testar' | 'desempenho' | 'pedido' | 'personas' | 'conectores' | 'roteiro';
 
 export interface CtxFluxo {

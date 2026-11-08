@@ -1,5 +1,3 @@
-import type { Route } from './+types/canais-agente-virtual-personas';
-import { seo } from '@/lib/seo';
-import { TestarPersonas } from '@/components/fluxo/personas';
-export function meta({ matches, location }: Route.MetaArgs) { return seo({ matches, location }, { title: 'Testar com personas · MotorCX', description: 'Conversas simuladas em lote com personas de ficção.', noindex: true }); }
-export default function CanaisAgenteVirtualPersonas() { return <TestarPersonas />; }
+import { RedirecionarRotaAntiga } from '@/components/comuns/redirecionar';
+// Endereço antigo: a tela mudou de lugar (Agente Voz/CX ou Speech Analytics). Leva ao novo com a mesma query (lib/rotas-voz.ts).
+export default function RotaAntiga() { return <RedirecionarRotaAntiga />; }

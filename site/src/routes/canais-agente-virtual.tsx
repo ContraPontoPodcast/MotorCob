@@ -1,5 +1,3 @@
-import type { Route } from './+types/canais-agente-virtual';
-import { seo } from '@/lib/seo';
-import { ListaFluxos } from '@/components/fluxo/lista';
-export function meta({ matches, location }: Route.MetaArgs) { return seo({ matches, location }, { title: 'Fluxos do agente virtual · MotorCX', description: 'Um fluxo de conversa por carteira: versões, aprovação e uso.', noindex: true }); }
-export default function CanaisAgenteVirtual() { return <ListaFluxos />; }
+import { RedirecionarRotaAntiga } from '@/components/comuns/redirecionar';
+// Endereço antigo: a tela mudou de lugar (Agente Voz/CX ou Speech Analytics). Leva ao novo com a mesma query (lib/rotas-voz.ts).
+export default function RotaAntiga() { return <RedirecionarRotaAntiga />; }

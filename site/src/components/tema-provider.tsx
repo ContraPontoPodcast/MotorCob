@@ -112,6 +112,8 @@ const AREA_LABEL: Record<AreaId, string> = {
 	cobranca: 'Cobrança',
 	jornada: 'Jornada do Cliente',
 	mensageria: 'Mensageria',
+	voz: 'Agente Voz/CX',
+	speech: 'Speech Analytics',
 	neutro: 'MotorCX',
 };
 

@@ -1,4 +1,4 @@
-// Tela 5 · Cobrança › Resultados › Gravações. Só para quem tem ouvir_gravacoes (a RLS de voz_gravacoes
+// Tela 5 · Speech Analytics › Gravações (/speech-analytics/gravacoes; antes Cobrança › Resultados). Só para quem tem ouvir_gravacoes (a RLS de voz_gravacoes
 // exige o mesmo); a transcrição exige ver_transcricoes. A gravação nunca fica aberta na tela: ouvir pede um
 // link de 5 minutos à Edge Function `gravacoes`, que confere a permissão e grava em `acessos`.
 // Só o ID do cliente aparece — nunca nome, CPF ou telefone.

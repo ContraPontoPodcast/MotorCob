@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import type { AreaRota } from '@/lib/area-rota';
-import { AREA_DESTINO } from '@/lib/area-rota';
+import { AREA_DESTINO, areaDoContrato } from '@/lib/area-rota';
 import { AREA_ICON } from '@/lib/area-icones';
 import { useMotorAuth } from '@/components/auth-provider';
 import { BlocoPedido, BotaoPedido, usePedidoAdmin } from '@/components/comuns/pedido-admin';
@@ -9,6 +9,8 @@ const AREA_NOME: Record<AreaRota, string> = {
 	cobranca: 'Cobrança',
 	jornada: 'Jornada do Cliente',
 	mensageria: 'Mensageria',
+	voz: 'Agente Voz/CX',
+	speech: 'Speech Analytics',
 	relatorios: 'Relatórios',
 	console: 'Console',
 	empresa: 'Empresa',
@@ -30,7 +32,8 @@ export function AreaNaoContratada({ area, empresaNome, equipeComPill }: { area: 
 	const nome = AREA_NOME[area] ?? area;
 	const destino = AREA_DESTINO[area];
 	const Icon = AREA_ICON[area] ?? AREA_ICON.nenhuma;
-	const alvo = area === 'cobranca' || area === 'jornada' || area === 'mensageria' ? area : undefined;
+	// Agente Voz/CX e Speech Analytics vêm com a Cobrança: o pedido ao Admin é da Cobrança.
+	const alvo = areaDoContrato(area) ?? undefined;
 	const podeAvisar = !!perfil && !perfil.equipe && perfil.papel !== 'admin' && !!alvo;
 	const pedido = usePedidoAdmin('area', podeAvisar ? alvo : undefined);
 	const avisar = podeAvisar && pedido.disponivel;
