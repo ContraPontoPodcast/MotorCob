@@ -122,10 +122,11 @@ class ConversaComTurnos:
     """Embrulha a Conversa (roteiro) ou a Sessao do fluxo (voz/fluxo.py): mesma interface para o Pipecat, e anota
     cada fala do agente e da pessoa e a PRIMEIRA oferta apresentada (só o código: parcelas e faixa de desconto)."""
 
-    def __init__(self, interna, turnos: TurnosConversa | None = None):
+    def __init__(self, interna, turnos: TurnosConversa | None = None, aviso: str = ""):
         object.__setattr__(self, "_interna", interna)
         object.__setattr__(self, "turnos", turnos or TurnosConversa())
         object.__setattr__(self, "oferta", None)
+        object.__setattr__(self, "aviso", (aviso or "").strip())    # SQL 83 · B6: dito antes da primeira fala
 
     def _olhar_oferta(self) -> None:
         if self.oferta is None:
@@ -134,8 +135,10 @@ class ConversaComTurnos:
                 object.__setattr__(self, "oferta", cod)
 
     def comecar(self) -> list[str]:
-        falas = self._interna.comecar()
-        for f in falas or []:
+        falas = list(self._interna.comecar() or [])
+        if self.aviso:          # gravação e assistente virtual, antes de tudo (e entra na transcrição: é a prova)
+            falas = [self.aviso, *falas]
+        for f in falas:
             self.turnos.agente(f)
         self._olhar_oferta()
         return falas

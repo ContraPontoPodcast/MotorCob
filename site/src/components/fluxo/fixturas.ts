@@ -17,7 +17,7 @@ const b = (id: string, tipo: Bloco['tipo'], modo: Bloco['modo'], titulo: string 
 /** Negociador · Cartão Aurora v5 (rascunho com as pendências do desenho: N9 sem saída, N17 inalcançável, C4 e alçada). */
 export function definicaoV5(): Definicao {
 	return { esquema: 1, blocos: [
-		b('N1', 'abertura', 'arvore', undefined, { fala: 'Olá, aqui é a central da {{assessoria}}, em nome de {{credor}}. Falo com {{primeiro_nome}}?' }, [['titular', 'Sou eu', 'N2'], ['terceiro', 'Não é a pessoa', 'N14']]),
+		b('N1', 'abertura', 'arvore', undefined, { fala: 'Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?' }, [['titular', 'Sou eu', 'N2'], ['terceiro', 'Não é a pessoa', 'N14']]),
 		b('N2', 'identidade', 'cognicao', undefined, { fala: 'Para sua segurança, me confirma o dia e o mês do seu nascimento?', pergunta: 'dia_mes_nascimento', conector_id: 2, tentativas: 2 }, [['confirmou', 'Confirmou', 'N3'], ['nao_confirmou', 'Não confirmou', 'N14'], ['falhou', 'Conector falhou', 'N13']]),
 		b('N3', 'intencao', 'cognicao', undefined, { fala: 'Consta {{saldo}} em aberto no Cartão Aurora. Como fica melhor para você?', intencoes: ['quero_negociar', 'ja_paguei', 'nao_reconheco', 'sem_dinheiro'], confianca_min: 0.7, tentativas: 2 }, [['quero_negociar', 'Quer negociar', 'N4'], ['ja_paguei', 'Já paguei', 'N8'], ['nao_reconheco', 'Não reconheço', 'N10'], ['sem_dinheiro', 'Sem dinheiro agora', 'N9'], ['nao_entendido', 'Não entendi 2×', 'N13']]),
 		b('N4', 'conector', 'sistema', 'Buscar ofertas (C1)', { conector_id: 1, fala_espera: 'Um instante, vou ver as condições.' }, [['respondeu', 'Respondeu', 'N15'], ['falhou', 'Falhou', 'N6']]),
@@ -140,7 +140,7 @@ export function criarApiFixturas(): FluxoApi {
 		return [...new Set(e)].sort();
 	};
 	const conversaDemo: [string | null, string, string, string][] = [
-		[null, 'Olá, aqui é a central da Aurora Cobranças, em nome do Varejo Aurora. Falo com Ana?', 'N1', 'arvore'],
+		[null, 'Olá, aqui é a central da Aurora Cobranças. Falo com Ana?', 'N1', 'arvore'],
 		['', 'Obrigada. Para confirmar, qual o dia e o mês do seu nascimento?', 'N2', 'cognicao'],
 		['', 'Consta R$ 1.380,00 em aberto no Cartão Aurora. Como fica melhor para você?', 'N3', 'cognicao'],
 		['', 'Tenho duas condições: 6× de R$ 230,00 ou à vista com 15% de desconto. Qual prefere?', 'N5', 'generativo'],

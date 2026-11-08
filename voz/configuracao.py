@@ -11,6 +11,8 @@ fornecedor_saude, item configuracao_invalida, que some quando a linha volta a va
 de uma empresa não para as outras. Formato de cima errado (e voz_config inválido) mantém a configuração anterior, como
 antes. Só grava se mudou (hash) e então sai com código 10, para o serviço da VM regerar o pjsip/dialplan dentro do
 contêiner e recarregar (infra/asterisk/vm/motorcx-voz-config).
+SQL 83 · B4: tronco ou transferência com host interno, reservado, de loopback ou do MotorCX (inclusive depois de
+resolver o nome) fica de fora do mesmo jeito (voz/destinos.py).
 Nenhuma senha passa por aqui: o banco só tem a referência do segredo.
 """
 from __future__ import annotations
@@ -24,14 +26,30 @@ import tempfile
 from pathlib import Path
 
 from voz import banco as B
+from voz import destinos as DST
 
 TABELAS = ("voz_troncos", "voz_rotas", "voz_transferencias", "voz_config")
 MUDOU = 10
 
 
-def buscar(sb, provedores_sip: list | None = None, ignoradas: list | None = None) -> dict:
+def enderecos_motorcx(sb) -> list[str]:
+    """Faixas do próprio MotorCX (voz_enderecos_motorcx, SQL 83). Banco sem o SQL 83: lista vazia (fica só o IP
+    externo e a rede da VM)."""
+    try:
+        linhas = sb.selecionar("voz_enderecos_motorcx") or []
+    except Exception:   # noqa: BLE001 — tabela do SQL 83 ainda não criada
+        return []
+    return [str(x.get("faixa")) for x in linhas if x.get("faixa")]
+
+
+def buscar(sb, provedores_sip: list | None = None, ignoradas: list | None = None, resolver=None,
+           proprios=()) -> dict:
     """Configuração de voz do banco, validada. Linhas inválidas de troncos, rotas e transferências ficam de fora e vão
-    para `ignoradas` (lista de banco.LinhaIgnorada), se dada. Formato de cima errado: DadosInvalidos."""
+    para `ignoradas` (lista de banco.LinhaIgnorada), se dada. Formato de cima errado: DadosInvalidos.
+    SQL 83 · B4: o host do tronco e o da transferência são conferidos contra as faixas reservadas e os IPs do MotorCX
+    (`proprios` + voz_enderecos_motorcx) e, com `resolver` (o main usa o DNS), DEPOIS de resolver o nome; o que
+    não passa fica de fora sozinho, com aviso. As faixas vão no JSON (enderecos_motorcx) para o gerador conferir de
+    novo dentro do contêiner do Asterisk."""
     dados = {t: sb.selecionar(t, ordem="empresa_id.asc") or [] for t in TABELAS}
     try:
         contrato = sb.selecionar("voz_contrato", limite=1) or []
@@ -49,7 +67,9 @@ def buscar(sb, provedores_sip: list | None = None, ignoradas: list | None = None
     for c in dados["voz_config"]:
         c["limite_simultaneas"] = limite.get(int(c[B.COLUNAS["voz_config"]["empresa_id"]]))
     dados["provedores_sip"] = provedores_sip or []
-    dados, fora = B.separar_validos(dados)     # linha inválida fica de fora sozinha
+    dados["enderecos_motorcx"] = enderecos_motorcx(sb)
+    faixas = DST.proprios_do_ambiente(extras=[*(proprios or ()), *dados["enderecos_motorcx"]])
+    dados, fora = B.separar_validos(dados, lambda h: DST.motivo_host(h, faixas, resolver))   # fica de fora sozinha
     B.carregar(dados)            # valida o resto (erro alto, nada é gravado)
     if ignoradas is not None:
         ignoradas.extend(fora)
@@ -138,8 +158,11 @@ def main(argv=None, sb=None) -> int:
         Path(a.provedores_sip).exists() else []
     sb = sb or supabase_do_ambiente()
     ignoradas: list = []
+    # IPs do próprio MotorCX pelos metadados da VM (motorcx-voz-config passa as duas variáveis ao contêiner)
+    proprios = DST.proprios_do_ambiente(os.environ.get("MOTORCX_IP_EXTERNO", ""),
+                                        [os.environ.get("MOTORCX_REDE_LOCAL", "")])
     try:
-        dados = buscar(sb, prov, ignoradas)
+        dados = buscar(sb, prov, ignoradas, resolver=DST.resolver_dns, proprios=proprios)
     except (B.DadosInvalidos, TypeError, AttributeError, KeyError) as ex:   # formato inesperado também não derruba
         print(f"ERRO: configuração de voz inválida no banco (mantida a anterior): {ex.__class__.__name__}: {ex}",
               file=sys.stderr)

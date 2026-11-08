@@ -27,6 +27,15 @@ TIPOS_EVENTO = ("resultado", "transferir", "encerrar", "passo", "conector", "flu
 MOTIVOS_TRANSFERENCIA = ("cpc", "pedido_humano", "ofertas_sem_acordo", "fora_alcada", "contestacao")
 
 
+def aviso_abertura(gravada: bool, empresa: str | None = None) -> str:
+    """SQL 83 · B6 (decisão do dono, 08/11/2026): a abertura diz que a ligação é gravada (quando é gravada e a empresa
+    deixou o aviso ligado, o padrão) e que quem fala é um assistente virtual, em todas as carteiras. Nunca o credor
+    nem a dívida: isso só depois de confirmar a identidade (trava do fluxo)."""
+    nome = " ".join(str(empresa or "").split())[:80]
+    quem = f"Sou o assistente virtual da {nome}." if nome else "Sou um assistente virtual."
+    return ("Esta ligação é gravada. " if gravada else "") + quem
+
+
 @dataclass(frozen=True)
 class ContextoChamada:
     id_chamada: str
@@ -37,6 +46,7 @@ class ContextoChamada:
     variaveis: dict = field(default_factory=dict, repr=False)   # da Lista do dia, só memória (nunca em log)
     final_numero: str = ""                  # últimos 2 dígitos (só para simulação/diagnóstico)
     credor_id: int | None = None            # carteira (o fluxo em uso é por carteira, SQL 58)
+    aviso_abertura: str = ""                # SQL 83 · B6: dito ANTES da primeira fala (gravação e assistente virtual)
 
 
 @dataclass(frozen=True)

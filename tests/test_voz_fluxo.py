@@ -237,6 +237,17 @@ class TestCaminhos(unittest.TestCase):
         s.identidade_confirmada = True
         self.assertIn("1380", s.render("Consta {{saldo}}.")[0])
 
+    def test_credor_escrito_como_texto_tambem_e_cortado(self):
+        """SQL 83 · B7: o nome do credor digitado à mão (sem {{credor}}) passa pelo validador, mas não pela fala."""
+        s = FX.Sessao(fluxo(), "c1", "CLI-1", VARS, lambda *a: None, CN.ConectoresDeExemplo(), hoje=HOJE)
+        fala, trava = s.render("Olá, aqui é a central da {{assessoria}}, em nome do VAREJO aurora. Falo com Ana?")
+        self.assertEqual(trava, "valor_antes_identidade")
+        self.assertNotIn("Varejo", fala)
+        self.assertEqual(s.render("Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?"),
+                         ("Olá, aqui é a central da Aurora Cobranças. Falo com Ana?", None))
+        s.identidade_confirmada = True
+        self.assertEqual(s.render("Em nome do Varejo Aurora, obrigada.")[1], None)
+
     def test_fluxo_invalido_nao_roda(self):
         d = C.negociador()
         next(b for b in d["blocos"] if b["id"] == "N1")["params"]["fala"] = "Consta {{saldo}}. Falo com {{primeiro_nome}}?"

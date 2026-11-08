@@ -51,6 +51,8 @@ LEITURA = {
     # SQL 58 · executor do fluxo: conectores ativos (segredo_ref é o nome no Secret Manager), hosts e base revisada
     "crm_conectores": "crm_conectores", "crm_hosts_permitidos": "crm_hosts_permitidos",
     "voz_base_respostas": "base_respostas",
+    # SQL 83 · B4: faixas do próprio MotorCX (destino recusado para tronco e transferência)
+    "voz_enderecos_motorcx": "enderecos_motorcx",
 }
 # tabela -> função de escrita do schema voz_vm (o upsert é dela)
 ESCRITA = {

@@ -1,5 +1,6 @@
 // Empresa › Privacidade e gravações (Admin da empresa). Protótipo aprovado, tela 7; Decisões do dono 3a, 3c, 4a e 4b.
-// Retenção (mínimo e padrão 90 dias, sem teto), aviso de gravação (desligado por padrão), transcrição a partir de
+// Retenção (SQL 83: 90 dias, o teto; até 5 anos só para promessa, acordo ou contestação, valor da equipe depois do
+// jurídico), aviso de gravação (ligado por padrão, SQL 83), transcrição a partir de
 // N segundos (padrão 5), quem ouve e quem lê (as mesmas permissões de Pessoas e perfis) e pedidos do titular,
 // abertos só pelo ID do cliente. Escreve por configurar_voz_empresa e abrir_pedido_titular (SQL 56).
 // Redesign v2: os 3 ajustes num cartão, com as consequências recolhidas; "Salvar alterações" é a ação principal;
@@ -20,7 +21,8 @@ import {
 } from '@/components/comuns/voz-ui';
 import { EmpresaShell } from './empresa-shell';
 
-const PADRAO = { retencao_dias: 90, aviso_gravacao: false, transcrever_min_segundos: 5 };
+const PADRAO = { retencao_dias: 90, aviso_gravacao: true, transcrever_min_segundos: 5 };
+const TETO_RETENCAO = 90;
 const PERMS_VOZ = [
 	{ codigo: 'ouvir_gravacoes', nome: 'Ouvir gravações' },
 	{ codigo: 'ver_transcricoes', nome: 'Ler transcrições' },
@@ -66,7 +68,7 @@ export function PrivacidadeVozPage() {
 		if (!supabase || !empresa) { setCarregado(true); return; }
 		const eid = Number(empresa.id);
 		const [c, cat, aj, pe] = await Promise.all([
-			supabase.from('voz_config').select('retencao_dias,aviso_gravacao,transcrever,transcrever_min_segundos,gravar,atualizado_em').eq('empresa_id', eid).maybeSingle(),
+			supabase.from('voz_config').select('retencao_dias,retencao_prova_dias,aviso_gravacao,transcrever,transcrever_min_segundos,gravar,atualizado_em').eq('empresa_id', eid).maybeSingle(),
 			supabase.from('permissoes_catalogo').select('codigo,nome,admin,planejamento,operacao,gestao').in('codigo', PERMS_VOZ.map(p => p.codigo)),
 			supabase.from('permissoes_papel').select('papel,permissao,permitido').eq('empresa_id', eid).in('permissao', PERMS_VOZ.map(p => p.codigo)),
 			supabase.from('titular_pedidos').select('id,id_cliente,tipo,aberto_em,prazo,situacao,arquivo,concluido_em').eq('empresa_id', eid).order('aberto_em', { ascending: false }).limit(200),
@@ -74,7 +76,7 @@ export function PrivacidadeVozPage() {
 		const conf = (c.data as Row | null) ?? null;
 		setCfg(conf);
 		setRet(String(conf?.retencao_dias ?? PADRAO.retencao_dias));
-		setAviso(conf?.aviso_gravacao === true);
+		setAviso(conf ? conf.aviso_gravacao === true : PADRAO.aviso_gravacao);
 		setTranscN(String(conf?.transcrever_min_segundos ?? PADRAO.transcrever_min_segundos));
 		setCatalogo((cat.data ?? []) as Row[]);
 		const m: Record<string, boolean> = {};
@@ -89,12 +91,12 @@ export function PrivacidadeVozPage() {
 	if (!equipe && !admin) return <EmpresaShell><SemPermissao tela="Privacidade e gravações" /></EmpresaShell>;
 
 	const retN = Number(ret), tN = Number(transcN);
-	const retErr = !(Number.isInteger(retN) && retN >= 90 && retN <= 36500);
+	const retErr = retN !== TETO_RETENCAO;
 	const tErr = !(Number.isInteger(tN) && tN >= 0 && tN <= 600);
 	const retAtual = Number(cfg?.retencao_dias ?? PADRAO.retencao_dias);
 	const ajustesSalvar: Record<string, unknown> = {};
 	if (!retErr && retN !== retAtual) ajustesSalvar.retencao_dias = retN;
-	if (aviso !== (cfg?.aviso_gravacao === true)) ajustesSalvar.aviso_gravacao = aviso;
+	if (aviso !== (cfg ? cfg.aviso_gravacao === true : PADRAO.aviso_gravacao)) ajustesSalvar.aviso_gravacao = aviso;
 	if (!tErr && tN !== Number(cfg?.transcrever_min_segundos ?? PADRAO.transcrever_min_segundos)) ajustesSalvar.transcrever_min_segundos = tN;
 	const mudou = Object.keys(ajustesSalvar).length > 0;
 	const podeSalvar = admin && mudou && !retErr && !tErr;
@@ -154,9 +156,9 @@ export function PrivacidadeVozPage() {
 					<Cartao titulo="Gravações e transcrição" desc={mudou ? 'Há mudanças não salvas.' : undefined}>
 						<div className="grid gap-5 md:grid-cols-3">
 							<Campo htmlFor="voz-ret" rotulo={<>Guardar por (dias) <Pilula className="ml-1">padrão: 90</Pilula></>}
-								erro={retErr ? 'O mínimo é 90 dias. Não há limite máximo.' : undefined}
-								ajuda={`Áudio, transcrição e códigos por cliente apagam sozinhos depois de ${inteiro(retN)} dias.`}>
-								<input id="voz-ret" value={ret} inputMode="numeric" disabled={!admin} onChange={e => setRet(e.target.value.replace(/\D/g, '').slice(0, 5))} className={`${campoCls} max-w-[200px] tnum`} />
+								erro={retErr ? `A retenção é de ${TETO_RETENCAO} dias (teto). Salve ${TETO_RETENCAO} para seguir.` : undefined}
+								ajuda={`Áudio, transcrição e códigos por cliente apagam sozinhos depois de ${TETO_RETENCAO} dias. Com promessa, acordo ou contestação: ${inteiro(Number(cfg?.retencao_prova_dias ?? TETO_RETENCAO))} dias (até 5 anos, com o jurídico; quem ajusta é a equipe MotorCX).`}>
+								<input id="voz-ret" value={ret} inputMode="numeric" disabled={!admin || !retErr} onChange={e => setRet(e.target.value.replace(/\D/g, '').slice(0, 5))} className={`${campoCls} max-w-[200px] tnum`} />
 							</Campo>
 							<Campo htmlFor="voz-trn" rotulo={<>Transcrever a partir de (segundos) <Pilula className="ml-1">padrão: 5</Pilula></>}
 								erro={tErr ? 'Use de 0 a 600 segundos.' : undefined}
@@ -165,9 +167,9 @@ export function PrivacidadeVozPage() {
 							</Campo>
 							<div className="min-w-0">
 								<p className="mb-1 text-[13px] font-semibold text-[var(--base-texto)]">Aviso no início da ligação</p>
-								<Chave label={<span className="text-[14px] text-[var(--base-texto)]">Avisar que é gravada <Pilula className="ml-1">padrão: desligado</Pilula></span>}
+								<Chave label={<span className="text-[14px] text-[var(--base-texto)]">Avisar que é gravada <Pilula className="ml-1">padrão: ligado</Pilula></span>}
 									checked={aviso} on={setAviso} disabled={!admin} />
-								<p className="mt-1 text-[12px] text-[var(--base-texto-3)]">Vale para todas as carteiras e entra na primeira fala.</p>
+								<p className="mt-1 text-[12px] text-[var(--base-texto-3)]">Vale para todas as carteiras e entra na primeira fala, junto com "Sou o assistente virtual" (sempre).</p>
 							</div>
 						</div>
 						{cfg && cfg.transcrever === false && <div className="mt-3"><Aviso tom="neutro">A transcrição está desligada para esta empresa.</Aviso></div>}
@@ -176,7 +178,8 @@ export function PrivacidadeVozPage() {
 								{ titulo: 'O prazo vale também para as gravações que já existem', texto: 'Diminuir apaga as mais antigas na noite seguinte (com confirmação); gravação guardada para disputa não é apagada. Os números agregados continuam.' },
 								{ titulo: 'No provedor, a cópia some em até 7 dias', texto: 'O MotorCX copia a gravação para o bucket da empresa, em São Paulo, e apaga no provedor.' },
 								{ titulo: 'Transcrição tem custo por minuto', texto: 'As chamadas abaixo do corte (caixa postal, quem desliga logo) não são cobradas como transcrição. Vale para o agente virtual e para o discador.' },
-								{ titulo: 'O aviso de gravação é decisão da empresa', texto: 'A apresentação como assistente virtual fica no roteiro de cada carteira.' },
+								{ titulo: 'O teto é de 90 dias', texto: 'Só gravações com promessa, acordo ou contestação podem ficar mais, até 5 anos, como prova (LGPD, arts. 15 e 16).' },
+								{ titulo: 'A abertura avisa', texto: '"Esta ligação é gravada." (se ligado) e "Sou o assistente virtual da empresa" (sempre, em todas as carteiras).' },
 							]} />
 						</Detalhes></div>
 					</Cartao>

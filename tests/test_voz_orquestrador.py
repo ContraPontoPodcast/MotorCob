@@ -244,11 +244,37 @@ class TestFluxo(Base):
         self.assertEqual(self.originados()[-1][1], "PJSIP/101011988887772@tr-1-10")
 
     def test_sem_rota(self):
-        orq = self.montar([item(tel="08001234567"), item("C2", "1133334444")])
+        # sem rota de fixo (a de fixo local virou móvel): o fixo fica fora do dia, o celular sai
+        orq = self.montar([item(tel="1133334444"), item("C2")], mud=[("voz_rotas", 3, {"tipo": "movel_vc2_vc3"})])
         self.assertEqual(orq.tick(), 1)
-        self.assertEqual(self.originados()[0][1], "PJSIP/10121133334444@tr-1-10")    # fixo local
         self.assertEqual(orq.contagem["sem_rota"], 1)
         self.assertTrue(any("sem rota" in a for a in orq.alertas))
+
+    def test_aviso_de_abertura(self):
+        """SQL 83 · B6: gravação (se grava e o aviso está ligado, o padrão) + assistente virtual; nunca o credor."""
+        import dataclasses
+        orq = self.montar([item()])
+        orq.tick()
+        c = next(iter(orq.chamadas.values()))
+        c.item.variaveis = {"assessoria": "Assessoria Alfa", "credor": "Banco Fictício"}
+        c.gravando = True
+        self.assertEqual(orq._aviso_abertura(c), "Esta ligação é gravada. Sou o assistente virtual da Assessoria Alfa.")
+        c.gravando = False
+        self.assertEqual(orq._aviso_abertura(c), "Sou o assistente virtual da Assessoria Alfa.")
+        c.gravando = True
+        orq.dados.configs[1] = dataclasses.replace(orq.dados.config(1), aviso_gravacao=False)
+        self.assertEqual(orq._aviso_abertura(c), "Sou o assistente virtual da Assessoria Alfa.")
+        self.assertNotIn("Banco", orq._aviso_abertura(c))
+
+    def test_numero_fora_do_plano_nao_sai(self):
+        """SQL 83 · B4: 0800, emergência, curto e internacional nunca são originados (nem com rota)."""
+        orq = self.montar([item("C1", "08001234567"), item("C2", "190"), item("C3", "+12125550100"),
+                           item("C4", "0011987654321"), item("C5", "1133334444")])
+        self.assertEqual(orq.tick(), 1)
+        self.assertEqual([o[1] for o in self.originados()], ["PJSIP/10121133334444@tr-1-10"])
+        self.assertEqual(orq.contagem["numero_bloqueado"], 4)
+        self.assertTrue(all("fora do plano de discagem" in a for a in orq.alertas))
+        self.assertFalse(any(n in " ".join(orq.alertas) for n in ("1234567", "2125550100", "1987654321")))   # sem o número
 
     def test_rota_sem_preco_alerta(self):
         orq = self.montar([item()], mud=[("voz_rotas", 0, {"preco_minuto": None})])
