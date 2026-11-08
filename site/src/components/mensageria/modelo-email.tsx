@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import { useMotorAuth } from '@/components/auth-provider';
 import type { ModeloEmail } from '@/lib/mensageria';
+import { AvisoIdentidade } from '@/components/comuns/aviso-identidade';
 
 export function ModeloEmailEditor() {
 	const { empresa, permissoes } = useMotorAuth();
@@ -84,12 +85,12 @@ export function ModeloEmailEditor() {
 					<div className="space-y-4">
 						<div>
 							<label className="mb-1.5 block text-[13px] font-semibold text-[#1D1D1F]">Nome do remetente *</label>
-							<input value={nome} disabled={!canEdit} onChange={(e) => setNome(e.target.value)} maxLength={60} placeholder="Empresa de Cobrança" className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[14px] text-[#1D1D1F] outline-none placeholder:text-[#8E8E93] focus-visible:ring-2 focus-visible:ring-[#0071E5]/40 disabled:bg-[#F5F5F7]" />
+							<input value={nome} disabled={!canEdit} onChange={(e) => setNome(e.target.value)} maxLength={60} placeholder="Nome da sua empresa" className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[14px] text-[#1D1D1F] outline-none placeholder:text-[#8E8E93] focus-visible:ring-2 focus-visible:ring-[#0071E5]/40 disabled:bg-[#F5F5F7]" />
 							<p className="mt-1 text-[12px] text-[#8E8E93]">2 a 60 caracteres.</p>
 						</div>
 						<div>
 							<label className="mb-1.5 block text-[13px] font-semibold text-[#1D1D1F]">Assunto *</label>
-							<input value={assunto} disabled={!canEdit} onChange={(e) => setAssunto(e.target.value)} maxLength={120} placeholder="Atualização do seu contrato" className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[14px] text-[#1D1D1F] outline-none placeholder:text-[#8E8E93] focus-visible:ring-2 focus-visible:ring-[#0071E5]/40 disabled:bg-[#F5F5F7]" />
+							<input value={assunto} disabled={!canEdit} onChange={(e) => setAssunto(e.target.value)} maxLength={120} placeholder="Você tem uma mensagem" className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[14px] text-[#1D1D1F] outline-none placeholder:text-[#8E8E93] focus-visible:ring-2 focus-visible:ring-[#0071E5]/40 disabled:bg-[#F5F5F7]" />
 							<p className="mt-1 text-[12px] text-[#8E8E93]">3 a 120 caracteres.</p>
 						</div>
 						<div>
@@ -97,8 +98,9 @@ export function ModeloEmailEditor() {
 								<label className="text-[13px] font-semibold text-[#1D1D1F]">Texto *</label>
 								<button onClick={inserirVariavel} disabled={!canEdit} className="rounded-full border border-[#D2D2D7] px-3 py-1 text-[12px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7] disabled:opacity-50">Inserir {'{empresa}'}</button>
 							</div>
-							<textarea ref={textoRef} value={texto} disabled={!canEdit} onChange={(e) => setTexto(e.target.value)} maxLength={5000} rows={10} placeholder="Prezado(a) cliente, o seu contrato com {empresa}..." className="w-full rounded-lg border border-[#D2D2D7] p-3 text-[14px] leading-relaxed text-[#1D1D1F] outline-none placeholder:text-[#8E8E93] focus-visible:ring-2 focus-visible:ring-[#0071E5]/40 disabled:bg-[#F5F5F7]" />
+							<textarea ref={textoRef} value={texto} disabled={!canEdit} onChange={(e) => setTexto(e.target.value)} maxLength={5000} rows={10} placeholder="Olá! Você tem uma mensagem da {empresa}. Acesse o link para ver os detalhes." className="w-full rounded-lg border border-[#D2D2D7] p-3 text-[14px] leading-relaxed text-[#1D1D1F] outline-none placeholder:text-[#8E8E93] focus-visible:ring-2 focus-visible:ring-[#0071E5]/40 disabled:bg-[#F5F5F7]" />
 							<p className="mt-1 text-[12px] text-[#8E8E93]">10 a 5.000 caracteres. Variável permitida: {'{empresa}'}. Nunca use nome, CPF ou valor do cliente.</p>
+							<AvisoIdentidade texto={`${nome}. ${assunto}. ${texto}`} empresa={empresa?.nome} />
 						</div>
 						{canEdit && (
 							<div className="flex justify-end">

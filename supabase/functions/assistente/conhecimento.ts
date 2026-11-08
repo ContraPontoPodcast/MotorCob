@@ -205,7 +205,7 @@ Cadastro dos canais da empresa (horário de envio e custo) e das mensagens (perm
 - SMS e Agente virtual: aba "Frases". No SMS há um contador "{n}/160"; acima de 160 caracteres o SMS não é enviado. No RCS, até 160 caracteres é RCS Basic; acima, RCS Single.
 - Discador e E-mail não têm aba de frases.
 - Quem envia (Canais, para WhatsApp, RCS, SMS e E-mail): "Lista para baixar (seu fornecedor envia)" ou "MotorCX envia" (só com a Mensageria contratada para o canal). Desligado = a chave do canal. Com "lista para baixar", o canal sai todo dia na Lista do dia ({canal}.csv, com a frase na coluna mensagem) e o fornecedor da empresa envia; a MotorCX não cria lote nem cobra envio. Padrão do assistente de implantação: SMS e e-mail em lista para baixar.
-- SMS sem frase na esteira usa a frase ativa da empresa para a etapa (Cliente novo, Deu CPC, Acordo · antes do vencimento, Acordo · parcela vencida…); o assistente de implantação cria as frases "Padrão MotorCX" de cada etapa, editáveis em Frases.
+- SMS sem frase na esteira usa a frase ativa da empresa para a etapa (Cliente novo, Deu CPC, Acordo · antes do vencimento, Acordo · parcela vencida…); o assistente de implantação cria as frases "Padrão MotorCX" de cada etapa, editáveis em Frases. As frases padrão são neutras ("Olá, {primeiro_nome}. Você tem uma mensagem da <empresa>. Acesse: {link}"): a mensagem chega a quem estiver com o telefone antes de confirmar a identidade, então valor, parcela, vencimento, credor e contrato ficam para depois do link. Quem escrever um texto que fala da dívida vê um aviso no editor (não impede salvar; o texto é da empresa).
 
 ### Regras de discagem
 

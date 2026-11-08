@@ -93,13 +93,13 @@ export const VARS_MOTORCOB = new Set(['saldo', 'dias_atraso', 'vencimento', 'val
 export const variavelLabel: Record<string, string> = {
 	saldo: 'Saldo', dias_atraso: 'Dias de atraso', vencimento: 'Vencimento',
 	valor_parcela: 'Valor da parcela', qtd_parcelas_abertas: 'Parcelas abertas',
-	nome: 'Nome', link: 'Link',
+	nome: 'Nome', primeiro_nome: 'Primeiro nome', link: 'Link',
 };
 
 export const exemploValores: Record<string, string> = {
 	saldo: 'R$ 1.234,50', dias_atraso: '32', vencimento: '15/10/2026',
 	valor_parcela: 'R$ 150,00', qtd_parcelas_abertas: '3',
-	nome: 'João', link: 'https://motorcob.online/p',
+	nome: 'João', primeiro_nome: 'João', link: 'https://motorcob.online/p',
 };
 
 /** Extrai as variáveis {x} do texto, na ordem de aparição, sem repetir. */
@@ -313,8 +313,9 @@ export function classificarImport(linhas: LinhaImport[], existentes: Frase[], at
 	});
 }
 
-/** Conteúdo do modelo CSV para download. */
-export const MODELO_CSV = 'canal;estagio;nome;codigo_template;texto\nwhatsapp;;Lembrete saldo;modelo_saldo;Olá {nome}, seu saldo é {saldo}. Vence em {vencimento}.\nsms;preventivo;;Lembrete: parcela de {valor_parcela} vence amanhã. {link}\n';
+/** Conteúdo do modelo CSV para download. Exemplos neutros (SQL 85): a mensagem chega a quem estiver com o telefone antes
+ *  de confirmar a identidade; valor, parcela e credor ficam para depois do link. */
+export const MODELO_CSV = 'canal;estagio;nome;codigo_template;texto\nwhatsapp;;Mensagem inicial;mensagem_inicial;Olá, {nome}. Você tem uma mensagem da Assessoria Exemplo. Acesse: {link}\nsms;preventivo;Lembrete;;Olá, {nome}. A Assessoria Exemplo tem um lembrete para você. Acesse: {link}\n';
 
 export async function importarFrases(empresaId: string, preview: LinhaPreview[]): Promise<{ gravadas: number; error: string }> {
 	if (!supabase) return { gravadas: 0, error: 'Configuração ausente.' };

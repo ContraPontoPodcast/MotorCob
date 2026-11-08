@@ -2899,6 +2899,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 79: descrever segmentos e régua (testar_segmentacao_aplicar.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 85 · mensagens escritas (SMS, WhatsApp, RCS, e-mail) sem a dívida antes da identidade: trava e lista dos salvos
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_mensagem_identidade.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 85: mensagens sem a dívida antes da identidade (testar_mensagem_identidade.py)", True, f"select {r.returncode}", None, None, 0)
+
 # SQL 83 · destinos perigosos (B4), aviso de gravação e teto de retenção (B6), identidade antes da dívida nos textos (B7)
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_seguranca.py")],
                    capture_output=True, text=True)

@@ -45,6 +45,35 @@ class TestTrava(unittest.TestCase):
         self.assertFalse(TI.recomendacao_ok({"titulo": "Abrir a ligação com o nome do credor", "proposta": {}}))
 
 
+MSG_CASOS = json.loads((RAIZ / "tests" / "dados" / "mensagem_identidade_casos.json").read_text(encoding="utf-8"))["casos"]
+MIGRACAO_85 = RAIZ / "supabase" / "migrations" / "20270121000001_mensagem_identidade.sql"
+
+
+class TestMensagemEscrita(unittest.TestCase):
+    """SQL 85: SMS, WhatsApp, RCS e e-mail chegam a quem estiver com o telefone, antes da identidade."""
+
+    def test_casos(self):
+        for c in MSG_CASOS:
+            with self.subTest(texto=c["texto"]):
+                self.assertEqual(TI.mensagem_revela(c["texto"], c.get("empresa")), c["revela"],
+                                 TI.motivos_mensagem(c["texto"], c.get("empresa")))
+
+    def test_padroes_iguais_ao_banco(self):
+        """public.mensagem_revela_divida tem cópia literal dos padrões (o sensivel é o mesmo da B7)."""
+        sql = MIGRACAO_85.read_text(encoding="utf-8")
+        for nome, padrao in {"sensivel": TI.SENSIVEL, **TI.PADROES_MENSAGEM}.items():
+            with self.subTest(padrao=nome):
+                m = re.search(rf"\n    {nome} constant text := '(.*?)';\n", sql)
+                self.assertIsNotNone(m, nome)
+                self.assertEqual(m.group(1), padrao.replace(r"\b", r"\y"))
+        self.assertIn("public.texto_revela_antes_identidade(t)", sql)        # a trava B7 vale também
+
+    def test_nome_da_empresa_nao_e_divida(self):
+        neutra = "Olá, {primeiro_nome}. Você tem uma mensagem da Recupera Cobranças. Acesse: {link}"
+        self.assertFalse(TI.mensagem_revela(neutra, "Recupera Cobranças"))
+        self.assertTrue(TI.mensagem_revela(neutra))
+
+
 class TestRetroalimentacao(unittest.TestCase):
     def conversao(self):
         linhas = [{"dimensao": "total", "valor": "todas", "credor_id": None, "conversas": 1000, "com_acordo": 300}]

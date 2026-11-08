@@ -86,3 +86,41 @@ def textos_da_recomendacao(r) -> list[str]:
 
 def recomendacao_ok(r) -> bool:
     return not any(revela(t) for t in textos_da_recomendacao(r))
+
+
+# ---------------------------------------------------------------- mensagens escritas (SQL 85)
+# SMS, WhatsApp, RCS e e-mail chegam a quem está com o telefone ou a caixa de e-mail, ANTES de qualquer confirmação de
+# identidade: não há "depois da confirmação" dentro do texto. Por isso a regra é mais simples que a da voz: a mensagem
+# não cita credor, dívida, valor, parcela, vencimento ou contrato em lugar nenhum (nem por variável). O detalhe fica
+# atrás do link autenticado. Os termos da voz (SENSIVEL) valem; somam-se as variáveis de chave simples ({saldo},
+# {valor_parcela}…) e as palavras que, numa mensagem de cobrança, dizem que há dívida (parcela, acordo, negociar…).
+# Cópia literal em public.mensagem_revela_divida (SQL 85); os casos de tests/dados/mensagem_identidade_casos.json rodam
+# aqui, no site (site/src/lib/identidade-mensagem.ts) e no Postgres.
+VARIAVEL_MENSAGEM = (r"\{\{? *(saldo\w*|credor\w*|valor\w*|vencimento\w*|dias_atraso|qtd_parcelas\w*|contrato\w*|"
+                     r"id_contrato|parcelas_max|desconto\w*|link_pagamento|oferta\.[a-z_]+) *\}\}?")
+TERMO_MENSAGEM = (r"\b(parcela\w*|acordo\w*|negocia\w*|renegocia\w*|quita\w*|regulariz\w*|pagamento\w*|pague\w*|"
+                  r"pagar|vencid\w*|devedor\w*|devendo|calote\w*)\b")
+PADROES_MENSAGEM = {"variavel_mensagem": VARIAVEL_MENSAGEM, "termo_mensagem": TERMO_MENSAGEM}
+_RE_MSG = {k: re.compile(v) for k, v in PADROES_MENSAGEM.items()}
+
+
+def sem_empresa(texto: str, empresa: str | None = None) -> str:
+    """Texto normalizado com o nome da empresa trocado por {empresa}: 'Alfa Cobrança' no nome não é a dívida."""
+    t = normal(texto)
+    e = normal(empresa or "")
+    return t.replace(e, "{empresa}") if len(e) >= 2 else t
+
+
+def motivos_mensagem(texto: str, empresa: str | None = None) -> list[str]:
+    """Por que a mensagem escrita revela a dívida a quem pegar o telefone; vazio = neutra."""
+    t = sem_empresa(texto, empresa)
+    out = [m for m in motivos(t)]
+    if _RE_MSG["variavel_mensagem"].search(t):
+        out.append("variavel_sensivel")
+    if _RE["sensivel"].search(t) or _RE_MSG["termo_mensagem"].search(t):
+        out.append("termo_sensivel")
+    return out
+
+
+def mensagem_revela(texto: str, empresa: str | None = None) -> bool:
+    return bool(motivos_mensagem(texto, empresa))
