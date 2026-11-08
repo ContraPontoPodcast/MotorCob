@@ -4,7 +4,7 @@
 // credores.discagem; quem grava é salvar_discagem (discagem.tsx), com versão, antes/depois e auditoria.
 import { useState, type ReactNode } from 'react';
 import { AlertTriangle, ChevronDown, Filter, Lock, RotateCcw } from 'lucide-react';
-import type { Discagem, LigacoesInfo } from '@/lib/discagem';
+import { avisoCurtasPct, type Discagem, type LigacoesInfo } from '@/lib/discagem';
 import {
 	CURTA_TXT, DEPOIS, FALHAS, LINHAS_SINAL, MODOS, ORDENS, PRIORIDADES, SEM_REDISCAR, SITUACOES, TRAVA_SIN, HOJE_SIN,
 	avisosSinal, avisosSpin, curtasComSpins, efetivo, explicaDepois, frase, linhaAlterada, modoDaCarteira, mudaHoje, mudarCampo,
@@ -103,7 +103,7 @@ export function TelaRenitencia({ draft, salvo, setDraft, canEdit, abrir, ligacoe
 		<Card titulo="Spin rate" sujo={modoSujo} onEditar={() => abrir('modo')} canEdit={canEdit}>
 			<p className="text-[18px] font-bold text-[var(--base-texto)]">{m.spins.quantidade} {m.spins.quantidade === 1 ? 'spin' : 'spins'} · {m.spins.intervalo_min} min entre eles</p>
 			<div className="flex flex-wrap gap-1">{m.spins.regras.map(r => <span key={r.spin} className="rounded-full bg-[var(--base-fill)] px-2 py-0.5 text-[11.5px] text-[var(--base-texto-2)]">{r.spin} → {r.telefone[0] === 't' ? `Tel. ${r.telefone.slice(1)}` : r.telefone === 'nao_tentado' ? 'não tentado' : 'histórico'}{r.inicio ? ` · ${r.inicio}` : ''}</span>)}</div>
-			<p className="text-[12.5px] text-[var(--base-texto-2)]">Curtas previstas: {cu == null ? 'sem histórico ainda' : <b style={{ color: cu >= 75 ? 'var(--estado-atencao-texto)' : undefined }}>{pc(cu, 0)}</b>} · aviso 75% · MP 85%</p>
+			<p className="text-[12.5px] text-[var(--base-texto-2)]">Curtas previstas: {cu == null ? 'sem histórico ainda' : <b style={{ color: cu >= avisoCurtasPct(draft) ? 'var(--estado-atencao-texto)' : undefined }}>{pc(cu, 0)}</b>} · aviso {avisoCurtasPct(draft)}% · Anatel 85%</p>
 			{sp.avisos.length > 0 && <Aviso>{sp.avisos.length === 1 ? sp.avisos[0] : `${sp.avisos.length} avisos: ${sp.avisos[0]}`}</Aviso>}
 		</Card>
 	);
@@ -260,7 +260,7 @@ export function TelaRenitencia({ draft, salvo, setDraft, canEdit, abrir, ligacoe
 				</div>
 				<div className="mt-2 space-y-1 text-[11.5px] text-[var(--base-texto-3)]">
 					<p>Só “Número incorreto” pode invalidar o número. As outras nunca invalidam: máquina, caixa postal e ocupado provam que o número existe.</p>
-					<p><Travado>Chamada curta segue a MP 1.396/2026 e não é configurável.</Travado>{!e.naOn && ' O descanso por não atende está desligado na carteira: “conta” só vale quando ligar.'}</p>
+					<p><Travado>Chamada curta segue o Despacho Anatel 100/2026 (MP 1.396/2026) e não é configurável.</Travado>{!e.naOn && ' O descanso por não atende está desligado na carteira: “conta” só vale quando ligar.'}</p>
 				</div>
 			</Secao>
 

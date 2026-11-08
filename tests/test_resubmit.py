@@ -28,9 +28,13 @@ TEL = ("11988887771", "11988887772", "11988887773", "11988887774")
 
 
 def _json_da_funcao(nome: str):
-    s = SQL65.read_text(encoding="utf-8")
-    m = re.search(rf"function public\.{nome}\(\) returns jsonb.*?select '(.*?)'::jsonb", s, re.S)
-    return json.loads(m.group(1))
+    """O JSON da ÚLTIMA definição da função nas migrações (o SQL 80 redefine regras_curtas_voz)."""
+    achado = None
+    for arq in sorted((RAIZ / "supabase" / "migrations").glob("*.sql")):
+        for m in re.finditer(rf"function public\.{nome}\(\) returns jsonb.*?select '(.*?)'::jsonb",
+                             arq.read_text(encoding="utf-8"), re.S):
+            achado = m.group(1)
+    return json.loads(achado)
 
 
 def _array_da_funcao(nome: str):
@@ -132,7 +136,7 @@ class TestMotor(unittest.TestCase):
         e = SimpleNamespace(resultado="indisponivel", duracao_s=None)
         cc = dict(DG.PADRAO["chamadas_curtas"])
         self.assertTrue(DG.e_curta(e, cc))
-        self.assertFalse(DG.e_curta(e, {**cc, "falha_conta": False}))
+        self.assertTrue(DG.e_curta(e, {**cc, "falha_conta": False}))   # travado: falha técnica é sempre curta
         self.assertTrue(DG.e_curta(SimpleNamespace(resultado="abandonada", duracao_s=None), {**cc, "falha_conta": False}))
 
     def test_conta_descanso_por_situacao(self):

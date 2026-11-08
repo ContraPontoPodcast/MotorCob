@@ -472,7 +472,7 @@ export function efetivo(d: DiscagemRen | null | undefined, travaTcli?: number): 
 		naOn: dn?.ativo ?? false, naN: dn?.n ?? 6, naDias: dn?.em_dias ?? 3, naDesc: dn?.descansa_dias ?? 7,
 		promessa: x.promessa_suspende?.ativo ?? false, promDias: x.promessa_suspende?.dias_sem_data ?? 7,
 		recusa: x.descanso_recusa?.ativo ?? false, recusaDias: x.descanso_recusa?.dias ?? 7,
-		nl: x.nao_ligar?.ativo ?? true, falhaCurta: x.chamadas_curtas?.falha_conta ?? true,
+		nl: x.nao_ligar?.ativo ?? true, falhaCurta: true, // travado em sim (Despacho Anatel 100/2026; SQL 80)
 		retornoDias: x.retorno_agendado?.max_dias ?? PADRAO.retorno_agendado.max_dias,
 		inexistente: x.inexistente?.ativo === false ? 'nao' : x.inexistente?.modo === 'invalida' ? 'invalida' : 'so_voz',
 		ren, tec, sinal, modo,
