@@ -1,12 +1,13 @@
-// Tela 2 · Agente de voz › Editor do fluxo. Faixa das 7 travas e "Em qualquer momento da ligação" no topo; quadro por
-// ramos (caminho principal em cima, ramos embaixo, saídas "Sim → nome da etapa").
+// Tela 2 · Agente de voz › Editor do fluxo. Abas (PR3 do redesenho): Roteiro (padrão: a conversa de cima para baixo,
+// em capítulos, com a faixa das 7 travas e "Em qualquer momento da ligação") · Mapa (o quadro por ramos, para ver o
+// todo) · Respostas prontas · Testes · Versões e aprovação. A aba fica em ?aba= e a etapa aberta em ?etapa=.
 // Cada mudança de etapa salva o rascunho (salvar_fluxo_voz: rascunho edita no lugar; versão aprovada ou em uso vira
 // rascunho novo). As pendências vêm do banco: fluxo_voz_bloqueios (validador + conectores + alçada + intenções + casos
 // de teste) e fluxo_voz_avisos (roleplay, só aviso). "Enviar para aprovação" (enviar_fluxo_voz_aprovacao, SQL 66)
 // fica desabilitado com o motivo enquanto houver pendência. Aprovar: aprovar_fluxo_voz; colocar em uso: usar_fluxo_voz.
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Plus, Sparkles } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Play, Plus, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Loading, Notice } from '@/components/app-shell';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
@@ -16,8 +17,10 @@ import {
 	type Bloco, type Definicao, type TipoBloco,
 } from '@/lib/fluxo';
 import { BarraEnvio, LegendaModos, Quadro, type Marca } from './quadro';
+import { Roteiro } from './roteiro';
+import { AbaRespostas, AbaTestes, AbaVersoes, AbasEditor, abaDaUrl, type AbaEditor } from './abas-editor';
 import { GavetaEtapa } from './etapa';
-import { Acoes, Gaveta, Linhas, Regras, Seg } from './ds';
+import { Acoes, Gaveta, Linhas, Regras } from './ds';
 import { EmQualquerMomento, FaixaTravas } from './travas';
 import { CabecalhoAgente } from './cabecalho';
 import { useFluxo, usePermissoesFluxo } from './contexto';
@@ -35,8 +38,21 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	const perm = usePermissoesFluxo();
 	const navigate = useNavigate();
 	const nomeCarteira = useNomeCarteira();
-	const [vista, setVista] = useState<'quadro' | 'lista'>('quadro');
-	const [gaveta, setGaveta] = useState<null | 'paleta' | 'pendencias' | 'modos' | 'versoes' | 'descrever' | 'alcada' | { etapa: string }>(null);
+	const [busca, setBusca] = useSearchParams();
+	const aba = abaDaUrl(busca.get('aba'));
+	const [gaveta, setGaveta] = useState<null | 'paleta' | 'pendencias' | 'modos' | 'descrever' | 'alcada' | { etapa: string }>(() => {
+		const e = busca.get('etapa');
+		return e && /^N\d{1,3}$/.test(e) ? { etapa: e } : null;
+	});
+	/** Abre a gaveta da etapa e guarda em ?etapa= (link direto para a etapa); fechar tira da URL. */
+	function abrirEtapa(id: string | null) {
+		setGaveta(id ? { etapa: id } : null);
+		setBusca(q => { const n = new URLSearchParams(q); if (id) n.set('etapa', id); else n.delete('etapa'); return n; }, { replace: true });
+	}
+	function trocarAba(a: AbaEditor) {
+		setBusca(q => { const n = new URLSearchParams(q); if (a === 'roteiro') n.delete('aba'); else n.set('aba', a); n.delete('etapa'); return n; });
+		setGaveta(null);
+	}
 	const [ocupado, setOcupado] = useState(false);
 	const [confirma, setConfirma] = useState<null | 'aprovar' | 'usar'>(null);
 
@@ -114,21 +130,14 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 				acoes={<BarraEnvio situacao={v.situacao} estado={estado} podeEditar={perm.editar} podeAprovar={perm.aprovar} ocupado={ocupado}
 					onEnviar={() => void enviar()} onAprovar={() => setConfirma('aprovar')} onUsar={() => setConfirma('usar')} />}
 			/>
-			<div className="mb-4 flex flex-wrap items-center gap-2">
-				<Botao secundario onClick={() => navigate(rota('testar', null, { versao: v.id }))}>Testar conversa</Botao>
-				<Botao secundario onClick={() => navigate(rota('personas', null, { versao: v.id }))}>Testar com personas</Botao>
-				{perm.editar && <button type="button" onClick={() => setGaveta('descrever')} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]"><Sparkles size={15} aria-hidden /> Descrever mudanças</button>}
-			</div>
-
 			<div className="space-y-4">
 				{v.situacao === 'arquivado'
 					? <Aviso tom="neutro" titulo="Versão arquivada.">Fica só para consulta. Quem aprova pode voltar para ela na lista de fluxos.</Aviso>
-					: <div className="flex flex-wrap items-end gap-3"><div className="min-w-0 flex-1"><Passos passos={PASSOS} atual={ixPasso} /></div><Botao secundario onClick={() => setGaveta('versoes')}>Versões</Botao></div>}
+					: <Passos passos={PASSOS} atual={ixPasso} />}
 				{v.situacao !== 'rascunho' && rascunhoAberto && perm.editar && (
 					<Aviso tom="info" titulo={`Há um rascunho (v${rascunhoAberto.versao}) deste fluxo.`}>As mudanças são feitas nele. <button type="button" className="font-semibold underline" onClick={() => navigate(rota('editor', rascunhoAberto.id))}>Abrir o rascunho</button></Aviso>
 				)}
 				{v.situacao === 'rascunho' && v.enviado_aprovacao_em && <Aviso tom="info" titulo={`Enviado para aprovação em ${dataCurta(v.enviado_aprovacao_em)}.`}>Mudar uma etapa cancela o envio: quem aprova precisa ver a versão nova.</Aviso>}
-				<FaixaTravas />
 				{pend.length > 0 ? (
 					<Aviso tom="erro" titulo={`${pend.length} ${pend.length === 1 ? 'pendência impede' : 'pendências impedem'} o envio para aprovação.`}>
 						{resumoPendencias(pend.map(p => p.codigo))} <button type="button" className="ml-1 font-semibold underline" onClick={() => setGaveta('pendencias')}>Ver pendências</button>
@@ -137,26 +146,45 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 					<Aviso tom="atencao" titulo="Antes de aprovar:">{avisos.map(a => explicar(a).texto).join(' ')} <button type="button" className="ml-1 font-semibold underline" onClick={() => navigate(rota('personas', null, { versao: v.id }))}>Testar com personas</button></Aviso>
 				) : v.situacao === 'rascunho' ? <Aviso tom="ok" titulo="Nada impede o envio.">O validador, os conectores, a alçada e os casos de teste estão em dia.</Aviso> : null}
 
-				<div className="flex flex-wrap items-center justify-between gap-2">
-					<Seg rotulo="Visualização" valor={vista} onChange={setVista} itens={[{ v: 'quadro', n: 'Quadro por ramos' }, { v: 'lista', n: 'Lista' }]} />
-					<Acoes>
-						{editavel && <Botao secundario onClick={() => setGaveta('paleta')} disabled={ocupado}><Plus size={14} aria-hidden /> Adicionar etapa</Botao>}
-						<button type="button" onClick={() => setGaveta('modos')} className="inline-flex h-8 items-center rounded-lg px-3 text-[12.5px] font-semibold text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]">Como ler</button>
-					</Acoes>
-				</div>
-				<LegendaModos />
-				<EmQualquerMomento />
-				{def.blocos.length ? <Quadro definicao={def} marcas={marcas} vista={vista} onAbrir={id => setGaveta({ etapa: id })} />
-					: <Vazio titulo="Fluxo sem etapas.">Use "Adicionar etapa" para começar pela Abertura.</Vazio>}
+			</div>
+
+			<div className="mt-5">
+				<AbasEditor atual={aba} onTrocar={trocarAba} />
+				{aba === 'roteiro' ? (
+					<div className="space-y-4">
+						<FaixaTravas />
+						<div className="flex flex-wrap items-center justify-between gap-2">
+							<LegendaModos />
+							<Acoes>
+								{editavel && <Botao secundario onClick={() => setGaveta('paleta')} disabled={ocupado}><Plus size={14} aria-hidden /> Etapa</Botao>}
+								{perm.editar && <Botao secundario onClick={() => setGaveta('descrever')}><Sparkles size={14} aria-hidden /> Descrever mudanças</Botao>}
+								<Botao onClick={() => navigate(rota('testar', null, { versao: v.id }))}><Play size={14} aria-hidden /> Testar conversa</Botao>
+								<button type="button" onClick={() => setGaveta('modos')} className="inline-flex h-8 items-center rounded-lg px-3 text-[12.5px] font-semibold text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]">Como ler</button>
+							</Acoes>
+						</div>
+						<EmQualquerMomento />
+						{def.blocos.length ? <Roteiro definicao={def} marcas={marcas} onAbrir={abrirEtapa} />
+							: <Vazio titulo="Fluxo sem etapas.">Use "+ Etapa" para começar pela Abertura.</Vazio>}
+					</div>
+				) : aba === 'mapa' ? (
+					<div className="space-y-3">
+						<Aviso tom="neutro" titulo="O mapa é para enxergar o desenho inteiro.">Para ler e editar a conversa, use o <button type="button" className="font-semibold underline" onClick={() => trocarAba('roteiro')}>Roteiro</button>. Toque numa etapa para abrir.</Aviso>
+						<LegendaModos />
+						{def.blocos.length ? <Quadro definicao={def} marcas={marcas} onAbrir={abrirEtapa} />
+							: <Vazio titulo="Fluxo sem etapas.">Comece pelo Roteiro.</Vazio>}
+					</div>
+				) : aba === 'respostas' ? <AbaRespostas versao={v.id} definicao={def} onAbrirEtapa={abrirEtapa} />
+					: aba === 'testes' ? <AbaTestes versao={v.id} fluxo={f.id} pendencias={{ casos: bloqueios.filter(c => c.startsWith('caso_falhou')).length, avisos: avisos.map(a => explicar(a).texto) }} />
+					: <AbaVersoes v={v} versoes={versoes} onAbrir={id => navigate(rota('editor', id))} />}
 			</div>
 
 			{etapaSel && (
 				<GavetaEtapa bloco={etapaSel} definicao={def} conectores={conectores} intencoes={intencoes} erros={[...bloqueios, ...avisos]} editavel={editavel}
-					versao={v.id} situacao={v.situacao} onFechar={() => setGaveta(null)}
+					versao={v.id} situacao={v.situacao} onFechar={() => abrirEtapa(null)}
 					onSalvar={(b: Bloco) => salvarDef(trocarBloco(def, b), `Etapa ${b.id} salva no rascunho.`)}
 					onRemover={id => salvarDef(removerBloco(def, id), `Etapa ${id} removida do rascunho.`)} />
 			)}
-			<Gaveta aberta={gaveta === 'paleta'} onFechar={() => setGaveta(null)} titulo="Adicionar etapa" sub="Entra no quadro como rascunho, sem ligação. Depois, ligue as saídas.">
+			<Gaveta aberta={gaveta === 'paleta'} onFechar={() => setGaveta(null)} titulo="Adicionar etapa" sub={'Entra no roteiro como rascunho, em "Etapas que nenhum caminho alcança". Depois, ligue uma resposta de outra etapa a ela.'}>
 				{grupos.map(g => (
 					<div key={g}>
 						<b className="text-[12.5px] font-semibold">{g}</b>
@@ -174,7 +202,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 				<Linhas itens={[...bloqueios, ...avisos].map(explicar).map(p => ({
 					e: <><Pilula tom={p.impede ? 'erro' : 'atencao'}>{p.impede ? 'impede' : 'atenção'}</Pilula> <b className="font-semibold">{p.bloco ? nomes.get(p.bloco) ?? 'Etapa que não existe mais' : 'Fluxo'}</b></>,
 					s: <>{p.texto}{comoCorrigir(p.codigo) && <span className="block text-[var(--base-texto-3)]">O que corrigir: {comoCorrigir(p.codigo)}</span>}</>,
-					d: p.bloco ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => setGaveta({ etapa: p.bloco! })}>Abrir</button>
+					d: p.bloco ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => abrirEtapa(p.bloco!)}>Abrir</button>
 						: p.codigo === 'sem_alcada' ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => setGaveta('alcada')}>Alçada</button>
 						: p.codigo.startsWith('caso_falhou') ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => navigate(rota('testar', null, { versao: v.id }))}>Testar</button>
 						: p.codigo.startsWith('roleplay') ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => navigate(rota('personas', null, { versao: v.id }))}>Personas</button> : null,
@@ -182,13 +210,6 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 				<Regras itens={[['Conectores e intenções do catálogo são da equipe MotorCX.', 'Conector em rascunho ou pausado segura a aprovação até ser testado e ativado (Empresa › Integrações › Conectores do CRM).'], ['Testar com personas é aviso, nunca bloqueio.', 'Sem lote, o envio mostra o aviso "sem teste com personas", mas não segura.']]} />
 			</Gaveta>
 			<GavetaComoLer aberta={gaveta === 'modos'} onFechar={() => setGaveta(null)} />
-			<Gaveta aberta={gaveta === 'versoes'} onFechar={() => setGaveta(null)} titulo="Versões" sub="Voltar para uma versão arquivada fica na lista de fluxos (quem aprova).">
-				<Linhas itens={versoes.map(x => ({
-					e: <><b className="font-semibold">v{x.versao}</b> · {SITUACOES[x.situacao].nome}{x.id === v.id ? ' · aberta' : ''}</>,
-					s: x.motivo ?? dataCurta(x.atualizado_em ?? x.criado_em),
-					d: x.id !== v.id ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => { setGaveta(null); navigate(rota('editor', x.id)); }}>Abrir</button> : null,
-				}))} />
-			</Gaveta>
 			<GavetaDescrever aberta={gaveta === 'descrever'} onFechar={() => setGaveta(null)} versaoOrigem={v.id} credorFixo={f.credor_id} aoPedir={id => navigate(rota('pedido', id))} />
 			<GavetaAlcada aberta={gaveta === 'alcada'} onFechar={() => setGaveta(null)} credor={f.credor_id} alcada={alcada} aoSalvar={() => void recarregar()} />
 			<ConfirmaAcao
