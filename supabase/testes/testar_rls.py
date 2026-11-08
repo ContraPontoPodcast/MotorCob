@@ -2180,8 +2180,16 @@ checar("SQL 56: equipe MotorCX não aprova roteiro do cliente", False, f"select 
 checar("SQL 56: cliente B não lê o roteiro da A", True, "select count(*) from public.voz_roteiros", "authenticated", u["operb"], 0)
 checar("SQL 56: usuário não grava roteiro direto", False, f"update public.voz_roteiros set situacao='em_uso' where empresa_id={EA}", "authenticated", u["admina"])
 # transferência (V25): só a equipe
-checar("SQL 56: Técnico cadastra a transferência por SIP", True, f"select public.salvar_transferencia_voz({EA}, 'Central Alfa', 'sip:operadores@pabx.alfa.exemplo:5060') is not null", "authenticated", VTEC, "t")
-checar("SQL 56: transferência pela ponte exige tronco", False, f"select public.salvar_transferencia_voz({EA}, 'Ponte', 'sip:operadores@pabx.alfa.exemplo', 'ponte')", "authenticated", VTEC)
+# o SQL 56 foi reaplicado acima (salvar_transferencia_voz volta ao padrão 'refer'): reaplica o SQL 81 por cima
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", "20270117000001_voz_transferencia_ponte.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+checar("SQL 81: Técnico cadastra a transferência por SIP; o padrão é a ponte, sem exigir tronco", True, f"select public.salvar_transferencia_voz({EA}, 'Central Alfa', 'sip:operadores@pabx.alfa.exemplo:5060') is not null; select metodo || '|' || coalesce(tronco_id::text, 'sem tronco') from public.voz_transferencias where empresa_id = {EA} and nome = 'Central Alfa'", "authenticated", VTEC, "ponte|sem tronco")
+checar("SQL 81: inserir sem método também fica com a ponte (padrão da coluna)", True, "select column_default from information_schema.columns where table_name = 'voz_transferencias' and column_name = 'metodo'", "service_role", None, "'ponte'::text")
+checar("SQL 81: REFER continua como opção explícita", True, f"select public.salvar_transferencia_voz({EA}, 'Central Alfa', 'sip:operadores@pabx.alfa.exemplo:5060', 'refer', transferencia => (select id from public.voz_transferencias where empresa_id = {EA} and nome = 'Central Alfa')) is not null; select metodo from public.voz_transferencias where empresa_id = {EA} and nome = 'Central Alfa'", "authenticated", VTEC, "refer")
+checar("SQL 81: volta para a ponte", True, f"select public.salvar_transferencia_voz({EA}, 'Central Alfa', 'sip:operadores@pabx.alfa.exemplo:5060', 'ponte', transferencia => (select id from public.voz_transferencias where empresa_id = {EA} and nome = 'Central Alfa')) is not null; select metodo from public.voz_transferencias where empresa_id = {EA} and nome = 'Central Alfa'", "authenticated", VTEC, "ponte")
+checar("SQL 81: método fora da lista é recusado", False, f"select public.salvar_transferencia_voz({EA}, 'Outra', 'sip:op@pabx.alfa.exemplo', 'desligar', credor => null)", "authenticated", VTEC)
 checar("SQL 56: cliente não cadastra transferência", False, f"select public.salvar_transferencia_voz({EA}, 'Central', 'sip:op@pabx.alfa.exemplo')", "authenticated", u["admina"])
 checar("SQL 56: cliente A lê o destino da sua transferência", True, "select count(*) from public.voz_transferencias", "authenticated", u["oper"], 1)
 checar("SQL 56: cliente B não lê a transferência da A", True, "select count(*) from public.voz_transferencias", "authenticated", u["operb"], 0)

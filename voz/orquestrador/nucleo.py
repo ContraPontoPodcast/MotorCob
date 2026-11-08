@@ -10,8 +10,11 @@ Fluxo de uma tentativa (id_chamada = uuid hex; canais <id>-c<n> cliente, <id>-p 
      volta ao Stasis ('amd').
   4. pessoa -> provedor de voz (ponte SIP, mídia externa ou interno); sem agente livre: Alô fake (se ligado) por até
      alo_fake_max_s e depois abandono (transferencia = sem_operador).
-  5. o provedor pede humano -> transferência por REFER (dialplan motorcx-transferir) ou ponte (originate para o
-     discador do cliente); resultado atendida | sem_operador | falhou.
+  5. o provedor pede humano -> ponte (padrão, decisão do dono 08/11/2026: o MotorCX segura a ligação e chama a fila
+     do cliente; a IA só sai quando o humano atende) ou REFER (opção avançada; dialplan motorcx-transferir). Ninguém
+     atendeu, a fila recusou ou não há destino: a pessoa volta para o agente, que pede desculpas e agenda um retorno
+     (ProvedorVoz.retomar_sem_humano); nunca se desliga na cara. Só se o agente não puder voltar (REFER já soltou o
+     agente, provedor sem suporte ou canal do agente caído) a chamada termina como abandono (sem_operador | falhou).
   6. o canal do cliente acabou -> evento (CDR, Q.850, SIP, AMD, billsec, toque, rota/tech prefix, segundos
      tarifados, custo, transferência) classificado com motor/voz.py, guarda e agendador atualizados, gravação na
      fila de envio para o GCS.
@@ -84,6 +87,8 @@ class Chamada:
     espera_agente_ate: datetime | None = None
     failover_ate: datetime | None = None
     provedor: str | None = None
+    conexao: str | None = None                  # tipo da conexão com o agente (sip | midia_externa | interno)
+    agente_solto: bool = False                  # o agente já saiu da ligação (REFER ou humano atendeu)
     passagem: dict = field(default_factory=dict)   # passada, situação de origem, onda e volta (Lote.iniciar)
 
     @property
@@ -396,7 +401,7 @@ class Orquestrador:
                                        "nomes": TIA.nomes_da_chamada(c.item.variaveis),
                                        "ate": agora + timedelta(hours=2)}
         con = prov.iniciar(ctx, self.evento_provedor)
-        c.provedor, c.estado, c.destino = prov.codigo, "conversa", "ia"
+        c.provedor, c.estado, c.destino, c.conexao = prov.codigo, "conversa", "ia", con.tipo
         c.ponte = f"{c.id}-b"
         self.ari.criar_ponte(c.ponte)
         self.ari.adicionar_na_ponte(c.ponte, [c.canal])
@@ -479,7 +484,7 @@ class Orquestrador:
         tf = self._destino_humano(c)
         if tf is None:
             self._alerta(f"empresa {c.empresa_id}: transferência pedida sem destino cadastrado (voz_transferencias)")
-            self._abandonar(c, "falhou")
+            self._sem_humano(c, "falhou")
             return
         c.tf, c.estado, c.motivo_tf = tf, "transferindo", motivo
         cab = self._cabecalhos(c, motivo, tf)
@@ -508,7 +513,7 @@ class Orquestrador:
                               timeout=self.transferencia_toque_s)
         except ErroARI:
             c.canal_humano = None
-            self._abandonar(c, "falhou")
+            self._sem_humano(c, "falhou")
 
     def _resultado_refer(self, c: Chamada, args: list, agora: datetime) -> None:
         status, proto = (list(args) + ["", ""])[:2]
@@ -525,7 +530,28 @@ class Orquestrador:
             self.ari.adicionar_na_ponte(c.ponte, [c.canal])
             self._ponte(c, c.tf, self._cabecalhos(c, c.motivo_tf, c.tf))
             return
-        self._abandonar(c, "sem_operador" if sip in SEM_OPERADOR_SIP else "falhou")
+        self._sem_humano(c, "sem_operador" if sip in SEM_OPERADOR_SIP else "falhou")
+
+    def _sem_humano(self, c: Chamada, motivo: str) -> None:
+        """Ninguém do cliente atendeu (ou a transferência falhou): a pessoa volta para o agente, que pede desculpas e
+        agenda um retorno (decisão do dono, 08/11/2026). Sem como voltar, abandono como antes."""
+        prov = self.provedores.get(c.provedor or "")
+        vivo = not c.agente_solto and (c.conexao == "interno" or c.canal_provedor is not None)
+        if prov is None or not vivo or c.estado not in ("conversa", "transferindo"):
+            self._abandonar(c, motivo)
+            return
+        # a conversa segue com o agente (antes de avisá-lo: ele pode encerrar na mesma hora); o desfecho vem dele
+        # (ex.: retorno_agendado) e não vira abandono
+        c.tf, c.canal_humano, c.estado, c.destino = None, None, "conversa", "ia"
+        try:
+            voltou = bool(prov.retomar_sem_humano(c.id, motivo))
+        except Exception as ex:   # noqa: BLE001 — provedor com erro: cai no abandono, como antes
+            self._alerta(f"provedor {c.provedor}: não voltou ao agente ({ex.__class__.__name__})")
+            voltou = False
+        if not voltou:
+            self._abandonar(c, motivo)
+            return
+        self._conta(f"transferencia_{motivo}_voltou_agente")
 
     def _humano_atendeu(self, c: Chamada, agora: datetime) -> None:
         c.transferencia, c.destino, c.estado = "atendida", "ia_humano", "humano"
@@ -539,9 +565,10 @@ class Orquestrador:
             self._desligar_cliente(c)
             return
         q, s = _int(ev.get("cause")), _int(ev.get("tech_cause"))
-        self._abandonar(c, "sem_operador" if (q in SEM_OPERADOR_Q850 or s in SEM_OPERADOR_SIP) else "falhou")
+        self._sem_humano(c, "sem_operador" if (q in SEM_OPERADOR_Q850 or s in SEM_OPERADOR_SIP) else "falhou")
 
     def _soltar_provedor(self, c: Chamada) -> None:
+        c.agente_solto = True
         prov = self.provedores.get(c.provedor or "")
         if prov is not None:
             prov.encerrar(c.id)

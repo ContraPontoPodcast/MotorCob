@@ -259,8 +259,8 @@ class TestFluxo(Base):
 
 
 class TestTransferencia(Base):
-    def _ate_transferir(self, mud=None):
-        orq = self.montar([item("C8", "11988887778")], mud=mud)     # final 8 = transferir (motivo cpc)
+    def _ate_transferir(self, mud=None, provedor=None):
+        orq = self.montar([item("C8", "11988887778")], mud=mud, provedor=provedor)     # final 8 = transferir (motivo cpc)
         orq.tick()
         canal = self.originados()[0][2]
         cid = canal.rsplit("-", 1)[0]
@@ -295,8 +295,33 @@ class TestTransferencia(Base):
         self.assertEqual((db["transferencia"], db["destino"]), ("atendida", "ia_humano"))
         self.assertTrue(db["atendida_em"] <= db["transferida_em"] <= db["encerrada_em"])
 
-    def test_ponte_sem_operador_vira_abandono(self):
+    def test_ponte_e_o_padrao(self):
+        self.assertEqual(B.ler_transferencia({"id": 1, "empresa_id": 1, "destino_sip": "sip:fila@203.0.113.50"}).metodo,
+                         "ponte")
+
+    def test_ponte_sem_operador_volta_ao_agente(self):
+        # decisão do dono (08/11/2026): ninguém atendeu -> a pessoa volta para o agente, que agenda um retorno
         orq, canal, cid = self._ate_transferir()
+        self.cair(f"{cid}-h", 17)
+        self.assertEqual(orq.contagem["transferencia_sem_operador_voltou_agente"], 1)
+        self.assertNotIn("abandono", orq.contagem)
+        self.cair(canal)
+        ev = self.eventos[0]
+        self.assertEqual((ev.transferencia, ev.destino, ev.desfecho), (None, "ia", "retorno_agendado"))
+        self.assertIsNotNone(ev.retorno_em)
+
+    def test_ponte_falhou_volta_ao_agente(self):
+        orq, canal, cid = self._ate_transferir()
+        self.cair(f"{cid}-h", 38)
+        self.cair(canal)
+        self.assertEqual(orq.contagem["transferencia_falhou_voltou_agente"], 1)
+        self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho), (None, "retorno_agendado"))
+
+    def test_provedor_que_nao_volta_vira_abandono(self):
+        class SemVolta(Simulador):
+            def retomar_sem_humano(self, id_chamada, motivo):
+                return False
+        orq, canal, cid = self._ate_transferir(provedor=SemVolta())
         self.cair(f"{cid}-h", 17)
         self.assertIn(canal, self.ari.desligados)
         self.cair(canal)
@@ -304,12 +329,6 @@ class TestTransferencia(Base):
         self.assertEqual((ev.transferencia, ev.desfecho, ev.origem_desfecho), ("sem_operador", "abandonada",
                                                                              "transferencia"))
         self.assertEqual(orq.contagem["abandono"], 1)
-
-    def test_ponte_falhou(self):
-        orq, canal, cid = self._ate_transferir()
-        self.cair(f"{cid}-h", 38)
-        self.cair(canal)
-        self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho), ("falhou", "abandonada"))
 
     def test_refer(self):
         mud = [("voz_transferencias", 0, {"metodo": "refer", "tech_prefix": "77"})]
@@ -344,11 +363,11 @@ class TestTransferencia(Base):
         self.cair(canal)
         self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho), ("sem_operador", "abandonada"))
 
-    def test_sem_destino_cadastrado(self):
+    def test_sem_destino_cadastrado_volta_ao_agente(self):
         mud = [("voz_transferencias", 0, {"ativo": False})]
         orq, canal, cid = self._ate_transferir(mud)
         self.cair(canal)
-        self.assertEqual(self.eventos[0].desfecho, "abandonada")
+        self.assertEqual(self.eventos[0].desfecho, "retorno_agendado")
         self.assertTrue(any("sem destino" in a for a in orq.alertas))
 
 

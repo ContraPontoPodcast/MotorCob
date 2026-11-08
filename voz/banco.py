@@ -235,7 +235,7 @@ class Transferencia:
     id: int
     empresa_id: int
     destino_sip: str
-    metodo: str = "refer"
+    metodo: str = "ponte"                           # padrão (decisão do dono, 08/11/2026); "refer" é opção avançada
     tech_prefix: str = ""
     cabecalhos: tuple = CABECALHOS_TRANSFERENCIA      # quais X-MotorCX vão (nunca CPF/nome/valor)
     tronco_id: int | None = None                     # "ponte pelo tronco": sai pelo tronco da empresa
@@ -381,7 +381,7 @@ def ler_transferencia(linha: dict) -> Transferencia:
     dest = str(_v(linha, t, "destino_sip", "")).strip()
     if not SIP_URI.match(dest):
         raise DadosInvalidos(f"{onde}: destino_sip inválido (sip:usuario@host[:porta][;transport=udp|tcp|tls])")
-    met = str(_v(linha, t, "metodo", "refer")).lower()
+    met = str(_v(linha, t, "metodo", "ponte")).lower()
     if met not in METODOS_TRANSFERENCIA:
         raise DadosInvalidos(f"{onde}: método '{met}' (refer|ponte)")
     tp = str(_v(linha, t, "tech_prefix", "") or "")

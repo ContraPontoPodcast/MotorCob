@@ -279,7 +279,7 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 }) {
 	const [nome, setNome] = useState(String(atual?.nome ?? 'Fila de negociação'));
 	const [destino, setDestino] = useState(String(atual?.destino_sip ?? ''));
-	const [metodo, setMetodo] = useState(String(atual?.metodo ?? 'refer'));
+	const [metodo, setMetodo] = useState(String(atual?.metodo ?? 'ponte'));
 	const [tronco, setTronco] = useState(String(atual?.tronco_id ?? ''));
 	const [tech, setTech] = useState(String(atual?.tech_prefix ?? ''));
 	const [ativo, setAtivo] = useState(atual ? atual.ativo !== false : true);
@@ -290,7 +290,6 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 	const e: Record<string, string> = {};
 	if (nome.trim().length < 2 || nome.trim().length > 60) e.nome = 'De 2 a 60 letras.';
 	if (!RE_DESTINO_SIP.test(destino.trim())) e.destino = 'Ex.: sip:fila-negociacao@discador.empresa.com.br:5061';
-	if (metodo === 'ponte' && !tronco) e.tronco = 'A ponte sai por um tronco da empresa.';
 	if (tech.trim() && !RE_TECH.test(tech.trim())) e.tech = 'Só números (1 a 8 dígitos).';
 	const ok = Object.keys(e).length === 0;
 	const err = (k: string) => (tentou ? e[k] : undefined);
@@ -324,14 +323,17 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 			</Campo>
 			<Campo rotulo="Como transferir">
 				<select value={metodo} onChange={x => setMetodo(x.target.value)} className={campoCls}>
-					<option value="refer">SIP REFER (o discador recebe a chamada)</option>
-					<option value="ponte">Nova chamada pelo tronco e ponte (discador sem REFER)</option>
+					<option value="ponte">O MotorCX segura a ligação e chama a sua fila (recomendado)</option>
+					<option value="refer">Passa a chamada (REFER) · avançado</option>
 				</select>
 			</Campo>
+			{metodo === 'refer'
+				? <Aviso tom="atencao">Só se a sua operadora confirmar que aceita REFER: muitas recusam ou cobram. Se o REFER falhar, o MotorCX tenta pela ponte, mas o agente já saiu da ligação e, se ninguém atender, a chamada cai.</Aviso>
+				: <p className="text-[12.5px] leading-relaxed text-[var(--base-texto-2)]">O agente só sai quando o seu operador atende. Se ninguém atender ou a fila recusar, a pessoa volta para o agente, que pede desculpas e agenda um retorno. Nunca desliga na cara.</p>}
 			<div className="grid gap-3 sm:grid-cols-2">
-				<Campo rotulo="Tronco" erro={err('tronco')} ajuda={metodo === 'refer' ? 'Opcional no REFER.' : undefined}>
+				<Campo rotulo="Tronco" erro={err('tronco')} ajuda={metodo === 'refer' ? 'Opcional no REFER.' : 'Opcional: sem tronco, o MotorCX liga direto para o destino SIP.'}>
 					<select value={tronco} onChange={x => setTronco(x.target.value)} className={campoCls}>
-						<option value="">{metodo === 'refer' ? 'Nenhum' : 'Escolha'}</option>
+						<option value="">{metodo === 'refer' ? 'Nenhum' : 'Direto no destino SIP'}</option>
 						{troncos.filter(t => t.ativo !== false).map(t => <option key={String(t.id)} value={String(t.id)}>{String(t.referencia)}</option>)}
 					</select>
 				</Campo>

@@ -127,6 +127,21 @@ class TestConversa(unittest.TestCase):
         c.ouvir("oi")
         self.assertEqual(self.ev, [("abc123", "transferir", {"motivo": "pedido_humano"})])
 
+    def test_sem_humano_volta_e_agenda_retorno(self):
+        c = self.conv([M.Resposta("", [("transferir_humano", {"motivo": "cpc"})]),
+                       M.Resposta("Amanhã às 10h está ótimo.", [("registrar_resultado", {
+                           "resultado": "retorno_agendado", "retorno_em": "2026-11-04T10:00"}),
+                           ("encerrar_chamada", {})])])
+        self.assertEqual(c.retomar_sem_humano("sem_operador"), [])          # não pediu humano: nada a fazer
+        c.ouvir("quero um atendente")
+        self.assertTrue(c.encerrada and c.aguardando_humano)               # o áudio fica de pé até o humano
+        self.assertEqual(c.retomar_sem_humano("sem_operador"), [M.RETOMAR_SEM_HUMANO])
+        self.assertFalse(c.encerrada or c.aguardando_humano)
+        self.assertIn("ninguém pôde atender", c.historico[-2]["content"])
+        self.assertEqual(c.ouvir("amanhã às 10"), ["Amanhã às 10h está ótimo."])
+        self.assertEqual([e[1] for e in self.ev], ["transferir", "resultado", "encerrar"])
+        self.assertEqual(self.ev[1][2]["resultado_ia"], "retorno_agendado")
+
     def test_limite_de_turnos(self):
         c = self.conv([M.Resposta("ok")] * 2, max_turnos=2)
         c.ouvir("a")
@@ -196,6 +211,21 @@ class TestMontagem(unittest.TestCase):
         self.assertFalse(mt.disponivel())                        # portas pares 40000 e 40002 em uso
         mt.encerrar("abc123")
         self.assertTrue(mt.disponivel())
+
+    def test_sem_humano_fala_pelo_pipecat(self):
+        rodadas, falas = [], []
+        modelo = FakeModelo([M.Resposta("", [("transferir_humano", {"motivo": "cpc"})])])
+        cfg = M.ConfigMontagem(portas=(40000, 40003), max_sessoes=5, host_midia="127.0.0.1")
+        mt = M.Montagem(cfg, Dicionario({}), lambda ctx: ("Roteiro", "Alô?"), modelo_de=lambda: modelo,
+                        executor=rodadas.append)
+        mt.iniciar(CTX, lambda *a: None)
+        self.assertFalse(mt.retomar_sem_humano("abc123", "sem_operador"))     # sem o Pipecat no ar: não volta
+        rodadas[0].conversa.falar_agora = falas.append                        # (o Pipecat liga isso ao subir)
+        self.assertFalse(mt.retomar_sem_humano("abc123", "sem_operador"))     # não pediu humano
+        rodadas[0].conversa.ouvir("quero um atendente")
+        self.assertTrue(mt.retomar_sem_humano("abc123", "sem_operador"))
+        self.assertEqual(falas, [M.RETOMAR_SEM_HUMANO])
+        self.assertFalse(mt.retomar_sem_humano("zzz", "falhou"))
 
     def test_servicos_pipecat_com_mocks(self):
         criados = {}
