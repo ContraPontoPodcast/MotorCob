@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Activity, BookOpen, Clock, Upload } from 'lucide-react';
-import { Loading, Notice, PageHeading, useAllowed } from '@/components/app-shell';
+import { Loading, Notice, PageHeading, usePermissao } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { friendlyError, supabase, type Row } from '@/lib/supabase';
 import { canalLabel } from '@/lib/estrategia';
@@ -14,6 +14,8 @@ import { numerosPorClienteOpts } from '@/lib/operacao';
 import { FrasesTab } from '@/components/canais/frases';
 import { ImportarPlaybookModal } from '@/components/canais/importar-playbook';
 import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
+import { PERM } from '@/lib/permissoes';
+import { identidade } from '@/lib/estado-canais';
 type CanalRow = CanalTela;
 
 const defaults: Record<string, CanalRow> = Object.fromEntries(
@@ -37,11 +39,19 @@ function Heranca({ sobrescrito, onVoltar }: { sobrescrito: boolean; onVoltar: ()
   );
 }
 
-export function Canais() {
+/**
+ * Configuração de hoje dos canais (horário, limites, custo, quem envia, Ligado e Modelos de mensagem).
+ * Com `canal`: só aquele canal — é o "Configurar" da visão geral (/canais/:canal) até a tela nova do canal (PR 6).
+ * Sem `canal`: os 6 canais juntos — continua em /canais?secao=frases (item "Frases" do menu).
+ * Editar exige editar_canais (o mesmo código do menu; SPEC §5). Antes bastava qualquer permissão editar_*.
+ */
+export function Canais({ canal }: { canal?: string } = {}) {
   const { empresa, credores } = useMotorAuth();
   const areasLib = useAreasLiberadas();
   const canaisMensageria: string[] = areasLib.mensageria ? areasLib.canais : [];
-  const canEdit = useAllowed(['admin', 'planejamento']);
+  const canEdit = usePermissao(PERM.editarCanais);
+  const canaisTela = canal ? canalOpts.filter(c => c.id === canal) : canalOpts;
+  const titulo = canal ? identidade(canal).nome : 'Canais e mensagens';
   const [escopo, setEscopo] = useState<string>('empresa'); // 'empresa' | credor_id
   const [rows, setRows] = useState<Record<string, CanalRow>>({});
   const [sobrescritos, setSobrescritos] = useState<Record<string, string[]>>({});
@@ -143,11 +153,11 @@ export function Canais() {
     setBusy(false);
   }
 
-  if (!empresa) return <><PageHeading eyebrow="CONFIGURAÇÃO / OPERAÇÃO" title="Canais e mensagens" description="Ajuste horário, capacidade e custo de cada canal da empresa."/><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></>;
-  if (loading) return <><PageHeading eyebrow="CONFIGURAÇÃO / OPERAÇÃO" title="Canais e mensagens" description="Ajuste horário, capacidade, custo e textos de cada canal da empresa."/><Loading/></>;
+  if (!empresa) return <><PageHeading eyebrow="CONFIGURAÇÃO / OPERAÇÃO" title={titulo} description="Ajuste horário, capacidade e custo de cada canal da empresa."/><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></>;
+  if (loading) return <><PageHeading eyebrow="CONFIGURAÇÃO / OPERAÇÃO" title={titulo} description="Ajuste horário, capacidade, custo e textos de cada canal da empresa."/><Loading/></>;
 
   return <>
-    <PageHeading eyebrow="CONFIGURAÇÃO / OPERAÇÃO" title="Canais e mensagens" description="Ajuste horário, capacidade, custo e textos de cada canal da empresa." actions={canEdit ? <button onClick={() => setImportOpen(true)} className="flex h-11 items-center gap-2 rounded-lg border border-[#0F4C5C] px-4 text-sm font-semibold text-[#0F4C5C] hover:bg-[#eaf2f3]"><Upload size={16}/> Importar playbook</button> : null} />
+    <PageHeading eyebrow="CONFIGURAÇÃO / OPERAÇÃO" title={titulo} description="Ajuste horário, capacidade, custo e textos de cada canal da empresa." actions={canEdit ? <button onClick={() => setImportOpen(true)} className="flex h-11 items-center gap-2 rounded-lg border border-[#0F4C5C] px-4 text-sm font-semibold text-[#0F4C5C] hover:bg-[#eaf2f3]"><Upload size={16}/> Importar playbook</button> : null} />
 
     {/* Seletor de escopo: Empresa (todas as carteiras) ou uma carteira. */}
     <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -162,14 +172,14 @@ export function Canais() {
     <div className={`mb-6 rounded-xl border p-5 text-sm ${isCarteira ? 'border-[#d9e5e8] bg-[#eaf2f3] text-[#315d68]' : 'border-[#d9e5e8] bg-[#eaf2f3] text-[#315d68]'}`}>
       {isCarteira
         ? <p>Esta carteira herda os canais da empresa e pode sobrescrever campos. Campos em cinza “da empresa” vêm da empresa; “desta carteira” foram sobrescritos. Salvar grava só o que foi alterado.</p>
-        : <p>Desligue um canal para que nenhuma estratégia o use. Os 6 canais aparecem sempre; ao salvar, gravamos o que estiver diferente do padrão. <strong>WhatsApp</strong> e <strong>RCS</strong> têm aba <strong>Modelos de mensagem</strong>; <strong>SMS</strong> e <strong>Agente virtual</strong> também. Discador e E-mail não usam mensagem.</p>}
+        : <p>Desligue um canal para que nenhuma estratégia o use. {canal ? 'Ao salvar' : 'Os 6 canais aparecem sempre; ao salvar'}, gravamos o que estiver diferente do padrão. <strong>WhatsApp</strong> e <strong>RCS</strong> têm aba <strong>Modelos de mensagem</strong>; <strong>SMS</strong> e <strong>Agente virtual</strong> também. Discador e E-mail não usam mensagem.</p>}
     </div>
     {!isCarteira && <div className="mb-6 rounded-xl border border-[#e2eaec] bg-[#f7fafb] p-5 text-sm text-[#4a6770]"><p>As regras de retorno de cada canal (DLR, bounce, sem conta…) ficam em <Link to="/credores" className="font-semibold text-[#0F4C5C] underline">Carteiras</Link> → (carteira) → Configurações → Canais.</p></div>}
     {error && <div className="mb-5"><Notice>{error}</Notice></div>}
     {success && <div className="mb-5"><Notice variant="success">{success}</Notice></div>}
 
-    <div className="grid gap-4 lg:grid-cols-2">
-      {canalOpts.map(c => {
+    <div className={canal ? 'grid max-w-3xl gap-4' : 'grid gap-4 lg:grid-cols-2'}>
+      {canaisTela.map(c => {
         const r = rows[c.id] ?? defaults[c.id];
         const sob = sobrescritos[c.id] ?? [];
         const tab = tabs[c.id] ?? (secaoFrases ? 'frases' : 'config');
@@ -283,7 +293,7 @@ export function Canais() {
       })}
     </div>
 
-    {canEdit && <div className="mt-6 flex justify-end"><button onClick={salvar} disabled={busy} className="h-11 rounded-lg bg-[#0F4C5C] px-6 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Salvando...' : isCarteira ? 'Salvar ajustes da carteira' : 'Salvar canais'}</button></div>}
+    {canEdit && <div className="mt-6 flex justify-end"><button onClick={salvar} disabled={busy} className="h-11 rounded-lg bg-[#0F4C5C] px-6 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Salvando...' : isCarteira ? 'Salvar ajustes da carteira' : canal ? 'Salvar canal' : 'Salvar canais'}</button></div>}
     {importOpen && <ImportarPlaybookModal onClose={() => setImportOpen(false)} onDone={() => { /* frases recarregam sozinhas por aba */ }}/>}
   </>;
 }
