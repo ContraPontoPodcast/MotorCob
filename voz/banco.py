@@ -480,6 +480,96 @@ class DadosVoz:
         return self.configs.get(empresa_id) or ConfigVoz(empresa_id=empresa_id)
 
 
+# ------------------------------------------------------------------ isolamento: uma linha ruim não para as outras
+# Antes, um tronco, rota ou transferência inválido fazia voz/configuracao.py manter a configuração anterior de TODAS as
+# empresas (C16 / G7 da revisão do especialista). Agora a linha inválida fica de fora (com motivo e id, sem segredo) e o
+# resto é publicado. Formato de cima errado (tabela que não é lista, linha que não é objeto, id ilegível, id repetido)
+# continua sendo erro: aí não dá para saber o que é de quem, e a configuração anterior fica.
+TABELAS_ISOLADAS = ("voz_troncos", "voz_rotas", "voz_transferencias")
+_LEITORES = {"voz_troncos": "ler_tronco", "voz_rotas": "ler_rota", "voz_transferencias": "ler_transferencia"}
+ITEM_SAUDE = "configuracao_invalida"     # fornecedor_saude.item da linha que ficou de fora
+_NOME_CURTO = {"voz_troncos": "tronco", "voz_rotas": "rota", "voz_transferencias": "transferencia"}
+
+
+@dataclass(frozen=True)
+class LinhaIgnorada:
+    tabela: str
+    id: int
+    empresa_id: int | None
+    motivo: str                    # uma frase, sem senha nem segredo_ref (só o que ler_* diz)
+
+    @property
+    def referencia(self) -> str:
+        """fornecedor_saude.referencia (^[A-Za-z0-9_.-]{0,40}$): tronco.12, rota.5, transferencia.3."""
+        return f"{_NOME_CURTO[self.tabela]}.{self.id}"
+
+    def texto(self) -> str:
+        emp = f"empresa {self.empresa_id}" if self.empresa_id is not None else "empresa ilegível"
+        return f"{self.tabela}[{self.id}] ({emp}) ficou de fora: {self.motivo}"
+
+
+def _motivo(ex: Exception, onde: str) -> str:
+    if isinstance(ex, DadosInvalidos):
+        m = str(ex)
+        return (m[len(onde) + 2:] if m.startswith(onde + ": ") else m)[:180]
+    # erro do Python (float('x'), data ilegível…) pode trazer o valor: só o tipo do erro
+    return f"valor em formato inesperado ({ex.__class__.__name__})"
+
+
+def _empresa_da(linha: dict, tabela: str) -> int | None:
+    try:
+        return int(_v(linha, tabela, "empresa_id"))
+    except (TypeError, ValueError):
+        return None
+
+
+def separar_validos(dados: dict) -> tuple[dict, list[LinhaIgnorada]]:
+    """Tira de `dados` as linhas inválidas de voz_troncos, voz_rotas e voz_transferencias (e a rota ou transferência
+    que aponta para tronco que ficou de fora ou é de outra empresa). Devolve (cópia rasa de `dados` só com as linhas
+    válidas, linhas ignoradas). Formato de cima errado levanta DadosInvalidos, como antes."""
+    saida = dict(dados)
+    ignoradas: list[LinhaIgnorada] = []
+    lidos: dict[str, list] = {}
+    for tabela in TABELAS_ISOLADAS:
+        linhas = dados.get(tabela) or []
+        if not isinstance(linhas, list):
+            raise DadosInvalidos(f"{tabela}: precisa ser uma lista de linhas")
+        ok = []
+        ler = globals()[_LEITORES[tabela]]
+        for linha in linhas:
+            if not isinstance(linha, dict):
+                raise DadosInvalidos(f"{tabela}: linha que não é objeto")
+            lid = _int(_v(linha, tabela, "id"), f"{tabela}.id", 1)       # sem id legível: erro de formato
+            onde = f"{tabela}[{lid}]"
+            try:
+                ok.append((linha, ler(linha)))
+            except (DadosInvalidos, TypeError, ValueError, AttributeError) as ex:
+                ignoradas.append(LinhaIgnorada(tabela, lid, _empresa_da(linha, tabela), _motivo(ex, onde)))
+        lidos[tabela] = ok
+    ids = [t.id for _, t in lidos["voz_troncos"]] + [x.id for x in ignoradas if x.tabela == "voz_troncos"]
+    if len(ids) != len(set(ids)):
+        raise DadosInvalidos("voz_troncos: id repetido")
+    por_id = {t.id: t for _, t in lidos["voz_troncos"]}
+    fora = {x.id for x in ignoradas if x.tabela == "voz_troncos"}
+
+    def _tronco_ok(tabela, item, tronco_id, obrigatorio):
+        if tronco_id is None and not obrigatorio:
+            return True
+        t = por_id.get(tronco_id)
+        if t is not None and t.empresa_id == item.empresa_id:
+            return True
+        motivo = (f"o tronco {tronco_id} ficou de fora (com erro de configuração)" if tronco_id in fora
+                  else f"o tronco {tronco_id} não existe na empresa {item.empresa_id}")
+        ignoradas.append(LinhaIgnorada(tabela, item.id, item.empresa_id, motivo))
+        return False
+
+    saida["voz_troncos"] = [l for l, _ in lidos["voz_troncos"]]
+    saida["voz_rotas"] = [l for l, r in lidos["voz_rotas"] if _tronco_ok("voz_rotas", r, r.tronco_id, True)]
+    saida["voz_transferencias"] = [l for l, x in lidos["voz_transferencias"]
+                                   if _tronco_ok("voz_transferencias", x, x.tronco_id, False)]
+    return saida, ignoradas
+
+
 def carregar(dados: dict) -> DadosVoz:
     """JSON {voz_troncos: [...], voz_rotas: [...], voz_transferencias: [...], voz_config: [...]} -> DadosVoz.
     Rota cujo tronco não existe ou é de outra empresa: erro (não se gera rota quebrada)."""

@@ -29,6 +29,7 @@ const ROTULO_SAUDE: Record<string, string> = {
 	webhook: 'Retorno das chamadas (webhook)',
 	conexao: 'Conexão',
 	sip: 'Ligação SIP com o Asterisk',
+	configuracao_invalida: 'Com erro de configuração',
 };
 const rotuloSaude = (item: string) => ROTULO_SAUDE[item] ?? item.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
 
@@ -300,7 +301,7 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 					podeTroncos={podeTroncos} modo={modo} onNumeros={() => setGNumeros(true)} onSalvo={m => salvo(m, true)} />
 			</>}
 			{aba === 'troncos' && <>
-				<Troncos troncos={d.troncos} pausas={d.pausas} podeTroncos={podeTroncos} onRetomado={() => salvo('Rota retomada. A VM volta a discar por este tronco no próximo minuto.', true)} onNovo={() => setGTronco({ tronco: null })} onEditar={t => setGTronco({ tronco: t })} />
+				<Troncos troncos={d.troncos} pausas={d.pausas} saude={d.saude} podeTroncos={podeTroncos} onRetomado={() => salvo('Rota retomada. A VM volta a discar por este tronco no próximo minuto.', true)} onNovo={() => setGTronco({ tronco: null })} onEditar={t => setGTronco({ tronco: t })} />
 				<Rotas rotas={d.rotas} troncos={d.troncos} saude={d.saude} podeTroncos={podeTroncos}
 					onNova={(base, prefixo) => setGRota({ base, prefixo })} onEncerrada={() => salvo('Rota encerrada. Ela fica no histórico.')} />
 			</>}
@@ -419,14 +420,17 @@ const formatoTxt = (t: Row) => {
 	return t.csp ? `${f} · CSP ${String(t.csp)}` : f;
 };
 
-function Troncos({ troncos, pausas, podeTroncos, onNovo, onEditar, onRetomado }: { troncos: Row[]; pausas: Pausa[]; podeTroncos: boolean; onNovo: () => void; onEditar: (t: Row) => void; onRetomado: () => void }) {
+function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onRetomado }: { troncos: Row[]; pausas: Pausa[]; saude: Row[]; podeTroncos: boolean; onNovo: () => void; onEditar: (t: Row) => void; onRetomado: () => void }) {
 	const ativos = troncos.filter(t => t.ativo !== false);
 	const [sel, setSel] = useState<Row | null>(null);
 	const [retomar, setRetomar] = useState<Pausa | null>(null);
 	const [nota, setNota] = useState('');
 	const [busy, setBusy] = useState(false);
 	const pausaDe = (t: Row) => pausas.find(p => String(p.tronco_id) === String(t.id)) ?? null;
+	// a VM deixa de fora só o tronco com erro (voz/configuracao.py): fornecedor_saude configuracao_invalida, tronco.<id>
+	const erroDe = (t: Row) => saude.find(s => s.item === 'configuracao_invalida' && s.ok === false && String(s.referencia) === `tronco.${String(t.id)}`) ?? null;
 	const situacao = (t: Row) => {
+		if (erroDe(t)) return { tom: 'erro' as const, txt: 'Com erro de configuração' };
 		const p = pausaDe(t);
 		if (p) return { tom: (p.motivo === 'bloqueio_originacao' ? 'erro' : 'atencao') as 'erro' | 'atencao', txt: `Pausado · ${MOTIVO_PAUSA[p.motivo] ?? p.motivo}` };
 		const x = situacaoTronco(t);
@@ -443,6 +447,7 @@ function Troncos({ troncos, pausas, podeTroncos, onNovo, onEditar, onRetomado }:
 		onRetomado();
 	}
 	const selPausa = sel ? pausaDe(sel) : null;
+	const selErro = sel ? erroDe(sel) : null;
 	return (
 		<Cartao semPad titulo="Troncos SIP da empresa"
 			desc="A empresa contrata as operadoras dela; o Asterisk do MotorCX disca por esses troncos e liga o agente de IA quando a pessoa atende."
@@ -476,6 +481,9 @@ function Troncos({ troncos, pausas, podeTroncos, onNovo, onEditar, onRetomado }:
 				</> : undefined}>
 				{selPausa && <AvisoDs tom={selPausa.motivo === 'bloqueio_originacao' ? 'erro' : 'atencao'} titulo={`Pausado por ${MOTIVO_PAUSA[selPausa.motivo] ?? selPausa.motivo}`}>
 					Desde {dateTimeBR(selPausa.pausado_em)}{selPausa.causa_sip ? ` (resposta SIP ${selPausa.causa_sip})` : ''}. A VM não disca por este tronco até alguém da equipe retomar.{!podeTroncos ? ` ${SEM_PERM_TRONCOS} retoma.` : ''}
+				</AvisoDs>}
+				{selErro && <AvisoDs tom="erro" titulo="Este tronco não subiu">
+					{String(selErro.detalhe ?? 'Configuração inválida.')} Corrija o cadastro: a VM volta a usar o tronco na próxima leitura.
 				</AvisoDs>}
 				{sel && <ListaValores itens={[
 					['Operadora', String(sel.operadora)],

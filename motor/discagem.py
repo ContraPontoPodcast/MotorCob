@@ -19,11 +19,15 @@ Configuração em camadas (a de cima vence):
   CPC, não é pagamento), inexistente (layout que marca `inexistente_confirmado` só bloqueia com esses
   códigos; o resto vira falha de rede) e "não ligar" (opt-out de voz: sai de todos os canais de voz).
   Padrão: só inexistente e "não ligar" ligados (recomendados); os outros vêm com o valor recomendado,
-  desligados.
-- Chamadas curtas (MP 1.396/2026: bloqueio das linhas com ≥ 85% de curtas e mais de 1 mil chamadas numa
-  linha ou 10 mil no total no dia): KPI medido pelos retornos de voz (cada linha = uma chamada), previsão
-  do dia (Σ tentativas × P(curta) do número), alerta e corte OPCIONAL (desligado). O motor não sabe por
-  qual linha de saída o discador liga: o limite por linha vira "linhas mínimas" no alerta.
+  desligados. Horários por UF/DDD vêm LIGADOS com a prévia (decisão do dono, 08/11/2026).
+- Chamadas curtas (Despacho Decisório Anatel nº 100/2026 e MP 1.396/2026, vigência 12/11/2026): conta como
+  curta a ligação não completada, caída na caixa postal ou com até 6 s. Se num dia uma linha passar de 1.000
+  ligações, ou todas as linhas juntas passarem de 10.000, e 85% ou mais forem curtas, a operadora bloqueia
+  TODAS as linhas da empresa por 15 dias. KPI medido pelos retornos de voz (cada linha = uma chamada), previsão
+  do dia (Σ tentativas × P(curta) do número), alerta (aviso 70%) e corte LIGADO por padrão em 80% (decisão do
+  dono, 08/11/2026; quem salvou corte_ativo=false mantém). Falha técnica (não completada) conta sempre como
+  curta (travado). O motor não sabe por qual linha de saída o discador liga: o limite por linha vira "linhas
+  mínimas" no alerta.
 """
 import copy
 import json
@@ -63,8 +67,12 @@ PADRAO = {
     # dia, ele sai no topo do mailing com agendar_para. Fora da faixa de horário vai para a próxima abertura.
     "retorno_agendado": {"ativo": True, "max_dias": 7, "sem_hora_dias": 1, "de": "08:00", "ate": "20:00"},
     "nao_ligar": {"ativo": True},
-    "horarios": {"ativo": False, "tabela": None},   # desligado até o jurídico validar a prévia
-    "chamadas_curtas": {"ativo": True, "aviso": 0.75, "corte_ativo": False, "corte": 0.80,
+    # ligado com a prévia (decisão do dono, 08/11/2026; a prévia não é orientação jurídica: confirmar com o jurídico).
+    # Quem salvou {"ativo": false} na carteira continua desligado.
+    "horarios": {"ativo": True, "tabela": None},
+    # Despacho Anatel 100/2026 (vigência 12/11/2026): corte ligado em 80% e aviso em 70% (decisão do dono, 08/11/2026).
+    # Quem salvou corte_ativo=false na carteira continua sem corte; quem não salvou a chave fica com o padrão novo.
+    "chamadas_curtas": {"ativo": True, "aviso": 0.70, "corte_ativo": True, "corte": 0.80,
                         "max_por_numero_dia": 900, "max_total_dia": 9000, "abandono_conta": True, "segundos": 6,
                         "falha_conta": True},
     # Renitência por situação, regra por sinalização, modo de discagem e reciclagem (protótipo funcional aprovado,
@@ -576,6 +584,8 @@ def normalizar(bruto, base: dict | None = None, onde: str = "discagem") -> tuple
         modo = (cfg.get("modo_discagem") or {}).get("modo", "horizontal")
         cfg["por_sinalizacao"], a = _por_sinalizacao(bruto["por_sinalizacao"], f"{onde}/por_sinalizacao", modo)
         av += a
+    # falha técnica conta sempre como curta (Despacho Anatel 100/2026): travado em sim, um false antigo é ignorado
+    cfg["chamadas_curtas"]["falha_conta"] = True
     # quem salvou a regra nova sem dizer as tentativas por número fica com 3 (decisão do dono); sem a regra, o de hoje
     if tem_regra_nova(cfg) and "tentativas_numero_dia" not in bruto:
         cfg["tentativas_numero_dia"] = TENTATIVAS_NUMERO_REGRA_NOVA
@@ -1169,6 +1179,11 @@ def regras_voz(regras_canal: dict, cfg: dict) -> dict:
 
 # ------------------------------------------------------------------ chamadas curtas
 NAO_COMPLETADA = V.NAO_COMPLETADA          # chamada curta sempre (motor/voz.py)
+# texto da regra (motor, alertas e site dizem o mesmo; site/src/lib/discagem.ts › REGRA_CURTAS)
+REGRA_CURTAS = ("Despacho Anatel 100/2026, a partir de 12/11/2026: conta como curta a ligação não completada, caída na caixa "
+                "postal ou com até 6 segundos; se num dia uma linha passar de 1.000 ligações, ou todas as linhas juntas "
+                "passarem de 10.000, e 85% ou mais forem curtas, a operadora bloqueia todas as linhas da empresa por "
+                "15 dias")
 PRIOR_CURTA = 0.9      # cobrança típica: 10% de atendimento humano acima de 6 s = 90% de curtas (plano C.2)
 FORCA_CARTEIRA = 20.0  # peso do prior na taxa da carteira (em chamadas)
 FORCA_NUMERO = 5.0     # peso da taxa da carteira na taxa do número (em chamadas)
@@ -1176,9 +1191,9 @@ DIAS_HISTORICO = 30
 
 
 def e_curta(e, cc: dict) -> bool:
-    """Chamada curta: até `segundos`, caixa postal ou não completada; abandono conta se configurado."""
-    if e.resultado in V.TECNICOS and not cc.get("falha_conta", True):
-        return False                       # a carteira não conta a falha técnica como curta (abandono à parte)
+    """Chamada curta: até `segundos`, caixa postal ou não completada; abandono conta se configurado.
+    Falha técnica (não completada) conta SEMPRE (Despacho Anatel 100/2026): `falha_conta` ficou travado em sim e
+    um `false` salvo antes é ignorado (o banco faz o mesmo em chamada_curta_voz, SQL 80)."""
     d = getattr(e, "duracao_s", None)
     if d is not None and d <= cc["segundos"]:
         return True
@@ -1379,8 +1394,7 @@ def curtas(fila: list, eventos: list, hoje: date, cfg: dict, tentativas) -> tupl
         if ultimo:
             partes.append(f"medido em {date.fromisoformat(ultimo['data']):%d/%m}: {_pct(ultimo['fracao'])} de "
                           f"{_n(ultimo['chamadas'])}")
-        txt = ("CHAMADAS CURTAS: " + "; ".join(partes) + f" (seu aviso: {_pct(cc['aviso'])}; MP 1.396: bloqueio "
-               "das linhas com 85% ou mais e mais de 1.000 chamadas numa linha ou 10.000 no total no dia).")
+        txt = ("CHAMADAS CURTAS: " + "; ".join(partes) + f" (seu aviso: {_pct(cc['aviso'])}; " + REGRA_CURTAS + ")")
         if total["chamadas"]:
             txt += (f" Com até {_n(cc['max_por_numero_dia'])} chamadas por linha, a lista de hoje precisa de pelo "
                     f"menos {resumo['linhas_minimas']} linha(s) de saída (o MotorCX não sabe por qual linha o "

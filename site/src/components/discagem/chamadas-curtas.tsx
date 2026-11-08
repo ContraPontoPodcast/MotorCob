@@ -1,4 +1,4 @@
-import { SUGESTOES, stableEqual, pct, filtrarAlertas, type Discagem, type DiscagemExecResumo } from '@/lib/discagem';
+import { SUGESTOES, REGRA_CURTAS, FONTE_CURTAS, stableEqual, pct, filtrarAlertas, type DiscagemExecResumo } from '@/lib/discagem';
 import { SectionCard, Toggle, PercentField, NumberField, CaixaInfo } from './discagem-campos';
 import type { DiscagemProps } from '@/lib/discagem';
 
@@ -16,13 +16,13 @@ export function ChamadasCurtas({ draft, update, reverter, canEdit, exec }: Props
 	const marcas = [
 		{ label: 'seu aviso', val: cc.aviso, cor: 'var(--estado-atencao)' },
 		...(cc.corte_ativo ? [{ label: 'corte', val: cc.corte, cor: 'var(--estado-erro)' }] : []),
-		{ label: 'MP 85%', val: 0.85, cor: 'var(--base-texto-3)' },
+		{ label: 'Anatel 85%', val: 0.85, cor: 'var(--base-texto-3)' },
 	].sort((a, b) => a.val - b.val);
 
 	return (
 		<div className="space-y-4">
-			<CaixaInfo tone="azul">
-				O acompanhamento da regra e as medidas são responsabilidade da sua operação; o MotorCX mostra os números e avisa. A regra ainda depende de regulamentação da Anatel.
+			<CaixaInfo tone="amber">
+				<strong>{REGRA_CURTAS}</strong> {FONTE_CURTAS} Trocar a bina ou espalhar as ligações por mais linhas não resolve: a Anatel pode endurecer os critérios para quem tentar contornar a regra. O MotorCX mostra os números, avisa e, com o corte ligado, tira a voz pelo fim da prioridade; o acompanhamento continua sendo da sua operação.
 			</CaixaInfo>
 
 			{/* Medidor */}
@@ -32,8 +32,8 @@ export function ChamadasCurtas({ draft, update, reverter, canEdit, exec }: Props
 				) : (
 					<div className="space-y-4">
 						<div className="grid gap-4 sm:grid-cols-2">
-							<MedidorCard titulo="Último dia medido" dado={ultimo} marcas={marcas} />
-							{previsao ? <MedidorCard titulo="Previsão de hoje" dado={previsao} marcas={marcas} /> : (
+							<MedidorCard titulo="Último dia medido" dado={ultimo} marcas={marcas} aviso={cc.aviso} />
+							{previsao ? <MedidorCard titulo="Previsão de hoje" dado={previsao} marcas={marcas} aviso={cc.aviso} /> : (
 								<div className="rounded-lg border p-4" style={{ borderColor: 'var(--base-borda)' }}>
 									<p className="text-[13px] font-semibold text-[var(--base-texto-2)]">Previsão de hoje</p>
 									<p className="mt-1 text-[12px] text-[var(--base-texto-3)]">Monitoramento desligado — sem previsão.</p>
@@ -63,10 +63,10 @@ export function ChamadasCurtas({ draft, update, reverter, canEdit, exec }: Props
 			<SectionCard title="Seus limites" ajustado={!stableEqual(cc, SUGESTOES.chamadas_curtas)} onReverter={() => reverter('chamadas_curtas')} canEdit={canEdit}>
 				<div className="flex items-center gap-2">
 					<Toggle checked={cc.ativo} disabled={!canEdit} label="Monitorar chamadas curtas" onChange={v => update({ chamadas_curtas: { ...cc, ativo: v } })} />
-					<span className="text-[13px] text-[var(--base-texto-2)]">{cc.ativo ? 'Monitorando' : 'Desligado (sugestão)'}</span>
+					<span className="text-[13px] text-[var(--base-texto-2)]">{cc.ativo ? 'Monitorando' : 'Desligado (não recomendado)'}</span>
 				</div>
 				<div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					<PercentField label="Aviso" value={cc.aviso} disabled={!canEdit} sugestao="75%" hint={cc.aviso >= 0.85 ? 'O aviso chega junto ou depois da referência da MP.' : undefined} onChange={v => update({ chamadas_curtas: { ...cc, aviso: v } })} />
+					<PercentField label="Aviso" value={cc.aviso} disabled={!canEdit} sugestao="70%" hint={cc.aviso >= 0.85 ? 'O aviso chega junto ou depois do limite de 85% da Anatel.' : undefined} onChange={v => update({ chamadas_curtas: { ...cc, aviso: v } })} />
 					<NumberField label="Máx. por número/dia" value={cc.max_por_numero_dia} min={1} disabled={!canEdit} sugestao="900" onChange={v => update({ chamadas_curtas: { ...cc, max_por_numero_dia: v === '' ? 1 : v } })} />
 					<NumberField label="Máx. total/dia" value={cc.max_total_dia} min={1} disabled={!canEdit} sugestao="9000" onChange={v => update({ chamadas_curtas: { ...cc, max_total_dia: v === '' ? 1 : v } })} />
 					<NumberField label="Conta como curta até" value={cc.segundos} min={1} max={60} suffix="seg" disabled={!canEdit} sugestao="6" onChange={v => update({ chamadas_curtas: { ...cc, segundos: v === '' ? 1 : v } })} />
@@ -80,12 +80,17 @@ export function ChamadasCurtas({ draft, update, reverter, canEdit, exec }: Props
 				</div>
 			</SectionCard>
 
-			{/* Corte opcional */}
-			<SectionCard title="Corte da voz (opcional)" canEdit={canEdit}>
+			{/* Corte (ligado por padrão em 80%) */}
+			<SectionCard title="Corte da voz" canEdit={canEdit}>
 				<div className="flex flex-wrap items-center gap-2">
 					<Toggle checked={cc.corte_ativo} disabled={!canEdit} label="Cortar a voz" onChange={v => update({ chamadas_curtas: { ...cc, corte_ativo: v } })} />
-					<span className="text-[13px] text-[var(--base-texto-2)]">Cortar a voz pelo fim da prioridade ao passar de {pct(cc.corte)}</span>
+					<span className="text-[13px] text-[var(--base-texto-2)]">{cc.corte_ativo ? `Ligado (recomendado): a voz é cortada pelo fim da prioridade ao passar de ${pct(cc.corte)} de curtas previstas` : 'Desligado: a lista sai inteira, mesmo com a previsão acima do limite'}</span>
 				</div>
+				{!cc.corte_ativo && (
+					<div className="mt-3 rounded-lg px-4 py-3 text-[13px]" style={{ backgroundColor: 'var(--estado-erro-fundo)', color: 'var(--estado-erro-texto)' }}>
+						Sem o corte, um dia acima de 85% de curtas pode bloquear todas as linhas da empresa por 15 dias. Recomendamos ligar em 80%.
+					</div>
+				)}
 				{cc.corte_ativo && (
 					<div className="mt-3 grid gap-4 sm:grid-cols-2">
 						<PercentField label="Corte" value={cc.corte} disabled={!canEdit} sugestao="80%" onChange={v => update({ chamadas_curtas: { ...cc, corte: v } })} />
@@ -112,7 +117,7 @@ export function ChamadasCurtas({ draft, update, reverter, canEdit, exec }: Props
 	);
 }
 
-function MedidorCard({ titulo, dado, marcas }: { titulo: string; dado: { chamadas: number; curtas: number; fracao: number } | null; marcas: { label: string; val: number; cor: string }[] }) {
+function MedidorCard({ titulo, dado, marcas, aviso }: { titulo: string; dado: { chamadas: number; curtas: number; fracao: number } | null; marcas: { label: string; val: number; cor: string }[]; aviso: number }) {
 	const fr = Math.min(1, dado?.fracao ?? 0);
 	return (
 		<div className="rounded-lg border p-4" style={{ borderColor: 'var(--base-borda)' }}>
@@ -121,7 +126,7 @@ function MedidorCard({ titulo, dado, marcas }: { titulo: string; dado: { chamada
 				<>
 					<p className="mt-1 text-[12px] tnum text-[var(--base-texto-3)]">{dado.chamadas} chamadas · {dado.curtas} curtas · <strong style={{ color: 'var(--base-texto)' }}>{pct(dado.fracao)}</strong></p>
 					<div className="relative mt-3 h-2.5 rounded-full" style={{ backgroundColor: 'var(--base-fill)' }}>
-						<div className="h-full rounded-full" style={{ width: `${fr * 100}%`, backgroundColor: fr >= 0.85 ? 'var(--estado-erro)' : fr >= 0.75 ? 'var(--estado-atencao)' : 'var(--estado-pronto)' }} />
+						<div className="h-full rounded-full" style={{ width: `${fr * 100}%`, backgroundColor: fr >= 0.85 ? 'var(--estado-erro)' : fr >= aviso ? 'var(--estado-atencao)' : 'var(--estado-pronto)' }} />
 						{marcas.map((m, i) => (
 							<span key={i} className="absolute top-1/2 h-3.5 w-0.5 -translate-y-1/2" style={{ left: `${Math.min(100, m.val * 100)}%`, backgroundColor: m.cor }} title={`${m.label}: ${pct(m.val)}`} />
 						))}
