@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { BookOpen, Copy, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
-import { useAllowed, Notice } from '@/components/app-shell';
+import { usePermissao, Notice } from '@/components/app-shell';
+import { PERM } from '@/lib/permissoes';
 import {
 	carregarFrases, salvarFrase, excluirFrase, toggleFraseAtiva, contarUsoFrase,
 	extrairVariaveis, previsualizar, smsMensagens, VARS_MOTORCOB, variavelLabel,
@@ -151,7 +152,7 @@ function FraseEditor({ canal, frase, onClose, onSaved }: {
 
 export function FrasesTab({ canal }: { canal: string }) {
 	const { empresa } = useMotorAuth();
-	const canEdit = useAllowed(['admin', 'planejamento']);
+	const canEdit = usePermissao(PERM.editarCanais);
 	const isTemplate = canalTipoMensagem(canal) === 'template';
 	const [frases, setFrases] = useState<Frase[]>([]);
 	const [loading, setLoading] = useState(true);
