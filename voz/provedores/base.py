@@ -67,5 +67,11 @@ class ProvedorVoz:
     def encerrar(self, id_chamada: str) -> None:
         """A chamada acabou (pessoa desligou ou transferiu): libera a sessão."""
 
+    def retomar_sem_humano(self, id_chamada: str, motivo: str) -> bool:
+        """A transferência pedida não chegou a um humano (motivo: sem_operador | falhou) e a pessoa continua na linha:
+        o agente volta, pede desculpas e oferece agendar um retorno (registrar_resultado retorno_agendado). True = o
+        agente voltou; False = este provedor não sabe voltar (o orquestrador encerra como abandono, como antes)."""
+        return False
+
     def tick(self, agora: datetime) -> None:
         """Chamado a cada ciclo do orquestrador (provedores que simulam tempo)."""

@@ -110,6 +110,17 @@ class Simulador(ProvedorVoz):
             s.emitir(id_chamada, "transcricao", {"turnos": turnos, "tempo": "estimado",
                                                  "oferta": OFERTA_DO_CENARIO.get(s.cenario)})
 
+    def retomar_sem_humano(self, id_chamada: str, motivo: str) -> bool:
+        """Sem humano: o agente simulado volta e agenda um retorno para amanhã (como a Montagem faria)."""
+        s = self.sessoes.get(id_chamada)
+        if s is None:
+            return False
+        quando = ((s.agora or datetime.now()) + timedelta(days=1)).replace(second=0, microsecond=0)
+        s.emitir(id_chamada, "resultado", {"resultado_ia": "retorno_agendado", "retorno_em": quando,
+                                           "identidade_confirmada": True})
+        s.emitir(id_chamada, "encerrar", {})
+        return True
+
     def tick(self, agora: datetime) -> None:
         for sid, s in list(self.sessoes.items()):
             if s.inicio is None:

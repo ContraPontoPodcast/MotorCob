@@ -116,6 +116,10 @@ class ModeloOpenAICompat:
                         tokens_entrada=int(uso.get("prompt_tokens") or 0), tokens_saida=int(uso.get("completion_tokens") or 0))
 
 
+RETOMAR_SEM_HUMANO = ("Me desculpe, nenhum atendente conseguiu atender agora. Posso agendar um retorno para você? "
+                      "Qual o melhor dia e horário?")
+
+
 class Conversa:
     """A lógica da conversa, sem áudio: recebe o texto final da pessoa e devolve o que falar; o que decide a
     chamada sai pelas ferramentas para `emitir` (resultado, transferir, encerrar)."""
@@ -126,6 +130,7 @@ class Conversa:
         self.primeira_fala = preencher(primeira_fala, ctx.variaveis)
         self.max_turnos, self.turnos = max_turnos, 0
         self.encerrada = False
+        self.aguardando_humano = False      # pediu humano: o áudio fica de pé até o humano atender ou não
         self.avisos: list[str] = []
         hoje = hoje or date.today()
         sistema = preencher(roteiro, ctx.variaveis) + (
@@ -193,8 +198,23 @@ class Conversa:
 
     def _transferir(self, motivo: str) -> None:
         if not self.encerrada:
-            self.encerrada = True
+            self.encerrada = self.aguardando_humano = True
             self.emitir(self.ctx.id_chamada, "transferir", {"motivo": motivo})
+
+    def retomar_sem_humano(self, motivo: str) -> list[str]:
+        """Ninguém do cliente atendeu a transferência: o agente volta, pede desculpas e oferece um retorno (decisão do
+        dono, 08/11/2026: nunca desligar na cara). Devolve a fala; o modelo segue com as ferramentas de sempre."""
+        if not self.aguardando_humano:
+            return []
+        self.encerrada = self.aguardando_humano = False
+        self.historico.append({"role": "system", "content": (
+            "A transferência para um atendente não completou (" + ("ninguém pôde atender agora" if motivo ==
+            "sem_operador" else "a ligação para a fila falhou") + "). Você já pediu desculpas na fala abaixo. Agende "
+            "um retorno: combine dia e horário, registre com registrar_resultado (resultado retorno_agendado, "
+            "retorno_em) e só então encerre com encerrar_chamada. Não transfira de novo nesta ligação.")})
+        fala = RETOMAR_SEM_HUMANO
+        self.historico.append({"role": "assistant", "content": fala})
+        return [fala]
 
     def _encerrar(self) -> None:
         if not self.encerrada:
@@ -468,7 +488,7 @@ async def rodar_pipecat(ponte: PonteRTP, conversa: Conversa, stt, tts, parar: as
                 ponte.interromper()
                 for t in await asyncio.to_thread(conversa.ouvir, frame.text):
                     await self.push_frame(TTSSpeakFrame(t))
-                if conversa.encerrada:
+                if conversa.encerrada and not getattr(conversa, "aguardando_humano", False):
                     await self.push_frame(EndFrame())
             else:
                 await self.push_frame(frame, direction)
@@ -563,6 +583,21 @@ class Montagem(ProvedorVoz):
                 return
             if i in self._emitir:
                 self._emitir[i](i, t, d)
+
+    def retomar_sem_humano(self, id_chamada: str, motivo: str) -> bool:
+        """A transferência não chegou a um humano: a Conversa do roteiro volta e fala o pedido de desculpas pelo
+        Pipecat (falar_agora). Sessão do fluxo (voz/fluxo.py) ainda não sabe voltar: False (abandono, como antes)."""
+        s = self.sessoes.get(id_chamada)
+        if s is None:
+            return False
+        voltar = getattr(s.conversa, "retomar_sem_humano", None)
+        falar = getattr(s.conversa, "falar_agora", None)
+        if voltar is None or falar is None:
+            return False
+        falas = voltar(motivo)
+        for fala in falas:
+            falar(fala)
+        return bool(falas)
 
     def encerrar(self, id_chamada: str) -> None:
         s = self.sessoes.pop(id_chamada, None)
