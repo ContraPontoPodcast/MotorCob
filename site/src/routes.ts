@@ -33,6 +33,7 @@ export default [
     route('empresa/membros', 'routes/empresa-membros.tsx'),
     route('empresa/pessoas', 'routes/empresa-pessoas.tsx'),
     route('empresa/modulos', 'routes/empresa-modulos.tsx'),
+    route('empresa/uso-ia', 'routes/empresa-uso-ia.tsx'),
     route('empresa/faturamento', 'routes/empresa-faturamento.tsx'),
     route('empresa/contratacao', 'routes/empresa-contratacao.tsx'),
     route('conta', 'routes/conta.tsx'),

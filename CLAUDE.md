@@ -795,6 +795,24 @@ CPC). volta/dia_ciclo vêm do passo exportado (`escolhas.csv` ganhou a coluna `p
 so_canal, so_regua, so_cluster, so_persona)`, `contato_por_posicao`, `respostas_por_hora` (Mensageria, hora de Brasília);
 `limpar_recuperacao(dias)` só do servidor. Site: Resultados › Painel › "Recuperação por canal e persona".
 
+SQL 78 (etapa 4 da IA: créditos de IA, decisão do dono 07/11/2026; SPEC do Especialista §11): franquia de créditos por ciclo
+do faturamento da empresa (`cobranca_itens.franquia_padrao` = 100 no item `ia_creditos`; `precos_empresa.franquia`, nulo = a
+do item, herdada pela vigência nova) e excedente a preço único (tabela R$ 1,90, nunca abaixo de `preco_minimo_ia`; impostos =
+`parametros_margem.impostos_pct`, nada fixo). Pesos em `ia_creditos_funcoes` (análise 2 · Descrever 2 · pergunta 1 · pré-análise,
+standby, explicar, respostas por opção e cache 0; mudar peso = commit). `ia_creditos_uso` (só quantidade; `pedido_ref` único
+`esp:analise:<id>`…): `reservar_creditos_ia` (site: quem vê a empresa; Descrever pede `editar_orquestracao`; standby só do
+servidor) → `confirmar_creditos_ia` na transação do resultado (crédito em `consumo_mensageria` na competência do ciclo; custo
+real em `consumo_ia`, `ia_creditos` ou `ia_sem_credito`, uma vez) ou `estornar_creditos_ia`; reserva parada 15 min deixa de contar
+e o plantão estorna (`estornar_creditos_ia_vencidos`, a cada 10 min); `registrar_uso_ia` = reserva + confirma (servidor). Avisos
+no sino em 80% e 100%, uma vez por ciclo (chave `creditos_ia:<empresa>:<competência>:<nível>`). Nunca bloqueia, salvo o teto do
+Master (`empresa_limites_ia`, `salvar_limites_creditos_ia`). Fatura: "Créditos de IA (franquia de N, incluída no contrato)" sem
+valor + "Créditos de IA excedentes · N × R$ X" (`linhas_fatura_creditos_ia` dentro de `previa_fatura`); `margem_ia` compara a
+receita do excedente com o custo só das unidades pagas; `margem_creditos_ia` mostra ao Master a franquia (custo na
+mensalidade), o excedente e o custo do sistema. Site: contador e aviso em `components/ia/creditos-ia.tsx` (regras em
+`lib/creditos-ia.ts`, `rotuloCreditos` para os botões das etapas 5 e 6), Empresa › Uso de IA (`/empresa/uso-ia`, view
+`ia_creditos_ciclo` + `uso_ia_empresa`) e Console › Margem › Itens de IA › Créditos. Os itens de IA que já existiam
+(`ia_geracao_fluxo`, roleplay, Speech Analytics) seguem como estão. Se o SQL 61 ou o 69 rodarem de novo, rode o 78 depois.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

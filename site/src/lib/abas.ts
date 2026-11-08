@@ -6,7 +6,7 @@ import {
 	Building, Users, Plug, Receipt, ScrollText,
 	HeartPulse, Mail, TrendingUp, Filter,
 	CircleDollarSign, MessagesSquare, Phone,
-	Mic, AudioLines, PhoneCall,
+	Mic, AudioLines, PhoneCall, Sparkles,
 } from 'lucide-react';
 import type { AreaRota } from './area-rota';
 import { PERM } from './permissoes';
@@ -185,6 +185,7 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Contatos', to: '/empresa/contatos', icon: MessageCircle },
 					{ nome: 'Pessoas e perfis', to: '/empresa/pessoas', icon: Users },
 					{ nome: 'Integrações', to: '/empresa/integracoes', icon: Plug, match: ['/empresa/modulos'] },
+					{ nome: 'Uso de IA', to: '/empresa/uso-ia', icon: Sparkles },
 					{ nome: 'Faturas', to: '/empresa/faturamento', icon: Receipt, perm: PERM.verFaturamento },
 					{ nome: 'Contratação', to: '/empresa/contratacao', icon: Receipt, permConsole: ['editar_contratacao', 'editar_precos'] },
 					{ nome: 'Auditoria', to: '/empresa/auditoria', icon: ScrollText, perm: PERM.verAuditoria },

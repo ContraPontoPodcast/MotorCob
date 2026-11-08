@@ -1538,6 +1538,7 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
         from nuvem import emails
         from nuvem import assistente as _assistente
         _assistente.teto(sb, out)                         # 80% e 100% do teto do Assistente no mês (SQL 43)
+        _estornar_creditos_ia(sb, out)                    # reserva de crédito de IA parada há 15 min (SQL 78)
         emails.avisos(sb, out)                            # avisos do sino que viram e-mail (SQL 42)
     relatorios.exportar(sb, out)                          # um arquivo grande por rodada (SQL 39)
     _foto_carteira(sb, dados, agora, out)
@@ -1574,6 +1575,18 @@ def rodar_mensageria(sb: Supabase, dados: Path, agora: datetime | None = None, o
                 pass
             marca.write_text(hoje, encoding="utf-8")
     return resumo
+
+
+def _estornar_creditos_ia(sb: Supabase, out=print) -> int:
+    """Créditos de IA (SQL 78): estorna a reserva que ficou mais de 15 minutos sem resultado (falha da VM, aba
+    fechada no meio). Banco sem o SQL 78: não faz nada."""
+    try:
+        n = int(sb.rpc("estornar_creditos_ia_vencidos") or 0)
+    except Exception:  # noqa: BLE001 — banco ainda sem o SQL 78
+        return 0
+    if n:
+        out(f"créditos de IA: {n} reserva(s) vencida(s) estornada(s)")
+    return n
 
 
 def _foto_carteira(sb: Supabase, dados: Path, agora: datetime | None, out=print) -> None:

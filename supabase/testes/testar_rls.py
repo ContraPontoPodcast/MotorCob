@@ -633,7 +633,7 @@ checar("fatura paga não conta como vencida", True, f"select faturas_vencidas fr
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional
 SVC = "service_role"
-checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 26)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59) + Speech Analytics (SQL 60)
+checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 28)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59) + Speech Analytics (SQL 60) + créditos de IA e IA sem crédito (SQL 78)
 checar("cliente não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", u["admina"])
 checar("Atendimento não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", SUP)
 checar("ninguém grava preço direto na tabela", False, f"insert into public.precos_empresa (empresa_id,item,modelo,preco) values ({EA},'sms','flat',0.01)", "authenticated", u["admin"])
@@ -2856,6 +2856,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 77: recuperação por ação (testar_recuperacao.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 78 · Créditos de IA: franquia, reserva/confirmação/estorno, avisos, teto, fatura e margem (aplica o 78 duas vezes)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_creditos_ia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 78: créditos de IA (testar_creditos_ia.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
