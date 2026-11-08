@@ -1,6 +1,7 @@
 // Cabeçalho das telas do Agente de voz (Agente Voz/CX) com as sub-abas. "Configuração do canal" e "Modelos de mensagem"
 // saíram daqui: ficam em Cobrança › Configurações › Canais e em Frases. "Roteiro (antigo)" aparece enquanto nenhum fluxo
-// está em uso na carteira. O "← Agente de voz" das subtelas vem do PageHeading (lib/rota-pai.ts).
+// está em uso na carteira. O "← Agente de voz" das subtelas vem do PageHeading (lib/rota-pai.ts). A marca do topo diz
+// "Agente Voz/CX › Agente de voz" (revisão U16), também no modo de demonstração.
 import type { ReactNode } from 'react';
 import { PageHeading } from '@/components/app-shell';
 import { SubAbas } from '@/components/voz/ui';
@@ -10,7 +11,7 @@ export function CabecalhoAgente({ titulo, desc, atual, acoes, titleExtra, roteir
 	const { rota, demo } = useFluxo();
 	return (
 		<>
-			<PageHeading title={titulo} description={desc} actions={acoes} titleExtra={titleExtra} semControles={demo} />
+			<PageHeading area="Agente Voz/CX › Agente de voz" title={titulo} description={desc} actions={acoes} titleExtra={titleExtra} semControles={demo} />
 			{atual && (
 				<SubAbas atual={atual} itens={[
 					{ id: 'lista', nome: 'Fluxos', to: rota('lista') },

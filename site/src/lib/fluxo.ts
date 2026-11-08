@@ -19,12 +19,13 @@ export interface Definicao { esquema: 1; blocos: Bloco[] }
 export type SituacaoVersao = 'rascunho' | 'aprovado_empresa' | 'em_uso' | 'arquivado';
 export type TipoAgente = 'localizador' | 'negociador' | 'ambos';
 
-/** Modos com nomes simples (decisão do dono); o nome antigo aparece só na gaveta, para quem já aprendeu. */
+/** Modos com nomes simples (decisão do dono); o nome antigo aparece só na gaveta, para quem já aprendeu. As cores de
+ * "Fala fixa" (cinza do texto) e "Sistema" (laranja) ficam bem diferentes no claro e no escuro (revisão U5). */
 export const MODOS: Record<Modo, { nome: string; antigo: string; cor: string; desc: string }> = {
-	arvore: { nome: 'Fala fixa', antigo: 'Árvore', cor: 'var(--base-texto-3)', desc: 'Fala roteirizada, opções e ramos. Previsível e auditável.' },
+	arvore: { nome: 'Fala fixa', antigo: 'Árvore', cor: 'var(--base-texto-2)', desc: 'Fala roteirizada, opções e ramos. Previsível e auditável.' },
 	cognicao: { nome: 'Entende e escolhe', antigo: 'Cognição', cor: '#2F6FD6', desc: 'Entende a intenção e os dados da fala e leva ao ramo certo. A fala continua roteirizada.' },
 	generativo: { nome: 'Conversa livre (IA)', antigo: 'Generativo', cor: '#8A4FC4', desc: 'A IA conversa rumo a um objetivo, só com as ferramentas e os limites desta etapa. Devolve o controle ao roteiro pelas saídas.' },
-	sistema: { nome: 'Sistema', antigo: 'Sem fala', cor: '#8E9AA6', desc: 'Chama API, testa condição ou registra. Não fala com a pessoa.' },
+	sistema: { nome: 'Sistema', antigo: 'Sem fala', cor: '#B8662F', desc: 'Chama API, testa condição ou registra. Não fala com a pessoa.' },
 };
 
 export const TIPOS_AGENTE: Record<TipoAgente, string> = { localizador: 'Localizador', negociador: 'Negociador', ambos: 'Localizador + Negociador' };
@@ -78,16 +79,33 @@ export const VARIAVEIS = ['primeiro_nome', 'credor', 'saldo', 'dias_atraso', 've
 	'parcelas_max', 'desconto_max', 'assessoria', 'oferta.id', 'oferta.parcelas', 'oferta.valor_parcela', 'oferta.desconto_pct',
 	'oferta.vencimento', 'oferta.valor_total', 'oferta.entrada'] as const;
 
-/** Regras fixas (travas): nenhum fluxo desliga. */
+/**
+ * As 7 travas (regras fixas): ficam no executor (voz/fluxo.py, docstring) e no validador (voz/fluxo_validador.py), não
+ * no fluxo; nenhum fluxo desliga. É a lista única do site: a faixa do editor, a gaveta e o "Descrever" leem esta.
+ * O texto diz só o que o código já garante hoje.
+ */
 export const TRAVAS: [string, string][] = [
-	['Não fala de valor antes de confirmar a identidade.', 'O validador recusa um fluxo em que valor, oferta ou credor vem antes de Confirmar identidade em algum caminho. Na ligação, o executor também corta.'],
-	['Nunca pede senha nem número de cartão.', 'Vale para a fala fixa e para a conversa livre: a resposta da IA passa por um filtro antes de virar voz.'],
-	['Atende "não me ligue" na hora.', 'Em qualquer etapa e em qualquer modo: grava o opt-out e encerra.'],
-	['Para terceiro, só recado neutro.', '"Peço que {{primeiro_nome}} retorne para a {{assessoria}}." Sem valor, sem credor, sem motivo.'],
+	['Valor, oferta e credor só depois da identidade.', 'O validador recusa um fluxo em que valor, oferta ou credor vem antes de Confirmar identidade em algum caminho. Na ligação, o executor também troca a fala pelo recado neutro.'],
+	['Nunca pede senha nem número de cartão.', 'Vale para a fala fixa e para a IA: a resposta passa por um filtro antes de virar voz. Se a pessoa oferecer, ouve: "O pagamento é sempre pelo link."'],
+	['"Não me ligue" encerra na hora.', 'Em qualquer etapa e em qualquer modo: grava o opt-out e se despede.'],
+	['Terceiro só ouve recado neutro.', '"Peço que {{primeiro_nome}} retorne para a {{assessoria}}." Sem valor, sem credor, sem motivo.'],
 	['Nunca passa da alçada.', 'Desconto, parcelas e entrada ficam dentro da alçada da carteira, também para as ofertas que vêm do CRM.'],
-	['Transfere para humano a qualquer momento.', 'Por SIP, para o discador de vocês, com o ID do cliente e o motivo no cabeçalho.'],
-	['A conversa livre nunca inventa oferta.', 'Só usa as ofertas que vieram do conector ou da alçada da carteira.'],
+	['"Quero falar com uma pessoa" transfere.', 'A qualquer momento, por SIP, para o discador de vocês, com o ID do cliente e o motivo. Sem atendente livre, a pessoa volta ao agente.'],
+	['A IA só usa as ofertas que recebeu.', 'Só as ofertas do conector ou da alçada da carteira. Número fora delas é trocado antes de virar voz.'],
 ];
+
+/**
+ * "Em qualquer momento da ligação": o que o executor faz antes de qualquer etapa (voz/fluxo.py › _travas e
+ * _tentar_de_novo). Só o que existe hoje; o que ainda não existe fica em SEMPRE_AINDA_NAO, dito como tal.
+ */
+export const SEMPRE: [string, string][] = [
+	['"Não me ligue mais"', 'Grava o opt-out e encerra.'],
+	['"Quero falar com uma pessoa"', 'Transfere para um atendente. Sem atendente livre, volta ao agente.'],
+	['Fala senha ou número de cartão', '"Não precisa me passar senha nem número de cartão. O pagamento é sempre pelo link."'],
+	['Silêncio ou resposta que o agente não entende', 'Pede para repetir até as tentativas da etapa. Depois, segue a saída da etapa.'],
+];
+/** Casos que ainda não têm tratamento próprio no executor (plano do redesenho: B2 e B4). Mostrados como "ainda não". */
+export const SEMPRE_AINDA_NAO = 'Ainda sem tratamento próprio: tema sensível (falecimento, doença, golpe), CPF dito pela pessoa, caixa postal e silêncio separado de "não entendi". Hoje, esses casos seguem o caminho da etapa.';
 
 /** Nomes legíveis das travas que o executor registra (voz_fluxo_passos.trava, travas_voz()). */
 export const NOMES_TRAVA: Record<string, string> = {
@@ -204,9 +222,33 @@ export function quadroPorRamos(d: Definicao): Ramo[] {
 	if (soltos.length) ramos.push({ nome: 'Sem ligação', blocos: soltos.sort((a, b) => numeroId(a.id) - numeroId(b.id)), tipo: 'solto' });
 	return ramos;
 }
-/** "Sou eu → N2" ou, para um final compartilhado, "Sou eu ↪ N13". */
-export function textoSaida(s: Saida, compartilhados: Set<string>): string {
-	return `${s.rotulo} ${compartilhados.has(s.para) ? '↪' : '→'} ${s.para}`;
+/**
+ * Nome de cada etapa para as setas (revisão U1: "Sou eu → Confirmar identidade" no lugar de "→ N2"). É o título da
+ * etapa; quando duas etapas têm o mesmo nome, o código entra entre parênteses só nelas ("Encerrar (N12)").
+ */
+export function nomesEtapas(d: Definicao): Map<string, string> {
+	const conta = new Map<string, number>();
+	for (const b of d.blocos) { const t = tituloBloco(b); conta.set(t, (conta.get(t) ?? 0) + 1); }
+	return new Map(d.blocos.map(b => { const t = tituloBloco(b); return [b.id, (conta.get(t) ?? 0) > 1 ? `${t} (${b.id})` : t]; }));
+}
+/** Título do ramo em linguagem de conversa: 'Se disser "Já paguei"', 'Se a conversa terminar em "Sem acordo"',
+ * 'Se Buscar ofertas falhar'. O caminho principal, os finais e os soltos ficam com o nome de sempre. */
+export function tituloRamo(r: Ramo, d: Definicao): string {
+	if (r.tipo !== 'ramo' || /^Se /.test(r.nome)) return r.nome;
+	const origem = d.blocos.find(b => b.id === r.origem);
+	if (origem?.tipo === 'generativa') return `Se a conversa terminar em "${r.nome}"`;
+	if (origem?.modo === 'sistema') return `Se der "${r.nome}"`;
+	return `Se disser "${r.nome}"`;
+}
+/** Nome do destino de uma saída; destino que não existe mais aparece como tal (nunca o código cru). */
+export const nomeDestino = (nomes: Map<string, string>, para: string) => nomes.get(para) ?? 'etapa que não existe mais';
+/** "Sou eu → Confirmar identidade". */
+export function textoSaida(s: Saida, nomes: Map<string, string>): string {
+	return `${s.rotulo} → ${nomeDestino(nomes, s.para)}`;
+}
+/** Os caminhos que chegam a uma etapa ("Sou eu", de Abertura): o que fica sem destino se ela for removida. */
+export function caminhosPara(d: Definicao, id: string): { de: string; rotulo: string }[] {
+	return d.blocos.filter(b => b.id !== id).flatMap(b => b.saidas.filter(s => s.para === id).map(s => ({ de: b.id, rotulo: s.rotulo })));
 }
 
 /** Quanto do fluxo é feito em cada modo (gaveta do fluxo). Percentuais inteiros que somam 100. */
@@ -255,7 +297,7 @@ const TEXTOS: Record<string, string> = {
 	abertura_repetida: 'O fluxo tem mais de uma Abertura.',
 	inalcancavel: 'Nenhum caminho chega a esta etapa.',
 	terceiro_sem_recado: 'Quando atende outra pessoa, o fluxo tem de ir direto para Encerrar com recado neutro.',
-	valor_antes_identidade: 'Fala de valor, oferta ou credor antes de Confirmar identidade em algum caminho.',
+	valor_antes_identidade: 'Esta etapa fala de valor, oferta ou credor e algum caminho chega aqui antes de Confirmar identidade.',
 	ciclo_sem_limite: 'Há uma volta sem limite: defina "repetir no máximo" numa das etapas da volta.',
 	identidade_sem_conferencia: 'Escolha o conector "Validar cadastro" do CRM: só ele confere a identidade.',
 	conector_inativo: 'O conector desta etapa não foi escolhido ou não está ativo (testado pela equipe MotorCX).',
@@ -267,6 +309,28 @@ const TEXTOS: Record<string, string> = {
 	roleplay_reprovadas: 'conversas com personas não chegaram ao resultado esperado.',
 	roleplay_acordo_caiu: 'O acordo simulado caiu em relação à versão em uso.',
 };
+/** "O que corrigir": o que fazer em cada pendência de etapa ou do fluxo (o texto de TEXTOS diz o quê; este, o como). */
+const COMO_CORRIGIR: Record<string, string> = {
+	sem_saida: 'Ligue as respostas desta etapa a uma próxima etapa, ou troque por Encerrar ou Transferir.',
+	saida_faltando: 'Escolha para onde vai cada resposta obrigatória desta etapa.',
+	saida_inexistente: 'Escolha de novo o destino da resposta: a etapa de antes foi removida.',
+	inalcancavel: 'Ligue uma resposta de outra etapa a esta, ou remova a etapa.',
+	valor_antes_identidade: 'Tire o credor, o valor e a oferta desta fala, ou ligue esta etapa só depois de "Confirmou" em Confirmar identidade. Se quem atende não for a pessoa, ela saberia de quem é a dívida (trava 1).',
+	params_invalidos: 'Preencha a fala e as opções desta etapa.',
+	generativo_sem_objetivo: 'Escreva o objetivo da conversa, como orientaria um bom negociador (pelo menos 20 caracteres).',
+	transferir_humano_desligado: 'Ligue a ferramenta "Transferir para humano".',
+	fala_pede_senha: 'Tire o pedido de senha ou de cartão da fala. O pagamento é sempre pelo link.',
+	identidade_sem_conferencia: 'Escolha o conector "Validar cadastro" do CRM nesta etapa.',
+	conector_inativo: 'Escolha um conector ativo. Quem testa e ativa os conectores é a equipe MotorCX (Empresa › Integrações).',
+	conector_finalidade: 'Escolha um conector com a finalidade desta etapa.',
+	sem_alcada: 'Cadastre a alçada da carteira (desconto, parcelas e parcela mínima).',
+	terceiro_sem_recado: 'Ligue "Não é a pessoa" da Abertura direto a Encerrar com recado neutro.',
+	ciclo_sem_limite: 'Abra uma das etapas da volta e defina "repetir no máximo".',
+	modo_incompativel: 'Escolha um modo que vale para este tipo de etapa.',
+	fala_longa: 'Encurte a fala: ao telefone, frases curtas são mais bem entendidas.',
+	caso_falhou: 'Abra Testar conversa e veja o caso de teste que falhou.',
+};
+export const comoCorrigir = (codigo: string): string => COMO_CORRIGIR[codigo.split(':')[0]] ?? '';
 /** Código do banco ('sem_saida:N9', 'sem_alcada', 'roleplay_reprovadas:3') → texto da tela. Avisos do roleplay nunca impedem. */
 export function explicar(codigo: string): Pendencia {
 	const [base, arg] = codigo.split(':');
@@ -340,8 +404,50 @@ export function validarLocal(d: Definicao): string[] {
 			for (const s of b?.saidas ?? []) if (porId.has(s.para) && !alc.has(s.para)) { alc.add(s.para); fila.push(s.para); }
 		}
 		for (const b of d.blocos) if (!alc.has(b.id)) out.add(`inalcancavel:${b.id}`);
+		for (const id of antesDaIdentidade(d, aberturas[0].id)) if (sensivel(porId.get(id) as Bloco)) out.add(`valor_antes_identidade:${id}`);
 	}
 	return [...out].sort();
+}
+
+// Trava 1 (valor_antes_identidade): cópia de voz/fluxo_validador.py (_alcance com "pular" e _sensivel), para o site
+// avisar enquanto se edita. O banco continua decidindo (public.fluxo_voz_erros).
+/** TIPOS_SENSIVEIS do validador: falar disso já é falar de valor ou oferta. */
+const TIPOS_SENSIVEIS: readonly TipoBloco[] = ['oferta', 'generativa', 'registrar', 'link'];
+/** VARIAVEIS_LIVRES do validador: as únicas que podem ser ditas antes da identidade. */
+const VARIAVEIS_LIVRES = ['primeiro_nome', 'assessoria'];
+export const VARIAVEIS_SENSIVEIS: readonly string[] = VARIAVEIS.filter(v => !VARIAVEIS_LIVRES.includes(v));
+/** Nomes entre {{ }} na ordem (trechos_variaveis do validador: o conteúdo vai até o 1º "}" e precisa de "}}"). */
+export function variaveisDoTexto(texto: string): string[] {
+	const out: string[] = [];
+	let p = 0, fecha = -1;
+	while (p < texto.length - 1) {
+		if (texto[p] === '{' && texto[p + 1] === '{') {
+			if (fecha < p + 2) { fecha = texto.indexOf('}', p + 2); if (fecha < 0) break; }
+			if (texto[fecha + 1] === '}') { out.push(texto.slice(p + 2, fecha).replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, '')); p = fecha + 2; continue; }
+		}
+		p++;
+	}
+	return out;
+}
+/** Textos que viram fala ou orientam a IA (textos_do_bloco do validador). */
+const textosDoBloco = (b: Bloco) => (['fala', 'fala_espera', 'objetivo'] as const).map(k => b.params?.[k]).filter((t): t is string => typeof t === 'string');
+/** Variáveis sensíveis que a etapa diz (vazio = nenhuma). */
+export const variaveisSensiveis = (b: Bloco) => [...new Set(textosDoBloco(b).flatMap(variaveisDoTexto).filter(v => VARIAVEIS_SENSIVEIS.includes(v)))];
+/** A etapa fala de valor, oferta ou credor (pelo tipo ou por uma variável sensível)? */
+export const sensivel = (b: Bloco) => TIPOS_SENSIVEIS.includes(b.tipo) || variaveisSensiveis(b).length > 0;
+/** Etapas que a conversa alcança a partir da Abertura sem passar por "Confirmou" de uma Confirmar identidade. */
+export function antesDaIdentidade(d: Definicao, inicio: string): Set<string> {
+	const porId = new Map(d.blocos.map(b => [b.id, b]));
+	const vis = new Set([inicio]);
+	const fila = [inicio];
+	while (fila.length) {
+		const o = porId.get(fila.shift() as string);
+		for (const s of o?.saidas ?? []) {
+			if (o!.tipo === 'identidade' && s.quando === 'confirmou') continue;
+			if (porId.has(s.para) && !vis.has(s.para)) { vis.add(s.para); fila.push(s.para); }
+		}
+	}
+	return vis;
 }
 
 // ---------------------------------------------------------------- desempenho (voz_fluxo_metricas_dia, só contagens)

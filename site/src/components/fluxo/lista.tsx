@@ -62,7 +62,7 @@ export function ListaFluxos() {
 
 	const emUsoDaCarteira = !!dados?.versoes.some(v => v.situacao === 'em_uso' && (v.credor_id ?? null) === (credor?.id ?? null));
 	const heading = (atual = true) => (
-		<CabecalhoAgente titulo="Agente virtual" desc="Um fluxo de conversa por carteira." atual={atual ? 'lista' : undefined} roteiroAntigo={!emUsoDaCarteira}
+		<CabecalhoAgente titulo="Agente de voz" desc="Um fluxo de conversa por carteira." atual={atual ? 'lista' : undefined} roteiroAntigo={!emUsoDaCarteira}
 			acoes={perm.editar ? <Botao onClick={() => setGaveta('novo')}><Plus size={15} aria-hidden /> Novo fluxo</Botao> : undefined} />
 	);
 

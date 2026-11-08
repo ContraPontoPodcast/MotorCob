@@ -1,4 +1,5 @@
-// Tela 2 · Agente virtual › Editor do fluxo. Quadro por ramos (caminho principal em cima, ramos embaixo, saídas "→ N5").
+// Tela 2 · Agente de voz › Editor do fluxo. Faixa das 7 travas e "Em qualquer momento da ligação" no topo; quadro por
+// ramos (caminho principal em cima, ramos embaixo, saídas "Sim → nome da etapa").
 // Cada mudança de etapa salva o rascunho (salvar_fluxo_voz: rascunho edita no lugar; versão aprovada ou em uso vira
 // rascunho novo). As pendências vêm do banco: fluxo_voz_bloqueios (validador + conectores + alçada + intenções + casos
 // de teste) e fluxo_voz_avisos (roleplay, só aviso). "Enviar para aprovação" (enviar_fluxo_voz_aprovacao, SQL 66)
@@ -11,15 +12,16 @@ import { Loading, Notice } from '@/components/app-shell';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { Aviso, Botao, Passos, Pilula, Vazio } from '@/components/voz/ui';
 import {
-	ORDEM_TIPOS, SITUACOES, TIPOS, TIPOS_AGENTE, TRAVAS, dataCurta, estadoEnvio, explicar, impedem, novoBloco, removerBloco, resumoPendencias, trocarBloco,
+	ORDEM_TIPOS, SITUACOES, TIPOS, TIPOS_AGENTE, comoCorrigir, dataCurta, estadoEnvio, explicar, impedem, nomesEtapas, novoBloco, removerBloco, resumoPendencias, trocarBloco,
 	type Bloco, type Definicao, type TipoBloco,
 } from '@/lib/fluxo';
 import { BarraEnvio, LegendaModos, Quadro, type Marca } from './quadro';
 import { GavetaEtapa } from './etapa';
-import { Acoes, Gaveta, Linhas, Regras, Seg, Selo } from './ds';
+import { Acoes, Gaveta, Linhas, Regras, Seg } from './ds';
+import { EmQualquerMomento, FaixaTravas } from './travas';
 import { CabecalhoAgente } from './cabecalho';
 import { useFluxo, usePermissoesFluxo } from './contexto';
-import { GavetaAlcada, GavetaComoLer, GavetaTravas, executar, mensagem, useCarregar, useNomeCarteira } from './comum';
+import { GavetaAlcada, GavetaComoLer, executar, mensagem, useCarregar, useNomeCarteira } from './comum';
 import { GavetaDescrever } from './lista';
 
 const PASSOS = [
@@ -34,7 +36,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	const navigate = useNavigate();
 	const nomeCarteira = useNomeCarteira();
 	const [vista, setVista] = useState<'quadro' | 'lista'>('quadro');
-	const [gaveta, setGaveta] = useState<null | 'paleta' | 'pendencias' | 'travas' | 'modos' | 'versoes' | 'descrever' | 'alcada' | { etapa: string }>(null);
+	const [gaveta, setGaveta] = useState<null | 'paleta' | 'pendencias' | 'modos' | 'versoes' | 'descrever' | 'alcada' | { etapa: string }>(null);
 	const [ocupado, setOcupado] = useState(false);
 	const [confirma, setConfirma] = useState<null | 'aprovar' | 'usar'>(null);
 
@@ -99,6 +101,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 		setOcupado(false); setConfirma(null); void recarregar();
 	}
 
+	const nomes = nomesEtapas(def);
 	const etapaSel = gaveta && typeof gaveta === 'object' ? def.blocos.find(b => b.id === gaveta.etapa) ?? null : null;
 	const grupos = ['Conversa', 'Integração', 'Controle'] as const;
 
@@ -125,6 +128,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 					<Aviso tom="info" titulo={`Há um rascunho (v${rascunhoAberto.versao}) deste fluxo.`}>As mudanças são feitas nele. <button type="button" className="font-semibold underline" onClick={() => navigate(rota('editor', rascunhoAberto.id))}>Abrir o rascunho</button></Aviso>
 				)}
 				{v.situacao === 'rascunho' && v.enviado_aprovacao_em && <Aviso tom="info" titulo={`Enviado para aprovação em ${dataCurta(v.enviado_aprovacao_em)}.`}>Mudar uma etapa cancela o envio: quem aprova precisa ver a versão nova.</Aviso>}
+				<FaixaTravas />
 				{pend.length > 0 ? (
 					<Aviso tom="erro" titulo={`${pend.length} ${pend.length === 1 ? 'pendência impede' : 'pendências impedem'} o envio para aprovação.`}>
 						{resumoPendencias(pend.map(p => p.codigo))} <button type="button" className="ml-1 font-semibold underline" onClick={() => setGaveta('pendencias')}>Ver pendências</button>
@@ -138,10 +142,10 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 					<Acoes>
 						{editavel && <Botao secundario onClick={() => setGaveta('paleta')} disabled={ocupado}><Plus size={14} aria-hidden /> Adicionar etapa</Botao>}
 						<button type="button" onClick={() => setGaveta('modos')} className="inline-flex h-8 items-center rounded-lg px-3 text-[12.5px] font-semibold text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]">Como ler</button>
-						<Selo onClick={() => setGaveta('travas')}>Regras fixas ({TRAVAS.length})</Selo>
 					</Acoes>
 				</div>
 				<LegendaModos />
+				<EmQualquerMomento />
 				{def.blocos.length ? <Quadro definicao={def} marcas={marcas} vista={vista} onAbrir={id => setGaveta({ etapa: id })} />
 					: <Vazio titulo="Fluxo sem etapas.">Use "Adicionar etapa" para começar pela Abertura.</Vazio>}
 			</div>
@@ -168,8 +172,8 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 			</Gaveta>
 			<Gaveta aberta={gaveta === 'pendencias'} onFechar={() => setGaveta(null)} titulo={`Pendências da v${v.versao}`} sub={`${pend.length} ${pend.length === 1 ? 'impede' : 'impedem'} o envio para aprovação${avisos.length ? ` · ${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}` : ''}`}>
 				<Linhas itens={[...bloqueios, ...avisos].map(explicar).map(p => ({
-					e: <><Pilula tom={p.impede ? 'erro' : 'atencao'}>{p.impede ? 'impede' : 'atenção'}</Pilula> <b className="font-semibold">{p.bloco ? `${p.bloco} · ${tituloDe(def, p.bloco)}` : 'Fluxo'}</b></>,
-					s: p.texto,
+					e: <><Pilula tom={p.impede ? 'erro' : 'atencao'}>{p.impede ? 'impede' : 'atenção'}</Pilula> <b className="font-semibold">{p.bloco ? nomes.get(p.bloco) ?? 'Etapa que não existe mais' : 'Fluxo'}</b></>,
+					s: <>{p.texto}{comoCorrigir(p.codigo) && <span className="block text-[var(--base-texto-3)]">O que corrigir: {comoCorrigir(p.codigo)}</span>}</>,
 					d: p.bloco ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => setGaveta({ etapa: p.bloco! })}>Abrir</button>
 						: p.codigo === 'sem_alcada' ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => setGaveta('alcada')}>Alçada</button>
 						: p.codigo.startsWith('caso_falhou') ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => navigate(rota('testar', null, { versao: v.id }))}>Testar</button>
@@ -177,7 +181,6 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 				}))} />
 				<Regras itens={[['Conectores e intenções do catálogo são da equipe MotorCX.', 'Conector em rascunho ou pausado segura a aprovação até ser testado e ativado (Empresa › Integrações › Conectores do CRM).'], ['Testar com personas é aviso, nunca bloqueio.', 'Sem lote, o envio mostra o aviso "sem teste com personas", mas não segura.']]} />
 			</Gaveta>
-			<GavetaTravas aberta={gaveta === 'travas'} onFechar={() => setGaveta(null)} />
 			<GavetaComoLer aberta={gaveta === 'modos'} onFechar={() => setGaveta(null)} />
 			<Gaveta aberta={gaveta === 'versoes'} onFechar={() => setGaveta(null)} titulo="Versões" sub="Voltar para uma versão arquivada fica na lista de fluxos (quem aprova).">
 				<Linhas itens={versoes.map(x => ({
@@ -199,9 +202,4 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 			/>
 		</>
 	);
-}
-
-function tituloDe(d: Definicao, id: string) {
-	const b = d.blocos.find(x => x.id === id);
-	return b ? (b.titulo || TIPOS[b.tipo]?.nome) : 'etapa removida';
 }

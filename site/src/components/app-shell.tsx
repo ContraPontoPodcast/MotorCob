@@ -393,7 +393,7 @@ export function useAllowed(roles: string[]) {
 	return true;
 }
 
-export function PageHeading({ title, description, actions, titleExtra, semControles }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode; titleExtra?: ReactNode; /** Sem "Buscar cliente" e seletor de carteira (telas fora da Cobrança, ex.: Empresa › Auditoria). */ semControles?: boolean }) {
+export function PageHeading({ title, description, actions, titleExtra, semControles, area }: { eyebrow?: string; /** Rótulo da área no topo (padrão: a área da rota), ex.: "Agente Voz/CX › Agente de voz". */ area?: string; title: string; description?: string; actions?: ReactNode; titleExtra?: ReactNode; /** Sem "Buscar cliente" e seletor de carteira (telas fora da Cobrança, ex.: Empresa › Auditoria). */ semControles?: boolean }) {
 	const { empresa, credor } = useMotorAuth();
 	const areaLabel = useAreaLabel();
 	const contexto = [empresa?.nome, semControles ? null : credor?.nome, dateExtensa()].filter(Boolean).join(' · ');
@@ -401,7 +401,7 @@ export function PageHeading({ title, description, actions, titleExtra, semContro
 		<div className="mb-7 flex flex-wrap items-start justify-between gap-4">
 			<div className="min-w-0">
 				<Voltar />
-				<span className="mc-area-tag mb-1.5">{areaLabel}</span>
+				<span className="mc-area-tag mb-1.5">{area ?? areaLabel}</span>
 				<div className="flex items-center gap-2">
 					<h1 className="mc-page-title text-[24px] font-bold leading-tight tracking-tight">{title}</h1>
 					{titleExtra}

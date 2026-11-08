@@ -116,7 +116,7 @@ export function PedidoGerado({ pedidoId }: { pedidoId: number }) {
 					{textos(r.suposicoes).length > 0 && <Detalhes titulo="O que a IA supôs" qtd={`${textos(r.suposicoes).length}`}><Linhas itens={textos(r.suposicoes).map(s => ({ e: s }))} /></Detalhes>}
 					{textos(r.mudancas).length > 0 && <Detalhes titulo="O que mudou em relação à versão de origem" qtd={`${textos(r.mudancas).length}`}><Linhas itens={textos(r.mudancas).map(s => ({ e: s }))} /></Detalhes>}
 					{pend.length > 0 && <Detalhes titulo="Ajustes no editor" qtd={`${pend.length}`}><Linhas itens={pend.map(x => ({ e: x.bloco ? `${x.bloco}` : 'Fluxo', s: x.texto }))} /></Detalhes>}
-					<Detalhes titulo="Travas aplicadas sem vocês pedirem"><Regras itens={TRAVAS.filter((_, i) => [0, 2, 3, 5, 6].includes(i))} /></Detalhes>
+					<Detalhes titulo={`As ${TRAVAS.length} travas aplicadas sem vocês pedirem`}><Regras itens={TRAVAS} /></Detalhes>
 				</Cartao>
 				<p className="text-[12px] text-[var(--base-texto-3)]">Situação: {situacaoPedido(p)}. {p.tipo === 'ia' && p.geracoes ? `${p.geracoes} ${p.geracoes === 1 ? 'geração' : 'gerações'} no item de IA da fatura.` : ''}</p>
 			</div>

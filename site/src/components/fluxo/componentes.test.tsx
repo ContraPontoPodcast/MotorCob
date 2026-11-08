@@ -1,10 +1,13 @@
 // Componentes do Fluxo do agente renderizados de verdade (react-dom/server), sem banco: o editor não deixa enviar para
-// aprovação com pendência de validação, o quadro por ramos mostra "→ N5"/"↪ N13" e marca a etapa que impede.
+// aprovação com pendência de validação, o quadro por ramos mostra as setas com o nome da etapa e marca a que impede,
+// as 7 travas ficam à vista e o "O que corrigir" diz o quê e como.
 // npm test (site/scripts/testar-componentes.mjs empacota com esbuild e roda com node --test)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { estadoEnvio, resumoPendencias, validarLocal, type Definicao } from '@/lib/fluxo';
+import { SEMPRE, TRAVAS, estadoEnvio, resumoPendencias, trocarBloco, validarLocal, type Definicao } from '@/lib/fluxo';
+import { EmQualquerMomento, FaixaTravas } from '@/components/fluxo/travas';
+import { OQueCorrigir, textoCredorAntes } from '@/components/fluxo/etapa';
 import { BarraEnvio, Quadro, type Marca } from '@/components/fluxo/quadro';
 import { criarApiFixturas, definicaoV5 } from '@/components/fluxo/fixturas';
 import { MemoryRouter } from 'react-router';
@@ -42,7 +45,7 @@ test('editor: quem só edita não vê "Colocar em uso"; quem aprova vê', () => 
 	assert.match(renderToStaticMarkup(<BarraEnvio situacao="aprovado_empresa" estado={ok} podeEditar={false} podeAprovar onEnviar={nada} onAprovar={nada} onUsar={nada} />), /Colocar em uso<\/button>/);
 });
 
-test('quadro por ramos: caminho principal, ramos, saídas "→ N" e "↪ N" e a etapa que impede', () => {
+test('quadro por ramos: caminho principal, ramos, setas com o nome da etapa e a etapa que impede', () => {
 	const d: Definicao = definicaoV5();
 	const marcas = new Map<string, Marca>(validarLocal(d).map(e => [e.split(':')[1], 'erro'] as [string, Marca]).filter(([id]) => !!id));
 	const html = renderToStaticMarkup(<Quadro definicao={d} marcas={marcas} vista="quadro" onAbrir={nada} />);
@@ -50,12 +53,57 @@ test('quadro por ramos: caminho principal, ramos, saídas "→ N" e "↪ N" e a 
 	assert.match(html, /aria-label="Já paguei"/);
 	assert.match(html, /aria-label="Finais compartilhados"/);
 	assert.match(html, /aria-label="Sem ligação"/);              // N17: nenhum caminho chega
-	assert.match(html, /Sou eu <b[^>]*>→ N2<\/b>/);
-	assert.match(html, /Não entendi 2× <b[^>]*>↪ N13<\/b>/);
+	// U1: nada de "→ N2" nem "↪ N13"; a seta diz o nome
+	assert.match(html, /Sou eu <span aria-hidden="true">→<\/span><span class="sr-only">, então<\/span> <b[^>]*>Confirmar identidade<\/b>/);
+	assert.match(html, /Não entendi 2× <span aria-hidden="true">→<\/span><span class="sr-only">, então<\/span> <b[^>]*>Transferir · atendente<\/b>/);
+	assert.doesNotMatch(html, /[→↪]\s*(<[^>]+>\s*)*N\d/);
+	assert.doesNotMatch(html, /↪/);
+	assert.match(html, /Se disser &quot;Já paguei&quot;<span[^>]*> · em Entender intenção<\/span>/);
+	// U3: N9 sem saída não aparece como "fim"; os finais dizem "Fim da ligação"
 	assert.match(html, /data-etapa="N9"[^>]*style="[^"]*var\(--estado-erro\)/);
-	assert.match(html, /N9 · Agendar retorno<\/b><span[^>]*>impede</);
+	assert.match(html, />Agendar retorno<\/b><span[^>]*>impede</);
+	const n9 = html.slice(html.indexOf('data-etapa="N9"'), html.indexOf('</button>', html.indexOf('data-etapa="N9"')));
+	assert.match(n9, /Nenhuma resposta ligada/);
+	assert.doesNotMatch(n9, />fim</);
+	assert.match(html, /Fim da ligação/);
+	// U6: cadeado na Abertura, não na conversa livre (IA)
+	const cartao = (id: string) => html.slice(html.indexOf(`data-etapa="${id}"`), html.indexOf('</button>', html.indexOf(`data-etapa="${id}"`)));
+	assert.match(cartao('N1'), /Etapa com trava fixa/);
+	assert.doesNotMatch(cartao('N5'), /Etapa com trava fixa/);
 	const lista = renderToStaticMarkup(<Quadro definicao={d} marcas={marcas} vista="lista" onAbrir={nada} />);
 	assert.match(lista, /<details open=""/);                     // no celular/lista: o caminho principal vem aberto
+});
+
+test('travas: as 7 sempre à vista, numeradas, recolhíveis e sem botão de remover; e "Em qualquer momento da ligação"', () => {
+	const html = renderToStaticMarkup(<FaixaTravas />);
+	assert.match(html, /aria-label="Travas fixas"/);
+	assert.match(html, /7 travas fixas · valem em toda a ligação/);
+	assert.equal((html.match(/<li /g) ?? []).length, 7);
+	TRAVAS.forEach(([t], i) => assert.ok(html.includes(`${i + 1}. ${t.replace(/"/g, '&quot;')}`), t));
+	assert.match(html, /aria-expanded="true"[^>]*>Recolher</);
+	assert.doesNotMatch(html, /Remover|remover/);
+	assert.match(renderToStaticMarkup(<FaixaTravas recolhidaInicial />), /<ol[^>]*hidden=""/);
+	const sempre = renderToStaticMarkup(<EmQualquerMomento />);
+	assert.match(sempre, /Em qualquer momento da ligação/);
+	assert.equal((sempre.match(/<li /g) ?? []).length, SEMPRE.length);
+	assert.match(sempre, /Ainda sem tratamento próprio: tema sensível/);
+});
+
+test('o que corrigir na etapa: credor na abertura aparece ao digitar, com o motivo e como corrigir', () => {
+	const d = definicaoV5();
+	const n1 = d.blocos.find(b => b.id === 'N1')!;
+	const digitado = { ...n1, params: { ...n1.params, fala: 'Olá, aqui é a {{assessoria}}, em nome de {{credor}}. Falo com {{primeiro_nome}}?' } };
+	assert.ok(!validarLocal(d).includes('valor_antes_identidade:N1'));
+	assert.ok(validarLocal(trocarBloco(d, digitado)).includes('valor_antes_identidade:N1'));
+	assert.equal(textoCredorAntes(digitado), 'Esta fala cita {{credor}} antes de confirmar a identidade, em algum caminho.');
+	const html = renderToStaticMarkup(<OQueCorrigir impede texto={textoCredorAntes(digitado)} como="Tire o credor desta fala." />);
+	assert.match(html, /role="alert"/);
+	assert.match(html, /O que corrigir:/);
+	assert.match(html, /impede o envio/);
+	assert.match(html, /Tire o credor desta fala\./);
+	const aviso = renderToStaticMarkup(<OQueCorrigir impede={false} texto="Sem personas." />);
+	assert.match(aviso, /role="status"/);
+	assert.doesNotMatch(aviso, /impede o envio/);
 });
 
 // SQL 68 · a equipe MotorCX monta o fluxo do cliente (cria, edita, duplica, testa e envia), mas não aprova nem coloca em uso

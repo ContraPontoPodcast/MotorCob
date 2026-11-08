@@ -1,8 +1,8 @@
 // Peças comuns das telas do Fluxo do agente: carregar dados, mensagens de erro, nome da carteira e as gavetas que
-// mais de uma tela abre (alçada da carteira, quem edita e aprova, regras fixas, como ler o quadro).
+// mais de uma tela abre (alçada da carteira, quem edita e aprova, como ler o quadro; as travas ficam em travas.tsx).
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { MODOS, TRAVAS } from '@/lib/fluxo';
+import { MODOS } from '@/lib/fluxo';
 import { Botao, campoCls, campoStyle } from '@/components/voz/ui';
 import type { AlcadaRow } from './api';
 import { Campo, Gaveta, Kv, Linhas, Ponto, Regras } from './ds';
@@ -69,10 +69,6 @@ export function GavetaQuem({ aberta, onFechar }: { aberta: boolean; onFechar: ()
 	);
 }
 
-export function GavetaTravas({ aberta, onFechar }: { aberta: boolean; onFechar: () => void }) {
-	return <Gaveta aberta={aberta} onFechar={onFechar} titulo={`Regras fixas · nenhum fluxo desliga`}><Regras itens={TRAVAS} /></Gaveta>;
-}
-
 export function GavetaComoLer({ aberta, onFechar }: { aberta: boolean; onFechar: () => void }) {
 	return (
 		<Gaveta aberta={aberta} onFechar={onFechar} titulo="Como ler o quadro">
@@ -85,8 +81,9 @@ export function GavetaComoLer({ aberta, onFechar }: { aberta: boolean; onFechar:
 				))}
 			</div>
 			<Linhas itens={[
-				{ e: <b>Sim → N5</b>, s: 'saída para outra etapa' },
-				{ e: <b>Não ↪ N13</b>, s: 'atalho para um final compartilhado' },
+				{ e: <>Sou eu → <b>Confirmar identidade</b></>, s: 'o que a pessoa responde e a etapa para onde a conversa vai' },
+				{ e: <b>Fim da ligação</b>, s: 'etapa final (Transferir ou Encerrar)' },
+				{ e: <span className="font-semibold text-[var(--estado-erro-texto)]">Nenhuma resposta ligada</span>, s: 'etapa que não é final e não tem saída: a ligação pararia ali' },
 				{ e: <span className="font-semibold text-[var(--estado-erro-texto)]">impede</span>, s: 'pendência que segura o envio para aprovação' },
 			]} />
 		</Gaveta>
