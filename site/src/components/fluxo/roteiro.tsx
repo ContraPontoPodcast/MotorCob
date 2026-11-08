@@ -3,14 +3,16 @@
 // o que o agente diz · o que o cliente pode responder → então [nome da etapa] · se não entender · se não ouvir nada.
 // Só o que o executor faz hoje (voz/fluxo.py); o que ainda não existe aparece como "Ainda sem tratamento próprio".
 // Os capítulos derivam de quadroPorRamos (site/src/lib/fluxo.ts), sem campo novo na definição. Só apresentação;
-// testado em site/src/components/fluxo/componentes.test.tsx.
+// testado em site/src/components/fluxo/componentes.test.tsx. Desde o PR4, cada etapa traz o "O que corrigir" dela, com
+// o botão de correção de um clique quando há (corrigir.tsx).
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight, Lock, Settings2 } from 'lucide-react';
 import { Pilula } from '@/components/voz/ui';
 import {
-	MODOS, acaoSistema, ehFinal, nomeDestino, nomesEtapas, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, textoVolta,
-	type Bloco, type Capitulo, type Definicao,
+	MODOS, acaoSistema, comoCorrigir, ehFinal, nomeDestino, nomesEtapas, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, textoVolta,
+	type Bloco, type Capitulo, type Definicao, type Pendencia,
 } from '@/lib/fluxo';
+import { OQueCorrigir, type AcaoCorrigir } from './corrigir';
 import { Ponto } from './ds';
 import { temTrava, type Marca } from './quadro';
 
@@ -52,8 +54,10 @@ function Linha({ q, children, fraca }: { q: ReactNode; children: ReactNode; frac
 }
 
 /** Uma etapa do roteiro: o que o agente diz, o que o cliente pode responder e para onde vai. */
-export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir }: {
+export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, pendencias, acao }: {
 	b: Bloco; n: number; definicao: Definicao; nomes: Map<string, string>; numeros: Map<string, number>; marca?: Marca; onAbrir: (id: string) => void;
+	/** Pendências desta etapa (banco), com "O que corrigir" e o botão de correção. */
+	pendencias?: Pendencia[]; acao?: (codigo: string) => AcaoCorrigir | null;
 }) {
 	const p = b.params ?? {};
 	const final = ehFinal(b);
@@ -131,6 +135,12 @@ export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir }
 						<Linha q="Se não ouvir nada" fraca><span className="text-[var(--base-texto-3)]">Ainda sem tratamento próprio: hoje o agente espera a pessoa falar.</span></Linha>
 					</ul>
 				)}
+
+				{pendencias?.length ? (
+					<div className="mt-2.5 space-y-2" aria-label="O que corrigir nesta etapa">
+						{pendencias.map(e => <OQueCorrigir key={e.codigo} impede={e.impede} texto={e.texto} como={comoCorrigir(e.codigo)} acao={acao?.(e.codigo)} />)}
+					</div>
+				) : null}
 			</article>
 		</li>
 	);
@@ -151,8 +161,9 @@ function CabCapitulo({ c, aberto, onTrocar }: { c: Capitulo; aberto: boolean; on
 }
 
 /** O roteiro inteiro: capítulos na ordem da conversa, etapas numeradas de 1 a N. */
-export function Roteiro({ definicao, marcas, onAbrir, recolhidos: recolhidosIniciais }: {
+export function Roteiro({ definicao, marcas, onAbrir, recolhidos: recolhidosIniciais, pendencias, acao }: {
 	definicao: Definicao; marcas: Map<string, Marca>; onAbrir: (id: string) => void; recolhidos?: string[];
+	pendencias?: Map<string, Pendencia[]>; acao?: (codigo: string) => AcaoCorrigir | null;
 }) {
 	const caps = roteiro(definicao);
 	const nomes = nomesEtapas(definicao);
@@ -169,7 +180,7 @@ export function Roteiro({ definicao, marcas, onAbrir, recolhidos: recolhidosInic
 						<CabCapitulo c={c} aberto={aberto} onTrocar={() => trocar(c.id)} />
 						<ol id={`cap-${c.id}`} hidden={!aberto} className="mt-2.5 space-y-2.5">
 							{c.blocos.map(b => (
-								<EtapaRoteiro key={b.id} b={b} n={numeros.get(b.id) ?? 0} definicao={definicao} nomes={nomes} numeros={numeros} marca={marcas.get(b.id)} onAbrir={onAbrir} />
+								<EtapaRoteiro key={b.id} b={b} n={numeros.get(b.id) ?? 0} definicao={definicao} nomes={nomes} numeros={numeros} marca={marcas.get(b.id)} onAbrir={onAbrir} pendencias={pendencias?.get(b.id)} acao={acao} />
 							))}
 						</ol>
 					</section>

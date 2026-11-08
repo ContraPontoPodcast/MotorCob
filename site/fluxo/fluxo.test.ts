@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-	MODOS, SEMPRE, TIPOS, TRAVAS, acaoSistema, caminhosPara, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, textoVolta, comoCorrigir, estadoEnvio, explicar, falaOk, nomesEtapas, textoSaida, tituloRamo, variaveisDoTexto, variaveisSensiveis, funil, impedem, kpisDoFluxo, misturaModos, modoPredominante, nomeAnexo, novoBloco,
+	MODOS, SEMPRE, TIPOS, TRAVAS, acaoSistema, correcaoDe, tirarSensiveisDaFala, caminhosPara, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, textoVolta, comoCorrigir, estadoEnvio, explicar, falaOk, nomesEtapas, textoSaida, tituloRamo, variaveisDoTexto, variaveisSensiveis, funil, impedem, kpisDoFluxo, misturaModos, modoPredominante, nomeAnexo, novoBloco,
 	proximoId, quadroPorRamos, removerBloco, roleplayValido, saidasFaltando, saidasPossiveis, somarMetricas, tipoDaSaida, validarLocal,
 	type Bloco, type Definicao,
 } from '../src/lib/fluxo.ts';
@@ -257,4 +257,55 @@ test('roteiro: volta dita na seta (sem repetir a etapa), "se não entender" igua
 	assert.match(acaoSistema(b('N4')), /^Chama um conector do CRM\. Enquanto espera, diz: "Um instante, por favor\."$/);
 	assert.equal(resultadoFinal(b('N14')), 'resultado: Recado neutro (terceiro)');
 	assert.equal(resultadoFinal(b('N13')), 'transferida: Pediu um atendente');
+});
+
+// ---------------------------------------------------------------- correções de um clique (PR4)
+test('correções de um clique: os mesmos casos que o validador Python confere (tests/dados/fluxo_correcoes_casos.json)', () => {
+	const dados = JSON.parse(readFileSync(new URL('../../tests/dados/fluxo_correcoes_casos.json', import.meta.url), 'utf8')) as {
+		conectores: { id: number; nome: string; finalidade: string; situacao: string }[];
+		casos: { nome: string; codigo: string; botao: string; antes: Definicao; depois: Definicao }[];
+		sem_botao: { nome: string; codigo: string; antes: Definicao }[];
+	};
+	assert.ok(dados.casos.length >= 10 && dados.sem_botao.length >= 3);
+	for (const c of dados.casos) {
+		const k = correcaoDe(c.antes, c.codigo, { conectores: dados.conectores });
+		assert.ok(k, c.nome);
+		assert.deepEqual(k.definicao, c.depois, c.nome);           // a regra não mudou sem regerar os casos
+		assert.equal(k.botao, c.botao, c.nome);
+		assert.ok(k.mudancas.length > 0 && k.mudancas.every(m => m.antes !== m.depois), c.nome);   // sempre mostra o antes → depois
+		const antes = new Set(validarLocal(c.antes));
+		const depois = validarLocal(c.depois);
+		assert.ok(!depois.includes(c.codigo), c.nome);
+		assert.deepEqual(depois.filter(e => !antes.has(e)), [], c.nome);
+		assert.notEqual(k.definicao, c.antes);                    // não muda a definição recebida
+	}
+	for (const c of dados.sem_botao) assert.equal(correcaoDe(c.antes, c.codigo, { conectores: dados.conectores }), null, c.nome);
+});
+
+test('correções de um clique: a definição de entrada não é alterada (o rascunho só muda ao confirmar)', () => {
+	const d = negociador();
+	const copia = JSON.stringify(d);
+	const k = correcaoDe(d, 'sem_saida:N9');
+	assert.ok(k);
+	assert.equal(JSON.stringify(d), copia);
+	// N9 liga "Agendou" ao Encerrar de retorno que estava solto: some também o "inalcançável" de N17
+	assert.deepEqual(k.definicao.blocos.find(b => b.id === 'N9')?.saidas.map(x => [x.quando, x.para]), [['agendou', 'N17'], ['nao_agendou', 'N13']]);
+	assert.ok(!validarLocal(k.definicao).some(e => e === 'sem_saida:N9' || e === 'inalcancavel:N17'));
+	assert.equal(k.mudancas[0].antes, 'sem destino');
+	// pendência que não existe ou código desconhecido: sem botão
+	assert.equal(correcaoDe(d, 'sem_saida:N99'), null);
+	assert.equal(correcaoDe(d, 'fala_longa:N1'), null);
+	assert.equal(correcaoDe(d, 'sem_alcada'), null);                // alçada é decisão da empresa: abre a gaveta
+	// N17 tem quem poderia usá-la? Não: nenhum caminho chega e ela não leva a nada. Remover é seguro.
+	assert.equal(correcaoDe(d, 'inalcancavel:N17')?.botao, 'Remover a etapa');
+});
+
+test('correções de um clique: tirar da fala o que não pode ser dito antes da identidade', () => {
+	assert.equal(tirarSensiveisDaFala('Olá, bom dia! Aqui é a Lia, da {{assessoria}}, em nome do {{credor}}. Falo com {{primeiro_nome}}?'), 'Olá, bom dia! Aqui é a Lia, da {{assessoria}}. Falo com {{primeiro_nome}}?');
+	assert.equal(tirarSensiveisDaFala('Olá. O {{credor}} pediu contato. Falo com {{primeiro_nome}}?'), 'Olá. Falo com {{primeiro_nome}}?');
+	assert.equal(tirarSensiveisDaFala('{{credor}} aqui. Falo com {{primeiro_nome}}?'), 'Falo com {{primeiro_nome}}?');
+	assert.equal(tirarSensiveisDaFala('Sobre R$ 1.380,00 do {{credor}}. Falo com {{primeiro_nome}}?'), 'Falo com {{primeiro_nome}}?');
+	assert.equal(tirarSensiveisDaFala('Falo com {{primeiro_nome}}?'), 'Falo com {{primeiro_nome}}?');   // nada a tirar
+	assert.equal(tirarSensiveisDaFala('{{saldo}}'), null);                                              // não sobra fala: sem botão
+	assert.equal(tirarSensiveisDaFala('Em nome do {{credor}}, {{primeiro_nome}}.'), null);
 });

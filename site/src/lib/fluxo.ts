@@ -625,3 +625,291 @@ export function nomeAnexo(nome: string, sufixo: string): string {
 	const base = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/[0-9]{6,}/g, d => d.slice(0, 5)).slice(-80);
 	return `${sufixo}_${base || 'anexo'}`;
 }
+
+// ---------------------------------------------------------------- correções de um clique (PR4 do redesenho; SPEC §6, Q6)
+// "O que corrigir" com botão: cada correção monta a definição nova e a lista do que muda (antes → depois), mostrada
+// para a pessoa confirmar; depois vai pelo mesmo salvar_fluxo_voz de sempre, no rascunho. Só correções determinísticas
+// e seguras: ligar a um final (Encerrar ou Transferir) uma resposta que não tem para onde ir, tirar da fala o que
+// não pode ser dito antes da identidade, remover a etapa a que nenhum caminho chega (e que não leva a nada que alguém
+// use), escolher o único conector ativo da finalidade certa, ligar a ferramenta "Transferir para humano". Nada aqui
+// muda o validador: o banco (public.fluxo_voz_erros / fluxo_voz_pendencias) continua decidindo. Uma correção só é
+// oferecida se, na validação local, ela some com a pendência e não cria outra.
+// Casos compartilhados com o Python (voz/fluxo_validador.py): tests/dados/fluxo_correcoes_casos.json.
+
+/** Conector como a correção precisa (ConectorRow tem estes campos). */
+export interface ConectorInfo { id: number; nome: string; finalidade: string; situacao: string }
+/** Uma linha do "antes → depois" mostrado antes de confirmar. */
+export interface Mudanca { onde: string; antes: string; depois: string }
+export interface Correcao {
+	codigo: string; bloco?: string;
+	/** Texto do botão ("Tirar o credor da abertura"). */
+	botao: string;
+	/** O que acontece, numa frase (vai para o aviso de sucesso). */
+	resumo: string;
+	mudancas: Mudanca[];
+	/** Nota opcional embaixo do antes → depois. */
+	nota?: string;
+	definicao: Definicao;
+}
+
+/** Final para onde uma resposta sem destino pode ir sem risco. O que não está aqui (Confirmou, Aceitou, Fechou acordo,
+ * opções de pergunta, intenções…) continua a conversa e precisa de uma decisão: sem botão. */
+const FINAL_DA_SAIDA: Record<string, { tipo: 'encerrar'; resultado: string } | { tipo: 'transferir'; motivo?: string }> = {
+	terceiro: { tipo: 'encerrar', resultado: 'recado' },
+	agendou: { tipo: 'encerrar', resultado: 'retorno_agendado' },
+	recusou: { tipo: 'encerrar', resultado: 'recusa' },
+	nao_confirmou: { tipo: 'encerrar', resultado: 'atendida_sem_cpc' },
+	registrado: { tipo: 'encerrar', resultado: 'promessa' },
+	enviado: { tipo: 'encerrar', resultado: 'promessa' },
+	nao_agendou: { tipo: 'transferir' },
+	sem_resposta: { tipo: 'transferir' },
+	nao_entendido: { tipo: 'transferir' },
+	falhou: { tipo: 'transferir' },
+	fora_alcada: { tipo: 'transferir', motivo: 'fora_alcada' },
+	contestou: { tipo: 'transferir', motivo: 'contestacao' },
+	sem_acordo: { tipo: 'transferir', motivo: 'ofertas_sem_acordo' },
+};
+/** Etapa final nova, quando o fluxo ainda não tem uma que sirva (fala neutra, sem variável sensível). */
+const FINAL_NOVO: Record<string, { titulo: string; fala: string }> = {
+	recado: { titulo: 'Encerrar · recado neutro', fala: 'Peço que {{primeiro_nome}} retorne para a {{assessoria}}. Obrigada.' },
+	retorno_agendado: { titulo: 'Encerrar · retorno agendado', fala: 'Combinado, eu ligo nesse horário. Até lá!' },
+	recusa: { titulo: 'Encerrar · recusa', fala: 'Tudo bem. Obrigada pela atenção. Até logo.' },
+	atendida_sem_cpc: { titulo: 'Encerrar · sem identidade', fala: 'Obrigada pela atenção. Até logo.' },
+	promessa: { titulo: 'Encerrar · acordo', fala: 'Combinado. Obrigada pela atenção. Até logo.' },
+	transferir: { titulo: 'Transferir · atendente', fala: 'Vou passar você para um atendente agora, só um instante.' },
+};
+
+/** Liga cada resposta pedida ao final certo: usa um final que já existe (o mesmo resultado; para transferir, o motivo
+ * certo ou o Transferir mais usado) e só cria um novo quando não há. null se alguma resposta não tem final seguro. */
+function ligarAFinais(d: Definicao, id: string, quandos: string[]): { definicao: Definicao; mudancas: Mudanca[]; novas: string[]; ligacoes: string[] } | null {
+	const bloco = d.blocos.find(b => b.id === id);
+	if (!bloco || !quandos.length || quandos.some(q => !FINAL_DA_SAIDA[q])) return null;
+	const nomesAntes = nomesEtapas(d);
+	const entradas = (bid: string, blocos: Bloco[]) => blocos.reduce((n, b) => n + b.saidas.filter(s => s.para === bid).length, 0);
+	let blocos = [...d.blocos];
+	const novas: string[] = [];
+	const destinos = new Map<string, string>();
+	const antesDaId = (() => { const ab = d.blocos.find(b => b.tipo === 'abertura'); return ab ? antesDaIdentidade(d, ab.id) : new Set<string>(); })();
+	for (const q of quandos) {
+		const alvo = FINAL_DA_SAIDA[q];
+		let achado: Bloco | undefined;
+		if (alvo.tipo === 'encerrar') {
+			achado = blocos.filter(b => b.tipo === 'encerrar' && b.params?.resultado === alvo.resultado && (alvo.resultado !== 'recado' || !variaveisSensiveis(b).length))
+				.sort((a, b) => entradas(b.id, blocos) - entradas(a.id, blocos) || numeroId(a.id) - numeroId(b.id))[0];
+		} else {
+			const ts = blocos.filter(b => b.tipo === 'transferir').sort((a, b) => entradas(b.id, blocos) - entradas(a.id, blocos) || numeroId(a.id) - numeroId(b.id));
+			achado = (alvo.motivo ? ts.find(b => b.params?.motivo === alvo.motivo) : undefined) ?? ts[0];
+		}
+		if (!achado) {
+			const chave = alvo.tipo === 'encerrar' ? alvo.resultado : 'transferir';
+			const novo = FINAL_NOVO[chave];
+			achado = alvo.tipo === 'encerrar'
+				? { id: proximoId(blocos), tipo: 'encerrar', modo: 'arvore', titulo: novo.titulo, params: { fala: novo.fala, resultado: alvo.resultado }, saidas: [] }
+				: { id: proximoId(blocos), tipo: 'transferir', modo: 'arvore', titulo: novo.titulo, params: { fala: novo.fala, motivo: alvo.motivo ?? (antesDaId.has(id) ? 'pedido_humano' : 'cpc') }, saidas: [] };
+			blocos = [...blocos, achado];
+			novas.push(achado.id);
+		}
+		destinos.set(q, achado.id);
+	}
+	const possiveis = saidasPossiveis(bloco);
+	const saidas = [...bloco.saidas.filter(s => !destinos.has(s.quando)), ...quandos.map(q => ({
+		quando: q, rotulo: bloco.saidas.find(s => s.quando === q)?.rotulo ?? possiveis.find(s => s.quando === q)?.rotulo ?? q.replace(/_/g, ' '),
+		para: destinos.get(q) as string, tipo: tipoDaSaida(bloco, q),
+	}))];
+	// mesma ordem das saídas possíveis (a de antes continua no lugar)
+	const ordem = (q: string) => { const i = possiveis.findIndex(s => s.quando === q); return i < 0 ? possiveis.length : i; };
+	saidas.sort((a, b) => ordem(a.quando) - ordem(b.quando));
+	blocos = blocos.map(b => (b.id === id ? { ...b, saidas } : b));
+	const definicao: Definicao = { ...d, blocos };
+	const nomesDepois = nomesEtapas(definicao);
+	const nomeEtapa = nomesAntes.get(id) ?? id;
+	const mudancas = quandos.map(q => {
+		const velha = bloco.saidas.find(s => s.quando === q);
+		const para = destinos.get(q) as string;
+		return {
+			onde: `${nomeEtapa} · "${saidas.find(s => s.quando === q)?.rotulo}"`,
+			antes: !velha ? 'sem destino' : nomesAntes.get(velha.para) ?? 'etapa que não existe mais',
+			depois: `${nomesDepois.get(para)}${novas.includes(para) ? ' (etapa nova)' : ''}`,
+		};
+	});
+	const ligacoes = quandos.map(q => `"${saidas.find(s => s.quando === q)?.rotulo}" a ${nomesDepois.get(destinos.get(q) as string)}`);
+	return { definicao, mudancas, novas, ligacoes };
+}
+
+/** Palavras para as variáveis que não podem ser ditas antes da identidade. */
+function palavraDaVariavel(v: string): string {
+	if (v === 'credor') return 'o credor';
+	if (v === 'saldo') return 'o saldo';
+	if (v === 'dias_atraso') return 'os dias de atraso';
+	if (v === 'vencimento') return 'o vencimento';
+	if (v === 'link_pagamento') return 'o link de pagamento';
+	if (v.startsWith('oferta.')) return 'a oferta';
+	return 'o valor';
+}
+const juntar = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} e ${xs[xs.length - 1]}`);
+
+/**
+ * Tira de uma fala os trechos que citam uma variável sensível. O trecho é o pedaço entre pontuações (",", ".", "!",
+ * "?", ";"): "Aqui é a Lia, da {{assessoria}}, em nome do {{credor}}. Falo com {{primeiro_nome}}?" perde
+ * ", em nome do {{credor}}". null se não sobra fala (aí não há correção automática).
+ */
+export function tirarSensiveisDaFala(fala: string): string | null {
+	// trechos que terminam em pontuação; "1.380,00" (pontuação entre dígitos) não corta
+	const partes: string[] = [];
+	let atual = '';
+	for (let i = 0; i < fala.length; i++) {
+		const ch = fala[i];
+		atual += ch;
+		const corta = ',.;!?'.includes(ch) && !(/[.,]/.test(ch) && /\d/.test(fala[i - 1] ?? '') && /\d/.test(fala[i + 1] ?? '')) && !',.;!?'.includes(fala[i + 1] ?? '');
+		if (corta) { partes.push(atual); atual = ''; }
+	}
+	if (atual) partes.push(atual);
+	const tem = (p: string) => variaveisDoTexto(p).some(v => VARIAVEIS_SENSIVEIS.includes(v));
+	if (!partes.some(tem)) return fala;
+	const fica: string[] = [];
+	for (const p of partes) {
+		if (!tem(p)) { fica.push(p); continue; }
+		// o trecho sai; a pontuação final dele fica no anterior quando fecha frase ("." "?" "!")
+		const fim = p.match(/[.;!?]+$/)?.[0];
+		if (fim && fica.length && !/[.!?]\s*$/.test(fica[fica.length - 1])) fica[fica.length - 1] = fica[fica.length - 1].replace(/[,;]+\s*$/, '') + fim;
+	}
+	let out = fica.join('').replace(/\s{2,}/g, ' ').replace(/\s+([,.;!?])/g, '$1').replace(/^[\s,.;!?]+/, '').trim();
+	out = out.replace(/([.!?])\s*([,;])/g, '$1');
+	if (!out || !/[\p{L}]/u.test(out.replace(/\{\{[^}]*\}\}/g, ''))) return null;
+	return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+const CAMPOS_FALA = ['fala', 'fala_espera'] as const;
+
+/**
+ * A correção de um clique para uma pendência ('sem_saida:N9', 'valor_antes_identidade:N1', 'terceiro_sem_recado'…),
+ * ou null quando a correção não é determinística (precisa de uma decisão de quem edita) ou não deixaria o fluxo melhor.
+ */
+export function correcaoDe(d: Definicao, codigo: string, ctx: { conectores?: ConectorInfo[] } = {}): Correcao | null {
+	const [base, arg] = codigo.split(':');
+	const bloco = arg ? d.blocos.find(b => b.id === arg) : undefined;
+	const nomes = nomesEtapas(d);
+	const nome = bloco ? nomes.get(bloco.id) ?? bloco.id : '';
+	let c: Omit<Correcao, 'codigo' | 'bloco'> | null = null;
+
+	if ((base === 'sem_saida' || base === 'saida_faltando' || base === 'saida_inexistente') && bloco && !ehFinal(bloco)) {
+		const possiveis = saidasPossiveis(bloco);
+		const ids = new Set(d.blocos.map(b => b.id));
+		let quandos: string[];
+		if (base === 'sem_saida') {
+			// a conversa livre termina em várias saídas; o "Fechou acordo" pede decisão: sem botão
+			if (bloco.tipo === 'generativa' || possiveis.some(s => s.obrig && !FINAL_DA_SAIDA[s.quando])) return null;
+			quandos = possiveis.filter(s => (s.obrig || s.quando !== 'falhou') && FINAL_DA_SAIDA[s.quando]).map(s => s.quando);
+		} else if (base === 'saida_faltando') {
+			const tem = new Set(bloco.saidas.map(s => s.quando));
+			quandos = possiveis.filter(s => s.obrig && !tem.has(s.quando)).map(s => s.quando);
+		} else {
+			quandos = bloco.saidas.filter(s => !ids.has(s.para)).map(s => s.quando);
+		}
+		const r = ligarAFinais(d, bloco.id, quandos);
+		if (r) c = {
+			botao: r.ligacoes.length <= 2 ? `Ligar ${juntar(r.ligacoes)}` : `Ligar ${r.ligacoes.length} respostas a um final`,
+			resumo: `${nome}: ${quandos.length === 1 ? 'a resposta agora vai' : 'as respostas agora vão'} para um final.`,
+			mudancas: r.mudancas,
+			nota: 'Final é Encerrar ou Transferir para um atendente: a ligação não fica parada. Dá para trocar o destino depois, na etapa.',
+			definicao: r.definicao,
+		};
+	} else if (base === 'terceiro_sem_recado') {
+		const ab = d.blocos.find(b => b.tipo === 'abertura');
+		const r = ab ? ligarAFinais(d, ab.id, ['terceiro']) : null;
+		if (r) c = {
+			botao: `Ligar "Não é a pessoa" ao recado neutro`, resumo: 'Quem não é a pessoa agora só ouve o recado neutro e a ligação encerra.',
+			mudancas: r.mudancas, nota: 'Trava 4: terceiro só ouve recado neutro, sem valor, sem credor e sem motivo.', definicao: r.definicao,
+		};
+	} else if (base === 'valor_antes_identidade' && bloco && !TIPOS_SENSIVEIS.includes(bloco.tipo)) {
+		const vs = variaveisSensiveis(bloco);
+		const params = { ...bloco.params };
+		const mudancas: Mudanca[] = [];
+		for (const k of CAMPOS_FALA) {
+			const t = params[k];
+			if (typeof t !== 'string') continue;
+			const novo = tirarSensiveisDaFala(t);
+			if (novo == null) return null;
+			if (novo !== t) { params[k] = novo; mudancas.push({ onde: `${nome} · ${k === 'fala' ? 'o agente diz' : 'fala de espera'}`, antes: t, depois: novo }); }
+		}
+		if (mudancas.length) {
+			const oque = juntar([...new Set(vs.map(palavraDaVariavel))]);
+			c = {
+				botao: `Tirar ${oque} ${bloco.tipo === 'abertura' ? 'da abertura' : 'desta fala'}`,
+				resumo: `${nome}: ${oque} só aparece depois de confirmar a identidade.`,
+				mudancas, nota: `Depois de "Confirmou" em Confirmar identidade, as etapas podem dizer ${oque} normalmente (trava 1).`,
+				definicao: trocarBloco(d, { ...bloco, params }),
+			};
+		}
+	} else if (base === 'inalcancavel' && bloco && bloco.tipo !== 'abertura' && !caminhosPara(d, bloco.id).length) {
+		c = {
+			botao: 'Remover a etapa', resumo: `${nome} saiu do rascunho.`,
+			mudancas: [{ onde: nome, antes: 'no rascunho, mas nenhum caminho chega até ela', depois: 'removida' }],
+			nota: 'Nenhuma ligação passa por esta etapa hoje: remover não muda nenhuma conversa. Se ela devia ser usada, cancele e ligue uma resposta de outra etapa a ela.',
+			definicao: removerBloco(d, bloco.id),
+		};
+	} else if (base === 'transferir_humano_desligado' && bloco?.tipo === 'generativa') {
+		const fe = Array.isArray(bloco.params?.ferramentas) ? (bloco.params.ferramentas as string[]) : [];
+		c = {
+			botao: 'Ligar "Transferir para humano"', resumo: `${nome}: "Transferir para humano" ligado.`,
+			mudancas: [{ onde: `${nome} · ferramentas`, antes: 'sem "Transferir para humano"', depois: 'com "Transferir para humano" (sempre ligado)' }],
+			nota: 'Trava 6: "quero falar com uma pessoa" transfere em qualquer momento.',
+			definicao: trocarBloco(d, { ...bloco, params: { ...bloco.params, ferramentas: [...fe, 'transferir_humano'] } }),
+		};
+	} else if ((base === 'conector_inativo' || base === 'identidade_sem_conferencia') && bloco) {
+		c = correcaoConector(d, bloco, nome, ctx.conectores ?? []);
+	}
+	if (!c) return null;
+	// rede de segurança: a pendência some e nenhuma outra aparece (validação local)
+	const antes = new Set(validarLocal(d));
+	const depois = validarLocal(c.definicao);
+	if (depois.some(e => !antes.has(e)) || (antes.has(codigo) && depois.includes(codigo))) return null;
+	return { codigo, ...(arg ? { bloco: arg } : {}), ...c };
+}
+
+/** Conector inativo ou não escolhido: escolhe o único conector ativo da finalidade certa; no registro de acordo, tira o
+ * conector extra (boleto ou link) que ainda não está ativo, se o do acordo está. Sem um único candidato: sem botão. */
+function correcaoConector(d: Definicao, bloco: Bloco, nome: string, conectores: ConectorInfo[]): Omit<Correcao, 'codigo' | 'bloco'> | null {
+	const ativo = (id: unknown) => conectores.find(c => c.id === id && c.situacao === 'ativo');
+	const rotulo = (id: unknown) => { const c = conectores.find(x => x.id === id); return c ? `${c.nome}${c.situacao !== 'ativo' ? ` (${c.situacao})` : ''}` : 'nenhum escolhido'; };
+	const unico = (fins: string[]) => { const xs = conectores.filter(c => c.situacao === 'ativo' && fins.includes(c.finalidade)); return xs.length === 1 ? xs[0] : null; };
+	const p = bloco.params ?? {};
+	if (bloco.tipo === 'registrar' && p.registra === 'acordo_crm') {
+		const cs = (Array.isArray(p.conectores) ? p.conectores : []).filter(x => x != null);
+		const ficam = cs.filter(ativo);
+		const temLink = d.blocos.some(b => b.tipo === 'link');
+		if (ficam.length && ficam.length < cs.length) return {
+			botao: temLink ? 'Usar o link do MotorCX por enquanto' : 'Tirar o conector inativo desta etapa',
+			resumo: `${nome}: só com os conectores ativos.`,
+			mudancas: [{ onde: `${nome} · conectores`, antes: cs.map(rotulo).join(' + '), depois: ficam.map(rotulo).join(' + ') }],
+			nota: `Quem ativa conector é a equipe MotorCX, depois de testar com o CRM.${temLink ? ' Enquanto isso, o link de pagamento sai pela etapa "Enviar link".' : ''} Quando ele for ativado, dá para escolher de novo na etapa.`,
+			definicao: trocarBloco(d, { ...bloco, params: { ...p, conectores: ficam } }),
+		};
+		const um = !ficam.length ? unico(['registrar_acordo']) : null;
+		if (um) return {
+			botao: `Usar "${um.nome}"`, resumo: `${nome}: conector "${um.nome}".`,
+			mudancas: [{ onde: `${nome} · conector do acordo`, antes: cs.length ? cs.map(rotulo).join(' + ') : 'nenhum escolhido', depois: um.nome }],
+			nota: 'É o único conector ativo para registrar acordo.', definicao: trocarBloco(d, { ...bloco, params: { ...p, conectores: [um.id] } }),
+		};
+		return null;
+	}
+	const fins = bloco.tipo === 'identidade' ? ['validar_cadastro'] : bloco.tipo === 'oferta' && p.origem === 'conector' ? ['buscar_ofertas'] : null;
+	if (!fins || ativo(p.conector_id)) return null;
+	const um = unico(fins);
+	if (!um) return null;
+	let nova = trocarBloco(d, { ...bloco, params: { ...p, conector_id: um.id } });
+	const mudancas: Mudanca[] = [{ onde: `${nome} · conector`, antes: rotulo(p.conector_id), depois: um.nome }];
+	// com o conector, "Conector falhou" passa a ser obrigatória na identidade: vai para um atendente
+	const b2 = nova.blocos.find(b => b.id === bloco.id) as Bloco;
+	const faltam = saidasFaltando(b2).length ? saidasPossiveis(b2).filter(s => s.obrig && !b2.saidas.some(x => x.quando === s.quando)).map(s => s.quando) : [];
+	if (faltam.length) {
+		const r = ligarAFinais(nova, bloco.id, faltam);
+		if (!r) return null;
+		nova = r.definicao; mudancas.push(...r.mudancas);
+	}
+	return {
+		botao: `Usar "${um.nome}"`, resumo: `${nome}: conector "${um.nome}".`, mudancas,
+		nota: `É o único conector ativo de ${bloco.tipo === 'identidade' ? '"Validar cadastro"' : '"Buscar ofertas"'}. Só o CRM confere; nunca a IA.`,
+		definicao: nova,
+	};
+}

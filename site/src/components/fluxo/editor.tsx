@@ -5,6 +5,9 @@
 // rascunho novo). As pendências vêm do banco: fluxo_voz_bloqueios (validador + conectores + alçada + intenções + casos
 // de teste) e fluxo_voz_avisos (roleplay, só aviso). "Enviar para aprovação" (enviar_fluxo_voz_aprovacao, SQL 66)
 // fica desabilitado com o motivo enquanto houver pendência. Aprovar: aprovar_fluxo_voz; colocar em uso: usar_fluxo_voz.
+// PR4: cada pendência aparece dentro da etapa ("O que corrigir", no Roteiro, no Mapa e na gaveta), com o botão de
+// correção de um clique quando ela é determinística (correcaoDe): antes → depois, confirmar, e vai para o rascunho pelo
+// mesmo salvar_fluxo_voz. A aba Roteiro mostra a contagem; "Corrigir N pontos" leva à primeira.
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Play, Plus, Sparkles } from 'lucide-react';
@@ -13,9 +16,10 @@ import { Loading, Notice } from '@/components/app-shell';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { Aviso, Botao, Passos, Pilula, Vazio } from '@/components/voz/ui';
 import {
-	ORDEM_TIPOS, SITUACOES, TIPOS, TIPOS_AGENTE, comoCorrigir, dataCurta, estadoEnvio, explicar, impedem, nomesEtapas, novoBloco, removerBloco, resumoPendencias, trocarBloco,
-	type Bloco, type Definicao, type TipoBloco,
+	ORDEM_TIPOS, SITUACOES, TIPOS, TIPOS_AGENTE, comoCorrigir, correcaoDe, dataCurta, estadoEnvio, explicar, impedem, nomesEtapas, novoBloco, numerosRoteiro, removerBloco, resumoPendencias, roteiro, trocarBloco,
+	type Bloco, type Correcao, type Definicao, type Pendencia, type TipoBloco,
 } from '@/lib/fluxo';
+import { ConfirmaCorrecao, OQueCorrigir, type AcaoCorrigir } from './corrigir';
 import { BarraEnvio, LegendaModos, Quadro, type Marca } from './quadro';
 import { Roteiro } from './roteiro';
 import { AbaRespostas, AbaTestes, AbaVersoes, AbasEditor, abaDaUrl, type AbaEditor } from './abas-editor';
@@ -55,6 +59,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	}
 	const [ocupado, setOcupado] = useState(false);
 	const [confirma, setConfirma] = useState<null | 'aprovar' | 'usar'>(null);
+	const [correcao, setCorrecao] = useState<Correcao | null>(null);
 
 	const { dados, erro, carregando, recarregar } = useCarregar(async () => {
 		if (!api || !empresa) return null;
@@ -86,6 +91,12 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	const rascunhoAberto = versoes.find(x => x.situacao === 'rascunho' && x.id !== v.id) ?? null;
 	const editavel = perm.editar && v.situacao !== 'arquivado' && !(v.situacao !== 'rascunho' && rascunhoAberto);
 	const pend = impedem(bloqueios);
+	// "O que corrigir" (PR4): pendências por etapa, dentro do cartão e da gaveta; as do fluxo (alçada, casos, personas) no topo do roteiro
+	const todas = [...bloqueios, ...avisos].map(explicar);
+	const ids = new Set(def.blocos.map(b => b.id));
+	const porBloco = new Map<string, Pendencia[]>();
+	for (const e of todas) if (e.bloco && ids.has(e.bloco)) porBloco.set(e.bloco, [...(porBloco.get(e.bloco) ?? []), e]);
+	const doFluxo = todas.filter(e => !e.bloco || !ids.has(e.bloco));
 	const estado = estadoEnvio({ situacao: v.situacao, erros: bloqueios, sujo: false, podeEditar: perm.editar, validando: ocupado, enviadoEm: v.enviado_aprovacao_em });
 	const ixPasso = v.situacao === 'em_uso' ? 2 : v.situacao === 'aprovado_empresa' ? 1 : v.situacao === 'arquivado' ? 3 : 0;
 
@@ -117,6 +128,29 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 		setOcupado(false); setConfirma(null); void recarregar();
 	}
 
+	/** Botão do "O que corrigir": correção de um clique (antes → depois e confirmar) ou atalho para quem resolve. */
+	function acao(codigo: string): AcaoCorrigir | null {
+		const base = codigo.split(':')[0];
+		if (base === 'sem_alcada') return { rotulo: 'Cadastrar alçada', onClick: () => setGaveta('alcada') };
+		if (base === 'caso_falhou') return { rotulo: 'Ver nos Testes', onClick: () => trocarAba('testes') };
+		if (base.startsWith('roleplay_')) return { rotulo: 'Testar com personas', onClick: () => navigate(rota('personas', null, { versao: v!.id })) };
+		if (!editavel) return null;
+		const c = correcaoDe(def, codigo, { conectores });
+		return c ? { rotulo: c.botao, onClick: () => setCorrecao(c) } : null;
+	}
+	async function aplicar(c: Correcao) {
+		if (!(await salvarDef(c.definicao, `Corrigido no rascunho. ${c.resumo}`))) return;
+		setCorrecao(null);
+		if (c.bloco && !c.definicao.blocos.some(b => b.id === c.bloco)) abrirEtapa(null);
+	}
+	/** "Corrigir N pontos": vai ao Roteiro e rola até a primeira etapa com pendência (na ordem da conversa). */
+	function irParaPrimeira() {
+		const nums = numerosRoteiro(roteiro(def));
+		const primeira = pend.map(p => p.bloco).filter((b): b is string => !!b && nums.has(b)).sort((a, b) => (nums.get(a) ?? 0) - (nums.get(b) ?? 0))[0];
+		trocarAba('roteiro');
+		setTimeout(() => document.getElementById(primeira && !doFluxo.some(e => e.impede) ? `etapa-${primeira}` : 'pendencias-fluxo')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+	}
+
 	const nomes = nomesEtapas(def);
 	const etapaSel = gaveta && typeof gaveta === 'object' ? def.blocos.find(b => b.id === gaveta.etapa) ?? null : null;
 	const grupos = ['Conversa', 'Integração', 'Controle'] as const;
@@ -140,7 +174,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 				{v.situacao === 'rascunho' && v.enviado_aprovacao_em && <Aviso tom="info" titulo={`Enviado para aprovação em ${dataCurta(v.enviado_aprovacao_em)}.`}>Mudar uma etapa cancela o envio: quem aprova precisa ver a versão nova.</Aviso>}
 				{pend.length > 0 ? (
 					<Aviso tom="erro" titulo={`${pend.length} ${pend.length === 1 ? 'pendência impede' : 'pendências impedem'} o envio para aprovação.`}>
-						{resumoPendencias(pend.map(p => p.codigo))} <button type="button" className="ml-1 font-semibold underline" onClick={() => setGaveta('pendencias')}>Ver pendências</button>
+						{resumoPendencias(pend.map(p => p.codigo))} <button type="button" className="ml-1 font-semibold underline" onClick={irParaPrimeira}>Corrigir {pend.length} {pend.length === 1 ? 'ponto' : 'pontos'}</button> <button type="button" className="ml-1 font-semibold underline" onClick={() => setGaveta('pendencias')}>Ver a lista</button>
 					</Aviso>
 				) : avisos.length > 0 ? (
 					<Aviso tom="atencao" titulo="Antes de aprovar:">{avisos.map(a => explicar(a).texto).join(' ')} <button type="button" className="ml-1 font-semibold underline" onClick={() => navigate(rota('personas', null, { versao: v.id }))}>Testar com personas</button></Aviso>
@@ -149,10 +183,15 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 			</div>
 
 			<div className="mt-5">
-				<AbasEditor atual={aba} onTrocar={trocarAba} />
+				<AbasEditor atual={aba} onTrocar={trocarAba} contagens={{ roteiro: pend.length }} />
 				{aba === 'roteiro' ? (
 					<div className="space-y-4">
 						<FaixaTravas />
+						{doFluxo.length > 0 && (
+							<div id="pendencias-fluxo" className="scroll-mt-20 space-y-2" aria-label="O que corrigir no fluxo">
+								{doFluxo.map(e => <OQueCorrigir key={e.codigo} fluxo impede={e.impede} texto={e.texto} como={comoCorrigir(e.codigo)} acao={acao(e.codigo)} />)}
+							</div>
+						)}
 						<div className="flex flex-wrap items-center justify-between gap-2">
 							<LegendaModos />
 							<Acoes>
@@ -163,14 +202,14 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 							</Acoes>
 						</div>
 						<EmQualquerMomento />
-						{def.blocos.length ? <Roteiro definicao={def} marcas={marcas} onAbrir={abrirEtapa} />
+						{def.blocos.length ? <Roteiro definicao={def} marcas={marcas} onAbrir={abrirEtapa} pendencias={porBloco} acao={acao} />
 							: <Vazio titulo="Fluxo sem etapas.">Use "+ Etapa" para começar pela Abertura.</Vazio>}
 					</div>
 				) : aba === 'mapa' ? (
 					<div className="space-y-3">
 						<Aviso tom="neutro" titulo="O mapa é para enxergar o desenho inteiro.">Para ler e editar a conversa, use o <button type="button" className="font-semibold underline" onClick={() => trocarAba('roteiro')}>Roteiro</button>. Toque numa etapa para abrir.</Aviso>
 						<LegendaModos />
-						{def.blocos.length ? <Quadro definicao={def} marcas={marcas} onAbrir={abrirEtapa} />
+						{def.blocos.length ? <Quadro definicao={def} marcas={marcas} onAbrir={abrirEtapa} pendencias={porBloco} />
 							: <Vazio titulo="Fluxo sem etapas.">Comece pelo Roteiro.</Vazio>}
 					</div>
 				) : aba === 'respostas' ? <AbaRespostas versao={v.id} definicao={def} onAbrirEtapa={abrirEtapa} />
@@ -180,7 +219,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 
 			{etapaSel && (
 				<GavetaEtapa bloco={etapaSel} definicao={def} conectores={conectores} intencoes={intencoes} erros={[...bloqueios, ...avisos]} editavel={editavel}
-					versao={v.id} situacao={v.situacao} onFechar={() => abrirEtapa(null)}
+					versao={v.id} situacao={v.situacao} onFechar={() => abrirEtapa(null)} acao={acao}
 					onSalvar={(b: Bloco) => salvarDef(trocarBloco(def, b), `Etapa ${b.id} salva no rascunho.`)}
 					onRemover={id => salvarDef(removerBloco(def, id), `Etapa ${id} removida do rascunho.`)} />
 			)}
@@ -202,13 +241,20 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 				<Linhas itens={[...bloqueios, ...avisos].map(explicar).map(p => ({
 					e: <><Pilula tom={p.impede ? 'erro' : 'atencao'}>{p.impede ? 'impede' : 'atenção'}</Pilula> <b className="font-semibold">{p.bloco ? nomes.get(p.bloco) ?? 'Etapa que não existe mais' : 'Fluxo'}</b></>,
 					s: <>{p.texto}{comoCorrigir(p.codigo) && <span className="block text-[var(--base-texto-3)]">O que corrigir: {comoCorrigir(p.codigo)}</span>}</>,
-					d: p.bloco ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => abrirEtapa(p.bloco!)}>Abrir</button>
-						: p.codigo === 'sem_alcada' ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => setGaveta('alcada')}>Alçada</button>
-						: p.codigo.startsWith('caso_falhou') ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => navigate(rota('testar', null, { versao: v.id }))}>Testar</button>
-						: p.codigo.startsWith('roleplay') ? <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => navigate(rota('personas', null, { versao: v.id }))}>Personas</button> : null,
+					d: (() => {
+						const a = acao(p.codigo);
+						const lk = 'text-[12.5px] font-semibold text-[var(--destaque)]';
+						return (
+							<span className="inline-flex flex-wrap justify-end gap-x-3 gap-y-1">
+								{a && <button type="button" className={lk} onClick={a.onClick}>{p.bloco ? 'Corrigir' : a.rotulo}</button>}
+								{p.bloco && <button type="button" className={lk} onClick={() => abrirEtapa(p.bloco!)}>Abrir</button>}
+							</span>
+						);
+					})(),
 				}))} />
 				<Regras itens={[['Conectores e intenções do catálogo são da equipe MotorCX.', 'Conector em rascunho ou pausado segura a aprovação até ser testado e ativado (Empresa › Integrações › Conectores do CRM).'], ['Testar com personas é aviso, nunca bloqueio.', 'Sem lote, o envio mostra o aviso "sem teste com personas", mas não segura.']]} />
 			</Gaveta>
+			<ConfirmaCorrecao correcao={correcao} ocupado={ocupado} onConfirmar={c => void aplicar(c)} onFechar={() => setCorrecao(null)} />
 			<GavetaComoLer aberta={gaveta === 'modos'} onFechar={() => setGaveta(null)} />
 			<GavetaDescrever aberta={gaveta === 'descrever'} onFechar={() => setGaveta(null)} versaoOrigem={v.id} credorFixo={f.credor_id} aoPedir={id => navigate(rota('pedido', id))} />
 			<GavetaAlcada aberta={gaveta === 'alcada'} onFechar={() => setGaveta(null)} credor={f.credor_id} alcada={alcada} aoSalvar={() => void recarregar()} />
