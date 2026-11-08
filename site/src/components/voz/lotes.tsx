@@ -1,4 +1,4 @@
-// Tela 3 · Mensageria › Agente virtual › Lotes e Ligações em curso.
+// Tela 3 · Agente Voz/CX › Ligações (/voz/ligacoes; antes Mensageria › Agente virtual): lotes e ligações em curso.
 // Lê voz_lotes, voz_ondas, resumo_lote_voz(), voz_divisao_concorrencia, voz_config e o preço do
 // minuto de IA (precos_empresa, só quem vê faturamento). Atualiza a cada 15 s, sem realtime.
 // Escreve só por RPC: pausar_lote_voz, retomar_lote_voz, cancelar_lote_voz e configurar_voz_empresa.
@@ -9,10 +9,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { ArrowLeft, Pause, Play, Recycle, RotateCw } from 'lucide-react';
+import { Pause, Play, Recycle, RotateCw } from 'lucide-react';
 import { Loading, Notice, usePermissao } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
+import { Voltar } from '@/components/comuns/voltar';
+import { ROTA_AGENTE, rotaLoteVoz } from '@/lib/rotas-voz';
 import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import {
 	ATUALIZA_MS, PERM_VOZ, SIT_LOTE_VOZ, SIT_ONDA, dataCurta, diaISO, funilDoResumo, horaCurta, inteiro, pct, reais,
@@ -85,12 +87,12 @@ export function LotesVoz() {
 
 	return (
 		<Moldura>
-			<Cabecalho titulo="Lotes do agente virtual" linha={[empresa?.nome, 'Mensageria', 'Agente virtual'].filter(Boolean).join(' · ')} />
+			<Cabecalho titulo="Lotes do agente virtual" linha={[empresa?.nome, 'Agente Voz/CX', 'Ligações'].filter(Boolean).join(' · ')} />
 			{!empresa ? <Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice>
 				: loading ? <Loading />
 				: error ? <Notice>{error}</Notice>
 				: lotes.length === 0 ? (
-					<Vazio titulo="Nenhum lote do agente virtual ainda." acao={<Link to="/canais/agente-virtual" className="inline-flex h-9 items-center rounded-lg border px-4 text-[13px] font-semibold text-[var(--base-texto)]" style={{ borderColor: 'var(--base-borda)' }}>Ver o roteiro</Link>}>
+					<Vazio titulo="Nenhum lote do agente virtual ainda." acao={<Link to={ROTA_AGENTE} className="inline-flex h-9 items-center rounded-lg border px-4 text-[13px] font-semibold text-[var(--base-texto)]" style={{ borderColor: 'var(--base-borda)' }}>Ver o roteiro</Link>}>
 						O lote do dia aparece aqui quando a Lista do dia manda clientes para o agente virtual. Antes, o roteiro precisa estar em uso.
 					</Vazio>
 				) : (
@@ -102,7 +104,7 @@ export function LotesVoz() {
 							{ rotulo: 'Telefonia estimada', valor: reais(dia.custo), detalhe: 'paga à operadora, fora da fatura' },
 						]} />
 						<Cartao semPadding>
-							<TabelaDs rotulo="Lotes do agente virtual" linhas={lotes} chave={l => l.id} onAbrir={l => navigate(`/mensageria/voz/lotes/${l.id}`)}
+							<TabelaDs rotulo="Lotes do agente virtual" linhas={lotes} chave={l => l.id} onAbrir={l => navigate(rotaLoteVoz(l.id))}
 								colunas={[
 									{ id: 'data', titulo: 'Data', celula: l => dataCurta(l.data) },
 									{ id: 'cart', titulo: 'Carteira', celula: l => nomeCarteira(l.credor_id) },
@@ -209,7 +211,8 @@ export function LoteVozCurso() {
 		toast.success('Limite de abandono salvo. Vale para os lotes da empresa.');
 	}
 
-	const voltar = <Link to="/mensageria/voz/lotes" className="mb-3 inline-flex items-center gap-1 text-[13px] text-[var(--base-texto-2)] hover:text-[var(--base-texto)]"><ArrowLeft size={14} /> Lotes do agente virtual</Link>;
+	// "← Ligações" (Agente Voz/CX › Ligações), pelo mapa de telas-mãe (lib/rota-pai.ts).
+	const voltar = <Voltar />;
 
 	if (!empresa) return <Moldura><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></Moldura>;
 	if (loading) return <Moldura>{voltar}<Loading /></Moldura>;

@@ -232,11 +232,11 @@ export function EnvioGravacoes({ empresaId, slug, onEnviado }: { empresaId: stri
 					{enviando ? <p className="text-[13px] text-[var(--base-texto)]">Enviando {enviando.feitos} de {enviando.total}… Não feche esta tela.</p>
 						: feito ? <>
 							<p className="text-[13px] text-[var(--base-texto-2)]">O MotorCX lê em até 15 minutos. O resultado (importadas, casadas e quarentena) aparece em Importações.</p>
-							<div className="mt-3 flex flex-wrap gap-2"><BotaoLink tipo="primario" to="/envios/gravacoes-discador">Ver as importações</BotaoLink><Botao secundario onClick={() => { setFeito(false); setPasso(0); }}>Enviar outras</Botao></div>
+							<div className="mt-3 flex flex-wrap gap-2"><BotaoLink tipo="primario" to="/speech-analytics/entrada">Ver as importações</BotaoLink><Botao secundario onClick={() => { setFeito(false); setPasso(0); }}>Enviar outras</Botao></div>
 						</> : null}
 				</Cartao>
 			)}
-			<p className="text-[12px] text-[var(--base-texto-3)]"><Link to="/envios/gravacoes-discador" className="underline">Voltar para Gravações do discador</Link></p>
+			<p className="text-[12px] text-[var(--base-texto-3)]"><Link to="/speech-analytics/entrada" className="underline">Voltar para a Entrada de gravações</Link></p>
 		</div>
 	);
 }

@@ -9,6 +9,9 @@ export type AreasLiberadas = {
 	cobranca: boolean;
 	jornada: boolean;
 	mensageria: boolean;
+	/** Módulo agente_voz ativo (Agente Voz/CX › Agente de voz, Ligações e Telefonia têm conteúdo). A área Agente Voz/CX
+	 *  e o Speech Analytics vêm com a Cobrança: a Discagem vale também para o discador próprio da empresa. */
+	agenteVoz: boolean;
 	/** Canais contratados da mensageria (empresa_modulos.canais da linha mensageria ativa). */
 	canais: CanalId[];
 	/** Último canal usado se ainda contratado, senão o 1º dos contratados. Nunca 'sms' fixo. */
@@ -119,6 +122,7 @@ export function useAreasLiberadas(): AreasLiberadas {
 	const cobranca = semEmpresa || (frentesDaPessoa.includes('motorcob') && modulos.has('orquestracao'));
 	const jornada = semEmpresa || (frentesDaPessoa.includes('motorcli') && modulos.has('jornada'));
 	const mensageria = semEmpresa || modulos.has('mensageria');
+	const agenteVoz = semEmpresa || modulos.has('agente_voz');
 
 	// Canal padrão: último usado se ainda contratado, senão o 1º dos contratados.
 	let canalPadrao: CanalId = 'sms';
@@ -130,5 +134,5 @@ export function useAreasLiberadas(): AreasLiberadas {
 
 	const destinoMensageria = canais.length > 0 ? `/mensageria/${canalPadrao}` : '/mensageria';
 
-	return { cobranca, jornada, mensageria, canais, canalPadrao, destinoMensageria, semEmpresa, pronto };
+	return { cobranca, jornada, mensageria, agenteVoz, canais, canalPadrao, destinoMensageria, semEmpresa, pronto };
 }

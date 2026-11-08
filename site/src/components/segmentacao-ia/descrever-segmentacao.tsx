@@ -19,6 +19,7 @@ import {
 	type Contagens, type PedidoSegmentacao, type PersonaInfo, type Pergunta, type Proposta, type Respostas, type SegmentoProposto,
 } from '@/lib/segmentacao-ia';
 import type { Acao } from '@/lib/estrategia';
+import { VoltarBotao } from '@/components/comuns/voltar';
 
 type Tela = 'texto' | 'aguardando' | 'proposta' | 'segmento' | 'revisar';
 const CAMPOS_PEDIDO = 'id,situacao,texto,proposta,resultado,hash_base,pedido_em,credor_id';
@@ -176,6 +177,8 @@ export function DescreverSegmentacao(p: DescreverProps) {
 
 	return (
 		<div ref={topo} className="space-y-3" data-descrever-segmentacao>
+			{/* Sair do "Descrever" sem descartar nada: o pedido continua guardado e reabre aqui depois. */}
+			<VoltarBotao rotulo="Segmentos" onClick={p.onFechar} />
 			{tela === 'texto' && <TelaTexto {...p} texto={texto} setTexto={setTexto} erro={erro} enviando={enviando} gerar={gerar} creditos={creditos} pedido={pedido} canaisAtivos={canaisAtivos} />}
 			{tela === 'aguardando' && (
 				<div className={`${cartao} p-5`} role="status" aria-live="polite">

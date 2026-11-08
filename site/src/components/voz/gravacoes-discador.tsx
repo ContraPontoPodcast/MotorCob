@@ -1,4 +1,4 @@
-// Tela 8 · Cobrança › Cargas › Gravações do discador (protótipo aprovado + SQL 64, importador).
+// Tela 8 · Speech Analytics › Entrada de gravações (/speech-analytics/entrada; antes Cobrança › Cargas › Gravações do discador) (protótipo aprovado + SQL 64, importador).
 // Fontes por empresa (envio pelo site, SFTP do discador, HTTPS), quantas a empresa quiser: o Admin (importar_gravacoes)
 // ou a equipe com gerenciar_troncos_voz cadastra (salvar_fonte_gravacoes) e pede "Ler agora". A credencial fica no
 // cofre (só a equipe gera a referência; o valor vai direto ao Secret Manager). Quem envia arquivos sobe o manifesto e
@@ -133,8 +133,8 @@ export function GravacoesDiscador() {
 
 	return (
 		<>
-			<PageHeading title="Gravações do discador" description="Cargas › Gravações · para transcrever e analisar as ligações feitas pelo discador de vocês"
-				actions={podeEnviar ? <BotaoLink tipo="primario" to="/envios/gravacoes-discador/enviar">Enviar gravações</BotaoLink> : undefined} />
+			<PageHeading title="Gravações do discador" description="Speech Analytics › Entrada de gravações · para transcrever e analisar as ligações feitas pelo discador de vocês"
+				actions={podeEnviar ? <BotaoLink tipo="primario" to="/speech-analytics/entrada/enviar">Enviar gravações</BotaoLink> : undefined} />
 			<SubAbas atual="gravacoes" itens={[{ id: 'carga', nome: 'Enviar carga', to: '/envios' }, { id: 'gravacoes', nome: 'Gravações do discador' }]} />
 			{!empresa ? <Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice> : loading ? <Loading /> : error ? <Notice>{error}</Notice> : (
 				<div className="space-y-4">
@@ -248,12 +248,12 @@ export function GravacoesDiscador() {
 	);
 }
 
-/** Tela própria do envio pelo site (3 passos), em Cargas › Gravações do discador › Enviar gravações. */
+/** Tela própria do envio pelo site (3 passos), em Speech Analytics › Entrada de gravações › Enviar gravações. */
 export function EnviarGravacoesPagina() {
 	const { empresa } = useMotorAuth();
 	return (
 		<>
-			<PageHeading title="Enviar gravações" description="Cargas › Gravações do discador · manifesto e áudios, ou um zip" />
+			<PageHeading title="Enviar gravações" description="Speech Analytics › Entrada de gravações · manifesto e áudios, ou um zip" />
 			{!empresa ? <Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice> : <EnvioGravacoes empresaId={empresa.id} slug={empresa.slug} onEnviado={() => {}} />}
 		</>
 	);

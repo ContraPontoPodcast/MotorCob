@@ -5,7 +5,8 @@
 import { supabase } from '@/lib/supabase';
 import { PERM } from '@/lib/permissoes';
 import { CANAL_STORAGE_KEY } from '@/lib/mensageria-produtos';
-import { areaDaRota } from '@/lib/area-rota';
+import { areaDaRota, areaDoContrato } from '@/lib/area-rota';
+import { ROTA_AGENTE, ROTA_DISCAGEM } from '@/lib/rotas-voz';
 
 /** Endereço único do avatar do Assistente MotorCX (usado em todos os lugares). */
 export const AVATAR_ASSISTENTE =
@@ -59,8 +60,8 @@ export const ACOES_ROTA: Record<string, RotaAcao> = {
 	abrir_comite: { rota: () => '/comite', perm: PERM.baixarComite },
 	abrir_enviar_arquivos: { rota: () => '/envios', perm: PERM.enviarArquivos },
 	abrir_canais_frases: { rota: () => '/canais', perm: PERM.editarCanais },
-	abrir_regras_discagem: { rota: () => '/discagem' },
-	abrir_agente_virtual: { rota: () => '/canais/agente-virtual' },
+	abrir_regras_discagem: { rota: () => ROTA_DISCAGEM },
+	abrir_agente_virtual: { rota: () => ROTA_AGENTE },
 	abrir_implantacao: { rota: () => '/implantacao' },
 	abrir_mensageria_painel: { rota: c => `/mensageria/${c}` },
 	abrir_campanhas: { rota: c => `/mensageria/${c}/campanhas` },
@@ -108,8 +109,8 @@ export function rotaDaAcao(acaoId: string, permissoes: string[], pergunta?: stri
 	const canal = areas?.canalPadrao ?? ultimoCanal();
 	let rota = def.rota(canal);
 	if (areas) {
-		const a = areaDaRota(rota.split('?')[0]);
-		if ((a === 'cobranca' || a === 'jornada' || a === 'mensageria') && !areas[a]) return null;
+		const a = areaDoContrato(areaDaRota(rota.split('?')[0]));
+		if (a && !areas[a]) return null;
 	}
 	if (def.comPergunta && pergunta) {
 		rota += `?assunto=${encodeURIComponent(pergunta.slice(0, 120))}`;

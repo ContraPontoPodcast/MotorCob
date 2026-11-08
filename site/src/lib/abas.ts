@@ -6,10 +6,11 @@ import {
 	Building, Users, Plug, Receipt, ScrollText,
 	HeartPulse, Mail, TrendingUp, Filter,
 	CircleDollarSign, MessagesSquare, Phone,
-	Mic, AudioLines, PhoneCall, Sparkles,
+	Mic, AudioLines, PhoneCall, Sparkles, Bot, Cable, LayoutDashboard,
 } from 'lucide-react';
 import type { AreaRota } from './area-rota';
 import { PERM } from './permissoes';
+import { ROTA_AGENTE, ROTA_DISCAGEM, ROTA_ENTRADA_GRAVACOES, ROTA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_TELEFONIA, ROTA_VOZ } from './rotas-voz';
 
 export type Aba = {
 	nome: string;
@@ -69,7 +70,6 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Orquestração', to: '/orquestracao', icon: Route },
 					{ nome: 'Personas', to: '/personas', icon: UsersRound, perm: PERM.verClientes },
 					{ nome: 'Frases', to: '/canais?secao=frases', icon: MessageCircle, perm: PERM.editarCanais },
-					{ nome: 'Regras de discagem', to: '/discagem', icon: Phone },
 				],
 			},
 			{
@@ -78,8 +78,6 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Painel', to: '/painel', icon: ChartNoAxesCombined, perm: PERM.verPainel },
 					{ nome: 'Mapa da esteira', to: '/mapa', icon: Map },
 					{ nome: 'Comitê', to: '/comite', icon: ShieldCheck, perm: PERM.baixarComite },
-					{ nome: 'Gravações', to: '/gravacoes', icon: Mic, perm: 'ouvir_gravacoes' },
-					{ nome: 'Speech Analytics', to: '/speech-analytics', icon: AudioLines, match: ['/speech-analytics/'] },
 				],
 			},
 			{
@@ -155,10 +153,33 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 					{ nome: 'Atendimento', to: '/mensageria/config/atendimento', icon: Settings },
 				],
 			},
+		],
+	},
+	// Agente Voz/CX (SPEC Canais §3.3): o discador decide quando e para qual número; o agente conversa.
+	voz: {
+		area: 'voz',
+		grupos: [
 			{
-				// Agente de voz: lotes fora do layout por canal de mensagem (/mensageria/voz/...).
 				abas: [
-					{ nome: 'Agente virtual', to: '/mensageria/voz/lotes', icon: PhoneCall },
+					{ nome: 'Visão geral', to: ROTA_VOZ, icon: LayoutDashboard, exato: true },
+					{ nome: 'Agente de voz', to: ROTA_AGENTE, icon: Bot },
+					{ nome: 'Discagem', to: ROTA_DISCAGEM, icon: Phone },
+					{ nome: 'Ligações', to: ROTA_LIGACOES, icon: PhoneCall },
+					{ nome: 'Telefonia', to: ROTA_TELEFONIA, icon: Cable },
+				],
+			},
+		],
+	},
+	// Speech Analytics (SPEC Canais §3.5): as abas de análise ficam dentro da Visão geral; Gravações e a Entrada de
+	// gravações (antes em Cobrança › Resultados e Cobrança › Cargas) moram aqui.
+	speech: {
+		area: 'speech',
+		grupos: [
+			{
+				abas: [
+					{ nome: 'Visão geral', to: ROTA_SPEECH, icon: AudioLines, exato: true, match: [`${ROTA_SPEECH}/qualidade`, `${ROTA_SPEECH}/operadores`, `${ROTA_SPEECH}/alertas`, `${ROTA_SPEECH}/recomendacoes`, `${ROTA_SPEECH}/curadoria`, `${ROTA_SPEECH}/busca`] },
+					{ nome: 'Gravações', to: ROTA_GRAVACOES, icon: Mic, perm: 'ouvir_gravacoes' },
+					{ nome: 'Entrada de gravações', to: ROTA_ENTRADA_GRAVACOES, icon: FileUp },
 				],
 			},
 		],

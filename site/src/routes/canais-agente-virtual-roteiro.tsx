@@ -1,6 +1,3 @@
-import type { Route } from './+types/canais-agente-virtual-roteiro';
-import { seo } from '@/lib/seo';
-import { RoteiroAgente } from '@/components/voz/roteiro';
-// Roteiro antigo (SQL 56): continua valendo na carteira até um fluxo entrar em uso nela (o executor cai no roteiro).
-export function meta({ matches, location }: Route.MetaArgs) { return seo({ matches, location }, { title: 'Roteiro do agente virtual · MotorCX', description: 'Roteiro do agente virtual por carteira: rascunho, aprovação e uso.', noindex: true }); }
-export default function CanaisAgenteVirtualRoteiro() { return <RoteiroAgente />; }
+import { RedirecionarRotaAntiga } from '@/components/comuns/redirecionar';
+// Endereço antigo: a tela mudou de lugar (Agente Voz/CX ou Speech Analytics). Leva ao novo com a mesma query (lib/rotas-voz.ts).
+export default function RotaAntiga() { return <RedirecionarRotaAntiga />; }

@@ -106,8 +106,8 @@ export function Operadores({ f, setDias, setAcoes }: { f: Filtros; setDias: (d: 
 	const semId = p.operadores.length === 0 && (p.sem_operador > 0 || p.sem_operador_import > 0);
 	const qtdSemId = p.sem_operador_import || p.sem_operador;
 	const aviso = semId
-		? <Aviso titulo="O discador de vocês não está mandando o ID do operador." acao={<Link className="text-[13px] font-semibold text-[var(--destaque)] hover:underline" to="/envios/gravacoes-discador">Gravações do discador</Link>}>As gravações entram na nota da equipe, mas não dá para avaliar ninguém. Peça ao fornecedor o campo do agente no arquivo de gravação.</Aviso>
-		: qtdSemId > 0 ? <Aviso titulo={`${nf(qtdSemId)} gravações chegaram sem o ID do operador.`} acao={<Link className="text-[13px] font-semibold text-[var(--destaque)] hover:underline" to="/envios/gravacoes-discador">Ver</Link>}>Contam na nota da equipe, mas não na de ninguém.</Aviso> : null;
+		? <Aviso titulo="O discador de vocês não está mandando o ID do operador." acao={<Link className="text-[13px] font-semibold text-[var(--destaque)] hover:underline" to="/speech-analytics/entrada">Entrada de gravações</Link>}>As gravações entram na nota da equipe, mas não dá para avaliar ninguém. Peça ao fornecedor o campo do agente no arquivo de gravação.</Aviso>
+		: qtdSemId > 0 ? <Aviso titulo={`${nf(qtdSemId)} gravações chegaram sem o ID do operador.`} acao={<Link className="text-[13px] font-semibold text-[var(--destaque)] hover:underline" to="/speech-analytics/entrada">Ver</Link>}>Contam na nota da equipe, mas não na de ninguém.</Aviso> : null;
 
 	if (semId || (p.gestor && comNota.length === 0 && semNota.length === 0)) {
 		return (<>{filtros}<div className="space-y-4">{aviso}

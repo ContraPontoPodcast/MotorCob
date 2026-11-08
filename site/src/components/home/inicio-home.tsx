@@ -47,6 +47,8 @@ function AtalhosInicio({ areas }: { areas: AreaInfo[] | null }) {
 		{ area: 'cobranca', nome: 'Cobrança', desc: 'Lista do dia, réguas e carteiras', to: '/fila', contratada: areasLib.cobranca },
 		{ area: 'jornada', nome: 'Jornada do Cliente', desc: 'Boas-vindas, ativação e retenção', to: '/jornada', contratada: areasLib.jornada },
 		{ area: 'mensageria', nome: 'Mensageria', desc: 'Campanhas, lotes e respostas', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
+		{ area: 'voz', nome: 'Agente Voz/CX', desc: 'Agente de voz, discagem e ligações', to: '/voz', contratada: areasLib.cobranca },
+		{ area: 'speech', nome: 'Speech Analytics', desc: 'O que as ligações dizem', to: '/speech-analytics', contratada: areasLib.cobranca },
 		{ area: 'relatorios', nome: 'Relatórios', desc: 'Os números de todas as áreas', to: '/relatorios', contratada: true },
 		{ area: 'empresa', nome: 'Empresa', desc: 'Pessoas, faturas e integrações', to: '/empresa', contratada: true },
 		{ area: 'suporte', nome: 'Suporte', desc: 'Seus chamados', to: '/suporte', contratada: true },
@@ -74,7 +76,7 @@ function AtalhosInicio({ areas }: { areas: AreaInfo[] | null }) {
 
 	function ir(a: Atalho) {
 		if (!a.contratada) { setInteresse(true); return; }
-		if (a.area === 'cobranca') aplicarFrente('motorcob');
+		if (a.area === 'cobranca' || a.area === 'voz' || a.area === 'speech') aplicarFrente('motorcob');
 		if (a.area === 'jornada') aplicarFrente('motorcli');
 		navigate(a.to);
 	}

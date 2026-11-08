@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router';
 import {
 	House, CircleDollarSign, Route, MessagesSquare, FileChartColumn,
-	Building, Headset, ShieldCheck, ChevronsRight,
+	Building, Headset, ShieldCheck, ChevronsRight, Bot, AudioLines,
 } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { useFrente } from '@/components/frente-provider';
@@ -74,7 +74,8 @@ function RailButton({
 			navigate(item.to);
 			return;
 		}
-		if (item.area === 'cobranca') aplicarFrente('motorcob');
+		// Agente Voz/CX e Speech Analytics trabalham com as carteiras da Cobrança.
+		if (item.area === 'cobranca' || item.area === 'voz' || item.area === 'speech') aplicarFrente('motorcob');
 		if (item.area === 'jornada') aplicarFrente('motorcli');
 		navigate(item.to);
 	}
@@ -131,6 +132,9 @@ export function LateralIcones() {
 		{ area: 'cobranca', nome: 'Cobrança', icon: CircleDollarSign, to: '/fila', contratada: areasLib.cobranca },
 		{ area: 'jornada', nome: 'Jornada do Cliente', icon: Route, to: '/jornada', contratada: areasLib.jornada },
 		{ area: 'mensageria', nome: 'Mensageria', icon: MessagesSquare, to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
+		// Áreas próprias desde o redesign de Canais (vêm com a Cobrança).
+		{ area: 'voz', nome: 'Agente Voz/CX', icon: Bot, to: '/voz', contratada: areasLib.cobranca },
+		{ area: 'speech', nome: 'Speech Analytics', icon: AudioLines, to: '/speech-analytics', contratada: areasLib.cobranca },
 		{ area: 'relatorios', nome: 'Relatórios', icon: FileChartColumn, to: '/relatorios', contratada: true },
 	];
 

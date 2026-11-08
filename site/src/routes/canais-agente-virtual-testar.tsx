@@ -1,5 +1,3 @@
-import type { Route } from './+types/canais-agente-virtual-testar';
-import { seo } from '@/lib/seo';
-import { TestarConversa } from '@/components/fluxo/testar';
-export function meta({ matches, location }: Route.MetaArgs) { return seo({ matches, location }, { title: 'Testar conversa · MotorCX', description: 'Simulador de texto do fluxo do agente virtual.', noindex: true }); }
-export default function CanaisAgenteVirtualTestar() { return <TestarConversa />; }
+import { RedirecionarRotaAntiga } from '@/components/comuns/redirecionar';
+// Endereço antigo: a tela mudou de lugar (Agente Voz/CX ou Speech Analytics). Leva ao novo com a mesma query (lib/rotas-voz.ts).
+export default function RotaAntiga() { return <RedirecionarRotaAntiga />; }

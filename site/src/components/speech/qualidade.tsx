@@ -135,7 +135,7 @@ export function Qualidade({ f, setDias, setAcoes }: { f: Filtros; setDias: (d: n
 				{r.contestada && <p className="mt-1.5 text-[12px] text-[var(--estado-pronto-texto)]">Discordância registrada. O caso está na fila de Curadoria.</p>}
 			</div>
 			<div className="flex shrink-0 flex-wrap gap-2">
-				<BotaoLink pequeno to={`/gravacoes?cliente=${encodeURIComponent(r.id_cliente)}`}><Play size={13} aria-hidden="true" />Ouvir</BotaoLink>
+				<BotaoLink pequeno to={`/speech-analytics/gravacoes?cliente=${encodeURIComponent(r.id_cliente)}`}><Play size={13} aria-hidden="true" />Ouvir</BotaoLink>
 				{!r.contestada && <Botao tipo="fantasma" pequeno onClick={() => void discordar(r)}>Discordar da nota</Botao>}
 			</div>
 		</div>

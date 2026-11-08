@@ -32,8 +32,8 @@ export type AbaSA = (typeof ABAS_SA)[number]['id'] | typeof BUSCA_SA.id;
 /** Endereços antigos que continuam abrindo: "Retroalimentação" virou Recomendações. */
 const ALIAS_SA: Record<string, AbaSA> = { retroalimentacao: 'recomendacoes' };
 /** O Roleplay saiu do Speech Analytics e foi para Fluxo do agente › Testar com personas (decisão do redesign v2).
- *  A tela é /canais/agente-virtual/personas (SQL 59; o link antigo /speech-analytics/roleplay redireciona para lá). */
-export const ROTA_TESTAR_PERSONAS = '/canais/agente-virtual/personas';
+ *  A tela é /voz/agente/personas (Agente Voz/CX; o link antigo /speech-analytics/roleplay redireciona para lá). */
+export const ROTA_TESTAR_PERSONAS = '/voz/agente/personas';
 export function abaValida(a: string | undefined): AbaSA {
 	if (a === BUSCA_SA.id) return 'busca';
 	if (a && ALIAS_SA[a]) return ALIAS_SA[a];
@@ -176,7 +176,7 @@ export const APLICA: Record<string, string> = { ambos: 'IA e humano', humano: 's
 export const DESTINOS: Record<string, { nome: string; onde: string; to: string; rascunho: boolean }> = {
 	regua: { nome: 'Régua', onde: 'Estratégia › Orquestração', to: '/orquestracao', rascunho: true },
 	renitencia: { nome: 'Renitência e Resubmit', onde: 'Estratégia › Orquestração (travas de ligação)', to: '/orquestracao', rascunho: true },
-	fluxo: { nome: 'Fluxo do agente', onde: 'Canais › Agente virtual', to: '/canais/agente-virtual', rascunho: false },
+	fluxo: { nome: 'Fluxo do agente', onde: 'Agente Voz/CX › Agente de voz', to: '/voz/agente', rascunho: false },
 	canal: { nome: 'Canal', onde: 'Estratégia › Orquestração', to: '/orquestracao', rascunho: false },
 	frases: { nome: 'Frases e Abordagem', onde: 'Estratégia › Frases', to: '/canais?secao=frases', rascunho: true },
 	propensao: { nome: 'Propensão em sombra', onde: 'Propensão (só observação)', to: '/personas', rascunho: false },

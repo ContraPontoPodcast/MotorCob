@@ -10,6 +10,8 @@ import { VoltarPara } from '@/components/comuns/voltar';
 
 // Rotas declaradas em src/routes.ts (o teste roda com cwd = site/).
 const declaradas = new Set([...readFileSync('src/routes.ts', 'utf8').matchAll(/route\('([^']+)'/g)].map(m => `/${m[1]}`));
+/** O caminho abre alguma rota declarada (exata ou com parâmetros, ex.: "/speech-analytics" em "/speech-analytics/:aba?"). */
+const abre = (caminho: string) => declaradas.has(caminho) || [...declaradas].some(r => r.includes('/:') && new RegExp(`^${r.split('/').filter(Boolean).map(seg => (seg.startsWith(':') ? (seg.endsWith('?') ? '(?:/[^/]+)?' : '/[^/]+') : `/${seg}`)).join('')}$`).test(caminho));
 
 test('toda rota mapeada e todo destino existem no routes.ts', () => {
 	for (const rota of Object.keys(ROTAS_PAI)) {
@@ -17,7 +19,7 @@ test('toda rota mapeada e todo destino existem no routes.ts', () => {
 		for (const equipe of [false, true]) {
 			const pai = rotaPai(rota, { equipe });
 			if (!pai) continue;
-			assert.ok(declaradas.has(pai.to.split('?')[0]), `destino inexistente: ${rota} → ${pai.to}`);
+			assert.ok(abre(pai.to.split('?')[0]), `destino inexistente: ${rota} → ${pai.to}`);
 			assert.notEqual(pai.to, rota, `${rota} não pode voltar para ela mesma`);
 			assert.ok(pai.rotulo.trim().length > 0);
 		}
@@ -53,4 +55,15 @@ test('VoltarPara é um link de verdade para a tela-mãe, com cores do tema', () 
 	assert.match(s, /aria-label="Voltar para Clientes"/);
 	assert.match(s, /var\(--base-texto-2\)/);
 	assert.doesNotMatch(s, /history|#[0-9a-fA-F]{3,6}\b/);
+});
+
+test('Agente Voz/CX e Speech Analytics: subtelas voltam para a tela-mãe; abas da área, não', () => {
+	for (const r of ['/voz/agente/editor/12', '/voz/agente/testar', '/voz/agente/desempenho', '/voz/agente/personas', '/voz/agente/pedido/3', '/voz/agente/roteiro']) {
+		assert.deepEqual(rotaPai(r), { to: '/voz/agente', rotulo: 'Agente de voz' }, r);
+	}
+	assert.deepEqual(rotaPai('/voz/ligacoes/42'), { to: '/voz/ligacoes', rotulo: 'Ligações' });
+	for (const r of ['/speech-analytics/qualidade', '/speech-analytics/busca', '/speech-analytics/gravacoes', '/speech-analytics/entrada']) assert.equal(rotaPai(r)?.to, '/speech-analytics', r);
+	assert.equal(rotaPai('/speech-analytics/entrada/enviar')?.to, '/speech-analytics/entrada');
+	for (const r of ['/voz', '/voz/agente', '/voz/discagem', '/voz/ligacoes', '/voz/telefonia', '/speech-analytics', '/speech-analytics/', '/canais']) assert.equal(rotaPai(r), null, r);
+	assert.equal(rotaPai('/voz/agente/editor/12/extra'), null, 'parâmetro casa um segmento só');
 });

@@ -53,21 +53,23 @@ O Início mostra:
 
 ## Navegação dentro dos produtos
 
-Dentro das áreas (Cobrança, Jornada do Cliente, Mensageria, Relatórios) fica a mesma barra do topo e, à esquerda, um menu lateral claro. No topo do menu: "‹ Início" e a troca de área (só para quem tem as duas).
+Dentro das áreas (Cobrança, Jornada do Cliente, Mensageria, Agente Voz/CX, Speech Analytics, Relatórios) fica a mesma barra do topo e, à esquerda, um menu lateral claro. No topo do menu: "‹ Início" e a troca de área (só para quem tem as duas).
 
-- Cobrança: Lista do dia, Clientes, Ações, Cargas · Estratégia (Orquestração, Personas, Frases, Regras de discagem) · Resultados (Painel, Mapa da esteira, Comitê, Gravações, Speech Analytics) · Configurações (Carteiras, Canais).
+- Cobrança: Lista do dia, Clientes, Ações, Cargas · Estratégia (Orquestração, Personas, Frases) · Resultados (Painel, Mapa da esteira, Comitê) · Configurações (Carteiras, Canais).
 - Jornada do Cliente: Visão geral, Lista do dia, Clientes, Cargas · Estratégia (Momentos e fases, Mensagens, Carteiras) · Resultados (Painel).
-- Mensageria: Campanhas, Lotes · Respostas (Caixa, Radar) · Templates, Listas · Resultados (Painel do canal, Score) · Configurações (Do canal, Atendimento) · Agente virtual (os lotes de ligações do dia).
+- Mensageria: Campanhas, Lotes · Respostas (Caixa, Radar) · Templates, Listas · Resultados (Painel do canal, Score) · Configurações (Do canal, Atendimento).
+- Agente Voz/CX (ícone de robô; vem com a Cobrança; endereço /voz): Visão geral (como uma ligação acontece), Agente de voz (fluxos do agente virtual), Discagem (as Regras de discagem), Ligações (os lotes de ligações do dia, antes em Mensageria › Agente virtual) e Telefonia (por onde o MotorCX liga; por enquanto só leitura, quem altera é a equipe MotorCX).
+- Speech Analytics (área própria; endereço /speech-analytics): Visão geral com as abas Qualidade, Operadores, Alertas, Recomendações, Curadoria e Buscar nas conversas · Gravações (antes em Cobrança › Resultados) · Entrada de gravações (as gravações do discador: fontes, envio pelo site e quarentena; antes em Cobrança › Cargas, que mantém um atalho).
 - Relatórios: Cobrança, Jornada, Mensageria e Meus arquivos (uma aba por produto contratado).
 - Empresa: Visão geral, Contatos, Pessoas e perfis, Integrações, Uso de IA, Faturas, Contratação (só equipe), Auditoria, Privacidade e gravações.
 - Empresa › Uso de IA: os créditos de IA da empresa no ciclo do faturamento. Cada empresa tem uma franquia de créditos por mês incluída no contrato (100); acima dela, cada crédito vai para a fatura como excedente. Gastam crédito: análise do especialista (2), "Descrever segmentos e régua" e "Descrever a estratégia" (2 por geração) e pergunta nova ao especialista (1). Não gastam: pré-análise ao salvar, standby depois da rotina, explicar melhor, responder por opção e resposta já guardada; o que falhou é estornado. A tela mostra o contador (por exemplo "87 de 100 no mês · excedente 0 · renova em 01/12"), o excedente, a projeção do ciclo no ritmo dos últimos 7 dias, o uso por função e por dia e o que vai para a fatura. O sino avisa em 80% e em 100% da franquia, uma vez por ciclo. Nada é bloqueado; só um limite combinado com a MotorCX pode parar a IA no mês ("fale com o suporte"). Mudar a franquia ou pôr um limite: fale com o suporte.
 - Na Mensageria, o controle de canal SMS · RCS · E-mail · WhatsApp. Canal não liberado aparece desabilitado; o último canal fica lembrado.
 - Console MotorCX (só equipe): Clientes (Empresas, Saúde, Implantação, Carteiras, Contatos do site, Integrações) · Suporte (Atendimento, Assistente) · Financeiro (Faturamento, Margem) · Mensageria (Produtos e preços, Fornecedores e rotas, Qualidade, Filtro de inteligência) · Administração (Equipe, Auditoria) · Sistema (E-mails).
-- Busca ⌘K (Ctrl+K): leva direto às telas; entende sinônimos e palavras sem acento (por exemplo "renitencia" ou "rediscagem" abrem Regras de discagem; "credor" abre Carteiras; "upload" ou "mailing" abrem Cargas; "onboarding" abre o Assistente de implantação). Atalhos da busca: Lista do dia, Lista do dia da Jornada, Respostas dos clientes, Abrir chamado, Meus chamados, Convidar membro, Contatos da empresa, Uso de IA, Faturas, Minha conta, Verificação em duas etapas, Documentação, Assistente de implantação, Carteiras, Cargas, Orquestração, Regras de discagem, Agente virtual, Canais e Frases (cada um só aparece para quem tem a área e a permissão).
+- Busca ⌘K (Ctrl+K): leva direto às telas; entende sinônimos e palavras sem acento (por exemplo "renitencia" ou "rediscagem" abrem Regras de discagem; "credor" abre Carteiras; "upload" ou "mailing" abrem Cargas; "onboarding" abre o Assistente de implantação). Atalhos da busca: Lista do dia, Lista do dia da Jornada, Respostas dos clientes, Abrir chamado, Meus chamados, Convidar membro, Contatos da empresa, Uso de IA, Faturas, Minha conta, Verificação em duas etapas, Documentação, Assistente de implantação, Carteiras, Cargas, Orquestração, Regras de discagem, Agente Voz/CX, Agente de voz, Ligações do agente, Telefonia, Speech Analytics, Gravações, Entrada de gravações, Canais e Frases (cada um só aparece para quem tem a área e a permissão).
 
 No celular, o menu lateral vai para a gaveta do botão ☰.
 
-Endereços antigos continuam funcionando e levam ao novo: /workspace vai para /inicio; Membros, Usuários e Permissões vão para Empresa › Pessoas e perfis; /auditoria vai para Empresa › Auditoria; as abas antigas de Minha conta vão para /conta.
+Endereços antigos continuam funcionando e levam ao novo: /workspace vai para /inicio; Membros, Usuários e Permissões vão para Empresa › Pessoas e perfis; /auditoria vai para Empresa › Auditoria; as abas antigas de Minha conta vão para /conta; /discagem vai para /voz/discagem; /canais/agente-virtual/… vai para /voz/agente/…; /mensageria/voz/lotes vai para /voz/ligacoes; /gravacoes vai para /speech-analytics/gravacoes; /envios/gravacoes-discador vai para /speech-analytics/entrada.
 
 Cabeçalho de cada tela: título à esquerda e uma linha de contexto (empresa, produto, canal na Mensageria e a data). À direita, o campo "Buscar cliente" (⌘K ou Ctrl+K), que procura só por ID do cliente ou número do contrato, e o botão principal da tela. Na Mensageria, o selo de modo (Simulação ou Envio real) fica ao lado do título.
 
@@ -207,19 +209,19 @@ Cadastro dos canais da empresa (horário de envio e custo) e das mensagens (perm
 
 ### Regras de discagem
 
-Cobrança › Estratégia › Regras de discagem (antes "Discagem"; endereço /discagem). Por carteira: quantas vezes ligar por dia e por número (renitência por situação), quando rediscar depois de não atendeu, ocupado ou caixa postal (regra por sinalização, "rediscar depois de N minutos"), modo de discagem (vertical ou horizontal, spins), resubmit e reciclagem do mailing, chamadas curtas, horários por UF/DDD e o resultado do dia. Sem nada salvo, vale o padrão MotorCX (3 tentativas por número, seg–sex 8h–20h, sábado 8h–14h). Quem edita: "Editar canais e frases" (ou a equipe). Para achar pela busca: digite discagem, renitência, rediscagem, tentativas, spins ou horário de ligar.
+Agente Voz/CX › Discagem (antes Cobrança › Estratégia › Regras de discagem; endereço /voz/discagem; o antigo /discagem continua abrindo). Vale para o agente de voz MotorCX e também para o discador e o AGV próprios da empresa. Por carteira: quantas vezes ligar por dia e por número (renitência por situação), quando rediscar depois de não atendeu, ocupado ou caixa postal (regra por sinalização, "rediscar depois de N minutos"), modo de discagem (vertical ou horizontal, spins), resubmit e reciclagem do mailing, chamadas curtas, horários por UF/DDD e o resultado do dia. Sem nada salvo, vale o padrão MotorCX (3 tentativas por número, seg–sex 8h–20h, sábado 8h–14h). Quem edita: "Editar canais e frases" (ou a equipe). Para achar pela busca: digite discagem, renitência, rediscagem, tentativas, spins ou horário de ligar.
 
 ### Agente virtual
 
 Onde fica cada parte:
 
-- Fluxos (Cobrança › Canais › Agente virtual ou a busca "agente virtual"; endereço /canais/agente-virtual): a lista de fluxos do agente, com as abas Configuração do canal, Modelos de mensagem, Fluxos, Testar conversa e Desempenho.
+- Fluxos (Agente Voz/CX › Agente de voz ou a busca "agente virtual"; endereço /voz/agente): a lista de fluxos do agente, com as abas Fluxos, Testar conversa e Desempenho. O horário e os limites do canal continuam em Cobrança › Configurações › Canais; as frases, em Frases.
 - Pedido em texto: descreva em português o que o agente deve fazer ("persona"); a IA gera um rascunho do fluxo (abertura → identidade → conversa → finais), que abre para revisar. Dá para descartar o pedido.
 - Editor: quadro por ramos. "Enviar para aprovação" fica travado enquanto houver pendência (por exemplo, falta a alçada de desconto ou um ramo sem fim).
 - Testar: simulador (você conversa como cliente), casos de teste, roleplay com personas e "Ouvir a voz".
 - Aprovar e colocar em uso na carteira: só o cliente. A equipe MotorCX pode montar e testar o fluxo pelo cliente.
 - Linha (tronco e número) e conectores: a equipe cadastra (Console › Fornecedores e rotas › Voz; Empresa › Integrações › Conectores).
-- Depois de ligado: os lotes de ligações do dia ficam em Mensageria › Agente virtual (reenviar, reciclar) e as regras de quantas vezes ligar em Regras de discagem.
+- Depois de ligado: os lotes de ligações do dia ficam em Agente Voz/CX › Ligações (reenviar, reciclar, pausar) e as regras de quantas vezes ligar em Agente Voz/CX › Discagem. As gravações e as análises ficam em Speech Analytics.
 
 ---
 

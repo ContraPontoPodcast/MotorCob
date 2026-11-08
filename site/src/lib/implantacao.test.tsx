@@ -190,10 +190,11 @@ test('lê CSV (; e Latin-1) e XLSX no navegador, sem biblioteca de planilha', ()
 });
 
 // ------------------------------------------------------------------ ganhos rápidos: menu e ⌘K
-test('menu: Discagem virou "Regras de discagem" (só esse nome mudou)', () => {
-	const nomes = ABAS.cobranca!.grupos.flatMap(g => g.abas.map(a => a.nome));
-	assert.ok(nomes.includes('Regras de discagem'));
-	assert.ok(!nomes.includes('Discagem'));
+test('menu: as Regras de discagem saíram da Cobrança e são a aba Discagem do Agente Voz/CX', () => {
+	const cobranca = ABAS.cobranca!.grupos.flatMap(g => g.abas);
+	assert.ok(!cobranca.some(a => a.to === '/discagem' || a.nome === 'Regras de discagem'));
+	const voz = ABAS.voz!.grupos.flatMap(g => g.abas);
+	assert.ok(voz.some(a => a.nome === 'Discagem' && a.to === '/voz/discagem'));
 });
 
 test('⌘K acha Discagem, Carteiras, Cargas e Orquestração por sinônimo e sem acento', () => {
