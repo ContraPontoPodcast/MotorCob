@@ -22,6 +22,8 @@
 #                                      só códigos e contagens, sem IA; SQL 66)
 #   motorcx-voz-gerar-fluxo.service    contínuo: gera o rascunho do fluxo a partir do pedido em texto (a cada 15 s;
 #                                      metadado motorcx-gerar-fluxo=1; sem ele, sai sem fazer nada; SQL 58/66)
+#   motorcx-voz-gerar-segmentacao.service contínuo: "Descrever segmentos e régua" (a cada 10 s; metadado
+#                                      motorcx-gerar-segmentacao=1; sem ele, sai sem fazer nada; SQL 79)
 # Provedores de voz: /etc/motorcx/provedores.json e provedores_sip.json são da VM e nunca são sobrescritos. Se não
 # existem, entra o padrão seguro: só a Montagem, com as REFERÊNCIAS das chaves no cofre (motorcx-provedores.padrao.json),
 # e nenhum provedor SIP ([]). Exemplos completos: infra/asterisk/vm/provedores*.exemplo.json.
@@ -79,7 +81,8 @@ for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-s
          motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.service motorcx-voz-speech-temas.timer \
          motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-https.service \
          motorcx-voz-https.timer motorcx-voz-importador.service motorcx-voz-importador.timer \
-         motorcx-voz-fluxo-noite.service motorcx-voz-fluxo-noite.timer motorcx-voz-gerar-fluxo.service; do
+         motorcx-voz-fluxo-noite.service motorcx-voz-fluxo-noite.timer motorcx-voz-gerar-fluxo.service \
+         motorcx-voz-gerar-segmentacao.service; do
   baixar_arquivo "$u" > "/etc/systemd/system/$u" || true
 done
 install -d -m 755 /usr/local/share/motorcx/caddy
@@ -109,6 +112,7 @@ systemctl enable --now motorcx-voz-config.timer motorcx-voz-transcricao.timer mo
   motorcx-voz-speech.timer motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.timer motorcx-voz-https.timer \
   motorcx-voz-importador.timer motorcx-voz-fluxo-noite.timer
 systemctl enable --now motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
-  motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-gerar-fluxo.service
+  motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-gerar-fluxo.service \
+  motorcx-voz-gerar-segmentacao.service
 systemctl enable caddy >/dev/null 2>&1 || true
 /usr/local/bin/motorcx-voz-https || true          # rotas ligadas, certificado e reload (de novo a cada 2 min)

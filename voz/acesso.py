@@ -7,7 +7,8 @@
                   voz-arquivos com um bilhete de uso único que o banco emite para UM caminho validado.
 
 AcessoProprio tem a MESMA interface que a voz usa da classe Supabase (selecionar, inserir, rpc, baixar, enviar,
-apagar_arquivos): configuracao.py, registro.py, publicacao.py, fluxo.py, gerar_fluxo.py e o orquestrador não mudam.
+apagar_arquivos): configuracao.py, registro.py, publicacao.py, fluxo.py, gerar_fluxo.py, gerar_segmentacao.py e o
+orquestrador não mudam.
 Tabela ou RPC fora da voz é recusada aqui e, de novo, no banco.
 
 Variáveis (gravadas em /run/motorcx/voz.env por infra/asterisk/vm/motorcx-voz-segredos a partir dos metadados;
@@ -96,6 +97,8 @@ RPC = {
     "registrar_transcricao_voz": "registrar_transcricao",
     # SQL 66 · job noturno das métricas do Fluxo do agente (voz/fluxo_metricas.py)
     "fluxo_empresas_voz": "fluxo_empresas", "agregar_fluxo_dia": "agregar_fluxo_dia",
+    # SQL 79 · Descrever segmentos e régua (voz/gerar_segmentacao.py): fila e devolução da proposta
+    "pegar_pedido_segmentacao": "pegar_pedido_segmentacao", "registrar_segmentacao": "registrar_segmentacao",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual

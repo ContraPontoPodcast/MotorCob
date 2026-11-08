@@ -4,14 +4,18 @@ import { toast } from 'sonner';
 import { friendlyError, supabase, type Row } from '@/lib/supabase';
 
 /** Segmentação (protótipo aprovado, tela 1): três caminhos com o MESMO peso (mesmo tamanho, mesmo miolo; nenhum
- *  recomendado). "Descrever segmentos e régua" fica em breve até a etapa 5; o que já existe continua. */
-export function CaminhosSegmentacao({ onNovo, onUsar, disabled }: { onNovo: () => void; onUsar: () => void; disabled?: boolean }) {
+ *  recomendado). "Descrever segmentos e régua" (etapa 5, SQL 79) é uma opção a mais; "IA" é só um selo. Sem a permissão
+ *  de editar a orquestração, o caminho de IA fica escondido (SPEC §6); o que já existe continua. */
+export function CaminhosSegmentacao({ onNovo, onUsar, onDescrever, podeDescrever = true, disabled }: {
+	onNovo: () => void; onUsar: () => void; onDescrever?: () => void; podeDescrever?: boolean; disabled?: boolean;
+}) {
 	const cls = 'flex min-h-[132px] flex-col items-start gap-2.5 rounded-xl border border-[var(--base-borda)] bg-[var(--base-cartao)] p-4 text-left transition enabled:hover:border-[var(--destaque)] enabled:hover:bg-[var(--base-fill)] disabled:cursor-not-allowed';
 	const ico = 'grid h-8 w-8 flex-none place-items-center rounded-lg bg-[var(--base-fill)] text-[var(--base-texto-2)]';
+	const comIA = podeDescrever && !!onDescrever;
 	return (
 		<div>
 			<h2 className="text-[15px] font-bold text-[var(--base-texto)]">Como montar os segmentos desta carteira</h2>
-			<div className="mt-3 grid auto-rows-fr gap-2.5 md:grid-cols-3" data-testid="caminhos-segmentacao">
+			<div className={`mt-3 grid auto-rows-fr gap-2.5 ${comIA ? 'md:grid-cols-3' : 'md:grid-cols-2'}`} data-testid="caminhos-segmentacao">
 				<button type="button" disabled={disabled} onClick={onNovo} className={`${cls} disabled:opacity-50`}>
 					<span className={ico} aria-hidden="true"><Plus size={16} /></span>
 					<span className="text-[13.5px] font-bold text-[var(--base-texto)]">Novo segmento</span>
@@ -22,17 +26,18 @@ export function CaminhosSegmentacao({ onNovo, onUsar, disabled }: { onNovo: () =
 					<span className="text-[13.5px] font-bold text-[var(--base-texto)]">Usar segmento da empresa</span>
 					<span className="text-xs text-[var(--base-texto-2)]">Ligue nesta carteira um segmento que a empresa já tem.</span>
 				</button>
-				<button type="button" disabled aria-disabled="true" title="Em breve" className={cls}>
-					<span className={ico} aria-hidden="true"><Sparkles size={16} /></span>
-					<span className="flex flex-wrap items-center gap-1.5">
-						<span className="text-[13.5px] font-bold text-[var(--base-texto-2)]">Descrever segmentos e régua</span>
-						<span className="rounded-full bg-[var(--base-fill)] px-2 py-0.5 text-[9px] font-bold uppercase text-[var(--base-texto-3)]">IA</span>
-						<span className="rounded-full bg-[var(--base-fill)] px-2 py-0.5 text-[9px] font-bold uppercase text-[var(--base-texto-3)]">em breve</span>
-					</span>
-					<span className="text-xs text-[var(--base-texto-3)]">Escreva como a carteira se divide; a IA propõe segmentos e régua.</span>
-				</button>
+				{comIA && (
+					<button type="button" disabled={disabled} onClick={onDescrever} className={`${cls} disabled:opacity-50`} data-caminho="descrever">
+						<span className={ico} aria-hidden="true"><Sparkles size={16} /></span>
+						<span className="flex flex-wrap items-center gap-1.5">
+							<span className="text-[13.5px] font-bold text-[var(--base-texto)]">Descrever segmentos e régua</span>
+							<span className="rounded-full bg-[var(--estado-info-fundo)] px-2 py-0.5 text-[9px] font-bold uppercase text-[var(--estado-info)]">IA</span>
+						</span>
+						<span className="text-xs text-[var(--base-texto-2)]">Escreva como a carteira se divide; a IA propõe segmentos e régua.</span>
+					</button>
+				)}
 			</div>
-			<p className="mt-2 text-[11px] text-[var(--base-texto-3)]">Os caminhos têm o mesmo peso e nenhum é recomendado. O cliente fica no 1º segmento em que se encaixa, de cima para baixo; segmentos com dias de atraso são reavaliados todo dia.</p>
+			<p className="mt-2 text-[11px] text-[var(--base-texto-3)]">{comIA ? <><b>Descrever é uma opção a mais; o que já existe continua.</b> Os caminhos têm o mesmo peso e nenhum é recomendado. Descrever só propõe: nada muda até você revisar e aplicar, e cada geração usa 2 créditos de IA. </> : 'Os caminhos têm o mesmo peso e nenhum é recomendado. '}O cliente fica no 1º segmento em que se encaixa, de cima para baixo; segmentos com dias de atraso são reavaliados todo dia.</p>
 		</div>
 	);
 }

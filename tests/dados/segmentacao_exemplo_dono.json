@@ -1,0 +1,1267 @@
+{
+ "_leia": "Exemplo do dono (protótipo proto-segmentacao, tela 2): o texto, o contexto que o banco manda à IA (sem dado pessoal) e a entrega que um LLM falso devolve (ferramenta entregar_segmentacao). Personas por nome com '@' (o teste/E2E troca pelo id da carteira). Usado em tests/test_segmentacao_ia.py e no E2E.",
+ "contexto": {
+  "pedido": 1,
+  "empresa_id": 1,
+  "credor_id": 1,
+  "texto": "Crie uma régua de cobrança para clientes com 0 a 30 dias de atraso. Priorize as personas com maior propensão ao pagamento nessa faixa e acione cada uma pelos canais de maior aderência, conforme o mapeamento existente.\nPara os clientes que não se enquadram nos perfis mapeados, aplique o seguinte ciclo, contado a partir do primeiro acionamento:\nDia 1 — SMS e/ou discador.\nDia 2 — RCS, e-mail e discador.\nDia 3 — Discador e agente de voz.\nNo 4º dia, reinicie o ciclo pelo Dia 1. Repita enquanto houver saldo em aberto e o cliente estiver na faixa de até 30 dias de atraso.\nApresente a régua em uma tabela com perfil do cliente, prioridade, dia do ciclo e canais de acionamento.\n\nPara clientes de 31 a 90 dias de atraso com ticket até R$ 2 mil, use uma régua só digital: Dia 1 WhatsApp, se não tiver WhatsApp vai RCS; Dia 3 SMS; Dia 5 e-mail. Repita a cada 7 dias.\n\nDe 31 a 90 dias com ticket acima de R$ 2 mil, priorize falar com o cliente: Dia 1 discador e WhatsApp, Dia 2 discador, Dia 4 e-mail e discador, reiniciando a cada 5 dias. Para a persona Digital nativo, troque o discador do Dia 1 por RCS.\n\nDe 91 a 180 dias: Dia 1 SMS, Dia 2 discador e Dia 5 e-mail, em ciclos de 10 dias. Quem atender e não fechar acordo deve ser acionado todo dia.\n\nAcima de 180 dias: só bureau e discador, nada de mensagem. Mande para o enriquecimento no bureau na entrada e ligue a cada 3 dias.\n\nQuem tem acordo, em dia ou atrasado, segue a régua padrão do motor em todos os segmentos.",
+  "hash_base": "h0",
+  "carteira": {
+   "nome": "Cartões"
+  },
+  "segmentos": [
+   {
+    "codigo": "JUR",
+    "nome": "Jurídico",
+    "ordem": 10,
+    "condicoes": [
+     {
+      "campo": "status_juridico",
+      "op": "em",
+      "valor": [
+       "ajuizado",
+       "em execução"
+      ]
+     }
+    ],
+    "em_uso": true,
+    "compartilhado_com": [],
+    "estrategia_propria": true,
+    "estrategia_nome": "Jurídico · Cartões"
+   },
+   {
+    "codigo": "A1",
+    "nome": "Primeiro atraso",
+    "ordem": 20,
+    "condicoes": [
+     {
+      "campo": "dias_atraso",
+      "op": "entre",
+      "valor": [
+       1,
+       30
+      ]
+     }
+    ],
+    "em_uso": true,
+    "compartilhado_com": [],
+    "estrategia_propria": false,
+    "estrategia_nome": null
+   },
+   {
+    "codigo": "A2",
+    "nome": "Atraso médio",
+    "ordem": 30,
+    "condicoes": [
+     {
+      "campo": "dias_atraso",
+      "op": "entre",
+      "valor": [
+       31,
+       90
+      ]
+     }
+    ],
+    "em_uso": true,
+    "compartilhado_com": [
+     "Consignado"
+    ],
+    "estrategia_propria": false,
+    "estrategia_nome": "Atraso médio"
+   },
+   {
+    "codigo": "B1",
+    "nome": "Atraso longo",
+    "ordem": 40,
+    "condicoes": [
+     {
+      "campo": "dias_atraso",
+      "op": "entre",
+      "valor": [
+       91,
+       360
+      ]
+     }
+    ],
+    "em_uso": true,
+    "compartilhado_com": [],
+    "estrategia_propria": true,
+    "estrategia_nome": "Atraso longo · Cartões"
+   }
+  ],
+  "codigos_empresa": [
+   "JUR",
+   "A1",
+   "A2",
+   "B1"
+  ],
+  "campos": [
+   {
+    "nome": "saldo",
+    "rotulo": "Saldo total",
+    "tipo": "numero"
+   },
+   {
+    "nome": "dias_atraso",
+    "rotulo": "Dias de atraso",
+    "tipo": "numero"
+   },
+   {
+    "nome": "qtd_contratos",
+    "rotulo": "Quantidade de contratos",
+    "tipo": "numero"
+   },
+   {
+    "nome": "idade",
+    "rotulo": "Idade (anos)",
+    "tipo": "numero"
+   },
+   {
+    "nome": "tem_email",
+    "rotulo": "Tem e-mail",
+    "tipo": "sim_nao"
+   },
+   {
+    "nome": "persona",
+    "rotulo": "Persona",
+    "tipo": "texto"
+   },
+   {
+    "nome": "produto",
+    "rotulo": "produto",
+    "tipo": "texto"
+   },
+   {
+    "nome": "uf",
+    "rotulo": "uf",
+    "tipo": "texto"
+   },
+   {
+    "nome": "valor_parcela",
+    "rotulo": "valor_parcela",
+    "tipo": "numero"
+   },
+   {
+    "nome": "status_juridico",
+    "rotulo": "status_juridico",
+    "tipo": "texto"
+   }
+  ],
+  "valores": {
+   "produto": [
+    {
+     "valor": "Cartão",
+     "clientes": 6920
+    },
+    {
+     "valor": "Crédito pessoal",
+     "clientes": 2410
+    },
+    {
+     "valor": "Consignado",
+     "clientes": 670
+    }
+   ],
+   "status_juridico": [
+    {
+     "valor": "ajuizado",
+     "clientes": 300
+    },
+    {
+     "valor": "em execução",
+     "clientes": 80
+    }
+   ]
+  },
+  "canais": {
+   "whatsapp": "ativo",
+   "rcs": "ativo",
+   "sms": "ativo",
+   "email": "ativo",
+   "agente_voz": "desligado",
+   "discador": "ativo"
+  },
+  "personas": [
+   {
+    "id": "11",
+    "nome": "Digital nativo",
+    "canais": [
+     "whatsapp",
+     "rcs",
+     "sms",
+     "email"
+    ]
+   },
+   {
+    "id": "12",
+    "nome": "Conectado (WhatsApp + e-mail)",
+    "canais": [
+     "whatsapp",
+     "email",
+     "sms",
+     "agente_voz"
+    ]
+   },
+   {
+    "id": "13",
+    "nome": "Atraso recente, ticket baixo",
+    "canais": [
+     "sms",
+     "whatsapp",
+     "rcs",
+     "agente_voz"
+    ]
+   },
+   {
+    "id": "14",
+    "nome": "Celular sem WhatsApp confirmado",
+    "canais": [
+     "rcs",
+     "sms",
+     "agente_voz",
+     "discador"
+    ]
+   }
+  ]
+ },
+ "entrega": {
+  "esquema": 2,
+  "ticket": "saldo",
+  "demais": "manter",
+  "segmentos": [
+   {
+    "ref": "s1",
+    "acao": "alterar",
+    "existente": "A1",
+    "codigo_sugerido": null,
+    "nome": "Atraso 0–30",
+    "condicoes": [
+     {
+      "campo": "dias_atraso",
+      "op": "entre",
+      "valor": [
+       0,
+       30
+      ]
+     }
+    ],
+    "trechos": [
+     "Crie uma régua de cobrança para clientes com 0 a 30 dias de atraso."
+    ],
+    "estrategia": "nova",
+    "intencao": {
+     "fases": {
+      "localizacao": {
+       "dias": [
+        {
+         "dia": 1,
+         "acoes": [
+          {
+           "canal": "sms",
+           "modo": "sempre"
+          },
+          {
+           "canal": "discador",
+           "modo": "reserva"
+          }
+         ]
+        },
+        {
+         "dia": 2,
+         "acoes": [
+          {
+           "canal": "rcs",
+           "modo": "sempre"
+          },
+          {
+           "canal": "email",
+           "modo": "sempre"
+          },
+          {
+           "canal": "discador",
+           "modo": "sempre"
+          }
+         ]
+        },
+        {
+         "dia": 3,
+         "acoes": [
+          {
+           "canal": "discador",
+           "modo": "sempre"
+          }
+         ]
+        }
+       ],
+       "ncp_no_dia": 4
+      },
+      "giro": {
+       "ciclo_dias": 3,
+       "voltas": 6,
+       "igual_localizacao": true,
+       "dias": []
+      },
+      "cpc": {
+       "modo": "padrao",
+       "intervalo_cpb": null
+      },
+      "preventivo": "padrao",
+      "quebra": "padrao"
+     },
+     "personas": [
+      {
+       "persona": "@Digital nativo",
+       "como": "mapeamento",
+       "dias": []
+      },
+      {
+       "persona": "@Conectado (WhatsApp + e-mail)",
+       "como": "mapeamento",
+       "dias": []
+      },
+      {
+       "persona": "@Atraso recente, ticket baixo",
+       "como": "mapeamento",
+       "dias": []
+      },
+      {
+       "persona": "@Celular sem WhatsApp confirmado",
+       "como": "mapeamento",
+       "dias": []
+      }
+     ],
+     "travas": {
+      "intervalo_horas": 12,
+      "acoes_dia": 3
+     },
+     "flags_segmento": {
+      "so_digital": false,
+      "canais_bloqueados": []
+     },
+     "aguardar_canais": []
+    }
+   },
+   {
+    "ref": "s2",
+    "acao": "novo",
+    "existente": null,
+    "codigo_sugerido": "D90B",
+    "nome": "31–90 · até R$ 2 mil",
+    "condicoes": [
+     {
+      "campo": "dias_atraso",
+      "op": "entre",
+      "valor": [
+       31,
+       90
+      ]
+     },
+     {
+      "campo": "$ticket",
+      "op": "<=",
+      "valor": 2000
+     }
+    ],
+    "trechos": [
+     "Para clientes de 31 a 90 dias de atraso com ticket até R$ 2 mil, use uma régua só digital"
+    ],
+    "estrategia": "nova",
+    "intencao": {
+     "fases": {
+      "localizacao": {
+       "dias": [
+        {
+         "dia": 1,
+         "acoes": [
+          {
+           "canal": "whatsapp",
+           "modo": "sempre"
+          },
+          {
+           "canal": "rcs",
+           "modo": "senao"
+          }
+         ]
+        },
+        {
+         "dia": 3,
+         "acoes": [
+          {
+           "canal": "sms",
+           "modo": "sempre"
+          }
+         ]
+        },
+        {
+         "dia": 5,
+         "acoes": [
+          {
+           "canal": "email",
+           "modo": "sempre"
+          }
+         ]
+        }
+       ],
+       "ncp_no_dia": 8
+      },
+      "giro": {
+       "ciclo_dias": 7,
+       "voltas": 6,
+       "igual_localizacao": true,
+       "dias": []
+      },
+      "cpc": {
+       "modo": "padrao",
+       "intervalo_cpb": null
+      },
+      "preventivo": "padrao",
+      "quebra": "padrao"
+     },
+     "personas": [],
+     "travas": {
+      "intervalo_horas": null,
+      "acoes_dia": null
+     },
+     "flags_segmento": {
+      "so_digital": false,
+      "canais_bloqueados": []
+     },
+     "aguardar_canais": []
+    }
+   },
+   {
+    "ref": "s3",
+    "acao": "novo",
+    "existente": null,
+    "codigo_sugerido": "D90A",
+    "nome": "31–90 · acima de R$ 2 mil",
+    "condicoes": [
+     {
+      "campo": "dias_atraso",
+      "op": "entre",
+      "valor": [
+       31,
+       90
+      ]
+     },
+     {
+      "campo": "$ticket",
+      "op": ">",
+      "valor": 2000
+     }
+    ],
+    "trechos": [
+     "De 31 a 90 dias com ticket acima de R$ 2 mil, priorize falar com o cliente"
+    ],
+    "estrategia": "nova",
+    "intencao": {
+     "fases": {
+      "localizacao": {
+       "dias": [
+        {
+         "dia": 1,
+         "acoes": [
+          {
+           "canal": "discador",
+           "modo": "sempre"
+          },
+          {
+           "canal": "whatsapp",
+           "modo": "sempre"
+          }
+         ]
+        },
+        {
+         "dia": 2,
+         "acoes": [
+          {
+           "canal": "discador",
+           "modo": "sempre"
+          }
+         ]
+        },
+        {
+         "dia": 4,
+         "acoes": [
+          {
+           "canal": "email",
+           "modo": "sempre"
+          },
+          {
+           "canal": "discador",
+           "modo": "sempre"
+          }
+         ]
+        }
+       ],
+       "ncp_no_dia": 6
+      },
+      "giro": {
+       "ciclo_dias": 5,
+       "voltas": 6,
+       "igual_localizacao": true,
+       "dias": []
+      },
+      "cpc": {
+       "modo": "padrao",
+       "intervalo_cpb": null
+      },
+      "preventivo": "padrao",
+      "quebra": "padrao"
+     },
+     "personas": [
+      {
+       "persona": "@Digital nativo",
+       "como": "proprio",
+       "dias": [
+        {
+         "dia": 1,
+         "acoes": [
+          {
+           "canal": "rcs",
+           "modo": "sempre"
+          },
+          {
+           "canal": "whatsapp",
+           "modo": "sempre"
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "travas": {
+      "intervalo_horas": null,
+      "acoes_dia": null
+     },
+     "flags_segmento": {
+      "so_digital": false,
+      "canais_bloqueados": []
+     },
+     "aguardar_canais": []
+    }
+   },
+   {
+    "ref": "s4",
+    "acao": "desligar",
+    "existente": "A2",
+    "codigo_sugerido": null,
+    "nome": "Atraso médio",
+    "condicoes": [],
+    "trechos": [],
+    "estrategia": "manter",
+    "intencao": null
+   },
+   {
+    "ref": "s5",
+    "acao": "alterar",
+    "existente": "B1",
+    "codigo_sugerido": null,
+    "nome": "91 a 180 dias",
+    "condicoes": [
+     {
+      "campo": "dias_atraso",
+      "op": "entre",
+      "valor": [
+       91,
+       180
+      ]
+     }
+    ],
+    "trechos": [
+     "De 91 a 180 dias: Dia 1 SMS, Dia 2 discador e Dia 5 e-mail"
+    ],
+    "estrategia": "nova",
+    "intencao": {
+     "fases": {
+      "localizacao": {
+       "dias": [
+        {
+         "dia": 1,
+         "acoes": [
+          {
+           "canal": "sms",
+           "modo": "sempre"
+          }
+         ]
+        },
+        {
+         "dia": 2,
+         "acoes": [
+          {
+           "canal": "discador",
+           "modo": "sempre"
+          }
+         ]
+        },
+        {
+         "dia": 5,
+         "acoes": [
+          {
+           "canal": "email",
+           "modo": "sempre"
+          }
+         ]
+        }
+       ],
+       "ncp_no_dia": 8
+      },
+      "giro": {
+       "ciclo_dias": 10,
+       "voltas": 6,
+       "igual_localizacao": true,
+       "dias": []
+      },
+      "cpc": {
+       "modo": "intervalo",
+       "intervalo_cpb": 1
+      },
+      "preventivo": "padrao",
+      "quebra": "padrao"
+     },
+     "personas": [],
+     "travas": {
+      "intervalo_horas": null,
+      "acoes_dia": null
+     },
+     "flags_segmento": {
+      "so_digital": false,
+      "canais_bloqueados": []
+     },
+     "aguardar_canais": []
+    }
+   },
+   {
+    "ref": "s6",
+    "acao": "novo",
+    "existente": null,
+    "codigo_sugerido": "X180",
+    "nome": "Acima de 180 dias",
+    "condicoes": [
+     {
+      "campo": "dias_atraso",
+      "op": ">",
+      "valor": 180
+     }
+    ],
+    "trechos": [
+     "Acima de 180 dias: só bureau e discador, nada de mensagem."
+    ],
+    "estrategia": "nova",
+    "intencao": {
+     "fases": {
+      "localizacao": {
+       "dias": [
+        {
+         "dia": 1,
+         "acoes": [
+          {
+           "canal": "enriquecimento",
+           "modo": "sempre"
+          },
+          {
+           "canal": "discador",
+           "modo": "sempre"
+          }
+         ]
+        },
+        {
+         "dia": 4,
+         "acoes": [
+          {
+           "canal": "discador",
+           "modo": "sempre"
+          }
+         ]
+        }
+       ],
+       "ncp_no_dia": 7
+      },
+      "giro": {
+       "ciclo_dias": 3,
+       "voltas": 6,
+       "igual_localizacao": false,
+       "dias": [
+        {
+         "dia": 1,
+         "acoes": [
+          {
+           "canal": "discador",
+           "modo": "sempre"
+          }
+         ]
+        }
+       ]
+      },
+      "cpc": {
+       "modo": "padrao",
+       "intervalo_cpb": null
+      },
+      "preventivo": "padrao",
+      "quebra": "padrao"
+     },
+     "personas": [],
+     "travas": {
+      "intervalo_horas": null,
+      "acoes_dia": null
+     },
+     "flags_segmento": {
+      "so_digital": false,
+      "canais_bloqueados": []
+     },
+     "aguardar_canais": []
+    }
+   }
+  ],
+  "entendi": [
+   {
+    "frase": "Crie uma régua de cobrança para clientes com 0 a 30 dias de atraso.",
+    "tipo": "segmento",
+    "ref": "s1",
+    "item": "A1 passa a dias_atraso entre [0, 30] (era 1–30)."
+   },
+   {
+    "frase": "Priorize as personas com maior propensão ao pagamento nessa faixa",
+    "tipo": "regua",
+    "ref": "s1",
+    "item": "Ordem das raias e da tabela (não reordena as personas da carteira)."
+   },
+   {
+    "frase": "e acione cada uma pelos canais de maior aderência, conforme o mapeamento existente.",
+    "tipo": "regua",
+    "ref": "s1",
+    "item": "Uma raia por persona em Cliente novo e Não CPC: Dia 1 = 1º canal do mapeamento, Dia 2 = 2º, Dia 3 = 3º."
+   },
+   {
+    "frase": "Para os clientes que não se enquadram nos perfis mapeados, aplique o seguinte ciclo",
+    "tipo": "regua",
+    "ref": "s1",
+    "item": "Raia Público geral. Dia 1 = 1ª lista do cliente (Cliente novo D+1)."
+   },
+   {
+    "frase": "Dia 1 — SMS e/ou discador.",
+    "tipo": "regua",
+    "ref": "s1",
+    "item": "SMS ↻ reserva Discador."
+   },
+   {
+    "frase": "Dia 2 — RCS, e-mail e discador.",
+    "tipo": "regua",
+    "ref": "s1",
+    "item": "RCS, E-mail e Discador, cada um “sempre” (3 ações no dia)."
+   },
+   {
+    "frase": "Dia 3 — Discador e agente de voz.",
+    "tipo": "fora",
+    "ref": "s1",
+    "item": "Discador. Agente virtual desligado nesta carteira."
+   },
+   {
+    "frase": "No 4º dia, reinicie o ciclo pelo Dia 1.",
+    "tipo": "regua",
+    "ref": "s1",
+    "item": "Sem CPC, vira Não CPC no D+4; Não CPC em ciclo de 3 dias com os mesmos Dias 1–3, 6 voltas."
+   },
+   {
+    "frase": "Repita enquanto houver saldo em aberto e o cliente estiver na faixa de até 30 dias de atraso.",
+    "tipo": "segmento",
+    "ref": "s1",
+    "item": "“Na faixa” = estar em A1; passou de 30 dias, muda de segmento no mesmo dia (reavaliação diária)."
+   },
+   {
+    "frase": "Apresente a régua em uma tabela com perfil do cliente, prioridade, dia do ciclo e canais de acionamento.",
+    "tipo": "regua",
+    "ref": "s1",
+    "item": "Tabela abaixo (só visualização)."
+   },
+   {
+    "frase": "Para clientes de 31 a 90 dias de atraso com ticket até R$ 2 mil",
+    "tipo": "segmento",
+    "ref": "s2",
+    "item": "D90B novo: dias_atraso entre [31, 90] e saldo até 2.000."
+   },
+   {
+    "frase": "use uma régua só digital: Dia 1 WhatsApp, se não tiver WhatsApp vai RCS; Dia 3 SMS; Dia 5 e-mail. Repita a cada 7 dias.",
+    "tipo": "regua",
+    "ref": "s2",
+    "item": "Dias 1, 3 e 5 só digital; Não CPC no D+8, ciclo de 7 dias."
+   },
+   {
+    "frase": "De 31 a 90 dias com ticket acima de R$ 2 mil",
+    "tipo": "segmento",
+    "ref": "s3",
+    "item": "D90A novo: dias_atraso entre [31, 90] e saldo acima de 2.000."
+   },
+   {
+    "frase": "Dia 1 discador e WhatsApp, Dia 2 discador, Dia 4 e-mail e discador, reiniciando a cada 5 dias. Para a persona Digital nativo, troque o discador do Dia 1 por RCS.",
+    "tipo": "regua",
+    "ref": "s3",
+    "item": "Ciclo de 5 dias; raia própria do Digital nativo no Dia 1 (RCS no lugar do discador)."
+   },
+   {
+    "frase": "De 91 a 180 dias",
+    "tipo": "segmento",
+    "ref": "s5",
+    "item": "B1 passa a 91–180 (era 91–360)."
+   },
+   {
+    "frase": "Dia 1 SMS, Dia 2 discador e Dia 5 e-mail, em ciclos de 10 dias. Quem atender e não fechar acordo deve ser acionado todo dia.",
+    "tipo": "regua",
+    "ref": "s5",
+    "item": "Ciclo de 10 dias; CPC · sem resposta a cada 1 dia."
+   },
+   {
+    "frase": "Acima de 180 dias",
+    "tipo": "segmento",
+    "ref": "s6",
+    "item": "X180 novo: dias_atraso maior que 180."
+   },
+   {
+    "frase": "só bureau e discador, nada de mensagem. Mande para o enriquecimento no bureau na entrada e ligue a cada 3 dias.",
+    "tipo": "regua",
+    "ref": "s6",
+    "item": "Cliente novo D1 enriquecimento + discador, D4 discador; Não CPC no D+7 em ciclo de 3 dias com discador."
+   },
+   {
+    "frase": "Quem tem acordo, em dia ou atrasado, segue a régua padrão do motor em todos os segmentos.",
+    "tipo": "regua",
+    "ref": "carteira",
+    "item": "Acordo antes do vencimento e parcela vencida: padrão do motor em todos."
+   }
+  ],
+  "suposicoes": [
+   {
+    "ref": "s1",
+    "texto": "Intervalo entre ações de 12 h em Cliente novo e Não CPC (mínimo do motor)."
+   },
+   {
+    "ref": "s1",
+    "texto": "Até 3 ações por dia (o Dia 2 tem 3 canais). Horário 08:00–20:00, domingo, feriado e Não Perturbe seguem a estratégia."
+   },
+   {
+    "ref": "s1",
+    "texto": "Personas usam os 3 primeiros canais do mapeamento; canal indisponível vira o próximo do mapeamento."
+   },
+   {
+    "ref": "s1",
+    "texto": "Quem já está em A1 hoje continua no estágio e no dia em que está; a régua nova vale a partir da próxima rotina."
+   },
+   {
+    "ref": "carteira",
+    "texto": "Mensagens não foram escolhidas: WhatsApp e RCS ficam “sem template” até você escolher."
+   },
+   {
+    "ref": "s4",
+    "texto": "A2 continua em Consignado com a estratégia “Atraso médio”, que não é apagada."
+   }
+  ],
+  "perguntas": [
+   {
+    "codigo": "ticket",
+    "ref": "carteira",
+    "texto": "“Ticket” é qual campo?",
+    "contexto": "Usado em D90B e D90A.",
+    "opcoes": [
+     {
+      "valor": "saldo",
+      "rotulo": "Saldo total",
+      "detalhe": "saldo · soma dos contratos",
+      "patch": []
+     },
+     {
+      "valor": "parcela",
+      "rotulo": "Valor da parcela",
+      "detalhe": "coluna valor_parcela da carga",
+      "patch": [
+       {
+        "ref": "carteira",
+        "caminho": "ticket",
+        "valor_json": "\"valor_parcela\""
+       }
+      ]
+     }
+    ],
+    "padrao": "saldo"
+   },
+   {
+    "codigo": "a2",
+    "ref": "s4",
+    "texto": "A2 · Atraso médio também está na carteira Consignado.",
+    "contexto": "Mudar a condição de A2 muda lá também. Por isso a proposta não altera A2.",
+    "opcoes": [
+     {
+      "valor": "desligar",
+      "rotulo": "Desligar A2 só aqui e criar D90B e D90A",
+      "detalhe": "Consignado não muda",
+      "patch": []
+     },
+     {
+      "valor": "alterar",
+      "rotulo": "Alterar A2 para “até R$ 2 mil” e criar só D90A",
+      "detalhe": "muda também em Consignado",
+      "patch": [
+       {
+        "ref": "s4",
+        "caminho": "acao",
+        "valor_json": "\"alterar\""
+       },
+       {
+        "ref": "s4",
+        "caminho": "nome",
+        "valor_json": "\"Atraso médio · até R$ 2 mil\""
+       },
+       {
+        "ref": "s4",
+        "caminho": "condicoes",
+        "valor_json": "[{\"campo\": \"dias_atraso\", \"op\": \"entre\", \"valor\": [31, 90]}, {\"campo\": \"$ticket\", \"op\": \"<=\", \"valor\": 2000}]"
+       },
+       {
+        "ref": "s4",
+        "caminho": "estrategia",
+        "valor_json": "\"nova\""
+       },
+       {
+        "ref": "s4",
+        "caminho": "intencao",
+        "valor_json": "{\"fases\": {\"localizacao\": {\"dias\": [{\"dia\": 1, \"acoes\": [{\"canal\": \"whatsapp\", \"modo\": \"sempre\"}, {\"canal\": \"rcs\", \"modo\": \"senao\"}]}, {\"dia\": 3, \"acoes\": [{\"canal\": \"sms\", \"modo\": \"sempre\"}]}, {\"dia\": 5, \"acoes\": [{\"canal\": \"email\", \"modo\": \"sempre\"}]}], \"ncp_no_dia\": 8}, \"giro\": {\"ciclo_dias\": 7, \"voltas\": 6, \"igual_localizacao\": true, \"dias\": []}, \"cpc\": {\"modo\": \"padrao\", \"intervalo_cpb\": null}, \"preventivo\": \"padrao\", \"quebra\": \"padrao\"}, \"personas\": [], \"travas\": {\"intervalo_horas\": null, \"acoes_dia\": null}, \"flags_segmento\": {\"so_digital\": false, \"canais_bloqueados\": []}, \"aguardar_canais\": []}"
+       },
+       {
+        "ref": "s2",
+        "caminho": "incluir",
+        "valor_json": "false"
+       }
+      ]
+     }
+    ],
+    "padrao": "desligar"
+   },
+   {
+    "codigo": "demais",
+    "ref": "carteira",
+    "texto": "Clientes com parcela ainda não vencida não cabem em nenhum segmento.",
+    "contexto": "Seu texto começa em 0 dia de atraso.",
+    "opcoes": [
+     {
+      "valor": "manter",
+      "rotulo": "Ficam em Demais",
+      "detalhe": "estratégia da carteira",
+      "patch": []
+     },
+     {
+      "valor": "a1",
+      "rotulo": "Entram em A1",
+      "detalhe": "A1 vira “até 30 dias”",
+      "patch": [
+       {
+        "ref": "s1",
+        "caminho": "condicoes",
+        "valor_json": "[{\"campo\": \"dias_atraso\", \"op\": \"<=\", \"valor\": 30}]"
+       }
+      ]
+     },
+     {
+      "valor": "desligar",
+      "rotulo": "Desligar Demais",
+      "detalhe": "sem ação; acordos continuam",
+      "patch": [
+       {
+        "ref": "carteira",
+        "caminho": "demais",
+        "valor_json": "\"desligar\""
+       }
+      ]
+     }
+    ],
+    "padrao": "manter"
+   },
+   {
+    "codigo": "a1d1",
+    "ref": "s1",
+    "texto": "Dia 1, “SMS e/ou discador”: como juntar os dois?",
+    "contexto": "",
+    "opcoes": [
+     {
+      "valor": "reserva",
+      "rotulo": "Discador como reserva",
+      "detalhe": "só se o SMS não der contato no dia",
+      "patch": []
+     },
+     {
+      "valor": "junto",
+      "rotulo": "Os dois sempre",
+      "detalhe": "SMS + Discador no mesmo dia",
+      "patch": [
+       {
+        "ref": "s1",
+        "caminho": "intencao.fases.localizacao.dias",
+        "valor_json": "[{\"dia\": 1, \"acoes\": [{\"canal\": \"sms\", \"modo\": \"sempre\"}, {\"canal\": \"discador\", \"modo\": \"sempre\"}]}, {\"dia\": 2, \"acoes\": [{\"canal\": \"rcs\", \"modo\": \"sempre\"}, {\"canal\": \"email\", \"modo\": \"sempre\"}, {\"canal\": \"discador\", \"modo\": \"sempre\"}]}, {\"dia\": 3, \"acoes\": [{\"canal\": \"discador\", \"modo\": \"sempre\"}]}]"
+       }
+      ]
+     },
+     {
+      "valor": "senao",
+      "rotulo": "Discador só sem SMS",
+      "detalhe": "quando não há celular para SMS",
+      "patch": [
+       {
+        "ref": "s1",
+        "caminho": "intencao.fases.localizacao.dias",
+        "valor_json": "[{\"dia\": 1, \"acoes\": [{\"canal\": \"sms\", \"modo\": \"sempre\"}, {\"canal\": \"discador\", \"modo\": \"senao\"}]}, {\"dia\": 2, \"acoes\": [{\"canal\": \"rcs\", \"modo\": \"sempre\"}, {\"canal\": \"email\", \"modo\": \"sempre\"}, {\"canal\": \"discador\", \"modo\": \"sempre\"}]}, {\"dia\": 3, \"acoes\": [{\"canal\": \"discador\", \"modo\": \"sempre\"}]}]"
+       }
+      ]
+     }
+    ],
+    "padrao": "reserva"
+   },
+   {
+    "codigo": "a1voz",
+    "ref": "s1",
+    "texto": "Dia 3 pede agente de voz, mas o Agente virtual está desligado nesta carteira.",
+    "contexto": "Na persona Celular sem WhatsApp, o 3º canal (Agente virtual) virou o próximo do mapeamento: Discador.",
+    "opcoes": [
+     {
+      "valor": "tirar",
+      "rotulo": "Tirar: Dia 3 só com Discador",
+      "detalhe": "",
+      "patch": []
+     },
+     {
+      "valor": "ativar",
+      "rotulo": "Vou ativar o canal",
+      "detalhe": "Aplicar fica bloqueado até ativar",
+      "patch": [
+       {
+        "ref": "s1",
+        "caminho": "intencao.fases.localizacao.dias",
+        "valor_json": "[{\"dia\": 1, \"acoes\": [{\"canal\": \"sms\", \"modo\": \"sempre\"}, {\"canal\": \"discador\", \"modo\": \"reserva\"}]}, {\"dia\": 2, \"acoes\": [{\"canal\": \"rcs\", \"modo\": \"sempre\"}, {\"canal\": \"email\", \"modo\": \"sempre\"}, {\"canal\": \"discador\", \"modo\": \"sempre\"}]}, {\"dia\": 3, \"acoes\": [{\"canal\": \"discador\", \"modo\": \"sempre\"}, {\"canal\": \"agente_voz\", \"modo\": \"sempre\"}]}]"
+       },
+       {
+        "ref": "s1",
+        "caminho": "intencao.aguardar_canais",
+        "valor_json": "[\"agente_voz\"]"
+       }
+      ]
+     }
+    ],
+    "padrao": "tirar"
+   },
+   {
+    "codigo": "a1prio",
+    "ref": "s1",
+    "texto": "“Priorizar” as personas por propensão vale onde?",
+    "contexto": "Cada cliente cai na 1ª persona da carteira que combina com ele.",
+    "opcoes": [
+     {
+      "valor": "raias",
+      "rotulo": "Só na ordem das raias e da tabela",
+      "detalhe": "não muda quem cai em qual persona",
+      "patch": []
+     },
+     {
+      "valor": "carteira",
+      "rotulo": "Reordenar as personas da carteira",
+      "detalhe": "vale para todas as estratégias; confirma em Personas",
+      "patch": []
+     }
+    ],
+    "padrao": "raias"
+   },
+   {
+    "codigo": "a1cpc",
+    "ref": "s1",
+    "texto": "Quem atende (CPC) e não fecha: com que frequência acionar?",
+    "contexto": "Quem atende sai do ciclo e vai para o estágio CPC · sem resposta (regra do motor).",
+    "opcoes": [
+     {
+      "valor": "padrao",
+      "rotulo": "Padrão do motor",
+      "detalhe": "a cada 2 dias, no canal do CPC",
+      "patch": []
+     },
+     {
+      "valor": "diario",
+      "rotulo": "Todo dia",
+      "detalhe": "até fechar ou sair da faixa",
+      "patch": [
+       {
+        "ref": "s1",
+        "caminho": "intencao.fases.cpc",
+        "valor_json": "{\"modo\": \"intervalo\", \"intervalo_cpb\": 1}"
+       }
+      ]
+     }
+    ],
+    "padrao": "padrao"
+   },
+   {
+    "codigo": "bdigital",
+    "ref": "s2",
+    "texto": "“Só digital” vale onde?",
+    "contexto": "O segmento tem a opção “Só digital”, que bloqueia agente virtual e discador em todos os estágios, inclusive CPC e acordo.",
+    "opcoes": [
+     {
+      "valor": "regua",
+      "rotulo": "Só na régua deste texto",
+      "detalhe": "CPC e acordo seguem o padrão",
+      "patch": []
+     },
+     {
+      "valor": "segmento",
+      "rotulo": "Marcar o segmento como Só digital",
+      "detalhe": "sem voz em nenhum estágio",
+      "patch": [
+       {
+        "ref": "s2",
+        "caminho": "intencao.flags_segmento.so_digital",
+        "valor_json": "true"
+       }
+      ]
+     }
+    ],
+    "padrao": "regua"
+   },
+   {
+    "codigo": "bpers",
+    "ref": "s2",
+    "texto": "As personas recebem a mesma régua?",
+    "contexto": "O texto não citou personas para esta faixa.",
+    "opcoes": [
+     {
+      "valor": "unica",
+      "rotulo": "Régua única para todos",
+      "detalhe": "",
+      "patch": []
+     },
+     {
+      "valor": "map",
+      "rotulo": "Cada persona pelo mapeamento",
+      "detalhe": "Dia 1/3/5 = 1º/2º/3º canal da persona",
+      "patch": [
+       {
+        "ref": "s2",
+        "caminho": "intencao.personas",
+        "valor_json": "[{\"persona\": \"@Digital nativo\", \"como\": \"mapeamento\", \"dias\": []}, {\"persona\": \"@Conectado (WhatsApp + e-mail)\", \"como\": \"mapeamento\", \"dias\": []}, {\"persona\": \"@Atraso recente, ticket baixo\", \"como\": \"mapeamento\", \"dias\": []}, {\"persona\": \"@Celular sem WhatsApp confirmado\", \"como\": \"mapeamento\", \"dias\": []}]"
+       }
+      ]
+     }
+    ],
+    "padrao": "unica"
+   },
+   {
+    "codigo": "ad1",
+    "ref": "s3",
+    "texto": "Dia 1, “discador e WhatsApp”: os dois sempre?",
+    "contexto": "",
+    "opcoes": [
+     {
+      "valor": "sempre",
+      "rotulo": "Os dois sempre",
+      "detalhe": "como escrito",
+      "patch": []
+     },
+     {
+      "valor": "reserva",
+      "rotulo": "WhatsApp e, sem contato, discador",
+      "detalhe": "discador como reserva",
+      "patch": [
+       {
+        "ref": "s3",
+        "caminho": "intencao.fases.localizacao.dias",
+        "valor_json": "[{\"dia\": 1, \"acoes\": [{\"canal\": \"whatsapp\", \"modo\": \"sempre\"}, {\"canal\": \"discador\", \"modo\": \"reserva\"}]}, {\"dia\": 2, \"acoes\": [{\"canal\": \"discador\", \"modo\": \"sempre\"}]}, {\"dia\": 4, \"acoes\": [{\"canal\": \"email\", \"modo\": \"sempre\"}, {\"canal\": \"discador\", \"modo\": \"sempre\"}]}]"
+       }
+      ]
+     }
+    ],
+    "padrao": "sempre"
+   },
+   {
+    "codigo": "b1estr",
+    "ref": "s5",
+    "texto": "B1 já tem a estratégia própria “Atraso longo · Cartões”.",
+    "contexto": "",
+    "opcoes": [
+     {
+      "valor": "substituir",
+      "rotulo": "Substituir pela régua do texto",
+      "detalhe": "a atual fica guardada e pode voltar",
+      "patch": []
+     },
+     {
+      "valor": "manter",
+      "rotulo": "Manter a atual",
+      "detalhe": "só a condição muda (91–180)",
+      "patch": [
+       {
+        "ref": "s5",
+        "caminho": "estrategia",
+        "valor_json": "\"manter\""
+       }
+      ]
+     }
+    ],
+    "padrao": "substituir"
+   },
+   {
+    "codigo": "b1email",
+    "ref": "s5",
+    "texto": "Dia 5 é e-mail; nem todo cliente deste segmento tem e-mail.",
+    "contexto": "",
+    "opcoes": [
+     {
+      "valor": "nada",
+      "rotulo": "Nada nesse dia",
+      "detalhe": "como escrito",
+      "patch": []
+     },
+     {
+      "valor": "sms",
+      "rotulo": "SMS no lugar",
+      "detalhe": "e-mail, senão SMS",
+      "patch": [
+       {
+        "ref": "s5",
+        "caminho": "intencao.fases.localizacao.dias",
+        "valor_json": "[{\"dia\": 1, \"acoes\": [{\"canal\": \"sms\", \"modo\": \"sempre\"}]}, {\"dia\": 2, \"acoes\": [{\"canal\": \"discador\", \"modo\": \"sempre\"}]}, {\"dia\": 5, \"acoes\": [{\"canal\": \"email\", \"modo\": \"sempre\"}, {\"canal\": \"sms\", \"modo\": \"senao\"}]}]"
+       }
+      ]
+     }
+    ],
+    "padrao": "nada"
+   },
+   {
+    "codigo": "xbloq",
+    "ref": "s6",
+    "texto": "“Nada de mensagem” vale também para CPC e acordo?",
+    "contexto": "Sua última frase pede que acordo siga a régua padrão do motor, que manda lembretes por WhatsApp e SMS.",
+    "opcoes": [
+     {
+      "valor": "regua",
+      "rotulo": "Só nas réguas de Cliente novo e Não CPC",
+      "detalhe": "acordo segue o padrão, como você pediu",
+      "patch": []
+     },
+     {
+      "valor": "segmento",
+      "rotulo": "Bloquear os canais de mensagem no segmento",
+      "detalhe": "vale em todos os estágios, inclusive acordo",
+      "patch": [
+       {
+        "ref": "s6",
+        "caminho": "intencao.flags_segmento.canais_bloqueados",
+        "valor_json": "[\"whatsapp\", \"rcs\", \"sms\", \"email\", \"agente_voz\"]"
+       }
+      ]
+     }
+    ],
+    "padrao": "regua"
+   }
+  ],
+  "fora": [
+   {
+    "trecho": "agente de voz",
+    "motivo": "canal_desligado",
+    "ref": "s1"
+   }
+  ]
+ }
+}

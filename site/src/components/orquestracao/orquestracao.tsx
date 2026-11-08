@@ -14,6 +14,8 @@ import { DesenhoDaEsteira } from '@/components/estrategias/desenho-esteira';
 import { LeaveGuardDialog } from '@/components/estrategias/leave-guard-dialog';
 import { ClusterForm, type Coluna } from '@/components/clusters/cluster-form';
 import { CaminhosSegmentacao, UsarSegmentoModal } from '@/components/clusters/caminhos-segmentacao';
+import { DescreverSegmentacao } from '@/components/segmentacao-ia/descrever-segmentacao';
+import { FaixaAplicada } from '@/components/segmentacao-ia/faixa-aplicada';
 import { ReenquadramentoButton, type ReenquadramentoHandle } from '@/components/reenquadramento/reenquadramento-button';
 import { PersonasDaCarteira, limparPersonas, normalizarDefinicao } from '@/components/orquestracao/personas-carteira';
 import { ExportarButton } from '@/components/estrategias/exportar-button';
@@ -55,8 +57,12 @@ function travasResumo(def: Definicao): string {
 }
 
 export function Orquestracao() {
-	const { empresa, credor, credores, selectCredor } = useMotorAuth();
+	const { empresa, credor, credores, selectCredor, permissoes } = useMotorAuth();
 	const canEdit = useAllowed(['admin', 'planejamento']);
+	// Descrever segmentos e régua (etapa 5): só quem edita a orquestração (SPEC §6); sem a permissão, o caminho some.
+	const podeDescrever = canEdit && permissoes.includes('editar_orquestracao');
+	const [descrever, setDescrever] = useState(false);
+	const [versaoAplicada, setVersaoAplicada] = useState(0);
 	const [segmentos, setSegmentos] = useState<SegmentoEmUso[]>([]);
 	const [clustersMap, setClustersMap] = useState<Record<string, Cluster>>({});
 	const [estrategias, setEstrategias] = useState<Estrategia[]>([]);
@@ -895,10 +901,23 @@ export function Orquestracao() {
 					{!demaisAtivo && emUso.length === 0 && (
 						<div className="flex items-center gap-2 rounded-xl border border-[var(--estado-erro)] bg-[var(--estado-erro-fundo)] px-4 py-3 text-sm font-semibold text-[var(--estado-erro-texto)]"><AlertTriangle size={16} /> Nenhum cliente desta carteira recebe ação: ligue um segmento ou os Demais clientes</div>
 					)}
+					{descrever && empresa && podeDescrever ? (
+						<DescreverSegmentacao empresaId={empresa.id} credorId={credor.id} credorNome={credor.nome}
+							outrasCarteiras={credAtivos.filter(c => c.id !== credor.id).map(c => ({ id: c.id, nome: c.nome }))}
+							personas={personasUsuario.map(pu => ({ id: String(pu.id), nome: pu.nome, canais: modelosMap[pu.nome] ?? [] }))}
+							colunas={colunas.map(c => ({ nome: c.nome, tipo: c.tipo }))} segmentosHoje={emUso.length}
+							onFechar={() => setDescrever(false)}
+							onAplicado={() => { setDescrever(false); setVersaoAplicada(v => v + 1); void reload(); }} />
+					) : <>
+					{empresa && <FaixaAplicada empresaId={empresa.id} credorId={credor.id} credorNome={credor.nome} segmentos={segmentos} versao={versaoAplicada}
+						onMudou={() => { setVersaoAplicada(v => v + 1); void reload(); }} onReenquadrar={() => reenqRef.current?.pedir()}
+						onAbrir={id => { selecionar(id); goStep('regua'); }} />}
 					<CaminhosSegmentacao
 						disabled={!canEdit}
 						onNovo={() => { setDepoisDoSegmento(null); setEditing(null); setFormOpen(true); }}
 						onUsar={() => setUsarOpen(true)}
+						onDescrever={() => setDescrever(true)}
+						podeDescrever={podeDescrever}
 					/>
 					{emUso.length === 0 ? (
 						<div className="rounded-lg border border-[var(--estado-atencao)] bg-[var(--estado-atencao-fundo)] px-4 py-2.5 text-sm font-medium text-[var(--estado-atencao-texto)]">Esta carteira ainda não tem segmentos em uso.</div>
@@ -944,6 +963,7 @@ export function Orquestracao() {
 							</div>
 						</>
 					)}
+					</>}
 				</div>
 			)}
 

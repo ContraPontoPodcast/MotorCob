@@ -169,6 +169,8 @@ Para montar a régua de um segmento (permissão "Editar a orquestração"):
 
 Depois de ajustar, quem tem a permissão "Reenquadrar agora" pode pedir a rodada do motor na hora, sem esperar a rotina seguinte.
 
+Descrever segmentos e régua (passo Segmentos, cartão com o selo IA, para quem tem "Editar a orquestração"): a pessoa escreve num texto só (até 6.000 caracteres) para quem é cada grupo (faixas de atraso, ticket, colunas da carga) e o que fazer com ele (dias, canais, personas) e clica em "Gerar proposta" (2 créditos de IA por geração; geração sem proposta é estornada). A IA não vê clientes, CPF, telefones nem valores individuais. A proposta mostra os segmentos na ordem (Novo, Alterar, Manter ou Desligar nesta carteira), as contagens de clientes de hoje calculadas pelo banco, as conferências, de onde vêm os clientes e perguntas com opções onde o texto foi ambíguo; responder às perguntas não gasta crédito. "Ticket" é o saldo total, salvo se o texto disser parcela. Segmento compartilhado com outra carteira é desligado só nesta e um novo é criado. O que não existe (campo, canal desligado ou não contratado, desconto ou oferta) fica fora e é explicado. Até 8 segmentos novos ou alterados por texto. Em "Revisar e aplicar", Aplicar faz tudo de uma vez (ou nada) e os segmentos e estratégias novos ficam pausados até a pessoa conferir a régua no editor (raias por persona) e clicar em "Conferi, ligar". "Desfazer aplicação" volta tudo ao que era até a próxima rotina.
+
 ### Comitê
 
 Planilha mensal do comitê para download (permissão "Baixar o relatório de comitê").

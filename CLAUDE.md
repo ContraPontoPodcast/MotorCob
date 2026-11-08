@@ -776,7 +776,7 @@ mesmos casos no motor e no site (`tests/dados/raias_semantica.json`, `tests/test
 
 SQL 76 (etapa 2 da IA na Orquestração, aprovada pelo dono): reavaliação diária dos segmentos com dias de atraso (motor) e
 prévia de cobertura `previa_segmentacao` (ver `motor/cluster.py` acima). Site, Segmentação: três cartões iguais (Novo
-segmento · Usar segmento da empresa · Descrever segmentos e régua, este "em breve" até a etapa 5;
+segmento · Usar segmento da empresa · Descrever segmentos e régua, ligado na etapa 5 / SQL 79;
 `components/clusters/caminhos-segmentacao.tsx`); no formulário do segmento, "clientes hoje" ao vivo pela prévia
 (`lib/previa-segmentacao.ts`: monta a lista em uso da carteira na ordem com o segmento editado no lugar dele). Ordem de
 implantação: banco (SQL 76) antes do motor; motor sem o banco só alerta; site sem o banco esconde a estimativa.
@@ -812,6 +812,28 @@ mensalidade), o excedente e o custo do sistema. Site: contador e aviso em `compo
 `lib/creditos-ia.ts`, `rotuloCreditos` para os botões das etapas 5 e 6), Empresa › Uso de IA (`/empresa/uso-ia`, view
 `ia_creditos_ciclo` + `uso_ia_empresa`) e Console › Margem › Itens de IA › Créditos. Os itens de IA que já existiam
 (`ia_geracao_fluxo`, roleplay, Speech Analytics) seguem como estão. Se o SQL 61 ou o 69 rodarem de novo, rode o 78 depois.
+
+SQL 79 (etapa 5 da IA: "Descrever segmentos e régua", decisões do dono 07/11/2026; protótipo proto-segmentacao v2): na
+Segmentação, um texto (até 6.000 caracteres) → `pedir_segmentacao` grava em `segmentacao_pedidos` (um em andamento por
+carteira) e RESERVA 2 créditos (`seg:geracao:<id>`, função `descrever_segmentos` do SQL 78; sem item avulso). Na VM,
+`voz/gerar_segmentacao.py` (serviço `motorcx-voz-gerar-segmentacao`, metadado `motorcx-gerar-segmentacao=1`, mesma chave do
+LLM do fluxo, nos dois acessos: `voz_vm.pegar_pedido_segmentacao`/`registrar_segmentacao`) pega o pedido com o contexto SEM
+dado pessoal (segmentos da carteira, campos, valores distintos de texto com contagem, canais com estado, personas com o
+mapeamento, `hash_segmentacao`), chama o LLM com UMA ferramenta (`entregar_segmentacao`, esquema estrito; texto do cliente
+entre marcas, como dado) e compila com `motor/segmentacao_ia.py` (determinístico): ordem final com os segmentos não citados
+no lugar, código único na empresa, condições por `cluster.ler_condicoes` (número JSON; `$ticket` = saldo, parcela só se o
+texto disser), régua por fase (Cliente novo/Não CPC com ciclo/CPC/Acordo padrão, nunca `passos: {}`), raias por persona
+(mapeamento = N-ésimo canal disponível), limites do editor, `estrategia.validar_estrategia` + `etapas.validar_fases`; erro →
+até 2 correções. O que não existe vai para `fora` (campo, canal desligado/não contratado, persona, oferta, recorte com 0).
+Cada opção de pergunta é compilada de novo e vira patch sobre a proposta (`caminho` → `valor`), que o site aplica sem IA
+(`lib/segmentacao-ia.ts`; paridade em `tests/dados/segmentacao_proposta_dono.json`). Com proposta o banco confirma os
+créditos; sem, estorna; descartar estorna. `aplicar_segmentacao(pedido, proposta, previa_hash, carteiras_extra)`: UMA
+transação (falha no meio não deixa nada), recusa hash velho e canal "a ativar" desligado, snapshot em
+`segmentacao_aplicacoes`, novo/alterar/desligar (só nesta carteira)/ordem/estratégia por `criar_estrategia_segmento`
+(a antiga fica)/Demais/cópia nas carteiras extra; tudo que é novo ou alterado nasce PAUSADO (`segmentos_carteira.ativo =
+false`) até `ligar_segmentacao`; `desfazer_segmentacao(aplicacao, forcar)` volta do snapshot (criados ficam desligados) só
+até a próxima rotina, com conflito listado. Permissão: `pode_descrever_segmentacao` = vê a empresa + `editar_orquestracao`
++ admin/planejamento. Site: `components/segmentacao-ia/` (telas 2–6 e a faixa "Aplicado" com Ligar/Desfazer/Reenquadrar).
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
