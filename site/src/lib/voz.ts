@@ -324,9 +324,25 @@ export const VARIAVEIS_VOZ: { id: string; desc: string; sempre?: boolean }[] = [
 	{ id: 'desconto_max', desc: 'Desconto máximo da carteira (alçada)' },
 ];
 
-/** Começo fixo da primeira fala; a frase de assistente virtual é opção do roteiro. */
-export function aberturaFixa(virtual: boolean, avisoGravacao: boolean): string {
-	return `Olá, aqui é ${virtual ? 'a assistente virtual' : 'a central'} da {{assessoria}}, em nome de {{credor}}.${avisoGravacao ? ' Esta ligação é gravada.' : ''} Falo com {{primeiro_nome}}?`;
+/** Começo fixo da primeira fala (SQL 83 · B6 e B7, decisão do dono 08/11/2026): o aviso de gravação (se ligado na
+ * empresa), "assistente virtual" sempre e a pergunta de identificação. Nunca o credor nem a dívida: isso só depois
+ * de a pessoa confirmar ser o titular. A VM diz o aviso antes da fala (voz/provedores/base.py › aviso_abertura). */
+export function aberturaFixa(avisoGravacao: boolean): string {
+	return `Olá! ${avisoGravacao ? 'Esta ligação é gravada. ' : ''}Sou o assistente virtual da {{assessoria}}. Falo com {{primeiro_nome}}?`;
+}
+
+/** Prompt padrão do roteiro do agente (Montagem): o credor e a conta só depois de confirmar o titular (B7). */
+export const PROMPT_PADRAO_ROTEIRO = 'Você é o assistente virtual da {{assessoria}}. Seja cordial e objetivo. Comece perguntando "Falo com {{primeiro_nome}}?" e confirme que fala com o titular. Antes disso, não diga o nome do credor, a dívida, o valor nem o motivo da ligação. Depois de confirmar, diga que fala em nome de {{credor}}, apresente a situação e as ofertas da carteira, dentro da alçada. Se a pessoa pedir, mande o link de pagamento por SMS.';
+/** Primeira fala depois da confirmação de identidade (a abertura fixa já perguntou com quem fala). */
+export const FALA_PADRAO_ROTEIRO = 'Estou ligando em nome de {{credor}}. Posso falar um minuto sobre a sua conta?';
+
+/** O prompt antigo (e quem copiou dele) abria "em nome de {{credor}}" antes da identidade: a tela avisa. */
+export function promptCredorAntesIdentidade(prompt: string): boolean {
+	const t = (prompt || '').toLowerCase();
+	const credor = t.search(/em nome d[eoa]s? \{\{\s*credor\s*\}\}/);
+	if (credor < 0) return false;
+	const titular = t.search(/titular|confirm/);
+	return titular < 0 || credor < titular;
 }
 
 // ----------------------------------------------------------------------------- lote

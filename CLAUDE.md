@@ -854,6 +854,18 @@ restaura só o que mudou) e APAGA os segmentos e estratégias que ela criou e ni
 `segmentos_carteira`). Site: "vale ao ligar" na revisão e "versão nova espera" na faixa (`efeitoAplicar`,
 `esperaAplicacao` em `lib/segmentacao-ia.ts`); o editor da régua ainda mostra a versão que vale hoje.
 
+**SQL 83 (decisões do dono, 08/11/2026; SPEC §6.1 B4, B6, B7): destinos perigosos, gravação e identidade antes da dívida.**
+B4: host do tronco e da transferência nunca interno, reservado, de loopback ou do MotorCX (`voz_enderecos_motorcx`, a equipe
+cadastra os IPs das VMs) — gatilho `voz_destino_seguro` no cadastro/mudança e, na VM, `voz/destinos.py` de novo DEPOIS do
+DNS (`configuracao.buscar` e o gerador deixam de fora sozinho o que não passa). Número: só nacional 10/11 dígitos com DDD
+válido (`destinos.motivo_numero` no orquestrador; plano do Asterisk com `_[1-9][1-9]9XXXXXXXX` e `_[1-9][1-9][2-5]XXXXXXX`,
+sem `_X.`). B6: `aviso_gravacao` ligado por padrão; a abertura diz "Esta ligação é gravada. Sou o assistente virtual da
+{empresa}." (`provedores/base.py › aviso_abertura`, antes da 1ª fala); retenção 90 (teto) e `retencao_prova_dias` (até
+1.825) só para gravação com `prova` (promessa ou contestação; gatilhos acompanham). B7: `motor/trava_identidade.py` =
+`public.texto_revela_antes_identidade` (casos em `tests/dados/trava_identidade_casos.json`): recomendação e relatório
+do Speech nunca sugerem credor/dívida antes da identidade; a Montagem sem fluxo corta a fala (`Conversa._travar`) e o
+fluxo corta o credor escrito à mão (`Sessao._credor_literal`). Se o SQL 56 rodar de novo, rode o 83 depois.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

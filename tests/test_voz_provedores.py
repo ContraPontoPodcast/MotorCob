@@ -115,6 +115,29 @@ class TestConversa(unittest.TestCase):
         self.assertEqual(c.ouvir("alô?"), [])
         self.assertEqual(self.modelo.vistos[0][-1], {"role": "user", "content": "sou eu"})
 
+    def test_trava_de_identidade_no_roteiro(self):
+        """SQL 83 · B7: sem fluxo (roteiro), o credor ou a dívida antes da identidade vira a pergunta de identificação."""
+        cred = "Banco Fictício"
+        ctx = ContextoChamada(id_chamada="abc124", empresa_id=1, id_cliente="C1",
+                              variaveis={"credor": cred, "primeiro_nome": "Ana"})
+        self.ev = []
+        self.modelo = FakeModelo([M.Resposta(f"Olá, estou ligando em nome da {cred.upper()}."),
+                       M.Resposta("É sobre a sua dívida em aberto."),
+                       M.Resposta("Obrigada.", [("registrar_resultado", {"resultado": "identidade_confirmada",
+                                                                         "identidade_confirmada": True})]),
+                       M.Resposta(f"Falo em nome da {cred}: consta um valor em aberto.")])
+        c = M.Conversa(ctx, self.modelo, lambda *a: self.ev.append(a), "Você fala por {{credor}}.",
+                       "Bom dia, em nome de {{credor}}.", hoje=date(2026, 11, 3))
+        fala = c.comecar()[0]
+        self.assertNotIn(cred, fala)
+        self.assertEqual(fala, "Antes de continuar, preciso confirmar com quem falo. Falo com Ana?")
+        self.assertNotIn(cred.upper(), c.ouvir("alô")[0])
+        self.assertNotIn("dívida", c.ouvir("quem é?")[0])
+        self.assertEqual(c.ouvir("sou eu"), ["Obrigada."])
+        self.assertEqual(c.ouvir("pode falar"), [f"Falo em nome da {cred}: consta um valor em aberto."])
+        self.assertEqual(c.avisos.count("valor_antes_identidade"), 3)
+        self.assertNotIn(cred, " ".join(m["content"] for m in c.historico[1:4]))   # o que não foi dito não fica
+
     def test_esquema_fechado(self):
         c = self.conv([M.Resposta("", [("registrar_resultado", {"resultado": "pagou_tudo"}),
                                        ("apagar_banco", {}), ("transferir_humano", {"motivo": "porque sim"})])])

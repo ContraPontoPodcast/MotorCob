@@ -458,7 +458,7 @@ class TestVariaveisDaFala(unittest.TestCase):
         self.sessoes = []
         self.mt = Montagem(ConfigMontagem(portas=(40000, 40011)), None,
                            lambda ctx: ("Você fala em nome de {{credor}}. Saldo: {{ saldo }}. Atraso: {{dias_atraso}}.",
-                                        "Olá, em nome de {{credor}}. Falo com {{primeiro_nome}}?"),
+                                        "Olá, {{primeiro_nome}}? Aqui é da {{assessoria}}."),
                            modelo_de=_ModeloEncerra, executor=self.sessoes.append)
         self.reg = RegistroBanco(self.sb)
         self.orq = Orquestrador(self.ari, B.carregar(d), Agendador(contratado=10), EscritorEventos(self.tmp.name),
@@ -503,9 +503,11 @@ class TestVariaveisDaFala(unittest.TestCase):
                 self.assertNotIn("dias_atraso", s.ctx.variaveis)    # fora de voz_config.variaveis
                 self.assertNotIn(self.NOME, repr(s.ctx))
         conv = por["C1"][0].conversa
-        self.assertEqual(conv.comecar(), [f"Olá, em nome de Banco Fictício. Falo com {self.NOME}?"])
+        # SQL 83 · B6: o aviso de assistente virtual vem antes da primeira fala (sem gravação: sem "é gravada")
+        self.assertEqual(conv.comecar(), ["Sou um assistente virtual.", f"Olá, {self.NOME}? Aqui é da {{{{assessoria}}}}."])
         self.assertIn(f"Banco Fictício. Saldo: {self.SALDO}. Atraso: {{{{dias_atraso}}}}.", conv.historico[0]["content"])
-        self.assertEqual(por["C2"][0].conversa.comecar(), ["Olá, em nome de Banco Fictício. Falo com Bruno?"])
+        self.assertEqual(por["C2"][0].conversa.comecar(),
+                         ["Sou um assistente virtual.", "Olá, Bruno? Aqui é da {{assessoria}}."])
         for s in self.sessoes:                                        # a pessoa responde; o agente encerra
             s.conversa.ouvir("não vou pagar")
         self.girar(5)

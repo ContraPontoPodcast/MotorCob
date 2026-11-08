@@ -132,13 +132,30 @@ class Conversa:
         self.encerrada = False
         self.aguardando_humano = False      # pediu humano: o áudio fica de pé até o humano atender ou não
         self.avisos: list[str] = []
+        self.identidade_confirmada = False  # SQL 83 · B7: até aqui, nada de credor, dívida ou valor (trava abaixo)
         hoje = hoje or date.today()
         sistema = preencher(roteiro, ctx.variaveis) + (
             f"\n\nHoje é {hoje:%d/%m/%Y}. Use só as ferramentas para registrar resultado, transferir ou encerrar. "
-            "Nunca peça o CPF completo nem dados de cartão.")
+            "Nunca peça o CPF completo nem dados de cartão. Antes de a pessoa confirmar ser o titular, não diga o "
+            "nome do credor, a dívida, o valor nem o contrato; quando ela confirmar, chame registrar_resultado com "
+            "resultado identidade_confirmada e identidade_confirmada true antes de falar da conta.")
         self.historico = [{"role": "system", "content": sistema}]
 
+    def _travar(self, falas: list[str]) -> list[str]:
+        """SQL 83 · B7, a mesma trava do fluxo no caminho do roteiro: antes da identidade, fala que cite o credor ou
+        outro valor sensível da chamada (inclusive escrito por extenso, sem a variável) ou fale de dívida, contrato
+        ou valor em aberto vira a pergunta de identificação."""
+        if self.identidade_confirmada:
+            return falas
+        return [self._identificar() if revela_antes_identidade(f, self.ctx.variaveis) else f for f in falas]
+
+    def _identificar(self) -> str:
+        self.avisos.append("valor_antes_identidade")
+        nome = (self.ctx.variaveis or {}).get("primeiro_nome")
+        return FALA_IDENTIFICAR.format(quem=f"com {nome}" if nome else "com o titular")
+
     def comecar(self) -> list[str]:
+        self.primeira_fala = self._travar([self.primeira_fala])[0]
         self.historico.append({"role": "assistant", "content": self.primeira_fala})
         return [self.primeira_fala]
 
@@ -154,9 +171,9 @@ class Conversa:
             return []
         for nome, args in r.chamadas:
             self._ferramenta(nome, args)
-        falas = [r.texto] if r.texto else []
-        if r.texto:
-            self.historico.append({"role": "assistant", "content": r.texto})
+        falas = self._travar([r.texto]) if r.texto else []
+        if falas:
+            self.historico.append({"role": "assistant", "content": falas[0]})
         self.turnos += 1
         if self.turnos >= self.max_turnos and not self.encerrada:
             self.avisos.append("limite de turnos")
@@ -184,6 +201,8 @@ class Conversa:
         dados = {"resultado_ia": r}
         if isinstance(a.get("identidade_confirmada"), bool):
             dados["identidade_confirmada"] = a["identidade_confirmada"]
+        if a.get("identidade_confirmada") is True or r in RESULTADOS_TITULAR:
+            self.identidade_confirmada = True
         try:
             if a.get("data_promessa"):
                 dados["data_promessa"] = date.fromisoformat(str(a["data_promessa"])[:10])
@@ -220,6 +239,27 @@ class Conversa:
         if not self.encerrada:
             self.encerrada = True
             self.emitir(self.ctx.id_chamada, "encerrar", {})
+
+
+# ------------------------------------------------------------------ trava de identidade no roteiro (SQL 83 · B7)
+# resultados que só o titular confirmado dá (a partir deles a conversa pode falar da conta)
+RESULTADOS_TITULAR = ("identidade_confirmada", "cpc", "promessa", "recusa")
+FALA_IDENTIFICAR = "Antes de continuar, preciso confirmar com quem falo. Falo {quem}?"
+VARIAVEIS_LIVRES = ("primeiro_nome", "assessoria")
+
+
+def revela_antes_identidade(fala: str, variaveis: dict | None) -> bool:
+    """A fala cita o valor de uma variável sensível da chamada (credor, saldo…; escrito por extenso também conta) ou
+    fala de dívida, contrato, débito ou valor em aberto (motor/trava_identidade.py › SENSIVEL)."""
+    from motor import trava_identidade as TI
+    t = TI.normal(fala)
+    for k, v in (variaveis or {}).items():
+        if k in VARIAVEIS_LIVRES or v in (None, ""):
+            continue
+        valor = TI.normal(str(v))
+        if len(valor) >= 3 and valor in t:
+            return True
+    return bool(re.search(TI.SENSIVEL, t))
 
 
 # ------------------------------------------------------------------ bloco generativo do fluxo (SQL 58)
@@ -568,7 +608,8 @@ class Montagem(ProvedorVoz):
             roteiro, primeira = self.roteiro_de(ctx)
             conv = Conversa(ctx, self.modelo_de(), emitir_fila, roteiro, primeira, self.cfg.max_turnos)
         # Speech Analytics (SQL 63): cada fala do agente e da pessoa é anotada para a transcrição da ligação da IA
-        conv = ConversaComTurnos(conv, TurnosConversa(self.relogio))
+        # SQL 83 · B6: o aviso de gravação e de assistente virtual vem antes da primeira fala (roteiro ou fluxo)
+        conv = ConversaComTurnos(conv, TurnosConversa(self.relogio), aviso=ctx.aviso_abertura)
         s = SessaoMontagem(ctx, porta, conv)
         self.sessoes[ctx.id_chamada] = s
         self._emitir[ctx.id_chamada] = emitir

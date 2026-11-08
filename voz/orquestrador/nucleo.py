@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo
 
 from motor import voz as V
 from voz import tarifacao as T
+from voz import destinos as DST
 from voz.banco import VARIAVEIS_VOZ, DadosVoz, Transferencia
 from voz.orquestrador import amd as A
 from voz.orquestrador import gravacao as G
@@ -38,7 +39,7 @@ from voz.orquestrador.agendador import Agendador
 from voz.orquestrador.ari import ClienteARI, ErroARI
 from voz.orquestrador.eventos import SEM_IA, EscritorEventos, EventoChamada, classificar
 from voz.orquestrador.lote import ItemLote, Lote, hash_destino
-from voz.provedores.base import ContextoChamada, ProvedorVoz
+from voz.provedores.base import ContextoChamada, ProvedorVoz, aviso_abertura
 from voz.transcricao import ia as TIA
 
 log = logging.getLogger("motorcx.voz")
@@ -223,6 +224,14 @@ class Orquestrador:
         return total
 
     def _originar(self, lote: Lote, idx: int, item: ItemLote, agora: datetime) -> bool | None:
+        # SQL 83 · B4: só número nacional (10/11 dígitos, DDD válido); emergência, 0300/0500/0800/0900, internacional
+        # e curtos nunca saem. O plano de discagem do Asterisk repete a trava (voz/asterisk/gerador.py).
+        motivo = DST.motivo_numero(item.telefone)
+        if motivo:
+            item.encerrado = True
+            self._conta("numero_bloqueado")
+            self._alerta(f"empresa {lote.empresa_id}: número fora do plano de discagem ({motivo}); fica fora do dia")
+            return None
         cands = T.rotas_para(self.dados, lote.empresa_id, item.telefone, agora.date())
         if not cands:
             item.encerrado = True
@@ -391,11 +400,18 @@ class Orquestrador:
         permitidas = set(self.dados.config(c.empresa_id).variaveis) & set(VARIAVEIS_VOZ)
         return {k: v for k, v in (c.item.variaveis or {}).items() if k in permitidas and v not in (None, "")}
 
+    def _aviso_abertura(self, c: Chamada) -> str:
+        """SQL 83 · B6: "Esta ligação é gravada." (gravando e com o aviso ligado, o padrão) + "Sou o assistente virtual
+        da {empresa}." (sempre). O nome é o da empresa (assessoria), nunca o do credor."""
+        cfg = self.dados.config(c.empresa_id)
+        return aviso_abertura(bool(c.gravando and cfg.aviso_gravacao), (c.item.variaveis or {}).get("assessoria"))
+
     def _conectar(self, c: Chamada, prov: ProvedorVoz, agora: datetime) -> None:
         ctx = ContextoChamada(id_chamada=c.id, empresa_id=c.empresa_id, id_cliente=c.item.id_cliente,
                               id_acao=c.item.id_acao, final_numero=c.item.telefone[-2:],
                               variaveis=self._variaveis_fala(c),
-                              credor_id=c.lote_chave[1] if c.lote_chave else None)
+                              credor_id=c.lote_chave[1] if c.lote_chave else None,
+                              aviso_abertura=self._aviso_abertura(c))
         if c.gravando and self.transcricoes is not None:
             self._transcrever[c.id] = {"empresa_id": c.empresa_id, "provedor": prov.codigo,
                                        "nomes": TIA.nomes_da_chamada(c.item.variaveis),

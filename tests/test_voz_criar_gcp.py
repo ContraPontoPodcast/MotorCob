@@ -223,6 +223,9 @@ class TestCriarGcp(unittest.TestCase):
         self.assertIn("≥ 90", r.stderr)
         r, _ = self.rodar("empresa", "abc", "90", "proj-ficticio")
         self.assertNotEqual(r.returncode, 0)
+        r, _ = self.rodar("empresa", "12", "1826", "proj-ficticio")         # SQL 83: nunca mais de 5 anos
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("≤ 1825", r.stderr)
 
 
 if __name__ == "__main__":

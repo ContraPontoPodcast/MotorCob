@@ -337,9 +337,20 @@ class Sessao:
             v = self._valor(nome.strip(" \t\n\r"))
             return v if v is not None else ""
         fala = FV.trocar_variaveis(texto, troca)
+        if not self.identidade_confirmada and self._credor_literal(fala):     # SQL 83 · B7: o nome escrito à mão
+            return self._recado(), "valor_antes_identidade"
         if RE_SENHA.search(normal(fala)):
             return FALA_SENHA, "senha_cartao"
         return fala, None
+
+    def _credor_literal(self, fala: str) -> bool:
+        """O nome do credor (ou outro valor sensível da chamada) escrito como texto, sem a variável: o validador não
+        vê (ele só conhece as variáveis), então a trava confere aqui, na hora de falar."""
+        t = normal(fala)
+        for k, v in self.vars.items():
+            if k in FV.VARIAVEIS_SENSIVEIS and v and len(normal(v)) >= 3 and normal(v) in t:
+                return True
+        return False
 
     def _recado(self) -> str:
         return RECADO_NEUTRO.format(primeiro_nome=self.vars.get("primeiro_nome") or "a pessoa responsável",

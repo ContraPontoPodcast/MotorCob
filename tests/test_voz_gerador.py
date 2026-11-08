@@ -13,6 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from voz import banco as B
+from voz import destinos as DST
 from voz import segredos as S
 from voz import tarifacao as T
 from voz.asterisk import gerador as G
@@ -241,7 +242,7 @@ class TestGerador(unittest.TestCase):
         # prioridade 1 (tronco 10, prefixo 1010) antes da 2 (tronco 11, prefixo 2020); vigência antiga não duplica
         self.assertLess(bloco.index("Dial(PJSIP/1010${EXTEN}@tr-1-10,60)"),
                         bloco.index("Dial(PJSIP/2020${EXTEN}@tr-1-11,60)"))
-        self.assertEqual(bloco.count("1010${EXTEN}"), 1)
+        self.assertEqual(bloco.count("1010${EXTEN}"), len(DST.PADROES_DIALPLAN))    # uma vez por padrão nacional
         self.assertIn("GROUP_COUNT(tr-1-10@motorcx)} >= ${MOTORCX_CANAIS_TR_1_10}]?r2", bloco)
         self.assertIn('"${DIALSTATUS}" = "CHANUNAVAIL" | "${DIALSTATUS}" = "CONGESTION"]?r2', bloco)
         self.assertIn("same => n(r3),Hangup(34)", bloco)
@@ -286,7 +287,8 @@ class TestGerador(unittest.TestCase):
     def test_gerar_grava_arquivos_com_permissao(self):
         with tempfile.TemporaryDirectory() as tmp:
             res = G.gerar(dados_exemplo(), Path(tmp), self.seg, "203.0.113.10", ["10.60.0.0/24"])
-            self.assertEqual(res, {"troncos": 3, "rotas": 6, "transferencias": 2, "provedores_sip": 1})
+            self.assertEqual(res, {"troncos": 3, "rotas": 6, "transferencias": 2, "provedores_sip": 1,
+                               "destinos_recusados": 0})
             pj = Path(tmp) / "pjsip_motorcx.conf"
             self.assertEqual(stat.S_IMODE(pj.stat().st_mode), 0o600)
             self.assertEqual(stat.S_IMODE((Path(tmp) / "extensions_motorcx.conf").stat().st_mode), 0o640)

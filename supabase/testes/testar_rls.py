@@ -2018,6 +2018,12 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261223000001_voz_base.sql")],
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
+# o SQL 56 recria configurar_voz_empresa e validade_gravacao_voz: o SQL 83 (teto de retenção e prova) vai por cima
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations",
+                                 "20270119000001_voz_destinos_gravacao_identidade.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
 _, VTEC, _ = sql("insert into auth.users (email) values ('voz.tecnico@x.com') returning id")
 _, VSUP, _ = sql("insert into auth.users (email) values ('voz.suporte@x.com') returning id")
 sql(f"update public.perfis set equipe=true, papel='operacao', equipe_tecnico=true, empresa_id=null, equipe_alcance='todas' where id='{VTEC}'")
@@ -2163,9 +2169,10 @@ checar("SQL 56: exportação do titular abre com prazo de 15 dias", True, "selec
 checar("SQL 56: Operação não abre pedido do titular", False, "select public.abrir_pedido_titular('C1', 'exportar')", "authenticated", u["oper"])
 checar("SQL 56: Admin tira a guarda", True, f"select public.soltar_gravacao({G1}); select guarda from public.voz_gravacoes where id={G1}", "authenticated", u["admina"], "f")
 checar("SQL 56: retenção abaixo de 90 dias é recusada", False, f"select public.configurar_voz_empresa({EA}, '{{\"retencao_dias\": 60}}')", "authenticated", u["admina"])
-checar("SQL 56: Admin sobe a retenção e a gravação acompanha", True, f"select public.configurar_voz_empresa({EA}, '{{\"retencao_dias\": 1825}}'); select (expira_em - gravada_em) = interval '1825 days' from public.voz_gravacoes where id={G1}", "authenticated", u["admina"], "t")
+checar("SQL 83: retenção acima de 90 dias é recusada (teto)", False, f"select public.configurar_voz_empresa({EA}, '{{\"retencao_dias\": 1825}}')", "authenticated", u["admina"])
+checar("SQL 83: Admin sobe a retenção de prova e a gravação com promessa acompanha", True, f"select public.configurar_voz_empresa({EA}, '{{\"retencao_prova_dias\": 1825}}'); select prova || '|' || ((expira_em - gravada_em) = interval '1825 days') from public.voz_gravacoes where id={G1}", "authenticated", u["admina"], "promessa|true")
 checar("SQL 56: Planejamento não muda a privacidade", False, f"select public.configurar_voz_empresa({EA}, '{{\"transcrever_min_segundos\": 10}}')", "authenticated", u["plan"])
-checar("SQL 56: transcrição começa em 5 s por padrão", True, f"select transcrever_min_segundos||'|'||aviso_gravacao from public.voz_config where empresa_id={EA}", "authenticated", u["oper"], "5|false")
+checar("SQL 56: transcrição começa em 5 s por padrão (e o aviso de gravação ligado, SQL 83)", True, f"select transcrever_min_segundos||'|'||aviso_gravacao from public.voz_config where empresa_id={EA}", "authenticated", u["oper"], "5|true")
 checar("SQL 56: apagar a gravação apaga os códigos da chamada", True, f"set role service_role; delete from public.voz_gravacoes where id={G1}; select coalesce(codigos::text,'nulo')||'|'||tem_gravacao from public.voz_chamadas where id={CH1}", None, None, "nulo|false")
 # configuração: Alô fake liberado pela equipe, ligado pela empresa
 checar("SQL 56: Alô fake sem liberação é recusado", False, f"select public.configurar_voz_empresa({EA}, '{{\"alo_fake\": true}}')", "authenticated", u["plan"])
@@ -2891,6 +2898,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 79: descrever segmentos e régua (testar_segmentacao_aplicar.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 83 · destinos perigosos (B4), aviso de gravação e teto de retenção (B6), identidade antes da dívida nos textos (B7)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_seguranca.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 83: destinos, gravação e identidade (testar_voz_seguranca.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

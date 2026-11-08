@@ -1,0 +1,125 @@
+{
+ "_sobre": "SQL 83 · B4: host do tronco/transferência pela regra estática (sem DNS). motivo null = aceito. Rodam em voz/destinos.py (tests/test_voz_destinos.py) e em public.voz_host_motivo (supabase/testes/testar_rls.py).",
+ "hosts": [
+  {
+   "host": "203.0.113.10",
+   "motivo": null
+  },
+  {
+   "host": "198.51.100.20",
+   "motivo": null
+  },
+  {
+   "host": "8.8.8.8",
+   "motivo": null
+  },
+  {
+   "host": "10.1.2.3",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "172.16.0.1",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "172.31.255.255",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "172.32.0.1",
+   "motivo": null
+  },
+  {
+   "host": "192.168.0.10",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "127.0.0.1",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "169.254.169.254",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "100.64.0.1",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "100.127.255.1",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "100.128.0.1",
+   "motivo": null
+  },
+  {
+   "host": "0.0.0.0",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "255.255.255.255",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "224.0.0.1",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "198.18.0.1",
+   "motivo": "endereço em rede interna, reservada ou de loopback"
+  },
+  {
+   "host": "999.1.1.1",
+   "motivo": "IPv4 inválido"
+  },
+  {
+   "host": "01.2.3.4",
+   "motivo": "IPv4 inválido"
+  },
+  {
+   "host": "localhost",
+   "motivo": "nome de rede interna ou que aponta para um IP interno"
+  },
+  {
+   "host": "metadata.google.internal",
+   "motivo": "nome de rede interna ou que aponta para um IP interno"
+  },
+  {
+   "host": "sip.empresa.local",
+   "motivo": "nome de rede interna ou que aponta para um IP interno"
+  },
+  {
+   "host": "10.0.0.1.nip.io",
+   "motivo": "nome de rede interna ou que aponta para um IP interno"
+  },
+  {
+   "host": "10-0-0-1.sslip.io",
+   "motivo": "nome de rede interna ou que aponta para um IP interno"
+  },
+  {
+   "host": "sip.exemplo.com.br",
+   "motivo": null
+  },
+  {
+   "host": "pabx.alfa.exemplo",
+   "motivo": null
+  },
+  {
+   "host": "SIP.Exemplo.com.br.",
+   "motivo": null
+  },
+  {
+   "host": "metadata",
+   "motivo": "nome de rede interna ou que aponta para um IP interno"
+  },
+  {
+   "host": "::1",
+   "motivo": "IPv6 direto não é aceito: use um nome"
+  },
+  {
+   "host": "",
+   "motivo": "endereço vazio"
+  }
+ ]
+}
