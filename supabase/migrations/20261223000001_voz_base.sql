@@ -135,7 +135,8 @@ alter table public.acessos add constraint acessos_acao_check
 -- ================================================================ 2. módulo, fornecedor e itens da fatura
 alter table public.empresa_modulos drop constraint if exists empresa_modulos_modulo_check;
 alter table public.empresa_modulos add constraint empresa_modulos_modulo_check
-    check (modulo in ('orquestracao', 'jornada', 'mensageria', 'enriquecimento', 'api', 'agente_voz'));
+    check (modulo in ('orquestracao', 'jornada', 'mensageria', 'enriquecimento', 'api', 'agente_voz',
+                      'speech_analytics'));   -- speech_analytics: SQL 87 (aqui para este SQL poder rodar de novo depois dele)
 
 alter table public.mensageria_fornecedores drop constraint if exists mensageria_fornecedores_canais_validos;
 alter table public.mensageria_fornecedores add constraint mensageria_fornecedores_canais_validos
