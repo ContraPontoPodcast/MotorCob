@@ -58,20 +58,27 @@ export function diasAtras(n: number): string {
 export function GavetaQuem({ aberta, onFechar }: { aberta: boolean; onFechar: () => void }) {
 	return (
 		<Gaveta aberta={aberta} onFechar={onFechar} titulo="Quem edita e quem aprova">
-			<Regras itens={[
-				['Um fluxo em uso por carteira.', 'Sem carteira escolhida, o fluxo vale para a empresa toda.'],
-				['Edita quem tem a permissão Editar canais; aprova e coloca em uso quem tem Aprovar roteiro de voz.', 'A equipe MotorCX pode montar o rascunho e enviar para aprovação, mas aprovar e colocar em uso é sempre de vocês.'],
-				['A versão em uso vale até a próxima ser aprovada e colocada em uso.', 'Entra na próxima ligação; uma ligação em curso nunca muda de versão.'],
-				['Voltar para uma versão anterior é um botão.', 'A atual vai para o arquivo. Nada é apagado.'],
-				['A alçada da carteira é de quem edita as carteiras.', 'É o teto de toda oferta, inclusive das que vêm do CRM.'],
-			]} />
+			<RegrasQuem />
 		</Gaveta>
+	);
+}
+
+/** Quem edita, quem aprova e como se volta de versão (gaveta da lista e aba "Versões e aprovação" do editor). */
+export function RegrasQuem() {
+	return (
+		<Regras itens={[
+			['Um fluxo em uso por carteira.', 'Sem carteira escolhida, o fluxo vale para a empresa toda.'],
+			['Edita quem tem a permissão Editar canais; aprova e coloca em uso quem tem Aprovar roteiro de voz.', 'A equipe MotorCX pode montar o rascunho e enviar para aprovação, mas aprovar e colocar em uso é sempre de vocês.'],
+			['A versão em uso vale até a próxima ser aprovada e colocada em uso.', 'Entra na próxima ligação; uma ligação em curso nunca muda de versão.'],
+			['Voltar para uma versão anterior é um botão.', 'A atual vai para o arquivo. Nada é apagado.'],
+			['A alçada da carteira é de quem edita as carteiras.', 'É o teto de toda oferta, inclusive das que vêm do CRM.'],
+		]} />
 	);
 }
 
 export function GavetaComoLer({ aberta, onFechar }: { aberta: boolean; onFechar: () => void }) {
 	return (
-		<Gaveta aberta={aberta} onFechar={onFechar} titulo="Como ler o quadro">
+		<Gaveta aberta={aberta} onFechar={onFechar} titulo="Como ler o roteiro e o mapa">
 			<div className="space-y-2">
 				{Object.values(MODOS).map(m => (
 					<div key={m.nome} className="flex items-start gap-2.5 rounded-xl bg-[var(--base-fill)] px-3 py-2.5">
@@ -81,10 +88,11 @@ export function GavetaComoLer({ aberta, onFechar }: { aberta: boolean; onFechar:
 				))}
 			</div>
 			<Linhas itens={[
-				{ e: <>Sou eu → <b>Confirmar identidade</b></>, s: 'o que a pessoa responde e a etapa para onde a conversa vai' },
+				{ e: <>Sou eu → então <b>Confirmar identidade</b></>, s: 'o que a pessoa responde e a etapa para onde a conversa vai' },
+				{ e: <b>Se não entender</b>, s: 'quantas vezes o agente pede de novo e para onde vai depois' },
 				{ e: <b>Fim da ligação</b>, s: 'etapa final (Transferir ou Encerrar)' },
 				{ e: <span className="font-semibold text-[var(--estado-erro-texto)]">Nenhuma resposta ligada</span>, s: 'etapa que não é final e não tem saída: a ligação pararia ali' },
-				{ e: <span className="font-semibold text-[var(--estado-erro-texto)]">impede</span>, s: 'pendência que segura o envio para aprovação' },
+				{ e: <span className="font-semibold text-[var(--estado-erro-texto)]">impede o envio</span>, s: 'pendência que segura o envio para aprovação' },
 			]} />
 		</Gaveta>
 	);

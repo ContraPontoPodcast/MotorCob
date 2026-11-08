@@ -102,10 +102,10 @@ export const SEMPRE: [string, string][] = [
 	['"Não me ligue mais"', 'Grava o opt-out e encerra.'],
 	['"Quero falar com uma pessoa"', 'Transfere para um atendente. Sem atendente livre, volta ao agente.'],
 	['Fala senha ou número de cartão', '"Não precisa me passar senha nem número de cartão. O pagamento é sempre pelo link."'],
-	['Silêncio ou resposta que o agente não entende', 'Pede para repetir até as tentativas da etapa. Depois, segue a saída da etapa.'],
+	['Resposta que o agente não entende', 'Pede de novo até as tentativas da etapa. Depois, segue a saída da etapa.'],
 ];
 /** Casos que ainda não têm tratamento próprio no executor (plano do redesenho: B2 e B4). Mostrados como "ainda não". */
-export const SEMPRE_AINDA_NAO = 'Ainda sem tratamento próprio: tema sensível (falecimento, doença, golpe), CPF dito pela pessoa, caixa postal e silêncio separado de "não entendi". Hoje, esses casos seguem o caminho da etapa.';
+export const SEMPRE_AINDA_NAO = 'Ainda sem tratamento próprio: tema sensível (falecimento, doença, golpe), CPF dito pela pessoa, caixa postal e silêncio no meio da conversa. Hoje, tema sensível, CPF e caixa postal seguem o caminho da etapa; no silêncio, o agente espera a pessoa falar.';
 
 /** Nomes legíveis das travas que o executor registra (voz_fluxo_passos.trava, travas_voz()). */
 export const NOMES_TRAVA: Record<string, string> = {
@@ -240,6 +240,104 @@ export function tituloRamo(r: Ramo, d: Definicao): string {
 	if (origem?.modo === 'sistema') return `Se der "${r.nome}"`;
 	return `Se disser "${r.nome}"`;
 }
+// ---------------------------------------------------------------- roteiro (vista principal do editor)
+/** Capítulo do roteiro: um trecho da conversa, lido de cima para baixo. */
+export interface Capitulo {
+	id: string; titulo: string; sub?: string;
+	tipo: 'conversa' | 'ramo' | 'finais' | 'solto';
+	/** Etapa de onde o ramo sai (só nos ramos). */
+	origem?: string;
+	blocos: Bloco[];
+}
+/** Etapas que já são o "caminho do acordo": a partir da 1ª delas, o caminho principal vira "Negociação". */
+const TIPOS_NEGOCIACAO: readonly TipoBloco[] = ['conector', 'condicao', 'oferta', 'generativa', 'registrar', 'link', 'retorno'];
+/**
+ * O roteiro: o fluxo em capítulos, na ordem da conversa (revisão U1 e U17; SPEC §2.1). Deriva de `quadroPorRamos`, sem
+ * campo novo na definição: o caminho principal se divide em "Começo da ligação" (até Confirmar identidade), "Motivo da
+ * ligação" (o que vem antes da negociação) e "Negociação" (da 1ª etapa de conector, oferta, IA, registro, link ou
+ * retorno em diante). Depois, um capítulo por ramo, com nome de conversa ('Se disser "Já paguei"'), os finais usados
+ * por vários caminhos e o que nenhum caminho alcança. Cada etapa aparece uma vez só; uma volta é dita na seta.
+ */
+export function roteiro(d: Definicao): Capitulo[] {
+	const nomes = nomesEtapas(d);
+	const out: Capitulo[] = [];
+	for (const r of quadroPorRamos(d)) {
+		if (r.tipo === 'principal') {
+			const ixId = r.blocos.findIndex(b => b.tipo === 'identidade');
+			const fimComeco = ixId >= 0 ? ixId + 1 : 1;
+			const resto = r.blocos.slice(fimComeco);
+			const ixNeg = resto.findIndex(b => TIPOS_NEGOCIACAO.includes(b.tipo));
+			const motivo = ixNeg < 0 ? resto : resto.slice(0, ixNeg);
+			const negociacao = ixNeg < 0 ? [] : resto.slice(ixNeg);
+			out.push({ id: 'comeco', titulo: 'Começo da ligação', sub: 'Quem atende e quem é a pessoa', tipo: 'conversa', blocos: r.blocos.slice(0, fimComeco) });
+			if (motivo.length) out.push(motivo.every(ehFinal)
+				? { id: 'fim', titulo: 'Fim da ligação', tipo: 'conversa', blocos: motivo }
+				: { id: 'motivo', titulo: 'Motivo da ligação', sub: ixId >= 0 ? 'Só depois da identidade confirmada' : 'Depois da abertura', tipo: 'conversa', blocos: motivo });
+			if (negociacao.length) out.push({ id: 'negociacao', titulo: 'Negociação', sub: 'Caminho do acordo', tipo: 'conversa', blocos: negociacao });
+		} else if (r.tipo === 'ramo') {
+			out.push({ id: `ramo-${r.origem ?? ''}-${r.blocos[0]?.id ?? ''}`, titulo: tituloRamo(r, d), sub: r.origem ? `A partir de ${nomes.get(r.origem)}` : undefined, tipo: 'ramo', origem: r.origem, blocos: r.blocos });
+		} else if (r.tipo === 'finais') {
+			out.push({ id: 'finais', titulo: 'Finais usados por vários caminhos', sub: 'Transferir e encerrar', tipo: 'finais', blocos: r.blocos });
+		} else {
+			out.push({ id: 'soltos', titulo: 'Etapas que nenhum caminho alcança', sub: 'Ligue uma resposta de outra etapa a elas, ou remova', tipo: 'solto', blocos: r.blocos });
+		}
+	}
+	return out;
+}
+/** Número de cada etapa no roteiro (1, 2, 3…), na ordem de leitura. */
+export function numerosRoteiro(caps: Capitulo[]): Map<string, number> {
+	const m = new Map<string, number>();
+	for (const c of caps) for (const b of c.blocos) m.set(b.id, m.size + 1);
+	return m;
+}
+/** Saída que volta a uma etapa já lida e fecha uma volta (ex.: "Quer outra condição" → Negociar, que pode chegar de
+ * novo aqui): "volta" ou "volta; no máximo 2 vezes". Ir para uma etapa lida antes, sem volta, não é volta. */
+export function textoVolta(s: Saida, de: string, numeros: Map<string, number>, d: Definicao): string {
+	const a = numeros.get(de), b = numeros.get(s.para);
+	if (a == null || b == null || b > a) return '';
+	const porId = new Map(d.blocos.map(x => [x.id, x]));
+	const vis = new Set([s.para]);
+	const fila = [s.para];
+	while (fila.length) for (const x of porId.get(fila.shift() as string)?.saidas ?? []) if (!vis.has(x.para)) { vis.add(x.para); fila.push(x.para); }
+	if (!vis.has(de)) return '';
+	const lim = d.blocos.find(x => x.id === s.para)?.repetir_max;
+	return lim ? `volta; no máximo ${lim} ${lim === 1 ? 'vez' : 'vezes'}` : 'volta';
+}
+/**
+ * "Se não entender": o que o executor faz hoje quando não entende a resposta (voz/fluxo.py › _tentar_de_novo e o
+ * _ouvir_ de cada tipo). Pede de novo (tentativas − 1) vezes, com a fala de cada tipo, e depois segue a saída `quando`.
+ * Só as etapas que ouvem a pessoa; a conversa com IA, o sistema e os finais, não. O silêncio ainda não tem tratamento
+ * próprio (B2): hoje o executor ignora o turno sem fala.
+ */
+export function seNaoEntender(b: Bloco): { repete: number; fala: string; quando: string } | null {
+	const p = b.params ?? {};
+	const repete = Math.max(0, (Math.floor(Number(p.tentativas)) || 2) - 1);
+	const FALA_REPETIR = 'Desculpe, pode repetir?';
+	switch (b.tipo) {
+		case 'abertura': return { repete, fala: 'Desculpe. Falo com {{primeiro_nome}}?', quando: 'terceiro' };
+		case 'identidade': return { repete, fala: 'Desculpe, não entendi. Pode repetir, por exemplo, 15 de março?', quando: 'nao_confirmou' };
+		case 'pergunta': return { repete, fala: typeof p.fala === 'string' && p.fala.trim() ? p.fala.trim() : FALA_REPETIR, quando: 'sem_resposta' };
+		case 'intencao': return { repete, fala: FALA_REPETIR, quando: 'nao_entendido' };
+		case 'oferta': return { repete, fala: FALA_REPETIR, quando: 'recusou' };
+		case 'retorno': return { repete, fala: 'Pode me dizer um dia e um horário, por exemplo, sexta às 10h?', quando: 'nao_agendou' };
+		default: return null;
+	}
+}
+/** O que a etapa de sistema faz, em palavras (ela não fala com a pessoa). */
+export function acaoSistema(b: Bloco): string {
+	const p = b.params ?? {};
+	if (b.tipo === 'conector') return `Chama um conector do CRM.${typeof p.fala_espera === 'string' && p.fala_espera.trim() ? ` Enquanto espera, diz: "${p.fala_espera.trim()}"` : ''}`;
+	if (b.tipo === 'condicao') return `Confere: ${rotuloDe(OPCOES.campo_condicao, p.campo)} ${rotuloDe(OPCOES.op, p.op)} ${String(p.valor ?? '')}`;
+	if (b.tipo === 'registrar') return `Registra: ${rotuloDe(OPCOES.registra, p.registra)}.`;
+	return resumoBloco(b);
+}
+/** O fim de uma etapa final: "resultado: Promessa" (Encerrar) ou "transferida: Pediu um atendente" (Transferir). */
+export function resultadoFinal(b: Bloco): string {
+	if (b.tipo === 'encerrar') return `resultado: ${rotuloDe(OPCOES.resultado_encerrar, b.params?.resultado)}`;
+	if (b.tipo === 'transferir') return `transferida: ${rotuloDe(OPCOES.motivo_transferir, b.params?.motivo)}`;
+	return '';
+}
+
 /** Nome do destino de uma saída; destino que não existe mais aparece como tal (nunca o código cru). */
 export const nomeDestino = (nomes: Map<string, string>, para: string) => nomes.get(para) ?? 'etapa que não existe mais';
 /** "Sou eu → Confirmar identidade". */
