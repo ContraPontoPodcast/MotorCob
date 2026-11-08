@@ -2,7 +2,7 @@
 // rate). Mexem só no rascunho; o rodapé mostra quantas alterações faltam salvar e o "Salvar como vN".
 import type { ReactNode } from 'react';
 import type { Discagem, LigacoesInfo } from '@/lib/discagem';
-import { SUGESTOES } from '@/lib/discagem';
+import { avisoCurtasPct } from '@/lib/discagem';
 import {
 	AUSENTE, MODOS, ORDENS, PADRAO, TEL_SPIN, avisosSpin, curtasComSpins, efetivo, idxSpins, modoDaCarteira, mudarModo, telefonesDia,
 	type DiscagemRen, type Modo, type TelSpin,
@@ -30,7 +30,6 @@ export function GavetaLimites(p: Props) {
 	const e = efetivo(draft as DiscagemRen, ligacoes.tentativas_cliente_dia?.valor);
 	const set = (patch: Partial<Discagem>) => setDraft({ ...draft, ...patch });
 	const dn = { ativo: e.naOn, n: e.naN, em_dias: e.naDias, descansa_dias: e.naDesc };
-	const cc = { ...SUGESTOES.chamadas_curtas!, ...(draft.chamadas_curtas ?? {}) };
 	const dis = !canEdit;
 	const tnT = ligacoes.tentativas_numero_dia, tcT = ligacoes.tentativas_cliente_dia;
 	return (
@@ -39,7 +38,7 @@ export function GavetaLimites(p: Props) {
 			<Ed titulo={<>Tentativas no dia{e.tnum !== 2 && <BadgeHoje muda />}</>} campos={<>
 				<Num valor={e.tnum} min={1} max={10} rotulo="Tentativas por número" disabled={dis || !!tnT} onChange={v => set({ tentativas_numero_dia: v })} /><Un>por número</Un>
 				<Num valor={e.tcli} min={1} max={10} rotulo="Tentativas por cliente" disabled={dis || !!tcT} onChange={v => set({ tentativas_cliente_dia: v })} /><Un>por cliente</Un>
-			</>} texto={<>Teto de todas as situações. Na régua, o dia conta como 1 tentativa. Hoje a VM aceita 2 por número; com a regra nova o padrão é 3. O limite de chamadas curtas da Anatel (MP 1.396/2026) continua valendo.
+			</>} texto={<>Teto de todas as situações. Na régua, o dia conta como 1 tentativa. Hoje a VM aceita 2 por número; com a regra nova o padrão é 3. O limite de chamadas curtas da Anatel (Despacho 100/2026) continua valendo.
 				{tnT && <TravaAviso>Nas estratégias {tnT.nomes.join(', ')} vale a trava de {tnT.valor} por número.</TravaAviso>}
 				{tcT && <TravaAviso>Nas estratégias {tcT.nomes.join(', ')} vale a trava de {tcT.valor} por cliente.</TravaAviso>}</>} />
 			<Ed titulo="Descanso por não atende" controle={<Toggle checked={e.naOn} disabled={dis} label="Descanso por não atende" onChange={v => set({ descanso_nao_atende: { ...dn, ativo: v } })} />}
@@ -57,8 +56,8 @@ export function GavetaLimites(p: Props) {
 				texto="Insistir depois de uma recusa clara é o caso clássico do art. 71 do CDC." />
 			<Ed titulo="Lista de “não ligar”" controle={<Toggle checked={e.nl} disabled={dis} label="Usar a lista de não ligar" onChange={v => { if (v || window.confirm('Recomendamos manter ligado. Desligar mesmo assim?')) set({ nao_ligar: { ativo: v } }); }} />}
 				texto={e.nl ? 'Ligado (recomendado): quem pediu sai de todos os canais de voz da empresa.' : <span className="text-[var(--estado-atencao-texto)]">Desligado: quem pediu para não receber ligação pode voltar a receber. Não recomendado.</span>} />
-			<Ed titulo="Falha técnica conta como curta" controle={<Toggle checked={e.falhaCurta} disabled={dis} label="Falha técnica conta como curta" onChange={v => set({ chamadas_curtas: { ...cc, falha_conta: v } })} />}
-				texto="Conservador até a Anatel regulamentar a MP 1.396/2026: chamada não completada é curta." />
+			<Ed titulo="Falha técnica conta como curta" controle={<Toggle checked disabled label="Falha técnica conta como curta (travado em sim)" onChange={() => undefined} />}
+				texto={<Travado>Sim, sempre: pela regra da Anatel (Despacho 100/2026), ligação não completada conta como curta.</Travado>} />
 		</Gaveta>
 	);
 }
@@ -133,7 +132,7 @@ export function GavetaModo(p: Props) {
 						<button type="button" className={btnSec} style={borda} onClick={() => muda(x => ({ ...x, spins: { ...x.spins, regras: x.spins.regras.map(y => ({ ...y, telefone: 't1' as TelSpin })) } }))}>Igual a hoje (todos no telefone 1)</button>
 					</div>}
 					{sp.avisos.length > 0 && <ul className="list-disc space-y-1 pl-5 text-[12px] text-[var(--estado-atencao-texto)]">{sp.avisos.map(a => <li key={a}>{a}</li>)}</ul>}
-					<p className="text-[12px] text-[var(--base-texto-2)]">Chamadas curtas previstas no dia com {sp.efetivos} {sp.efetivos === 1 ? 'spin' : 'spins'}: {cu == null ? 'sem histórico ainda (Contato por passada)' : <><b style={{ color: cu >= 75 ? 'var(--estado-atencao-texto)' : 'var(--base-texto)' }}>{pc(cu, 0)}</b> (com 1 spin: {pc(cu1 ?? 0, 0)})</>} · aviso 75% · MP 85%.</p>
+					<p className="text-[12px] text-[var(--base-texto-2)]">Chamadas curtas previstas no dia com {sp.efetivos} {sp.efetivos === 1 ? 'spin' : 'spins'}: {cu == null ? 'sem histórico ainda (Contato por passada)' : <><b style={{ color: cu >= avisoCurtasPct(p.draft) ? 'var(--estado-atencao-texto)' : 'var(--base-texto)' }}>{pc(cu, 0)}</b> (com 1 spin: {pc(cu1 ?? 0, 0)})</>} · aviso {avisoCurtasPct(p.draft)}% · Anatel 85%.</p>
 					<Detalhes resumo="Como os spins abrem">Sem início, o spin seguinte abre quando o anterior passou por todo o mailing e o intervalo de {m.spins.intervalo_min} min do último telefone venceu. Tiram o cliente dos spins seguintes: CPC, acordo, promessa, recusa, “não ligar” e as sinalizações com “Finaliza” ligado.</Detalhes>
 				</div>
 			)}

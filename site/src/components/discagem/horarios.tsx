@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { SUGESTOES, PREVIA_UFS, PREVIA_DDDS, UF_DDD_PREVIA, UFS, DDDS_VALIDOS, stableEqual, type Discagem, type JanelaHorario, type HorariosTabela } from '@/lib/discagem';
+import { SUGESTOES, AVISO_SEM_HORARIOS, resumoHorarios, PREVIA_UFS, PREVIA_DDDS, UF_DDD_PREVIA, UFS, DDDS_VALIDOS, stableEqual, type Discagem, type JanelaHorario, type HorariosTabela } from '@/lib/discagem';
 import { SectionCard, Toggle, CaixaInfo } from './discagem-campos';
 import type { DiscagemProps } from '@/lib/discagem';
 import { filtrarAlertas, type DiscagemExecResumo } from '@/lib/discagem';
@@ -110,11 +110,17 @@ export function Horarios({ draft, update, reverter, canEdit, exec }: Props) {
 
 	return (
 		<div className="space-y-4">
-			<SectionCard title="Janela por UF/DDD" ajustado={h.ativo || temAjuste} onReverter={() => reverter('horarios')} canEdit={canEdit}>
+			<SectionCard title="Janela por UF/DDD" ajustado={!h.ativo || temAjuste} onReverter={() => reverter('horarios')} canEdit={canEdit}>
 				<div className="flex items-center gap-2">
 					<Toggle checked={h.ativo} disabled={!canEdit} label="Usar janela por UF/DDD" onChange={v => update({ horarios: { ativo: v, tabela } })} />
-					<span className="text-[13px] text-[var(--base-texto-2)]">Usar janela por UF/DDD</span>
+					<span className="text-[13px] text-[var(--base-texto-2)]">{resumoHorarios(h)}</span>
 				</div>
+				<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Domingo e feriado nacional: nunca liga, com ou sem a tabela.</p>
+				{!h.ativo && (
+					<div role="alert" className="mt-3 rounded-lg px-4 py-3 text-[13px] font-medium" style={{ backgroundColor: 'var(--estado-erro-fundo)', color: 'var(--estado-erro-texto)' }}>
+						{AVISO_SEM_HORARIOS}
+					</div>
+				)}
 			</SectionCard>
 
 			{h.ativo && (

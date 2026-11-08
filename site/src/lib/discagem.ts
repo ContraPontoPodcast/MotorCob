@@ -24,7 +24,7 @@ export type Discagem = {
 		max_total_dia: number;
 		segundos: number; // 1–60
 		abandono_conta: boolean;
-		falha_conta?: boolean; // SQL 65: falha técnica conta como curta (padrão: sim)
+		falha_conta?: boolean; // SQL 65; travado em sim desde o SQL 80 (Despacho Anatel 100/2026): o site nunca grava
 	};
 	// SQL 65 · Renitência por situação e Resubmit (src/lib/renitencia.ts). Sem a chave = o de hoje.
 	retorno_agendado?: { max_dias?: number } & Record<string, unknown>;
@@ -96,7 +96,13 @@ export type DiscagemProps = {
 	canEdit: boolean;
 };
 
-// Sugestões do MotorCX (chave ausente = estes valores).
+// Regra das chamadas curtas (motor/discagem.py › REGRA_CURTAS diz o mesmo nos alertas).
+export const REGRA_CURTAS = 'Conta como curta: ligação não completada, caída na caixa postal ou com até 6 segundos. Se num dia uma linha passar de 1.000 ligações, ou todas as linhas juntas passarem de 10.000, e 85% ou mais forem curtas, a operadora bloqueia todas as linhas da empresa por 15 dias.';
+export const FONTE_CURTAS = 'Despacho Decisório Anatel nº 100/2026 e MP 1.396/2026, vigência a partir de 12/11/2026.';
+export const AVISO_SEM_HORARIOS = 'Sem a tabela por estado, o horário vale no fuso de Brasília. No Acre isso é 6h da manhã.';
+
+// Sugestões do MotorCX (chave ausente = estes valores). Corte de curtas ligado em 80% com aviso em 70% e horários por
+// UF ligados com a prévia: decisão do dono (08/11/2026), iguais a regras/regua.json › discagem.
 export const SUGESTOES: Discagem = {
 	tentativas_numero_dia: 2,
 	tentativas_cliente_dia: undefined,
@@ -107,9 +113,25 @@ export const SUGESTOES: Discagem = {
 	promessa_suspende: { ativo: false, dias_sem_data: 7 },
 	inexistente: { ativo: true },
 	nao_ligar: { ativo: true },
-	horarios: { ativo: false, tabela: null },
-	chamadas_curtas: { ativo: true, aviso: 0.75, corte_ativo: false, corte: 0.80, max_por_numero_dia: 900, max_total_dia: 9000, abandono_conta: true, segundos: 6 },
+	horarios: { ativo: true, tabela: null },
+	chamadas_curtas: { ativo: true, aviso: 0.70, corte_ativo: true, corte: 0.80, max_por_numero_dia: 900, max_total_dia: 9000, abandono_conta: true, segundos: 6 },
 };
+
+/** Resumo do cartão de horários: "Ligado · tabela da empresa em 4 UFs · resto pela prévia (confirme com o seu jurídico)". */
+export function resumoHorarios(h: Discagem['horarios']): string {
+	if (!(h?.ativo ?? true)) return 'Desligado · vale o fuso de Brasília para todos';
+	const ufs = Object.entries(h?.tabela?.ufs ?? {}).filter(([uf, j]) => !PREVIA_UFS[uf] || !stableEqual(j, PREVIA_UFS[uf])).length;
+	const ddds = Object.entries(h?.tabela?.ddds ?? {}).filter(([dd, j]) => !PREVIA_DDDS[dd] || !stableEqual(j, PREVIA_DDDS[dd])).length;
+	const partes = [ufs ? `${ufs} ${ufs === 1 ? 'UF' : 'UFs'}` : '', ddds ? `${ddds} ${ddds === 1 ? 'DDD' : 'DDDs'}` : ''].filter(Boolean);
+	return partes.length
+		? `Ligado · tabela da empresa em ${partes.join(' e ')} · resto pela prévia (confirme com o seu jurídico)`
+		: 'Ligado · pela prévia MotorCX (confirme com o seu jurídico)';
+}
+
+/** Aviso de curtas que vale na carteira, em % (o do draft ou o padrão). */
+export function avisoCurtasPct(d: Discagem): number {
+	return Math.round((d.chamadas_curtas?.aviso ?? SUGESTOES.chamadas_curtas!.aviso) * 100);
+}
 
 // Prévia MotorCX de horários por UF/DDD (seg–sex / sábado). "não" = null. Fonte: Portal ContraPonto, 28/01/2026.
 const j = (ss: [string, string] | null, sab: [string, string] | null): JanelaHorario => ({ seg_sex: ss, sabado: sab });
@@ -170,15 +192,23 @@ export function stableEqual(a: unknown, b: unknown): boolean {
 export function effectiveDiscagem(stored: Record<string, unknown> | null | undefined): Discagem {
 	// tentativas por número sem valor salvo fica vazio: o padrão depende da regra nova (2 hoje; 3 com por_sinalizacao
 	// ou modo_discagem, SQL 65) e a tela lê o efetivo (lib/renitencia.ts › efetivo)
-	const d: Discagem = { ...SUGESTOES, ...(stored as Discagem) };
-	if ((stored as Discagem | null | undefined)?.tentativas_numero_dia == null) delete d.tentativas_numero_dia;
+	const st = (stored ?? {}) as Discagem;
+	const d: Discagem = { ...SUGESTOES, ...st };
+	if (st.tentativas_numero_dia == null) delete d.tentativas_numero_dia;
+	// chamadas curtas e horários: o que a carteira gravou por cima do padrão, campo a campo (o que não gravou segue o
+	// padrão novo). falha_conta fica de fora: travado em sim.
+	const { falha_conta: _travado, ...cc } = { ...SUGESTOES.chamadas_curtas!, ...(st.chamadas_curtas ?? {}) };
+	void _travado;
+	d.chamadas_curtas = cc;
+	d.horarios = { ...SUGESTOES.horarios!, ...(st.horarios ?? {}) };
 	return d;
 }
 
-/** Calcula a saída de horários: ativo false → omitir; ativo true → { ativo, tabela? }. */
+/** Calcula a saída de horários: desligado → { ativo: false } (a escolha fica gravada); ligado sem ajuste → omitir
+ *  (ausente = sugestão, que é ligado); ligado com ajuste → { ativo, tabela }. */
 function computarHorariosSaida(h: Discagem['horarios']): Record<string, unknown> | null {
-	const ativo = h?.ativo ?? false;
-	if (!ativo) return null; // ausente = sugestão
+	const ativo = h?.ativo ?? true;
+	if (!ativo) return { ativo: false };
 	const tabela = h?.tabela;
 	const ufs: Record<string, JanelaHorario> = {};
 	const ddds: Record<string, JanelaHorario> = {};
@@ -191,7 +221,7 @@ function computarHorariosSaida(h: Discagem['horarios']): Record<string, unknown>
 		if (!prev || !stableEqual(jan, prev)) ddds[dd] = jan;
 	}
 	const hasOv = Object.keys(ufs).length > 0 || Object.keys(ddds).length > 0;
-	return hasOv ? { ativo: true, tabela: { hora: 'local', ufs, ddds } } : { ativo: true };
+	return hasOv ? { ativo: true, tabela: { hora: 'local', ufs, ddds } } : null;
 }
 
 /** Diff: só as chaves que diferem da sugestão. Preserva chaves desconhecidas. Nunca grava null
@@ -229,6 +259,15 @@ export function computeDiff(draft: Discagem): Record<string, unknown> {
 		if (k === 'horarios') {
 			const saida = computarHorariosSaida(draft.horarios);
 			if (saida) out.horarios = saida;
+			continue;
+		}
+		if (k === 'chamadas_curtas') {
+			// só os campos que diferem do padrão: quem mexe no aviso não "congela" o corte (e falha_conta nunca vai)
+			const sug = SUGESTOES.chamadas_curtas as Record<string, unknown>;
+			const cc = (draft.chamadas_curtas ?? {}) as Record<string, unknown>;
+			const dif: Record<string, unknown> = {};
+			for (const [kk, v] of Object.entries(cc)) if (kk !== 'falha_conta' && v !== undefined && !stableEqual(v, sug[kk])) dif[kk] = v;
+			if (Object.keys(dif).length) out.chamadas_curtas = dif;
 			continue;
 		}
 		const dv = (draft as Record<string, unknown>)[k];

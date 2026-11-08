@@ -2,6 +2,7 @@
 como retorno (envios), plantão com a Lista do dia do bucket saidas e o modo simulado (AriSimulado). Banco falso
 em memória; nada de rede. Só dados fictícios."""
 import csv
+import io
 import json
 import os
 import queue
@@ -9,6 +10,7 @@ import tempfile
 import threading
 import unittest
 from datetime import date, datetime, time, timedelta
+from contextlib import redirect_stderr
 from pathlib import Path
 
 from motor.discagem import CAMPOS_MAILING
@@ -102,11 +104,84 @@ class TestConfiguracao(unittest.TestCase):
             self.assertEqual(oct(saida.stat().st_mode & 0o777), "0o644")
             self.assertEqual(len(B.carregar(gravado).troncos), 4)
             self.assertEqual(CF.main(argv, sb=sb), 0)                      # nada mudou
-            sb.tabelas["voz_rotas"][0]["tipo"] = "satelite"                # quebrado no banco
+            # uma rota quebrada no banco fica de fora sozinha; o resto (das duas empresas) é publicado
+            sb.tabelas["voz_rotas"][0]["tipo"] = "satelite"
+            err = io.StringIO()
+            with redirect_stderr(err):
+                self.assertEqual(CF.main(argv, sb=sb), CF.MUDOU)
+            gravado = json.loads(saida.read_text())
+            self.assertEqual(sorted(r["id"] for r in gravado["voz_rotas"]), [2, 3, 4, 5, 6])
+            self.assertEqual(len(B.carregar(gravado).troncos), 4)
+            self.assertIn("voz_rotas[1] (empresa 1) ficou de fora: tipo 'satelite'", err.getvalue())
+            saude = sb.tabelas["fornecedor_saude"]
+            self.assertEqual([(x["empresa_id"], x["item"], x["referencia"], x["ok"]) for x in saude],
+                             [(1, "configuracao_invalida", "rota.1", False)])
+            self.assertEqual(CF.main(argv, sb=sb), 0)                      # sem mudança: não avisa de novo
+            self.assertEqual(len(sb.tabelas["fornecedor_saude"]), 1)
+            sb.tabelas["voz_rotas"][0]["tipo"] = "movel_vc1"               # consertou: volta e o aviso some
+            self.assertEqual(CF.main(argv, sb=sb), CF.MUDOU)
+            self.assertEqual(sb.tabelas["fornecedor_saude"][-1]["ok"], True)
+            self.assertEqual(len(json.loads(saida.read_text())["voz_rotas"]), 6)
+            # formato de cima errado (linha sem id legível): mantém a configuração anterior de todos, como antes
+            sb.tabelas["voz_troncos"].append({"id": None, "empresa_id": 1, "host": "203.0.113.9"})
             antes = saida.read_text()
-            self.assertEqual(CF.main(argv, sb=sb), 2)
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(CF.main(argv, sb=sb), 2)
             self.assertEqual(saida.read_text(), antes)                     # o que está no ar fica
             self.assertNotIn("password", antes)
+
+    def test_tronco_invalido_nao_para_as_outras_empresas(self):
+        d = dados_exemplo()
+        d["voz_troncos"][2]["cps"] = 600                                  # empresa 2: acima do limite da VM
+        d["voz_troncos"][1]["segredo_ref"] = "voz/trunk/1-11 senha"       # empresa 1: referência do cofre inválida
+        sb = SbFalso({**{t: d[t] for t in CF.TABELAS}, "voz_contrato": [{"concorrencia_contratada": 300}]})
+        with tempfile.TemporaryDirectory() as tmp:
+            saida = Path(tmp) / "voz.json"
+            err = io.StringIO()
+            with redirect_stderr(err):
+                self.assertEqual(CF.main(["--saida", str(saida)], sb=sb), CF.MUDOU)
+            g = B.carregar(json.loads(saida.read_text()))
+            self.assertEqual(sorted(t.id for t in g.troncos), [10, 99])
+            # a rota e a transferência que dependem de tronco que ficou de fora também ficam (sem quebrar o Asterisk)
+            self.assertEqual(sorted(r.id for r in g.rotas), [1, 3, 4, 6])
+            self.assertEqual([x.id for x in g.transferencias], [7])
+            log = err.getvalue()
+            self.assertIn("voz_troncos[20] (empresa 2) ficou de fora: cps fora de (0, 500]", log)
+            self.assertIn("voz_troncos[11] (empresa 1) ficou de fora: autenticação por senha exige segredo_ref", log)
+            self.assertIn("voz_rotas[5] (empresa 2) ficou de fora: o tronco 20 ficou de fora", log)
+            self.assertIn("voz_transferencias[8] (empresa 2) ficou de fora", log)
+            self.assertNotIn("voz/trunk", log)                             # nunca o segredo_ref nem senha
+            refs = {(x["empresa_id"], x["referencia"]): x for x in sb.tabelas["fornecedor_saude"]}
+            self.assertEqual(set(refs), {(2, "tronco.20"), (1, "tronco.11"), (1, "rota.2"), (2, "rota.5"),
+                                         (2, "transferencia.8")})
+            self.assertTrue(all(x["ok"] is False and x["tronco_id"] is None for x in refs.values()))
+            self.assertNotIn("voz/trunk", json.dumps(sb.tabelas["fornecedor_saude"]))
+
+    def test_aviso_que_falha_tenta_de_novo_e_nao_segura_a_publicacao(self):
+        d = dados_exemplo()
+        d["voz_troncos"][2]["cps"] = 600
+        sb = SbFalso({**{t: d[t] for t in CF.TABELAS}, "voz_contrato": [{"concorrencia_contratada": 300}]})
+        sb.falhar_inserir = True
+        with tempfile.TemporaryDirectory() as tmp:
+            saida = Path(tmp) / "voz.json"
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(CF.main(["--saida", str(saida)], sb=sb), CF.MUDOU)
+            self.assertNotIn("fornecedor_saude", sb.tabelas)
+            sb.falhar_inserir = False
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(CF.main(["--saida", str(saida)], sb=sb), 0)
+            self.assertEqual([x["referencia"] for x in sb.tabelas["fornecedor_saude"]],
+                             ["rota.5", "transferencia.8", "tronco.20"])
+
+    def test_id_repetido_e_config_invalida_mantem_a_anterior(self):
+        d = dados_exemplo()
+        d["voz_troncos"].append(dict(d["voz_troncos"][0], cps=600))      # id 10 repetido (um deles inválido)
+        with self.assertRaises(B.DadosInvalidos):
+            B.separar_validos(d)
+        d = dados_exemplo()
+        d["voz_config"][0]["pico_multiplo"] = 9
+        with self.assertRaises(B.DadosInvalidos):
+            CF.buscar(SbFalso({t: d[t] for t in CF.TABELAS}))
 
     def test_sem_voz_contrato(self):
         class SemContrato(SbFalso):
