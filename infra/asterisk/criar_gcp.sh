@@ -28,7 +28,7 @@
 #   - 2 VMs (zonas a e b), Shielded VM, Debian 12; no boot, vm_inicio.sh instala o Docker e os serviços
 #     (Asterisk, orquestrador, configuração e transcrição)
 # Empresa (decisão do dono: um bucket por empresa, com a retenção dela):
-#   - bucket <projeto>-motorcx-grav-e<id> em São Paulo, privado, apagando depois de <dias> (mínimo 90, sem teto;
+#   - bucket <projeto>-motorcx-grav-e<id> em São Paulo, privado, apagando depois de <dias> (90 a 1.825, SQL 83;
 #     a partir de 365 dias passa para Coldline aos 90), CMEK se a chave existir ou USAR_CMEK=1, e acesso só da
 #     conta motorcx-asterisk (grava e lê) e da motorcx-gravacoes-leitura (só lê). O nome vai para
 #     voz_config.bucket_gravacoes da empresa.
@@ -154,7 +154,10 @@ garantir_cmek() {   # cria (se pedido) a chave do Cloud KMS e dá ao agente do G
 # ======================================================================= modo empresa: bucket de gravações
 if [ "$MODO" = empresa ]; then
   [[ "$EMPRESA_ID" =~ ^[1-9][0-9]{0,9}$ ]] || falha "uso: bash criar_gcp.sh empresa <id> <dias> [projeto]"
-  [[ "$RETENCAO_DIAS" =~ ^[0-9]+$ ]] && [ "$RETENCAO_DIAS" -ge 90 ] || falha "a retenção precisa ser um número ≥ 90 dias"
+  # SQL 83 · B6: teto de 90 dias; até 1.825 (5 anos) só se a empresa guarda promessa, acordo ou contestação por mais
+  # (voz_config.retencao_prova_dias). O ciclo de vida do bucket é o limite de fora: use o retencao_prova_dias da empresa.
+  [[ "$RETENCAO_DIAS" =~ ^[0-9]+$ ]] && [ "$RETENCAO_DIAS" -ge 90 ] && [ "$RETENCAO_DIAS" -le 1825 ] || \
+    falha "a retenção precisa ser um número ≥ 90 e ≤ 1825 dias (90 é o teto; até 5 anos só para promessa, acordo ou contestação)"
   gcloud config set project "$PROJETO" >/dev/null
   SA="${SA_NOME}@${PROJETO}.iam.gserviceaccount.com"
   existe gcloud iam service-accounts describe "$SA" || falha "rode antes: bash criar_gcp.sh $PROJETO (infraestrutura)"

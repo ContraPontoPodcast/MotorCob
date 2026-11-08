@@ -14,6 +14,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Callable
+
+from voz import destinos as D
 
 # ------------------------------------------------------------------ nomes de coluna (ajuste aqui)
 COLUNAS: dict[str, dict[str, str]] = {
@@ -43,7 +46,8 @@ COLUNAS: dict[str, dict[str, str]] = {
         "empresa_id": "empresa_id", "modo": "modo", "provedor": "provedor", "pico_multiplo": "pico_multiplo",
         "abandono_max_pct": "abandono_max_pct", "freio_ritmo_pct": "freio_ritmo_pct",
         "alo_fake_liberado": "alo_fake_liberado", "alo_fake": "alo_fake", "alo_fake_max_s": "alo_fake_max_s",
-        "alo_fake_audio_ref": "alo_fake_audio_ref", "gravar": "gravar", "retencao_dias": "retencao_dias",
+        "alo_fake_audio_ref": "alo_fake_audio_ref", "gravar": "gravar", "aviso_gravacao": "aviso_gravacao",
+        "retencao_dias": "retencao_dias",
         "transcrever": "transcrever", "transcrever_min_segundos": "transcrever_min_segundos",
         "bucket_gravacoes": "bucket_gravacoes", "variaveis": "variaveis",
     },
@@ -282,6 +286,7 @@ class ConfigVoz:
     alo_fake_max_s: int = 4
     alo_fake_audio_ref: str | None = None
     gravar: bool = True
+    aviso_gravacao: bool = True               # SQL 83 · B6: ligado por padrão (a abertura diz que a ligação é gravada)
     retencao_dias: int = 90
     transcrever: bool = True
     transcrever_min_segundos: int = 5
@@ -301,6 +306,9 @@ def ler_tronco(linha: dict) -> Tronco:
     host = str(_v(linha, t, "host", "")).strip()
     if not HOST.match(host):
         raise DadosInvalidos(f"{onde}: host inválido")
+    motivo = D.motivo_host(host)            # SQL 83 · B4: a regra estática do banco (sem DNS)
+    if motivo:
+        raise DadosInvalidos(f"{onde}: host recusado ({motivo})")
     transp = str(_v(linha, t, "transporte", "udp")).lower()
     if transp not in TRANSPORTES:
         raise DadosInvalidos(f"{onde}: transporte '{transp}' (udp|tcp|tls)")
@@ -381,6 +389,9 @@ def ler_transferencia(linha: dict) -> Transferencia:
     dest = str(_v(linha, t, "destino_sip", "")).strip()
     if not SIP_URI.match(dest):
         raise DadosInvalidos(f"{onde}: destino_sip inválido (sip:usuario@host[:porta][;transport=udp|tcp|tls])")
+    motivo = D.motivo_host(D.host_da_transferencia(dest))      # SQL 83 · B4
+    if motivo:
+        raise DadosInvalidos(f"{onde}: destino recusado ({motivo})")
     met = str(_v(linha, t, "metodo", "ponte")).lower()
     if met not in METODOS_TRANSFERENCIA:
         raise DadosInvalidos(f"{onde}: método '{met}' (refer|ponte)")
@@ -423,6 +434,7 @@ def ler_config(linha: dict) -> ConfigVoz:
         alo_fake_liberado=_bool(_v(linha, t, "alo_fake_liberado"), False), alo_fake=_bool(_v(linha, t, "alo_fake"), False),
         alo_fake_max_s=_int(_v(linha, t, "alo_fake_max_s", 4), f"{onde}.alo_fake_max_s", 1, 15),
         alo_fake_audio_ref=_v(linha, t, "alo_fake_audio_ref"), gravar=_bool(_v(linha, t, "gravar"), True),
+        aviso_gravacao=_bool(_v(linha, t, "aviso_gravacao"), True),
         retencao_dias=_int(_v(linha, t, "retencao_dias", 90), f"{onde}.retencao_dias", 90),
         transcrever=_bool(_v(linha, t, "transcrever"), True),
         transcrever_min_segundos=_int(_v(linha, t, "transcrever_min_segundos", 5), f"{onde}.transcrever_min_segundos",
@@ -523,10 +535,13 @@ def _empresa_da(linha: dict, tabela: str) -> int | None:
         return None
 
 
-def separar_validos(dados: dict) -> tuple[dict, list[LinhaIgnorada]]:
+def separar_validos(dados: dict, destino: Callable[[str], str | None] | None = None
+                    ) -> tuple[dict, list[LinhaIgnorada]]:
     """Tira de `dados` as linhas inválidas de voz_troncos, voz_rotas e voz_transferencias (e a rota ou transferência
     que aponta para tronco que ficou de fora ou é de outra empresa). Devolve (cópia rasa de `dados` só com as linhas
-    válidas, linhas ignoradas). Formato de cima errado levanta DadosInvalidos, como antes."""
+    válidas, linhas ignoradas). Formato de cima errado levanta DadosInvalidos, como antes.
+    `destino(host) -> motivo | None` (SQL 83 · B4): a conferência do host DEPOIS do DNS e contra os IPs do MotorCX
+    (voz/destinos.py › motivo_host com resolver); o tronco ou a transferência recusada fica de fora sozinha."""
     saida = dict(dados)
     ignoradas: list[LinhaIgnorada] = []
     lidos: dict[str, list] = {}
@@ -542,7 +557,13 @@ def separar_validos(dados: dict) -> tuple[dict, list[LinhaIgnorada]]:
             lid = _int(_v(linha, tabela, "id"), f"{tabela}.id", 1)       # sem id legível: erro de formato
             onde = f"{tabela}[{lid}]"
             try:
-                ok.append((linha, ler(linha)))
+                obj = ler(linha)
+                if destino is not None and tabela in ("voz_troncos", "voz_transferencias"):
+                    motivo = destino(obj.host)
+                    if motivo:
+                        raise DadosInvalidos(f"{onde}: {'host' if tabela == 'voz_troncos' else 'destino'} "
+                                             f"recusado ({motivo})")
+                ok.append((linha, obj))
             except (DadosInvalidos, TypeError, ValueError, AttributeError) as ex:
                 ignoradas.append(LinhaIgnorada(tabela, lid, _empresa_da(linha, tabela), _motivo(ex, onde)))
         lidos[tabela] = ok

@@ -8,6 +8,11 @@ Saída (dois arquivos incluídos pelos .conf fixos da imagem, infra/asterisk/con
                            Stasis); transferência por REFER; saída por empresa e tipo de número com tech prefix,
                            prioridade, failover e teto de canais por tronco (GROUP_COUNT). O CPS por tronco fica como
                            variável global e é aplicado pelo orquestrador (o Asterisk não limita CPS por endpoint).
+                           SQL 83 · B4: a saída só aceita número nacional (DDD + fixo de 10 ou móvel de 11 dígitos);
+                           emergência, 0300/0500/0800/0900, internacional e curtos não casam com nada e não saem.
+Destinos (SQL 83 · B4): tronco ou transferência com host interno, reservado, de loopback ou do MotorCX (o IP externo,
+a rede local e as faixas de voz_enderecos_motorcx), inclusive DEPOIS de resolver o nome aqui dentro do contêiner,
+fica de fora (aviso no stderr, sem derrubar as outras empresas), com as rotas e transferências que dependem dele.
 
 Uso (dentro do contêiner, pela VM; nunca imprime senha):
   python3 -m voz.asterisk.gerador --dados /run/motorcx/voz.json --saida /etc/asterisk/motorcx \\
@@ -24,6 +29,7 @@ import tempfile
 from pathlib import Path
 
 from voz import banco as B
+from voz import destinos as DST
 from voz.segredos import Dicionario, Resolvedor, SecretManager, Tardio
 
 APP_ARI = "motorcx"
@@ -181,19 +187,24 @@ def gerar_extensions(dados: B.DadosVoz, amd: str = AMD_PADRAO) -> str:
                 vistos.add(k)
                 unicas.append(r)
         out += [f"; empresa {emp} · {tipo}: prioridade 1 primeiro; CHANUNAVAIL/CONGESTION ou tronco cheio -> próxima",
-                f"[motorcx-saida-{emp}-{tipo}]", "exten => _X.,1,NoOp(MotorCX saída)"]
-        for i, r in enumerate(unicas, start=1):
-            t = troncos[r.tronco_id]
-            v = _var_tronco(t)
-            out += [f" same => n(r{i}),GotoIf($[${{GROUP_COUNT({t.nome}@motorcx)}} >= ${{MOTORCX_CANAIS_{v}}}]?r{i + 1})",
-                    f" same => n,Set(GROUP(motorcx)={t.nome})",
-                    f" same => n,Set(MOTORCX_TECH_PREFIX={r.tech_prefix})",
-                    f" same => n,Set(MOTORCX_ROTA_ID={r.id})",
-                    f" same => n,Dial(PJSIP/{t.discar(r.tech_prefix, '${EXTEN}')}@{t.nome},60)",
-                    f" same => n,GotoIf($[\"${{DIALSTATUS}}\" = \"CHANUNAVAIL\" | \"${{DIALSTATUS}}\" = \"CONGESTION\"]"
-                    f"?r{i + 1})",
-                    " same => n,Hangup()"]
-        out += [f" same => n(r{len(unicas) + 1}),Hangup(34)", ""]
+                "; só número nacional (SQL 83): móvel DDD+9+8 dígitos ou fixo DDD+[2-5]+7 dígitos; o resto não casa",
+                f"[motorcx-saida-{emp}-{tipo}]"]
+        for padrao in DST.PADROES_DIALPLAN:
+            out.append(f"exten => {padrao},1,NoOp(MotorCX saída)")
+            for i, r in enumerate(unicas, start=1):
+                t = troncos[r.tronco_id]
+                v = _var_tronco(t)
+                out += [f" same => n(r{i}),GotoIf($[${{GROUP_COUNT({t.nome}@motorcx)}} >= ${{MOTORCX_CANAIS_{v}}}]"
+                        f"?r{i + 1})",
+                        f" same => n,Set(GROUP(motorcx)={t.nome})",
+                        f" same => n,Set(MOTORCX_TECH_PREFIX={r.tech_prefix})",
+                        f" same => n,Set(MOTORCX_ROTA_ID={r.id})",
+                        f" same => n,Dial(PJSIP/{t.discar(r.tech_prefix, '${EXTEN}')}@{t.nome},60)",
+                        f" same => n,GotoIf($[\"${{DIALSTATUS}}\" = \"CHANUNAVAIL\" | \"${{DIALSTATUS}}\" = "
+                        f"\"CONGESTION\"]?r{i + 1})",
+                        " same => n,Hangup()"]
+            out.append(f" same => n(r{len(unicas) + 1}),Hangup(34)")
+        out += ["exten => i,1,Hangup(1)", ""]
     return "\n".join(out).rstrip() + "\n"
 
 
@@ -212,10 +223,40 @@ def gravar(pasta: Path, nome: str, texto: str, modo: int) -> Path:
     return pasta / nome
 
 
+def filtrar_destinos(dados: B.DadosVoz, proprios=(), resolver=None) -> tuple[B.DadosVoz, list[str]]:
+    """SQL 83 · B4: tira os troncos e transferências com destino recusado (voz/destinos.py › motivo_host), as rotas
+    desses troncos e as transferências que saem por eles. Devolve (dados filtrados, avisos sem endereço nem senha)."""
+    avisos: list[str] = []
+    fora: set[int] = set()
+    troncos = []
+    for t in dados.troncos:
+        motivo = DST.motivo_host(t.host, proprios, resolver)
+        if motivo:
+            fora.add(t.id)
+            avisos.append(f"tronco {t.id} (empresa {t.empresa_id}) ficou de fora: {motivo}")
+        else:
+            troncos.append(t)
+    tfs = []
+    for x in dados.transferencias:
+        motivo = (f"o tronco {x.tronco_id} ficou de fora" if x.tronco_id in fora
+                  else DST.motivo_host(x.host, proprios, resolver))
+        if motivo:
+            avisos.append(f"transferência {x.id} (empresa {x.empresa_id}) ficou de fora: {motivo}")
+        else:
+            tfs.append(x)
+    rotas = [r for r in dados.rotas if r.tronco_id not in fora]
+    return B.DadosVoz(troncos=troncos, rotas=rotas, transferencias=tfs, configs=dados.configs), avisos
+
+
 def gerar(entrada: dict, saida: Path, segredos: Resolvedor, ip_externo: str = "", redes_locais=(),
-          tls: dict | None = None) -> dict:
-    """Gera os dois arquivos. Devolve só contagens (seguras para log)."""
+          tls: dict | None = None, resolver=None) -> dict:
+    """Gera os dois arquivos. Devolve só contagens (seguras para log). `resolver` (o main usa o DNS): confere os
+    nomes dos destinos depois de resolver, aqui dentro do contêiner (SQL 83 · B4)."""
     dados = B.carregar(entrada)
+    proprios = DST.proprios_do_ambiente(ip_externo, redes_locais, entrada.get("enderecos_motorcx") or [])
+    dados, avisos = filtrar_destinos(dados, proprios, resolver)
+    for a in avisos:
+        print(f"AVISO: {a}. Os outros seguem.", file=sys.stderr)
     pj = gerar_pjsip(dados, segredos, ip_externo, redes_locais, tls=tls,
                      provedores_sip=entrada.get("provedores_sip") or [])
     ex = gerar_extensions(dados)
@@ -223,7 +264,7 @@ def gerar(entrada: dict, saida: Path, segredos: Resolvedor, ip_externo: str = ""
     gravar(saida, "extensions_motorcx.conf", ex, 0o640)
     return {"troncos": sum(t.ativo for t in dados.troncos), "rotas": len(dados.rotas),
             "transferencias": sum(x.ativo for x in dados.transferencias),
-            "provedores_sip": len(entrada.get("provedores_sip") or [])}
+            "provedores_sip": len(entrada.get("provedores_sip") or []), "destinos_recusados": len(avisos)}
 
 
 def recarregar(ari) -> None:
@@ -246,7 +287,7 @@ def main(argv=None) -> int:
     seg = Dicionario(marcador="SEM-SENHA-PREVIA") if a.sem_senhas else Tardio(SecretManager)
     tls = {"cert": a.tls_cert, "chave": a.tls_chave} if a.tls_cert and a.tls_chave else None
     try:
-        res = gerar(entrada, Path(a.saida), seg, a.ip_externo, a.rede_local, tls)
+        res = gerar(entrada, Path(a.saida), seg, a.ip_externo, a.rede_local, tls, resolver=DST.resolver_dns)
     except (B.DadosInvalidos, LookupError, ValueError) as ex:
         print(f"ERRO: {ex}", file=sys.stderr)
         return 2

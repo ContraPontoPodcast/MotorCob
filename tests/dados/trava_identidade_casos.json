@@ -1,0 +1,30 @@
+{
+  "_sobre": "SQL 83 · B7: textos do Speech Analytics × trava 'identidade antes da dívida'. revela = true: o texto sugere dizer credor, dívida, valor ou contrato antes de a pessoa confirmar a identidade. Rodam em motor/trava_identidade.py (tests/test_trava_identidade.py) e em public.texto_revela_antes_identidade (supabase/testes/testar_rls.py).",
+  "casos": [
+    {"texto": "Abrir a conversa com o nome do credor", "revela": true},
+    {"texto": "Abra a ligação dizendo o nome do credor e o valor em aberto.", "revela": true},
+    {"texto": "Diga o nome do credor logo no início da ligação.", "revela": true},
+    {"texto": "Na abertura, cite o valor da dívida.", "revela": true},
+    {"texto": "Fale do contrato antes de confirmar a identidade.", "revela": true},
+    {"texto": "Mencionar o débito na primeira fala aumenta o CPC.", "revela": true},
+    {"texto": "Comece com o saldo em aberto para ganhar tempo.", "revela": true},
+    {"texto": "Olá, aqui é a central da {{assessoria}}, em nome de {{credor}}. Falo com {{primeiro_nome}}?", "revela": true},
+    {"texto": "Bom dia! Posso falar sobre o seu contrato?", "revela": true},
+    {"texto": "Boa tarde, falo com {{primeiro_nome}}? É sobre a sua dívida com {{ credor }}.", "revela": true},
+    {"texto": "Olá! Consta {{saldo}} em aberto. Falo com {{primeiro_nome}}?", "revela": true},
+    {"texto": "'Desconhece a dívida' subiu 6 pontos na Carteira Cartões Beta. Confirme a identidade mais cedo e diga o nome do credor logo depois da confirmação.", "revela": false},
+    {"texto": "Diga o nome do credor só depois que a pessoa confirmar a identidade.", "revela": false},
+    {"texto": "Nunca diga o credor antes de confirmar a identidade.", "revela": false},
+    {"texto": "Não fale da dívida na abertura.", "revela": false},
+    {"texto": "Bom dia! Falo com {{primeiro_nome}}?", "revela": false},
+    {"texto": "Esta ligação é gravada. Sou o assistente virtual da Assessoria Alfa.", "revela": false},
+    {"texto": "Olá, aqui é a central da {{assessoria}}. Falo com {{primeiro_nome}}?", "revela": false},
+    {"texto": "Entendo que o momento está difícil. Vamos achar um valor que caiba no seu mês?", "revela": false},
+    {"texto": "Antes de desligar, deixa eu repetir o combinado: o valor, a data e por onde pagar.", "revela": false},
+    {"texto": "Ligar à tarde, entre 12:00 e 17:00", "revela": false},
+    {"texto": "Nesta carteira, as ligações à tarde viram acordo 18,2% das vezes; de manhã, 11,0%. O rascunho limita a janela de horário da estratégia.", "revela": false},
+    {"texto": "Associação, não causa: por isso vira frase em rascunho para testar, não regra.", "revela": false},
+    {"texto": "Reconhecer a dificuldade antes da oferta", "revela": false},
+    {"texto": "", "revela": false}
+  ]
+}

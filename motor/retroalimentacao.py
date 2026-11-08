@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
+from motor import trava_identidade as TI
+
 PISO_N = 200            # por grupo
 PISO_DIF = 5.0          # pontos percentuais
 PISO_GRUPO = 30         # nada exibido com menos que isso
@@ -241,8 +243,11 @@ def regra_propensao(por_motivo: list[dict]) -> list[Recomendacao]:
 
 
 def gerar(conversao: list[dict], renitencia: list[dict], por_motivo: list[dict]) -> list[Recomendacao]:
-    return (regra_horario(conversao) + regra_renitencia(renitencia) + regra_frases(conversao)
+    """Todas as regras. SQL 83 · B7: recomendação cujo texto sugira dizer credor, dívida, valor ou contrato antes da
+    identidade nunca sai (motor/trava_identidade.py; o banco recusa de novo em registrar_recomendacao_voz)."""
+    recs = (regra_horario(conversao) + regra_renitencia(renitencia) + regra_frases(conversao)
             + regra_ofertas(conversao) + regra_canal(conversao) + regra_propensao(por_motivo))
+    return [r for r in recs if TI.recomendacao_ok(r)]
 
 
 # ------------------------------------------------------------------ impacto (antes × depois, 28 dias)
@@ -313,6 +318,7 @@ def montar_relatorio(credor: dict, competencia: date, conversao: list[dict], ale
                                       .replace(".", ","),
                          "n": int(venc[0]), "unidade": "acordos a mais por mês",
                          "estimativa": estimar_impacto(venc[0], abs(pa - pb))})
+    recs = [r for r in recs if TI.recomendacao_ok(r)]        # SQL 83 · B7: a mesma trava do fluxo
     return {
         "competencia": competencia.isoformat(),
         "resumo": {"conversas": {"n": int(n)}, "acordo_pct": pct(acordos, n),

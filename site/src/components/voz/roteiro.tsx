@@ -11,7 +11,7 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { supabase, friendlyError, dateTimeBR, type Row } from '@/lib/supabase';
 import {
-	PERM_VOZ, SITUACAO_ROTEIRO, TIPOS_AGENTE, VARIAVEIS_VOZ, aberturaFixa, regrasDe, regrasPadrao,
+	FALA_PADRAO_ROTEIRO, PERM_VOZ, PROMPT_PADRAO_ROTEIRO, SITUACAO_ROTEIRO, TIPOS_AGENTE, VARIAVEIS_VOZ, aberturaFixa, promptCredorAntesIdentidade, regrasDe, regrasPadrao,
 	type RegrasTransferencia, type TipoAgente,
 } from '@/lib/voz';
 import { Botao, Cartao, Pilula, SubAbas, Trava, Vazio, campoCls, campoStyle } from './ui';
@@ -40,8 +40,6 @@ type VozConfig = {
 	alo_fake_liberado: boolean; alo_fake: boolean; alo_fake_max_s: number; aviso_gravacao: boolean; variaveis: string[];
 };
 
-const PROMPT_PADRAO = 'Você é o agente virtual da {{assessoria}}, em nome de {{credor}}. Seja cordial e objetivo. Confirme que fala com o titular antes de qualquer assunto da conta. Depois, apresente a situação e as ofertas da carteira, dentro da alçada. Se a pessoa pedir, mande o link de pagamento por SMS.';
-const FALA_PADRAO = 'Posso falar um minuto sobre a sua conta?';
 
 const PASSOS = [
 	{ id: 'rascunho', nome: 'Rascunho', desc: 'Quem edita canais e frases' },
@@ -54,7 +52,7 @@ function deRoteiro(r: Roteiro): Rascunho {
 }
 
 function novoRascunho(): Rascunho {
-	return { tipo: 'negociador', regras: regrasPadrao('negociador'), prompt: PROMPT_PADRAO, fala: FALA_PADRAO, virtual: false };
+	return { tipo: 'negociador', regras: regrasPadrao('negociador'), prompt: PROMPT_PADRAO_ROTEIRO, fala: FALA_PADRAO_ROTEIRO, virtual: true };
 }
 
 export function RoteiroAgente() {
@@ -251,23 +249,21 @@ export function RoteiroAgente() {
 						<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Fora dessas regras o agente encerra sozinho e grava o evento (promessa, retorno, recusa). A transferência vai pelo tronco SIP com o ID do cliente e o motivo.</p>
 					</Cartao>
 
-					<Cartao titulo="Primeira fala" linha={'O começo é fixo. Não existe aviso automático de "assistente virtual": se a empresa quiser, a frase entra no texto deste roteiro.'}>
-						<p className="rounded-xl bg-[var(--base-fill)] px-3 py-2.5 text-[13px] leading-relaxed text-[var(--base-texto)]"><Variaveis texto={aberturaFixa(draft.virtual, !!config?.aviso_gravacao)} /></p>
+					<Cartao titulo="Primeira fala" linha={'O começo é fixo: aviso de gravação (se ligado na empresa), "assistente virtual" sempre e a pergunta de identificação. O credor e a conta só depois de a pessoa confirmar ser o titular.'}>
+						<p className="rounded-xl bg-[var(--base-fill)] px-3 py-2.5 text-[13px] leading-relaxed text-[var(--base-texto)]"><Variaveis texto={aberturaFixa(!!config?.aviso_gravacao)} /></p>
 						<label htmlFor="fala" className="mt-3 block text-[12px] font-semibold text-[var(--base-texto-2)]">Depois da confirmação de identidade</label>
 						<input id="fala" value={draft.fala} maxLength={500} disabled={!editavel} onChange={e => patch({ fala: e.target.value })} className={`${campoCls} mt-1 w-full`} style={campoStyle} />
-						<label className="mt-3 flex items-start gap-2 text-[13px] text-[var(--base-texto)]">
-							<input type="checkbox" checked={draft.virtual} disabled={!editavel} onChange={e => patch({ virtual: e.target.checked })} className="mt-0.5 accent-[var(--destaque)]" />
-							<span>Escrever no roteiro "aqui é a assistente virtual" <span className="text-[var(--base-texto-3)]">(padrão: desligado)</span></span>
-						</label>
+
 						<p className="mt-1 text-[12px] text-[var(--base-texto-3)]">{config?.aviso_gravacao ? 'A abertura avisa que a ligação é gravada' : 'A abertura não avisa que a ligação é gravada'}: isso vale para a empresa toda e muda em <Link to="/empresa/privacidade" className="underline">Empresa › Privacidade e gravações</Link>.</p>
 						<label htmlFor="prompt" className="mt-4 block text-[12px] font-semibold text-[var(--base-texto-2)]">Como o agente conduz a conversa</label>
+						{promptCredorAntesIdentidade(draft.prompt) && <p role="alert" className="mt-1 rounded-lg bg-[var(--base-fill)] px-2 py-1.5 text-[12px] text-[var(--base-texto)]">Este texto diz "em nome de {'{{credor}}'}" antes de confirmar o titular. Revelar o credor a um terceiro expõe a dívida: mova o credor para depois da confirmação.</p>}
 						<textarea id="prompt" value={draft.prompt} maxLength={20000} rows={5} disabled={!editavel} onChange={e => patch({ prompt: e.target.value })} className={`${campoCls} mt-1 h-auto w-full py-2 leading-relaxed`} style={campoStyle} />
 						<p className="mt-1 text-[11.5px] text-[var(--base-texto-3)]">Use as variáveis entre chaves duplas, como {'{{credor}}'}. As regras fixas valem acima deste texto.</p>
 					</Cartao>
 
 					<Detalhes solto resumo="Exemplo de conversa">
 						<div className="space-y-2">
-							<Balao quem="Agente"><Variaveis texto={aberturaFixa(draft.virtual, !!config?.aviso_gravacao)} /></Balao>
+							<Balao quem="Agente"><Variaveis texto={aberturaFixa(!!config?.aviso_gravacao)} /></Balao>
 							<Balao quem="Pessoa" cliente>Sou eu.</Balao>
 							<Balao quem="Agente">Obrigada. {draft.fala} {draft.tipo === 'localizador' ? 'Vou passar você para um atendente agora.' : <>Consta um valor de <Variaveis texto="{{saldo}}" /> em aberto.</>}</Balao>
 							{draft.tipo !== 'localizador' && <><Balao quem="Pessoa" cliente>Consigo pagar dia 5.</Balao><Balao quem="Agente">Combinado: dia 5. Quer que eu mande o link por SMS?</Balao></>}

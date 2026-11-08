@@ -285,7 +285,10 @@ class ElevenLabs(ProvedorVoz):
         return Conexao("sip", endpoint=f"PJSIP/{self.numero_agente}@{self.endpoint}", variaveis={
             "PJSIP_HEADER(add,X-MotorCX-Id)": ctx.id_chamada,
             "PJSIP_HEADER(add,X-MotorCX-Empresa)": str(ctx.empresa_id),
-            "PJSIP_HEADER(add,X-MotorCX-Acao)": ctx.id_acao or "-"})
+            "PJSIP_HEADER(add,X-MotorCX-Acao)": ctx.id_acao or "-",
+            # SQL 83 · B6: o agente da ElevenLabs abre com o aviso (gravacao,virtual | virtual); o texto fica na
+            # primeira mensagem configurada lá, que lê este cabeçalho
+            "PJSIP_HEADER(add,X-MotorCX-Aviso)": "gravacao,virtual" if "gravada" in ctx.aviso_abertura else "virtual"})
 
     def encerrar(self, id_chamada: str) -> None:
         self.sessoes.pop(id_chamada, None)
