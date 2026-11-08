@@ -8,6 +8,7 @@ import { erroDaFuncao } from '@/lib/funcoes';
 import { lerNumeroBR } from '@/lib/condicoes';
 import { Aviso, Botao, BotaoLink, Detalhes, Kpis, Pilula, Segmentos, campoCls, campoStyle, textareaCls } from '@/components/ds';
 import { MapeamentoCarga } from '@/components/comuns/mapeamento-carga';
+import { AvisoIdentidade } from '@/components/comuns/aviso-identidade';
 import { combinar, lerArquivo, paraSalvar, reconhecer, validar, type ColunasCarga, type LeituraArquivo } from '@/lib/mapeamento-carga';
 import {
 	CANAIS_ASSISTENTE, FRASES_PADRAO_SMS, REGUA_PADRAO, ROTULO_QUEM, checklist, comContato, heroi, podeMotorcx, proximaLista,
@@ -348,8 +349,9 @@ export function PassoAcionar({ sit, onVoltar, onSalvo }: { sit: Situacao; onVolt
 							<div className="grid gap-3 pt-2">
 								{FRASES_PADRAO_SMS.map(f => (
 									<label key={f.estagio} className="grid gap-1 text-[13px] font-semibold text-[var(--base-texto)]">
-										SMS · {f.etapa} <span className="text-[11.5px] font-normal text-[var(--base-texto-3)]">{(frases[f.estagio] ?? '').length}/160 · variáveis: {'{saldo}'} {'{dias_atraso}'} {'{vencimento}'} {'{valor_parcela}'}</span>
+										SMS · {f.etapa} <span className="text-[11.5px] font-normal text-[var(--base-texto-3)]">{(frases[f.estagio] ?? '').length}/160 · variáveis: {'{primeiro_nome}'} {'{link}'} · valor e parcela só depois do link</span>
 										<textarea rows={2} maxLength={160} className={textareaCls} style={campoStyle} value={frases[f.estagio] ?? ''} onChange={e => setFrases(x => ({ ...x, [f.estagio]: e.target.value }))} />
+										<AvisoIdentidade texto={frases[f.estagio] ?? ''} empresa={sit.empresa.nome} />
 									</label>
 								))}
 							</div>

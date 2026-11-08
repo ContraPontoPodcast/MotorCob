@@ -5,6 +5,7 @@ import { supabase, friendlyError, dateTimeBR, safeFileName, type Row } from '@/l
 import { useMotorAuth } from '@/components/auth-provider';
 import { isCanalValido, CATEGORIA_RCS, TIPO_MIDIA_NOME } from '@/lib/mensageria-produtos';
 import { ModeloEmailEditor } from '@/components/mensageria/modelo-email';
+import { AvisoIdentidade } from '@/components/comuns/aviso-identidade';
 
 export function TemplatesCanal() {
 	const { canal } = useParams();
@@ -38,7 +39,7 @@ export function TemplatesCanal() {
 					<div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)' }}>
 						<span className="mc-area-tag mb-3">Mensageria</span>
 						<h2 className="text-[18px] font-semibold text-[#1D1D1F]">Templates</h2>
-						<p className="mx-auto mt-2 max-w-sm text-[14px] text-[#6E6E73]">O template é o texto da mensagem, com variáveis como {'{{nome}}'} e {'{{valor}}'}.</p>
+						<p className="mx-auto mt-2 max-w-sm text-[14px] text-[#6E6E73]">O template é o texto da mensagem, com variáveis como {'{{nome}}'} e {'{{link}}'}. Sem dívida, valor ou credor: a mensagem chega antes de confirmar quem recebe.</p>
 						{canEdit && <button onClick={() => setEditando('novo')} className="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-[#1D1D1F] px-5 text-[14px] font-medium text-white hover:opacity-85"><Plus size={16} /> Criar o primeiro template</button>}
 					</div>
 				) : (
@@ -154,6 +155,7 @@ function TemplateEditor({ canal, existente, onClose, onSaved }: { canal: string;
 						<textarea ref={textareaRef} value={texto} onChange={e => setTexto(e.target.value)} rows={5} className="w-full rounded-lg border border-[#D2D2D7] p-3 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-[#0071E5]/40" />
 						{isSms && <p className="mt-1 text-[12px] text-[#8E8E93]">{semVars.length}/160 sem as variáveis · Depois de preencher as variáveis, o SMS acima de 160 caracteres não é enviado.</p>}
 						{seloRcs && <p className="mt-1 text-[12px] font-semibold text-[#3B5BA9]">{seloRcs}</p>}
+						<AvisoIdentidade texto={texto} empresa={empresa?.nome} />
 					</div>
 					<div className="flex items-center justify-between rounded-lg border border-[#E5E5EA] px-4 py-3">
 						<div><span className="text-[14px] font-medium text-[#1D1D1F]">Rastrear links</span><p className="text-[12px] text-[#8E8E93]">Os links viram endereços curtos do MotorCX para saber quem clicou.</p></div>

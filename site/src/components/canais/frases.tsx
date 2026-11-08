@@ -10,6 +10,7 @@ import {
 	FRASE_ESTAGIOS, estagioLabel, canalTipoMensagem, templateCodigoOf, templatePreviewOf, frasePreview,
 	type Frase,
 } from '@/lib/frases';
+import { AvisoIdentidade } from '@/components/comuns/aviso-identidade';
 
 const MAX_TEXTO = 2000;
 const MAX_CODIGO = 200;
@@ -87,13 +88,13 @@ function FraseEditor({ canal, frase, onClose, onSaved }: {
 					<div className="grid gap-4 sm:grid-cols-2">
 						<div>
 							<label className="mb-1 block text-xs font-semibold text-slate-600">Nome <span className="text-[#C62828]">*</span></label>
-							<input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Lembrete de saldo" className="h-10 w-full rounded border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]"/>
+							<input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Mensagem inicial" className="h-10 w-full rounded border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]"/>
 							<p className="mt-1 text-[11px] text-slate-400">Único neste canal.</p>
 						</div>
 						{isTemplate ? (
 							<div>
 								<label className="mb-1 block text-xs font-semibold text-slate-600">Código do template no provedor <span className="text-[#C62828]">*</span></label>
-								<input value={codigo} onChange={e => setCodigo(e.target.value)} maxLength={MAX_CODIGO} placeholder="Ex.: lembrete_saldo_v1" className="h-10 w-full rounded border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]"/>
+								<input value={codigo} onChange={e => setCodigo(e.target.value)} maxLength={MAX_CODIGO} placeholder="Ex.: mensagem_inicial_v1" className="h-10 w-full rounded border border-[#d8e3e5] px-3 text-sm outline-none focus:border-[#0F4C5C]"/>
 								<p className="mt-1 text-[11px] text-slate-400">Nome do template aprovado no provedor. Até {MAX_CODIGO} caracteres.</p>
 							</div>
 						) : (
@@ -111,11 +112,12 @@ function FraseEditor({ canal, frase, onClose, onSaved }: {
 							<label className="text-xs font-semibold text-slate-600">{isTemplate ? 'Prévia do texto' : 'Texto'} <span className="text-[#C62828]">*</span></label>
 							<span className={`text-[11px] ${isSms && texto.length > 160 ? 'font-bold text-[#C62828]' : 'text-slate-400'}`}>{isSms ? `${texto.length}/160` : isTemplate && canal === 'rcs' ? (texto.length > 160 ? 'RCS Single (preço diferente)' : 'RCS Basic') : `${texto.length}/${MAX_TEXTO}`}</span>
 						</div>
-						<textarea ref={taRef} value={texto} onChange={e => setTexto(e.target.value)} rows={5} placeholder={isTemplate ? 'Prévia do texto do template…' : 'Escreva a mensagem. Use {saldo}, {vencimento}…'} className="w-full rounded border border-[#d8e3e5] p-3 text-sm outline-none focus:border-[#0F4C5C]"/>
+						<textarea ref={taRef} value={texto} onChange={e => setTexto(e.target.value)} rows={5} placeholder={isTemplate ? 'Prévia do texto do template…' : 'Ex.: Olá, {nome}. Você tem uma mensagem da sua empresa. Acesse: {link}'} className="w-full rounded border border-[#d8e3e5] p-3 text-sm outline-none focus:border-[#0F4C5C]"/>
 						{isSms && (texto.length > 160
 							? <p className="mt-1 text-[11px] font-semibold text-[#C62828]">O SMS acima de 160 caracteres não é enviado.</p>
 							: <p className="mt-1 text-[11px] text-slate-400">160 caracteres por mensagem. {texto ? `${smsMensagens(texto)} mensagem(s).` : ''}</p>)}
 						{isTemplate && canal === 'rcs' && <p className="mt-1 text-[11px] text-slate-400">{texto.length > 160 ? 'Acima de 160: cobra como RCS Single.' : 'Até 160: cobra como RCS Basic.'}</p>}
+						{canal !== 'agente_voz' && canal !== 'discador' && <AvisoIdentidade texto={texto} empresa={empresa?.nome} />}
 					</div>
 					<div>
 						<p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">Inserir variável</p>

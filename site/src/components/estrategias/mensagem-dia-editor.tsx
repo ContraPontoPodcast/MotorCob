@@ -6,6 +6,7 @@ import {
 	FRASE_CANAIS, fraseCanalLabel, frasePreview, templateCodigoOf, canalTipoMensagem, type Frase,
 } from '@/lib/frases';
 import { canalLabel, type MensagemAcao, type MensagemRef } from '@/lib/estrategia';
+import { AvisoIdentidade } from '@/components/comuns/aviso-identidade';
 
 const MAX_TEXTO = 2000;
 const VARS_INSERIR = ['saldo', 'dias_atraso', 'vencimento', 'valor_parcela', 'qtd_parcelas_abertas', 'nome', 'link'];
@@ -130,6 +131,7 @@ function RefEditor({ canal, refAtual, frases, estagio, onSetRef, onSalvarNoPlayb
 							<span className={`text-[11px] ${texto.length > MAX_TEXTO ? 'font-bold text-[#C62828]' : 'text-slate-400'}`}>{texto.length}/{MAX_TEXTO}{isSms && texto ? ` · ${smsMensagens(texto)} SMS` : ''}</span>
 						</div>
 						<textarea ref={taRef} value={texto} onChange={e => setTexto(e.target.value)} rows={4} placeholder="Escreva a mensagem…" className="w-full rounded border border-[#d8e3e5] p-3 text-sm outline-none focus:border-[#0F4C5C]"/>
+						{canal !== 'agente_voz' && canal !== 'discador' && <AvisoIdentidade texto={texto} />}
 					</div>
 					<VariavelBotoes onInsert={insertVar}/>
 					{vars.length > 0 && (

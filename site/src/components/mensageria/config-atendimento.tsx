@@ -284,7 +284,7 @@ function RespostaRapidaModal({ existente, onClose, onSaved }: { existente: Row |
 					</div>
 					<div>
 						<label className="mb-1.5 block text-[13px] font-semibold text-[#1D1D1F]">Texto *</label>
-						<textarea value={texto} onChange={e => setTexto(e.target.value)} rows={3} placeholder="Ex.: Olá {{nome}}, vamos negociar seu acordo." className="w-full resize-none rounded-lg border border-[#D2D2D7] px-3 py-2 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-[#0071E5]/40" />
+						<textarea value={texto} onChange={e => setTexto(e.target.value)} rows={3} placeholder="Ex.: Olá {{nome}}, obrigado pelo retorno. Os detalhes estão no link." className="w-full resize-none rounded-lg border border-[#D2D2D7] px-3 py-2 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-[#0071E5]/40" />
 					</div>
 					{erro && <p className="text-[13px] text-[#FF3B30]">{erro}</p>}
 					<div className="flex justify-end gap-2">

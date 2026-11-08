@@ -4,6 +4,7 @@ import { BookOpen, Lock, Plus, Search, Trash2, X } from 'lucide-react';
 import { Notice, useAllowed } from '@/components/app-shell';
 import { useJornadaCarteira, JornadaHeading } from '@/components/jornada/jornada-shell';
 import { PainelEdicao } from '@/components/comuns/painel-edicao';
+import { AvisoIdentidade } from '@/components/comuns/aviso-identidade';
 import { friendlyError, supabase, type Row } from '@/lib/supabase';
 import {
 	canalTipoMensagem, carregarFrases, salvarFrase, excluirFrase, frasePreview, previsualizar, smsMensagens,
@@ -312,9 +313,10 @@ function MensagemEditor({ frase, momento, colunas, podeEditar, motivoBloqueio, r
 						<label className="text-[12px] font-semibold text-[#6E6E73]">Texto <span className="text-[#FF3B30]">*</span></label>
 						<span className={`text-[11px] ${isSms && texto.length > 160 ? 'font-bold text-[#FF3B30]' : 'text-[#8E8E93]'}`}>{isSms ? `${texto.length}/160 · ${smsMensagens(texto)} parte(s)` : `${texto.length}/${MAX_TEXTO}`}</span>
 					</div>
-					<textarea value={texto} onChange={e => setTexto(e.target.value)} rows={5} placeholder="Escreva a mensagem. Use {primeiro_nome}, {valor}…" className="w-full rounded-lg border border-[#D2D2D7] p-3 text-[13px] outline-none focus:border-[#1D1D1F]" />
+					<textarea value={texto} onChange={e => setTexto(e.target.value)} rows={5} placeholder="Ex.: Olá, {primeiro_nome}. Você tem uma mensagem da sua empresa. Acesse: {link}" className="w-full rounded-lg border border-[#D2D2D7] p-3 text-[13px] outline-none focus:border-[#1D1D1F]" />
 					{isSms && texto.length > 160 && <p className="mt-1 text-[11px] font-semibold text-[#FF3B30]">SMS acima de 160 caracteres não é enviado.</p>}
 					{isSms && <p className="mt-1 text-[11px] text-[#8E8E93]">Lembre embaixo: "Responda SAIR para não receber".</p>}
+					<AvisoIdentidade texto={texto} empresa={empresa?.nome} />
 				</div>
 			)}
 

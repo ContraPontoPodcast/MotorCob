@@ -879,6 +879,16 @@ sem `_X.`). B6: `aviso_gravacao` ligado por padrão; a abertura diz "Esta ligaç
 do Speech nunca sugerem credor/dívida antes da identidade; a Montagem sem fluxo corta a fala (`Conversa._travar`) e o
 fluxo corta o credor escrito à mão (`Sessao._credor_literal`). Se o SQL 56 rodar de novo, rode o 83 depois.
 
+**SQL 85 (decisão do dono, 08/11/2026): mensagem escrita sem a dívida antes da identidade.** SMS, WhatsApp, RCS e e-mail
+chegam inteiros a quem está com o telefone: nenhum texto PADRÃO do MotorCX cita dívida, saldo, valor, parcela, vencimento,
+credor ou contrato. SMS padrão do Assistente de implantação (`FRASES_PADRAO_SMS`): "Olá, {primeiro_nome}. Você tem uma
+mensagem da <empresa>. Acesse: {link}" e variações por etapa ({primeiro_nome} e {link} a ferramenta do canal preenche); o
+detalhe fica atrás do link autenticado. Trava: `motor/trava_identidade.py › motivos_mensagem` = `public.mensagem_revela_divida`
+= `site/src/lib/identidade-mensagem.ts` (casos em `tests/dados/mensagem_identidade_casos.json`; usa a B7 e soma variáveis
+de chave simples e palavras como parcela/acordo/negociar; o nome da empresa vira {empresa}). Os testes (unittest e npm test)
+barram padrão novo que revele; nos editores do cliente (Canais › Frases, Orquestração, Jornada, Mensageria, Assistente) é
+só AVISO (`AvisoIdentidade`), o texto é do cliente. O SQL não reescreve nada salvo: lista os ids no raise notice.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

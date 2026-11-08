@@ -1,0 +1,23 @@
+{
+  "_sobre": "SQL 85: mensagens escritas (SMS, WhatsApp, RCS, e-mail) × 'identidade antes da dívida'. revela = true: o texto conta a quem estiver com o telefone que há dívida, valor, parcela, credor ou contrato. empresa (opcional) = nome da empresa que envia, trocado por {empresa} antes de conferir. Rodam em motor/trava_identidade.py (tests/test_trava_identidade.py), em site/src/lib/identidade-mensagem.ts (npm test) e em public.mensagem_revela_divida (supabase/testes/testar_mensagem_identidade.py).",
+  "casos": [
+    {"texto": "Alfa: temos uma condição especial para o seu débito de {saldo}. Responda este SMS ou fale conosco.", "revela": true},
+    {"texto": "Alfa: como combinado, seu débito de {saldo} tem condições à vista e parcelado. Responda para fechar.", "revela": true},
+    {"texto": "Alfa: lembrete, sua parcela de {valor_parcela} vence em {vencimento}. Mantenha seu acordo em dia.", "revela": true},
+    {"texto": "Alfa: a parcela de {valor_parcela} venceu em {vencimento}. Regularize e mantenha seu acordo.", "revela": true},
+    {"texto": "Olá {nome}, seu saldo é {saldo}. Vence em {vencimento}.", "revela": true},
+    {"texto": "Lembrete: parcela de {valor_parcela} vence amanhã. {link}", "revela": true},
+    {"texto": "Olá {{nome}}, vamos negociar seu acordo.", "revela": true},
+    {"texto": "Prezado(a) cliente, o seu contrato com {empresa} tem novidades.", "revela": true},
+    {"texto": "Você tem uma pendência conosco. Acesse {link}", "revela": true},
+    {"texto": "Oi! Mensagem sobre a sua dívida com {credor}.", "revela": true},
+    {"texto": "Faltam 3 dias para o vencimento: {vencimento}.", "revela": true},
+    {"texto": "Pague com desconto pelo link {link}", "revela": true},
+    {"texto": "Olá, {primeiro_nome}. Você tem uma mensagem da Alfa. Acesse: {link}", "revela": false},
+    {"texto": "Olá, {primeiro_nome}. A Alfa tem um lembrete para você. Acesse: {link}", "revela": false},
+    {"texto": "Olá, {primeiro_nome}. A Alfa precisa falar com você. Acesse: {link}", "revela": false},
+    {"texto": "Olá, {primeiro_nome}. Você tem uma mensagem da Alfa Cobrança Ltda. Acesse: {link}", "empresa": "Alfa Cobrança Ltda", "revela": false},
+    {"texto": "Olá, {primeiro_nome}. Você tem uma mensagem da Alfa Cobrança Ltda. Acesse: {link}", "revela": true},
+    {"texto": "Responda SAIR para não receber mais mensagens.", "revela": false}
+  ]
+}

@@ -64,12 +64,15 @@ export function podeMotorcx(s: Pick<Situacao, 'mensageria'> | null, canal: Canal
 	return !!s?.mensageria?.contratada && (s.mensageria.canais ?? []).includes(canal);
 }
 
-/** Frases padrão do SMS por etapa (editáveis no passo 4; viram frases "Padrão MotorCX · <etapa>"). Sem dado pessoal. */
+/** Frases padrão do SMS por etapa (editáveis no passo 4; viram frases "Padrão MotorCX · <etapa>"). Sem dado pessoal e
+ *  NEUTRAS (SQL 85, decisão do dono de 08/11/2026): o SMS chega a quem estiver com o telefone antes de confirmar a
+ *  identidade, então não cita dívida, valor, parcela, vencimento, credor nem contrato (CDC art. 42; LGPD). O detalhe fica
+ *  atrás do link autenticado. {primeiro_nome} e {link} a ferramenta do canal preenche (como {nome} e {link} nas frases). */
 export const FRASES_PADRAO_SMS: { estagio: 'localizacao' | 'cpa' | 'preventivo' | 'quebra'; etapa: string; texto: (empresa: string) => string }[] = [
-	{ estagio: 'localizacao', etapa: 'Cliente novo', texto: e => `${e}: temos uma condição especial para o seu débito de {saldo}. Responda este SMS ou fale conosco.` },
-	{ estagio: 'cpa', etapa: 'Deu CPC', texto: e => `${e}: como combinado, seu débito de {saldo} tem condições à vista e parcelado. Responda para fechar.` },
-	{ estagio: 'preventivo', etapa: 'Acordo · antes do vencimento', texto: e => `${e}: lembrete, sua parcela de {valor_parcela} vence em {vencimento}. Mantenha seu acordo em dia.` },
-	{ estagio: 'quebra', etapa: 'Acordo · parcela vencida', texto: e => `${e}: a parcela de {valor_parcela} venceu em {vencimento}. Regularize e mantenha seu acordo.` },
+	{ estagio: 'localizacao', etapa: 'Cliente novo', texto: e => `Olá, {primeiro_nome}. Você tem uma mensagem da ${e}. Acesse: {link}` },
+	{ estagio: 'cpa', etapa: 'Deu CPC', texto: e => `Olá, {primeiro_nome}. A ${e} separou uma resposta para você, como combinado. Acesse: {link}` },
+	{ estagio: 'preventivo', etapa: 'Acordo · antes do vencimento', texto: e => `Olá, {primeiro_nome}. A ${e} tem um lembrete para você. Acesse: {link}` },
+	{ estagio: 'quebra', etapa: 'Acordo · parcela vencida', texto: e => `Olá, {primeiro_nome}. A ${e} precisa falar com você. Acesse: {link}` },
 ];
 
 /** Régua padrão MotorCX (Playbook), uma linha por etapa: o que o motor faz sem estratégia. */
