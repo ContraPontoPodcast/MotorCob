@@ -42,8 +42,12 @@ export type PedidoSegmentacao = {
 };
 export type Aplicacao = {
 	id: string; credor_id: string; aplicada_em: string; situacao: 'aplicada' | 'desfeita'; ligada_em: string | null;
-	resumo: { novos?: number; alterados?: number; desligados?: number; estrategias?: number; pausados?: number };
-	criados: { pausados?: (string | number)[]; clusters?: (string | number)[] };
+	resumo: { novos?: number; alterados?: number; desligados?: number; estrategias?: number; pausados?: number; versoes?: number };
+	criados: {
+		pausados?: (string | number)[]; clusters?: (string | number)[];
+		// SQL 82: versão nova dos segmentos alterados que estão valendo (a atual segue até ligar), por id do segmento
+		espera?: { versoes?: Record<string, { ligada_em?: string | null }>; concluida_em?: string | null; substituida_por?: number | null } | null;
+	};
 };
 
 export const ROTULO_ACAO: Record<AcaoSeg, string> = { novo: 'Novo', alterar: 'Alterar', manter: 'Manter', desligar: 'Desligar nesta carteira' };
@@ -126,6 +130,29 @@ export function desligados(prop: Proposta): SegmentoProposto[] {
 }
 export function naoCriados(prop: Proposta): SegmentoProposto[] {
 	return Object.values(prop.segmentos).filter(s => s.incluir === false);
+}
+
+// ------------------------------------------------------------------ o que o Aplicar faz (SQL 82, decisão do dono 08/11/2026)
+/** Segmento novo nasce pausado; segmento atual alterado (ou com estratégia nova) segue na versão atual até você ligar a
+ * nova; o resto não muda. */
+export type EfeitoAplicar = 'pausado' | 'versao_nova' | null;
+export function efeitoAplicar(s: SegmentoProposto): EfeitoAplicar {
+	if (s.incluir === false || s.acao === 'desligar') return null;
+	if (s.acao === 'novo') return 'pausado';
+	return s.acao === 'alterar' || s.estrategia === 'nova' ? 'versao_nova' : null;
+}
+/** Com algo para ligar, a ordem nova, os desligados e o Demais também esperam o Ligar (o que vale hoje não muda). */
+export function temOQueLigar(prop: Proposta): boolean {
+	return emOrdem(prop).some(s => efeitoAplicar(s) !== null);
+}
+/** Na faixa "Aplicado": segmentos novos ainda pausados e versões novas ainda esperando o Ligar. */
+export function esperaAplicacao(ap: Aplicacao, segmentos: { cluster_id: string; em_uso: boolean }[]) {
+	const ids = new Set((ap.criados?.pausados ?? []).map(String));
+	const pausados = segmentos.filter(s => ids.has(String(s.cluster_id)) && !s.em_uso).map(s => String(s.cluster_id));
+	const esp = ap.criados?.espera;
+	const valendo = !!esp && esp.substituida_por == null && esp.concluida_em == null;
+	const versoes = valendo ? Object.entries(esp?.versoes ?? {}).filter(([, v]) => !v?.ligada_em).map(([k]) => k) : [];
+	return { pausados, versoes, total: new Set([...pausados, ...versoes]).size };
 }
 
 export function contarAcoes(prop: Proposta) {

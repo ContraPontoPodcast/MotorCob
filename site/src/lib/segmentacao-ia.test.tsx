@@ -8,8 +8,9 @@ import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import {
-	aplicarPatch, bloqueiosAplicar, comRespostas, conferencias, contarAcoes, corpoPrevia, desligados, emOrdem, explicarErrosGeracao,
-	lerContagens, matrizDeOnde, respostasPadrao, tabelaRegua, textoCondicao, trocarOrdem, type Proposta,
+	aplicarPatch, bloqueiosAplicar, comRespostas, conferencias, contarAcoes, corpoPrevia, desligados, efeitoAplicar, emOrdem,
+	esperaAplicacao, explicarErrosGeracao, lerContagens, matrizDeOnde, respostasPadrao, tabelaRegua, temOQueLigar, textoCondicao,
+	trocarOrdem, type Aplicacao, type Proposta,
 } from '@/lib/segmentacao-ia';
 import type { ResultadoPrevia } from '@/lib/previa-segmentacao';
 import { DescreverSegmentacao } from '@/components/segmentacao-ia/descrever-segmentacao';
@@ -50,6 +51,27 @@ test('ordem, ações e corpo da prévia', () => {
 	const alt = comRespostas(P, { a2: 'alterar' });
 	assert.deepEqual(emOrdem(alt).map(s => s.codigo), ['JUR', 'A1', 'D90A', 'A2', 'B1', 'X180']);   // D90B não é criado
 	assert.deepEqual(trocarOrdem(P, 's2', 's3').ordem.slice(2, 4), ['s3', 's2']);
+});
+
+test('SQL 82: novo nasce pausado; alterado (ou com estratégia nova) segue na versão atual até ligar', () => {
+	const ef = Object.fromEntries(emOrdem(P).map(s => [s.codigo, efeitoAplicar(s)]));
+	assert.deepEqual(ef, { JUR: null, A1: 'versao_nova', D90B: 'pausado', D90A: 'pausado', B1: 'versao_nova', X180: 'pausado' });
+	assert.equal(efeitoAplicar(P.segmentos.s4), null);                // A2 desligado aqui
+	assert.equal(temOQueLigar(P), true);
+	const so = { ...P, ordem: ['atual_JUR'], segmentos: { atual_JUR: P.segmentos.atual_JUR } };
+	assert.equal(temOQueLigar(so), false);                             // só ordem/desligar: vale na hora
+});
+
+test('SQL 82: faixa "Aplicado" conta pausados e versões ainda esperando', () => {
+	const ap = (espera: Aplicacao['criados']['espera']): Aplicacao => ({
+		id: '1', credor_id: '9', aplicada_em: '2026-11-08T10:00:00Z', situacao: 'aplicada', ligada_em: null, resumo: {},
+		criados: { pausados: [11, 12], espera },
+	});
+	const segs = [{ cluster_id: '11', em_uso: false }, { cluster_id: '12', em_uso: true }, { cluster_id: '20', em_uso: true }];
+	assert.deepEqual(esperaAplicacao(ap({ versoes: { 20: {}, 21: { ligada_em: '2026-11-08T10:01:00Z' } } }), segs),
+		{ pausados: ['11'], versoes: ['20'], total: 2 });
+	assert.deepEqual(esperaAplicacao(ap({ versoes: { 20: {} }, substituida_por: 5 }), segs).versoes, []);   // substituída
+	assert.deepEqual(esperaAplicacao(ap(null), segs), { pausados: ['11'], versoes: [], total: 1 });           // aplicada antes do SQL 82
 });
 
 // prévia do exemplo do dono (contagens do protótipo, tela 3)
