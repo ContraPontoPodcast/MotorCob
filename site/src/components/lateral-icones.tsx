@@ -132,9 +132,9 @@ export function LateralIcones() {
 		{ area: 'cobranca', nome: 'Cobrança', icon: CircleDollarSign, to: '/fila', contratada: areasLib.cobranca },
 		{ area: 'jornada', nome: 'Jornada do Cliente', icon: Route, to: '/jornada', contratada: areasLib.jornada },
 		{ area: 'mensageria', nome: 'Mensageria', icon: MessagesSquare, to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
-		// Áreas próprias desde o redesign de Canais (vêm com a Cobrança).
+		// Áreas próprias desde o redesign de Canais: Agente Voz/CX vem com a Cobrança; Speech Analytics é módulo (SQL 87).
 		{ area: 'voz', nome: 'Agente Voz/CX', icon: Bot, to: '/voz', contratada: areasLib.cobranca },
-		{ area: 'speech', nome: 'Speech Analytics', icon: AudioLines, to: '/speech-analytics', contratada: areasLib.cobranca },
+		{ area: 'speech', nome: 'Speech Analytics', icon: AudioLines, to: '/speech-analytics', contratada: areasLib.speech },
 		{ area: 'relatorios', nome: 'Relatórios', icon: FileChartColumn, to: '/relatorios', contratada: true },
 	];
 

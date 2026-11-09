@@ -2924,5 +2924,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 86: tela do canal (testar_canal_tela.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 87 · Contratação: Agente de voz e Speech Analytics como módulos (voz_config.speech_analytics segue o módulo)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_modulos_voz.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 87: módulos de voz na Contratação (testar_modulos_voz.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
