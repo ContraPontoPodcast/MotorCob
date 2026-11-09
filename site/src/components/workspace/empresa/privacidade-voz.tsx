@@ -14,7 +14,7 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { SemPermissao } from '@/components/role-gate';
 import { Chave } from '@/components/workspace/console/chave';
 import { supabase, friendlyError, dateBR, dateTimeBR, logAccess, today, type Row } from '@/lib/supabase';
-import { PERFIS_INFO } from '@/lib/perfis-info';
+import { PERFIS_INFO, padraoDoPerfil } from '@/lib/perfis-info';
 import { idClienteValido, inteiro } from '@/lib/voz';
 import {
 	Aviso, Cadeado, Campo, Cartao, Dialogo, Pilula, TabelaRolavel, Vazio, btnLink, btnPrim, btnSec, campoCls, tdCls, thCls,
@@ -115,13 +115,13 @@ export function PrivacidadeVozPage() {
 	function valorPerm(papel: string, codigo: string): boolean {
 		const k = `${papel}|${codigo}`;
 		if (k in ajustes) return ajustes[k];
-		return (catalogo.find(c => c.codigo === codigo) as Row | undefined)?.[papel] === true;
+		return padraoDoPerfil(papel, codigo, catalogo.find(c => c.codigo === codigo) as Row | undefined);
 	}
 	async function trocarPerm(papel: string, codigo: string) {
 		if (!supabase || !empresa || !podePerms) return;
 		const k = `${papel}|${codigo}`;
 		const novo = !valorPerm(papel, codigo);
-		const padrao = (catalogo.find(c => c.codigo === codigo) as Row | undefined)?.[papel] === true;
+		const padrao = padraoDoPerfil(papel, codigo, catalogo.find(c => c.codigo === codigo) as Row | undefined);
 		setBusyPerm(k);
 		setAjustes(prev => { const n = { ...prev }; if (novo === padrao) delete n[k]; else n[k] = novo; return n; });
 		const { error } = novo === padrao

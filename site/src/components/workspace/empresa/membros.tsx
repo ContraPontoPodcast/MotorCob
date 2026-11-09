@@ -5,7 +5,7 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError, dateTimeBR, type Perfil } from '@/lib/supabase';
 import { EmpresaShell, cardShadow } from './empresa-shell';
 
-const roleName: Record<string, string> = { admin: 'Administrador', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão' };
+const roleName: Record<string, string> = { admin: 'Administrador', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão', qualidade: 'Qualidade' };
 
 export function MembrosPage() {
   const { empresa, perfil } = useMotorAuth();

@@ -1886,7 +1886,7 @@ checar("Pessoas: Operação vê a lista, mas só o próprio e-mail", True, "sele
 checar("Pessoas: áreas pela frente da empresa", True, f"select array_to_string(areas, ',') from public.pessoas_empresa() where id='{WOP}'", "authenticated", WOP, "cobranca")
 checar("Pessoas: não lista a empresa dos outros", True, f"select count(*) from public.pessoas_empresa({EW}) where id='{WOP}'", "authenticated", u["operb"], 0)
 _sv(f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EW},'gestao','baixar_comite',not public.permissao_padrao('gestao','baixar_comite'))")
-checar("Perfis: pessoas e ajustes fora do padrão", True, "select string_agg(papel||':'||pessoas||':'||ajustes, ',' order by papel) from public.perfis_empresa()", "authenticated", WOP, "admin:1:0,gestao:1:1,operacao:2:0,planejamento:0:0")
+checar("Perfis: pessoas e ajustes fora do padrão", True, "select string_agg(papel||':'||pessoas||':'||ajustes, ',' order by papel) from public.perfis_empresa()", "authenticated", WOP, "admin:1:0,gestao:1:1,operacao:2:0,planejamento:0:0,qualidade:0:0")  # SQL 89: o perfil Qualidade entra na lista
 checar("prazo: 1 dia útil (sexta 17h → segunda 17h)", True, "select (public.somar_horas_uteis('2026-10-16 17:00-03', 9) at time zone 'America/Sao_Paulo')::text", "authenticated", WOP, "2026-10-19 17:00:00")
 checar("prazo: alta, 4 horas úteis a partir do sábado", True, "select (public.somar_horas_uteis('2026-10-17 10:00-03', 4) at time zone 'America/Sao_Paulo')::text", "authenticated", WOP, "2026-10-19 13:00:00")
 checar("Resposta até: vazio enquanto espera o cliente", True, f"select (c.prazo_resposta is null)::text from public.chamados c where id={CW}", "authenticated", WOP, "true")
@@ -2936,6 +2936,13 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 88: identidade pelo arquivo (testar_identidade_mailing.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 89 · Perfil Qualidade: só o Speech Analytics (minhas_empresas sem a Qualidade, minhas_empresas_speech nas tabelas e
+# RPCs do Speech, teto de permissões; varredura de toda tabela/view com empresa_id e de toda RPC que recebe a empresa)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_perfil_qualidade.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 89: perfil Qualidade (testar_perfil_qualidade.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

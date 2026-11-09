@@ -16,7 +16,8 @@ import { CommandPalette } from '@/components/workspace/workspace-command-palette
 import { useAreaLabel } from '@/components/tema-provider';
 import { AbasTelas } from '@/components/abas-telas';
 import { Voltar } from '@/components/comuns/voltar';
-import { areaDaRota } from '@/lib/area-rota';
+import { areaDaRota, rotaLiberadaSoSpeech } from '@/lib/area-rota';
+import { perfilSoSpeech } from '@/lib/perfis-info';
 import { Link, useLocation } from 'react-router';
 import { Menu, Search, HelpCircle } from 'lucide-react';
 import { MarcaMotorCX } from '@/components/site/marca-motorcx';
@@ -131,6 +132,8 @@ export function WorkspaceShell() {
 	if (error) return <div className="mc-platform grid min-h-screen place-items-center p-6" style={{ backgroundColor: 'var(--base-conteudo)', color: 'var(--base-texto)' }}><p>Não foi possível verificar seu acesso. Atualize a página.</p></div>;
 	const bloqueado = !perfil?.ativo || (!perfil.equipe && !perfil.empresa_id);
 	if (bloqueado) return <BlockedScreen title="Acesso não liberado." subtitle="Fale com o administrador." onSair={sair} />;
+	// Perfil Qualidade: Início, Empresa, Suporte etc. não abrem; fica só a própria conta (o resto volta para o Speech).
+	if (perfilSoSpeech(perfil) && !rotaLiberadaSoSpeech(loc.pathname)) return <Navigate to="/speech-analytics" replace />;
 
 	return (
 		<AssistenteProvider>

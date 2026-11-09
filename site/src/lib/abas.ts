@@ -34,6 +34,8 @@ export type Aba = {
 	permConsole?: string[];
 	/** Só aparece com esta área contratada (ex.: Relatórios › Cobrança). */
 	requerArea?: 'cobranca' | 'jornada' | 'mensageria' | 'speech';
+	/** Não aparece para o perfil Qualidade (só Speech, sem cargas nem configuração da entrada). */
+	semQualidade?: boolean;
 };
 
 export type GrupoAbas = {
@@ -179,7 +181,7 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 				abas: [
 					{ nome: 'Visão geral', to: ROTA_SPEECH, icon: AudioLines, exato: true, match: [`${ROTA_SPEECH}/qualidade`, `${ROTA_SPEECH}/operadores`, `${ROTA_SPEECH}/alertas`, `${ROTA_SPEECH}/recomendacoes`, `${ROTA_SPEECH}/curadoria`, `${ROTA_SPEECH}/busca`], requerArea: 'speech' },
 					{ nome: 'Gravações', to: ROTA_GRAVACOES, icon: Mic, perm: 'ouvir_gravacoes' },
-					{ nome: 'Entrada de gravações', to: ROTA_ENTRADA_GRAVACOES, icon: FileUp, requerArea: 'speech' },
+					{ nome: 'Entrada de gravações', to: ROTA_ENTRADA_GRAVACOES, icon: FileUp, requerArea: 'speech', semQualidade: true },
 				],
 			},
 		],

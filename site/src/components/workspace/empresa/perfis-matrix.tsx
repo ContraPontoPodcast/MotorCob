@@ -3,7 +3,7 @@ import { Lock, RotateCcw } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { supabase } from '@/lib/supabase';
 import { isPermissionError } from '@/lib/permissoes';
-import { PERFIS_INFO } from '@/lib/perfis-info';
+import { PERFIS_INFO, padraoDoPerfil, perfilPodeTer } from '@/lib/perfis-info';
 import { cardShadow } from './empresa-shell';
 
 const PAPEIS = PERFIS_INFO.map(p => ({ id: p.id, nome: p.nome }));
@@ -26,7 +26,7 @@ export function PerfisMatrix() {
   const podeGerenciarPerms = permissoes.includes('gerenciar_permissoes');
   const [catalogo, setCatalogo] = useState<Catalogo[]>([]);
   const [ajustes, setAjustes] = useState<Record<string, boolean>>({});
-  const [pessoasPorPerfil, setPessoasPorPerfil] = useState<Record<string, number>>({ admin: 0, planejamento: 0, operacao: 0, gestao: 0 });
+  const [pessoasPorPerfil, setPessoasPorPerfil] = useState<Record<string, number>>({ admin: 0, planejamento: 0, operacao: 0, gestao: 0, qualidade: 0 });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -46,7 +46,7 @@ export function PerfisMatrix() {
     const ajMap: Record<string, boolean> = {};
     for (const a of (aj.data ?? []) as { papel: string; permissao: string; permitido: boolean }[]) ajMap[`${a.papel}|${a.permissao}`] = a.permitido;
     setAjustes(ajMap);
-    const pplMap: Record<string, number> = { admin: 0, planejamento: 0, operacao: 0, gestao: 0 };
+    const pplMap: Record<string, number> = { admin: 0, planejamento: 0, operacao: 0, gestao: 0, qualidade: 0 };
     for (const p of (ppl.data ?? []) as { papel: string }[]) { if (pplMap[p.papel] !== undefined) pplMap[p.papel]++; }
     setPessoasPorPerfil(pplMap);
     setLoading(false);
@@ -62,9 +62,10 @@ export function PerfisMatrix() {
   function padrao(papel: string, codigo: string): boolean {
     const linha = catalogo.find(c => c.codigo === codigo);
     if (!linha) return false;
-    return Boolean((linha as Record<string, unknown>)[papel]);
+    return padraoDoPerfil(papel, codigo, linha as unknown as Record<string, unknown>);
   }
   function valor(papel: string, codigo: string): boolean {
+    if (!perfilPodeTer(papel, codigo)) return false;
     const k = `${papel}|${codigo}`;
     if (k in ajustes) return ajustes[k];
     return padrao(papel, codigo);
@@ -72,8 +73,9 @@ export function PerfisMatrix() {
   function isAjuste(papel: string, codigo: string): boolean {
     return `${papel}|${codigo}` in ajustes;
   }
+  // Admin com gerenciar usuários/permissões; Qualidade fora do Speech Analytics (o banco recusa)
   function isLocked(papel: string, codigo: string): boolean {
-    return LOCKED.has(`${papel}|${codigo}`);
+    return LOCKED.has(`${papel}|${codigo}`) || !perfilPodeTer(papel, codigo);
   }
 
   async function toggle(papel: string, codigo: string) {
@@ -202,6 +204,7 @@ export function PerfisMatrix() {
                                 <button
                                   role="switch"
                                   aria-checked={on}
+                                  title={perfilPodeTer(p.id, c.codigo) ? undefined : 'O perfil Qualidade só tem acessos do Speech Analytics'}
                                   disabled={locked || !podeGerenciarPerms || busy === k}
                                   onClick={() => void toggle(p.id, c.codigo)}
                                   className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-60 ${on ? 'bg-[#34C759]' : 'bg-[#D2D2D7]'}`}

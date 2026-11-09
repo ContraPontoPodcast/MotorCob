@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, type Row } from '@/lib/supabase';
+import { perfilSoSpeech } from '@/lib/perfis-info';
 
 type Estado = 'carregando' | 'indisponivel' | 'antes' | 'confirmando' | 'enviando' | 'avisado';
 
@@ -33,7 +34,9 @@ export function usePedidoAdmin(tipo: 'permissao' | 'area', alvo: string | undefi
 			if (!active) return;
 			if (hoje.error) { setEstado('indisponivel'); return; }
 			const n = ((pessoas.data ?? []) as Row[]).filter(r => r.papel === 'admin' && r.situacao !== 'inativo' && r.id !== perfil.id).length;
-			setAdmins(pessoas.error ? null : n);
+			// a Qualidade não lê a equipe (pessoas_empresa vem vazio): o número de Admins fica desconhecido e o
+			// avisar_admin responde quantos foram avisados
+			setAdmins(pessoas.error || perfilSoSpeech(perfil) ? null : n);
 			if (hoje.data) { setAvisadoEm(String(hoje.data)); setEstado('avisado'); }
 			else setEstado('antes');
 		})().catch(() => { if (active) setEstado('indisponivel'); });

@@ -41,16 +41,25 @@ export const ATALHOS: Atalho[] = [
 	{ id: 'frases', label: 'Frases', to: '/canais?secao=frases', perm: PERM.editarCanais, keywords: 'frases frase mensagem mensagens texto sms playbook de frases modelo', area: 'cobranca' },
 ];
 
+/** Atalhos de fora da área Speech que o perfil Qualidade também vê. */
+const ATALHOS_SO_SPEECH = ['gravacoes', 'conta', '2fa'];
+
 /** Sem acento e em minúsculas (quem digita "renitencia" acha "renitência"). */
 function semAcento(t: string): string {
 	return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 /** Filtra os atalhos pela permissão do usuário, pelas áreas contratadas e pelo texto digitado. */
-export function filtrarAtalhos(atalhos: Atalho[], q: string, permissoes: string[], areas?: Pick<AreasLiberadas, 'cobranca' | 'jornada' | 'mensageria'> & Partial<Pick<AreasLiberadas, 'speech'>>): Atalho[] {
+export function filtrarAtalhos(atalhos: Atalho[], q: string, permissoes: string[], areas?: Pick<AreasLiberadas, 'cobranca' | 'jornada' | 'mensageria'> & Partial<Pick<AreasLiberadas, 'speech' | 'soSpeech'>>): Atalho[] {
 	const query = semAcento(q.trim());
 	return atalhos.filter(a => {
 		if (a.perm && !permissoes.includes(a.perm)) return false;
+		// Perfil Qualidade: só o Speech Analytics (as Gravações ficam dentro dele) e a própria conta.
+		if (areas?.soSpeech) {
+			if (!(a.area === 'speech' || ATALHOS_SO_SPEECH.includes(a.id))) return false;
+			if (a.area === 'speech' && !areas.speech) return false;
+			return !query || semAcento(a.label + ' ' + a.keywords).includes(query);
+		}
 		if (a.area && areas && !areas[a.area]) return false;
 		if (!query) return true;
 		return semAcento(a.label + ' ' + a.keywords).includes(query);
@@ -66,7 +75,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 	const [sel, setSel] = useState(0);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	const lista = useMemo(() => filtrarAtalhos(ATALHOS, q, permissoes, areasLib), [q, permissoes, areasLib.cobranca, areasLib.jornada, areasLib.mensageria, areasLib.speech]);
+	const lista = useMemo(() => filtrarAtalhos(ATALHOS, q, permissoes, areasLib), [q, permissoes, areasLib.cobranca, areasLib.jornada, areasLib.mensageria, areasLib.speech, areasLib.soSpeech]);
 
 	useEffect(() => { if (open) { setQ(''); setSel(0); setTimeout(() => inputRef.current?.focus(), 0); } }, [open]);
 	useEffect(() => { setSel(0); }, [q]);

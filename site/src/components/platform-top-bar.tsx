@@ -11,8 +11,9 @@ import { CommandPalette } from '@/components/workspace/workspace-command-palette
 import { PERM } from '@/lib/permissoes';
 import { supabase } from '@/lib/supabase';
 import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
+import { perfilSoSpeech } from '@/lib/perfis-info';
 
-const roleName: Record<string, string> = { admin: 'Administrador', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão' };
+const roleName: Record<string, string> = { admin: 'Administrador', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão', qualidade: 'Qualidade' };
 
 function initials(nome?: string) {
 	if (!nome) return 'U';
@@ -191,8 +192,8 @@ export function AvatarMenu({ abrirPara = 'baixo' }: { abrirPara?: 'baixo' | 'cim
 					</div>
 					<div className="p-1">
 						<button onClick={() => { setOpen(false); navigate('/conta'); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] text-[#1D1D1F] hover:bg-[#F5F5F7]"><UserIcon size={16} className="text-[#8E8E93]" /> Minha conta</button>
-						<button onClick={() => { setOpen(false); navigate('/ajuda/o-que-significa'); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] text-[#1D1D1F] hover:bg-[#F5F5F7]"><HelpCircle size={16} className="text-[#8E8E93]" /> O que significa</button>
-				<button onClick={() => { setOpen(false); navigate('/docs'); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] text-[#1D1D1F] hover:bg-[#F5F5F7]"><BookOpen size={16} className="text-[#8E8E93]" /> Documentação</button>
+						{!perfilSoSpeech(perfil) && <button onClick={() => { setOpen(false); navigate('/ajuda/o-que-significa'); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] text-[#1D1D1F] hover:bg-[#F5F5F7]"><HelpCircle size={16} className="text-[#8E8E93]" /> O que significa</button>}
+				{!perfilSoSpeech(perfil) && <button onClick={() => { setOpen(false); navigate('/docs'); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] text-[#1D1D1F] hover:bg-[#F5F5F7]"><BookOpen size={16} className="text-[#8E8E93]" /> Documentação</button>}
 						{perfil?.equipe && <button onClick={() => { setOpen(false); navigate('/console'); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] text-[#1D1D1F] hover:bg-[#F5F5F7]"><ShieldCheck size={16} className="text-[#8E8E93]" /> Console MotorCX</button>}
 						<div className="my-1 border-t border-[#E5E5EA]" />
 						<button onClick={sair} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] text-[#FF3B30] hover:bg-[#FFE8E6]"><LogOut size={16} /> Sair</button>
@@ -334,7 +335,8 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 
 	if (!open) return null;
 
-	const areas: { id: string; nome: string; to: string; contratada: boolean }[] = [
+	const soSpeech = areasLib.soSpeech;
+	const todas: { id: string; nome: string; to: string; contratada: boolean }[] = [
 		{ id: 'cobranca', nome: 'Cobrança', to: '/fila', contratada: areasLib.cobranca },
 		{ id: 'jornada', nome: 'Jornada do Cliente', to: '/jornada', contratada: areasLib.jornada },
 		{ id: 'mensageria', nome: 'Mensageria', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
@@ -342,6 +344,8 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 		{ id: 'speech', nome: 'Speech Analytics', to: '/speech-analytics', contratada: areasLib.speech },
 		{ id: 'relatorios', nome: 'Relatórios', to: '/relatorios', contratada: true },
 	];
+	// Perfil Qualidade: só o Speech Analytics e a própria conta.
+	const areas = soSpeech ? todas.filter(a => a.id === 'speech') : todas;
 
 	const areaIcon = (id: string) => { const I = AREA_ICON[id as keyof typeof AREA_ICON] ?? Building2; return I; };
 
@@ -354,7 +358,7 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 					<button onClick={onClose} aria-label="Fechar" className="grid h-8 w-8 place-items-center rounded-lg text-[#8E8E93] hover:bg-[#F5F5F7]"><X size={18} /></button>
 				</div>
 				<div className="flex-1 overflow-y-auto p-2">
-					<Link to="/inicio" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Início</Link>
+					{!soSpeech && <Link to="/inicio" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">Início</Link>}
 					{isEquipe && (
 						<button onClick={() => { navigate('/console'); onClose(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[15px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7]">
 							<Terminal size={16} className="text-[#8E8E93]" /> Console MotorCX
@@ -370,6 +374,7 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 						</button>
 					); })}
 
+					{!soSpeech && <>
 					<p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#8E8E93]">Empresa</p>
 					<Link to="/empresa" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Visão geral</Link>
 					<Link to="/empresa/contatos" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Contatos</Link>
@@ -382,12 +387,14 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 					<p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#8E8E93]">Suporte</p>
 					<Link to="/suporte" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Chamados</Link>
 
+					</>}
+
 					{children}
 
 					<div className="mt-4 border-t border-[#E5E5EA] p-2">
 						<Link to="/conta" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Minha conta</Link>
-						<Link to="/ajuda/o-que-significa" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">O que significa</Link>
-					<Link to="/docs" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Documentação</Link>
+						{!soSpeech && <Link to="/ajuda/o-que-significa" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">O que significa</Link>}
+					{!soSpeech && <Link to="/docs" onClick={onClose} className="block rounded-lg px-3 py-2.5 text-[15px] text-[#1D1D1F] hover:bg-[#F5F5F7]">Documentação</Link>}
 					</div>
 				</div>
 			</div>

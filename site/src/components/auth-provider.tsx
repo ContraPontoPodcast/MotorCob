@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, type Perfil, type Empresa, type Credor, credorStorageKey, friendlyError } from '@/lib/supabase';
 import { isPermissionError } from '@/lib/permissoes';
+import { perfilSoSpeech } from '@/lib/perfis-info';
 
 type AuthState = {
   session: Session | null;
@@ -61,10 +62,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return list;
   }
 
-  async function loadCredores(emp: Empresa | null): Promise<Credor[]> {
+  // soSpeech (perfil Qualidade, SQL 89): a tabela credores é da Cobrança; o filtro de carteira do Speech lê só id,
+  // código e nome por carteiras_speech().
+  async function loadCredores(emp: Empresa | null, soSpeech = false): Promise<Credor[]> {
     if (!supabase || !emp) { setCredores([]); setCredor(null); return []; }
-    const { data } = await supabase.from('credores').select('id,empresa_id,codigo,nome,ativo,estrategia_id,demais_ativo,entrada_carga,criado_em').eq('empresa_id', emp.id).order('nome');
-    const list = (data ?? []) as Credor[];
+    let list: Credor[];
+    if (soSpeech) {
+      const { data } = await supabase.rpc('carteiras_speech', { empresa: Number(emp.id) });
+      list = ((data ?? []) as { id: number | string; empresa_id: number | string; codigo: string; nome: string; ativo: boolean }[])
+        .map(c => ({ id: String(c.id), empresa_id: String(c.empresa_id), codigo: c.codigo, nome: c.nome, ativo: c.ativo,
+                     estrategia_id: null, demais_ativo: true, entrada_carga: 'arquivo' as const, regras_retorno: null }));
+    } else {
+      const { data } = await supabase.from('credores').select('id,empresa_id,codigo,nome,ativo,estrategia_id,demais_ativo,entrada_carga,criado_em').eq('empresa_id', emp.id).order('nome');
+      list = (data ?? []) as Credor[];
+    }
     setCredores(list);
     const urlCode = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('credor') : null;
     const storedCode = typeof window !== 'undefined' ? localStorage.getItem(credorStorageKey(emp.id)) : null;
@@ -76,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshCredores(): Promise<Credor[]> {
-    return loadCredores(empresa);
+    return loadCredores(empresa, perfilSoSpeech(perfil));
   }
 
   async function load(next: Session | null) {
@@ -103,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (prf?.empresa_id) {
         const { data: emp } = await supabase
           .from('empresas').select('id,slug,nome,ativa').eq('id', prf.empresa_id).maybeSingle();
-        if (emp) { setEmpresa(emp as Empresa); await loadCredores(emp as Empresa); }
+        if (emp) { setEmpresa(emp as Empresa); await loadCredores(emp as Empresa, perfilSoSpeech(prf)); }
       }
     }
     setLoading(false);

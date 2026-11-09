@@ -4,6 +4,7 @@ import { useFrente } from '@/components/frente-provider';
 import { supabase, type Row } from '@/lib/supabase';
 import { CANAL_STORAGE_KEY, isCanalValido, type CanalId } from '@/lib/mensageria-produtos';
 import type { FrenteId } from '@/lib/frentes';
+import { perfilSoSpeech } from '@/lib/perfis-info';
 
 export type AreasLiberadas = {
 	cobranca: boolean;
@@ -23,6 +24,9 @@ export type AreasLiberadas = {
 	destinoMensageria: string;
 	/** Equipe sem empresa na pílula (vê todas as áreas). */
 	semEmpresa: boolean;
+	/** Perfil Qualidade (SQL 89): só a área Speech Analytics. As outras áreas somem do menu (trilho, gaveta, Início,
+	 *  ⌘K) e qualquer rota fora do Speech volta para /speech-analytics (lib/area-rota.ts › rotaLiberadaSoSpeech). */
+	soSpeech: boolean;
 	/** false enquanto os módulos da empresa ainda estão sendo lidos. */
 	pronto: boolean;
 };
@@ -99,6 +103,7 @@ export function useAreasLiberadas(): AreasLiberadas {
 
 	const isEquipe = !!perfil?.equipe;
 	const semEmpresa = isEquipe && !empresa;
+	const soSpeech = perfilSoSpeech(perfil);
 
 	useEffect(() => {
 		if (!empresaId) { setDados(null); return; }
@@ -123,10 +128,10 @@ export function useAreasLiberadas(): AreasLiberadas {
 	const canais = dados?.canais ?? VAZIO.canais;
 	const frentesDaPessoa: FrenteId[] = isEquipe && dados ? dados.frentesEmpresa : frentes;
 
-	const cobranca = semEmpresa || (frentesDaPessoa.includes('motorcob') && modulos.has('orquestracao'));
-	const jornada = semEmpresa || (frentesDaPessoa.includes('motorcli') && modulos.has('jornada'));
-	const mensageria = semEmpresa || modulos.has('mensageria');
-	const agenteVoz = semEmpresa || modulos.has('agente_voz');
+	const cobranca = !soSpeech && (semEmpresa || (frentesDaPessoa.includes('motorcob') && modulos.has('orquestracao')));
+	const jornada = !soSpeech && (semEmpresa || (frentesDaPessoa.includes('motorcli') && modulos.has('jornada')));
+	const mensageria = !soSpeech && (semEmpresa || modulos.has('mensageria'));
+	const agenteVoz = !soSpeech && (semEmpresa || modulos.has('agente_voz'));
 	const speech = semEmpresa || modulos.has('speech_analytics');
 
 	// Canal padrão: último usado se ainda contratado, senão o 1º dos contratados.
@@ -139,5 +144,5 @@ export function useAreasLiberadas(): AreasLiberadas {
 
 	const destinoMensageria = canais.length > 0 ? `/mensageria/${canalPadrao}` : '/mensageria';
 
-	return { cobranca, jornada, mensageria, agenteVoz, speech, canais, canalPadrao, destinoMensageria, semEmpresa, pronto };
+	return { cobranca, jornada, mensageria, agenteVoz, speech, canais, canalPadrao, destinoMensageria, semEmpresa, soSpeech, pronto };
 }
