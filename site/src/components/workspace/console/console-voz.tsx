@@ -225,8 +225,8 @@ function Concorrencia({ divisao, contrato, nomeEmpresa, podeTroncos, loading, on
 			</div>
 			<Gaveta aberta={como} onFechar={() => setComo(false)} titulo="Como dividimos a concorrência">
 				<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Limite da empresa = {inteiro(atual)} × canais dela ÷ {inteiro(totCanais)} canais no total. A sobra do arredondamento vai para as empresas com a maior fração. O pico é opção de cada empresa, vem desligado e nunca passa dos canais do tronco.</p>
-				<Trava icone={<Phone size={16} />} titulo='Quem liga é sempre o agente de IA. Se na transferência não houver operador livre no discador do cliente, a chamada é derrubada e registrada como "abandono".'>
-					Nada fica em fila esperando. A taxa de abandono aparece em Ligações em curso e freia o lote quando passa do limite da empresa.
+				<Trava icone={<Phone size={16} />} titulo="Quem liga é sempre o agente de IA. O limite conta conversas com a IA, não linhas tocando: cada número só é discado com um robô reservado para ele.">
+					Sem robô livre, o número espera na lista do dia e não é discado. Se mesmo com a reserva a IA não abrir a conversa (falha do provedor), a pessoa ouve uma mensagem curta e neutra antes de a ligação acabar, e isso conta como &quot;abandono sem robô livre&quot;. Na transferência sem operador livre, a pessoa volta para o agente, que pede desculpas e agenda um retorno. A taxa de abandono aparece em Ligações em curso e freia o lote quando passa do limite da empresa.
 				</Trava>
 			</Gaveta>
 		</Cartao>

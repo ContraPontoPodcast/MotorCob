@@ -73,7 +73,8 @@ def _e_curta_antes(e, cc):
 # chaves acrescentadas pelo de-para SIP/Q.850 + decisões do dono (31/10/2026): só aparecem com código/coluna novos
 NOVOS_DE_PARA = {"maquina", "desligou_sem_conversar", "atendeu_desligou", "retorno_agendado", "falha_operadora",
                  "bloqueio_originacao", "cancelada_discador", "indisponivel", "rejeitada", "mudo", "fax"}
-NOVOS = NOVOS_DE_PARA | {"inexistente_voz"}
+# SQL 91: atendeu sem robô livre (a VM reservou antes de discar; só falha/corrida do provedor) — abandono separado
+NOVOS = NOVOS_DE_PARA | {"inexistente_voz", "abandono_sem_robo"}
 
 
 def _sem_novos(d):
@@ -102,7 +103,7 @@ class TestParidadeVoz(unittest.TestCase):
         self.assertEqual(_sem_novos(DG.MARCA_VOZ), ANTES_MARCA_VOZ)
         self.assertEqual(set(DG.NAO_COMPLETADA) - NOVOS, set(ANTES_NAO_COMPLETADA))
         self.assertEqual(set(V.NAO_ATENDE) - NOVOS, set(ANTES_NAO_ATENDE))
-        self.assertEqual(V.CURTA_SE_ABANDONO, ("abandonada",))
+        self.assertEqual(V.CURTA_SE_ABANDONO, ("abandonada", "abandono_sem_robo"))
         self.assertTrue(set(DG.MARCA_VOZ.values()) <= set(MARCAS))
 
     def test_e_curta_igual_em_todos_os_desfechos(self):
@@ -185,6 +186,38 @@ class TestConfirmacaoInexistente(unittest.TestCase):
         a, b = V.CONFIRMA_A_SIP | V.CONFIRMA_B_SIP, V.CONFIRMA_A_Q850 | V.CONFIRMA_B_Q850
         self.assertFalse(a & V.NUNCA_CONFIRMA_SIP)
         self.assertFalse(b & (V.NUNCA_CONFIRMA_Q850 | V.APARELHO_Q850))
+
+
+class TestAbandonoSemRobo(unittest.TestCase):
+    """SQL 91: quem atende sem robô livre tem desfecho próprio, que conta no abandono como a abandonada."""
+
+    def test_classificacao(self):
+        self.assertEqual(V.classificar_chamada(transferencia="sem_robo", amd="HUMAN", dialstatus="ANSWER")[:2],
+                         ("abandono_sem_robo", "transferencia"))
+        self.assertEqual(V.classificar_chamada(transferencia="sem_operador")[0], "abandonada")
+        self.assertIn("sem_robo", V.TRANSFERENCIAS)
+
+    def test_conta_no_abandono_e_na_curta(self):
+        d = V.POR_CHAVE["abandono_sem_robo"]
+        self.assertEqual((d.nivel, d.curta, d.marca, d.interno), ("SEM_RETORNO", "abandono", "clique", False))
+        self.assertIsNone(d.generico)                          # o cliente não marca: só a VM gera
+        for ab in (True, False):
+            e = SimpleNamespace(resultado="abandono_sem_robo", duracao_s=30)
+            self.assertEqual(DG.e_curta(e, {"segundos": 6, "abandono_conta": ab}), ab)
+
+    def test_renitencia_e_a_linha_do_abandono(self):
+        self.assertEqual(DG.situacao_de("abandono_sem_robo"), "abandonada")
+        self.assertEqual(DG.sinalizacao_de("abandono_sem_robo"), "abandonada")
+        sql = (Path(__file__).resolve().parent.parent / "supabase" / "migrations" /
+               "20270127000001_voz_abandono_sem_robo.sql").read_text(encoding="utf-8")
+        self.assertIn("when resultado = 'abandono_sem_robo' then 'abandonada'", sql)
+
+    def test_lote_trata_como_abandono(self):
+        from voz.orquestrador import lote as L
+        self.assertIn("abandono_sem_robo", L.ENCERRA_CLIENTE)
+        self.assertIn("abandono_sem_robo", L.REABRIVEIS)
+        from voz.orquestrador.nucleo import ABANDONOS
+        self.assertEqual(ABANDONOS, ("abandonada", "abandono_sem_robo"))
 
 
 if __name__ == "__main__":

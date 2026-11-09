@@ -46,11 +46,12 @@ from motor import voz as V
 # desfechos que encerram o CLIENTE no dia (houve gente do outro lado ou pedido explícito) — o de hoje
 ENCERRA_CLIENTE = frozenset(d.chave for d in V.DESFECHOS if d.e_cpc) | {
     "opt_out", "recado", "atendida_terceiro_desconhece", "atendida_sem_cpc", "atendeu_desligou",
-    "desligou_sem_conversar", "abandonada"}
+    "desligou_sem_conversar", "abandonada", "abandono_sem_robo"}
 # desfechos que encerram o NÚMERO no dia (não adianta tentar de novo hoje)
 ENCERRA_NUMERO = frozenset({"numero_inexistente", "inexistente_voz", "fax", "rejeitada", "opt_out"})
 # encerram o cliente hoje, mas a regra por sinalização (ou o "Reenviar agora") pode reabrir: ninguém falou de verdade
-REABRIVEIS = frozenset({"atendeu_desligou", "desligou_sem_conversar", "abandonada", "atendida_terceiro_desconhece",
+REABRIVEIS = frozenset({"atendeu_desligou", "desligou_sem_conversar", "abandonada", "abandono_sem_robo",
+                        "atendida_terceiro_desconhece",
                         "retorno_agendado", "recado"})
 # com a regra nova, só estes finalizam sempre (o resto é a linha da sinalização)
 FINALIZA_SEMPRE = frozenset(DG.FINALIZA_SEMPRE)
