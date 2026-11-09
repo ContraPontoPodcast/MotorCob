@@ -1,5 +1,6 @@
 // "← Tela-mãe" no topo das telas que se abrem a partir de outra. Só cores do tema (--base-*): funciona no claro e
 // no escuro. O destino vem de src/lib/rota-pai.ts (nunca do histórico do navegador).
+import { createContext, useContext } from 'react';
 import { Link, useLocation } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
@@ -37,9 +38,14 @@ export function VoltarBotao({ rotulo, onClick }: { rotulo: string; onClick: () =
 	);
 }
 
+/** Rota de verdade da tela quando o endereço é outro: o modo de demonstração (/dev/fluxo/...) mostra o mesmo voltar
+ *  que a tela tem em /voz/agente/... */
+export const RotaDaTela = createContext<string | null>(null);
+
 /** "← tela-mãe" da rota atual (src/lib/rota-pai.ts); nada quando a rota não tem tela-mãe. */
 export function Voltar() {
-	const { pathname } = useLocation();
+	const local = useLocation().pathname;
+	const pathname = useContext(RotaDaTela) ?? local;
 	const { perfil } = useMotorAuth();
 	const pai = rotaPai(pathname, { equipe: !!perfil?.equipe });
 	return pai ? <div><VoltarPara {...pai} /></div> : null;
