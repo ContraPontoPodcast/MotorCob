@@ -4,9 +4,10 @@ import { Lock } from 'lucide-react';
 import { useMotorAuth } from '@/components/auth-provider';
 import { BlocoPedido, BotaoPedido, usePedidoAdmin } from '@/components/comuns/pedido-admin';
 import { supabase, type Row } from '@/lib/supabase';
+import { padraoDoPerfil, perfilPodeTer } from '@/lib/perfis-info';
 
-const PAPEL_LABEL: Record<string, string> = { admin: 'Administrador', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão' };
-const PAPEIS = ['admin', 'planejamento', 'operacao', 'gestao'] as const;
+const PAPEL_LABEL: Record<string, string> = { admin: 'Administrador', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão', qualidade: 'Qualidade' };
+const PAPEIS = ['admin', 'planejamento', 'operacao', 'gestao', 'qualidade'] as const;
 
 export function RoleGate({ roles, children }: { roles: string[]; children: ReactNode }) {
   const { perfil } = useMotorAuth();
@@ -33,16 +34,17 @@ export function SemPermissao({ perm, tela }: { perm?: string; tela?: string }) {
     (async () => {
       try {
         const [{ data: padrao }, { data: ajustes }] = await Promise.all([
-          // padrão MotorCX por perfil: colunas admin/planejamento/operacao/gestao do catálogo (não existe permissoes_padrao)
+          // padrão MotorCX por perfil: colunas admin/planejamento/operacao/gestao do catálogo; o da Qualidade é a lista
+          // fixa de perfis-info (como permissao_padrao() no banco)
           supabase.from('permissoes_catalogo').select('codigo,admin,planejamento,operacao,gestao').eq('codigo', perm).maybeSingle(),
           supabase.from('permissoes_papel').select('papel,permitido').eq('permissao', perm),
         ]);
         if (!active) return;
         const map: Record<string, boolean> = {};
-        for (const p of PAPEIS) map[p] = (padrao as Row | null)?.[p] === true;
+        for (const p of PAPEIS) map[p] = padraoDoPerfil(p, perm, padrao as Row | null);
         for (const r of (ajustes as Row[] | null) ?? []) {
           const papel = String(r.papel ?? '');
-          if (PAPEIS.includes(papel as typeof PAPEIS[number])) map[papel] = r.permitido === true;
+          if (PAPEIS.includes(papel as typeof PAPEIS[number])) map[papel] = r.permitido === true && perfilPodeTer(papel, perm);
         }
         const lista = PAPEIS.filter(p => map[p]).map(p => PAPEL_LABEL[p]);
         setPerfisComPerm(lista.length ? lista : null);

@@ -930,6 +930,21 @@ do arquivo (ainda não construídas): `identidade_mailing_confirmada`. Limpeza n
 Chave: `docs/NUVEM_GCP.md` › "Chave de identidade do agente de voz". Testes: `tests/test_identidade_mailing.py` e
 `supabase/testes/testar_identidade_mailing.py`. Se o SQL 58 for rodado de novo, rode o 88 depois.
 
+**SQL 89 (Roleplay de treinamento, PR 1; SPEC aprovada pelo dono): perfil "Qualidade", só a área Speech Analytics.**
+Pessoa da empresa cliente (papel `qualidade`). **Vale no banco, não só no menu:** `minhas_empresas()` não devolve a
+empresa para a Qualidade, então toda policy/RPC de fora do Speech já nega; `minhas_empresas_speech()` (= minhas_empresas
++ a empresa da Qualidade) só nas tabelas e RPCs que as telas do Speech leem (gravações, insights, temas, checklist,
+recomendações, `empresa_modulos`, `painel_speech`/`qualidade_voz`/`operadores_voz`/`operador_voz`, `acesso_da_empresa`)
+e em `cliente_pode(empresa, perm)` quando `perm` é do Speech (`permissoes_speech()`: ouvir_gravacoes, ver_transcricoes,
+ver_operadores, ver_alertas, curadoria_voz, editar_checklist). Padrão da Qualidade = `permissoes_qualidade()` (as mesmas
+menos editar_checklist), pelo `permissao_padrao()` (o catálogo continua com 4 colunas); `pode()` nunca passa do Speech
+para ela, nem com ajuste do Admin (o banco recusa o ajuste). Carteiras do filtro: `carteiras_speech()` (só id, código e
+nome; a tabela `credores` é da Cobrança). Site: `perfilSoSpeech`/`soSpeech` (`lib/perfis-info.ts`,
+`use-areas-liberadas.ts`): menu só com o Speech, rota fora dele (menos `/conta`) volta para `/speech-analytics`, as
+Gravações ficam dentro do Speech (contrato `speech_analytics`). Teste: `supabase/testes/testar_perfil_qualidade.py`
+(varre toda tabela/view com `empresa_id` e toda RPC que recebe a empresa). Tabela ou RPC nova do Speech que a Qualidade
+deve ler: use `minhas_empresas_speech()` ou `cliente_pode(empresa, <perm do Speech>)`. Se o SQL 60 rodar de novo, rode o 89.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

@@ -128,7 +128,8 @@ export function LateralIcones() {
 	}
 	function onLeave() { setDica(null); }
 
-	const items: RailItem[] = [
+	const soSpeech = areasLib.soSpeech;
+	const todas: RailItem[] = [
 		{ area: 'cobranca', nome: 'Cobrança', icon: CircleDollarSign, to: '/fila', contratada: areasLib.cobranca },
 		{ area: 'jornada', nome: 'Jornada do Cliente', icon: Route, to: '/jornada', contratada: areasLib.jornada },
 		{ area: 'mensageria', nome: 'Mensageria', icon: MessagesSquare, to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
@@ -137,6 +138,8 @@ export function LateralIcones() {
 		{ area: 'speech', nome: 'Speech Analytics', icon: AudioLines, to: '/speech-analytics', contratada: areasLib.speech },
 		{ area: 'relatorios', nome: 'Relatórios', icon: FileChartColumn, to: '/relatorios', contratada: true },
 	];
+	// Perfil Qualidade: só o Speech Analytics (sem Início, Empresa nem Suporte).
+	const items = soSpeech ? todas.filter(it => it.area === 'speech') : todas;
 
 	const largura = recolhido ? 44 : 192;
 
@@ -147,12 +150,12 @@ export function LateralIcones() {
 				style={{ width: largura, transition: 'width 200ms ease' }}
 			>
 				{/* Logo */}
-				<Link to="/inicio" aria-label="Início" className="mb-2 grid h-9 w-9 shrink-0 place-items-center">
+				<Link to={soSpeech ? '/speech-analytics' : '/inicio'} aria-label={soSpeech ? 'Speech Analytics' : 'Início'} className="mb-2 grid h-9 w-9 shrink-0 place-items-center">
 					<MotorCXMark className="h-7 w-7" />
 				</Link>
 
 				{/* Início */}
-				<div className="w-full" style={{ paddingLeft: recolhido ? 0 : 4, paddingRight: recolhido ? 0 : 4 }}>
+				{!soSpeech && <div className="w-full" style={{ paddingLeft: recolhido ? 0 : 4, paddingRight: recolhido ? 0 : 4 }}>
 					<RailButton
 						item={{ area: 'inicio', nome: 'Início', icon: House, to: '/inicio', contratada: true }}
 						ativo={areaAtual === 'inicio'}
@@ -160,7 +163,7 @@ export function LateralIcones() {
 						onHover={onHover}
 						onLeave={onLeave}
 					/>
-				</div>
+				</div>}
 
 				{/* Áreas */}
 				<div className="mt-1 w-full space-y-0.5" style={{ paddingLeft: recolhido ? 0 : 4, paddingRight: recolhido ? 0 : 4 }}>
@@ -177,7 +180,7 @@ export function LateralIcones() {
 				</div>
 
 				{/* Espaço + Empresa */}
-				<div className="mt-3 w-full" style={{ paddingLeft: recolhido ? 0 : 4, paddingRight: recolhido ? 0 : 4 }}>
+				{!soSpeech && <div className="mt-3 w-full" style={{ paddingLeft: recolhido ? 0 : 4, paddingRight: recolhido ? 0 : 4 }}>
 					<RailButton
 						item={{ area: 'empresa', nome: 'Empresa', icon: Building, to: '/empresa', contratada: true }}
 						ativo={areaAtual === 'empresa'}
@@ -185,11 +188,11 @@ export function LateralIcones() {
 						onHover={onHover}
 						onLeave={onLeave}
 					/>
-				</div>
+				</div>}
 
 				{/* Espaço + Suporte + Console */}
 				<div className="mt-auto w-full space-y-0.5" style={{ paddingLeft: recolhido ? 0 : 4, paddingRight: recolhido ? 0 : 4 }}>
-					<div className="relative">
+					{!soSpeech && <div className="relative">
 						<RailButton
 							item={{ area: 'suporte', nome: 'Suporte', icon: Headset, to: '/suporte', contratada: true }}
 							ativo={areaAtual === 'suporte'}
@@ -200,7 +203,7 @@ export function LateralIcones() {
 						{suporteN > 0 && (
 							<span className="pointer-events-none absolute right-1 top-1 grid h-[16px] min-w-[16px] place-items-center rounded-full bg-[#FF3B30] px-1 text-[9px] font-bold text-white tnum">{suporteN > 99 ? '99+' : suporteN}</span>
 						)}
-					</div>
+					</div>}
 					{isEquipe && (
 						<RailButton
 							item={{ area: 'console', nome: 'Console MotorCX', icon: ShieldCheck, to: '/console', contratada: true }}

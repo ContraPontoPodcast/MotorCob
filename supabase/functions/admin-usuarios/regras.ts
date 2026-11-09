@@ -2,7 +2,7 @@
 // O banco repete as mesmas travas (RLS, proteger_perfil); aqui elas valem para o que só a chave do servidor faz
 // (convite, bloqueio de login, link de senha).
 
-export const PAPEIS = ["admin", "planejamento", "operacao", "gestao"] as const;
+export const PAPEIS = ["admin", "planejamento", "operacao", "gestao", "qualidade"] as const;   // qualidade: só o Speech (SQL 89)
 export type Papel = (typeof PAPEIS)[number];
 export const ACOES = ["listar", "convidar", "desativar", "reativar", "resetar_senha", "alterar_papel", "resetar_2fa", "convidar_equipe"] as const;
 export type Acao = (typeof ACOES)[number];
@@ -90,6 +90,10 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
   if (acao === "convidar" || acao === "alterar_papel") {
     if (!PAPEIS.includes(c.papel as Papel)) return { erro: "perfil inválido" };
     pedido.papel = c.papel as Papel;
+    // a Qualidade só tem acessos do Speech Analytics (o banco recusa os outros: validar_permissao_usuario, SQL 89)
+    if (pedido.papel === "qualidade" && Object.values(pedido.acessos ?? {}).some((v) => v)) {
+      return { erro: "o perfil Qualidade só tem acessos do Speech Analytics" };
+    }
   }
   return { pedido };
 }
@@ -180,7 +184,7 @@ export function autorizar(quem: Perfil | null, podeGerenciar: boolean, pedido: P
 }
 
 const NOME_PAPEL: Record<Papel, string> = {
-  admin: "Admin", planejamento: "Planejamento", operacao: "Operação", gestao: "Gestão",
+  admin: "Admin", planejamento: "Planejamento", operacao: "Operação", gestao: "Gestão", qualidade: "Qualidade",
 };
 
 /** Dados do convite que o modelo de e-mail do Supabase usa ({{ .Data.empresa_nome }} etc.): para qual empresa,

@@ -20,6 +20,7 @@ function visibleAbas(g: GrupoAbas, area: AreaRota, canal: string, permissoes: st
 	return g.abas.filter(a => {
 		if (a.excetoCanal && canal && a.excetoCanal.includes(canal)) return false;
 		if (a.requerArea && !areas[a.requerArea]) return false;
+		if (a.semQualidade && areas.soSpeech) return false;
 		if (a.permConsole && (!ehEquipe || !a.permConsole.some(c => can(c)))) return false;
 		if (a.perm) {
 			if (area === 'console') { if (!can(a.perm)) return false; }

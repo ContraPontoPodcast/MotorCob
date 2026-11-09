@@ -139,7 +139,7 @@ function trackClient(client: SupabaseClient): SupabaseClient {
   }) as SupabaseClient;
 }
 
-export type Perfil = { id: string; nome: string; email: string; papel: 'admin' | 'planejamento' | 'operacao' | 'gestao'; ativo: boolean; empresa_id: string | null; equipe: boolean; ultimo_acesso?: string | null };
+export type Perfil = { id: string; nome: string; email: string; papel: 'admin' | 'planejamento' | 'operacao' | 'gestao' | 'qualidade'; ativo: boolean; empresa_id: string | null; equipe: boolean; ultimo_acesso?: string | null };
 export type Empresa = { id: string; slug: string; nome: string; ativa: boolean };
 export type Credor = { id: string; empresa_id: string; codigo: string; nome: string; ativo: boolean; estrategia_id: string | null; demais_ativo: boolean; entrada_carga: 'arquivo' | 'api'; regras_retorno: Record<string, unknown> | null; criado_em?: string; compartilhada_com?: string | null; estrategia_propria?: boolean; frente?: string; discagem?: Record<string, unknown> | null };
 export const credorStorageKey = (empresaId: string) => `motorcob.credor.${empresaId}`;

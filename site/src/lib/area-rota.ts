@@ -125,11 +125,19 @@ function ehGravacoes(pathname: string): boolean {
 	return ['/speech-analytics/gravacoes', '/gravacoes'].some(p => pathname === p || pathname.startsWith(p + '/'));
 }
 
-/** Contrato que a rota exige (a área da rota, com a exceção das Gravações). Usado pela moldura e pelo Assistente. */
-export function contratoDaRota(pathname: string): AreaContrato | null {
+/** Contrato que a rota exige (a área da rota, com a exceção das Gravações). Usado pela moldura e pelo Assistente.
+ *  Perfil Qualidade (soSpeech): as Gravações ficam dentro do Speech Analytics e pedem o módulo speech_analytics (ela
+ *  não tem a Cobrança). */
+export function contratoDaRota(pathname: string, soSpeech = false): AreaContrato | null {
 	const area = areaDaRota(pathname);
-	if (area === 'speech' && ehGravacoes(pathname)) return 'cobranca';
+	if (area === 'speech' && ehGravacoes(pathname)) return soSpeech ? 'speech' : 'cobranca';
 	return areaDoContrato(area);
+}
+
+/** Perfil Qualidade (SQL 89): só a área Speech Analytics e a própria conta (dados, senha, duas etapas). Qualquer outra
+ *  rota volta para o Speech Analytics. O banco nega o resto do mesmo jeito (minhas_empresas() sem a Qualidade). */
+export function rotaLiberadaSoSpeech(pathname: string): boolean {
+	return areaDaRota(pathname) === 'speech' || pathname === '/conta' || pathname.startsWith('/conta/');
 }
 
 /** Alvo do "Avisar o Admin" de uma área fora do plano (avisar_admin aceita speech_analytics desde o SQL 87). */
