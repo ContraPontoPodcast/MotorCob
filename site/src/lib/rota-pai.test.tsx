@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { ROTAS_PAI, rotaPai } from './rota-pai';
-import { VoltarPara } from '@/components/comuns/voltar';
+import { RotaDaTela, Voltar, VoltarPara } from '@/components/comuns/voltar';
 
 // Rotas declaradas em src/routes.ts (o teste roda com cwd = site/).
 const declaradas = new Set([...readFileSync('src/routes.ts', 'utf8').matchAll(/route\('([^']+)'/g)].map(m => `/${m[1]}`));
@@ -57,13 +57,43 @@ test('VoltarPara é um link de verdade para a tela-mãe, com cores do tema', () 
 	assert.doesNotMatch(s, /history|#[0-9a-fA-F]{3,6}\b/);
 });
 
-test('Agente Voz/CX e Speech Analytics: subtelas voltam para a tela-mãe; abas da área, não', () => {
-	for (const r of ['/voz/agente/editor/12', '/voz/agente/testar', '/voz/agente/desempenho', '/voz/agente/personas', '/voz/agente/pedido/3', '/voz/agente/roteiro']) {
+test('Agente Voz/CX e Speech Analytics: seções voltam para a Visão geral da área; subtelas, para a seção', () => {
+	const visaoGeralVoz = { to: '/voz', rotulo: 'Visão geral do Agente Voz/CX' };
+	for (const r of ['/voz/agente', '/voz/discagem', '/voz/ligacoes', '/voz/telefonia', '/voz/telefonia/']) {
+		for (const equipe of [false, true]) assert.deepEqual(rotaPai(r, { equipe }), visaoGeralVoz, r);
+	}
+	for (const r of ['/voz/agente/editor/12', '/voz/agente/identidade', '/voz/agente/testar', '/voz/agente/desempenho', '/voz/agente/personas', '/voz/agente/pedido/3', '/voz/agente/roteiro']) {
 		assert.deepEqual(rotaPai(r), { to: '/voz/agente', rotulo: 'Agente de voz' }, r);
 	}
 	assert.deepEqual(rotaPai('/voz/ligacoes/42'), { to: '/voz/ligacoes', rotulo: 'Ligações' });
 	for (const r of ['/speech-analytics/qualidade', '/speech-analytics/busca', '/speech-analytics/gravacoes', '/speech-analytics/entrada']) assert.equal(rotaPai(r)?.to, '/speech-analytics', r);
 	assert.equal(rotaPai('/speech-analytics/entrada/enviar')?.to, '/speech-analytics/entrada');
-	for (const r of ['/voz', '/voz/agente', '/voz/discagem', '/voz/ligacoes', '/voz/telefonia', '/speech-analytics', '/speech-analytics/', '/canais']) assert.equal(rotaPai(r), null, r);
+	// O topo de cada área não tem voltar (o menu da área leva a ele).
+	for (const r of ['/voz', '/voz/', '/speech-analytics', '/speech-analytics/', '/canais']) assert.equal(rotaPai(r), null, r);
 	assert.equal(rotaPai('/voz/agente/editor/12/extra'), null, 'parâmetro casa um segmento só');
+});
+
+test('toda tela do Agente Voz/CX no routes.ts tem voltar, menos a Visão geral e os endereços que redirecionam', () => {
+	const voz = [...declaradas].filter(r => r.startsWith('/voz/'));
+	assert.ok(voz.length >= 13, 'as rotas da área estão no routes.ts');
+	for (const r of voz) {
+		if (r === '/voz/conexao') continue; // redireciona para /voz/telefonia (lib/rotas-voz.ts)
+		const caminho = r.replace(/:[^/]+/g, '7');
+		const pai = rotaPai(caminho);
+		assert.ok(pai, `sem voltar: ${r}`);
+		// A tela-mãe fica acima na hierarquia do menu: Visão geral → seção → subtela → detalhe.
+		assert.ok(caminho.startsWith(pai.to + '/'), `${r} volta para ${pai.to}, que não está acima dela`);
+	}
+});
+
+test('o voltar desenhado nas seções do Agente Voz/CX aponta para a Visão geral da área', () => {
+	const html = (rota: string) => renderToStaticMarkup(<MemoryRouter initialEntries={[rota]}><Voltar /></MemoryRouter>);
+	const telefonia = html('/voz/telefonia');
+	assert.match(telefonia, /<a [^>]*href="\/voz"/);
+	assert.match(telefonia, /aria-label="Voltar para Visão geral do Agente Voz\/CX"/);
+	assert.match(html('/voz/agente/identidade'), /href="\/voz\/agente"/);
+	assert.equal(html('/voz'), '');
+	// Modo de demonstração (/dev/fluxo/...): o mesmo voltar da rota de verdade.
+	const demo = renderToStaticMarkup(<MemoryRouter initialEntries={['/dev/fluxo/testar']}><RotaDaTela.Provider value="/voz/agente/testar"><Voltar /></RotaDaTela.Provider></MemoryRouter>);
+	assert.match(demo, /href="\/voz\/agente"/);
 });

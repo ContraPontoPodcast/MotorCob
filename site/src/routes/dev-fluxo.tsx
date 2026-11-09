@@ -3,7 +3,8 @@
 // (src/routes.ts); no build de produção ela nem entra, e o componente ainda confere import.meta.env.DEV.
 import { useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
-import { ProvedorFixturas, type CtxFluxo, type Tela } from '@/components/fluxo/contexto';
+import { ProvedorFixturas, rotaReal, type CtxFluxo, type Tela } from '@/components/fluxo/contexto';
+import { RotaDaTela } from '@/components/comuns/voltar';
 import { criarApiFixturas } from '@/components/fluxo/fixturas';
 import { ListaFluxos } from '@/components/fluxo/lista';
 import { EditorFluxo } from '@/components/fluxo/editor';
@@ -62,10 +63,13 @@ export default function DevFluxo() {
 		: <ListaFluxos />;
 	return (
 		<ProvedorFixturas valor={valor}>
+			{/* o voltar da tela como em /voz/agente/... (o link leva ao app de verdade) */}
+			<RotaDaTela.Provider value={tela === 'carga' ? null : rotaReal(tela as Tela, id ?? (tela === 'editor' ? 105 : tela === 'pedido' ? 412 : null))}>
 			<div className="min-h-screen bg-[var(--base-fundo,var(--base-fill))] px-4 py-6 text-[var(--base-texto)] sm:px-8">
 				<p className="mb-4 rounded-lg px-3 py-1.5 text-[12px] font-semibold" style={{ backgroundColor: 'var(--estado-atencao-fundo)', color: 'var(--estado-atencao-texto)' }}>Modo de demonstração (só desenvolvimento): dados fictícios, nada vai ao banco.</p>
 				<div className="mx-auto max-w-[1200px]">{corpo}</div>
 			</div>
+			</RotaDaTela.Provider>
 		</ProvedorFixturas>
 	);
 }

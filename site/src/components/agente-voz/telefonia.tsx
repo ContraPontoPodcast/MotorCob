@@ -14,7 +14,7 @@ export function TelefoniaLeitura() {
 	return (
 		<>
 			<PageHeading title="Telefonia" description="Por onde o MotorCX liga: a rota da operadora (tronco SIP), a bina e a transferência para os seus operadores." semControles
-				actions={equipe ? <BotaoLink to="/console/fornecedores?aba=voz">Abrir no Console</BotaoLink> : undefined} />
+				actions={equipe ? <BotaoLink to="/console/fornecedores?aba=voz">Configurar no Console (equipe MotorCX)</BotaoLink> : undefined} />
 			{!agenteVoz ? (
 				<Aviso tom="info" titulo="O agente de voz MotorCX não está contratado.">O discador e o AGV da sua empresa usam a telefonia de vocês, fora do MotorCX.</Aviso>
 			) : (
