@@ -912,6 +912,24 @@ de chave simples e palavras como parcela/acordo/negociar; o nome da empresa vira
 barram padrão novo que revele; nos editores do cliente (Canais › Frases, Orquestração, Jornada, Mensageria, Assistente) é
 só AVISO (`AvisoIdentidade`), o texto é do cliente. O SQL não reescreve nada salvo: lista os ids no raise notice.
 
+**SQL 88 (padrões aprovados pelo dono em 08/11/2026; SPEC "mailing", parte IDENTIDADE): o agente de voz confere a
+identidade pelo arquivo.** Por carteira (`voz_mailing_config.identidade`, credor nulo = empresa toda, versões com "o que
+mudou" e `z_auditar`; salva só quem aprova o roteiro de voz, `salvar_config_mailing_voz`): quem confere (`crm` ·
+`arquivo` · `crm_arquivo` · `arquivo_crm`), quantas perguntas (1 · 2), quais na ordem (dia/mês, 3 últimos dígitos; ano
+como reserva), se faltar dado (`proxima` · `menos` · `transferir`) e erros no dia (3 · 4 · 6). **Sem configuração o
+executor faz exatamente o de hoje** (teste de paridade). Carga: colunas `nascimento` e `documento_validacao` (pode ser a
+do CPF) no mapeamento; viram código e somem (`motor/identidade_mailing.py`: HMAC-SHA256 com a chave PRÓPRIA da empresa
+no Secret Manager `motorcx-voz-identidade-e<id>`, domínio + empresa + id + pergunta, 32 hex; nunca o `faturamento_sal`)
+em `base/identidade.csv`; nunca viram atributo, prévia ou saída (risco R1; `previa.PESSOAIS` ganhou ULT3/DIG/DV…).
+A rotina publica só os códigos da lista de hoje do agente (`nuvem/identidade_voz.py` → `publicar_identidade_voz`; nunca
+no Storage). **A comparação é no banco:** a VM (`voz/conector.FonteArquivo`, fonte interna) calcula o código da resposta
+e chama `conferir_identidade_voz`, que só responde dentro de uma ligação aberta (`abrir_identidade_voz`, 30 min), conta 2
+tentativas por pergunta e o limite do dia somando as ligações, e devolve só a palavra. Ninguém lê os códigos (site,
+service_role e `motorcx_voz` sem acesso). "Não confere" nunca troca de fonte; falha ou sem dado, sim. Trava das ofertas
+do arquivo (ainda não construídas): `identidade_mailing_confirmada`. Limpeza no job noturno da VM (`limpar_identidade_voz`).
+Chave: `docs/NUVEM_GCP.md` › "Chave de identidade do agente de voz". Testes: `tests/test_identidade_mailing.py` e
+`supabase/testes/testar_identidade_mailing.py`. Se o SQL 58 for rodado de novo, rode o 88 depois.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

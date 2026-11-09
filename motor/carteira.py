@@ -136,12 +136,13 @@ def _gravar_pagamentos(arq: Path, registro: list[dict]):
     tmp.replace(arq)
 
 
-def montar(pasta: str | Path, entrada: Entrada, chave=None) -> dict:
+def montar(pasta: str | Path, entrada: Entrada, chave=None, identidade=None) -> dict:
     """Lê as cinco pastas do credor e grava a base canônica em <pasta>/base/. Retorna o relatório.
 
     chave: o sal da empresa para o código do cliente que era CPF (texto ou função; a nuvem passa o faturamento_sal do
     banco). Sem chave: o sal local da pasta (config/sal_id_cliente.txt; Mac e testes). Na primeira montagem com esta
-    regra, os ids antigos que eram CPF são trocados no estado e nas saídas (motor/pseudonimo.migrar_pasta)."""
+    regra, os ids antigos que eram CPF são trocados no estado e nas saídas (motor/pseudonimo.migrar_pasta).
+    identidade: a chave de identidade da empresa (motor/identidade_mailing.Chave; SQL 88) ou None."""
     pasta = Path(pasta)
     base = pasta / "base"
     arqs = {t: _arquivos(pasta / p) for t, p in PASTAS.items()}
@@ -233,7 +234,7 @@ def montar(pasta: str | Path, entrada: Entrada, chave=None) -> dict:
 
     rel = converter_base(arqs["geral"], entrada.base, base, incrementais=arqs["incremental"],
                          retiradas=retiradas, pagamentos=pagamentos, layout_incremental=entrada.incremental,
-                         pseudo=pseudo)
+                         pseudo=pseudo, identidade=identidade)
     rel["avisos"] = dict(avisos)
     # por arquivo: quantas linhas acharam o cliente e por qual chave (código, contrato, CPF...)
     rel["identificacao"] = {}

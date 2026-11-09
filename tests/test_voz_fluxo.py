@@ -460,7 +460,7 @@ class TestMontagemFluxo(unittest.TestCase):
         f1, f2 = car(ctx), car(ctx)
         self.assertIs(f1, f2)
         self.assertEqual((f1.versao_id, f1.alcada.parcelas_max, f1.hosts), (10, 6, ("api.crm.exemplo.com.br",)))
-        self.assertEqual(SB.n, 2)                               # em uso + alçada, uma vez só
+        self.assertEqual(SB.n, 3)                               # em uso + alçada + identidade (SQL 88), uma vez só
 
 
 class TestRegistroFluxo(unittest.TestCase):

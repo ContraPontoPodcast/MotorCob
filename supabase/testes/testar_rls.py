@@ -2930,5 +2930,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 87: módulos de voz na Contratação (testar_modulos_voz.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 88 · Agente de voz: identidade pelo arquivo (só códigos; comparação no banco, só durante a ligação em andamento;
+# limite de erros no dia; trava das ofertas; ninguém lê os códigos, nem a VM; RLS e quem salva a configuração)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_identidade_mailing.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 88: identidade pelo arquivo (testar_identidade_mailing.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

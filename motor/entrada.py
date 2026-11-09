@@ -294,7 +294,7 @@ def checar_base(arq: str | Path, layout: LayoutBase) -> list[str]:
 
 def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | Path,
                    incrementais: list[Path] = (), retiradas: list[dict] = (), pagamentos: list[dict] = (),
-                   layout_incremental: LayoutBase | None = None, pseudo=None) -> dict:
+                   layout_incremental: LayoutBase | None = None, pseudo=None, identidade=None) -> dict:
     """Carteira do credor -> base/clientes.csv, contatos.csv, na_carga.csv, pessoas.csv, atributos.csv.
 
     LGPD: o CPF nunca é o id do cliente. Layout cuja coluna do cliente é a do CPF (sem código de cliente) ou código
@@ -314,6 +314,9 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     retiradas: [{data, id_cliente, id_contrato, motivo}] · pagamentos: [{data, id_cliente,
     id_contrato, valor, tipo: quitacao|parcial|""}] (já com o cliente resolvido).
     Marcas por telefone na carga (opcionais): hot (preferencial), whatsapp, rcs.
+    Colunas do agente de voz (SQL 88, opcionais no layout): `nascimento` e `documento_validacao` (pode ser a do CPF).
+    São dado pessoal: nunca viram atributo, prévia nem saída (risco R1). Com `identidade` (motor/identidade_mailing.Chave
+    da empresa) viram código em base/identidade.csv, só de quem está na carga; sem chave, o relatório só conta.
     """
     eventos = [(data_do_arquivo(a), 0, a.name, "geral", a) for a in arquivos]
     eventos += [(data_do_arquivo(a), 1, a.name, "incremental", a) for a in incrementais]
@@ -332,6 +335,9 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     quitados: dict[str, date] = {}
     if pseudo is None:
         pseudo = Pseudonimizador.local(Path(pasta_saida).parent)
+    from motor import identidade_mailing as IM
+    ident = IM.Leitura(identidade)
+    voz_mapeadas = {"nascimento": False, "documento_validacao": False}
     for dia, _, _, tipo, item in eventos:
         if tipo == "retirada":
             idc, ct = item["id_cliente"], item.get("id_contrato") or ""
@@ -388,10 +394,15 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
             # contato, CPF e ID não viram atributo: só o que descreve o cliente/contrato
             pessoais = {col["id_cliente"], col.get("cpf")} | {t["coluna"] for t in tel_cols} \
                 | {t.get(k) for t in tel_cols for k in ("whatsapp", "rcs", "hot", "ddd")} | set(emails)
-            # data de nascimento é dado pessoal: não vira atributo, vira só a idade
-            col_nasc = next((c for c in nomes if _nome_simples(c) in NOMES_NASCIMENTO), None)
+            # data de nascimento é dado pessoal: não vira atributo, vira só a idade (e, apontada, o código de validação)
+            col_nasc_voz, col_doc_voz = col.get("nascimento"), col.get("documento_validacao")
+            col_nasc = col_nasc_voz or next((c for c in nomes if _nome_simples(c) in NOMES_NASCIMENTO), None)
             col_idade = next((c for c in nomes if _nome_simples(c) == "IDADE"), None)
             pessoais.add(col_nasc)
+            # SQL 88 · risco R1: as colunas de validação do agente de voz nunca viram atributo, prévia ou saída
+            pessoais |= {col_nasc_voz, col_doc_voz}
+            voz_mapeadas["nascimento"] |= bool(col_nasc_voz)
+            voz_mapeadas["documento_validacao"] |= bool(col_doc_voz)
             colunas_atrib = [c for c in nomes if c and c not in pessoais]
             n = 0
             for linha in leitor:
@@ -422,6 +433,9 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                 doc = documento(linha[col["cpf"]]) if "cpf" in col else None
                 if doc:
                     documentos[idc] = doc
+                if col_nasc_voz or col_doc_voz:      # vira código na hora; o valor não sai daqui
+                    ident.ler_linha(idc, linha.get(col_nasc_voz) if col_nasc_voz else None,
+                                    linha.get(col_doc_voz) if col_doc_voz else None, dia, lay.formato_data)
                 linhas_arq[idc].append({
                     "id_contrato": (linha[col["id_contrato"]] or "").strip() if "id_contrato" in col else "",
                     "saldo": saldo, "atraso": atraso, "entrada": entrada, "dia": dia,
@@ -487,6 +501,11 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
         for idc in sorted(documentos):
             w.writerow([idc, documentos[idc]])
     gravar_originais(pasta, pseudo.originais)
+    if identidade is not None:
+        IM.gravar(pasta, ident.linhas(set(estoque)))
+    else:   # sem chave: nenhum código guardado (um arquivo de antes, de outra chave, sai)
+        IM.apagar(pasta)
+    rel["identidade"] = ident.relatorio(set(estoque), voz_mapeadas)
     with open(pasta / "fora_do_estoque.csv", "w", newline="", encoding="utf-8") as f:
         f.write("id_cliente;data;motivo\n" + "".join(f"{i};{d.isoformat()};{m}\n" for i, (d, m) in sorted(saiu.items())))
     # atributos do contrato de maior saldo de cada cliente

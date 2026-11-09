@@ -504,7 +504,8 @@ def main(argv=None) -> int:
         registro = RegistroBanco(sb)
         if "montagem_motorcx" in provedores:    # SQL 58: a versão em uso do fluxo da carteira (sem fluxo: roteiro)
             from voz.fluxo import CarregadorFluxos
-            provedores["montagem_motorcx"].fluxo_de = CarregadorFluxos(sb)
+            # SQL 88: com o cofre, a identidade pode ser conferida pelo arquivo (a chave fica só na memória)
+            provedores["montagem_motorcx"].fluxo_de = CarregadorFluxos(sb, segredos=segredos)
         from voz.transcricao.ia import GravadorTranscricaoIA
         orq = Orquestrador(ari, dados, Agendador(contratado=contratado), EscritorEventos(a.eventos), provedores,
                            relogio_brasilia, fila_envio=fila_envio, ao_registrar=registro.registrar,

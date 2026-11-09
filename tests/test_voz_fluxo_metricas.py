@@ -27,10 +27,16 @@ class TestFluxoMetricas(unittest.TestCase):
         sb = SbFalso([7, 9])
         out = FM.noite(sb, date(2026, 11, 2), "1/2")
         self.assertEqual(sb.chamadas[0], ("fluxo_empresas_voz", {"parte": "1/2"}))
-        self.assertEqual([a for n, a in sb.chamadas[1:]], [
+        self.assertEqual([a for n, a in sb.chamadas[1:-1]], [
             {"empresa": 7, "dia": "2026-10-31"}, {"empresa": 7, "dia": "2026-11-01"},
             {"empresa": 9, "dia": "2026-10-31"}, {"empresa": 9, "dia": "2026-11-01"}])
-        self.assertEqual(out, {"empresas": 2, "dias": 4, "blocos": 12, "intencoes": 8})
+        self.assertEqual(sb.chamadas[-1], ("limpar_identidade_voz", {}))     # SQL 88: só a parte 1 limpa
+        self.assertEqual(out, {"empresas": 2, "dias": 4, "blocos": 12, "intencoes": 8})   # a limpeza falha no falso: segue
+
+    def test_so_a_parte_1_limpa_a_identidade(self):
+        sb = SbFalso([7])
+        FM.noite(sb, date(2026, 11, 2), "2/2")
+        self.assertNotIn("limpar_identidade_voz", [n for n, _ in sb.chamadas])
 
     def test_empresa_com_erro_nao_segura_as_outras(self):
         out = FM.noite(SbFalso([7, 9], falha=7), date(2026, 11, 2))
@@ -39,7 +45,7 @@ class TestFluxoMetricas(unittest.TestCase):
     def test_janela_limitada_ao_banco(self):
         sb = SbFalso([7])
         FM.noite(sb, date(2026, 11, 2), dias=99)
-        self.assertEqual(len(sb.chamadas) - 1, FM.JANELA_DIAS)
+        self.assertEqual(len(sb.chamadas) - 2, FM.JANELA_DIAS)          # - empresas - limpeza (SQL 88)
 
     def test_main_imprime_o_resumo(self):
         buf = io.StringIO()
@@ -50,6 +56,7 @@ class TestFluxoMetricas(unittest.TestCase):
     def test_rpcs_no_acesso_proprio(self):
         self.assertEqual(A.RPC["fluxo_empresas_voz"], "fluxo_empresas")
         self.assertEqual(A.RPC["agregar_fluxo_dia"], "agregar_fluxo_dia")
+        self.assertEqual(A.RPC["limpar_identidade_voz"], "limpar_identidade")
 
 
 if __name__ == "__main__":

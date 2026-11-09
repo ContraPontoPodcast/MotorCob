@@ -432,9 +432,12 @@ def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
                                   "parcelas_pagas": rel_base.get("parcelas_pagas", 0),
                                   "acordos_abertos": rel_base.get("acordos_abertos", 0),
                                   "avisos": rel_base.get("avisos") or {}, "na_carga": rel_base["na_carga"]}
+        from nuvem import identidade_voz   # SQL 88: só contagens da validação do agente de voz
+        ident = identidade_voz.resumo(rel_base)
         return "processado", {**arq, "clientes_na_base": rel_base["clientes"], "contatos": rel_base["contatos"],
                               "rejeitadas": rel_base["rejeitadas"], "na_carga": rel_base["na_carga"],
-                              "fora_da_carga": rel_base["fora_da_carga"]}
+                              "fora_da_carga": rel_base["fora_da_carga"],
+                              **({"identidade_voz": ident} if ident else {})}
     if e["tipo"] == "ocorrencia":
         if nome in r["sem_layout"] or any(s.startswith(nome + " ") for s in r["sem_layout"]):
             return "erro", {"erro": "arquivo não reconhecido como ocorrência: confira o nome do arquivo"}
@@ -1001,7 +1004,9 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         rel_base = None
         if tem("bruto") or tem("incremental"):
             from nuvem import faturamento as fat_sal   # o sal da empresa: o CPF nunca é o id (código pseudônimo)
-            rel_base = rodar_dia.preparar_carteira(entrada, pasta, chave=lambda: fat_sal.sal_da_empresa(sb, eid))
+            from nuvem import identidade_voz   # SQL 88: data/documento da carga viram código e somem
+            rel_base = rodar_dia.preparar_carteira(entrada, pasta, chave=lambda: fat_sal.sal_da_empresa(sb, eid),
+                                                   identidade=identidade_voz.chave(eid, out))
             out(f"  carteira: {rel_base['clientes']} clientes, {rel_base['na_carga']} em cobrança, "
                 f"{rel_base['contatos']} contatos")
             # só nomes e tipos das colunas, para o site montar as regras de cluster
@@ -1110,6 +1115,11 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         aviso_previa = publicar_previa(sb, eid, cid, data, r)
         if aviso_previa:
             r["alertas"].append(aviso_previa)
+        from nuvem import identidade_voz   # SQL 88: códigos de validação da lista de hoje do agente (nunca no Storage)
+        for aviso in (identidade_voz.publicar(sb, eid, cid, pasta, data, r.get("saida"), out),
+                      identidade_voz.alerta_da_carga(rel_base, eid)):
+            if aviso:
+                r["alertas"].append(aviso)
         n_trilha = publicar_trilha(sb, pasta / "estado", eid, cid)
         sb.apagar("fila_dia", {"empresa_id": f"eq.{eid}", **_fc(cid), "data": f"eq.{data.isoformat()}"})
         fila = _linhas_fila(r["fila"], data, eid, cid)

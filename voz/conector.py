@@ -429,3 +429,77 @@ class ConectoresDeExemplo:
             return Resultado("recusado")
         dados, codigo, ofertas = aplicar_mapa_saida(con.exemplo_resposta, con.mapa_saida)
         return Resultado("ok", http_status=200, latencia_ms=0, codigo=codigo, dados=dados, ofertas=ofertas)
+
+
+# ------------------------------------------------------------------ fonte interna: identidade pelo arquivo (SQL 88)
+FONTES_IDENTIDADE = {"crm": ("crm",), "arquivo": ("arquivo",), "crm_arquivo": ("crm", "arquivo"),
+                     "arquivo_crm": ("arquivo", "crm")}
+RESPOSTAS_ARQUIVO = ("identidade_ok", "identidade_nao_confere", "sem_dado", "bloqueado")
+
+
+def ref_chave_identidade(empresa_id) -> str:
+    """Referência da chave de identidade da empresa: 'voz/identidade/e12' = segredo motorcx-voz-identidade-e12."""
+    return f"voz/identidade/e{int(empresa_id)}"
+
+
+class FonteArquivo:
+    """Conector INTERNO (classe `interno`, finalidade validar_cadastro) que confere a identidade pelo que veio no arquivo.
+
+    A comparação acontece no banco: a VM calcula o código da resposta (HMAC com a chave de identidade da empresa, lida
+    do Secret Manager e guardada só em memória) e chama `conferir_identidade_voz`, que devolve só identidade_ok,
+    identidade_nao_confere, sem_dado ou bloqueado. A VM nunca recebe os códigos guardados. Mesmo `Resultado` do CRM:
+    o executor trata igual (falha do banco = classe `tempo`; chave ausente = `recusado` → próxima fonte).
+    Log só com a fonte, a classe e a palavra da resposta; nunca a resposta, o código ou a chave."""
+    nome = "Arquivo (MotorCX)"
+
+    def __init__(self, sb, segredos, relogio=time.monotonic, ttl_chave_s: float = 600):
+        self.sb, self.segredos, self.relogio, self.ttl = sb, segredos, relogio, ttl_chave_s
+        self._chaves: dict[int, tuple[float, object]] = {}
+
+    def _chave(self, empresa_id: int):
+        from motor import identidade_mailing as IM
+        hit = self._chaves.get(empresa_id)
+        if hit and self.relogio() - hit[0] < self.ttl:
+            return hit[1]
+        valor, versao = self.segredos.valor_com_versao(ref_chave_identidade(empresa_id))
+        ch = IM.Chave(int(empresa_id), int(versao), IM.ler_segredo(valor))
+        del valor
+        self._chaves[empresa_id] = (self.relogio(), ch)
+        return ch
+
+    def abrir(self, empresa_id, credor_id, id_cliente: str, id_chamada: str) -> dict | None:
+        """Começo da etapa: registra a ligação em andamento. {"disponiveis": [...], "bloqueado": bool} ou None (falhou)."""
+        try:
+            r = self.sb.rpc("abrir_identidade_voz", {"empresa": int(empresa_id), "credor": int(credor_id),
+                                                     "id_cliente": id_cliente, "id_chamada": id_chamada})
+            r = r[0] if isinstance(r, list) and r else r
+            if not isinstance(r, dict) or not isinstance(r.get("disponiveis"), list):
+                raise ValueError("resposta fora do formato")
+            return {"disponiveis": [p for p in r["disponiveis"] if isinstance(p, str)], "bloqueado": bool(r.get("bloqueado"))}
+        except Exception as ex:   # noqa: BLE001 — fonte falhou: o executor passa para a próxima
+            log.warning("identidade: fonte=arquivo abrir=falhou (%s)", ex.__class__.__name__)
+            return None
+
+    def conferir(self, empresa_id, credor_id, id_cliente: str, id_chamada: str, pergunta: str, valor: str) -> Resultado:
+        from motor import identidade_mailing as IM
+        t0 = self.relogio()
+        try:
+            ch = self._chave(int(empresa_id))
+            cod = IM.codigo(ch, id_cliente, pergunta, valor)
+        except Exception as ex:   # noqa: BLE001 — sem chave: a fonte não confere (próxima)
+            log.warning("identidade: fonte=arquivo classe=recusado (%s)", ex.__class__.__name__)
+            return Resultado("recusado", latencia_ms=int((self.relogio() - t0) * 1000))
+        try:
+            r = self.sb.rpc("conferir_identidade_voz", {"empresa": int(empresa_id), "credor": int(credor_id),
+                                                        "id_cliente": id_cliente, "id_chamada": id_chamada,
+                                                        "pergunta": pergunta, "codigo": cod, "versao": ch.versao})
+        except Exception as ex:   # noqa: BLE001 — banco fora, ligação fora de andamento: fonte falhou
+            log.warning("identidade: fonte=arquivo classe=tempo (%s)", ex.__class__.__name__)
+            return Resultado("tempo", latencia_ms=int((self.relogio() - t0) * 1000))
+        finally:
+            cod = None
+        r = r[0] if isinstance(r, list) and len(r) == 1 else r
+        ms = int((self.relogio() - t0) * 1000)
+        if r not in RESPOSTAS_ARQUIVO:
+            return Resultado("mapa_invalido", latencia_ms=ms)
+        return Resultado("ok", latencia_ms=ms, codigo=r)
