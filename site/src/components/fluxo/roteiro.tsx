@@ -12,6 +12,7 @@ import {
 	MODOS, acaoSistema, comoCorrigir, ehFinal, nomeDestino, nomesEtapas, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, textoVolta,
 	type Bloco, type Capitulo, type Definicao, type Pendencia,
 } from '@/lib/fluxo';
+import { FALA_PERGUNTA, textoFonte, textoPerguntas, usaArquivo, type ConfigIdentidade, type PerguntaIdentidade } from '@/lib/identidade-mailing';
 import { OQueCorrigir, type AcaoCorrigir } from './corrigir';
 import { Ponto } from './ds';
 import { temTrava, type Marca } from './quadro';
@@ -54,10 +55,12 @@ function Linha({ q, children, fraca }: { q: ReactNode; children: ReactNode; frac
 }
 
 /** Uma etapa do roteiro: o que o agente diz, o que o cliente pode responder e para onde vai. */
-export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, pendencias, acao }: {
+export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, pendencias, acao, identidade, onMudarIdentidade }: {
 	b: Bloco; n: number; definicao: Definicao; nomes: Map<string, string>; numeros: Map<string, number>; marca?: Marca; onAbrir: (id: string) => void;
 	/** Pendências desta etapa (banco), com "O que corrigir" e o botão de correção. */
 	pendencias?: Pendencia[]; acao?: (codigo: string) => AcaoCorrigir | null;
+	/** SQL 88: quem confere a identidade na carteira (null = o de hoje; undefined = ainda não carregou). */
+	identidade?: ConfigIdentidade | null; onMudarIdentidade?: () => void;
 }) {
 	const p = b.params ?? {};
 	const final = ehFinal(b);
@@ -103,6 +106,8 @@ export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, 
 					<p className="mt-2 text-[12.5px] text-[var(--estado-erro-texto)]">Sem fala escrita.</p>
 				)}
 
+				{b.tipo === 'identidade' && identidade !== undefined && <QuemConfere b={b} identidade={identidade} onMudar={onMudarIdentidade} />}
+
 				{final ? (
 					<ul className="mt-2.5 space-y-1">
 						<Linha q="Fim da ligação">{resultadoFinal(b)}</Linha>
@@ -146,6 +151,30 @@ export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, 
 	);
 }
 
+/** Etapa "Confirmar identidade" (SQL 88): a 2ª pergunta (quando a carteira pede duas) e quem confere, com "Mudar". */
+export function QuemConfere({ b, identidade, onMudar }: { b: Bloco; identidade: ConfigIdentidade | null; onMudar?: () => void }) {
+	const da = typeof b.params?.pergunta === 'string' ? b.params.pergunta : null;
+	const perguntas = identidade ? identidade.perguntas.slice(0, identidade.quantas) : [];
+	const depois = perguntas.filter((p, i) => !(i === 0 && p === da));
+	return (
+		<div className="mt-2 space-y-2" data-quem-confere={identidade?.fonte ?? 'hoje'}>
+			{depois.map((p, i) => (
+				<div key={p}>
+					<Rotulo>{i === 0 && perguntas[0] !== da ? 'Pergunta' : 'Depois'}</Rotulo>
+					<p className="mt-1 rounded-xl px-3 py-2 text-[13px] text-[var(--base-texto)]" style={{ backgroundColor: 'var(--base-fill)' }}>{FALA_PERGUNTA[p as PerguntaIdentidade]}</p>
+				</div>
+			))}
+			<p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-3 py-2 text-[12.5px]" style={{ backgroundColor: 'var(--base-fill)', boxShadow: '0 0 0 1px var(--base-borda)' }}>
+				<b className="font-semibold text-[var(--base-texto)]">Quem confere:</b>
+				<span className="text-[var(--base-texto)]">{textoFonte(identidade)}</span>
+				{identidade && <span className="text-[var(--base-texto-2)]">· {textoPerguntas(identidade)}</span>}
+				{usaArquivo(identidade) && <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[var(--area-voz)]"><Lock size={11} aria-hidden />a resposta vira código; a IA não vê</span>}
+				{onMudar && <button type="button" onClick={onMudar} className="ml-auto text-[12.5px] font-semibold text-[var(--destaque)] underline-offset-2 hover:underline">Mudar ›</button>}
+			</p>
+		</div>
+	);
+}
+
 /** Cabeçalho de um capítulo, que recolhe (fluxo grande, até 60 etapas). */
 function CabCapitulo({ c, aberto, onTrocar }: { c: Capitulo; aberto: boolean; onTrocar: () => void }) {
 	const Ico = aberto ? ChevronDown : ChevronRight;
@@ -161,9 +190,10 @@ function CabCapitulo({ c, aberto, onTrocar }: { c: Capitulo; aberto: boolean; on
 }
 
 /** O roteiro inteiro: capítulos na ordem da conversa, etapas numeradas de 1 a N. */
-export function Roteiro({ definicao, marcas, onAbrir, recolhidos: recolhidosIniciais, pendencias, acao }: {
+export function Roteiro({ definicao, marcas, onAbrir, recolhidos: recolhidosIniciais, pendencias, acao, identidade, onMudarIdentidade }: {
 	definicao: Definicao; marcas: Map<string, Marca>; onAbrir: (id: string) => void; recolhidos?: string[];
 	pendencias?: Map<string, Pendencia[]>; acao?: (codigo: string) => AcaoCorrigir | null;
+	identidade?: ConfigIdentidade | null; onMudarIdentidade?: () => void;
 }) {
 	const caps = roteiro(definicao);
 	const nomes = nomesEtapas(definicao);
@@ -180,7 +210,7 @@ export function Roteiro({ definicao, marcas, onAbrir, recolhidos: recolhidosInic
 						<CabCapitulo c={c} aberto={aberto} onTrocar={() => trocar(c.id)} />
 						<ol id={`cap-${c.id}`} hidden={!aberto} className="mt-2.5 space-y-2.5">
 							{c.blocos.map(b => (
-								<EtapaRoteiro key={b.id} b={b} n={numeros.get(b.id) ?? 0} definicao={definicao} nomes={nomes} numeros={numeros} marca={marcas.get(b.id)} onAbrir={onAbrir} pendencias={pendencias?.get(b.id)} acao={acao} />
+								<EtapaRoteiro key={b.id} b={b} n={numeros.get(b.id) ?? 0} definicao={definicao} nomes={nomes} numeros={numeros} marca={marcas.get(b.id)} onAbrir={onAbrir} pendencias={pendencias?.get(b.id)} acao={acao} identidade={identidade} onMudarIdentidade={onMudarIdentidade} />
 							))}
 						</ol>
 					</section>

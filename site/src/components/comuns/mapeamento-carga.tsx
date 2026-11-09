@@ -1,7 +1,8 @@
 // Tabela "O que reconhecemos" da carga geral (SQL 74): um campo do MotorCX por linha, a coluna do arquivo (seletor) e
 // o estado. Usada no Assistente de implantação (passo 3), em Configurações da carteira › Arquivos e na carga que voltou
 // esperando as colunas. Exemplos de dado pessoal sempre mascarados.
-import { CAMPOS_CARGA, exemplo, type CampoCarga, type ColunasCarga } from '@/lib/mapeamento-carga';
+import { Lock } from 'lucide-react';
+import { CAMPOS_CARGA, CAMPOS_VOZ, exemplo, type CampoCarga, type CampoVoz, type ColunasCarga } from '@/lib/mapeamento-carga';
 import { Pilula, campoCls, campoStyle } from '@/components/ds';
 
 type Props = {
@@ -13,7 +14,7 @@ type Props = {
 	somenteLeitura?: boolean;
 };
 
-function valorDe(c: ColunasCarga, k: CampoCarga): string[] {
+function valorDe(c: ColunasCarga, k: CampoCarga | CampoVoz): string[] {
 	const v = (c as Record<string, unknown>)[k];
 	return Array.isArray(v) ? (v as string[]) : typeof v === 'string' && v ? [v] : [];
 }
@@ -24,16 +25,21 @@ export function MapeamentoCarga({ cabecalho, colunas, reconhecido, onTrocar, lin
 		const l = (linhas ?? []).find(r => cols.some(c => (r[idx(c)] ?? '').trim()));
 		return l ? cols.map(c => exemplo(k, l[idx(c)])).filter(Boolean)[0] ?? '' : '';
 	};
-	function trocar(k: CampoCarga, v: string | string[]) {
+	function trocar(k: CampoCarga | CampoVoz, v: string | string[]) {
 		const novo: ColunasCarga = { ...colunas };
 		const rec = novo as Record<string, unknown>;
 		if (Array.isArray(v)) { if (v.length) rec[k] = v; else delete rec[k]; }
 		else if (v) rec[k] = v; else delete rec[k];
 		onTrocar(novo);
 	}
-	const ocupadas = (exceto: CampoCarga) => new Set(CAMPOS_CARGA.filter(c => c.key !== exceto).flatMap(c => valorDe(colunas, c.key)));
+	// colunas já usadas por outro campo (o documento de validação pode repetir o CPF: "usar o CPF/CNPJ já apontado")
+	const ocupadas = (exceto: CampoCarga | CampoVoz) => new Set([
+		...CAMPOS_CARGA.filter(c => c.key !== exceto).flatMap(c => valorDe(colunas, c.key)),
+		...CAMPOS_VOZ.filter(c => c.key !== exceto && !(c.key === 'documento_validacao' && colunas.documento_validacao === colunas.cpf)).flatMap(c => valorDe(colunas, c.key)),
+	]);
 
 	return (
+		<div className="space-y-4">
 		<div className="overflow-x-auto">
 			<table className="w-full min-w-0 text-[13.5px]">
 				<thead>
@@ -94,5 +100,47 @@ export function MapeamentoCarga({ cabecalho, colunas, reconhecido, onTrocar, lin
 				</tbody>
 			</table>
 		</div>
+		<ParaAgenteVoz cabecalho={cabecalho} colunas={colunas} trocar={trocar} livres={k => cabecalho.filter(h => h && !ocupadas(k).has(h))} somenteLeitura={somenteLeitura} />
+		</div>
+	);
+}
+
+/** Grupo "Para o agente de voz" (SQL 88): opcional; os valores nunca aparecem (nem de exemplo) e só viram código. */
+function ParaAgenteVoz({ cabecalho, colunas, trocar, livres, somenteLeitura }: {
+	cabecalho: string[]; colunas: ColunasCarga; trocar: (k: CampoVoz, v: string) => void; livres: (k: CampoVoz) => string[]; somenteLeitura?: boolean;
+}) {
+	if (!cabecalho.length && !colunas.nascimento && !colunas.documento_validacao) return null;
+	return (
+		<section aria-labelledby="t-voz" className="rounded-xl px-3 py-3" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }}>
+			<h3 id="t-voz" className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-[var(--base-texto)]">Para o agente de voz <Pilula tom="neutro">opcional</Pilula></h3>
+			<p className="mt-1.5 flex items-start gap-1.5 rounded-lg px-2.5 py-2 text-[12.5px] text-[var(--base-texto)]" style={{ backgroundColor: 'color-mix(in srgb, var(--area-voz) 9%, var(--base-cartao))' }}>
+				<Lock size={13} className="mt-[2px] shrink-0 text-[var(--area-voz)]" aria-hidden />
+				<span><b className="font-semibold">Dados de validação nunca ficam guardados nem aparecem em tela.</b> Na leitura da carga, o MotorCX transforma cada valor num código (com a chave da empresa) e descarta o valor. Essas colunas também nunca viram atributo, segmento ou persona.</span>
+			</p>
+			<h4 className="mt-3 text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--base-texto-3)]">Confirmar identidade</h4>
+			<ul className="mt-1 divide-y" style={{ borderColor: 'var(--base-separator)' }}>
+				{CAMPOS_VOZ.map(c => {
+					const atual = colunas[c.key] ?? '';
+					const cpf = colunas.cpf;
+					const opcoes = livres(c.key).filter(h => h !== cpf);
+					return (
+						<li key={c.key} data-campo={c.key} className="grid gap-x-4 gap-y-1.5 py-2.5 md:grid-cols-[minmax(0,1fr)_minmax(0,260px)_minmax(0,1fr)]" style={{ borderColor: 'var(--base-separator)' }}>
+							<span className="min-w-0">
+								<b className="block text-[13.5px] font-medium text-[var(--base-texto)]">{c.nome}</b>
+								<small className="block text-[11.5px] text-[var(--base-texto-3)]">{c.ajuda}</small>
+							</span>
+							{somenteLeitura ? <span className="font-mono text-[12.5px]">{atual ? (atual === cpf && c.key === 'documento_validacao' ? `Usar ${atual} (já apontado)` : atual) : '—'}</span> : (
+								<select aria-label={`Coluna de ${c.nome}`} value={atual} onChange={e => trocar(c.key, e.target.value)} className={`${campoCls} h-9 w-full`} style={campoStyle}>
+									<option value="">— não vem no arquivo —</option>
+									{c.key === 'documento_validacao' && cpf && <option value={cpf}>Usar {cpf} (já apontado)</option>}
+									{opcoes.map(h => <option key={h} value={h}>{h}</option>)}
+								</select>
+							)}
+							<small className="min-w-0 text-[12px] text-[var(--base-texto-2)]">{atual ? <><Pilula tom="info">vira código</Pilula> {c.formato}</> : 'Não vem no arquivo.'}</small>
+						</li>
+					);
+				})}
+			</ul>
+		</section>
 	);
 }

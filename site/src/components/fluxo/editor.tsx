@@ -65,11 +65,13 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 		if (!api || !empresa) return null;
 		const v = await api.versao(versaoId);
 		if (!v) return { v: null } as const;
-		const [f, versoes, conectores, intencoes, bloqueios, avisos, alcada] = await Promise.all([
+		const [f, versoes, conectores, intencoes, bloqueios, avisos, alcada, identidade] = await Promise.all([
 			api.fluxo(v.fluxo_id), api.versoesDoFluxo(v.fluxo_id), api.conectores(empresa.id).catch(() => []), api.intencoes().catch(() => []),
 			api.bloqueios(v.id), api.avisos(v.id).catch(() => [] as string[]), api.alcada(empresa.id, v.credor_id).catch(() => null),
+			// SQL 88: quem confere a identidade na carteira (banco sem o SQL 88: undefined, e o Roteiro fica como antes)
+			api.identidade(empresa.id, v.credor_id).then(x => x?.identidade ?? null).catch(() => undefined),
 		]);
-		return { v, f, versoes, conectores, intencoes, bloqueios, avisos, alcada };
+		return { v, f, versoes, conectores, intencoes, bloqueios, avisos, alcada, identidade };
 	}, [api, empresa?.id, versaoId]);
 
 	const marcas = useMemo(() => {
@@ -85,7 +87,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	if (erro && !dados) return <>{cab()}<Notice>{erro}</Notice></>;
 	if (!dados?.v || !dados.f) return <>{cab()}<Vazio titulo="Versão não encontrada." acao={<Botao secundario onClick={() => navigate(rota('lista'))}>Voltar aos fluxos</Botao>}>Ela pode ser de outra empresa ou ter sido apagada.</Vazio></>;
 
-	const { v, f, versoes, conectores, intencoes, bloqueios, avisos, alcada } = dados;
+	const { v, f, versoes, conectores, intencoes, bloqueios, avisos, alcada, identidade } = dados;
 	const def = v.definicao;
 	const emUso = versoes.find(x => x.situacao === 'em_uso') ?? null;
 	const rascunhoAberto = versoes.find(x => x.situacao === 'rascunho' && x.id !== v.id) ?? null;
@@ -202,14 +204,14 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 							</Acoes>
 						</div>
 						<EmQualquerMomento />
-						{def.blocos.length ? <Roteiro definicao={def} marcas={marcas} onAbrir={abrirEtapa} pendencias={porBloco} acao={acao} />
+						{def.blocos.length ? <Roteiro definicao={def} marcas={marcas} onAbrir={abrirEtapa} pendencias={porBloco} acao={acao} identidade={identidade} onMudarIdentidade={() => navigate(rota('identidade'))} />
 							: <Vazio titulo="Fluxo sem etapas.">Use "+ Etapa" para começar pela Abertura.</Vazio>}
 					</div>
 				) : aba === 'mapa' ? (
 					<div className="space-y-3">
 						<Aviso tom="neutro" titulo="O mapa é para enxergar o desenho inteiro.">Para ler e editar a conversa, use o <button type="button" className="font-semibold underline" onClick={() => trocarAba('roteiro')}>Roteiro</button>. Toque numa etapa para abrir.</Aviso>
 						<LegendaModos />
-						{def.blocos.length ? <Quadro definicao={def} marcas={marcas} onAbrir={abrirEtapa} pendencias={porBloco} />
+						{def.blocos.length ? <Quadro definicao={def} marcas={marcas} onAbrir={abrirEtapa} pendencias={porBloco} identidade={identidade} />
 							: <Vazio titulo="Fluxo sem etapas.">Comece pelo Roteiro.</Vazio>}
 					</div>
 				) : aba === 'respostas' ? <AbaRespostas versao={v.id} definicao={def} onAbrirEtapa={abrirEtapa} />

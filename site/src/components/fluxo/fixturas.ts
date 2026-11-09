@@ -8,6 +8,7 @@ import type {
 	AlcadaRow, CasoRow, ChamadaCrmRow, ConectorRow, ConversaRow, FluxoApi, FluxoRow, IntencaoRow, LoteRow, ModeloRow, PedidoRow, PersonaRow,
 	ResultadoLoteRow, RespostaRow, Simulacao, VersaoRow,
 } from './api';
+import type { IdentidadeVigente, VersaoIdentidade } from '@/lib/identidade-mailing';
 
 const b = (id: string, tipo: Bloco['tipo'], modo: Bloco['modo'], titulo: string | undefined, params: Record<string, unknown>, saidas: [string, string, string][] = []): Bloco => ({
 	id, tipo, modo, ...(titulo ? { titulo } : {}), params,
@@ -127,6 +128,8 @@ export function criarApiFixturas(): FluxoApi {
 	const lotes: LoteRow[] = [{ id: 51, fluxo_versao_id: 105, personas: [1, 2, 3, 4, 5, 6], quantidade: 20, situacao: 'concluido', pedido_em: agora, concluido_em: '2026-10-31T13:42:00Z', conversas: 120, tokens: 412000 }, { id: 41, fluxo_versao_id: 104, personas: [1, 2, 3, 4, 5, 6], quantidade: 20, situacao: 'concluido', pedido_em: '2026-10-20T12:00:00Z', concluido_em: '2026-10-20T12:30:00Z', conversas: 120, tokens: 398000 }];
 	const modelos: ModeloRow[] = [{ codigo: 'localizador', nome: 'Localizador', tipo_agente: 'localizador', descricao: 'Confirma o titular e transfere para o discador de vocês. Quase tudo fala fixa.' }, { codigo: 'negociador', nome: 'Negociador', tipo_agente: 'negociador', descricao: 'Confirma o titular, entende a intenção, busca ofertas no CRM e negocia.' }, { codigo: 'ambos', nome: 'Localizador + Negociador', tipo_agente: 'ambos', descricao: 'Negocia quando há oferta; sem oferta, transfere com CPC.' }];
 	let alcada: AlcadaRow | null = null;
+	let identidade: IdentidadeVigente | null = null;
+	const historico: VersaoIdentidade[] = [];
 	const espera = <T,>(x: T) => new Promise<T>(r => setTimeout(() => r(x), 120));
 	const pend = (d: Definicao, credor: number | null) => {
 		const e = validarLocal(d);
@@ -157,6 +160,15 @@ export function criarApiFixturas(): FluxoApi {
 		saude: async () => espera([{ conector_id: 1, volume_24h: 412, p50_ms: 402, p95_ms: 910, erro_pct: 1.8, ultima: agora }, { conector_id: 2, volume_24h: 1240, p50_ms: 290, p95_ms: 640, erro_pct: 1.3, ultima: agora }, { conector_id: 3, volume_24h: 118, p50_ms: 844, p95_ms: 2100, erro_pct: 3.9, ultima: agora }]),
 		chamadasCrm: async () => espera(chamadas), hosts: async () => espera(['api.crm-aurora.example.com']), cuidaConectores: async () => espera(false),
 		alcada: async () => espera(alcada),
+		identidade: async () => espera(identidade),
+		historicoIdentidade: async () => espera([...historico]),
+		salvarIdentidade: async (_e, credor, cfg) => {
+			const agora = '2026-11-08T10:00:00-03:00';
+			if (historico[0] && !historico[0].vigente_ate) historico[0] = { ...historico[0], vigente_ate: agora };
+			identidade = cfg ? { id: historico.length + 1, credor_id: credor, identidade: cfg, vigente_desde: agora } : null;
+			if (cfg) historico.unshift({ id: historico.length + 1, credor_id: credor, identidade: cfg, mudancas: historico.length ? 'Quem confere mudou' : 'Configuração inicial', vigente_desde: agora, vigente_ate: null });
+			await espera(0);
+		},
 		pendencias: async (_e, c, d) => espera(pend(d, c)),
 		bloqueios: async id => { const x = versoes.find(y => y.id === id); return espera(x ? pend(x.definicao, x.credor_id) : []); },
 		avisos: async id => espera(id === 105 ? ['roleplay_reprovadas:3'] : id === 401 ? ['roleplay_ausente'] : []),
