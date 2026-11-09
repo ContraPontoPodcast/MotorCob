@@ -159,7 +159,7 @@ LINHAS = [{"id_cliente": IDC, "pergunta": "dia_mes_nascimento", "codigo": cod(EA
 
 
 def publicar(linhas, credor=CA, empresa=EA, papel="service_role", uid=None):
-    return sql(f"select public.publicar_identidade_voz({empresa}, {credor}, current_date, '{j(linhas)}'::jsonb)",
+    return sql(f"select public.publicar_identidade_voz({empresa}, {credor}, (now() at time zone 'America/Sao_Paulo')::date, '{j(linhas)}'::jsonb)",
                papel, uid)
 
 
@@ -305,8 +305,8 @@ sv(salvar(None, "null"), *ADM)
 # ---------------------------------------------------------------- limpeza
 sv(salvar(CFG), *ADM)
 publicar(LINHAS)
-sv(f"update public.voz_identidade_dia set dia = current_date - 3 where id_cliente = 'OUT-{T}'")
-sv(f"update public.voz_identidade_tentativas set dia = current_date - 3 where id_cliente = '{IDC}'")
+sv(f"update public.voz_identidade_dia set dia = (now() at time zone 'America/Sao_Paulo')::date - 3 where id_cliente = 'OUT-{T}'")
+sv(f"update public.voz_identidade_tentativas set dia = (now() at time zone 'America/Sao_Paulo')::date - 3 where id_cliente = '{IDC}'")
 checar("o site não limpa", False, "select public.limpar_identidade_voz()", "authenticated", U["adm"])
 ok, out, err = sql("select voz_vm.limpar_identidade('{}')", usuario="motorcx_voz")
 afirmar("a VM limpa (job noturno) e recebe só contagens", ok and set(json.loads(out)) == {"codigos", "tentativas", "chamadas"},
