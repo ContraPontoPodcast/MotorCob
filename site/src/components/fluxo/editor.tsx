@@ -221,7 +221,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 
 			{etapaSel && (
 				<GavetaEtapa bloco={etapaSel} definicao={def} conectores={conectores} intencoes={intencoes} erros={[...bloqueios, ...avisos]} editavel={editavel}
-					versao={v.id} situacao={v.situacao} onFechar={() => abrirEtapa(null)} acao={acao}
+					versao={v.id} situacao={v.situacao} onFechar={() => abrirEtapa(null)} acao={acao} carteira={nomeCarteira(f.credor_id)}
 					onSalvar={(b: Bloco) => salvarDef(trocarBloco(def, b), `Etapa ${b.id} salva no rascunho.`)}
 					onRemover={id => salvarDef(removerBloco(def, id), `Etapa ${id} removida do rascunho.`)} />
 			)}

@@ -262,3 +262,45 @@ test('mapa e abas (PR4): o cartão do mapa diz o que corrigir; a aba Roteiro mos
 	assert.match(abas, new RegExp(`>Roteiro<span[^>]*>${n}</span>`));
 	assert.match(abas, new RegExp(`<option value="roteiro"[^>]*>Roteiro \\(${n}\\)</option>`));
 });
+
+// ---------------------------------------------------------------- PR5: detalhe da etapa
+test('detalhe da etapa: 4 cartões do modo, o escolhido marcado e o que não vale apagado com o motivo', async () => {
+	const { CartoesModo } = await import('@/components/fluxo/etapa-partes');
+	const { cartoesModo } = await import('@/lib/fluxo');
+	const html = renderToStaticMarkup(<CartoesModo cartoes={cartoesModo({ tipo: 'abertura', modo: 'arvore' })} onEscolher={nada} />);
+	assert.match(html, /role="radiogroup" aria-label="Como o agente decide nesta etapa"/);
+	assert.equal((html.match(/role="radio"/g) ?? []).length, 4);
+	for (const n of ['Fala fixa', 'IA entende a resposta', 'IA conversa', 'Sem fala']) assert.match(html, new RegExp(`>${n}</b>`));
+	assert.match(html, /aria-checked="true"[^>]*data-modo="arvore"/);
+	assert.match(html, /aria-checked="false" disabled=""[^>]*data-modo="cognicao"/);
+	assert.match(html, /Não vale para etapa com trava\./);
+	// numa Oferta, "IA entende a resposta" vale e fica clicável
+	const oferta = renderToStaticMarkup(<CartoesModo cartoes={cartoesModo({ tipo: 'oferta', modo: 'arvore' })} onEscolher={nada} />);
+	assert.match(oferta, /aria-checked="false"[^>]*data-modo="cognicao"/);
+	assert.doesNotMatch(oferta.match(/<button[^>]*data-modo="cognicao"[^>]*>/)?.[0] ?? '', /disabled=""/);
+});
+
+test('detalhe da etapa: "O agente diz" destaca as variáveis e risca as sensíveis antes da identidade', async () => {
+	const { FalaDoAgente } = await import('@/components/fluxo/etapa-partes');
+	const html = renderToStaticMarkup(<FalaDoAgente valor="Olá, aqui é a {{assessoria}}, em nome do {{credor}}. Falo com {{primeiro_nome}}?" onChange={nada} antesDaIdentidade />);
+	assert.match(html, /data-variavel="assessoria" data-usada="true"/);
+	assert.match(html, /data-variavel="credor" data-usada="true" data-bloqueada="true"/);
+	assert.match(html, /<button[^>]*disabled=""[^>]*data-variavel="saldo"[^>]*data-bloqueada="true"/);   // não dá para inserir
+	assert.match(html, /aria-label="Fala com as variáveis em destaque"/);
+	const depois = renderToStaticMarkup(<FalaDoAgente valor="Consta {{saldo}}." onChange={nada} antesDaIdentidade={false} />);
+	assert.doesNotMatch(depois, /data-bloqueada/);
+});
+
+test('detalhe da etapa: "Como soa no telefone", checagens e "Se não ouvir nada"', async () => {
+	const { ChecagensFala, ComoSoa, SeNaoOuvir } = await import('@/components/fluxo/etapa-partes');
+	const { comoSoa } = await import('@/lib/falado');
+	const soa = renderToStaticMarkup(<ComoSoa falada={comoSoa('Fica 6× de R$ 230,00, a primeira em 05/12.')} onOuvir={async () => {}} />);
+	assert.match(soa, /Como soa no telefone/);
+	assert.match(soa, /“Fica seis vezes de duzentos e trinta reais, a primeira em cinco de dezembro\.”/);
+	assert.match(soa, /> Ouvir</);
+	assert.doesNotMatch(renderToStaticMarkup(<ComoSoa falada="Oi" />), /Ouvir/);           // sem prévia de voz, só o texto
+	const chk = renderToStaticMarkup(<ChecagensFala itens={[{ estado: 'ok', texto: '16 palavras (curta para o ouvido)' }, { estado: 'erro', texto: 'Cita {{credor}} antes de confirmar a identidade (trava 1)' }]} />);
+	assert.match(chk, /data-checagem="ok"[^]*16 palavras/);
+	assert.match(chk, /data-checagem="erro"[^]*corrigir: <\/span>Cita \{\{credor\}\}/);
+	assert.match(renderToStaticMarkup(<SeNaoOuvir />), /Se não ouvir nada<\/b><span[^>]*>Ainda sem tratamento próprio/);
+});

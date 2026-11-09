@@ -19,14 +19,18 @@ export interface Definicao { esquema: 1; blocos: Bloco[] }
 export type SituacaoVersao = 'rascunho' | 'aprovado_empresa' | 'em_uso' | 'arquivado';
 export type TipoAgente = 'localizador' | 'negociador' | 'ambos';
 
-/** Modos com nomes simples (decisão do dono); o nome antigo aparece só na gaveta, para quem já aprendeu. As cores de
- * "Fala fixa" (cinza do texto) e "Sistema" (laranja) ficam bem diferentes no claro e no escuro (revisão U5). */
+/** Modos com nomes em palavras (decisão do dono; PR5 do redesenho: Fala fixa · IA entende a resposta · IA conversa ·
+ * Sem fala). Só o nome muda: os códigos (arvore, cognicao, generativo, sistema) e o que o executor faz continuam iguais.
+ * `antigo` é o código interno, mostrado só no "Avançado" da etapa. As cores de "Fala fixa" (cinza do texto) e "Sem
+ * fala" (laranja) ficam bem diferentes no claro e no escuro (revisão U5). */
 export const MODOS: Record<Modo, { nome: string; antigo: string; cor: string; desc: string }> = {
-	arvore: { nome: 'Fala fixa', antigo: 'Árvore', cor: 'var(--base-texto-2)', desc: 'Fala roteirizada, opções e ramos. Previsível e auditável.' },
-	cognicao: { nome: 'Entende e escolhe', antigo: 'Cognição', cor: '#2F6FD6', desc: 'Entende a intenção e os dados da fala e leva ao ramo certo. A fala continua roteirizada.' },
-	generativo: { nome: 'Conversa livre (IA)', antigo: 'Generativo', cor: '#8A4FC4', desc: 'A IA conversa rumo a um objetivo, só com as ferramentas e os limites desta etapa. Devolve o controle ao roteiro pelas saídas.' },
-	sistema: { nome: 'Sistema', antigo: 'Sem fala', cor: '#B8662F', desc: 'Chama API, testa condição ou registra. Não fala com a pessoa.' },
+	arvore: { nome: 'Fala fixa', antigo: 'arvore', cor: 'var(--base-texto-2)', desc: 'O agente diz exatamente este texto. O cliente escolhe entre respostas simples.' },
+	cognicao: { nome: 'IA entende a resposta', antigo: 'cognicao', cor: '#2F6FD6', desc: 'O agente diz o texto fixo; a IA só entende o que o cliente quis dizer e escolhe o caminho.' },
+	generativo: { nome: 'IA conversa', antigo: 'generativo', cor: '#8A4FC4', desc: 'A IA escreve as frases rumo a um objetivo, só com as ofertas que recebeu e dentro da alçada. Devolve o controle ao roteiro pelas saídas.' },
+	sistema: { nome: 'Sem fala', antigo: 'sistema', cor: '#B8662F', desc: 'Consulta, confere ou registra no CRM. O cliente não ouve nada além da fala de espera.' },
 };
+/** Ordem dos 4 cartões do modo no detalhe da etapa. */
+export const ORDEM_MODOS: Modo[] = ['arvore', 'cognicao', 'generativo', 'sistema'];
 
 export const TIPOS_AGENTE: Record<TipoAgente, string> = { localizador: 'Localizador', negociador: 'Negociador', ambos: 'Localizador + Negociador' };
 export const SITUACOES: Record<SituacaoVersao, { nome: string; tom: 'ok' | 'atencao' | 'neutro' | 'info' }> = {
@@ -47,7 +51,7 @@ export const TIPOS: Record<TipoBloco, InfoTipo> = {
 	identidade: { nome: 'Confirmar identidade', grupo: 'Conversa', modos: ['arvore', 'cognicao'], saidas: [{ quando: 'confirmou', rotulo: 'Confirmou', obrig: true }, { quando: 'nao_confirmou', rotulo: 'Não confirmou', obrig: true }, { quando: 'falhou', rotulo: 'Conector falhou' }], params: () => ({ fala: 'Para sua segurança, me confirma o dia e o mês do seu nascimento?', pergunta: 'dia_mes_nascimento', conector_id: null, tentativas: 2 }) },
 	pergunta: { nome: 'Pergunta', grupo: 'Conversa', modos: ['arvore'], saidas: [{ quando: 'sem_resposta', rotulo: 'Sem resposta' }], params: () => ({ fala: 'Posso continuar?', tentativas: 1, opcoes: [{ codigo: 'sim', rotulo: 'Sim' }, { codigo: 'nao', rotulo: 'Não' }] }) },
 	intencao: { nome: 'Entender intenção', grupo: 'Conversa', modos: ['cognicao'], saidas: [{ quando: 'nao_entendido', rotulo: 'Não entendi', obrig: true }], params: () => ({ fala: 'Como fica melhor para você resolver?', intencoes: ['quero_negociar', 'sem_dinheiro'], confianca_min: 0.7, tentativas: 2 }) },
-	generativa: { nome: 'Conversa livre (IA)', grupo: 'Conversa', modos: ['generativo'], saidas: [{ quando: 'fechou_acordo', rotulo: 'Fechou acordo' }, { quando: 'sem_acordo', rotulo: 'Sem acordo' }, { quando: 'contestou', rotulo: 'Contestou' }, { quando: 'fora_alcada', rotulo: 'Fora da alçada' }], params: () => ({ objetivo: '', tom: ['cordial', 'frases_curtas', 'sem_giria', 'nao_pressiona'], max_turnos: 8, ferramentas: ['apresentar_oferta', 'consultar_base', 'transferir_humano', 'encerrar_chamada'], contrapropostas_max: 2 }) },
+	generativa: { nome: 'IA conversa', grupo: 'Conversa', modos: ['generativo'], saidas: [{ quando: 'fechou_acordo', rotulo: 'Fechou acordo' }, { quando: 'sem_acordo', rotulo: 'Sem acordo' }, { quando: 'contestou', rotulo: 'Contestou' }, { quando: 'fora_alcada', rotulo: 'Fora da alçada' }], params: () => ({ objetivo: '', tom: ['cordial', 'frases_curtas', 'sem_giria', 'nao_pressiona'], max_turnos: 8, ferramentas: ['apresentar_oferta', 'consultar_base', 'transferir_humano', 'encerrar_chamada'], contrapropostas_max: 2 }) },
 	oferta: { nome: 'Oferta', grupo: 'Conversa', modos: ['arvore', 'cognicao'], saidas: [{ quando: 'aceitou', rotulo: 'Aceitou', obrig: true }, { quando: 'quer_outra', rotulo: 'Quer outra condição' }, { quando: 'recusou', rotulo: 'Recusou', obrig: true }], params: () => ({ origem: 'carteira', fala: 'Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?' }) },
 	retorno: { nome: 'Agendar retorno', grupo: 'Conversa', modos: ['arvore', 'cognicao'], saidas: [{ quando: 'agendou', rotulo: 'Agendou', obrig: true }, { quando: 'nao_agendou', rotulo: 'Não agendou' }], params: () => ({ fala: 'Quando fica melhor eu ligar de novo?', dias_max: 7 }) },
 	conector: { nome: 'Chamar conector', grupo: 'Integração', modos: ['sistema'], saidas: [{ quando: 'respondeu', rotulo: 'Respondeu', obrig: true }, { quando: 'falhou', rotulo: 'Falhou', obrig: true }], params: () => ({ conector_id: null, fala_espera: 'Um instante, por favor.' }) },
@@ -376,7 +380,7 @@ const TEXTOS: Record<string, string> = {
 	id_repetido: 'Duas etapas com o mesmo código.',
 	tipo_invalido: 'Tipo de etapa desconhecido.',
 	bloco_invalido: 'Etapa com campo fora do esquema (título com mais de 60 caracteres ou repetição fora de 1 a 5).',
-	identidade_generativa: 'Confirmar identidade não pode ser Conversa livre (IA).',
+	identidade_generativa: 'Confirmar identidade não pode ser "IA conversa": quem confere é o CRM.',
 	modo_incompativel: 'Este modo não vale para este tipo de etapa.',
 	params_invalidos: 'Falta preencher algum campo desta etapa (fala, opções ou escolhas).',
 	fala_longa: 'Fala com mais de 500 caracteres.',
@@ -912,4 +916,112 @@ function correcaoConector(d: Definicao, bloco: Bloco, nome: string, conectores: 
 		nota: `É o único conector ativo de ${bloco.tipo === 'identidade' ? '"Validar cadastro"' : '"Buscar ofertas"'}. Só o CRM confere; nunca a IA.`,
 		definicao: nova,
 	};
+}
+
+// ---------------------------------------------------------------- detalhe da etapa (PR5 do redesenho, SPEC §2.3)
+/** Um cartão do modo: o nome em palavras, a frase e, se não vale para a etapa, o motivo (o cartão aparece apagado). */
+export interface CartaoModo { modo: Modo; nome: string; frase: string; escolhido: boolean; disponivel: boolean; motivo: string }
+/** Etapas cujo modo é parte de uma trava fixa (Abertura e Confirmar identidade: a IA nunca decide ali). */
+const TIPOS_TRAVA: readonly TipoBloco[] = ['abertura', 'identidade'];
+/**
+ * Os 4 cartões "Como o agente decide nesta etapa", na ordem Fala fixa · IA entende a resposta · IA conversa · Sem fala.
+ * Só apresentação: o cartão escolhido é `b.modo` e os disponíveis são os de `modosDoTipo` (as mesmas listas do banco).
+ */
+export function cartoesModo(b: Pick<Bloco, 'tipo' | 'modo'>): CartaoModo[] {
+	const vale = modosDoTipo(b.tipo);
+	return ORDEM_MODOS.map(modo => {
+		const disponivel = vale.includes(modo);
+		let motivo = '';
+		if (!disponivel) {
+			if (b.tipo === 'identidade' && modo === 'generativo') motivo = 'Quem confere a identidade é o CRM, nunca a IA.';
+			else if (TIPOS_TRAVA.includes(b.tipo)) motivo = 'Não vale para etapa com trava.';
+			else if (vale.length === 1 && vale[0] === 'sistema') motivo = 'Esta etapa não fala com o cliente.';
+			else if (modo === 'sistema') motivo = 'Só para consulta ou registro no CRM.';
+			else if (modo === 'generativo') motivo = 'Só na etapa "IA conversa" (adicione pela "+ Etapa").';
+			else if (b.tipo === 'generativa') motivo = 'Nesta etapa quem escreve as frases é a IA.';
+			else motivo = 'Não vale para esta etapa.';
+		}
+		return { modo, nome: MODOS[modo].nome, frase: MODOS[modo].desc.split('. Devolve')[0].replace(/\.?$/, '.'), escolhido: b.modo === modo, disponivel, motivo };
+	});
+}
+
+/** "Certeza mínima" (confianca_min, 0,50 a 0,95) em palavras. Valor fora dos três: "Personalizada (0,80)". */
+export const CERTEZAS: [number, string, string][] = [
+	[0.6, 'Menos exigente', 'Aceita respostas mais vagas; erra mais de caminho.'],
+	[0.7, 'Normal', 'O padrão.'],
+	[0.85, 'Mais exigente', 'Pede de novo com mais frequência; erra menos de caminho.'],
+];
+export function certezaEmPalavras(v: unknown): string {
+	const n = Number(v ?? 0.7);
+	const c = CERTEZAS.find(([x]) => Math.abs(x - n) < 0.001);
+	return c ? c[1] : `Personalizada (${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+}
+
+/** Exemplos do que o cliente diz para cada resposta, quando a etapa não tem os seus (só para ler; não vão ao banco). */
+const EXEMPLOS_PADRAO: Record<string, string[]> = {
+	'abertura:titular': ['Sou eu.', 'Sim, pode falar.'],
+	'abertura:terceiro': ['Não, aqui é a vizinha.', 'Ela não está.'],
+	'identidade:confirmou': ['15 de março.', 'Dia 15 do 3.'],
+	'identidade:nao_confirmou': ['Não vou dizer.', 'Uma data que não confere no CRM.'],
+	'oferta:aceitou': ['Fechado.', 'Pode ser.'],
+	'oferta:quer_outra': ['Tem outra condição?', 'Dá para parcelar mais?'],
+	'oferta:recusou': ['Não dá.', 'Agora não.'],
+	'retorno:agendou': ['Sexta às 10h.', 'Amanhã de manhã.'],
+	'retorno:nao_agendou': ['Não sei.', 'Não precisa ligar.'],
+	'intencao:quero_negociar': ['Quero parcelar.', 'Como eu pago?'],
+	'intencao:ja_paguei': ['Já paguei.', 'Paguei semana passada.'],
+	'intencao:nao_reconheco': ['Não devo isso.', 'Não fiz essa compra.'],
+	'intencao:sem_dinheiro': ['Tô desempregado.', 'Agora não dá.'],
+	'intencao:pedir_humano': ['Quero falar com alguém.'],
+	'intencao:agendar_retorno': ['Me liga outro dia.'],
+};
+/** Exemplos da resposta: os da etapa (intenção: params.exemplos) ou, sem eles, os do catálogo, marcados como tal. */
+export function exemplosDaSaida(b: Bloco, quando: string): { exemplos: string[]; doCatalogo: boolean } {
+	const p = b.params ?? {};
+	if (b.tipo === 'intencao') {
+		const ex = (p.exemplos && typeof p.exemplos === 'object' ? (p.exemplos as Record<string, unknown>)[quando] : null);
+		if (Array.isArray(ex) && ex.length) return { exemplos: ex.map(String), doCatalogo: false };
+	}
+	if (b.tipo === 'pergunta') {
+		const op = (Array.isArray(p.opcoes) ? p.opcoes : []).find((o: { codigo?: string }) => o?.codigo === quando) as { rotulo?: string } | undefined;
+		if (op?.rotulo) return { exemplos: [op.rotulo], doCatalogo: false };
+	}
+	return { exemplos: EXEMPLOS_PADRAO[`${b.tipo}:${quando}`] ?? [], doCatalogo: true };
+}
+
+/** Filtro de senha e cartão do validador (voz/fluxo_validador.py › pede_senha: mesma troca de acentos). */
+export function pedeSenha(texto: string): boolean {
+	return /senha|numero do cartao|codigo de seguranca|cvv/.test(texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
+}
+
+/** Palavras da fala como vai ser dita (só as que têm letra ou número). */
+export const palavras = (t: string) => t.split(/\s+/).filter(w => /[\p{L}\p{N}]/u.test(w)).length;
+/** Ideal para o ouvido: até 25 palavras (cerca de 10 s). Acima de 40, é longa demais para voz. */
+export const PALAVRAS_IDEAL = 25;
+export const PALAVRAS_LONGA = 40;
+
+export interface Checagem { estado: 'ok' | 'atencao' | 'erro' | 'info'; texto: string }
+/**
+ * Checagens da fala, ao vivo (SPEC §2.3): tamanho para o ouvido, uma pergunta por vez, credor ou valor antes da
+ * identidade (a mesma regra do banco: quem calcula `credorAntes` é validarLocal), senha ou cartão (pede_senha) e
+ * os números como vão ser lidos. Só aviso: quem decide continua sendo o banco.
+ */
+export function checarFala(a: {
+	fala: string; falada: string; antesDaIdentidade: boolean; credorAntes: boolean; sensiveis: string[]; trechos: { de: string; para: string }[];
+}): Checagem[] {
+	const out: Checagem[] = [];
+	if (!a.fala.trim()) return [{ estado: 'erro', texto: 'Sem fala escrita.' }];
+	const n = palavras(a.falada);
+	const seg = Math.max(1, Math.round(n / 2.5));
+	out.push(n <= PALAVRAS_IDEAL ? { estado: 'ok', texto: `${n} ${n === 1 ? 'palavra' : 'palavras'} (curta para o ouvido)` }
+		: { estado: 'atencao', texto: `${n} palavras, cerca de ${seg} s: ${n > PALAVRAS_LONGA ? 'longa demais para voz' : 'longa para o ouvido'}. O ideal é até ${PALAVRAS_IDEAL}; divida em duas etapas ou corte o que não ajuda a decidir.` });
+	const q = (a.fala.match(/\?/g) ?? []).length;
+	if (q === 1) out.push({ estado: 'ok', texto: 'Uma pergunta por vez' });
+	else if (q > 1) out.push({ estado: 'atencao', texto: `${q} perguntas na mesma fala: o cliente costuma responder só a última. Deixe uma.` });
+	if (a.antesDaIdentidade) out.push(a.credorAntes
+		? { estado: 'erro', texto: `Cita ${a.sensiveis.length ? a.sensiveis.map(v => `{{${v}}}`).join(', ') : 'valor ou oferta'} antes de confirmar a identidade (trava 1)` }
+		: { estado: 'ok', texto: 'Nada de credor nem valor antes da identidade' });
+	out.push(pedeSenha(a.fala) ? { estado: 'erro', texto: 'Pede senha ou número de cartão (trava 2: nunca)' } : { estado: 'ok', texto: 'Não pede senha nem número de cartão' });
+	if (a.trechos.length) out.push({ estado: 'info', texto: `Números como vão ser lidos: ${a.trechos.map(t => `"${t.de}" → "${t.para}"`).join(' · ')}` });
+	return out;
 }

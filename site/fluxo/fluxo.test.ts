@@ -9,6 +9,8 @@ import {
 	proximoId, quadroPorRamos, removerBloco, roleplayValido, saidasFaltando, saidasPossiveis, somarMetricas, tipoDaSaida, validarLocal,
 	type Bloco, type Definicao,
 } from '../src/lib/fluxo.ts';
+import { CERTEZAS, ORDEM_MODOS, cartoesModo, certezaEmPalavras, checarFala, exemplosDaSaida, modosDoTipo, palavras, pedeSenha } from '../src/lib/fluxo.ts';
+import { comoSoa, dataPorExtenso, porExtenso, preencherTeste, reaisPorExtenso, trechosFalados, valoresTeste } from '../src/lib/falado.ts';
 
 const s = (quando: string, rotulo: string, para: string, tipo: 'normal' | 'devolve' | 'falha' = 'normal') => ({ quando, rotulo, para, tipo });
 const blk = (id: string, tipo: Bloco['tipo'], modo: Bloco['modo'], saidas: ReturnType<typeof s>[] = [], params: Record<string, unknown> = {}): Bloco => ({ id, tipo, modo, params: { ...TIPOS[tipo].params(), ...params }, saidas });
@@ -94,7 +96,7 @@ test('novo bloco, remover e mistura de modos', () => {
 	assert.ok(sem13.blocos.every(b => b.saidas.every(x => x.para !== 'N13')));
 	const m = misturaModos(d);
 	assert.equal(m.reduce((a, x) => a + x.pct, 0), 100);
-	assert.equal(MODOS.cognicao.nome, 'Entende e escolhe');
+	assert.equal(MODOS.cognicao.nome, 'IA entende a resposta');
 	assert.match(modoPredominante(d), /^Misto · fala fixa/);
 });
 
@@ -308,4 +310,91 @@ test('correções de um clique: tirar da fala o que não pode ser dito antes da 
 	assert.equal(tirarSensiveisDaFala('Falo com {{primeiro_nome}}?'), 'Falo com {{primeiro_nome}}?');   // nada a tirar
 	assert.equal(tirarSensiveisDaFala('{{saldo}}'), null);                                              // não sobra fala: sem botão
 	assert.equal(tirarSensiveisDaFala('Em nome do {{credor}}, {{primeiro_nome}}.'), null);
+});
+
+// ---------------------------------------------------------------- PR5: detalhe da etapa
+test('modos em cartões: 4 cartões com os nomes em palavras e os mesmos códigos de sempre', () => {
+	assert.deepEqual(ORDEM_MODOS, ['arvore', 'cognicao', 'generativo', 'sistema']);
+	assert.deepEqual(ORDEM_MODOS.map(m => MODOS[m].nome), ['Fala fixa', 'IA entende a resposta', 'IA conversa', 'Sem fala']);
+	assert.deepEqual(ORDEM_MODOS.map(m => MODOS[m].antigo), ORDEM_MODOS);           // o código interno não mudou
+	for (const tipo of Object.keys(TIPOS) as Bloco['tipo'][]) {
+		for (const modo of modosDoTipo(tipo)) {
+			const cs = cartoesModo({ tipo, modo });
+			assert.equal(cs.length, 4, tipo);
+			assert.deepEqual(cs.map(c => c.modo), ORDEM_MODOS);
+			assert.deepEqual(cs.filter(c => c.escolhido).map(c => c.modo), [modo], `${tipo}:${modo}`);
+			// disponível ⇔ o banco aceita o modo para o tipo; o que não vale sempre diz por quê
+			for (const c of cs) {
+				assert.equal(c.disponivel, modosDoTipo(tipo).includes(c.modo), `${tipo}:${c.modo}`);
+				assert.equal(!!c.motivo, !c.disponivel, `${tipo}:${c.modo}`);
+				assert.ok(c.frase.endsWith('.'), c.frase);
+			}
+		}
+	}
+	const abertura = cartoesModo({ tipo: 'abertura', modo: 'arvore' });
+	assert.equal(abertura.find(c => c.modo === 'cognicao')?.motivo, 'Não vale para etapa com trava.');
+	assert.equal(cartoesModo({ tipo: 'identidade', modo: 'cognicao' }).find(c => c.modo === 'generativo')?.motivo, 'Quem confere a identidade é o CRM, nunca a IA.');
+	assert.equal(cartoesModo({ tipo: 'conector', modo: 'sistema' }).find(c => c.modo === 'arvore')?.motivo, 'Esta etapa não fala com o cliente.');
+	assert.ok(cartoesModo({ tipo: 'oferta', modo: 'arvore' }).find(c => c.modo === 'cognicao')?.disponivel);
+});
+
+test('como soa: a mesma tabela de casos do Python (tests/dados/fala_por_extenso_casos.json)', () => {
+	const t = JSON.parse(readFileSync(new URL('../../tests/dados/fala_por_extenso_casos.json', import.meta.url), 'utf8')) as { numeros: [number, string][]; falas: [string, string][] };
+	assert.ok(t.numeros.length >= 20 && t.falas.length >= 20);
+	for (const [n, e] of t.numeros) assert.equal(porExtenso(n), e, String(n));
+	for (const [f, e] of t.falas) assert.equal(comoSoa(f), e, f);
+	assert.equal(porExtenso(2, true), 'duas');
+	assert.equal(porExtenso(201, true), 'duzentas e uma');
+	assert.equal(reaisPorExtenso(1, 1), 'um real e um centavo');
+	assert.equal(reaisPorExtenso(2_000_000), 'dois milhões de reais');
+	assert.equal(dataPorExtenso(5, 12), 'cinco de dezembro');
+	assert.equal(dataPorExtenso(0, 5), null);
+	assert.deepEqual(trechosFalados('6× de R$ 230,00 em 05/12. Ok?'), [{ de: '6×', para: 'seis vezes' }, { de: 'R$ 230,00', para: 'duzentos e trinta reais' }, { de: '05/12', para: 'cinco de dezembro' }]);
+});
+
+test('como soa: preenche com o cliente de teste do simulador e não repete "R$"', () => {
+	const v = valoresTeste('Aurora Cobranças', 'Cartão Aurora');
+	assert.equal(v.primeiro_nome, 'Ana');
+	assert.equal(comoSoa(preencherTeste('Consta {{saldo}} no {{credor}}.', v)), 'Consta mil trezentos e oitenta reais no Cartão Aurora.');
+	assert.equal(preencherTeste('Consta R$ {{saldo}}.', v), 'Consta R$ 1.380,00.');
+	assert.equal(comoSoa(preencherTeste('{{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}, a primeira em {{oferta.vencimento}}.', v)), 'seis parcelas de duzentos e trinta reais, a primeira em cinco de dezembro.');
+	assert.equal(preencherTeste('{{desconhecida}}', v), '{{desconhecida}}');
+});
+
+test('checagens da fala: tamanho para o ouvido, uma pergunta, trava 1, senha e números lidos', () => {
+	const base = { antesDaIdentidade: true, credorAntes: false, sensiveis: [] as string[], trechos: [] as { de: string; para: string }[] };
+	const curta = checarFala({ ...base, fala: 'Olá! Falo com {{primeiro_nome}}?', falada: 'Olá! Falo com Ana?' });
+	assert.deepEqual(curta.map(c => c.estado), ['ok', 'ok', 'ok', 'ok']);
+	assert.equal(curta[0].texto, '4 palavras (curta para o ouvido)');
+	const longa = 'palavra '.repeat(30) + '?';
+	const c2 = checarFala({ ...base, fala: longa + ' E agora?', falada: longa });
+	assert.equal(c2[0].estado, 'atencao');
+	assert.match(c2[0].texto, /^30 palavras, cerca de 12 s: longa para o ouvido/);
+	assert.equal(c2[1].estado, 'atencao');
+	assert.match(c2[1].texto, /^2 perguntas/);
+	assert.match(checarFala({ ...base, fala: 'x', falada: 'p '.repeat(41) })[0].texto, /longa demais para voz/);
+	const credor = checarFala({ ...base, fala: 'Falo em nome do {{credor}}?', falada: 'Falo em nome do Cartão Aurora?', credorAntes: true, sensiveis: ['credor'] });
+	assert.deepEqual(credor.find(c => c.estado === 'erro'), { estado: 'erro', texto: 'Cita {{credor}} antes de confirmar a identidade (trava 1)' });
+	// depois da identidade, a trava 1 não se aplica (não aparece)
+	assert.ok(!checarFala({ ...base, fala: 'Consta {{saldo}}.', falada: 'Consta mil reais.', antesDaIdentidade: false }).some(c => /identidade/.test(c.texto)));
+	assert.equal(checarFala({ ...base, fala: 'Me passa a senha do cartão', falada: 'Me passa a senha do cartão' }).find(c => c.estado === 'erro')?.texto, 'Pede senha ou número de cartão (trava 2: nunca)');
+	assert.ok(pedeSenha('Qual o NÚMERO DO CARTÃO?') && pedeSenha('o código de segurança') && !pedeSenha('o pagamento é pelo link'));
+	const num = checarFala({ ...base, fala: 'Consta {{saldo}}.', falada: 'Consta mil trezentos e oitenta reais.', antesDaIdentidade: false, trechos: [{ de: 'R$ 1.380,00', para: 'mil trezentos e oitenta reais' }] });
+	assert.deepEqual(num[num.length - 1], { estado: 'info', texto: 'Números como vão ser lidos: "R$ 1.380,00" → "mil trezentos e oitenta reais"' });
+	assert.deepEqual(checarFala({ ...base, fala: '  ', falada: '' }), [{ estado: 'erro', texto: 'Sem fala escrita.' }]);
+	assert.equal(palavras('Olá, Ana! — tudo bem?'), 4);
+});
+
+test('o cliente pode responder: exemplos da etapa ou do catálogo, e certeza em palavras', () => {
+	const d = negociador();
+	const n3 = { ...d.blocos.find(b => b.id === 'N3')!, params: { ...d.blocos.find(b => b.id === 'N3')!.params, exemplos: { ja_paguei: ['paguei ontem'] } } };
+	assert.deepEqual(exemplosDaSaida(n3, 'ja_paguei'), { exemplos: ['paguei ontem'], doCatalogo: false });
+	assert.deepEqual(exemplosDaSaida(n3, 'quero_negociar'), { exemplos: ['Quero parcelar.', 'Como eu pago?'], doCatalogo: true });
+	assert.deepEqual(exemplosDaSaida(d.blocos.find(b => b.id === 'N1')!, 'terceiro').exemplos, ['Não, aqui é a vizinha.', 'Ela não está.']);
+	assert.deepEqual(exemplosDaSaida(blk('P', 'pergunta', 'arvore'), 'sim'), { exemplos: ['Sim'], doCatalogo: false });
+	assert.deepEqual(exemplosDaSaida(blk('C', 'conector', 'sistema'), 'respondeu'), { exemplos: [], doCatalogo: true });
+	assert.deepEqual(CERTEZAS.map(c => c[1]), ['Menos exigente', 'Normal', 'Mais exigente']);
+	assert.equal(certezaEmPalavras(0.7), 'Normal');
+	assert.equal(certezaEmPalavras(undefined), 'Normal');
+	assert.equal(certezaEmPalavras(0.8), 'Personalizada (0,80)');
 });
