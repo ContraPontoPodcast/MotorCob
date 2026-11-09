@@ -87,6 +87,8 @@ export function LotesVoz() {
 
 	return (
 		<Moldura>
+			{/* "← Visão geral do Agente Voz/CX" (Ligações é seção da área), pelo mapa de telas-mãe (lib/rota-pai.ts). */}
+			<Voltar />
 			<Cabecalho titulo="Lotes do agente virtual" linha={[empresa?.nome, 'Agente Voz/CX', 'Ligações'].filter(Boolean).join(' · ')} />
 			{!empresa ? <Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice>
 				: loading ? <Loading />
@@ -214,7 +216,7 @@ export function LoteVozCurso() {
 	// "← Ligações" (Agente Voz/CX › Ligações), pelo mapa de telas-mãe (lib/rota-pai.ts).
 	const voltar = <Voltar />;
 
-	if (!empresa) return <Moldura><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></Moldura>;
+	if (!empresa) return <Moldura>{voltar}<Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></Moldura>;
 	if (loading) return <Moldura>{voltar}<Loading /></Moldura>;
 	if (error) return <Moldura>{voltar}<Notice>{error}</Notice></Moldura>;
 	if (!lote) return <Moldura>{voltar}<Vazio titulo="Lote não encontrado.">Ele pode ser de outra empresa ou ter sido apagado.</Vazio></Moldura>;

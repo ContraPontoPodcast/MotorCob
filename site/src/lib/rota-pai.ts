@@ -7,13 +7,14 @@
 // A chave é a rota como está no routes.ts: exata ("/suporte/novo") ou com parâmetros ("/voz/ligacoes/:id",
 // "/speech-analytics/:aba?"). A rota exata ganha da com parâmetro.
 
-import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH } from './rotas-voz';
+import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_VOZ } from './rotas-voz';
 
 export type RotaPai = { to: string; rotulo: string };
 export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean };
 
 const INICIO: RotaPai = { to: '/inicio', rotulo: 'Início' };
 const INTEGRACOES: RotaPai = { to: '/empresa/integracoes', rotulo: 'Integrações' };
+const VISAO_GERAL_VOZ: RotaPai = { to: ROTA_VOZ, rotulo: 'Visão geral do Agente Voz/CX' };
 const AGENTE_DE_VOZ: RotaPai = { to: ROTA_AGENTE, rotulo: 'Agente de voz' };
 
 /** Rota exata (sem query) → tela-mãe. Função quando o destino depende de quem está logado. */
@@ -34,9 +35,16 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/empresa': ctx => (ctx.equipe ? { to: '/console', rotulo: 'Console › Empresas' } : null),
 	// Cobrança › Configurações › Canais: a configuração de um canal volta para a visão geral.
 	'/canais/:canal': { to: '/canais', rotulo: 'Canais' },
-	// Agente Voz/CX › Agente de voz: fluxo (editor), testes, desempenho, rascunho gerado e roteiro antigo voltam à lista
-	// de fluxos. Visão geral, Agente de voz, Discagem, Ligações e Telefonia são abas da área (sem voltar).
+	// Agente Voz/CX, como o Speech Analytics: cada seção do menu da área (Agente de voz, Discagem, Ligações e Telefonia)
+	// volta para a Visão geral da área, que é o topo (sem voltar).
+	'/voz/agente': VISAO_GERAL_VOZ,
+	'/voz/discagem': VISAO_GERAL_VOZ,
+	'/voz/ligacoes': VISAO_GERAL_VOZ,
+	'/voz/telefonia': VISAO_GERAL_VOZ,
+	// Agente Voz/CX › Agente de voz: fluxo (editor), Confirmar identidade, testes, desempenho, personas, rascunho gerado
+	// e roteiro antigo voltam à lista de fluxos.
 	'/voz/agente/editor/:versao': AGENTE_DE_VOZ,
+	'/voz/agente/identidade': AGENTE_DE_VOZ,
 	'/voz/agente/testar': AGENTE_DE_VOZ,
 	'/voz/agente/desempenho': AGENTE_DE_VOZ,
 	'/voz/agente/personas': AGENTE_DE_VOZ,
