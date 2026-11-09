@@ -132,6 +132,18 @@ test("dados do convite para o e-mail", () => {
   assert.equal(dadosDoConvite(admA, "", "X", "gestao").convidado_por, "o Admin da sua empresa");
 });
 
+test("perfil Qualidade (SQL 89): convite e troca de perfil, só com acessos do Speech", () => {
+  assert.deepEqual(ped({ acao: "convidar", email: "q@b.com", papel: "qualidade" }), { acao: "convidar", email: "q@b.com", papel: "qualidade" });
+  assert.equal(ped({ acao: "alterar_papel", usuario_id: operA.id, papel: "qualidade" }).papel, "qualidade");
+  assert.equal(validarPedido({ acao: "convidar", email: "q@b.com", papel: "qualidade", acessos: { baixar_listas: true } }).erro,
+    "o perfil Qualidade só tem acessos do Speech Analytics");
+  assert.ok(validarPedido({ acao: "convidar", email: "q@b.com", papel: "qualidade", acessos: { baixar_listas: false } }).pedido);
+  // o Admin da empresa convida e muda para Qualidade; a Gestão não convida (sem gerenciar_usuarios)
+  assert.equal(autorizar(admA, true, ped({ acao: "convidar", email: "q@b.com", papel: "qualidade" }), null), null);
+  assert.equal(autorizar(admA, true, ped({ acao: "alterar_papel", usuario_id: operA.id, papel: "qualidade" }), operA), null);
+  assert.equal(dadosDoConvite(admA, undefined, "X", "qualidade").papel, "Qualidade");
+});
+
 test("convite da equipe não chega com campos em branco", () => {
   const d = dadosConviteEquipe({ ...equipe, nome: "Rafa" }, " Ana ");
   assert.deepEqual(d, { empresa_nome: "equipe MotorCob", papel: "integrante da equipe", convidado_por: "Rafa", nome: "Ana" });

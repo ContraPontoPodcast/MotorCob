@@ -8,7 +8,7 @@ import { ErrorDetail } from '@/components/error-detail';
 import { useFrente } from '@/components/frente-provider';
 import { PERM } from '@/lib/permissoes';
 import { isCanalValido, CANAL_STORAGE_KEY } from '@/lib/mensageria-produtos';
-import { areaDaRota, areaDoContrato, contratoDaRota } from '@/lib/area-rota';
+import { areaDaRota, areaDoContrato, contratoDaRota, rotaLiberadaSoSpeech } from '@/lib/area-rota';
 import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
 import { AssistenteProvider } from '@/components/workspace/assistente/assistente-context';
 import { AssistenteAvatar } from '@/components/workspace/assistente/assistente-avatar';
@@ -84,6 +84,7 @@ function HeaderControls() {
 /** Barra do topo do cartão (sticky): migalha + pílula da empresa + ⌘K + ? + sino. */
 function TopoCartao({ onMenuClick }: { onMenuClick?: () => void }) {
 	const areaLabel = useAreaLabel();
+	const { soSpeech } = useAreasLiberadas();
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const loc = useLocation();
 
@@ -110,7 +111,7 @@ function TopoCartao({ onMenuClick }: { onMenuClick?: () => void }) {
 					<button onClick={onMenuClick} aria-label="Abrir menu" className="grid h-9 w-9 place-items-center rounded-lg text-[var(--base-texto)] hover:bg-[var(--base-fill)] lg:hidden"><Menu size={20} /></button>
 				)}
 				{/* Mobile: logo */}
-				<Link to="/inicio" className="flex items-center gap-2 lg:hidden">
+				<Link to={soSpeech ? '/speech-analytics' : '/inicio'} className="flex items-center gap-2 lg:hidden">
 					<MarcaMotorCX />
 				</Link>
 				{/* Migalha (desktop) */}
@@ -125,7 +126,7 @@ function TopoCartao({ onMenuClick }: { onMenuClick?: () => void }) {
 						<kbd className="rounded bg-[var(--base-borda)] px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
 					</button>
 					<button onClick={() => setPaletteOpen(true)} aria-label="Buscar" className="grid h-9 w-9 place-items-center rounded-lg text-[var(--base-texto-2)] hover:bg-[var(--base-fill)] lg:hidden"><Search size={18} /></button>
-					<Link to="/ajuda/o-que-significa" aria-label="O que significa" className="hidden h-9 w-9 place-items-center rounded-lg text-[var(--base-texto-3)] hover:bg-[var(--base-fill)] hover:text-[var(--base-texto)] lg:grid"><HelpCircle size={18} /></Link>
+					{!soSpeech && <Link to="/ajuda/o-que-significa" aria-label="O que significa" className="hidden h-9 w-9 place-items-center rounded-lg text-[var(--base-texto-3)] hover:bg-[var(--base-fill)] hover:text-[var(--base-texto)] lg:grid"><HelpCircle size={18} /></Link>}
 					<SinoAvisos />
 					<div className="lg:hidden"><AvatarMenu /></div>
 				</div>
@@ -252,10 +253,13 @@ export function AppShell() {
 
 	const area = areaDaRota(loc.pathname);
 
+	// Perfil Qualidade: só o Speech Analytics (o banco nega o resto do mesmo jeito; aqui a tela não abre vazia).
+	if (areasLib.soSpeech && !rotaLiberadaSoSpeech(loc.pathname)) return <Navigate to="/speech-analytics" replace />;
+
 	// Cliente sem a área contratada → página de área não contratada (só depois de ler os módulos da empresa,
 	// para a página não piscar para quem tem a área).
 	// Agente Voz/CX vem com a Cobrança; Speech Analytics é o módulo speech_analytics, menos as Gravações (contratoDaRota).
-	const contrato = contratoDaRota(loc.pathname);
+	const contrato = contratoDaRota(loc.pathname, areasLib.soSpeech);
 	if (!areasLib.pronto && contrato) {
 		return <div className="mc-platform grid min-h-screen place-items-center" style={{ backgroundColor: 'var(--base-conteudo)', color: 'var(--base-texto)' }}><div className="flex items-center gap-3"><Activity className="animate-pulse" /> Carregando seu espaço...</div></div>;
 	}

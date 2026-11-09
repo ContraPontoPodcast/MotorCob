@@ -8,7 +8,7 @@ import { erroDaFuncao } from '@/lib/funcoes';
 import { PERFIS_INFO, type PerfilId } from '@/lib/perfis-info';
 import { cardShadow } from './empresa-shell';
 
-const roleName: Record<string, string> = { admin: 'Admin', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão' };
+const roleName: Record<string, string> = { admin: 'Admin', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão', qualidade: 'Qualidade' };
 
 /** Formata o último acesso: "hoje 08:02", "ontem", "12/10", "—". */
 function acessoBR(v: string | null | undefined): string {

@@ -16,7 +16,7 @@ export function AssistenteGaveta() {
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
 
-	const perfilLabel = perfil?.equipe ? 'Equipe MotorCX' : (({ admin: 'Administrador', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão' } as Record<string, string>)[perfil?.papel ?? ''] ?? perfil?.papel ?? '');
+	const perfilLabel = perfil?.equipe ? 'Equipe MotorCX' : (({ admin: 'Administrador', planejamento: 'Planejamento', operacao: 'Operação', gestao: 'Gestão', qualidade: 'Qualidade' } as Record<string, string>)[perfil?.papel ?? ''] ?? perfil?.papel ?? '');
 
 	useEffect(() => {
 		if (drawerOpen && scrollRef.current) {
