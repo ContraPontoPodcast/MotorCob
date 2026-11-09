@@ -5,7 +5,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { SEMPRE, TRAVAS, estadoEnvio, resumoPendencias, trocarBloco, validarLocal, type Definicao } from '@/lib/fluxo';
+import { SEMPRE, TRAVAS, correcaoDe, estadoEnvio, explicar, resumoPendencias, trocarBloco, validarLocal, type Definicao, type Pendencia } from '@/lib/fluxo';
+import { AntesDepois, OQueCorrigir as OQueCorrigirComBotao } from '@/components/fluxo/corrigir';
 import { EmQualquerMomento, FaixaTravas } from '@/components/fluxo/travas';
 import { OQueCorrigir, textoCredorAntes } from '@/components/fluxo/etapa';
 import { BarraEnvio, Quadro, type Marca } from '@/components/fluxo/quadro';
@@ -199,4 +200,65 @@ test('abas do editor: Roteiro é a padrão; Mapa, Respostas prontas, Testes e Ve
 	assert.match(html, /role="tablist" aria-label="Partes do fluxo"/);
 	assert.match(html, /aria-selected="true"[^>]*>Roteiro</);
 	assert.match(html, /<option value="versoes">Versões e aprovação<\/option>/);   // no celular, um select
+});
+
+test('o que corrigir dentro da etapa (PR4): no cartão do roteiro, com motivo, como corrigir e o botão de um clique', async () => {
+	const api = criarApiFixturas();
+	const d: Definicao = definicaoV5();
+	const erros = await api.bloqueios(105);
+	const conectores = await api.conectores(1);
+	const porBloco = new Map<string, Pendencia[]>();
+	for (const e of erros.map(explicar)) if (e.bloco) porBloco.set(e.bloco, [...(porBloco.get(e.bloco) ?? []), e]);
+	const marcas = new Map<string, Marca>([...porBloco.keys()].map(id => [id, 'erro'] as [string, Marca]));
+	const acao = (codigo: string) => { const c = correcaoDe(d, codigo, { conectores }); return c ? { rotulo: c.botao, onClick: nada } : null; };
+	const html = renderToStaticMarkup(<Roteiro definicao={d} marcas={marcas} onAbrir={nada} pendencias={porBloco} acao={acao} />);
+	const cartao = (id: string) => { const i = html.indexOf(`data-etapa="${id}"`); return html.slice(i, html.indexOf('</article>', i)); };
+	// N9 sem saída: o que é, o que fazer e o botão (liga "Agendou" ao Encerrar de retorno que estava solto)
+	const n9 = cartao('N9');
+	assert.match(n9, /aria-label="O que corrigir nesta etapa"/);
+	assert.match(n9, /O que corrigir:<\/b><span[^>]*>Etapa sem saída\./);
+	assert.match(n9, /Ligue as respostas desta etapa a uma próxima etapa/);
+	assert.match(n9, /<button[^>]*>Ligar &quot;Agendou&quot; a Encerrar · retorno e &quot;Não agendou&quot; a Transferir · atendente<\/button>/);
+	// N7: o boleto do CRM ainda em rascunho; dá para seguir com o link do MotorCX
+	assert.match(cartao('N7'), /<button[^>]*>Usar o link do MotorCX por enquanto<\/button>/);
+	// N17 inalcançável e solta: remover (o botão abre o antes → depois; nada muda sem confirmar)
+	assert.match(cartao('N17'), /<button[^>]*>Remover a etapa<\/button>/);
+	// etapa sem pendência: nada de "O que corrigir"
+	assert.doesNotMatch(cartao('N2'), /O que corrigir/);
+});
+
+test('o que corrigir (PR4): pendência sem correção automática fica sem botão; atalho do fluxo; antes → depois', () => {
+	const sem = renderToStaticMarkup(<OQueCorrigirComBotao impede texto="Uma etapa está com código inválido." />);
+	assert.doesNotMatch(sem, /<button/);
+	const fluxo = renderToStaticMarkup(<OQueCorrigirComBotao fluxo impede texto="A carteira não tem alçada cadastrada." acao={{ rotulo: 'Cadastrar alçada', onClick: nada }} />);
+	assert.match(fluxo, /O que corrigir \(fluxo\):/);
+	assert.match(fluxo, /<button[^>]*>Cadastrar alçada<\/button>/);
+	const sujo = renderToStaticMarkup(<OQueCorrigirComBotao impede texto="x" acao={{ rotulo: 'Tirar o credor da abertura', onClick: nada, disabled: true, motivo: 'Salve a etapa antes.' }} />);
+	assert.match(sujo, /<button[^>]*disabled=""[^>]*>Tirar o credor da abertura<\/button>/);
+	assert.match(sujo, /Salve a etapa antes\./);
+	// antes → depois do credor na abertura (pergunta Q6: sempre mostra antes de mudar)
+	const d = definicaoV5();
+	const n1 = d.blocos.find(b => b.id === 'N1')!;
+	const comCredor = trocarBloco(d, { ...n1, params: { fala: 'Olá, bom dia! Aqui é a Lia, da {{assessoria}}, em nome do {{credor}}. Falo com {{primeiro_nome}}?' } });
+	const c = correcaoDe(comCredor, 'valor_antes_identidade:N1');
+	assert.ok(c);
+	assert.equal(c.botao, 'Tirar o credor da abertura');
+	const html = renderToStaticMarkup(<AntesDepois c={c} />);
+	assert.match(html, /<span class="sr-only">Antes: <\/span>Olá, bom dia! Aqui é a Lia, da \{\{assessoria\}\}, em nome do \{\{credor\}\}\. Falo/);
+	assert.match(html, /<span class="sr-only">Depois: <\/span>Olá, bom dia! Aqui é a Lia, da \{\{assessoria\}\}\. Falo com \{\{primeiro_nome\}\}\?/);
+	assert.match(html, /Nada vai para ligação sem aprovação\./);
+});
+
+test('mapa e abas (PR4): o cartão do mapa diz o que corrigir; a aba Roteiro mostra a contagem', async () => {
+	const d: Definicao = definicaoV5();
+	const erros = (await criarApiFixturas().bloqueios(105)).map(explicar);
+	const porBloco = new Map<string, Pendencia[]>();
+	for (const e of erros) if (e.bloco) porBloco.set(e.bloco, [...(porBloco.get(e.bloco) ?? []), e]);
+	const mapa = renderToStaticMarkup(<Quadro definicao={d} marcas={new Map()} onAbrir={nada} pendencias={porBloco} />);
+	const i = mapa.indexOf('data-etapa="N9"');
+	assert.match(mapa.slice(i, mapa.indexOf('</button>', i)), /O que corrigir: <\/b>Etapa sem saída\..*Toque para corrigir\./);
+	const n = erros.filter(e => e.impede).length;
+	const abas = renderToStaticMarkup(<MemoryRouter><AbasEditor atual="roteiro" onTrocar={nada} contagens={{ roteiro: n }} /></MemoryRouter>);
+	assert.match(abas, new RegExp(`>Roteiro<span[^>]*>${n}</span>`));
+	assert.match(abas, new RegExp(`<option value="roteiro"[^>]*>Roteiro \\(${n}\\)</option>`));
 });
