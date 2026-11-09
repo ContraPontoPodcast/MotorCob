@@ -8,7 +8,9 @@
 // PR4: cada pendência aparece dentro da etapa ("O que corrigir", no Roteiro, no Mapa e na gaveta), com o botão de
 // correção de um clique quando ela é determinística (correcaoDe): antes → depois, confirmar, e vai para o rascunho pelo
 // mesmo salvar_fluxo_voz. A aba Roteiro mostra a contagem; "Corrigir N pontos" leva à primeira.
-import { useMemo, useState } from 'react';
+// PR6: "Testar conversa" abre ao lado do Roteiro (?testar=1; no celular, em tela cheia), com a etapa atual acesa e as
+// travas que agiram. Mesmo simulador (api.simular); a tela cheia /voz/agente/testar continua.
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Play, Plus, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,7 +18,7 @@ import { Loading, Notice } from '@/components/app-shell';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { Aviso, Botao, Passos, Pilula, Vazio } from '@/components/voz/ui';
 import {
-	ORDEM_TIPOS, SITUACOES, TIPOS, TIPOS_AGENTE, comoCorrigir, correcaoDe, dataCurta, estadoEnvio, explicar, impedem, nomesEtapas, novoBloco, numerosRoteiro, removerBloco, resumoPendencias, roteiro, trocarBloco,
+	ORDEM_TIPOS, SITUACOES, TIPOS, TIPOS_AGENTE, comoCorrigir, correcaoDe, dataCurta, estadoEnvio, etapaDoTeste, explicar, impedem, nomesEtapas, novoBloco, numerosRoteiro, removerBloco, resumoPendencias, roteiro, trocarBloco,
 	type Bloco, type Correcao, type Definicao, type Pendencia, type TipoBloco,
 } from '@/lib/fluxo';
 import { ConfirmaCorrecao, OQueCorrigir, type AcaoCorrigir } from './corrigir';
@@ -30,7 +32,10 @@ import { CabecalhoAgente } from './cabecalho';
 import { useFluxo, usePermissoesFluxo } from './contexto';
 import { GavetaAlcada, GavetaComoLer, executar, mensagem, useCarregar, useNomeCarteira } from './comum';
 import { GavetaDescrever } from './lista';
+import { useConversaTeste } from './conversa-teste';
+import { PainelTestar } from './testar-ao-lado';
 
+const SEM_CENARIO = {};
 const PASSOS = [
 	{ id: 'rascunho', nome: 'Rascunho', desc: 'Quem edita canais' },
 	{ id: 'aprovado_empresa', nome: 'Aprovado pela empresa', desc: 'Quem aprova roteiro de voz' },
@@ -57,6 +62,19 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 		setBusca(q => { const n = new URLSearchParams(q); if (a === 'roteiro') n.delete('aba'); else n.set('aba', a); n.delete('etapa'); return n; });
 		setGaveta(null);
 	}
+	// PR6: "Testar conversa" abre ao lado do Roteiro (?testar=1), com a etapa atual acesa
+	const testar = busca.get('testar') === '1' && perm.editar;
+	function abrirTestar(abrir: boolean) {
+		setBusca(q => { const n = new URLSearchParams(q); if (abrir) { n.set('testar', '1'); n.delete('aba'); n.delete('etapa'); } else n.delete('testar'); return n; });
+		if (abrir) setGaveta(null);
+	}
+	const conversa = useConversaTeste(api, versaoId, SEM_CENARIO, testar);
+	const atualTeste = conversa.sim?.caminho[conversa.sim.caminho.length - 1] ?? null;
+	// no computador, o Roteiro acompanha a conversa (no celular, o teste ocupa a tela)
+	useEffect(() => {
+		if (!testar || !atualTeste || typeof window === 'undefined' || !window.matchMedia?.('(min-width: 1024px)').matches) return;
+		document.getElementById(`etapa-${atualTeste}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+	}, [testar, atualTeste, conversa.sim]);
 	const [ocupado, setOcupado] = useState(false);
 	const [confirma, setConfirma] = useState<null | 'aprovar' | 'usar'>(null);
 	const [correcao, setCorrecao] = useState<Correcao | null>(null);
@@ -187,7 +205,8 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 			<div className="mt-5">
 				<AbasEditor atual={aba} onTrocar={trocarAba} contagens={{ roteiro: pend.length }} />
 				{aba === 'roteiro' ? (
-					<div className="space-y-4">
+					<div className={testar ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] lg:items-start lg:gap-4' : ''}>
+					<div className="min-w-0 space-y-4">
 						<FaixaTravas />
 						{doFluxo.length > 0 && (
 							<div id="pendencias-fluxo" className="scroll-mt-20 space-y-2" aria-label="O que corrigir no fluxo">
@@ -199,13 +218,17 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 							<Acoes>
 								{editavel && <Botao secundario onClick={() => setGaveta('paleta')} disabled={ocupado}><Plus size={14} aria-hidden /> Etapa</Botao>}
 								{perm.editar && <Botao secundario onClick={() => setGaveta('descrever')}><Sparkles size={14} aria-hidden /> Descrever mudanças</Botao>}
-								<Botao onClick={() => navigate(rota('testar', null, { versao: v.id }))}><Play size={14} aria-hidden /> Testar conversa</Botao>
+								{perm.editar && !testar && <Botao onClick={() => abrirTestar(true)}><Play size={14} aria-hidden /> Testar conversa</Botao>}
 								<button type="button" onClick={() => setGaveta('modos')} className="inline-flex h-8 items-center rounded-lg px-3 text-[12.5px] font-semibold text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]">Como ler</button>
 							</Acoes>
 						</div>
 						<EmQualquerMomento />
-						{def.blocos.length ? <Roteiro definicao={def} marcas={marcas} onAbrir={abrirEtapa} pendencias={porBloco} acao={acao} identidade={identidade} onMudarIdentidade={() => navigate(rota('identidade'))} />
+						{def.blocos.length ? <Roteiro definicao={def} marcas={marcas} onAbrir={abrirEtapa} pendencias={porBloco} acao={acao} identidade={identidade} onMudarIdentidade={() => navigate(rota('identidade'))} teste={testar ? etapaDoTeste(conversa.sim, def) : null} />
 							: <Vazio titulo="Fluxo sem etapas.">Use "+ Etapa" para começar pela Abertura.</Vazio>}
+					</div>
+					{testar && <PainelTestar estado={conversa} definicao={def} nomes={nomes} api={api} versao={v.id} onFechar={() => abrirTestar(false)}
+						onEtapa={id => document.getElementById(`etapa-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+						onTelaCheia={() => navigate(rota('testar', null, { versao: v.id }))} />}
 					</div>
 				) : aba === 'mapa' ? (
 					<div className="space-y-3">
@@ -221,7 +244,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 
 			{etapaSel && (
 				<GavetaEtapa bloco={etapaSel} definicao={def} conectores={conectores} intencoes={intencoes} erros={[...bloqueios, ...avisos]} editavel={editavel}
-					versao={v.id} situacao={v.situacao} onFechar={() => abrirEtapa(null)} acao={acao} carteira={nomeCarteira(f.credor_id)}
+					versao={v.id} situacao={v.situacao} onFechar={() => abrirEtapa(null)} acao={acao} carteira={nomeCarteira(f.credor_id)} onTestar={perm.editar ? () => abrirTestar(true) : undefined}
 					onSalvar={(b: Bloco) => salvarDef(trocarBloco(def, b), `Etapa ${b.id} salva no rascunho.`)}
 					onRemover={id => salvarDef(removerBloco(def, id), `Etapa ${id} removida do rascunho.`)} />
 			)}

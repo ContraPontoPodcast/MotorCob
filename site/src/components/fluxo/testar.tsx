@@ -3,21 +3,22 @@
 // exemplo de resposta (ou com a resposta escolhida em "Opções": sucesso, tempo esgotado ou 401; SQL 66). O simulador
 // não guarda estado: cada fala reenvia a conversa toda. "Ouvir" toca a fala com a voz da empresa (TTS da Montagem na VM,
 // pela mesma Edge Function; o áudio não fica guardado e o uso entra no item de IA da margem).
+// A conversa é a mesma do painel "Testar conversa" ao lado do Roteiro (conversa-teste.tsx; PR6 do redesenho).
 // Casos de teste guardados (voz_fluxo_casos_teste) rodam por "rodar_casos"; caso que falha segura a aprovação.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Lock, RotateCcw, Settings2, Volume2 } from 'lucide-react';
+import { RotateCcw, Settings2 } from 'lucide-react';
 import { Loading, Notice } from '@/components/app-shell';
 import { Botao, Cartao, Pilula, Vazio, campoCls, campoStyle } from '@/components/voz/ui';
-import { MODOS, NOMES_TRAVA, SITUACOES, falaOk, type Modo } from '@/lib/fluxo';
+import { SITUACOES, nomesEtapas, rotuloTrava, travasDoTeste } from '@/lib/fluxo';
 import type { CasoRow, CenarioConector, Simulacao } from './api';
 import { Campo, Detalhes, Gaveta, Kv, Linhas } from './ds';
 import { CabecalhoAgente } from './cabecalho';
 import { useFluxo, usePermissoesFluxo } from './contexto';
 import { executar, mensagem, useCarregar, useNomeCarteira } from './comum';
+import { Conversa, useConversaTeste } from './conversa-teste';
 
 const NOMES_CENARIO: Record<CenarioConector, string> = { sucesso: 'sucesso', tempo: 'tempo esgotado', '401': '401' };
-const SUGESTOES_FIXAS = ['Sou eu.', 'Não, aqui não é essa pessoa.', 'Quero parcelar.', 'Já paguei.', 'Não reconheço essa dívida.', 'Agora não dá, estou sem dinheiro.'];
 
 export function useVersoesParaTeste() {
 	const { api, empresa } = useFluxo();
@@ -40,51 +41,38 @@ export function TestarConversa() {
 	const versoes = useVersoesParaTeste();
 	const versao = Number(busca.get('versao')) || versoes.dados?.find(v => v.situacao === 'rascunho')?.id || versoes.dados?.[0]?.id || 0;
 	const atual = versoes.dados?.find(v => v.id === versao) ?? null;
-	const [falas, setFalas] = useState<string[]>([]);
-	const [sim, setSim] = useState<Simulacao | null>(null);
-	const [erro, setErro] = useState('');
-	const [ocupado, setOcupado] = useState(false);
-	const [texto, setTexto] = useState('');
 	const [painel, setPainel] = useState<'caminho' | 'intencao' | 'travas' | 'con'>('caminho');
 	const [cenarios, setCenarios] = useState<Record<string, CenarioConector>>({});
 	const falhar = useMemo(() => Object.entries(cenarios).filter(([, c]) => c === 'tempo').map(([id]) => Number(id)), [cenarios]);
 	const [tocando, setTocando] = useState<string | null>(null);
+	const [erroOuvir, setErroOuvir] = useState('');
 	const [opcoes, setOpcoes] = useState(false);
-	const fim = useRef<HTMLDivElement>(null);
+	const [soa, setSoa] = useState(false);
 	const { dados: conectores } = useCarregar(async () => (api && empresa ? api.conectores(empresa.id) : []), [api, empresa?.id]);
-
-	async function rodar(lista: string[]) {
-		if (!api || !versao) return;
-		setOcupado(true); setErro('');
-		try { setSim(await api.simular(versao, lista, [], cenarios)); setFalas(lista); } catch (e) { setErro(mensagem(e)); } finally { setOcupado(false); }
-	}
-	useEffect(() => { setSim(null); setFalas([]); if (versao && perm.editar) void rodar([]); }, [versao, JSON.stringify(cenarios), perm.editar]);
+	// nomes das etapas desta versão (a conversa mostra o nome, nunca o código)
+	const { dados: def } = useCarregar(async () => (api && versao ? (await api.versao(versao))?.definicao ?? null : null), [api, versao]);
+	const nomes = useMemo(() => (def ? nomesEtapas(def) : new Map<string, string>()), [def]);
+	const estado = useConversaTeste(api, versao, cenarios, perm.editar);
+	const { sim, falas, ocupado } = estado;
 	/** "Ouvir a voz": prévia em áudio desta fala (nada fica guardado). */
 	async function ouvir(texto: string, chave: string) {
 		if (!api || !versao || tocando) return;
-		setTocando(chave);
+		setTocando(chave); setErroOuvir('');
 		try {
 			const r = await api.ouvir(versao, texto);
 			if (!r.audio) throw new Error('Prévia sem áudio (modo de demonstração).');
 			const a = new Audio(`data:${r.mime};base64,${r.audio}`);
 			a.onended = () => setTocando(null);
 			await a.play();
-		} catch (e) { setErro(mensagem(e)); setTocando(null); }
+		} catch (e) { setErroOuvir(mensagem(e)); setTocando(null); }
 	}
-	useEffect(() => { fim.current?.scrollIntoView?.({ block: 'nearest' }); }, [sim]);
 
-	const travas = useMemo(() => (sim?.turnos ?? []).flatMap(t => t.travas), [sim]);
+	const travas = useMemo(() => travasDoTeste(sim?.turnos ?? []), [sim]);
 	const chamadas = useMemo(() => (sim?.turnos ?? []).flatMap(t => t.conectores), [sim]);
 	const ultimaIntencao = [...(sim?.turnos ?? [])].reverse().find(t => t.intencao)?.intencao ?? null;
-	const textoOk = falaOk(texto.trim());
-	function enviar(t: string) {
-		const f = t.trim();
-		if (!falaOk(f) || ocupado || sim?.encerrada) return;
-		setTexto(''); void rodar([...falas, f]);
-	}
 
-	const heading = <CabecalhoAgente titulo="Testar conversa" desc="Por texto, sem ligar para ninguém. Cliente de teste CLI-00001 e conectores com resposta simulada." atual="testar"
-		acoes={<><button type="button" onClick={() => setOpcoes(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]"><Settings2 size={15} aria-hidden /> Opções</button><Botao secundario onClick={() => void rodar([])} disabled={!versao || ocupado}><RotateCcw size={14} aria-hidden /> Recomeçar</Botao></>} />;
+	const heading = <CabecalhoAgente titulo="Testar conversa" desc="Por texto, sem ligar para ninguém. Cliente de teste CLI-00001 e conectores com resposta simulada. No editor, o teste também abre ao lado do Roteiro." atual="testar"
+		acoes={<><label className="inline-flex h-9 items-center gap-1.5 px-2 text-[13px] text-[var(--base-texto-2)]"><input type="checkbox" className="accent-[var(--destaque)]" checked={soa} onChange={e => setSoa(e.target.checked)} /> Como soa</label><button type="button" onClick={() => setOpcoes(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold text-[var(--base-texto-2)] hover:bg-[var(--base-fill)]"><Settings2 size={15} aria-hidden /> Opções</button><Botao secundario onClick={() => void estado.rodar([])} disabled={!versao || ocupado}><RotateCcw size={14} aria-hidden /> Recomeçar</Botao></>} />;
 	if (!empresa) return <>{heading}<Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></>;
 	if (!perm.editar) return <>{heading}<Vazio titulo="Testar conversa é para quem edita o fluxo.">Precisa da permissão Editar canais (o simulador confere no servidor).</Vazio></>;
 	if (versoes.carregando && !versoes.dados) return <>{heading}<Loading /></>;
@@ -97,56 +85,22 @@ export function TestarConversa() {
 				<select aria-label="Versão" value={versao} onChange={e => setBusca(b => { b.set('versao', e.target.value); return b; })} className={`${campoCls} w-full max-w-[520px]`} style={campoStyle}>
 					{versoes.dados.map(v => <option key={v.id} value={v.id}>{v.rotulo}</option>)}
 				</select>
-				{atual && <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => navigate(rota('editor', atual.id))}>Abrir no editor</button>}
+				{atual && <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => navigate(rota('editor', atual.id, { testar: 1 }))}>Abrir no editor, com o teste ao lado</button>}
 			</div>
-			{erro && <div className="mb-4"><Notice>{erro}</Notice></div>}
+			{erroOuvir && <div className="mb-4"><Notice>{erroOuvir}</Notice></div>}
 			<div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
 				<Cartao titulo="Conversa" linha={Object.keys(cenarios).length ? `Resposta simulada: ${Object.entries(cenarios).map(([id, c]) => `C${id} ${NOMES_CENARIO[c]}`).join(', ')}.` : undefined}>
-					<div className="flex max-h-[60vh] flex-col gap-2.5 overflow-y-auto pr-1" aria-live="polite">
-						{!sim && ocupado && <p className="text-[13px] text-[var(--base-texto-3)]">Começando a conversa…</p>}
-						{(sim?.turnos ?? []).map((t, i) => (
-							<div key={i} className="flex flex-col gap-2.5">
-								{t.pessoa && <div className="max-w-[85%] self-end rounded-[12px_12px_4px_12px] px-3 py-2 text-[13.5px] text-[var(--base-texto)]" style={{ backgroundColor: 'var(--destaque-suave)' }}>{t.pessoa}</div>}
-								{t.falas.map((f, j) => (
-									<div key={j} className="max-w-[85%]">
-										<div className="flex items-start gap-1.5">
-											<div className="min-w-0 rounded-[12px_12px_12px_4px] bg-[var(--base-fill)] px-3 py-2 text-[13.5px] text-[var(--base-texto)]">{f.texto}</div>
-											<button type="button" aria-label="Ouvir esta fala" title="Ouvir a voz" disabled={!!tocando} onClick={() => void ouvir(f.texto, `${i}-${j}`)} className="mt-1 shrink-0 rounded-full p-1 text-[var(--base-texto-3)] hover:text-[var(--base-texto)] disabled:opacity-50"><Volume2 size={15} className={tocando === `${i}-${j}` ? 'animate-pulse' : ''} /></button>
-										</div>
-										<div className="mt-0.5 text-[11.5px] text-[var(--base-texto-3)]">{[f.bloco, MODOS[f.modo as Modo]?.nome, j === t.falas.length - 1 && t.intencao ? `intenção: ${t.intencao.intencao} (${t.intencao.confianca})` : null, j === t.falas.length - 1 && t.conectores.length ? t.conectores.map(c => `C${c.conector} ${c.status ?? c.classe}`).join(' · ') : null].filter(Boolean).join(' · ')}</div>
-									</div>
-								))}
-								{t.travas.map(tr => <div key={tr} className="inline-flex items-center gap-1.5 self-center text-[12px] text-[var(--base-texto-2)]"><Lock size={12} aria-hidden /> trava: {NOMES_TRAVA[tr] ?? tr}</div>)}
-								{t.fim && <div className="self-center text-[12px] font-semibold text-[var(--base-texto-2)]">Conversa encerrada · {t.fim}</div>}
-							</div>
-						))}
-						<div ref={fim} />
-					</div>
-					{!sim?.encerrada && (
-						<>
-							<div className="mt-3.5 flex flex-wrap gap-1.5">
-								{SUGESTOES_FIXAS.map(s => <button key={s} type="button" disabled={ocupado} onClick={() => enviar(s)} className="h-8 rounded-full border px-3 text-[12.5px] text-[var(--base-texto)] hover:bg-[var(--base-fill)] disabled:opacity-50" style={{ borderColor: 'var(--base-borda)' }}>{s}</button>)}
-								<button type="button" disabled={ocupado} onClick={() => enviar('Não me ligue mais.')} className="inline-flex h-8 items-center gap-1 rounded-full border px-3 text-[12.5px] text-[var(--base-texto)] hover:bg-[var(--base-fill)]" style={{ borderColor: 'var(--base-borda)' }}><Lock size={12} aria-hidden /> Não me ligue mais</button>
-								<button type="button" disabled={ocupado} onClick={() => enviar('Quero falar com uma pessoa.')} className="inline-flex h-8 items-center gap-1 rounded-full border px-3 text-[12.5px] text-[var(--base-texto)] hover:bg-[var(--base-fill)]" style={{ borderColor: 'var(--base-borda)' }}><Lock size={12} aria-hidden /> Quero falar com uma pessoa</button>
-							</div>
-							<form className="mt-2.5 flex gap-2" onSubmit={e => { e.preventDefault(); enviar(texto); }}>
-								<input aria-label="Mensagem" value={texto} maxLength={300} onChange={e => setTexto(e.target.value)} placeholder="Escreva como se fosse a pessoa…" className={`${campoCls} h-10 min-w-0 flex-1`} style={campoStyle} />
-								<Botao type="submit" disabled={!textoOk || ocupado}>Enviar</Botao>
-							</form>
-							{texto && !textoOk && <p className="mt-1 text-[12px] text-[var(--estado-erro-texto)]">Até 300 caracteres, sem número de documento, telefone ou e-mail.</p>}
-						</>
-					)}
-					{sim?.encerrada && <div className="mt-3"><Botao secundario onClick={() => void rodar([])}>Recomeçar</Botao></div>}
+					<Conversa estado={estado} nomes={nomes} soa={soa} onOuvir={(t, k) => void ouvir(t, k)} tocando={tocando} />
 				</Cartao>
 				<Cartao titulo="O que aconteceu">
 					<select aria-label="Painel" value={painel} onChange={e => setPainel(e.target.value as typeof painel)} className={`${campoCls} mb-3 w-full`} style={campoStyle}>
-						<option value="caminho">Caminho no fluxo</option><option value="intencao">Intenção reconhecida</option><option value="travas">Travas acionadas</option><option value="con">Chamadas a conectores</option>
+						<option value="caminho">Caminho no fluxo</option><option value="intencao">Intenção reconhecida</option><option value="travas">Travas que agiram</option><option value="con">Chamadas a conectores</option>
 					</select>
 					{painel === 'intencao' ? (ultimaIntencao ? <Kv itens={[['Intenção', ultimaIntencao.intencao], ['Confiança', ultimaIntencao.confianca], ['Dados entendidos', (ultimaIntencao.entidades ?? []).join(', ') || '—']]} /> : <p className="text-[12.5px] text-[var(--base-texto-2)]">Nenhuma intenção até aqui.</p>)
-						: painel === 'travas' ? (travas.length ? <Linhas itens={travas.map(t => ({ e: NOMES_TRAVA[t] ?? t }))} /> : <p className="text-[12.5px] text-[var(--base-texto-2)]">Nenhuma até aqui. Experimente "não me ligue mais" ou pedir 24 parcelas.</p>)
+						: painel === 'travas' ? (travas.length ? <Linhas itens={travas.map(t => ({ e: rotuloTrava(t), s: `${t.pessoa ? `Quando o cliente disse “${t.pessoa}”` : 'Na abertura'}${t.etapa ? `, em ${nomes.get(t.etapa) ?? t.etapa}` : ''}.` }))} /> : <p className="text-[12.5px] text-[var(--base-texto-2)]">Nenhuma até aqui. Experimente "não me ligue mais" ou pedir 24 parcelas.</p>)
 						: painel === 'con' ? (<>{chamadas.length ? <Linhas itens={chamadas.map(c => ({ e: `C${c.conector}${c.nome ? ` · ${c.nome}` : ''}`, d: `${c.status ?? c.classe}${c.ms != null ? ` · ${c.ms} ms` : ''}`, s: c.codigo ?? undefined }))} /> : <p className="text-[12.5px] text-[var(--base-texto-2)]">Nenhum conector chamado até aqui.</p>}<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Resposta de exemplo; nada vai ao CRM.</p></>)
 						: (<>
-							<Linhas itens={(sim?.caminho ?? []).map((b, i, arr) => ({ e: <b className="font-semibold">{b}</b>, d: i === arr.length - 1 && !sim?.encerrada ? <Pilula tom="info">agora</Pilula> : <Pilula tom="ok">passou</Pilula> }))} />
+							<Linhas itens={(sim?.caminho ?? []).map((b, i, arr) => ({ e: <b className="font-semibold">{nomes.get(b) ?? b}</b>, d: i === arr.length - 1 && !sim?.encerrada ? <Pilula tom="info">agora</Pilula> : <Pilula tom="ok">passou</Pilula> }))} />
 							{sim?.resultado && <p className="mt-2 text-[12.5px] text-[var(--base-texto-2)]">Resultado: <b>{sim.resultado}</b></p>}
 						</>)}
 				</Cartao>

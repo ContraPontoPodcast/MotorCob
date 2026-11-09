@@ -4,7 +4,8 @@
 // Só o que o executor faz hoje (voz/fluxo.py); o que ainda não existe aparece como "Ainda sem tratamento próprio".
 // Os capítulos derivam de quadroPorRamos (site/src/lib/fluxo.ts), sem campo novo na definição. Só apresentação;
 // testado em site/src/components/fluxo/componentes.test.tsx. Desde o PR4, cada etapa traz o "O que corrigir" dela, com
-// o botão de correção de um clique quando há (corrigir.tsx).
+// o botão de correção de um clique quando há (corrigir.tsx). Desde o PR6, com o teste aberto ao lado, a etapa em que
+// a conversa está fica acesa e as que já passaram ficam com o número cheio.
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight, Lock, Settings2 } from 'lucide-react';
 import { Pilula } from '@/components/voz/ui';
@@ -55,8 +56,10 @@ function Linha({ q, children, fraca }: { q: ReactNode; children: ReactNode; frac
 }
 
 /** Uma etapa do roteiro: o que o agente diz, o que o cliente pode responder e para onde vai. */
-export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, pendencias, acao, identidade, onMudarIdentidade }: {
+export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, pendencias, acao, identidade, onMudarIdentidade, teste }: {
 	b: Bloco; n: number; definicao: Definicao; nomes: Map<string, string>; numeros: Map<string, number>; marca?: Marca; onAbrir: (id: string) => void;
+	/** PR6, "Testar conversa" ao lado: 'agora' acende a etapa em que a conversa está; 'passou' marca as que já passaram. */
+	teste?: 'agora' | 'fim' | 'passou';
 	/** Pendências desta etapa (banco), com "O que corrigir" e o botão de correção. */
 	pendencias?: Pendencia[]; acao?: (codigo: string) => AcaoCorrigir | null;
 	/** SQL 88: quem confere a identidade na carteira (null = o de hoje; undefined = ainda não carregou). */
@@ -72,14 +75,15 @@ export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, 
 	const fala = typeof p.fala === 'string' ? p.fala.trim() : '';
 	const tituloResp = b.tipo === 'generativa' ? 'A conversa termina quando' : b.modo === 'sistema' ? 'Resultado' : 'O cliente pode responder';
 	return (
-		<li id={ancora(b.id)} data-etapa={b.id} className="grid scroll-mt-20 grid-cols-[28px_minmax(0,1fr)] gap-2 sm:gap-3">
-			<span aria-hidden className="mt-2.5 grid h-7 w-7 place-items-center rounded-full text-[12px] font-bold tnum" style={{ border: `2px solid ${MODOS[b.modo]?.cor ?? 'var(--base-borda)'}`, color: 'var(--base-texto-2)', backgroundColor: 'var(--base-cartao)' }}>{n}</span>
-			<article aria-label={`Etapa ${n}: ${nomes.get(b.id)}`} className="min-w-0 rounded-2xl px-3.5 py-3 sm:px-4"
-				style={{ backgroundColor: 'var(--base-cartao)', boxShadow: `0 0 0 ${marca === 'erro' ? 2 : 1}px ${marca === 'erro' ? 'var(--estado-erro)' : 'var(--base-borda)'}` }}>
+		<li id={ancora(b.id)} data-etapa={b.id} data-teste={teste} className="grid scroll-mt-20 grid-cols-[28px_minmax(0,1fr)] gap-2 sm:gap-3">
+			<span aria-hidden className="mt-2.5 grid h-7 w-7 place-items-center rounded-full text-[12px] font-bold tnum" style={{ border: `2px solid ${MODOS[b.modo]?.cor ?? 'var(--base-borda)'}`, color: teste === 'passou' ? 'var(--base-cartao)' : 'var(--base-texto-2)', backgroundColor: teste === 'passou' ? (MODOS[b.modo]?.cor ?? 'var(--base-texto-3)') : 'var(--base-cartao)' }}>{n}</span>
+			<article aria-label={`Etapa ${n}: ${nomes.get(b.id)}`} aria-current={teste === 'agora' || teste === 'fim' ? 'step' : undefined} className="min-w-0 rounded-2xl px-3.5 py-3 transition-shadow sm:px-4"
+				style={{ backgroundColor: 'var(--base-cartao)', boxShadow: teste === 'agora' || teste === 'fim' ? '0 0 0 2px var(--destaque), 0 6px 18px -8px color-mix(in srgb, var(--destaque) 45%, transparent)' : `0 0 0 ${marca === 'erro' ? 2 : 1}px ${marca === 'erro' ? 'var(--estado-erro)' : 'var(--base-borda)'}` }}>
 				<header className="flex flex-wrap items-center gap-x-2 gap-y-1">
 					<h3 className="min-w-0 flex-1 text-[14px] font-semibold text-[var(--base-texto)]">
 						<button type="button" onClick={() => onAbrir(b.id)} className="text-left underline-offset-2 hover:underline">{nomes.get(b.id)}</button>
 					</h3>
+					{teste === 'agora' ? <Pilula tom="info">agora no teste</Pilula> : teste === 'fim' ? <Pilula tom="info">o teste terminou aqui</Pilula> : null}
 					{marca === 'erro' ? <Pilula tom="erro">impede o envio</Pilula> : marca === 'atencao' ? <Pilula tom="atencao">atenção</Pilula> : null}
 					{temTrava(b) && <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[var(--area-voz)]"><Lock size={12} aria-hidden />trava</span>}
 					<ModoChip b={b} />
@@ -190,8 +194,10 @@ function CabCapitulo({ c, aberto, onTrocar }: { c: Capitulo; aberto: boolean; on
 }
 
 /** O roteiro inteiro: capítulos na ordem da conversa, etapas numeradas de 1 a N. */
-export function Roteiro({ definicao, marcas, onAbrir, recolhidos: recolhidosIniciais, pendencias, acao, identidade, onMudarIdentidade }: {
+export function Roteiro({ definicao, marcas, onAbrir, recolhidos: recolhidosIniciais, pendencias, acao, identidade, onMudarIdentidade, teste }: {
 	definicao: Definicao; marcas: Map<string, Marca>; onAbrir: (id: string) => void; recolhidos?: string[];
+	/** PR6: a etapa acesa pelo teste ao lado e as que já passaram (etapaDoTeste). */
+	teste?: { atual: string | null; passou: Set<string>; terminou: boolean } | null;
 	pendencias?: Map<string, Pendencia[]>; acao?: (codigo: string) => AcaoCorrigir | null;
 	identidade?: ConfigIdentidade | null; onMudarIdentidade?: () => void;
 }) {
@@ -203,14 +209,16 @@ export function Roteiro({ definicao, marcas, onAbrir, recolhidos: recolhidosInic
 	return (
 		<div className="space-y-6">
 			{caps.map(c => {
-				const aberto = !recolhidos.has(c.id);
+				// o capítulo da etapa acesa nunca fica recolhido
+				const aberto = !recolhidos.has(c.id) || (!!teste?.atual && c.blocos.some(b => b.id === teste.atual));
 				return (
 					<section key={c.id} aria-label={c.titulo} data-capitulo={c.tipo}
 						className={c.tipo === 'conversa' ? '' : 'border-l-2 pl-3 sm:pl-4'} style={c.tipo === 'conversa' ? undefined : { borderColor: c.tipo === 'solto' ? 'var(--estado-erro)' : 'var(--base-borda)' }}>
 						<CabCapitulo c={c} aberto={aberto} onTrocar={() => trocar(c.id)} />
 						<ol id={`cap-${c.id}`} hidden={!aberto} className="mt-2.5 space-y-2.5">
 							{c.blocos.map(b => (
-								<EtapaRoteiro key={b.id} b={b} n={numeros.get(b.id) ?? 0} definicao={definicao} nomes={nomes} numeros={numeros} marca={marcas.get(b.id)} onAbrir={onAbrir} pendencias={pendencias?.get(b.id)} acao={acao} identidade={identidade} onMudarIdentidade={onMudarIdentidade} />
+								<EtapaRoteiro key={b.id} b={b} n={numeros.get(b.id) ?? 0} definicao={definicao} nomes={nomes} numeros={numeros} marca={marcas.get(b.id)} onAbrir={onAbrir} pendencias={pendencias?.get(b.id)} acao={acao} identidade={identidade} onMudarIdentidade={onMudarIdentidade}
+									teste={teste?.atual === b.id ? (teste.terminou ? 'fim' : 'agora') : teste?.passou.has(b.id) ? 'passou' : undefined} />
 							))}
 						</ol>
 					</section>

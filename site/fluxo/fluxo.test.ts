@@ -9,6 +9,7 @@ import {
 	proximoId, quadroPorRamos, removerBloco, roleplayValido, saidasFaltando, saidasPossiveis, somarMetricas, tipoDaSaida, validarLocal,
 	type Bloco, type Definicao,
 } from '../src/lib/fluxo.ts';
+import { NUMERO_TRAVA, NOMES_TRAVA, etapaDoTeste, rotuloTrava, textoFim, travasDoTeste } from '../src/lib/fluxo.ts';
 import { CERTEZAS, ORDEM_MODOS, cartoesModo, certezaEmPalavras, checarFala, exemplosDaSaida, modosDoTipo, palavras, pedeSenha } from '../src/lib/fluxo.ts';
 import { comoSoa, dataPorExtenso, porExtenso, preencherTeste, reaisPorExtenso, trechosFalados, valoresTeste } from '../src/lib/falado.ts';
 
@@ -397,4 +398,36 @@ test('o cliente pode responder: exemplos da etapa ou do catálogo, e certeza em 
 	assert.equal(certezaEmPalavras(0.7), 'Normal');
 	assert.equal(certezaEmPalavras(undefined), 'Normal');
 	assert.equal(certezaEmPalavras(0.8), 'Personalizada (0,80)');
+});
+
+// ---------------------------------------------------------------- PR6: testar ao lado
+test('testar ao lado: a etapa acesa é a última do caminho; as anteriores passaram', () => {
+	const d = negociador();
+	assert.deepEqual(etapaDoTeste(null, d), { atual: null, passou: new Set(), terminou: false });
+	const e = etapaDoTeste({ caminho: ['N1', 'N2', 'N3', 'NX'], encerrada: false }, d);        // id que não existe é ignorado
+	assert.equal(e.atual, 'N3');
+	assert.deepEqual([...e.passou], ['N1', 'N2']);
+	assert.equal(e.terminou, false);
+	// volta (N5 → N6 → N5): a etapa atual não aparece como "passou"
+	const v = etapaDoTeste({ caminho: ['N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N5'], encerrada: true }, d);
+	assert.equal(v.atual, 'N5');
+	assert.ok(!v.passou.has('N5') && v.passou.has('N6'));
+	assert.equal(v.terminou, true);
+});
+
+test('testar ao lado: qual trava agiu, quando e onde', () => {
+	assert.deepEqual(Object.values(NUMERO_TRAVA).sort(), [1, 2, 3, 4, 5, 6, 7]);
+	for (const k of Object.keys(NUMERO_TRAVA)) assert.ok(NOMES_TRAVA[k], k);
+	const turnos = [
+		{ pessoa: null, bloco: 'N1', falas: [{ bloco: 'N1' }], travas: [] },
+		{ pessoa: 'Sou eu.', bloco: 'N2', falas: [{ bloco: 'N2' }], travas: [] },
+		{ pessoa: 'Não me ligue mais.', bloco: 'N2', falas: [{ bloco: 'N2' }], travas: ['nao_me_ligue'], fim: 'opt_out' },
+	];
+	const t = travasDoTeste(turnos);
+	assert.deepEqual(t, [{ turno: 2, trava: 'nao_me_ligue', numero: 3, nome: '"Não me ligue"', etapa: 'N2', pessoa: 'Não me ligue mais.' }]);
+	assert.equal(rotuloTrava(t[0]), 'Trava 3 · "Não me ligue"');
+	assert.equal(rotuloTrava({ numero: null, nome: 'Repetição' }), 'Repetição');
+	assert.equal(travasDoTeste([{ pessoa: 'x', bloco: null, falas: [], travas: ['repeticao'] }])[0].numero, null);
+	assert.equal(textoFim('opt_out'), 'opt-out');
+	assert.equal(textoFim('transferida · pedido_humano'), 'transferida · pedido humano');
 });
