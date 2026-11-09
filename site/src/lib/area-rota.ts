@@ -109,11 +109,30 @@ export const AREA_DESTINO: Record<AreaRota, string> = {
 	nenhuma: '/inicio',
 };
 
-/** Áreas que dependem de um contrato: Agente Voz/CX e Speech Analytics vêm com a Cobrança (a Discagem vale também
- *  para quem tem discador próprio; agente, ligações e telefonia mostram "não contratado" sem o módulo agente_voz). */
-export type AreaContrato = 'cobranca' | 'jornada' | 'mensageria';
+/** Áreas que dependem de um contrato. Agente Voz/CX vem com a Cobrança (a Discagem vale também para quem tem
+ *  discador próprio; agente, ligações e telefonia mostram "não contratado" sem o módulo agente_voz). Speech Analytics
+ *  é o módulo speech_analytics (Contratação, SQL 87): sem ele, a área mostra "não faz parte do plano". */
+export type AreaContrato = 'cobranca' | 'jornada' | 'mensageria' | 'speech';
 export function areaDoContrato(area: AreaRota): AreaContrato | null {
-	if (area === 'cobranca' || area === 'voz' || area === 'speech') return 'cobranca';
-	if (area === 'jornada' || area === 'mensageria') return area;
+	if (area === 'cobranca' || area === 'voz') return 'cobranca';
+	if (area === 'jornada' || area === 'mensageria' || area === 'speech') return area;
 	return null;
+}
+
+/** Gravações (Speech Analytics › Gravações e o antigo /gravacoes): ouvir as ligações do agente e do discador não
+ *  depende da análise. Continuam com a Cobrança, como antes do SQL 87. */
+function ehGravacoes(pathname: string): boolean {
+	return ['/speech-analytics/gravacoes', '/gravacoes'].some(p => pathname === p || pathname.startsWith(p + '/'));
+}
+
+/** Contrato que a rota exige (a área da rota, com a exceção das Gravações). Usado pela moldura e pelo Assistente. */
+export function contratoDaRota(pathname: string): AreaContrato | null {
+	const area = areaDaRota(pathname);
+	if (area === 'speech' && ehGravacoes(pathname)) return 'cobranca';
+	return areaDoContrato(area);
+}
+
+/** Alvo do "Avisar o Admin" de uma área fora do plano (avisar_admin aceita speech_analytics desde o SQL 87). */
+export function alvoDoPedido(contrato: AreaContrato): string {
+	return contrato === 'speech' ? 'speech_analytics' : contrato;
 }

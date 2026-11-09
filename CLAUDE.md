@@ -384,7 +384,8 @@ de outra pessoa pela certificação e a rotação segue.
   transação, com o uso de IA (tokens reais; minuto cobrado só na 1ª análise ok). Noite (02:40): `agregar_speech_dia`
   refaz os `_dia` (idempotente; operador só com ID do discador), depois as regras e o impacto de 28 dias de
   `motor/retroalimentacao.py` pelas RPCs. Desligado por padrão: metadado `motorcx-speech-analytics=1` na VM e
-  `voz_config.speech_analytics` por empresa. Os dois acessos da VM (funções de `voz_vm`).
+  `voz_config.speech_analytics` por empresa (desde o SQL 87, igual ao módulo `speech_analytics` da Contratação, por
+  gatilho nos dois sentidos; a área Speech Analytics do site também depende do módulo). Os dois acessos da VM (funções de `voz_vm`).
 - `voz/importador/` (SQL 64): importador das gravações do discador do cliente, na VM (timer
   `motorcx-voz-importador`, metadado `motorcx-importador-gravacoes=1` e, por fonte, `leitura_automatica`; os dois acessos).
   Fontes por empresa em `voz_import_config` (envio pelo site no bucket `gravacoes-discador`, SFTP com a chave do servidor
@@ -878,6 +879,16 @@ centro de custo e RCS sem aparelho, também em Mensageria (1 ciclo). `/canais?se
 (`frases-pagina.tsx`, `?canal=`); Importar playbook só no topo da visão geral. Banco: `canais_empresa.pausado_em` /
 `pausado_por` (gatilho `canal_pausado_desde`: grava ao pausar, apaga ao retomar, ninguém escreve à mão; o já pausado ganhou
 o `atualizado_em`), `estado_canais` usa o `pausado_em`, e `credor_canais` grava com `pode('editar_canais')` (era papel fixo).
+
+**SQL 87 (pedido do dono, 08/11/2026): Agente de voz e Speech Analytics na Contratação.** A Contratação (cadastro novo e
+edição; `editar_contratacao`) tem as chaves "Agente de voz" e "Speech Analytics" (linhas e textos em
+`lib/contratacao-modulos.ts`), gravadas em `empresa_modulos` (`agente_voz`, `speech_analytics`). `voz_config.speech_analytics`
+(o que a VM lê) segue o módulo: gatilhos `speech_do_modulo` (empresa_modulos → voz_config, só se a empresa já tem
+voz_config; ninguém cria voz_config por aqui) e `modulo_do_speech` (voz_config nova nasce com o módulo; o `update` à mão do
+Master leva o módulo junto). Backfill: `voz_config.speech_analytics = true` virou módulo ativo. Site: a área Speech
+Analytics depende do módulo (`useAreasLiberadas().speech`, `areaDoContrato('speech')`), com a página "não faz parte do
+plano" e "Avisar o Admin" (`avisar_admin` aceita `speech_analytics`); as Gravações seguem com a Cobrança
+(`contratoDaRota`). O item `ia_speech_analytics` é do módulo `speech_analytics` (preço nenhum mudou).
 
 **SQL 83 (decisões do dono, 08/11/2026; SPEC §6.1 B4, B6, B7): destinos perigosos, gravação e identidade antes da dívida.**
 B4: host do tronco e da transferência nunca interno, reservado, de loopback ou do MotorCX (`voz_enderecos_motorcx`, a equipe

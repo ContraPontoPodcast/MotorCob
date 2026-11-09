@@ -249,7 +249,7 @@ export function acoesPermitidas(ctx: Contexto | null): Set<string> {
 
 const PAPEIS: Record<string, string> = { admin: "Admin", planejamento: "Planejamento", operacao: "Operação", gestao: "Gestão" };
 const MODULOS: Record<string, string> = { orquestracao: "Orquestração", jornada: "Jornada", mensageria: "Mensageria",
-  enriquecimento: "Enriquecimento", api: "API" };
+  enriquecimento: "Enriquecimento", api: "API", agente_voz: "Agente de voz", speech_analytics: "Speech Analytics" };
 
 /** Linha de contexto que vai junto da pergunta (nunca dado da carteira). */
 export function textoContexto(ctx: Contexto | null, frente: string | null, telaNome: string | null, permitidas: Set<string>) {

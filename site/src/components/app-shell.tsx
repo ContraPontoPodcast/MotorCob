@@ -8,7 +8,7 @@ import { ErrorDetail } from '@/components/error-detail';
 import { useFrente } from '@/components/frente-provider';
 import { PERM } from '@/lib/permissoes';
 import { isCanalValido, CANAL_STORAGE_KEY } from '@/lib/mensageria-produtos';
-import { areaDaRota, areaDoContrato } from '@/lib/area-rota';
+import { areaDaRota, areaDoContrato, contratoDaRota } from '@/lib/area-rota';
 import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
 import { AssistenteProvider } from '@/components/workspace/assistente/assistente-context';
 import { AssistenteAvatar } from '@/components/workspace/assistente/assistente-avatar';
@@ -236,7 +236,8 @@ export function AppShell() {
 	useEffect(() => {
 		const a = areaDaRota(loc.pathname);
 		const contrato = areaDoContrato(a);
-		if (contrato === 'cobranca') aplicarFrente('motorcob');
+		// Speech Analytics trabalha com as carteiras da Cobrança (como na lateral), mesmo sendo um módulo à parte.
+		if (contrato === 'cobranca' || a === 'speech') aplicarFrente('motorcob');
 		else if (contrato === 'jornada') aplicarFrente('motorcli');
 	}, [loc.pathname, aplicarFrente]);
 
@@ -253,8 +254,8 @@ export function AppShell() {
 
 	// Cliente sem a área contratada → página de área não contratada (só depois de ler os módulos da empresa,
 	// para a página não piscar para quem tem a área).
-	// Agente Voz/CX e Speech Analytics vêm com a Cobrança (areaDoContrato).
-	const contrato = areaDoContrato(area);
+	// Agente Voz/CX vem com a Cobrança; Speech Analytics é o módulo speech_analytics, menos as Gravações (contratoDaRota).
+	const contrato = contratoDaRota(loc.pathname);
 	if (!areasLib.pronto && contrato) {
 		return <div className="mc-platform grid min-h-screen place-items-center" style={{ backgroundColor: 'var(--base-conteudo)', color: 'var(--base-texto)' }}><div className="flex items-center gap-3"><Activity className="animate-pulse" /> Carregando seu espaço...</div></div>;
 	}

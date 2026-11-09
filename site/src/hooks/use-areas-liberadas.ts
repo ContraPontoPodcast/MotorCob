@@ -10,8 +10,11 @@ export type AreasLiberadas = {
 	jornada: boolean;
 	mensageria: boolean;
 	/** Módulo agente_voz ativo (Agente Voz/CX › Agente de voz, Ligações e Telefonia têm conteúdo). A área Agente Voz/CX
-	 *  e o Speech Analytics vêm com a Cobrança: a Discagem vale também para o discador próprio da empresa. */
+	 *  vem com a Cobrança: a Discagem vale também para o discador próprio da empresa. */
 	agenteVoz: boolean;
+	/** Módulo speech_analytics ativo (SQL 87): a área Speech Analytics. Sem ele, "não faz parte do plano" (as Gravações
+	 *  continuam com a Cobrança: lib/area-rota.ts › contratoDaRota). */
+	speech: boolean;
 	/** Canais contratados da mensageria (empresa_modulos.canais da linha mensageria ativa). */
 	canais: CanalId[];
 	/** Último canal usado se ainda contratado, senão o 1º dos contratados. Nunca 'sms' fixo. */
@@ -81,7 +84,8 @@ export function esquecerAreasLiberadas(empresaId?: string) {
  * E área liberada para a pessoa.
  * - Cobrança: frente motorcob E módulo orquestracao ativo;
  * - Jornada do Cliente: frente motorcli E módulo jornada ativo;
- * - Mensageria: módulo mensageria ativo.
+ * - Mensageria: módulo mensageria ativo;
+ * - Speech Analytics: módulo speech_analytics ativo (Contratação; liga também voz_config.speech_analytics, SQL 87).
  * Empresa só de Mensageria (Orquestração e Jornada desligadas na Contratação/Integrações) fica só com a
  * Mensageria e os Relatórios. Cliente: frentes da pessoa (minhas_frentes). Equipe com a pílula: as frentes da
  * empresa escolhida (vê o que o cliente vê). Equipe SEM empresa na pílula vê todas as áreas.
@@ -123,6 +127,7 @@ export function useAreasLiberadas(): AreasLiberadas {
 	const jornada = semEmpresa || (frentesDaPessoa.includes('motorcli') && modulos.has('jornada'));
 	const mensageria = semEmpresa || modulos.has('mensageria');
 	const agenteVoz = semEmpresa || modulos.has('agente_voz');
+	const speech = semEmpresa || modulos.has('speech_analytics');
 
 	// Canal padrão: último usado se ainda contratado, senão o 1º dos contratados.
 	let canalPadrao: CanalId = 'sms';
@@ -134,5 +139,5 @@ export function useAreasLiberadas(): AreasLiberadas {
 
 	const destinoMensageria = canais.length > 0 ? `/mensageria/${canalPadrao}` : '/mensageria';
 
-	return { cobranca, jornada, mensageria, agenteVoz, canais, canalPadrao, destinoMensageria, semEmpresa, pronto };
+	return { cobranca, jornada, mensageria, agenteVoz, speech, canais, canalPadrao, destinoMensageria, semEmpresa, pronto };
 }

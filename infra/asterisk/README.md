@@ -219,7 +219,9 @@ metadado (ou `=0`) e reinicie o serviço. VM antiga (sem o arquivo da unidade): 
 **Speech Analytics (SQL 62):** desligado por padrão em dois lugares.
 1. Na VM: metadado `motorcx-speech-analytics=1` (sem ele, os dois timers saem sem fazer nada):
    `gcloud compute instances add-metadata "$VM" --zone="$ZONA" --metadata=motorcx-speech-analytics=1`.
-2. Por empresa, no banco (o Master): `update public.voz_config set speech_analytics = true where empresa_id = <id>;`.
+2. Por empresa: a chave **Speech Analytics** da Contratação (Console › Empresas ou Empresa › Contratação, permissão
+   `editar_contratacao`). Ela grava o módulo `speech_analytics` e o banco liga `voz_config.speech_analytics` junto (SQL 87;
+   o `update public.voz_config set speech_analytics = …` à mão continua valendo e leva o módulo junto).
    Cada minuto analisado entra na fatura no item `ia_speech_analytics` pelo preço da empresa; o custo real do LLM
    (tokens × `custos_ia_voz`, componente `avaliador`) fica só para a margem do Master.
 A transcrição de cada gravação é casada com `voz_gravacoes` pelo nome do arquivo em

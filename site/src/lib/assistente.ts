@@ -5,7 +5,7 @@
 import { supabase } from '@/lib/supabase';
 import { PERM } from '@/lib/permissoes';
 import { CANAL_STORAGE_KEY } from '@/lib/mensageria-produtos';
-import { areaDaRota, areaDoContrato } from '@/lib/area-rota';
+import { contratoDaRota } from '@/lib/area-rota';
 import { ROTA_AGENTE, ROTA_DISCAGEM } from '@/lib/rotas-voz';
 
 /** Endereço único do avatar do Assistente MotorCX (usado em todos os lugares). */
@@ -99,7 +99,7 @@ export const ACOES_ROTA: Record<string, RotaAcao> = {
 };
 
 /** Áreas contratadas (useAreasLiberadas) e canal padrão, para o Assistente não levar a tela de área fora do plano. */
-export type ContextoAcao = { cobranca: boolean; jornada: boolean; mensageria: boolean; canalPadrao?: string };
+export type ContextoAcao = { cobranca: boolean; jornada: boolean; mensageria: boolean; speech?: boolean; canalPadrao?: string };
 
 /** Resolve a rota de uma ação; retorna null sem a permissão ou, com `areas`, se a tela é de área não contratada. */
 export function rotaDaAcao(acaoId: string, permissoes: string[], pergunta?: string, areas?: ContextoAcao): string | null {
@@ -109,7 +109,7 @@ export function rotaDaAcao(acaoId: string, permissoes: string[], pergunta?: stri
 	const canal = areas?.canalPadrao ?? ultimoCanal();
 	let rota = def.rota(canal);
 	if (areas) {
-		const a = areaDoContrato(areaDaRota(rota.split('?')[0]));
+		const a = contratoDaRota(rota.split('?')[0]);
 		if (a && !areas[a]) return null;
 	}
 	if (def.comPergunta && pergunta) {

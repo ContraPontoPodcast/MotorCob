@@ -259,7 +259,7 @@ export function PlatformTopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 		{ id: 'jornada', nome: 'Jornada do Cliente', icon: AREA_ICON.jornada, cor: '#8E8E93', to: '/jornada', contratada: areasLib.jornada },
 		{ id: 'mensageria', nome: 'Mensageria', icon: AREA_ICON.mensageria, cor: '#7A4FB0', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
 		{ id: 'voz', nome: 'Agente Voz/CX', icon: AREA_ICON.voz, cor: '#2F5D7C', to: '/voz', contratada: areasLib.cobranca },
-		{ id: 'speech', nome: 'Speech Analytics', icon: AREA_ICON.speech, cor: '#5B4B8A', to: '/speech-analytics', contratada: areasLib.cobranca },
+		{ id: 'speech', nome: 'Speech Analytics', icon: AREA_ICON.speech, cor: '#5B4B8A', to: '/speech-analytics', contratada: areasLib.speech },
 		{ id: 'relatorios', nome: 'Relatórios', icon: AREA_ICON.relatorios, cor: '#0A60D0', to: '/relatorios', contratada: true },
 	];
 
@@ -339,7 +339,7 @@ export function MobileNavDrawer({ open, onClose, children }: { open: boolean; on
 		{ id: 'jornada', nome: 'Jornada do Cliente', to: '/jornada', contratada: areasLib.jornada },
 		{ id: 'mensageria', nome: 'Mensageria', to: areasLib.destinoMensageria, contratada: areasLib.mensageria },
 		{ id: 'voz', nome: 'Agente Voz/CX', to: '/voz', contratada: areasLib.cobranca },
-		{ id: 'speech', nome: 'Speech Analytics', to: '/speech-analytics', contratada: areasLib.cobranca },
+		{ id: 'speech', nome: 'Speech Analytics', to: '/speech-analytics', contratada: areasLib.speech },
 		{ id: 'relatorios', nome: 'Relatórios', to: '/relatorios', contratada: true },
 	];
 
