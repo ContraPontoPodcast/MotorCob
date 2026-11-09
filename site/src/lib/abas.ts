@@ -33,7 +33,7 @@ export type Aba = {
 	/** Só para a equipe com uma destas permissões do Console (ex.: Empresa › Contratação). */
 	permConsole?: string[];
 	/** Só aparece com esta área contratada (ex.: Relatórios › Cobrança). */
-	requerArea?: 'cobranca' | 'jornada' | 'mensageria';
+	requerArea?: 'cobranca' | 'jornada' | 'mensageria' | 'speech';
 };
 
 export type GrupoAbas = {
@@ -177,9 +177,9 @@ export const ABAS: Partial<Record<AreaRota, AreaAbas>> = {
 		grupos: [
 			{
 				abas: [
-					{ nome: 'Visão geral', to: ROTA_SPEECH, icon: AudioLines, exato: true, match: [`${ROTA_SPEECH}/qualidade`, `${ROTA_SPEECH}/operadores`, `${ROTA_SPEECH}/alertas`, `${ROTA_SPEECH}/recomendacoes`, `${ROTA_SPEECH}/curadoria`, `${ROTA_SPEECH}/busca`] },
+					{ nome: 'Visão geral', to: ROTA_SPEECH, icon: AudioLines, exato: true, match: [`${ROTA_SPEECH}/qualidade`, `${ROTA_SPEECH}/operadores`, `${ROTA_SPEECH}/alertas`, `${ROTA_SPEECH}/recomendacoes`, `${ROTA_SPEECH}/curadoria`, `${ROTA_SPEECH}/busca`], requerArea: 'speech' },
 					{ nome: 'Gravações', to: ROTA_GRAVACOES, icon: Mic, perm: 'ouvir_gravacoes' },
-					{ nome: 'Entrada de gravações', to: ROTA_ENTRADA_GRAVACOES, icon: FileUp },
+					{ nome: 'Entrada de gravações', to: ROTA_ENTRADA_GRAVACOES, icon: FileUp, requerArea: 'speech' },
 				],
 			},
 		],

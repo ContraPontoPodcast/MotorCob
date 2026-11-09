@@ -70,7 +70,7 @@ test('endereço antigo → novo: a tabela da SPEC, com o antigo declarado e redi
 	assert.equal(destinoRedirecionamento('/gravacoes', '?cliente=CLI-1', '#x'), '/speech-analytics/gravacoes?cliente=CLI-1#x');
 });
 
-test('áreas: Agente Voz/CX e Speech Analytics têm rota, tema, ícone, destino e vêm com a Cobrança', () => {
+test('áreas: Agente Voz/CX e Speech Analytics têm rota, tema, ícone e destino (Voz com a Cobrança, Speech é módulo)', () => {
 	for (const r of ['/voz', '/voz/agente/testar', '/voz/discagem', '/discagem', '/canais/agente-virtual', '/mensageria/voz/lotes/3']) assert.equal(areaDaRota(r), 'voz', r);
 	for (const r of ['/speech-analytics', '/speech-analytics/gravacoes', '/gravacoes', '/insights-voz', '/envios/gravacoes-discador']) assert.equal(areaDaRota(r), 'speech', r);
 	for (const r of ['/canais', '/envios', '/orquestracao']) assert.equal(areaDaRota(r), 'cobranca', r);
@@ -82,7 +82,7 @@ test('áreas: Agente Voz/CX e Speech Analytics têm rota, tema, ícone, destino 
 	assert.notEqual(AREA_ICON.voz, AREA_ICON.cobranca);
 	assert.notEqual(AREA_ICON.speech, AREA_ICON.cobranca);
 	assert.equal(areaDoContrato('voz'), 'cobranca');
-	assert.equal(areaDoContrato('speech'), 'cobranca');
+	assert.equal(areaDoContrato('speech'), 'speech');   // módulo speech_analytics desde o SQL 87
 	assert.equal(areaDoContrato('relatorios'), null);
 });
 

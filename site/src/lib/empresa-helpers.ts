@@ -33,6 +33,8 @@ export const MODULOS_INFO: { id: string; nome: string; desc: string; canais?: bo
   { id: 'mensageria', nome: 'Mensageria', desc: 'SMS, e-mail, RCS e WhatsApp', canais: true },
   { id: 'enriquecimento', nome: 'Enriquecimento', desc: 'Contatos novos para quem está sem canal' },
   { id: 'api', nome: 'API', desc: 'Cargas e Lista do dia pelo seu sistema' },
+  { id: 'agente_voz', nome: 'Agente de voz', desc: 'O agente de IA liga, conversa e transfere para os seus operadores.' },
+  { id: 'speech_analytics', nome: 'Speech Analytics', desc: 'Análise das ligações do agente e do discador: notas, motivos, alertas.' },
 ];
 
 export const CANAIS_MSG: { id: string; nome: string; cor: string }[] = [
