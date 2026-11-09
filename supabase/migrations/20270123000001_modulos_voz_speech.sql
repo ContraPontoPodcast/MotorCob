@@ -125,12 +125,23 @@ comment on column public.voz_config.speech_analytics is
 select pg_temp.trocar('public.avisar_admin(text, text, text, text)',
     $t$if alvo not in ('cobranca', 'jornada', 'mensageria') then$t$,
     $t$if alvo not in ('cobranca', 'jornada', 'mensageria', 'speech_analytics') then$t$);
-select pg_temp.trocar('public.avisar_admin(text, text, text, text)',
-    $t$titulo := quem || ' quer conhecer a ' ||
-                  case alvo when 'cobranca' then 'Cobrança' when 'jornada' then 'Jornada do Cliente' else 'Mensageria' end;$t$,
-    $t$titulo := quem || ' quer conhecer ' ||
-                  case alvo when 'cobranca' then 'a Cobrança' when 'jornada' then 'a Jornada do Cliente'
-                            when 'speech_analytics' then 'o Speech Analytics' else 'a Mensageria' end;$t$);
+-- título do aviso: troca só o "case" (o resto do texto pode variar entre bancos); se não achar, segue sem mudar o
+-- título (é só o texto do aviso; a área speech_analytics já é aceita pelo passo acima)
+do $tit$
+declare d text := pg_get_functiondef('public.avisar_admin(text, text, text, text)'::regprocedure);
+        novo text;
+begin
+    if position('speech_analytics'' then' in d) > 0 then
+        return;                                  -- já aplicado
+    end if;
+    novo := regexp_replace(d, $re$else\s+'Mensageria'(\s+end)$re$,
+                           $r$when 'speech_analytics' then 'Speech Analytics' else 'Mensageria'\1$r$, 'g');
+    if novo = d then
+        raise notice 'SQL 87: título do "Avisar o Admin" mantido (formato diferente); o aviso do Speech Analytics sai com o título padrão';
+    else
+        execute novo;
+    end if;
+end $tit$;
 
 -- ================================================================ 5. item da fatura do Speech Analytics
 update public.cobranca_itens set modulo = 'speech_analytics'

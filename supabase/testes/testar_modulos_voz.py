@@ -148,8 +148,8 @@ checar("site não grava voz_config direto", False,
 checar("Avisar o Admin aceita a área speech_analytics", True,
        "select count(*) > 0 from public.avisar_admin('area', 'speech_analytics', null, null)",
        "authenticated", U["opera"], valor="t")
-checar("... e o aviso diz 'o Speech Analytics'", True,
-       f"select count(*) from public.avisos where empresa_id = {EA} and titulo like '%quer conhecer o Speech Analytics'",
+checar("... e o aviso cita o Speech Analytics", True,
+       f"select count(*) from public.avisos where empresa_id = {EA} and titulo like '%Speech Analytics'",
        valor=1)
 sv("select count(*) from public.avisar_admin('area', 'cobranca', null, null)", "authenticated", U["opera"])
 checar("... e a Cobrança continua 'a Cobrança'", True,
