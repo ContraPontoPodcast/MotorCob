@@ -186,14 +186,35 @@ export function criarApiFixturas(): FluxoApi {
 		salvarCaso: async () => { await espera(0); }, apagarCaso: async () => { await espera(0); },
 		simular: async (_versao, falas, _falhar, cenarios = {}): Promise<Simulacao> => {
 			const cen = (c: { conector: number; nome?: string; classe: string; status?: number | null; ms?: number | null; codigo?: string | null }) => cenarios[String(c.conector)] === 'tempo' ? { ...c, classe: 'tempo', status: null, ms: 2500, codigo: 'falhou' } : cenarios[String(c.conector)] === '401' ? { ...c, classe: 'http_4xx', status: 401, ms: 120, codigo: 'falhou' } : c;
-			const turnos = conversaDemo.slice(0, Math.min(falas.length + 1, conversaDemo.length)).map(([, texto, bloco, modo], i) => ({
-				pessoa: i === 0 ? null : falas[i - 1], falas: [{ texto, bloco, modo }], bloco, caminho: [bloco],
-				intencao: bloco === 'N3' && i > 0 ? null : i === 3 ? { intencao: 'quero_negociar', confianca: 'alta', entidades: ['prazo: dia do salário'] } : null,
-				conectores: (i === 2 ? [{ conector: 2, nome: 'Validar cadastro', classe: 'ok', status: 200, ms: 276, codigo: 'identidade_ok' }] : i === 3 ? [{ conector: 1, nome: 'Buscar ofertas', classe: 'ok', status: 200, ms: 402, codigo: 'ofertas_1_3' }] : []).map(cen),
-				travas: /não me lig|nao me lig/i.test(falas[i - 1] ?? '') ? ['nao_me_ligue'] : [], devolucoes: [], fim: null,
-			}));
-			const caminho = ['N1', 'N2', 'N3', 'N4', 'N15', 'N5'].slice(0, Math.min(6, falas.length * 2 + 1));
-			return espera({ turnos, caminho, resultado: null, encerrada: false });
+			// como o executor (voz/fluxo.py › _travas): "não me ligue" e "quero uma pessoa" agem antes de qualquer etapa
+			const CAM: Record<string, string[]> = { N1: ['N1'], N2: ['N2'], N3: ['N3'], N5: ['N4', 'N15', 'N5'] };
+			const turnos: Simulacao['turnos'] = [];
+			const caminho: string[] = [];
+			let encerrada = false, resultado: string | null = null;
+			for (let i = 0; i <= falas.length && i < conversaDemo.length + 1; i++) {
+				const pessoa = i === 0 ? null : falas[i - 1];
+				const atual = caminho[caminho.length - 1] ?? 'N1';
+				const trava = /não me lig|nao me lig/i.test(pessoa ?? '') ? 'nao_me_ligue' : /pessoa|atendente|humano/i.test(pessoa ?? '') ? 'pedido_humano' : null;
+				if (trava) {
+					const optout = trava === 'nao_me_ligue';
+					if (!optout) caminho.push('N13');
+					turnos.push({ pessoa, falas: [{ texto: optout ? 'Entendido. Vou registrar agora e você não recebe mais ligações nossas sobre isso. Até logo.' : 'Claro, vou passar você para um atendente agora, só um instante.', bloco: atual, modo: 'arvore' }], bloco: optout ? atual : 'N13', caminho: optout ? [] : ['N13'], intencao: null, conectores: [], travas: [trava], devolucoes: [], fim: optout ? 'opt_out' : 'transferida · pedido_humano' });
+					encerrada = true; resultado = optout ? 'opt_out' : null;
+					break;
+				}
+				const d = conversaDemo[Math.min(i, conversaDemo.length - 1)];
+				if (i >= conversaDemo.length) break;
+				const [, texto, bloco, modo] = d;
+				const cam = caminho.includes(bloco) ? [] : CAM[bloco] ?? [bloco];
+				caminho.push(...cam);
+				turnos.push({
+					pessoa, falas: [{ texto, bloco, modo }], bloco, caminho: cam,
+					intencao: i === 3 ? { intencao: 'quero_negociar', confianca: 'alta', entidades: ['prazo: dia do salário'] } : null,
+					conectores: (i === 2 ? [{ conector: 2, nome: 'Validar cadastro', classe: 'ok', status: 200, ms: 276, codigo: 'identidade_ok' }] : i === 3 ? [{ conector: 1, nome: 'Buscar ofertas', classe: 'ok', status: 200, ms: 402, codigo: 'ofertas_1_3' }] : []).map(cen),
+					travas: [], devolucoes: [], fim: null,
+				});
+			}
+			return espera({ turnos, caminho, resultado, encerrada });
 		},
 		ouvir: async () => espera({ audio: '', mime: 'audio/mpeg' }),
 		cancelarPedido: async id => { const p = pedidos.find(x => x.id === id); if (p) { p.situacao = 'cancelado'; p.versao_gerada_id = null; p.cancelado_em = new Date().toISOString(); } await espera(0); },
