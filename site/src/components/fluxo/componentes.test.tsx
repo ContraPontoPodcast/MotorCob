@@ -304,3 +304,47 @@ test('detalhe da etapa: "Como soa no telefone", checagens e "Se não ouvir nada"
 	assert.match(chk, /data-checagem="erro"[^]*corrigir: <\/span>Cita \{\{credor\}\}/);
 	assert.match(renderToStaticMarkup(<SeNaoOuvir />), /Se não ouvir nada<\/b><span[^>]*>Ainda sem tratamento próprio/);
 });
+
+// ---------------------------------------------------------------- PR6: testar ao lado
+test('testar ao lado: a etapa atual acende no Roteiro e as anteriores ficam marcadas', async () => {
+	const { etapaDoTeste } = await import('@/lib/fluxo');
+	const d = definicaoV5();
+	const html = renderToStaticMarkup(<Roteiro definicao={d} marcas={new Map()} onAbrir={nada} teste={etapaDoTeste({ caminho: ['N1', 'N2', 'N3'], encerrada: false }, d)} />);
+	assert.match(html, /data-etapa="N3" data-teste="agora"/);
+	assert.match(html, /data-etapa="N1" data-teste="passou"/);
+	assert.match(html, /data-etapa="N2" data-teste="passou"/);
+	assert.doesNotMatch(html, /data-etapa="N4" data-teste/);
+	assert.equal((html.match(/aria-current="step"/g) ?? []).length, 1);
+	assert.match(html, /agora no teste/);
+	const fim = renderToStaticMarkup(<Roteiro definicao={d} marcas={new Map()} onAbrir={nada} teste={etapaDoTeste({ caminho: ['N1', 'N2'], encerrada: true }, d)} />);
+	assert.match(fim, /data-etapa="N2" data-teste="fim"/);
+	assert.match(fim, /o teste terminou aqui/);
+	assert.doesNotMatch(renderToStaticMarkup(<Roteiro definicao={d} marcas={new Map()} onAbrir={nada} />), /data-teste=/);
+});
+
+test('testar ao lado: o painel diz qual trava agiu e quando (simulador de demonstração)', async () => {
+	const { PainelTestar } = await import('@/components/fluxo/testar-ao-lado');
+	const { nomesEtapas } = await import('@/lib/fluxo');
+	const api = criarApiFixturas();
+	const d = definicaoV5();
+	const sim = await api.simular(105, ['Sou eu.', '15 de março.', 'Não me ligue mais.'], []);
+	assert.equal(sim.encerrada, true);
+	assert.deepEqual(sim.turnos[3].travas, ['nao_me_ligue']);
+	const estado = { sim, falas: [], ocupado: false, erro: '', rodar: async () => {}, enviar: nada };
+	const html = renderToStaticMarkup(<PainelTestar estado={estado} definicao={d} nomes={nomesEtapas(d)} api={null} versao={105} onFechar={nada} onEtapa={nada} onTelaCheia={nada} />);
+	assert.match(html, /aria-label="Travas que agiram"/);
+	assert.match(html, /Trava 3 · &quot;Não me ligue&quot;<\/b> · quando o cliente disse “Não me ligue mais\.”, em Entender intenção/);
+	assert.match(html, /data-trava="nao_me_ligue"[^>]*>.*Trava 3 · &quot;Não me ligue&quot; · agiu em Entender intenção/);
+	assert.match(html, /Terminou em <button[^>]*>Entender intenção<\/button> · opt-out/);
+	assert.match(html, /data-fim="true">Fim · opt-out/);
+	assert.match(html, /Tela cheia/);                                     // a tela antiga continua alcançável
+	assert.doesNotMatch(html, /aria-label="Atalhos do cliente"/);          // conversa encerrada: só Recomeçar
+	// conversa em andamento: atalhos de objeções e de travas, e "soa:" com valores por extenso
+	const sim2 = await api.simular(105, ['Sou eu.', '15 de março.'], []);
+	const html2 = renderToStaticMarkup(<PainelTestar estado={{ ...estado, sim: sim2 }} definicao={d} nomes={nomesEtapas(d)} api={null} versao={105} onFechar={nada} onEtapa={nada} onTelaCheia={nada} />);
+	assert.match(html2, /Agora em <button[^>]*>Entender intenção<\/button>/);
+	assert.match(html2, /aria-label="Atalhos do cliente"/);
+	assert.match(html2, /Objeções/);
+	assert.match(html2, /soa: “Consta mil trezentos e oitenta reais em aberto no Cartão Aurora\. Como fica melhor para você\?”/);
+	assert.doesNotMatch(html2, /aria-label="Travas que agiram"/);
+});

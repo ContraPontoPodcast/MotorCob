@@ -1025,3 +1025,36 @@ export function checarFala(a: {
 	if (a.trechos.length) out.push({ estado: 'info', texto: `Números como vão ser lidos: ${a.trechos.map(t => `"${t.de}" → "${t.para}"`).join(' · ')}` });
 	return out;
 }
+
+// ---------------------------------------------------------------- testar ao lado (PR6 do redesenho)
+/** Número da trava (lista TRAVAS) que o executor registra em cada código (voz_fluxo_passos.trava, travas_voz()). */
+export const NUMERO_TRAVA: Record<string, number> = {
+	valor_antes_identidade: 1, senha_cartao: 2, nao_me_ligue: 3, terceiro: 4, alcada: 5, pedido_humano: 6, oferta_inventada: 7,
+};
+/** O mínimo de um turno do simulador (api.ts › TurnoSimulado) que o painel usa; sem importar o tipo do componente. */
+export interface TurnoTeste { pessoa: string | null; bloco: string | null; falas: { bloco: string | null }[]; travas: string[]; fim?: string | null }
+export interface TravaNoTeste { turno: number; trava: string; numero: number | null; nome: string; etapa: string | null; pessoa: string | null }
+/**
+ * As travas que agiram na conversa de teste, na ordem, com quando (a resposta do cliente que disparou, o número do
+ * turno) e onde (a etapa em que a conversa estava: a fala da trava sai com o bloco atual do executor).
+ */
+export function travasDoTeste(turnos: TurnoTeste[]): TravaNoTeste[] {
+	return turnos.flatMap((t, i) => t.travas.map(trava => ({
+		turno: i, trava, numero: NUMERO_TRAVA[trava] ?? null, nome: NOMES_TRAVA[trava] ?? trava.replace(/_/g, ' '),
+		etapa: t.falas[0]?.bloco ?? t.bloco ?? null, pessoa: t.pessoa,
+	})));
+}
+/** "Trava 3 · "Não me ligue"" (sem número para o que não é uma das 7, como a repetição). */
+export const rotuloTrava = (t: Pick<TravaNoTeste, 'numero' | 'nome'>) => (t.numero ? `Trava ${t.numero} · ${t.nome}` : t.nome);
+/**
+ * A etapa acesa no Roteiro: a última do caminho enquanto a conversa corre (ou onde ela terminou), e as que já passaram.
+ * Só ids que existem na definição (o simulador devolve o caminho do executor).
+ */
+export function etapaDoTeste(sim: { caminho: string[]; encerrada: boolean } | null, d: Definicao): { atual: string | null; passou: Set<string>; terminou: boolean } {
+	const ids = new Set(d.blocos.map(b => b.id));
+	const cam = (sim?.caminho ?? []).filter(id => ids.has(id));
+	const atual = cam.length ? cam[cam.length - 1] : null;
+	return { atual, passou: new Set(cam.slice(0, -1).filter(id => id !== atual)), terminou: !!sim?.encerrada };
+}
+/** Fim da conversa de teste em palavras ("opt_out" → "opt-out"; "transferida · pedido_humano" → "transferida · pedido humano"). */
+export const textoFim = (fim: string) => (fim === 'opt_out' ? 'opt-out' : fim.replace(/_/g, ' '));
