@@ -83,7 +83,7 @@ export function GavetaComoLer({ aberta, onFechar }: { aberta: boolean; onFechar:
 				{Object.values(MODOS).map(m => (
 					<div key={m.nome} className="flex items-start gap-2.5 rounded-xl bg-[var(--base-fill)] px-3 py-2.5">
 						<span className="mt-1"><Ponto cor={m.cor} tam={10} /></span>
-						<span className="min-w-0 text-[13px] text-[var(--base-texto)]"><b className="font-semibold">{m.nome}</b> <span className="text-[12px] text-[var(--base-texto-3)]">(antes: {m.antigo})</span><small className="mt-0.5 block text-[12px] text-[var(--base-texto-2)]">{m.desc}</small></span>
+						<span className="min-w-0 text-[13px] text-[var(--base-texto)]"><b className="font-semibold">{m.nome}</b><small className="mt-0.5 block text-[12px] text-[var(--base-texto-2)]">{m.desc}</small></span>
 					</div>
 				))}
 			</div>

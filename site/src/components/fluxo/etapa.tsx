@@ -1,18 +1,26 @@
-// Gaveta da etapa (editor): modo, fala ou objetivo, campos do tipo, saídas ("Sim → nome da etapa") e, na conversa livre, a base
-// de respostas (salvar_resposta_fluxo_voz; revisa quem aprova). Os campos seguem o esquema 1 de public.fluxo_voz_erros:
-// o que o banco recusa aparece nas pendências depois de salvar. A trava 1 (valor, oferta ou credor antes da identidade)
-// é conferida aqui enquanto se digita (validarLocal, cópia do validador) e aparece como "O que corrigir".
+// Detalhe da etapa (editor; PR5 do redesenho, SPEC §2.3): o modo em 4 cartões, "O agente diz" com as variáveis em
+// destaque, "Como soa no telefone" (valores e datas por extenso; "Ouvir" usa a prévia de voz que já existe, SQL 66) e as
+// checagens da fala; "O cliente pode responder" com exemplos e "então → etapa"; "Se não entender" (o que o executor faz
+// hoje) e "Se não ouvir nada" (ainda sem tratamento próprio); "Avançado" com tentativas, certeza em palavras e os
+// códigos internos. Os campos seguem o esquema 1 de public.fluxo_voz_erros: o que o banco recusa aparece nas
+// pendências depois de salvar. A trava 1 (valor, oferta ou credor antes da identidade) é conferida aqui enquanto se
+// digita (validarLocal, cópia do validador) e aparece como "O que corrigir". Na IA conversa, a base de respostas
+// (salvar_resposta_fluxo_voz; revisa quem aprova).
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Play, Trash2, X } from 'lucide-react';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { Botao, Pilula, campoCls, campoStyle } from '@/components/voz/ui';
 import {
-	MODOS, OPCOES, TIPOS, caminhosPara, comoCorrigir, correcaoDe, explicar, modosDoTipo, nomesEtapas, saidasPossiveis, tipoDaSaida, trocarBloco, validarLocal, variaveisSensiveis,
-	type Bloco, type Correcao, type Definicao, type Modo, type Saida,
+	CERTEZAS, MODOS, OPCOES, TIPOS, acaoSistema, antesDaIdentidade, caminhosPara, cartoesModo, certezaEmPalavras, checarFala, comoCorrigir, correcaoDe, exemplosDaSaida, explicar, nomeDestino, nomesEtapas, resultadoFinal,
+	saidasPossiveis, seNaoEntender, tipoDaSaida, trocarBloco, validarLocal, variaveisSensiveis,
+	type Bloco, type Correcao, type Definicao, type Saida,
 } from '@/lib/fluxo';
+import { comoSoa, preencherTeste, trechosFalados, valoresTeste } from '@/lib/falado';
 import type { ConectorRow, IntencaoRow, RespostaRow } from './api';
 import { Campo, Detalhes, Gaveta, Linhas } from './ds';
-import { useFluxo } from './contexto';
+import { useFluxo, usePermissoesFluxo } from './contexto';
+import { CartoesModo, ChecagensFala, ComoSoa, FalaDoAgente, SeNaoOuvir, Secao, SeloTrava } from './etapa-partes';
+import { Fala, ModoChip } from './roteiro';
 import { executar, useCarregar } from './comum';
 import { ConfirmaCorrecao, OQueCorrigir, type AcaoCorrigir } from './corrigir';
 
@@ -55,12 +63,31 @@ function SelConector({ conectores, finalidades, valor, onChange, disabled }: { c
 	);
 }
 
-export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, editavel, versao, situacao, onFechar, onSalvar, onRemover, acao }: {
+/** Tipos que ouvem a pessoa e usam "tentativas" (o mesmo campo de hoje, agora no Avançado). */
+const COM_TENTATIVAS: readonly string[] = ['identidade', 'pergunta', 'intencao'];
+/** Saídas que só acontecem quando o agente não entende: ficam em "Se não entender", não em "O cliente pode responder". */
+const SO_SEM_ENTENDER = ['nao_entendido', 'sem_resposta'];
+/** Campo da fala de cada tipo (o conector tem a fala de espera; condição e registrar não falam; a IA conversa tem objetivo). */
+const chaveFala = (tipo: string) => (tipo === 'conector' ? 'fala_espera' : ['condicao', 'registrar', 'generativa'].includes(tipo) ? null : 'fala');
+
+/**
+ * Detalhe da etapa (PR5 do redesenho; SPEC §2.3). Na ordem: O que corrigir · 1 Como o agente decide (4 cartões) ·
+ * 2 O agente diz (variáveis, Como soa, checagens) ou Objetivo da IA · 3 O cliente pode responder (exemplos e "então →")
+ * · 4 Se não entender / Se não ouvir nada · Respostas prontas (IA conversa) · Avançado (tentativas, certeza, repetição
+ * e os códigos internos). Todos os campos de antes continuam aqui; só mudou o lugar e o nome.
+ */
+export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, editavel, versao, situacao, onFechar, onSalvar, onRemover, acao, carteira, onTestar }: {
 	bloco: Bloco; definicao: Definicao; conectores: ConectorRow[]; intencoes: IntencaoRow[]; erros: string[]; editavel: boolean;
 	versao: number; situacao: string; onFechar: () => void; onSalvar: (b: Bloco) => Promise<boolean>; onRemover: (id: string) => Promise<boolean>;
 	/** Botão do "O que corrigir" (correção de um clique sobre o rascunho salvo). */
 	acao?: (codigo: string) => AcaoCorrigir | null;
+	/** Nome da carteira, para o "Como soa" (o credor de teste). */
+	carteira?: string | null;
+	/** "Testar conversa" ao lado (PR6). */
+	onTestar?: () => void;
 }) {
+	const { api, empresa } = useFluxo();
+	const perm = usePermissoesFluxo();
 	const [b, setB] = useState<Bloco>(bloco);
 	const [ocupado, setOcupado] = useState(false);
 	useEffect(() => { setB(bloco); }, [bloco]);
@@ -70,8 +97,10 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 	const outros = definicao.blocos.filter(x => x.id !== b.id);
 	const nomes = useMemo(() => nomesEtapas(definicao), [definicao]);
 	const nome = nomes.get(b.id) ?? b.id;
+	const comB = useMemo(() => trocarBloco(definicao, b), [definicao, b]);
 	// trava 1 ao digitar: a mesma regra do banco, sobre o rascunho desta gaveta (antes de salvar)
-	const credorAntes = useMemo(() => validarLocal(trocarBloco(definicao, b)).includes(`valor_antes_identidade:${b.id}`), [definicao, b]);
+	const credorAntes = useMemo(() => validarLocal(comB).includes(`valor_antes_identidade:${b.id}`), [comB, b.id]);
+	const antes = useMemo(() => { const a = comB.blocos.find(x => x.tipo === 'abertura'); return !!a && antesDaIdentidade(comB, a.id).has(b.id); }, [comB, b.id]);
 	const meus = erros.map(explicar).filter(e => e.bloco === b.id && e.codigo.split(':')[0] !== 'valor_antes_identidade');
 	const chegam = useMemo(() => caminhosPara(definicao, b.id), [definicao, b.id]);
 	const [confirmaRemover, setConfirmaRemover] = useState(false);
@@ -87,11 +116,25 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 	const botaoCredor = (): AcaoCorrigir | null => {
 		if (!editavel) return null;
 		if (!sujo) return botao(`valor_antes_identidade:${b.id}`);
-		const c = correcaoDe(trocarBloco(definicao, b), `valor_antes_identidade:${b.id}`);
+		const c = correcaoDe(comB, `valor_antes_identidade:${b.id}`);
 		return c ? { rotulo: c.botao, onClick: () => setPrevia(c) } : null;
 	};
 
-	// saídas: uma linha por saída possível (pergunta e intenção dependem das opções); conversa livre tem lista própria
+	// "O agente diz" → "Como soa": valores de teste (os do simulador) e números por extenso
+	const kFala = chaveFala(b.tipo);
+	const fala = kFala ? String(p[kFala] ?? '') : '';
+	const vars = useMemo(() => valoresTeste((empresa?.nome ?? 'Assessoria de teste').replace(/\s*\(demonstração\)$/, ''), carteira ?? null), [empresa?.nome, carteira]);
+	const preenchida = preencherTeste(fala, vars);
+	const falada = comoSoa(preenchida);
+	const checagens = kFala === 'fala' ? checarFala({ fala, falada, antesDaIdentidade: antes, credorAntes, sensiveis: variaveisSensiveis(b), trechos: trechosFalados(preenchida).filter(t => !/^\d{1,2}$/.test(t.de)) }) : [];
+	async function ouvir() {
+		if (!api) return;
+		const r = await api.ouvir(versao, falada.slice(0, 500));
+		if (!r.audio) throw new Error('Prévia sem áudio no modo de demonstração.');
+		await new Audio(`data:${r.mime};base64,${r.audio}`).play();
+	}
+
+	// saídas: uma linha por saída possível (pergunta e intenção dependem das opções); a IA conversa tem lista própria
 	const possiveis = useMemo(() => saidasPossiveis(b), [b]);
 	function setSaida(quando: string, mudar: Partial<Saida> | null) {
 		setB(x => {
@@ -102,10 +145,10 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 			return { ...x, saidas: atual ? x.saidas.map(s => (s.quando === quando ? nova : s)) : [...x.saidas, nova] };
 		});
 	}
-	const destino = (quando: string) => (
-		<select aria-label={`Destino de ${quando}`} value={b.saidas.find(s => s.quando === quando)?.para ?? ''} disabled={dis} onChange={e => setSaida(quando, { para: e.target.value })} className={sel} style={campoStyle}>
+	const destino = (quando: string, rotulo?: string) => (
+		<select aria-label={`Então, depois de "${rotulo ?? quando}"`} value={b.saidas.find(s => s.quando === quando)?.para ?? ''} disabled={dis} onChange={e => setSaida(quando, { para: e.target.value })} className={sel} style={campoStyle}>
 			<option value="">— sem saída —</option>
-			{outros.map(o => <option key={o.id} value={o.id}>→ {nomes.get(o.id)}</option>)}
+			{outros.map(o => <option key={o.id} value={o.id}>{nomes.get(o.id)}</option>)}
 		</select>
 	);
 
@@ -119,90 +162,21 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 		if (ok) onFechar();
 	}
 
+	// campos próprios do tipo (iguais aos de antes): ficam junto da fala, em "Detalhes desta etapa"
 	let campos: ReactNode = null;
-	const fala = (rotulo = 'Fala', chave = 'fala') => (
-		<Campo inteiro rotulo={rotulo} ajuda={'Variáveis entre chaves duplas, como {{primeiro_nome}}. Até 500 caracteres.'}>
-			<textarea rows={3} value={String(p[chave] ?? '')} maxLength={500} disabled={dis} onChange={e => setP(chave, e.target.value)} className={`${sel} h-auto py-2 leading-relaxed`} style={campoStyle} />
-		</Campo>
-	);
-	const tentativas = <Campo rotulo="Tentativas (1 a 3)"><input type="number" min={1} max={3} value={Number(p.tentativas ?? 1)} disabled={dis} onChange={e => setP('tentativas', Number(e.target.value))} className={sel} style={campoStyle} /></Campo>;
 	switch (b.tipo) {
-		case 'abertura': campos = fala(); break;
 		case 'identidade': campos = (<>
-			{fala()}
 			<Campo rotulo="O que confere"><Opcoes lista={OPCOES.pergunta_identidade} valor={p.pergunta} disabled={dis} onChange={v => setP('pergunta', v)} /></Campo>
-			{tentativas}
 			<Campo inteiro rotulo="Conector que confere no CRM (Validar cadastro)" ajuda="Só o CRM confere a identidade, nunca a IA. Sem o conector, a aprovação fica pendente.">
 				<SelConector conectores={conectores} finalidades={['validar_cadastro']} valor={p.conector_id} disabled={dis} onChange={v => setP('conector_id', v)} />
 			</Campo>
 		</>); break;
-		case 'pergunta': {
-			const ops = (Array.isArray(p.opcoes) ? p.opcoes : []) as { codigo: string; rotulo: string }[];
-			campos = (<>
-				{fala('Pergunta')}
-				{tentativas}
-				<div className="sm:col-span-2">
-					<b className="text-[12px] font-semibold text-[var(--base-texto-2)]">Opções (1 a 6)</b>
-					<div className="mt-1 space-y-1.5">
-						{ops.map((o, i) => (
-							<div key={i} className="flex gap-2">
-								<input aria-label={`Opção ${i + 1}`} value={o.rotulo} maxLength={60} disabled={dis} onChange={e => setP('opcoes', ops.map((x, j) => (j === i ? { ...x, rotulo: e.target.value, codigo: slug(e.target.value) } : x)))} className={sel} style={campoStyle} />
-								{!dis && <button type="button" aria-label="Remover opção" onClick={() => setP('opcoes', ops.filter((_, j) => j !== i))} className="px-2 text-[var(--base-texto-3)]"><Trash2 size={14} /></button>}
-							</div>
-						))}
-						{!dis && ops.length < 6 && <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => setP('opcoes', [...ops, { codigo: `opcao_${ops.length + 1}`, rotulo: `Opção ${ops.length + 1}` }])}>+ opção</button>}
-					</div>
-				</div>
-			</>);
-			break;
-		}
-		case 'intencao': {
-			const its = (Array.isArray(p.intencoes) ? p.intencoes : []) as string[];
-			const ex = (p.exemplos && typeof p.exemplos === 'object' ? p.exemplos : {}) as Record<string, string[]>;
-			campos = (<>
-				{fala()}
-				{tentativas}
-				<Campo rotulo="Confiança mínima (0,50 a 0,95)"><input type="number" step={0.05} min={0.5} max={0.95} value={Number(p.confianca_min ?? 0.7)} disabled={dis} onChange={e => setP('confianca_min', Number(e.target.value))} className={sel} style={campoStyle} /></Campo>
-				<div className="sm:col-span-2">
-					<b className="text-[12px] font-semibold text-[var(--base-texto-2)]">Intenções que esta etapa entende (até 12; catálogo da equipe MotorCX)</b>
-					<div className="mt-1"><Marcar lista={intencoes.filter(i => i.ativa || its.includes(i.codigo)).map(i => [i.codigo, i.nome] as const)} valor={its} disabled={dis} onChange={v => { setP('intencoes', v.slice(0, 12)); setP('exemplos', Object.fromEntries(Object.entries(ex).filter(([k]) => v.includes(k)))); }} /></div>
-				</div>
-				<div className="sm:col-span-2">
-					<Detalhes titulo="Frases de exemplo" qtd="uma por linha, até 10 por intenção">
-						<div className="space-y-2">
-							{its.map(i => (
-								<Campo key={i} inteiro rotulo={intencoes.find(x => x.codigo === i)?.nome ?? i}>
-									<textarea rows={2} disabled={dis} value={(ex[i] ?? []).join('\n')} onChange={e => setP('exemplos', { ...ex, [i]: e.target.value.split('\n').map(x => x.slice(0, 120)).filter(Boolean).slice(0, 10) })} className={`${sel} h-auto py-2`} style={campoStyle} />
-								</Campo>
-							))}
-						</div>
-					</Detalhes>
-				</div>
-			</>);
-			break;
-		}
-		case 'generativa': {
-			campos = (<>
-				<Campo inteiro rotulo="Objetivo da conversa livre" ajuda="Pelo menos 20 caracteres. Só ofertas do conector ou da alçada; nunca inventa.">
-					<textarea rows={4} value={String(p.objetivo ?? '')} disabled={dis} onChange={e => setP('objetivo', e.target.value)} className={`${sel} h-auto py-2 leading-relaxed`} style={campoStyle} />
-				</Campo>
-				<Campo rotulo="Limite de turnos (1 a 40)"><input type="number" min={1} max={40} value={Number(p.max_turnos ?? 8)} disabled={dis} onChange={e => setP('max_turnos', Number(e.target.value))} className={sel} style={campoStyle} /></Campo>
-				<Campo rotulo="Contrapropostas (0 a 5)"><input type="number" min={0} max={5} value={Number(p.contrapropostas_max ?? 2)} disabled={dis} onChange={e => setP('contrapropostas_max', Number(e.target.value))} className={sel} style={campoStyle} /></Campo>
-				<div className="sm:col-span-2"><b className="text-[12px] font-semibold text-[var(--base-texto-2)]">Tom</b><div className="mt-1"><Marcar lista={OPCOES.tom} valor={(p.tom as string[]) ?? []} disabled={dis} onChange={v => setP('tom', v)} /></div></div>
-				<div className="sm:col-span-2"><b className="text-[12px] font-semibold text-[var(--base-texto-2)]">Ferramentas desta etapa</b><div className="mt-1"><Marcar lista={OPCOES.ferramentas} valor={(p.ferramentas as string[]) ?? []} disabled={dis} travado="transferir_humano" onChange={v => setP('ferramentas', [...new Set([...v, 'transferir_humano'])])} /></div></div>
-			</>);
-			break;
-		}
 		case 'oferta': campos = (<>
 			<Campo rotulo="De onde vem a oferta"><Opcoes lista={OPCOES.origem_oferta} valor={p.origem} disabled={dis} onChange={v => setP('origem', v)} /></Campo>
 			{p.origem === 'conector' && <Campo rotulo="Conector (Buscar ofertas)"><SelConector conectores={conectores} finalidades={['buscar_ofertas']} valor={p.conector_id} disabled={dis} onChange={v => setP('conector_id', v)} /></Campo>}
-			{fala()}
 		</>); break;
-		case 'retorno': campos = (<>{fala()}<Campo rotulo="Até quantos dias (1 a 7)"><input type="number" min={1} max={7} value={Number(p.dias_max ?? 7)} disabled={dis} onChange={e => setP('dias_max', Number(e.target.value))} className={sel} style={campoStyle} /></Campo></>); break;
-		case 'conector': campos = (<>
-			<Campo rotulo="Conector"><SelConector conectores={conectores} valor={p.conector_id} disabled={dis} onChange={v => setP('conector_id', v)} /></Campo>
-			{fala('Fala de espera', 'fala_espera')}
-		</>); break;
+		case 'retorno': campos = <Campo rotulo="Até quantos dias (1 a 7)"><input type="number" min={1} max={7} value={Number(p.dias_max ?? 7)} disabled={dis} onChange={e => setP('dias_max', Number(e.target.value))} className={sel} style={campoStyle} /></Campo>; break;
+		case 'conector': campos = <Campo rotulo="Conector"><SelConector conectores={conectores} valor={p.conector_id} disabled={dis} onChange={v => setP('conector_id', v)} /></Campo>; break;
 		case 'registrar': {
 			const cs = (Array.isArray(p.conectores) ? p.conectores : []) as (number | null)[];
 			campos = (<>
@@ -215,10 +189,7 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 			</>);
 			break;
 		}
-		case 'link': campos = (<>
-			<Campo rotulo="Canal"><Opcoes lista={OPCOES.canal_link} valor={p.canal} disabled={dis} onChange={v => setP('canal', v)} /></Campo>
-			{fala()}
-		</>); break;
+		case 'link': campos = <Campo rotulo="Canal"><Opcoes lista={OPCOES.canal_link} valor={p.canal} disabled={dis} onChange={v => setP('canal', v)} /></Campo>; break;
 		case 'condicao': campos = (<>
 			<Campo rotulo="Campo"><Opcoes lista={OPCOES.campo_condicao} valor={p.campo} disabled={dis} onChange={v => { setP('campo', v); setP('valor', v === 'identidade_confirmada' ? true : 1); if (v === 'identidade_confirmada') setP('op', '='); }} /></Campo>
 			<Campo rotulo="Comparação"><Opcoes lista={p.campo === 'identidade_confirmada' ? OPCOES.op.slice(0, 2) : OPCOES.op} valor={p.op} disabled={dis} onChange={v => setP('op', v)} /></Campo>
@@ -226,73 +197,188 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 				? <Opcoes lista={[['true', 'sim'], ['false', 'não']]} valor={String(p.valor)} disabled={dis} onChange={v => setP('valor', v === 'true')} />
 				: <input type="number" value={Number(p.valor ?? 0)} disabled={dis} onChange={e => setP('valor', Number(e.target.value))} className={sel} style={campoStyle} />}</Campo>
 		</>); break;
-		case 'transferir': campos = (<><Campo rotulo="Motivo"><Opcoes lista={OPCOES.motivo_transferir} valor={p.motivo} disabled={dis} onChange={v => setP('motivo', v)} /></Campo>{fala()}</>); break;
-		case 'encerrar': campos = (<>
-			<Campo rotulo="Resultado"><Opcoes lista={OPCOES.resultado_encerrar} valor={p.resultado} disabled={dis} onChange={v => setP('resultado', v)} /></Campo>
-			<Campo rotulo="Código (opcional)" ajuda="Minúsculas e _ (ex.: acordo_registrado)."><input value={String(p.codigo ?? '')} maxLength={41} disabled={dis} onChange={e => { const v = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''); setB(x => { const q = { ...x.params }; if (v) q.codigo = v; else delete q.codigo; return { ...x, params: q }; }); }} className={sel} style={campoStyle} /></Campo>
-			{fala()}
-		</>); break;
+		case 'transferir': campos = <Campo rotulo="Motivo"><Opcoes lista={OPCOES.motivo_transferir} valor={p.motivo} disabled={dis} onChange={v => setP('motivo', v)} /></Campo>; break;
+		case 'encerrar': campos = <Campo rotulo="Resultado"><Opcoes lista={OPCOES.resultado_encerrar} valor={p.resultado} disabled={dis} onChange={v => setP('resultado', v)} /></Campo>; break;
 	}
 
 	const gen = b.tipo === 'generativa';
 	const quandosGen = gen ? [...new Set([...possiveis.map(s => s.quando), ...b.saidas.map(s => s.quando)])] : [];
-	const [novoQuando, setNovoQuando] = useState('');
+	const [novaSaida, setNovaSaida] = useState('');
+	const codigoNova = slug(novaSaida);
+	const ne = seNaoEntender(b);
+	const respostas = (gen ? quandosGen : possiveis.map(s => s.quando)).filter(q => !(ne && q === ne.quando && SO_SEM_ENTENDER.includes(q)));
+	const its = (Array.isArray(p.intencoes) ? p.intencoes : []) as string[];
+	const ex = (p.exemplos && typeof p.exemplos === 'object' ? p.exemplos : {}) as Record<string, string[]>;
+	const ops = (Array.isArray(p.opcoes) ? p.opcoes : []) as { codigo: string; rotulo: string }[];
+	const tituloResp = gen ? 'A conversa termina quando' : b.modo === 'sistema' ? 'Resultado' : 'O cliente pode responder';
+	const trava = b.tipo === 'abertura' ? 'Abertura' : b.tipo === 'identidade' ? 'Identidade' : b.tipo === 'encerrar' && p.resultado === 'recado' ? 'Recado neutro' : null;
+	let n = 0;
 
 	return (
-		<Gaveta aberta onFechar={onFechar} titulo={nome} sub={`${MODOS[b.modo]?.nome ?? b.modo} (no editor antigo: ${MODOS[b.modo]?.antigo ?? b.modo}) · ${TIPOS[b.tipo]?.nome} · código ${b.id}`}
-			pe={editavel ? <>
-				<Botao secundario onClick={() => setConfirmaRemover(true)} disabled={ocupado}><Trash2 size={14} aria-hidden /> Remover etapa</Botao>
-				<Botao onClick={() => void salvar()} disabled={ocupado}>Salvar etapa</Botao>
-			</> : undefined}>
+		<Gaveta aberta onFechar={onFechar} largura={720} titulo={nome}
+			sub={<span className="flex flex-wrap items-center gap-1.5">
+				<ModoChip b={b} />
+				{trava && <SeloTrava>trava: {trava}</SeloTrava>}
+				<span className="rounded-full px-2 py-0.5 text-[11.5px] text-[var(--base-texto-2)]" style={{ backgroundColor: 'var(--base-fill)' }}>{b.tipo === 'abertura' ? 'começo da ligação' : chegam.length === 1 ? 'chega aqui 1 caminho' : `chegam aqui ${chegam.length} caminhos`}</span>
+			</span>}
+			pe={<>
+				{editavel && <Botao secundario onClick={() => setConfirmaRemover(true)} disabled={ocupado}><Trash2 size={14} aria-hidden /> Remover etapa</Botao>}
+				{onTestar && <Botao secundario onClick={onTestar}><Play size={14} aria-hidden /> Testar conversa</Botao>}
+				{editavel && <Botao onClick={() => void salvar()} disabled={ocupado}>Salvar</Botao>}
+			</>}>
 			{credorAntes && <OQueCorrigir impede texto={textoCredorAntes(b)} como={comoCorrigir('valor_antes_identidade')} acao={botaoCredor()} />}
 			{meus.map(e => <OQueCorrigir key={e.codigo} impede={e.impede} texto={e.texto} como={comoCorrigir(e.codigo)} acao={botao(e.codigo)} />)}
 			{!editavel && <p className="text-[12.5px] text-[var(--base-texto-3)]">Somente leitura{situacao !== 'rascunho' ? ': para mudar, edite o rascunho do fluxo.' : '.'}</p>}
-			<div className="grid gap-3 sm:grid-cols-2">
-				<Campo rotulo="Título (opcional)"><input value={b.titulo ?? ''} maxLength={60} disabled={dis} placeholder={TIPOS[b.tipo]?.nome} onChange={e => setB(x => ({ ...x, titulo: e.target.value }))} className={sel} style={campoStyle} /></Campo>
-				<Campo rotulo="Modo da etapa">
-					<select value={b.modo} disabled={dis || modosDoTipo(b.tipo).length < 2} onChange={e => setB(x => ({ ...x, modo: e.target.value as Modo }))} className={sel} style={campoStyle}>
-						{modosDoTipo(b.tipo).map(m => <option key={m} value={m}>{MODOS[m].nome}</option>)}
-					</select>
-				</Campo>
-				{campos}
-			</div>
+
+			<Campo rotulo="Nome da etapa (opcional)"><input value={b.titulo ?? ''} maxLength={60} disabled={dis} placeholder={TIPOS[b.tipo]?.nome} onChange={e => setB(x => ({ ...x, titulo: e.target.value }))} className={sel} style={campoStyle} /></Campo>
+
+			<Secao n={++n} titulo="Como o agente decide nesta etapa" id="sec-modo">
+				<CartoesModo cartoes={cartoesModo(b)} disabled={dis} onEscolher={m => setB(x => ({ ...x, modo: m }))} />
+			</Secao>
+
+			{gen ? (
+				<Secao n={++n} titulo="Objetivo da IA" id="sec-objetivo">
+					<textarea aria-label="Objetivo da IA" rows={4} value={String(p.objetivo ?? '')} disabled={dis} onChange={e => setP('objetivo', e.target.value)} className={`${sel} h-auto py-2 leading-relaxed`} style={campoStyle} />
+					<small className="block text-[11.5px] text-[var(--base-texto-3)]">Escreva como orientaria um bom negociador (pelo menos 20 caracteres). A IA nunca inventa oferta: só usa as que vieram do CRM, dentro da alçada.</small>
+					<div className="grid gap-3 sm:grid-cols-2">
+						<Campo rotulo="Até quantos turnos (1 a 40)"><input type="number" min={1} max={40} value={Number(p.max_turnos ?? 8)} disabled={dis} onChange={e => setP('max_turnos', Number(e.target.value))} className={sel} style={campoStyle} /></Campo>
+						<Campo rotulo="Contrapropostas no máximo (0 a 5)"><input type="number" min={0} max={5} value={Number(p.contrapropostas_max ?? 2)} disabled={dis} onChange={e => setP('contrapropostas_max', Number(e.target.value))} className={sel} style={campoStyle} /></Campo>
+					</div>
+					<div><b className="text-[12px] font-semibold text-[var(--base-texto-2)]">A IA pode</b><div className="mt-1"><Marcar lista={OPCOES.ferramentas} valor={(p.ferramentas as string[]) ?? []} disabled={dis} travado="transferir_humano" onChange={v => setP('ferramentas', [...new Set([...v, 'transferir_humano'])])} /></div></div>
+					<div><b className="text-[12px] font-semibold text-[var(--base-texto-2)]">Jeito de falar</b><div className="mt-1"><Marcar lista={OPCOES.tom} valor={(p.tom as string[]) ?? []} disabled={dis} onChange={v => setP('tom', v)} /></div></div>
+					<p className="text-[12px] text-[var(--base-texto-3)]">"Transferir para humano" fica sempre ligado nesta etapa (trava 6).</p>
+				</Secao>
+			) : kFala ? (
+				<Secao n={++n} titulo={kFala === 'fala_espera' ? 'O agente diz enquanto espera' : b.tipo === 'pergunta' ? 'O agente pergunta' : 'O agente diz'} id="sec-fala">
+					<FalaDoAgente valor={fala} disabled={dis} antesDaIdentidade={antes} onChange={v => setP(kFala, v)} rotulo={kFala === 'fala_espera' ? 'Fala de espera' : 'O que o agente diz'} />
+					<ComoSoa falada={falada} onOuvir={api && perm.editar ? ouvir : undefined} aviso={`Com o cliente de teste (${vars.primeiro_nome}, saldo ${vars.saldo}) e uma oferta de exemplo. Valores e datas por extenso.`} />
+					{checagens.length > 0 && <ChecagensFala itens={checagens} />}
+					{campos && <div className="grid gap-3 sm:grid-cols-2">{campos}</div>}
+				</Secao>
+			) : (
+				<Secao n={++n} titulo="O que a etapa faz" sub={acaoSistema(b)} id="sec-faz">
+					<div className="grid gap-3 sm:grid-cols-2">{campos}</div>
+				</Secao>
+			)}
+
 			{!final && (
-				<div>
-					<b className="text-[12.5px] font-semibold">Saídas</b>
-					<div className="mt-1.5 space-y-2">
-						{(gen ? quandosGen : possiveis.map(s => s.quando)).map(q => {
+				<Secao n={++n} titulo={tituloResp} id="sec-respostas"
+					sub={b.tipo === 'intencao' ? 'A IA entende jeitos diferentes de dizer a mesma coisa. Os exemplos ajudam.' : gen ? 'Quando a conversa termina, o roteiro continua pela etapa escolhida.' : undefined}>
+					{b.tipo === 'intencao' && (
+						<div>
+							<b className="text-[12px] font-semibold text-[var(--base-texto-2)]">O que esta etapa entende (até 12; catálogo da equipe MotorCX)</b>
+							<div className="mt-1"><Marcar lista={intencoes.filter(i => i.ativa || its.includes(i.codigo)).map(i => [i.codigo, i.nome] as const)} valor={its} disabled={dis} onChange={v => { setP('intencoes', v.slice(0, 12)); setP('exemplos', Object.fromEntries(Object.entries(ex).filter(([k]) => v.includes(k)))); }} /></div>
+						</div>
+					)}
+					{b.tipo === 'pergunta' && (
+						<div>
+							<b className="text-[12px] font-semibold text-[var(--base-texto-2)]">Opções que o agente oferece (1 a 6)</b>
+							<div className="mt-1 space-y-1.5">
+								{ops.map((o, i) => (
+									<div key={i} className="flex gap-2">
+										<input aria-label={`Opção ${i + 1}`} value={o.rotulo} maxLength={60} disabled={dis} onChange={e => setP('opcoes', ops.map((x, j) => (j === i ? { ...x, rotulo: e.target.value, codigo: slug(e.target.value) } : x)))} className={sel} style={campoStyle} />
+										{!dis && <button type="button" aria-label="Remover opção" onClick={() => setP('opcoes', ops.filter((_, j) => j !== i))} className="px-2 text-[var(--base-texto-3)]"><Trash2 size={14} /></button>}
+									</div>
+								))}
+								{!dis && ops.length < 6 && <button type="button" className="text-[12.5px] font-semibold text-[var(--destaque)]" onClick={() => setP('opcoes', [...ops, { codigo: `opcao_${ops.length + 1}`, rotulo: `Opção ${ops.length + 1}` }])}>+ opção</button>}
+							</div>
+						</div>
+					)}
+					<div className="space-y-2">
+						{respostas.map(q => {
 							const pos = possiveis.find(s => s.quando === q);
 							const atual = b.saidas.find(s => s.quando === q);
+							const rot = atual?.rotulo ?? pos?.rotulo ?? q;
+							const exs = exemplosDaSaida(b, q);
+							const editaEx = b.tipo === 'intencao' && !dis;
 							return (
-								<div key={q} className="grid gap-1.5 rounded-xl border p-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" style={{ borderColor: 'var(--base-borda)' }}>
-									<input aria-label={`Rótulo de ${q}`} value={atual?.rotulo ?? pos?.rotulo ?? q} maxLength={60} disabled={dis || !atual} onChange={e => setSaida(q, { rotulo: e.target.value })} className={sel} style={campoStyle} />
-									{destino(q)}
-									<small className="text-[11.5px] text-[var(--base-texto-3)] sm:col-span-2">{gen ? 'devolve o controle ao roteiro' : q === 'falhou' ? 'quando o conector ou o envio falha' : 'quando'}: <code>{q}</code>{pos?.obrig ? ' · obrigatória' : ''}</small>
+								<div key={q} data-resposta={q} className="space-y-1.5 rounded-xl p-2.5" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }}>
+									<div className="grid items-center gap-1.5 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+										<input aria-label={`Resposta: ${rot}`} value={rot} maxLength={60} disabled={dis || !atual} onChange={e => setSaida(q, { rotulo: e.target.value })} className={sel} style={campoStyle} />
+										<span className="text-[12.5px] text-[var(--base-texto-2)]">então →</span>
+										{destino(q, rot)}
+									</div>
+									{(exs.exemplos.length > 0 || editaEx) && (
+										<div className="flex flex-wrap items-center gap-1.5" aria-label={`Exemplos de "${rot}"`}>
+											{exs.exemplos.map((x, i) => (
+												<span key={i} className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] text-[var(--base-texto-2)]" style={{ backgroundColor: 'var(--base-fill)' }}>
+													“{x}”{editaEx && !exs.doCatalogo && <button type="button" aria-label={`Tirar o exemplo ${x}`} className="text-[var(--base-texto-3)]" onClick={() => setP('exemplos', { ...ex, [q]: (ex[q] ?? []).filter((_, j) => j !== i) })}><X size={12} /></button>}
+												</span>
+											))}
+											{exs.doCatalogo && exs.exemplos.length > 0 && <small className="text-[11px] text-[var(--base-texto-3)]">exemplos</small>}
+											{editaEx && <NovoExemplo onAdicionar={t => setP('exemplos', { ...ex, [q]: [...(ex[q] ?? []), t.slice(0, 120)].slice(0, 10) })} />}
+										</div>
+									)}
+									{pos?.obrig && !atual && <small className="block text-[11.5px] text-[var(--estado-erro-texto)]">Obrigatória: escolha para onde vai.</small>}
 								</div>
 							);
 						})}
 						{gen && !dis && (
 							<div className="flex gap-2">
-								<input aria-label="Nova saída" placeholder="nova saída (ex.: pediu_boleto)" value={novoQuando} onChange={e => setNovoQuando(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} className={sel} style={campoStyle} />
-								<Botao secundario disabled={!/^[a-z][a-z0-9_]{1,40}$/.test(novoQuando) || quandosGen.includes(novoQuando)} onClick={() => { setB(x => ({ ...x, saidas: [...x.saidas, { quando: novoQuando, rotulo: novoQuando.replace(/_/g, ' '), para: outros[0]?.id ?? '', tipo: 'devolve' }] })); setNovoQuando(''); }}>Adicionar</Botao>
+								<input aria-label="Nova saída" placeholder="Outro fim da conversa (ex.: Pediu boleto)" value={novaSaida} maxLength={60} onChange={e => setNovaSaida(e.target.value)} className={sel} style={campoStyle} />
+								<Botao secundario disabled={!/^[a-z][a-z0-9_]{1,40}$/.test(codigoNova) || quandosGen.includes(codigoNova)} onClick={() => { setB(x => ({ ...x, saidas: [...x.saidas, { quando: codigoNova, rotulo: novaSaida.trim().slice(0, 60), para: outros[0]?.id ?? '', tipo: 'devolve' }] })); setNovaSaida(''); }}>Adicionar</Botao>
 							</div>
 						)}
 					</div>
-				</div>
+				</Secao>
 			)}
-			{final && <p className="text-[12.5px] text-[var(--base-texto-2)]">Etapa final, sem saída.</p>}
-			<Detalhes titulo="Repetição" qtd={b.repetir_max ? `até ${b.repetir_max}×` : 'sem limite definido'}>
-				<p className="mb-2 text-[12.5px] text-[var(--base-texto-2)]">Numa volta (ex.: "Quer outra condição" voltando à negociação), uma das etapas precisa de um limite.</p>
-				<select value={b.repetir_max ?? ''} disabled={dis} onChange={e => setB(x => { const n = { ...x }; if (e.target.value) n.repetir_max = Number(e.target.value); else delete n.repetir_max; return n; })} className={sel} style={campoStyle}>
-					<option value="">sem limite</option>
-					{[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>repetir no máximo {n}×</option>)}
-				</select>
-			</Detalhes>
+			{final && <p className="text-[12.5px] text-[var(--base-texto-2)]">Etapa final: a ligação termina aqui ({resultadoFinal(b)}).</p>}
+
+			{ne && (
+				<Secao n={++n} titulo="Se não entender" id="sec-nao-entender">
+					<div className="space-y-1.5 rounded-xl px-3 py-2.5" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }} data-se-nao-entender>
+						<p className="text-[12.5px] text-[var(--base-texto)]">
+							{ne.repete > 0 ? <>Pede de novo {ne.repete === 1 ? '1 vez' : `${ne.repete} vezes`}: “<Fala texto={ne.fala} />”</> : 'Não pede de novo.'}
+							<span className="text-[var(--base-texto-3)]"> (fala do agente; ainda não é editável)</span>
+						</p>
+						{SO_SEM_ENTENDER.includes(ne.quando) ? (
+							<div className="grid items-center gap-1.5 sm:grid-cols-[auto_minmax(0,1fr)]"><span className="text-[12.5px] text-[var(--base-texto-2)]">Depois, então →</span>{destino(ne.quando, 'não entender')}</div>
+						) : (
+							<p className="text-[12.5px] text-[var(--base-texto-2)]">Depois, segue a resposta “{b.saidas.find(s => s.quando === ne.quando)?.rotulo ?? possiveis.find(s => s.quando === ne.quando)?.rotulo ?? ne.quando}” → <b className="font-semibold text-[var(--base-texto)]">{(() => { const s = b.saidas.find(x => x.quando === ne.quando); return s?.para ? nomeDestino(nomes, s.para) : 'transfere para um atendente'; })()}</b></p>
+						)}
+						<small className="block text-[11.5px] text-[var(--base-texto-3)]">O número de tentativas fica no Avançado.</small>
+					</div>
+					<SeNaoOuvir />
+				</Secao>
+			)}
+
 			{gen && <BaseRespostas versao={versao} bloco={b.id} editavel={editavel && situacao === 'rascunho'} />}
-			{(b.tipo === 'abertura' || b.tipo === 'identidade' || (b.tipo === 'encerrar' && p.resultado === 'recado')) && (
-				<p className="flex items-start gap-1.5 text-[12px] text-[var(--base-texto-3)]">Etapa com trava fixa. Nenhum fluxo desliga; as 7 travas ficam no topo do editor.</p>
-			)}
-			{gen && <p className="text-[12px] text-[var(--base-texto-3)]">"Transferir para humano" fica sempre ligado nesta etapa (trava 6). O resto da conversa é editável.</p>}
+
+			<Detalhes titulo="Avançado" qtd="tentativas, certeza, repetição e códigos internos">
+				<div className="space-y-3">
+					{COM_TENTATIVAS.includes(b.tipo) && (
+						<Campo rotulo="Tentativas antes de seguir (1 a 3)" ajuda={`Com ${Number(p.tentativas ?? 1)}, o agente pede de novo ${Math.max(0, Number(p.tentativas ?? 1) - 1)} ${Number(p.tentativas ?? 1) - 1 === 1 ? 'vez' : 'vezes'} quando não entende.`}>
+							<input type="number" min={1} max={3} value={Number(p.tentativas ?? 1)} disabled={dis} onChange={e => setP('tentativas', Number(e.target.value))} className={sel} style={campoStyle} />
+						</Campo>
+					)}
+					{b.tipo === 'intencao' && (
+						<Campo rotulo="Certeza mínima para escolher o caminho" ajuda={CERTEZAS.find(([v]) => Math.abs(v - Number(p.confianca_min ?? 0.7)) < 0.001)?.[2] ?? 'Valor escolhido antes; vale como está.'}>
+							<select value={String(Number(p.confianca_min ?? 0.7))} disabled={dis} onChange={e => setP('confianca_min', Number(e.target.value))} className={sel} style={campoStyle}>
+								{!CERTEZAS.some(([v]) => Math.abs(v - Number(p.confianca_min ?? 0.7)) < 0.001) && <option value={String(Number(p.confianca_min ?? 0.7))}>{certezaEmPalavras(p.confianca_min)}</option>}
+								{CERTEZAS.map(([v, t]) => <option key={v} value={String(v)}>{t}</option>)}
+							</select>
+						</Campo>
+					)}
+					<Campo rotulo="Se voltar para esta etapa" ajuda={'Numa volta (ex.: "Quer outra condição" voltando à negociação), uma das etapas precisa de um limite.'}>
+						<select value={b.repetir_max ?? ''} disabled={dis} onChange={e => setB(x => { const nb = { ...x }; if (e.target.value) nb.repetir_max = Number(e.target.value); else delete nb.repetir_max; return nb; })} className={sel} style={campoStyle}>
+							<option value="">sem limite</option>
+							{[1, 2, 3, 4, 5].map(k => <option key={k} value={k}>no máximo {k} {k === 1 ? 'vez' : 'vezes'}</option>)}
+						</select>
+					</Campo>
+					{b.tipo === 'encerrar' && (
+						<Campo rotulo="Código do resultado (opcional)" ajuda="Minúsculas e _ (ex.: acordo_registrado). Aparece nos relatórios.">
+							<input value={String(p.codigo ?? '')} maxLength={41} disabled={dis} onChange={e => { const v = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''); setB(x => { const q = { ...x.params }; if (v) q.codigo = v; else delete q.codigo; return { ...x, params: q }; }); }} className={sel} style={campoStyle} />
+						</Campo>
+					)}
+					<div className="rounded-xl px-3 py-2.5 text-[12px] text-[var(--base-texto-2)]" style={{ backgroundColor: 'var(--base-fill)' }} data-codigos>
+						<b className="block font-semibold text-[var(--base-texto)]">Códigos internos</b>
+						<span className="block">Etapa <code>{b.id}</code> · tipo <code>{b.tipo}</code> · modo <code>{MODOS[b.modo]?.antigo ?? b.modo}</code></span>
+						{b.saidas.length > 0 && <span className="block">Respostas: {b.saidas.map(s => <span key={s.quando} className="mr-2 inline-block"><code>{s.quando}</code> ({s.rotulo})</span>)}</span>}
+					</div>
+				</div>
+			</Detalhes>
+
+			{trava && <p className="flex items-start gap-1.5 text-[12px] text-[var(--base-texto-3)]">Etapa com trava fixa. Nenhum fluxo desliga; as 7 travas ficam no topo do editor.</p>}
 			<ConfirmaCorrecao local correcao={previa} onFechar={() => setPrevia(null)}
 				onConfirmar={c => { const nb = c.definicao.blocos.find(x => x.id === b.id); if (nb) setB(nb); setPrevia(null); }} />
 			<ConfirmaAcao
@@ -308,6 +394,19 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 				onConfirm={() => void (async () => { setOcupado(true); const ok = await onRemover(b.id); setOcupado(false); setConfirmaRemover(false); if (ok) onFechar(); })()}
 			/>
 		</Gaveta>
+	);
+}
+
+/** "+ exemplo": uma frase curta que a pessoa diria (até 120 caracteres). */
+function NovoExemplo({ onAdicionar }: { onAdicionar: (t: string) => void }) {
+	const [aberto, setAberto] = useState(false);
+	const [t, setT] = useState('');
+	if (!aberto) return <button type="button" onClick={() => setAberto(true)} className="h-7 rounded-full px-2.5 text-[12px] font-semibold text-[var(--destaque)]" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }}>+ exemplo</button>;
+	const ok = () => { if (t.trim()) onAdicionar(t.trim()); setT(''); setAberto(false); };
+	return (
+		<input autoFocus aria-label="Novo exemplo" value={t} maxLength={120} placeholder="como a pessoa diria" onChange={e => setT(e.target.value)}
+			onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ok(); } if (e.key === 'Escape') setAberto(false); }} onBlur={ok}
+			className={`${campoCls} h-7 w-48 text-[12px]`} style={campoStyle} />
 	);
 }
 

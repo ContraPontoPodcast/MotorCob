@@ -1,0 +1,34 @@
+{
+  "_sobre": "Como a fala vai ser dita (\"Como soa no telefone\"): a mesma tabela roda no site (site/src/lib/falado.ts, site/fluxo/fluxo.test.ts) e no Python (voz/falado.py, tests/test_voz_falado.py). Dados fictícios.",
+  "numeros": [
+    [0, "zero"], [1, "um"], [2, "dois"], [10, "dez"], [14, "quatorze"], [16, "dezesseis"], [21, "vinte e um"],
+    [45, "quarenta e cinco"], [100, "cem"], [101, "cento e um"], [230, "duzentos e trinta"], [999, "novecentos e noventa e nove"],
+    [1000, "mil"], [1001, "mil e um"], [1100, "mil e cem"], [1380, "mil trezentos e oitenta"], [2000, "dois mil"],
+    [2026, "dois mil e vinte e seis"], [2500, "dois mil e quinhentos"], [21345, "vinte e um mil trezentos e quarenta e cinco"],
+    [100000, "cem mil"], [1000000, "um milhão"], [2500000, "dois milhões e quinhentos mil"], [1000001, "um milhão e um"]
+  ],
+  "falas": [
+    ["Consta R$ 1.380,00 em aberto.", "Consta mil trezentos e oitenta reais em aberto."],
+    ["São 6 parcelas de R$ 230,00, a primeira em 05/12.", "São seis parcelas de duzentos e trinta reais, a primeira em cinco de dezembro."],
+    ["Fica 6× de R$ 230,00?", "Fica seis vezes de duzentos e trinta reais?"],
+    ["Fica 2x de R$ 690,00.", "Fica duas vezes de seiscentos e noventa reais."],
+    ["Uma parcela de R$ 1,00.", "Uma parcela de um real."],
+    ["Entrada de R$ 0,50.", "Entrada de cinquenta centavos."],
+    ["Total de R$ 1.380,55.", "Total de mil trezentos e oitenta reais e cinquenta e cinco centavos."],
+    ["Saldo de R$ 1.000.000,00.", "Saldo de um milhão de reais."],
+    ["Consta 1.380,00 em aberto.", "Consta mil trezentos e oitenta reais em aberto."],
+    ["Vence em 01/03.", "Vence em primeiro de março."],
+    ["Vence em 15/03/2026.", "Vence em quinze de março de dois mil e vinte e seis."],
+    ["Desconto de 15% à vista.", "Desconto de quinze por cento à vista."],
+    ["Juros de 2,5% ao mês.", "Juros de dois vírgula cinco por cento ao mês."],
+    ["Ligo amanhã às 10h.", "Ligo amanhã às dez horas."],
+    ["Ligo às 14h30.", "Ligo às quatorze horas e trinta minutos."],
+    ["Ligo às 9:05.", "Ligo às nove horas e cinco minutos."],
+    ["São 2 parcelas e 45 dias de atraso.", "São duas parcelas e quarenta e cinco dias de atraso."],
+    ["Em até 12 vezes.", "Em até doze vezes."],
+    ["Uma vez só: 1 vez.", "Uma vez só: uma vez."],
+    ["Olá, {{primeiro_nome}}. Tudo bem?", "Olá, {{primeiro_nome}}. Tudo bem?"],
+    ["Data 32/13 não existe.", "Data 32/13 não existe."],
+    ["Protocolo 1234567890.", "Protocolo 1234567890."]
+  ]
+}

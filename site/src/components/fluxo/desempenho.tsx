@@ -103,12 +103,12 @@ export function DesempenhoFluxo() {
 					{degraus.map(d => <BarraH key={d.bloco.id} rotulo={`${d.bloco.id} · ${tituloBloco(d.bloco)}`} valor={d.chegaram} max={max} texto={`${nTxt(d.chegaram)} · ${pctTxt(d.pctAtendidas)}`} onClick={() => setDegrau(d)} />)}
 				</Cartao>
 				<Cartao titulo="Mais detalhes">
-					<div className="mb-3"><Seg rotulo="Detalhe" valor={aba} onChange={setAba} itens={[{ v: 'intencoes', n: 'Intenções' }, { v: 'livre', n: 'Conversa livre' }, { v: 'conectores', n: 'Conectores' }, { v: 'versoes', n: anterior ? `v${anterior.versao} × v${atual!.versao}` : 'Versões' }]} /></div>
+					<div className="mb-3"><Seg rotulo="Detalhe" valor={aba} onChange={setAba} itens={[{ v: 'intencoes', n: 'Intenções' }, { v: 'livre', n: 'IA conversa' }, { v: 'conectores', n: 'Conectores' }, { v: 'versoes', n: anterior ? `v${anterior.versao} × v${atual!.versao}` : 'Versões' }]} /></div>
 					{aba === 'intencoes' ? (
 						intBlocos.length && totInt ? <>
 							{[...ints.entries()].sort((a, b) => b[1] - a[1]).map(([i, n]) => <BarraH key={i} rotulo={i} valor={n} max={Math.max(...ints.values())} texto={`${pctTxt(n / totInt)} · ${nTxt(n)}`} />)}
 							<p className="mt-2 text-[12px] text-[var(--base-texto-3)]">Etapas: {intBlocos.map(b => `${b.id} · ${tituloBloco(b)}`).join(', ')}. "nao_entendido" alto pede mais frases de exemplo nas intenções.</p>
-						</> : <p className="text-[13px] text-[var(--base-texto-2)]">{intBlocos.length ? 'Sem intenções contadas no período.' : 'Este fluxo não tem etapa "Entende e escolhe" de intenção.'}</p>
+						</> : <p className="text-[13px] text-[var(--base-texto-2)]">{intBlocos.length ? 'Sem intenções contadas no período.' : 'Este fluxo não tem etapa "IA entende a resposta" de intenção.'}</p>
 					) : aba === 'livre' ? (
 						gens.length ? <Tabela cabecalho={['Etapa · motivo', 'Foi para', 'Conversas', 'Turnos médios']} numericas={[2, 3]}
 							linhas={gens.flatMap(g => Object.entries(mAtual.get(g.id)?.saidas ?? {}).sort((a, b) => b[1] - a[1]).map(([q, n]) => {
@@ -116,7 +116,7 @@ export function DesempenhoFluxo() {
 								const tot = mAtual.get(g.id)?.chegaram || 0;
 								return [`${g.id} · ${s?.rotulo ?? q.replace(/_/g, ' ')}`, s?.para ?? '—', `${nTxt(n)} · ${pctTxt(tot ? n / tot : null)}`, mAtual.get(g.id)?.turnos_medio != null ? String(mAtual.get(g.id)!.turnos_medio).replace('.', ',') : '—'];
 							}))} vazio={<p className="text-[13px] text-[var(--base-texto-2)]">Sem devoluções da conversa livre no período.</p>} />
-							: <p className="text-[13px] text-[var(--base-texto-2)]">Este fluxo não tem Conversa livre (IA).</p>
+							: <p className="text-[13px] text-[var(--base-texto-2)]">Este fluxo não tem etapa "IA conversa".</p>
 					) : aba === 'conectores' ? (
 						porCon.length ? <Tabela cabecalho={['Conector', 'Chamadas', 'Erro', 'O que o fluxo fez']} numericas={[1, 2]}
 							linhas={porCon.map(([id, a]) => [`C${id}`, nTxt(a.n), `${pctTxt(a.erro / a.n)} · ${nTxt(a.tempo)} esgotados`, a.alt ? `${nTxt(a.alt)} usaram as ofertas da carteira` : `${nTxt(a.erro)} seguiram pelo ramo de falha`])} />
