@@ -25,7 +25,7 @@ import random
 import re
 
 from voz.analise import analisador as AN
-from voz.persona import RE_PESSOAL, filtrar_fala
+from voz.persona import filtrar_fala
 from voz.transcricao import redacao as RED
 
 log = logging.getLogger("motorcx.voz.treino")
@@ -69,9 +69,11 @@ def saldo_ficticio(faixa: str | None, semente: int) -> str | None:
 
 def mascarar_fala(texto: str) -> str:
     """Fala que vai para o banco: a mesma máscara da transcrição das ligações, sem e-mail nem 9+ dígitos, até 600."""
-    t = RED.mascarar(texto or "")[0]
-    t = RE_PESSOAL.sub("***", t).replace("@", " ")
-    return re.sub(r"\s+", " ", t).strip()[:MAX_TEXTO]
+    # palavra com "@" (e-mail) vira *** antes de tudo, sem regex sobre o texto de fora (tempo linear)
+    t = " ".join("***" if "@" in w else w for w in (texto or "")[:2 * MAX_TEXTO].split())
+    t = RED.mascarar(t)[0]
+    t = re.sub(r"\d{9,}", "***", t).replace("@", " ")
+    return " ".join(t.split())[:MAX_TEXTO]
 
 
 def _txt(v, n: int) -> str:
@@ -83,7 +85,11 @@ def _lista(v, n: int, tam: int = 200) -> list[str]:
 
 
 def primeiro_nome(persona: str) -> str:
-    return re.sub(r"\s*\((fictícia|fictício)\)\s*$", "", persona or "").strip() or "Ana"
+    p = (persona or "").strip()
+    for fim in ("(fictícia)", "(fictício)"):
+        if p.endswith(fim):
+            p = p[: -len(fim)].strip()
+    return p or "Ana"
 
 
 def prompt_cliente(cen: dict, saldo: str | None) -> str:
