@@ -117,6 +117,12 @@ class Chamada:
     desligar_ate: datetime | None = None        # tocando a mensagem de sem robô: desliga no fim (ou neste prazo)
     sem_operador: bool = False                  # pediu humano e não houve operador (V8: conta mesmo se o agente voltou)
     ctx: object = None                          # ContextoChamada da conversa (B5: reconectar o agente sem humano)
+    # SQL 125 · minuto falado com a IA (o que a empresa paga): trechos [início, fim|None, motivo do fim]. Abre quando o
+    # agente entra na conversa, fecha no INÍCIO da transferência (a cobrança para ali), reabre quando o agente volta
+    # sem humano; máquina, sem robô e AMD não abrem nada. A cadência e o preço são do banco (tarifar_ia_chamada_voz)
+    ia_trechos: list = field(default_factory=list)
+    ia_sessao_ini: datetime | None = None       # sessão do provedor (custo nosso, inclui o toque da ponte)
+    ia_sessao_fim: datetime | None = None
 
     @property
     def candidata(self):
@@ -153,6 +159,46 @@ def _int(v):
         return int(str(v).strip().split()[-1]) if v not in (None, "") else None
     except (ValueError, IndexError):
         return None
+
+
+MAX_TRECHOS_IA = 5        # voz_chamadas.ia_trechos (o que passar disso vai somado no último)
+
+
+def ia_abrir(c: Chamada, agora: datetime) -> None:
+    """O agente está na conversa: abre um trecho cobrável (nada se já há um aberto). Reabrir no mesmo instante em que o
+    anterior fechou (transferência que nem começou) continua o mesmo trecho."""
+    if c.ia_trechos and c.ia_trechos[-1][1] is None:
+        return
+    if c.ia_trechos and c.ia_trechos[-1][1] == agora:
+        c.ia_trechos[-1][1], c.ia_trechos[-1][2] = None, None
+    else:
+        c.ia_trechos.append([agora, None, None])
+    c.ia_sessao_ini = c.ia_sessao_ini or agora
+
+
+def ia_fechar(c: Chamada, agora: datetime, motivo: str) -> None:
+    """Fecha o trecho aberto (transferencia | agente_encerrou | fim)."""
+    if c.ia_trechos and c.ia_trechos[-1][1] is None:
+        c.ia_trechos[-1][1], c.ia_trechos[-1][2] = max(agora, c.ia_trechos[-1][0]), motivo
+
+
+def ia_medicao(c: Chamada) -> dict:
+    """Campos do minuto de IA para voz_chamadas: soma dos trechos em milésimos e a sessão do provedor. Ligação não
+    atendida não manda nada; atendida sem conversa (máquina, sem robô) manda 0."""
+    if c.t_atendeu is None:
+        return {}
+    fechados = [t for t in c.ia_trechos if t[1] is not None]
+    soma = round(sum((f - i).total_seconds() for i, f, _ in fechados), 3)
+    trechos = [list(t) for t in fechados]
+    if len(trechos) > MAX_TRECHOS_IA:                 # o banco guarda até 5: o resto vai no último (a soma é a real)
+        trechos = trechos[:MAX_TRECHOS_IA - 1] + [[trechos[MAX_TRECHOS_IA - 1][0], trechos[-1][1], trechos[-1][2]]]
+    sessao = None
+    if c.ia_sessao_ini is not None:
+        sessao = round(max(((c.ia_sessao_fim or c.t_fim or c.ia_sessao_ini) - c.ia_sessao_ini).total_seconds(), 0), 3)
+    return {"ia_inicio_em": fechados[0][0] if fechados else None,
+            "ia_fim_em": fechados[0][1] if fechados else None,
+            "ia_retomada_em": fechados[1][0] if len(fechados) > 1 else None,
+            "ia_trechos": trechos or None, "segundos_ia": soma, "segundos_sessao_ia": sessao}
 
 
 class Orquestrador:
@@ -480,6 +526,8 @@ class Orquestrador:
                 self._resultado_amd(c, args[1:], agora)
             elif etapa == "provedor" and canal == c.canal_provedor:
                 self.ari.adicionar_na_ponte(c.ponte, [canal])
+                if c.estado == "conversa":         # SQL 125: o agente (SIP) entrou na ponte: a IA começa a contar
+                    ia_abrir(c, agora)
             elif etapa == "humano" and canal == c.canal_humano:
                 self._humano_atendeu(c, agora)
             elif etapa == "transferencia" and canal == c.canal:
@@ -492,6 +540,7 @@ class Orquestrador:
             elif canal == c.canal_provedor:
                 c.canal_provedor = None
                 if c.estado == "conversa":         # o provedor caiu/encerrou no meio da conversa
+                    ia_fechar(c, agora, "agente_encerrou")
                     self._desligar_cliente(c)
         elif tipo == "ChannelTransfer" and canal == c.canal_provedor:
             # REFER do provedor (ElevenLabs: sip:transferir-<motivo>@...): a transferência é feita pelo MotorCX
@@ -645,6 +694,9 @@ class Orquestrador:
             c.canal_provedor = f"{c.id}-p"
             self.ari.midia_externa(c.canal_provedor, APP, con.host_porta, con.formato)
             self.ari.adicionar_na_ponte(c.ponte, [c.canal_provedor])
+            ia_abrir(c, agora)                  # SQL 125: o áudio do agente já está na ponte
+        else:                                   # interno: o agente fala pelo próprio orquestrador desde iniciar()
+            ia_abrir(c, agora)
 
     # ---------------------------------------------------------------- eventos do provedor
     def evento_provedor(self, id_chamada: str, tipo: str, dados: dict) -> None:
@@ -693,7 +745,7 @@ class Orquestrador:
             c.resultado_ia = r
         elif r:
             self._alerta(f"provedor {c.provedor}: resultado desconhecido '{r}' (ignorado)")
-        for k in ("identidade_confirmada", "data_promessa", "valor_promessa", "retorno_em"):
+        for k in ("identidade_confirmada", "data_promessa", "valor_promessa", "retorno_em", "duracao_ia_provedor_s"):
             if dados.get(k) is not None:
                 c.extras[k] = dados[k]
 
@@ -712,6 +764,7 @@ class Orquestrador:
             next((x for x in ativos if x.credor_id is None), None)
 
     def _transferir(self, c: Chamada, motivo: str, agora: datetime) -> None:
+        ia_fechar(c, agora, "transferencia")    # SQL 125: a cobrança da IA termina no INÍCIO da transferência
         c.t_transferencia = agora
         tf = self._destino_humano(c)
         if tf is None:
@@ -816,6 +869,7 @@ class Orquestrador:
                 self._alerta(f"provedor {c.provedor}: não voltou ao agente ({ex.__class__.__name__})")
                 voltou = False
             if voltou:
+                ia_abrir(c, self.relogio())     # SQL 125: o agente voltou (ninguém atendeu): volta a contar
                 self._conta(f"transferencia_{motivo}_voltou_agente")
                 return
         if self._reconectar_agente(c, prov, motivo):
@@ -866,6 +920,8 @@ class Orquestrador:
         self._sem_humano(c, "sem_operador" if (q in SEM_OPERADOR_Q850 or s in SEM_OPERADOR_SIP) else "falhou")
 
     def _soltar_provedor(self, c: Chamada) -> None:
+        if c.ia_sessao_ini is not None and not c.agente_solto:   # SQL 125: fim da sessão do provedor (custo)
+            c.ia_sessao_fim = self.relogio()
         if c.conversando:                       # o robô fica livre para a próxima conversa
             c.conversando = False
             self.agendador.fim_conversa(c.empresa_id)
@@ -940,6 +996,9 @@ class Orquestrador:
         self.chamadas.pop(c.id, None)
         prov = self.provedores.get(c.provedor or "")
         espera = getattr(prov, "espera_resultado_s", 0) if prov is not None else 0
+        ia_fechar(c, agora, "fim")              # SQL 125: a conversa com o agente acabou junto com a ligação
+        if c.ia_sessao_ini is not None and not c.agente_solto:
+            c.ia_sessao_fim = agora
         self._soltar_provedor(c)
         if c.canal_humano:
             self.ari.desligar(c.canal_humano)
@@ -985,7 +1044,10 @@ class Orquestrador:
             lote_id=self.lotes[c.lote_chave].lote_id if c.lote_chave in self.lotes else None,
             destino_hash=hash_destino(c.item.telefone), passada=c.passagem.get("passada"),
             situacao_origem=c.passagem.get("situacao_origem"), resubmit_ref=c.passagem.get("resubmit_ref"),
-            onda_chave=c.passagem.get("onda_chave"))
+            onda_chave=c.passagem.get("onda_chave"), **ia_medicao(c))
+        dur = c.extras.get("duracao_ia_provedor_s")
+        if dur is not None and ev.segundos_sessao_ia is not None and abs(float(dur) - ev.segundos_sessao_ia) > 2:
+            self._conta("divergencia_duracao_ia")     # só monitoramento: quem cobra é a medição da VM
         if c.gravando and c.t_atendeu and self.fila_envio is not None:
             objeto = G.nome_objeto(c.lote_chave[1] if c.lote_chave else None, ev.data, c.id)
             ev.gravacao = f"gs://{c.bucket}/{objeto}"

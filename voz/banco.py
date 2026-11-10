@@ -71,6 +71,9 @@ COLUNAS: dict[str, dict[str, str]] = {
         # SQL 65 · Resubmit e contato por passada
         "lote_id": "lote_id", "onda_id": "onda_id", "destino_hash": "destino_hash", "passada": "passada",
         "situacao_origem": "situacao_origem", "resubmit_id": "resubmit_id",
+        # SQL 125 · minuto falado com a IA (a VM mede; cadência, preço e valor são do gatilho tarifar_ia_chamada_voz)
+        "ia_inicio_em": "ia_inicio_em", "ia_fim_em": "ia_fim_em", "ia_retomada_em": "ia_retomada_em",
+        "ia_trechos": "ia_trechos", "segundos_ia": "segundos_ia", "segundos_sessao_ia": "segundos_sessao_ia",
     },
     # SQL 65 · cada decisão do Resubmit (automático ou "Reenviar agora"): só destino_hash, nunca o telefone
     "voz_resubmits": {
