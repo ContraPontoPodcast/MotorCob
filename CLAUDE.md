@@ -1046,6 +1046,16 @@ motor não muda; o `voz_config.pico_multiplo` guardado fica). Funções novas (s
 fatura: `faturamento`, `precos_produtos`, `contratacao_ciclo`, `ciclo_pagamento`) rodarem de novo, rode o 98 depois.
 Teste: `supabase/testes/testar_licencas_fatura.py`.
 
+**Site · Contratação › Agente de voz › Robôs contratados (PR 3 do plano, sem SQL).** Seção em Empresa › Contratação
+(`robos-contratados.tsx`: resumo com KPIs, limite real, mudança agendada e a prévia real do ciclo) e as telas
+`/empresa/contratacao/robos` (editar: quantidade, por robô ou valor fechado, agora com pro rata ou próximo ciclo,
+fidelidade, franquia, transcrição, motivo, limite real, overbooking com confirmação, revisão → `salvar_licencas_voz`) e
+`/empresa/contratacao/robos/historico` (`licencas_voz`); as duas voltam para a Contratação (`rota-pai.ts`). As contas da
+prévia simulada ficam em `site/src/lib/licencas-voz.ts`, iguais às do SQL 98 (o teste usa os mesmos números). Avisos:
+mudança agendada continua valendo depois de um aumento "agora"; preço trocado "agora" é cobrado pelos dias (crédito se
+menor); sem a linha `voz_minuto_ia_franquia` na prévia, a tela avisa que o SQL 98 falta. `ITENS_FATURA_VOZ` ganha
+`voz_licenca_robo` e `ehItemFaturaVoz` cobre ajustes e franquia (`faturamento-voz.tsx`).
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

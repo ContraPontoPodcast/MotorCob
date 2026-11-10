@@ -11,7 +11,7 @@ import { CalendarDays, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, friendlyError, moneyBR, today, type Row } from '@/lib/supabase';
 import { mesExtenso } from '@/lib/empresa-helpers';
-import { ITENS_FATURA_VOZ, TIPOS_ROTA, baixarTexto, cadenciaTxt, competencias, inteiro, paraCsv, reais } from '@/lib/voz';
+import { ehItemFaturaVoz, TIPOS_ROTA, baixarTexto, cadenciaTxt, competencias, inteiro, paraCsv, reais } from '@/lib/voz';
 import { Aviso, Cartao, Vazio, btnPrim } from '@/components/comuns/voz-ui';
 import { Gaveta, Kpis, ListaValores, Pilula, Tabela } from '@/components/ds';
 
@@ -40,7 +40,7 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 				supabase!.from('voz_config').select('empresa_id,pico_multiplo').eq('empresa_id', eid).maybeSingle(),
 			]);
 			if (!ativo) return;
-			const lista = ((pf.data ?? []) as Row[]).filter(r => (ITENS_FATURA_VOZ as readonly string[]).some(c => String(r.item ?? '') === c || String(r.item ?? '') === `${c}_minimo`));
+			const lista = ((pf.data ?? []) as Row[]).filter(r => ehItemFaturaVoz(r.item));   // robôs (licenças), ajuste pro rata e franquia (SQL 98) também
 			setItens(lista);
 			setConsumo((cm.data ?? []) as Row[]);
 			setRotas((ro.data ?? []) as Row[]);
@@ -64,6 +64,7 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 
 	const totFat = itens.reduce((t, i) => t + Number(i.valor ?? 0), 0);
 	const temPico = itens.some(i => i.item === 'voz_minuto_ia_pico' && Number(i.quantidade ?? 0) > 0);
+	const temLicenca = itens.some(i => String(i.item ?? '').startsWith('voz_licenca_robo') || i.item === 'voz_minuto_ia_franquia');
 	const totTel = linhas.reduce((t, l) => t + (l.custo ?? 0), 0);
 	const totCh = linhas.reduce((t, l) => t + Number(l.chamadas ?? 0), 0);
 	const totSeg = linhas.reduce((t, l) => t + Number(l.segundos_tarifados ?? 0), 0);
@@ -117,7 +118,7 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 				{ rotulo: 'Telefonia estimada · paga à operadora', valor: moneyBR(totTel), detalhe: `fora da fatura do MotorCX${chSemCusto ? ` · ${inteiro(chSemCusto)} chamadas sem custo` : ''}`, tom: chSemCusto ? 'atencao' : undefined },
 			]} />
 
-			<Cartao semPad titulo="Itens faturados pelo MotorCX" desc="Plataforma, minuto de IA, transcrição e gestão do tronco. Os outros produtos entram na mesma fatura, em Itens do mês.">
+			<Cartao semPad titulo="Itens faturados pelo MotorCX" desc="Robôs contratados (licenças), plataforma, minuto de IA, transcrição e gestão do tronco. Os outros produtos entram na mesma fatura, em Itens do mês.">
 				<Tabela rotulo="Itens faturados" linhas={itens} chave={i => String(i.item) + String(i.descricao ?? '')}
 					vazio={<div className="px-1"><Vazio titulo="Nenhum item do agente virtual neste mês">Quando o agente ligar de verdade, o minuto de IA, a transcrição e a gestão do tronco aparecem aqui.</Vazio></div>}
 					colunas={[
@@ -126,7 +127,7 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 						{ id: 'preco', titulo: 'Preço', num: true, celula: i => { const preco = Number(i.preco ?? 0); return <span className="text-[var(--base-texto-2)]">{preco > 0 && preco < 1 ? reais(preco, 3) : moneyBR(preco)}</span>; } },
 						{ id: 'valor', titulo: 'Valor', num: true, celula: i => <b>{moneyBR(i.valor)}</b> },
 					]}
-					rodape={itens.length ? <><span>{temPico ? 'Pico ligado: o minuto de IA acima do limite sai como item próprio, ao dobro.' : 'Sem minuto no pico neste mês.'}</span><b className="tnum text-[var(--base-texto)]">Total {moneyBR(totFat)}</b></> : undefined} />
+					rodape={itens.length ? <><span>{temLicenca ? 'Robôs contratados: a franquia de minutos de IA vem da licença, sem minuto no pico; mudança no meio do ciclo entra como ajuste pro rata.' : temPico ? 'Pico ligado: o minuto de IA acima do limite sai como item próprio, ao dobro.' : 'Sem minuto no pico neste mês.'}</span><b className="tnum text-[var(--base-texto)]">Total {moneyBR(totFat)}</b></> : undefined} />
 			</Cartao>
 
 			<Cartao semPad titulo="Telefonia (paga à operadora)" desc="Não entra na fatura do MotorCX. Consumo do mês por rota, com a cadência e o preço do contrato da empresa, para conferir com a fatura da operadora.">
