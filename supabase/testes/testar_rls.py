@@ -2973,5 +2973,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 98: robôs contratados na fatura (testar_licencas_fatura.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 101 · Robôs contratados na divisão do teto global: licenças primeiro (proporcional no overbooking), sobra para quem
+# não tem licença pelos canais, motivo, cliente sem o teto global, VM com as colunas novas, aviso do teto abaixo do vendido
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_licencas_divisao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 101: robôs contratados na divisão (testar_licencas_divisao.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
