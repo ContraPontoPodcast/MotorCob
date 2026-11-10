@@ -39,6 +39,8 @@ export default [
     route('empresa/uso-ia', 'routes/empresa-uso-ia.tsx'),
     route('empresa/faturamento', 'routes/empresa-faturamento.tsx'),
     route('empresa/contratacao', 'routes/empresa-contratacao.tsx'),
+    route('empresa/contratacao/robos', 'routes/empresa-contratacao-robos.tsx'),
+    route('empresa/contratacao/robos/historico', 'routes/empresa-contratacao-robos-historico.tsx'),
     route('conta', 'routes/conta.tsx'),
     route('conta/permissoes', 'routes/conta-permissoes.tsx'),
     route('conta/seguranca', 'routes/conta-seguranca.tsx'),

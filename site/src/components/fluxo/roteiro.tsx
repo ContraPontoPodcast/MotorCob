@@ -10,7 +10,7 @@ import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight, Lock, Settings2 } from 'lucide-react';
 import { Pilula } from '@/components/voz/ui';
 import {
-	MODOS, acaoSistema, comoCorrigir, ehFinal, nomeDestino, nomesEtapas, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, textoVolta,
+	MODOS, acaoSistema, comoCorrigir, ehFinal, nomeDestino, nomesEtapas, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, seNaoOuvir, textoVolta,
 	type Bloco, type Capitulo, type Definicao, type Pendencia,
 } from '@/lib/fluxo';
 import { FALA_PERGUNTA, textoFonte, textoPerguntas, usaArquivo, type ConfigIdentidade, type PerguntaIdentidade } from '@/lib/identidade-mailing';
@@ -71,7 +71,9 @@ export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, 
 	const saidaNe = ne ? b.saidas.find(s => s.quando === ne.quando) : undefined;
 	const rotuloNe = saidaNe?.rotulo ?? ne?.quando.replace(/_/g, ' ') ?? '';
 	// "Não entendi" e "Sem resposta" só acontecem quando o agente não entende: aparecem em "Se não entender", não como resposta.
-	const respostas = b.saidas.filter(s => !(ne && s.quando === ne.quando && SO_SEM_ENTENDER.includes(s.quando)));
+	const no = seNaoOuvir(b);
+	const saidaNo = no?.quando ? b.saidas.find(s => s.quando === no.quando) : undefined;
+	const respostas = b.saidas.filter(s => !(ne && s.quando === ne.quando && SO_SEM_ENTENDER.includes(s.quando)) && !(no && s.quando === 'silencio'));
 	const fala = typeof p.fala === 'string' ? p.fala.trim() : '';
 	const tituloResp = b.tipo === 'generativa' ? 'A conversa termina quando' : b.modo === 'sistema' ? 'Resultado' : 'O cliente pode responder';
 	return (
@@ -141,7 +143,14 @@ export function EtapaRoteiro({ b, n, definicao, nomes, numeros, marca, onAbrir, 
 							{ne.repete > 0 && <>pede de novo {ne.repete === 1 ? '1 vez' : `${ne.repete} vezes`} (“<Fala texto={ne.fala} />”) · depois</>}
 							{saidaNe ? <><Seta /><Destino nomes={nomes} para={saidaNe.para} /></> : <>{ne.repete > 0 ? ' ' : ''}transfere para um atendente <span className="text-[var(--base-texto-3)]">(“{rotuloNe}” não está ligada a uma etapa)</span></>}
 						</Linha>
-						<Linha q="Se não ouvir nada" fraca><span className="text-[var(--base-texto-3)]">Ainda sem tratamento próprio: hoje o agente espera a pessoa falar.</span></Linha>
+						{no && (
+							<Linha q="Se não ouvir nada" fraca>
+								{no.repete > 0 && <>pede de novo {no.repete === 1 ? '1 vez' : `${no.repete} vezes`} (“<Fala texto={no.fala} />”) · depois</>}
+								{no.quando === null ? <>{no.repete > 0 ? ' ' : ''}encerra sem recado <span className="text-[var(--base-texto-3)]">(pode ser caixa postal; não conta como terceiro)</span></>
+									: saidaNo ? <><Seta /><Destino nomes={nomes} para={saidaNo.para} /></>
+									: <>{no.repete > 0 ? ' ' : ''}transfere para um atendente</>}
+							</Linha>
+						)}
 					</ul>
 				)}
 

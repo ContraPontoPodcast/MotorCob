@@ -5,11 +5,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { SEMPRE, TRAVAS, correcaoDe, estadoEnvio, explicar, resumoPendencias, trocarBloco, validarLocal, type Definicao, type Pendencia } from '@/lib/fluxo';
+import { SEMPRE, TRAVAS, correcaoDe, explicar, resumoPendencias, trocarBloco, validarLocal, type Definicao, type Pendencia } from '@/lib/fluxo';
 import { AntesDepois, OQueCorrigir as OQueCorrigirComBotao } from '@/components/fluxo/corrigir';
 import { EmQualquerMomento, FaixaTravas } from '@/components/fluxo/travas';
 import { OQueCorrigir, textoCredorAntes } from '@/components/fluxo/etapa';
-import { BarraEnvio, Quadro, type Marca } from '@/components/fluxo/quadro';
+import { Quadro, type Marca } from '@/components/fluxo/quadro';
+import { AcaoPrincipal } from '@/components/fluxo/versao';
+import { acaoDaFase } from '@/lib/fluxo-versao';
 import { Roteiro } from '@/components/fluxo/roteiro';
 import { ABAS_EDITOR, AbasEditor, abaDaUrl } from '@/components/fluxo/abas-editor';
 import { criarApiFixturas, definicaoV5 } from '@/components/fluxo/fixturas';
@@ -20,32 +22,36 @@ import { ListaFluxos } from '@/components/fluxo/lista';
 const nada = () => {};
 const botao = (html: string, nome: string) => html.match(new RegExp(`<button[^>]*>${nome}</button>`))?.[0] ?? '';
 
-test('editor: com pendência de validação, "Enviar para aprovação" fica desabilitado e diz o motivo', async () => {
+test('editor: com pendência no desenho, a ação principal é "Corrigir N pontos" e o envio diz por que não libera', async () => {
 	const api = criarApiFixturas();
 	const erros = await api.bloqueios(105);                      // v5 do desenho: N9 sem saída, N17 inalcançável, C4 e alçada
 	assert.ok(erros.includes('sem_saida:N9') && erros.includes('inalcancavel:N17') && erros.includes('conector_inativo:N7') && erros.includes('sem_alcada'), erros.join(','));
-	const estado = estadoEnvio({ situacao: 'rascunho', erros, sujo: false, podeEditar: true });
-	const html = renderToStaticMarkup(<BarraEnvio situacao="rascunho" estado={estado} podeEditar podeAprovar onEnviar={nada} onAprovar={nada} onUsar={nada} />);
-	const enviar = botao(html, 'Enviar para aprovação');
-	assert.ok(enviar, html);
-	assert.match(enviar, /disabled=""/);
-	assert.match(enviar, /aria-describedby="motivo-envio"/);
-	assert.match(html, /id="motivo-envio"[^>]*>\d+ pendências impedem o envio\.</);
-	assert.match(botao(html, 'Aprovar'), /disabled=""/);         // quem aprova também não passa por cima
+	for (const podeAprovar of [true, false]) {
+		const acao = acaoDaFase({ situacao: 'rascunho', bloqueios: erros, podeEditar: true, podeAprovar, versao: 5 });
+		const html = renderToStaticMarkup(<AcaoPrincipal acao={acao} onAcao={nada} />);
+		assert.equal(acao.tipo, 'corrigir');
+		assert.match(html, />Corrigir 4 pontos<\/button>/);
+		assert.match(html, /aria-describedby="motivo-envio"/);
+		assert.match(html, /id="motivo-envio"[^>]*>Enviar para aprovação libera quando o desenho estiver certo\.</);
+		assert.doesNotMatch(html, />Aprovar</);                  // quem aprova também não passa por cima
+	}
 	assert.equal(resumoPendencias(erros.filter(e => !e.startsWith('roleplay'))), 'Uma etapa sem saída, uma etapa inalcançável, um conector sem configurar e uma carteira sem alçada.');
 });
 
-test('editor: sem pendência (só aviso de roleplay), envia', () => {
-	const estado = estadoEnvio({ situacao: 'rascunho', erros: ['roleplay_ausente'], sujo: false, podeEditar: true });
-	const html = renderToStaticMarkup(<BarraEnvio situacao="rascunho" estado={estado} podeEditar podeAprovar={false} onEnviar={nada} onAprovar={nada} onUsar={nada} />);
+test('editor: sem pendência (só aviso de roleplay), a ação principal é enviar', () => {
+	const acao = acaoDaFase({ situacao: 'rascunho', bloqueios: ['roleplay_ausente'], podeEditar: true, podeAprovar: false, versao: 5 });
+	const html = renderToStaticMarkup(<AcaoPrincipal acao={acao} onAcao={nada} />);
+	assert.ok(botao(html, 'Enviar para aprovação'), html);
 	assert.doesNotMatch(botao(html, 'Enviar para aprovação'), /disabled=""/);
-	assert.doesNotMatch(html, />Aprovar</);                      // sem a permissão, nem aparece
+	assert.doesNotMatch(html, />Aprovar</);
 });
 
 test('editor: quem só edita não vê "Colocar em uso"; quem aprova vê', () => {
-	const ok = { ok: false, motivo: '' };
-	assert.doesNotMatch(renderToStaticMarkup(<BarraEnvio situacao="aprovado_empresa" estado={ok} podeEditar podeAprovar={false} onEnviar={nada} onAprovar={nada} onUsar={nada} />), /Colocar em uso<\/button>/);
-	assert.match(renderToStaticMarkup(<BarraEnvio situacao="aprovado_empresa" estado={ok} podeEditar={false} podeAprovar onEnviar={nada} onAprovar={nada} onUsar={nada} />), /Colocar em uso<\/button>/);
+	const html = (podeEditar: boolean, podeAprovar: boolean) => renderToStaticMarkup(<AcaoPrincipal acao={acaoDaFase({ situacao: 'aprovado_empresa', bloqueios: [], podeEditar, podeAprovar, versao: 5, emUso: 4 })} onAcao={nada} />);
+	assert.doesNotMatch(html(true, false), /Colocar em uso<\/button>/);
+	assert.match(html(true, false), /Quem tem Aprovar roteiro de voz coloca em uso/);
+	assert.match(html(false, true), /Colocar em uso<\/button>/);
+	assert.match(html(false, true), /A v4 vai para o arquivo/);
 });
 
 test('mapa (quadro por ramos): caminho principal, ramos, setas com o nome da etapa e a etapa que impede', () => {
@@ -125,12 +131,12 @@ test('permissões: o cliente continua igual (editar_canais edita; aprovar_roteir
 
 test('editor da equipe: envia para aprovação, mas não vê Aprovar nem Colocar em uso', () => {
 	const p = permissoesFluxo({ permissoes: [], equipe: true, equipeMonta: true });
-	const estado = estadoEnvio({ situacao: 'rascunho', erros: [], sujo: false, podeEditar: p.editar });
-	const html = renderToStaticMarkup(<BarraEnvio situacao="rascunho" estado={estado} podeEditar={p.editar} podeAprovar={p.aprovar} onEnviar={nada} onAprovar={nada} onUsar={nada} />);
+	const html = renderToStaticMarkup(<AcaoPrincipal acao={acaoDaFase({ situacao: 'rascunho', bloqueios: [], podeEditar: p.editar, podeAprovar: p.aprovar, versao: 1 })} onAcao={nada} />);
 	assert.ok(botao(html, 'Enviar para aprovação'), html);
-	assert.doesNotMatch(botao(html, 'Enviar para aprovação'), /disabled=""/);
-	assert.doesNotMatch(html, />Aprovar</);
-	const aprovado = renderToStaticMarkup(<BarraEnvio situacao="aprovado_empresa" estado={{ ok: false, motivo: '' }} podeEditar={p.editar} podeAprovar={p.aprovar} onEnviar={nada} onAprovar={nada} onUsar={nada} />);
+	assert.doesNotMatch(html, />Aprovar|Revisar e aprovar</);
+	const enviada = renderToStaticMarkup(<AcaoPrincipal acao={acaoDaFase({ situacao: 'rascunho', bloqueios: [], enviadoEm: '2026-11-01T10:00:00Z', podeEditar: p.editar, podeAprovar: p.aprovar, versao: 1 })} onAcao={nada} />);
+	assert.doesNotMatch(enviada, /<button/);
+	const aprovado = renderToStaticMarkup(<AcaoPrincipal acao={acaoDaFase({ situacao: 'aprovado_empresa', bloqueios: [], podeEditar: p.editar, podeAprovar: p.aprovar, versao: 1 })} onAcao={nada} />);
 	assert.doesNotMatch(aprovado, /Colocar em uso<\/button>/);
 });
 
@@ -176,7 +182,10 @@ test('roteiro: capítulos na ordem da conversa, ramos com nome, "o agente diz / 
 	assert.match(n2, /Se não entender/);
 	assert.match(n2, /pede de novo 1 vez/);
 	assert.match(n2, /então <a href="#etapa-N14"[^>]*>Encerrar · recado neutro<\/a>/);
-	assert.match(n2, /Se não ouvir nada.*Ainda sem tratamento próprio/);
+	assert.match(n2, /Se não ouvir nada.*pede de novo 1 vez \(“.*Desculpe, não ouvi\. Para sua segurança/);   // SQL 95
+	assert.match(n2, /Se não ouvir nada[^]*então <a href="#etapa-N14"/);                 // sem saída própria: a de "não entender"
+	const n1 = html.slice(pos('N1'), pos('N2'));
+	assert.match(n1, /Se não ouvir nada.*encerra sem recado/);
 	const n3 = html.slice(pos('N3'), pos('N4'));
 	assert.doesNotMatch(n3, />Não entendi 2×</);                  // "Não entendi" vai para "Se não entender", não é resposta
 	// finais e a etapa sem saída (U3)
@@ -292,7 +301,7 @@ test('detalhe da etapa: "O agente diz" destaca as variáveis e risca as sensíve
 });
 
 test('detalhe da etapa: "Como soa no telefone", checagens e "Se não ouvir nada"', async () => {
-	const { ChecagensFala, ComoSoa, SeNaoOuvir } = await import('@/components/fluxo/etapa-partes');
+	const { ChecagensFala, ComoSoa, QuadroRepeticao } = await import('@/components/fluxo/etapa-partes');
 	const { comoSoa } = await import('@/lib/falado');
 	const soa = renderToStaticMarkup(<ComoSoa falada={comoSoa('Fica 6× de R$ 230,00, a primeira em 05/12.')} onOuvir={async () => {}} />);
 	assert.match(soa, /Como soa no telefone/);
@@ -302,7 +311,19 @@ test('detalhe da etapa: "Como soa no telefone", checagens e "Se não ouvir nada"
 	const chk = renderToStaticMarkup(<ChecagensFala itens={[{ estado: 'ok', texto: '16 palavras (curta para o ouvido)' }, { estado: 'erro', texto: 'Cita {{credor}} antes de confirmar a identidade (trava 1)' }]} />);
 	assert.match(chk, /data-checagem="ok"[^]*16 palavras/);
 	assert.match(chk, /data-checagem="erro"[^]*corrigir: <\/span>Cita \{\{credor\}\}/);
-	assert.match(renderToStaticMarkup(<SeNaoOuvir />), /Se não ouvir nada<\/b><span[^>]*>Ainda sem tratamento próprio/);
+	// SQL 95: fala própria editável; vazia = a padrão com aviso de fala genérica; vezes e destino
+	const nada = () => {};
+	const gen = renderToStaticMarkup(<QuadroRepeticao qual="silencio" fala="" padrao="Desculpe, não ouvi. Posso continuar?" vezes={2} onFala={nada} onVezes={nada} destino={<span>Transferir</span>} />);
+	assert.match(gen, /data-se-nao-ouvir/);
+	assert.match(gen, /Se não ouvir nada<\/b>/);
+	assert.match(gen, /data-fala-generica[^]*Fala padrão: “Desculpe, não ouvi\. Posso continuar\?”/);
+	assert.match(gen, /Pede de novo 1 vez antes de seguir/);
+	const prop = renderToStaticMarkup(<QuadroRepeticao qual="nao_entendi" fala="Não peguei. Quer negociar?" padrao="Desculpe, pode repetir?" vezes={1} onFala={nada} onVezes={nada} destino={null}
+		checagens={[{ estado: 'ok', texto: 'Uma pergunta por vez' }]} />);
+	assert.match(prop, /data-se-nao-entender/);
+	assert.doesNotMatch(prop, /data-fala-generica/);
+	assert.match(prop, /Uma pergunta por vez/);
+	assert.match(prop, /Não pede de novo/);
 });
 
 // ---------------------------------------------------------------- PR6: testar ao lado

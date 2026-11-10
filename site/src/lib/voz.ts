@@ -35,8 +35,18 @@ export const FORMATOS_DISCAGEM: { id: string; nome: string; exemplo: string }[] 
 
 export const CODECS = ['alaw', 'ulaw', 'g729', 'g722', 'opus'] as const;
 
-/** Itens que o MotorCX fatura do agente de voz (cobranca_itens, produto agente_voz). Telefonia não é item. */
-export const ITENS_FATURA_VOZ = ['voz_plataforma', 'voz_minuto_ia', 'voz_minuto_ia_pico', 'voz_transcricao', 'gestao_tronco_sip'] as const;
+/** Itens que o MotorCX fatura do agente de voz (cobranca_itens, produto agente_voz). Telefonia não é item.
+ *  voz_licenca_robo: robôs contratados (licenças, SQL 93/98). */
+export const ITENS_FATURA_VOZ = ['voz_licenca_robo', 'voz_plataforma', 'voz_minuto_ia', 'voz_minuto_ia_pico', 'voz_transcricao', 'gestao_tronco_sip'] as const;
+
+/** Linha da prévia que é do agente de voz: o item, o complemento do mínimo (<item>_minimo) e as linhas que o SQL 98
+ *  acrescenta para quem tem licença (voz_licenca_robo_ajuste[_n] e voz_minuto_ia_franquia). */
+export function ehItemFaturaVoz(item: unknown): boolean {
+	const it = String(item ?? '');
+	if (!it) return false;
+	if (it.startsWith('voz_licenca_robo_ajuste') || it === 'voz_minuto_ia_franquia') return true;
+	return (ITENS_FATURA_VOZ as readonly string[]).some(c => it === c || it === `${c}_minimo`);
+}
 
 /** Mesma regra de public.segundos_tarifados: sem carência; 0 se não atendeu; o mínimo inicial; depois, blocos. */
 export function segundosTarifados(billsec: number, inicial: number, incremento: number): number {
