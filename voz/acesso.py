@@ -104,6 +104,8 @@ RPC = {
     # SQL 88 · identidade pelo arquivo: a VM manda o código da resposta e recebe só a palavra (nunca os códigos)
     "identidade_voz_vigente": "identidade_vigente", "abrir_identidade_voz": "abrir_identidade",
     "conferir_identidade_voz": "conferir_identidade", "limpar_identidade_voz": "limpar_identidade",
+    # SQL 120 · Roleplay: sugestões de treino do job noturno do Speech (voz/analise/rotina.py › noite)
+    "gerar_sugestoes_treino": "gerar_sugestoes_treino",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual

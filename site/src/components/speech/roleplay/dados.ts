@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { friendlyError } from '@/lib/supabase';
 import { diaSP } from '@/lib/speech';
 import type {
-	AtribuicaoRP, CenarioRP, EquipeRP, ItemChecklistRP, LinkRP, OperadorRP, PessoaNoTreino, SessaoRP,
+	AtribuicaoRP, CenarioRP, EquipeRP, ItemChecklistRP, LinkRP, OperadorRP, PessoaNoTreino, SessaoRP, SugestaoRP,
 } from '@/lib/roleplay';
 
 type Sb = SupabaseClient;
@@ -74,15 +74,25 @@ export async function lerLinks(sb: Sb, empresa: number): Promise<LinkRP[]> {
 		.eq('empresa_id', empresa).is('revogado_em', null));
 }
 
-export type Sugestao = { id: number; regra: string; cenario_id: number | null; operadores: number[]; criado_em: string };
+export type Sugestao = SugestaoRP;
 export type Uso = { minutos_voz: number; franquia_voz: number; sessoes_texto: number; franquia_texto: number; voz_bloqueada: boolean };
 export type DadosPainel = {
 	cenarios: CenarioRP[]; operadores: OperadorRP[]; atribuicoes: AtribuicaoRP[]; pessoas: PessoaNoTreino[]; sessoes: SessaoRP[];
 	links: LinkRP[]; discordancias: { sessao_id: number }[]; sugestoes: Sugestao[]; uso: Uso | null; itens: Record<string, ItemChecklistRP>;
+	equipes: EquipeRP[];
 };
 
+/** Sugestões novas do job noturno (SQL 120): só as que a regra ainda sustentou nos últimos 8 dias. */
+const COLS_SUG = 'id, regra, chave, cenario_id, operadores, criado_em, evidencia, atualizada_em';
+
+/** "Dispensar" com o motivo (tratado / falso_positivo) ou, com motivo nulo, "Desfazer". */
+export async function dispensarSugestao(sb: Sb, id: number, motivo: 'tratado' | 'falso_positivo' | null): Promise<void> {
+	const { error } = await sb.rpc('dispensar_sugestao_treino', { sugestao: id, motivo });
+	if (error) throw new Error(friendlyError(error));
+}
+
 export async function lerPainel(sb: Sb, empresa: number): Promise<DadosPainel> {
-	const [cenarios, operadores, atribuicoes, pessoas, sessoes, links, discordancias, sugestoes, uso, itens] = await Promise.all([
+	const [cenarios, operadores, atribuicoes, pessoas, sessoes, links, discordancias, sugestoes, uso, itens, equipes] = await Promise.all([
 		lerCenarios(sb, empresa),
 		lerOperadores(sb, empresa),
 		sb.from('treino_atribuicoes').select('id, cenario_id, prazo, nota_minima, tentativas, criado_em')
@@ -94,12 +104,13 @@ export async function lerPainel(sb: Sb, empresa: number): Promise<DadosPainel> {
 		lerLinks(sb, empresa),
 		sb.from('treino_discordancias').select('sessao_id').eq('empresa_id', empresa).is('resolvida_em', null).limit(200)
 			.then(r => dados<{ sessao_id: number }[]>(r)),
-		sb.from('treino_sugestoes').select('id, regra, cenario_id, operadores, criado_em')
-			.eq('empresa_id', empresa).eq('situacao', 'nova').order('criado_em', { ascending: false }).limit(20).then(r => dados<Sugestao[]>(r)),
+		sb.from('treino_sugestoes').select(COLS_SUG)
+			.eq('empresa_id', empresa).eq('situacao', 'nova').gte('atualizada_em', diaSP(-8)).order('criado_em', { ascending: false }).limit(50).then(r => dados<Sugestao[]>(r)),
 		sb.rpc('uso_treino', { empresa }).then(r => (r.error ? null : (r.data as Uso))),
 		lerItensChecklist(sb, empresa),
+		lerEquipes(sb, empresa),
 	]);
-	return { cenarios, operadores, atribuicoes, pessoas, sessoes, links, discordancias, sugestoes, uso, itens };
+	return { cenarios, operadores, atribuicoes, pessoas, sessoes, links, discordancias, sugestoes, uso, itens, equipes };
 }
 
 export type DadosPessoa = {
@@ -262,7 +273,7 @@ export async function lerParaAtribuir(sb: Sb, empresa: number, sug: number | nul
 		lerCenarios(sb, empresa),
 		lerOperadores(sb, empresa),
 		lerEquipes(sb, empresa),
-		sug == null ? Promise.resolve(null) : sb.from('treino_sugestoes').select('id, regra, cenario_id, operadores, criado_em').eq('empresa_id', empresa).eq('id', sug).maybeSingle()
+		sug == null ? Promise.resolve(null) : sb.from('treino_sugestoes').select(COLS_SUG).eq('empresa_id', empresa).eq('id', sug).maybeSingle()
 			.then(r => (r.error ? null : (r.data as Sugestao | null))),
 		sb.rpc('uso_treino', { empresa }).then(r => (r.error ? null : (r.data as Uso))),
 	]);

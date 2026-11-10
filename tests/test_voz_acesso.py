@@ -176,7 +176,8 @@ class TestEscrita(unittest.TestCase):
         for publica, vm in (("alcada_voz_vigente", "alcada_vigente"), ("pegar_pedido_fluxo_voz", "pegar_pedido_fluxo"),
                             ("registrar_geracao_fluxo_voz", "registrar_geracao_fluxo"),
                             ("anexos_fluxo_vencidos", "anexos_fluxo_vencidos"),
-                            ("marcar_anexos_apagados", "marcar_anexos_apagados")):
+                            ("marcar_anexos_apagados", "marcar_anexos_apagados"),
+                            ("gerar_sugestoes_treino", "gerar_sugestoes_treino")):     # SQL 120
             self.assertEqual(A.RPC[publica], vm)
 
     def test_fluxo_le_e_grava_pelas_views_e_funcoes(self):

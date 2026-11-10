@@ -425,8 +425,9 @@ checar("nenhuma nota de treino foi para voz_avaliacoes nem voz_qualidade_dia", T
        f"select (select count(*) from public.voz_avaliacoes where empresa_id = {TA}) + "
        f"(select count(*) from public.voz_qualidade_dia where empresa_id = {TA})", sr, None, 0)
 checar("nenhuma função do treino escreve em voz_avaliacoes/voz_qualidade_dia", True,
+       # ler pode (sugestões do SQL 120, evolução do SQL 121 e padrões do SQL 122 leem as notas reais); gravar, nunca
        "select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like '%treino%' "
-       "and (prosrc ~ 'voz_avaliacoes' or prosrc ~ 'voz_qualidade_dia')", sr, None, 0)
+       "and prosrc ~* '(insert\\s+into|update|delete\\s+from|truncate)\\s+(public\\.)?(voz_avaliacoes|voz_qualidade_dia)'", sr, None, 0)
 checar("nenhuma coluna de áudio nas tabelas do treino", True,
        "select count(*) from information_schema.columns where table_schema = 'public' and table_name like 'treino\\_%' "
        "and (column_name ~ 'audio|gravacao|caminho|arquivo' or data_type = 'bytea')", sr, None, 0)
