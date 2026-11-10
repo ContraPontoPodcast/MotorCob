@@ -2994,5 +2994,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 106: ritmo da discagem, medir certo (testar_ritmo_voz.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 107 · Ritmo por carteira (Power/Preditivo V3): credores.discagem › ritmo validado e versionado por salvar_discagem
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ritmo_config.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 107: ritmo da discagem por carteira (testar_ritmo_config.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from motor import discagem as DG
 from voz import banco as B
 from voz.orquestrador.agendador import Agendador
 from voz.orquestrador.ari import AriHttp, AriSimulado
@@ -109,21 +110,33 @@ class FonteListas:
         finally:
             arq.unlink(missing_ok=True)
 
-    def regras(self, empresa_id: int) -> dict:
-        """Renitência por situação e Resubmit de cada carteira (credores.discagem pela RPC regras_discagem_voz, SQL
-        65). Falhou ou carteira sem as chaves novas: sem regras, a discagem de hoje (paridade)."""
+    def discagem(self, empresa_id: int) -> list[dict] | None:
+        """credores.discagem de cada carteira ativa (RPC regras_discagem_voz, SQL 65). None = não leu (banco fora)."""
         try:
-            linhas = self.sb.rpc("regras_discagem_voz", {"empresa": int(empresa_id)}) or []
+            return self.sb.rpc("regras_discagem_voz", {"empresa": int(empresa_id)}) or []
         except Exception as ex:   # noqa: BLE001 — banco sem o SQL 65 ou fora: discagem de hoje
             log.warning("empresa %s: regras da discagem não lidas (%s); vale a discagem de hoje", empresa_id,
                         ex.__class__.__name__)
-            return {}
+            return None
+
+    def regras(self, empresa_id: int, linhas: list[dict] | None = None) -> dict:
+        """Renitência por situação e Resubmit de cada carteira (credores.discagem pela RPC regras_discagem_voz, SQL
+        65). Falhou ou carteira sem as chaves novas: sem regras, a discagem de hoje (paridade)."""
+        linhas = self.discagem(empresa_id) if linhas is None else linhas
         saida = {}
-        for l in linhas:
+        for l in linhas or []:
             r = RegrasLote.da_carteira(l.get("discagem"))
             if r is not None:
                 saida[l.get("credor_id")] = r
         return saida
+
+    def ritmos(self, empresa_id: int, linhas: list[dict] | None = None) -> dict | None:
+        """credor_id -> ritmo da carteira (credores.discagem › ritmo, SQL 107; sem a chave, Power 1,0). None = não leu
+        (o ritmo de antes continua)."""
+        linhas = self.discagem(empresa_id) if linhas is None else linhas
+        if linhas is None:
+            return None
+        return {l.get("credor_id"): DG.ritmo_da_carteira(l.get("discagem")) for l in linhas}
 
     def lotes(self, empresa_id: int, dia) -> list[Lote] | None:
         """Lotes do dia da empresa (um por carteira e canal) ou None se a lista ainda não saiu."""
@@ -136,7 +149,9 @@ class FonteListas:
         except Exception:   # noqa: BLE001 — banco sem credores: a empresa toda
             credores = []
         unidades = [(c["id"], c["codigo"], (c.get("nome") or "").strip()) for c in credores] or [(None, None, "")]
-        regras = self.regras(empresa_id)
+        linhas = self.discagem(empresa_id)
+        regras = self.regras(empresa_id, linhas or [])
+        ritmos = self.ritmos(empresa_id, linhas) or {}
         saida, achou = [], False
         for cid, cod, nome_credor in unidades:
             prefixo = f"{emp['slug']}/{dia.isoformat()}" + (f"/{cod}" if cid is not None else "")
@@ -166,6 +181,9 @@ class FonteListas:
                 saida.append(Lote(empresa_id, mailing, credor_id=cid, canal="discador", regras=regras.get(cid)))
             if itens:
                 saida.append(Lote(empresa_id, itens, credor_id=cid, canal="agente_voz", regras=regras.get(cid)))
+        for l in saida:
+            if l.credor_id in ritmos:
+                l.ritmo = ritmos[l.credor_id]
         return saida if achou else None
 
 
@@ -180,7 +198,7 @@ class Plantao:
         self.carregados: dict[int, object] = {}     # empresa -> dia carregado
         self._mtime = dados_caminho.stat().st_mtime if dados_caminho and dados_caminho.exists() else None
         self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9, "robos": -1e9,
-                     "ritmo": -1e9}
+                     "ritmo": -1e9, "ritmo_cfg": -1e9}
         self._ritmo_aviso_s = -1e9                   # último aviso de falha das amostras do ritmo (1 por hora)
         self._robos_s: float | None = None           # última foto dos robôs (segundos no limite entre duas fotos)
         self._robos_aviso_s = -1e9                   # último aviso de falha da telemetria (no máximo 1 por hora)
@@ -205,6 +223,8 @@ class Plantao:
             self.registrar_uso_robos(agora_s)
         if self.registro is not None and self._vence("ritmo", agora_s, 60):
             self.registrar_ritmo(agora_s)
+        if self.fonte is not None and self._vence("ritmo_cfg", agora_s, 60):
+            self.atualizar_ritmos()
         if self.registro is not None and self._vence("pausas", agora_s, 30):
             self.sincronizar_pausas()
         if self.registro is not None and self._vence("reenvio", agora_s, 30):
@@ -279,6 +299,23 @@ class Plantao:
                 log.warning("uso dos robôs não gravado (%s); segue discando", ex.__class__.__name__)
             return 0
         return len(linhas)
+
+    # ------------------------------------------------------------ SQL 107 · ritmo da carteira (Power/Preditivo V3)
+    def atualizar_ritmos(self) -> int:
+        """Relê o ritmo de cada carteira com lote carregado (mudou no site = vale no minuto seguinte). Banco fora: o de
+        antes continua. Devolve quantos lotes mudaram."""
+        mudou = 0
+        for emp in sorted({l.empresa_id for l in self.orq.lotes.values()}):
+            ritmos = self.fonte.ritmos(emp)
+            if ritmos is None:
+                continue
+            for l in self.orq.lotes.values():
+                novo = ritmos.get(l.credor_id, dict(DG.PADRAO["ritmo"])) if l.empresa_id == emp else None
+                if novo is not None and novo != l.ritmo:
+                    log.info("empresa %s carteira %s: ritmo agora %s", emp, l.credor_id, novo)
+                    l.ritmo = novo
+                    mudou += 1
+        return mudou
 
     # ------------------------------------------------------------ SQL 106 · ritmo da discagem (Power/Preditivo V1)
     def registrar_ritmo(self, agora_s: float, todos: bool = False) -> int:
