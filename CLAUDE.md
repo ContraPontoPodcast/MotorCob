@@ -980,6 +980,22 @@ editáveis.** Só acrescenta funções (nenhuma recriada). Onde se edita cada co
 Item novo com franquia: entra em `itens_com_franquia()` e em `site/src/lib/precos-itens.ts` (o teste confere a paridade).
 Teste: `supabase/testes/testar_precos_editaveis.py`.
 
+**SQL 103 (Telefonia própria do cliente, PR T1; SPEC Canais §6.2, G5): senha do tronco direto no cofre.** A senha
+(autenticação "usuário e senha") é digitada uma vez e vai pela Edge Function `segredo-tronco-voz` ("Verify JWT" ligado)
+direto para o Secret Manager, sempre no segredo da empresa `motorcx-voz-trunk-e<empresa>-<referência>`
+(`segredo_ref = voz/trunk/e<empresa>/<referência>`, `segredo_ref_tronco_voz`/`nome_segredo_tronco_voz`). Fluxo: login +
+aal2 → `preparar_segredo_tronco_voz(tronco)` com o login da pessoa (quem pode = `pode_configurar_telefonia`; aal2; só
+tronco por senha; 5 por hora por tronco, 30 por dia por empresa; registra o pedido em `voz_troncos_cofre` e devolve só o
+nome) → Secret Manager com a conta `motorcx-voz-cofre-escrita` (cria e escreve só em `motorcx-voz-trunk-*`; **não lê**;
+secret `GCP_COFRE_TRONCO_CHAVE`, `bash infra/asterisk/criar_gcp.sh chave-cofre <projeto>`), versões antigas destruídas →
+`registrar_segredo_tronco_voz` (só service_role e só depois do pedido da mesma pessoa nos últimos 10 min): grava
+`segredo_guardado_em/por` e `segredo_versao` (nunca o valor), zera o teste e grava na Auditoria "senha trocada (versão
+N)". O site só sabe "senha guardada" (a data). `cadastrar_tronco_voz` recriada: sem referência usa a do tronco ou a do
+cofre da empresa; referência fora do padrão só a equipe (`cuida_voz`). Gerador do Asterisk: tronco cuja senha o cofre não
+entrega fica de fora sozinho (`filtrar_senhas`), sem parar as outras empresas; `;` da senha vira `\;`. Texto honesto
+(C8): só o servidor de voz lê; quem administra o GCP consegue ler o cofre. Teste: `supabase/testes/testar_voz_cofre.py`.
+Se o SQL 56 rodar de novo, rode o 103 depois.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
