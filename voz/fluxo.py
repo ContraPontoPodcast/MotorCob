@@ -6,7 +6,9 @@ aqui e não no prompt:
   1. valor, oferta ou credor só depois de Confirmar identidade (o validador já recusa o fluxo; aqui a fala que
      tiver variável sensível sem identidade confirmada é trocada pelo recado neutro);
   2. nunca pede senha nem cartão (fala do roteiro e do Generativo passam por filtro; a pessoa que oferecer ouve a
-     fala fixa);
+     fala fixa); SQL 96: nem CPF — a fala nunca cita nem diz um CPF (só "os três últimos números do CPF" da
+     identidade), e o CPF que a pessoa disser nunca é repetido nem vai ao modelo, ao log ou à transcrição: ela ouve
+     FALA_CPF (na identidade pelos 3 últimos números, o pedido de só os 3) e a etapa continua esperando;
   3. "não me ligue" em qualquer etapa: opt-out e encerra (nenhum ramo segura);
   4. terceiro ouve só o recado neutro fixo;
   5. nunca passa da alçada (ofertas do CRM acima dela são descartadas, código oferta_acima_alcada);
@@ -18,6 +20,15 @@ configuração, o executor faz exatamente o de hoje. Com ela: as fontes na ordem
 falhou ou não tem o dado é pulada), N perguntas que precisam conferir todas, 2 tentativas por pergunta, "não confere"
 é resposta e NUNCA troca de fonte, e o limite de erros do dia (somando as ligações) é contado no banco.
 A Cognição só classifica intenção (saída fechada) e a fala continua a do roteiro.
+
+"Se não entender" e "Se não ouvir nada" (SQL 95; SPEC B1 e B2): são dois contadores separados por etapa. Quando não
+entende, o agente diz `params.nao_entendi.fala` (sem ela, a fala padrão de hoje de cada tipo) até
+`nao_entendi.vezes` (sem ela, `tentativas`, padrão 2) e depois segue a saída de "não entendi" da etapa. Quando não
+ouve nada (`silencio()`: a Montagem chama depois de SILENCIO_S sem fala; o simulador, com a fala "[silêncio]"), diz
+`params.silencio.fala` (sem ela, "Desculpe, não ouvi." e a fala da etapa) até `silencio.vezes` (padrão 2) e depois
+segue a saída "silencio"; sem ela, a de "não entendi". Na Abertura, silêncio sem saída própria encerra SEM recado e
+NÃO marca terceiro (pode ser caixa postal ou linha muda). Na IA conversa, sem saída "silencio", passa a um atendente.
+As falas novas passam por render(): a trava 1 (credor ou valor antes da identidade) e a de senha valem para elas.
 
 Eventos para o orquestrador (emitir(id_chamada, tipo, dados)):
   passo      um por bloco (voz_fluxo_passos: ordem, bloco_id, modo, saida_quando, intencao, confianca_faixa,
@@ -37,6 +48,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from voz import conector as CN
 from voz import fluxo_validador as FV
+from voz.transcricao import redacao as RD
 
 log = logging.getLogger("motorcx.voz.fluxo")
 
@@ -46,8 +58,18 @@ RECADO_NEUTRO = "Peço que {primeiro_nome} retorne a ligação para a {assessori
 FALA_OPT_OUT = "Entendido. Vou registrar agora e você não recebe mais ligações nossas sobre isso. Até logo."
 FALA_HUMANO = "Claro, vou passar você para um atendente agora, só um instante."
 FALA_SENHA = "Não precisa me passar senha nem número de cartão. O pagamento é sempre pelo link."
+FALA_CPF = "Não precisa me dizer o CPF. Por segurança, eu nunca peço nem repito esse número."
+FALA_CPF_ULTIMOS3 = "Me diga só os três últimos números, por favor."
 FALA_REPETIR = "Desculpe, pode repetir?"
 FALA_FALHA = "Tive um problema aqui. Vou passar você para um atendente, só um instante."
+FALA_NAO_OUVI = "Desculpe, não ouvi."
+FALA_SILENCIO_IA = "Você ainda está aí?"
+SILENCIO_S = 6.0                 # sem fala da pessoa depois que o agente terminou de falar (fixo pela MotorCX; SPEC §2.5)
+MARCA_SILENCIO = "[silêncio]"    # no simulador e nos casos de teste, a "fala" que quer dizer: a pessoa não disse nada
+VEZES_PADRAO = 2
+# saída de "não entendi" de cada tipo que ouve (para onde vai depois das tentativas)
+SAIDA_NAO_ENTENDI = {"abertura": "terceiro", "identidade": "nao_confirmou", "pergunta": "sem_resposta",
+                     "intencao": "nao_entendido", "oferta": "recusou", "retorno": "nao_agendou"}
 
 RE_NAO_ME_LIGUE = re.compile(r"nao me lig|para de (me )?ligar|pare de (me )?ligar|nao quero mais (receber|ligac)|"
                              r"nao liguem mais|tira(r)? meu numero|nunca mais me lig")
@@ -270,6 +292,8 @@ def informado_de(pergunta: str, texto: str, hoje: date) -> str | None:
 
 
 class Sessao:
+    trava_cpf = True                       # SQL 96: o CPF dito é tratado aqui (voz/transcricao/ia.ConversaComTurnos)
+
     def __init__(self, fluxo: FluxoCarregado, id_chamada: str, id_cliente: str, variaveis: dict, emitir,
                  cliente_conectores, entendedor=None, gerador=None, hoje: date | None = None):
         erros = FV.erros(fluxo.definicao)
@@ -290,6 +314,7 @@ class Sessao:
         self.terceiro = False
         self.atual: str | None = None
         self.tentativas: dict[str, int] = {}
+        self.silencios: dict[str, int] = {}    # SQL 95: silêncio conta à parte do "não entendi"
         self.entradas: dict[str, int] = {}
         self.ordem = 0
         self.encerrada = False
@@ -324,6 +349,22 @@ class Sessao:
         getattr(self, "_ouvir_" + b["tipo"])(b, texto, t)
         return self._turno
 
+    def silencio(self) -> list[str]:
+        """A pessoa não disse nada (a Montagem chama depois de SILENCIO_S; o simulador, com MARCA_SILENCIO)."""
+        return [f for f, _, _ in self.turno_silencio().falas]
+
+    def turno_silencio(self) -> Turno:
+        self._turno = Turno()
+        if self.encerrada or self.atual is None:
+            return self._turno
+        b = self.blocos[self.atual]
+        self._turno.intencao = {"intencao": "silencio", "confianca": "alta", "entidades": []}
+        if b["tipo"] == "generativa":
+            self._silencio_ia(b)
+        elif b["tipo"] in FV.OUVEM:
+            self._silencio_etapa(b)
+        return self._turno
+
     def _transferir(self, motivo: str) -> None:            # chamado pela Montagem se o áudio cair
         if not self.encerrada:
             self._finalizar("transferir", motivo=motivo)
@@ -338,6 +379,14 @@ class Sessao:
 
     # ---------------------------------------------------------------- travas em toda fala
     def _travas(self, texto: str, t: str) -> bool:
+        if RD.cpf_dito(texto):              # SQL 96: antes de tudo (o texto nem chega ao modelo)
+            self._marca_trava("cpf")
+            b = self.blocos.get(self.atual or "")
+            ult3 = b is not None and b["tipo"] == "identidade" and (
+                (self._ident or {}).get("atual") == "ultimos3_documento"
+                or (self._ident is None and b["params"].get("pergunta") == "ultimos3_documento"))
+            self._falar(f"{FALA_CPF} {FALA_CPF_ULTIMOS3}" if ult3 else FALA_CPF, self.atual)
+            return True
         cog = None
         if not RE_NAO_ME_LIGUE.search(t) and not RE_HUMANO.search(t) and not isinstance(self.entendedor, EntendedorRegras):
             cog = self.entendedor.entender(texto, ["nao_me_ligue", "pedir_humano"])
@@ -397,6 +446,8 @@ class Sessao:
             return self._recado(), "valor_antes_identidade"
         if RE_SENHA.search(normal(fala)):
             return FALA_SENHA, "senha_cartao"
+        if FV.pede_cpf(fala):                                                 # SQL 96: nunca cita nem diz CPF
+            return FALA_CPF, "cpf"
         return fala, None
 
     def _credor_literal(self, fala: str) -> bool:
@@ -436,6 +487,7 @@ class Sessao:
         self.ordem += 1
         self.entradas[bid] = self.entradas.get(bid, 0) + 1
         self.tentativas[bid] = 0
+        self.silencios[bid] = 0
         passo = {"ordem": self.ordem, "bloco_id": bid, "modo": b["modo"], "fluxo_versao_id": self.fluxo.versao_id,
                  "entrou_em": datetime.now(timezone.utc).isoformat(timespec="seconds")}
         self.passos.append(passo)
@@ -494,13 +546,85 @@ class Sessao:
         self.resultado_final = resultado or self.resultado_final
         self.descartar()
 
-    def _tentar_de_novo(self, b: dict, fala: str | None = None) -> bool:
-        """Mais uma tentativa no bloco? (tentativas do params, padrão 2)"""
-        self.tentativas[b["id"]] += 1
-        if self.tentativas[b["id"]] >= int(b["params"].get("tentativas") or 2):
+    def _vezes(self, b: dict, qual: str) -> int:
+        """Quantas vezes sem entender (ou sem ouvir) até seguir: params.<qual>.vezes; no "não entendi", sem ela,
+        `tentativas` (o de hoje); padrão 2."""
+        r = b["params"].get(qual)
+        if isinstance(r, dict) and r.get("vezes"):
+            return int(r["vezes"])
+        return int((b["params"].get("tentativas") if qual == "nao_entendi" else None) or VEZES_PADRAO)
+
+    def _fala_propria(self, b: dict, qual: str) -> bool:
+        """Diz a fala própria da etapa (params.<qual>.fala), com as travas da fala. False = a etapa não tem."""
+        r = b["params"].get(qual)
+        if not (isinstance(r, dict) and isinstance(r.get("fala"), str) and r["fala"].strip()):
             return False
-        self._falar(fala or FALA_REPETIR, b["id"])
+        fala, trava = self.render(r["fala"])
+        if trava:
+            self._marca_trava(trava)
+        self._falar(fala, b["id"])
         return True
+
+    def _tentar_de_novo(self, b: dict, fala: str | None = None) -> bool:
+        """Mais uma tentativa no bloco quando não entende? (nao_entendi.vezes ou tentativas, padrão 2). Diz a fala
+        própria da etapa (nao_entendi.fala) ou, sem ela, a padrão de hoje."""
+        self.tentativas[b["id"]] += 1
+        if self.tentativas[b["id"]] >= self._vezes(b, "nao_entendi"):
+            return False
+        if not self._fala_propria(b, "nao_entendi"):
+            self._falar(fala or FALA_REPETIR, b["id"])
+        return True
+
+    # ---------------------------------------------------------------- silêncio (SQL 95 · B2)
+    def _fala_silencio_padrao(self, b: dict) -> None:
+        if b["tipo"] == "abertura":
+            nome = self.vars.get("primeiro_nome")
+            self._falar(f"Alô? Falo com {nome}?" if nome else "Alô? Consegue me ouvir?", b["id"])
+            return
+        st = self._ident if self._ident is not None and self._ident.get("bloco") == b["id"] else None
+        if st is not None and st.get("atual") and st["atual"] != b["params"].get("pergunta"):
+            self._falar(f"{FALA_NAO_OUVI} {PERGUNTAS_FALA[st['atual']]}", b["id"])     # a pergunta da configuração
+            return
+        fala, trava = self.render(b["params"].get("fala") or "")
+        if trava:
+            self._marca_trava(trava)
+            self._falar(fala, b["id"])
+            return
+        self._falar(f"{FALA_NAO_OUVI} {fala}".strip(), b["id"])
+
+    def _silencio_etapa(self, b: dict) -> None:
+        bid = b["id"]
+        self.silencios[bid] = self.silencios.get(bid, 0) + 1
+        if self.silencios[bid] < self._vezes(b, "silencio"):
+            if not self._fala_propria(b, "silencio"):
+                self._fala_silencio_padrao(b)
+            return
+        self._ident = None
+        if any(s["quando"] == FV.SAIDA_SILENCIO for s in b["saidas"]):
+            self._seguir(b, FV.SAIDA_SILENCIO)
+        elif b["tipo"] == "abertura":
+            # caixa postal ou linha muda: encerra sem recado e sem marcar terceiro (X9)
+            self.passos[-1]["saida_quando"] = FV.SAIDA_SILENCIO
+            self._emitir("passo", dict(self.passos[-1]))
+            self._finalizar("encerrar")
+        else:
+            q = SAIDA_NAO_ENTENDI[b["tipo"]]
+            extra = {"intencao": "nao_entendido", "confianca_faixa": "baixa"} if b["tipo"] == "intencao" else {}
+            self._seguir(b, q, **extra)
+
+    def _silencio_ia(self, b: dict) -> None:
+        bid = b["id"]
+        self.silencios[bid] = self.silencios.get(bid, 0) + 1
+        if self.silencios[bid] < VEZES_PADRAO:
+            self._falar(FALA_SILENCIO_IA, bid, "generativo")
+            return
+        if self.conversa is not None:
+            self.passos[-1]["turnos"] = self.conversa.turnos
+        if any(s["quando"] == FV.SAIDA_SILENCIO for s in b["saidas"]):
+            self._seguir(b, FV.SAIDA_SILENCIO, motivo_devolucao=FV.SAIDA_SILENCIO)
+            return
+        self._falar(FALA_HUMANO, bid)
+        self._finalizar("transferir", motivo="pedido_humano")
 
     # ---------------------------------------------------------------- abertura (árvore) e terceiro (trava 4)
     def _entrar_abertura(self, b):
@@ -686,7 +810,7 @@ class Sessao:
             if st["tent"][q] >= TENTATIVAS_IDENTIDADE:
                 self._ident = None
                 self._seguir(b, "nao_confirmou")
-            else:
+            elif not self._fala_propria(b, "nao_entendi"):
                 self._falar("Desculpe, não entendi. Pode repetir, por exemplo, 15 de março?" if q != "ultimos3_documento"
                             else "Desculpe, não entendi. Pode repetir os três últimos números?", b["id"])
             return
@@ -1094,7 +1218,8 @@ def simular(fluxo: FluxoCarregado, falas: list[str], variaveis: dict, entendedor
     for f in falas:
         if s.encerrada:
             break
-        turnos.append(_turno_json(f, s.turno(f)))
+        silencio = normal(f).strip("[] ") == "silencio"          # MARCA_SILENCIO (SQL 95): a pessoa não disse nada
+        turnos.append(_turno_json(MARCA_SILENCIO if silencio else f, s.turno_silencio() if silencio else s.turno(f)))
     return {"turnos": turnos, "caminho": list(s.caminho), "encerrada": s.encerrada,
             "resultado": s.resultado_final, "passos": [d for t, d in eventos if t == "passo"],
             "conectores": [d for t, d in eventos if t == "conector"],
@@ -1102,7 +1227,8 @@ def simular(fluxo: FluxoCarregado, falas: list[str], variaveis: dict, entendedor
 
 
 def _turno_json(fala_pessoa, t: Turno) -> dict:
-    return {"pessoa": fala_pessoa, "falas": [{"texto": x, "bloco": b, "modo": m} for x, b, m in t.falas],
+    # SQL 96: o CPF dito nunca volta (nem para a tela do simulador)
+    return {"pessoa": RD.sem_cpf(fala_pessoa) if fala_pessoa else fala_pessoa, "falas": [{"texto": x, "bloco": b, "modo": m} for x, b, m in t.falas],
             "bloco": t.caminho[-1] if t.caminho else (t.falas[-1][1] if t.falas else None),
             "caminho": t.caminho, "intencao": t.intencao, "conectores": t.conectores, "travas": t.travas,
             "devolucoes": t.devolucoes, "fim": t.fim}
