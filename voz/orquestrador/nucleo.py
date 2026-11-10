@@ -11,10 +11,10 @@ Fluxo de uma tentativa (id_chamada = uuid hex; canais <id>-c<n> cliente, <id>-p 
   3. atendeu (StasisStart 'saida') -> linha sem reserva (razão > 1, Power/Preditivo) reserva o robô agora, antes do
      AMD -> dialplan motorcx-atendeu: AMD (ou Khomp) e MixMonitor só em pessoa -> volta ao Stasis ('amd').
   4. pessoa -> a reserva vira conversa e vai ao provedor de voz (ponte SIP, mídia externa ou interno). Máquina ->
-     a reserva volta. Se mesmo com a reserva o provedor não abrir a sessão (corrida com a capacidade da VM ou falha do
-     provedor): Alô fake (se ligado) por até alo_fake_max_s e depois uma mensagem curta e neutra pré-gravada (sem
-     dívida nem credor: a identidade vem antes da dívida) e o fim da ligação, com desfecho abandono_sem_robo
-     (transferencia = sem_robo), que conta no abandono. Nunca se desliga mudo na cara de quem atendeu.
+     a reserva volta. Sem robô (linha a mais do Power/Preditivo que atendeu com todos ocupados, ou corrida/falha do
+     provedor): na hora, uma mensagem curta e neutra pré-gravada (sem dívida nem credor: a identidade vem antes da
+     dívida) e o fim da ligação, com desfecho abandono_sem_robo (transferencia = sem_robo), que conta no abandono e
+     não religa no dia. Nunca se desliga mudo na cara de quem atendeu; o "Alô fake" saiu (V4).
   5. o provedor pede humano -> ponte (padrão, decisão do dono 08/11/2026: o MotorCX segura a ligação e chama a fila
      do cliente; a IA só sai quando o humano atende) ou REFER (opção avançada; dialplan motorcx-transferir). Ninguém
      atendeu, a fila recusou ou não há destino: a pessoa volta para o agente, que pede desculpas e agenda um retorno
@@ -35,6 +35,7 @@ from datetime import datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
 
+from motor import discagem as DG
 from motor import voz as V
 from voz import tarifacao as T
 from voz import destinos as DST
@@ -233,21 +234,27 @@ class Orquestrador:
         return self._originar_rodadas(agora)
 
     def retrato(self, empresa_id: int, credor_id: int | None = None) -> dict:
-        """Modo, razão e robôs da empresa agora (para as amostras do ritmo; só contagens)."""
+        """Modo, razão (configurada e a que vale agora), estado da carteira e robôs da empresa agora (para as amostras
+        do ritmo; só contagens)."""
         e = self.agendador.empresas.get(empresa_id)
         if e is None:
             return {}
-        return {"modo": "power", "razao": e.razao, "conversas": e.conversas, "reservas": e.reservas,
-                "linhas": e.linhas}
+        agora = self.relogio()
+        lote = next((l for l in self.lotes.values() if l.empresa_id == empresa_id and l.credor_id == credor_id), None)
+        ritmo = lote.ritmo if lote is not None else {"modo": "power", "razao": e.razao}
+        razao = lote.controle.razao(ritmo, agora) if lote is not None else e.razao
+        estado = lote.controle.estado(ritmo, agora) if lote is not None else "normal"
+        return {"modo": ritmo.get("modo", "power"), "razao": razao, "razao_config": ritmo.get("razao", 1.0),
+                "estado": estado, "conversas": e.conversas, "reservas": e.reservas, "linhas": e.linhas}
 
     def _originar_rodadas(self, agora: datetime) -> int:
         total, progresso = 0, True
         while progresso:                       # rodízio: uma por empresa por rodada (partilha justa)
             progresso = False
             for lote in self.lotes.values():
-                if not self._vaga(lote):
+                if not self._vaga(lote, agora):
                     continue
-                prox = lote.proximo(agora)
+                prox = lote.proximo(agora, reservavel=self._reservavel(lote.empresa_id))
                 if prox is None:
                     continue
                 r = self._originar(lote, *prox, agora)
@@ -284,7 +291,10 @@ class Orquestrador:
         else:
             self._conta("troncos_cheios")
             return False
-        self._reservar(c)
+        # razão 1,0: a linha sai com o robô reservado (ninguém atende sem agente). Razão > 1 (Power/Preditivo): todas
+        # reservam quando ATENDEM (um robô preso a uma linha que só toca não serve a quem atendeu na linha ao lado),
+        # salvo o cliente que teve abandono há pouco (ItemLote.reservar), que só sai com o seu robô
+        self._reservar(c, antes=item.reservar or lote.controle.razao(lote.ritmo, agora) <= 1.0)
         c.passagem = lote.iniciar(idx, agora)
         lote.em_voo.add(idx)
         self.chamadas[c.id] = c
@@ -301,23 +311,31 @@ class Orquestrador:
             return 1 if prov.disponivel() else 0
         return n - self.reservas_prov.get(prov.codigo, 0)
 
-    def _vaga(self, lote: Lote) -> bool:
+    def _vaga(self, lote: Lote, agora: datetime) -> bool:
         """Pode originar mais uma linha desta carteira? Robôs da empresa (agendador) e sessões do provedor nesta VM:
-        com a razão 1,0 toda linha sai com a sua reserva; acima, linhas sem conversa < razão × (livres + reservados)."""
+        com a razão 1,0 toda linha sai com a sua reserva; acima (Power/Preditivo da carteira, lote.controle), linhas
+        sem conversa < razão × (livres + reservados)."""
         prov = self._provedor(lote.empresa_id)
         if prov is None:
             return False
         livres_prov = self._livres_provedor(prov)
-        if self.agendador.vaga_empresa(lote.empresa_id, livres_max=livres_prov):
+        razao = lote.controle.razao(lote.ritmo, agora)
+        if self.agendador.vaga_empresa(lote.empresa_id, razao=razao, livres_max=livres_prov):
             return True
         if livres_prov <= 0 and self.agendador.vaga_empresa(lote.empresa_id):
             self._conta("sem_robo_provedor")   # a lista espera: ninguém é discado sem robô para falar
         return False
 
-    def _reservar(self, c: Chamada) -> None:
-        """Antes de originar: o robô da empresa (agendador) e a sessão do provedor ficam guardados para esta linha."""
+    def _reservavel(self, empresa_id: int) -> bool:
+        """Há robô livre (empresa e provedor) para reservar agora?"""
+        prov = self._provedor(empresa_id)
+        return prov is not None and self._livres_provedor(prov) > 0 and self.agendador.livres_conversa(empresa_id) > 0
+
+    def _reservar(self, c: Chamada, antes: bool = True) -> None:
+        """Antes de originar: o robô da empresa (agendador) e a sessão do provedor ficam guardados para esta linha
+        (`antes`; senão só a linha conta e o robô é reservado no atendimento)."""
         prov = self._provedor(c.empresa_id)
-        livre_prov = prov is not None and self._livres_provedor(prov) > 0
+        livre_prov = antes and prov is not None and self._livres_provedor(prov) > 0
         c.reservada = self.agendador.ocupar(c.empresa_id, c.candidata.tronco.id, pode_reservar=livre_prov)
         if c.reservada and livre_prov:
             c.prov_reserva = prov.codigo
@@ -472,12 +490,8 @@ class Orquestrador:
         if self._vaga_robo(c, prov):
             self._conectar(c, prov, agora)
             return
-        cfg = self.dados.config(c.empresa_id)
-        if cfg.alo_fake_ativo:
-            self.ari.tocar(c.canal, self.audio_alo, f"{c.id}-alo")
-            c.espera_agente_ate = agora + timedelta(seconds=cfg.alo_fake_max_s)
-            self._conta("alo_fake")
-            return
+        # sem robô: a mensagem neutra na hora (o "Alô fake", que segurava a pessoa com um "Alô?" gravado e depois
+        # derrubava, saiu no V4 do Power/Preditivo; voz_config.alo_fake* ficou sem efeito)
         self._sem_robo(c, agora)
 
     def _tentar_agente(self, c: Chamada, agora: datetime) -> None:
@@ -878,6 +892,10 @@ class Orquestrador:
             for al in lote.alertas:              # alertas do lote (a pausa da rota é do núcleo)
                 self._alerta(al)
             lote.alertas.clear()
+        if c.veredito == A.PESSOA and lote is not None:
+            if lote.controle.resultado_pessoa(ev.desfecho in ABANDONOS, agora, lote.ritmo) == "freou":
+                self._alerta(f"empresa {c.empresa_id} carteira {lote.credor_id}: abandono acima de "
+                             f"{DG.TETO_ABANDONO:g}% nos últimos 30 min — ligando 1 por robô até o fim do dia")
         if c.veredito == A.PESSOA:
             mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho in ABANDONOS, agora.timestamp())
             if mudou == "freou":

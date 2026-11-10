@@ -432,43 +432,17 @@ class TestAloFakeEAbandono(Base):
         self.assertIsNotNone(db["transferida_em"])               # check do banco: transferência exige transferida_em
         self.assertEqual(orq.contagem.get("abandono_sem_robo"), 1)
 
-    def test_alo_fake_segura_e_conecta(self):
-        sim = Simulador(max_simultaneas=1)
+    def test_alo_fake_saiu_mensagem_na_hora(self):
+        # V4 (Power/Preditivo): o "Alô?" gravado segurava a pessoa e depois derrubava; mesmo ligado, não toca mais
         mud = [("voz_config", 0, {"alo_fake_liberado": True, "alo_fake": True, "alo_fake_max_s": 4})]
+        sim = Simulador(max_simultaneas=1)
         orq = self.montar([item()], provedor=sim, mud=mud)
         orq.tick()
         canal = self.originados()[0][2]
         sim.max_simultaneas = 0
         self.atender(canal)
-        self.assertEqual(self.ari.de("tocar")[0][1:3], (canal, "sound:motorcx/alo"))
-        self.rel.andar(2)
-        sim.max_simultaneas = 1
-        orq.tick()
-        self.assertEqual(len(sim.sessoes), 1)
-        self.assertNotIn(canal, self.ari.desligados)
-
-    def test_alo_fake_sem_liberacao_da_equipe_nao_toca(self):
-        mud = [("voz_config", 0, {"alo_fake_liberado": False, "alo_fake": True})]
-        sim = Simulador(max_simultaneas=1)
-        orq = self.montar([item()], provedor=sim, mud=mud)
-        orq.tick()
-        sim.max_simultaneas = 0
-        self.atender(self.originados()[0][2])
-        self.assertNotIn("sound:motorcx/alo", [t[2] for t in self.ari.de("tocar")])
         self.assertEqual([t[2] for t in self.ari.de("tocar")], ["sound:motorcx/sem-robo"])
-
-    def test_alo_fake_estoura_tempo(self):
-        mud = [("voz_config", 0, {"alo_fake_liberado": True, "alo_fake": True, "alo_fake_max_s": 4})]
-        sim = Simulador(max_simultaneas=1)
-        orq = self.montar([item()], provedor=sim, mud=mud)
-        orq.tick()
-        canal = self.originados()[0][2]
-        sim.max_simultaneas = 0
-        self.atender(canal)
-        self.rel.andar(4)
-        orq.tick()
         self.assertNotIn(canal, self.ari.desligados)            # mensagem antes de desligar
-        self.assertEqual(self.ari.de("tocar")[-1][2], "sound:motorcx/sem-robo")
         self.rel.andar(15)                                      # sem o PlaybackFinished: desliga pelo prazo
         orq.tick()
         self.assertIn(canal, self.ari.desligados)

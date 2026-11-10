@@ -138,6 +138,22 @@ class FonteListas:
             return None
         return {l.get("credor_id"): DG.ritmo_da_carteira(l.get("discagem")) for l in linhas}
 
+    def abandonos(self, empresa_id: int) -> dict:
+        """id_cliente -> (abandonos nos últimos 7 dias, último dia) (RPC abandonos_recentes_voz, SQL 108). Banco fora ou
+        sem o SQL: vazio (ninguém é tirado do dia; o "não religa no dia" vale do mesmo jeito)."""
+        try:
+            linhas = self.sb.rpc("abandonos_recentes_voz", {"empresa": int(empresa_id)}) or []
+        except Exception as ex:   # noqa: BLE001
+            log.warning("empresa %s: abandonos recentes não lidos (%s)", empresa_id, ex.__class__.__name__)
+            return {}
+        saida = {}
+        for l in linhas:
+            try:
+                saida[str(l["id_cliente"])] = (int(l["abandonos"]), datetime.fromisoformat(str(l["ultimo"])).date())
+            except (KeyError, TypeError, ValueError):
+                continue
+        return saida
+
     def lotes(self, empresa_id: int, dia) -> list[Lote] | None:
         """Lotes do dia da empresa (um por carteira e canal) ou None se a lista ainda não saiu."""
         emp = (self.sb.selecionar("empresas", {"id": f"eq.{int(empresa_id)}"}) or [None])[0]
@@ -184,7 +200,28 @@ class FonteListas:
         for l in saida:
             if l.credor_id in ritmos:
                 l.ritmo = ritmos[l.credor_id]
+        if saida:
+            aplicar_abandonos(saida, self.abandonos(empresa_id), dia)
         return saida if achou else None
+
+
+# abandono do discador nos últimos dias (PREDITIVO.md 3.5, V4): 2 em 7 dias = 3 dias sem voz (o dia do último e os
+# 2 seguintes); 1 = a próxima ligação só sai com robô reservado
+ABANDONOS_PAUSA, DIAS_PAUSA = 2, 3
+
+
+def aplicar_abandonos(lotes: list[Lote], abandonos: dict, dia) -> int:
+    """Marca os itens dos clientes com abandono recente. Devolve quantos itens ficaram fora do dia."""
+    fora = 0
+    for l in lotes:
+        for it in l.itens:
+            n, ultimo = abandonos.get(it.id_cliente, (0, None))
+            if n >= ABANDONOS_PAUSA and ultimo is not None and (dia - ultimo).days < DIAS_PAUSA:
+                it.encerrado = True
+                fora += 1
+            elif n >= 1:
+                it.reservar = True
+    return fora
 
 
 class Plantao:

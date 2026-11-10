@@ -1,6 +1,7 @@
 """Ritmo da discagem (Power e Preditivo, PREDITIVO.md): V1 · medir o abandono certo, sem mudar o ritmo (SQL 106);
 V2 · linhas e robôs separados também com razão > 1 (reserva no atendimento, antes do AMD); V3 · ritmo por carteira em
-credores.discagem › ritmo (SQL 107) e a leitura na VM.
+credores.discagem › ritmo (SQL 107) e a leitura na VM; V4 · Power (razão fixa, teto de abandono) e abandono digno
+(mensagem, não religa no dia, abandono recente; SQL 108).
 
 - a taxa do freio é a dos últimos 30 min (não o acumulado desde que a VM subiu) e solta sozinha quando a janela anda;
 - a transferência sem operador (fila humana cheia) não é abandono e não freia o discador;
@@ -163,60 +164,54 @@ class TestSql106(unittest.TestCase):
         m = M.Medidor()
         m.contar(1, 2, 3, "cpc", True, True, 30, datetime(2026, 11, 3, 10, 0))
         (linha,) = m.fechar(datetime(2026, 11, 3, 11, 0), lambda e, c: {})
-        self.assertEqual({c.split()[0] for c in campos}, set(linha))
+        # o SQL 108 recria a leitura com razao_config e estado (TestSql108)
+        self.assertEqual({c.split()[0] for c in campos}, set(linha) - {"razao_config", "estado"})
         self.assertEqual(set(linha["por_tronco"][0]), {"tronco_id", "discadas", "atendidas_pessoa", "abandonos",
                                                        "curtas"})
 
 
 class TestReservaNoAtendimento(Base):
-    """V2 · linhas e robôs separados com razão > 1: a linha a mais sai sem reserva, reserva o robô quando ATENDE (antes
-    do AMD), devolve na máquina, e o toque longo nunca ocupa robô. Com a razão 1,0 (padrão) nada muda."""
+    """V2/V4 · linhas e robôs separados com razão > 1: as linhas saem sem reserva e reservam o robô quando ATENDEM (antes
+    do AMD), a máquina devolve, quem atende sem robô livre ouve a mensagem (abandono), e o toque longo nunca ocupa robô.
+    Com a razão 1,0 (padrão) nada muda: cada linha sai com o seu robô."""
 
     def _montar(self, n=8, limite=2, razao=2.0, provedor=None):
         itens = [item(f"C{i}", f"119888{i:05d}") for i in range(n)]
         mud = [("voz_config", 0, {"limite_simultaneas": limite, "pico_multiplo": 1}),
                ("voz_troncos", 0, {"cps": 100}), ("voz_troncos", 1, {"cps": 100})]
         orq = self.montar(itens, mud=mud, provedor=provedor)
-        orq.agendador.empresas[1].razao = razao
+        self.lote.ritmo = {"modo": "power", "razao": razao, "meta_abandono": 1.0, "razao_max": 3.0}   # V4: da carteira
         return orq, orq.agendador.empresas[1]
 
     def test_linhas_a_mais_sem_reserva_e_toque_longo_sem_robo(self):
         orq, e = self._montar()
         self.assertEqual(orq.tick(), 4)                          # 2 robôs livres × razão 2,0
-        self.assertEqual((e.linhas, e.reservas, e.conversas, e.ocupadas), (4, 2, 0, 2))
-        sem = [c for c in orq.chamadas.values() if not c.reservada]
-        self.assertEqual(len(sem), 2)
+        self.assertEqual((e.linhas, e.reservas, e.conversas, e.ocupadas), (4, 0, 0, 0))
         self.rel.andar(39)                                      # toque longo: nenhuma conversa, nenhum pico
-        for c in sem:
+        for c in list(orq.chamadas.values()):
             self.cair(c.canal, 19)
-        self.assertEqual((e.linhas, e.reservas, e.conversas), (2, 2, 0))
+        self.assertEqual((e.linhas, e.reservas, e.conversas), (0, 0, 0))
         self.assertTrue(all(not ev.no_pico for ev in self.eventos))
 
-    def test_reserva_no_atendimento_e_devolve_na_maquina(self):
+    def test_reserva_no_atendimento_devolve_na_maquina_e_abandono_com_mensagem(self):
         orq, e = self._montar()
         orq.tick()
-        com = [c for c in orq.chamadas.values() if c.reservada]
-        sem = [c for c in orq.chamadas.values() if not c.reservada]
-        self.atender(com[0].canal, amd="MACHINE", causa="LONGGREETING")   # robô volta
-        self.ev("StasisStart", sem[0].canal, args=["saida", sem[0].id])   # atendeu: reserva antes do AMD
-        self.assertTrue(sem[0].reservada)
-        self.assertEqual((e.reservas, orq.contagem.get("reserva_no_atendimento")), (2, 1))
-        self.ev("StasisStart", sem[0].canal, args=["amd", "HUMAN", "HUMAN-1-1", ""])
-        self.assertEqual((e.reservas, e.conversas), (1, 1))
-        self.assertIn(sem[0].id, self.sim.sessoes)              # quem atendeu fala com o agente
-        self.atender(sem[1].canal, amd="MACHINE", causa="LONGGREETING")   # sem robô livre: nada reservado
+        a, b, c, d = list(orq.chamadas.values())
+        self.ev("StasisStart", a.canal, args=["saida", a.id])   # atendeu: reserva antes do AMD
+        self.assertTrue(a.reservada)
+        self.assertEqual((e.reservas, orq.contagem.get("reserva_no_atendimento")), (1, 1))
+        self.ev("StasisStart", a.canal, args=["amd", "MACHINE", "LONGGREETING", ""])
+        self.assertEqual(e.reservas, 0)                          # máquina: o robô volta
+        self.atender(b.canal)
+        self.assertEqual((e.reservas, e.conversas), (0, 1))
+        self.assertIn(b.id, self.sim.sessoes)                    # quem atendeu fala com o agente
+        self.ev("StasisStart", c.canal, args=["saida", c.id])   # o último robô livre
+        self.ev("StasisStart", d.canal, args=["saida", d.id])   # nenhum: o AMD ainda decide
         self.assertEqual(orq.contagem.get("atendeu_sem_reserva"), 1)
-        self.assertEqual(e.reservas, 1)
-
-    def test_atendeu_sem_robo_livre_e_abandono_com_mensagem(self):
-        orq, e = self._montar()
-        orq.tick()
-        sem = [c for c in orq.chamadas.values() if not c.reservada]
-        self.atender(sem[0].canal)                               # os 2 robôs estão reservados para as outras linhas
+        self.ev("StasisStart", d.canal, args=["amd", "HUMAN", "HUMAN-1-1", ""])
         self.assertEqual(self.ari.de("tocar")[-1][2], "sound:motorcx/sem-robo")   # nunca mudo
-        self.cair(sem[0].canal)
+        self.cair(d.canal)
         self.assertEqual(self.eventos[-1].desfecho, "abandono_sem_robo")
-        self.assertEqual((e.atendidas_pessoa, e.abandonos), (1, 1))
 
     def test_provedor_limita_as_linhas_a_mais(self):
         sim = __import__("voz.provedores.simulador", fromlist=["Simulador"]).Simulador(max_simultaneas=1)
@@ -294,6 +289,113 @@ class TestVmLeORitmo(Base):
         fonte.linhas = [{"credor_id": 7, "discagem": {"ritmo": {"modo": "x"}}}]   # inválido: padrão
         pl.ciclo(122.0)
         self.assertEqual(self.lote.ritmo, {"modo": "power", "razao": 1.0, "meta_abandono": 1.0, "razao_max": 3.0})
+
+
+class TestPower(Base):
+    """V4 · Power: a razão fixa da carteira vale na VM; teto de 3 % nos últimos 30 min → 1,0 até o fim do dia; o
+    Preditivo, até o V5, disca em aquecimento (1,0)."""
+
+    def _montar(self, ritmo, n=12, limite=2):
+        itens = [item(f"C{i}", f"119888{i:05d}") for i in range(n)]
+        mud = [("voz_config", 0, {"limite_simultaneas": limite, "pico_multiplo": 1}),
+               ("voz_troncos", 0, {"cps": 100}), ("voz_troncos", 1, {"cps": 100})]
+        orq = self.montar(itens, mud=mud)
+        self.lote.ritmo = {"modo": "power", "razao": 1.0, "meta_abandono": 1.0, "razao_max": 3.0, **ritmo}
+        return orq
+
+    def test_razao_da_carteira(self):
+        for razao, linhas in ((1.0, 2), (1.5, 3), (2.0, 4), (3.0, 6)):
+            orq = self._montar({"razao": razao})
+            self.assertEqual(orq.tick(), linhas, razao)
+            # 1,0: cada linha com o seu robô; acima: todas reservam no atendimento
+            self.assertEqual(sum(c.reservada for c in orq.chamadas.values()), 2 if razao == 1.0 else 0)
+
+    def test_preditivo_antes_do_controlador_e_um_para_um(self):
+        orq = self._montar({"modo": "preditivo", "razao_max": 3.0})
+        self.assertEqual(orq.tick(), 2)
+        self.assertEqual(orq.retrato(1, None)["estado"], "aquecendo")
+
+    def test_retrato_tem_modo_razao_e_estado(self):
+        orq = self._montar({"razao": 2.0})
+        self.lote.credor_id = None
+        r = orq.retrato(1, None)
+        self.assertEqual({k: r[k] for k in ("modo", "razao", "razao_config", "estado")},
+                         {"modo": "power", "razao": 2.0, "razao_config": 2.0, "estado": "normal"})
+
+    def test_teto_de_abandono_freia_ate_o_fim_do_dia(self):
+        from voz.orquestrador.ritmo import AMOSTRA_MIN_TETO, RitmoCarteira
+        r = RitmoCarteira()
+        ritmo = {"modo": "power", "razao": 2.0}
+        t = D0
+        for i in range(AMOSTRA_MIN_TETO - 1):
+            self.assertIsNone(r.resultado_pessoa(i < 2, t, ritmo))     # 2 de 49: abaixo da amostra mínima
+        self.assertEqual(r.resultado_pessoa(False, t, ritmo), "freou")  # 2 de 50 = 4 % > 3 %
+        self.assertEqual((r.razao(ritmo, t), r.estado(ritmo, t)), (1.0, "freado"))
+        self.assertEqual(r.razao(ritmo, t + timedelta(hours=8)), 1.0)    # até o fim do dia
+        self.assertEqual(r.razao(ritmo, t + timedelta(days=1)), 2.0)     # amanhã volta
+        r2 = RitmoCarteira()
+        for i in range(AMOSTRA_MIN_TETO):                                # já em 1,0: nada a frear
+            r2.resultado_pessoa(i < 5, t, {"modo": "power", "razao": 1.0})
+        self.assertIsNone(r2.freado_dia)
+
+
+class TestAbandonoDigno(Base):
+    """V4 · quem atende sem agente ouve a mensagem e não recebe outra ligação no dia (nem pela regra por sinalização);
+    abandono recente: 2 em 7 dias = 3 dias sem voz; 1 = a próxima só com robô reservado."""
+
+    def test_nao_religa_no_dia_mesmo_com_a_regra_por_sinalizacao(self):
+        from voz.orquestrador.lote import Lote, RegrasLote
+        regras = RegrasLote.da_carteira({"por_sinalizacao": {}})
+        self.assertTrue(regras.sinal("abandonada")["rediscar"]["ativo"])   # a linha padrão redisca no topo
+        it, outro = item("C1"), item("C1", "11988887771", ordem=2)
+        lote = Lote(1, [it, outro], regras=regras)
+        lote.registrar(it, "abandono_sem_robo", D0, id_chamada="x1")
+        self.assertIn("C1", lote.guarda.clientes_encerrados)
+        self.assertNotIn("C1", lote.guarda.reabriveis)
+        self.assertIsNone(it.volta)
+        self.assertIsNone(lote.proximo(D0 + timedelta(hours=1)))
+        lote2 = Lote(1, [item("C2")], regras=regras)
+        lote2.registrar(lote2.itens[0], "transferencia_sem_operador", D0, id_chamada="x2")   # não é abandono
+        self.assertIsNotNone(lote2.itens[0].volta)
+
+    def test_abandonos_recentes(self):
+        from voz.orquestrador.lote import Lote
+        from voz.orquestrador.principal import aplicar_abandonos
+        lote = Lote(1, [item("A"), item("B", "11988887771"), item("C", "11988887772"), item("D", "11988887773")])
+        hoje = D0.date()
+        fora = aplicar_abandonos([lote], {"A": (2, hoje - timedelta(days=1)), "B": (1, hoje - timedelta(days=2)),
+                                          "C": (2, hoje - timedelta(days=3))}, hoje)
+        a, b, c, d = lote.itens
+        self.assertEqual((fora, a.encerrado, b.reservar, c.encerrado, c.reservar, d.reservar),
+                         (1, True, True, False, True, False))
+
+    def test_quem_teve_abandono_so_sai_com_robo_reservado(self):
+        itens = [item("R", "11988887771", reservar=True), item("N", "11988887772"), item("M", "11988887773")]
+        mud = [("voz_config", 0, {"limite_simultaneas": 1, "pico_multiplo": 1}),
+               ("voz_troncos", 0, {"cps": 100}), ("voz_troncos", 1, {"cps": 100})]
+        orq = self.montar(itens, mud=mud)
+        self.lote.ritmo = {"modo": "power", "razao": 3.0, "meta_abandono": 1.0, "razao_max": 3.0}
+        orq.tick()
+        por = {c.item.id_cliente: c.reservada for c in orq.chamadas.values()}
+        self.assertEqual(por, {"R": True, "N": False, "M": False})       # R primeiro, com o único robô
+        from voz.orquestrador.lote import Lote
+        lote = Lote(1, [item("R", "11988887771", reservar=True), item("N", "11988887772")])
+        self.assertEqual(lote.proximo(D0, reservavel=False)[1].id_cliente, "N")   # sem robô livre: R espera
+        self.assertEqual(lote.proximo(D0)[1].id_cliente, "R")
+
+
+class TestSql108(unittest.TestCase):
+    def test_vm_manda_o_que_o_banco_le(self):
+        s = (RAIZ / "supabase" / "migrations" / "20270223000001_voz_ritmo_power.sql").read_text(encoding="utf-8")
+        campos = re.search(r"as x\(([^)]*)\)", s, re.S).group(1).replace("\n", " ").split(",")
+        m = M.Medidor()
+        m.contar(1, 2, 3, "cpc", True, True, 30, datetime(2026, 11, 3, 10, 0))
+        retrato = {"modo": "power", "razao": 2.0, "razao_config": 2.0, "estado": "normal", "conversas": 1,
+                   "reservas": 0, "linhas": 2}
+        (linha,) = m.fechar(datetime(2026, 11, 3, 11, 0), lambda e, c: retrato)
+        self.assertEqual({c.split()[0] for c in campos}, set(linha))
+        self.assertEqual(A.RPC["abandonos_recentes_voz"], "abandonos_recentes")
+        self.assertIn("function voz_vm.abandonos_recentes(args jsonb)", s)
 
 
 if __name__ == "__main__":
