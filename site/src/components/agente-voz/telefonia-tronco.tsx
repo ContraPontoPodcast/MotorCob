@@ -16,7 +16,8 @@ import {
 } from '@/lib/voz';
 import {
 	ERROS_OPERADORA, LIMITE_TESTE_DIA, LIMITE_TESTE_HORA, PASSOS_TRONCO, SITUACAO_TESTE, formDoTronco,
-	instrucaoTeste, linhasTeste, motivoPausa, payloadTronco, sugerirReferencia, validarTronco, type FormTronco, type PassoTeste,
+	codigosTxt, instrucaoTeste, linhasTeste, motivoPausa, payloadTronco, sugerirReferencia, tomSaude, validarTronco,
+	type FormTronco, type PassoTeste, type SaudeTronco,
 } from '@/lib/telefonia';
 import { erroDaFuncao } from '@/lib/funcoes';
 import { supabase, dateTimeBR, today, type Row } from '@/lib/supabase';
@@ -223,6 +224,7 @@ export function TelefoniaTronco() {
 					</div>
 				)}
 
+				{tronco && <Saude tronco={tronco} />}
 				{tronco && <TestarRota tronco={tronco} numeros={d?.numeros ?? []} pode={pode} onFim={() => void carregar()} />}
 				{tronco && pode && <UsarTronco tronco={tronco} pausado={!!pausa} onMudou={m => { setMsg(m); void carregar(); }} />}
 
@@ -393,6 +395,36 @@ function UsarTronco({ tronco, pausado, onMudou }: { tronco: Row; pausado: boolea
 					: <Botao tipo="primario" pequeno disabled={busy || !pronto} onClick={() => void usar(true)}>Usar este tronco</Botao>}
 				{erro && <span className="text-[13px]" style={{ color: 'var(--estado-erro-texto)' }}>{erro}</span>}
 			</div>
+		</Cartao>
+	);
+}
+
+/** Saúde do tronco nas últimas 24 h (SQL 115, G34): o que o disjuntor olha. */
+function Saude({ tronco }: { tronco: Row }) {
+	const [s, setS] = useState<SaudeTronco | null | undefined>(undefined);
+	useEffect(() => {
+		if (!supabase) return;
+		let vivo = true;
+		void supabase.rpc('saude_troncos_voz', { empresa: Number(tronco.empresa_id), horas: 24 }).then(({ data }) => {
+			if (!vivo) return;
+			const linhas = (Array.isArray(data) ? data : []) as (SaudeTronco & { tronco_id: number })[];
+			setS(linhas.find(l => Number(l.tronco_id) === Number(tronco.id)) ?? null);
+		});
+		return () => { vivo = false; };
+	}, [tronco.id, tronco.empresa_id]);
+	if (s === undefined) return null;
+	const tom = tomSaude(s);
+	return (
+		<Cartao titulo="Saúde do tronco (24 h)" linha="Um tronco com falhas técnicas seguidas sai sozinho (disjuntor) e os outros continuam ligando. Ele volta quando o Testar a rota passar."
+			direita={<Pilula tom={tom}>{tom === 'neutro' ? 'Sem ligações' : tom === 'ok' ? 'Saudável' : tom === 'atencao' ? 'Atenção' : 'Com problema'}</Pilula>}>
+			{!s ? <p className="text-[13px] text-[var(--base-texto-3)]">Nenhuma ligação por este tronco nas últimas 24 horas.</p> : (
+				<Pares itens={[
+					['Tentativas', `${s.tentativas} · ${s.atendidas} atendidas (${String(s.pct_atendidas ?? 0).replace('.', ',')}%)`],
+					['Falhas técnicas da operadora', `${s.falhas_tecnicas} (${String(s.pct_falhas ?? 0).replace('.', ',')}%)`],
+					['Duração média atendida', s.duracao_media_s != null ? `${Math.round(Number(s.duracao_media_s))} s` : '—'],
+					['Códigos mais comuns', codigosTxt(s.codigos)],
+				]} />
+			)}
 		</Cartao>
 	);
 }

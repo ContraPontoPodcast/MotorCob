@@ -1091,6 +1091,19 @@ saída no dialplan). Site: `/voz/telefonia` editável e `/voz/telefonia/tronco/:
 cofre, Testar a rota ao vivo, Usar este tronco, erros da operadora, ficha técnica); regras em `site/src/lib/telefonia.ts`.
 Teste: `supabase/testes/testar_voz_telefonia_editavel.py`, `tests/test_voz_testador.py` e o `regras.test.ts` da função.
 
+**SQL 115 (Telefonia própria do cliente, PR T6; SPEC §6.2 item 14, D4, G19, G34): disjuntor por tronco.**
+`voz_troncos_pausas.motivo` ganha `disjuntor` e `suspeita_sem_credito`. `falha_tecnica_voz(sip, q850)`: SIP 403, 407,
+408 e 5xx (menos 580), ou Q.850 3/34/38/41/42/44/47/102 sem SIP (pessoa que não atende, número inexistente e 402/bloqueio
+não contam). Gatilho `voz_chamadas_disjuntor` (tentativa encerrada e não atendida, modo teste/real) →
+`avaliar_disjuntor_tronco_voz`: nas últimas 6 h e depois da última retomada, pausa SÓ o tronco com 20 falhas técnicas
+seguidas ou 50% das últimas 50 (`disjuntor`), ou >90% das últimas 30 com o mesmo SIP para ≥15 destinos
+(`suspeita_sem_credito`). A VM já lê as pausas a cada 30 s (`troncos_pausados_voz`) e a reserva assume: nada mudou no
+`nucleo.py`/`agendador.py`. Aviso obrigatório `pausa` (vira e-mail) aos Admins e aviso à equipe. Volta com teste:
+`registrar_teste_tronco_voz` (recriada) retoma sozinha essas duas pausas quando o teste passa sem o tronco ter mudado;
+sem crédito e bloqueio continuam pedindo o Retomar. `saude_troncos_voz(empresa, horas)` (G34): tentativas, atendidas,
+falhas técnicas, duração média e os 5 SIP mais comuns por tronco (card "Saúde do tronco" na tela do tronco). Teste:
+`supabase/testes/testar_voz_disjuntor.py`. Se o SQL 114 rodar de novo, rode o 115 depois.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
