@@ -91,7 +91,9 @@ grant select on public.voz_ritmo_amostras to authenticated, service_role;
 -- ================================================================ 4. gravação (VM)
 -- linhas: [{empresa_id, credor_id, janela, modo, razao, discadas, atendidas_pessoa, abandonos, transf_sem_operador,
 --           curtas, conversas, reservas, linhas, por_tronco}]
-create or replace function public.ritmo_voz_linhas(linhas jsonb)
+-- interna (só registrar_ritmo_voz usa): derrubada e recriada para poder rodar de novo depois de um SQL que mude as colunas
+drop function if exists public.ritmo_voz_linhas(jsonb);
+create function public.ritmo_voz_linhas(linhas jsonb)
 returns table (empresa_id bigint, credor_id bigint, janela timestamptz, modo text, razao numeric, discadas int,
                atendidas_pessoa int, abandonos int, transf_sem_operador int, curtas int, conversas int, reservas int,
                linhas_ar int, por_tronco jsonb)
