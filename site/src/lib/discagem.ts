@@ -201,9 +201,10 @@ export function effectiveDiscagem(stored: Record<string, unknown> | null | undef
 	if (st.tentativas_numero_dia == null) delete d.tentativas_numero_dia;
 	// chamadas curtas e horários: o que a carteira gravou por cima do padrão, campo a campo (o que não gravou segue o
 	// padrão novo). falha_conta fica de fora: travado em sim.
+	// abandono_conta também fica travado em sim (PR 8 do plano; SPEC pergunta 15: todo abandono conta como curta)
 	const { falha_conta: _travado, ...cc } = { ...SUGESTOES.chamadas_curtas!, ...(st.chamadas_curtas ?? {}) };
 	void _travado;
-	d.chamadas_curtas = cc;
+	d.chamadas_curtas = { ...cc, abandono_conta: true };
 	d.horarios = { ...SUGESTOES.horarios!, ...(st.horarios ?? {}) };
 	return d;
 }

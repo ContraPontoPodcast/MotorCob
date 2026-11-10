@@ -1185,6 +1185,17 @@ retorno antes de chamar a fila, com alerta, até a janela voltar (o que nem foi 
 transferência sem operador conta à parte nas amostras do ritmo (mesmo com o agente de volta) e nunca no abandono. Ligações
 mostra "Fila humana cheia" acima de 10 % no dia.
 
+**Site · Agente Voz/CX › Discagem com os padrões novos na tela (PR 8 do plano Canais/Agente Voz/CX, sem SQL).**
+Chamadas curtas: no topo, os medidores de hoje **por linha (bina)** e **no total da empresa** (`discagem/curtas-hoje.tsx`,
+`ritmo_voz_hoje(empresa)` sem carteira, a cada 15 s; limites da Anatel 1.000/10.000; "Linha parada hoje" e "A empresa
+parou de ligar hoje" pela mesma regra da VM, 800/8.000 ou 950/9.500 liberado); "Ligação não completada" e "Abandono"
+contam sempre (travados; `effectiveDiscagem` força `abandono_conta = true` e o próximo salvamento tira o "não" salvo).
+Renitência: cartão **Padrões recomendados** (tabela D2 da revisão) com "Nesta carteira" e "Usar os padrões recomendados".
+Ritmo: bloco **Posição do número** (D3: 2 telefones por dia, horizontal; "Usar o recomendado" e a gaveta do modo).
+Os dois botões só mudam o rascunho (`site/src/lib/discagem-recomendado.ts`; fixa 2 tentativas por número e liga a regra
+por sinalização): vale ao salvar como vN (`salvar_discagem`). O padrão MotorCX do motor e do banco **não** muda.
+Horários (faixa vermelha ao desligar) já vinham do B2. Testes: `site/src/lib/discagem-recomendado.test.tsx`.
+
 **SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
 ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
 `nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
