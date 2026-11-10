@@ -1011,6 +1011,20 @@ tronco/transferência ativo. VM: `motorcx-voz-firewall.timer` (2 min) → `pytho
 ligado, o `criar_gcp.sh` não sobrescreve as origens SIP/RTP. Testes: `tests/test_voz_firewall.py` e
 `supabase/testes/testar_voz_firewall.py`.
 
+**SQL 105 (Telefonia própria do cliente, PR T3; SPEC §5 e §6.2, G3, G4 e D13): o Admin do cliente configura a
+telefonia dele.** Permissão nova do cliente `configurar_telefonia` (catálogo, grupo Agente virtual; padrão só Admin; fora
+do Speech: o Qualidade nunca tem). `pode_configurar_telefonia(eid)` = equipe com `gerenciar_troncos_voz` OU
+`cliente_pode(eid, 'configurar_telefonia')` + módulo `agente_voz` + **sessão aal2**. Por ela passam
+`cadastrar_tronco_voz`, `preparar_segredo_tronco_voz`, `definir_ips_voz`, `salvar_rota_voz`, `encerrar_rota_voz` e
+`salvar_transferencia_voz` (recriadas inteiras; frase "sem permissão para configurar a telefonia…"). Liberar IPs no
+firewall continua só com a equipe. **Trava de liberação** (a VM usa todo tronco ativo e não olha `teste_ok`): tronco que o cliente cadastra nasce inativo e mudar como ele conecta (endereço, autenticação, usuário, referência, bina, formato, CSP) o desativa; o cliente desativa, só a equipe ativa. Leitura do cliente sem segredo (`ve_telefonia`: quem é da empresa com o módulo, ou a
+equipe que cuida da voz): views `voz_troncos_empresa` (sem `segredo_ref`; `segredo_no_cofre`, IPs e `ips_pendentes`) e
+`voz_rotas_empresa`; as tabelas continuam só da equipe/faturamento. Gatilho `voz_troncos_avisar_mudanca`: tronco novo ou
+mudança de endereço, autenticação, senha (versão), bina ou IPs → aviso obrigatório `seguranca` (vira e-mail) a cada Admin
+da empresa, com quem mudou e nunca o valor, e aviso no sino da equipe. Site: Agente Voz/CX › Telefonia lista os troncos
+(só leitura; a tela editável é o PR T5). Teste: `supabase/testes/testar_voz_configurar_telefonia.py`. Se o SQL 56, 81 ou
+103 rodar de novo, rode o 105 depois.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
