@@ -182,7 +182,10 @@ test('roteiro: capítulos na ordem da conversa, ramos com nome, "o agente diz / 
 	assert.match(n2, /Se não entender/);
 	assert.match(n2, /pede de novo 1 vez/);
 	assert.match(n2, /então <a href="#etapa-N14"[^>]*>Encerrar · recado neutro<\/a>/);
-	assert.match(n2, /Se não ouvir nada.*Ainda sem tratamento próprio/);
+	assert.match(n2, /Se não ouvir nada.*pede de novo 1 vez \(“.*Desculpe, não ouvi\. Para sua segurança/);   // SQL 95
+	assert.match(n2, /Se não ouvir nada[^]*então <a href="#etapa-N14"/);                 // sem saída própria: a de "não entender"
+	const n1 = html.slice(pos('N1'), pos('N2'));
+	assert.match(n1, /Se não ouvir nada.*encerra sem recado/);
 	const n3 = html.slice(pos('N3'), pos('N4'));
 	assert.doesNotMatch(n3, />Não entendi 2×</);                  // "Não entendi" vai para "Se não entender", não é resposta
 	// finais e a etapa sem saída (U3)
@@ -298,7 +301,7 @@ test('detalhe da etapa: "O agente diz" destaca as variáveis e risca as sensíve
 });
 
 test('detalhe da etapa: "Como soa no telefone", checagens e "Se não ouvir nada"', async () => {
-	const { ChecagensFala, ComoSoa, SeNaoOuvir } = await import('@/components/fluxo/etapa-partes');
+	const { ChecagensFala, ComoSoa, QuadroRepeticao } = await import('@/components/fluxo/etapa-partes');
 	const { comoSoa } = await import('@/lib/falado');
 	const soa = renderToStaticMarkup(<ComoSoa falada={comoSoa('Fica 6× de R$ 230,00, a primeira em 05/12.')} onOuvir={async () => {}} />);
 	assert.match(soa, /Como soa no telefone/);
@@ -308,7 +311,19 @@ test('detalhe da etapa: "Como soa no telefone", checagens e "Se não ouvir nada"
 	const chk = renderToStaticMarkup(<ChecagensFala itens={[{ estado: 'ok', texto: '16 palavras (curta para o ouvido)' }, { estado: 'erro', texto: 'Cita {{credor}} antes de confirmar a identidade (trava 1)' }]} />);
 	assert.match(chk, /data-checagem="ok"[^]*16 palavras/);
 	assert.match(chk, /data-checagem="erro"[^]*corrigir: <\/span>Cita \{\{credor\}\}/);
-	assert.match(renderToStaticMarkup(<SeNaoOuvir />), /Se não ouvir nada<\/b><span[^>]*>Ainda sem tratamento próprio/);
+	// SQL 95: fala própria editável; vazia = a padrão com aviso de fala genérica; vezes e destino
+	const nada = () => {};
+	const gen = renderToStaticMarkup(<QuadroRepeticao qual="silencio" fala="" padrao="Desculpe, não ouvi. Posso continuar?" vezes={2} onFala={nada} onVezes={nada} destino={<span>Transferir</span>} />);
+	assert.match(gen, /data-se-nao-ouvir/);
+	assert.match(gen, /Se não ouvir nada<\/b>/);
+	assert.match(gen, /data-fala-generica[^]*Fala padrão: “Desculpe, não ouvi\. Posso continuar\?”/);
+	assert.match(gen, /Pede de novo 1 vez antes de seguir/);
+	const prop = renderToStaticMarkup(<QuadroRepeticao qual="nao_entendi" fala="Não peguei. Quer negociar?" padrao="Desculpe, pode repetir?" vezes={1} onFala={nada} onVezes={nada} destino={null}
+		checagens={[{ estado: 'ok', texto: 'Uma pergunta por vez' }]} />);
+	assert.match(prop, /data-se-nao-entender/);
+	assert.doesNotMatch(prop, /data-fala-generica/);
+	assert.match(prop, /Uma pergunta por vez/);
+	assert.match(prop, /Não pede de novo/);
 });
 
 // ---------------------------------------------------------------- PR6: testar ao lado
