@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Lock, Volume2 } from 'lucide-react';
 import { Botao, campoCls, campoStyle } from '@/components/voz/ui';
-import { MODOS, falaOk, rotuloTrava, textoFim, travasDoTeste, type Modo } from '@/lib/fluxo';
+import { MODOS, SILENCIO_S, falaOk, rotuloTrava, textoFim, travasDoTeste, type Modo } from '@/lib/fluxo';
 import { comoSoa } from '@/lib/falado';
 import type { CenarioConector, FluxoApi, Simulacao } from './api';
 import { mensagem } from './comum';
@@ -35,9 +35,12 @@ export function useConversaTeste(api: FluxoApi | null, versao: number, cenarios:
 	return { sim, falas, ocupado, erro, rodar, enviar };
 }
 
-/** Atalhos do que o cliente diria: comuns, objeções e os que disparam travas (sem silêncio: chega com o PR8). */
+/** No simulador, a "fala" que quer dizer: o cliente não disse nada (voz/fluxo.py › MARCA_SILENCIO; SQL 95). */
+export const SILENCIO = '[silêncio]';
+/** Atalhos do que o cliente diria: comuns, silêncio, objeções e os que disparam travas. */
 export const ATALHOS: { grupo: string; trava?: boolean; itens: string[] }[] = [
 	{ grupo: 'Comuns', itens: ['Sou eu.', '15 de março.', 'Quero parcelar.', 'Aceito as 6 parcelas.'] },
+	{ grupo: 'Silêncio', itens: [SILENCIO] },
 	{ grupo: 'Objeções', itens: ['Já paguei.', 'Não reconheço essa dívida.', 'Tô desempregado.', 'Tira os juros que eu fecho.'] },
 	{ grupo: 'Travas', trava: true, itens: ['Não me ligue mais.', 'Quero falar com uma pessoa.', 'Não, aqui é a vizinha.', 'Meu CPF é 111.444.777-35.'] },
 ];
@@ -65,7 +68,9 @@ export function Conversa({ estado, nomes, soa, onOuvir, tocando, onEtapa, altura
 				{!sim && ocupado && <p className="text-[13px] text-[var(--base-texto-3)]">Começando a conversa…</p>}
 				{(sim?.turnos ?? []).map((t, i) => (
 					<div key={i} className="flex flex-col gap-2">
-						{t.pessoa && <div className="max-w-[85%] self-end rounded-[12px_12px_4px_12px] px-3 py-2 text-[13.5px] text-[var(--base-texto)]" style={{ backgroundColor: 'var(--destaque-suave)' }}>{t.pessoa}</div>}
+						{t.pessoa && (t.pessoa === SILENCIO
+							? <div className="self-end text-[12px] italic text-[var(--base-texto-3)]" data-silencio>o cliente não disse nada ({SILENCIO_S} s)</div>
+							: <div className="max-w-[85%] self-end rounded-[12px_12px_4px_12px] px-3 py-2 text-[13.5px] text-[var(--base-texto)]" style={{ backgroundColor: 'var(--destaque-suave)' }}>{t.pessoa}</div>)}
 						{travas.filter(x => x.turno === i).map(x => (
 							<div key={x.trava} data-trava={x.trava} className="inline-flex items-center gap-1.5 self-center text-center text-[12px] font-semibold text-[var(--area-voz)]">
 								<Lock size={12} aria-hidden /> {rotuloTrava(x)}{x.etapa ? ` · agiu em ${nomeEtapa(x.etapa)}` : ''}

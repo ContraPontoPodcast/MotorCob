@@ -5,8 +5,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-	MODOS, SEMPRE, TIPOS, TRAVAS, acaoSistema, correcaoDe, tirarSensiveisDaFala, caminhosPara, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, textoVolta, comoCorrigir, estadoEnvio, explicar, falaOk, nomesEtapas, textoSaida, tituloRamo, variaveisDoTexto, variaveisSensiveis, funil, impedem, kpisDoFluxo, misturaModos, modoPredominante, nomeAnexo, novoBloco,
-	proximoId, quadroPorRamos, removerBloco, roleplayValido, saidasFaltando, saidasPossiveis, somarMetricas, tipoDaSaida, validarLocal,
+	MODOS, SEMPRE, TIPOS, TRAVAS, acaoSistema, correcaoDe, tirarSensiveisDaFala, caminhosPara, numerosRoteiro, resultadoFinal, roteiro, seNaoEntender, seNaoOuvir, textoVolta, comoCorrigir, estadoEnvio, explicar, falaOk, nomesEtapas, textoSaida, tituloRamo, variaveisDoTexto, variaveisSensiveis, funil, impedem, kpisDoFluxo, misturaModos, modoPredominante, nomeAnexo, novoBloco,
+	proximoId, quadroPorRamos, removerBloco, roleplayValido, saidasFaltando, saidasPossiveis, somarMetricas, tipoDaSaida, trocarBloco, validarLocal,
 	type Bloco, type Definicao,
 } from '../src/lib/fluxo.ts';
 import { NUMERO_TRAVA, NOMES_TRAVA, etapaDoTeste, rotuloTrava, textoFim, travasDoTeste } from '../src/lib/fluxo.ts';
@@ -186,7 +186,7 @@ test('o que corrigir: toda pendência de etapa que o editor marca diz como corri
 test('travas: uma lista só, 7 itens, sem prometer o que o executor ainda não faz', () => {
 	assert.equal(TRAVAS.length, 7);
 	const tudo = [...TRAVAS.flat(), ...SEMPRE.flat()].join(' ');
-	assert.doesNotMatch(tudo, /tema sensível|caixa postal/i);             // B4 (tema sensível) ainda não está no ar
+	assert.doesNotMatch(tudo, /tema sensível|caixa postal/i);             // B4 (tema sensível) ainda não está no ar (o silêncio, B2, sim: SQL 95)
 	assert.match(tudo, /nunca é repetido/);                                // SQL 96: a trava de CPF já está
 	assert.ok(SEMPRE.some(([q]) => /Não me ligue/.test(q)) && SEMPRE.some(([q]) => /pessoa/.test(q)));
 	assert.notEqual(MODOS.arvore.cor, MODOS.sistema.cor);
@@ -250,13 +250,27 @@ test('roteiro: volta dita na seta (sem repetir a etapa), "se não entender" igua
 	assert.equal(textoVolta(sem.blocos.find(b => b.id === 'N6')!.saidas.at(-1)!, 'N6', numerosRoteiro(roteiro(sem)), sem), '');
 	// voz/fluxo.py › _tentar_de_novo: tentativas (padrão 2) − 1 repetições; depois, a saída de cada tipo
 	const b = (id: string) => d.blocos.find(x => x.id === id)!;
-	assert.deepEqual(seNaoEntender(b('N1')), { repete: 1, fala: 'Desculpe. Falo com {{primeiro_nome}}?', quando: 'terceiro' });
-	assert.deepEqual(seNaoEntender(b('N2')), { repete: 1, fala: 'Desculpe, não entendi. Pode repetir, por exemplo, 15 de março?', quando: 'nao_confirmou' });
+	assert.deepEqual(seNaoEntender(b('N1')), { repete: 1, vezes: 2, fala: 'Desculpe. Falo com {{primeiro_nome}}?', quando: 'terceiro', propria: false });
+	assert.deepEqual(seNaoEntender(b('N2')), { repete: 1, vezes: 2, fala: 'Desculpe, não entendi. Pode repetir, por exemplo, 15 de março?', quando: 'nao_confirmou', propria: false });
 	assert.equal(seNaoEntender(b('N3'))?.quando, 'nao_entendido');
 	assert.equal(seNaoEntender(b('N6'))?.quando, 'recusou');
 	assert.equal(seNaoEntender(b('N9'))?.quando, 'nao_agendou');
-	assert.deepEqual(seNaoEntender(blk('N20', 'pergunta', 'arvore', [], { fala: 'Posso seguir?', tentativas: 1 })), { repete: 0, fala: 'Posso seguir?', quando: 'sem_resposta' });
+	assert.deepEqual(seNaoEntender(blk('N20', 'pergunta', 'arvore', [], { fala: 'Posso seguir?', tentativas: 1 })), { repete: 0, vezes: 1, fala: 'Posso seguir?', quando: 'sem_resposta', propria: false });
 	for (const id of ['N4', 'N5', 'N7', 'N13']) assert.equal(seNaoEntender(b(id)), null, id);   // sistema, IA e finais não "ouvem"
+	// SQL 95: fala própria e vezes de "Se não entender"; "Se não ouvir nada" com saída "silencio" ou, sem ela, a de "não entender"
+	const n3 = { ...b('N3'), params: { ...b('N3').params, nao_entendi: { fala: 'Não peguei. Quer negociar?', vezes: 3 } } };
+	assert.deepEqual(seNaoEntender(n3), { repete: 2, vezes: 3, fala: 'Não peguei. Quer negociar?', quando: 'nao_entendido', propria: true });
+	assert.deepEqual(seNaoOuvir(b('N1')), { repete: 1, vezes: 2, fala: 'Alô? Falo com {{primeiro_nome}}?', quando: null, propria: false });   // Abertura: encerra sem recado
+	assert.equal(seNaoOuvir(b('N3'))?.quando, 'nao_entendido');
+	assert.match(seNaoOuvir(b('N3'))!.fala, /^Desculpe, não ouvi\. /);
+	const n9 = { ...b('N9'), params: { ...b('N9').params, silencio: { vezes: 1 } }, saidas: [...b('N9').saidas, s('silencio', 'Não respondeu', 'N13')] };
+	assert.deepEqual(seNaoOuvir(n9), { repete: 0, vezes: 1, fala: 'Desculpe, não ouvi. Quando fica melhor eu ligar de novo?', quando: 'silencio', propria: false });
+	for (const id of ['N4', 'N5', 'N13']) assert.equal(seNaoOuvir(b(id)), null, id);
+	assert.ok(saidasPossiveis(b('N3')).some(x => x.quando === 'silencio' && !x.obrig));
+	assert.ok(!saidasPossiveis(b('N4')).some(x => x.quando === 'silencio'));
+	// a fala de silêncio com o credor na Abertura acende a trava 1 (= voz/fluxo_casos.py)
+	const comCredor = trocarBloco(d, { ...b('N1'), params: { ...b('N1').params, silencio: { fala: 'Alô? É sobre {{credor}}.' } } });
+	assert.ok(validarLocal(comCredor).includes('valor_antes_identidade:N1'));
 	assert.equal(acaoSistema(blk('N30', 'condicao', 'sistema', [], { campo: 'ofertas_quantidade', op: '>=', valor: 1 })), 'Confere: Ofertas recebidas ≥ 1');
 	assert.match(acaoSistema(b('N4')), /^Chama um conector do CRM\. Enquanto espera, diz: "Um instante, por favor\."$/);
 	assert.equal(resultadoFinal(b('N14')), 'resultado: Recado neutro (terceiro)');

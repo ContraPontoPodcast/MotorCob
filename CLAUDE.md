@@ -990,6 +990,18 @@ editáveis.** Só acrescenta funções (nenhuma recriada). Onde se edita cada co
 Item novo com franquia: entra em `itens_com_franquia()` e em `site/src/lib/precos-itens.ts` (o teste confere a paridade).
 Teste: `supabase/testes/testar_precos_editaveis.py`.
 
+**SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
+ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
+`nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
+contam à parte (`Sessao.tentativas` × `Sessao.silencios`). Sem nada configurado, o "não entendi" é o de antes (fala padrão
+de cada tipo, `tentativas` padrão 2, saída de "não entendi"). Silêncio: a Montagem chama `Sessao.silencio()` depois de
+`SILENCIO_S` (6 s) sem fala da pessoa contados de quando a fila de áudio do agente esvazia (`RelogioSilencio`); padrão 2
+vezes ("Desculpe, não ouvi." + a fala da etapa), depois a saída "silencio" ou, sem ela, a de "não entendi"; na Abertura sem
+saída própria encerra SEM recado e sem marcar terceiro; na IA conversa, "Você ainda está aí?" e depois atendente. As falas
+novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracteres, variáveis, senha e trava 1. Simulador e
+casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
+(`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

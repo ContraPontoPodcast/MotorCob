@@ -2263,6 +2263,12 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261225000001_voz_fluxo.sql")],
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
+# SQL 95 (silêncio e "não entendi" por etapa) refaz o validador do SQL 58: reaplica depois dele
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations",
+                                 "20270131000001_voz_silencio_nao_entendi.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
 import json as _json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from voz import fluxo_casos as _FC, fluxo_modelos as _FM   # noqa: E402

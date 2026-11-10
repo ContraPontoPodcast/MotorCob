@@ -162,6 +162,15 @@ class ConversaComTurnos:
         self._olhar_oferta()
         return falas
 
+    def silencio(self) -> list[str]:
+        """SQL 95: a pessoa ficou calada (a Montagem chama depois do tempo de silêncio). Só a Sessao do fluxo sabe
+        tratar; a Conversa do roteiro, não (nada a dizer). A fala do agente entra na transcrição."""
+        f = getattr(self._interna, "silencio", None)
+        falas = list(f() or []) if callable(f) else []
+        for t in falas:
+            self.turnos.agente(t)
+        return falas
+
     @property
     def falar_agora(self):
         return getattr(self._interna, "falar_agora", None)
