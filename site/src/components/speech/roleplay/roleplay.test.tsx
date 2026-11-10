@@ -1,6 +1,7 @@
 // Roleplay renderizado de verdade (react-dom/server), sem banco: moldura (trilha, abas do Speech com Roleplay
 // marcada, sub-navegação e o voltar), Painel vazio e com dados, biblioteca com filtro, cenário só leitura
-// (Duplicar para editar no Padrão MotorCX; "em breve" no da empresa), Cadastro para treino e a página da pessoa.
+// (Duplicar para editar no Padrão MotorCX), Cadastro para treino e a página da pessoa. O editor, o Atribuir, os
+// Treinos atribuídos e a página do operador estão em atribuir.test.tsx.
 // O Speech Analytics não tem modo de demonstração no navegador: estes testes cobrem as telas.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,7 +57,8 @@ test('moldura: trilha, título, abas do Speech com Roleplay marcada, sub-navega�
 	const painel = em('/speech-analytics/roleplay', <MolduraRP titulo="Roleplay"><p /></MolduraRP>);
 	assert.match(painel, /aria-current="page"[^>]*>Painel<\/a>/);
 	assert.match(painel, /aria-label="Voltar para Visão geral do Speech Analytics"/);
-	assert.doesNotMatch(painel, /Treinos atribuídos|Evolução/, 'sem link para seção que ainda não existe');
+	assert.match(painel, /href="\/speech-analytics\/roleplay\/atribuicoes"[^>]*>Treinos atribuídos<\/a>/);
+	assert.doesNotMatch(painel, /Evolução/, 'sem link para seção que ainda não existe');
 });
 
 test('abas do Speech: Roleplay só para quem treina ou cuida dos cenários', () => {
@@ -111,7 +113,7 @@ test('Cenários: filtro marcado, Padrão MotorCX primeiro "Ver e duplicar", da e
 	assert.match(emp, /A empresa ainda não tem cenários próprios/);
 });
 
-test('Cenário só leitura: Item crítico, ficha fictícia, Duplicar no Padrão MotorCX e "em breve" no da empresa', () => {
+test('Cenário só leitura: Item crítico, ficha fictícia, Duplicar e Atribuir no Padrão MotorCX', () => {
 	const h = em('/x', <CorpoCenario c={MX} itens={{}} />);
 	assert.match(h, /Rita \(fictícia\)/);
 	assert.match(h, /Item crítico · reprova a sessão/);
@@ -128,9 +130,10 @@ test('Cenário só leitura: Item crítico, ficha fictícia, Duplicar no Padrão 
 
 	const mx = em('/x', <AcoesCenario c={MX} pode={{ treinar: true, cenarios: true }} onDuplicar={nada} />);
 	assert.match(mx, />Duplicar para editar</);
+	assert.match(mx, /href="\/speech-analytics\/roleplay\/atribuir\?cen=1"[^>]*>Atribuir</, 'publicado: atribuir com o cenário pré-escolhido');
 	assert.doesNotMatch(mx, /disabled=""/);
 	const emp = em('/x', <AcoesCenario c={EMP} pode={{ treinar: true, cenarios: true }} onDuplicar={nada} />);
-	assert.match(emp, /disabled=""[^>]*>Editar · em breve/);
+	assert.doesNotMatch(emp, /Atribuir|em breve/, 'rascunho não se atribui (o da empresa abre no editor)');
 	assert.doesNotMatch(em('/x', <AcoesCenario c={MX} pode={{ treinar: true, cenarios: false }} onDuplicar={nada} />), /Duplicar/, 'sem editar_cenarios_treino, sem duplicar');
 	const copia = em('/x', <CorpoCenario c={EMP} itens={{}} base={{ id: 1, nome: 'Já pagou' }} />);
 	assert.match(copia, /Cópia de <a [^>]*href="\/speech-analytics\/roleplay\/cenarios\/1"/);

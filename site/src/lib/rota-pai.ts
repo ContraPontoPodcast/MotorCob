@@ -8,7 +8,7 @@
 // "/speech-analytics/:aba?"). A rota exata ganha da com parâmetro.
 
 import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_VOZ } from './rotas-voz';
-import { ROTA_RP, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS } from './roleplay';
+import { ROTA_RP, ROTA_RP_ATRIBUICOES, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS } from './roleplay';
 
 export type RotaPai = { to: string; rotulo: string };
 export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean };
@@ -63,6 +63,12 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/speech-analytics/roleplay/cenarios/:id': { to: ROTA_RP_CENARIOS, rotulo: 'Cenários' },
 	'/speech-analytics/roleplay/operadores': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
 	'/speech-analytics/roleplay/operadores/:op': { to: ROTA_RP_CADASTRO, rotulo: 'Cadastro para treino' },
+	// Editor (cenário novo) volta para a biblioteca; o treino atribuído e o "Atribuir treino", para Treinos atribuídos.
+	// Quando a tela foi aberta de outra (pessoa, cenário, Painel), o "← Voltar" leva de volta a ela (state.de).
+	'/speech-analytics/roleplay/cenarios/novo': { to: ROTA_RP_CENARIOS, rotulo: 'Cenários' },
+	'/speech-analytics/roleplay/atribuicoes': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
+	'/speech-analytics/roleplay/atribuicoes/:id': { to: ROTA_RP_ATRIBUICOES, rotulo: 'Treinos atribuídos' },
+	'/speech-analytics/roleplay/atribuir': { to: ROTA_RP_ATRIBUICOES, rotulo: 'Treinos atribuídos' },
 };
 
 /** "/voz/ligacoes/:id" → /^\/voz\/ligacoes\/[^/]+$/ ("/x/:p?" também casa "/x"). */

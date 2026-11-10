@@ -1,8 +1,9 @@
 // Moldura das telas do Roleplay: trilha clicável, cabeçalho com "← tela-mãe" (lib/rota-pai.ts), as abas do Speech
 // Analytics (Roleplay marcada também nos detalhes) e a sub-navegação do Roleplay. Cada tela tem o próprio título,
 // no h1 e na aba do navegador ("Cenários · Roleplay · MotorCX").
-import { useEffect, type ReactNode } from 'react';
-import { Link, useLocation } from 'react-router';
+import { createContext, useContext, useEffect, type ReactNode } from 'react';
+import { Link, useLocation, type LinkProps } from 'react-router';
+import { estadoDe } from '@/components/comuns/voltar';
 import { ChevronRight } from 'lucide-react';
 import { PageHeading } from '@/components/app-shell';
 import { SECOES_RP, ehSecaoRP, secaoRP, tituloDocumentoRP, trilhaRP, type ItemTrilha, type SecaoRP } from '@/lib/roleplay';
@@ -38,6 +39,22 @@ export function SubnavRP({ secao, exato }: { secao: SecaoRP; exato: boolean }) {
 	);
 }
 
+/** Título da tela do Roleplay aberta agora (o "← Voltar" da tela seguinte diz para onde volta). */
+const TelaAtualRP = createContext<string | null>(null);
+
+/** Estado de navegação "vim desta tela" (regra única de Voltar, SPEC §2.1). */
+export function useEstadoDe() {
+	const { pathname, search } = useLocation();
+	const titulo = useContext(TelaAtualRP);
+	return titulo ? estadoDe(pathname + search, titulo) : undefined;
+}
+
+/** Link que abre uma tela "para dentro" lembrando a origem: o "← Voltar" (e o ⟵ do navegador) voltam para cá. */
+export function LinkRP({ state, ...p }: LinkProps) {
+	const de = useEstadoDe();
+	return <Link {...p} state={state ?? de} />;
+}
+
 export function MolduraRP({ titulo, descricao, acoes, detalhe, children }: {
 	titulo: string; descricao?: string; acoes?: ReactNode;
 	/** Nome da tela de detalhe (cenário, pessoa), para a trilha e o título da aba. */
@@ -48,12 +65,12 @@ export function MolduraRP({ titulo, descricao, acoes, detalhe, children }: {
 	const doc = tituloDocumentoRP(pathname, detalhe);
 	useEffect(() => { document.title = doc; }, [doc]);
 	return (
-		<>
+		<TelaAtualRP.Provider value={titulo}>
 			<TrilhaRP itens={trilhaRP(pathname, detalhe)} />
 			<PageHeading title={titulo} description={descricao} actions={acoes} semControles area="Speech Analytics › Roleplay" />
 			<AbasSpeech atual="roleplay" />
 			<SubnavRP secao={secaoRP(pathname) ?? 'painel'} exato={ehSecaoRP(pathname)} />
 			{children}
-		</>
+		</TelaAtualRP.Provider>
 	);
 }

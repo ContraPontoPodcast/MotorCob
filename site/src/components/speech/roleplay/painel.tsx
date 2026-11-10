@@ -8,10 +8,11 @@ import { Aviso, BotaoLink, Cartao, Estado, Kpis, LinkTexto, Pilula, Tabela } fro
 import { supabase } from '@/lib/supabase';
 import { ROTA_TESTAR_PERSONAS, dataBR, diaSP, nf } from '@/lib/speech';
 import {
-	REGRA_SUGESTAO, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS, SITUACAO_TREINO, indicadoresPainel, precisaDeAcao, resumoTreino, rotaCenarioRP, rotaPessoaRP,
+	REGRA_SUGESTAO, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS, SITUACAO_TREINO, indicadoresPainel, precisaDeAcao, resumoTreino, rotaAtribuicaoRP, rotaAtribuir,
+	rotaCenarioRP, rotaPessoaRP,
 	type AtribuicaoRP, type ItemAcao,
 } from '@/lib/roleplay';
-import { MolduraRP } from './moldura';
+import { LinkRP, MolduraRP } from './moldura';
 import { SeloLgpdTreino } from './comum';
 import { lerPainel, type DadosPainel } from './dados';
 import type { PodeRP } from './index';
@@ -46,7 +47,10 @@ function TextoAcao({ i }: { i: ItemAcao }) {
 	return (
 		<div className="flex flex-wrap items-center justify-between gap-2 border-b py-2.5 last:border-0" style={{ borderColor: 'var(--base-borda)' }}>
 			<p className="min-w-0 flex-[1_1_320px] text-[13.5px] text-[var(--base-texto)]">{i.texto}</p>
-			{i.operador_id != null && <LinkTexto to={rotaPessoaRP(i.operador_id)}>Ver a pessoa</LinkTexto>}
+			<span className="flex flex-wrap gap-3">
+				{i.atribuicao_id != null && <LinkRP to={rotaAtribuicaoRP(i.atribuicao_id)} className="text-[13px] font-semibold text-[var(--destaque)] hover:underline">Ver o treino</LinkRP>}
+				{i.operador_id != null && <LinkRP to={rotaPessoaRP(i.operador_id)} className="text-[13px] font-semibold text-[var(--destaque)] hover:underline">Ver a pessoa</LinkRP>}
+			</span>
 		</div>
 	);
 }
@@ -87,6 +91,7 @@ export function PainelView({ d, hoje, desde, agora }: { d: DadosPainel; hoje: st
 								<article key={s.id} className="rounded-xl bg-[var(--base-fill)] px-3.5 py-3">
 									<p className="text-[13.5px] font-semibold text-[var(--base-texto)]">{REGRA_SUGESTAO[s.regra] ?? 'Sugestão de treino'}</p>
 									<p className="mt-0.5 text-[12.5px] text-[var(--base-texto-2)]">{s.operadores.length} {s.operadores.length === 1 ? 'operador' : 'operadores'} · {dataBR(s.criado_em)}{cen ? <> · cenário sugerido: <Link className="font-semibold text-[var(--destaque)] hover:underline" to={rotaCenarioRP(s.cenario_id!)}>{cen}</Link></> : null}</p>
+									<p className="mt-1.5"><LinkRP to={rotaAtribuir({ sug: s.id })} className="text-[13px] font-semibold text-[var(--destaque)] hover:underline">Atribuir treino</LinkRP></p>
 								</article>
 							);
 						})}
@@ -99,7 +104,7 @@ export function PainelView({ d, hoje, desde, agora }: { d: DadosPainel; hoje: st
 					<Tabela<AtribuicaoRP> rotulo="Treinos em andamento" linhas={abertas} chave={a => a.id}
 						vazio="Nenhum treino atribuído em andamento. Os treinos atribuídos aparecem aqui com o prazo e quem já chegou na meta."
 						colunas={[
-							{ id: 'cen', titulo: 'Cenário', celula: a => <Link className="font-semibold hover:underline" to={rotaCenarioRP(a.cenario_id)}>{nomeCen(a.cenario_id) ?? 'Cenário'}</Link> },
+							{ id: 'cen', titulo: 'Cenário', celula: a => <LinkRP className="font-semibold hover:underline" to={rotaAtribuicaoRP(a.id)}>{nomeCen(a.cenario_id) ?? 'Cenário'}</LinkRP> },
 							{ id: 'prazo', titulo: 'Prazo', num: true, celula: a => dataBR(a.prazo) },
 							{ id: 'meta', titulo: 'Chegaram na meta', num: true, celula: a => { const r = resumoTreino(a, d.pessoas, hoje); return `${r.naMeta} de ${r.pessoas}`; } },
 							{ id: 'nota', titulo: 'Nota média', num: true, celula: a => { const r = resumoTreino(a, d.pessoas, hoje); return r.media == null ? '—' : `${r.media} (meta ${a.nota_minima})`; } },

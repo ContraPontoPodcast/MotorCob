@@ -18,6 +18,9 @@ export default [
   route('privacidade', 'routes/privacidade.tsx'),
   route('email/sair', 'routes/email-sair.tsx'),
   route('relatorio-credor/:token', 'routes/relatorio-credor.tsx'),
+  // Página do operador pelo link pessoal de treino (Roleplay, SQL 90/99): sem login e sem o menu do MotorCX.
+  route('treino/:token', 'routes/treino.tsx'),
+  route('treino/:token/:atr', 'routes/treino-briefing.tsx'),
   // Só no dev server com VITE_FLUXO_FIXTURES=1: telas do Fluxo do agente com dados fictícios (nunca em produção).
   ...(process.env.VITE_FLUXO_FIXTURES === '1' && process.env.NODE_ENV !== 'production' ? [route('dev/fluxo/:tela?/:id?', 'routes/dev-fluxo.tsx')] : []),
   layout('routes/workspace-layout.tsx', [
@@ -144,6 +147,10 @@ export default [
     route('speech-analytics/entrada/enviar', 'routes/speech-entrada-enviar.tsx'),
     // Roleplay (treino de operadores, SQL 90): o Painel é a aba /speech-analytics/roleplay; as subtelas, aqui.
     route('speech-analytics/roleplay/cenarios', 'routes/speech-roleplay-cenarios.tsx'),
+    route('speech-analytics/roleplay/cenarios/novo', 'routes/speech-roleplay-cenario-novo.tsx'),
+    route('speech-analytics/roleplay/atribuicoes', 'routes/speech-roleplay-atribuicoes.tsx'),
+    route('speech-analytics/roleplay/atribuicoes/:id', 'routes/speech-roleplay-atribuicao.tsx'),
+    route('speech-analytics/roleplay/atribuir', 'routes/speech-roleplay-atribuir.tsx'),
     route('speech-analytics/roleplay/cenarios/:id', 'routes/speech-roleplay-cenario.tsx'),
     route('speech-analytics/roleplay/operadores', 'routes/speech-roleplay-operadores.tsx'),
     route('speech-analytics/roleplay/operadores/:op', 'routes/speech-roleplay-operador.tsx'),
