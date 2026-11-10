@@ -226,6 +226,44 @@ class TestGerador(unittest.TestCase):
         with self.assertRaises(S.SegredoAusente):
             G.gerar_pjsip(self.dados, S.Dicionario({}))
 
+    def test_sql103_tronco_sem_senha_no_cofre_fica_de_fora_sozinho(self):
+        """Um tronco com senha ainda não guardada (ou apagada) não para a configuração das outras empresas."""
+        with tempfile.TemporaryDirectory() as tmp:
+            err = io.StringIO()
+            with redirect_stderr(err):
+                res = G.gerar(dados_exemplo(), Path(tmp), S.Dicionario({}), "203.0.113.10", ["10.60.0.0/24"])
+            self.assertEqual((res["troncos"], res["sem_senha"], res["destinos_recusados"]), (2, 1, 0))
+            pj = (Path(tmp) / "pjsip_motorcx.conf").read_text()
+            ex = (Path(tmp) / "extensions_motorcx.conf").read_text()
+            self.assertNotIn("[tr-1-11]", pj)
+            self.assertIn("[tr-1-10]", pj)
+            self.assertIn("[tr-2-20]", pj)
+            self.assertNotIn("@tr-1-11", ex)                               # a rota do tronco 11 sai junto
+            self.assertIn("tronco 11 (empresa 1) ficou de fora: senha indisponível no cofre", err.getvalue())
+            self.assertNotIn("voz/trunk", err.getvalue())                    # sem nome de segredo no aviso
+
+    def test_sql103_senha_com_ponto_e_virgula_e_lida_uma_vez(self):
+        lidas = []
+
+        class Contador(S.Resolvedor):
+            def valor(self, ref):
+                lidas.append(ref)
+                return "abc;def;123"
+        d, seg, avisos = G.filtrar_senhas(self.dados, Contador())
+        self.assertEqual((lidas, avisos), (["voz/trunk/1-11"], []))
+        pj = G.gerar_pjsip(d, seg)
+        self.assertIn("password=abc\\;def\\;123\n", pj)
+        d2, _, avisos2 = G.filtrar_senhas(self.dados, S.Dicionario({"voz/trunk/1-11": "linha\nquebrada"}))
+        self.assertEqual(len(d2.troncos), len(self.dados.troncos) - 1)
+        self.assertIn("quebra de linha", avisos2[0])
+        self.assertNotIn("linha\nquebrada", avisos2[0])
+
+    def test_sql103_nome_do_segredo_da_empresa(self):
+        # a referência que o banco grava (segredo_ref_tronco_voz) vira o nome que a Edge Function escreve
+        # (nome_segredo_tronco_voz): motorcx-voz-trunk-e<empresa>-<referência>
+        self.assertEqual(S.nome_secret_manager("voz/trunk/e12/aurora-opc"), "motorcx-voz-trunk-e12-aurora-opc")
+        self.assertEqual(S.nome_secret_manager("voz/trunk/e3/sp_1"), "motorcx-voz-trunk-e3-sp_1")
+
     def test_tls_exige_certificado(self):
         d = dados_exemplo()
         d["voz_troncos"][0]["transporte"] = "tls"
@@ -288,7 +326,7 @@ class TestGerador(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             res = G.gerar(dados_exemplo(), Path(tmp), self.seg, "203.0.113.10", ["10.60.0.0/24"])
             self.assertEqual(res, {"troncos": 3, "rotas": 6, "transferencias": 2, "provedores_sip": 1,
-                               "destinos_recusados": 0})
+                               "destinos_recusados": 0, "sem_senha": 0})
             pj = Path(tmp) / "pjsip_motorcx.conf"
             self.assertEqual(stat.S_IMODE(pj.stat().st_mode), 0o600)
             self.assertEqual(stat.S_IMODE((Path(tmp) / "extensions_motorcx.conf").stat().st_mode), 0o640)

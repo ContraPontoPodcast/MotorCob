@@ -94,6 +94,19 @@ export function segredoTroncoOk(ref: string, atual?: string | null): boolean {
 	const r = ref.trim();
 	return RE_SEGREDO_TRONCO.test(r) || (!!atual && r === atual);
 }
+// SQL 103 · Telefonia T1: a senha do tronco vai direto para o cofre pela Edge Function segredo-tronco-voz (nunca pelo
+// banco). O site só sabe se está guardada (voz_troncos.segredo_guardado_em). A mesma regra de
+// supabase/functions/segredo-tronco-voz/regras.ts › motivoSenha.
+export const FUNCAO_SEGREDO_TRONCO = 'segredo-tronco-voz';
+export const SENHA_TRONCO_MIN = 8;
+export const SENHA_TRONCO_MAX = 128;
+export function senhaTroncoMotivo(s: string): string | null {
+	if (s.length < SENHA_TRONCO_MIN || s.length > SENHA_TRONCO_MAX) return `A senha precisa ter de ${SENHA_TRONCO_MIN} a ${SENHA_TRONCO_MAX} caracteres.`;
+	// eslint-disable-next-line no-control-regex
+	if (/[\u0000-\u001f\u007f]/.test(s)) return 'A senha não pode ter quebra de linha nem caractere de controle.';
+	if (s.trim() !== s) return 'A senha não pode começar nem terminar com espaço.';
+	return null;
+}
 export const RE_USUARIO = /^[A-Za-z0-9_.\-+]{1,64}$/;
 export const RE_DDD = /^[1-9][1-9]$/;
 export const RE_BINA = /^([1-9][1-9][2-9][0-9]{7,8}|0[3589]00[0-9]{6,7}|[34]00[0-9][0-9]{4})$/;
