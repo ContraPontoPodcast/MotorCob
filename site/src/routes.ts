@@ -159,6 +159,7 @@ export default [
     route('speech-analytics/roleplay/atribuir', 'routes/speech-roleplay-atribuir.tsx'),
     route('speech-analytics/roleplay/cenarios/:id', 'routes/speech-roleplay-cenario.tsx'),
     route('speech-analytics/roleplay/operadores', 'routes/speech-roleplay-operadores.tsx'),
+    route('speech-analytics/roleplay/evolucao', 'routes/speech-roleplay-evolucao.tsx'),
     route('speech-analytics/roleplay/operadores/:op', 'routes/speech-roleplay-operador.tsx'),
     route('speech-analytics/:aba?', 'routes/speech-analytics.tsx'),
     // Endereços antigos: continuam abrindo e levam ao novo, com a mesma query (lib/rotas-voz.ts).
