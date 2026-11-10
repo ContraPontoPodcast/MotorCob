@@ -126,5 +126,5 @@ case "${1:-}" in
     fi
     exec docker run --name motorcx-voz-gerar-segmentacao "${comum_voz[@]}" "$IMG_VOZ" \
       python3 -m voz.gerar_segmentacao --intervalo 10 "${llm[@]}" ;;
-  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador|fluxo-noite|gerar-fluxo|gerar-segmentacao|firewall|teste" >&2; exit 2 ;;
+  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador|fluxo-noite|gerar-fluxo|gerar-segmentacao|sons|firewall|teste" >&2; exit 2 ;;
 esac
