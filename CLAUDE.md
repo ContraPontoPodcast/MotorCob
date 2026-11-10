@@ -945,6 +945,23 @@ Gravações ficam dentro do Speech (contrato `speech_analytics`). Teste: `supaba
 (varre toda tabela/view com `empresa_id` e toda RPC que recebe a empresa). Tabela ou RPC nova do Speech que a Qualidade
 deve ler: use `minhas_empresas_speech()` ou `cliente_pode(empresa, <perm do Speech>)`. Se o SQL 60 rodar de novo, rode o 89.
 
+**SQL 90 (Roleplay de treinamento, PR 2; SPEC aprovada pelo dono com os padrões recomendados): o banco do treino.** Só
+banco (telas nos próximos PRs). Tabelas `treino_*` (equipes, cenários, atribuições e pessoas da atribuição, links e
+acessos, sessões, transcrições, feedback ponto a ponto, feedback 1:1, revisões, discordâncias, sugestões, uso do mês),
+todas com RLS por `cliente_pode(empresa, 'treinar_operadores')` (cenários também com `editar_cenarios_treino`; os 10
+Padrão MotorCX, `empresa_id` nulo, só leitura). Permissões novas no catálogo e em `permissoes_speech()`/
+`permissoes_qualidade()`: Admin e Qualidade sim, os outros perfis não. Operador sem login: `voz_operadores` ganha
+`equipe_id` e `so_treino` (sem `operador_ref` só se `so_treino`); link pessoal com só o sha-256 do token (o site não lê
+o hash), validade = maior prazo + 1 dia, um ativo por pessoa; **anon só chama** `treino_meus`, `treino_iniciar`,
+`treino_resultado`, `treino_sair` e `treino_discordar` com o token (só os treinos daquele operador; módulo
+`speech_analytics` desligado = "treinos indisponíveis"). Sessão: em_andamento → avaliada / abandonada / falhou; **só a
+avaliada conta tentativa**; o resultado vem do serviço de treino por `registrar_sessao_treino` (service_role). Nota de
+treino **nunca** vai para `voz_avaliacoes`/`voz_qualidade_dia`; áudio nunca é guardado; transcrição e feedback apagados em
+90 dias por `apagar_voz_expirada()` (teste da Qualidade, 1 dia). Cobrança: `ia_treino_voz` (minuto) e `ia_treino_texto`
+(sessão), franquia mensal (`franquia_padrao` 1.000 e 300, ou `precos_empresa.franquia`); custo em `consumo_ia`, na fatura
+só o excedente; voz acabou = voz bloqueia, texto segue, aviso a 80% e 100%. Teste: `supabase/testes/testar_treino.py`.
+Se o SQL 89 rodar de novo, rode o 90 depois.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

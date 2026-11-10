@@ -16,6 +16,8 @@ export const PERM_SA = {
 	ouvirGravacoes: 'ouvir_gravacoes',
 	editarOrquestracao: 'editar_orquestracao',
 	editarCanais: 'editar_canais',
+	treinarOperadores: 'treinar_operadores', // SQL 90 · Roleplay: atribuir treinos, links, sessões e feedback 1:1
+	editarCenariosTreino: 'editar_cenarios_treino', // SQL 90 · Roleplay: biblioteca de cenários da empresa
 } as const;
 
 /** Abas do Speech Analytics (redesign v2). "Buscar nas conversas" fica no fim da barra (BUSCA_SA), não é aba. */

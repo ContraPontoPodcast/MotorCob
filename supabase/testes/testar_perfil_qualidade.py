@@ -74,10 +74,18 @@ def aplicar(vez):
 
 aplicar(1)
 aplicar(2)
+# o SQL 89 recria permissoes_speech/permissoes_qualidade; as migrações posteriores (SQL 90: treino) voltam por cima,
+# como em produção ("se o SQL 89 rodar de novo, rode os seguintes depois")
+for posterior in sorted(p for p in SQL89.parent.glob("*.sql") if p.name > SQL89.name):
+    r = subprocess.run(["psql", "-d", BANCO, "-v", "ON_ERROR_STOP=1", "-q", "-f", str(posterior)], capture_output=True,
+                       text=True)
+    checar(f"a migração posterior {posterior.name[:14]} roda de novo por cima", True, f"select {r.returncode}", valor=0)
 
 au = "authenticated"
-SPEECH = ["ouvir_gravacoes", "ver_transcricoes", "ver_operadores", "ver_alertas", "curadoria_voz", "editar_checklist"]
-PADRAO_Q = sorted(SPEECH[:-1])
+# SQL 90: o treino de operadores (Roleplay) entra no Speech: treinar_operadores e editar_cenarios_treino
+SPEECH = ["ouvir_gravacoes", "ver_transcricoes", "ver_operadores", "ver_alertas", "curadoria_voz", "editar_checklist",
+          "treinar_operadores", "editar_cenarios_treino"]
+PADRAO_Q = sorted(p for p in SPEECH if p != "editar_checklist")
 
 # ---------------------------------------------------------------- empresas, carteiras e pessoas (fictícias)
 T = uuid.uuid4().hex[:6]
@@ -147,7 +155,7 @@ sv(f"set role service_role; insert into public.fila_dia (empresa_id, data, canal
 sv(f"insert into public.acessos (usuario, acao, alvo, empresa_id) values ('{A}', 'download', 'q89', {QA})")
 
 # ---------------------------------------------------------------- permissões
-checar("Qualidade tem por padrão só as 5 permissões do Speech", True,
+checar(f"Qualidade tem por padrão só as {len(PADRAO_Q)} permissões do Speech", True,
        "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", au, Q, ",".join(PADRAO_Q))
 checar("permissao_padrao('qualidade') = permissoes_qualidade()", True,
        "select string_agg(c.codigo, ',' order by c.codigo) from public.permissoes_catalogo c "
@@ -284,7 +292,11 @@ checar("pode_ver_empresa é não", True, f"select public.pode_ver_empresa({QA})"
 # nenhuma linha fora da lista do Speech. perfis/empresas: só a própria linha.
 PERMITIDAS = {"voz_gravacoes", "voz_avaliacoes", "voz_alertas", "voz_operadores", "voz_treino_exemplos", "voz_temas",
               "voz_curadoria_itens", "voz_golden_set", "voz_golden_medicoes", "voz_melhorias", "voz_insights_dia",
-              "checklists_qualidade", "recomendacoes", "empresa_modulos"}
+              "checklists_qualidade", "recomendacoes", "empresa_modulos",
+              # SQL 90: treino de operadores (Roleplay), com cliente_pode(empresa, 'treinar_operadores')
+              "treino_equipes", "treino_cenarios", "treino_atribuicoes", "treino_atribuicao_operadores", "treino_links",
+              "treino_link_acessos", "treino_sessoes", "treino_transcricoes", "treino_feedback", "treino_feedbacks",
+              "treino_revisoes", "treino_discordancias", "treino_sugestoes", "treino_uso_mes"}
 tabelas = sql("select c.relname from pg_class c join pg_attribute a on a.attrelid = c.oid and a.attname = 'empresa_id' "
               "and not a.attisdropped where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'v', 'm', 'p') "
               "and has_table_privilege('authenticated', c.oid, 'select') order by 1", todas=True)[1]
@@ -319,7 +331,10 @@ checar("varredura: a Qualidade X vê só a própria empresa em empresas", True,
 RPC_SPEECH = {"painel_speech", "qualidade_voz", "operadores_voz", "operador_voz", "reprovadas_voz", "alertas_voz",
               "contagem_alertas_voz", "buscar_trechos_voz", "buscas_recentes_voz", "salvar_operador_voz",
               "salvar_rascunho_checklist", "salvar_melhoria_voz", "carteiras_speech", "acesso_da_empresa",
-              "cliente_pode", "checklist_vigente"}
+              "cliente_pode", "checklist_vigente",
+              # SQL 90: treino de operadores (Roleplay)
+              "salvar_equipe_treino", "salvar_operador_treino", "salvar_cenario_treino", "atribuir_treino",
+              "salvar_feedback_treino", "uso_treino", "treino_liberado"}
 # respostas que não são dado da empresa (constantes, sim/não do próprio acesso)
 INOFENSIVAS = {"", "f", "0", "[]", "{}", "null", "false", "t"}
 funcs = sql("select p.proname || '|' || p.pronargs || '|' || pg_get_function_identity_arguments(p.oid) from pg_proc p "

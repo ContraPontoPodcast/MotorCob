@@ -7,9 +7,10 @@ import { contratoDaRota, rotaLiberadaSoSpeech } from './area-rota';
 import { PERFIS_INFO, PERMISSOES_QUALIDADE, PERMISSOES_SPEECH, nomePerfil, padraoDoPerfil, perfilPodeTer, perfilSoSpeech } from './perfis-info';
 import { ATALHOS, filtrarAtalhos } from '@/components/workspace/workspace-command-palette';
 
-const SQL89 = readFileSync('../supabase/migrations/20270125000001_perfil_qualidade.sql', 'utf8');
+// a definição vigente das listas é a da última migração que as recria (SQL 90: treino de operadores)
+const SQL_LISTAS = readFileSync('../supabase/migrations/20270126000001_treino_operadores.sql', 'utf8');
 const lista = (fn: string) => {
-	const m = SQL89.match(new RegExp(`function public\\.${fn}\\(\\) returns text\\[\\][\\s\\S]*?array\\[([^\\]]*)\\]`));
+	const m = SQL_LISTAS.match(new RegExp(`function public\\.${fn}\\(\\) returns text\\[\\][\\s\\S]*?array\\[([^\\]]*)\\]`));
 	return (m?.[1] ?? '').split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean);
 };
 
@@ -34,6 +35,8 @@ test('Qualidade: padrão e teto de permissões iguais aos do banco', () => {
 	assert.deepEqual([...PERMISSOES_SPEECH].sort(), lista('permissoes_speech').sort());
 	assert.deepEqual([...PERMISSOES_QUALIDADE].sort(), lista('permissoes_qualidade').sort());
 	assert.ok(!PERMISSOES_QUALIDADE.includes('editar_checklist'), 'editar o checklist fica com o Admin');
+	assert.ok(PERMISSOES_QUALIDADE.includes('treinar_operadores') && PERMISSOES_QUALIDADE.includes('editar_cenarios_treino'),
+		'a Qualidade treina operadores e edita cenários (SQL 90)');
 	assert.equal(padraoDoPerfil('qualidade', 'ver_alertas', { qualidade: false }), true);
 	assert.equal(padraoDoPerfil('qualidade', 'baixar_listas', { baixar_listas: true }), false);
 	assert.equal(padraoDoPerfil('gestao', 'ver_alertas', { gestao: true }), true);

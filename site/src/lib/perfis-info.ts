@@ -17,11 +17,12 @@ export function nomePerfil(papel: string | null | undefined): string {
 }
 
 /** Permissões que existem dentro do Speech Analytics: as únicas que o perfil Qualidade pode ter (igual a
- *  public.permissoes_speech(), SQL 89). Fora delas o banco diz "não" para a Qualidade, mesmo com ajuste. */
-export const PERMISSOES_SPEECH: readonly string[] = ['ouvir_gravacoes', 'ver_transcricoes', 'ver_operadores', 'ver_alertas', 'curadoria_voz', 'editar_checklist'];
+ *  public.permissoes_speech(), SQL 89; o treino de operadores entrou no SQL 90). Fora delas o banco diz "não" para a
+ *  Qualidade, mesmo com ajuste. */
+export const PERMISSOES_SPEECH: readonly string[] = ['ouvir_gravacoes', 'ver_transcricoes', 'ver_operadores', 'ver_alertas', 'curadoria_voz', 'editar_checklist', 'treinar_operadores', 'editar_cenarios_treino'];
 
 /** Padrão MotorCX do perfil Qualidade (igual a public.permissoes_qualidade()): editar o checklist fica com o Admin. */
-export const PERMISSOES_QUALIDADE: readonly string[] = ['ouvir_gravacoes', 'ver_transcricoes', 'ver_operadores', 'ver_alertas', 'curadoria_voz'];
+export const PERMISSOES_QUALIDADE: readonly string[] = ['ouvir_gravacoes', 'ver_transcricoes', 'ver_operadores', 'ver_alertas', 'curadoria_voz', 'treinar_operadores', 'editar_cenarios_treino'];
 
 /** O perfil só enxerga a área Speech Analytics (e a própria conta). */
 export function perfilSoSpeech(perfil: { papel?: string | null; equipe?: boolean | null } | null | undefined): boolean {
