@@ -214,8 +214,12 @@ class TestGerador(unittest.TestCase):
         self.assertIn("contact=sip:203.0.113.30:5080;transport=tcp", pj)
         self.assertEqual(pj.count(SENHA), 1)
         self.assertIn("allow=alaw\n", pj)
-        # inativo fica de fora; transferência 'ponte pelo tronco' não ganha endpoint próprio
-        self.assertNotIn("tr-2-99", pj)
+        # SQL 114: o inativo sobe só como endpoint (para o teste da rota), sem saída no dialplan; transferência 'ponte
+        # pelo tronco' não ganha endpoint próprio
+        self.assertIn("Desligado · 30 canais · 5 CPS · INATIVO: só para o teste da rota\n[tr-2-99]", pj)
+        ex = G.gerar_extensions(B.carregar(dados_exemplo()))
+        self.assertNotIn("tr-2-99", ex)
+        self.assertNotIn("TR_2_99", ex)
         self.assertIn("[tf-1-7]", pj)
         self.assertNotIn("[tf-2-8]", pj)
         self.assertIn("[pv-elevenlabs]", pj)
@@ -378,8 +382,8 @@ class TestGerador(unittest.TestCase):
     def test_gerar_grava_arquivos_com_permissao(self):
         with tempfile.TemporaryDirectory() as tmp:
             res = G.gerar(dados_exemplo(), Path(tmp), self.seg, "203.0.113.10", ["10.60.0.0/24"])
-            self.assertEqual(res, {"troncos": 3, "rotas": 6, "transferencias": 2, "provedores_sip": 1,
-                               "destinos_recusados": 0, "sem_senha": 0})
+            self.assertEqual(res, {"troncos": 3, "troncos_so_teste": 1, "rotas": 6, "transferencias": 2,
+                                   "provedores_sip": 1, "destinos_recusados": 0, "sem_senha": 0})
             pj = Path(tmp) / "pjsip_motorcx.conf"
             self.assertEqual(stat.S_IMODE(pj.stat().st_mode), 0o600)
             self.assertEqual(stat.S_IMODE((Path(tmp) / "extensions_motorcx.conf").stat().st_mode), 0o640)

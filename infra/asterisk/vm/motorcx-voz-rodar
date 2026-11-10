@@ -2,7 +2,9 @@
 # Sobe um dos contêineres da voz em primeiro plano (o systemd cuida de reiniciar).
 #   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite | speech-temas |
 #                     speech-buscas | simulador-fluxo | importador | fluxo-noite | gerar-fluxo | gerar-segmentacao |
-#                     firewall
+#                     firewall | teste
+# teste (SQL 114, "Testar a rota" da tela Telefonia): contínuo nas duas VMs; pega o pedido do banco ("for update skip
+# locked"), liga pelo tronco pedido com o app ARI motorcx-teste e grava cada passo. O número de teste fica só na memória.
 # fluxo-noite (métricas do Fluxo do agente, SQL 66): só códigos e contagens, sem IA; roda sempre.
 # gerar-fluxo (pedido em texto "Descrever e o MotorCX monta", SQL 58/66: voz/gerar_fluxo.py) só roda com o metadado
 # motorcx-gerar-fluxo=1 (padrão: desligado); a chave do LLM vem do cofre (motorcx-voz-llm-fluxo).
@@ -64,6 +66,10 @@ case "${1:-}" in
     exec docker run --name motorcx-voz-firewall "${comum_voz[@]}" -e MOTORCX_IP_EXTERNO="$IP_EXTERNO" \
       -e MOTORCX_REDE_LOCAL="$REDE_LOCAL" -e MOTORCX_FIREWALL_FIXOS="$(meta motorcx-firewall-fixos)" \
       -e MOTORCX_VM_NOME="$(hostname -s)" "$IMG_VOZ" python3 -m voz.firewall ;;
+  teste)
+    exec docker run --name motorcx-voz-teste "${comum_voz[@]}" -e MOTORCX_IP_EXTERNO="$IP_EXTERNO" \
+      -e MOTORCX_REDE_LOCAL="$REDE_LOCAL" -e MOTORCX_VM_NOME="$(hostname -s)" "$IMG_VOZ" \
+      python3 -m voz.testador --dados "$RUN/voz.json" ;;
   fluxo-noite)
     exec docker run --name motorcx-voz-fluxo-noite "${comum_voz[@]}" "$IMG_VOZ" \
       python3 -m voz.fluxo_metricas --parte "$PARTE" ;;
@@ -114,5 +120,5 @@ case "${1:-}" in
     fi
     exec docker run --name motorcx-voz-gerar-segmentacao "${comum_voz[@]}" "$IMG_VOZ" \
       python3 -m voz.gerar_segmentacao --intervalo 10 "${llm[@]}" ;;
-  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador|fluxo-noite|gerar-fluxo|gerar-segmentacao" >&2; exit 2 ;;
+  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador|fluxo-noite|gerar-fluxo|gerar-segmentacao|firewall|teste" >&2; exit 2 ;;
 esac

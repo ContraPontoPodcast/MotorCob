@@ -97,3 +97,8 @@ test('o voltar desenhado nas seções do Agente Voz/CX aponta para a Visão gera
 	const demo = renderToStaticMarkup(<MemoryRouter initialEntries={['/dev/fluxo/testar']}><RotaDaTela.Provider value="/voz/agente/testar"><Voltar /></RotaDaTela.Provider></MemoryRouter>);
 	assert.match(demo, /href="\/voz\/agente"/);
 });
+
+test('Telefonia › tronco (SQL 114) volta para Telefonia', () => {
+	assert.deepEqual(rotaPai('/voz/telefonia/tronco/novo'), { to: '/voz/telefonia', rotulo: 'Telefonia' });
+	assert.deepEqual(rotaPai('/voz/telefonia/tronco/alfa-sp-1'), { to: '/voz/telefonia', rotulo: 'Telefonia' });
+});
