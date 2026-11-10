@@ -1,5 +1,5 @@
-// Quadro por ramos (a aba Mapa do editor desde o PR3 do redesenho; a vista principal é o Roteiro, em roteiro.tsx) e a
-// barra de envio para aprovação.
+// Quadro por ramos (a aba Mapa do editor desde o PR3 do redesenho; a vista principal é o Roteiro, em roteiro.tsx). A
+// ação de envio/aprovação saiu daqui no PR7: é a ação principal do caminho da versão (versao.tsx).
 // Componentes só de apresentação (sem dados nem rotas), testados em site/fluxo/componentes.test.tsx.
 // As setas dizem o nome da etapa ("Sou eu → Confirmar identidade"), nunca o código (revisão U1); o código fica na
 // gaveta da etapa, para quem precisa dele (casos de teste, suporte).
@@ -7,7 +7,7 @@ import { Lock } from 'lucide-react';
 import { Pilula } from '@/components/voz/ui';
 import {
 	MODOS, ehFinal, nomeDestino, nomesEtapas, quadroPorRamos, resumoBloco, tituloRamo,
-	type Bloco, type Definicao, type Pendencia, type SituacaoVersao,
+	type Bloco, type Definicao, type Pendencia,
 } from '@/lib/fluxo';
 import { textoFonte, usaArquivo, type ConfigIdentidade } from '@/lib/identidade-mailing';
 import { Ponto } from './ds';
@@ -89,39 +89,6 @@ export function LegendaModos() {
 	return (
 		<div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-[var(--base-texto-2)]">
 			{Object.values(MODOS).map(m => <span key={m.nome} className="inline-flex items-center gap-1"><Ponto cor={m.cor} />{m.nome}</span>)}
-		</div>
-	);
-}
-
-/**
- * Ação principal do editor. "Enviar para aprovação" fica desabilitado, com o motivo escrito ao lado, enquanto houver
- * pendência (decisão do dono). Quem aprova vê também "Aprovar" (mesmo bloqueio); depois, "Colocar em uso".
- */
-export function BarraEnvio({ situacao, estado, podeEditar, podeAprovar, ocupado, onEnviar, onAprovar, onUsar }: {
-	situacao: SituacaoVersao; estado: { ok: boolean; motivo: string }; podeEditar: boolean; podeAprovar: boolean; ocupado?: boolean;
-	onEnviar: () => void; onAprovar: () => void; onUsar: () => void;
-}) {
-	const btn = 'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-4 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50';
-	const prim = { backgroundColor: 'var(--destaque)', color: 'var(--destaque-texto)' };
-	const sec = { border: '1px solid var(--base-borda)', color: 'var(--base-texto)' };
-	if (situacao === 'aprovado_empresa') {
-		return (
-			<div className="flex flex-col items-end gap-1">
-				{podeAprovar
-					? <button type="button" className={btn} style={prim} disabled={ocupado} onClick={onUsar}>Colocar em uso</button>
-					: <span className="text-[12.5px] text-[var(--base-texto-2)]">Aprovada. Quem tem Aprovar roteiro de voz coloca em uso.</span>}
-			</div>
-		);
-	}
-	if (situacao !== 'rascunho') return null;
-	const bloqueado = !estado.ok || !!ocupado;
-	return (
-		<div className="flex flex-col items-start gap-1 sm:items-end">
-			<div className="flex flex-wrap gap-2">
-				{podeAprovar && <button type="button" className={btn} style={sec} disabled={bloqueado} aria-describedby={estado.motivo ? 'motivo-envio' : undefined} onClick={onAprovar}>Aprovar</button>}
-				{podeEditar && <button type="button" className={btn} style={prim} disabled={bloqueado} title={estado.motivo || undefined} aria-describedby={estado.motivo ? 'motivo-envio' : undefined} onClick={onEnviar}>Enviar para aprovação</button>}
-			</div>
-			{estado.motivo && <span id="motivo-envio" role="status" className="text-[12px]" style={{ color: estado.ok ? 'var(--base-texto-3)' : 'var(--estado-erro-texto)' }}>{estado.motivo}</span>}
 		</div>
 	);
 }

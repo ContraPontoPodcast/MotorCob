@@ -1,8 +1,8 @@
 """Fala por extenso em pt-BR: "R$ 1.380,00" -> "mil trezentos e oitenta reais", "05/12" -> "cinco de dezembro",
 "6×" -> "seis vezes". Cópia fiel de site/src/lib/falado.ts ("Como soa no telefone" do editor do fluxo, PR5 do
 redesenho). As duas leem a mesma tabela de casos (tests/dados/fala_por_extenso_casos.json), para o site e a VM
-dizerem igual. Ainda não entra no executor: a normalização antes do TTS é o B6 do plano (PR10). Função pura, sem
-rede e sem guardar texto."""
+dizerem igual. PR10 (B6): na ligação, todo texto que vai ao TTS passa por como_soa (voz/provedores/montagem.py ›
+para_tts), e a prévia "Ouvir" da VM também. Função pura, sem rede e sem guardar texto."""
 from __future__ import annotations
 
 import re
