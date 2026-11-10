@@ -4,7 +4,9 @@
 // treino_liberado e em toda RPC do treino).
 // Telas: Painel (/speech-analytics/roleplay), Cenários (/cenarios?f=), cenário (/cenarios/:id: editor para o da
 // empresa), Novo cenário (/cenarios/novo), Treinos atribuídos (/atribuicoes?sit=), o treino (/atribuicoes/:id),
-// Atribuir treino (/atribuir?cen=&ops=&sug=), Cadastro para treino (/operadores?eq=) e a pessoa (/operadores/:op). Rotas, trilha e títulos em lib/roleplay.ts; o "← Voltar"
+// Atribuir treino (/atribuir?cen=&ops=&sug=), Cadastro para treino (/operadores?eq=) e a pessoa (/operadores/:op).
+// Sessão por texto (SQL 100): treino lado a lado (/atribuicoes/:id/lado-a-lado/:op), sessão de uma pessoa
+// (/atribuicoes/:id/sessoes/:sid), testar cenário (/cenarios/:id/testar) e resultado do teste (/cenarios/:id/teste/:sid). Rotas, trilha e títulos em lib/roleplay.ts; o "← Voltar"
 // em lib/rota-pai.ts.
 import { useEffect, useState, type ReactNode } from 'react';
 import { Notice } from '@/components/app-shell';
@@ -19,16 +21,20 @@ import { Painel } from './painel';
 import { Cenarios, DetalheCenario, NovoCenario } from './cenarios';
 import { Atribuicoes, DetalheAtribuicao } from './atribuicoes';
 import { AtribuirTreino } from './atribuir';
+import { LadoALado, SessaoDaPessoa, TestarCenario } from './sessao-qualidade';
 import { Cadastro } from './cadastro';
 import { PaginaPessoa } from './pessoa';
 
 export type TelaRP = { tipo: 'painel' } | { tipo: 'cenarios' } | { tipo: 'cenario'; id: string } | { tipo: 'novo_cenario' } | { tipo: 'cadastro' }
-	| { tipo: 'pessoa'; id: string } | { tipo: 'atribuicoes' } | { tipo: 'atribuicao'; id: string } | { tipo: 'atribuir' };
+	| { tipo: 'pessoa'; id: string } | { tipo: 'atribuicoes' } | { tipo: 'atribuicao'; id: string } | { tipo: 'atribuir' }
+	| { tipo: 'lado_a_lado'; id: string; op: string } | { tipo: 'sessao'; id: string; sid: string } | { tipo: 'testar'; id: string }
+	| { tipo: 'teste'; id: string; sid: string };
 export type PodeRP = { treinar: boolean; cenarios: boolean };
 
 const TITULO_PADRAO: Record<TelaRP['tipo'], string> = {
 	painel: 'Roleplay', cenarios: 'Cenários', cenario: 'Cenário', novo_cenario: 'Novo cenário', cadastro: 'Cadastro para treino', pessoa: 'Pessoa',
-	atribuicoes: 'Treinos atribuídos', atribuicao: 'Treino', atribuir: 'Atribuir treino',
+	atribuicoes: 'Treinos atribuídos', atribuicao: 'Treino', atribuir: 'Atribuir treino', lado_a_lado: 'Treino lado a lado', sessao: 'Sessão',
+	testar: 'Testar cenário', teste: 'Resultado do teste',
 };
 
 /** Estado de bloqueio, já dentro da moldura (trilha, abas e sub-navegação continuam). */
@@ -83,6 +89,10 @@ export function Roleplay({ tela }: { tela: TelaRP }) {
 		case 'atribuicoes': return <Atribuicoes empresa={empresaId} pode={pode} />;
 		case 'atribuicao': return <DetalheAtribuicao empresa={empresaId} id={tela.id} pode={pode} />;
 		case 'atribuir': return <AtribuirTreino empresa={empresaId} pode={pode} />;
+		case 'lado_a_lado': return <LadoALado empresa={empresaId} atr={tela.id} op={tela.op} pode={pode} />;
+		case 'sessao': return <SessaoDaPessoa empresa={empresaId} atr={tela.id} sid={tela.sid} pode={pode} />;
+		case 'testar': return <TestarCenario empresa={empresaId} id={tela.id} pode={pode} />;
+		case 'teste': return <SessaoDaPessoa empresa={empresaId} atr="" sid={tela.sid} pode={pode} teste />;
 		case 'cadastro': return <Cadastro empresa={empresaId} pode={pode} />;
 		case 'pessoa': return <PaginaPessoa empresa={empresaId} id={tela.id} pode={pode} />;
 	}

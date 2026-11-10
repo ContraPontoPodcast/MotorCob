@@ -1,4 +1,7 @@
-// Página do operador pelo link pessoal de treino: /treino/:token ("Meus treinamentos") e /treino/:token/:atr (briefing).
+// Página do operador pelo link pessoal de treino: /treino/:token ("Meus treinamentos"), /treino/:token/:atr (briefing),
+// /treino/:token/:atr/sessao/:sessao (sessão por texto em tela cheia) e /treino/:token/:atr/resultado/:sessao (resultado
+// formativo). A sessão abre por treino_iniciar (SQL 90: prazo, tentativas, módulo) e conversa pela Edge Function treino
+// (SQL 100); o resultado vem de treino_resultado e o "Discordo deste ponto" vai por treino_discordar.
 // Sem login e sem o menu do MotorCX: o token vai para treino_meus (SQL 90), que confere o hash, a validade, a
 // revogação, o operador ativo e o módulo, devolve só os treinos daquele operador e registra o acesso (sem IP). Quando o
 // link não abre, treino_estado_link (SQL 99) diz por quê (venceu, foi trocado, treinos indisponíveis).
@@ -6,12 +9,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
-import { Aviso, Botao, Cartao, Estado, Pilula } from '@/components/ds';
-import { supabase } from '@/lib/supabase';
+import { Aviso, Botao, BotaoLink, Cartao, Estado, Pilula } from '@/components/ds';
+import { friendlyError, supabase } from '@/lib/supabase';
+import { rotaResultadoOperador, rotaSessaoOperador, textoEncerramento, type ResultadoTreino } from '@/lib/treino-sessao';
+import { SessaoTexto } from './sessao';
+import { ResultadoView } from './resultado';
+import { chamarTreino } from './chamar';
 import { dataBR, diaSP } from '@/lib/speech';
 import { FAIXAS_SALDO, GRAVIDADE_RP, rotaBriefing, rotaTreino, rotuloTipoCliente, textoAlcada, textoDuracao, tokenValido } from '@/lib/roleplay';
 import {
-	TELA_LINK, gruposMeus, pilulaTreino, podeComecar, textoIstoETreino,
+	TELA_LINK, gruposMeus, pilulaTreino, podeComecar, tentativasRestantes, textoIstoETreino,
 	type EstadoLink, type MeusTreinos, type TreinoOperador,
 } from '@/lib/treino-operador';
 
@@ -149,9 +156,11 @@ export function BriefingView({ t, token, hoje, vozDisponivel, comecar }: { t: Tr
 	const [modo, setModo] = useState(modos.includes('texto') && (!vozDisponivel || !modos.includes('voz')) ? 'texto' : modos[0] ?? 'texto');
 	const p = pilulaTreino(t, hoje);
 	const sim = /fictícia/.test(c.persona_nome) ? 'simulada' : 'simulado';
+	const aviso = (useLocation().state as { aviso?: string } | null)?.aviso;
 	return (
 		<MolduraTreino titulo={c.nome} voltar={<VoltarMeus token={token} />}>
 			<Aviso tom="info" titulo="Isto é treino.">{textoIstoETreino(t)}</Aviso>
+			{aviso && <div role="status"><Aviso tom="neutro">{aviso}</Aviso></div>}
 			<p><Pilula tom={p.tom}>{p.texto}</Pilula></p>
 			<Cartao titulo={`Cliente ${sim}`} linha="Ficha fictícia: nada aqui é de um cliente de verdade.">
 				<dl className="grid gap-x-4 gap-y-2 text-[13.5px] sm:grid-cols-[auto_1fr]">
@@ -183,12 +192,7 @@ export function BriefingView({ t, token, hoje, vozDisponivel, comecar }: { t: Tr
 						{modos.includes('texto') && <label className="inline-flex items-center gap-1.5"><input type="radio" name="modo" checked={modo === 'texto'} onChange={() => setModo('texto')} />Texto</label>}
 					</fieldset>
 					<div className="mt-3">
-						{comecar ? comecar(t, modo) : (
-							<>
-								<Botao disabled>Começar · em breve</Botao>
-								<p className="mt-2 text-[12.5px] text-[var(--base-texto-2)]">A sessão de treino abre aqui em breve. O seu treino já está guardado neste link, com o prazo de {dataBR(t.prazo)}.</p>
-							</>
-						)}
+						{comecar ? comecar(t, modo) : <ComecarOperador token={token} t={t} modo={modo} />}
 					</div>
 				</Cartao>
 			) : t.situacao === 'aprovado' ? (
@@ -196,6 +200,91 @@ export function BriefingView({ t, token, hoje, vozDisponivel, comecar }: { t: Tr
 			) : (
 				<Aviso tom="neutro" titulo={t.situacao === 'precisa_apoio' ? `Você usou ${t.tentativas_usadas === 1 ? 'a tentativa' : `as ${t.tentativas_usadas} tentativas`}.` : 'O prazo deste treino acabou.'}>A Qualidade vai combinar com você o próximo passo.</Aviso>
 			)}
+		</MolduraTreino>
+	);
+}
+
+// ------------------------------------------------------------------ começar, sessão e resultado
+/** "Começar": abre a sessão (treino_iniciar confere prazo, tentativas e módulo) e vai para a tela da sessão. */
+export function ComecarOperador({ token, t, modo }: { token: string; t: TreinoOperador; modo: string }) {
+	const navegar = useNavigate();
+	const { pathname } = useLocation();
+	const [erro, setErro] = useState('');
+	const [ocupado, setOcupado] = useState(false);
+	if (modo === 'voz') return (
+		<>
+			<Botao disabled>Começar por voz · em breve</Botao>
+			<p className="mt-2 text-[12.5px] text-[var(--base-texto-2)]">O treino por voz no navegador chega numa próxima versão. Escolha “Texto” para treinar agora.</p>
+		</>
+	);
+	async function comecar() {
+		if (!supabase) return;
+		setOcupado(true); setErro('');
+		const { data, error } = await supabase.rpc('treino_iniciar', { token, atribuicao: t.atribuicao, modo: 'texto' });
+		setOcupado(false);
+		if (error || !data) { setErro(friendlyError(error)); return; }
+		navegar(rotaSessaoOperador(token, t.atribuicao, (data as { sessao: number }).sessao), { state: { de: pathname } });
+	}
+	return (
+		<>
+			<Botao onClick={() => void comecar()} disabled={ocupado}>{ocupado ? 'Abrindo…' : 'Começar'}</Botao>
+			<p className="mt-2 text-[12.5px] text-[var(--base-texto-2)]">A ligação abre em tela cheia. Para sair, use “Sair”: dá para sair sem contar a tentativa.</p>
+			{erro && <p role="alert" className="mt-2 text-[13px] font-medium text-[var(--estado-erro-texto)]">{erro}</p>}
+		</>
+	);
+}
+
+export function PaginaSessaoOperador({ token, atr, sessao }: { token: string; atr: string; sessao: string }) {
+	const navegar = useNavigate();
+	const c = useMeusTreinos(token);
+	const sid = /^\d{1,18}$/.test(sessao) ? Number(sessao) : null;
+	if (!c) return <Carregando titulo="Treino" />;
+	if ('estado' in c) return <TelaLinkFechado estado={c.estado} ate={c.ate} />;
+	if ('erro' in c) return <MolduraTreino titulo="Treino"><Estado tipo="erro" titulo="Não abriu agora.">{c.erro}</Estado></MolduraTreino>;
+	const t = c.d.treinos.find(x => String(x.atribuicao) === atr);
+	if (!t || sid == null) return <MolduraTreino titulo="Sessão não encontrada" voltar={<VoltarMeus token={token} />}><Estado tipo="vazio" titulo="Esta sessão não está na sua lista.">Volte para “Meus treinamentos”.</Estado></MolduraTreino>;
+	const cen = t.cenario;
+	return (
+		<SessaoTexto chamar={chamarTreino(sid, token)}
+			ficha={{ cenario: cen.nome, persona: cen.persona_nome, divida: cen.divida ?? {}, foco: cen.itens_foco.map(i => i.texto ?? 'item do checklist'), objetivo: cen.objetivo_cenario }}
+			onFim={r => {
+				// a tela da sessão (transição) não fica no histórico: dá lugar ao resultado ou volta ao briefing
+				if (r.situacao === 'avaliada') navegar(rotaResultadoOperador(token, atr, sid), { replace: true, state: { de: rotaTreino(token) } });
+				else navegar(rotaBriefing(token, atr), { replace: true, state: { de: rotaTreino(token), aviso: textoEncerramento(r) } });
+			}} />
+	);
+}
+
+export function PaginaResultadoOperador({ token, atr, sessao }: { token: string; atr: string; sessao: string }) {
+	const c = useMeusTreinos(token);
+	const [r, setR] = useState<ResultadoTreino | null | undefined>(undefined);
+	const sid = /^\d{1,18}$/.test(sessao) ? Number(sessao) : null;
+	useEffect(() => {
+		if (!supabase || sid == null || !tokenValido(token)) { setR(null); return; }
+		let ativo = true;
+		void supabase.rpc('treino_resultado', { token, sessao: sid }).then(({ data, error }) => { if (ativo) setR(error || !data ? null : (data as ResultadoTreino)); });
+		return () => { ativo = false; };
+	}, [token, sid]);
+	if (!c || r === undefined) return <Carregando titulo="Resultado do treino" />;
+	if ('estado' in c) return <TelaLinkFechado estado={c.estado} ate={c.ate} />;
+	if ('erro' in c || !r) return <MolduraTreino titulo="Resultado do treino" voltar={<VoltarMeus token={token} />}><Estado tipo="vazio" titulo="Resultado não encontrado.">Volte para “Meus treinamentos”.</Estado></MolduraTreino>;
+	const t = c.d.treinos.find(x => String(x.atribuicao) === atr) ?? null;
+	return <ResultadoOperadorView r={r} t={t} token={token} hoje={diaSP(0)} />;
+}
+
+export function ResultadoOperadorView({ r, t, token, hoje }: { r: ResultadoTreino; t: TreinoOperador | null; token: string; hoje: string }) {
+	return (
+		<MolduraTreino titulo={t ? `Resultado · ${t.cenario.nome}` : 'Resultado do treino'} voltar={<VoltarMeus token={token} />}>
+			<ResultadoView r={r} quem="operador" restantes={t ? tentativasRestantes(t) : null} prazo={t?.prazo ?? null}
+				onDiscordar={async (item, texto) => {
+					if (!supabase) return;
+					const { error } = await supabase.rpc('treino_discordar', { token, sessao: r.sessao, item, texto });
+					if (error) throw new Error(friendlyError(error));
+				}} />
+			<div className="flex flex-wrap gap-2 pt-2">
+				{t && podeComecar(t, hoje) && <BotaoLink tipo="primario" to={rotaBriefing(token, t.atribuicao)}>Treinar de novo</BotaoLink>}
+				<BotaoLink to={rotaTreino(token)}>Meus treinamentos</BotaoLink>
+			</div>
 		</MolduraTreino>
 	);
 }

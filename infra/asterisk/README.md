@@ -276,7 +276,9 @@ do Caddy) e o `motorcx-voz-https` (no boot e a cada 2 min) grava o Caddyfile ver
 - `/elevenlabs/pos-chamada` → receptor do webhook (127.0.0.1:8092, limite de 2 MB): sobe quando o `provedores.json` tem
   `elevenlabs.ref_webhook`;
 - `/simular` e `/roleplay` → simulador do Fluxo e roleplay (`voz/simulador_http.py`, 127.0.0.1:8091, 256 KB), com o
-  serviço `motorcx-voz-simulador`: sobe com o metadado `motorcx-simulador-fluxo=1`.
+  serviço `motorcx-voz-simulador`: sobe com o metadado `motorcx-simulador-fluxo=1`. O mesmo `/simular` atende o treino
+  de operadores por texto do Roleplay (SQL 100, `voz/treino.py`: corpo com `"treino": "turno" | "avaliar"`), chamado pela
+  Edge Function `treino` com a mesma assinatura (sem rota nova no Caddy).
 O `criar_gcp.sh` abre a 8443 para `ORIGENS_HTTPS` (padrão: a internet toda, porque nem a ElevenLabs nem as Edge
 Functions têm IP de origem fixo; quem protege é a assinatura HMAC de cada rota) e a 80 só para o desafio do Let's
 Encrypt.

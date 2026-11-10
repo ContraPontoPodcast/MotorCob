@@ -9,7 +9,7 @@ import { Aviso, Botao, BotaoLink, Cartao, Estado, LinkTexto, Pilula, SOMBRA, Seg
 import { supabase } from '@/lib/supabase';
 import {
 	DIFICULDADE, FAIXAS_SALDO, FILTROS_CENARIO, GRAVIDADE_RP, ROTA_RP_CENARIOS, ROTA_RP_NOVO_CENARIO, cenarioVazio, ehPadraoMotorCX, filtrarCenarios,
-	filtroCenario, formDoCenario, itemChecklist, rotaAtribuir, rotaCenarioRP, rotuloObjecao, rotuloTipoCliente, textoAlcada, textoDuracao, textoModos,
+	filtroCenario, formDoCenario, itemChecklist, rotaAtribuir, rotaCenarioRP, rotaTestarRP, rotuloObjecao, rotuloTipoCliente, textoAlcada, textoDuracao, textoModos,
 	type CenarioRP, type FiltroCenario, type ItemChecklistRP,
 } from '@/lib/roleplay';
 import { LinkRP, MolduraRP } from './moldura';
@@ -158,7 +158,8 @@ export function descricaoCenario(c: Pick<CenarioRP, 'empresa_id' | 'situacao'>):
 export function AcoesCenario({ c, pode, duplicando, onDuplicar }: { c: CenarioRP; pode: PodeRP; duplicando?: boolean; onDuplicar: () => void }) {
 	const atribuir = pode.treinar && c.situacao === 'publicado' ? <LinkRP to={rotaAtribuir({ cen: c.id })} className={clsBotao('secundario')}>Atribuir</LinkRP> : null;
 	if (!pode.cenarios) return <><SeloLgpdTreino />{atribuir}</>;
-	if (ehPadraoMotorCX(c)) return <><SeloLgpdTreino />{atribuir}<Botao onClick={onDuplicar} disabled={duplicando}>{duplicando ? 'Duplicando…' : 'Duplicar para editar'}</Botao></>;
+	const testar = c.modos.includes('texto') ? <LinkRP to={rotaTestarRP(c.id)} className={clsBotao('secundario')}>Testar</LinkRP> : null;
+	if (ehPadraoMotorCX(c)) return <><SeloLgpdTreino />{testar}{atribuir}<Botao onClick={onDuplicar} disabled={duplicando}>{duplicando ? 'Duplicando…' : 'Duplicar para editar'}</Botao></>;
 	return <><SeloLgpdTreino />{atribuir}</>;
 }
 

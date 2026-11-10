@@ -2958,6 +2958,13 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 99: editor, atribuição e link do operador (testar_treino_atribuir.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 100 · Roleplay, PR 5: sessão de treino por texto (conversa em andamento só do servidor, contexto pelo link ou por
+# quem abriu, resultado para a Qualidade, ciclo com registrar_sessao_treino)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_sessao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 100: sessão de treino por texto (testar_treino_sessao.py)", True, f"select {r.returncode}", None, None, 0)
+
 # SQL 92 · Preços editáveis: tabela, mínimo e franquia padrão; preço e franquia por empresa (permissão, vigência,
 # guarda da IA e mínimo com motivo)
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_precos_editaveis.py")],

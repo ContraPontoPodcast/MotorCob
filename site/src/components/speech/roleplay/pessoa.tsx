@@ -8,7 +8,7 @@ import { Botao, BotaoLink, Cartao, Estado, Gaveta, Kpis, Pilula, Tabela, clsBota
 import { supabase } from '@/lib/supabase';
 import { dataBR, dataHoraBR, diaSP, nf, rotaSA } from '@/lib/speech';
 import {
-	ROTA_RP_CADASTRO, SITUACAO_PESSOA, estadoLink, rotaAtribuicaoRP, rotaAtribuir, situacaoPessoa, ultimaAvaliada,
+	ROTA_RP_CADASTRO, SITUACAO_PESSOA, estadoLink, rotaAtribuicaoRP, rotaAtribuir, rotaSessaoRP, situacaoPessoa, ultimaAvaliada,
 	type AtribuicaoRP, type SessaoRP,
 } from '@/lib/roleplay';
 import { LinkRP, MolduraRP } from './moldura';
@@ -108,7 +108,7 @@ export function CorpoPessoa({ d, hoje, agora }: { d: DadosPessoa; hoje: string; 
 					: <Cartao semPadding><div className="p-4 sm:px-5">
 						<Tabela<SessaoRP> rotulo={`Sessões de ${o.apelido}`} linhas={d.sessoes} chave={s => s.id}
 							colunas={[
-								{ id: 'data', titulo: 'Data', celula: s => dataHoraBR(s.inicio) },
+								{ id: 'data', titulo: 'Data', celula: s => (s.atribuicao_id != null && s.situacao === 'avaliada' ? <LinkRP to={rotaSessaoRP(s.atribuicao_id, s.id)} className="font-semibold hover:underline">{dataHoraBR(s.inicio)}</LinkRP> : dataHoraBR(s.inicio)) },
 								{ id: 'cen', titulo: 'Cenário', celula: s => nomeCen(s.cenario_id) },
 								{ id: 'modo', titulo: 'Modo', celula: s => MODO[s.modo] ?? '—' },
 								{ id: 'dur', titulo: 'Duração', num: true, celula: s => (s.duracao_s == null ? '—' : `${Math.max(1, Math.round(s.duracao_s / 60))} min`) },

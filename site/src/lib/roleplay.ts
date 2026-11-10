@@ -17,6 +17,12 @@ export const ROTA_RP_NOVO_CENARIO = `${ROTA_RP_CENARIOS}/novo`;
 export const ROTA_RP_ATRIBUICOES = `${ROTA_RP}/atribuicoes`;
 export const ROTA_RP_ATRIBUIR = `${ROTA_RP}/atribuir`;
 export const rotaAtribuicaoRP = (id: number | string) => `${ROTA_RP_ATRIBUICOES}/${encodeURIComponent(String(id))}`;
+/** Sessão de uma pessoa (resultado, "Revisar avaliação", feedback 1:1) e o treino lado a lado (SQL 100). */
+export const rotaSessaoRP = (atr: number | string, sessao: number | string) => `${rotaAtribuicaoRP(atr)}/sessoes/${encodeURIComponent(String(sessao))}`;
+export const rotaLadoALadoRP = (atr: number | string, op: number | string) => `${rotaAtribuicaoRP(atr)}/lado-a-lado/${encodeURIComponent(String(op))}`;
+/** Teste do cenário pela Qualidade e o resultado do teste (nada conta para operador). */
+export const rotaTestarRP = (cen: number | string) => `${rotaCenarioRP(cen)}/testar`;
+export const rotaTesteRP = (cen: number | string, sessao: number | string) => `${rotaCenarioRP(cen)}/teste/${encodeURIComponent(String(sessao))}`;
 /** "Atribuir treino" com quem originou pré-marcado (?cen=&ops=&sug=). */
 export function rotaAtribuir(x: { cen?: number | null; ops?: number[]; sug?: number | null } = {}): string {
 	const q = new URLSearchParams();
@@ -66,13 +72,14 @@ const DETALHE_PADRAO: Record<string, string> = {
 };
 /** Trilha clicável: Speech Analytics › Roleplay › Cenários › Já pagou. O último item é a tela atual (sem link).
  *  `detalhe` é o nome da tela de detalhe (cenário, pessoa), quando já carregou. */
-export function trilhaRP(pathname: string, detalhe?: string | null): ItemTrilha[] {
+export function trilhaRP(pathname: string, detalhe?: string | null, meio?: ItemTrilha | null): ItemTrilha[] {
 	const p = sem(pathname);
 	const secao = secaoRP(p);
 	const itens: ItemTrilha[] = [{ rotulo: 'Speech Analytics', to: '/speech-analytics' }, { rotulo: 'Roleplay', to: ROTA_RP }];
 	if (secao && secao !== 'painel') {
 		const s = SECOES_RP.find(x => x.id === secao)!;
 		itens.push({ rotulo: s.nome, to: s.to });
+		if (p !== s.to && meio?.rotulo.trim()) itens.push(meio);
 		if (p !== s.to) itens.push({ rotulo: detalhe?.trim() || DETALHE_PADRAO[p === ROTA_RP_NOVO_CENARIO ? 'novo' : p === ROTA_RP_ATRIBUIR ? 'atribuir' : secao] });
 	}
 	const ult = itens[itens.length - 1];
@@ -81,8 +88,8 @@ export function trilhaRP(pathname: string, detalhe?: string | null): ItemTrilha[
 }
 
 /** Título da aba do navegador, distinto por tela: "Já pagou · Cenários · Roleplay · MotorCX". */
-export function tituloDocumentoRP(pathname: string, detalhe?: string | null): string {
-	const itens = trilhaRP(pathname, detalhe);
+export function tituloDocumentoRP(pathname: string, detalhe?: string | null, meio?: ItemTrilha | null): string {
+	const itens = trilhaRP(pathname, detalhe, meio);
 	const partes = (itens.length > 2 ? itens.slice(1) : itens).map(i => i.rotulo).reverse();
 	return `${partes.join(' · ')} · MotorCX`;
 }
