@@ -912,6 +912,13 @@ sem `_X.`). B6: `aviso_gravacao` ligado por padrão; a abertura diz "Esta ligaç
 do Speech nunca sugerem credor/dívida antes da identidade; a Montagem sem fluxo corta a fala (`Conversa._travar`) e o
 fluxo corta o credor escrito à mão (`Sessao._credor_literal`). Se o SQL 56 rodar de novo, rode o 83 depois.
 
+**PR10 do redesenho do fluxo (SPEC B6 e Q9, sem SQL): a voz da ligação diz números por extenso e os áudios do sistema
+saem da voz do agente.** Todo texto que vai ao TTS na ligação passa por `voz/falado.como_soa` (`montagem.para_tts`; o
+Pipecat recebe `ConversaFalada(s.conversa)`): valores, datas, horas, parcelas e percentuais como o "Como soa no telefone"
+(mesma tabela `tests/dados/fala_por_extenso_casos.json`); a transcrição e os eventos guardam o texto escrito. A prévia
+"Ouvir" da VM também. `sem-robo.wav` e `alo.wav`: `motorcx-voz-sons` na VM (`voz/sons_sistema.py`, chave `motorcx-voz-tts`
+do cofre, WAV 8 kHz mono 16 bits em `/var/motorcx/sons`, montada no Asterisk); comando no README do Asterisk, seção 4.
+
 **SQL 85 (decisão do dono, 08/11/2026): mensagem escrita sem a dívida antes da identidade.** SMS, WhatsApp, RCS e e-mail
 chegam inteiros a quem está com o telefone: nenhum texto PADRÃO do MotorCX cita dívida, saldo, valor, parcela, vencimento,
 credor ou contrato. SMS padrão do Assistente de implantação (`FRASES_PADRAO_SMS`): "Olá, {primeiro_nome}. Você tem uma
