@@ -19,7 +19,8 @@ Fluxo de uma tentativa (id_chamada = uuid hex; canais <id>-c<n> cliente, <id>-p 
      do cliente; a IA só sai quando o humano atende) ou REFER (opção avançada; dialplan motorcx-transferir). Ninguém
      atendeu, a fila recusou ou não há destino: a pessoa volta para o agente, que pede desculpas e agenda um retorno
      (ProvedorVoz.retomar_sem_humano); nunca se desliga na cara. Só se o agente não puder voltar (REFER já soltou o
-     agente, provedor sem suporte ou canal do agente caído) a chamada termina como abandono (sem_operador | falhou).
+     agente, provedor sem suporte ou canal do agente caído) a chamada termina como transferencia_sem_operador
+     (sem_operador | falhou; SQL 106: não é abandono do discador).
   6. o canal do cliente acabou -> evento (CDR, Q.850, SIP, AMD, billsec, toque, rota/tech prefix, segundos
      tarifados, custo, transferência) classificado com motor/voz.py, guarda e agendador atualizados, gravação na
      fila de envio para o GCS.
@@ -44,6 +45,7 @@ from voz.orquestrador.agendador import Agendador
 from voz.orquestrador.ari import ClienteARI, ErroARI
 from voz.orquestrador.eventos import SEM_IA, EscritorEventos, EventoChamada, classificar
 from voz.orquestrador.lote import ItemLote, Lote, hash_destino
+from voz.orquestrador.medidor import Medidor
 from voz.provedores.base import ContextoChamada, ProvedorVoz, aviso_abertura
 from voz.transcricao import ia as TIA
 
@@ -59,7 +61,8 @@ AUDIO_ALO_PADRAO = "sound:motorcx/alo"
 AUDIO_SEM_ROBO_PADRAO = "sound:motorcx/sem-robo"
 MENSAGEM_SEM_ROBO_MAX_S = 15          # sem o PlaybackFinished (áudio faltando, evento perdido), desliga depois disto
 SUFIXO_SEM_ROBO = "semrobo"
-# desfechos que contam no freio de abandono (e na taxa de abandono da tela)
+# desfechos que contam no freio de abandono (e na taxa de abandono da tela). A transferência sem operador (fila humana
+# cheia) não entra: é transferencia_sem_operador desde o SQL 106
 ABANDONOS = ("abandonada", "abandono_sem_robo")
 
 
@@ -173,6 +176,7 @@ class Orquestrador:
         self.contagem: dict[str, int] = {}
         self.alertas: list[str] = []
         self.pausas_novas: list[dict] = []       # rotas pausadas aqui e ainda não gravadas no banco (o Plantão grava)
+        self.medidor = Medidor()                 # ritmo por carteira × janela de 5 min (SQL 106; o Plantão grava)
 
     # ---------------------------------------------------------------- utilidades
     def _conta(self, k: str, n: int = 1):
@@ -223,7 +227,18 @@ class Orquestrador:
                 self._registrar(c)
         if self.fila_envio is not None:
             self.fila_envio.processar(agora.timestamp())
+        for emp in list(self.agendador.empresas):    # a janela de 30 min do freio anda com o relógio
+            if self.agendador.reavaliar(emp, agora.timestamp()) == "soltou":
+                log.info("empresa %s: abandono dos últimos 30 min voltou ao normal — ritmo liberado", emp)
         return self._originar_rodadas(agora)
+
+    def retrato(self, empresa_id: int, credor_id: int | None = None) -> dict:
+        """Modo, razão e robôs da empresa agora (para as amostras do ritmo; só contagens)."""
+        e = self.agendador.empresas.get(empresa_id)
+        if e is None:
+            return {}
+        return {"modo": "power", "razao": e.razao, "conversas": e.conversas, "reservas": e.reservas,
+                "linhas": e.linhas}
 
     def _originar_rodadas(self, agora: datetime) -> int:
         total, progresso = 0, True
@@ -491,10 +506,11 @@ class Orquestrador:
             self._desligar_cliente(c)
 
     def _abandonar(self, c: Chamada, motivo: str) -> None:
-        """Sem destino (agente ou humano): derruba e registra como abandono (V24)."""
+        """A transferência não achou humano e o agente não pôde voltar: encerra. O desfecho é
+        transferencia_sem_operador (SQL 106): não conta no abandono do discador."""
         c.transferencia = motivo
         c.destino = c.destino or "ia"
-        self._conta("abandono")
+        self._conta("transferencia_sem_operador")
         self._desligar_cliente(c)
 
     def _variaveis_fala(self, c: Chamada) -> dict:
@@ -671,7 +687,7 @@ class Orquestrador:
 
     def _sem_humano(self, c: Chamada, motivo: str) -> None:
         """Ninguém do cliente atendeu (ou a transferência falhou): a pessoa volta para o agente, que pede desculpas e
-        agenda um retorno (decisão do dono, 08/11/2026). Sem como voltar, abandono como antes."""
+        agenda um retorno (decisão do dono, 08/11/2026). Sem como voltar, encerra (transferencia_sem_operador)."""
         prov = self.provedores.get(c.provedor or "")
         vivo = not c.agente_solto and (c.conexao == "interno" or c.canal_provedor is not None)
         if prov is None or not vivo or c.estado not in ("conversa", "transferindo"):
@@ -834,6 +850,8 @@ class Orquestrador:
                 ao_enviar = lambda _uri, linha=linha: self.ao_gravacao(linha)   # noqa: E731
             self.fila_envio.agendar(G.nome_arquivo(c.id), objeto, ao_enviar=ao_enviar, bucket=c.bucket)
         classificar(ev, self.toque_min_s)
+        self.medidor.contar(c.empresa_id, c.lote_chave[1] if c.lote_chave else None, cand.tronco.id, ev.desfecho,
+                            c.veredito == A.PESSOA, c.t_atendeu is not None, billsec, agora)
         self.escritor.escrever(ev)
         if self.ao_registrar is not None:
             self.ao_registrar(ev)
@@ -846,7 +864,7 @@ class Orquestrador:
                 self._alerta(al)
             lote.alertas.clear()
         if c.veredito == A.PESSOA:
-            mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho in ABANDONOS)
+            mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho in ABANDONOS, agora.timestamp())
             if mudou == "freou":
                 self._alerta(f"empresa {c.empresa_id}: abandono acima de "
                              f"{self.dados.config(c.empresa_id).abandono_max_pct:g}% — ritmo reduzido")

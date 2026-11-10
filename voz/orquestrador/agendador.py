@@ -17,17 +17,22 @@ Dois recursos, dois contadores (decisão do dono: o limite conta CONVERSAS com a
                       quando a conversa começa, não na originação (linha que só tocou não vira minuto de pico).
   teto global       = concorrência contratada (voz_contrato), nunca ultrapassado (conta conversas + reservas).
   por tronco        = canais do tronco em voo e CPS (balde de fichas: até `cps` por segundo, rajada de 1 s).
-  freio de abandono = abandonos ÷ atendidas por pessoa no lote (mínimo de amostra). Acima de abandono_max_pct, o
-                      teto da empresa cai para freio_ritmo_pct % até a taxa voltar abaixo de 80 % do limite.
+  freio de abandono = abandonos ÷ atendidas por pessoa da empresa nos ÚLTIMOS 30 MIN (JanelaTaxa; mínimo de amostra).
+                      Acima de abandono_max_pct, o teto da empresa cai para freio_ritmo_pct % até a taxa da janela voltar
+                      abaixo de 80 % do limite (ou a janela ficar sem amostra). Antes era o acumulado desde que o processo
+                      subiu: um dia ruim antigo travava o freio (SQL 106, Power/Preditivo V1). Abandono = abandonada e
+                      abandono_sem_robo; a transferência sem operador (fila humana cheia) não entra.
 """
 from __future__ import annotations
 
 import math
+from collections import deque
 from dataclasses import dataclass, field
 
 from voz.banco import ConfigVoz, Tronco
 
 AMOSTRA_MIN_ABANDONO = 20
+JANELA_ABANDONO_S = 30 * 60      # a taxa do freio é a dos últimos 30 min (PREDITIVO.md 3.3 a)
 # linhas por robô livre. 1,0 = discagem 1:1 com reserva (o comportamento de sempre). O Power/Preditivo (PR próprio) lê a
 # razão de credores.discagem.ritmo; até lá ninguém muda este valor.
 RAZAO_PADRAO = 1.0
@@ -52,6 +57,32 @@ class Balde:
 
 
 @dataclass
+class JanelaTaxa:
+    """Atendidas por pessoa e abandonos dos últimos `janela_s` segundos (fila de (t, abandono); só contagens)."""
+    janela_s: float = JANELA_ABANDONO_S
+    eventos: deque = field(default_factory=deque)
+    abandonos: int = 0
+
+    def podar(self, agora_s: float) -> None:
+        while self.eventos and self.eventos[0][0] <= agora_s - self.janela_s:
+            _, ab = self.eventos.popleft()
+            self.abandonos -= int(ab)
+
+    def contar(self, agora_s: float, abandono: bool) -> None:
+        self.eventos.append((agora_s, bool(abandono)))
+        self.abandonos += int(bool(abandono))
+        self.podar(agora_s)
+
+    @property
+    def atendidas(self) -> int:
+        return len(self.eventos)
+
+    def taxa(self, minimo: int = AMOSTRA_MIN_ABANDONO) -> float | None:
+        """% de abandono na janela (None = menos de `minimo` atendidas por pessoa)."""
+        return None if self.atendidas < minimo else 100.0 * self.abandonos / self.atendidas
+
+
+@dataclass
 class EstadoEmpresa:
     config: ConfigVoz
     canais: int
@@ -59,8 +90,7 @@ class EstadoEmpresa:
     reservas: int = 0          # robôs reservados para linhas que ainda não viraram conversa
     conversas: int = 0         # conversas com a IA (sessão do provedor aberta)
     razao: float = RAZAO_PADRAO
-    atendidas_pessoa: int = 0
-    abandonos: int = 0
+    janela: JanelaTaxa = field(default_factory=JanelaTaxa)   # atendidas por pessoa e abandonos dos últimos 30 min
     freado: bool = False
     freado_vezes: int = 0
     pico_janela: int = 0       # maior `ocupadas` desde a última foto (telemetria dos robôs, SQL 102)
@@ -88,10 +118,18 @@ class EstadoEmpresa:
         return t
 
     @property
+    def atendidas_pessoa(self) -> int:
+        """Atendidas por pessoa na janela de 30 min."""
+        return self.janela.atendidas
+
+    @property
+    def abandonos(self) -> int:
+        """Abandonos na janela de 30 min."""
+        return self.janela.abandonos
+
+    @property
     def taxa_abandono(self) -> float | None:
-        if self.atendidas_pessoa < AMOSTRA_MIN_ABANDONO:
-            return None
-        return 100.0 * self.abandonos / self.atendidas_pessoa
+        return self.janela.taxa()
 
 
 @dataclass
@@ -242,18 +280,30 @@ class Agendador:
         if tronco_id is not None:
             self.em_voo_tronco[tronco_id] = max(0, self.em_voo_tronco.get(tronco_id, 0) - 1)
 
-    def resultado_pessoa(self, empresa_id: int, abandonada: bool) -> str | None:
-        """Conta uma chamada atendida por pessoa (e se foi abandonada). Devolve 'freou'/'soltou' quando muda."""
+    def resultado_pessoa(self, empresa_id: int, abandonada: bool, agora_s: float | None = None) -> str | None:
+        """Conta uma chamada atendida por pessoa (e se foi abandonada) na janela de 30 min. Devolve 'freou'/'soltou'
+        quando muda. Sem `agora_s`, conta no instante do último evento (testes antigos)."""
         e = self.empresas[empresa_id]
-        e.atendidas_pessoa += 1
-        e.abandonos += int(abandonada)
-        taxa = e.taxa_abandono
-        if taxa is None:
+        if agora_s is None:
+            agora_s = e.janela.eventos[-1][0] if e.janela.eventos else 0.0
+        e.janela.contar(agora_s, abandonada)
+        return self._avaliar_freio(e)
+
+    def reavaliar(self, empresa_id: int, agora_s: float) -> str | None:
+        """A janela anda com o relógio: sem ligação nova, os abandonos antigos saem e o freio pode soltar."""
+        e = self.empresas.get(empresa_id)
+        if e is None or not e.freado:
             return None
-        if not e.freado and taxa > e.config.abandono_max_pct:
+        e.janela.podar(agora_s)
+        return self._avaliar_freio(e)
+
+    @staticmethod
+    def _avaliar_freio(e: EstadoEmpresa) -> str | None:
+        taxa = e.taxa_abandono
+        if not e.freado and taxa is not None and taxa > e.config.abandono_max_pct:
             e.freado, e.freado_vezes = True, e.freado_vezes + 1
             return "freou"
-        if e.freado and taxa <= 0.8 * e.config.abandono_max_pct:
-            e.freado = False
+        if e.freado and (taxa is None or taxa <= 0.8 * e.config.abandono_max_pct):
+            e.freado = False         # janela sem amostra ou a taxa voltou: solta
             return "soltou"
         return None

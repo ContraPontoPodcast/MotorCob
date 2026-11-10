@@ -106,6 +106,8 @@ RPC = {
     "conferir_identidade_voz": "conferir_identidade", "limpar_identidade_voz": "limpar_identidade",
     # SQL 102 · uso dos robôs contratados (em uso agora e pico do dia, só contagens; o Plantão grava a cada 15 s)
     "registrar_uso_robos_voz": "registrar_uso_robos",
+    # SQL 106 · ritmo da discagem (janelas de 5 min por carteira, só contagens; o Plantão grava a cada minuto)
+    "registrar_ritmo_voz": "registrar_ritmo",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual

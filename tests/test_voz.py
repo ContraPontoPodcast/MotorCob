@@ -75,6 +75,8 @@ NOVOS_DE_PARA = {"maquina", "desligou_sem_conversar", "atendeu_desligou", "retor
                  "bloqueio_originacao", "cancelada_discador", "indisponivel", "rejeitada", "mudo", "fax"}
 # SQL 91: atendeu sem robô livre (a VM reservou antes de discar; só falha/corrida do provedor) — abandono separado
 NOVOS = NOVOS_DE_PARA | {"inexistente_voz", "abandono_sem_robo"}
+# SQL 106: transferência sem operador separada do abandono (antes era "abandonada"; agora não freia o discador)
+NOVOS = NOVOS | {"transferencia_sem_operador"}
 
 
 def _sem_novos(d):
@@ -194,7 +196,7 @@ class TestAbandonoSemRobo(unittest.TestCase):
     def test_classificacao(self):
         self.assertEqual(V.classificar_chamada(transferencia="sem_robo", amd="HUMAN", dialstatus="ANSWER")[:2],
                          ("abandono_sem_robo", "transferencia"))
-        self.assertEqual(V.classificar_chamada(transferencia="sem_operador")[0], "abandonada")
+        self.assertEqual(V.classificar_chamada(transferencia="sem_operador")[0], "transferencia_sem_operador")
         self.assertIn("sem_robo", V.TRANSFERENCIAS)
 
     def test_conta_no_abandono_e_na_curta(self):
@@ -218,6 +220,34 @@ class TestAbandonoSemRobo(unittest.TestCase):
         self.assertIn("abandono_sem_robo", L.REABRIVEIS)
         from voz.orquestrador.nucleo import ABANDONOS
         self.assertEqual(ABANDONOS, ("abandonada", "abandono_sem_robo"))
+
+
+class TestTransferenciaSemOperador(unittest.TestCase):
+    """SQL 106 (Power/Preditivo V1): a transferência sem operador não é abandono do discador."""
+
+    def test_classificacao_e_atributos(self):
+        for tf in ("sem_operador", "falhou"):
+            self.assertEqual(V.classificar_chamada(transferencia=tf, resultado_ia="cpc")[:2],
+                             ("transferencia_sem_operador", "transferencia"))
+        d = V.POR_CHAVE["transferencia_sem_operador"]
+        self.assertEqual((d.nivel, d.curta, d.marca, d.interno, d.generico), ("SEM_RETORNO", None, "clique", False,
+                                                                             None))
+        self.assertNotIn("transferencia_sem_operador", V.CURTA_SE_ABANDONO)
+
+    def test_curta_so_pelos_segundos(self):
+        cc = {"segundos": 6, "abandono_conta": True}
+        self.assertFalse(DG.e_curta(SimpleNamespace(resultado="transferencia_sem_operador", duracao_s=40), cc))
+        self.assertTrue(DG.e_curta(SimpleNamespace(resultado="transferencia_sem_operador", duracao_s=5), cc))
+
+    def test_renitencia_igual_a_de_antes(self):
+        self.assertEqual(DG.situacao_de("transferencia_sem_operador"), "abandonada")
+        self.assertEqual(DG.sinalizacao_de("transferencia_sem_operador"), "abandonada")
+        sql = (RAIZ / "supabase" / "migrations" / "20270221000001_voz_ritmo_medir.sql").read_text(encoding="utf-8")
+        self.assertIn("when resultado in ('abandono_sem_robo', 'transferencia_sem_operador') then 'abandonada'", sql)
+        from voz.orquestrador import lote as L
+        self.assertIn("transferencia_sem_operador", L.ENCERRA_CLIENTE)
+        from voz.orquestrador.nucleo import ABANDONOS
+        self.assertNotIn("transferencia_sem_operador", ABANDONOS)
 
 
 if __name__ == "__main__":
