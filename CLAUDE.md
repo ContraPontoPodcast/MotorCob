@@ -1138,6 +1138,17 @@ VM/servidor; das amostras do SQL 106) a cada 30 min e ao carregar lote. Simulaç
 controlador de verdade em `tests/sim_preditivo.py` (3 cenários do PREDITIVO.md com abandono ≤ 1,5 %; ~2× as conversas
 do Power 1,0).
 
+**Site · Agente Voz/CX › Discagem › Ritmo e "Robôs e o Preditivo" (Power e Preditivo V7a, sem SQL).** Aba **Ritmo**
+(`components/discagem/ritmo.tsx`, primeira das abas): hoje na carteira (`ritmo_voz_hoje` a cada 15 s: razão agora,
+abandono com meta e teto, atendimento por pessoa, curtas, frase de estado), "Como o MotorCX disca" (Power com números por
+robô livre 1,0–3,0, 1,0 = progressivo; Preditivo com meta 0,5–3 % e razão máxima 1,5/2,0/2,5/3,0), "Quando alguém atende
+e não há robô" (a mensagem neutra e as regras fixas), Freios (teto 3 %, curtas) e a gaveta "Qual escolher?". Edita
+`draft.ritmo`, salvo com o resto da Discagem (`lib/discagem.ts › computeDiff` grava só o que difere de Power 1,0, via
+`lib/ritmo.ts › ritmoSaida`; o "Salvar como vN" e o histórico ganham "Ritmo › …"). Página `/voz/discagem/robos`
+(`robos-preditivo.tsx`; Voltar → Discagem; links no cartão do contrato e na aba): licença = conversas, não linhas;
+exemplo ilustrativo no contrato da empresa (Power 1,0 / 2,0 / Preditivo) e o aviso "canais ≈ robôs × razão" quando o
+tronco segura. Testes: `site/src/lib/ritmo.test.tsx`.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

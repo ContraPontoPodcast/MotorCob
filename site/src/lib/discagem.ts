@@ -1,6 +1,8 @@
 // Discagem da carteira: leitura/escrita em credores.discagem (jsonb objeto).
 // O site só lê execucoes.resumo/alertas e estrategias.definicao.ligacoes. Nada é criado/alterado no banco.
 
+import { ritmoDe, ritmoSaida, type Ritmo } from './ritmo';
+
 export type JanelaHorario = { seg_sex: [string, string] | null; sabado: [string, string] | null };
 export type HorariosTabela = { hora: 'local'; ufs: Record<string, JanelaHorario>; ddds: Record<string, JanelaHorario> };
 
@@ -34,6 +36,8 @@ export type Discagem = {
 	por_sinalizacao?: Record<string, unknown> | null;
 	modo_discagem?: Record<string, unknown> | null;
 	reciclagem_auto?: Record<string, unknown> | null;
+	// SQL 107 · ritmo da discagem da VM: Power ou Preditivo (lib/ritmo.ts). Sem a chave = Power 1,0.
+	ritmo?: Partial<Ritmo> | null;
 };
 
 export type LigacoesTrava = {
@@ -249,6 +253,11 @@ export function computeDiff(draft: Discagem): Record<string, unknown> {
 		}
 		if (k === 'por_sinalizacao' || k === 'modo_discagem' || k === 'reciclagem_auto') {
 			if (draft[k] != null) out[k] = draft[k]; // já só com o que difere do padrão (lib/renitencia.ts)
+			continue;
+		}
+		if (k === 'ritmo') {
+			const saida = draft.ritmo ? ritmoSaida(ritmoDe({ ritmo: draft.ritmo })) : null;
+			if (saida) out.ritmo = saida; // só o que difere de Power 1,0
 			continue;
 		}
 		if (k === 'retorno_agendado') {
