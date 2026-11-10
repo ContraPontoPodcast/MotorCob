@@ -1149,6 +1149,14 @@ e não há robô" (a mensagem neutra e as regras fixas), Freios (teto 3 %, curta
 exemplo ilustrativo no contrato da empresa (Power 1,0 / 2,0 / Preditivo) e o aviso "canais ≈ robôs × razão" quando o
 tronco segura. Testes: `site/src/lib/ritmo.test.tsx`.
 
+**Site · Agente Voz/CX › Ligações (faixa ao vivo) e Visão geral (Power e Preditivo V7b, sem SQL).** Em Ligações,
+`components/voz/faixa-ritmo.tsx` › "Ritmo agora" da carteira do topo (ou da empresa), `ritmo_voz_hoje` a cada 15 s: modo
+e razão, robôs (conversando, reservados, linhas no ar), abandono (meta e teto), curtas, atendimento por pessoa,
+transferência sem operador separada, abandono em 30 dias, a frase de estado e, recolhidos, o dia por meia hora e por
+linha (bina mascarada; "Parada hoje" pela mesma regra da VM). Linha parada: o Admin (perfil admin) vê "Liberar até
+950/linha e 9.500/total hoje" (motivo; `liberar_curtas_voz`, SQL 109). Visão geral: "Ligações hoje" ("Preditivo ·
+abandono 0,8% · curtas 76%") e, com freio, "Com problema: …". Testes: `site/src/lib/ritmo-ao-vivo.test.tsx`.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

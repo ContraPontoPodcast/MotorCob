@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { Pause, Play, Recycle, RotateCw } from 'lucide-react';
 import { Loading, Notice, usePermissao } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
+import { FaixaRitmo } from './faixa-ritmo';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { Voltar } from '@/components/comuns/voltar';
 import { ROTA_AGENTE, rotaLoteVoz } from '@/lib/rotas-voz';
@@ -99,10 +100,12 @@ export function LotesVoz() {
 					</Vazio>
 				) : (
 					<div className="space-y-4">
+						{/* Power e Preditivo (V7b): o ritmo da carteira do topo (ou da empresa) agora */}
+						<FaixaRitmo />
 						<Kpis itens={[
 							{ rotulo: `Ligações ${hoje.length ? 'hoje' : 'no último dia'}`, valor: inteiro(dia.total), detalhe: `${inteiro(dia.encerradas)} encerradas` },
 							{ rotulo: 'Em andamento', valor: inteiro(dia.vivos), detalhe: dia.vivos === 1 ? 'lote ligando ou agendado' : 'lotes ligando ou agendados' },
-							{ rotulo: 'Abandono', valor: dia.encerradas ? pct((100 * dia.abandonos) / Math.max(1, dia.encerradas)) : '—', detalhe: 'atendeu e caiu sem operador livre' },
+							{ rotulo: 'Abandono', valor: dia.encerradas ? pct((100 * dia.abandonos) / Math.max(1, dia.encerradas)) : '—', detalhe: 'abandonos registrados nos lotes do dia' },
 							{ rotulo: 'Telefonia estimada', valor: reais(dia.custo), detalhe: 'paga à operadora, fora da fatura' },
 						]} />
 						<Cartao semPadding>
