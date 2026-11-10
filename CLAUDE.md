@@ -1050,6 +1050,17 @@ a tabela por empresa com o "por quê" (`motivo` do SQL 101). Contas e frases em 
 (`porQueCliente` nunca cita o teto global). Sem o SQL 101 no banco, o cartão avisa. A configuração da empresa mostra o
 pico como "Desligado (robôs contratados)" para quem tem licença.
 
+**SQL 102 + VM (Robôs contratados, PR 6): uso dos robôs.** `voz_robos_agora` (uma linha por empresa: `em_uso` = robôs
+ocupados = conversas + reservas, `conversas`, `linhas` no ar, `aguardando` = números do dia que esperam na lista e não
+estão discando, `limite` = teto aplicado agora pela VM, `no_limite`, `atualizado_em`; mais velho que 60 s = "sem leitura
+agora", nunca zero) e `voz_robos_dia` (pico do dia em America/Sao_Paulo, `pico_em`, `segundos_no_limite`; 400 dias). Só
+contagens. Grava só `registrar_uso_robos_voz(linhas)` (servidor ou VM; no acesso próprio, `voz_vm.registrar_uso_robos`):
+o Plantão (`voz/orquestrador/principal.py › registrar_uso_robos`) manda a cada 15 s as empresas desta VM, com o pico da
+janela vindo do agendador (`Agendador.foto_robos`: maior `ocupadas` desde a foto anterior) e os segundos no limite entre
+duas fotos (até 60). Banco sem o SQL 102: a VM avisa no máximo 1 vez por hora e segue discando. Leitura: quem é da
+empresa (`minhas_empresas()`) e a equipe com `cuida_voz`. Testes: `supabase/testes/testar_robos_uso.py` e
+`tests/test_voz_robos_uso.py`.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

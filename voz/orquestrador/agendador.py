@@ -63,6 +63,7 @@ class EstadoEmpresa:
     abandonos: int = 0
     freado: bool = False
     freado_vezes: int = 0
+    pico_janela: int = 0       # maior `ocupadas` desde a última foto (telemetria dos robôs, SQL 102)
 
     @property
     def ocupadas(self) -> int:
@@ -187,6 +188,7 @@ class Agendador:
         reservada = self.livres_conversa(empresa_id) > 0
         e.linhas += 1
         e.reservas += int(reservada)
+        e.pico_janela = max(e.pico_janela, e.ocupadas)
         self.em_voo_tronco[tronco_id] = self.em_voo_tronco.get(tronco_id, 0) + 1
         return reservada
 
@@ -206,7 +208,21 @@ class Agendador:
             return None
         no_pico = e.conversas >= e.limite
         e.conversas += 1
+        e.pico_janela = max(e.pico_janela, e.ocupadas)
         return no_pico
+
+    def foto_robos(self, empresa_id: int) -> dict | None:
+        """Uso dos robôs da empresa para a telemetria (SQL 102): em uso agora (conversas + reservas, o que o limite
+        conta), conversando, linhas no ar, o teto aplicado agora e o maior uso desde a foto anterior (zera a janela).
+        Só contagens."""
+        e = self.empresas.get(empresa_id)
+        if e is None:
+            return None
+        pico = max(e.pico_janela, e.ocupadas)
+        e.pico_janela = e.ocupadas
+        teto = e.teto
+        return {"em_uso": e.ocupadas, "conversas": e.conversas, "linhas": e.linhas, "limite": teto, "pico": pico,
+                "no_limite": teto > 0 and e.ocupadas >= teto}
 
     def fim_conversa(self, empresa_id: int) -> None:
         """O agente saiu da ligação (fim, REFER ou humano atendeu na ponte): o robô fica livre."""
