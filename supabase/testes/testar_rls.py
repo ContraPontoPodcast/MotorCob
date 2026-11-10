@@ -3090,5 +3090,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 127: demonstrativo do minuto falado (testar_demonstrativo_ia.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 128 · divisão do teto com o limite de conversas do por minuto (PR 7): motivo por_minuto, sem pico
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_divisao_minuto.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 128: divisão do teto com o por minuto (testar_divisao_minuto.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
