@@ -2277,6 +2277,19 @@ def _lit(d):
     return _json.dumps(d, ensure_ascii=False).replace("'", "''")
 def _j(x):
     return _json.dumps(x, ensure_ascii=False, separators=(",", ":"))
+def _sql96():
+    """SQL 96 (trava de CPF) refaz funções do SQL 58 e do 59: reaplica depois deles."""
+    r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                        os.path.join(os.path.dirname(__file__), "..", "migrations", "20270201000001_voz_trava_cpf.sql")],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+_sql96()
+# SQL 96: a mesma tabela de casos da fala com CPF (tests/dados/trava_cpf_casos.json) dá o mesmo no banco
+for _t, _esp in _json.loads(open(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "dados", "trava_cpf_casos.json"),
+                                 encoding="utf-8").read())["fala"]:
+    checar(f"SQL 96 · fala com CPF: {_t}", True, f"select public.fluxo_voz_aux_pede_senha('{_t.replace(chr(39), chr(39) * 2)}')",
+           "authenticated", u["oper"], "t" if _esp else "f")
+checar("SQL 96: trava cpf na lista e no check dos passos", True, "select ('cpf' = any (public.travas_voz()))::text || position('cpf' in pg_get_constraintdef((select oid from pg_constraint where conname = 'voz_fluxo_passos_trava_check')))::int::boolean::text", "service_role", None, "truetrue")
 # FL2: os mesmos casos do validador em Python (voz/fluxo_casos.py) dão a mesma lista de erros no banco
 for _n, _d, _e in _FC.casos():
     checar(f"SQL 58 · validador: {_n}", True, f"select array_to_json(public.fluxo_voz_erros('{_lit(_d)}'::jsonb))",
@@ -2478,7 +2491,7 @@ checar("SQL 58: cliente B não lê os casos da A", True, "select count(*) from p
 
 # passos e métricas (FL7): só a VM grava, só códigos
 checar("SQL 58: VM grava o passo do bloco", True, f"insert into public.voz_fluxo_passos (empresa_id,chamada_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,saida_quando,intencao,confianca_faixa) values ({EA},{CH1},'ch-0001',{FV1},3,'N3','cognicao','quero_negociar','quero_negociar','alta') returning ordem", "service_role", None, 3)
-checar("SQL 58: trava fora da lista é recusada", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,trava) values ({EA},'ch-0001',{FV1},4,'N3','cognicao','cpf')", "service_role")
+checar("SQL 58: trava fora da lista é recusada", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,trava) values ({EA},'ch-0001',{FV1},4,'N3','cognicao','trava_inventada')", "service_role")
 checar("SQL 58: usuário não grava passo", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo) values ({EA},'ch-0001',{FV1},5,'N3','cognicao')", "authenticated", u["admin"])
 checar("SQL 58: VM grava a métrica do dia (saídas por código)", True, f"insert into public.voz_fluxo_metricas_dia (empresa_id,fluxo_versao_id,dia,bloco_id,chegaram,saidas) values ({EA},{FV1},'2026-11-05','N3',10,'{{\"quero_negociar\": 6, \"ja_paguei\": 4}}') returning chegaram", "service_role", None, 10)
 checar("SQL 58: métrica com texto livre é recusada", False, f"insert into public.voz_fluxo_metricas_dia (empresa_id,fluxo_versao_id,dia,bloco_id,saidas) values ({EA},{FV1},'2026-11-06','N3','{{\"Ana disse\": 1}}')", "service_role")
@@ -2567,6 +2580,7 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261226000001_voz_roleplay.sql")],
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
+_sql96()
 from voz import roleplay as _RP   # noqa: E402
 for _cod, _p in _RP.PERSONAS_PADRAO.items():
     checar(f"SQL 59: persona padrão {_cod} igual à do Python", True,
@@ -2613,7 +2627,7 @@ _sv(_reg(RL1, _PN["nao_me_ligue"], 2, "opt_out", "true", travas="{nao_me_ligue}"
 _sv(_reg(RL1, _PN["negocia_rapido"], 1, "promessa", "true", acordo="true", oferta="'OF-2'", parcelas="6"))
 CV_FALHA = _sv(_reg(RL1, _PN["negocia_rapido"], 2, "limite_turnos", "false", transc="'[{\"quem\": \"agente\", \"texto\": \"Olá\", \"bloco\": \"N1\"}, {\"quem\": \"pessoa\", \"texto\": \"Sou eu.\"}, {\"quem\": \"pessoa\", \"texto\": \"Hum.\"}]'::jsonb"))
 checar("SQL 59: usuário não grava conversa", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true"), "authenticated", u["admin"])
-checar("SQL 59: trava fora da lista é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", travas="{cpf}"), "service_role")
+checar("SQL 59: trava fora da lista é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", travas="{trava_inventada}"), "service_role")
 checar("SQL 59: transcrição com CPF é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", transc="'[{\"quem\": \"pessoa\", \"texto\": \"meu cpf 12345678901\"}]'::jsonb"), "service_role")
 checar("SQL 59: persona fora do lote é recusada", False, _reg(RL1, _PN["quer_parcelar_muito"], 1, "recusa", "true"), "service_role")
 checar("SQL 59: só a VM conclui o lote", False, f"select public.concluir_roleplay_lote({RL1}, 2500)", "authenticated", u["plan"])

@@ -204,6 +204,12 @@ export function criarApiFixturas(): FluxoApi {
 					continue;
 				}
 				silencios = 0;
+				// SQL 96 (voz/fluxo.py › _travas): CPF dito volta só como a marca, nunca repetido, e a etapa continua esperando
+				// (falas com CPF não andam na conversa de demonstração)
+				if (/\d{3}\.?\d{3}\.?\d{3}-?\d{2}|c\.?p\.?f/i.test(pessoa ?? '')) {
+					turnos.push({ pessoa: '[CPF REDIGIDO]', falas: [{ texto: 'Não precisa me dizer o CPF. Por segurança, eu nunca peço nem repito esse número.', bloco: atual, modo: 'arvore' }], bloco: atual, caminho: [], intencao: null, conectores: [], travas: ['cpf'], devolucoes: [], fim: null });
+					continue;
+				}
 				const i = passo++;
 				if (i > conversaDemo.length) break;
 				const trava = /não me lig|nao me lig/i.test(pessoa ?? '') ? 'nao_me_ligue' : /pessoa|atendente|humano/i.test(pessoa ?? '') ? 'pedido_humano' : null;

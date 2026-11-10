@@ -6,7 +6,9 @@ aqui e não no prompt:
   1. valor, oferta ou credor só depois de Confirmar identidade (o validador já recusa o fluxo; aqui a fala que
      tiver variável sensível sem identidade confirmada é trocada pelo recado neutro);
   2. nunca pede senha nem cartão (fala do roteiro e do Generativo passam por filtro; a pessoa que oferecer ouve a
-     fala fixa);
+     fala fixa); SQL 96: nem CPF — a fala nunca cita nem diz um CPF (só "os três últimos números do CPF" da
+     identidade), e o CPF que a pessoa disser nunca é repetido nem vai ao modelo, ao log ou à transcrição: ela ouve
+     FALA_CPF (na identidade pelos 3 últimos números, o pedido de só os 3) e a etapa continua esperando;
   3. "não me ligue" em qualquer etapa: opt-out e encerra (nenhum ramo segura);
   4. terceiro ouve só o recado neutro fixo;
   5. nunca passa da alçada (ofertas do CRM acima dela são descartadas, código oferta_acima_alcada);
@@ -46,6 +48,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from voz import conector as CN
 from voz import fluxo_validador as FV
+from voz.transcricao import redacao as RD
 
 log = logging.getLogger("motorcx.voz.fluxo")
 
@@ -55,6 +58,8 @@ RECADO_NEUTRO = "Peço que {primeiro_nome} retorne a ligação para a {assessori
 FALA_OPT_OUT = "Entendido. Vou registrar agora e você não recebe mais ligações nossas sobre isso. Até logo."
 FALA_HUMANO = "Claro, vou passar você para um atendente agora, só um instante."
 FALA_SENHA = "Não precisa me passar senha nem número de cartão. O pagamento é sempre pelo link."
+FALA_CPF = "Não precisa me dizer o CPF. Por segurança, eu nunca peço nem repito esse número."
+FALA_CPF_ULTIMOS3 = "Me diga só os três últimos números, por favor."
 FALA_REPETIR = "Desculpe, pode repetir?"
 FALA_FALHA = "Tive um problema aqui. Vou passar você para um atendente, só um instante."
 FALA_NAO_OUVI = "Desculpe, não ouvi."
@@ -287,6 +292,8 @@ def informado_de(pergunta: str, texto: str, hoje: date) -> str | None:
 
 
 class Sessao:
+    trava_cpf = True                       # SQL 96: o CPF dito é tratado aqui (voz/transcricao/ia.ConversaComTurnos)
+
     def __init__(self, fluxo: FluxoCarregado, id_chamada: str, id_cliente: str, variaveis: dict, emitir,
                  cliente_conectores, entendedor=None, gerador=None, hoje: date | None = None):
         erros = FV.erros(fluxo.definicao)
@@ -372,6 +379,14 @@ class Sessao:
 
     # ---------------------------------------------------------------- travas em toda fala
     def _travas(self, texto: str, t: str) -> bool:
+        if RD.cpf_dito(texto):              # SQL 96: antes de tudo (o texto nem chega ao modelo)
+            self._marca_trava("cpf")
+            b = self.blocos.get(self.atual or "")
+            ult3 = b is not None and b["tipo"] == "identidade" and (
+                (self._ident or {}).get("atual") == "ultimos3_documento"
+                or (self._ident is None and b["params"].get("pergunta") == "ultimos3_documento"))
+            self._falar(f"{FALA_CPF} {FALA_CPF_ULTIMOS3}" if ult3 else FALA_CPF, self.atual)
+            return True
         cog = None
         if not RE_NAO_ME_LIGUE.search(t) and not RE_HUMANO.search(t) and not isinstance(self.entendedor, EntendedorRegras):
             cog = self.entendedor.entender(texto, ["nao_me_ligue", "pedir_humano"])
@@ -431,6 +446,8 @@ class Sessao:
             return self._recado(), "valor_antes_identidade"
         if RE_SENHA.search(normal(fala)):
             return FALA_SENHA, "senha_cartao"
+        if FV.pede_cpf(fala):                                                 # SQL 96: nunca cita nem diz CPF
+            return FALA_CPF, "cpf"
         return fala, None
 
     def _credor_literal(self, fala: str) -> bool:
@@ -1210,7 +1227,8 @@ def simular(fluxo: FluxoCarregado, falas: list[str], variaveis: dict, entendedor
 
 
 def _turno_json(fala_pessoa, t: Turno) -> dict:
-    return {"pessoa": fala_pessoa, "falas": [{"texto": x, "bloco": b, "modo": m} for x, b, m in t.falas],
+    # SQL 96: o CPF dito nunca volta (nem para a tela do simulador)
+    return {"pessoa": RD.sem_cpf(fala_pessoa) if fala_pessoa else fala_pessoa, "falas": [{"texto": x, "bloco": b, "modo": m} for x, b, m in t.falas],
             "bloco": t.caminho[-1] if t.caminho else (t.falas[-1][1] if t.falas else None),
             "caminho": t.caminho, "intencao": t.intencao, "conectores": t.conectores, "travas": t.travas,
             "devolucoes": t.devolucoes, "fim": t.fim}
