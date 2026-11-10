@@ -4,14 +4,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
-import { Botao, BotaoLink, Cartao, Estado, Gaveta, Kpis, Pilula, Tabela } from '@/components/ds';
+import { Botao, BotaoLink, Cartao, Estado, Gaveta, Kpis, Pilula, Tabela, clsBotao } from '@/components/ds';
 import { supabase } from '@/lib/supabase';
 import { dataBR, dataHoraBR, diaSP, nf, rotaSA } from '@/lib/speech';
 import {
-	ROTA_RP_CADASTRO, SITUACAO_PESSOA, estadoLink, rotaCenarioRP, situacaoPessoa, ultimaAvaliada,
+	ROTA_RP_CADASTRO, SITUACAO_PESSOA, estadoLink, rotaAtribuicaoRP, rotaAtribuir, situacaoPessoa, ultimaAvaliada,
 	type AtribuicaoRP, type SessaoRP,
 } from '@/lib/roleplay';
-import { MolduraRP } from './moldura';
+import { LinkRP, MolduraRP } from './moldura';
 import { SeloLgpdTreino } from './comum';
 import { lerPessoa, salvarCadastro, type DadosPessoa } from './dados';
 import { FormOperador, usePainelUrl, type DadosForm } from './cadastro';
@@ -51,7 +51,7 @@ export function PaginaPessoa({ empresa, id, pode }: { empresa: number; id: strin
 	const desc = `${equipe} · ${o.operador_ref ? `ID no discador ${o.operador_ref}` : 'só treino, sem ID do discador'}${o.ativo ? '' : ' · desativado'}`;
 	return (
 		<MolduraRP titulo={o.apelido} detalhe={o.apelido} descricao={desc}
-			acoes={<><SeloLgpdTreino /><Botao tipo="secundario" onClick={() => abrir('editar')}>Editar cadastro</Botao></>}>
+			acoes={<><SeloLgpdTreino /><Botao tipo="secundario" onClick={() => abrir('editar')}>Editar cadastro</Botao>{o.ativo && <LinkRP to={rotaAtribuir({ ops: [o.id] })} className={clsBotao('primario')}>Atribuir treino</LinkRP>}</>}>
 			<CorpoPessoa d={d} hoje={diaSP(0)} />
 			<Gaveta aberta={painel === 'editar'} onFechar={fechar} titulo={`Editar ${o.apelido}`} subtitulo="Primeiro nome e inicial. Sem CPF, e-mail ou telefone.">
 				{/* Na edição não se traz ninguém de Speech › Operadores (só no cadastro novo). */}
@@ -82,7 +82,7 @@ export function CorpoPessoa({ d, hoje, agora }: { d: DadosPessoa; hoje: string; 
 				{ rotulo: 'Treinos pendentes', valor: nf(pendentes.length), detalhe: pendentes.length ? `prazo mais próximo ${dataBR([...pendentes].sort((a, b) => a.a.prazo.localeCompare(b.a.prazo))[0].a.prazo)}` : 'nenhum em aberto' },
 				{ rotulo: 'Sessões avaliadas', valor: nf(avaliadas.length), detalhe: 'tentativa abandonada não conta' },
 				{ rotulo: 'Última nota de treino', valor: ult ? nf(ult.nota) : '—', detalhe: ult ? dataBR(ult.inicio) : 'ainda sem nota' },
-				{ rotulo: 'Link de treino', valor: link.estado === 'ativo' ? 'Ativo' : link.estado === 'expirado' ? 'Expirado' : 'Sem link', detalhe: link.ate ? `${link.estado === 'ativo' ? 'válido até' : 'venceu em'} ${dataBR(link.ate)}` : 'o link pessoal chega com a atribuição', tom: link.estado === 'expirado' ? 'atencao' : undefined },
+				{ rotulo: 'Link de treino', valor: link.estado === 'ativo' ? 'Ativo' : link.estado === 'expirado' ? 'Expirado' : 'Sem link', detalhe: link.ate ? `${link.estado === 'ativo' ? 'válido até' : 'venceu em'} ${dataBR(link.ate)}` : 'gere em Treinos atribuídos', tom: link.estado === 'expirado' ? 'atencao' : undefined },
 			]} />
 			{o.operador_ref && <p className="text-[12.5px] text-[var(--base-texto-2)]">A nota das ligações reais fica em <Link className="font-semibold text-[var(--destaque)] hover:underline" to={rotaSA('operadores')}>Speech › Operadores</Link>. Ela nunca se mistura com a nota de treino.</p>}
 
@@ -91,7 +91,7 @@ export function CorpoPessoa({ d, hoje, agora }: { d: DadosPessoa; hoje: string; 
 					<Tabela<(typeof situacoes)[number]> rotulo={`Treinos atribuídos de ${o.apelido}`} linhas={situacoes} chave={x => x.a.id}
 						vazio={`Nenhum treino atribuído a ${o.apelido} ainda.`}
 						colunas={[
-							{ id: 'cen', titulo: 'Cenário', celula: x => <Link className="font-semibold hover:underline" to={rotaCenarioRP(x.a.cenario_id)}>{nomeCen(x.a.cenario_id)}</Link> },
+							{ id: 'cen', titulo: 'Cenário', celula: x => <LinkRP className="font-semibold hover:underline" to={rotaAtribuicaoRP(x.a.id)}>{nomeCen(x.a.cenario_id)}</LinkRP> },
 							{ id: 'prazo', titulo: 'Prazo', num: true, celula: x => dataBR(x.a.prazo) },
 							{ id: 'nota', titulo: 'Melhor nota', num: true, celula: x => (x.p.melhor_nota == null ? '—' : `${Math.round(Number(x.p.melhor_nota))} (meta ${x.a.nota_minima})`) },
 							{ id: 'tent', titulo: 'Tentativas', num: true, celula: x => tentativas(x.a, x.p.tentativas_usadas, x.p.tentativas_extra) },

@@ -13,12 +13,35 @@ export const ROTA_RP_CENARIOS = `${ROTA_RP}/cenarios`;
 export const ROTA_RP_CADASTRO = `${ROTA_RP}/operadores`;
 export const rotaCenarioRP = (id: number | string) => `${ROTA_RP_CENARIOS}/${encodeURIComponent(String(id))}`;
 export const rotaPessoaRP = (id: number | string) => `${ROTA_RP_CADASTRO}/${encodeURIComponent(String(id))}`;
+export const ROTA_RP_NOVO_CENARIO = `${ROTA_RP_CENARIOS}/novo`;
+export const ROTA_RP_ATRIBUICOES = `${ROTA_RP}/atribuicoes`;
+export const ROTA_RP_ATRIBUIR = `${ROTA_RP}/atribuir`;
+export const rotaAtribuicaoRP = (id: number | string) => `${ROTA_RP_ATRIBUICOES}/${encodeURIComponent(String(id))}`;
+/** "Atribuir treino" com quem originou pré-marcado (?cen=&ops=&sug=). */
+export function rotaAtribuir(x: { cen?: number | null; ops?: number[]; sug?: number | null } = {}): string {
+	const q = new URLSearchParams();
+	if (x.cen != null) q.set('cen', String(x.cen));
+	if (x.ops?.length) q.set('ops', x.ops.join(','));
+	if (x.sug != null) q.set('sug', String(x.sug));
+	const s = q.toString();
+	return s ? `${ROTA_RP_ATRIBUIR}?${s}` : ROTA_RP_ATRIBUIR;
+}
+/** Ids da query (?ops=1,2,3): só números, sem repetir, até 200. */
+export function idsDaQuery(v: string | null | undefined): number[] {
+	const out: number[] = [];
+	for (const p of (v ?? '').split(',')) {
+		if (/^\d{1,18}$/.test(p.trim()) && !out.includes(Number(p))) out.push(Number(p));
+		if (out.length >= 200) break;
+	}
+	return out;
+}
 
-export type SecaoRP = 'painel' | 'cenarios' | 'cadastro';
-/** Sub-navegação do Roleplay. Só as seções que já existem (Treinos atribuídos e Evolução chegam nos próximos PRs). */
+export type SecaoRP = 'painel' | 'cenarios' | 'atribuicoes' | 'cadastro';
+/** Sub-navegação do Roleplay. Só as seções que já existem (Evolução chega num próximo PR). */
 export const SECOES_RP: readonly { id: SecaoRP; nome: string; to: string }[] = [
 	{ id: 'painel', nome: 'Painel', to: ROTA_RP },
 	{ id: 'cenarios', nome: 'Cenários', to: ROTA_RP_CENARIOS },
+	{ id: 'atribuicoes', nome: 'Treinos atribuídos', to: ROTA_RP_ATRIBUICOES },
 	{ id: 'cadastro', nome: 'Cadastro para treino', to: ROTA_RP_CADASTRO },
 ];
 
@@ -29,6 +52,7 @@ export function secaoRP(pathname: string): SecaoRP | null {
 	const p = sem(pathname);
 	if (p === ROTA_RP) return 'painel';
 	if (p === ROTA_RP_CENARIOS || p.startsWith(`${ROTA_RP_CENARIOS}/`)) return 'cenarios';
+	if (p === ROTA_RP_ATRIBUICOES || p.startsWith(`${ROTA_RP_ATRIBUICOES}/`) || p === ROTA_RP_ATRIBUIR) return 'atribuicoes';
 	if (p === ROTA_RP_CADASTRO || p.startsWith(`${ROTA_RP_CADASTRO}/`)) return 'cadastro';
 	return null;
 }
@@ -37,6 +61,9 @@ export function secaoRP(pathname: string): SecaoRP | null {
 export const ehSecaoRP = (pathname: string) => SECOES_RP.some(s => s.to === sem(pathname));
 
 export type ItemTrilha = { rotulo: string; to?: string };
+const DETALHE_PADRAO: Record<string, string> = {
+	cenarios: 'Cenário', cadastro: 'Pessoa', atribuicoes: 'Treino', painel: 'Roleplay', novo: 'Novo cenário', atribuir: 'Atribuir treino',
+};
 /** Trilha clicável: Speech Analytics › Roleplay › Cenários › Já pagou. O último item é a tela atual (sem link).
  *  `detalhe` é o nome da tela de detalhe (cenário, pessoa), quando já carregou. */
 export function trilhaRP(pathname: string, detalhe?: string | null): ItemTrilha[] {
@@ -46,7 +73,7 @@ export function trilhaRP(pathname: string, detalhe?: string | null): ItemTrilha[
 	if (secao && secao !== 'painel') {
 		const s = SECOES_RP.find(x => x.id === secao)!;
 		itens.push({ rotulo: s.nome, to: s.to });
-		if (p !== s.to) itens.push({ rotulo: detalhe?.trim() || (secao === 'cenarios' ? 'Cenário' : 'Pessoa') });
+		if (p !== s.to) itens.push({ rotulo: detalhe?.trim() || DETALHE_PADRAO[p === ROTA_RP_NOVO_CENARIO ? 'novo' : p === ROTA_RP_ATRIBUIR ? 'atribuir' : secao] });
 	}
 	const ult = itens[itens.length - 1];
 	itens[itens.length - 1] = { rotulo: ult.rotulo };
@@ -72,7 +99,7 @@ export const TIPOS_CLIENTE: Record<string, string> = {
 	quer_supervisor: 'Quer falar com o supervisor', outro: 'Outro',
 };
 
-const OBJECOES_TREINO: Record<string, string> = {
+export const OBJECOES_TREINO: Record<string, string> = {
 	ja_paguei: 'Diz que já pagou', nao_reconheco: 'Não reconhece a dívida', procon: 'Ameaça reclamar no Procon',
 	nao_entendi: 'Não entende os valores', pedir_fora_alcada: 'Pede condição fora da alçada', nao_me_ligue: 'Pede para não ligar mais',
 	sem_tempo: 'Diz que não tem tempo', sem_dinheiro: 'Diz que não tem dinheiro', pedir_supervisor: 'Pede o supervisor',
@@ -312,3 +339,153 @@ export function validarNomeEquipe(t: string): string {
 /** Quem está no Cadastro para treino: criado só para treino ou com equipe de treino. O resto de Speech › Operadores
  *  pode ser trazido ("Trazer de Speech › Operadores"). */
 export const noCadastro = (o: Pick<OperadorRP, 'so_treino' | 'equipe_id'>) => o.so_treino || o.equipe_id != null;
+
+// ------------------------------------------------------------------ editor de cenário (as mesmas regras do banco, SQL 90)
+export type ObjecaoForm = { codigo: string; quando: string };
+export type FormCenario = {
+	nome: string; persona_nome: string; perfil: string; descricao: string; objetivo: string;
+	comportamentos: string[]; frases: string[]; objecoes: ObjecaoForm[]; dificuldade: number;
+	produto: string; faixa: string; dias_atraso: string; parcelas: string; desconto_max: string;
+	duracao_min: string; modos: string[]; itens_foco: string[]; objetivo_cenario: string;
+};
+export const LIMITES_CENARIO = { comportamentos: 10, frases: 20, objecoes: 10, itens_foco: 12, texto: 200, quando: 120 } as const;
+
+export function cenarioVazio(): FormCenario {
+	return {
+		nome: '', persona_nome: '', perfil: 'ja_pagou', descricao: '', objetivo: '', comportamentos: [], frases: [], objecoes: [], dificuldade: 2,
+		produto: 'Cartão Exemplo', faixa: '1k_5k', dias_atraso: '60', parcelas: '10', desconto_max: '15', duracao_min: '8', modos: ['voz', 'texto'],
+		itens_foco: [], objetivo_cenario: '',
+	};
+}
+const num = (v: unknown) => (v == null ? '' : String(v));
+export function formDoCenario(c: CenarioRP): FormCenario {
+	const d = c.divida ?? {};
+	return {
+		nome: c.nome, persona_nome: c.persona_nome, perfil: c.perfil, descricao: c.descricao ?? '', objetivo: c.objetivo,
+		comportamentos: [...c.comportamentos], frases: [...c.frases], objecoes: c.objecoes.map(o => ({ codigo: o.codigo, quando: o.quando ?? '' })),
+		dificuldade: c.dificuldade, produto: d.produto ?? '', faixa: d.faixa ?? '', dias_atraso: num(d.dias_atraso),
+		parcelas: num(d.alcada?.parcelas), desconto_max: num(d.alcada?.desconto_max), duracao_min: String(Math.round(c.duracao_max_s / 60)),
+		modos: [...c.modos], itens_foco: [...c.itens_foco], objetivo_cenario: c.objetivo_cenario ?? '',
+	};
+}
+export const mesmoForm = (a: FormCenario, b: FormCenario) => JSON.stringify(a) === JSON.stringify(b);
+
+const RE_PERSONA = /^\S.{0,40}\((fictícia|fictício)\)$/u;
+function textoLivre(v: string, min: number, max: number, nome: string): string {
+	const t = v.trim();
+	if (t.length < min) return min <= 1 ? `Escreva ${nome}.` : `Escreva ${nome} (${min} caracteres ou mais).`;
+	if (t.length > max) return `Use até ${max} caracteres.`;
+	if (t.includes('@') || textoTemDadoPessoal(t)) return 'Sem CPF, telefone ou e-mail: o cenário é ficção.';
+	return '';
+}
+const inteiro = (v: string) => (/^\d{1,6}$/.test(v.trim()) ? Number(v.trim()) : null);
+
+export type ErrosCenario = Partial<Record<keyof FormCenario | 'geral', string>>;
+/** Mesmas regras dos checks de treino_cenarios (SQL 90). Vazio = pode salvar. */
+export function validarCenario(f: FormCenario): ErrosCenario {
+	const e: ErrosCenario = {};
+	const nome = textoLivre(f.nome, 3, 80, 'o nome do cenário');
+	if (nome) e.nome = nome;
+	const p = f.persona_nome.trim();
+	if (!p) e.persona_nome = 'Escreva o nome do cliente simulado.';
+	else if (!RE_PERSONA.test(p) || /[0-9@]/.test(p) || p.length > 60) e.persona_nome = 'Primeiro nome e “(fictícia)” ou “(fictício)” no fim, sem números. Ex.: Rita (fictícia).';
+	if (!TIPOS_CLIENTE[f.perfil]) e.perfil = 'Escolha o tipo de cliente.';
+	if (f.descricao.trim()) { const x = textoLivre(f.descricao, 1, 400, 'o resumo'); if (x) e.descricao = x; }
+	const obj = textoLivre(f.objetivo, 10, 500, 'como o cliente age');
+	if (obj) e.objetivo = obj;
+	const lista = (l: string[], n: number) => l.length > n ? `Até ${n}.` : l.map(x => textoLivre(x, 1, LIMITES_CENARIO.texto, 'o texto')).find(Boolean) ?? '';
+	const comp = lista(f.comportamentos, LIMITES_CENARIO.comportamentos);
+	if (comp) e.comportamentos = comp;
+	const fr = lista(f.frases, LIMITES_CENARIO.frases);
+	if (fr) e.frases = fr;
+	if (f.objecoes.length > LIMITES_CENARIO.objecoes) e.objecoes = `Até ${LIMITES_CENARIO.objecoes} objeções.`;
+	else {
+		const ruim = f.objecoes.find(o => !/^[a-z][a-z0-9_]{1,40}$/.test(o.codigo) || (o.quando.trim() && textoLivre(o.quando, 1, LIMITES_CENARIO.quando, 'quando')));
+		if (ruim) e.objecoes = !/^[a-z][a-z0-9_]{1,40}$/.test(ruim.codigo) ? 'Escolha a objeção.' : textoLivre(ruim.quando, 1, LIMITES_CENARIO.quando, 'quando');
+	}
+	if (!(f.dificuldade >= 1 && f.dificuldade <= 5)) e.dificuldade = 'De 1 a 5.';
+	if (f.produto.trim()) { const x = textoLivre(f.produto, 2, 60, 'o produto'); if (x) e.produto = x; }
+	if (f.faixa && !FAIXAS_SALDO[f.faixa]) e.faixa = 'Escolha a faixa de saldo.';
+	if (f.dias_atraso.trim()) { const d = inteiro(f.dias_atraso); if (d == null || d < 1 || d > 3650) e.dias_atraso = 'De 1 a 3.650 dias.'; }
+	if (f.parcelas.trim()) { const d = inteiro(f.parcelas); if (d == null || d < 1 || d > 120) e.parcelas = 'De 1 a 120 parcelas.'; }
+	if (f.desconto_max.trim()) { const d = inteiro(f.desconto_max); if (d == null || d > 100) e.desconto_max = 'De 0% a 100%.'; }
+	const dur = inteiro(f.duracao_min);
+	if (dur == null || dur < 1 || dur > 15) e.duracao_min = 'De 1 a 15 minutos.';
+	if (!f.modos.length) e.modos = 'Deixe ao menos um modo (voz ou texto).';
+	if (f.itens_foco.length > LIMITES_CENARIO.itens_foco) e.itens_foco = `Até ${LIMITES_CENARIO.itens_foco} itens em foco.`;
+	if (f.objetivo_cenario.trim()) { const x = textoLivre(f.objetivo_cenario, 1, 200, 'o objetivo'); if (x) e.objetivo_cenario = x; }
+	return e;
+}
+
+/** O `dados` de salvar_cenario_treino (só os campos que o banco aceita). */
+export function dadosCenario(f: FormCenario, situacao: 'rascunho' | 'publicado') {
+	const alcada: { parcelas?: number; desconto_max?: number } = {};
+	if (inteiro(f.parcelas) != null) alcada.parcelas = inteiro(f.parcelas)!;
+	if (inteiro(f.desconto_max) != null) alcada.desconto_max = inteiro(f.desconto_max)!;
+	const divida: DividaRP & Record<string, unknown> = {};
+	if (f.produto.trim()) divida.produto = f.produto.trim();
+	if (f.faixa) divida.faixa = f.faixa;
+	if (inteiro(f.dias_atraso) != null) divida.dias_atraso = inteiro(f.dias_atraso)!;
+	if (Object.keys(alcada).length) divida.alcada = alcada;
+	const limpa = (l: string[]) => l.map(x => x.trim()).filter(Boolean);
+	return {
+		nome: f.nome.trim(), persona_nome: f.persona_nome.trim(), perfil: f.perfil, descricao: f.descricao.trim(), objetivo: f.objetivo.trim(),
+		comportamentos: limpa(f.comportamentos), frases: limpa(f.frases),
+		objecoes: f.objecoes.map(o => (o.quando.trim() ? { codigo: o.codigo, quando: o.quando.trim() } : { codigo: o.codigo })),
+		dificuldade: f.dificuldade, divida, duracao_max_s: Math.min(900, Math.max(60, (inteiro(f.duracao_min) ?? 8) * 60)),
+		modos: (['voz', 'texto'] as const).filter(m => f.modos.includes(m)), itens_foco: f.itens_foco, objetivo_cenario: f.objetivo_cenario.trim(), situacao,
+	};
+}
+
+// ------------------------------------------------------------------ "Atribuir treino"
+export type FormAtribuir = { cenario: number | null; operadores: number[]; prazo: string; meta: string; tentativas: string; modos: string[] };
+export const OPCOES_TENTATIVAS = [{ v: '1', n: '1' }, { v: '2', n: '2' }, { v: '3', n: '3' }, { v: '5', n: '5' }, { v: '', n: 'Sem limite' }] as const;
+/** Prazo padrão: hoje + 7 dias (ISO). */
+export function prazoPadrao(hoje: string): string {
+	const d = new Date(`${hoje}T12:00:00Z`);
+	d.setUTCDate(d.getUTCDate() + 7);
+	return d.toISOString().slice(0, 10);
+}
+function maisDias(hoje: string, n: number): string {
+	const d = new Date(`${hoje}T12:00:00Z`);
+	d.setUTCDate(d.getUTCDate() + n);
+	return d.toISOString().slice(0, 10);
+}
+/** Mesmas regras de atribuir_treino (SQL 90): cenário publicado, 1 a 200 pessoas, prazo de hoje a 180 dias. */
+export function validarAtribuicao(f: FormAtribuir, hoje: string, modosCenario: readonly string[] | null): Partial<Record<keyof FormAtribuir, string>> {
+	const e: Partial<Record<keyof FormAtribuir, string>> = {};
+	if (f.cenario == null) e.cenario = 'Escolha o cenário.';
+	if (!f.operadores.length) e.operadores = 'Escolha pelo menos uma pessoa.';
+	else if (f.operadores.length > 200) e.operadores = 'Até 200 pessoas por treino.';
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(f.prazo) || f.prazo < hoje || f.prazo > maisDias(hoje, 180)) e.prazo = 'Prazo de hoje até 180 dias.';
+	const m = inteiro(f.meta);
+	if (m == null || m > 100) e.meta = 'Meta de 0 a 100.';
+	if (f.tentativas && !(Number(f.tentativas) >= 1 && Number(f.tentativas) <= 20)) e.tentativas = 'De 1 a 20 tentativas.';
+	if (!f.modos.length) e.modos = 'Escolha o modo.';
+	else if (modosCenario && f.modos.some(x => !modosCenario.includes(x))) e.modos = 'O cenário não tem esse modo.';
+	return e;
+}
+export const MODOS_ATRIBUIR = [
+	{ v: 'voz,texto', n: 'Voz (padrão) ou texto' }, { v: 'texto', n: 'Só texto' }, { v: 'voz', n: 'Só voz' },
+] as const;
+
+// ------------------------------------------------------------------ link pessoal e lembrete
+export const ROTA_TREINO = '/treino';
+export const rotaTreino = (token: string) => `${ROTA_TREINO}/${token}`;
+export const rotaBriefing = (token: string, atr: number | string) => `${rotaTreino(token)}/${encodeURIComponent(String(atr))}`;
+export const tokenValido = (t: string | null | undefined) => !!t && /^[0-9a-f]{64}$/.test(t);
+/** Endereço completo do link (para copiar e para o QR). */
+export const urlTreino = (origem: string, token: string) => `${origem.replace(/\/+$/, '')}${rotaTreino(token)}`;
+
+/** Lembrete pronto para colar no canal interno (não guardamos contato do operador). Sem o link quando ele não está
+ *  à mão (o token só aparece uma vez): o texto pede para abrir o link de treino que a pessoa já recebeu. */
+export function textoLembrete(x: { apelido: string; cenario: string; prazo: string; meta: number; tentativas?: string | null; url?: string | null }): string {
+	const primeiro = x.apelido.trim().split(/\s+/)[0] || x.apelido.trim();
+	const tent = x.tentativas ? ` Você tem ${x.tentativas}.` : '';
+	const link = x.url ? `\nSeu link de treino: ${x.url}` : '\nAbra o seu link de treino (o mesmo que você recebeu da Qualidade).';
+	return `Oi, ${primeiro}! Lembrete do treino “${x.cenario}”: o prazo é ${dataBR(x.prazo)} e a meta é ${x.meta}.${tent} É treino: a nota não entra na sua monitoria.${link}`;
+}
+/** Resumo do feedback 1:1 para o supervisor (só o combinado, sem nota de ligação real). */
+export function resumoFeedback(x: { apelido: string; cenario?: string | null; combinado: string; proxima?: string | null }): string {
+	return `Feedback 1:1 com ${x.apelido.trim()}${x.cenario ? ` (treino “${x.cenario}”)` : ''}: ${x.combinado.trim()}${x.proxima ? ` Próxima conversa: ${dataBR(x.proxima)}.` : ''}`;
+}

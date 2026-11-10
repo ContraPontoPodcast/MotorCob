@@ -107,11 +107,12 @@ test('Roleplay: o Painel volta para a Visão geral (como toda aba); seções, pa
 	assert.equal(rotaPai('/speech-analytics/roleplay/cenarios/12/extra'), null, 'parâmetro casa um segmento só');
 	// toda rota do Roleplay no routes.ts tem voltar para uma tela acima dela
 	const rp = [...declaradas].filter(r => r.startsWith('/speech-analytics/roleplay'));
-	assert.equal(rp.length, 4);
+	assert.equal(rp.length, 8);
 	for (const r of rp) {
 		const caminho = r.replace(/:[^/]+/g, '7');
 		const pai = rotaPai(caminho);
-		assert.ok(pai && caminho.startsWith(pai.to + '/'), `${r} → ${pai?.to}`);
+		// o "Atribuir treino" volta para Treinos atribuídos (irmã); as outras, para uma tela acima delas
+		assert.ok(pai && (caminho.startsWith(pai.to + '/') || (r.endsWith('/atribuir') && pai.to.endsWith('/atribuicoes'))), `${r} → ${pai?.to}`);
 	}
 	const html = renderToStaticMarkup(<MemoryRouter initialEntries={['/speech-analytics/roleplay/cenarios/12']}><Voltar /></MemoryRouter>);
 	assert.match(html, /href="\/speech-analytics\/roleplay\/cenarios"/);

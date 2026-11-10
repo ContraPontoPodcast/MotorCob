@@ -157,3 +157,114 @@ export async function salvarCadastro(sb: Sb, empresa: number, x: { apelido: stri
 	if (equipe == null) throw new ErroRP('Escolha a equipe.');
 	return salvarOperador(sb, empresa, { apelido: x.apelido, equipe, operador_ref: x.operador_ref, operador: x.operador, ativo: x.ativo });
 }
+
+// ------------------------------------------------------------------ editor, atribuição e links (RPCs do SQL 90)
+export async function salvarCenario(sb: Sb, empresa: number, dados: Record<string, unknown>, cenario?: number | null): Promise<number> {
+	const r = await sb.rpc('salvar_cenario_treino', { empresa, dados, cenario: cenario ?? null });
+	if (r.error) throw new ErroRP(friendlyError(r.error));
+	return Number(r.data);
+}
+
+export async function atribuirTreino(sb: Sb, empresa: number, x: { cenario: number; operadores: number[]; prazo: string; nota_minima: number; tentativas: number | null; modos: string[]; sugestao: number | null }): Promise<number> {
+	const r = await sb.rpc('atribuir_treino', {
+		empresa, cenario: x.cenario, operadores: x.operadores, prazo: x.prazo, nota_minima: x.nota_minima, tentativas: x.tentativas, modos: x.modos, sugestao: x.sugestao,
+	});
+	if (r.error) throw new ErroRP(friendlyError(r.error));
+	return Number(r.data);
+}
+
+/** Link novo da pessoa: o token aparece só aqui (o banco guarda o sha-256). Gerar outro revoga o anterior. */
+export async function gerarLink(sb: Sb, operador: number): Promise<{ token: string; valido_ate: string }> {
+	const r = await sb.rpc('gerar_link_treino', { operador });
+	if (r.error) throw new ErroRP(friendlyError(r.error));
+	return r.data as { token: string; valido_ate: string };
+}
+export async function revogarLink(sb: Sb, operador: number): Promise<void> {
+	const r = await sb.rpc('revogar_link_treino', { operador });
+	if (r.error) throw new ErroRP(friendlyError(r.error));
+}
+export async function liberarTentativa(sb: Sb, atribuicao: number, operador: number): Promise<number> {
+	const r = await sb.rpc('liberar_tentativa_treino', { atribuicao, operador });
+	if (r.error) throw new ErroRP(friendlyError(r.error));
+	return Number(r.data);
+}
+export async function estenderPrazo(sb: Sb, atribuicao: number, prazo: string): Promise<void> {
+	const r = await sb.rpc('estender_prazo_treino', { atribuicao, prazo });
+	if (r.error) throw new ErroRP(friendlyError(r.error));
+}
+export async function salvarFeedback(sb: Sb, empresa: number, x: { operador: number; combinado: string; proxima_conversa: string | null; atribuicao: number | null; sessao?: number | null }): Promise<number> {
+	const r = await sb.rpc('salvar_feedback_treino', {
+		empresa, operador: x.operador, combinado: x.combinado.trim(), proxima_conversa: x.proxima_conversa || null, atribuicao: x.atribuicao, sessao: x.sessao ?? null,
+	});
+	if (r.error) throw new ErroRP(friendlyError(r.error));
+	return Number(r.data);
+}
+
+export type AtribuicaoCompleta = AtribuicaoRP & { modos: string[]; origem_sugestao_id: number | null };
+export type DadosAtribuicoes = { atribuicoes: AtribuicaoCompleta[]; pessoas: PessoaNoTreino[]; cenarios: CenarioRP[]; operadores: OperadorRP[] };
+
+const COLS_ATR = 'id, cenario_id, prazo, nota_minima, tentativas, criado_em, modos, origem_sugestao_id';
+const COLS_PESSOA = 'atribuicao_id, operador_id, situacao, melhor_nota, tentativas_usadas, tentativas_extra';
+
+export async function lerAtribuicoes(sb: Sb, empresa: number): Promise<DadosAtribuicoes> {
+	const [atribuicoes, pessoas, cenarios, operadores] = await Promise.all([
+		sb.from('treino_atribuicoes').select(COLS_ATR).eq('empresa_id', empresa).order('prazo', { ascending: false }).limit(500).then(r => dados<AtribuicaoCompleta[]>(r)),
+		sb.from('treino_atribuicao_operadores').select(COLS_PESSOA).eq('empresa_id', empresa).limit(5000).then(r => dados<PessoaNoTreino[]>(r)),
+		lerCenarios(sb, empresa),
+		lerOperadores(sb, empresa),
+	]);
+	return { atribuicoes, pessoas, cenarios, operadores };
+}
+
+export type FeedbackRP = { id: number; operador_id: number; combinado: string; proxima_conversa: string | null; criado_em: string };
+export type DadosAtribuicao = {
+	atribuicao: AtribuicaoCompleta | null; cenario: CenarioRP | null; pessoas: PessoaNoTreino[]; operadores: OperadorRP[]; equipes: EquipeRP[];
+	sessoes: SessaoRP[]; links: LinkRP[]; ultimoAcesso: Record<number, string>; feedbacks: FeedbackRP[];
+};
+
+export async function lerAtribuicao(sb: Sb, empresa: number, id: number): Promise<DadosAtribuicao> {
+	const a = await sb.from('treino_atribuicoes').select(COLS_ATR).eq('empresa_id', empresa).eq('id', id).maybeSingle();
+	if (a.error) throw new ErroRP(friendlyError(a.error));
+	const atribuicao = (a.data as AtribuicaoCompleta | null) ?? null;
+	if (!atribuicao) return { atribuicao: null, cenario: null, pessoas: [], operadores: [], equipes: [], sessoes: [], links: [], ultimoAcesso: {}, feedbacks: [] };
+	const [cenario, pessoas, operadores, equipes, sessoes, linksTodos, feedbacks] = await Promise.all([
+		lerCenario(sb, empresa, atribuicao.cenario_id),
+		sb.from('treino_atribuicao_operadores').select(COLS_PESSOA).eq('empresa_id', empresa).eq('atribuicao_id', id).then(r => dados<PessoaNoTreino[]>(r)),
+		lerOperadores(sb, empresa),
+		lerEquipes(sb, empresa),
+		sb.from('treino_sessoes').select('id, atribuicao_id, operador_id, cenario_id, origem, modo, situacao, inicio, duracao_s, nota, reprovada, item_reprovado')
+			.eq('empresa_id', empresa).eq('atribuicao_id', id).order('inicio', { ascending: false }).limit(1000).then(r => dados<SessaoRP[]>(r)),
+		sb.from('treino_links').select('id, operador_id, valido_ate, revogado_em').eq('empresa_id', empresa).order('criado_em', { ascending: false }).limit(3000)
+			.then(r => dados<(LinkRP & { id: number })[]>(r)),
+		sb.from('treino_feedbacks').select('id, operador_id, combinado, proxima_conversa, criado_em').eq('empresa_id', empresa).eq('atribuicao_id', id)
+			.order('criado_em', { ascending: false }).limit(200).then(r => dados<FeedbackRP[]>(r)),
+	]);
+	// Último acesso de cada pessoa pelo link (treino_link_acessos: sem IP, sem token).
+	const ops = new Set(pessoas.map(p => p.operador_id));
+	const meus = linksTodos.filter(l => ops.has(l.operador_id));
+	const ultimoAcesso: Record<number, string> = {};
+	if (meus.length) {
+		const ac = await sb.from('treino_link_acessos').select('link_id, em').eq('empresa_id', empresa).in('link_id', meus.map(l => l.id).slice(0, 500))
+			.order('em', { ascending: false }).limit(2000);
+		if (!ac.error) {
+			for (const x of (ac.data ?? []) as { link_id: number; em: string }[]) {
+				const op = meus.find(l => l.id === x.link_id)?.operador_id;
+				if (op != null && !ultimoAcesso[op]) ultimoAcesso[op] = x.em;
+			}
+		}
+	}
+	return { atribuicao, cenario, pessoas, operadores, equipes, sessoes, links: meus.filter(l => !l.revogado_em), ultimoAcesso, feedbacks };
+}
+
+export type DadosAtribuir = { cenarios: CenarioRP[]; operadores: OperadorRP[]; equipes: EquipeRP[]; sugestao: Sugestao | null; uso: Uso | null };
+export async function lerParaAtribuir(sb: Sb, empresa: number, sug: number | null): Promise<DadosAtribuir> {
+	const [cenarios, operadores, equipes, sugestao, uso] = await Promise.all([
+		lerCenarios(sb, empresa),
+		lerOperadores(sb, empresa),
+		lerEquipes(sb, empresa),
+		sug == null ? Promise.resolve(null) : sb.from('treino_sugestoes').select('id, regra, cenario_id, operadores, criado_em').eq('empresa_id', empresa).eq('id', sug).maybeSingle()
+			.then(r => (r.error ? null : (r.data as Sugestao | null))),
+		sb.rpc('uso_treino', { empresa }).then(r => (r.error ? null : (r.data as Uso))),
+	]);
+	return { cenarios, operadores, equipes, sugestao, uso };
+}
