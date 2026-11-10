@@ -283,11 +283,15 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 	const [tronco, setTronco] = useState(String(atual?.tronco_id ?? ''));
 	const [tech, setTech] = useState(String(atual?.tech_prefix ?? ''));
 	const [ativo, setAtivo] = useState(atual ? atual.ativo !== false : true);
+	// SQL 111 (Power/Preditivo V8): operadores do cliente para transferência ao mesmo tempo (padrão 5)
+	const [simultaneas, setSimultaneas] = useState(String(atual?.simultaneas ?? 5));
 	const [busy, setBusy] = useState(false);
 	const [erro, setErro] = useState('');
 	const [tentou, setTentou] = useState(false);
 
 	const e: Record<string, string> = {};
+	const nSim = Number(simultaneas);
+	if (!Number.isInteger(nSim) || nSim < 1 || nSim > 500) e.simultaneas = 'De 1 a 500.';
 	if (nome.trim().length < 2 || nome.trim().length > 60) e.nome = 'De 2 a 60 letras.';
 	if (!RE_DESTINO_SIP.test(destino.trim())) e.destino = 'Ex.: sip:fila-negociacao@discador.empresa.com.br:5061';
 	if (tech.trim() && !RE_TECH.test(tech.trim())) e.tech = 'Só números (1 a 8 dígitos).';
@@ -298,11 +302,15 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 		setTentou(true);
 		if (!ok || !supabase) return;
 		setBusy(true); setErro('');
-		const { error } = await supabase.rpc('salvar_transferencia_voz', {
+		const { data: tid, error } = await supabase.rpc('salvar_transferencia_voz', {
 			empresa: Number(empresaId), nome: nome.trim(), destino_sip: destino.trim(), metodo,
 			tronco: tronco ? Number(tronco) : null, tech_prefix: tech.trim() || null, credor: null, ativo,
 			transferencia: atual?.id != null ? Number(atual.id) : null,
 		});
+		if (!error && tid != null && nSim !== Number(atual?.simultaneas ?? 5)) {
+			const r = await supabase.rpc('definir_operadores_transferencia_voz', { transferencia: Number(tid), simultaneas: nSim });
+			if (r.error) { setBusy(false); setErro(erroDoBanco(r.error)); return; }
+		}
 		setBusy(false);
 		if (error) { setErro(erroDoBanco(error)); return; }
 		onSaved('Transferência salva. Se o destino mudou, o teste roda de novo.');
@@ -341,6 +349,9 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 					<input value={tech} inputMode="numeric" maxLength={8} onChange={x => setTech(x.target.value.replace(/\D/g, ''))} className={`${campoCls} font-mono`} />
 				</Campo>
 			</div>
+			<Campo rotulo="Operadores para transferência ao mesmo tempo" erro={err('simultaneas')} ajuda="O MotorCX nunca transfere mais que isso ao mesmo tempo. Passou, o agente continua a conversa e agenda o retorno (não é abandono). Padrão 5; o cliente informa.">
+				<input value={simultaneas} inputMode="numeric" maxLength={3} onChange={x => setSimultaneas(x.target.value.replace(/\D/g, ''))} className={campoCls} />
+			</Campo>
 			<Trava icone={<KeyRound size={16} />} titulo="Cabeçalhos enviados: ID da chamada, ID da ação, ação e motivo">
 				Nunca vão CPF, nome, valor ou transcrição.
 			</Trava>

@@ -2,7 +2,8 @@
 V2 · linhas e robôs separados também com razão > 1 (reserva no atendimento, antes do AMD); V3 · ritmo por carteira em
 credores.discagem › ritmo (SQL 107) e a leitura na VM; V4 · Power (razão fixa, teto de abandono) e abandono digno
 (mensagem, não religa no dia, abandono recente; SQL 108); V6 · freios de chamadas curtas no ritmo (SQL 109); V5 ·
-o Preditivo (controlador, aquecimento, previsão de robôs liberando, simulação de discagem; SQL 110).
+o Preditivo (controlador, aquecimento, previsão de robôs liberando, simulação de discagem; SQL 110); V8 · perna humana
+(operadores ao mesmo tempo, fila cheia; SQL 111).
 
 - a taxa do freio é a dos últimos 30 min (não o acumulado desde que a VM subiu) e solta sozinha quando a janela anda;
 - a transferência sem operador (fila humana cheia) não é abandono e não freia o discador;
@@ -631,6 +632,89 @@ class TestPreditivoNaVm(Base):
         self.assertEqual((h.atendidas_7d, h.dias_preditivo, h.p_empresa), (120, 2, 0.11))
         self.assertEqual(sb.rpcs[0], ("historico_ritmo_voz", {"empresa": 1}))
         self.assertEqual(A.RPC["historico_ritmo_voz"], "historico_ritmo")
+
+
+class TestPernaHumana(Base):
+    """V8 · perna humana: nunca mais transferências ao mesmo tempo que os operadores informados (padrão 5); passou, o
+    agente continua e agenda retorno; fila humana cheia (> 10 % sem operador em 30 min) = o agente oferece o retorno
+    antes de transferir; a transferência sem operador conta à parte (mesmo quando o agente voltou), nunca no abandono."""
+
+    def _transferindo(self, n, simultaneas=5):
+        itens = [item(f"C{i}", f"11988887{i:02d}8") for i in range(n)]          # final 8 = o Simulador pede humano
+        mud = [("voz_config", 0, {"limite_simultaneas": 20, "pico_multiplo": 1}),
+               ("voz_troncos", 0, {"cps": 100, "canais": 50}), ("voz_troncos", 1, {"cps": 100}),
+               ("voz_transferencias", 0, {"simultaneas": simultaneas})]
+        orq = self.montar(itens, mud=mud)
+        orq.tick()
+        for c in list(orq.chamadas.values()):
+            self.atender(c.canal)
+        orq.tick()
+        self.rel.andar(31)
+        orq.tick()
+        return orq
+
+    def test_limite_de_operadores_ao_mesmo_tempo(self):
+        orq = self._transferindo(4, simultaneas=2)
+        humanos = [c for c in orq.chamadas.values() if c.estado == "transferindo"]
+        self.assertEqual(len(humanos), 2)                        # só 2 chamando a fila
+        self.assertEqual(orq.contagem.get("transferencia_limite_operadores"), 2)
+        self.assertEqual(len([c for c in self.ari.de("originar") if c[3][0] == "humano"]), 2)   # só 2 para a fila
+        voltaram = [c for c in orq.chamadas.values() if c.estado != "transferindo"]
+        self.assertEqual(len(voltaram), 2)                       # as outras voltaram ao agente (retorno agendado)
+        self.assertTrue(all(c.sem_operador and c.canal_humano is None for c in voltaram))
+        self.assertEqual(orq.contagem.get("transferencia_sem_operador_voltou_agente"), 2)
+        self.assertEqual(self.dados.transferencias[0].simultaneas, 2)
+
+    def test_fila_cheia_e_contagem_separada(self):
+        from voz.orquestrador.nucleo import FILA_AMOSTRA_MIN
+        orq = self._transferindo(1)
+        j = orq.fila_humana.setdefault(1, __import__("voz.orquestrador.agendador", fromlist=["JanelaTaxa"]).JanelaTaxa())
+        for k in range(FILA_AMOSTRA_MIN):
+            j.contar(self.rel().timestamp(), k < 3)               # 15 % sem operador
+        self.assertTrue(orq._fila_humana_cheia(1, self.rel()))
+        self.assertTrue(any("fila humana está cheia" in a for a in orq.alertas))
+        c = next(iter(orq.chamadas.values()))
+        self.cair(f"{c.id}-h", 17)                              # ninguém atendeu: volta ao agente
+        self.cair(c.canal)
+        b = next(iter(orq.medidor.baldes.values()))
+        self.assertEqual((b.transf_sem_operador, b.abandonos), (1, 0))
+        self.rel.andar(31 * 60)                                   # a janela anda: a fila deixa de estar cheia
+        self.assertFalse(orq._fila_humana_cheia(1, self.rel()))
+
+    def test_banco_le_simultaneas(self):
+        from voz import banco as B
+        from tests.test_voz_gerador import dados_exemplo
+        d = dados_exemplo()
+        self.assertEqual(B.carregar(d).transferencias[0].simultaneas, 5)          # sem a coluna: 5
+        d["voz_transferencias"][0]["simultaneas"] = 600
+        with self.assertRaises(B.DadosInvalidos):
+            B.carregar(d)
+        s = (RAIZ / "supabase" / "migrations" / "20270226000001_voz_transferencia_operadores.sql").read_text(encoding="utf-8")
+        self.assertIn("select t.id, t.simultaneas from public.voz_transferencias t", s)
+        self.assertNotIn("create or replace view voz_vm.transferencias ", s)    # o SQL 57 continua reaplicável
+        self.assertEqual(B.COLUNAS["voz_transferencias"]["simultaneas"], "simultaneas")
+        self.assertEqual(A.LEITURA["voz_transferencias_operadores"], "transferencias_operadores")
+
+    def test_acesso_proprio_junta_a_view_dos_operadores(self):
+        from voz import configuracao as CF
+
+        class SbV:
+            def __init__(self, falhar=False):
+                self.falhar = falhar
+
+            def selecionar(self, t, **kw):
+                if self.falhar:
+                    raise OSError("sem a view")
+                return [{"id": 3, "simultaneas": 9}]
+        trs = [{"id": 3, "destino_sip": "sip:x@y"}, {"id": 4}]
+        CF.juntar_operadores(SbV(), trs)
+        self.assertEqual([t.get("simultaneas") for t in trs], [9, None])
+        ja = [{"id": 3, "simultaneas": 2}]
+        CF.juntar_operadores(SbV(falhar=True), ja)             # modo chave: já veio na linha (nem consulta)
+        self.assertEqual(ja[0]["simultaneas"], 2)
+        sem = [{"id": 3}]
+        CF.juntar_operadores(SbV(falhar=True), sem)            # banco sem o SQL 111: fica o padrão
+        self.assertNotIn("simultaneas", sem[0])
 
 
 if __name__ == "__main__":

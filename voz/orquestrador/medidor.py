@@ -53,14 +53,15 @@ class Medidor:
     pendentes: list = field(default_factory=list)      # linhas fechadas que o banco ainda não recebeu
 
     def contar(self, empresa_id: int, credor_id: int | None, tronco_id: int | None, desfecho: str | None,
-               pessoa: bool, atendida: bool, billsec: int | None, quando: datetime) -> None:
+               pessoa: bool, atendida: bool, billsec: int | None, quando: datetime, sem_operador: bool = False) -> None:
+        """`sem_operador`: pediu humano e não houve operador mesmo que o agente tenha voltado e agendado o retorno (V8)."""
         b = self.baldes.setdefault((empresa_id, credor_id, inicio_janela(quando)), Balde())
         ab = desfecho in ABANDONOS
         curta = e_curta(desfecho, atendida, billsec)
         b.discadas += 1
         b.atendidas_pessoa += int(pessoa)
         b.abandonos += int(ab and pessoa)
-        b.transf_sem_operador += int(desfecho == TRANSF_SEM_OPERADOR)
+        b.transf_sem_operador += int(desfecho == TRANSF_SEM_OPERADOR or sem_operador)
         b.curtas += int(curta)
         if tronco_id is not None:
             t = b.por_tronco.setdefault(int(tronco_id), [0, 0, 0, 0])

@@ -3019,5 +3019,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 110: histórico do Preditivo (testar_ritmo_preditivo.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 111 · Perna humana (Power/Preditivo V8): operadores para transferência ao mesmo tempo
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_transferencia_operadores.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 111: operadores para transferência ao mesmo tempo (testar_transferencia_operadores.py)", True,
+       f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

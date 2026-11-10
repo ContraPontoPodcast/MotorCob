@@ -39,7 +39,7 @@ COLUNAS: dict[str, dict[str, str]] = {
     "voz_transferencias": {
         "id": "id", "empresa_id": "empresa_id", "destino_sip": "destino_sip", "metodo": "metodo",
         "tech_prefix": "tech_prefix", "cabecalhos": "cabecalhos", "tronco_id": "tronco_id", "ativo": "ativo",
-        "credor_id": "credor_id",
+        "credor_id": "credor_id", "simultaneas": "simultaneas",
     },
     # V1, V16, V24
     "voz_config": {
@@ -245,6 +245,7 @@ class Transferencia:
     tronco_id: int | None = None                     # "ponte pelo tronco": sai pelo tronco da empresa
     ativo: bool = True
     credor_id: int | None = None                     # nulo = a empresa toda
+    simultaneas: int = 5                             # operadores para transferência ao mesmo tempo (SQL 111)
 
     @property
     def nome(self) -> str:
@@ -404,7 +405,8 @@ def ler_transferencia(linha: dict) -> Transferencia:
     return Transferencia(id=xid, empresa_id=_int(_v(linha, t, "empresa_id"), f"{onde}.empresa_id", 1),
                          destino_sip=dest, metodo=met, tech_prefix=tp, cabecalhos=cab,
                          tronco_id=int(tr) if tr else None, ativo=_bool(_v(linha, t, "ativo"), True),
-                         credor_id=int(cred) if cred else None)
+                         credor_id=int(cred) if cred else None,
+                         simultaneas=_int(_v(linha, t, "simultaneas", 5) or 5, f"{onde}.simultaneas", 1, 500))
 
 
 def ler_cabecalhos(v, onde: str) -> tuple:

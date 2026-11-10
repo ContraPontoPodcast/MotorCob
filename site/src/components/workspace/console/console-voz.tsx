@@ -598,6 +598,7 @@ function Transferencia({ atual, troncos, podeTroncos, onEditar }: { atual: Row |
 						<ListaValores itens={[
 							['Como', atual.metodo === 'ponte' ? 'O MotorCX segura a ligação e chama a fila (sem ninguém: volta ao agente e agenda retorno)' : 'Passa a chamada (REFER; se falhar, nova chamada e ponte)'],
 							['Prefixo', atual.tech_prefix ? <span key="p" className="font-mono">{String(atual.tech_prefix)}</span> : '—'],
+							['Operadores ao mesmo tempo', String(atual.simultaneas ?? 5)],
 							['Cabeçalhos enviados', <span key="c" className="font-mono text-[12.5px]">{(Array.isArray(atual.cabecalhos) ? atual.cabecalhos as string[] : []).join(' · ') || '—'}</span>],
 						]} />
 					</Detalhes>

@@ -53,6 +53,8 @@ LEITURA = {
     "voz_base_respostas": "base_respostas",
     # SQL 83 · B4: faixas do próprio MotorCX (destino recusado para tronco e transferência)
     "voz_enderecos_motorcx": "enderecos_motorcx",
+    # SQL 111 · operadores para transferência ao mesmo tempo (id, simultaneas; junta com voz_vm.transferencias)
+    "voz_transferencias_operadores": "transferencias_operadores",
 }
 # tabela -> função de escrita do schema voz_vm (o upsert é dela)
 ESCRITA = {

@@ -42,7 +42,7 @@ from voz import destinos as DST
 from voz.banco import VARIAVEIS_VOZ, DadosVoz, Transferencia
 from voz.orquestrador import amd as A
 from voz.orquestrador import gravacao as G
-from voz.orquestrador.agendador import Agendador
+from voz.orquestrador.agendador import Agendador, JanelaTaxa
 from voz.orquestrador.ari import ClienteARI, ErroARI
 from voz.orquestrador.eventos import SEM_IA, EscritorEventos, EventoChamada, classificar
 from voz.orquestrador.lote import ItemLote, Lote, hash_destino
@@ -66,6 +66,9 @@ SUFIXO_SEM_ROBO = "semrobo"
 # desfechos que contam no freio de abandono (e na taxa de abandono da tela). A transferência sem operador (fila humana
 # cheia) não entra: é transferencia_sem_operador desde o SQL 106
 ABANDONOS = ("abandonada", "abandono_sem_robo")
+# perna humana (V8, PREDITIVO.md 3.8): transferências sem operador acima disto nos últimos 30 min (com amostra) = fila
+# humana cheia: o agente oferece o retorno antes de tentar transferir, até a janela voltar
+FILA_CHEIA_PCT, FILA_AMOSTRA_MIN = 10.0, 20
 
 
 @dataclass
@@ -111,6 +114,7 @@ class Chamada:
     prov_reserva: str | None = None             # provedor em que a sessão está reservada (Orquestrador.reservas_prov)
     conversando: bool = False                   # a linha ocupa uma conversa da empresa (o agente está nela)
     desligar_ate: datetime | None = None        # tocando a mensagem de sem robô: desliga no fim (ou neste prazo)
+    sem_operador: bool = False                  # pediu humano e não houve operador (V8: conta mesmo se o agente voltou)
 
     @property
     def candidata(self):
@@ -180,6 +184,8 @@ class Orquestrador:
         self.pausas_novas: list[dict] = []       # rotas pausadas aqui e ainda não gravadas no banco (o Plantão grava)
         self.medidor = Medidor()                 # ritmo por carteira × janela de 5 min (SQL 106; o Plantão grava)
         self.curtas = Curtas()                   # chamadas curtas do dia por linha e total (freios do ritmo, V6)
+        self.fila_humana: dict[int, JanelaTaxa] = {}   # empresa -> transferências (sem operador?) dos últimos 30 min
+        self.fila_cheia: set[int] = set()
 
     # ---------------------------------------------------------------- utilidades
     def _conta(self, k: str, n: int = 1):
@@ -706,6 +712,16 @@ class Orquestrador:
             self._alerta(f"empresa {c.empresa_id}: transferência pedida sem destino cadastrado (voz_transferencias)")
             self._sem_humano(c, "falhou")
             return
+        if self._fila_humana_cheia(c.empresa_id, agora):
+            self._conta("transferencia_fila_cheia")     # o agente oferece o retorno antes de chamar a fila
+            self._sem_humano(c, "sem_operador", contar=False)
+            return
+        em_curso = sum(1 for x in self.chamadas.values()
+                       if x.tf is not None and x.tf.id == tf.id and x.estado in ("transferindo", "humano"))
+        if em_curso >= tf.simultaneas:
+            self._conta("transferencia_limite_operadores")   # nunca mais que os operadores informados ao mesmo tempo
+            self._sem_humano(c, "sem_operador", contar=False)
+            return
         c.tf, c.estado, c.motivo_tf = tf, "transferindo", motivo
         cab = self._cabecalhos(c, motivo, tf)
         if tf.metodo == "refer":
@@ -738,6 +754,7 @@ class Orquestrador:
     def _resultado_refer(self, c: Chamada, args: list, agora: datetime) -> None:
         status, proto = (list(args) + ["", ""])[:2]
         if str(status).upper() == "SUCCESS":
+            self._resultado_transferencia(c, False)
             c.transferencia, c.destino = "atendida", "ia_humano"
             self._conta("transferida")
             self._desligar_cliente(c)        # o discador do cliente ficou com a chamada
@@ -752,9 +769,32 @@ class Orquestrador:
             return
         self._sem_humano(c, "sem_operador" if sip in SEM_OPERADOR_SIP else "falhou")
 
-    def _sem_humano(self, c: Chamada, motivo: str) -> None:
-        """Ninguém do cliente atendeu (ou a transferência falhou): a pessoa volta para o agente, que pede desculpas e
-        agenda um retorno (decisão do dono, 08/11/2026). Sem como voltar, encerra (transferencia_sem_operador)."""
+    def _fila_humana_cheia(self, empresa_id: int, agora: datetime) -> bool:
+        j = self.fila_humana.get(empresa_id)
+        if j is None:
+            return False
+        j.podar(agora.timestamp())
+        taxa = j.taxa(FILA_AMOSTRA_MIN)
+        cheia = taxa is not None and taxa > FILA_CHEIA_PCT
+        if cheia and empresa_id not in self.fila_cheia:
+            self.fila_cheia.add(empresa_id)
+            self._alerta(f"empresa {empresa_id}: sua fila humana está cheia ({taxa:.0f}% das transferências sem operador "
+                         "na última meia hora) — o agente está agendando retornos")
+        elif not cheia:
+            self.fila_cheia.discard(empresa_id)
+        return cheia
+
+    def _resultado_transferencia(self, c: Chamada, sem_operador: bool) -> None:
+        self.fila_humana.setdefault(c.empresa_id, JanelaTaxa()).contar(self.relogio().timestamp(), sem_operador)
+
+    def _sem_humano(self, c: Chamada, motivo: str, contar: bool = True) -> None:
+        """Ninguém do cliente atendeu (ou a transferência falhou), ou passou do limite de operadores / fila cheia: a
+        pessoa volta para o agente, que pede desculpas e agenda um retorno (decisão do dono, 08/11/2026). Sem como
+        voltar, encerra (transferencia_sem_operador). `contar`: entra na taxa da fila humana (o que nem foi tentado,
+        não)."""
+        c.sem_operador = True
+        if contar:
+            self._resultado_transferencia(c, True)
         prov = self.provedores.get(c.provedor or "")
         vivo = not c.agente_solto and (c.conexao == "interno" or c.canal_provedor is not None)
         if prov is None or not vivo or c.estado not in ("conversa", "transferindo"):
@@ -774,6 +814,7 @@ class Orquestrador:
         self._conta(f"transferencia_{motivo}_voltou_agente")
 
     def _humano_atendeu(self, c: Chamada, agora: datetime) -> None:
+        self._resultado_transferencia(c, False)
         c.transferencia, c.destino, c.estado = "atendida", "ia_humano", "humano"
         self._conta("transferida")
         self._soltar_provedor(c)
@@ -918,7 +959,8 @@ class Orquestrador:
             self.fila_envio.agendar(G.nome_arquivo(c.id), objeto, ao_enviar=ao_enviar, bucket=c.bucket)
         classificar(ev, self.toque_min_s)
         self.medidor.contar(c.empresa_id, c.lote_chave[1] if c.lote_chave else None, cand.tronco.id, ev.desfecho,
-                            c.veredito == A.PESSOA, c.t_atendeu is not None, billsec, agora)
+                            c.veredito == A.PESSOA, c.t_atendeu is not None, billsec, agora,
+                            sem_operador=c.sem_operador)
         self.curtas.contar(c.empresa_id, cand.tronco.id, e_curta(ev.desfecho, c.t_atendeu is not None, billsec), agora)
         for av in self.curtas.avisos:
             self._alerta(av)
