@@ -179,7 +179,9 @@ class Plantao:
         self.registro, self.publicador, self.relogio = registro, publicador, relogio
         self.carregados: dict[int, object] = {}     # empresa -> dia carregado
         self._mtime = dados_caminho.stat().st_mtime if dados_caminho and dados_caminho.exists() else None
-        self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9}
+        self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9, "robos": -1e9}
+        self._robos_s: float | None = None           # última foto dos robôs (segundos no limite entre duas fotos)
+        self._robos_aviso_s = -1e9                   # último aviso de falha da telemetria (no máximo 1 por hora)
         self.agregado: object = None                 # último dia agregado em voz_passadas_dia
 
     def _vence(self, k: str, agora_s: float, a_cada: float) -> bool:
@@ -197,6 +199,8 @@ class Plantao:
             self._ids_dos_lotes(hoje)
             self.registro.sincronizar(list(self.orq.lotes.values()))
             self.registro.descarregar()
+        if self.registro is not None and self._vence("robos", agora_s, 15):
+            self.registrar_uso_robos(agora_s)
         if self.registro is not None and self._vence("pausas", agora_s, 30):
             self.sincronizar_pausas()
         if self.registro is not None and self._vence("reenvio", agora_s, 30):
@@ -243,6 +247,34 @@ class Plantao:
             self.registro.sb.rpc("registrar_janelas_lote_voz", {"lote": int(lote_id), "janelas": janelas})
         except Exception as ex:   # noqa: BLE001
             log.warning("lote %s: janelas não registradas (%s)", lote_id, ex.__class__.__name__)
+
+    # ------------------------------------------------------------ SQL 102 · uso dos robôs contratados
+    def registrar_uso_robos(self, agora_s: float) -> int:
+        """voz_robos_agora / voz_robos_dia: por empresa desta VM, robôs em uso agora, o maior uso desde a foto anterior,
+        os números que ainda esperam na lista e o tempo com todos os robôs ocupados. Só contagens. Banco sem o SQL 102
+        (ou fora): avisa no máximo uma vez por hora e segue discando."""
+        passou = 0.0 if self._robos_s is None else min(max(agora_s - self._robos_s, 0.0), 60.0)
+        self._robos_s = agora_s
+        agora = self.relogio()
+        linhas = []
+        for emp in self._minhas():
+            f = self.orq.agendador.foto_robos(emp)
+            if f is None:
+                continue
+            aguardando = sum(max(0, l.pendentes(agora) - len(l.em_voo)) for l in self.orq.lotes.values()
+                             if l.empresa_id == emp)      # na lista e ainda não discando agora
+            linhas.append({"empresa_id": emp, **f, "aguardando": aguardando,
+                           "segundos_no_limite": int(round(passou)) if f["no_limite"] else 0})
+        if not linhas:
+            return 0
+        try:
+            self.registro.sb.rpc("registrar_uso_robos_voz", {"linhas": linhas[:500]})
+        except Exception as ex:   # noqa: BLE001
+            if agora_s - self._robos_aviso_s >= 3600:
+                self._robos_aviso_s = agora_s
+                log.warning("uso dos robôs não gravado (%s); segue discando", ex.__class__.__name__)
+            return 0
+        return len(linhas)
 
     def sincronizar_pausas(self) -> None:
         """Rotas pausadas (sem crédito / bloqueio): grava no banco as que esta VM pausou e depois aplica as ativas do
