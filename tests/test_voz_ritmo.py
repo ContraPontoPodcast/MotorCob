@@ -1,4 +1,5 @@
-"""Ritmo da discagem (Power e Preditivo, PREDITIVO.md): V1 · medir o abandono certo, sem mudar o ritmo (SQL 106).
+"""Ritmo da discagem (Power e Preditivo, PREDITIVO.md): V1 · medir o abandono certo, sem mudar o ritmo (SQL 106);
+V2 · linhas e robôs separados também com razão > 1 (reserva no atendimento, antes do AMD).
 
 - a taxa do freio é a dos últimos 30 min (não o acumulado desde que a VM subiu) e solta sozinha quando a janela anda;
 - a transferência sem operador (fila humana cheia) não é abandono e não freia o discador;
@@ -164,6 +165,68 @@ class TestSql106(unittest.TestCase):
         self.assertEqual({c.split()[0] for c in campos}, set(linha))
         self.assertEqual(set(linha["por_tronco"][0]), {"tronco_id", "discadas", "atendidas_pessoa", "abandonos",
                                                        "curtas"})
+
+
+class TestReservaNoAtendimento(Base):
+    """V2 · linhas e robôs separados com razão > 1: a linha a mais sai sem reserva, reserva o robô quando ATENDE (antes
+    do AMD), devolve na máquina, e o toque longo nunca ocupa robô. Com a razão 1,0 (padrão) nada muda."""
+
+    def _montar(self, n=8, limite=2, razao=2.0, provedor=None):
+        itens = [item(f"C{i}", f"119888{i:05d}") for i in range(n)]
+        mud = [("voz_config", 0, {"limite_simultaneas": limite, "pico_multiplo": 1}),
+               ("voz_troncos", 0, {"cps": 100}), ("voz_troncos", 1, {"cps": 100})]
+        orq = self.montar(itens, mud=mud, provedor=provedor)
+        orq.agendador.empresas[1].razao = razao
+        return orq, orq.agendador.empresas[1]
+
+    def test_linhas_a_mais_sem_reserva_e_toque_longo_sem_robo(self):
+        orq, e = self._montar()
+        self.assertEqual(orq.tick(), 4)                          # 2 robôs livres × razão 2,0
+        self.assertEqual((e.linhas, e.reservas, e.conversas, e.ocupadas), (4, 2, 0, 2))
+        sem = [c for c in orq.chamadas.values() if not c.reservada]
+        self.assertEqual(len(sem), 2)
+        self.rel.andar(39)                                      # toque longo: nenhuma conversa, nenhum pico
+        for c in sem:
+            self.cair(c.canal, 19)
+        self.assertEqual((e.linhas, e.reservas, e.conversas), (2, 2, 0))
+        self.assertTrue(all(not ev.no_pico for ev in self.eventos))
+
+    def test_reserva_no_atendimento_e_devolve_na_maquina(self):
+        orq, e = self._montar()
+        orq.tick()
+        com = [c for c in orq.chamadas.values() if c.reservada]
+        sem = [c for c in orq.chamadas.values() if not c.reservada]
+        self.atender(com[0].canal, amd="MACHINE", causa="LONGGREETING")   # robô volta
+        self.ev("StasisStart", sem[0].canal, args=["saida", sem[0].id])   # atendeu: reserva antes do AMD
+        self.assertTrue(sem[0].reservada)
+        self.assertEqual((e.reservas, orq.contagem.get("reserva_no_atendimento")), (2, 1))
+        self.ev("StasisStart", sem[0].canal, args=["amd", "HUMAN", "HUMAN-1-1", ""])
+        self.assertEqual((e.reservas, e.conversas), (1, 1))
+        self.assertIn(sem[0].id, self.sim.sessoes)              # quem atendeu fala com o agente
+        self.atender(sem[1].canal, amd="MACHINE", causa="LONGGREETING")   # sem robô livre: nada reservado
+        self.assertEqual(orq.contagem.get("atendeu_sem_reserva"), 1)
+        self.assertEqual(e.reservas, 1)
+
+    def test_atendeu_sem_robo_livre_e_abandono_com_mensagem(self):
+        orq, e = self._montar()
+        orq.tick()
+        sem = [c for c in orq.chamadas.values() if not c.reservada]
+        self.atender(sem[0].canal)                               # os 2 robôs estão reservados para as outras linhas
+        self.assertEqual(self.ari.de("tocar")[-1][2], "sound:motorcx/sem-robo")   # nunca mudo
+        self.cair(sem[0].canal)
+        self.assertEqual(self.eventos[-1].desfecho, "abandono_sem_robo")
+        self.assertEqual((e.atendidas_pessoa, e.abandonos), (1, 1))
+
+    def test_provedor_limita_as_linhas_a_mais(self):
+        sim = __import__("voz.provedores.simulador", fromlist=["Simulador"]).Simulador(max_simultaneas=1)
+        orq, e = self._montar(limite=5, provedor=sim)
+        self.assertEqual(orq.tick(), 2)                          # 1 sessão do provedor × razão 2,0
+
+    def test_razao_um_igual_a_antes(self):
+        orq, e = self._montar(razao=1.0)
+        self.assertEqual(orq.tick(), 2)
+        self.assertTrue(all(c.reservada for c in orq.chamadas.values()))
+        self.assertEqual(orq.contagem.get("reserva_no_atendimento"), None)
 
 
 if __name__ == "__main__":
