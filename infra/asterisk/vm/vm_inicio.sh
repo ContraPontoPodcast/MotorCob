@@ -71,7 +71,7 @@ baixar() { curl -fsS -H 'Metadata-Flavor: Google' "$META/$1"; }
 chave_meta() { printf 'arquivo-%s' "$1" | tr -c 'A-Za-z0-9_-' '_'; }
 baixar_arquivo() { baixar "$(chave_meta "$1")" 2>/dev/null || baixar "arquivo-$1" 2>/dev/null; }
 for f in motorcx-voz-comum motorcx-voz-segredos motorcx-voz-rodar motorcx-voz-config motorcx-voz-atualizar \
-         motorcx-voz-https; do
+         motorcx-voz-https motorcx-voz-sons; do
   baixar_arquivo "$f" > "/usr/local/bin/$f" && chmod 755 "/usr/local/bin/$f" || true
 done
 for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
