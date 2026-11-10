@@ -183,11 +183,13 @@ class Agendador:
             return 0
         return max(0, min(e.teto - e.ocupadas, self.contratado - self.ocupadas_global))
 
-    def vaga_empresa(self, empresa_id: int, razao: float | None = None, livres_max: int | None = None) -> bool:
+    def vaga_empresa(self, empresa_id: int, razao: float | None = None, livres_max: int | None = None,
+                     livres_extra: int = 0) -> bool:
         """Pode originar mais uma linha? Linhas sem conversa < razão × (robôs livres + reservados). Com a razão 1,0
         isso é: só origina com um robô livre para reservar (canal e CPS do tronco são conferidos à parte).
         `razao` = a da carteira (padrão: a da empresa); `livres_max` = as sessões livres do provedor nesta VM (os robôs
-        livres nunca passam delas: linha a mais só sai se, quando atender, puder haver sessão)."""
+        livres nunca passam delas: linha a mais só sai se, quando atender, puder haver sessão). `livres_extra` = robôs
+        que a previsão do Preditivo espera liberar até as linhas novas atenderem (só vale com razão > 1)."""
         e = self.empresas.get(empresa_id)
         if e is None:
             return False
@@ -198,7 +200,7 @@ class Agendador:
         if r <= 1.0:
             return livres > 0
         sem_conversa = max(0, e.linhas - e.conversas)
-        return sem_conversa < math.floor(r * (livres + e.reservas))
+        return sem_conversa < math.floor(r * (livres + max(0, livres_extra) + e.reservas))
 
     def tronco_livre(self, tronco_id: int, agora_s: float) -> bool:
         """Canal livre E ficha de CPS (consome a ficha: chame só quando for originar)."""

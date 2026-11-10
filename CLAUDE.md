@@ -1125,6 +1125,19 @@ e a liberação do Admin (`liberar_curtas_voz(empresa, motivo)`: só o Admin da 
 caracteres sem dado pessoal, 1 por dia, auditada em `voz_curtas_liberacoes`): os volumes de parada sobem para 950/linha e
 9.500/total só naquele dia; a redução continua. **Vai para produção junto ou antes do Preditivo (V5).**
 
+**Agente de voz · Preditivo (Power e Preditivo V5, SQL 110).** `RitmoCarteira` (`voz/orquestrador/ritmo.py`): razão =
+fator ÷ p, de 1,0 até a razão máxima da carteira (2,0 na primeira semana em Preditivo). p = atendidas por pessoa ÷
+discadas por janela de 30 min do dia com encolhimento (k = 200) para a base (a janela anterior do dia com 30+ atendidas;
+senão a carteira em 7 dias; senão a empresa; senão 0,12); sem o "× 0,8" do PREDITIVO.md, porque p menor disca mais.
+Fator começa em 0,8 (0,3–1,0), revisto a cada 5 min com 50+ atendidas nos últimos 30 min: acima do teto (3 %) × 0,5
+na hora (estado freado) e, 10 min acima, Power 1,0 até o fim do dia; acima da meta −0,10; abaixo de meta ÷ 2 +0,05.
+Aquecimento: Power 1,0 até 200 atendidas por pessoa da carteira em 7 dias (com as de hoje); razão até 1,5 nos primeiros
+15 min do lote. Robôs que vão liberar até a linha nova atender (conversa já passou de conversa média − T; T = toque
+médio + AMD) contam como livres (`Orquestrador._liberando`, `vaga_empresa(livres_extra)`). `historico_ritmo_voz` (só
+VM/servidor; das amostras do SQL 106) a cada 30 min e ao carregar lote. Simulação de discagem com o agendador e o
+controlador de verdade em `tests/sim_preditivo.py` (3 cenários do PREDITIVO.md com abandono ≤ 1,5 %; ~2× as conversas
+do Power 1,0).
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

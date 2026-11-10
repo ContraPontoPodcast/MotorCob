@@ -1,7 +1,8 @@
 """Ritmo da discagem (Power e Preditivo, PREDITIVO.md): V1 · medir o abandono certo, sem mudar o ritmo (SQL 106);
 V2 · linhas e robôs separados também com razão > 1 (reserva no atendimento, antes do AMD); V3 · ritmo por carteira em
 credores.discagem › ritmo (SQL 107) e a leitura na VM; V4 · Power (razão fixa, teto de abandono) e abandono digno
-(mensagem, não religa no dia, abandono recente; SQL 108); V6 · freios de chamadas curtas no ritmo (SQL 109).
+(mensagem, não religa no dia, abandono recente; SQL 108); V6 · freios de chamadas curtas no ritmo (SQL 109); V5 ·
+o Preditivo (controlador, aquecimento, previsão de robôs liberando, simulação de discagem; SQL 110).
 
 - a taxa do freio é a dos últimos 30 min (não o acumulado desde que a VM subiu) e solta sozinha quando a janela anda;
 - a transferência sem operador (fila humana cheia) não é abandono e não freia o discador;
@@ -483,6 +484,153 @@ class TestFreiosCurtas(Base):
         from voz.orquestrador import curtas as K
         self.assertEqual((K.LINHA_PARA, K.EMPRESA_PARA, K.LINHA_LIBERADA, K.EMPRESA_LIBERADA), (800, 8000, 950, 9500))
         self.assertIn("950/linha e 9.500/total", s)
+
+
+class TestControladorPreditivo(unittest.TestCase):
+    """V5 · o Preditivo: p com encolhimento, fator do controlador, aquecimento, primeira semana, início do lote e teto."""
+
+    def _ctrl(self, **h):
+        from voz.orquestrador.ritmo import Historico, RitmoCarteira
+        base = {"discadas_7d": 5000, "atendidas_7d": 600, "dias_preditivo": 30}
+        return RitmoCarteira(historico=Historico(**{**base, **h}))
+
+    PRED = {"modo": "preditivo", "razao": 1.0, "meta_abandono": 1.0, "razao_max": 3.0}
+
+    def test_p_com_encolhimento(self):
+        from voz.orquestrador.ritmo import P_SEM_HISTORICO, Historico, RitmoCarteira
+        c = self._ctrl()
+        self.assertAlmostEqual(c.p(D0), 0.12)                  # 600/5000 da carteira
+        for i in range(200):
+            c.discou(D0, i < 60)                                # 30 % hoje
+        self.assertAlmostEqual(c.p(D0), (60 + 200 * 0.12) / 400)
+        self.assertAlmostEqual(RitmoCarteira().p(D0), P_SEM_HISTORICO)
+        self.assertAlmostEqual(RitmoCarteira(historico=Historico(p_empresa=0.2)).p(D0), 0.2)
+        # janela nova do dia: a anterior (com 30+ atendidas) vira a base
+        self.assertAlmostEqual(c.p(D0 + timedelta(minutes=30)), (60 + 200 * 0.12) / 400)
+
+    def test_razao_fator_sobre_p_com_tetos(self):
+        c = self._ctrl()
+        c.inicio = D0 - timedelta(hours=1)
+        self.assertAlmostEqual(c.razao(self.PRED, D0), 0.8 / 0.12 if 0.8 / 0.12 < 3 else 3.0)
+        self.assertEqual(c.razao({**self.PRED, "razao_max": 2.5}, D0), 2.5)
+        c.inicio = D0 - timedelta(minutes=5)                     # primeiros 15 min do lote: até 1,5
+        self.assertEqual(c.razao(self.PRED, D0), 1.5)
+        c2 = self._ctrl(dias_preditivo=3)                        # primeira semana: até 2,0
+        c2.inicio = D0 - timedelta(hours=1)
+        self.assertEqual(c2.razao(self.PRED, D0), 2.0)
+
+    def test_aquecimento(self):
+        c = self._ctrl(atendidas_7d=150)
+        c.inicio = D0 - timedelta(hours=1)
+        self.assertEqual((c.razao(self.PRED, D0), c.estado(self.PRED, D0)), (1.0, "aquecendo"))
+        for _ in range(50):
+            c.discou(D0, True)                                    # 150 + 50 hoje = 200
+        self.assertGreater(c.razao(self.PRED, D0), 1.0)
+        self.assertEqual(c.estado(self.PRED, D0), "normal")
+
+    def test_fator_segue_a_meta(self):
+        from voz.orquestrador.ritmo import FATOR_INICIAL
+        c = self._ctrl()
+        t = D0
+        for i in range(60):                                      # 2 de 60 = 3,3 % > teto: corta pela metade na hora
+            c.resultado_pessoa(i < 2, t, self.PRED)
+        self.assertAlmostEqual(c.fator, FATOR_INICIAL * 0.5)
+        self.assertEqual(c.estado(self.PRED, t), "freado")
+        c2 = self._ctrl()
+        for i in range(100):                                     # 2 % > meta 1 %: −0,10 na revisão
+            c2.janela.contar(t.timestamp(), i < 2)
+        c2.rever(t, self.PRED)
+        self.assertAlmostEqual(c2.fator, FATOR_INICIAL - 0.10)
+        c2.rever(t + timedelta(minutes=1), self.PRED)
+        self.assertAlmostEqual(c2.fator, FATOR_INICIAL - 0.10)   # só revê a cada 5 min
+        c2.rever(t + timedelta(minutes=5), self.PRED)
+        self.assertAlmostEqual(c2.fator, FATOR_INICIAL - 0.20)
+        c3 = self._ctrl()
+        for i in range(100):                                     # 0 % < meta ÷ 2: +0,05
+            c3.janela.contar(t.timestamp(), False)
+        c3.rever(t, self.PRED)
+        self.assertAlmostEqual(c3.fator, FATOR_INICIAL + 0.05)
+
+    def test_teto_por_10_min_vira_power_no_dia(self):
+        c = self._ctrl()
+        t = D0
+        for i in range(50):
+            c.resultado_pessoa(i < 5, t, self.PRED)              # 10 %
+        self.assertIsNone(c.freado_dia)
+        self.assertEqual(c.rever(t + timedelta(minutes=10), self.PRED), "power")
+        self.assertEqual(c.razao(self.PRED, t + timedelta(hours=2)), 1.0)
+        self.assertEqual(c.estado(self.PRED, t + timedelta(hours=2)), "freado")
+
+
+class TestSimulacaoPreditivo(unittest.TestCase):
+    """V5 · simulação de discagem (agendador e controlador de verdade, mundo falso): 30 robôs, conversa média de 90 s,
+    30 % de máquina, 3 h, em 3 cenários do PREDITIVO.md (p estável, p subindo à tarde, rota caindo). O abandono fica em
+    até 1,5 % e o Preditivo conversa mais que o Power 1,0 (o de hoje), que nunca abandona."""
+
+    def _sim(self, p_de, **kw):
+        from tests.sim_preditivo import simular
+        return [simular(p_de, seed=s, **kw) for s in (1, 2)]
+
+    def test_tres_cenarios_abandono_ate_1_5(self):
+        S = 3 * 3600
+        cen = {"p estável": lambda t: 0.15, "p subindo à tarde": lambda t: 0.08 + 0.32 * t / S,
+               "rota caindo": lambda t: 0.15 if t < 3600 else (0.03 if t < 7200 else 0.15)}
+        base = self._sim(lambda t: 0.15, ritmo={"modo": "power", "razao": 1.0})
+        self.assertTrue(all(b["abandonos"] == 0 for b in base))
+        for nome, f in cen.items():
+            for r in self._sim(f):
+                self.assertLessEqual(r["abandono_pct"], 1.5, nome)
+                self.assertGreater(r["razao_media"], 1.0, nome)
+        for r, b in zip(self._sim(cen["p estável"]), base):
+            self.assertGreater(r["conversas_hora"], 1.5 * b["conversas_hora"])   # ~2× hoje (PREDITIVO.md 3.4)
+
+    def test_preditivo_abandona_menos_que_power_alto_com_p_subindo(self):
+        S = 3 * 3600
+        f = lambda t: 0.10 + 0.35 * t / S                      # noqa: E731
+        pred = self._sim(f)
+        power = self._sim(f, ritmo={"modo": "power", "razao": 3.0})
+        self.assertLess(sum(r["abandono_pct"] for r in pred), sum(r["abandono_pct"] for r in power))
+
+    def test_sem_historico_aquece_em_power_um(self):
+        from tests.sim_preditivo import simular
+        r = simular(lambda t: 0.15, segundos=600, aquecida=False)
+        self.assertEqual((r["razao_max"], r["abandonos"]), (1.0, 0))      # 10 min: ainda sem 200 atendidas
+
+
+class TestPreditivoNaVm(Base):
+    def test_liberando_e_historico(self):
+        from voz.orquestrador.ritmo import Historico
+        itens = [item(f"C{i}", f"119888{i:05d}") for i in range(30)]
+        mud = [("voz_config", 0, {"limite_simultaneas": 2, "pico_multiplo": 1}),
+               ("voz_troncos", 0, {"cps": 100, "canais": 100}), ("voz_troncos", 1, {"cps": 100})]
+        orq = self.montar(itens, mud=mud)
+        self.lote.ritmo = {"modo": "preditivo", "razao": 1.0, "meta_abandono": 1.0, "razao_max": 3.0}
+        self.assertEqual(orq.tick(), 2)                          # sem histórico: aquecimento (1:1)
+        self.lote.controle.historico = Historico(discadas_7d=5000, atendidas_7d=600, dias_preditivo=30)
+        self.lote.controle.inicio = D0 - timedelta(hours=1)
+        for c in list(orq.chamadas.values()):
+            self.atender(c.canal)                                # os 2 robôs conversando
+        self.assertEqual(orq.tick(), 0)                          # nenhum livre, nenhum liberando
+        self.rel.andar(80)                                       # conversa média 90 s − T 17 s: vão liberar
+        self.assertEqual(orq._liberando(self.lote, self.rel()), 2)
+        self.assertEqual(orq.tick(), 6)                          # 2 liberando × razão 3,0
+
+    def test_plantao_le_o_historico(self):
+        orq = self.montar([item()])
+        self.lote.credor_id = 7
+
+        class SbH(Sb):
+            def rpc(self, f, args=None):
+                super().rpc(f, args)
+                return {"p_empresa": 0.11, "carteiras": [{"credor_id": 7, "discadas_7d": 900, "atendidas_7d": 120,
+                                                          "dias_preditivo": 2}]}
+        sb = SbH()
+        pl = P.Plantao(orq, None, orq.dados.config(1).modo, registro=SimpleNamespace(sb=sb), relogio=self.rel)
+        self.assertEqual(pl.ler_historico(), 1)
+        h = self.lote.controle.historico
+        self.assertEqual((h.atendidas_7d, h.dias_preditivo, h.p_empresa), (120, 2, 0.11))
+        self.assertEqual(sb.rpcs[0], ("historico_ritmo_voz", {"empresa": 1}))
+        self.assertEqual(A.RPC["historico_ritmo_voz"], "historico_ritmo")
 
 
 if __name__ == "__main__":

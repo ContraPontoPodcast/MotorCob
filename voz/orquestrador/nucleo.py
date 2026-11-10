@@ -230,6 +230,8 @@ class Orquestrador:
                 self._registrar(c)
         if self.fila_envio is not None:
             self.fila_envio.processar(agora.timestamp())
+        for lote in self.lotes.values():             # o controlador do Preditivo revê o fator mesmo sem ligação nova
+            self._aviso_ritmo(lote, lote.controle.rever(agora, lote.ritmo))
         for emp in list(self.agendador.empresas):    # a janela de 30 min do freio anda com o relógio
             if self.agendador.reavaliar(emp, agora.timestamp()) == "soltou":
                 log.info("empresa %s: abandono dos últimos 30 min voltou ao normal — ritmo liberado", emp)
@@ -329,11 +331,31 @@ class Orquestrador:
             return False
         livres_prov = self._livres_provedor(prov)
         razao = self.curtas.razao(lote.empresa_id, lote.controle.razao(lote.ritmo, agora), agora)
-        if self.agendador.vaga_empresa(lote.empresa_id, razao=razao, livres_max=livres_prov):
+        extra = self._liberando(lote, agora) if razao > 1.0 and lote.controle.preditivo_ativo(lote.ritmo, agora) else 0
+        if self.agendador.vaga_empresa(lote.empresa_id, razao=razao, livres_max=livres_prov, livres_extra=extra):
             return True
         if livres_prov <= 0 and self.agendador.vaga_empresa(lote.empresa_id):
             self._conta("sem_robo_provedor")   # a lista espera: ninguém é discado sem robô para falar
         return False
+
+    def _aviso_ritmo(self, lote: Lote, mudou: str | None) -> None:
+        if mudou is None:
+            return
+        quem = f"empresa {lote.empresa_id} carteira {lote.credor_id}"
+        teto = f"{DG.TETO_ABANDONO:g}%"
+        if mudou == "freou" and lote.ritmo.get("modo") == "preditivo":
+            self._alerta(f"{quem}: abandono acima de {teto} nos últimos 30 min — Preditivo freado (margem cortada pela "
+                         "metade)")
+        elif mudou in ("freou", "power"):
+            self._alerta(f"{quem}: abandono acima de {teto} nos últimos 30 min — ligando 1 por robô até o fim do dia")
+
+    def _liberando(self, lote: Lote, agora: datetime) -> int:
+        """Preditivo: robôs da empresa que devem liberar até a linha nova atender (conversas que já passaram de
+        conversa média − T, com T = toque médio até atender + AMD; PREDITIVO.md 3.2)."""
+        limiar = max(0.0, lote.controle.conversa_s - lote.controle.T)
+        return sum(1 for c in self.chamadas.values()
+                   if c.empresa_id == lote.empresa_id and c.conversando and c.t_atendeu is not None
+                   and (agora - c.t_atendeu).total_seconds() >= limiar)
 
     def _tronco_ok(self, empresa_id: int, tronco_id: int, agora: datetime) -> bool:
         """Linha parada hoje pelas curtas não disca (e não consome ficha de CPS); senão, canal e CPS do tronco."""
@@ -912,10 +934,10 @@ class Orquestrador:
             for al in lote.alertas:              # alertas do lote (a pausa da rota é do núcleo)
                 self._alerta(al)
             lote.alertas.clear()
+        if lote is not None:
+            lote.controle.discou(agora, c.veredito == A.PESSOA, toque, billsec if c.provedor else None)
         if c.veredito == A.PESSOA and lote is not None:
-            if lote.controle.resultado_pessoa(ev.desfecho in ABANDONOS, agora, lote.ritmo) == "freou":
-                self._alerta(f"empresa {c.empresa_id} carteira {lote.credor_id}: abandono acima de "
-                             f"{DG.TETO_ABANDONO:g}% nos últimos 30 min — ligando 1 por robô até o fim do dia")
+            self._aviso_ritmo(lote, lote.controle.resultado_pessoa(ev.desfecho in ABANDONOS, agora, lote.ritmo))
         if c.veredito == A.PESSOA:
             mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho in ABANDONOS, agora.timestamp())
             if mudou == "freou":

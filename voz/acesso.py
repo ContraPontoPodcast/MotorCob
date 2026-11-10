@@ -112,6 +112,8 @@ RPC = {
     "abandonos_recentes_voz": "abandonos_recentes",
     # SQL 109 · curtas de hoje por linha e total (do que a VM já gravou) e a liberação do Admin
     "curtas_hoje_voz": "curtas_hoje",
+    # SQL 110 · histórico do Preditivo por carteira (atendidas e discadas em 7 dias, dias em Preditivo, p da empresa)
+    "historico_ritmo_voz": "historico_ritmo",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual
