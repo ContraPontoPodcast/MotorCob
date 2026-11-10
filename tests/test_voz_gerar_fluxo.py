@@ -366,7 +366,7 @@ class TestPedidoEmTextoLivre(unittest.TestCase):
         self.assertEqual((g.resultado["tentativas"], g.resultado["erros"]), (1, []))
         msg = llm.chamadas[1][-1]["content"]
         self.assertIn("N3 (pergunta): saídas obrigatórias nao_quer, quer_regularizar (falta nao_quer); "
-                      "válidas nao_quer, quer_regularizar, sem_resposta.", msg)
+                      "válidas nao_quer, quer_regularizar, sem_resposta, silencio.", msg)
         self.assertIn("N4 (pergunta): fala com valor escrito (R$ 2.100,00); use {{oferta.*}} e deixe os valores como "
                       "pergunta sobre a alçada.", msg)
         self.assertIn("O sistema já fez estes ajustes", msg)
