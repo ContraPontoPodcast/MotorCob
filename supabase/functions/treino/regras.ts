@@ -3,12 +3,16 @@
 // resultado assinado que a VM devolve e o `dados` de registrar_sessao_treino. Testadas em regras.test.ts
 // (node --experimental-strip-types --test).
 
-export type Acao = "turno" | "encerrar" | "sair" | "voz" | "ouvir";
+export type Acao = "turno" | "encerrar" | "sair" | "voz" | "ouvir" | "gerar_cenario";
 export type Pedido = {
   acao: Acao; sessao: number; token: string | null; texto: string | null;
   /** só no "ouvir" (antes de abrir a sessão): pelo link, a atribuição; logado, o cenário e a empresa */
   atribuicao?: number | null; cenario?: number | null; empresa?: number | null;
+  /** só no "gerar_cenario" (SQL 122): o padrão escolhido (códigos) e o período */
+  escolha?: EscolhaPadrao;
 };
+export type EscolhaPadrao = { motivo: string | null; objecao: string | null; item: string | null; dias: number };
+const COD = /^[a-z][a-z0-9_]{1,39}$/;
 export type Turno = { quem: "persona" | "operador"; texto: string; t?: number };
 
 export const MAX_TEXTO = 600;
@@ -32,6 +36,17 @@ export function validarPedido(c: unknown): { pedido?: Pedido; erro?: string } {
     if (x.token != null ? !idOk(x.atribuicao) : !(idOk(x.cenario) && idOk(x.empresa))) return { erro: "pedido inválido" };
     return { pedido: { acao: "ouvir", sessao: 0, token: (x.token as string | undefined) ?? null, texto: null,
       atribuicao: idOk(x.atribuicao) ? x.atribuicao : null, cenario: idOk(x.cenario) ? x.cenario : null, empresa: idOk(x.empresa) ? x.empresa : null } };
+  }
+  if (x.acao === "gerar_cenario") {
+    const fora = Object.keys(x).filter((k) => !["acao", "empresa", "motivo", "objecao", "item", "dias"].includes(k));
+    if (fora.length || !idOk(x.empresa)) return { erro: "pedido inválido" };
+    const cod = (v: unknown) => (v == null ? null : typeof v === "string" && COD.test(v) ? v : undefined);
+    const motivo = cod(x.motivo), objecao = cod(x.objecao), item = cod(x.item);
+    if (motivo === undefined || objecao === undefined || item === undefined) return { erro: "pedido inválido" };
+    if (!motivo && !objecao && !item) return { erro: "escolha um motivo, uma objeção ou um item" };
+    const dias = x.dias == null ? 30 : Number(x.dias);
+    if (![7, 30, 90].includes(dias)) return { erro: "pedido inválido" };
+    return { pedido: { acao: "gerar_cenario", sessao: 0, token: null, texto: null, empresa: x.empresa, escolha: { motivo, objecao, item, dias } } };
   }
   const fora = Object.keys(x).filter((k) => !["acao", "sessao", "token", "texto"].includes(k));
   if (fora.length) return { erro: "pedido inválido" };
@@ -181,3 +196,68 @@ export function urlOuvir(urlSimular: string): string {
 }
 /** Prévia da voz: minutos estimados pela fala (~15 caracteres por segundo), como no simular_fluxo_voz. */
 export const minutosPrevia = (caracteres: number) => Math.round((Math.max(0, caracteres) / 900) * 1000) / 1000;
+
+// ---------------------------------------------------------------- cenário a partir dos padrões (SQL 122)
+export type PadroesInsights = {
+  de: string; ate: string; base: number; suficiente: boolean;
+  motivos: { codigo: string; conversas: number; pct: number }[]; objecoes: { codigo: string; conversas: number; pct: number }[];
+  itens: { item: string; avaliadas: number; sim_pct: number }[];
+};
+/** Do motivo das ligações ao tipo de cliente do treino (quando o LLM não escolher outro). */
+export const PERFIL_DO_MOTIVO: Record<string, string> = {
+  desemprego: "desempregado_recente", reducao_renda: "desempregado_recente", nao_reconhece: "contesta_procon",
+  contestacao: "contesta_procon", fraude_alegada: "contesta_procon", insatisfacao_servico: "irritado",
+  outras_dividas: "quer_parcelar_muito", esquecimento: "negocia_rapido", aguardando_recebimento: "negocia_rapido",
+};
+/** A faixa do saldo fictício pelo motivo (o valor exato é sorteado na faixa na hora do treino, nunca pelo LLM). */
+const FAIXA_DO_MOTIVO: Record<string, string> = { outras_dividas: "5k_mais", desemprego: "1k_5k", reducao_renda: "1k_5k", esquecimento: "ate_1k" };
+
+/** Os insights do cenário (só códigos e porcentagens, base >= 30), do que o BANCO devolveu para a escolha. O que não
+ *  estiver nos padrões (grupo com menos de 30) é recusado: o navegador não inventa padrão. */
+export function insightsDaEscolha(p: PadroesInsights, e: EscolhaPadrao): { insights?: Record<string, number | string>; erro?: string } {
+  if (!p || !p.suficiente || !(p.base >= 30)) return { erro: "Ainda não há 30 ligações analisadas no período para gerar um cenário." };
+  const ins: Record<string, number | string> = { base: p.base, de: p.de, ate: p.ate };
+  if (e.motivo) {
+    const m = p.motivos.find((x) => x.codigo === e.motivo);
+    if (!m) return { erro: "Esse motivo não tem 30 ligações no período." };
+    ins[`motivo:${m.codigo}`] = m.pct;
+  }
+  if (e.objecao) {
+    const o = p.objecoes.find((x) => x.codigo === e.objecao);
+    if (!o) return { erro: "Essa objeção não tem 30 ligações no período." };
+    ins[`objecao:${o.codigo}`] = o.pct;
+  }
+  if (e.item) {
+    const i = p.itens.find((x) => x.item === e.item);
+    if (!i) return { erro: "Esse item não tem 30 avaliações no período." };
+    ins[`item:${i.item}`] = i.sim_pct;
+  }
+  return { insights: ins };
+}
+
+const textoOk = (t: unknown, min: number, max: number) =>
+  typeof t === "string" && t.trim().length >= min && t.length <= max && !/@|\d{8,}|\d{3}\.\d{3}\.\d{3}-\d{2}/.test(t);
+
+/** O `dados` de salvar_cenario_treino a partir do cenário da VM: rascunho, origem insights, ficha fictícia pelo código. */
+export function dadosCenarioGerado(c: unknown, insights: Record<string, number | string>, e: EscolhaPadrao): Record<string, unknown> | null {
+  if (!c || typeof c !== "object") return null;
+  const x = c as Record<string, unknown>;
+  if (!textoOk(x.nome, 3, 80) || !textoOk(x.objetivo, 10, 500) || typeof x.persona_nome !== "string"
+      || !/^\S.{0,40}\((fictícia|fictício)\)$/.test(x.persona_nome) || /[0-9@]/.test(x.persona_nome)) return null;
+  const lista = (v: unknown, n: number, max: number) => (Array.isArray(v) ? v : []).filter((t) => textoOk(t, 1, max)).slice(0, n) as string[];
+  const objecoes = (Array.isArray(x.objecoes) ? x.objecoes : []).filter((o) => o && typeof o === "object" && COD.test(String((o as { codigo?: unknown }).codigo)))
+    .slice(0, 10).map((o) => {
+      const r = o as { codigo: string; quando?: unknown };
+      return textoOk(r.quando, 1, 120) ? { codigo: r.codigo, quando: r.quando as string } : { codigo: r.codigo };
+    });
+  const dif = Number(x.dificuldade);
+  return {
+    nome: (x.nome as string).trim(), persona_nome: x.persona_nome, perfil: typeof x.perfil === "string" && COD.test(x.perfil) && x.perfil !== "outro" ? x.perfil : (PERFIL_DO_MOTIVO[e.motivo ?? ""] ?? "outro"),
+    objetivo: (x.objetivo as string).trim(), comportamentos: lista(x.comportamentos, 10, 200), frases: lista(x.frases, 20, 200), objecoes,
+    dificuldade: Number.isInteger(dif) && dif >= 1 && dif <= 5 ? dif : 3,
+    ...(textoOk(x.objetivo_cenario, 3, 200) ? { objetivo_cenario: (x.objetivo_cenario as string).trim() } : {}),
+    divida: { produto: "Cartão Exemplo", faixa: FAIXA_DO_MOTIVO[e.motivo ?? ""] ?? "1k_5k", dias_atraso: 60, alcada: { parcelas: 6, desconto_max: 20 } },
+    itens_foco: e.item ? [e.item] : [], modos: ["voz", "texto"], duracao_max_s: 480,
+    situacao: "rascunho", origem: "insights", insights,
+  };
+}

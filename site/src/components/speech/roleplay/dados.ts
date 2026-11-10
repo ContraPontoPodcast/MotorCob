@@ -34,7 +34,7 @@ export async function lerCenarios(sb: Sb, empresa: number): Promise<CenarioRP[]>
 
 export async function lerCenario(sb: Sb, empresa: number, id: number): Promise<CenarioRP | null> {
 	const r = await sb.from('treino_cenarios')
-		.select('id, empresa_id, base_id, nome, persona_nome, perfil, descricao, objetivo, comportamentos, frases, objecoes, dificuldade, divida, duracao_max_s, modos, itens_foco, objetivo_cenario, situacao, origem, atualizado_em')
+		.select('id, empresa_id, base_id, nome, persona_nome, perfil, descricao, objetivo, comportamentos, frases, objecoes, dificuldade, divida, duracao_max_s, modos, itens_foco, objetivo_cenario, situacao, origem, insights, atualizado_em')
 		.eq('id', id)
 		.or(`empresa_id.is.null,empresa_id.eq.${empresa}`)
 		.maybeSingle();

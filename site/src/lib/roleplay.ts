@@ -14,6 +14,8 @@ export const ROTA_RP_CADASTRO = `${ROTA_RP}/operadores`;
 export const rotaCenarioRP = (id: number | string) => `${ROTA_RP_CENARIOS}/${encodeURIComponent(String(id))}`;
 export const rotaPessoaRP = (id: number | string) => `${ROTA_RP_CADASTRO}/${encodeURIComponent(String(id))}`;
 export const ROTA_RP_NOVO_CENARIO = `${ROTA_RP_CENARIOS}/novo`;
+/** Novo a partir dos padrões das ligações (SQL 122): a mesma rota do novo, com ?de=insights. */
+export const ROTA_RP_NOVO_INSIGHTS = `${ROTA_RP_NOVO_CENARIO}?de=insights`;
 export const ROTA_RP_ATRIBUICOES = `${ROTA_RP}/atribuicoes`;
 export const ROTA_RP_ATRIBUIR = `${ROTA_RP}/atribuir`;
 /** Evolução (SQL 121): empresa ou equipe (?eq=), no período (?d=). */
@@ -161,6 +163,8 @@ export type CenarioRP = {
 	descricao: string | null; objetivo: string; comportamentos: string[]; frases: string[]; objecoes: { codigo: string; quando?: string }[];
 	dificuldade: number; divida: DividaRP; duracao_max_s: number; modos: string[]; itens_foco: string[]; objetivo_cenario: string | null;
 	situacao: 'rascunho' | 'publicado' | 'arquivado'; origem: 'padrao' | 'manual' | 'insights'; atualizado_em?: string | null;
+	/** cenário gerado de padrões agregados (SQL 122): só códigos e porcentagens, base >= 30 */
+	insights?: Record<string, number | string> | null;
 };
 export const ehPadraoMotorCX = (c: Pick<CenarioRP, 'empresa_id'>) => c.empresa_id == null;
 

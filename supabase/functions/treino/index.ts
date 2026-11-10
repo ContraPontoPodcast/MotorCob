@@ -11,6 +11,10 @@
 //   { acao: 'ouvir', token, atribuicao } | { acao: 'ouvir', cenario, empresa }   → { audio (base64), mime }
 //       "Ouvir a voz" da cliente simulada antes de começar (treino_previa_voz: uma frase do roteiro fictício; pelo link,
 //       6 por hora). Nada é guardado; o uso entra em registrar_uso_ia_voz (previa_voz, nada cobrado do cliente).
+//   { acao: 'gerar_cenario', empresa, motivo?, objecao?, item?, dias? }   → { cenario }   (SQL 122, logado)
+//       cenário FICTÍCIO a partir dos padrões AGREGADOS das ligações: lê padroes_insights_treino com o login de quem pede
+//       (editar_cenarios_treino; só grupos com 30+ ligações), manda à VM só códigos e porcentagens, e grava o que voltar
+//       em RASCUNHO com salvar_cenario_treino (também com o login; uma pessoa revisa e publica).
 // E a VM chama, assinada com a chave do simulador (X-MotorCX-Carimbo/X-MotorCX-Assinatura, sem Origin):
 //   { acao: 'voz_registrar', sessao, dados, sem_fala } → registrar_sessao_treino (ia_treino_voz por minuto, franquia,
 //       aviso a 80%/100%) ou, sem fala do operador, treino_descartar_turnos (não conta, não cobra). Nunca áudio.
@@ -30,8 +34,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   assinarVM, conferirAssinaturaVM, criarBilhete, dadosAbandono, dadosBilhete, dadosRegistro, erroDoBanco, falasDoOperador, limparTurnos,
   MAX_FALAS_OPERADOR, MIN_VOZ_S, minutosPrevia, pacoteAvaliar, pacoteTurno, somarTurno, temFalaDoOperador, tempoEsgotado, urlOuvir,
-  validarPedido, validarRegistroVoz,
-  type Contexto,
+  dadosCenarioGerado, insightsDaEscolha, validarPedido, validarRegistroVoz,
+  type Contexto, type PadroesInsights,
 } from "./regras.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -108,6 +112,37 @@ Deno.serve(async (req) => {
   const { pedido, erro } = validarPedido(corpo);
   if (!pedido) return responder({ erro }, 400, origem);
   const jwtDe = () => (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+
+  // ---------------------------------------------------------------- cenário a partir dos padrões (logado)
+  if (pedido.acao === "gerar_cenario") {
+    const jwt = jwtDe();
+    if (!jwt || jwt === ANON) return responder({ erro: "faça login para gerar cenários" }, 401, origem);
+    const comoUsuario = createClient(SUPABASE_URL, ANON, { ...sem, global: { headers: { Authorization: `Bearer ${jwt}` } } });
+    const e = pedido.escolha!;
+    const { data: pad, error: ePad } = await comoUsuario.rpc("padroes_insights_treino", { empresa: pedido.empresa, dias: e.dias });
+    if (ePad || !pad) {
+      const x = erroDoBanco(ePad?.message);
+      return responder({ erro: x.status === 403 ? "Seu perfil não cria cenários de treino." : x.erro }, x.status, origem);
+    }
+    const { insights, erro: eIns } = insightsDaEscolha(pad as PadroesInsights, e);
+    if (!insights) return responder({ erro: eIns }, 400, origem);
+    if (!VM_URL || !VM_CHAVE) return responder({ erro: "A geração de cenários ainda não está configurada. Avise o Admin." }, 503, origem);
+    let vm: Awaited<ReturnType<typeof chamarVM>>;
+    try {
+      vm = await chamarVM({ treino: "gerar", insights, ...(e.item ? { item: { id: e.item, texto: null } } : {}) }, 60_000);
+    } catch (x) {
+      console.error("treino", "gerar", (x as Error).name);
+      return responder({ erro: "Não deu para gerar o cenário agora. Tente de novo em alguns minutos." }, 502, origem);
+    }
+    const dados = vm.ok ? dadosCenarioGerado(vm.corpo.cenario, insights, e) : null;
+    if (!dados) return responder({ erro: "Não deu para gerar um cenário válido agora. Tente de novo ou crie do zero." }, 502, origem);
+    const { data: cid, error: eSal } = await comoUsuario.rpc("salvar_cenario_treino", { empresa: pedido.empresa, dados });
+    if (eSal || !cid) {
+      const m = eSal?.message ?? "";
+      return responder({ erro: /limite de 20/.test(m) ? "Limite de 20 cenários gerados por dia nesta empresa. Tente amanhã ou crie do zero." : "Não deu para guardar o cenário gerado." }, /limite/.test(m) ? 429 : 400, origem);
+    }
+    return responder({ cenario: cid }, 200, origem);
+  }
 
   // ---------------------------------------------------------------- "Ouvir a voz" (antes de abrir a sessão)
   if (pedido.acao === "ouvir") {

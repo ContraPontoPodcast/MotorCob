@@ -1,20 +1,23 @@
 // Roleplay › Cenários: biblioteca (Padrão MotorCX + da empresa, filtro na URL: ?f=mx|emp|dif) e o cenário. O Padrão
 // MotorCX é só leitura: "Duplicar para editar" cria a cópia em rascunho na empresa (duplicar_cenario_treino) e abre a
 // cópia no lugar do original (replace). O cenário da empresa abre no editor (editor.tsx) para quem cuida dos cenários;
-// "Novo cenário" abre o editor vazio (/cenarios/novo).
+// "Novo cenário" abre o editor vazio (/cenarios/novo); "Novo a partir dos padrões" (/cenarios/novo?de=insights, SQL 122)
+// gera um rascunho dos padrões agregados das ligações (insights.tsx), que abre no editor com o selo.
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Aviso, Botao, BotaoLink, Cartao, Estado, LinkTexto, Pilula, SOMBRA, Segmentos, clsBotao } from '@/components/ds';
 import { supabase } from '@/lib/supabase';
 import {
-	DIFICULDADE, FAIXAS_SALDO, FILTROS_CENARIO, GRAVIDADE_RP, ROTA_RP_CENARIOS, ROTA_RP_NOVO_CENARIO, cenarioVazio, ehPadraoMotorCX, filtrarCenarios,
+	DIFICULDADE, FAIXAS_SALDO, FILTROS_CENARIO, GRAVIDADE_RP, ROTA_RP_CENARIOS, ROTA_RP_NOVO_CENARIO, ROTA_RP_NOVO_INSIGHTS, cenarioVazio, ehPadraoMotorCX, filtrarCenarios,
 	filtroCenario, formDoCenario, itemChecklist, rotaAtribuir, rotaCenarioRP, rotaTestarRP, rotuloObjecao, rotuloTipoCliente, textoAlcada, textoDuracao, textoModos,
 	type CenarioRP, type FiltroCenario, type ItemChecklistRP,
 } from '@/lib/roleplay';
 import { LinkRP, MolduraRP } from './moldura';
 import { EditorCenario } from './editor';
-import { Dificuldade, PilulasCenario, SeloLgpdTreino } from './comum';
+import { Dificuldade, PilulasCenario, SeloInsights, SeloLgpdTreino } from './comum';
+import { NovoDeInsights } from './insights';
+import { MOTIVOS, OBJECOES } from '@/lib/speech';
 import { duplicarCenario, lerCenario, lerCenarios, lerItensChecklist } from './dados';
 import type { PodeRP } from './index';
 
@@ -38,7 +41,7 @@ export function Cenarios({ empresa, pode }: { empresa: number; pode?: PodeRP }) 
 	const trocar = (v: FiltroCenario) => setQ(p => { const n = new URLSearchParams(p); if (v === 'todos') n.delete('f'); else n.set('f', v); return n; }, { replace: true, preventScrollReset: true });
 	return (
 		<MolduraRP titulo="Cenários" descricao="Biblioteca de clientes simulados: Padrão MotorCX e os da empresa."
-			acoes={<><SeloLgpdTreino />{pode?.cenarios && <LinkRP to={ROTA_RP_NOVO_CENARIO} className={clsBotao('primario')}>Novo cenário</LinkRP>}</>}>
+			acoes={<><SeloLgpdTreino />{pode?.cenarios && <><LinkRP to={ROTA_RP_NOVO_INSIGHTS} className={clsBotao('secundario')}>Novo a partir dos padrões</LinkRP><LinkRP to={ROTA_RP_NOVO_CENARIO} className={clsBotao('primario')}>Novo cenário</LinkRP></>}</>}>
 			{erro ? <Estado tipo="erro" titulo="Não deu para carregar a biblioteca agora.">{erro}</Estado>
 				: !lista ? <Estado tipo="carregando" />
 				: <ListaCenarios lista={lista} filtro={f} itens={itens} onFiltro={trocar} />}
@@ -125,7 +128,8 @@ export function DetalheCenario({ empresa, id, pode }: { empresa: number; id: str
 	if (pode.cenarios && !ehPadraoMotorCX(c)) {
 		return (
 			<EditorCenario key={`${c.id}:${c.atualizado_em ?? ''}`} empresa={empresa} cenario={c} inicial={formDoCenario(c)} itens={itens}
-				aviso={q.get('copia') === '1' ? <Aviso tom="ok" titulo="Cópia criada, em rascunho.">Ela já está na biblioteca da empresa. Ajuste o que quiser e publique para poder atribuir.</Aviso> : undefined}
+				aviso={q.get('copia') === '1' ? <Aviso tom="ok" titulo="Cópia criada, em rascunho.">Ela já está na biblioteca da empresa. Ajuste o que quiser e publique para poder atribuir.</Aviso>
+					: c.origem === 'insights' ? <SeloInsights c={c} rotulo={(t, k) => rotuloPadrao(t, k, itens)} recemGerado={q.get('gerado') === '1'} /> : undefined}
 				onSalvo={() => { if (!supabase) return; void lerCenario(supabase, empresa, c.id).then(x => { if (x) setC(x); }).catch(() => {}); }} />
 		);
 	}
@@ -136,8 +140,18 @@ export function DetalheCenario({ empresa, id, pode }: { empresa: number; id: str
 	);
 }
 
-/** Editor vazio (/cenarios/novo): ao salvar, dá lugar ao cenário criado (replace). */
+/** Código de um padrão (motivo, objeção, item) para a tela. */
+export function rotuloPadrao(tipo: string, codigo: string, itens: Record<string, ItemChecklistRP>): string {
+	if (tipo === 'motivo') return MOTIVOS[codigo] ?? 'Outro motivo';
+	if (tipo === 'objecao') return OBJECOES[codigo] ?? 'Outra objeção';
+	if (tipo === 'item') return itemChecklist(codigo, itens).texto;
+	return 'padrão';
+}
+
+/** Editor vazio (/cenarios/novo): ao salvar, dá lugar ao cenário criado (replace). Com ?de=insights, a geração a partir
+ *  dos padrões das ligações. */
 export function NovoCenario({ empresa, pode }: { empresa: number; pode: PodeRP }) {
+	const [q] = useSearchParams();
 	const [itens, setItens] = useState<Record<string, ItemChecklistRP> | null>(null);
 	useEffect(() => {
 		if (!supabase) return;
@@ -146,6 +160,7 @@ export function NovoCenario({ empresa, pode }: { empresa: number; pode: PodeRP }
 		return () => { ativo = false; };
 	}, [empresa]);
 	if (!pode.cenarios) return <MolduraRP titulo="Novo cenário"><Estado tipo="semPermissao" titulo="Seu perfil não cria cenários.">Quem tem a permissão de editar cenários de treino cria e publica os cenários da empresa. Quem libera é o Admin, em Empresa › Pessoas e perfis.</Estado></MolduraRP>;
+	if (q.get('de') === 'insights') return <NovoDeInsights empresa={empresa} pode={pode} />;
 	if (!itens) return <MolduraRP titulo="Novo cenário"><Estado tipo="carregando" /></MolduraRP>;
 	return <EditorCenario empresa={empresa} cenario={null} inicial={cenarioVazio()} itens={itens} />;
 }
@@ -158,7 +173,7 @@ export function descricaoCenario(c: Pick<CenarioRP, 'empresa_id' | 'situacao'>):
 export function AcoesCenario({ c, pode, duplicando, onDuplicar }: { c: CenarioRP; pode: PodeRP; duplicando?: boolean; onDuplicar: () => void }) {
 	const atribuir = pode.treinar && c.situacao === 'publicado' ? <LinkRP to={rotaAtribuir({ cen: c.id })} className={clsBotao('secundario')}>Atribuir</LinkRP> : null;
 	if (!pode.cenarios) return <><SeloLgpdTreino />{atribuir}</>;
-	const testar = c.modos.includes('texto') ? <LinkRP to={rotaTestarRP(c.id)} className={clsBotao('secundario')}>Testar</LinkRP> : null;
+	const testar = c.modos.length > 0 ? <LinkRP to={rotaTestarRP(c.id)} className={clsBotao('secundario')}>Testar</LinkRP> : null;
 	if (ehPadraoMotorCX(c)) return <><SeloLgpdTreino />{testar}{atribuir}<Botao onClick={onDuplicar} disabled={duplicando}>{duplicando ? 'Duplicando…' : 'Duplicar para editar'}</Botao></>;
 	return <><SeloLgpdTreino />{atribuir}</>;
 }

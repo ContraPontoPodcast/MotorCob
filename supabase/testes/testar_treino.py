@@ -196,8 +196,10 @@ NOVO = {"nome": "Pagou, mas a baixa não caiu", "persona_nome": "Renata (fictíc
                                      "alcada": {"parcelas": 12, "desconto_max": 30}},
         "itens_foco": ["ck_cpc", "cl_tratou_objecao"], "modos": ["texto"], "origem": "insights",
         "insights": {"base": 4210, "motivo:contestacao": 0.18, "de": "2026-10-01", "ate": "2026-10-30"},
-        "situacao": "publicado"}
+        "situacao": "rascunho"}
+# SQL 122: o cenário de padrões agregados nasce em rascunho; uma pessoa revisa e publica
 CE = sv(f"select public.salvar_cenario_treino({TA}, {j(NOVO)})", au, Q)
+sv(f"select public.salvar_cenario_treino({TA}, '{{\"situacao\": \"publicado\"}}', {CE})", au, Q)
 checar("cenário da empresa publicado (de insights) grava publicado_em", True,
        f"select situacao || '|' || origem || '|' || (publicado_em is not null) from public.treino_cenarios where id = {CE}",
        au, Q, "publicado|insights|true")

@@ -191,7 +191,7 @@ def criar_servidor(porta: int, chave: str, modelo_de=None, entendedor_de=None, h
                 except Exception as ex:   # noqa: BLE001 — LLM fora: nada é gravado; a Edge Function avisa
                     log.warning("simulador: treino falhou (%s)", ex.__class__.__name__)
                     return self._resp(502, {"erro": "o cliente simulado não respondeu agora"})
-                log.info("simulador: treino %s %s", "avaliar" if pedido.get("treino") == "avaliar" else "turno", TR.resumo_log(r))
+                log.info("simulador: treino %s %s", pedido.get("treino") if pedido.get("treino") in ("avaliar", "gerar") else "turno", TR.resumo_log(r))
                 return self._resp(503 if r.get("erro") == "treino indisponível nesta VM" else 400 if "erro" in r else 200, r)
             try:
                 r = rodar(pedido, modelo_de=modelo_de, entendedor=entendedor_de() if entendedor_de else None)
