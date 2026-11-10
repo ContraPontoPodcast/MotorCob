@@ -633,7 +633,7 @@ checar("fatura paga não conta como vencida", True, f"select faturas_vencidas fr
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional
 SVC = "service_role"
-checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 30)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59) + Speech Analytics (SQL 60) + créditos de IA e IA sem crédito (SQL 78) + treino por voz e por texto (SQL 90)
+checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 31)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59) + Speech Analytics (SQL 60) + créditos de IA e IA sem crédito (SQL 78) + treino por voz e por texto (SQL 90) + robôs (licenças) do agente de voz (SQL 93)
 checar("cliente não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", u["admina"])
 checar("Atendimento não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", SUP)
 checar("ninguém grava preço direto na tabela", False, f"insert into public.precos_empresa (empresa_id,item,modelo,preco) values ({EA},'sms','flat',0.01)", "authenticated", u["admin"])
@@ -2246,7 +2246,7 @@ checar("SQL 56: cliente B não lê o consumo da A", True, "select count(*) from 
 checar("SQL 56: exportação por dia e rota", True, f"select count(*) from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["gest"], 2)
 checar("SQL 56: B não exporta a telefonia da A", False, f"select * from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["operb"])
 checar("SQL 56: usuário não grava consumo de voz", False, f"insert into public.consumo_voz (empresa_id,dia) values ({EA},'2026-11-06')", "authenticated", u["admin"])
-checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_geracao_fluxo,ia_roleplay,ia_speech_analytics")   # + SQL 58, 59 e 60
+checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_licenca_robo,voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_geracao_fluxo,ia_roleplay,ia_speech_analytics")   # + SQL 58, 59, 60 e 93 (robôs)
 checar("SQL 56: telefonia não entra na prévia da fatura", True, f"select count(*) from public.previa_fatura({EA}, '2026-11-01') where item like '%telefon%' or item like 'consumo_voz%'", "authenticated", u["gest"], 0)
 for t in ("voz_config", "voz_roteiros", "voz_troncos", "voz_rotas", "voz_transferencias", "voz_contrato", "voz_lotes", "voz_ondas",
           "voz_chamadas", "voz_gravacoes", "consumo_voz", "fornecedor_saude", "voz_insights_dia", "titular_pedidos",
@@ -2689,7 +2689,7 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
 assert r.returncode == 0, r.stderr
 _M = u["admin"]
 checar("SQL 61: itens de IA marcados", True, "select count(*) from public.cobranca_itens where eh_ia and codigo in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','ia_geracao_fluxo','ia_roleplay')", "authenticated", u["oper"], 5)
-checar("SQL 61: nenhum item fora da IA marcado", True, "select count(*) from public.cobranca_itens where eh_ia and codigo not like 'ia\\_%' and codigo not in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao')", "authenticated", u["oper"], 0)
+checar("SQL 61: nenhum item fora da IA marcado", True, "select count(*) from public.cobranca_itens where eh_ia and codigo not like 'ia\\_%' and codigo not in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','voz_licenca_robo')", "authenticated", u["oper"], 0)   # voz_licenca_robo: SQL 93
 checar("SQL 61: MC mínima da IA nasce em 70%", True, "select mc_minima_ia_pct from public.parametros_margem", "authenticated", _M, "70.00")
 checar("SQL 61: Administrativo não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", ADM, 0)
 checar("SQL 61: cliente não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", u["admina"], 0)
@@ -2978,6 +2978,13 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 92: preços editáveis (testar_precos_editaveis.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 93 · Agente de voz: robôs contratados (licenças): RLS (cliente nunca grava; Admin do cliente só lê o próprio
+# contrato), vigência, fidelidade, guarda da IA, overbooking, preço em precos_empresa e só se acrescenta
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_licencas_voz.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 93: robôs contratados (testar_licencas_voz.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

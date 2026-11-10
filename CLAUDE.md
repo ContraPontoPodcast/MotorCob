@@ -997,6 +997,26 @@ editáveis.** Só acrescenta funções (nenhuma recriada). Onde se edita cada co
 Item novo com franquia: entra em `itens_com_franquia()` e em `site/src/lib/precos-itens.ts` (o teste confere a paridade).
 Teste: `supabase/testes/testar_precos_editaveis.py`.
 
+**SQL 93 (Robôs contratados, PR 1; SPEC aprovada pelo dono com os padrões recomendados): licenças do Agente de voz no
+banco.** 1 robô = 1 conversa ao mesmo tempo com a IA (não é linha nem canal). Só banco: a fatura, a divisão da
+concorrência (`divisao_concorrencia_voz()`) e o motor ainda não leem. `voz_licencas`: uma linha por vigência, **só se
+acrescenta** (gatilho barra update/delete, até do servidor; a exclusão da empresa apaga em cascata); vale a última com
+`vigente_desde <= hoje_sp()` (America/Sao_Paulo; no mesmo dia, a de maior id). Escrita só por `salvar_licencas_voz`:
+robôs, fidelidade e franquia com `editar_contratacao`; preço novo também com `editar_precos`; abaixo do mínimo do catálogo
+com `preco_abaixo_minimo` (ou Master) e motivo; guarda da IA = preço por robô ≥ `preco_minimo_licenca_voz(franquia)`
+(franquia × custo do `voz_minuto_ia`, nem o Master passa). Vazio = pré-preenchido (o que vale; sem licença, a tabela e a
+franquia padrão de 4.000 min). Aumento vale hoje ou no próximo ciclo; redução (robôs, franquia, transcrição) só no
+próximo ciclo e nunca abaixo do mínimo da fidelidade antes do fim (fidelidade 0/6/12/24 meses, só mantém ou estende).
+Overbooking (Σ robôs > `voz_contrato.concorrencia_contratada` numa mudança que aumenta) exige confirmação e avisa a
+equipe (`/console/voz`). O preço vai também para `precos_empresa` (item `voz_licenca_robo`, eh_ia: flat = por robô,
+mensalidade = valor fechado, franquia = a da licença) e **só pela licença** (gatilho `guardar_preco_licenca_voz`; o
+cartão Preços da Contratação não mostra o robô, `ITENS_SO_LICENCA`). O robô entra em `itens_com_franquia()` (franquia
+padrão com o Master em Margem › IA). Leitura: `voz_licencas` (sem motivo/autor) e `voz_licencas_cliente` para equipe com
+`editar_contratacao`/`ver_faturamento` e cliente com `ve_faturamento`; `voz_licenca_vigente` (robôs, sem preço) para
+quem é da empresa e o servidor; `licencas_voz(empresa)`: histórico da equipe (quem, de → para, situação, motivo).
+Recriadas inteiras: `itens_com_franquia`, `custo_ia_referencia`, `guardar_preco_empresa_ia`, `ia_precos_abaixo_minimo`
+(se o SQL 61 ou o 92 rodarem de novo, rode o 93 depois). Teste: `supabase/testes/testar_licencas_voz.py`.
+
 **SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
 ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
 `nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
