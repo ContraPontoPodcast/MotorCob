@@ -11,7 +11,7 @@ import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_V
 import { ROTA_RP, ROTA_RP_ATRIBUICOES, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS } from './roleplay';
 
 export type RotaPai = { to: string; rotulo: string };
-export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean };
+export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean; /** Query da rota ("?assunto=robos"). */ busca?: string };
 
 const INICIO: RotaPai = { to: '/inicio', rotulo: 'Início' };
 const INTEGRACOES: RotaPai = { to: '/empresa/integracoes', rotulo: 'Integrações' };
@@ -23,7 +23,9 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	// Extrato do cliente: aberto pela lista de Clientes, pela busca do topo e pelos alertas do Speech Analytics.
 	'/cliente': { to: '/clientes', rotulo: 'Clientes' },
 	// Suporte
-	'/suporte/novo': { to: '/suporte', rotulo: 'Meus chamados' },
+	// "Pedir mais robôs" (Agente Voz/CX › Discagem, ?assunto=robos) volta para a Discagem.
+	'/suporte/novo': ctx => (new URLSearchParams(ctx.busca ?? '').get('assunto') === 'robos'
+		? { to: '/voz/discagem', rotulo: 'Discagem' } : { to: '/suporte', rotulo: 'Meus chamados' }),
 	// Documentação da API: aberta em Empresa › Integrações (tokens e módulos).
 	'/docs/api': INTEGRACOES,
 	'/documentacao': INTEGRACOES,
@@ -34,6 +36,9 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/implantacao': ctx => (ctx.equipe ? { to: '/console/implantacao', rotulo: 'Console › Implantação' } : INICIO),
 	// A equipe entra na empresa pelo Console › Empresas; para o cliente, Empresa é uma área do menu.
 	'/empresa': ctx => (ctx.equipe ? { to: '/console', rotulo: 'Console › Empresas' } : null),
+	// Empresa › Contratação › Agente de voz: editar os robôs contratados (licenças) e o histórico voltam à Contratação.
+	'/empresa/contratacao/robos': { to: '/empresa/contratacao', rotulo: 'Contratação' },
+	'/empresa/contratacao/robos/historico': { to: '/empresa/contratacao', rotulo: 'Contratação' },
 	// Cobrança › Configurações › Canais: a configuração de um canal volta para a visão geral.
 	'/canais/:canal': { to: '/canais', rotulo: 'Canais' },
 	// Agente Voz/CX, como o Speech Analytics: cada seção do menu da área (Agente de voz, Discagem, Ligações e Telefonia)
