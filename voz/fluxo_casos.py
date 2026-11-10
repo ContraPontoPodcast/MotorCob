@@ -217,6 +217,34 @@ CASOS: list[tuple[str, object, list[str]]] = [
     ("modelo sem conector escolhido ainda é válido", negociador(None, None, None, None), []),
     ("conferência fora do CRM não existe (sem param confere)", _mud(_set("N2", "confere", "dado_carga_vm")),
      ["params_invalidos:N2"]),
+    # SQL 95: "Se não entender" e "Se não ouvir nada" (fala própria, vezes e a saída "silencio")
+    ("fala própria para não entender e silêncio passa", _mud(_varios(
+        _set("N3", "nao_entendi", {"fala": "Não peguei. Quer negociar, já pagou ou prefere que eu ligue depois?", "vezes": 2}),
+        _set("N3", "silencio", {"fala": "Está me ouvindo? Pode falar, por exemplo: quero negociar.", "vezes": 1}),
+        lambda d: _bloco(d, "N3")["saidas"].append(_s("Não respondeu", "N13", "silencio")))), []),
+    ("abertura com silêncio indo para o recado neutro passa", _mud(_varios(
+        _set("N1", "silencio", {"vezes": 2}), lambda d: _bloco(d, "N1")["saidas"].append(_s("Ninguém fala", "N14", "silencio")))), []),
+    ("saída silencio fora das etapas que ouvem", _mud(lambda d: _bloco(d, "N15")["saidas"].append(_s("x", "N13", "silencio"))),
+     ["saida_invalida:N15"]),
+    ("silêncio com vezes fora de 1 a 3", _mud(_set("N9", "silencio", {"vezes": 4})), ["params_invalidos:N9"]),
+    ("não entender com chave a mais", _mud(_set("N8", "nao_entendi", {"fala": "De novo?", "para": "N13"})), ["params_invalidos:N8"]),
+    ("silêncio com fala vazia", _mud(_set("N6", "silencio", {"fala": "  "})), ["params_invalidos:N6"]),
+    ("silêncio em etapa que não ouve", _mud(_set("N11", "silencio", {"vezes": 1})), ["params_invalidos:N11"]),
+    ("fala de não entender longa", _mud(_set("N2", "nao_entendi", {"fala": "a" * 501})), ["fala_longa:N2"]),
+    ("fala de silêncio com variável inexistente", _mud(_set("N9", "silencio", {"fala": "Alô, {{cpf}}?"})),
+     ["variavel_invalida:N9"]),
+    ("fala de não entender pede senha", _mud(_set("N8", "nao_entendi", {"fala": "Me diga a senha do cartão."})),
+     ["fala_pede_senha:N8"]),
+    ("fala de silêncio cita o credor antes da identidade", _mud(_set("N1", "silencio", {"fala": "Alô? É sobre {{credor}}."})),
+     ["valor_antes_identidade:N1"]),
+    ("fala de não entender cita o saldo antes da identidade",
+     _mud(_set("N2", "nao_entendi", {"fala": "Para falar do {{saldo}}, me diga o dia e o mês."})),
+     ["valor_antes_identidade:N2"]),
+    ("fala de não entender com o saldo depois da identidade passa",
+     _mud(_set("N3", "nao_entendi", {"fala": "São {{saldo}} em aberto. Quer negociar?"})), []),
+    ("silêncio levando para a oferta antes da identidade",
+     _mud(lambda d: _bloco(d, "N2")["saidas"].append(_s("Não respondeu", "N6", "silencio"))),
+     ["valor_antes_identidade:N11", "valor_antes_identidade:N5", "valor_antes_identidade:N6", "valor_antes_identidade:N7"]),
 ]
 
 

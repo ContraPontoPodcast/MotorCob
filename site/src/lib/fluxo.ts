@@ -106,10 +106,11 @@ export const SEMPRE: [string, string][] = [
 	['"Não me ligue mais"', 'Grava o opt-out e encerra.'],
 	['"Quero falar com uma pessoa"', 'Transfere para um atendente. Sem atendente livre, volta ao agente.'],
 	['Fala senha ou número de cartão', '"Não precisa me passar senha nem número de cartão. O pagamento é sempre pelo link."'],
-	['Resposta que o agente não entende', 'Pede de novo até as tentativas da etapa. Depois, segue a saída da etapa.'],
+	['Resposta que o agente não entende', 'Diz a fala de "Se não entender" da etapa até as vezes escolhidas. Depois, segue a saída da etapa.'],
+	['A pessoa fica em silêncio', `Depois de 6 s sem fala, diz a fala de "Se não ouvir nada" da etapa até as vezes escolhidas. Na Abertura, sem destino próprio, encerra sem recado e não conta como terceiro.`],
 ];
 /** Casos que ainda não têm tratamento próprio no executor (plano do redesenho: B2 e B4). Mostrados como "ainda não". */
-export const SEMPRE_AINDA_NAO = 'Ainda sem tratamento próprio: tema sensível (falecimento, doença, golpe), CPF dito pela pessoa, caixa postal e silêncio no meio da conversa. Hoje, tema sensível, CPF e caixa postal seguem o caminho da etapa; no silêncio, o agente espera a pessoa falar.';
+export const SEMPRE_AINDA_NAO = 'Ainda sem tratamento próprio: tema sensível (falecimento, doença, golpe), CPF dito pela pessoa e caixa postal detectada pela fala. Hoje, eles seguem o caminho da etapa.';
 
 /** Nomes legíveis das travas que o executor registra (voz_fluxo_passos.trava, travas_voz()). */
 export const NOMES_TRAVA: Record<string, string> = {
@@ -140,8 +141,15 @@ export function rotuloDe(lista: readonly (readonly [string, string])[], v: unkno
 	return lista.find(x => x[0] === v)?.[1] ?? String(v ?? '');
 }
 
+/** SQL 95: etapas que ouvem a pessoa, com "Se não entender" e "Se não ouvir nada" (= voz/fluxo_validador.OUVEM). */
+export const OUVEM: readonly TipoBloco[] = ['abertura', 'identidade', 'pergunta', 'intencao', 'oferta', 'retorno'];
+/** A saída opcional "Se não ouvir nada" (quando = silencio). */
+export const SAIDA_SILENCIO: SaidaPadrao = { quando: 'silencio', rotulo: 'Não respondeu' };
 /** Saídas possíveis do bloco: (quando, rótulo sugerido, obrigatória). Pergunta e intenção dependem dos params. */
 export function saidasPossiveis(b: Bloco): SaidaPadrao[] {
+	return [...saidasDoTipo(b), ...(OUVEM.includes(b.tipo) ? [SAIDA_SILENCIO] : [])];
+}
+function saidasDoTipo(b: Bloco): SaidaPadrao[] {
 	const p = b.params ?? {};
 	if (b.tipo === 'pergunta') {
 		const ops = Array.isArray(p.opcoes) ? (p.opcoes as { codigo?: string; rotulo?: string }[]) : [];
@@ -313,19 +321,45 @@ export function textoVolta(s: Saida, de: string, numeros: Map<string, number>, d
  * Só as etapas que ouvem a pessoa; a conversa com IA, o sistema e os finais, não. O silêncio ainda não tem tratamento
  * próprio (B2): hoje o executor ignora o turno sem fala.
  */
-export function seNaoEntender(b: Bloco): { repete: number; fala: string; quando: string } | null {
+export interface Repeticao { repete: number; vezes: number; fala: string; quando: string | null; propria: boolean }
+/** params.nao_entendi / params.silencio (SQL 95): {fala?, vezes?}. */
+export function repeticao(b: Bloco, qual: 'nao_entendi' | 'silencio'): { fala?: string; vezes?: number } {
+	const r = b.params?.[qual];
+	if (!r || typeof r !== 'object' || Array.isArray(r)) return {};
+	const o = r as Record<string, unknown>;
+	return { fala: typeof o.fala === 'string' && o.fala.trim() ? o.fala : undefined, vezes: Number.isInteger(o.vezes) ? (o.vezes as number) : undefined };
+}
+/** Saída de "não entendi" de cada tipo que ouve (voz/fluxo.py › SAIDA_NAO_ENTENDI). */
+export const SAIDA_NAO_ENTENDI: Partial<Record<TipoBloco, string>> = { abertura: 'terceiro', identidade: 'nao_confirmou', pergunta: 'sem_resposta', intencao: 'nao_entendido', oferta: 'recusou', retorno: 'nao_agendou' };
+export function seNaoEntender(b: Bloco): (Repeticao & { quando: string }) | null {
 	const p = b.params ?? {};
-	const repete = Math.max(0, (Math.floor(Number(p.tentativas)) || 2) - 1);
+	const quando = SAIDA_NAO_ENTENDI[b.tipo];
+	if (!quando) return null;
+	const r = repeticao(b, 'nao_entendi');
+	const vezes = r.vezes ?? (Math.floor(Number(p.tentativas)) || 2);
 	const FALA_REPETIR = 'Desculpe, pode repetir?';
-	switch (b.tipo) {
-		case 'abertura': return { repete, fala: 'Desculpe. Falo com {{primeiro_nome}}?', quando: 'terceiro' };
-		case 'identidade': return { repete, fala: 'Desculpe, não entendi. Pode repetir, por exemplo, 15 de março?', quando: 'nao_confirmou' };
-		case 'pergunta': return { repete, fala: typeof p.fala === 'string' && p.fala.trim() ? p.fala.trim() : FALA_REPETIR, quando: 'sem_resposta' };
-		case 'intencao': return { repete, fala: FALA_REPETIR, quando: 'nao_entendido' };
-		case 'oferta': return { repete, fala: FALA_REPETIR, quando: 'recusou' };
-		case 'retorno': return { repete, fala: 'Pode me dizer um dia e um horário, por exemplo, sexta às 10h?', quando: 'nao_agendou' };
-		default: return null;
-	}
+	const padrao = b.tipo === 'abertura' ? 'Desculpe. Falo com {{primeiro_nome}}?'
+		: b.tipo === 'identidade' ? 'Desculpe, não entendi. Pode repetir, por exemplo, 15 de março?'
+		: b.tipo === 'pergunta' ? (typeof p.fala === 'string' && p.fala.trim() ? p.fala.trim() : FALA_REPETIR)
+		: b.tipo === 'retorno' ? 'Pode me dizer um dia e um horário, por exemplo, sexta às 10h?' : FALA_REPETIR;
+	return { repete: Math.max(0, vezes - 1), vezes, fala: r.fala ?? padrao, quando, propria: !!r.fala };
+}
+/** Segundos sem fala da pessoa até contar como silêncio (voz/fluxo.py › SILENCIO_S; fixo pela MotorCX). */
+export const SILENCIO_S = 6;
+/**
+ * "Se não ouvir nada" (SQL 95; voz/fluxo.py › _silencio_etapa): diz a fala própria (ou "Desculpe, não ouvi." e a fala
+ * da etapa; na Abertura, "Alô? Falo com …?") até as vezes (padrão 2) e depois segue a saída "silencio"; sem ela, a de
+ * "não entendi". `quando` null = encerra sem recado (só a Abertura).
+ */
+export function seNaoOuvir(b: Bloco): Repeticao | null {
+	const qne = SAIDA_NAO_ENTENDI[b.tipo];
+	if (!qne) return null;
+	const r = repeticao(b, 'silencio');
+	const vezes = r.vezes ?? 2;
+	const fala = typeof b.params?.fala === 'string' ? b.params.fala.trim() : '';
+	const padrao = b.tipo === 'abertura' ? 'Alô? Falo com {{primeiro_nome}}?' : `Desculpe, não ouvi. ${fala}`.trim();
+	const temSaida = b.saidas.some(s => s.quando === 'silencio');
+	return { repete: Math.max(0, vezes - 1), vezes, fala: r.fala ?? padrao, quando: temSaida ? 'silencio' : b.tipo === 'abertura' ? null : qne, propria: !!r.fala };
 }
 /** O que a etapa de sistema faz, em palavras (ela não fala com a pessoa). */
 export function acaoSistema(b: Bloco): string {
@@ -532,7 +566,7 @@ export function variaveisDoTexto(texto: string): string[] {
 	return out;
 }
 /** Textos que viram fala ou orientam a IA (textos_do_bloco do validador). */
-const textosDoBloco = (b: Bloco) => (['fala', 'fala_espera', 'objetivo'] as const).map(k => b.params?.[k]).filter((t): t is string => typeof t === 'string');
+const textosDoBloco = (b: Bloco) => [...(['fala', 'fala_espera', 'objetivo'] as const).map(k => b.params?.[k]), ...(['nao_entendi', 'silencio'] as const).map(k => repeticao(b, k).fala)].filter((t): t is string => typeof t === 'string');
 /** Variáveis sensíveis que a etapa diz (vazio = nenhuma). */
 export const variaveisSensiveis = (b: Bloco) => [...new Set(textosDoBloco(b).flatMap(variaveisDoTexto).filter(v => VARIAVEIS_SENSIVEIS.includes(v)))];
 /** A etapa fala de valor, oferta ou credor (pelo tipo ou por uma variável sensível)? */
