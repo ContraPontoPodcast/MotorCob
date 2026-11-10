@@ -1071,6 +1071,14 @@ rodarem de novo, rode o 101 depois. `definir_concorrencia_contratada` (mesma ass
 `/console/voz`) quando diminui o teto para baixo dos robôs vendidos; não bloqueia. Teste:
 `supabase/testes/testar_licencas_divisao.py` (cenários isolados numa transação desfeita).
 
+**Site · Console › Agente virtual › Todas as empresas: robôs vendidos × teto (PR 5, sem SQL).** O cartão
+"Concorrência contratada" virou "Robôs vendidos × teto contratado" (`console-voz-robos.tsx`): KPIs (teto, vendidos com
+% do teto, usáveis = Σ min(licenças, canais), sobra para quem não tem licença), barra empilhada das licenças com o marco
+do teto, alerta de overbooking (ou "quase no teto" a partir de 90%), teto editável (abaixo do vendido pede confirmação) e
+a tabela por empresa com o "por quê" (`motivo` do SQL 101). Contas e frases em `site/src/lib/robos-voz.ts`
+(`porQueCliente` nunca cita o teto global). Sem o SQL 101 no banco, o cartão avisa. A configuração da empresa mostra o
+pico como "Desligado (robôs contratados)" para quem tem licença.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
