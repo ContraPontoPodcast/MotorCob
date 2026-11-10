@@ -20,7 +20,6 @@ import io
 import json
 import logging
 import math
-import os
 import re
 import struct
 import urllib.request
@@ -112,8 +111,7 @@ def gerar(saida: Path, sintetizar, sons: dict | None = None) -> list[Path]:
             raise RuntimeError(f"'{nome}': o TTS devolveu áudio vazio")
         destino = saida / f"{nome}.wav"
         tmp = saida / f".{nome}.wav.tmp"
-        tmp.write_bytes(wav(para_8k(pcm)))
-        os.chmod(tmp, 0o644)
+        tmp.write_bytes(wav(para_8k(pcm)))      # permissão pelo umask do contêiner; o motorcx-voz-sons ajusta no Asterisk
         tmp.replace(destino)
         feitos.append(destino)
         log.info("som %s gerado (%.1f s)", nome, len(pcm) / 2 / TAXA_TTS)
