@@ -46,8 +46,10 @@ class Fonte:
     def __init__(self, sb):
         self.sb = sb
 
-    def regras(self, empresa_id, linhas=None):
-        return {}
+    def discagem(self, empresa_id):
+        return self.linhas
+
+    linhas: list = []
 
 
 def pedido(i=1, **kw):
@@ -158,6 +160,14 @@ class TestPlantaoTestarAgora(Base):
         self.assertEqual([l.teste_id for l in pl._do_dia()], [None])
         pl._carregar_listas(self.rel().date())        # dia "novo" para a empresa: sai o lote do dia, o de teste fica
         self.assertEqual([l.teste_id for l in orq.lotes.values()], [1])
+
+    def test_horario_da_tabela_da_carteira(self):
+        orq, pl = self._plantao([pedido()])
+        pl.fonte.linhas = [{"credor_id": 7, "discagem": {"horarios": {"ativo": True, "tabela": {
+            "hora": "local", "ufs": {"SP": {"seg_sex": ["11:00", "18:00"], "sabado": None}}, "ddds": {}}}}}]
+        pl.pegar_testes_agora(0.0)                       # 10:00 em SP, a carteira só liga a partir das 11:00
+        self.assertIn("fora do horário", self.sb.concluidos()[0]["motivo"])
+        self.assertEqual(len(orq.lotes), 1)
 
     def test_rpc_no_acesso_proprio(self):
         self.assertEqual((A.RPC["pegar_teste_agora_voz"], A.RPC["concluir_teste_agora_voz"]),
