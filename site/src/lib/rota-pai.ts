@@ -8,6 +8,7 @@
 // "/speech-analytics/:aba?"). A rota exata ganha da com parâmetro.
 
 import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_VOZ } from './rotas-voz';
+import { ROTA_RP, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS } from './roleplay';
 
 export type RotaPai = { to: string; rotulo: string };
 export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean };
@@ -56,6 +57,12 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	// de gravações) volta para a Visão geral; o envio volta para a Entrada.
 	'/speech-analytics/:aba?': { to: ROTA_SPEECH, rotulo: 'Visão geral do Speech Analytics' },
 	'/speech-analytics/entrada/enviar': { to: ROTA_ENTRADA_GRAVACOES, rotulo: 'Entrada de gravações' },
+	// Roleplay (a aba /speech-analytics/roleplay é o Painel e volta para a Visão geral, como as outras abas): cada seção
+	// volta para o Painel; o cenário, para a biblioteca; a pessoa, para o Cadastro para treino.
+	'/speech-analytics/roleplay/cenarios': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
+	'/speech-analytics/roleplay/cenarios/:id': { to: ROTA_RP_CENARIOS, rotulo: 'Cenários' },
+	'/speech-analytics/roleplay/operadores': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
+	'/speech-analytics/roleplay/operadores/:op': { to: ROTA_RP_CADASTRO, rotulo: 'Cadastro para treino' },
 };
 
 /** "/voz/ligacoes/:id" → /^\/voz\/ligacoes\/[^/]+$/ ("/x/:p?" também casa "/x"). */
