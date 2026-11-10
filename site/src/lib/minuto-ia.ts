@@ -3,6 +3,12 @@
 // (tests/dados/tarifacao_ia_casos.json, conferida em minuto-ia.test.tsx), e as planilhas do demonstrativo.
 import { paraCsv } from './voz';
 
+/** Pré-preenchidos (decisão do dono): preço do minuto R$ 1,25 e cadência 0/30/6, sempre editáveis. */
+export const PRECO_MINUTO_PADRAO = 1.25;
+export const CADENCIA_PADRAO = '0/30/6';
+/** Régua da tela da Contratação: como cada duração é cobrada. */
+export const REGUA_CADENCIA = [5, 12, 31, 47, 95] as const;
+
 /** Segundos em milésimos inteiros, arredondando a 4ª casa para cima a partir de 5 (como o round(s, 3) do banco). */
 export function milesimos(v: unknown): number {
 	const n = Number(v ?? 0);

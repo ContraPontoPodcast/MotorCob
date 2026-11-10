@@ -38,6 +38,8 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	// Empresa › Contratação › Agente de voz: editar os robôs contratados (licenças) e o histórico voltam à Contratação.
 	'/empresa/contratacao/robos': { to: '/empresa/contratacao', rotulo: 'Contratação' },
 	'/empresa/contratacao/robos/historico': { to: '/empresa/contratacao', rotulo: 'Contratação' },
+	// Contratação › Agente de voz: modelo de cobrança (minuto falado ou licença) volta à Contratação.
+	'/empresa/contratacao/voz': { to: '/empresa/contratacao', rotulo: 'Contratação' },
 	// Empresa › Faturamento › Demonstrativo do minuto falado (SQL 127) volta ao Faturamento.
 	'/empresa/faturamento/demonstrativo': { to: '/empresa/faturamento', rotulo: 'Faturamento' },
 	// Cobrança › Configurações › Canais: a configuração de um canal volta para a visão geral.
