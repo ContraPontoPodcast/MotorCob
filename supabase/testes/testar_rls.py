@@ -3046,5 +3046,11 @@ print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 111: operadores para transferência ao mesmo tempo (testar_transferencia_operadores.py)", True,
        f"select {r.returncode}", None, None, 0)
 
+# SQL 116 · Canais › Agente de voz › "Testar agora" (PR 9 do plano): ligação de teste sem número no banco
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_testar_agora.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 116: Testar agora do Agente de voz (testar_testar_agora.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

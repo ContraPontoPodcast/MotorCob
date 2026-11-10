@@ -186,6 +186,9 @@ class Orquestrador:
         self.curtas = Curtas()                   # chamadas curtas do dia por linha e total (freios do ritmo, V6)
         self.fila_humana: dict[int, JanelaTaxa] = {}   # empresa -> transferências (sem operador?) dos últimos 30 min
         self.fila_cheia: set[int] = set()
+        # "Testar agora" (SQL 116): o Plantão recebe o fim da ligação de teste (id do teste, evento, chamada). O evento
+        # vai para voz_chamadas (ao_registrar) e para os medidores, mas não volta ao motor (não há cliente)
+        self.ao_teste: Callable[[int, EventoChamada, "Chamada"], None] | None = None
 
     # ---------------------------------------------------------------- utilidades
     def _conta(self, k: str, n: int = 1):
@@ -965,10 +968,12 @@ class Orquestrador:
         for av in self.curtas.avisos:
             self._alerta(av)
         self.curtas.avisos.clear()
-        self.escritor.escrever(ev)
+        lote = self.lotes.get(c.lote_chave)
+        teste = lote.teste_id if lote is not None else None
+        if teste is None:
+            self.escritor.escrever(ev)
         if self.ao_registrar is not None:
             self.ao_registrar(ev)
-        lote = self.lotes.get(c.lote_chave)
         if lote is not None:
             lote.em_voo.discard(c.idx)
             lote.registrar(c.item, ev.desfecho, self.relogio(), causa_sip=c.causa_sip,
@@ -986,3 +991,5 @@ class Orquestrador:
                 self._alerta(f"empresa {c.empresa_id}: abandono acima de "
                              f"{self.dados.config(c.empresa_id).abandono_max_pct:g}% — ritmo reduzido")
         self._conta(f"desfecho_{ev.desfecho}")
+        if teste is not None and self.ao_teste is not None:
+            self.ao_teste(teste, ev, c)

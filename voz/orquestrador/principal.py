@@ -34,6 +34,7 @@ from voz.orquestrador.gravacao import EnviadorGCS, FilaEnvio
 from voz.orquestrador.lote import Lote, RegrasLote, ler_ids, ler_mailing
 from voz.orquestrador.nucleo import APP, Orquestrador
 from voz.orquestrador.ritmo import Historico
+from voz.orquestrador import testar_agora as TA
 from voz.provedores.simulador import Simulador
 
 log = logging.getLogger("motorcx.voz")
@@ -229,19 +230,25 @@ class Plantao:
     """O laço do serviço, em ciclos testáveis (ciclo(agora_s) sem dormir)."""
 
     def __init__(self, orq: Orquestrador, fonte: FonteListas, modo: str, dados_caminho: Path | None = None,
-                 registro=None, publicador=None, relogio=relogio_brasilia, parte: tuple[int, int] = (1, 1)):
+                 registro=None, publicador=None, relogio=relogio_brasilia, parte: tuple[int, int] = (1, 1),
+                 segredos=None):
         self.orq, self.fonte, self.modo, self.dados_caminho = orq, fonte, modo, dados_caminho
         self.parte = parte          # (i, n): esta VM disca as empresas com id % n == i - 1
         self.registro, self.publicador, self.relogio = registro, publicador, relogio
         self.carregados: dict[int, object] = {}     # empresa -> dia carregado
         self._mtime = dados_caminho.stat().st_mtime if dados_caminho and dados_caminho.exists() else None
         self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9, "robos": -1e9,
-                     "ritmo": -1e9, "ritmo_cfg": -1e9, "curtas": -1e9, "historico": -1e9}
+                     "ritmo": -1e9, "ritmo_cfg": -1e9, "curtas": -1e9, "historico": -1e9, "testes": -1e9}
         self._curtas_aviso_s = -1e9                  # último aviso de falha da leitura das curtas (1 por hora)
         self._ritmo_aviso_s = -1e9                   # último aviso de falha das amostras do ritmo (1 por hora)
         self._robos_s: float | None = None           # última foto dos robôs (segundos no limite entre duas fotos)
         self._robos_aviso_s = -1e9                   # último aviso de falha da telemetria (no máximo 1 por hora)
         self.agregado: object = None                 # último dia agregado em voz_passadas_dia
+        # "Testar agora" (SQL 116): o número de teste vem do cofre pela referência (nunca do banco)
+        self.segredos = segredos
+        self.testes: dict[int, TA.TesteEmCurso] = {}
+        self._testes_aviso_s = -1e9
+        orq.ao_teste = self._teste_terminou
 
     def _vence(self, k: str, agora_s: float, a_cada: float) -> bool:
         if agora_s - self._ult[k] >= a_cada:
@@ -256,8 +263,11 @@ class Plantao:
             self._carregar_listas(hoje)
         if self.registro is not None and self._vence("banco", agora_s, 15):
             self._ids_dos_lotes(hoje)
-            self.registro.sincronizar(list(self.orq.lotes.values()))
+            self.registro.sincronizar(self._do_dia())
             self.registro.descarregar()
+        if self.registro is not None and self._vence("testes", agora_s, 15):
+            self.pegar_testes_agora(agora_s)
+            self.vigiar_testes(agora_s)
         if self.registro is not None and self._vence("robos", agora_s, 15):
             self.registrar_uso_robos(agora_s)
         if self.registro is not None and self._vence("ritmo", agora_s, 60):
@@ -288,7 +298,7 @@ class Plantao:
     def _ids_dos_lotes(self, hoje) -> None:
         """voz_lotes do dia para cada carteira carregada (um por carteira; discador e agente_voz dividem)."""
         grupos: dict = {}
-        for l in self.orq.lotes.values():
+        for l in self._do_dia():
             if l.lote_id is None:
                 grupos.setdefault((l.empresa_id, l.credor_id), []).append(l)
         for (emp, cid), ls in grupos.items():
@@ -348,11 +358,11 @@ class Plantao:
         """Relê o ritmo de cada carteira com lote carregado (mudou no site = vale no minuto seguinte). Banco fora: o de
         antes continua. Devolve quantos lotes mudaram."""
         mudou = 0
-        for emp in sorted({l.empresa_id for l in self.orq.lotes.values()}):
+        for emp in sorted({l.empresa_id for l in self._do_dia()}):
             ritmos = self.fonte.ritmos(emp)
             if ritmos is None:
                 continue
-            for l in self.orq.lotes.values():
+            for l in self._do_dia():
                 novo = ritmos.get(l.credor_id, dict(DG.PADRAO["ritmo"])) if l.empresa_id == emp else None
                 if novo is not None and novo != l.ritmo:
                     log.info("empresa %s carteira %s: ritmo agora %s", emp, l.credor_id, novo)
@@ -366,7 +376,7 @@ class Plantao:
         (aquecimento, base do p e razão máxima da primeira semana). Banco fora: o de antes continua (sem histórico, o
         Preditivo fica em aquecimento: Power 1,0)."""
         n = 0
-        for emp in sorted({l.empresa_id for l in self.orq.lotes.values()}):
+        for emp in sorted({l.empresa_id for l in self._do_dia()}):
             try:
                 h = self.registro.sb.rpc("historico_ritmo_voz", {"empresa": emp}) or {}
             except Exception as ex:   # noqa: BLE001
@@ -374,7 +384,7 @@ class Plantao:
                 continue
             por = {c.get("credor_id"): c for c in h.get("carteiras") or []}
             p_emp = h.get("p_empresa")
-            for l in self.orq.lotes.values():
+            for l in self._do_dia():
                 if l.empresa_id != emp:
                     continue
                 c = por.get(l.credor_id) or {}
@@ -441,6 +451,112 @@ class Plantao:
         retomadas = orq.agendador.aplicar_pausas({int(a["tronco_id"]): a["motivo"] for a in ativas}, meus)
         for t in retomadas:
             log.warning("rota %s retomada pela equipe: volta a discar", t)
+
+    def _do_dia(self) -> list:
+        """Os lotes da Lista do dia (sem os de "Testar agora", que não têm voz_lotes, ondas nem resubmits)."""
+        return [l for l in self.orq.lotes.values() if l.teste_id is None]
+
+    # ------------------------------------------------------------ SQL 116 · "Testar agora" (PR 9 do plano Canais)
+    def _concluir_teste(self, teste_id: int, situacao: str, desfecho: str | None = None, passos: dict | None = None,
+                        motivo: str | None = None) -> None:
+        try:
+            self.registro.sb.rpc("concluir_teste_agora_voz", {"teste": int(teste_id), "situacao": situacao,
+                                                              "desfecho": desfecho, "passos": passos or {},
+                                                              "motivo": motivo})
+        except Exception as ex:   # noqa: BLE001
+            log.warning("teste agora %s: resultado não gravado (%s)", teste_id, ex.__class__.__name__)
+
+    def _soltar_teste(self, teste_id: int) -> None:
+        t = self.testes.pop(int(teste_id), None)
+        if t is not None:
+            self.orq.lotes.pop(t.lote.chave, None)
+
+    def pegar_testes_agora(self, agora_s: float) -> int:
+        """Pega os pedidos das empresas desta VM em Só números de teste ou Real (um de cada vez por empresa), lê o
+        número no cofre, confere tudo de novo e põe o lote de um item no orquestrador. Recusa com o motivo."""
+        if self.modo != "real":
+            return 0
+        minhas = [e for e, cfg in sorted(self.orq.dados.configs.items())
+                  if cfg.modo in ("teste", "real") and e % self.parte[1] == self.parte[0] - 1]
+        n = 0
+        while minhas:
+            try:
+                ped = self.registro.sb.rpc("pegar_teste_agora_voz", {"empresas": minhas})
+            except Exception as ex:   # noqa: BLE001 — banco sem o SQL 116 (ou fora): 1 aviso por hora, segue discando
+                if agora_s - self._testes_aviso_s >= 3600:
+                    self._testes_aviso_s = agora_s
+                    log.warning("teste agora: falha ao pegar pedido (%s)", ex.__class__.__name__)
+                return n
+            if not ped:
+                return n
+            n += 1
+            tid, emp = int(ped["id"]), int(ped["empresa_id"])
+            cid = int(ped["credor_id"]) if ped.get("credor_id") is not None else None
+            if self.segredos is None:
+                self._concluir_teste(tid, "recusado", motivo="o servidor de voz está sem acesso ao cofre de segredos")
+                continue
+            try:
+                numero = self.segredos.valor(str(ped.get("segredo_ref") or ""))
+            except Exception as ex:   # noqa: BLE001 — nunca repassa o valor
+                log.warning("teste agora %s: número não lido do cofre (%s)", tid, ex.__class__.__name__)
+                self._concluir_teste(tid, "recusado", motivo="o número de teste não foi lido do cofre")
+                continue
+            numero = "".join(ch for ch in numero if ch.isdigit())
+            numero = numero[2:] if len(numero) in (12, 13) and numero.startswith("55") else numero
+            agora = self.relogio()
+            regras = self.fonte.regras(emp) if self.fonte is not None else {}
+            rl = (regras or {}).get(cid)
+            hor = (rl.cfg.get("horarios") or {}) if rl is not None else {}
+            cfg = self.orq.dados.config(emp)
+            if emp not in self.orq.agendador.empresas:
+                self.orq.agendador.registrar_empresa(cfg, self.orq.dados.troncos_da(emp))
+            jan, motivo = TA.conferir(ped, numero, agora, hor.get("tabela") if hor.get("ativo", True) else None,
+                                      self.orq.curtas.empresa_parada(emp, agora))
+            if motivo:
+                self._concluir_teste(tid, "recusado", motivo=motivo)
+                continue
+            variaveis = {}
+            try:
+                emp_row = (self.fonte.sb.selecionar("empresas", {"id": f"eq.{emp}"}) or [None])[0]
+                cred = (self.fonte.sb.selecionar("credores", {"id": f"eq.{cid}"}) or [None])[0] if cid else None
+                if emp_row and emp_row.get("nome"):
+                    variaveis["assessoria"] = str(emp_row["nome"])[:80]
+                if cred and cred.get("nome"):
+                    variaveis["credor"] = str(cred["nome"]).strip()[:80]
+            except Exception:   # noqa: BLE001 — sem os nomes, a abertura diz "um assistente virtual"
+                pass
+            item = TA.item_de_teste(tid, numero, jan, variaveis)
+            del numero
+            lote = Lote(emp, [item], credor_id=cid, canal="agente_voz", teste_id=tid)
+            self.orq.adicionar_lote(lote)
+            self.testes[tid] = TA.TesteEmCurso(tid, lote, agora_s)
+            log.info("teste agora %s: empresa %s carteira %s, ligando", tid, emp, cid)
+        return n
+
+    def _teste_terminou(self, teste_id: int, ev, c) -> None:
+        """Fim da ligação de teste (do núcleo): grava os passos e tira o lote."""
+        t = self.testes.get(int(teste_id))
+        if t is None or t.concluido:
+            return
+        t.concluido = True
+        cfg = self.orq.dados.config(c.empresa_id)
+        self._concluir_teste(teste_id, "concluido", ev.desfecho,
+                             TA.passos(ev, bool(c.gravando), bool(cfg.aviso_gravacao), bool(c.provedor)))
+        self._soltar_teste(teste_id)
+
+    def vigiar_testes(self, agora_s: float) -> None:
+        """Item que saiu sem discar (sem rota, número fora do plano) ou que esperou demais (troncos ou robôs
+        ocupados): recusa com o motivo e tira o lote. Ligação em voo nunca é cortada aqui."""
+        for tid, t in list(self.testes.items()):
+            if t.concluido or t.lote.em_voo:
+                continue
+            item = t.lote.itens[0]
+            if item.tentativas == 0 and (item.encerrado or agora_s - t.inicio_s >= TA.ESPERA_MAX_S):
+                t.concluido = True
+                motivo = TA.motivo_sem_ligacao(t.lote) if item.encerrado else \
+                    "a rota ou os robôs ficaram ocupados por 5 minutos: tente de novo"
+                self._concluir_teste(tid, "recusado", motivo=motivo)
+                self._soltar_teste(tid)
 
     def pegar_reenvios(self) -> int:
         """Reenviar agora: pega um pedido pendente das empresas desta VM, confere de novo e cria as voltas."""
@@ -559,7 +675,7 @@ class Plantao:
     def descarregar_tudo(self, so_periodico: bool = False) -> None:
         if self.registro is not None:
             if not so_periodico:
-                self.registro.sincronizar(list(self.orq.lotes.values()))
+                self.registro.sincronizar(self._do_dia())
                 self.registro.descarregar()
                 self.registrar_ritmo(0.0, todos=True)      # parando: a janela aberta também vai
             self.registro.atualizar_consumo()
@@ -579,7 +695,7 @@ class Plantao:
 
     def _carregar_listas(self, hoje) -> None:
         # dia novo: sai o lote de ontem (o que não foi discado fica para a lista de hoje do motor)
-        for chave in [k for k, l in self.orq.lotes.items() if self.carregados.get(k[0]) != hoje]:
+        for chave in [k for k, l in self.orq.lotes.items() if l.teste_id is None and self.carregados.get(k[0]) != hoje]:
             if not any(c.lote_chave == chave for c in self.orq.chamadas.values()):
                 self.orq.lotes.pop(chave, None)
         for emp, cfg in sorted(self.orq.dados.configs.items()):
@@ -693,7 +809,7 @@ def main(argv=None) -> int:
         if pub is None:
             log.warning("MOTORCX_VOZ_ENVIADO_POR não definido: os eventos ficam só na VM (sem envio ao motor)")
         plantao = Plantao(orq, FonteListas(sb, Path(a.eventos) / ".listas"), a.modo, Path(a.dados), registro, pub,
-                          parte=(i, n))
+                          parte=(i, n), segredos=segredos)
         threading.Thread(target=_ouvir, args=(ari, fila, parar), daemon=True).start()
         import signal
         signal.signal(signal.SIGTERM, lambda *_: parar.set())
