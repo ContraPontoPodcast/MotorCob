@@ -108,7 +108,9 @@ test('treino atribuído: situação por pessoa (quem precisa de apoio primeiro),
 	assert.match(h, /href="\/speech-analytics\/roleplay\/atribuir\?ops=100"[^>]*>Atribuir outro cenário/);
 	assert.match(h, /href="\/speech-analytics\/roleplay\/operadores\/100"/);
 	assert.match(h, /Registrar feedback 1:1/);
-	assert.match(h, /Treino lado a lado · em breve/);
+	assert.match(h, /href="\/speech-analytics\/roleplay\/atribuicoes\/5\/lado-a-lado\/103"[^>]*>Treino lado a lado</, 'quem ainda não chegou na meta treina lado a lado');
+	assert.doesNotMatch(h, /lado-a-lado\/100"/, 'quem esgotou as tentativas não (precisa de apoio)');
+	assert.doesNotMatch(h, /lado-a-lado\/101"/, 'quem chegou na meta não');
 	assert.match(h, /Confirmar a identidade antes do valor\./);
 	assert.match(h, /aria-current="true"[^>]*>Treinos atribuídos<\/a>/, 'seção-mãe marcada no detalhe');
 	assert.doesNotMatch(t, INTERNOS);
@@ -185,7 +187,7 @@ test('operador: briefing com "Isto é treino" antes de tudo, ficha fictícia, it
 	assert.match(h, /Item crítico/);
 	assert.match(h, /minutos de voz do mês acabaram/);
 	assert.match(h, /value="on" checked=""|checked=""[^>]*\/?>Texto/, 'sem minutos de voz: texto marcado');
-	assert.match(h, /Começar · em breve/);
+	assert.match(h, /Começar<\/button>/, 'texto marcado: Começar habilitado');
 	assert.match(h, /aria-label="Voltar para Meus treinamentos"/);
 	assert.doesNotMatch(t, INTERNOS);
 	const esgotou = em('/x', <BriefingView t={{ ...TR, situacao: 'precisa_apoio', tentativas_usadas: 2 }} token={TOKEN} hoje={HOJE} vozDisponivel />);

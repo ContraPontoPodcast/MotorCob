@@ -74,6 +74,13 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/speech-analytics/roleplay/atribuicoes': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
 	'/speech-analytics/roleplay/atribuicoes/:id': { to: ROTA_RP_ATRIBUICOES, rotulo: 'Treinos atribuídos' },
 	'/speech-analytics/roleplay/atribuir': { to: ROTA_RP_ATRIBUICOES, rotulo: 'Treinos atribuídos' },
+	// Sessão por texto (SQL 100): a sessão de uma pessoa e o treino lado a lado voltam para o treino; o teste e o
+	// resultado do teste, para o cenário.
+	// O destino com ":id" recebe o id do próprio endereço.
+	'/speech-analytics/roleplay/atribuicoes/:id/sessoes/:sid': { to: `${ROTA_RP_ATRIBUICOES}/:id`, rotulo: 'Treino' },
+	'/speech-analytics/roleplay/atribuicoes/:id/lado-a-lado/:op': { to: `${ROTA_RP_ATRIBUICOES}/:id`, rotulo: 'Treino' },
+	'/speech-analytics/roleplay/cenarios/:id/testar': { to: `${ROTA_RP_CENARIOS}/:id`, rotulo: 'Cenário' },
+	'/speech-analytics/roleplay/cenarios/:id/teste/:sid': { to: `${ROTA_RP_CENARIOS}/:id`, rotulo: 'Cenário' },
 };
 
 /** "/voz/ligacoes/:id" → /^\/voz\/ligacoes\/[^/]+$/ ("/x/:p?" também casa "/x"). */
@@ -86,13 +93,23 @@ function padrao(rota: string): RegExp {
 }
 const COM_PARAMETRO = Object.keys(ROTAS_PAI).filter(r => r.includes('/:')).map(r => [r, padrao(r)] as const);
 
+function preencherParametros(rota: string, caminho: string, destino: string): string {
+	const nomes = rota.split('/');
+	const valores = caminho.split('/');
+	const p: Record<string, string> = {};
+	nomes.forEach((n, i) => { if (n.startsWith(':') && valores[i] != null) p[n.replace(/[:?]/g, '')] = valores[i]; });
+	return destino.replace(/:([A-Za-z]+)/g, (m, k: string) => p[k] ?? m);
+}
+
 /** Tela-mãe da rota, ou null quando a tela já é o topo da área (abas, menu lateral). */
 export function rotaPai(pathname: string, ctx: ContextoRota = {}): RotaPai | null {
 	const caminho = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
 	const chave = Object.hasOwn(ROTAS_PAI, caminho) ? caminho : COM_PARAMETRO.find(([, re]) => re.test(caminho))?.[0];
 	const regra = chave ? ROTAS_PAI[chave] : undefined;
 	if (!regra) return null;
-	const pai = typeof regra === 'function' ? regra(ctx) : regra;
+	const bruto = typeof regra === 'function' ? regra(ctx) : regra;
+	// destino com parâmetro ("/x/:id"): o valor vem do mesmo parâmetro no endereço atual
+	const pai = bruto && bruto.to.includes('/:') && chave ? { ...bruto, to: preencherParametros(chave, caminho, bruto.to) } : bruto;
 	// "/x/:p?" também casa "/x", que é a própria tela-mãe: não volta para ela mesma.
 	return pai && pai.to.split('?')[0] !== caminho ? pai : null;
 }

@@ -55,18 +55,20 @@ export function LinkRP({ state, ...p }: LinkProps) {
 	return <Link {...p} state={state ?? de} />;
 }
 
-export function MolduraRP({ titulo, descricao, acoes, detalhe, children }: {
+export function MolduraRP({ titulo, descricao, acoes, detalhe, meio, children }: {
 	titulo: string; descricao?: string; acoes?: ReactNode;
 	/** Nome da tela de detalhe (cenário, pessoa), para a trilha e o título da aba. */
 	detalhe?: string | null;
+	/** Degrau entre a seção e o detalhe (ex.: o treino, na sessão de uma pessoa). */
+	meio?: ItemTrilha | null;
 	children: ReactNode;
 }) {
 	const { pathname } = useLocation();
-	const doc = tituloDocumentoRP(pathname, detalhe);
+	const doc = tituloDocumentoRP(pathname, detalhe, meio);
 	useEffect(() => { document.title = doc; }, [doc]);
 	return (
 		<TelaAtualRP.Provider value={titulo}>
-			<TrilhaRP itens={trilhaRP(pathname, detalhe)} />
+			<TrilhaRP itens={trilhaRP(pathname, detalhe, meio)} />
 			<PageHeading title={titulo} description={descricao} actions={acoes} semControles area="Speech Analytics › Roleplay" />
 			<AbasSpeech atual="roleplay" />
 			<SubnavRP secao={secaoRP(pathname) ?? 'painel'} exato={ehSecaoRP(pathname)} />

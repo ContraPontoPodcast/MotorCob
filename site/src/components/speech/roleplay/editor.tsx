@@ -10,11 +10,11 @@ import { useEffect, useId, useState, type ReactNode } from 'react';
 import { useBlocker, useNavigate } from 'react-router';
 import { ArrowUp, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { Aviso, Botao, Cartao, Modal, Pilula, campoCls, campoStyle, textareaCls } from '@/components/ds';
+import { Aviso, Botao, Cartao, Modal, Pilula, campoCls, campoStyle, clsBotao, textareaCls } from '@/components/ds';
 import { supabase } from '@/lib/supabase';
 import {
 	DIFICULDADE, FAIXAS_SALDO, GRAVIDADE_RP, ITENS_PADRAO, LIMITES_CENARIO, OBJECOES_TREINO, TIPOS_CLIENTE, dadosCenario, itemChecklist, mesmoForm,
-	rotaAtribuir, rotaCenarioRP, rotuloObjecao, textoAlcada, validarCenario,
+	rotaAtribuir, rotaCenarioRP, rotaTestarRP, rotuloObjecao, textoAlcada, validarCenario,
 	type CenarioRP, type ErrosCenario, type FormCenario, type ItemChecklistRP,
 } from '@/lib/roleplay';
 import { LinkRP, MolduraRP } from './moldura';
@@ -89,6 +89,7 @@ export function EditorCenario({ empresa, cenario, inicial, itens, onSalvo, aviso
 			<SeloLgpdTreino />
 			{sujo && <Pilula tom="atencao">Alterações não salvas</Pilula>}
 			{cenario && <Botao tipo="secundario" onClick={duplicar} disabled={ocupado}>Duplicar</Botao>}
+			{cenario && cenario.modos.includes('texto') && !sujo && <LinkRP to={rotaTestarRP(cenario.id)} className={clsBotao('secundario')}>Testar</LinkRP>}
 			{publicado
 				? <Botao onClick={() => void salvarEFicar('publicado')} disabled={ocupado || !sujo}>{ocupado ? 'Salvando…' : 'Salvar alterações'}</Botao>
 				: <>

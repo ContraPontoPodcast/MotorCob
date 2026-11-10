@@ -4,7 +4,8 @@
 // Os painéis entram no histórico (?painel=link-<op> | links | lembrete | lembrete-<op> | prazo | feedback-<op>): o ⟵ e o
 // Esc fecham. O token do link aparece só quando é gerado (o banco guarda o sha-256): fica na memória desta tela.
 // RPCs do SQL 90: gerar_link_treino, revogar_link_treino, liberar_tentativa_treino, estender_prazo_treino,
-// salvar_feedback_treino. O "Treino lado a lado" e o "Ver sessão" chegam com a sessão por texto.
+// salvar_feedback_treino. "Treino lado a lado" e "Ver sessão" (a última avaliada) abrem as telas da sessão por texto
+// (SQL 100).
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Copy, Printer, QrCode } from 'lucide-react';
@@ -14,7 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { dataBR, dataHoraBR, diaSP, nf, textoTemDadoPessoal } from '@/lib/speech';
 import {
 	ROTA_RP_ATRIBUIR, SITUACAO_PESSOA, SITUACAO_TREINO, estadoLink, resumoFeedback, resumoTreino, rotaAtribuicaoRP, rotaAtribuir, rotaCenarioRP,
-	rotaPessoaRP, situacaoPessoa, textoLembrete, textoModos, ultimaAvaliada, urlTreino,
+	rotaLadoALadoRP, rotaPessoaRP, rotaSessaoRP, situacaoPessoa, textoLembrete, textoModos, ultimaAvaliada, urlTreino,
 	type OperadorRP, type PessoaNoTreino, type ResumoTreino, type SituacaoPessoa,
 } from '@/lib/roleplay';
 import { LinkRP, MolduraRP } from './moldura';
@@ -223,9 +224,11 @@ export function CorpoAtribuicao({ d, hoje, criada, tokens, onAbrir, onMaisUma, a
 	const acoes = (l: LinhaPessoa) => {
 		const op = l.p.operador_id;
 		const podeMais = a.tentativas != null && l.s !== 'aprovado' && l.p.tentativas_usadas > 0;
+		const podeLado = l.s !== 'aprovado' && l.s !== 'precisa_apoio' && a.prazo >= hoje && a.modos.includes('texto') && !!l.o?.ativo;
 		return (
 			<div className="flex flex-wrap items-center justify-end gap-1.5">
-				<Botao tipo="secundario" pequeno disabled title="O treino lado a lado chega com a sessão por texto">Treino lado a lado · em breve</Botao>
+				{ultimaAvaliada(d.sessoes, a.id, op) && <LinkRP to={rotaSessaoRP(a.id, ultimaAvaliada(d.sessoes, a.id, op)!.id)} className={clsBotao('secundario', true)}>Ver sessão</LinkRP>}
+				{podeLado && <LinkRP to={rotaLadoALadoRP(a.id, op)} className={clsBotao('secundario', true)}>Treino lado a lado</LinkRP>}
 				<details className="relative">
 					<summary className={`${clsBotao('secundario', true)} cursor-pointer list-none`}>Próximo passo<span className="sr-only"> para {l.o?.apelido}</span></summary>
 					<div role="group" aria-label={`Próximo passo para ${l.o?.apelido ?? 'pessoa'}`} className="absolute right-0 z-20 mt-1 flex w-56 flex-col rounded-xl bg-[var(--base-cartao)] p-1 text-left text-[13px]" style={{ boxShadow: '0 0 0 1px var(--base-borda), 0 12px 32px rgba(0,0,0,.16)' }}>
