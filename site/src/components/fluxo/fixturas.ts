@@ -191,9 +191,17 @@ export function criarApiFixturas(): FluxoApi {
 			const turnos: Simulacao['turnos'] = [];
 			const caminho: string[] = [];
 			let encerrada = false, resultado: string | null = null;
-			for (let i = 0; i <= falas.length && i < conversaDemo.length + 1; i++) {
-				const pessoa = i === 0 ? null : falas[i - 1];
+			let pulos = 0;   // falas com CPF não andam na conversa de demonstração
+			for (let j = 0; j <= falas.length && j - pulos < conversaDemo.length + 1; j++) {
+				const pessoa = j === 0 ? null : falas[j - 1];
+				const i = j - pulos;
 				const atual = caminho[caminho.length - 1] ?? 'N1';
+				// SQL 96 (voz/fluxo.py › _travas): CPF dito volta só como a marca, nunca repetido, e a etapa continua esperando
+				if (/\d{3}\.?\d{3}\.?\d{3}-?\d{2}|c\.?p\.?f/i.test(pessoa ?? '')) {
+					turnos.push({ pessoa: '[CPF REDIGIDO]', falas: [{ texto: 'Não precisa me dizer o CPF. Por segurança, eu nunca peço nem repito esse número.', bloco: atual, modo: 'arvore' }], bloco: atual, caminho: [], intencao: null, conectores: [], travas: ['cpf'], devolucoes: [], fim: null });
+					pulos++;
+					continue;
+				}
 				const trava = /não me lig|nao me lig/i.test(pessoa ?? '') ? 'nao_me_ligue' : /pessoa|atendente|humano/i.test(pessoa ?? '') ? 'pedido_humano' : null;
 				if (trava) {
 					const optout = trava === 'nao_me_ligue';

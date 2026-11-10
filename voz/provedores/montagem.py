@@ -30,6 +30,7 @@ from datetime import date, datetime, timedelta
 from motor import voz as V
 from voz.provedores.base import MOTIVOS_TRANSFERENCIA, Conexao, ContextoChamada, Emitir, ProvedorVoz
 from voz.provedores.rtp import TAXA, PonteRTP
+from voz.fluxo_validador import pede_cpf
 from voz.transcricao.ia import ConversaComTurnos, TurnosConversa
 
 log = logging.getLogger("motorcx.voz")
@@ -145,6 +146,7 @@ class Conversa:
         """SQL 83 · B7, a mesma trava do fluxo no caminho do roteiro: antes da identidade, fala que cite o credor ou
         outro valor sensível da chamada (inclusive escrito por extenso, sem a variável) ou fale de dívida, contrato
         ou valor em aberto vira a pergunta de identificação."""
+        falas = [FIXA_CPF if pede_cpf(f) else f for f in falas]        # SQL 96: nunca pede, cita nem diz CPF
         if self.identidade_confirmada:
             return falas
         return [self._identificar() if revela_antes_identidade(f, self.ctx.variaveis) else f for f in falas]
@@ -264,6 +266,7 @@ def revela_antes_identidade(fala: str, variaveis: dict | None) -> bool:
 
 # ------------------------------------------------------------------ bloco generativo do fluxo (SQL 58)
 FIXA_SENHA = "Não preciso de senha nem de número de cartão. O pagamento é sempre pelo link que eu envio."
+FIXA_CPF = "Não preciso do seu CPF. O pagamento é sempre pelo link que eu envio."
 FIXA_LIMITE = "Posso te ajudar com uma das condições que tenho aqui para você."
 RE_PEDE_SENHA = re.compile(r"senha|numero do cartao|codigo de seguranca|cvv|digitos do cartao")
 RE_DATAS_HORAS = re.compile(r"\b\d{1,2}/\d{1,2}(/\d{2,4})?\b|\b\d{1,2}h(\d{2})?\b|\b\d{1,2}:\d{2}\b|\b\d{4}-\d{2}-\d{2}\b")
@@ -382,6 +385,8 @@ class ConversaBloco:
             return texto, None
         if RE_PEDE_SENHA.search(_normal(texto)):
             return FIXA_SENHA, "senha_cartao"
+        if pede_cpf(texto):                     # SQL 96: a IA nunca pede, cita nem diz CPF
+            return FIXA_CPF, "cpf"
         if not self._numeros_ok(texto):
             if self.oferta_atual:
                 o = self.oferta_atual

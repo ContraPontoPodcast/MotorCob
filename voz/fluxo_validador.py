@@ -97,6 +97,11 @@ COM_FALA = ("abertura", "identidade", "pergunta", "intencao", "oferta", "retorno
 RE_ID = re.compile(r"N[0-9]{1,3}")
 RE_CODIGO = re.compile(r"[a-z][a-z0-9_]{1,40}")
 RE_SENHA = re.compile(r"senha|numero do cartao|codigo de seguranca|cvv")
+# SQL 96 · trava de CPF: a fala nunca cita CPF nem diz um número com cara de CPF. Só "os três últimos números do CPF"
+# (a pergunta de identidade) pode.
+RE_CPF_PERMITIDO = re.compile(r"(tres|3) ultimos (numeros|digitos)[^.?!]{0,20}c\.?p\.?f")
+RE_CPF_PALAVRA = re.compile(r"c\.?p\.?f")
+RE_CPF_NUMERO = re.compile(r"[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}")
 _BRANCOS = " \t\n\r"      # btrim do banco
 # mesma troca de acentos do banco (translate), para o filtro de senha dar igual nos dois
 _ACENTOS = str.maketrans("áàâãäéèêëíìîïóòôõöúùûüç", "aaaaaeeeeiiiiooooouuuuc")
@@ -163,8 +168,15 @@ def variaveis(texto: str) -> list[str]:
     return [m.strip(_BRANCOS) for _, _, m in trechos_variaveis(texto)]
 
 
+def pede_cpf(texto: str) -> bool:
+    """SQL 96: a fala pede, cita ou diz um CPF (fora "os três últimos números do CPF")."""
+    t = texto.lower().translate(_ACENTOS)
+    return RE_CPF_PALAVRA.search(RE_CPF_PERMITIDO.sub("", t)) is not None or RE_CPF_NUMERO.search(t) is not None
+
+
 def pede_senha(texto: str) -> bool:
-    return RE_SENHA.search(texto.lower().translate(_ACENTOS)) is not None
+    """Trava 2: senha, cartão ou (SQL 96) CPF. = public.fluxo_voz_aux_pede_senha."""
+    return RE_SENHA.search(texto.lower().translate(_ACENTOS)) is not None or pede_cpf(texto)
 
 
 def textos_do_bloco(b: dict) -> list[tuple[str, str]]:

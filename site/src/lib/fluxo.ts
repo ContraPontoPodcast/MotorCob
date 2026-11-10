@@ -90,7 +90,7 @@ export const VARIAVEIS = ['primeiro_nome', 'credor', 'saldo', 'dias_atraso', 've
  */
 export const TRAVAS: [string, string][] = [
 	['Valor, oferta e credor só depois da identidade.', 'O validador recusa um fluxo em que valor, oferta ou credor vem antes de Confirmar identidade em algum caminho. Na ligação, o executor também troca a fala pelo recado neutro.'],
-	['Nunca pede senha nem número de cartão.', 'Vale para a fala fixa e para a IA: a resposta passa por um filtro antes de virar voz. Se a pessoa oferecer, ouve: "O pagamento é sempre pelo link."'],
+	['Nunca pede senha, número de cartão nem CPF.', 'Vale para a fala fixa e para a IA: a resposta passa por um filtro antes de virar voz. Se a pessoa oferecer senha ou cartão, ouve: "O pagamento é sempre pelo link." O CPF que a pessoa disser nunca é repetido, nem vai para a IA ou para a transcrição. Na identidade, só "os três últimos números do CPF".'],
 	['"Não me ligue" encerra na hora.', 'Em qualquer etapa e em qualquer modo: grava o opt-out e se despede.'],
 	['Terceiro só ouve recado neutro.', '"Peço que {{primeiro_nome}} retorne para a {{assessoria}}." Sem valor, sem credor, sem motivo.'],
 	['Nunca passa da alçada.', 'Desconto, parcelas e entrada ficam dentro da alçada da carteira, também para as ofertas que vêm do CRM.'],
@@ -103,18 +103,20 @@ export const TRAVAS: [string, string][] = [
  * _tentar_de_novo). Só o que existe hoje; o que ainda não existe fica em SEMPRE_AINDA_NAO, dito como tal.
  */
 export const SEMPRE: [string, string][] = [
+	['Fala o CPF', '"Não precisa me dizer o CPF. Por segurança, eu nunca peço nem repito esse número." A etapa continua esperando a resposta.'],
 	['"Não me ligue mais"', 'Grava o opt-out e encerra.'],
 	['"Quero falar com uma pessoa"', 'Transfere para um atendente. Sem atendente livre, volta ao agente.'],
 	['Fala senha ou número de cartão', '"Não precisa me passar senha nem número de cartão. O pagamento é sempre pelo link."'],
 	['Resposta que o agente não entende', 'Pede de novo até as tentativas da etapa. Depois, segue a saída da etapa.'],
 ];
 /** Casos que ainda não têm tratamento próprio no executor (plano do redesenho: B2 e B4). Mostrados como "ainda não". */
-export const SEMPRE_AINDA_NAO = 'Ainda sem tratamento próprio: tema sensível (falecimento, doença, golpe), CPF dito pela pessoa, caixa postal e silêncio no meio da conversa. Hoje, tema sensível, CPF e caixa postal seguem o caminho da etapa; no silêncio, o agente espera a pessoa falar.';
+export const SEMPRE_AINDA_NAO = 'Ainda sem tratamento próprio: tema sensível (falecimento, doença, golpe), caixa postal e silêncio no meio da conversa. Hoje, tema sensível e caixa postal seguem o caminho da etapa; no silêncio, o agente espera a pessoa falar.';
 
 /** Nomes legíveis das travas que o executor registra (voz_fluxo_passos.trava, travas_voz()). */
 export const NOMES_TRAVA: Record<string, string> = {
 	nao_me_ligue: '"Não me ligue"', pedido_humano: 'Pediu humano', senha_cartao: 'Senha ou cartão', valor_antes_identidade: 'Valor antes de confirmar identidade',
 	terceiro: 'Falar com terceiro', alcada: 'Valor fora da alçada', oferta_inventada: 'Oferta inventada', repeticao: 'Repetição',
+	cpf: 'CPF dito pela pessoa (não repetido)',
 };
 
 // ---------------------------------------------------------------- blocos
@@ -389,7 +391,7 @@ const TEXTOS: Record<string, string> = {
 	ferramenta_invalida: 'Ferramenta fora da lista ou repetida.',
 	transferir_humano_desligado: 'A conversa livre precisa da ferramenta "Transferir para humano" (trava fixa).',
 	variavel_invalida: 'Usa uma variável {{ }} que não existe.',
-	fala_pede_senha: 'A fala pede senha ou número de cartão (trava fixa: nunca).',
+	fala_pede_senha: 'A fala pede senha, número de cartão ou CPF (trava fixa: nunca).',
 	saida_invalida: 'Uma saída está repetida ou fora das opções desta etapa.',
 	final_com_saida: 'Transferir e Encerrar são finais: não têm saída.',
 	sem_saida: 'Etapa sem saída. A conversa ficaria parada aqui.',
@@ -421,7 +423,7 @@ const COMO_CORRIGIR: Record<string, string> = {
 	params_invalidos: 'Preencha a fala e as opções desta etapa.',
 	generativo_sem_objetivo: 'Escreva o objetivo da conversa, como orientaria um bom negociador (pelo menos 20 caracteres).',
 	transferir_humano_desligado: 'Ligue a ferramenta "Transferir para humano".',
-	fala_pede_senha: 'Tire o pedido de senha ou de cartão da fala. O pagamento é sempre pelo link.',
+	fala_pede_senha: 'Tire da fala o pedido de senha, de cartão ou de CPF (e qualquer número de CPF). O pagamento é sempre pelo link; na identidade, só "os três últimos números do CPF".',
 	identidade_sem_conferencia: 'Escolha o conector "Validar cadastro" do CRM nesta etapa, ou configure a conferência pelo arquivo na aba Confirmar identidade.',
 	conector_inativo: 'Escolha um conector ativo. Quem testa e ativa os conectores é a equipe MotorCX (Empresa › Integrações).',
 	conector_finalidade: 'Escolha um conector com a finalidade desta etapa.',
@@ -487,6 +489,7 @@ export function validarLocal(d: Definicao): string[] {
 	if (aberturas.length > 1) out.add('abertura_repetida');
 	for (const b of d.blocos) {
 		if (!modosDoTipo(b.tipo).includes(b.modo)) out.add(`modo_incompativel:${b.id}`);
+		if ((['fala', 'fala_espera'] as const).some(k => typeof b.params?.[k] === 'string' && pedeSenha(b.params[k] as string))) out.add(`fala_pede_senha:${b.id}`);   // trava 2 (com CPF, SQL 96)
 		if (ehFinal(b)) { if (b.saidas.length) out.add(`final_com_saida:${b.id}`); continue; }
 		if (!b.saidas.length) { out.add(`sem_saida:${b.id}`); continue; }
 		if (b.saidas.some(s => !ids.has(s.para))) out.add(`saida_inexistente:${b.id}`);
@@ -989,9 +992,17 @@ export function exemplosDaSaida(b: Bloco, quando: string): { exemplos: string[];
 	return { exemplos: EXEMPLOS_PADRAO[`${b.tipo}:${quando}`] ?? [], doCatalogo: true };
 }
 
-/** Filtro de senha e cartão do validador (voz/fluxo_validador.py › pede_senha: mesma troca de acentos). */
+/** Filtro de senha e cartão do validador (voz/fluxo_validador.py › pede_senha: mesma troca de acentos), com o CPF. */
 export function pedeSenha(texto: string): boolean {
-	return /senha|numero do cartao|codigo de seguranca|cvv/.test(texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
+	return /senha|numero do cartao|codigo de seguranca|cvv/.test(texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')) || pedeCpf(texto);
+}
+/**
+ * SQL 96 · trava de CPF (voz/fluxo_validador.py › pede_cpf): a fala cita CPF ou diz um número com cara de CPF. Só
+ * "os três últimos números (ou dígitos) do CPF", a pergunta de identidade, pode.
+ */
+export function pedeCpf(texto: string): boolean {
+	const t = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+	return /c\.?p\.?f/.test(t.replace(/(tres|3) ultimos (numeros|digitos)[^.?!]{0,20}c\.?p\.?f/g, '')) || /[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}/.test(t);
 }
 
 /** Palavras da fala como vai ser dita (só as que têm letra ou número). */
@@ -1021,7 +1032,8 @@ export function checarFala(a: {
 	if (a.antesDaIdentidade) out.push(a.credorAntes
 		? { estado: 'erro', texto: `Cita ${a.sensiveis.length ? a.sensiveis.map(v => `{{${v}}}`).join(', ') : 'valor ou oferta'} antes de confirmar a identidade (trava 1)` }
 		: { estado: 'ok', texto: 'Nada de credor nem valor antes da identidade' });
-	out.push(pedeSenha(a.fala) ? { estado: 'erro', texto: 'Pede senha ou número de cartão (trava 2: nunca)' } : { estado: 'ok', texto: 'Não pede senha nem número de cartão' });
+	out.push(pedeCpf(a.fala) ? { estado: 'erro', texto: 'Cita ou pede CPF (trava 2: nunca; na identidade, só "os três últimos números do CPF")' }
+		: pedeSenha(a.fala) ? { estado: 'erro', texto: 'Pede senha ou número de cartão (trava 2: nunca)' } : { estado: 'ok', texto: 'Não pede senha, cartão nem CPF' });
 	if (a.trechos.length) out.push({ estado: 'info', texto: `Números como vão ser lidos: ${a.trechos.map(t => `"${t.de}" → "${t.para}"`).join(' · ')}` });
 	return out;
 }
@@ -1029,7 +1041,7 @@ export function checarFala(a: {
 // ---------------------------------------------------------------- testar ao lado (PR6 do redesenho)
 /** Número da trava (lista TRAVAS) que o executor registra em cada código (voz_fluxo_passos.trava, travas_voz()). */
 export const NUMERO_TRAVA: Record<string, number> = {
-	valor_antes_identidade: 1, senha_cartao: 2, nao_me_ligue: 3, terceiro: 4, alcada: 5, pedido_humano: 6, oferta_inventada: 7,
+	valor_antes_identidade: 1, senha_cartao: 2, cpf: 2, nao_me_ligue: 3, terceiro: 4, alcada: 5, pedido_humano: 6, oferta_inventada: 7,
 };
 /** O mínimo de um turno do simulador (api.ts › TurnoSimulado) que o painel usa; sem importar o tipo do componente. */
 export interface TurnoTeste { pessoa: string | null; bloco: string | null; falas: { bloco: string | null }[]; travas: string[]; fim?: string | null }

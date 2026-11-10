@@ -10,7 +10,7 @@ import {
 	type Bloco, type Definicao,
 } from '../src/lib/fluxo.ts';
 import { NUMERO_TRAVA, NOMES_TRAVA, etapaDoTeste, rotuloTrava, textoFim, travasDoTeste } from '../src/lib/fluxo.ts';
-import { CERTEZAS, ORDEM_MODOS, cartoesModo, certezaEmPalavras, checarFala, exemplosDaSaida, modosDoTipo, palavras, pedeSenha } from '../src/lib/fluxo.ts';
+import { CERTEZAS, ORDEM_MODOS, cartoesModo, certezaEmPalavras, checarFala, exemplosDaSaida, modosDoTipo, palavras, pedeCpf, pedeSenha } from '../src/lib/fluxo.ts';
 import { comoSoa, dataPorExtenso, porExtenso, preencherTeste, reaisPorExtenso, trechosFalados, valoresTeste } from '../src/lib/falado.ts';
 
 const s = (quando: string, rotulo: string, para: string, tipo: 'normal' | 'devolve' | 'falha' = 'normal') => ({ quando, rotulo, para, tipo });
@@ -186,7 +186,8 @@ test('o que corrigir: toda pendência de etapa que o editor marca diz como corri
 test('travas: uma lista só, 7 itens, sem prometer o que o executor ainda não faz', () => {
 	assert.equal(TRAVAS.length, 7);
 	const tudo = [...TRAVAS.flat(), ...SEMPRE.flat()].join(' ');
-	assert.doesNotMatch(tudo, /CPF|tema sensível|caixa postal/i);         // B2 e B4 ainda não estão no ar
+	assert.doesNotMatch(tudo, /tema sensível|caixa postal/i);             // B4 (tema sensível) ainda não está no ar
+	assert.match(tudo, /nunca é repetido/);                                // SQL 96: a trava de CPF já está
 	assert.ok(SEMPRE.some(([q]) => /Não me ligue/.test(q)) && SEMPRE.some(([q]) => /pessoa/.test(q)));
 	assert.notEqual(MODOS.arvore.cor, MODOS.sistema.cor);
 });
@@ -416,7 +417,7 @@ test('testar ao lado: a etapa acesa é a última do caminho; as anteriores passa
 });
 
 test('testar ao lado: qual trava agiu, quando e onde', () => {
-	assert.deepEqual(Object.values(NUMERO_TRAVA).sort(), [1, 2, 3, 4, 5, 6, 7]);
+	assert.deepEqual([...new Set(Object.values(NUMERO_TRAVA))].sort(), [1, 2, 3, 4, 5, 6, 7]);   // cpf (SQL 96) também é a trava 2
 	for (const k of Object.keys(NUMERO_TRAVA)) assert.ok(NOMES_TRAVA[k], k);
 	const turnos = [
 		{ pessoa: null, bloco: 'N1', falas: [{ bloco: 'N1' }], travas: [] },
@@ -430,4 +431,17 @@ test('testar ao lado: qual trava agiu, quando e onde', () => {
 	assert.equal(travasDoTeste([{ pessoa: 'x', bloco: null, falas: [], travas: ['repeticao'] }])[0].numero, null);
 	assert.equal(textoFim('opt_out'), 'opt-out');
 	assert.equal(textoFim('transferida · pedido_humano'), 'transferida · pedido humano');
+});
+
+test('trava de CPF (SQL 96): a mesma tabela do Python e do banco; checagem da fala e validarLocal', () => {
+	const t = JSON.parse(readFileSync(new URL('../../tests/dados/trava_cpf_casos.json', import.meta.url), 'utf8')) as { fala: [string, boolean][] };
+	for (const [fala, esperado] of t.fala) assert.equal(pedeCpf(fala), esperado, fala);
+	assert.ok(pedeSenha('Me diga seu CPF.') && !pedeSenha('Me diga os três últimos números do seu CPF?'));
+	const chk = checarFala({ fala: 'Me confirma o seu CPF?', falada: 'Me confirma o seu CPF?', antesDaIdentidade: false, credorAntes: false, sensiveis: [], trechos: [] });
+	assert.ok(chk.some(c => c.estado === 'erro' && /CPF/.test(c.texto)));
+	const d = negociador();
+	d.blocos.find(b => b.id === 'N2')!.params.fala = 'Para sua segurança, me diga o seu CPF?';
+	assert.ok(validarLocal(d).includes('fala_pede_senha:N2'));
+	assert.match(explicar('fala_pede_senha:N2').texto, /CPF/);
+	assert.equal(NUMERO_TRAVA.cpf, 2);
 });

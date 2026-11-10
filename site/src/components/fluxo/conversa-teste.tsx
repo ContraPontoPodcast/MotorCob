@@ -39,7 +39,7 @@ export function useConversaTeste(api: FluxoApi | null, versao: number, cenarios:
 export const ATALHOS: { grupo: string; trava?: boolean; itens: string[] }[] = [
 	{ grupo: 'Comuns', itens: ['Sou eu.', '15 de março.', 'Quero parcelar.', 'Aceito as 6 parcelas.'] },
 	{ grupo: 'Objeções', itens: ['Já paguei.', 'Não reconheço essa dívida.', 'Tô desempregado.', 'Tira os juros que eu fecho.'] },
-	{ grupo: 'Travas', trava: true, itens: ['Não me ligue mais.', 'Quero falar com uma pessoa.', 'Não, aqui é a vizinha.'] },
+	{ grupo: 'Travas', trava: true, itens: ['Não me ligue mais.', 'Quero falar com uma pessoa.', 'Não, aqui é a vizinha.', 'Meu CPF é 111.444.777-35.'] },
 ];
 
 /**

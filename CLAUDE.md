@@ -880,6 +880,16 @@ centro de custo e RCS sem aparelho, também em Mensageria (1 ciclo). `/canais?se
 `pausado_por` (gatilho `canal_pausado_desde`: grava ao pausar, apaga ao retomar, ninguém escreve à mão; o já pausado ganhou
 o `atualizado_em`), `estado_canais` usa o `pausado_em`, e `credor_canais` grava com `pode('editar_canais')` (era papel fixo).
 
+**SQL 96 (PR9 do redesenho do fluxo; SPEC B4 e Q4): trava de CPF.** O agente nunca fala, pede nem repete CPF (o CPF
+nunca é identificador e o site nunca mostra nem busca por ele). Fala do fluxo: `fluxo_voz_aux_pede_senha` =
+`voz/fluxo_validador.pede_senha`/`pede_cpf` = `site/src/lib/fluxo.ts › pedeCpf` (casos em `tests/dados/trava_cpf_casos.json`):
+citar CPF ou dizer um número com cara de CPF dá `fala_pede_senha`; só "os três últimos números/dígitos do CPF" (identidade)
+pode. Executor: `Sessao.render` troca a fala (trava `cpf`); a IA conversa e a Conversa do roteiro também cortam (`FIXA_CPF`).
+Pessoa: `redacao.cpf_dito` (formato, 11 dígitos com DV, por extenso, ou "CPF" + 9 dígitos) é a 1ª trava em `_travas`:
+responde `FALA_CPF` (na identidade pelos 3 últimos, pede só os 3), a etapa continua esperando, o texto nunca vai ao modelo;
+`ConversaComTurnos` guarda só `[CPF REDIGIDO]` e o simulador devolve a marca. `travas_voz()` e `voz_fluxo_passos.trava` + 'cpf'.
+Se o SQL 58 ou o 59 rodarem de novo, rode o 96 depois.
+
 **SQL 87 (pedido do dono, 08/11/2026): Agente de voz e Speech Analytics na Contratação.** A Contratação (cadastro novo e
 edição; `editar_contratacao`) tem as chaves "Agente de voz" e "Speech Analytics" (linhas e textos em
 `lib/contratacao-modulos.ts`), gravadas em `empresa_modulos` (`agente_voz`, `speech_analytics`). `voz_config.speech_analytics`
