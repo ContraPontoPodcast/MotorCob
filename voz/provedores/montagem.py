@@ -30,6 +30,7 @@ from datetime import date, datetime, timedelta
 from motor import voz as V
 from voz.provedores.base import MOTIVOS_TRANSFERENCIA, Conexao, ContextoChamada, Emitir, ProvedorVoz
 from voz.provedores.rtp import TAXA, PonteRTP
+from voz.fluxo_validador import pede_cpf
 from voz.transcricao.ia import ConversaComTurnos, TurnosConversa
 
 log = logging.getLogger("motorcx.voz")
@@ -145,6 +146,7 @@ class Conversa:
         """SQL 83 · B7, a mesma trava do fluxo no caminho do roteiro: antes da identidade, fala que cite o credor ou
         outro valor sensível da chamada (inclusive escrito por extenso, sem a variável) ou fale de dívida, contrato
         ou valor em aberto vira a pergunta de identificação."""
+        falas = [FIXA_CPF if pede_cpf(f) else f for f in falas]        # SQL 96: nunca pede, cita nem diz CPF
         if self.identidade_confirmada:
             return falas
         return [self._identificar() if revela_antes_identidade(f, self.ctx.variaveis) else f for f in falas]
@@ -264,6 +266,7 @@ def revela_antes_identidade(fala: str, variaveis: dict | None) -> bool:
 
 # ------------------------------------------------------------------ bloco generativo do fluxo (SQL 58)
 FIXA_SENHA = "Não preciso de senha nem de número de cartão. O pagamento é sempre pelo link que eu envio."
+FIXA_CPF = "Não preciso do seu CPF. O pagamento é sempre pelo link que eu envio."
 FIXA_LIMITE = "Posso te ajudar com uma das condições que tenho aqui para você."
 RE_PEDE_SENHA = re.compile(r"senha|numero do cartao|codigo de seguranca|cvv|digitos do cartao")
 RE_DATAS_HORAS = re.compile(r"\b\d{1,2}/\d{1,2}(/\d{2,4})?\b|\b\d{1,2}h(\d{2})?\b|\b\d{1,2}:\d{2}\b|\b\d{4}-\d{2}-\d{2}\b")
@@ -382,6 +385,8 @@ class ConversaBloco:
             return texto, None
         if RE_PEDE_SENHA.search(_normal(texto)):
             return FIXA_SENHA, "senha_cartao"
+        if pede_cpf(texto):                     # SQL 96: a IA nunca pede, cita nem diz CPF
+            return FIXA_CPF, "cpf"
         if not self._numeros_ok(texto):
             if self.oferta_atual:
                 o = self.oferta_atual
@@ -513,24 +518,60 @@ def montar_servicos_pipecat(cfg: ConfigMontagem, segredos) -> tuple:
     return stt, tts
 
 
+class RelogioSilencio:
+    """SQL 95 · B2: "a pessoa não disse nada". Conta `limite` segundos desde o que veio por último: a pessoa falar
+    (transcrição, parcial ou o começo da fala) ou o agente terminar de falar (a fila da ponte esvaziar). Venceu =
+    a sessão do fluxo trata o silêncio (fala própria da etapa, vezes e destino) e o relógio recomeça."""
+
+    def __init__(self, limite: float = 6.0):
+        self.limite = limite
+        self.marco: float | None = None
+
+    def pessoa(self, agora: float) -> None:
+        self.marco = agora
+
+    def venceu(self, agora: float, falando: bool) -> bool:
+        if self.marco is None or falando:
+            self.marco = agora
+            return False
+        if agora - self.marco >= self.limite:
+            self.marco = agora
+            return True
+        return False
+
+
 async def rodar_pipecat(ponte: PonteRTP, conversa: Conversa, stt, tts, parar: asyncio.Event) -> None:
-    """Pipeline Pipecat: áudio da ponte -> STT -> Conversa (thread) -> TTS -> ponte."""
+    """Pipeline Pipecat: áudio da ponte -> STT -> Conversa (thread) -> TTS -> ponte. SQL 95: sem fala da pessoa por
+    SILENCIO_S depois que o agente terminou de falar, a sessão do fluxo trata o silêncio (conversa.silencio)."""
+    from pipecat.frames import frames as F
     from pipecat.frames.frames import EndFrame, InputAudioRawFrame, TranscriptionFrame, TTSAudioRawFrame, TTSSpeakFrame
     from pipecat.pipeline.pipeline import Pipeline
     from pipecat.pipeline.runner import PipelineRunner
     from pipecat.pipeline.task import PipelineTask
     from pipecat.processors.frame_processor import FrameProcessor
 
+    from voz.fluxo import SILENCIO_S
+    relogio = RelogioSilencio(SILENCIO_S)
+    vez = asyncio.Lock()                       # ouvir e silêncio nunca rodam juntos na mesma sessão
+    agora = asyncio.get_running_loop().time
+    fala_parcial = tuple(c for c in (getattr(F, "InterimTranscriptionFrame", None),
+                                     getattr(F, "UserStartedSpeakingFrame", None)) if c is not None)
+
     class Cerebro(FrameProcessor):
         async def process_frame(self, frame, direction):
             await super().process_frame(frame, direction)
             if isinstance(frame, TranscriptionFrame):
                 ponte.interromper()
-                for t in await asyncio.to_thread(conversa.ouvir, frame.text):
-                    await self.push_frame(TTSSpeakFrame(t))
+                relogio.pessoa(agora())
+                async with vez:
+                    for t in await asyncio.to_thread(conversa.ouvir, frame.text):
+                        await self.push_frame(TTSSpeakFrame(t))
+                relogio.pessoa(agora())
                 if conversa.encerrada and not getattr(conversa, "aguardando_humano", False):
                     await self.push_frame(EndFrame())
             else:
+                if fala_parcial and isinstance(frame, fala_parcial):
+                    relogio.pessoa(agora())
                 await self.push_frame(frame, direction)
 
     class Saida(FrameProcessor):
@@ -549,8 +590,26 @@ async def rodar_pipecat(ponte: PonteRTP, conversa: Conversa, stt, tts, parar: as
         conversa.falar_agora = lambda t: asyncio.run_coroutine_threadsafe(task.queue_frame(TTSSpeakFrame(t)), loop)
     for t in conversa.comecar():
         await task.queue_frame(TTSSpeakFrame(t))
+
+    async def vigiar_silencio():
+        while not conversa.encerrada:
+            await asyncio.sleep(0.25)
+            if getattr(conversa, "aguardando_humano", False) or not relogio.venceu(agora(), ponte.falando()):
+                continue
+            async with vez:
+                if conversa.encerrada:
+                    return
+                for t in await asyncio.to_thread(conversa.silencio):
+                    await task.queue_frame(TTSSpeakFrame(t))
+            relogio.pessoa(agora())
+            if conversa.encerrada and not getattr(conversa, "aguardando_humano", False):
+                await task.queue_frame(EndFrame())
+
     runner = asyncio.ensure_future(PipelineRunner(handle_sigint=False).run(task))
+    vigia = asyncio.ensure_future(vigiar_silencio()) if hasattr(conversa, "silencio") else None
     await parar.wait()
+    if vigia is not None:
+        vigia.cancel()
     await task.queue_frame(EndFrame())
     await runner
 

@@ -880,6 +880,16 @@ centro de custo e RCS sem aparelho, também em Mensageria (1 ciclo). `/canais?se
 `pausado_por` (gatilho `canal_pausado_desde`: grava ao pausar, apaga ao retomar, ninguém escreve à mão; o já pausado ganhou
 o `atualizado_em`), `estado_canais` usa o `pausado_em`, e `credor_canais` grava com `pode('editar_canais')` (era papel fixo).
 
+**SQL 96 (PR9 do redesenho do fluxo; SPEC B4 e Q4): trava de CPF.** O agente nunca fala, pede nem repete CPF (o CPF
+nunca é identificador e o site nunca mostra nem busca por ele). Fala do fluxo: `fluxo_voz_aux_pede_senha` =
+`voz/fluxo_validador.pede_senha`/`pede_cpf` = `site/src/lib/fluxo.ts › pedeCpf` (casos em `tests/dados/trava_cpf_casos.json`):
+citar CPF ou dizer um número com cara de CPF dá `fala_pede_senha`; só "os três últimos números/dígitos do CPF" (identidade)
+pode. Executor: `Sessao.render` troca a fala (trava `cpf`); a IA conversa e a Conversa do roteiro também cortam (`FIXA_CPF`).
+Pessoa: `redacao.cpf_dito` (formato, 11 dígitos com DV, por extenso, ou "CPF" + 9 dígitos) é a 1ª trava em `_travas`:
+responde `FALA_CPF` (na identidade pelos 3 últimos, pede só os 3), a etapa continua esperando, o texto nunca vai ao modelo;
+`ConversaComTurnos` guarda só `[CPF REDIGIDO]` e o simulador devolve a marca. `travas_voz()` e `voz_fluxo_passos.trava` + 'cpf'.
+Se o SQL 58 ou o 59 rodarem de novo, rode o 96 depois.
+
 **SQL 87 (pedido do dono, 08/11/2026): Agente de voz e Speech Analytics na Contratação.** A Contratação (cadastro novo e
 edição; `editar_contratacao`) tem as chaves "Agente de voz" e "Speech Analytics" (linhas e textos em
 `lib/contratacao-modulos.ts`), gravadas em `empresa_modulos` (`agente_voz`, `speech_analytics`). `voz_config.speech_analytics`
@@ -1043,6 +1053,18 @@ lê tudo com padrão; o gerador aplica DTMF, cabeçalho, realm, De, OPTIONS, `S(
 `TIMEOUT(absolute)` por tronco no `[motorcx-atendeu]`; `voz/tarifacao.py` disca `Rota.prefixo_discagem`; o núcleo usa
 `min(toque do núcleo, toque do tronco)`. Teste: `supabase/testes/testar_voz_tronco_campos.py`. Se o SQL 56, 81, 103 ou
 105 rodar de novo, rode o 113 depois.
+
+**SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
+ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
+`nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
+contam à parte (`Sessao.tentativas` × `Sessao.silencios`). Sem nada configurado, o "não entendi" é o de antes (fala padrão
+de cada tipo, `tentativas` padrão 2, saída de "não entendi"). Silêncio: a Montagem chama `Sessao.silencio()` depois de
+`SILENCIO_S` (6 s) sem fala da pessoa contados de quando a fila de áudio do agente esvazia (`RelogioSilencio`); padrão 2
+vezes ("Desculpe, não ouvi." + a fala da etapa), depois a saída "silencio" ou, sem ela, a de "não entendi"; na Abertura sem
+saída própria encerra SEM recado e sem marcar terceiro; na IA conversa, "Você ainda está aí?" e depois atendente. As falas
+novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracteres, variáveis, senha e trava 1. Simulador e
+casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
+(`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.

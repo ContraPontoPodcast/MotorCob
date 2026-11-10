@@ -191,9 +191,27 @@ export function criarApiFixturas(): FluxoApi {
 			const turnos: Simulacao['turnos'] = [];
 			const caminho: string[] = [];
 			let encerrada = false, resultado: string | null = null;
-			for (let i = 0; i <= falas.length && i < conversaDemo.length + 1; i++) {
-				const pessoa = i === 0 ? null : falas[i - 1];
+			// como o executor (voz/fluxo.py › turno_silencio): "[silêncio]" pede de novo na mesma etapa; 2 seguidos na
+			// Abertura encerram sem recado (pode ser caixa postal) e sem marcar terceiro
+			let silencios = 0, passo = 0;
+			for (const pessoa of [null, ...falas]) {
 				const atual = caminho[caminho.length - 1] ?? 'N1';
+				if (pessoa === '[silêncio]') {
+					silencios++;
+					const fim = silencios >= 2 && atual === 'N1';
+					turnos.push({ pessoa, falas: fim ? [] : [{ texto: atual === 'N1' ? 'Alô? Falo com Ana?' : 'Desculpe, não ouvi. Pode repetir?', bloco: atual, modo: 'arvore' }], bloco: atual, caminho: [], intencao: { intencao: 'silencio', confianca: 'alta', entidades: [] }, conectores: [], travas: [], devolucoes: [], fim: fim ? 'encerrada' : null });
+					if (fim) { encerrada = true; break; }
+					continue;
+				}
+				silencios = 0;
+				// SQL 96 (voz/fluxo.py › _travas): CPF dito volta só como a marca, nunca repetido, e a etapa continua esperando
+				// (falas com CPF não andam na conversa de demonstração)
+				if (/\d{3}\.?\d{3}\.?\d{3}-?\d{2}|c\.?p\.?f/i.test(pessoa ?? '')) {
+					turnos.push({ pessoa: '[CPF REDIGIDO]', falas: [{ texto: 'Não precisa me dizer o CPF. Por segurança, eu nunca peço nem repito esse número.', bloco: atual, modo: 'arvore' }], bloco: atual, caminho: [], intencao: null, conectores: [], travas: ['cpf'], devolucoes: [], fim: null });
+					continue;
+				}
+				const i = passo++;
+				if (i > conversaDemo.length) break;
 				const trava = /não me lig|nao me lig/i.test(pessoa ?? '') ? 'nao_me_ligue' : /pessoa|atendente|humano/i.test(pessoa ?? '') ? 'pedido_humano' : null;
 				if (trava) {
 					const optout = trava === 'nao_me_ligue';
