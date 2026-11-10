@@ -3077,5 +3077,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 125: minuto de IA por chamada (testar_chamadas_ia.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 126 · consumo do dia e fatura do minuto falado (PR 5): minutos tarifados × preço por vigência, franquia, sem pico,
+# licença com os minutos medidos e a fatura de quem não tem o modelo novo igual à do SQL 98
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_fatura_minuto.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 126: consumo e fatura do minuto falado (testar_fatura_minuto.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
