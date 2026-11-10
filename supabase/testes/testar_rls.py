@@ -2683,6 +2683,11 @@ def checar_erro(nome, cmd, papel, uid, trecho):
     ok_total += passou; falhas += not passou
     print(("PASSOU " if passou else "FALHOU ") + nome + ("" if passou else f"  -> ok={ok} out={out!r} err={err[:200]}"))
 # os testes acima rodam de novo os SQL 30, 58 e 59, que desfazem os trechos que o SQL 61 troca: roda o 61 de novo
+# SQL 124: o 61 rodado de novo volta o guarda à mínima geral; o minuto de IA volta ao estado do 61 (sem a mínima própria,
+# tabela = mínimo) e o testar_margem_item.py, no fim, roda o 124 de novo
+_r124 = subprocess.run(BASE + ["-c", "update public.cobranca_itens set mc_minima_ia_pct = null, preco_minimo = 1.50, "
+                               "preco_tabela = 1.50 where codigo = 'voz_minuto_ia'"], capture_output=True, text=True)
+assert _r124.returncode == 0, _r124.stderr
 r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261228000001_ia_margem.sql")],
                    capture_output=True, text=True)
@@ -3058,6 +3063,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 123: contrato do minuto de IA (testar_cobranca_ia.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 124 · MC mínima própria por item de IA (PR 2 do minuto falado): 60% no minuto de IA, a geral segue em 70%
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_margem_item.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 124: MC mínima própria por item de IA (testar_margem_item.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

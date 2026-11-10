@@ -85,6 +85,11 @@ PARAM = sv("select impostos_pct || ',' || mc_minima_ia_pct from public.parametro
 TETO_ANTES = sv("select concorrencia_contratada from public.voz_contrato")
 CAD_ANTES = sv("select cadencia_ia_padrao from public.voz_contrato")
 sv("update public.parametros_margem set impostos_pct = 0, mc_minima_ia_pct = 70 where id = 1")
+# SQL 124: a mínima própria do minuto de IA (60%) fica de fora aqui; os testes do 124 cobrem os 60%
+ITEM_MC = sv("select coalesce(mc_minima_ia_pct::text, 'null') from public.cobranca_itens where codigo = 'voz_minuto_ia'")
+TAB_ANTES = sv("select preco_minimo || ',' || preco_tabela from public.cobranca_itens where codigo = 'voz_minuto_ia'")
+sv("update public.cobranca_itens set mc_minima_ia_pct = null, preco_minimo = 1.50, preco_tabela = greatest(preco_tabela, 1.50) "
+   "where codigo = 'voz_minuto_ia'")
 EA = sv(f"insert into public.empresas (slug, nome) values ('e123-a-{T}', 'E123 A {T}') returning id")
 EB = sv(f"insert into public.empresas (slug, nome) values ('e123-b-{T}', 'E123 B {T}') returning id")
 EC = sv(f"insert into public.empresas (slug, nome) values ('e123-c-{T}', 'E123 C {T}') returning id")
@@ -281,6 +286,9 @@ checar("a exclusão da empresa apaga em cascata", True,
 sv(f"update public.voz_contrato set concorrencia_contratada = {TETO_ANTES}, cadencia_ia_padrao = '{CAD_ANTES}'")
 imp, mc = PARAM.split(",")
 sv(f"update public.parametros_margem set impostos_pct = {imp}, mc_minima_ia_pct = {mc} where id = 1")
+pmin_a, tab_a = TAB_ANTES.split(",")
+sv(f"update public.cobranca_itens set mc_minima_ia_pct = {ITEM_MC} where codigo = 'voz_minuto_ia'")
+sv(f"update public.cobranca_itens set preco_minimo = {pmin_a}, preco_tabela = {tab_a} where codigo = 'voz_minuto_ia'")
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
