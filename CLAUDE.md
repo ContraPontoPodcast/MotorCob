@@ -1114,6 +1114,17 @@ reabríveis do "Reenviar agora"). Ao carregar o lote, `abandonos_recentes_voz` (
 (`ItemLote.reservar`; `Lote.proximo(reservavel)`). As amostras ganham `razao_config` e `estado`
 (normal|aquecendo|reduzido|freado|parado) e `ritmo_voz_hoje › ultima` os devolve.
 
+**Agente de voz · freios de chamadas curtas no ritmo (Power e Preditivo V6, SQL 109; Despacho Anatel 100/2026).** A VM
+mede em tempo real as curtas do dia por linha (tronco/bina) e no total da empresa (`voz/orquestrador/curtas.py`; a regra
+do motor, abandono conta sempre) e freia bem antes do bloqueio da operadora (85 % com 1.000/linha ou 10.000/total): de
+70 % a 80 % a razão cai linearmente até 1,0 (com 100+ ligações no dia na linha ou no total; estado `reduzido`); 80 % com
+800 ligações = a linha para no dia (não disca nem gasta CPS; volta amanhã); 80 % com 8.000 = a empresa para no dia
+(estado `parado`). Nunca troca a bina nem desvia para contornar. A cada 5 min o Plantão junta o que o banco já tem do
+dia (`curtas_hoje_voz`, das amostras do SQL 106; VM reiniciada não começa do zero; fica o maior, nunca soma duas vezes)
+e a liberação do Admin (`liberar_curtas_voz(empresa, motivo)`: só o Admin da empresa ou da equipe, motivo de 10 a 300
+caracteres sem dado pessoal, 1 por dia, auditada em `voz_curtas_liberacoes`): os volumes de parada sobem para 950/linha e
+9.500/total só naquele dia; a redução continua. **Vai para produção junto ou antes do Preditivo (V5).**
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

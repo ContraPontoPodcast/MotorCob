@@ -235,7 +235,8 @@ class Plantao:
         self.carregados: dict[int, object] = {}     # empresa -> dia carregado
         self._mtime = dados_caminho.stat().st_mtime if dados_caminho and dados_caminho.exists() else None
         self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9, "robos": -1e9,
-                     "ritmo": -1e9, "ritmo_cfg": -1e9}
+                     "ritmo": -1e9, "ritmo_cfg": -1e9, "curtas": -1e9}
+        self._curtas_aviso_s = -1e9                  # último aviso de falha da leitura das curtas (1 por hora)
         self._ritmo_aviso_s = -1e9                   # último aviso de falha das amostras do ritmo (1 por hora)
         self._robos_s: float | None = None           # última foto dos robôs (segundos no limite entre duas fotos)
         self._robos_aviso_s = -1e9                   # último aviso de falha da telemetria (no máximo 1 por hora)
@@ -262,6 +263,8 @@ class Plantao:
             self.registrar_ritmo(agora_s)
         if self.fonte is not None and self._vence("ritmo_cfg", agora_s, 60):
             self.atualizar_ritmos()
+        if self.registro is not None and self._vence("curtas", agora_s, 300):
+            self.semear_curtas(agora_s)
         if self.registro is not None and self._vence("pausas", agora_s, 30):
             self.sincronizar_pausas()
         if self.registro is not None and self._vence("reenvio", agora_s, 30):
@@ -353,6 +356,24 @@ class Plantao:
                     l.ritmo = novo
                     mudou += 1
         return mudou
+
+    # ------------------------------------------------------------ SQL 109 · freios de curtas (Power/Preditivo V6)
+    def semear_curtas(self, agora_s: float) -> int:
+        """O que o banco já tem de curtas hoje (por linha e total) e a liberação do Admin, por empresa desta VM: a VM
+        reiniciada não começa do zero e a liberação vale em até 5 min. Banco fora: segue com o que mediu (1 aviso por
+        hora)."""
+        hoje, n = self.relogio().date(), 0
+        for emp in self._minhas():
+            try:
+                dados = self.registro.sb.rpc("curtas_hoje_voz", {"empresa": emp}) or {}
+            except Exception as ex:   # noqa: BLE001
+                if agora_s - self._curtas_aviso_s >= 3600:
+                    self._curtas_aviso_s = agora_s
+                    log.warning("curtas de hoje não lidas (%s); segue com o que a VM mediu", ex.__class__.__name__)
+                return n
+            self.orq.curtas.semear(emp, hoje, dados)
+            n += 1
+        return n
 
     # ------------------------------------------------------------ SQL 106 · ritmo da discagem (Power/Preditivo V1)
     def registrar_ritmo(self, agora_s: float, todos: bool = False) -> int:

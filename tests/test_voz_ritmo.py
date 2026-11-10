@@ -1,7 +1,7 @@
 """Ritmo da discagem (Power e Preditivo, PREDITIVO.md): V1 · medir o abandono certo, sem mudar o ritmo (SQL 106);
 V2 · linhas e robôs separados também com razão > 1 (reserva no atendimento, antes do AMD); V3 · ritmo por carteira em
 credores.discagem › ritmo (SQL 107) e a leitura na VM; V4 · Power (razão fixa, teto de abandono) e abandono digno
-(mensagem, não religa no dia, abandono recente; SQL 108).
+(mensagem, não religa no dia, abandono recente; SQL 108); V6 · freios de chamadas curtas no ritmo (SQL 109).
 
 - a taxa do freio é a dos últimos 30 min (não o acumulado desde que a VM subiu) e solta sozinha quando a janela anda;
 - a transferência sem operador (fila humana cheia) não é abandono e não freia o discador;
@@ -396,6 +396,93 @@ class TestSql108(unittest.TestCase):
         self.assertEqual({c.split()[0] for c in campos}, set(linha))
         self.assertEqual(A.RPC["abandonos_recentes_voz"], "abandonos_recentes")
         self.assertIn("function voz_vm.abandonos_recentes(args jsonb)", s)
+
+
+class TestFreiosCurtas(Base):
+    """V6 · curtas medidas na VM por linha e total: a razão cai de 70 % a 80 %; em 80 % com 800 ligações a linha para no
+    dia; com 8.000 a empresa para; a liberação do Admin sobe para 950/9.500 só no dia; dia novo zera."""
+
+    def test_razao_cai_de_70_a_80(self):
+        from voz.orquestrador.curtas import Curtas
+        c = Curtas()
+        for i in range(100):
+            c.contar(1, 10, i < 75, D0)                          # 75 % de curtas
+        self.assertAlmostEqual(c.razao(1, 3.0, D0), 2.0)       # metade do caminho entre 3,0 e 1,0
+        self.assertEqual(c.razao(1, 1.0, D0), 1.0)
+        self.assertEqual(c.estado(1, D0), "reduzido")
+        c2 = Curtas()
+        for i in range(99):
+            c2.contar(1, 10, True, D0)                          # 100 % mas sem amostra (99 < 100): não reduz
+        self.assertEqual(c2.razao(1, 3.0, D0), 3.0)
+        c2.contar(1, 10, True, D0)
+        self.assertEqual(c2.razao(1, 3.0, D0), 1.0)            # ≥ 80 %: 1,0
+
+    def test_linha_para_em_800_e_volta_amanha(self):
+        from voz.orquestrador.curtas import Curtas
+        c = Curtas()
+        for i in range(799):
+            c.contar(1, 10, i % 10 < 8, D0)                     # 80 %
+        self.assertFalse(c.tronco_parado(1, 10, D0))
+        c.contar(1, 10, True, D0)
+        self.assertTrue(c.tronco_parado(1, 10, D0))
+        self.assertEqual(c.estado(1, D0), "parado")
+        self.assertTrue(any("parada até amanhã" in a for a in c.avisos))
+        self.assertFalse(c.tronco_parado(1, 11, D0))           # as outras linhas seguem
+        self.assertFalse(c.tronco_parado(1, 10, D0 + timedelta(days=1)))
+        c.contar(1, 10, False, D0 + timedelta(days=1))          # dia novo: zera
+        self.assertEqual(c.empresas[1].troncos[10].total, 1)
+
+    def test_liberacao_do_admin_e_semente_do_banco(self):
+        from voz.orquestrador.curtas import Curtas
+        c = Curtas()
+        c.semear(1, D0.date(), {"total": 8000, "curtas": 6500, "troncos": [{"tronco_id": 10, "total": 900,
+                                                                           "curtas": 760}]})
+        self.assertTrue(c.empresa_parada(1, D0))
+        self.assertTrue(c.tronco_parado(1, 10, D0))
+        c.semear(1, D0.date(), {"total": 10, "curtas": 1, "liberado": True})   # nunca desce: fica o maior
+        self.assertEqual(c.empresas[1].total.total, 8000)
+        self.assertFalse(c.empresa_parada(1, D0))              # liberado: só para em 9.500
+        self.assertFalse(c.tronco_parado(1, 10, D0))           # e a linha em 950
+        self.assertEqual(c.razao(1, 2.0, D0), 1.0)             # a redução continua
+
+    def test_vm_nao_disca_por_linha_parada_nem_empresa_parada(self):
+        itens = [item(f"C{i}", f"119888{i:05d}") for i in range(10)]
+        mud = [("voz_config", 0, {"limite_simultaneas": 5, "pico_multiplo": 1}),
+               ("voz_troncos", 0, {"cps": 100}), ("voz_troncos", 1, {"cps": 100})]
+        orq = self.montar(itens, mud=mud)
+        orq.curtas.semear(1, D0.date(), {"troncos": [{"tronco_id": 10, "total": 800, "curtas": 700}]})
+        orq.tick()
+        self.assertTrue(all(c.candidata.tronco.id != 10 for c in orq.chamadas.values()))
+        self.assertGreater(orq.contagem.get("linha_parada_curtas", 0), 0)
+        self.assertEqual(orq.retrato(1, None)["estado"], "parado")
+        orq2 = self.montar(itens, mud=mud)
+        orq2.curtas.semear(1, D0.date(), {"total": 8000, "curtas": 6400})
+        self.assertEqual(orq2.tick(), 0)
+        self.assertGreater(orq2.contagem.get("empresa_parada_curtas", 0), 0)
+
+    def test_plantao_semeia_do_banco_e_banco_fora_segue(self):
+        orq = self.montar([item()])
+
+        class SbCurtas(Sb):
+            def rpc(self, f, args=None):
+                super().rpc(f, args)
+                return {"total": 900, "curtas": 100, "troncos": [], "liberado": False}
+        sb = SbCurtas()
+        pl = P.Plantao(orq, None, orq.dados.config(1).modo, registro=SimpleNamespace(sb=sb), relogio=self.rel)
+        self.assertEqual(pl.semear_curtas(0.0), 1)
+        self.assertEqual(sb.rpcs[0], ("curtas_hoje_voz", {"empresa": 1}))
+        self.assertEqual(orq.curtas.empresas[1].total.total, 900)
+        pl2 = P.Plantao(orq, None, orq.dados.config(1).modo, registro=SimpleNamespace(sb=Sb(falhar=True)),
+                        relogio=self.rel)
+        self.assertEqual(pl2.semear_curtas(0.0), 0)
+
+    def test_sql_e_acesso(self):
+        s = (RAIZ / "supabase" / "migrations" / "20270224000001_voz_curtas_freio.sql").read_text(encoding="utf-8")
+        self.assertEqual(A.RPC["curtas_hoje_voz"], "curtas_hoje")
+        self.assertIn("function voz_vm.curtas_hoje(args jsonb)", s)
+        from voz.orquestrador import curtas as K
+        self.assertEqual((K.LINHA_PARA, K.EMPRESA_PARA, K.LINHA_LIBERADA, K.EMPRESA_LIBERADA), (800, 8000, 950, 9500))
+        self.assertIn("950/linha e 9.500/total", s)
 
 
 if __name__ == "__main__":

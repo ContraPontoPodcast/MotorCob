@@ -46,7 +46,8 @@ from voz.orquestrador.agendador import Agendador
 from voz.orquestrador.ari import ClienteARI, ErroARI
 from voz.orquestrador.eventos import SEM_IA, EscritorEventos, EventoChamada, classificar
 from voz.orquestrador.lote import ItemLote, Lote, hash_destino
-from voz.orquestrador.medidor import Medidor
+from voz.orquestrador.curtas import Curtas
+from voz.orquestrador.medidor import Medidor, e_curta
 from voz.provedores.base import ContextoChamada, ProvedorVoz, aviso_abertura
 from voz.transcricao import ia as TIA
 
@@ -178,6 +179,7 @@ class Orquestrador:
         self.alertas: list[str] = []
         self.pausas_novas: list[dict] = []       # rotas pausadas aqui e ainda não gravadas no banco (o Plantão grava)
         self.medidor = Medidor()                 # ritmo por carteira × janela de 5 min (SQL 106; o Plantão grava)
+        self.curtas = Curtas()                   # chamadas curtas do dia por linha e total (freios do ritmo, V6)
 
     # ---------------------------------------------------------------- utilidades
     def _conta(self, k: str, n: int = 1):
@@ -243,7 +245,11 @@ class Orquestrador:
         lote = next((l for l in self.lotes.values() if l.empresa_id == empresa_id and l.credor_id == credor_id), None)
         ritmo = lote.ritmo if lote is not None else {"modo": "power", "razao": e.razao}
         razao = lote.controle.razao(ritmo, agora) if lote is not None else e.razao
+        razao = self.curtas.razao(empresa_id, razao, agora)
         estado = lote.controle.estado(ritmo, agora) if lote is not None else "normal"
+        curtas = self.curtas.estado(empresa_id, agora)     # parado vence; freado vence o reduzido
+        if curtas == "parado" or (curtas == "reduzido" and estado != "freado"):
+            estado = curtas
         return {"modo": ritmo.get("modo", "power"), "razao": razao, "razao_config": ritmo.get("razao", 1.0),
                 "estado": estado, "conversas": e.conversas, "reservas": e.reservas, "linhas": e.linhas}
 
@@ -285,7 +291,7 @@ class Orquestrador:
             return None
         c = Chamada(novo_id(), lote.empresa_id, idx, item, cands, lote_chave=lote.chave)
         for i, cand in enumerate(cands):
-            if self.agendador.tronco_livre(cand.tronco.id, agora.timestamp()):
+            if self._tronco_ok(lote.empresa_id, cand.tronco.id, agora):
                 c.i_rota = i
                 break
         else:
@@ -318,13 +324,23 @@ class Orquestrador:
         prov = self._provedor(lote.empresa_id)
         if prov is None:
             return False
+        if self.curtas.empresa_parada(lote.empresa_id, agora):
+            self._conta("empresa_parada_curtas")   # 80 % de curtas com 8.000 ligações hoje: só amanhã
+            return False
         livres_prov = self._livres_provedor(prov)
-        razao = lote.controle.razao(lote.ritmo, agora)
+        razao = self.curtas.razao(lote.empresa_id, lote.controle.razao(lote.ritmo, agora), agora)
         if self.agendador.vaga_empresa(lote.empresa_id, razao=razao, livres_max=livres_prov):
             return True
         if livres_prov <= 0 and self.agendador.vaga_empresa(lote.empresa_id):
             self._conta("sem_robo_provedor")   # a lista espera: ninguém é discado sem robô para falar
         return False
+
+    def _tronco_ok(self, empresa_id: int, tronco_id: int, agora: datetime) -> bool:
+        """Linha parada hoje pelas curtas não disca (e não consome ficha de CPS); senão, canal e CPS do tronco."""
+        if self.curtas.tronco_parado(empresa_id, tronco_id, agora):
+            self._conta("linha_parada_curtas")
+            return False
+        return self.agendador.tronco_livre(tronco_id, agora.timestamp())
 
     def _reservavel(self, empresa_id: int) -> bool:
         """Há robô livre (empresa e provedor) para reservar agora?"""
@@ -395,7 +411,7 @@ class Orquestrador:
         """Passa para a próxima rota com tronco livre; False se acabaram."""
         for j in range(c.i_rota + 1, len(c.candidatas)):
             t_novo = c.candidatas[j].tronco.id
-            if self.agendador.tronco_livre(t_novo, agora.timestamp()):
+            if self._tronco_ok(c.empresa_id, t_novo, agora):
                 self.agendador.trocar_tronco(c.candidata.tronco.id, t_novo)
                 c.i_rota = j
                 self._conta("failover")
@@ -881,6 +897,10 @@ class Orquestrador:
         classificar(ev, self.toque_min_s)
         self.medidor.contar(c.empresa_id, c.lote_chave[1] if c.lote_chave else None, cand.tronco.id, ev.desfecho,
                             c.veredito == A.PESSOA, c.t_atendeu is not None, billsec, agora)
+        self.curtas.contar(c.empresa_id, cand.tronco.id, e_curta(ev.desfecho, c.t_atendeu is not None, billsec), agora)
+        for av in self.curtas.avisos:
+            self._alerta(av)
+        self.curtas.avisos.clear()
         self.escritor.escrever(ev)
         if self.ao_registrar is not None:
             self.ao_registrar(ev)
