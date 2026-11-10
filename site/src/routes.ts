@@ -144,6 +144,11 @@ export default [
     route('speech-analytics/gravacoes', 'routes/speech-gravacoes.tsx'),
     route('speech-analytics/entrada', 'routes/speech-entrada.tsx'),
     route('speech-analytics/entrada/enviar', 'routes/speech-entrada-enviar.tsx'),
+    // Roleplay (treino de operadores, SQL 90): o Painel é a aba /speech-analytics/roleplay; as subtelas, aqui.
+    route('speech-analytics/roleplay/cenarios', 'routes/speech-roleplay-cenarios.tsx'),
+    route('speech-analytics/roleplay/cenarios/:id', 'routes/speech-roleplay-cenario.tsx'),
+    route('speech-analytics/roleplay/operadores', 'routes/speech-roleplay-operadores.tsx'),
+    route('speech-analytics/roleplay/operadores/:op', 'routes/speech-roleplay-operador.tsx'),
     route('speech-analytics/:aba?', 'routes/speech-analytics.tsx'),
     // Endereços antigos: continuam abrindo e levam ao novo, com a mesma query (lib/rotas-voz.ts).
     route('canais/agente-virtual', 'routes/canais-agente-virtual.tsx'),
