@@ -276,6 +276,13 @@ end $$;
 
 -- ================================================================ 4. pico desligado para quem tem licença
 -- SQL 56/57 recriada inteira: empresa com licença vigente hoje (robôs > 0) fica com pico 1 (teto = limite)
+-- Rodado de novo depois do SQL 101 (a divisão já tem licencas e motivo, e o pico desligado vem de lá): não recria.
+do $do98$
+begin
+    if pg_get_function_result(to_regprocedure('public.divisao_concorrencia_voz()')) like '%motivo text%' then
+        return;
+    end if;
+    execute $f98$
 create or replace function public.divisao_concorrencia_voz()
 returns table (empresa_id bigint, canais int, contratado int, cota numeric, limite int, pico_multiplo int, teto int)
 language sql stable security definer set search_path = public as $$
@@ -305,6 +312,8 @@ language sql stable security definer set search_path = public as $$
       join p on p.empresa_id = f.empresa_id
      where public.chamada_do_servidor() or public.chamada_da_vm_voz() or f.empresa_id in (select public.minhas_empresas())
 $$;
+    $f98$;
+end $do98$;
 
 -- SQL 57 recriada inteira: a VM lê o pico daqui (voz/banco.py); com licença vigente hoje e robôs > 0, pico = 1.
 -- A data de hoje vai escrita (não hoje_sp()): a VM (motorcx_voz) não executa funções de public.

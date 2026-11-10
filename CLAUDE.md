@@ -1056,6 +1056,21 @@ mudança agendada continua valendo depois de um aumento "agora"; preço trocado 
 menor); sem a linha `voz_minuto_ia_franquia` na prévia, a tela avisa que o SQL 98 falta. `ITENS_FATURA_VOZ` ganha
 `voz_licenca_robo` e `ehItemFaturaVoz` cobre ajustes e franquia (`faturamento-voz.tsx`).
 
+**SQL 101 (Robôs contratados, PR 4): divisão do teto global pelas licenças.** `divisao_concorrencia_voz()` (e por ela
+`voz_divisao_concorrencia`, `voz_vm.divisao()`/`voz_vm.divisao_concorrencia`, a estimativa do lote e o motor/VM):
+demanda = min(robôs vigentes hoje, canais dos troncos ativos) para quem tem licença com robôs > 0; cabe no teto → limite =
+demanda; overbooking → floor(teto × demanda ÷ Σ demanda) com a sobra para as maiores frações (empate: mais demanda,
+menor id), nunca acima da demanda. Quem não tem licença (ou tem 0 robôs, ou só agendada) divide **só a sobra** pelos
+canais, com a regra antiga. Colunas novas no fim: `licencas` (nulo = sem licença) e `motivo` (`licencas` | `tronco` |
+`teto` | `legado`); licença sem tronco ativo aparece com 0 canais e motivo `tronco`; `teto` = limite para quem tem
+licença (pico desligado). O cliente não vê o teto global: `contratado` e `cota` vêm nulos fora da equipe/servidor/VM (o
+motivo `teto` é "limite temporário da plataforma" para ele). O retorno mudou: drop cascade e recriar a função, as duas
+views e `voz_vm.divisao()` com os grants; o motor lê só `empresa_id` e `limite` (sem mudança). Os SQL 56, 57 e 98
+conferem a assinatura antes de recriar (56/57 voltam às sete colunas; o 98 pula a divisão se já tem `motivo`): se
+rodarem de novo, rode o 101 depois. `definir_concorrencia_contratada` (mesma assinatura) avisa a equipe (sino,
+`/console/voz`) quando diminui o teto para baixo dos robôs vendidos; não bloqueia. Teste:
+`supabase/testes/testar_licencas_divisao.py` (cenários isolados numa transação desfeita).
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
