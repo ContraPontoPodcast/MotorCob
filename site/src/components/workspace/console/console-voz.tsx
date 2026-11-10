@@ -1,5 +1,6 @@
 // Console › Fornecedores e rotas › Agente virtual (equipe MotorCX). Protótipo aprovado, tela 1, e SQL 56.
-// Global: conexão do provedor (só se funciona, nunca a chave) e concorrência contratada dividida entre as empresas.
+// Global: conexão do provedor (só se funciona, nunca a chave) e robôs vendidos × teto contratado (console-voz-robos.tsx,
+// SQL 101: licenças primeiro, a sobra para quem não tem licença).
 // Por empresa: provedor de voz, troncos SIP, IPs de saída, rotas com vigência (e o alerta de rota sem cadastro),
 // calculadora de tarifação sem carência, transferência para o discador, pico, Alô fake e o caminho
 // Simulado → Só números de teste → Real com o checklist. Troncos, rotas e configuração: gerenciar_troncos_voz.
@@ -20,6 +21,8 @@ import { Abas, Aviso as AvisoDs, Detalhes, Gaveta, Kpis, ListaValores, Passos, S
 import { textoTemDadoPessoal } from '@/lib/speech';
 import { useConsolePerms } from './console-perms';
 import { NumerosTesteDialogo, RotaGaveta, TransferenciaGaveta, TroncoGaveta } from './console-voz-gavetas';
+import { RobosTeto } from './console-voz-robos';
+import { comLicenca, linhaDivisao, porQueEquipe } from '@/lib/robos-voz';
 
 const SEM_PERM_TRONCOS = 'Só a equipe com a permissão de troncos de voz';
 const SEM_PERM_LIGAR = 'Só quem tem a permissão de ligar o agente de voz';
@@ -96,7 +99,7 @@ export function AgenteVirtualConsole() {
 
 			{aba === 'todas' ? <>
 				<ConexaoProvedor fornecedores={fornecedores} saude={saudeGlobal} loading={loading} />
-				<Concorrencia divisao={divisao} contrato={contrato} nomeEmpresa={nomeEmpresa} podeTroncos={podeTroncos} loading={loading}
+				<RobosTeto divisao={divisao} contrato={contrato} nomeEmpresa={nomeEmpresa} podeTroncos={podeTroncos} loading={loading}
 					onSalvo={() => void recarregarGlobal()} onEscolher={id => { setEmpresaId(id); setAba('empresa'); }} />
 			</> : <div>
 				<div className="mb-4 flex flex-wrap items-center gap-3">
@@ -161,74 +164,6 @@ function ConexaoProvedor({ fornecedores, saude, loading }: { fornecedores: Row[]
 					})}
 				</div>
 			)}
-		</Cartao>
-	);
-}
-
-// ============================================================== concorrência contratada
-function Concorrencia({ divisao, contrato, nomeEmpresa, podeTroncos, loading, onSalvo, onEscolher }: {
-	divisao: Row[]; contrato: Row | null; nomeEmpresa: (id: unknown) => string; podeTroncos: boolean; loading: boolean;
-	onSalvo: () => void; onEscolher: (id: string) => void;
-}) {
-	const atual = Number(contrato?.concorrencia_contratada ?? divisao[0]?.contratado ?? 0);
-	const [valor, setValor] = useState(String(atual));
-	const [busy, setBusy] = useState(false);
-	const [como, setComo] = useState(false);
-	useEffect(() => { setValor(String(atual)); }, [atual]);
-
-	const n = Number(valor);
-	const valido = Number.isInteger(n) && n >= 0 && n <= 1000000;
-	const mudou = valido && n !== atual;
-	const totCanais = divisao.reduce((t, r) => t + Number(r.canais ?? 0), 0);
-	const totLimite = divisao.reduce((t, r) => t + Number(r.limite ?? 0), 0);
-	const linhas = [...divisao].sort((a, b) => Number(b.canais) - Number(a.canais));
-
-	async function salvar() {
-		if (!supabase || !mudou) return;
-		setBusy(true);
-		const { error } = await supabase.rpc('definir_concorrencia_contratada', { n });
-		setBusy(false);
-		if (error) { toast.error(erroRpc(error)); return; }
-		toast.success('Concorrência salva. A divisão entre as empresas foi refeita.');
-		onSalvo();
-	}
-
-	return (
-		<Cartao semPad titulo="Concorrência contratada"
-			desc="Total de ligações ao mesmo tempo no contrato com o provedor de voz, dividido entre as empresas pelos canais dos troncos ativos."
-			acoes={<button type="button" onClick={() => setComo(true)} className={btnLink}>Como dividimos</button>}>
-			<div className="px-5 pb-2 sm:px-6">
-				<div className="flex flex-wrap items-end gap-3">
-					<div className="w-full max-w-[280px]">
-						<label htmlFor="voz-contr" className="mb-1 block text-[13px] font-semibold text-[var(--base-texto)]">Total contratado (ao mesmo tempo)</label>
-						<input id="voz-contr" value={valor} inputMode="numeric" disabled={!podeTroncos} onChange={e => setValor(e.target.value.replace(/\D/g, ''))} className={`${campoCls} tnum`} />
-					</div>
-					{podeTroncos ? (
-						<button onClick={() => void salvar()} disabled={!mudou || busy} className={btnPrim}>{busy ? 'Salvando...' : 'Salvar'}</button>
-					) : <Cadeado>{SEM_PERM_TRONCOS}</Cadeado>}
-				</div>
-				<p className="mt-1.5 text-[12px] text-[var(--base-texto-3)]">A divisão é refeita na hora.{contrato?.atualizado_em ? ` Última mudança: ${dateTimeBR(contrato.atualizado_em)}.` : ''}</p>
-			</div>
-			<div className="pt-2">
-				{loading ? <p className="py-4 text-center text-[13px] text-[var(--base-texto-3)]">Carregando...</p> : (
-					<Tabela rotulo="Divisão por empresa" linhas={linhas} chave={r => String(r.empresa_id)} onAbrir={r => onEscolher(String(r.empresa_id))}
-						vazio="Nenhuma empresa com tronco ativo ainda."
-						colunas={[
-							{ id: 'emp', titulo: 'Empresa', celula: r => nomeEmpresa(r.empresa_id) },
-							{ id: 'can', titulo: 'Canais', num: true, celula: r => inteiro(r.canais) },
-							{ id: 'lim', titulo: 'Limite', num: true, celula: r => <b>{inteiro(r.limite)}</b> },
-							{ id: 'pico', titulo: 'Pico', celula: r => { const pico = Number(r.pico_multiplo ?? 1); return pico <= 1 ? 'Desligado' : `Até ${pico}× · máx. ${inteiro(r.teto)}`; } },
-						]}
-						celular={r => ({ titulo: nomeEmpresa(r.empresa_id), valor: `${inteiro(r.limite)} simultâneas`, resumo: `${inteiro(r.canais)} canais` })}
-						rodape={<><span>Total</span><span className="tnum">{inteiro(totCanais)} canais · limite {inteiro(totLimite)}</span></>} />
-				)}
-			</div>
-			<Gaveta aberta={como} onFechar={() => setComo(false)} titulo="Como dividimos a concorrência">
-				<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Limite da empresa = {inteiro(atual)} × canais dela ÷ {inteiro(totCanais)} canais no total. A sobra do arredondamento vai para as empresas com a maior fração. O pico é opção de cada empresa, vem desligado e nunca passa dos canais do tronco.</p>
-				<Trava icone={<Phone size={16} />} titulo="Quem liga é sempre o agente de IA. O limite conta conversas com a IA, não linhas tocando: cada número só é discado com um robô reservado para ele.">
-					Sem robô livre, o número espera na lista do dia e não é discado. Se mesmo com a reserva a IA não abrir a conversa (falha do provedor), a pessoa ouve uma mensagem curta e neutra antes de a ligação acabar, e isso conta como &quot;abandono sem robô livre&quot;. Na transferência sem operador livre, a pessoa volta para o agente, que pede desculpas e agenda um retorno. A taxa de abandono aparece em Ligações em curso e freia o lote quando passa do limite da empresa.
-				</Trava>
-			</Gaveta>
 		</Cartao>
 	);
 }
@@ -330,6 +265,8 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 	const limite = Number(divisaoLinha?.limite ?? 0);
 	const canais = troncos.filter(t => t.ativo !== false).reduce((s, t) => s + Number(t.canais ?? 0), 0);
 	const tetoDe = (m: number) => Math.min(limite * m, canais);
+	// com licença (SQL 98/101) o pico não vale: quem precisa de mais compra robôs; o valor guardado volta se a licença sair
+	const comRobos = divisaoLinha ? comLicenca(linhaDivisao(divisaoLinha)) : false;
 
 	async function ajustar(chave: string, valor: unknown, msg: string) {
 		if (!supabase) return;
@@ -345,7 +282,7 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 
 	const linhasCfg: { id: string; nome: string; valor: ReactNode }[] = [
 		{ id: 'provedor', nome: 'Provedor de voz', valor: provInfo?.nome ?? provedor },
-		{ id: 'pico', nome: 'Pico acima do limite', valor: pico <= 1 ? 'Desligado' : `Até ${pico}× · máx. ${inteiro(tetoDe(pico))}` },
+		{ id: 'pico', nome: 'Pico acima do limite', valor: comRobos ? 'Desligado (robôs contratados)' : pico <= 1 ? 'Desligado' : `Até ${pico}× · máx. ${inteiro(tetoDe(pico))}` },
 		{ id: 'alo', nome: 'Alô fake', valor: aloLib ? (config?.alo_fake ? `Liberado · ligado, até ${inteiro(config?.alo_fake_max_s)} s` : 'Liberado · desligado pela empresa') : 'Não liberado' },
 		{ id: 'numeros', nome: 'Números de teste', valor: nTeste === 0 ? 'Nenhum cadastrado' : `${inteiro(nTeste)} cadastrado${nTeste > 1 ? 's' : ''}` },
 		{ id: 'bucket', nome: 'Bucket de gravações', valor: config?.bucket_gravacoes ? <span className="font-mono text-[12.5px]">{String(config.bucket_gravacoes)}</span> : 'Sem bucket' },
@@ -382,6 +319,7 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 						<option value="2">Até 2× · máx. {inteiro(tetoDe(2))}</option>
 						<option value="3">Até 3× · máx. {inteiro(tetoDe(3))}</option>
 					</select>
+					{comRobos && <p className="text-[12.5px] leading-relaxed text-[var(--estado-atencao-texto)]">Esta empresa tem robôs contratados: o pico não vale (limite = robôs). O valor fica guardado e volta a valer se a licença chegar a 0.</p>}
 					<p className="text-[12.5px] leading-relaxed text-[var(--base-texto-2)]">{pico <= 1 ? `Sem pico: a empresa nunca passa de ${inteiro(limite)}.` : `Até ${inteiro(tetoDe(pico))} ao mesmo tempo. O minuto de IA acima de ${inteiro(limite)} custa o dobro e aparece como item próprio na fatura do MotorCX.${tetoDe(pico) < limite * pico ? ` Travado nos ${inteiro(canais)} canais do tronco.` : ''}`}</p>
 				</>}
 				{aberta === 'alo' && <>
@@ -749,7 +687,7 @@ function LigarDeVerdade({ empresaId, empresaNome, d, modo, podeLigar, divisaoLin
 				{ rotulo: 'Modo agora', valor: modoInfo?.nome ?? 'Simulado', tom: modo === 'real' ? 'ok' : undefined },
 				{ rotulo: 'Lista pronta', valor: `${prontos} de ${itens.length}`, tom: prontos < itens.length ? 'atencao' : 'ok' },
 				{ rotulo: 'Troncos no ar', valor: `${inteiro(noAr)} de ${inteiro(d.troncos.length)}`, tom: d.troncos.length && !noAr ? 'alerta' : undefined },
-				{ rotulo: 'Ao mesmo tempo', valor: divisaoLinha ? inteiro(divisaoLinha.limite) : '—', detalhe: divisaoLinha ? `pelos ${inteiro(divisaoLinha.canais)} canais do tronco` : 'precisa de um tronco ativo' },
+				{ rotulo: 'Ao mesmo tempo', valor: divisaoLinha ? inteiro(divisaoLinha.limite) : '—', detalhe: divisaoLinha ? porQueEquipe(linhaDivisao(divisaoLinha)) : 'precisa de um tronco ativo' },
 			]} />
 			<Cartao titulo="Antes de ligar de verdade" desc="Os mesmos itens que o banco confere ao mudar de modo.">
 				<ul className="space-y-2">
