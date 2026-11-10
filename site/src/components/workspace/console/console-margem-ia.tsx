@@ -6,6 +6,8 @@
 // preços" como ação principal, tabela de preços com 5 colunas, a fórmula em "Como calculamos", a margem do mês com 5
 // colunas e a gaveta de edição com um seletor de seção e um botão de salvar só. Só tokens do tema.
 // SQL 78: terceira parte "Créditos" (franquia, excedente, custo real do cliente e do sistema, teto por empresa).
+// SQL 92: nos itens com franquia (Créditos de IA e treino do Speech), a franquia padrão aparece na lista e é editada
+// junto com o preço de tabela (salvar_franquia_padrao); a franquia de cada empresa fica na Contratação.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Aviso, Botao, Cartao, Detalhes, Estado, Gaveta, Kpis, ListaRegras, ListaValores, Pilula, Rotulo, Segmentos, Tabela, campoCls, campoStyle, type Tom } from '@/components/ds';
@@ -13,6 +15,7 @@ import { supabase, friendlyError, moneyBR, numberBR, type Row } from '@/lib/supa
 import { ErrorDetail } from '@/components/error-detail';
 import { useConsolePerms } from './console-perms';
 import { CreditosIaMaster } from './console-creditos-ia';
+import { franquiaDigitada, temFranquia } from '@/lib/precos-itens';
 
 const SIT_IA: Record<string, { label: string; tom: Tom }> = {
   ok: { label: 'OK', tom: 'ok' },
@@ -68,15 +71,17 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
     let ativo = true;
     (async () => {
       setLoading(true); setError('');
-      const [it, mg, ab] = await Promise.all([
+      const [it, mg, ab, fr] = await Promise.all([
         supabase.rpc('itens_ia'),
         supabase.rpc('margem_ia', { competencia }),
         supabase.rpc('ia_precos_abaixo_minimo'),
+        supabase.from('cobranca_itens').select('codigo,franquia_padrao').eq('eh_ia', true),
       ]);
       if (!ativo) return;
       const e = it.error ?? mg.error ?? ab.error;
       if (e) { setError(friendlyError(e)); setLoading(false); return; }
-      setItens((it.data ?? []) as Row[]);
+      const franquias = new Map(((fr.data ?? []) as Row[]).map(r => [String(r.codigo), r.franquia_padrao]));
+      setItens(((it.data ?? []) as Row[]).map(x => ({ ...x, franquia_padrao: franquias.get(String(x.codigo)) ?? null })));
       setMargem((mg.data ?? []) as Row[]);
       setAbaixo((ab.data ?? []) as Row[]);
       setLoading(false);
@@ -121,7 +126,7 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
           <Tabela rotulo="Preços dos itens de IA" linhas={itens} chave={it => String(it.codigo)} onAbrir={it => setEditar({ item: it })} selecionada={editar ? String(editar.item.codigo) : null}
             vazio="Nenhum item de IA no catálogo."
             colunas={[
-              { id: 'item', titulo: 'Item', celula: it => <span><b className="font-medium">{String(it.nome)}</b><small className="block text-[11.5px] text-[var(--base-texto-3)]">por {String(it.unidade)}{Number(it.precos_abaixo ?? 0) > 0 && <span className="ml-1 font-semibold text-[var(--estado-erro-texto)]">· {String(it.precos_abaixo)} abaixo</span>}</small></span> },
+              { id: 'item', titulo: 'Item', celula: it => <span><b className="font-medium">{String(it.nome)}</b><small className="block text-[11.5px] text-[var(--base-texto-3)]">por {String(it.unidade)}{temFranquia(it.codigo) && it.franquia_padrao != null && <> · franquia {numberBR(it.franquia_padrao)}</>}{Number(it.precos_abaixo ?? 0) > 0 && <span className="ml-1 font-semibold text-[var(--estado-erro-texto)]">· {String(it.precos_abaixo)} abaixo</span>}</small></span> },
               { id: 'custo', titulo: 'Custo', num: true, celula: it => it.custo_unitario == null ? <span className="text-[var(--estado-atencao-texto)]">sem custo</span> : precoIA(it.custo_unitario) },
               { id: 'min', titulo: 'Preço mínimo', num: true, celula: it => <b>{precoIA(it.preco_minimo_ia)}</b> },
               { id: 'tab', titulo: 'Tabela', num: true, celula: it => precoIA(it.preco_tabela) },
@@ -194,6 +199,8 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
   const [milTokens, setMilTokens] = useState(item.custo_mil_tokens != null ? String(item.custo_mil_tokens).replace('.', ',') : '');
   const [premissa, setPremissa] = useState(String(item.premissa ?? ''));
   const [tabela, setTabela] = useState(item.preco_tabela != null ? String(item.preco_tabela).replace('.', ',') : '');
+  const comFranquia = temFranquia(item.codigo);
+  const [franquia, setFranquia] = useState(item.franquia_padrao != null ? String(item.franquia_padrao) : '');
   const [empresas, setEmpresas] = useState<Row[]>([]);
   const [empresa, setEmpresa] = useState(empresaInicial ?? '');
   const [precoEmp, setPrecoEmp] = useState('');
@@ -209,7 +216,8 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
     if (!supabase) return;
     const { data } = await supabase.rpc('itens_ia');
     const novo = ((data ?? []) as Row[]).find(x => x.codigo === it.codigo);
-    if (novo) setIt(novo);
+    const { data: fr } = await supabase.from('cobranca_itens').select('franquia_padrao').eq('codigo', String(it.codigo)).maybeSingle();
+    if (novo) setIt({ ...novo, franquia_padrao: (fr as Row | null)?.franquia_padrao ?? it.franquia_padrao ?? null });
     onSalvo();
   }
 
@@ -234,14 +242,24 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
     setMsg({ onde: 'custo', ok: `Custo salvo. Preço mínimo agora: ${precoIA(r.preco_minimo)}.${r.preco_padrao_aplicado ? ' O item ganhou o preço padrão (= o mínimo).' : ''}${abaixo > 0 ? ` ${abaixo} preço(s) ficaram abaixo do mínimo: nenhum foi alterado.` : ''}` });
     await recarregarItem();
   }
+  const vFranquia = comFranquia ? franquiaDigitada(franquia) : null;
+  const franquiaMudou = comFranquia && vFranquia != null && vFranquia !== Number(it.franquia_padrao ?? -1);
+  const tabelaMudou = vTabela > 0 && vTabela !== Number(it.preco_tabela ?? 0);
   async function salvarTabela() {
     if (!supabase || tabelaAbaixo) return;
     setBusy('tabela'); setMsg(null);
-    const { error } = await supabase.rpc('salvar_preco_tabela_ia', { item: it.codigo, preco_tabela: vTabela });
+    if (tabelaMudou || !franquiaMudou) {
+      const { error } = await supabase.rpc('salvar_preco_tabela_ia', { item: it.codigo, preco_tabela: vTabela });
+      if (error) { setBusy(''); setMsg({ onde: 'tabela', erro: erroIA(error) }); return; }
+    }
+    if (franquiaMudou) {
+      const { error } = await supabase.rpc('salvar_franquia_padrao', { item: it.codigo, franquia: vFranquia });
+      if (error) { setBusy(''); setMsg({ onde: 'tabela', erro: erroIA(error) }); await recarregarItem(); return; }
+    }
     setBusy('');
-    if (error) { setMsg({ onde: 'tabela', erro: erroIA(error) }); return; }
-    setMsg({ onde: 'tabela', ok: 'Preço de tabela salvo.' });
-    toast.success('Preço de tabela salvo.');
+    const texto = franquiaMudou ? (tabelaMudou ? 'Preço de tabela e franquia padrão salvos.' : 'Franquia padrão salva.') : 'Preço de tabela salvo.';
+    setMsg({ onde: 'tabela', ok: texto });
+    toast.success(texto);
     await recarregarItem();
   }
   async function salvarEmpresa() {
@@ -258,10 +276,10 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
   const campo = `${campoCls} w-full tnum`;
   const msgDe = (onde: Secao) => msg?.onde === onde ? (msg.erro ? <Aviso tom="erro">{msg.erro}</Aviso> : <Aviso tom="ok">{msg.ok}</Aviso>) : null;
   const podeCusto = busy === '' && num(custo) > 0 && (moeda === 'BRL' || num(cotacao) > 0);
-  const podeTabela = busy === '' && vTabela > 0 && !tabelaAbaixo && !semCusto;
+  const podeTabela = busy === '' && vTabela > 0 && !tabelaAbaixo && !semCusto && (!comFranquia || vFranquia != null);
   const podeEmpresa = busy === '' && !!empresa && vEmp > 0 && !empAbaixo && !semCusto;
   const salvarAtual = secao === 'custo' ? <Botao onClick={() => void salvarCusto()} disabled={!podeCusto}>{busy === 'custo' ? 'Salvando...' : 'Salvar custo'}</Botao>
-    : secao === 'tabela' ? <Botao onClick={() => void salvarTabela()} disabled={!podeTabela}>{busy === 'tabela' ? 'Salvando...' : 'Salvar preço de tabela'}</Botao>
+    : secao === 'tabela' ? <Botao onClick={() => void salvarTabela()} disabled={!podeTabela}>{busy === 'tabela' ? 'Salvando...' : comFranquia ? 'Salvar tabela e franquia' : 'Salvar preço de tabela'}</Botao>
     : <Botao onClick={() => void salvarEmpresa()} disabled={!podeEmpresa}>{busy === 'empresa' ? 'Salvando...' : 'Salvar preço da empresa'}</Botao>;
   const vermelho = { borderColor: 'var(--estado-erro)', color: 'var(--estado-erro-texto)' };
 
@@ -287,6 +305,10 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
         <Rotulo texto={`Preço de tabela por ${String(it.unidade)}`}><input inputMode="decimal" value={tabela} onChange={e => setTabela(e.target.value)} aria-invalid={tabelaAbaixo} className={campo} style={tabelaAbaixo ? vermelho : campoStyle} /></Rotulo>
         {tabelaAbaixo && <Aviso tom="erro">{mensagemMinimoIA(minimo, it.unidade, mcMinima)}</Aviso>}
         {semCusto && <Aviso tom="atencao">Sem custo cadastrado: o preço fica bloqueado até cadastrar o custo.</Aviso>}
+        {comFranquia && <>
+          <Rotulo texto={`Franquia padrão por ciclo (${String(it.unidade)})`}><input inputMode="numeric" value={franquia} onChange={e => setFranquia(e.target.value)} aria-invalid={vFranquia == null} className={campo} style={vFranquia == null ? vermelho : campoStyle} /></Rotulo>
+          <p className="text-[12.5px] text-[var(--base-texto-2)]">{vFranquia == null ? 'Informe um número inteiro de 0 a 1.000.000.' : 'Vale para as empresas sem franquia própria (a da empresa fica na Contratação). Só o que passar da franquia vai para a fatura.'}</p>
+        </>}
         {msgDe('tabela')}
       </>}
       {secao === 'empresa' && <>

@@ -5,6 +5,7 @@ import { supabase, friendlyError, type Row } from '@/lib/supabase';
 import { ConsoleShell, cardShadow } from './console-shell';
 import { Chave } from './chave';
 import { useConsolePerms } from './console-perms';
+import { ITENS_PRECO_PADRAO } from '@/lib/precos-itens';
 
 // Abas na ordem pedida: SMS · WhatsApp · RCS · E-mail.
 const ABAS = [
@@ -205,7 +206,12 @@ export function ConsoleProdutosPage() {
 				</section>
 			)}
 
-			<ScorePrecos podeEditar={podeEditar} />
+			<PrecosPadrao podeEditar={podeEditar} titulo="Score de Entrega" itensBase={SCORE_ITENS_PRECOS} minimoOpcional={false}
+				texto="Preço mínimo e de tabela dos dois itens de Score. O SMS segue com o preço padrão do contrato; o Score é cobrado à parte."
+				salvarRpc={(codigo, min, tab) => supabase!.rpc('salvar_preco_score', { item: codigo, preco_minimo: min, preco_tabela: tab })} />
+			<PrecosPadrao podeEditar={podeEditar} titulo="Motor e Agente de voz" itensBase={MOTOR_VOZ_ITENS_PRECOS} minimoOpcional
+				texto="Preço de tabela (o que a Contratação pré-preenche) e mínimo opcional. Abaixo do mínimo só o Administrativo, com motivo. Itens de IA ficam em Margem › Itens de IA."
+				salvarRpc={(codigo, min, tab) => supabase!.rpc('salvar_preco_padrao', { item: codigo, preco_tabela: tab, preco_minimo: min })} />
 
 			{drawer && <ProdutoDrawer produto={drawer.produto} novo={drawer.novo} onClose={() => setDrawer(null)} onSaved={() => { setDrawer(null); void reload(); }} />}
 		</ConsoleShell>
@@ -358,46 +364,58 @@ function parseNum(v: string): number {
 	return isNaN(n) ? 0 : n;
 }
 
-// ---------- Score de Entrega (mínimo e tabela dos dois itens) ----------
+// ---------- Tabela e mínimo dos itens fora dos canais: Score de Entrega, Motor e Agente de voz ----------
+// SQL 92: o Motor (Orquestração, Jornada) e o Agente de voz fora da IA (plataforma, gestão de tronco) ganham tabela e
+// mínimo como o Score; a tabela é o que a Contratação pré-preenche. Itens de IA ficam em Margem › IA (só o Master).
 
-const SCORE_ITENS_PRECOS = [
+type ItemPadrao = { codigo: string; nome?: string; desc?: string };
+
+const SCORE_ITENS_PRECOS: ItemPadrao[] = [
 	{ codigo: 'score_analisado', nome: 'Por número analisado', desc: 'Cobre toda a lista enviada ao filtro.' },
 	{ codigo: 'score_represado', nome: 'Só pelos represados', desc: 'Cobra só os números que o filtro segurou.' },
 ];
+const MOTOR_VOZ_ITENS_PRECOS: ItemPadrao[] = ITENS_PRECO_PADRAO.map(codigo => ({ codigo }));
 
-function ScorePrecos({ podeEditar }: { podeEditar: boolean }) {
-	const [itens, setItens] = useState<Record<string, { min: string; tab: string }>>({});
+function PrecosPadrao({ podeEditar, titulo, texto, itensBase, minimoOpcional, salvarRpc }: {
+	podeEditar: boolean; titulo: string; texto: string; itensBase: ItemPadrao[]; minimoOpcional: boolean;
+	salvarRpc: (codigo: string, min: number | null, tab: number) => PromiseLike<{ error: unknown }>;
+}) {
+	const [itens, setItens] = useState<Record<string, { min: string; tab: string; nome: string; unidade: string }>>({});
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState<string | null>(null);
 	const [error, setError] = useState('');
 	const [success, setSuccess] = useState<string | null>(null);
+	const codigos = itensBase.map(i => i.codigo);
 
 	async function reload() {
 		if (!supabase) return;
 		setLoading(true); setError('');
-		const { data, error: e } = await supabase.from('cobranca_itens').select('*').in('codigo', ['score_analisado', 'score_represado']);
+		const { data, error: e } = await supabase.from('cobranca_itens').select('*').in('codigo', codigos);
 		if (e) { setError(friendlyError(e)); setLoading(false); return; }
-		const map: Record<string, { min: string; tab: string }> = {};
+		const map: Record<string, { min: string; tab: string; nome: string; unidade: string }> = {};
 		((data ?? []) as Row[]).forEach(r => {
 			const c = String(r.codigo ?? '');
-			map[c] = { min: r.preco_minimo != null ? String(r.preco_minimo) : '', tab: r.preco_tabela != null ? String(r.preco_tabela) : '' };
+			map[c] = { min: r.preco_minimo != null ? String(r.preco_minimo) : '', tab: r.preco_tabela != null ? String(r.preco_tabela) : '', nome: String(r.nome ?? c), unidade: String(r.unidade ?? '') };
 		});
 		setItens(map);
 		setLoading(false);
 	}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	useEffect(() => { void reload(); }, []);
 
 	async function salvar(codigo: string) {
 		if (!supabase) return;
 		const ed = itens[codigo];
 		if (!ed) return;
+		const semMin = minimoOpcional && !ed.min.trim();
 		const min = parseNum(ed.min);
 		const tab = parseNum(ed.tab);
 		setError(''); setSuccess(null);
-		if (min <= 0) { setError('O preço mínimo tem que ser maior que zero.'); return; }
-		if (tab < min) { setError('O preço de tabela tem que ser maior ou igual ao mínimo.'); return; }
+		if (!semMin && min <= 0) { setError(minimoOpcional ? 'O mínimo tem que ser maior que zero (ou vazio, sem mínimo).' : 'O preço mínimo tem que ser maior que zero.'); return; }
+		if (tab <= 0) { setError('Informe o preço de tabela.'); return; }
+		if (!semMin && tab < min) { setError('O preço de tabela tem que ser maior ou igual ao mínimo.'); return; }
 		setBusy(codigo);
-		const { error: e } = await supabase.rpc('salvar_preco_score', { item: codigo, preco_minimo: min, preco_tabela: tab });
+		const { error: e } = await salvarRpc(codigo, semMin ? null : min, tab);
 		setBusy(null);
 		if (e) { setError(friendlyError(e)); return; }
 		setSuccess(codigo);
@@ -405,27 +423,29 @@ function ScorePrecos({ podeEditar }: { podeEditar: boolean }) {
 
 	return (
 		<section className="rounded-2xl bg-white p-4 sm:p-6" style={{ boxShadow: cardShadow }}>
-			<h2 className="text-[16px] font-semibold text-[#1D1D1F]">Score de Entrega</h2>
-			<p className="mb-4 text-[13px] text-[#6E6E73]">Preço mínimo e de tabela dos dois itens de Score. O SMS segue com o preço padrão do contrato; o Score é cobrado à parte.</p>
+			<h2 className="text-[16px] font-semibold text-[#1D1D1F]">{titulo}</h2>
+			<p className="mb-4 text-[13px] text-[#6E6E73]">{texto}</p>
 			{loading ? <p className="py-4 text-center text-[14px] text-[#8E8E93]">Carregando...</p> : (
 				<div className="space-y-4">
-					{SCORE_ITENS_PRECOS.map(s => {
-						const ed = itens[s.codigo] ?? { min: '', tab: '' };
+					{itensBase.filter(s => itens[s.codigo]).map(s => {
+						const ed = itens[s.codigo];
 						const minNum = parseNum(ed.min);
 						const tabNum = parseNum(ed.tab);
-						const tabOk = tabNum >= minNum && minNum > 0;
+						const semMin = minimoOpcional && !ed.min.trim();
+						const tabOk = tabNum > 0 && (semMin || (minNum > 0 && tabNum >= minNum));
+						const setCampo = (campo: 'min' | 'tab', v: string) => setItens(prev => ({ ...prev, [s.codigo]: { ...prev[s.codigo], [campo]: v } }));
 						return (
 							<div key={s.codigo} className="rounded-xl border border-[#F0F0F2] p-4">
-								<p className="text-[15px] font-medium text-[#1D1D1F]">{s.nome}</p>
-								<p className="mt-0.5 text-[12px] text-[#6E6E73]">{s.desc}</p>
+								<p className="text-[15px] font-medium text-[#1D1D1F]">{s.nome ?? ed.nome}</p>
+								<p className="mt-0.5 text-[12px] text-[#6E6E73]">{s.desc ?? `por ${ed.unidade}`}</p>
 								<div className="mt-3 flex flex-wrap items-end gap-3">
 									<label className="block">
 										<span className="mb-1 block text-[12px] font-semibold text-[#6E6E73]">Mínimo (R$)</span>
-										<input value={ed.min} onChange={e => setItens(prev => ({ ...prev, [s.codigo]: { ...prev[s.codigo], min: e.target.value } }))} disabled={!podeEditar} inputMode="decimal" className="h-9 w-[140px] rounded-lg border border-[#D2D2D7] px-3 text-[14px] tnum outline-none focus:border-[#1D1D1F] disabled:bg-[#F5F5F7] disabled:text-[#8E8E93]" placeholder="0,0000" />
+										<input value={ed.min} onChange={e => setCampo('min', e.target.value)} disabled={!podeEditar} inputMode="decimal" className="h-9 w-[140px] rounded-lg border border-[#D2D2D7] px-3 text-[14px] tnum outline-none focus:border-[#1D1D1F] disabled:bg-[#F5F5F7] disabled:text-[#8E8E93]" placeholder={minimoOpcional ? 'sem mínimo' : '0,0000'} />
 									</label>
 									<label className="block">
 										<span className="mb-1 block text-[12px] font-semibold text-[#6E6E73]">Tabela (R$)</span>
-										<input value={ed.tab} onChange={e => setItens(prev => ({ ...prev, [s.codigo]: { ...prev[s.codigo], tab: e.target.value } }))} disabled={!podeEditar} inputMode="decimal" className={`h-9 w-[140px] rounded-lg border px-3 text-[14px] tnum outline-none focus:border-[#1D1D1F] disabled:bg-[#F5F5F7] disabled:text-[#8E8E93] ${!tabOk ? 'border-[#FF3B30]' : 'border-[#D2D2D7]'}`} placeholder="0,0000" />
+										<input value={ed.tab} onChange={e => setCampo('tab', e.target.value)} disabled={!podeEditar} inputMode="decimal" className={`h-9 w-[140px] rounded-lg border px-3 text-[14px] tnum outline-none focus:border-[#1D1D1F] disabled:bg-[#F5F5F7] disabled:text-[#8E8E93] ${!tabOk ? 'border-[#FF3B30]' : 'border-[#D2D2D7]'}`} placeholder="0,0000" />
 									</label>
 									{podeEditar && (
 										<button onClick={() => salvar(s.codigo)} disabled={busy === s.codigo || !tabOk} className="h-9 rounded-lg px-4 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50" style={{ backgroundColor: MENSAGEM_COR }}>{busy === s.codigo ? 'Salvando...' : 'Salvar'}</button>

@@ -12,12 +12,14 @@ import { useConsolePerms } from '@/components/workspace/console/console-perms';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ErrorDetail } from '@/components/error-detail';
 import { PainelEdicao } from '@/components/comuns/painel-edicao';
+import { franquiaDigitada, franquiaEfetiva, franquiaParaSalvar, itensDosModulos, modeloInicial, modelosDoItem, numeroCampo, precoInicial, temFranquia } from '@/lib/precos-itens';
 
 // ---------- helpers ----------
 
 type Modelo = 'flat' | 'faixa' | 'progressivo' | 'mensalidade';
 type Faixa = { ate: string; preco: string };
-type PrecoEdit = { modelo: Modelo; preco: string; minimo: string; faixas: Faixa[]; motivo: string };
+/** franquia: só nos itens com franquia (SQL 92); o texto do campo, pré-preenchido com a que já vale. */
+type PrecoEdit = { modelo: Modelo; preco: string; minimo: string; faixas: Faixa[]; motivo: string; franquia?: string };
 type Periodicidade = 'mensal' | 'semanal' | 'quinzenal' | 'outro';
 type ModeloPag = 'pos' | 'pre';
 
@@ -641,9 +643,14 @@ export function ContratacaoEmpresa({
         }
         payload.motivo = abaixo ? (ed.motivo ?? '').trim() || null : null;
         payload.motivo_vigencia = vig === 'atual' ? motivoVigencia.trim() : null;
-        const { error: ePr, data } = await supabase.rpc('salvar_preco_vigencia', payload);
+        const item = itens.find(it => String(it.codigo) === codigo);
+        // itens com franquia (SQL 92): o mesmo salvar_preco_vigencia + a franquia da empresa na vigência (null = mantém)
+        const { error: ePr, data } = item && temFranquia(codigo)
+          ? await supabase.rpc('salvar_preco_franquia', { ...payload, franquia: franquiaParaSalvar(ed.franquia ?? '', franquiaEfetiva(precoVigente(precosEmpresa.filter(p => String(p.item ?? '') === codigo), competencia), item)) })
+          : await supabase.rpc('salvar_preco_vigencia', payload);
         if (ePr) throw new Error(`Falha ao salvar o preço do ${itemNome}: ${ePr.message}`);
-        if (!valeDesde && (data as Row)?.vale_desde) valeDesde = String((data as Row).vale_desde);
+        const vale = (Array.isArray(data) ? data[0] : data) as Row | null;
+        if (!valeDesde && vale?.vale_desde) valeDesde = String(vale.vale_desde);
       }
       const { data: pr } = await supabase.from('precos_empresa').select('*, precos_faixas(*)').eq('empresa_id', empresaId).order('vigente_desde', { ascending: false });
       setPrecosEmpresa((pr ?? []) as Row[]);
@@ -669,7 +676,13 @@ export function ContratacaoEmpresa({
     const cicloLabel = periodicidade === 'mensal' ? `Mensal · dia ${diaCorte}` : periodicidade === 'semanal' ? 'Semanal' : periodicidade === 'quinzenal' ? 'Quinzenal' : `A cada ${cicloDias} dias`;
     const formasLabel = formas.map(f => FORMAS_PAG.find(x => x.id === f)?.curto ?? f).join(', ');
     const precosAlterados = Object.keys(alterados).length > 0;
-    const podeSalvarPrecos = precosAlterados && (vigencia !== 'atual' || motivoVigencia.trim().length >= 5);
+    const podeSalvarPrecos = precosAlterados && (vigencia !== 'atual' || motivoVigencia.trim().length >= 5)
+      && Object.entries(alterados).every(([c, ed]) => !temFranquia(c) || franquiaDigitada(ed.franquia ?? '') != null);
+    // SQL 92: além do motor, os itens do Agente de voz e do Speech Analytics (módulo ligado) também têm preço aqui
+    const motorItens = itensContratados.filter(it => MOTOR_CODES.includes(String(it.codigo)));
+    const vozSpeech = itensDosModulos(itens, modulos);
+    const itensPrecos = [...motorItens, ...vozSpeech.agente_voz, ...vozSpeech.speech_analytics];
+    const grupo = (titulo: string, lista: Row[]) => <GrupoPreco titulo={titulo} itens={lista} precosEmpresa={precosEmpresa} competencia={competencia} alterados={alterados} editando={editando} onEditar={setEditando} onAltera={(id, ed) => setAlterados(p => ({ ...p, [id]: ed }))} onHistorico={setHistoricoItem} />;
 
     return (
       <div className="space-y-5">
@@ -809,7 +822,7 @@ export function ContratacaoEmpresa({
           resumo={(
             <div className="overflow-hidden rounded-lg border border-[#E5E5EA]">
               <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 bg-[#F5F5F7] px-3 py-2 text-[12px] font-semibold text-[#6E6E73]"><span>Item</span><span>Tipo</span><span className="text-right">Preço</span><span className="text-right">Desde</span></div>
-              {itensContratados.filter(it => MOTOR_CODES.includes(String(it.codigo))).length === 0 ? <p className="px-3 py-4 text-center text-[13px] text-[#8E8E93]">Selecione um motor para ver os itens.</p> : itensContratados.filter(it => MOTOR_CODES.includes(String(it.codigo))).map(item => {
+              {itensPrecos.length === 0 ? <p className="px-3 py-4 text-center text-[13px] text-[#8E8E93]">Selecione um motor ou módulo para ver os itens.</p> : itensPrecos.map(item => {
                 const id = String(item.codigo);
                 const itemPrecos = precosEmpresa.filter(p => String(p.item ?? '') === id);
                 const vigente = precoVigente(itemPrecos, competencia);
@@ -818,7 +831,7 @@ export function ContratacaoEmpresa({
                   <div key={id} className="grid grid-cols-[1fr_auto_auto_auto] gap-3 border-t border-[#F0F0F2] px-3 py-2 text-[13px] text-[#1D1D1F]">
                     <span>{item.nome}</span>
                     <span className="text-[#6E6E73]">{vigente ? MODELO_LABEL[String(vigente.modelo) as Modelo] : '—'}</span>
-                    <span className="text-right tnum">{vigente ? precoTabela(vigente, unidade) : <span className="text-[#FF3B30]">Sem preço</span>}</span>
+                    <span className="text-right tnum">{vigente ? precoTabela(vigente, unidade) : <span className="text-[#FF3B30]">Sem preço</span>}{temFranquia(id) && <span className="block text-[12px] text-[#6E6E73]">franquia {numberBR(franquiaEfetiva(vigente, item))}</span>}</span>
                     <span className="text-right tnum text-[#6E6E73]">{vigente?.vigente_desde ? mesExtenso(vigente.vigente_desde) : '—'}</span>
                   </div>
                 );
@@ -827,8 +840,12 @@ export function ContratacaoEmpresa({
           )}
           form={(
             <div className="space-y-4">
-              {itensContratados.filter(it => MOTOR_CODES.includes(String(it.codigo))).length === 0 ? <p className="py-4 text-center text-[14px] text-[#8E8E93]">Selecione um motor para ver os itens de cobrança.</p> : (
-                <GrupoPreco titulo="MOTOR" itens={itensContratados.filter(it => MOTOR_CODES.includes(String(it.codigo)))} precosEmpresa={precosEmpresa} competencia={competencia} alterados={alterados} editando={editando} onEditar={setEditando} onAltera={(id, ed) => setAlterados(p => ({ ...p, [id]: ed }))} onHistorico={setHistoricoItem} />
+              {itensPrecos.length === 0 ? <p className="py-4 text-center text-[14px] text-[#8E8E93]">Selecione um motor ou módulo para ver os itens de cobrança.</p> : (
+                <>
+                  {grupo('MOTOR', motorItens)}
+                  {grupo('AGENTE DE VOZ', vozSpeech.agente_voz)}
+                  {grupo('SPEECH ANALYTICS', vozSpeech.speech_analytics)}
+                </>
               )}
             </div>
           )}
@@ -839,10 +856,17 @@ export function ContratacaoEmpresa({
                 const item = itens.find(it => String(it.codigo) === codigo);
                 const itemPrecos = precosEmpresa.filter(p => String(p.item ?? '') === codigo);
                 const vigente = precoVigente(itemPrecos, competencia);
-                const unidade = UNIDADE_LABEL[codigo] ?? 'unidade';
+                const unidade = UNIDADE_LABEL[codigo] ?? String(item?.unidade ?? 'unidade');
                 const oldStr = vigente ? precoTabela(vigente, unidade) : 'Sem preço';
                 const newStr = ed.modelo === 'mensalidade' ? `${moneyBR(parseNum(ed.preco))}/ciclo` : ed.modelo === 'flat' ? precoCliente(parseNum(ed.preco), unidade) : 'Por faixa';
-                return <div key={codigo} className="flex items-center justify-between gap-2 text-[13px]"><span className="text-[#1D1D1F]">{item?.nome ?? codigo}</span><span className="tnum"><span className="text-[#8E8E93] line-through">{oldStr}</span> → <span className="font-medium text-[#1D1D1F]">{newStr}</span></span></div>;
+                const frAntes = item && temFranquia(codigo) ? franquiaEfetiva(vigente, item) : null;
+                const frNova = frAntes != null ? franquiaDigitada(ed.franquia ?? '') : null;
+                return (
+                  <div key={codigo} className="text-[13px]">
+                    <div className="flex items-center justify-between gap-2"><span className="text-[#1D1D1F]">{item?.nome ?? codigo}</span><span className="tnum"><span className="text-[#8E8E93] line-through">{oldStr}</span> → <span className="font-medium text-[#1D1D1F]">{newStr}</span></span></div>
+                    {frAntes != null && frNova != null && frNova !== frAntes && <div className="flex items-center justify-between gap-2 text-[12px] text-[#6E6E73]"><span>Franquia por ciclo</span><span className="tnum"><span className="line-through">{numberBR(frAntes)}</span> → <span className="font-medium text-[#1D1D1F]">{numberBR(frNova)} {String(item?.unidade ?? '')}</span></span></div>}
+                  </div>
+                );
               })}
               {Object.keys(alterados).length === 0 && <p className="text-[13px] text-[#8E8E93]">Nenhuma mudança. Abra um item para alterar o preço.</p>}
               <div className="border-t border-[#F0F0F2] pt-3">
@@ -1158,8 +1182,12 @@ function PrecoEditor({ item, precosEmpresa, competencia, edit, onChange, onClose
   const vigente = precoVigente(precosEmpresa, competencia);
   const unidade = UNIDADE_LABEL[id] ?? String(item.unidade ?? 'unidade');
 
-  const [modelo, setModelo] = useState<Modelo>(edit?.modelo ?? String(vigente?.modelo ?? 'flat') as Modelo);
-  const [preco, setPreco] = useState(edit?.preco ?? String(vigente?.preco ?? ''));
+  // sem preço da empresa, o editor já abre com o preço de tabela (SQL 92: "pode deixar pré-preenchido")
+  const [modelo, setModelo] = useState<Modelo>(edit?.modelo ?? modeloInicial(item, vigente?.modelo, isMotor));
+  const [preco, setPreco] = useState(edit?.preco ?? precoInicial(vigente?.preco, item.preco_tabela));
+  const comFranquia = temFranquia(id);
+  const franquiaAtual = franquiaEfetiva(vigente, item);
+  const [franquia, setFranquia] = useState(edit?.franquia ?? (comFranquia ? String(franquiaAtual) : ''));
   const [minimo, setMinimo] = useState(edit?.minimo ?? String(vigente?.minimo ?? ''));
   const [faixas, setFaixas] = useState<Faixa[]>(() => {
     if (edit?.faixas) return edit.faixas;
@@ -1173,15 +1201,17 @@ function PrecoEditor({ item, precosEmpresa, competencia, edit, onChange, onClose
 
   const min = Number(item.preco_minimo ?? 0);
   const abaixoMin = (modelo === 'flat' || modelo === 'mensalidade') && parseNum(preco) > 0 && parseNum(preco) < min;
-  const podeAbaixo = can('preco_abaixo_minimo');
+  const ehIA = !!item.eh_ia;
+  const podeAbaixo = can('preco_abaixo_minimo') && !ehIA;   // IA: nunca abaixo do mínimo, nem com motivo (SQL 61)
+  const franquiaInvalida = comFranquia && franquiaDigitada(franquia) == null;
 
   // sincroniza mudanças para o pai
   useEffect(() => {
-    onChange({ modelo, preco, minimo, faixas, motivo });
+    onChange({ modelo, preco, minimo, faixas, motivo, ...(comFranquia ? { franquia } : {}) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelo, preco, minimo, faixas, motivo]);
+  }, [modelo, preco, minimo, faixas, motivo, franquia]);
 
-  const modelos: Modelo[] = isMotor ? ['flat', 'faixa', 'progressivo', 'mensalidade'] : ['flat', 'faixa', 'progressivo'];
+  const modelos: Modelo[] = modelosDoItem(item, isMotor);
   const mostraMinimo = modelo !== 'mensalidade';
   const mostraFaixas = modelo === 'faixa' || modelo === 'progressivo';
   const valorSim = simular(modelo, preco, minimo, faixas, volume);
@@ -1210,10 +1240,11 @@ function PrecoEditor({ item, precosEmpresa, competencia, edit, onChange, onClose
         {modelo === 'mensalidade' && (
           <label className="block"><span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Valor por ciclo (R$)</span><input value={preco} onChange={e => setPreco(e.target.value)} inputMode="decimal" className="h-10 w-full rounded-lg border border-[#D2D2D7] px-3 text-[15px] outline-none focus:border-[#1D1D1F]" placeholder="0,00" /></label>
         )}
+        {Number(item.preco_tabela ?? 0) > 0 && <p className="text-[12px] text-[#6E6E73]">Tabela {preco5BR(item.preco_tabela)}{min > 0 ? ` · mínimo ${preco5BR(min)}` : ''} por {unidade}</p>}
         {abaixoMin && (
           <div className="rounded-lg bg-[#FFE8E6] px-3 py-2">
             <p className="text-[12px] font-medium text-[#FF3B30]">Preço abaixo do mínimo ({preco4BR(min)}).</p>
-            {podeAbaixo ? (
+            {ehIA ? <p className="mt-1 text-[12px] text-[#FF3B30]">Item de IA: o menor preço aceito é {preco5BR(min)} por {unidade}.</p> : podeAbaixo ? (
               <label className="mt-1.5 block"><span className="mb-1 block text-[12px] font-semibold text-[#6E6E73]">Motivo (vai para a Auditoria) *</span><input value={motivo} onChange={e => setMotivo(e.target.value)} className="h-9 w-full rounded-lg border border-[#D2D2D7] px-3 text-[14px] outline-none focus:border-[#1D1D1F]" placeholder="Por que abaixo do mínimo" /></label>
             ) : <p className="mt-1 text-[12px] text-[#FF3B30]">Abaixo do mínimo só com o Administrativo.</p>}
           </div>
@@ -1241,6 +1272,14 @@ function PrecoEditor({ item, precosEmpresa, competencia, edit, onChange, onClose
               })}
             </div>
           </div>
+        )}
+
+        {comFranquia && (
+          <label className="block">
+            <span className="mb-1 block text-[13px] font-semibold text-[#1D1D1F]">Franquia por ciclo</span>
+            <input value={franquia} onChange={e => setFranquia(e.target.value)} inputMode="numeric" aria-invalid={franquiaInvalida} className={`h-10 w-full rounded-lg border px-3 text-[15px] tnum outline-none focus:border-[#1D1D1F] ${franquiaInvalida ? 'border-[#FF3B30]' : 'border-[#D2D2D7]'}`} placeholder={numeroCampo(item.franquia_padrao)} />
+            <span className="mt-1 block text-[12px] text-[#6E6E73]">{franquiaInvalida ? 'Informe um número inteiro de 0 a 1.000.000.' : `Padrão: ${numberBR(item.franquia_padrao ?? 0)}. Cada ${String(item.unidade ?? 'unidade')} além da franquia vai para a fatura.`}</span>
+          </label>
         )}
 
         {mostraMinimo && (
@@ -1416,14 +1455,15 @@ function ProdutoMensageriaLinha({ produto, ativo, precos, competencia, empresaId
 	soPrecos: boolean; podeAbaixo: boolean; onToggle: (on: boolean) => void; onSalvo: () => void;
 }) {
 	const vigente = precoVigente(precos, competencia);
-	const [preco, setPreco] = useState(vigente?.preco != null ? String(vigente.preco) : '');
+	// sem preço da empresa, o campo já vem com o preço de tabela (SQL 92)
+	const [preco, setPreco] = useState(precoInicial(vigente?.preco, produto.preco_tabela));
 	const [motivo, setMotivo] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [erro, setErro] = useState('');
 	const [salvo, setSalvo] = useState(false);
 
 	// sincroniza quando a vigência muda (após recarregar)
-	useEffect(() => { setPreco(vigente?.preco != null ? String(vigente.preco) : ''); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [vigente?.preco]);
+	useEffect(() => { setPreco(precoInicial(vigente?.preco, produto.preco_tabela)); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [vigente?.preco]);
 
 	const min = produto.preco_minimo;
 	const tab = produto.preco_tabela;
@@ -1536,8 +1576,10 @@ function ScoreSection({ numero, empresaId, competencia }: { numero: number; empr
 			const codigo = String(p.item ?? '');
 			const arr = (pr.data as Row[]).filter(x => String(x.item ?? '') === codigo);
 			const vig = precoVigente(arr, competencia);
-			prMap[codigo] = vig?.preco != null ? String(vig.preco) : '';
+			prMap[codigo] = vig?.preco != null ? numeroCampo(vig.preco) : '';
 		});
+		// sem preço da empresa, o campo já vem com o preço de tabela (SQL 92)
+		((it.data ?? []) as Row[]).forEach(i => { const c = String(i.codigo ?? ''); if (!prMap[c]) prMap[c] = precoInicial(null, i.preco_tabela); });
 		setPrecos(prMap);
 		setLoading(false);
 	}
