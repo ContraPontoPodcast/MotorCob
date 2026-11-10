@@ -247,7 +247,7 @@ CASOS: list[tuple[str, object, list[str]]] = [
     ("silêncio em etapa que não ouve", _mud(_set("N11", "silencio", {"vezes": 1})), ["params_invalidos:N11"]),
     ("fala de não entender longa", _mud(_set("N2", "nao_entendi", {"fala": "a" * 501})), ["fala_longa:N2"]),
     ("fala de silêncio com variável inexistente", _mud(_set("N9", "silencio", {"fala": "Alô, {{cpf}}?"})),
-     ["variavel_invalida:N9"]),
+     ["fala_pede_senha:N9", "variavel_invalida:N9"]),                     # SQL 96: também cita CPF
     ("fala de não entender pede senha", _mud(_set("N8", "nao_entendi", {"fala": "Me diga a senha do cartão."})),
      ["fala_pede_senha:N8"]),
     ("fala de silêncio cita o credor antes da identidade", _mud(_set("N1", "silencio", {"fala": "Alô? É sobre {{credor}}."})),
