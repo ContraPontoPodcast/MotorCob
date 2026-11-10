@@ -2966,5 +2966,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 103: senha do tronco no cofre (testar_voz_cofre.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 104 · Telefonia T2: IPs da operadora por tronco (regra igual à da VM), liberação em dois passos (equipe + aal2) e
+# origens do firewall só para o servidor e a VM
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_firewall.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 104: IPs da operadora e firewall (testar_voz_firewall.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

@@ -9,7 +9,7 @@ import { erroDaFuncao } from '@/lib/funcoes';
 import {
 	CODECS, FORMATOS_DISCAGEM, IPS_SAIDA_MOTORCX, RE_BINA, RE_CSP, RE_DDD, RE_DESTINO_SIP, RE_HOST, RE_IP, RE_REFERENCIA,
 	RE_TECH, RE_USUARIO, TIPOS_ROTA, TRANSPORTES, cadenciaTxt, lerNumero, reais, segundosTarifados, hashNumeroTeste,
-	CPS_MAX, FUNCAO_SEGREDO_TRONCO, senhaTroncoMotivo,
+	CPS_MAX, FUNCAO_SEGREDO_TRONCO, senhaTroncoMotivo, lerIps, ipsMotivo, ipsPendentes,
 } from '@/lib/voz';
 import { Aviso, Campo, Dialogo, Gaveta, Trava, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 
@@ -41,6 +41,8 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 	const [csp, setCsp] = useState(String(tronco?.csp ?? ''));
 	const [codecs, setCodecs] = useState<string[]>(Array.isArray(tronco?.codecs) ? (tronco!.codecs as string[]) : ['alaw', 'ulaw']);
 	const [ativo, setAtivo] = useState(tronco ? tronco.ativo !== false : true);
+	const ipsAntes = Array.isArray(tronco?.ips_operadora) ? (tronco!.ips_operadora as string[]) : [];
+	const [ips, setIps] = useState(ipsAntes.join('\n'));
 	const [busy, setBusy] = useState(false);
 	const [erro, setErro] = useState('');
 	const [tentou, setTentou] = useState(false);
@@ -63,6 +65,9 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 	if (formato === 'tech_0_csp_ddd_numero' && !RE_CSP.test(csp.trim())) e.csp = 'O formato com CSP precisa do código da prestadora (2 dígitos).';
 	else if (csp.trim() && !RE_CSP.test(csp.trim())) e.csp = 'Use 2 dígitos.';
 	if (codecs.length === 0) e.codecs = 'Escolha ao menos um codec.';
+	const listaIps = lerIps(ips);
+	const motivoIps = ipsMotivo(listaIps);
+	if (motivoIps) e.ips = motivoIps;
 	const ok = Object.keys(e).length === 0;
 	const err = (k: string) => (tentou ? e[k] : undefined);
 
@@ -71,17 +76,25 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 		if (!ok || !supabase) return;
 		setBusy(true); setErro('');
 		// SQL 103: sem referência (segredo_ref nulo), o banco mantém a do tronco ou usa a do cofre da empresa
-		const { error } = await supabase.rpc('cadastrar_tronco_voz', {
+		const { data: tid, error } = await supabase.rpc('cadastrar_tronco_voz', {
 			empresa: Number(empresaId), referencia: referencia.trim().toLowerCase(), operadora: operadora.trim(), host: host.trim(),
 			canais: canaisN, autenticacao, ddd_origem: ddd.trim(), bina: binaFinal,
 			segredo_ref: null, usuario: autenticacao === 'senha' ? usuario.trim() : null,
 			porta: portaN, transporte, cps: cpsN, codecs, formato_discagem: formato, ativo, csp: csp.trim() || null,
 		});
+		if (error) { setBusy(false); setErro(erroDoBanco(error)); return; }
+		// SQL 104: a lista de IPs vai à parte; IP novo espera a equipe liberar no firewall
+		let pendentes = 0;
+		if (listaIps.join(',') !== ipsAntes.join(',') && tid != null) {
+			const { data: pend, error: eIps } = await supabase.rpc('definir_ips_voz', { tipo: 'tronco', id: Number(tid), ips: listaIps });
+			if (eIps) { setBusy(false); setErro(`O tronco foi salvo, mas os IPs não: ${erroDoBanco(eIps)}`); return; }
+			pendentes = Array.isArray(pend) ? pend.length : 0;
+		}
 		setBusy(false);
-		if (error) { setErro(erroDoBanco(error)); return; }
 		const falta = autenticacao === 'senha' && (novo || tronco?.autenticacao !== 'senha' || !tronco?.segredo_guardado_em);
 		onSaved((novo ? 'Tronco cadastrado. O Asterisk faz a chamada de teste e a divisão da concorrência é refeita.' : 'Tronco atualizado. Se mudou a conexão, o teste roda de novo.')
-			+ (falta ? ' Falta guardar a senha: abra o tronco de novo e use "Guardar a senha no cofre".' : ''));
+			+ (falta ? ' Falta guardar a senha: abra o tronco de novo e use "Guardar a senha no cofre".' : '')
+			+ (pendentes ? ` ${pendentes} IP(s) da operadora esperando a liberação no firewall.` : ''));
 	}
 
 	return (
@@ -133,6 +146,12 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 			{autenticacao === 'senha' && (tronco && tronco.autenticacao === 'senha'
 				? <SenhaNoCofre tronco={tronco} onGuardada={onSaved} />
 				: <Trava icone={<KeyRound size={16} />} titulo="Depois de salvar, guarde a senha">Abra o tronco de novo e use "Guardar a senha no cofre". Sem a senha, este tronco fica de fora e os outros continuam ligando.</Trava>)}
+
+			<Campo rotulo="IPs da operadora (sinalização e áudio)" erro={err('ips')}
+				ajuda={`Peça à operadora os IPs do equipamento SIP dela (SBC), um por linha, até 20. Sem eles, o firewall do MotorCX barra o áudio de volta. IP novo só entra no firewall depois que a equipe libera.${tronco && ipsPendentes(tronco).length ? ` Esperando liberação: ${ipsPendentes(tronco).join(', ')}.` : ''}`}>
+				<textarea value={ips} onChange={x => setIps(x.target.value)} rows={3} autoComplete="off" spellCheck={false} placeholder={'200.100.50.10\n200.100.60.0/24'}
+					className={`${campoCls} font-mono`} />
+			</Campo>
 
 			<div className="grid grid-cols-2 gap-3">
 				<Campo rotulo="Canais" erro={err('canais')} ajuda="Ligações simultâneas do contrato.">
@@ -321,11 +340,16 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 	const [tronco, setTronco] = useState(String(atual?.tronco_id ?? ''));
 	const [tech, setTech] = useState(String(atual?.tech_prefix ?? ''));
 	const [ativo, setAtivo] = useState(atual ? atual.ativo !== false : true);
+	const ipsAntes = Array.isArray(atual?.ips_operadora) ? (atual!.ips_operadora as string[]) : [];
+	const [ips, setIps] = useState(ipsAntes.join('\n'));
 	const [busy, setBusy] = useState(false);
 	const [erro, setErro] = useState('');
 	const [tentou, setTentou] = useState(false);
 
 	const e: Record<string, string> = {};
+	const listaIps = lerIps(ips);
+	const motivoIps = ipsMotivo(listaIps);
+	if (motivoIps) e.ips = motivoIps;
 	if (nome.trim().length < 2 || nome.trim().length > 60) e.nome = 'De 2 a 60 letras.';
 	if (!RE_DESTINO_SIP.test(destino.trim())) e.destino = 'Ex.: sip:fila-negociacao@discador.empresa.com.br:5061';
 	if (tech.trim() && !RE_TECH.test(tech.trim())) e.tech = 'Só números (1 a 8 dígitos).';
@@ -336,14 +360,21 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 		setTentou(true);
 		if (!ok || !supabase) return;
 		setBusy(true); setErro('');
-		const { error } = await supabase.rpc('salvar_transferencia_voz', {
+		const { data: xid, error } = await supabase.rpc('salvar_transferencia_voz', {
 			empresa: Number(empresaId), nome: nome.trim(), destino_sip: destino.trim(), metodo,
 			tronco: tronco ? Number(tronco) : null, tech_prefix: tech.trim() || null, credor: null, ativo,
 			transferencia: atual?.id != null ? Number(atual.id) : null,
 		});
+		if (error) { setBusy(false); setErro(erroDoBanco(error)); return; }
+		let pendentes = 0;
+		if (listaIps.join(',') !== ipsAntes.join(',') && xid != null) {
+			const { data: pend, error: eIps } = await supabase.rpc('definir_ips_voz', { tipo: 'transferencia', id: Number(xid), ips: listaIps });
+			if (eIps) { setBusy(false); setErro(`A transferência foi salva, mas os IPs não: ${erroDoBanco(eIps)}`); return; }
+			pendentes = Array.isArray(pend) ? pend.length : 0;
+		}
 		setBusy(false);
-		if (error) { setErro(erroDoBanco(error)); return; }
-		onSaved('Transferência salva. Se o destino mudou, o teste roda de novo.');
+		onSaved('Transferência salva. Se o destino mudou, o teste roda de novo.'
+			+ (pendentes ? ` ${pendentes} IP(s) do PABX esperando a liberação no firewall.` : ''));
 	}
 
 	return (
@@ -379,6 +410,11 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 					<input value={tech} inputMode="numeric" maxLength={8} onChange={x => setTech(x.target.value.replace(/\D/g, ''))} className={`${campoCls} font-mono`} />
 				</Campo>
 			</div>
+			<Campo rotulo="IPs do PABX/discador (sinalização e áudio)" erro={err('ips')}
+				ajuda={`Para o firewall do MotorCX deixar o áudio da ponte passar. Um por linha, até 20. IP novo entra depois que a equipe libera.${atual && ipsPendentes(atual).length ? ` Esperando liberação: ${ipsPendentes(atual).join(', ')}.` : ''}`}>
+				<textarea value={ips} onChange={x => setIps(x.target.value)} rows={2} autoComplete="off" spellCheck={false} placeholder="200.100.70.20"
+					className={`${campoCls} font-mono`} />
+			</Campo>
 			<Trava icone={<KeyRound size={16} />} titulo="Cabeçalhos enviados: ID da chamada, ID da ação, ação e motivo">
 				Nunca vão CPF, nome, valor ou transcrição.
 			</Trava>

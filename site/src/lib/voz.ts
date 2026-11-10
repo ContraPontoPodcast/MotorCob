@@ -107,6 +107,23 @@ export function senhaTroncoMotivo(s: string): string | null {
 	if (s.trim() !== s) return 'A senha não pode começar nem terminar com espaço.';
 	return null;
 }
+// SQL 104 · Telefonia T2: IPs da operadora (troncos) e do PABX (transferência) para o firewall das VMs. A regra completa
+// (rede interna, IP do MotorCX) é do banco (voz_ips_motivo) e da VM (voz/firewall.py); aqui só a forma e o tamanho.
+export const IPS_MAX = 20;
+export const RE_IP_FAIXA = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/(2[4-9]|3[0-2]))?$/;
+export function lerIps(texto: string): string[] {
+	return [...new Set(texto.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean))];
+}
+export function ipsMotivo(lista: string[]): string | null {
+	if (lista.length > IPS_MAX) return `No máximo ${IPS_MAX} IPs ou faixas.`;
+	const ruim = lista.find(x => !RE_IP_FAIXA.test(x) || x.split('/')[0].split('.').some(o => Number(o) > 255));
+	return ruim ? `"${ruim}" não é um IPv4 (200.100.50.10) nem uma faixa até /24 (200.100.50.0/24).` : null;
+}
+/** Os IPs da lista que a equipe ainda não liberou no firewall. */
+export function ipsPendentes(linha: { ips_operadora?: unknown; ips_liberados?: unknown } | null | undefined): string[] {
+	const lib = new Set(Array.isArray(linha?.ips_liberados) ? (linha!.ips_liberados as string[]) : []);
+	return (Array.isArray(linha?.ips_operadora) ? (linha!.ips_operadora as string[]) : []).filter(x => !lib.has(x));
+}
 export const RE_USUARIO = /^[A-Za-z0-9_.\-+]{1,64}$/;
 export const RE_DDD = /^[1-9][1-9]$/;
 export const RE_BINA = /^([1-9][1-9][2-9][0-9]{7,8}|0[3589]00[0-9]{6,7}|[34]00[0-9][0-9]{4})$/;
