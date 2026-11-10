@@ -38,7 +38,7 @@ export function definicaoV5(): Definicao {
 	] };
 }
 /** v4 em uso: o mesmo fluxo sem as pendências (N9 → N17, link pelo MotorCX sem C4). */
-function definicaoV4(): Definicao {
+export function definicaoV4(): Definicao {
 	const d = definicaoV5();
 	return { esquema: 1, blocos: d.blocos.map(x => x.id === 'N9' ? { ...x, saidas: [{ quando: 'agendou', rotulo: 'Agendou', para: 'N17', tipo: 'normal' }, { quando: 'nao_agendou', rotulo: 'Não agendou', para: 'N13', tipo: 'normal' }] }
 		: x.id === 'N7' ? { ...x, params: { registra: 'acordo_crm', conectores: [3] } } : x) };
