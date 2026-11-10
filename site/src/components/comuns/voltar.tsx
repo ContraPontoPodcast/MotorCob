@@ -44,9 +44,9 @@ export const RotaDaTela = createContext<string | null>(null);
 
 /** "← tela-mãe" da rota atual (src/lib/rota-pai.ts); nada quando a rota não tem tela-mãe. */
 export function Voltar() {
-	const local = useLocation().pathname;
+	const { pathname: local, search } = useLocation();
 	const pathname = useContext(RotaDaTela) ?? local;
 	const { perfil } = useMotorAuth();
-	const pai = rotaPai(pathname, { equipe: !!perfil?.equipe });
+	const pai = rotaPai(pathname, { equipe: !!perfil?.equipe, busca: search });
 	return pai ? <div><VoltarPara {...pai} /></div> : null;
 }

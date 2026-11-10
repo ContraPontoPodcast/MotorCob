@@ -1090,6 +1090,16 @@ duas fotos (até 60). Banco sem o SQL 102: a VM avisa no máximo 1 vez por hora 
 empresa (`minhas_empresas()`) e a equipe com `cuida_voz`. Testes: `supabase/testes/testar_robos_uso.py` e
 `tests/test_voz_robos_uso.py`.
 
+**Site · Agente Voz/CX › Discagem: "Seu contrato" (Robôs contratados, PR 7, sem SQL).** No topo da Discagem
+(`components/discagem/robos-contrato.tsx`), da empresa: contratados (`voz_licenca_vigente`, sem preço), disponíveis agora
+(limite do SQL 101, nunca acima das licenças), em uso agora (`voz_robos_agora`; leitura mais velha que 60 s = "sem leitura
+agora", nunca zero) e pico de hoje (`voz_robos_dia`, com a hora e o tempo no limite), barra de uso, o porquê quando fica
+abaixo do contrato (`porQueCliente`: tronco ou "limite temporário da plataforma"; nunca o teto global), "O que acontece
+quando todos os robôs estão ocupados" (ninguém cai; o número espera na lista) e "Pedir mais robôs" →
+`/suporte/novo?assunto=robos&robos=N` (assunto, motivo e descrição pré-preenchidos; o Voltar dessa tela leva à Discagem:
+`rotaPai` recebe a query em `busca`). Sem licença e com voz: cartão do modelo antigo com "Pedir robôs"; sem voz: nada.
+Atualiza a cada 15 s. O Console (PR 5) ganha a coluna "Em uso · pico hoje".
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

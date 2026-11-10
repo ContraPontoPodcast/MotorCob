@@ -107,3 +107,42 @@ export function porQueCliente(l: LinhaDivisao): string {
 	if (l.motivo === 'teto') return `Limite temporário da plataforma: ${l.limite} de ${robos(lic)} ao mesmo tempo. A equipe MotorCX acompanha e amplia a capacidade.`;
 	return '';
 }
+
+// ---------------------------------------------------------------- uso dos robôs (SQL 102, PR 7)
+/** Leitura de "em uso agora" mais velha que isso = "sem leitura agora" (nunca zero). A VM grava a cada 15 s. */
+export const LEITURA_VALIDA_MS = 60_000;
+
+/** Em uso agora (voz_robos_agora) ou null quando não há leitura recente. */
+export function emUsoAgora(linha: Row | null | undefined, agoraMs: number): number | null {
+	if (!linha?.atualizado_em) return null;
+	const t = Date.parse(String(linha.atualizado_em));
+	if (!Number.isFinite(t) || agoraMs - t > LEITURA_VALIDA_MS) return null;
+	return int(linha.em_uso);
+}
+
+/** Hora (HH:MM, Brasília) de um instante ISO. */
+export function horaBR(iso: unknown): string {
+	if (!iso) return '';
+	const d = new Date(String(iso));
+	return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+}
+
+/** "às 10:42 · bateu o limite" do pico de hoje. */
+export function detalhePico(pico: number, picoEm: unknown, limite: number, segundosNoLimite: number): string {
+	if (pico <= 0) return 'nenhuma conversa ainda hoje';
+	const h = horaBR(picoEm);
+	const bateu = limite > 0 && pico >= limite;
+	const min = Math.floor(segundosNoLimite / 60);
+	return [h && `às ${h}`, bateu && (min >= 1 ? `no limite por ${min} min hoje` : 'bateu o limite')].filter(Boolean).join(' · ');
+}
+
+/** Texto do chamado "Pedir mais robôs" (Suporte › Novo chamado com ?assunto=robos). Sem preço nem teto. */
+export const ASSUNTO_ROBOS = 'Quero mais robôs para o Agente de voz';
+export function descricaoPedidoRobos(robos: number | null): string {
+	return [
+		robos != null && robos > 0 ? `Contrato hoje: ${robos} ${robos === 1 ? 'robô' : 'robôs'}.` : 'Ainda não tenho robôs contratados.',
+		'Quantos robôs a mais: ',
+		'A partir de quando (o quanto antes ou no próximo ciclo): ',
+		'Por quê (ex.: o lote das 10h fica esperando na lista todo dia): ',
+	].join('\n');
+}
