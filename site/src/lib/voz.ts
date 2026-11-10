@@ -45,6 +45,7 @@ export function ehItemFaturaVoz(item: unknown): boolean {
 	const it = String(item ?? '');
 	if (!it) return false;
 	if (it.startsWith('voz_licenca_robo_ajuste') || it === 'voz_minuto_ia_franquia') return true;
+	if (/^voz_minuto_ia_[0-9]+$/.test(it)) return true;      // SQL 126: uma linha por vigência de preço no minuto falado
 	return (ITENS_FATURA_VOZ as readonly string[]).some(c => it === c || it === `${c}_minimo`);
 }
 

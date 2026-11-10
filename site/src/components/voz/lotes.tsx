@@ -59,7 +59,7 @@ function situacaoLote(l: Lote) {
 
 // ============================================================================ lista
 export function LotesVoz() {
-	const { empresa, credores } = useMotorAuth();
+	const { empresa, credores, permissoes } = useMotorAuth();
 	const navigate = useNavigate();
 	const [lotes, setLotes] = useState<Lote[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -108,6 +108,8 @@ export function LotesVoz() {
 							{ rotulo: 'Abandono', valor: dia.encerradas ? pct((100 * dia.abandonos) / Math.max(1, dia.encerradas)) : '—', detalhe: 'abandonos registrados nos lotes do dia' },
 							{ rotulo: 'Telefonia estimada', valor: reais(dia.custo), detalhe: 'paga à operadora, fora da fatura' },
 						]} />
+						{/* SQL 127: o minuto falado com a IA de cada ligação (quem vê o faturamento) */}
+						{permissoes.includes('ver_faturamento') && <p className="text-[12.5px] text-[var(--base-texto-2)]">Minuto falado com a IA: veja como cada ligação foi cobrada no <Link to="/empresa/faturamento/demonstrativo" className="font-semibold text-[var(--destaque)] hover:underline">demonstrativo do Agente de voz</Link>.</p>}
 						<Cartao semPadding>
 							<TabelaDs rotulo="Lotes do agente virtual" linhas={lotes} chave={l => l.id} onAbrir={l => navigate(rotaLoteVoz(l.id))}
 								colunas={[
