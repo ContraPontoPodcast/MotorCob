@@ -962,6 +962,24 @@ treino **nunca** vai para `voz_avaliacoes`/`voz_qualidade_dia`; áudio nunca é 
 só o excedente; voz acabou = voz bloqueia, texto segue, aviso a 80% e 100%. Teste: `supabase/testes/testar_treino.py`.
 Se o SQL 89 rodar de novo, rode o 90 depois.
 
+**SQL 92 (pedido do dono: "Os preços precisam ser todos editáveis, você pode deixar pré-preenchido"): preços
+editáveis.** Só acrescenta funções (nenhuma recriada). Onde se edita cada coisa:
+- **Tabela/mínimo:** Mensageria em Console › Produtos (`salvar_produto`); Score e, novo, Motor (Orquestração, Jornada)
+  e Agente de voz fora da IA (plataforma, gestão de tronco) também em Produtos (`salvar_preco_score`,
+  `salvar_preco_padrao`; `editar_produtos`, mínimo opcional); itens de IA em Console › Margem › IA, só o Master
+  (`salvar_preco_tabela_ia`, nunca abaixo do mínimo da IA).
+- **Franquia padrão:** só nos itens de `itens_com_franquia()` (`ia_creditos`, `ia_treino_voz`, `ia_treino_texto`), só o
+  Master, na gaveta de Margem › IA (`salvar_franquia_padrao`; o gatilho `guardar_franquia_padrao` barra gravação direta
+  de quem não é Master).
+- **Preço por empresa:** Empresa › Contratação, cartão Preços (`editar_precos`, vigência próximo ciclo/este ciclo com
+  motivo): Motor e, novo, os grupos Agente de voz e Speech Analytics (módulo ligado). Itens com franquia gravam por
+  `salvar_preco_franquia` (= `salvar_preco_vigencia` + a franquia da empresa na vigência; vazio = mantém/herda/padrão;
+  a franquia dos Créditos de IA da empresa continua só com o Master, também em Margem › IA › Créditos). Mensageria e
+  Score nas seções deles.
+- **Pré-preenchido:** sem preço da empresa, o campo abre com o preço de tabela; a franquia, com a que vale.
+Item novo com franquia: entra em `itens_com_franquia()` e em `site/src/lib/precos-itens.ts` (o teste confere a paridade).
+Teste: `supabase/testes/testar_precos_editaveis.py`.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

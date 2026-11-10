@@ -2952,5 +2952,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 90: treino de operadores (testar_treino.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 92 · Preços editáveis: tabela, mínimo e franquia padrão; preço e franquia por empresa (permissão, vigência,
+# guarda da IA e mínimo com motivo)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_precos_editaveis.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 92: preços editáveis (testar_precos_editaveis.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
