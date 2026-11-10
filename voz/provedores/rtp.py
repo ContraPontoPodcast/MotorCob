@@ -99,6 +99,10 @@ class PonteRTP(asyncio.DatagramProtocol):
         for pk in self.emp.pacotes(pcm_le):
             self.saida.put_nowait(pk)
 
+    def falando(self) -> bool:
+        """Ainda há fala do agente na fila (o relógio do silêncio só conta depois que ela sai)."""
+        return self.saida is not None and not self.saida.empty()
+
     def interromper(self) -> None:
         """Pessoa falou por cima: descarta o que ainda não saiu."""
         while self.saida is not None and not self.saida.empty():
