@@ -65,8 +65,14 @@ class ProvedorVoz:
     codigo = "base"
 
     def disponivel(self) -> bool:
-        """Há agente livre agora? (sem agente: Alô fake, se ligado, e depois abandono)"""
+        """Há agente livre agora? (o orquestrador reserva antes de originar; sem agente quando a pessoa atende — corrida
+        ou falha do provedor —: Alô fake, se ligado, e depois a mensagem curta de abandono_sem_robo)"""
         return True
+
+    def livres(self) -> int | None:
+        """Sessões livres agora nesta VM (capacidade − sessões abertas), para o orquestrador reservar o robô ANTES de
+        originar. None = o provedor não sabe dizer (vale só disponivel())."""
+        return None
 
     def limites(self) -> dict:
         return {}

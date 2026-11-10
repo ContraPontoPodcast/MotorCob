@@ -196,6 +196,7 @@ export const RESULTADO_VOZ: Record<string, { label: string; tom: Tom }> = {
 	nao_atendida: { label: 'Não atendeu', tom: 'neutro' },
 	ocupado: { label: 'Ocupado', tom: 'neutro' },
 	abandonada: { label: 'Abandono', tom: 'atencao' },
+	abandono_sem_robo: { label: 'Abandono sem robô livre', tom: 'atencao' },
 	desligou_sem_conversar: { label: 'Desligou sem conversar', tom: 'neutro' },
 	atendeu_desligou: { label: 'Atendeu e desligou', tom: 'neutro' },
 	mudo: { label: 'Mudo', tom: 'neutro' },
@@ -379,7 +380,7 @@ export function funilDoResumo(linhas: { resultado: string; chamadas: number }[])
 		retorno: soma(['retorno_agendado']),
 		naoLigar: soma(['opt_out']),
 		caixa,
-		abandono: soma(['abandonada']),
+		abandono: soma(['abandonada', 'abandono_sem_robo']),
 	};
 }
 

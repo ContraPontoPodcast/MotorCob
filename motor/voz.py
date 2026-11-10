@@ -143,6 +143,12 @@ DESFECHOS: tuple[Desfecho, ...] = (
       prova_existencia=True),
     D("mudo", "SEM_RETORNO", "Mudo", marca="temporario", nao_atende=True, generico="mudo"),
     D("fax", "SEM_RETORNO", "Fax / sinal", marca="inexistente", generico="fax"),
+    # pessoa atendeu e não havia robô (sessão de IA) livre: a VM reserva o robô antes de discar, então só sobra a
+    # corrida/falha do provedor (e, no Power/Preditivo, a linha discada além dos robôs). Ela ouve uma mensagem curta e
+    # neutra e a ligação acaba. É abandono (curta "abandono", freio do lote, Anatel) como "abandonada", mas separado da
+    # transferência sem operador. Só a VM gera (transferencia = sem_robo); na renitência é a linha "abandonada".
+    D("abandono_sem_robo", "SEM_RETORNO", "Abandono sem robô livre", marca="clique", curta="abandono",
+      prova_existencia=True),
 )
 POR_CHAVE = {d.chave: d for d in DESFECHOS}
 assert len(POR_CHAVE) == len(DESFECHOS), "desfecho de voz repetido"
@@ -231,7 +237,8 @@ def tipo_confirmacao(sip: int | None = None, q850: int | None = None, canonico: 
 # tabulação que volta do discador do cliente depois da transferência, ou que chega pela importação).
 CAUSAS = Path(__file__).resolve().parent.parent / "regras" / "voz_causas.json"
 GRUPOS_CAUSA = ("sip", "q850", "dialstatus", "amd")
-TRANSFERENCIAS = ("atendida", "sem_operador", "falhou")     # resultado da transferência IA -> humano
+# resultado da transferência IA -> humano; sem_robo = a pessoa atendeu e não havia robô livre (nem chegou à IA)
+TRANSFERENCIAS = ("atendida", "sem_operador", "falhou", "sem_robo")
 DESTINOS = ("ia", "ia_humano")                               # quem ficou com a chamada do nosso lado
 FRACOS = ("nao_atendida",)       # resultado que a rede pode detalhar (o "sem contato" genérico vira não atende)
 _causas_cache: dict = {}
@@ -339,7 +346,8 @@ def classificar_chamada(resultado_ia=None, resultado_operador=None, transferenci
     """Desfecho final de uma tentativa: (chave, origem, avisos); origem = operador|transferencia|ia|rede|nenhum.
 
     1. a tabulação do OPERADOR (depois da transferência) manda, se diz algo além de "não atendeu";
-    2. transferência sem operador ou que falhou = abandono (não penaliza o número);
+    2. transferência sem operador ou que falhou = abandono (não penaliza o número); sem robô livre quando a pessoa
+       atendeu (transferencia = sem_robo) = abandono_sem_robo;
     3. o evento da IA;
     4. a rede (pela_rede). "Não atendeu" genérico da IA/operador cede para o que a rede detalhou.
     Número inexistente vindo da IA/operador com causa de rede que NÃO confirma vira o que a rede disse (ou falha
@@ -350,6 +358,8 @@ def classificar_chamada(resultado_ia=None, resultado_operador=None, transferenci
         ch, origem = resultado_operador, "operador"
     elif transferencia in ("sem_operador", "falhou"):
         ch, origem = "abandonada", "transferencia"
+    elif transferencia == "sem_robo":
+        ch, origem = "abandono_sem_robo", "transferencia"
     elif resultado_ia and resultado_ia not in FRACOS:
         ch, origem = resultado_ia, "ia"
     elif rede:

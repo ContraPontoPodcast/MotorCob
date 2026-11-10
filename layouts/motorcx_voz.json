@@ -53,6 +53,7 @@
     "rejeitada": "rejeitada",
     "mudo": "mudo",
     "fax": "fax",
+    "abandono_sem_robo": "abandono_sem_robo",
     "SEM_IA": "nao_atendida"
   }
 }
