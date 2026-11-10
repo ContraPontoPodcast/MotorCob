@@ -109,11 +109,12 @@ const TR: TreinoOperador = {
 	sessoes: [],
 };
 
-test('operador: Começar por texto habilitado, voz "em breve"; resultado com "Treinar de novo" e "Meus treinamentos"', () => {
+test('operador: Começar por texto habilitado, voz depois do teste de microfone; resultado com "Treinar de novo" e "Meus treinamentos"', () => {
 	const b = em(`/treino/${TOKEN}/5`, <BriefingView t={TR} token={TOKEN} hoje="2026-11-10" vozDisponivel={false} />);
 	assert.match(b, />Começar<\/button>/);
 	const voz = em(`/treino/${TOKEN}/5`, <BriefingView t={{ ...TR, modos: ['voz'], cenario: { ...TR.cenario, modos: ['voz'] } }} token={TOKEN} hoje="2026-11-10" vozDisponivel />);
-	assert.match(voz, /Começar por voz · em breve/);
+	assert.match(voz, /Testar o microfone/);
+	assert.match(voz, /<button[^>]*disabled=""[^>]*>Começar por voz/);
 	const r = em(`/treino/${TOKEN}/5/resultado/9`, <ResultadoOperadorView r={R} t={TR} token={TOKEN} hoje="2026-11-10" />);
 	assert.match(r, /<h1[^>]*>Resultado · Já pagou<\/h1>/);
 	assert.match(r, new RegExp(`href="/treino/${TOKEN}/5"[^>]*>Treinar de novo`));

@@ -18,7 +18,7 @@ export type Chamar = {
 	encerrar: () => Promise<ResultadoChamada<RespostaEncerrar>>;
 	sair: () => Promise<ResultadoChamada<{ situacao: string }>>;
 };
-export type FichaSessao = { cenario: string; persona: string; divida: DividaRP; foco: string[]; objetivo?: string | null };
+export type FichaSessao = { cenario: string; persona: string; divida: DividaRP; foco: string[]; objetivo?: string | null; duracao?: number };
 type Fase = 'carregando' | 'ligacao' | 'desligou' | 'tempo' | 'avaliando' | 'terminou';
 
 export function SessaoTexto({ ficha, chamar, onFim, quem = 'operador' }: {

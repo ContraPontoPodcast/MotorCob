@@ -14,6 +14,7 @@
 #   motorcx-voz-speech-temas.timer     segunda 03:20: temas novos da semana (clusterização; mesmo metadado)
 #   motorcx-voz-speech-buscas.service  contínuo: busca semântica do site (a cada 2 s; mesmo metadado)
 #   motorcx-voz-simulador.service      simulador do Fluxo e roleplay em 127.0.0.1:8091 (metadado motorcx-simulador-fluxo=1)
+#   motorcx-voz-treino.service         treino por voz do Roleplay em 127.0.0.1:8093, WebSocket (metadado motorcx-treino-voz=1)
 #   caddy + motorcx-voz-https.timer    proxy HTTPS na 8443 (Caddy oficial, versão fixa): só as rotas dos recursos
 #                                      ligados; certificado Let's Encrypt de <ip>.sslip.io (ou motorcx-dominio-https)
 #   motorcx-voz-importador.timer       a cada 15 min: importa as gravações do discador do cliente (metadado
@@ -82,11 +83,11 @@ for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-s
          motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-https.service \
          motorcx-voz-https.timer motorcx-voz-importador.service motorcx-voz-importador.timer \
          motorcx-voz-fluxo-noite.service motorcx-voz-fluxo-noite.timer motorcx-voz-gerar-fluxo.service \
-         motorcx-voz-gerar-segmentacao.service; do
+         motorcx-voz-gerar-segmentacao.service motorcx-voz-treino.service; do
   baixar_arquivo "$u" > "/etc/systemd/system/$u" || true
 done
 install -d -m 755 /usr/local/share/motorcx/caddy
-for c in motorcx-caddy.Caddyfile motorcx-caddy-simulador.caddy motorcx-caddy-elevenlabs.caddy; do
+for c in motorcx-caddy.Caddyfile motorcx-caddy-simulador.caddy motorcx-caddy-elevenlabs.caddy motorcx-caddy-treino-voz.caddy; do
   baixar_arquivo "$c" > "/usr/local/share/motorcx/caddy/$c" || true
 done
 # provedores de voz: padrão seguro só quando o arquivo não existe (o que o dono gravou fica como está)
@@ -113,6 +114,6 @@ systemctl enable --now motorcx-voz-config.timer motorcx-voz-transcricao.timer mo
   motorcx-voz-importador.timer motorcx-voz-fluxo-noite.timer
 systemctl enable --now motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
   motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-gerar-fluxo.service \
-  motorcx-voz-gerar-segmentacao.service
+  motorcx-voz-gerar-segmentacao.service motorcx-voz-treino.service
 systemctl enable caddy >/dev/null 2>&1 || true
 /usr/local/bin/motorcx-voz-https || true          # rotas ligadas, certificado e reload (de novo a cada 2 min)

@@ -241,7 +241,7 @@ class TestScriptsDaVm(unittest.TestCase):
             r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, f"{f.name}: {r.stderr}")
         servicos = sorted(vm.glob("*.service"))
-        self.assertEqual(len(servicos), 16)
+        self.assertEqual(len(servicos), 17)
         for s in servicos:
             txt = s.read_text()
             self.assertIn("ExecStart=", txt, s.name)
@@ -258,7 +258,8 @@ class TestScriptsDaVm(unittest.TestCase):
                      "motorcx-caddy-elevenlabs.caddy", "motorcx-voz-importador.service",
                      "motorcx-voz-importador.timer", "motorcx-voz-fluxo-noite.service",
                      "motorcx-voz-fluxo-noite.timer", "motorcx-voz-gerar-fluxo.service",
-                     "motorcx-voz-gerar-segmentacao.service", "motorcx-provedores.padrao.json"):
+                     "motorcx-voz-gerar-segmentacao.service", "motorcx-provedores.padrao.json",
+                     "motorcx-voz-treino.service", "motorcx-caddy-treino-voz.caddy"):
             self.assertIn(nome, inicio)
             self.assertTrue((vm / nome).exists(), nome)
         # Speech Analytics (SQL 62): desligado por padrão, só liga com o metadado da VM
@@ -306,7 +307,13 @@ class TestProxyHttps(unittest.TestCase):
         self.assertIn("max_size 256KB", sim)
         self.assertEqual(SH.MAX_CORPO, 256 * 1024)
         self.assertIn("reverse_proxy 127.0.0.1:8091", sim)
+        tv = (VM / "motorcx-caddy-treino-voz.caddy").read_text(encoding="utf-8")   # treino por voz (SQL 119)
+        self.assertIn("@treinovoz path /treino/voz", tv)
+        self.assertIn("reverse_proxy 127.0.0.1:8093", tv)
+        self.assertIn("stream_close_delay", tv)
         rodar = (VM / "motorcx-voz-rodar").read_text(encoding="utf-8")
+        self.assertIn("voz.treino_voz --porta 8093", rodar)
+        self.assertIn('[ "$(meta motorcx-treino-voz)" != 1 ]', rodar)
         self.assertIn("voz.simulador_http --porta 8091", rodar)
         self.assertIn('[ "$(meta motorcx-simulador-fluxo)" != 1 ]', rodar)
         inicio = (VM / "vm_inicio.sh").read_text(encoding="utf-8")
@@ -320,7 +327,7 @@ class TestProxyHttps(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             cf = (VM / "motorcx-caddy.Caddyfile").read_text(encoding="utf-8").replace(
                 "/etc/caddy/motorcx-rotas", d)
-            for f in ("motorcx-caddy-simulador.caddy", "motorcx-caddy-elevenlabs.caddy"):
+            for f in ("motorcx-caddy-simulador.caddy", "motorcx-caddy-elevenlabs.caddy", "motorcx-caddy-treino-voz.caddy"):
                 shutil.copy(VM / f, Path(d) / f)
             (Path(d) / "00-base.caddy").write_text("tls internal\n")
             (Path(d) / "Caddyfile").write_text(cf)
@@ -333,7 +340,8 @@ class TestProxyHttps(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
         self.fonte = self.tmp / "fonte"
         self.fonte.mkdir()
-        for f in ("motorcx-caddy.Caddyfile", "motorcx-caddy-simulador.caddy", "motorcx-caddy-elevenlabs.caddy"):
+        for f in ("motorcx-caddy.Caddyfile", "motorcx-caddy-simulador.caddy", "motorcx-caddy-elevenlabs.caddy",
+                  "motorcx-caddy-treino-voz.caddy"):
             shutil.copy(VM / f, self.fonte / f)
         self.etc = self.tmp / "etc"
         self.etc.mkdir()
@@ -341,12 +349,13 @@ class TestProxyHttps(unittest.TestCase):
         self.log = self.tmp / "log"
         self.comum = self.tmp / "comum"
         self.comum.write_text('meta() { case "$1" in motorcx-simulador-fluxo) echo "${M_SIM:-}" ;; '
+                              'motorcx-treino-voz) echo "${M_TV:-}" ;; '
                               'motorcx-https-tls) echo "${M_TLS:-}" ;; motorcx-dominio-https) echo "${M_DOM:-}" ;; esac; }\n'
                               'IP_EXTERNO=203.0.113.11\n')
 
-    def https(self, sim="", tls="", dom="", valida=0, ativo=1):
+    def https(self, sim="", tls="", dom="", valida=0, ativo=1, tv=""):
         env = {**os.environ, "MOTORCX_VOZ_COMUM": str(self.comum), "MOTORCX_CADDY_FONTE": str(self.fonte),
-               "MOTORCX_ETC_CADDY": str(self.etc), "MOTORCX_PROVEDORES": str(self.prov), "M_SIM": sim, "M_TLS": tls,
+               "MOTORCX_ETC_CADDY": str(self.etc), "MOTORCX_PROVEDORES": str(self.prov), "M_SIM": sim, "M_TV": tv, "M_TLS": tls,
                "M_DOM": dom, "LOG": str(self.log),
                "BASH_FUNC_caddy%%": f'() {{ echo "caddy $* host=$MOTORCX_HTTPS_HOST" >> "$LOG"; return {valida}; }}',
                "BASH_FUNC_systemctl%%": f'() {{ echo "systemctl $*" >> "$LOG"; '
@@ -375,6 +384,13 @@ class TestProxyHttps(unittest.TestCase):
         self.assertEqual([l for l in log if "reload" in l or "restart" in l], [])     # nada mudou
         self.prov.write_text(json.dumps({"elevenlabs": {"numero_agente": "a1"}}))     # webhook desligado
         r, log, rotas = self.https(sim="")
+        self.assertEqual(rotas, ["00-base.caddy"])
+
+    def test_treino_por_voz_so_com_o_metadado(self):
+        r, log, rotas = self.https(tv="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(rotas, ["00-base.caddy", "motorcx-caddy-treino-voz.caddy"])
+        r, log, rotas = self.https(tv="")
         self.assertEqual(rotas, ["00-base.caddy"])
 
     def test_invalido_mantem_o_que_esta_no_ar(self):

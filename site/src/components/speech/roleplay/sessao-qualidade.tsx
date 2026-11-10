@@ -1,7 +1,8 @@
-// Roleplay › sessão por texto do lado da Qualidade (SQL 100):
+// Roleplay › sessão de treino do lado da Qualidade, por voz (SQL 119, padrão quando o cenário tem voz) ou por texto (SQL 100):
 // - Treino lado a lado (/atribuicoes/:id/lado-a-lado/:op): a Qualidade, logada, abre a sessão nesta máquina para a
-//   pessoa ao lado (iniciar_treino_lado_a_lado). Abrir a tela não começa a ligação: mostra "Começar". Começada, o id
-//   da sessão vai para a URL (?sessao=, replace). Ao terminar, a sessão dá lugar ao resultado (replace).
+//   pessoa ao lado (iniciar_treino_lado_a_lado). Abrir a tela não começa a ligação: mostra "Começar" (por voz, depois do
+//   teste de microfone, com "Ouvir a voz"). Começada, o id da sessão e o modo vão para a URL (?sessao=&modo=, replace).
+//   Ao terminar, a sessão dá lugar ao resultado (replace).
 // - Testar cenário (/cenarios/:id/testar): o mesmo, sem operador (testar_cenario_treino; conta no saldo, nada é
 //   guardado para pessoa nenhuma e a conversa some em 1 dia). Termina no resultado do teste (/cenarios/:id/teste/:sid).
 // - Sessão de uma pessoa (/atribuicoes/:id/sessoes/:sid): resultado formativo, "Revisar avaliação" item a item
@@ -20,8 +21,9 @@ import {
 } from '@/lib/roleplay';
 import { textoEncerramento, type ResultadoTreino } from '@/lib/treino-sessao';
 import { SessaoTexto } from '@/components/treino/sessao';
+import { SessaoVoz, TesteMicrofone } from '@/components/treino/voz';
 import { ResultadoView } from '@/components/treino/resultado';
-import { chamarTreino } from '@/components/treino/chamar';
+import { chamarTreino, chamarVoz, previaVoz } from '@/components/treino/chamar';
 import { MolduraRP } from './moldura';
 import { SeloLgpdTreino } from './comum';
 import { usePainelUrl } from './cadastro';
@@ -43,39 +45,53 @@ function Briefing({ c, itens, para }: { c: CenarioRP; itens: Record<string, Item
 				<dt className="text-[var(--base-texto-3)]">Duração</dt><dd className="m-0">até {textoDuracao(c.duracao_max_s)}</dd>
 				{c.itens_foco.length > 0 && <><dt className="text-[var(--base-texto-3)]">Em foco</dt><dd className="m-0">{c.itens_foco.map(i => itemChecklist(i, itens).texto).join(' · ')}</dd></>}
 			</dl>
-			<p className="mt-3 text-[12.5px] text-[var(--base-texto-2)]">Por enquanto o treino roda por texto: a ligação abre em tela cheia. Para sair, use “Sair” (dá para sair sem contar).</p>
+			<p className="mt-3 text-[12.5px] text-[var(--base-texto-2)]">A ligação abre em tela cheia. Para sair, use “Sair” (dá para sair sem contar). Na voz, o áudio não é guardado.</p>
 		</Cartao>
 	);
 }
 
-/** Lado a lado e teste: "Começar" abre a sessão; com ?sessao= na URL, a sessão em tela cheia. */
-function SessaoLogada({ titulo, detalhe, meio, c, itens, para, iniciar, aoTerminar, aoSair }: {
+/** Lado a lado e teste: "Começar" abre a sessão (voz, o padrão, ou texto); com ?sessao= na URL, a sessão em tela cheia. */
+function SessaoLogada({ titulo, detalhe, meio, c, itens, para, empresa, modos, iniciar, aoTerminar, aoSair }: {
 	titulo: string; detalhe: string; meio?: { rotulo: string; to: string }; c: CenarioRP; itens: Record<string, ItemChecklistRP>; para?: string;
-	iniciar: () => Promise<number>; aoTerminar: (sessao: number) => void; aoSair: (msg: string) => void;
+	empresa: number; modos: string[]; iniciar: (modo: 'voz' | 'texto') => Promise<number>; aoTerminar: (sessao: number) => void; aoSair: (msg: string) => void;
 }) {
 	const [q, setQ] = useSearchParams();
 	const sessao = num(q.get('sessao'));
+	const temVoz = modos.includes('voz'), temTexto = modos.includes('texto');
+	const [modo, setModo] = useState<'voz' | 'texto'>(temVoz ? 'voz' : 'texto');
+	const [micOk, setMicOk] = useState(false);
 	const [ocupado, setOcupado] = useState(false);
 	const [erro, setErro] = useState('');
 	if (sessao != null) {
-		return <SessaoTexto quem="qualidade" chamar={chamarTreino(sessao, null)}
-			ficha={{ cenario: c.nome, persona: c.persona_nome, divida: c.divida ?? {}, foco: c.itens_foco.map(i => itemChecklist(i, itens).texto), objetivo: c.objetivo_cenario }}
-			onFim={r => (r.situacao === 'avaliada' ? aoTerminar(sessao) : aoSair(textoEncerramento(r)))} />;
+		const ficha = { cenario: c.nome, persona: c.persona_nome, divida: c.divida ?? {}, foco: c.itens_foco.map(i => itemChecklist(i, itens).texto), objetivo: c.objetivo_cenario, duracao: c.duracao_max_s };
+		const onFim = (r: Parameters<Parameters<typeof SessaoTexto>[0]['onFim']>[0]) => (r.situacao === 'avaliada' ? aoTerminar(sessao) : aoSair(textoEncerramento(r)));
+		return q.get('modo') === 'voz'
+			? <SessaoVoz quem="qualidade" chamar={chamarVoz(sessao, null)} ficha={ficha} onFim={onFim} />
+			: <SessaoTexto quem="qualidade" chamar={chamarTreino(sessao, null)} ficha={ficha} onFim={onFim} />;
 	}
 	async function comecar() {
 		setOcupado(true); setErro('');
 		try {
-			const s = await iniciar();
-			setQ(p => { const n = new URLSearchParams(p); n.set('sessao', String(s)); return n; }, { replace: true });
+			const s = await iniciar(modo);
+			setQ(p => { const n = new URLSearchParams(p); n.set('sessao', String(s)); n.set('modo', modo); return n; }, { replace: true });
 		} catch (e) { setErro(e instanceof Error ? e.message : 'Não deu para começar.'); } finally { setOcupado(false); }
 	}
 	return (
 		<MolduraRP titulo={titulo} detalhe={detalhe} meio={meio} acoes={<SeloLgpdTreino />}>
 			<div className="max-w-[720px] space-y-4">
 				<Briefing c={c} itens={itens} para={para} />
-				{!c.modos.includes('texto') && <Aviso tom="atencao">Este cenário é só por voz, e o treino por voz chega numa próxima versão.</Aviso>}
+				{modos.length === 0 ? <Aviso tom="atencao">Este treino não tem um modo em comum com o cenário. Ajuste o cenário ou atribua de novo.</Aviso> : (
+					<Cartao titulo="Como treinar">
+						<fieldset className="flex flex-wrap gap-3 text-[13.5px]">
+							<legend className="sr-only">Modo do treino</legend>
+							{temVoz && <label className="inline-flex items-center gap-1.5"><input type="radio" name="modo-rp" checked={modo === 'voz'} onChange={() => setModo('voz')} />Voz (padrão)</label>}
+							{temTexto && <label className="inline-flex items-center gap-1.5"><input type="radio" name="modo-rp" checked={modo === 'texto'} onChange={() => setModo('texto')} />Texto</label>}
+						</fieldset>
+						{modo === 'voz' && <div className="mt-3"><TesteMicrofone onOk={setMicOk} onTexto={temTexto ? () => setModo('texto') : undefined} ouvir={previaVoz({ cenario: c.id, empresa })} /></div>}
+					</Cartao>
+				)}
 				{erro && <div role="alert"><Aviso tom="erro">{erro}</Aviso></div>}
-				<Botao onClick={() => void comecar()} disabled={ocupado || !c.modos.includes('texto')}>{ocupado ? 'Abrindo…' : 'Começar'}</Botao>
+				<Botao onClick={() => void comecar()} disabled={ocupado || modos.length === 0 || (modo === 'voz' && !micOk)}>{ocupado ? 'Abrindo…' : modo === 'voz' ? 'Começar por voz' : 'Começar'}</Botao>
 			</div>
 		</MolduraRP>
 	);
@@ -102,8 +118,9 @@ export function LadoALado({ empresa, atr, op, pode }: { empresa: number; atr: st
 	const aid = d.atribuicao.id;
 	return (
 		<SessaoLogada titulo={`Treino lado a lado com ${pessoa.apelido}`} detalhe="Treino lado a lado" meio={{ rotulo: d.cenario.nome, to: rotaAtribuicaoRP(aid) }} c={d.cenario} itens={itens} para={pessoa.apelido}
-			iniciar={async () => {
-				const r = await supabase!.rpc('iniciar_treino_lado_a_lado', { atribuicao: aid, operador: pessoa.id, modo: 'texto' });
+			empresa={empresa} modos={d.cenario.modos.filter(m => d.atribuicao!.modos.includes(m))}
+			iniciar={async modo => {
+				const r = await supabase!.rpc('iniciar_treino_lado_a_lado', { atribuicao: aid, operador: pessoa.id, modo });
 				if (r.error) throw new Error(friendlyError(r.error));
 				return Number((r.data as { sessao: number }).sessao);
 			}}
@@ -129,8 +146,9 @@ export function TestarCenario({ empresa, id, pode }: { empresa: number; id: stri
 	if (!c) return <MolduraRP titulo="Testar cenário"><Estado tipo="vazio" titulo="Cenário não encontrado.">O endereço pode estar desatualizado.</Estado></MolduraRP>;
 	return (
 		<SessaoLogada titulo={`Testar: ${c.nome}`} detalhe="Testar cenário" meio={{ rotulo: c.nome, to: rotaCenarioRP(c.id) }} c={c} itens={itens}
-			iniciar={async () => {
-				const r = await supabase!.rpc('testar_cenario_treino', { cenario: c.id, empresa, modo: 'texto' });
+			empresa={empresa} modos={c.modos}
+			iniciar={async modo => {
+				const r = await supabase!.rpc('testar_cenario_treino', { cenario: c.id, empresa, modo });
 				if (r.error) throw new Error(friendlyError(r.error));
 				return Number((r.data as { sessao: number }).sessao);
 			}}

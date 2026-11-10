@@ -1,20 +1,23 @@
 // Página do operador pelo link pessoal de treino: /treino/:token ("Meus treinamentos"), /treino/:token/:atr (briefing),
 // /treino/:token/:atr/sessao/:sessao (sessão por texto em tela cheia) e /treino/:token/:atr/resultado/:sessao (resultado
-// formativo). A sessão abre por treino_iniciar (SQL 90: prazo, tentativas, módulo) e conversa pela Edge Function treino
-// (SQL 100); o resultado vem de treino_resultado e o "Discordo deste ponto" vai por treino_discordar.
+// formativo). A sessão abre por treino_iniciar (SQL 90: prazo, tentativas, módulo, franquia de voz) e conversa pela Edge
+// Function treino: por texto (SQL 100) ou por voz (SQL 119, ?modo=voz: microfone testado antes, WebSocket até a VM); o
+// resultado vem de treino_resultado e o "Discordo deste ponto" vai por treino_discordar.
 // Sem login e sem o menu do MotorCX: o token vai para treino_meus (SQL 90), que confere o hash, a validade, a
 // revogação, o operador ativo e o módulo, devolve só os treinos daquele operador e registra o acesso (sem IP). Quando o
 // link não abre, treino_estado_link (SQL 99) diz por quê (venceu, foi trocado, treinos indisponíveis).
 // Tom formativo (SPEC §2.4): "Isto é treino" aparece ANTES de começar; nada de "reprovado".
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { Aviso, Botao, BotaoLink, Cartao, Estado, Pilula } from '@/components/ds';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { rotaResultadoOperador, rotaSessaoOperador, textoEncerramento, type ResultadoTreino } from '@/lib/treino-sessao';
 import { SessaoTexto } from './sessao';
+import { SessaoVoz, TesteMicrofone } from './voz';
 import { ResultadoView } from './resultado';
-import { chamarTreino } from './chamar';
+import { chamarTreino, chamarVoz, previaVoz } from './chamar';
+import { avisoMinutosVoz } from '@/lib/treino-voz';
 import { dataBR, diaSP } from '@/lib/speech';
 import { FAIXAS_SALDO, GRAVIDADE_RP, rotaBriefing, rotaTreino, rotuloTipoCliente, textoAlcada, textoDuracao, tokenValido } from '@/lib/roleplay';
 import {
@@ -146,10 +149,14 @@ export function PaginaBriefing({ token, atr, comecar }: { token: string; atr: st
 	if ('erro' in c) return <MolduraTreino titulo="Treino"><Estado tipo="erro" titulo="Não abriu agora.">{c.erro}</Estado></MolduraTreino>;
 	const t = c.d.treinos.find(x => String(x.atribuicao) === atr);
 	if (!t) return <MolduraTreino titulo="Treino não encontrado" voltar={<VoltarMeus token={token} />}><Estado tipo="vazio" titulo="Este treino não está na sua lista.">Volte para “Meus treinamentos” e abra o treino por lá.</Estado></MolduraTreino>;
-	return <BriefingView t={t} token={token} hoje={diaSP(0)} vozDisponivel={c.d.voz_disponivel} comecar={comecar} />;
+	return <BriefingView t={t} token={token} hoje={diaSP(0)} vozDisponivel={c.d.voz_disponivel} comecar={comecar} avisoVoz={avisoMinutosVoz(c.d.voz_minutos, c.d.voz_franquia)} />;
 }
 
-export function BriefingView({ t, token, hoje, vozDisponivel, comecar }: { t: TreinoOperador; token: string; hoje: string; vozDisponivel: boolean; comecar?: (t: TreinoOperador, modo: string) => ReactNode }) {
+export function BriefingView({ t, token, hoje, vozDisponivel, comecar, avisoVoz }: {
+	t: TreinoOperador; token: string; hoje: string; vozDisponivel: boolean; comecar?: (t: TreinoOperador, modo: string) => ReactNode;
+	/** "Restam N minutos de voz" a partir de 80% da franquia do mês (SQL 119) */
+	avisoVoz?: string | null;
+}) {
 	const c = t.cenario;
 	const d = c.divida ?? {};
 	const modos = t.modos.filter(m => c.modos.includes(m));
@@ -191,8 +198,9 @@ export function BriefingView({ t, token, hoje, vozDisponivel, comecar }: { t: Tr
 						{modos.includes('voz') && <label className="inline-flex items-center gap-1.5"><input type="radio" name="modo" checked={modo === 'voz'} disabled={!vozDisponivel} onChange={() => setModo('voz')} />Voz (padrão){!vozDisponivel && ' · minutos de voz do mês acabaram'}</label>}
 						{modos.includes('texto') && <label className="inline-flex items-center gap-1.5"><input type="radio" name="modo" checked={modo === 'texto'} onChange={() => setModo('texto')} />Texto</label>}
 					</fieldset>
+					{modos.includes('voz') && avisoVoz && <div className="mt-3"><Aviso tom="atencao">{avisoVoz}</Aviso></div>}
 					<div className="mt-3">
-						{comecar ? comecar(t, modo) : <ComecarOperador token={token} t={t} modo={modo} />}
+						{comecar ? comecar(t, modo) : <ComecarOperador token={token} t={t} modo={modo} trocarParaTexto={modos.includes('texto') ? () => setModo('texto') : undefined} />}
 					</div>
 				</Cartao>
 			) : t.situacao === 'aprovado' ? (
@@ -206,29 +214,27 @@ export function BriefingView({ t, token, hoje, vozDisponivel, comecar }: { t: Tr
 
 // ------------------------------------------------------------------ começar, sessão e resultado
 /** "Começar": abre a sessão (treino_iniciar confere prazo, tentativas e módulo) e vai para a tela da sessão. */
-export function ComecarOperador({ token, t, modo }: { token: string; t: TreinoOperador; modo: string }) {
+export function ComecarOperador({ token, t, modo, trocarParaTexto }: { token: string; t: TreinoOperador; modo: string; trocarParaTexto?: () => void }) {
 	const navegar = useNavigate();
 	const { pathname } = useLocation();
 	const [erro, setErro] = useState('');
 	const [ocupado, setOcupado] = useState(false);
-	if (modo === 'voz') return (
-		<>
-			<Botao disabled>Começar por voz · em breve</Botao>
-			<p className="mt-2 text-[12.5px] text-[var(--base-texto-2)]">O treino por voz no navegador chega numa próxima versão. Escolha “Texto” para treinar agora.</p>
-		</>
-	);
+	const [micOk, setMicOk] = useState(false);
+	const voz = modo === 'voz';
 	async function comecar() {
 		if (!supabase) return;
 		setOcupado(true); setErro('');
-		const { data, error } = await supabase.rpc('treino_iniciar', { token, atribuicao: t.atribuicao, modo: 'texto' });
+		const { data, error } = await supabase.rpc('treino_iniciar', { token, atribuicao: t.atribuicao, modo: voz ? 'voz' : 'texto' });
 		setOcupado(false);
 		if (error || !data) { setErro(friendlyError(error)); return; }
-		navegar(rotaSessaoOperador(token, t.atribuicao, (data as { sessao: number }).sessao), { state: { de: pathname } });
+		const rota = rotaSessaoOperador(token, t.atribuicao, (data as { sessao: number }).sessao);
+		navegar(voz ? `${rota}?modo=voz` : rota, { state: { de: pathname } });
 	}
 	return (
 		<>
-			<Botao onClick={() => void comecar()} disabled={ocupado}>{ocupado ? 'Abrindo…' : 'Começar'}</Botao>
-			<p className="mt-2 text-[12.5px] text-[var(--base-texto-2)]">A ligação abre em tela cheia. Para sair, use “Sair”: dá para sair sem contar a tentativa.</p>
+			{voz && <div className="mb-3"><TesteMicrofone onOk={setMicOk} onTexto={trocarParaTexto} ouvir={previaVoz({ token, atribuicao: t.atribuicao })} /></div>}
+			<Botao onClick={() => void comecar()} disabled={ocupado || (voz && !micOk)}>{ocupado ? 'Abrindo…' : voz ? 'Começar por voz' : 'Começar'}</Botao>
+			<p className="mt-2 text-[12.5px] text-[var(--base-texto-2)]">{voz && !micOk ? 'Teste o microfone para começar. ' : ''}A ligação abre em tela cheia. Para sair, use “Sair”: dá para sair sem contar a tentativa.</p>
 			{erro && <p role="alert" className="mt-2 text-[13px] font-medium text-[var(--estado-erro-texto)]">{erro}</p>}
 		</>
 	);
@@ -236,6 +242,7 @@ export function ComecarOperador({ token, t, modo }: { token: string; t: TreinoOp
 
 export function PaginaSessaoOperador({ token, atr, sessao }: { token: string; atr: string; sessao: string }) {
 	const navegar = useNavigate();
+	const voz = useSearchParams()[0].get('modo') === 'voz';
 	const c = useMeusTreinos(token);
 	const sid = /^\d{1,18}$/.test(sessao) ? Number(sessao) : null;
 	if (!c) return <Carregando titulo="Treino" />;
@@ -244,15 +251,15 @@ export function PaginaSessaoOperador({ token, atr, sessao }: { token: string; at
 	const t = c.d.treinos.find(x => String(x.atribuicao) === atr);
 	if (!t || sid == null) return <MolduraTreino titulo="Sessão não encontrada" voltar={<VoltarMeus token={token} />}><Estado tipo="vazio" titulo="Esta sessão não está na sua lista.">Volte para “Meus treinamentos”.</Estado></MolduraTreino>;
 	const cen = t.cenario;
-	return (
-		<SessaoTexto chamar={chamarTreino(sid, token)}
-			ficha={{ cenario: cen.nome, persona: cen.persona_nome, divida: cen.divida ?? {}, foco: cen.itens_foco.map(i => i.texto ?? 'item do checklist'), objetivo: cen.objetivo_cenario }}
-			onFim={r => {
-				// a tela da sessão (transição) não fica no histórico: dá lugar ao resultado ou volta ao briefing
-				if (r.situacao === 'avaliada') navegar(rotaResultadoOperador(token, atr, sid), { replace: true, state: { de: rotaTreino(token) } });
-				else navegar(rotaBriefing(token, atr), { replace: true, state: { de: rotaTreino(token), aviso: textoEncerramento(r) } });
-			}} />
-	);
+	const ficha = { cenario: cen.nome, persona: cen.persona_nome, divida: cen.divida ?? {}, foco: cen.itens_foco.map(i => i.texto ?? 'item do checklist'), objetivo: cen.objetivo_cenario, duracao: cen.duracao_max_s };
+	// a tela da sessão (transição) não fica no histórico: dá lugar ao resultado ou volta ao briefing
+	const onFim = (r: Parameters<Parameters<typeof SessaoTexto>[0]['onFim']>[0]) => {
+		if (r.situacao === 'avaliada') navegar(rotaResultadoOperador(token, atr, sid), { replace: true, state: { de: rotaTreino(token) } });
+		else navegar(rotaBriefing(token, atr), { replace: true, state: { de: rotaTreino(token), aviso: textoEncerramento(r) } });
+	};
+	return voz
+		? <SessaoVoz chamar={chamarVoz(sid, token)} ficha={ficha} onFim={onFim} />
+		: <SessaoTexto chamar={chamarTreino(sid, token)} ficha={ficha} onFim={onFim} />;
 }
 
 export function PaginaResultadoOperador({ token, atr, sessao }: { token: string; atr: string; sessao: string }) {

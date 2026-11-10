@@ -16,7 +16,7 @@ export type RespostaTurno = {
 	fala?: string; operador?: string | null; desligou?: boolean; saldo?: string | null; segundos?: number; duracao_max_s?: number;
 	turnos?: Turno[]; fim?: 'tempo' | 'limite';
 };
-export type RespostaEncerrar = { situacao: 'avaliada' | 'falhou' | 'abandonada'; sessao?: number; motivo?: string };
+export type RespostaEncerrar = { situacao: 'avaliada' | 'falhou' | 'abandonada'; sessao?: number; motivo?: string; /** a frase pronta (sessão por voz) */ aviso?: string };
 
 /** "03:07". */
 export function relogio(s: number): string {
@@ -73,6 +73,7 @@ export function validarDiscordancia(t: string, temDadoPessoal: (s: string) => bo
 
 /** Mensagem do encerramento para a tela. */
 export function textoEncerramento(r: RespostaEncerrar): string {
+	if (r.aviso) return r.aviso;
 	if (r.situacao === 'avaliada') return 'Conversa avaliada.';
 	if (r.situacao === 'abandonada') return r.motivo === 'sem_fala' ? 'Você saiu antes de falar: a tentativa não contou.' : 'Você saiu sem contar: a tentativa não contou.';
 	return 'Não deu para avaliar agora: a tentativa não contou. Tente de novo em alguns minutos.';

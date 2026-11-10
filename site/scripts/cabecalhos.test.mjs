@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { gerar, hashesInline, politica, supabaseDoBuild } from './cabecalhos.mjs';
+import { gerar, hashesInline, origensVoz, politica, supabaseDoBuild, vozDoBuild } from './cabecalhos.mjs';
 
 const sha = s => `'sha256-${createHash('sha256').update(s, 'utf8').digest('base64')}'`;
 
@@ -40,4 +40,16 @@ test('gera o _headers do Netlify para /*', () => {
 	const txt = readFileSync(path.join(dir, '_headers'), 'utf8');
 	assert.match(txt, /^\/\*\n {2}Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-/m);
 	assert.ok(txt.includes(hashes[0]));
+});
+
+test('treino por voz: o WebSocket das VMs entra em connect-src, só wss e endereço exato', () => {
+	const p = politica('https://abcdefghij.supabase.co', [], ['wss://35-198-40-10.sslip.io:8443']);
+	assert.match(p, /connect-src 'self' https:\/\/abcdefghij\.supabase\.co wss:\/\/abcdefghij\.supabase\.co https:\/\/storage\.googleapis\.com wss:\/\/35-198-40-10\.sslip\.io:8443;/);
+	assert.deepEqual(origensVoz('wss://a.exemplo:8443, wss://b.exemplo:8443'), ['wss://a.exemplo:8443', 'wss://b.exemplo:8443']);
+	assert.deepEqual(origensVoz(''), []);
+	assert.throws(() => origensVoz('wss://*.sslip.io:8443'), /inválido/);
+	assert.throws(() => origensVoz('ws://a.exemplo:8443'), /inválido/);
+	assert.throws(() => origensVoz('wss://a.exemplo:8443/treino/voz'), /inválido/);
+	assert.deepEqual(vozDoBuild({ TREINO_VOZ_WSS: 'wss://c.exemplo:8443' }), ['wss://c.exemplo:8443']);
+	assert.ok(vozDoBuild({}).every(x => x.startsWith('wss://')), 'o do netlify.toml');
 });
