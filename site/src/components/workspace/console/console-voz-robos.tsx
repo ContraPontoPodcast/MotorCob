@@ -160,7 +160,7 @@ function EditarTeto({ atual, vendidos, podeTroncos, atualizadoEm, onSalvo }: {
 	return (
 		<div>
 			<div className="flex flex-wrap items-end gap-3">
-				<div className="w-full max-w-[280px]">
+				<div className="w-full max-w-[380px]">
 					<label htmlFor="voz-teto" className="mb-1 block text-[13px] font-semibold text-[var(--base-texto)]">Teto contratado com o provedor (ao mesmo tempo)</label>
 					<input id="voz-teto" value={valor} inputMode="numeric" disabled={!podeTroncos} aria-describedby="voz-teto-ajuda"
 						onChange={e => setValor(e.target.value.replace(/\D/g, ''))} className={`${campoCls} tnum`} />
