@@ -504,9 +504,7 @@ class Plantao:
             numero = "".join(ch for ch in numero if ch.isdigit())
             numero = numero[2:] if len(numero) in (12, 13) and numero.startswith("55") else numero
             agora = self.relogio()
-            regras = self.fonte.regras(emp) if self.fonte is not None else {}
-            rl = (regras or {}).get(cid)
-            hor = (rl.cfg.get("horarios") or {}) if rl is not None else {}
+            hor = self._horarios_da_carteira(emp, cid)
             cfg = self.orq.dados.config(emp)
             if emp not in self.orq.agendador.empresas:
                 self.orq.agendador.registrar_empresa(cfg, self.orq.dados.troncos_da(emp))
@@ -532,6 +530,15 @@ class Plantao:
             self.testes[tid] = TA.TesteEmCurso(tid, lote, agora_s)
             log.info("teste agora %s: empresa %s carteira %s, ligando", tid, emp, cid)
         return n
+
+    def _horarios_da_carteira(self, emp: int, cid: int | None) -> dict:
+        """credores.discagem › horarios da carteira, normalizado pelo motor (ausente = ligado com a prévia)."""
+        linhas = self.fonte.discagem(emp) if self.fonte is not None else None
+        bruto = next((l.get("discagem") for l in linhas or [] if l.get("credor_id") == cid), None)
+        try:
+            return DG.normalizar(bruto or {})[0].get("horarios") or {}
+        except Exception:   # noqa: BLE001 — regra que não valida: vale a prévia
+            return {}
 
     def _teste_terminou(self, teste_id: int, ev, c) -> None:
         """Fim da ligação de teste (do núcleo): grava os passos e tira o lote."""
