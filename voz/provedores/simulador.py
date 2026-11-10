@@ -89,6 +89,9 @@ class Simulador(ProvedorVoz):
     def disponivel(self) -> bool:
         return len(self.sessoes) < self.max_simultaneas
 
+    def livres(self) -> int:
+        return max(0, self.max_simultaneas - len(self.sessoes))
+
     def limites(self) -> dict:
         return {"por_agente": self.max_simultaneas}
 

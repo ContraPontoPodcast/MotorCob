@@ -397,23 +397,44 @@ class TestTransferencia(Base):
         self.assertTrue(any("sem destino" in a for a in orq.alertas))
 
 
+class SimuladorQueFalha(Simulador):
+    """Provedor que aceita a reserva mas não abre a sessão (erro ao iniciar): o caso de falha do provedor."""
+
+    def iniciar(self, ctx, emitir):
+        raise RuntimeError("provedor fora do ar")
+
+
 class TestAloFakeEAbandono(Base):
-    def test_sem_agente_sem_alo_fake_derruba(self):
-        orq = self.montar([item()], provedor=Simulador(max_simultaneas=0))
+    def test_sem_robo_toca_mensagem_e_nao_derruba_mudo(self):
+        # a reserva foi feita, mas o provedor perdeu a capacidade antes de a pessoa atender (corrida/falha)
+        sim = Simulador(max_simultaneas=1)
+        orq = self.montar([item()], provedor=sim)
         orq.tick()
         canal = self.originados()[0][2]
+        cid = canal.rsplit("-", 1)[0]
+        sim.max_simultaneas = 0
         self.atender(canal)
+        self.assertNotIn(canal, self.ari.desligados)            # nunca desliga mudo
+        self.assertEqual(self.ari.de("tocar")[0][1:4], (canal, "sound:motorcx/sem-robo", f"{cid}-semrobo"))
+        self.assertEqual(orq.agendador.empresas[1].ocupadas, 0)  # a reserva já voltou
+        self.orq.ao_evento({"type": "PlaybackFinished", "playback": {"id": f"{cid}-semrobo", "state": "done"}})
         self.assertIn(canal, self.ari.desligados)
-        self.assertEqual(self.ari.de("tocar"), [])
         self.cair(canal)
-        self.assertEqual((self.eventos[0].desfecho, self.eventos[0].transferencia), ("abandonada", "sem_operador"))
+        ev = self.eventos[0]
+        self.assertEqual((ev.desfecho, ev.transferencia, ev.origem_desfecho), ("abandono_sem_robo", "sem_robo",
+                                                                               "transferencia"))
+        db = para_voz_chamadas(ev)
+        self.assertEqual((db["resultado"], db["transferencia"]), ("abandono_sem_robo", "sem_robo"))
+        self.assertIsNotNone(db["transferida_em"])               # check do banco: transferência exige transferida_em
+        self.assertEqual(orq.contagem.get("abandono_sem_robo"), 1)
 
     def test_alo_fake_segura_e_conecta(self):
-        sim = Simulador(max_simultaneas=0)
+        sim = Simulador(max_simultaneas=1)
         mud = [("voz_config", 0, {"alo_fake_liberado": True, "alo_fake": True, "alo_fake_max_s": 4})]
         orq = self.montar([item()], provedor=sim, mud=mud)
         orq.tick()
         canal = self.originados()[0][2]
+        sim.max_simultaneas = 0
         self.atender(canal)
         self.assertEqual(self.ari.de("tocar")[0][1:3], (canal, "sound:motorcx/alo"))
         self.rel.andar(2)
@@ -424,22 +445,31 @@ class TestAloFakeEAbandono(Base):
 
     def test_alo_fake_sem_liberacao_da_equipe_nao_toca(self):
         mud = [("voz_config", 0, {"alo_fake_liberado": False, "alo_fake": True})]
-        orq = self.montar([item()], provedor=Simulador(max_simultaneas=0), mud=mud)
+        sim = Simulador(max_simultaneas=1)
+        orq = self.montar([item()], provedor=sim, mud=mud)
         orq.tick()
+        sim.max_simultaneas = 0
         self.atender(self.originados()[0][2])
-        self.assertEqual(self.ari.de("tocar"), [])
+        self.assertNotIn("sound:motorcx/alo", [t[2] for t in self.ari.de("tocar")])
+        self.assertEqual([t[2] for t in self.ari.de("tocar")], ["sound:motorcx/sem-robo"])
 
     def test_alo_fake_estoura_tempo(self):
         mud = [("voz_config", 0, {"alo_fake_liberado": True, "alo_fake": True, "alo_fake_max_s": 4})]
-        orq = self.montar([item()], provedor=Simulador(max_simultaneas=0), mud=mud)
+        sim = Simulador(max_simultaneas=1)
+        orq = self.montar([item()], provedor=sim, mud=mud)
         orq.tick()
         canal = self.originados()[0][2]
+        sim.max_simultaneas = 0
         self.atender(canal)
         self.rel.andar(4)
         orq.tick()
+        self.assertNotIn(canal, self.ari.desligados)            # mensagem antes de desligar
+        self.assertEqual(self.ari.de("tocar")[-1][2], "sound:motorcx/sem-robo")
+        self.rel.andar(15)                                      # sem o PlaybackFinished: desliga pelo prazo
+        orq.tick()
         self.assertIn(canal, self.ari.desligados)
         self.cair(canal)
-        self.assertEqual(self.eventos[0].desfecho, "abandonada")
+        self.assertEqual(self.eventos[0].desfecho, "abandono_sem_robo")
 
     def test_freio_de_abandono(self):
         n = AMOSTRA_MIN_ABANDONO
@@ -447,7 +477,7 @@ class TestAloFakeEAbandono(Base):
         mud = [("voz_config", 0, {"limite_simultaneas": 10, "pico_multiplo": 1, "abandono_max_pct": 3,
                                   "freio_ritmo_pct": 50}),
                ("voz_troncos", 0, {"canais": 100, "cps": 100})]
-        orq = self.montar(itens, provedor=Simulador(max_simultaneas=0), mud=mud)
+        orq = self.montar(itens, provedor=SimuladorQueFalha(), mud=mud)
         emp = orq.agendador.empresas[1]
         feitas = 0
         while feitas < n:
@@ -470,6 +500,9 @@ class TestConcorrencia(Base):
         # limite 4, pico ×2 = 8; troncos da empresa 1 têm 5 + 3 canais = 8
         orq = self.montar(self._itens(12), mud=[("voz_troncos", 0, {"cps": 100}), ("voz_troncos", 1, {"cps": 100})])
         self.assertEqual(orq.tick(), 8)
+        self.assertEqual([c.no_pico for c in orq.chamadas.values()], [False] * 8)   # tocando não é pico
+        for c in list(orq.chamadas.values()):
+            self.atender(c.canal)                              # o pico é decidido quando a conversa começa
         pico = [c.no_pico for c in orq.chamadas.values()]
         self.assertEqual(sorted(pico), [False] * 4 + [True] * 4)
         self.assertEqual(orq.agendador.em_voo_tronco, {10: 5, 11: 3})
@@ -507,6 +540,197 @@ class TestConcorrencia(Base):
         for c in orq.chamadas.values():
             por_emp[c.empresa_id] = por_emp.get(c.empresa_id, 0) + 1
         self.assertEqual(por_emp, {1: 2, 2: 2})
+
+
+class TestRobos(Base):
+    """Conversas (robôs) separadas das linhas: reserva antes de originar, devolução no AMD e no fim, capacidade do
+    provedor na VM, e as travas de linha (canais e CPS) iguais."""
+
+    def _itens(self, n):
+        return [item(f"C{i}", f"119888{i:05d}") for i in range(n)]
+
+    def _mud(self, limite, **cfg):
+        return [("voz_config", 0, {"limite_simultaneas": limite, "pico_multiplo": 1, **cfg}),
+                ("voz_troncos", 0, {"cps": 100}), ("voz_troncos", 1, {"cps": 100})]
+
+    def test_reserva_antes_de_originar_e_contagem_separada(self):
+        orq = self.montar(self._itens(6), mud=self._mud(2))
+        emp = orq.agendador.empresas[1]
+        self.assertEqual(orq.tick(), 2)
+        self.assertEqual((emp.linhas, emp.reservas, emp.conversas), (2, 2, 0))
+        self.assertTrue(all(c.reservada for c in orq.chamadas.values()))
+        self.assertEqual(orq.reservas_prov, {"simulador": 2})
+        a, b = list(orq.chamadas.values())
+        self.atender(a.canal)                                   # pessoa: a reserva vira conversa
+        self.assertEqual((emp.linhas, emp.reservas, emp.conversas), (2, 1, 1))
+        self.assertEqual(orq.reservas_prov, {"simulador": 1})
+        self.assertEqual(len(self.sim.sessoes), 1)
+        self.atender(b.canal, amd="MACHINE", causa="LONGGREETING")   # máquina: o robô volta na hora
+        self.assertEqual((emp.linhas, emp.reservas, emp.conversas), (2, 0, 1))
+        self.assertEqual(orq.reservas_prov, {"simulador": 0})
+        self.assertEqual(orq.tick(), 1)                         # a linha da máquina ainda está no ar, mas o robô não
+        self.assertEqual((emp.linhas, emp.reservas, emp.conversas), (3, 1, 1))
+        self.cair(b.canal)
+        self.assertEqual((emp.linhas, emp.reservas, emp.conversas), (2, 1, 1))
+        self.cair(a.canal)
+        self.assertEqual((emp.linhas, emp.reservas, emp.conversas), (1, 1, 0))
+
+    def test_toque_longo_nao_vira_conversa_nem_pico(self):
+        orq = self.montar(self._itens(4), mud=self._mud(2))
+        orq.tick()
+        self.rel.andar(39)
+        c = next(iter(orq.chamadas.values()))
+        self.cair(c.canal, 19)                                  # não atendeu: reserva volta, sem minuto de pico
+        emp = orq.agendador.empresas[1]
+        self.assertEqual((emp.linhas, emp.reservas, emp.conversas), (1, 1, 0))
+        self.assertFalse(self.eventos[0].no_pico)
+
+    def test_provedor_cheio_nao_origina(self):
+        sim = Simulador(max_simultaneas=1)
+        orq = self.montar(self._itens(5), mud=self._mud(10), provedor=sim)
+        self.assertEqual(orq.tick(), 1)                         # só uma sessão do provedor na VM
+        self.assertGreater(orq.contagem.get("sem_robo_provedor", 0), 0)
+        c = next(iter(orq.chamadas.values()))
+        self.atender(c.canal)
+        self.assertEqual(orq.reservas_prov, {"simulador": 0})
+        self.assertEqual(orq.tick(), 0)                         # a sessão está em uso
+        self.cair(c.canal)
+        self.assertEqual(orq.tick(), 1)
+
+    def test_capacidade_do_provedor_e_compartilhada_entre_empresas(self):
+        sim = Simulador(max_simultaneas=3)
+        orq = self.montar(self._itens(10), mud=self._mud(10), provedor=sim)
+        orq.agendador.registrar_empresa(self.dados.config(2), self.dados.troncos_da(2))
+        orq.adicionar_lote(Lote(2, [item(f"E{i}", f"119777{i:05d}") for i in range(10)]))
+        orq.tick()
+        self.assertEqual(len(orq.chamadas), 3)
+        self.assertEqual(orq.reservas_prov, {"simulador": 3})
+
+    def test_falha_do_provedor_ao_abrir_a_sessao(self):
+        orq = self.montar([item()], provedor=SimuladorQueFalha())
+        orq.tick()
+        canal = self.originados()[0][2]
+        self.atender(canal)
+        emp = orq.agendador.empresas[1]
+        self.assertEqual((emp.reservas, emp.conversas), (0, 0))
+        self.assertNotIn(canal, self.ari.desligados)
+        self.assertEqual(self.ari.de("tocar")[0][2], "sound:motorcx/sem-robo")
+        self.assertEqual(self.ari.de("criar_ponte"), [])
+        self.assertTrue(any("não abriu a sessão" in a for a in orq.alertas))
+        self.rel.andar(15)
+        orq.tick()
+        self.assertIn(canal, self.ari.desligados)
+        self.cair(canal)
+        self.assertEqual(self.eventos[0].desfecho, "abandono_sem_robo")
+
+    def test_mensagem_sem_como_tocar_desliga(self):
+        from voz.orquestrador.ari import ErroARI
+        sim = Simulador(max_simultaneas=1)
+        orq = self.montar([item()], provedor=sim)
+        orq.tick()
+        canal = self.originados()[0][2]
+        sim.max_simultaneas = 0
+
+        def falha(*a, **k):
+            raise ErroARI("canal sumiu")
+        self.ari.tocar = falha
+        self.atender(canal)
+        self.assertIn(canal, self.ari.desligados)
+
+    def test_pessoa_que_desliga_durante_a_mensagem(self):
+        sim = Simulador(max_simultaneas=1)
+        orq = self.montar([item()], provedor=sim)
+        orq.tick()
+        canal = self.originados()[0][2]
+        sim.max_simultaneas = 0
+        self.atender(canal)
+        self.cair(canal)
+        self.assertEqual(self.eventos[0].desfecho, "abandono_sem_robo")
+        self.assertEqual(orq.chamadas, {})
+        emp = orq.agendador.empresas[1]
+        self.assertEqual((emp.linhas, emp.reservas, emp.conversas), (0, 0, 0))
+
+    def test_humano_atendeu_na_ponte_libera_o_robo(self):
+        orq = self.montar([item("C8", "11988887778")])          # final 8 = transferir
+        orq.tick()
+        canal = self.originados()[0][2]
+        cid = canal.rsplit("-", 1)[0]
+        self.atender(canal)
+        emp = orq.agendador.empresas[1]
+        self.assertEqual(emp.conversas, 1)
+        orq.tick()
+        self.rel.andar(31)
+        orq.tick()
+        self.ev("StasisStart", f"{cid}-h", args=["humano", cid])
+        self.assertEqual((emp.linhas, emp.conversas), (1, 0))   # a linha segue com o humano; o robô está livre
+
+    def test_reduzir_o_limite_nao_derruba_quem_ja_reservou(self):
+        orq = self.montar(self._itens(4), mud=self._mud(2))
+        orq.tick()
+        from dataclasses import replace
+        cfg = replace(self.dados.config(1), limite_simultaneas=0)   # limite novo (ou freio): só para conversas novas
+        orq.agendador.atualizar_empresa(cfg, self.dados.troncos_da(1))
+        self.assertEqual(orq.tick(), 0)
+        for c in list(orq.chamadas.values()):
+            self.atender(c.canal)
+        self.assertEqual(len(self.sim.sessoes), 2)              # quem atendeu tem robô
+        self.assertEqual(self.ari.de("tocar"), [])
+
+    def test_travas_de_linha_iguais(self):
+        # canais do tronco (5 + 3) e CPS continuam limitando as linhas, mesmo com robôs sobrando
+        orq = self.montar(self._itens(20), mud=self._mud(50))
+        self.assertEqual(orq.tick(), 8)
+        self.assertEqual(orq.agendador.em_voo_tronco, {10: 5, 11: 3})
+        orq2 = self.montar(self._itens(20), mud=[("voz_config", 0, {"limite_simultaneas": 50}),
+                                                 ("voz_troncos", 0, {"cps": 1}), ("voz_troncos", 1, {"cps": 1})])
+        self.assertEqual(orq2.tick(), 2)
+
+
+class TestAgendadorRobos(unittest.TestCase):
+    def _ag(self, limite=2, canais=10, contratado=100):
+        d = dados_exemplo()
+        d["voz_config"][0].update({"limite_simultaneas": limite, "pico_multiplo": 1})
+        dados = B.carregar(d)
+        ag = Agendador(contratado=contratado)
+        ag.registrar_empresa(dados.config(1), dados.troncos_da(1))
+        ag.empresas[1].canais = canais
+        return ag
+
+    def test_razao_padrao_e_um_para_um(self):
+        ag = self._ag()
+        e = ag.empresas[1]
+        self.assertEqual(e.razao, 1.0)
+        self.assertTrue(ag.ocupar(1, 10))
+        self.assertTrue(ag.ocupar(1, 10))
+        self.assertFalse(ag.vaga_empresa(1))                    # 2 robôs reservados = limite
+        self.assertEqual(ag.conversar(1, reservada=True), False)
+        self.assertEqual((e.linhas, e.reservas, e.conversas), (2, 1, 1))
+
+    def test_sem_reserva_nunca_toma_o_robo_de_quem_reservou(self):
+        ag = self._ag()
+        ag.ocupar(1, 10)
+        ag.ocupar(1, 10)
+        self.assertIsNone(ag.conversar(1, reservada=False))
+
+    def test_teto_global_conta_conversas(self):
+        ag = self._ag(limite=5, contratado=2)
+        ag.ocupar(1, 10)
+        ag.conversar(1, reservada=True)
+        ag.ocupar(1, 10)
+        self.assertFalse(ag.vaga_empresa(1))
+        ag.fim_conversa(1)
+        self.assertTrue(ag.vaga_empresa(1))
+
+    def test_razao_maior_preparada_para_o_power(self):
+        ag = self._ag(limite=2)
+        e = ag.empresas[1]
+        e.razao = 2.0                                           # o PR do Power lê a razão da carteira
+        n = 0
+        while ag.vaga_empresa(1) and n < 10:
+            ag.ocupar(1, 10)
+            n += 1
+        self.assertEqual(n, 4)                                  # 2 linhas por robô livre
+        self.assertEqual(e.reservas, 2)                         # só 2 saem com reserva
 
 
 class TestGuarda(Base):

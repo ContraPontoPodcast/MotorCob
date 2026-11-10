@@ -1,15 +1,20 @@
 """Orquestrador ARI: do lote do dia ao evento de cada tentativa.
 
 Fluxo de uma tentativa (id_chamada = uuid hex; canais <id>-c<n> cliente, <id>-p provedor, <id>-h humano):
-  1. tick: a guarda libera um item, o agendador tem vaga (empresa, global, canal e CPS do tronco) e há rota para
-     o tipo do número -> originate PJSIP/<tech prefix><DDD+número>@<tronco> no app Stasis.
+  1. tick: a guarda libera um item, há robô para reservar (conversas da empresa e global no agendador e sessão livre
+     no provedor da empresa nesta VM), canal e CPS do tronco, e rota para o tipo do número -> o robô fica reservado
+     para a linha e sai o originate PJSIP/<tech prefix><DDD+número>@<tronco> no app Stasis. Sem robô para reservar,
+     o número espera na lista (nada é discado para quem não teria com quem falar).
   2. falha técnica antes de atender (pela_rede = falha_operadora/bloqueio_originacao) -> próxima rota (failover).
      Sem crédito (falha da operadora com SIP 402) ou bloqueio de originação pausam a rota (o tronco) na hora: ela não
      disca até a equipe retomar (SQL 65 › voz_troncos_pausas; a pausa vai ao banco pelo Plantão) e a equipe é avisada.
   3. atendeu (StasisStart 'saida') -> dialplan motorcx-atendeu: AMD (ou Khomp) e MixMonitor só em pessoa ->
      volta ao Stasis ('amd').
-  4. pessoa -> provedor de voz (ponte SIP, mídia externa ou interno); sem agente livre: Alô fake (se ligado) por até
-     alo_fake_max_s e depois abandono (transferencia = sem_operador).
+  4. pessoa -> a reserva vira conversa e vai ao provedor de voz (ponte SIP, mídia externa ou interno). Máquina ->
+     a reserva volta. Se mesmo com a reserva o provedor não abrir a sessão (corrida com a capacidade da VM ou falha do
+     provedor): Alô fake (se ligado) por até alo_fake_max_s e depois uma mensagem curta e neutra pré-gravada (sem
+     dívida nem credor: a identidade vem antes da dívida) e o fim da ligação, com desfecho abandono_sem_robo
+     (transferencia = sem_robo), que conta no abandono. Nunca se desliga mudo na cara de quem atendeu.
   5. o provedor pede humano -> ponte (padrão, decisão do dono 08/11/2026: o MotorCX segura a ligação e chama a fila
      do cliente; a IA só sai quando o humano atende) ou REFER (opção avançada; dialplan motorcx-transferir). Ninguém
      atendeu, a fila recusou ou não há destino: a pessoa volta para o agente, que pede desculpas e agenda um retorno
@@ -50,6 +55,12 @@ TECNICOS_FAILOVER = ("falha_operadora", "bloqueio_originacao")
 SEM_OPERADOR_Q850 = frozenset({17, 18, 19, 21, 31})
 SEM_OPERADOR_SIP = frozenset({408, 480, 486, 600, 603})
 AUDIO_ALO_PADRAO = "sound:motorcx/alo"
+# mensagem de quem atendeu sem robô (como gerar: infra/asterisk/README.md, seção 4): curta, neutra, sem dívida nem credor
+AUDIO_SEM_ROBO_PADRAO = "sound:motorcx/sem-robo"
+MENSAGEM_SEM_ROBO_MAX_S = 15          # sem o PlaybackFinished (áudio faltando, evento perdido), desliga depois disto
+SUFIXO_SEM_ROBO = "semrobo"
+# desfechos que contam no freio de abandono (e na taxa de abandono da tela)
+ABANDONOS = ("abandonada", "abandono_sem_robo")
 
 
 @dataclass
@@ -65,7 +76,7 @@ class Chamada:
     t_origem: datetime | None = None
     t_atendeu: datetime | None = None
     no_pico: bool = False
-    estado: str = "originando"     # originando | atendida | conversa | transferindo | humano | encerrando
+    estado: str = "originando"     # originando | atendida | conversa | transferindo | humano | mensagem | encerrando
     causa_q850: int | None = None
     causa_sip: int | None = None
     amd: str | None = None
@@ -91,6 +102,10 @@ class Chamada:
     conexao: str | None = None                  # tipo da conexão com o agente (sip | midia_externa | interno)
     agente_solto: bool = False                  # o agente já saiu da ligação (REFER ou humano atendeu)
     passagem: dict = field(default_factory=dict)   # passada, situação de origem, onda e volta (Lote.iniciar)
+    reservada: bool = False                     # há um robô reservado para esta linha (agendador)
+    prov_reserva: str | None = None             # provedor em que a sessão está reservada (Orquestrador.reservas_prov)
+    conversando: bool = False                   # a linha ocupa uma conversa da empresa (o agente está nela)
+    desligar_ate: datetime | None = None        # tocando a mensagem de sem robô: desliga no fim (ou neste prazo)
 
     @property
     def candidata(self):
@@ -135,7 +150,7 @@ class Orquestrador:
                  detector: A.DetectorMaquina | None = None, fila_envio: G.FilaEnvio | None = None,
                  ao_registrar: Callable[[EventoChamada], None] | None = None, toque_max_s: int = 40,
                  toque_min_s: int = 15, transferencia_toque_s: int = 30, failover_espera_s: int = 5,
-                 audio_alo: str = AUDIO_ALO_PADRAO,
+                 audio_alo: str = AUDIO_ALO_PADRAO, audio_sem_robo: str = AUDIO_SEM_ROBO_PADRAO,
                  ao_fluxo: Callable[[int, str, str, dict], None] | None = None,
                  transcricoes: TIA.GravadorTranscricaoIA | None = None,
                  ao_gravacao: Callable[[dict], None] | None = None):
@@ -145,7 +160,8 @@ class Orquestrador:
         self.fila_envio, self.ao_registrar = fila_envio, ao_registrar
         self.toque_max_s, self.toque_min_s = toque_max_s, toque_min_s
         self.transferencia_toque_s, self.failover_espera_s = transferencia_toque_s, failover_espera_s
-        self.audio_alo = audio_alo
+        self.audio_alo, self.audio_sem_robo = audio_alo, audio_sem_robo
+        self.reservas_prov: dict[str, int] = {}  # provedor -> sessões reservadas para linhas que ainda não conversam
         self.ao_fluxo = ao_fluxo                # passos e chamadas de conector do fluxo (SQL 58) → RegistroBanco
         # Speech Analytics (SQL 63): transcrição mascarada da conversa com a IA (só de ligação gravada) e a gravação da
         # IA em voz_gravacoes depois que subiu para o bucket
@@ -196,6 +212,9 @@ class Orquestrador:
                 self._tentar_agente(c, agora)
             if c.failover_ate is not None:
                 self._tentar_failover(c, agora)
+            if c.desligar_ate is not None and agora >= c.desligar_ate:
+                c.desligar_ate = None
+                self._desligar_cliente(c)
         for cid in [k for k, v in self._transcrever.items() if agora >= v["ate"]]:
             self._transcrever.pop(cid, None)        # a transcrição não veio (provedor sem texto): nomes saem da memória
         for cid, (c, prazo) in list(self.aguardando.items()):
@@ -211,7 +230,7 @@ class Orquestrador:
         while progresso:                       # rodízio: uma por empresa por rodada (partilha justa)
             progresso = False
             for lote in self.lotes.values():
-                if not self.agendador.vaga_empresa(lote.empresa_id):
+                if not self.agendador.vaga_empresa(lote.empresa_id) or not self._vaga_provedor(lote.empresa_id):
                     continue
                 prox = lote.proximo(agora)
                 if prox is None:
@@ -250,7 +269,7 @@ class Orquestrador:
         else:
             self._conta("troncos_cheios")
             return False
-        c.no_pico = self.agendador.ocupar(lote.empresa_id, c.candidata.tronco.id)
+        self._reservar(c)
         c.passagem = lote.iniciar(idx, agora)
         lote.em_voo.add(idx)
         self.chamadas[c.id] = c
@@ -258,6 +277,54 @@ class Orquestrador:
             self._desistir(c, agora)
             return False
         return True
+
+    # ---------------------------------------------------------------- robôs (conversas) e reservas
+    def _livres_provedor(self, prov: ProvedorVoz) -> int:
+        """Sessões do provedor nesta VM que ninguém reservou (capacidade compartilhada entre as empresas)."""
+        n = prov.livres()
+        if n is None:                          # provedor que não sabe a capacidade: só o disponivel()
+            return 1 if prov.disponivel() else 0
+        return n - self.reservas_prov.get(prov.codigo, 0)
+
+    def _vaga_provedor(self, empresa_id: int) -> bool:
+        """Há sessão do provedor da empresa para reservar? (com a razão 1,0, toda linha sai com a sua)"""
+        prov = self._provedor(empresa_id)
+        if prov is None:
+            return False
+        if self._livres_provedor(prov) > 0:
+            return True
+        self._conta("sem_robo_provedor")       # a lista espera: ninguém é discado sem robô para falar
+        return False
+
+    def _reservar(self, c: Chamada) -> None:
+        """Antes de originar: o robô da empresa (agendador) e a sessão do provedor ficam guardados para esta linha."""
+        c.reservada = self.agendador.ocupar(c.empresa_id, c.candidata.tronco.id)
+        prov = self._provedor(c.empresa_id) if c.reservada else None
+        if prov is not None and self._livres_provedor(prov) > 0:
+            c.prov_reserva = prov.codigo
+            self.reservas_prov[prov.codigo] = self.reservas_prov.get(prov.codigo, 0) + 1
+
+    def _soltar_reserva(self, c: Chamada) -> None:
+        """A linha não vai (ou não vai mais) conversar com a reserva: robô e sessão do provedor voltam."""
+        if c.reservada:
+            c.reservada = False
+            self.agendador.devolver_reserva(c.empresa_id)
+        self._soltar_reserva_provedor(c)
+
+    def _soltar_reserva_provedor(self, c: Chamada) -> None:
+        if c.prov_reserva is not None:
+            self.reservas_prov[c.prov_reserva] = max(0, self.reservas_prov.get(c.prov_reserva, 0) - 1)
+            c.prov_reserva = None
+
+    def _vaga_robo(self, c: Chamada, prov: ProvedorVoz | None) -> bool:
+        """A pessoa atendeu: há robô para ela? Com a reserva, sim, salvo se o provedor não tem sessão de verdade
+        (corrida com a capacidade da VM ou falha). Sem reserva (razão > 1, ou provedor trocado no meio), só com vaga
+        livre que ninguém reservou."""
+        if prov is None or not prov.disponivel():
+            return False
+        empresa_ok = c.reservada or self.agendador.livres_conversa(c.empresa_id) > 0
+        prov_ok = c.prov_reserva == prov.codigo or self._livres_provedor(prov) > 0
+        return empresa_ok and prov_ok
 
     def _grava(self, empresa_id: int) -> bool:
         """Grava se a empresa quer E tem bucket próprio (um por empresa); sem bucket, alerta e não grava."""
@@ -304,11 +371,15 @@ class Orquestrador:
         lote = self.lotes[c.lote_chave]
         lote.em_voo.discard(c.idx)
         c.item.nao_antes_de = agora + timedelta(minutes=1)
+        self._soltar_reserva(c)
         self.agendador.liberar(c.empresa_id, c.candidata.tronco.id)
 
     # ---------------------------------------------------------------- eventos do ARI
     def ao_evento(self, ev: dict) -> None:
         tipo = ev.get("type")
+        if tipo == "PlaybackFinished":
+            self._fim_playback(ev)
+            return
         canal = (ev.get("channel") or {}).get("id") or ""
         c = self.chamadas.get(_id_de(canal)) if canal else None
         if c is None:
@@ -362,12 +433,13 @@ class Orquestrador:
         c.amd, c.veredito = v.amd or None, v.tipo
         if v.tipo != A.PESSOA:
             self._conta(f"amd_{v.tipo}")
+            self._soltar_reserva(c)             # máquina/silêncio: o robô reservado volta na hora
             self._desligar_cliente(c)
             return
         c.gravando = self._grava(c.empresa_id)
         c.bucket = self.dados.config(c.empresa_id).bucket_gravacoes
         prov = self._provedor(c.empresa_id)
-        if prov is not None and prov.disponivel():
+        if self._vaga_robo(c, prov):
             self._conectar(c, prov, agora)
             return
         cfg = self.dados.config(c.empresa_id)
@@ -376,16 +448,47 @@ class Orquestrador:
             c.espera_agente_ate = agora + timedelta(seconds=cfg.alo_fake_max_s)
             self._conta("alo_fake")
             return
-        self._abandonar(c, "sem_operador")
+        self._sem_robo(c, agora)
 
     def _tentar_agente(self, c: Chamada, agora: datetime) -> None:
         prov = self._provedor(c.empresa_id)
-        if prov is not None and prov.disponivel():
+        if self._vaga_robo(c, prov):
             c.espera_agente_ate = None
             self._conectar(c, prov, agora)
         elif agora >= c.espera_agente_ate:
             c.espera_agente_ate = None
-            self._abandonar(c, "sem_operador")
+            self._sem_robo(c, agora)
+
+    def _sem_robo(self, c: Chamada, agora: datetime) -> None:
+        """A pessoa atendeu e não há robô (o provedor não abriu a sessão mesmo com a reserva). Nunca desliga mudo: toca a
+        mensagem curta e neutra (sem dívida nem credor) e desliga no fim dela. Desfecho abandono_sem_robo (conta no
+        abandono: freio do lote, Anatel e a meta do preditivo). A reserva volta: ninguém mais vai usá-la nesta linha."""
+        c.transferencia = "sem_robo"
+        c.destino = c.destino or "ia"
+        c.t_transferencia = c.t_transferencia or agora
+        self._soltar_reserva(c)
+        self._conta("abandono_sem_robo")
+        prov = self.dados.config(c.empresa_id).provedor
+        self._alerta(f"empresa {c.empresa_id}: pessoa atendeu sem robô livre (provedor {prov} sem sessão mesmo com a "
+                     "reserva): ouviu a mensagem de abandono e a ligação foi encerrada")
+        c.estado = "mensagem"
+        try:
+            self.ari.tocar(c.canal, self.audio_sem_robo, f"{c.id}-{SUFIXO_SEM_ROBO}")
+        except ErroARI as ex:                  # sem como tocar: encerra (é o único caso em que não há mensagem)
+            log.warning("mensagem de sem robô não tocou (%s)", ex)
+            self._desligar_cliente(c)
+            return
+        c.desligar_ate = agora + timedelta(seconds=MENSAGEM_SEM_ROBO_MAX_S)
+
+    def _fim_playback(self, ev: dict) -> None:
+        """A mensagem de sem robô acabou de tocar (ou falhou): desliga."""
+        pid = str((ev.get("playback") or {}).get("id") or "")
+        if not pid.endswith(f"-{SUFIXO_SEM_ROBO}"):
+            return
+        c = self.chamadas.get(_id_de(pid))
+        if c is not None and c.estado == "mensagem":
+            c.desligar_ate = None
+            self._desligar_cliente(c)
 
     def _abandonar(self, c: Chamada, motivo: str) -> None:
         """Sem destino (agente ou humano): derruba e registra como abandono (V24)."""
@@ -412,11 +515,29 @@ class Orquestrador:
                               variaveis=self._variaveis_fala(c),
                               credor_id=c.lote_chave[1] if c.lote_chave else None,
                               aviso_abertura=self._aviso_abertura(c))
+        no_pico = self.agendador.conversar(c.empresa_id, c.reservada)
+        if no_pico is None:                     # sem reserva e sem robô livre (não acontece com a razão 1,0)
+            self._sem_robo(c, agora)
+            return
+        c.reservada, c.conversando, c.no_pico = False, True, no_pico
+        self._soltar_reserva_provedor(c)        # a sessão aberta passa a contar no provedor
         if c.gravando and self.transcricoes is not None:
             self._transcrever[c.id] = {"empresa_id": c.empresa_id, "provedor": prov.codigo,
                                        "nomes": TIA.nomes_da_chamada(c.item.variaveis),
                                        "ate": agora + timedelta(hours=2)}
-        con = prov.iniciar(ctx, self.evento_provedor)
+        try:
+            con = prov.iniciar(ctx, self.evento_provedor)
+        except Exception as ex:   # noqa: BLE001 — provedor com erro ao abrir a sessão: mensagem, nunca hangup mudo
+            self._alerta(f"provedor {prov.codigo}: não abriu a sessão ({ex.__class__.__name__})")
+            self._transcrever.pop(c.id, None)
+            try:
+                prov.encerrar(c.id)
+            except Exception:     # noqa: BLE001
+                pass
+            c.conversando = False
+            self.agendador.fim_conversa(c.empresa_id)
+            self._sem_robo(c, agora)
+            return
         c.provedor, c.estado, c.destino, c.conexao = prov.codigo, "conversa", "ia", con.tipo
         c.ponte = f"{c.id}-b"
         self.ari.criar_ponte(c.ponte)
@@ -584,6 +705,9 @@ class Orquestrador:
         self._sem_humano(c, "sem_operador" if (q in SEM_OPERADOR_Q850 or s in SEM_OPERADOR_SIP) else "falhou")
 
     def _soltar_provedor(self, c: Chamada) -> None:
+        if c.conversando:                       # o robô fica livre para a próxima conversa
+            c.conversando = False
+            self.agendador.fim_conversa(c.empresa_id)
         c.agente_solto = True
         prov = self.provedores.get(c.provedor or "")
         if prov is not None:
@@ -661,6 +785,8 @@ class Orquestrador:
         if c.ponte:
             self.ari.destruir_ponte(c.ponte)
         c.t_fim = agora
+        c.desligar_ate = c.espera_agente_ate = None
+        self._soltar_reserva(c)                 # não atendeu, falhou ou desligou no AMD: o robô reservado volta
         self.agendador.liberar(c.empresa_id, c.candidata.tronco.id)
         if espera and c.veredito == A.PESSOA and c.resultado_ia is None:
             self.aguardando[c.id] = (c, agora + timedelta(seconds=espera))
@@ -720,7 +846,7 @@ class Orquestrador:
                 self._alerta(al)
             lote.alertas.clear()
         if c.veredito == A.PESSOA:
-            mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho == "abandonada")
+            mudou = self.agendador.resultado_pessoa(c.empresa_id, ev.desfecho in ABANDONOS)
             if mudou == "freou":
                 self._alerta(f"empresa {c.empresa_id}: abandono acima de "
                              f"{self.dados.config(c.empresa_id).abandono_max_pct:g}% — ritmo reduzido")

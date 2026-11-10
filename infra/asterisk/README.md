@@ -194,6 +194,37 @@ subirem para o bucket da empresa.
   preencha `tts_voz` (id da voz pt-BR) e crie os segredos `motorcx-voz-deepgram`, `motorcx-voz-llm` e
   `motorcx-voz-tts` antes de pôr uma empresa com `provedor = 'montagem_motorcx'`.
 
+**Robôs (conversas) e a mensagem de quem atende sem robô (SQL 91):** o limite de cada empresa
+(`voz_divisao_concorrencia.limite`, × pico se ligado) e o teto global contam **conversas com a IA**, não linhas tocando.
+O orquestrador reserva o robô **antes de discar**: a vaga da empresa no agendador e uma sessão livre do provedor da
+empresa nesta VM (Montagem `max_sessoes`, ElevenLabs/Simulador `max_simultaneas`). Sem robô para reservar, o número
+espera na lista e não é discado. A reserva vira conversa quando o AMD dá pessoa e volta na hora quando dá máquina ou
+a linha acaba sem conversa. As linhas continuam limitadas pelos canais e pelo CPS de cada tronco. A discagem segue
+1:1 (razão 1,0); o Power/Preditivo, que disca mais linhas que robôs, é outro PR.
+
+Se mesmo com a reserva o provedor não abrir a sessão (corrida com a capacidade da VM ou falha do provedor), a pessoa
+**nunca** é desligada muda: ouve o áudio `sound:motorcx/sem-robo` e a ligação acaba no fim dele (ou em 15 s, se o
+Asterisk não avisar o fim). O desfecho é `abandono_sem_robo` (`transferencia = sem_robo`), contado no abandono (freio
+do lote, chamadas curtas da Anatel). Com o Alô fake ligado, ele toca antes e a mensagem só vem se a IA não ficar livre
+em `alo_fake_max_s`. Contadores do plantão: `sem_robo_provedor` (linha não discada por falta de sessão no provedor) e
+`abandono_sem_robo`.
+
+O áudio não vem na imagem por padrão (como o `sound:motorcx/alo` do Alô fake). Para instalar:
+1. Texto (curto, neutro, **sem** dívida, credor nem nome da pessoa: a identidade vem antes da dívida), por exemplo:
+   "Olá! No momento não conseguimos continuar esta ligação. Vamos tentar de novo mais tarde. Obrigado."
+2. Gere a fala com a mesma voz pt-BR do agente, no TTS da Montagem ou da ElevenLabs (pelo painel do fornecedor; a
+   chave nunca vai para o repositório nem para a VM por este caminho), e baixe em WAV ou MP3.
+3. Converta para o formato do Asterisk (8 kHz, mono, 16 bits):
+   `ffmpeg -i fala.mp3 -ar 8000 -ac 1 -sample_fmt s16 infra/asterisk/sons/sem-robo.wav`
+   (para o Alô fake, o mesmo com `alo.wav`).
+4. Faça o commit em `infra/asterisk/sons/`: o `Dockerfile` copia a pasta para `/var/lib/asterisk/sounds/motorcx/` e a
+   imagem nova chega às VMs às 05:35. Para testar antes numa VM:
+   `docker cp sem-robo.wav motorcx-asterisk:/var/lib/asterisk/sounds/motorcx/` (não precisa reiniciar).
+
+Sem o arquivo, o Asterisk avisa que o áudio falhou e a ligação acaba na hora, com o mesmo desfecho
+`abandono_sem_robo` (é o único caso sem mensagem). Confira com `asterisk -rx "core show file formats"` e, numa
+ligação de teste, `journalctl -u motorcx-voz-orquestrador | grep abandono_sem_robo`.
+
 **Geração do fluxo por texto (SQL 58/66):** o pedido "Descrever e o MotorCX monta" do site fica na fila
 (`voz_fluxo_pedidos`) até o serviço `motorcx-voz-gerar-fluxo` de uma VM pegar. Sem ele ligado, o pedido fica
 "pendente" para sempre. Para ligar (as duas VMs podem rodar: a fila usa `for update skip locked`):

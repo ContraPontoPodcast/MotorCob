@@ -593,6 +593,9 @@ class Montagem(ProvedorVoz):
     def disponivel(self) -> bool:
         return len(self.sessoes) < self.cfg.max_sessoes and bool(self._livres)
 
+    def livres(self) -> int:
+        return max(0, min(self.cfg.max_sessoes - len(self.sessoes), len(self._livres)))
+
     def limites(self) -> dict:
         return {"por_agente": self.cfg.max_sessoes}
 
