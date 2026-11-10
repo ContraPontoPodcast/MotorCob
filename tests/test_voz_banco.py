@@ -14,6 +14,17 @@ from motor import voz as V
 
 RAIZ = Path(__file__).resolve().parent.parent
 MIGRACAO = RAIZ / "supabase" / "migrations" / "20261223000001_voz_base.sql"
+SQL91 = RAIZ / "supabase" / "migrations" / "20270127000001_voz_abandono_sem_robo.sql"
+
+
+def _ultima(inicio: str) -> str:
+    """O texto da migração com a ÚLTIMA definição (o SQL 91 refaz desfechos_voz e o check da transferência)."""
+    achado = None
+    for arq in sorted((RAIZ / "supabase" / "migrations").glob("*.sql")):
+        t = arq.read_text(encoding="utf-8")
+        if inicio in t:
+            achado = t
+    return achado
 
 
 def _lista(sql: str, inicio: str) -> list[str]:
@@ -37,14 +48,18 @@ class TestVozBanco(unittest.TestCase):
         cls.sql = MIGRACAO.read_text(encoding="utf-8")
 
     def test_desfechos_iguais_ao_motor(self):
-        banco = _lista(self.sql, "create or replace function public.desfechos_voz()")
+        inicio = "create or replace function public.desfechos_voz()"
+        banco = _lista(_ultima(inicio), inicio)
         motor = [d.chave for d in V.DESFECHOS if not d.interno]
         self.assertEqual(banco, motor)
+        self.assertIn("abandono_sem_robo", banco)
 
     def test_transferencia_e_destino(self):
         self.assertIn("transferencia          text check (transferencia in ('atendida', 'sem_operador', 'falhou'))",
                       self.sql)
-        self.assertEqual(V.TRANSFERENCIAS, ("atendida", "sem_operador", "falhou"))
+        sql91 = SQL91.read_text(encoding="utf-8")
+        self.assertIn("check (transferencia in ('atendida', 'sem_operador', 'falhou', 'sem_robo')) not valid", sql91)
+        self.assertEqual(V.TRANSFERENCIAS, ("atendida", "sem_operador", "falhou", "sem_robo"))
         self.assertIn("destino                text check (destino in ('ia', 'ia_humano'))", self.sql)
         self.assertEqual(V.DESTINOS, ("ia", "ia_humano"))
 

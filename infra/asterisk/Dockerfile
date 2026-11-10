@@ -57,6 +57,8 @@ COPY voz/__init__.py voz/banco.py voz/segredos.py voz/gcp.py voz/tarifacao.py /o
 COPY voz/asterisk/ /opt/motorcx/voz/asterisk/
 COPY infra/asterisk/conf/ /etc/asterisk/
 COPY infra/asterisk/entrypoint.sh /usr/local/bin/motorcx-asterisk
+# áudios do orquestrador (sound:motorcx/sem-robo, sound:motorcx/alo): como gerar em infra/asterisk/README.md, seção 4
+COPY infra/asterisk/sons/ /var/lib/asterisk/sounds/motorcx/
 
 RUN chmod 755 /usr/local/bin/motorcx-asterisk \
  && mkdir -p /etc/asterisk/motorcx /var/spool/asterisk/motorcx /var/run/asterisk /var/log/asterisk /var/lib/asterisk \

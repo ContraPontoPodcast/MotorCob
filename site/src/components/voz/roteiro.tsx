@@ -284,9 +284,9 @@ export function RoteiroAgente() {
 											<input id="alo-max" type="number" min={1} max={15} value={aloMax} disabled={!podeEditar} onChange={e => setAloMax(e.target.value)} className={`${campoCls} mt-1 w-24`} style={campoStyle} />
 										</div>
 										{podeEditar && Number(aloMax) !== config.alo_fake_max_s && <Botao secundario disabled={!(Number(aloMax) >= 1 && Number(aloMax) <= 15)} onClick={() => void salvarConfig({ alo_fake_max_s: Number(aloMax) }, 'Tempo do Alô fake salvo.')}>Salvar tempo</Botao>}
-										<p className="w-full text-[12px] text-[var(--base-texto-2)]">Se ninguém ficar livre em {config.alo_fake_max_s} s, a chamada cai e conta como abandono.</p>
+										<p className="w-full text-[12px] text-[var(--base-texto-2)]">Se a IA não ficar livre em {config.alo_fake_max_s} s, a pessoa ouve uma mensagem curta e neutra, a ligação acaba e conta como abandono.</p>
 									</div>
-								) : <p className="mt-2 text-[12px] text-[var(--base-texto-2)]">Desligado: sem operador livre na transferência, a chamada cai na hora e conta como abandono.</p>}
+								) : <p className="mt-2 text-[12px] text-[var(--base-texto-2)]">Desligado: se a IA não puder atender quem atendeu (raro: cada número só é discado com um robô reservado), a pessoa ouve na hora uma mensagem curta e neutra, a ligação acaba e conta como abandono.</p>}
 							</>
 						) : (
 							<Trava titulo="Alô fake não liberado para a sua empresa." texto="É um recurso que a equipe MotorCX libera. Peça pelo Suporte." />

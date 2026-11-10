@@ -47,7 +47,7 @@ class EventoChamada:
     causa_q850: int | None = None
     dialstatus: str | None = None
     amd: str | None = None
-    transferencia: str | None = None  # atendida | sem_operador | falhou
+    transferencia: str | None = None  # atendida | sem_operador | falhou | sem_robo (atendeu sem robô livre)
     destino: str | None = None        # ia | ia_humano
     rota: str | None = None           # tronco/tech prefix (trava de lote por rota)
     identidade_confirmada: bool | None = None
