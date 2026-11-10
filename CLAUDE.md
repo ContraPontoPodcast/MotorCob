@@ -1029,6 +1029,23 @@ novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracter
 casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
 (`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
 
+**SQL 98 (Robôs contratados, PR 2): licenças na fatura.** `previa_fatura` (e por ela rascunhos, `fechar_fatura` e a
+estimativa) lê o item `voz_licenca_robo` de `voz_licencas` (dia exato), **nunca** do preço que o SQL 93 grava em
+`precos_empresa` (aquele vale o mês inteiro). Ciclo cheio = a licença do 1º dia do ciclo (`ciclo_de`; por robô: robôs ×
+preço; valor fechado: o total). Mudança no meio do ciclo (aumento "agora", troca de preço, contrato que começa no meio):
+linha `voz_licenca_robo_ajuste[_n]` = (total novo − anterior) × dias restantes ÷ dias do ciclo, contando o dia da
+mudança (preço menor "agora" = crédito); no mesmo dia vale a última gravação. Com licença no ciclo (robôs > 0): franquia
+do `voz_minuto_ia` = Σ robôs × `franquia_min_robo` pelos dias de cada vigência (linha `voz_minuto_ia_franquia`, sempre) e
+excedente = minutos de IA + de pico − franquia, pelo preço da empresa, sem o mínimo mensal; `voz_plataforma` zerada
+("incluída nos robôs"), `voz_transcricao` zerada se `transcricao_inclusa`, `voz_minuto_ia_pico` não se cobra;
+`gestao_tronco_sip`, `ia_speech_analytics` e telefonia (fora) iguais. Pico desligado para quem tem licença vigente hoje
+com robôs > 0: `divisao_concorrencia_voz()` (pico 1, teto = limite) e a view `voz_vm.config` (a VM lê o pico dali; o
+motor não muda; o `voz_config.pico_multiplo` guardado fica). Funções novas (só servidor): `licenca_voz_ciclo`,
+`segmentos_licenca_voz`, `linhas_fatura_licenca_voz`, `linhas_fatura_minuto_ia_voz`. **Recriadas inteiras:**
+`previa_fatura`, `divisao_concorrencia_voz` e `voz_vm.config` — se o SQL 56, 57, 69 ou 78 (ou as migrações antigas de
+fatura: `faturamento`, `precos_produtos`, `contratacao_ciclo`, `ciclo_pagamento`) rodarem de novo, rode o 98 depois.
+Teste: `supabase/testes/testar_licencas_fatura.py`.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
