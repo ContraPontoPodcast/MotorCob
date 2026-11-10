@@ -10,7 +10,7 @@
 import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_VOZ } from './rotas-voz';
 
 export type RotaPai = { to: string; rotulo: string };
-export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean };
+export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean; /** Query da rota ("?assunto=robos"). */ busca?: string };
 
 const INICIO: RotaPai = { to: '/inicio', rotulo: 'Início' };
 const INTEGRACOES: RotaPai = { to: '/empresa/integracoes', rotulo: 'Integrações' };
@@ -22,7 +22,9 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	// Extrato do cliente: aberto pela lista de Clientes, pela busca do topo e pelos alertas do Speech Analytics.
 	'/cliente': { to: '/clientes', rotulo: 'Clientes' },
 	// Suporte
-	'/suporte/novo': { to: '/suporte', rotulo: 'Meus chamados' },
+	// "Pedir mais robôs" (Agente Voz/CX › Discagem, ?assunto=robos) volta para a Discagem.
+	'/suporte/novo': ctx => (new URLSearchParams(ctx.busca ?? '').get('assunto') === 'robos'
+		? { to: '/voz/discagem', rotulo: 'Discagem' } : { to: '/suporte', rotulo: 'Meus chamados' }),
 	// Documentação da API: aberta em Empresa › Integrações (tokens e módulos).
 	'/docs/api': INTEGRACOES,
 	'/documentacao': INTEGRACOES,

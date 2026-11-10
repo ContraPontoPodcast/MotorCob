@@ -3,13 +3,14 @@
 // (SQL 101: limite real de cada empresa, licenças e motivo) e voz_contrato; grava o teto por
 // definir_concorrencia_contratada (equipe com gerenciar_troncos_voz). Baixar o teto abaixo dos robôs vendidos pede
 // confirmação (o banco avisa a equipe no sino). Só a equipe vê esta tela: o cliente nunca vê o teto global.
+// Em uso agora e pico de hoje por empresa: voz_robos_agora / voz_robos_dia (SQL 102, PR 7); sem leitura recente, "—".
 import { useEffect, useMemo, useState } from 'react';
 import { Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, friendlyError, dateTimeBR, type Row } from '@/lib/supabase';
 import { inteiro } from '@/lib/voz';
 import {
-	ROTULO_MOTIVO, TOM_MOTIVO, comLicenca, linhaDivisao, porQueEquipe, resumoRobos, type LinhaDivisao,
+	ROTULO_MOTIVO, TOM_MOTIVO, comLicenca, emUsoAgora, linhaDivisao, porQueEquipe, resumoRobos, type LinhaDivisao,
 } from '@/lib/robos-voz';
 import { Cadeado, Cartao, Dialogo, Pilula, Trava, btnLink, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 import { Aviso, Gaveta, Kpis, Tabela } from '@/components/ds';
@@ -33,6 +34,7 @@ export function RobosTeto({ divisao, contrato, nomeEmpresa, podeTroncos, loading
 	const r = useMemo(() => resumoRobos(linhas, teto), [linhas, teto]);
 	const semSql101 = divisao.length > 0 && !('motivo' in divisao[0]);
 	const [como, setComo] = useState(false);
+	const uso = useUsoRobos();
 
 	const ordenadas = useMemo(() => [...linhas].sort((a, b) =>
 		Number(comLicenca(b)) - Number(comLicenca(a)) || (b.licencas ?? 0) - (a.licencas ?? 0) || b.canais - a.canais
@@ -76,6 +78,7 @@ export function RobosTeto({ divisao, contrato, nomeEmpresa, podeTroncos, loading
 							{ id: 'lic', titulo: 'Licenças', num: true, celula: l => l.licencas == null ? '—' : inteiro(l.licencas) },
 							{ id: 'can', titulo: 'Canais', num: true, celula: l => inteiro(l.canais) },
 							{ id: 'lim', titulo: 'Limite real', num: true, celula: l => <b>{inteiro(l.limite)}</b> },
+							{ id: 'uso', titulo: 'Em uso · pico hoje', num: true, celula: l => textoUso(uso, l.empresa_id) },
 							{ id: 'pq', titulo: 'Por quê', celula: l => <PorQue l={l} /> },
 						]}
 						celular={l => ({ titulo: nomeEmpresa(l.empresa_id), valor: `${inteiro(l.limite)} ao mesmo tempo`, resumo: <PorQue l={l} /> })}
@@ -97,6 +100,38 @@ export function RobosTeto({ divisao, contrato, nomeEmpresa, podeTroncos, loading
 			</Gaveta>
 		</Cartao>
 	);
+}
+
+type UsoRobos = { agora: Map<number, Row>; dia: Map<number, Row>; ms: number };
+
+/** voz_robos_agora / voz_robos_dia de todas as empresas (SQL 102; a VM grava a cada 15 s). Sem o SQL 102: vazio. */
+function useUsoRobos(): UsoRobos {
+	const [u, setU] = useState<UsoRobos>({ agora: new Map(), dia: new Map(), ms: 0 });
+	useEffect(() => {
+		let vivo = true;
+		async function ler() {
+			if (!supabase) return;
+			const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+			const [a, d] = await Promise.all([
+				supabase.from('voz_robos_agora').select('empresa_id,em_uso,atualizado_em'),
+				supabase.from('voz_robos_dia').select('empresa_id,pico,segundos_no_limite').eq('dia', hoje),
+			]);
+			if (!vivo) return;
+			const mapa = (rows: unknown) => new Map(((rows ?? []) as Row[]).map(r => [Number(r.empresa_id), r]));
+			setU({ agora: mapa(a.data), dia: mapa(d.data), ms: Date.now() });
+		}
+		void ler();
+		const t = window.setInterval(() => { void ler(); }, 15_000);
+		return () => { vivo = false; window.clearInterval(t); };
+	}, []);
+	return u;
+}
+
+function textoUso(u: UsoRobos, empresa: number): string {
+	const agora = emUsoAgora(u.agora.get(empresa), u.ms || Date.now());
+	const pico = u.dia.get(empresa)?.pico;
+	if (agora == null && pico == null) return '—';
+	return `${agora == null ? '—' : inteiro(agora)} · ${pico == null ? '—' : inteiro(pico)}`;
 }
 
 function PorQue({ l }: { l: LinhaDivisao }) {
