@@ -1,7 +1,7 @@
 // Detalhe da etapa (editor; PR5 do redesenho, SPEC §2.3): o modo em 4 cartões, "O agente diz" com as variáveis em
 // destaque, "Como soa no telefone" (valores e datas por extenso; "Ouvir" usa a prévia de voz que já existe, SQL 66) e as
-// checagens da fala; "O cliente pode responder" com exemplos e "então → etapa"; "Se não entender" (o que o executor faz
-// hoje) e "Se não ouvir nada" (ainda sem tratamento próprio); "Avançado" com tentativas, certeza em palavras e os
+// checagens da fala; "O cliente pode responder" com exemplos e "então → etapa"; "Se não entender" e "Se não ouvir nada"
+// com fala própria, vezes e destino (SQL 95); "Avançado" com certeza em palavras e os
 // códigos internos. Os campos seguem o esquema 1 de public.fluxo_voz_erros: o que o banco recusa aparece nas
 // pendências depois de salvar. A trava 1 (valor, oferta ou credor antes da identidade) é conferida aqui enquanto se
 // digita (validarLocal, cópia do validador) e aparece como "O que corrigir". Na IA conversa, a base de respostas
@@ -12,14 +12,14 @@ import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { Botao, Pilula, campoCls, campoStyle } from '@/components/voz/ui';
 import {
 	CERTEZAS, MODOS, OPCOES, TIPOS, acaoSistema, antesDaIdentidade, caminhosPara, cartoesModo, certezaEmPalavras, checarFala, comoCorrigir, correcaoDe, exemplosDaSaida, explicar, nomeDestino, nomesEtapas, resultadoFinal,
-	saidasPossiveis, seNaoEntender, tipoDaSaida, trocarBloco, validarLocal, variaveisSensiveis,
+	saidasPossiveis, seNaoEntender, seNaoOuvir, tipoDaSaida, variaveisDoTexto, VARIAVEIS_SENSIVEIS, trocarBloco, validarLocal, variaveisSensiveis,
 	type Bloco, type Correcao, type Definicao, type Saida,
 } from '@/lib/fluxo';
 import { comoSoa, preencherTeste, trechosFalados, valoresTeste } from '@/lib/falado';
 import type { ConectorRow, IntencaoRow, RespostaRow } from './api';
 import { Campo, Detalhes, Gaveta, Linhas } from './ds';
 import { useFluxo, usePermissoesFluxo } from './contexto';
-import { CartoesModo, ChecagensFala, ComoSoa, FalaDoAgente, SeNaoOuvir, Secao, SeloTrava } from './etapa-partes';
+import { CartoesModo, ChecagensFala, ComoSoa, FalaDoAgente, QuadroRepeticao, Secao, SeloTrava } from './etapa-partes';
 import { Fala, ModoChip } from './roteiro';
 import { executar, useCarregar } from './comum';
 import { ConfirmaCorrecao, OQueCorrigir, type AcaoCorrigir } from './corrigir';
@@ -63,10 +63,12 @@ function SelConector({ conectores, finalidades, valor, onChange, disabled }: { c
 	);
 }
 
-/** Tipos que ouvem a pessoa e usam "tentativas" (o mesmo campo de hoje, agora no Avançado). */
+/** Tipos que já tinham "tentativas": as vezes de "Se não entender" continuam nesse campo (um número só). */
 const COM_TENTATIVAS: readonly string[] = ['identidade', 'pergunta', 'intencao'];
-/** Saídas que só acontecem quando o agente não entende: ficam em "Se não entender", não em "O cliente pode responder". */
+/** Saídas que só acontecem quando o agente não entende ou não ouve: ficam nos quadros "Se não entender" e "Se não
+ *  ouvir nada", não em "O cliente pode responder". */
 const SO_SEM_ENTENDER = ['nao_entendido', 'sem_resposta'];
+const SO_SEM_OUVIR = 'silencio';
 /** Campo da fala de cada tipo (o conector tem a fala de espera; condição e registrar não falam; a IA conversa tem objetivo). */
 const chaveFala = (tipo: string) => (tipo === 'conector' ? 'fala_espera' : ['condicao', 'registrar', 'generativa'].includes(tipo) ? null : 'fala');
 
@@ -145,9 +147,9 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 			return { ...x, saidas: atual ? x.saidas.map(s => (s.quando === quando ? nova : s)) : [...x.saidas, nova] };
 		});
 	}
-	const destino = (quando: string, rotulo?: string) => (
+	const destino = (quando: string, rotulo?: string, vazio = '— sem saída —') => (
 		<select aria-label={`Então, depois de "${rotulo ?? quando}"`} value={b.saidas.find(s => s.quando === quando)?.para ?? ''} disabled={dis} onChange={e => setSaida(quando, { para: e.target.value })} className={sel} style={campoStyle}>
-			<option value="">— sem saída —</option>
+			<option value="">{vazio}</option>
 			{outros.map(o => <option key={o.id} value={o.id}>{nomes.get(o.id)}</option>)}
 		</select>
 	);
@@ -206,7 +208,31 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 	const [novaSaida, setNovaSaida] = useState('');
 	const codigoNova = slug(novaSaida);
 	const ne = seNaoEntender(b);
-	const respostas = (gen ? quandosGen : possiveis.map(s => s.quando)).filter(q => !(ne && q === ne.quando && SO_SEM_ENTENDER.includes(q)));
+	const no = seNaoOuvir(b);
+	const respostas = (gen ? quandosGen : possiveis.map(s => s.quando)).filter(q => !(ne && q === ne.quando && SO_SEM_ENTENDER.includes(q)) && !(no && q === SO_SEM_OUVIR));
+	// SQL 95: params.nao_entendi / params.silencio = {fala?, vezes?}; vazio sai do params (vale o padrão)
+	function setRep(qual: 'nao_entendi' | 'silencio', campo: 'fala' | 'vezes', v: string | number | null) {
+		setB(x => {
+			const q = { ...x.params };
+			if (qual === 'nao_entendi' && campo === 'vezes' && COM_TENTATIVAS.includes(x.tipo)) {   // um número só: o de hoje
+				q.tentativas = v;
+				const r = { ...(q.nao_entendi as Record<string, unknown> | undefined) };
+				delete r.vezes;
+				if (Object.keys(r).length) q.nao_entendi = r; else delete q.nao_entendi;
+				return { ...x, params: q };
+			}
+			const r: Record<string, unknown> = { ...(q[qual] && typeof q[qual] === 'object' ? q[qual] as Record<string, unknown> : {}) };
+			if (v === null || v === '') delete r[campo]; else r[campo] = v;
+			if (Object.keys(r).length) q[qual] = r; else delete q[qual];
+			return { ...x, params: q };
+		});
+	}
+	const falaRep = (qual: 'nao_entendi' | 'silencio') => { const r = p[qual]; return r && typeof r === 'object' && typeof (r as Record<string, unknown>).fala === 'string' ? String((r as Record<string, unknown>).fala) : ''; };
+	const checarRep = (t: string) => {
+		const pre = preencherTeste(t, vars);
+		const sens = [...new Set(variaveisDoTexto(t).filter(v => VARIAVEIS_SENSIVEIS.includes(v)))];
+		return checarFala({ fala: t, falada: comoSoa(pre), antesDaIdentidade: antes, credorAntes: antes && sens.length > 0, sensiveis: sens, trechos: trechosFalados(pre).filter(x => !/^\d{1,2}$/.test(x.de)) });
+	};
 	const its = (Array.isArray(p.intencoes) ? p.intencoes : []) as string[];
 	const ex = (p.exemplos && typeof p.exemplos === 'object' ? p.exemplos : {}) as Record<string, string[]>;
 	const ops = (Array.isArray(p.opcoes) ? p.opcoes : []) as { codigo: string; rotulo: string }[];
@@ -324,33 +350,24 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 			)}
 			{final && <p className="text-[12.5px] text-[var(--base-texto-2)]">Etapa final: a ligação termina aqui ({resultadoFinal(b)}).</p>}
 
-			{ne && (
-				<Secao n={++n} titulo="Se não entender" id="sec-nao-entender">
-					<div className="space-y-1.5 rounded-xl px-3 py-2.5" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }} data-se-nao-entender>
-						<p className="text-[12.5px] text-[var(--base-texto)]">
-							{ne.repete > 0 ? <>Pede de novo {ne.repete === 1 ? '1 vez' : `${ne.repete} vezes`}: “<Fala texto={ne.fala} />”</> : 'Não pede de novo.'}
-							<span className="text-[var(--base-texto-3)]"> (fala do agente; ainda não é editável)</span>
-						</p>
-						{SO_SEM_ENTENDER.includes(ne.quando) ? (
-							<div className="grid items-center gap-1.5 sm:grid-cols-[auto_minmax(0,1fr)]"><span className="text-[12.5px] text-[var(--base-texto-2)]">Depois, então →</span>{destino(ne.quando, 'não entender')}</div>
-						) : (
-							<p className="text-[12.5px] text-[var(--base-texto-2)]">Depois, segue a resposta “{b.saidas.find(s => s.quando === ne.quando)?.rotulo ?? possiveis.find(s => s.quando === ne.quando)?.rotulo ?? ne.quando}” → <b className="font-semibold text-[var(--base-texto)]">{(() => { const s = b.saidas.find(x => x.quando === ne.quando); return s?.para ? nomeDestino(nomes, s.para) : 'transfere para um atendente'; })()}</b></p>
-						)}
-						<small className="block text-[11.5px] text-[var(--base-texto-3)]">O número de tentativas fica no Avançado.</small>
-					</div>
-					<SeNaoOuvir />
+			{ne && no && (
+				<Secao n={++n} titulo="Se não entender ou não ouvir nada" id="sec-nao-entender" sub="Cada um com fala própria, quantas vezes e para onde vai depois.">
+					<QuadroRepeticao qual="nao_entendi" fala={falaRep('nao_entendi')} padrao={ne.fala} vezes={ne.vezes} disabled={dis}
+						onFala={v => setRep('nao_entendi', 'fala', v.trim() ? v.slice(0, 500) : null)} onVezes={v => setRep('nao_entendi', 'vezes', v)}
+						checagens={falaRep('nao_entendi').trim() ? checarRep(falaRep('nao_entendi')) : undefined}
+						destino={SO_SEM_ENTENDER.includes(ne.quando ?? '') ? destino(ne.quando!, 'não entender')
+							: <span className="text-[12.5px] text-[var(--base-texto)]">segue “{b.saidas.find(s => s.quando === ne.quando)?.rotulo ?? possiveis.find(s => s.quando === ne.quando)?.rotulo ?? ne.quando}” → <b className="font-semibold">{(() => { const s = b.saidas.find(x => x.quando === ne.quando); return s?.para ? nomeDestino(nomes, s.para) : 'transfere para um atendente'; })()}</b></span>} />
+					<QuadroRepeticao qual="silencio" fala={falaRep('silencio')} padrao={no.fala} vezes={no.vezes} disabled={dis}
+						onFala={v => setRep('silencio', 'fala', v.trim() ? v.slice(0, 500) : null)} onVezes={v => setRep('silencio', 'vezes', v)}
+						checagens={falaRep('silencio').trim() ? checarRep(falaRep('silencio')) : undefined}
+						destino={destino(SO_SEM_OUVIR, 'não ouvir nada', b.tipo === 'abertura' ? '— encerra sem recado (caixa postal) —' : '— igual a "Se não entender" —')} />
 				</Secao>
 			)}
 
 			{gen && <BaseRespostas versao={versao} bloco={b.id} editavel={editavel && situacao === 'rascunho'} />}
 
-			<Detalhes titulo="Avançado" qtd="tentativas, certeza, repetição e códigos internos">
+			<Detalhes titulo="Avançado" qtd="certeza, repetição e códigos internos">
 				<div className="space-y-3">
-					{COM_TENTATIVAS.includes(b.tipo) && (
-						<Campo rotulo="Tentativas antes de seguir (1 a 3)" ajuda={`Com ${Number(p.tentativas ?? 1)}, o agente pede de novo ${Math.max(0, Number(p.tentativas ?? 1) - 1)} ${Number(p.tentativas ?? 1) - 1 === 1 ? 'vez' : 'vezes'} quando não entende.`}>
-							<input type="number" min={1} max={3} value={Number(p.tentativas ?? 1)} disabled={dis} onChange={e => setP('tentativas', Number(e.target.value))} className={sel} style={campoStyle} />
-						</Campo>
-					)}
 					{b.tipo === 'intencao' && (
 						<Campo rotulo="Certeza mínima para escolher o caminho" ajuda={CERTEZAS.find(([v]) => Math.abs(v - Number(p.confianca_min ?? 0.7)) < 0.001)?.[2] ?? 'Valor escolhido antes; vale como está.'}>
 							<select value={String(Number(p.confianca_min ?? 0.7))} disabled={dis} onChange={e => setP('confianca_min', Number(e.target.value))} className={sel} style={campoStyle}>

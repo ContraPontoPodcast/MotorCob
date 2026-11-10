@@ -1,0 +1,29 @@
+{
+  "_sobre": "SQL 96 · trava de CPF. 'fala': o que o AGENTE diz (voz/fluxo_validador.pede_cpf = site/src/lib/fluxo.ts › pedeCpf = public.fluxo_voz_aux_pede_senha); 'pessoa': o que a PESSOA diz (voz/transcricao/redacao.cpf_dito). CPF fictício (111.444.777-35).",
+  "fala": [
+    ["Para sua segurança, me diga o seu CPF?", true],
+    ["Qual o número do C.P.F.?", true],
+    ["Confere 111.444.777-35?", true],
+    ["Seu documento 11144477735 está certo?", true],
+    ["Os três últimos números do CPF. Ou o CPF inteiro.", true],
+    ["Nunca peço o CPF.", true],
+    ["Me diga os três últimos números do seu CPF?", false],
+    ["Certo. E me diz os três últimos números do seu CPF?", false],
+    ["Pode dizer os 3 últimos dígitos do CPF?", false],
+    ["Falo com {{primeiro_nome}}?", false],
+    ["São {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}.", false],
+    ["Me liga no 0800 123 4567.", false]
+  ],
+  "pessoa": [
+    ["meu cpf é 111.444.777-35", true],
+    ["é 11144477735", true],
+    ["111 444 777 35", true],
+    ["um um um quatro quatro quatro sete sete sete três cinco", true],
+    ["o CPF é 123 456 789", true],
+    ["472", false],
+    ["os três últimos são 4 7 2", false],
+    ["meu telefone é 11 98765 4321", false],
+    ["quero pagar 1.380,00", false],
+    ["não vou dar meu cpf", false]
+  ]
+}
