@@ -23,7 +23,10 @@ import re
 import time
 from pathlib import Path
 
-from voz.transcricao.redacao import mascarar
+from voz.transcricao.redacao import MARCA_CPF, cpf_dito, mascarar
+
+# SQL 96: o que a Conversa do roteiro (sem fluxo) diz quando a pessoa fala um CPF; o texto nem chega ao modelo
+FALA_CPF_ROTEIRO = "Não precisa me dizer o CPF. Por segurança, eu nunca peço nem repito esse número."
 
 PREFIXO = "ia_"
 RETENCAO_DIAS = 90
@@ -144,11 +147,28 @@ class ConversaComTurnos:
         return falas
 
     def ouvir(self, texto: str) -> list[str]:
+        if cpf_dito(texto):
+            # SQL 96: o CPF dito nunca fica na transcrição (nem em memória); a sessão do fluxo tem a trava própria
+            # (responde e espera); a Conversa do roteiro nem recebe o texto (não vai ao modelo)
+            self.turnos.pessoa(MARCA_CPF)
+            falas = self._interna.ouvir(texto) if getattr(self._interna, "trava_cpf", False) else [FALA_CPF_ROTEIRO]
+            for f in falas or []:
+                self.turnos.agente(f)
+            return falas
         self.turnos.pessoa(texto)
         falas = self._interna.ouvir(texto)
         for f in falas or []:
             self.turnos.agente(f)
         self._olhar_oferta()
+        return falas
+
+    def silencio(self) -> list[str]:
+        """SQL 95: a pessoa ficou calada (a Montagem chama depois do tempo de silêncio). Só a Sessao do fluxo sabe
+        tratar; a Conversa do roteiro, não (nada a dizer). A fala do agente entra na transcrição."""
+        f = getattr(self._interna, "silencio", None)
+        falas = list(f() or []) if callable(f) else []
+        for t in falas:
+            self.turnos.agente(t)
         return falas
 
     @property
