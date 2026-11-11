@@ -1018,6 +1018,18 @@ quem é da empresa e o servidor; `licencas_voz(empresa)`: histórico da equipe (
 Recriadas inteiras: `itens_com_franquia`, `custo_ia_referencia`, `guardar_preco_empresa_ia`, `ia_precos_abaixo_minimo`
 (se o SQL 61 ou o 92 rodarem de novo, rode o 93 depois). Teste: `supabase/testes/testar_licencas_voz.py`.
 
+**SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
+ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
+`nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
+contam à parte (`Sessao.tentativas` × `Sessao.silencios`). Sem nada configurado, o "não entendi" é o de antes (fala padrão
+de cada tipo, `tentativas` padrão 2, saída de "não entendi"). Silêncio: a Montagem chama `Sessao.silencio()` depois de
+`SILENCIO_S` (6 s) sem fala da pessoa contados de quando a fila de áudio do agente esvazia (`RelogioSilencio`); padrão 2
+vezes ("Desculpe, não ouvi." + a fala da etapa), depois a saída "silencio" ou, sem ela, a de "não entendi"; na Abertura sem
+saída própria encerra SEM recado e sem marcar terceiro; na IA conversa, "Você ainda está aí?" e depois atendente. As falas
+novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracteres, variáveis, senha e trava 1. Simulador e
+casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
+(`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
+
 **SQL 98 (Robôs contratados, PR 2): licenças na fatura.** `previa_fatura` (e por ela rascunhos, `fechar_fatura` e a
 estimativa) lê o item `voz_licenca_robo` de `voz_licencas` (dia exato), **nunca** do preço que o SQL 93 grava em
 `precos_empresa` (aquele vale o mês inteiro). Ciclo cheio = a licença do 1º dia do ciclo (`ciclo_de`; por robô: robôs ×
@@ -1088,6 +1100,108 @@ quando todos os robôs estão ocupados" (ninguém cai; o número espera na lista
 `/suporte/novo?assunto=robos&robos=N` (assunto, motivo e descrição pré-preenchidos; o Voltar dessa tela leva à Discagem:
 `rotaPai` recebe a query em `busca`). Sem licença e com voz: cartão do modelo antigo com "Pedir robôs"; sem voz: nada.
 Atualiza a cada 15 s. O Console (PR 5) ganha a coluna "Em uso · pico hoje".
+
+**SQL 103 (Telefonia própria do cliente, PR T1; SPEC Canais §6.2, G5): senha do tronco direto no cofre.** A senha
+(autenticação "usuário e senha") é digitada uma vez e vai pela Edge Function `segredo-tronco-voz` ("Verify JWT" ligado)
+direto para o Secret Manager, sempre no segredo da empresa `motorcx-voz-trunk-e<empresa>-<referência>`
+(`segredo_ref = voz/trunk/e<empresa>/<referência>`, `segredo_ref_tronco_voz`/`nome_segredo_tronco_voz`). Fluxo: login +
+aal2 → `preparar_segredo_tronco_voz(tronco)` com o login da pessoa (quem pode = `pode_configurar_telefonia`; aal2; só
+tronco por senha; 5 por hora por tronco, 30 por dia por empresa; registra o pedido em `voz_troncos_cofre` e devolve só o
+nome) → Secret Manager com a conta `motorcx-voz-cofre-escrita` (cria e escreve só em `motorcx-voz-trunk-*`; **não lê**;
+secret `GCP_COFRE_TRONCO_CHAVE`, `bash infra/asterisk/criar_gcp.sh chave-cofre <projeto>`), versões antigas destruídas →
+`registrar_segredo_tronco_voz` (só service_role e só depois do pedido da mesma pessoa nos últimos 10 min): grava
+`segredo_guardado_em/por` e `segredo_versao` (nunca o valor), zera o teste e grava na Auditoria "senha trocada (versão
+N)". O site só sabe "senha guardada" (a data). `cadastrar_tronco_voz` recriada: sem referência usa a do tronco ou a do
+cofre da empresa; referência fora do padrão só a equipe (`cuida_voz`). Gerador do Asterisk: tronco cuja senha o cofre não
+entrega fica de fora sozinho (`filtrar_senhas`), sem parar as outras empresas; `;` da senha vira `\;`. Texto honesto
+(C8): só o servidor de voz lê; quem administra o GCP consegue ler o cofre. Teste: `supabase/testes/testar_voz_cofre.py`.
+Se o SQL 56 rodar de novo, rode o 103 depois.
+
+**SQL 104 (Telefonia própria do cliente, PR T2; SPEC §6.2, G6): IPs da operadora por tronco e firewall das VMs a
+partir do cadastro.** `voz_troncos` e `voz_transferencias` ganham `ips_operadora` (IPs do SBC da operadora; na
+transferência, do PABX) e `ips_liberados(_em/_por)`. Regra (`voz_ips_motivo`, igual a `voz/firewall.py › motivo_origem`):
+até 20, só IPv4, faixa até /24, nunca 0.0.0.0/0, rede interna/reservada nem IP do MotorCX; gatilho `voz_ips_seguros`.
+Dois passos: `definir_ips_voz` (quem configura a telefonia; aviso no sino da equipe) e `liberar_ips_voz` (só a equipe com
+`gerenciar_troncos_voz` e aal2; Console › tronco › "Liberar IPs no firewall"); tirar IP vale na hora (liberado =
+interseção com a lista). `origens_firewall_voz` (servidor) / `voz_vm.origens_firewall` (VM): só o liberado, de
+tronco/transferência ativo. VM: `motorcx-voz-firewall.timer` (2 min) → `python3 -m voz.firewall`: lista fixa do
+`criar_gcp.sh` (metadado `motorcx-firewall-fixos`) + o banco, confere tudo de novo e só então atualiza
+`motorcx-voz-sip`/`motorcx-voz-rtp` (sem origem: desligadas); banco/API fora = nada muda; cada mudança em
+`voz_firewall_eventos`. **Desligado por padrão**: `bash infra/asterisk/criar_gcp.sh firewall-automatico <projeto>` (papel
+`motorcxVozFirewall` na `motorcx-asterisk` e metadado `motorcx-firewall-automatico=1`; `DESLIGAR=1` volta). Com ele
+ligado, o `criar_gcp.sh` não sobrescreve as origens SIP/RTP. Testes: `tests/test_voz_firewall.py` e
+`supabase/testes/testar_voz_firewall.py`.
+
+**SQL 105 (Telefonia própria do cliente, PR T3; SPEC §5 e §6.2, G3, G4 e D13): o Admin do cliente configura a
+telefonia dele.** Permissão nova do cliente `configurar_telefonia` (catálogo, grupo Agente virtual; padrão só Admin; fora
+do Speech: o Qualidade nunca tem). `pode_configurar_telefonia(eid)` = equipe com `gerenciar_troncos_voz` OU
+`cliente_pode(eid, 'configurar_telefonia')` + módulo `agente_voz` + **sessão aal2**. Por ela passam
+`cadastrar_tronco_voz`, `preparar_segredo_tronco_voz`, `definir_ips_voz`, `salvar_rota_voz`, `encerrar_rota_voz` e
+`salvar_transferencia_voz` (recriadas inteiras; frase "sem permissão para configurar a telefonia…"). Liberar IPs no
+firewall continua só com a equipe. **Trava de liberação** (a VM usa todo tronco ativo e não olha `teste_ok`): tronco que o cliente cadastra nasce inativo e mudar como ele conecta (endereço, autenticação, usuário, referência, bina, formato, CSP) o desativa; o cliente desativa, só a equipe ativa. Leitura do cliente sem segredo (`ve_telefonia`: quem é da empresa com o módulo, ou a
+equipe que cuida da voz): views `voz_troncos_empresa` (sem `segredo_ref`; `segredo_no_cofre`, IPs e `ips_pendentes`) e
+`voz_rotas_empresa`; as tabelas continuam só da equipe/faturamento. Gatilho `voz_troncos_avisar_mudanca`: tronco novo ou
+mudança de endereço, autenticação, senha (versão), bina ou IPs → aviso obrigatório `seguranca` (vira e-mail) a cada Admin
+da empresa, com quem mudou e nunca o valor, e aviso no sino da equipe. Site: Agente Voz/CX › Telefonia lista os troncos
+(só leitura; a tela editável é o PR T5). Teste: `supabase/testes/testar_voz_configurar_telefonia.py`. Se o SQL 56, 81 ou
+103 rodar de novo, rode o 105 depois.
+
+**SQL 113 (Telefonia própria do cliente, PR T4; SPEC §3.4 e §6.2 item 12, seção E do parecer, G10, G12–G14, G35,
+C4, C17, D5): os campos que a operadora pede.** `voz_troncos` ganha `declaracao_em/por` (contrato e bina declarados;
+obrigatória para o cliente no tronco novo e a cada troca de bina; trocar a bina zera), `autenticacao_operadora`
+(sim/nao/nao_sei), `dtmf` (auto/rfc4733/inband/info → `dtmf_mode`), `realm`, `from_usuario` (o "De"), `cabecalho_bina`
+(from_pai/from/rpid → `send_pai`/`send_rpid`), `tech_prefix` (opcional, padrão das rotas), `toque_max_s` (30; 15–45),
+`duracao_max_min` (20; 5–60), `verificar_options` (qualify 60 s ou 0), `liga_para` e `retorno_bina`; formato
+`tech_e164` (+55). Gatilho `voz_troncos_bina_operadora`: a bina não vai para tronco de OUTRA operadora da mesma empresa.
+Rota com prefixo opcional: `voz_rotas.enviar_prefixo` (false = a operadora não usa; `tech_prefix` vira um código interno
+`0nnnnnnn` só para vigência/tarifação, reaproveitado pela vigência nova do mesmo tronco e tipo); `salvar_rota_voz` aceita
+prefixo vazio e tronco inativo da empresa. `cadastrar_tronco_voz` mantém a assinatura (Console igual) e exige a declaração
+do cliente; RPC nova `salvar_tronco_voz(empresa, tronco jsonb)` com todos os campos (chave ausente mantém, texto vazio
+limpa; mudar realm/De/cabeçalho/DTMF zera o teste e desativa o tronco do cliente). Leitura em views PRÓPRIAS (o 57 e o 105
+recriam as antigas e não podem perder colunas): `voz_troncos_campos_empresa`, `voz_rotas_prefixo_empresa` (site) e
+`voz_vm.troncos_campos`, `voz_vm.rotas_prefixo` (a VM; `voz/acesso.py › EXTRAS` junta pelo id). VM: `voz/banco.py`
+lê tudo com padrão; o gerador aplica DTMF, cabeçalho, realm, De, OPTIONS, `S(duração)` e toque no plano de reserva e
+`TIMEOUT(absolute)` por tronco no `[motorcx-atendeu]`; `voz/tarifacao.py` disca `Rota.prefixo_discagem`; o núcleo usa
+`min(toque do núcleo, toque do tronco)`. Teste: `supabase/testes/testar_voz_tronco_campos.py`. Se o SQL 56, 81, 103 ou
+105 rodar de novo, rode o 113 depois.
+
+**SQL 114 (Telefonia própria do cliente, PR T5; SPEC §3.4 e §6.2 item 13, seção F do parecer, C11, C12, D12, G1,
+G18, G29): Telefonia editável e o "Testar a rota" de verdade.** Números de teste `voz_numeros_teste` (até 5 por empresa):
+o NÚMERO fica só no cofre, como a senha do tronco. A Edge Function `segredo-tronco-voz` aceita `{empresa, numero_teste}`
+(chama `preparar_numero_teste_voz` com o login da pessoa: permissão, aal2, limite; grava em
+`motorcx-voz-trunk-e<empresa>-teste-<12 do hash>`, o prefixo que a conta de escrita já pode; `registrar_numero_teste_voz`
+pelo servidor) e `{remover_numero_teste}` (`remover_numero_teste_voz` devolve o nome e a função destrói as versões).
+O banco guarda `hash` (sha-256 dos dígitos sem o 55, igual a `numeros_teste_hash`), `mascara` "(11) 9••••-••41" e
+`segredo_ref`. Confirmado quando a pessoa digita no passo 5 do teste o código de 4 dígitos que só aparece na tela (não há
+SMS avulso hoje); só os confirmados entram em `voz_config.numeros_teste_hash`. `voz_testes_tronco` (sem número):
+`pedir_teste_tronco_voz(tronco, numero_teste)` confere número guardado da empresa, IPs liberados, senha guardada, um por
+vez, 10/h por tronco e 30/dia por empresa; `pegar_teste_tronco_voz` (VM, "for update skip locked") devolve `numero_ref`
+e a VM lê o número no cofre. A VM grava cada passo (`registrar_teste_tronco_voz`, mensagens sem telefone) e no fim
+`teste_ok/testado_em` só se `assinatura_tronco_voz` não mudou; `responder_bina_teste_voz`, `cancelar_teste_tronco_voz`,
+`ler_teste_tronco_voz`; pedido parado 10 min expira. `usar_tronco_voz(tronco, ativo)`: o Admin tira de uso sempre; põe
+em uso só com teste que passou, IPs liberados, senha e sem pausa, e só se a empresa já teve Real (`pedidos_envio_real`
+ligado ou `modo = real`); na primeira vez vira aviso à equipe (`pedido_equipe`). `retomar_rota_voz(pausa)`: o Admin
+retoma só com teste que passou DEPOIS da pausa (nota automática). Views do cliente: `voz_numeros_teste_empresa`,
+`voz_testes_tronco_empresa` (código só enquanto roda), `voz_pausas_empresa`. VM: `voz/testador.py` (serviço
+`motorcx-voz-teste`, app ARI `motorcx-teste`; passos 0–9: voz.json com a última mudança, DNS público, endpoint no
+Asterisk, OPTIONS por UDP em `voz/sip_options.py`, INVITE com `tech_cause`, bipes + código por DTMF, TALK_DETECT,
+`CHANNEL(rtpqos,audio,all)`, bina na tela, BYE); o gerador sobe o tronco INATIVO como endpoint só para o teste (sem
+saída no dialplan). Site: `/voz/telefonia` editável e `/voz/telefonia/tronco/:ref` (assistente de 6 passos, senha no
+cofre, Testar a rota ao vivo, Usar este tronco, erros da operadora, ficha técnica); regras em `site/src/lib/telefonia.ts`.
+Teste: `supabase/testes/testar_voz_telefonia_editavel.py`, `tests/test_voz_testador.py` e o `regras.test.ts` da função.
+
+**SQL 115 (Telefonia própria do cliente, PR T6; SPEC §6.2 item 14, D4, G19, G34): disjuntor por tronco.**
+`voz_troncos_pausas.motivo` ganha `disjuntor` e `suspeita_sem_credito`. `falha_tecnica_voz(sip, q850)`: SIP 403, 407,
+408 e 5xx (menos 580), ou Q.850 3/34/38/41/42/44/47/102 sem SIP (pessoa que não atende, número inexistente e 402/bloqueio
+não contam). Gatilho `voz_chamadas_disjuntor` (tentativa encerrada e não atendida, modo teste/real) →
+`avaliar_disjuntor_tronco_voz`: nas últimas 6 h e depois da última retomada, pausa SÓ o tronco com 20 falhas técnicas
+seguidas ou 50% das últimas 50 (`disjuntor`), ou >90% das últimas 30 com o mesmo SIP para ≥15 destinos
+(`suspeita_sem_credito`). A VM já lê as pausas a cada 30 s (`troncos_pausados_voz`) e a reserva assume: nada mudou no
+`nucleo.py`/`agendador.py`. Aviso obrigatório `pausa` (vira e-mail) aos Admins e aviso à equipe. Volta com teste:
+`registrar_teste_tronco_voz` (recriada) retoma sozinha essas duas pausas quando o teste passa sem o tronco ter mudado;
+sem crédito e bloqueio continuam pedindo o Retomar. `saude_troncos_voz(empresa, horas)` (G34): tentativas, atendidas,
+falhas técnicas, duração média e os 5 SIP mais comuns por tronco (card "Saúde do tronco" na tela do tronco). Teste:
+`supabase/testes/testar_voz_disjuntor.py`. Se o SQL 114 rodar de novo, rode o 115 depois.
 
 **Agente de voz · ritmo da discagem: medir certo (Power e Preditivo V1, SQL 106).** `transferencia_sem_operador` é
 desfecho próprio (conversou, pediu humano, a fila do cliente não atendeu e o agente não pôde voltar): NÃO é abandono do
@@ -1195,18 +1309,6 @@ Ritmo: bloco **Posição do número** (D3: 2 telefones por dia, horizontal; "Usa
 Os dois botões só mudam o rascunho (`site/src/lib/discagem-recomendado.ts`; fixa 2 tentativas por número e liga a regra
 por sinalização): vale ao salvar como vN (`salvar_discagem`). O padrão MotorCX do motor e do banco **não** muda.
 Horários (faixa vermelha ao desligar) já vinham do B2. Testes: `site/src/lib/discagem-recomendado.test.tsx`.
-
-**SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
-ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
-`nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
-contam à parte (`Sessao.tentativas` × `Sessao.silencios`). Sem nada configurado, o "não entendi" é o de antes (fala padrão
-de cada tipo, `tentativas` padrão 2, saída de "não entendi"). Silêncio: a Montagem chama `Sessao.silencio()` depois de
-`SILENCIO_S` (6 s) sem fala da pessoa contados de quando a fila de áudio do agente esvazia (`RelogioSilencio`); padrão 2
-vezes ("Desculpe, não ouvi." + a fala da etapa), depois a saída "silencio" ou, sem ela, a de "não entendi"; na Abertura sem
-saída própria encerra SEM recado e sem marcar terceiro; na IA conversa, "Você ainda está aí?" e depois atendente. As falas
-novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracteres, variáveis, senha e trava 1. Simulador e
-casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
-(`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
