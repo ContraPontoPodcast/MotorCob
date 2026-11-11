@@ -309,7 +309,7 @@ checar("operação não altera o calendário", True, f"update public.credores se
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
 # permissões por perfil (padrão MotorCob + ajuste do Admin da empresa) e auditoria
 checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas,reciclar_lote_voz,reenviar_lote_voz,ver_clientes,ver_painel")
-checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 31)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60) + 1 do importador (SQL 64) + 2 do SQL 65 + 2 do treino (SQL 90)
+checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 32)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60) + 1 do importador (SQL 64) + 2 do SQL 65 + 2 do treino (SQL 90) + configurar_telefonia (SQL 105)
 checar("usuário inativo não tem permissão", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["inativo"], 0)
 checar("planejamento não ajusta permissões", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["plan"])
 checar("Admin libera Reenquadrar para a operação", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["admina"])
@@ -372,7 +372,7 @@ checar("convite: acessos do perfil Operação na empresa", True, "select string_
 checar("convite: Admin sempre com gerenciar usuários", True, "select permitido from public.permissoes_do_papel(papel => 'admin') where codigo='gerenciar_usuarios'", "authenticated", u["admina"], "t")
 checar("quem não gerencia usuários não lê acessos de perfil", True, "select count(*) from public.permissoes_do_papel(papel => 'operacao')", "authenticated", u["oper"], 0)
 checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
-checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 31)   # 21 + 5 do SQL 60 + 1 do SQL 64 + 2 do SQL 65 (reenviar e reciclar) + 2 do SQL 90 (treino)
+checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 32)   # 21 + 5 do SQL 60 + 1 do SQL 64 + 2 do SQL 65 (reenviar e reciclar) + 2 do SQL 90 (treino) + 1 do SQL 105 (configurar_telefonia)
 checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
 # página comercial: mídia pública e formulário de contato (visitante só insere)
 checar("bucket site é público", True, "select public from storage.buckets where id='site'", "service_role", "t")
@@ -2263,6 +2263,12 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261225000001_voz_fluxo.sql")],
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
+# SQL 95 (silêncio e "não entendi" por etapa) refaz o validador do SQL 58: reaplica depois dele
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations",
+                                 "20270131000001_voz_silencio_nao_entendi.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
 import json as _json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from voz import fluxo_casos as _FC, fluxo_modelos as _FM   # noqa: E402
@@ -2271,6 +2277,19 @@ def _lit(d):
     return _json.dumps(d, ensure_ascii=False).replace("'", "''")
 def _j(x):
     return _json.dumps(x, ensure_ascii=False, separators=(",", ":"))
+def _sql96():
+    """SQL 96 (trava de CPF) refaz funções do SQL 58 e do 59: reaplica depois deles."""
+    r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                        os.path.join(os.path.dirname(__file__), "..", "migrations", "20270201000001_voz_trava_cpf.sql")],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+_sql96()
+# SQL 96: a mesma tabela de casos da fala com CPF (tests/dados/trava_cpf_casos.json) dá o mesmo no banco
+for _t, _esp in _json.loads(open(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "dados", "trava_cpf_casos.json"),
+                                 encoding="utf-8").read())["fala"]:
+    checar(f"SQL 96 · fala com CPF: {_t}", True, f"select public.fluxo_voz_aux_pede_senha('{_t.replace(chr(39), chr(39) * 2)}')",
+           "authenticated", u["oper"], "t" if _esp else "f")
+checar("SQL 96: trava cpf na lista e no check dos passos", True, "select ('cpf' = any (public.travas_voz()))::text || position('cpf' in pg_get_constraintdef((select oid from pg_constraint where conname = 'voz_fluxo_passos_trava_check')))::int::boolean::text", "service_role", None, "truetrue")
 # FL2: os mesmos casos do validador em Python (voz/fluxo_casos.py) dão a mesma lista de erros no banco
 for _n, _d, _e in _FC.casos():
     checar(f"SQL 58 · validador: {_n}", True, f"select array_to_json(public.fluxo_voz_erros('{_lit(_d)}'::jsonb))",
@@ -2472,7 +2491,7 @@ checar("SQL 58: cliente B não lê os casos da A", True, "select count(*) from p
 
 # passos e métricas (FL7): só a VM grava, só códigos
 checar("SQL 58: VM grava o passo do bloco", True, f"insert into public.voz_fluxo_passos (empresa_id,chamada_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,saida_quando,intencao,confianca_faixa) values ({EA},{CH1},'ch-0001',{FV1},3,'N3','cognicao','quero_negociar','quero_negociar','alta') returning ordem", "service_role", None, 3)
-checar("SQL 58: trava fora da lista é recusada", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,trava) values ({EA},'ch-0001',{FV1},4,'N3','cognicao','cpf')", "service_role")
+checar("SQL 58: trava fora da lista é recusada", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,trava) values ({EA},'ch-0001',{FV1},4,'N3','cognicao','trava_inventada')", "service_role")
 checar("SQL 58: usuário não grava passo", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo) values ({EA},'ch-0001',{FV1},5,'N3','cognicao')", "authenticated", u["admin"])
 checar("SQL 58: VM grava a métrica do dia (saídas por código)", True, f"insert into public.voz_fluxo_metricas_dia (empresa_id,fluxo_versao_id,dia,bloco_id,chegaram,saidas) values ({EA},{FV1},'2026-11-05','N3',10,'{{\"quero_negociar\": 6, \"ja_paguei\": 4}}') returning chegaram", "service_role", None, 10)
 checar("SQL 58: métrica com texto livre é recusada", False, f"insert into public.voz_fluxo_metricas_dia (empresa_id,fluxo_versao_id,dia,bloco_id,saidas) values ({EA},{FV1},'2026-11-06','N3','{{\"Ana disse\": 1}}')", "service_role")
@@ -2561,6 +2580,7 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261226000001_voz_roleplay.sql")],
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
+_sql96()
 from voz import roleplay as _RP   # noqa: E402
 for _cod, _p in _RP.PERSONAS_PADRAO.items():
     checar(f"SQL 59: persona padrão {_cod} igual à do Python", True,
@@ -2607,7 +2627,7 @@ _sv(_reg(RL1, _PN["nao_me_ligue"], 2, "opt_out", "true", travas="{nao_me_ligue}"
 _sv(_reg(RL1, _PN["negocia_rapido"], 1, "promessa", "true", acordo="true", oferta="'OF-2'", parcelas="6"))
 CV_FALHA = _sv(_reg(RL1, _PN["negocia_rapido"], 2, "limite_turnos", "false", transc="'[{\"quem\": \"agente\", \"texto\": \"Olá\", \"bloco\": \"N1\"}, {\"quem\": \"pessoa\", \"texto\": \"Sou eu.\"}, {\"quem\": \"pessoa\", \"texto\": \"Hum.\"}]'::jsonb"))
 checar("SQL 59: usuário não grava conversa", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true"), "authenticated", u["admin"])
-checar("SQL 59: trava fora da lista é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", travas="{cpf}"), "service_role")
+checar("SQL 59: trava fora da lista é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", travas="{trava_inventada}"), "service_role")
 checar("SQL 59: transcrição com CPF é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", transc="'[{\"quem\": \"pessoa\", \"texto\": \"meu cpf 12345678901\"}]'::jsonb"), "service_role")
 checar("SQL 59: persona fora do lote é recusada", False, _reg(RL1, _PN["quer_parcelar_muito"], 1, "recusa", "true"), "service_role")
 checar("SQL 59: só a VM conclui o lote", False, f"select public.concluir_roleplay_lote({RL1}, 2500)", "authenticated", u["plan"])
@@ -2952,6 +2972,19 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 90: treino de operadores (testar_treino.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 99 · Roleplay, PR 4: quem treina lê o cadastro (voz_operadores) e o estado do link da página do operador
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_atribuir.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 99: editor, atribuição e link do operador (testar_treino_atribuir.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 100 · Roleplay, PR 5: sessão de treino por texto (conversa em andamento só do servidor, contexto pelo link ou por
+# quem abriu, resultado para a Qualidade, ciclo com registrar_sessao_treino)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_sessao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 100: sessão de treino por texto (testar_treino_sessao.py)", True, f"select {r.returncode}", None, None, 0)
+
 # SQL 92 · Preços editáveis: tabela, mínimo e franquia padrão; preço e franquia por empresa (permissão, vigência,
 # guarda da IA e mínimo com motivo)
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_precos_editaveis.py")],
@@ -2986,6 +3019,48 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 102: uso dos robôs (testar_robos_uso.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 103 · Telefonia T1: senha do tronco direto no cofre (só o nome do segredo da empresa, aal2, limite, registro só
+# pelo servidor depois do pedido, teste zerado e Auditoria sem valor)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_cofre.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 103: senha do tronco no cofre (testar_voz_cofre.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 104 · Telefonia T2: IPs da operadora por tronco (regra igual à da VM), liberação em dois passos (equipe + aal2) e
+# origens do firewall só para o servidor e a VM
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_firewall.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 104: IPs da operadora e firewall (testar_voz_firewall.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 105 · Telefonia T3: configurar_telefonia (padrão só Admin, com aal2 e o módulo agente_voz), RPCs do cliente, views
+# sem segredo e e-mail aos Admins a cada mudança de endereço, senha, bina ou IPs
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_configurar_telefonia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 105: o Admin configura a telefonia (testar_voz_configurar_telefonia.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 113 · Telefonia T4: os campos que a operadora pede (declarações, DTMF, realm, cabeçalho da bina, E.164, prefixo
+# opcional, toque e duração), bina única por operadora e as views novas
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_tronco_campos.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 113: campos do tronco (testar_voz_tronco_campos.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 114 · Telefonia T5: números de teste, "Testar a rota" (pedido, VM, passos, teste_ok, confirmação do número),
+# usar em Real (primeira vez pela equipe) e retomar só depois de um teste que passou
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_telefonia_editavel.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 114: Telefonia editável e teste da rota (testar_voz_telefonia_editavel.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 115 · Telefonia T6: disjuntor por tronco (20 seguidas, 50% de 50), suspeita de sem crédito (90% de 30 com o
+# mesmo código), volta com teste e saúde do tronco
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_disjuntor.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 115: disjuntor por tronco (testar_voz_disjuntor.py)", True, f"select {r.returncode}", None, None, 0)
 
 # SQL 106 · Ritmo da discagem (Power/Preditivo V1): transferência sem operador separada do abandono e amostras de 5 min
 # por carteira (só a VM/servidor grava; cada empresa lê só a sua)
