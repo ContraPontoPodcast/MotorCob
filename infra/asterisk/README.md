@@ -33,6 +33,26 @@ bucket único `<projeto>-motorcx-gravacoes` da versão do piloto não é usado: 
 Ele não pede nem mostra segredos. A senha do ARI é
 gerada dentro do Secret Manager (`motorcx-voz-ari-senha`) e não aparece na tela.
 
+**Firewall automático (SQL 104, PR T2 da Telefonia):** em vez de editar a lista a cada operadora nova, os IPs da
+operadora entram no cadastro de cada tronco (e os do PABX, na transferência), e a equipe MotorCX confere e libera no
+Console (Agente virtual › tronco › "Liberar IPs no firewall", com a verificação em duas etapas). A cada 2 minutos a
+VM (`motorcx-voz-firewall.timer` → `voz/firewall.py`) põe nas regras `motorcx-voz-sip` e `motorcx-voz-rtp` a lista
+fixa deste script (metadado `motorcx-firewall-fixos`) + os IPs liberados, depois de conferir tudo de novo (só IPv4,
+do banco até /24, nunca `0.0.0.0/0`, rede interna ou IP do MotorCX; no máximo 500). Sem nenhuma origem, as regras
+ficam desligadas (SIP fechado). Cada mudança vai para `voz_firewall_eventos`. Vem **desligado**; para ligar (uma vez):
+
+```bash
+bash criar_gcp.sh motorcob                      # scripts novos nas VMs + regras SIP/RTP criadas (desligadas se a lista estiver vazia)
+bash criar_gcp.sh firewall-automatico motorcob  # papel motorcxVozFirewall na conta motorcx-asterisk + metadado nas duas VMs
+```
+
+O papel só lê e atualiza as duas regras (condição pelo nome). Se o journal da VM mostrar HTTP 403 mesmo assim, rode
+`SEM_CONDICAO=1 bash criar_gcp.sh firewall-automatico motorcob` (o mesmo papel sem a condição: a conta passa a poder
+atualizar qualquer regra de firewall do projeto, então só se precisar). Para voltar à lista fixa:
+`DESLIGAR=1 bash criar_gcp.sh firewall-automatico motorcob` e depois `bash criar_gcp.sh motorcob`. Com o firewall
+automático ligado, rodar o script de novo não mexe nas origens SIP/RTP: só atualiza a lista fixa no metadado, e a VM
+aplica em até 2 minutos.
+
 **Depois de rodar de novo (VM que já existe):** o script só troca os metadados; a VM instala os scripts e unidades
 novos no próximo boot. Para aplicar já, em cada VM:
 

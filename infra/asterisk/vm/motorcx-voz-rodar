@@ -1,7 +1,8 @@
 #!/bin/bash
 # Sobe um dos contêineres da voz em primeiro plano (o systemd cuida de reiniciar).
 #   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite | speech-temas |
-#                     speech-buscas | simulador-fluxo | importador | fluxo-noite | gerar-fluxo | gerar-segmentacao | sons
+#                     speech-buscas | simulador-fluxo | importador | fluxo-noite | gerar-fluxo | gerar-segmentacao | sons |
+#                     firewall
 # sons (PR10): gera sem-robo.wav e alo.wav com o TTS da voz do agente (voz/sons_sistema.py) em /var/motorcx/sons; quem
 # instala no Asterisk é o motorcx-voz-sons. Com /var/motorcx/sons/sem-robo.wav, o Asterisk sobe com a pasta montada em
 # /var/lib/asterisk/sounds/motorcx (só leitura): os sons ficam depois de reiniciar e de atualizar a imagem.
@@ -60,6 +61,15 @@ case "${1:-}" in
     fi
     exec docker run --name motorcx-voz-speech-noite "${comum_voz[@]}" -e MOTORCX_SPEECH_ANALYTICS=1 "$IMG_VOZ" \
       python3 -m voz.analise.rotina noite --parte "$PARTE" ;;
+  firewall)
+    # SQL 104: regras motorcx-voz-sip/rtp = lista fixa do criar_gcp.sh + IPs liberados pela equipe no banco. Desligado
+    # por padrão: liga com o metadado motorcx-firewall-automatico=1 (bash criar_gcp.sh firewall-automatico)
+    if [ "$(meta motorcx-firewall-automatico)" != 1 ]; then
+      echo "Firewall automático desligado nesta VM (metadado motorcx-firewall-automatico)"; exit 0
+    fi
+    exec docker run --name motorcx-voz-firewall "${comum_voz[@]}" -e MOTORCX_IP_EXTERNO="$IP_EXTERNO" \
+      -e MOTORCX_REDE_LOCAL="$REDE_LOCAL" -e MOTORCX_FIREWALL_FIXOS="$(meta motorcx-firewall-fixos)" \
+      -e MOTORCX_VM_NOME="$(hostname -s)" "$IMG_VOZ" python3 -m voz.firewall ;;
   fluxo-noite)
     exec docker run --name motorcx-voz-fluxo-noite "${comum_voz[@]}" "$IMG_VOZ" \
       python3 -m voz.fluxo_metricas --parte "$PARTE" ;;

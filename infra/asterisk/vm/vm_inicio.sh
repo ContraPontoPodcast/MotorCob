@@ -82,7 +82,7 @@ for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-s
          motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-https.service \
          motorcx-voz-https.timer motorcx-voz-importador.service motorcx-voz-importador.timer \
          motorcx-voz-fluxo-noite.service motorcx-voz-fluxo-noite.timer motorcx-voz-gerar-fluxo.service \
-         motorcx-voz-gerar-segmentacao.service; do
+         motorcx-voz-gerar-segmentacao.service motorcx-voz-firewall.service motorcx-voz-firewall.timer; do
   baixar_arquivo "$u" > "/etc/systemd/system/$u" || true
 done
 install -d -m 755 /usr/local/share/motorcx/caddy
@@ -110,7 +110,7 @@ fi
 systemctl daemon-reload
 systemctl enable --now motorcx-voz-config.timer motorcx-voz-transcricao.timer motorcx-voz-atualizar.timer \
   motorcx-voz-speech.timer motorcx-voz-speech-noite.timer motorcx-voz-speech-temas.timer motorcx-voz-https.timer \
-  motorcx-voz-importador.timer motorcx-voz-fluxo-noite.timer
+  motorcx-voz-importador.timer motorcx-voz-fluxo-noite.timer motorcx-voz-firewall.timer
 systemctl enable --now motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
   motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-gerar-fluxo.service \
   motorcx-voz-gerar-segmentacao.service
