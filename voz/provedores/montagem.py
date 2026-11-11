@@ -30,6 +30,7 @@ from datetime import date, datetime, timedelta
 from motor import voz as V
 from voz.provedores.base import MOTIVOS_TRANSFERENCIA, Conexao, ContextoChamada, Emitir, ProvedorVoz
 from voz.provedores.rtp import TAXA, PonteRTP
+from voz.falado import como_soa
 from voz.fluxo_validador import pede_cpf
 from voz.transcricao.ia import ConversaComTurnos, TurnosConversa
 
@@ -614,6 +615,41 @@ async def rodar_pipecat(ponte: PonteRTP, conversa: Conversa, stt, tts, parar: as
     await runner
 
 
+def para_tts(texto: str) -> str:
+    """PR10 do redesenho (SPEC B6 e Q9): o texto que vai ao TTS na ligação, com valores, datas, horários, parcelas e
+    percentuais por extenso, igual ao "Como soa no telefone" do editor (voz/falado.py = site/src/lib/falado.ts; casos em
+    tests/dados/fala_por_extenso_casos.json)."""
+    return como_soa(texto or "")
+
+
+class ConversaFalada:
+    """O que o Pipecat recebe: a mesma conversa, com toda fala que vai ao TTS passada por para_tts (comecar, ouvir,
+    silêncio e a fala de espera/do retorno sem humano por falar_agora). Só a voz muda: a transcrição, os eventos e o
+    resto da Montagem continuam com a conversa de dentro (o texto como foi escrito)."""
+
+    def __init__(self, interna):
+        object.__setattr__(self, "_interna", interna)
+
+    def comecar(self) -> list[str]:
+        return [para_tts(t) for t in self._interna.comecar() or []]
+
+    def ouvir(self, texto: str) -> list[str]:
+        return [para_tts(t) for t in self._interna.ouvir(texto) or []]
+
+    def silencio(self) -> list[str]:
+        f = getattr(self._interna, "silencio", None)
+        return [para_tts(t) for t in (f() if callable(f) else None) or []]
+
+    def __getattr__(self, nome):
+        return getattr(self._interna, nome)
+
+    def __setattr__(self, nome, valor):
+        if nome == "falar_agora" and callable(valor):
+            orig = valor
+            valor = lambda t: orig(para_tts(t))   # noqa: E731
+        setattr(self._interna, nome, valor)
+
+
 @dataclass
 class SessaoMontagem:
     ctx: ContextoChamada
@@ -748,7 +784,7 @@ class Montagem(ProvedorVoz):
                                                                   local_addr=(self.cfg.host_midia, s.porta))
             envio = asyncio.ensure_future(ponte.enviar_ritmado())
             stt, tts = self.servicos or montar_servicos_pipecat(self.cfg, self.segredos)
-            await rodar_pipecat(ponte, s.conversa, stt, tts, s.parar)
+            await rodar_pipecat(ponte, ConversaFalada(s.conversa), stt, tts, s.parar)   # PR10: voz por extenso
             envio.cancel()
         except Exception as ex:   # noqa: BLE001 — falha de áudio/serviço: devolve a pessoa para um humano
             log.warning("sessão da montagem falhou (%s)", ex.__class__.__name__)
