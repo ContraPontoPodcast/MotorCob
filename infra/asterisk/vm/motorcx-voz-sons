@@ -1,0 +1,45 @@
+#!/bin/bash
+# Gera e instala os áudios do sistema do Asterisk com a voz do agente (PR10): sem-robo.wav (SQL 91, quem atende sem
+# robô livre) e alo.wav (Alô fake). Rode como root: sudo /usr/local/bin/motorcx-voz-sons
+#   1. lê os segredos para /run (motorcx-voz-segredos) e gera os sons na imagem da voz (motorcx-voz-rodar sons): TTS da
+#      Montagem com a voz e o modelo de /etc/motorcx/provedores.json e a chave do cofre (motorcx-voz-tts), WAV 8 kHz,
+#      mono, 16 bits em /var/motorcx/sons. A chave nunca sai do processo: nem tela, nem arquivo, nem log;
+#   2. instala no contêiner do Asterisk em /var/lib/asterisk/sounds/motorcx/ (docker cp; sem reiniciar). Daqui em
+#      diante o Asterisk sobe com /var/motorcx/sons montada (motorcx-voz-rodar asterisk), então os sons ficam depois de
+#      reiniciar e de a imagem atualizar às 05:35;
+#   3. confere: lista os arquivos no contêiner e o formato (8000 Hz, 1 canal, 16 bits).
+# Textos neutros, sem dívida, credor, valor nem nome (voz/sons_sistema.py › SONS). Pode rodar de novo (troca os sons).
+set -euo pipefail
+. /usr/local/bin/motorcx-voz-comum
+DIR=/var/motorcx/sons
+DESTINO=/var/lib/asterisk/sounds/motorcx
+/usr/local/bin/motorcx-voz-segredos
+install -d -m 755 -o 10010 -g 10010 "$DIR"
+docker rm -f motorcx-voz-sons >/dev/null 2>&1 || true
+/usr/local/bin/motorcx-voz-rodar sons
+for s in sem-robo alo; do
+  [ -s "$DIR/$s.wav" ] || { echo "motorcx-voz-sons: $s.wav não foi gerado" >&2; exit 1; }
+done
+if docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' motorcx-asterisk 2>/dev/null | grep -qw "$DESTINO"; then
+  echo "O Asterisk já lê $DIR (montada em $DESTINO)."
+elif docker inspect motorcx-asterisk >/dev/null 2>&1; then
+  docker exec -u 0 motorcx-asterisk mkdir -p "$DESTINO"
+  docker cp "$DIR/sem-robo.wav" "motorcx-asterisk:$DESTINO/sem-robo.wav"
+  docker cp "$DIR/alo.wav" "motorcx-asterisk:$DESTINO/alo.wav"
+  docker exec -u 0 motorcx-asterisk chmod 644 "$DESTINO/sem-robo.wav" "$DESTINO/alo.wav"
+  echo "Instalados no Asterisk em $DESTINO (no próximo reinício, a pasta $DIR passa a ser montada)."
+else
+  echo "O contêiner motorcx-asterisk não está rodando: os sons entram quando ele subir (pasta $DIR montada)."
+fi
+docker exec motorcx-asterisk ls -l "$DESTINO" 2>/dev/null || true
+command -v python3 >/dev/null || exit 0
+for s in sem-robo alo; do
+  python3 - "$DIR/$s.wav" <<'PY'
+import sys, wave
+with wave.open(sys.argv[1]) as w:
+    ok = (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (8000, 1, 2)
+    print(f"{sys.argv[1]}: {w.getframerate()} Hz, {w.getnchannels()} canal, {8 * w.getsampwidth()} bits, "
+          f"{w.getnframes() / w.getframerate():.1f} s {'ok' if ok else 'FORMATO ERRADO'}")
+    sys.exit(0 if ok else 1)
+PY
+done

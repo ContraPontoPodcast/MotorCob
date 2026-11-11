@@ -132,12 +132,38 @@ export function ChecagensFala({ itens }: { itens: Checagem[] }) {
 	);
 }
 
-/** "Se não ouvir nada": ainda sem tratamento próprio no executor (B2, PR8). */
-export function SeNaoOuvir() {
+/**
+ * "Se não entender" e "Se não ouvir nada" (SQL 95; SPEC §2.3 item 4): a fala própria da etapa (vazia = a padrão do
+ * executor, com aviso de fala genérica), quantas vezes até seguir e para onde vai depois (`destino`, montado pela
+ * gaveta). As checagens da fala valem também aqui (a trava 1 e a de senha).
+ */
+export function QuadroRepeticao({ qual, fala, padrao, vezes, onFala, onVezes, destino, disabled, checagens }: {
+	qual: 'nao_entendi' | 'silencio'; fala: string; padrao: string; vezes: number;
+	onFala: (v: string) => void; onVezes: (n: number) => void; destino: ReactNode; disabled?: boolean; checagens?: Checagem[];
+}) {
+	const ouvir = qual === 'silencio';
+	const titulo = ouvir ? 'Se não ouvir nada' : 'Se não entender';
 	return (
-		<div className="rounded-xl px-3 py-2.5 text-[12.5px]" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }} data-se-nao-ouvir>
-			<b className="block font-semibold text-[var(--base-texto)]">Se não ouvir nada</b>
-			<span className="text-[var(--base-texto-3)]">Ainda sem tratamento próprio: hoje o agente espera a pessoa falar.</span>
+		<div className="space-y-2 rounded-xl px-3 py-2.5" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }} {...{ [ouvir ? 'data-se-nao-ouvir' : 'data-se-nao-entender']: '' }}>
+			<b className="block text-[13px] font-semibold text-[var(--base-texto)]">{titulo}</b>
+			<p className="text-[12px] text-[var(--base-texto-2)]">{ouvir ? 'Depois de 6 s sem a pessoa falar (fixo pela MotorCX).' : 'Quando a resposta não bate com nenhuma das esperadas.'}</p>
+			<textarea aria-label={`${titulo}: o que o agente diz`} rows={2} value={fala} maxLength={500} disabled={disabled} placeholder={padrao} onChange={e => onFala(e.target.value)}
+				className={`${campoCls} h-auto w-full py-2 leading-relaxed`} style={campoStyle} />
+			{!fala.trim() && (
+				<small className="flex items-start gap-1.5 text-[11.5px] text-[var(--estado-atencao-texto)]" data-fala-generica>
+					<TriangleAlert size={12} className="mt-[2px] shrink-0" aria-hidden />
+					<span>Fala padrão: “{padrao}”. Ela é genérica; escreva uma própria, que diga de outro jeito e dê um exemplo do que responder.</span>
+				</small>
+			)}
+			{fala.trim() && checagens && checagens.length > 0 && <ChecagensFala itens={checagens} />}
+			<div className="grid items-center gap-1.5 sm:grid-cols-[auto_auto_minmax(0,1fr)]">
+				<select aria-label={`${titulo}: quantas vezes`} value={vezes} disabled={disabled} onChange={e => onVezes(Number(e.target.value))} className={campoCls} style={campoStyle}>
+					{[1, 2, 3].map(n => <option key={n} value={n}>{n === 1 ? 'Na 1ª vez' : `Depois de ${n} vezes`}</option>)}
+				</select>
+				<span className="text-[12.5px] text-[var(--base-texto-2)]">{vezes === 1 ? 'sem ' : ''}{ouvir ? (vezes === 1 ? 'ouvir' : 'sem ouvir') : (vezes === 1 ? 'entender' : 'sem entender')}, então →</span>
+				{destino}
+			</div>
+			<small className="block text-[11.5px] text-[var(--base-texto-3)]">{vezes === 1 ? 'Não pede de novo.' : `Pede de novo ${vezes - 1 === 1 ? '1 vez' : `${vezes - 1} vezes`} antes de seguir.`}</small>
 		</div>
 	);
 }

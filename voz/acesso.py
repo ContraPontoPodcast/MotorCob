@@ -54,6 +54,9 @@ LEITURA = {
     # SQL 83 · B4: faixas do próprio MotorCX (destino recusado para tronco e transferência)
     "voz_enderecos_motorcx": "enderecos_motorcx",
 }
+# SQL 113 · Telefonia T4: colunas novas em views próprias (o SQL 57 recria voz_vm.troncos/rotas sem elas). O acesso
+# próprio junta pelo id; banco sem o SQL 113: fica só a view de base (o banco.py usa o padrão de cada campo).
+EXTRAS = {"voz_troncos": "troncos_campos", "voz_rotas": "rotas_prefixo"}
 # tabela -> função de escrita do schema voz_vm (o upsert é dela)
 ESCRITA = {
     "voz_chamadas": "gravar_chamadas", "consumo_voz": "gravar_consumo", "voz_gravacoes": "gravar_gravacoes",
@@ -86,6 +89,8 @@ RPC = {
     "pegar_reciclagem_voz": "pegar_reciclagem", "concluir_reciclagem_voz": "concluir_reciclagem",
     "registrar_reciclagem_auto_voz": "registrar_reciclagem_auto",
     "pausar_tronco_voz": "pausar_tronco", "troncos_pausados_voz": "troncos_pausados",            # pausa da rota
+    # SQL 104 · firewall das VMs a partir do cadastro (voz/firewall.py): origens liberadas e o registro da mudança
+    "origens_firewall_voz": "origens_firewall", "registrar_firewall_voz": "registrar_firewall",
     "registrar_janelas_lote_voz": "registrar_janelas_lote",                                       # janelas do lote
     # SQL 63 · ligações da IA (gravação), clusterização semanal dos temas e embedding dos trechos
     "registrar_gravacoes_ia_voz": "registrar_gravacoes_ia", "trechos_para_temas_voz": "trechos_para_temas",
@@ -106,6 +111,9 @@ RPC = {
     "conferir_identidade_voz": "conferir_identidade", "limpar_identidade_voz": "limpar_identidade",
     # SQL 102 · uso dos robôs contratados (em uso agora e pico do dia, só contagens; o Plantão grava a cada 15 s)
     "registrar_uso_robos_voz": "registrar_uso_robos",
+    # SQL 114 · Telefonia T5: teste da rota (voz/testador.py)
+    "pegar_teste_tronco_voz": "pegar_teste_tronco", "ler_teste_tronco_voz": "ler_teste_tronco",
+    "registrar_teste_tronco_voz": "registrar_teste_tronco",
     # SQL 106 · ritmo da discagem (janelas de 5 min por carteira, só contagens; o Plantão grava a cada minuto)
     "registrar_ritmo_voz": "registrar_ritmo",
 }
@@ -237,7 +245,17 @@ class AcessoProprio:
 
     def selecionar(self, tabela, filtros: dict | None = None, ordem: str | None = None, limite: int | None = None):
         sql, params = montar_select(tabela, filtros, ordem, limite)
-        return [r[0] for r in self._run(sql, **params) or []]
+        linhas = [r[0] for r in self._run(sql, **params) or []]
+        if tabela in EXTRAS and linhas:
+            try:
+                extras = {r[0]["id"]: r[0] for r in self._run(f"select to_jsonb(t) from voz_vm.{EXTRAS[tabela]} t") or []}
+            except (_ConexaoCaiu, OSError):
+                raise
+            except Exception:   # noqa: BLE001 — view do SQL 113 ainda não criada: os campos ficam com o padrão
+                extras = {}
+            for l in linhas:
+                l.update({k: v for k, v in extras.get(l.get("id"), {}).items() if k != "id"})
+        return linhas
 
     def inserir(self, tabela, linhas, conflito: str | None = None, retornar=False, lote=1000):
         linhas = linhas if isinstance(linhas, list) else [linhas]
