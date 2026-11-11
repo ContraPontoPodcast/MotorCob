@@ -33,6 +33,26 @@ bucket único `<projeto>-motorcx-gravacoes` da versão do piloto não é usado: 
 Ele não pede nem mostra segredos. A senha do ARI é
 gerada dentro do Secret Manager (`motorcx-voz-ari-senha`) e não aparece na tela.
 
+**Firewall automático (SQL 104, PR T2 da Telefonia):** em vez de editar a lista a cada operadora nova, os IPs da
+operadora entram no cadastro de cada tronco (e os do PABX, na transferência), e a equipe MotorCX confere e libera no
+Console (Agente virtual › tronco › "Liberar IPs no firewall", com a verificação em duas etapas). A cada 2 minutos a
+VM (`motorcx-voz-firewall.timer` → `voz/firewall.py`) põe nas regras `motorcx-voz-sip` e `motorcx-voz-rtp` a lista
+fixa deste script (metadado `motorcx-firewall-fixos`) + os IPs liberados, depois de conferir tudo de novo (só IPv4,
+do banco até /24, nunca `0.0.0.0/0`, rede interna ou IP do MotorCX; no máximo 500). Sem nenhuma origem, as regras
+ficam desligadas (SIP fechado). Cada mudança vai para `voz_firewall_eventos`. Vem **desligado**; para ligar (uma vez):
+
+```bash
+bash criar_gcp.sh motorcob                      # scripts novos nas VMs + regras SIP/RTP criadas (desligadas se a lista estiver vazia)
+bash criar_gcp.sh firewall-automatico motorcob  # papel motorcxVozFirewall na conta motorcx-asterisk + metadado nas duas VMs
+```
+
+O papel só lê e atualiza as duas regras (condição pelo nome). Se o journal da VM mostrar HTTP 403 mesmo assim, rode
+`SEM_CONDICAO=1 bash criar_gcp.sh firewall-automatico motorcob` (o mesmo papel sem a condição: a conta passa a poder
+atualizar qualquer regra de firewall do projeto, então só se precisar). Para voltar à lista fixa:
+`DESLIGAR=1 bash criar_gcp.sh firewall-automatico motorcob` e depois `bash criar_gcp.sh motorcob`. Com o firewall
+automático ligado, rodar o script de novo não mexe nas origens SIP/RTP: só atualiza a lista fixa no metadado, e a VM
+aplica em até 2 minutos.
+
 **Depois de rodar de novo (VM que já existe):** o script só troca os metadados; a VM instala os scripts e unidades
 novos no próximo boot. Para aplicar já, em cada VM:
 
@@ -93,6 +113,25 @@ criar motorcx-voz-trunk-12-3 "Senha do tronco"
 
 Tronco autenticado por IP não tem senha.
 
+**Senha de tronco pela tela (SQL 103, PR T1 da Telefonia):** a senha é digitada uma vez (Console › Agente virtual ›
+tronco › "Guardar a senha no cofre"; no PR T5, também na tela Telefonia do cliente) e vai **direto** para o Secret
+Manager pela Edge Function `segredo-tronco-voz`, sempre no segredo da empresa do tronco:
+`motorcx-voz-trunk-e<empresa>-<referência>` (no banco, `segredo_ref = voz/trunk/e<empresa>/<referência>`). O banco
+guarda só a data (`segredo_guardado_em`) e a versão; a versão anterior é destruída. Exige a verificação em duas etapas.
+A conta que escreve (`motorcx-voz-cofre-escrita`) **não lê** nenhum segredo; quem lê é só a `motorcx-asterisk` das
+VMs, na hora de gerar o pjsip (um tronco cuja senha ainda não está no cofre fica de fora sozinho, sem parar os outros).
+Quem administra o projeto no Google Cloud continua conseguindo ler o cofre: o controle é o IAM restrito e o log de
+auditoria do Secret Manager, não uma promessa de que "ninguém vê". Uma vez, no Cloud Shell (na pasta `infra/asterisk`):
+
+```bash
+bash criar_gcp.sh chave-cofre motorcob     # conta, papéis sem leitura e a chave num arquivo 0600 (não mostra o conteúdo)
+```
+
+Siga o que ele imprimir (colar no secret `GCP_COFRE_TRONCO_CHAVE` do Supabase e apagar o arquivo com `shred`) e publique
+a função com "Verify JWT" ligado: `supabase functions deploy segredo-tronco-voz --project-ref <ref>` (ou cole no editor
+o arquivo de `python3 scripts/juntar_funcao.py segredo-tronco-voz`). Conferir sem ver valor:
+`gcloud secrets versions list motorcx-voz-trunk-e12-aurora --project=motorcob` (só versão e data).
+
 **Opcionais:**
 - `motorcx-voz-deepgram`, `motorcx-voz-llm` e `motorcx-voz-tts`: chaves da Montagem MotorCX;
 - `motorcx-voz-transcricao-api`: chave da reserva da transcrição por API;
@@ -150,6 +189,7 @@ antes da janela de discagem.
 |---|---|
 | `motorcx-asterisk` | Asterisk 22 (PJSIP, ARI, AMD, MixMonitor) na rede do host. SIP em 5060, RTP em 10000–20000, ARI só em `127.0.0.1:8088`. |
 | `motorcx-voz-orquestrador` | Plantão das empresas com `voz_config.modo = 'real'`. Só disca com o acesso próprio ao banco (seção 7). Detalhes abaixo da tabela. |
+| `motorcx-voz-teste` | "Testar a rota" da tela Telefonia (SQL 114, `voz/testador.py`): contínuo nas duas VMs; pega o pedido do banco, lê o número de teste no cofre, liga pelo tronco pedido (app ARI `motorcx-teste`, o tronco inativo também sobe como endpoint só para isso) e grava cada passo. Nada de número em log. |
 | `motorcx-voz-simulado` | O mesmo plantão para as empresas em modo `simulado`, sem ligação de verdade. |
 | `motorcx-voz-config.timer` | A cada 2 min, busca troncos, rotas, transferências e config no banco. Se algo mudou, regera o pjsip e o dialplan dentro do contêiner, com as senhas do cofre, e recarrega. Configuração inválida no banco mantém a que está no ar. |
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |
@@ -293,7 +333,9 @@ do Caddy) e o `motorcx-voz-https` (no boot e a cada 2 min) grava o Caddyfile ver
 - `/elevenlabs/pos-chamada` → receptor do webhook (127.0.0.1:8092, limite de 2 MB): sobe quando o `provedores.json` tem
   `elevenlabs.ref_webhook`;
 - `/simular` e `/roleplay` → simulador do Fluxo e roleplay (`voz/simulador_http.py`, 127.0.0.1:8091, 256 KB), com o
-  serviço `motorcx-voz-simulador`: sobe com o metadado `motorcx-simulador-fluxo=1`.
+  serviço `motorcx-voz-simulador`: sobe com o metadado `motorcx-simulador-fluxo=1`. O mesmo `/simular` atende o treino
+  de operadores por texto do Roleplay (SQL 100, `voz/treino.py`: corpo com `"treino": "turno" | "avaliar"`), chamado pela
+  Edge Function `treino` com a mesma assinatura (sem rota nova no Caddy).
 O `criar_gcp.sh` abre a 8443 para `ORIGENS_HTTPS` (padrão: a internet toda, porque nem a ElevenLabs nem as Edge
 Functions têm IP de origem fixo; quem protege é a assinatura HMAC de cada rota) e a 80 só para o desafio do Let's
 Encrypt.

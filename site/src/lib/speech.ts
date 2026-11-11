@@ -25,6 +25,9 @@ export const ABAS_SA = [
 	{ id: 'visao', nome: 'Visão geral' },
 	{ id: 'qualidade', nome: 'Qualidade' },
 	{ id: 'operadores', nome: 'Operadores' },
+	// SQL 90 · treino de operadores humanos com cliente simulado. Só aparece para quem treina ou cuida dos cenários
+	// (treinar_operadores / editar_cenarios_treino: Admin e Qualidade). Subtelas em lib/roleplay.ts.
+	{ id: 'roleplay', nome: 'Roleplay' },
 	{ id: 'alertas', nome: 'Alertas' },
 	{ id: 'recomendacoes', nome: 'Recomendações' },
 	{ id: 'curadoria', nome: 'Curadoria' },
@@ -33,8 +36,8 @@ export const BUSCA_SA = { id: 'busca', nome: 'Buscar nas conversas' } as const;
 export type AbaSA = (typeof ABAS_SA)[number]['id'] | typeof BUSCA_SA.id;
 /** Endereços antigos que continuam abrindo: "Retroalimentação" virou Recomendações. */
 const ALIAS_SA: Record<string, AbaSA> = { retroalimentacao: 'recomendacoes' };
-/** O Roleplay saiu do Speech Analytics e foi para Fluxo do agente › Testar com personas (decisão do redesign v2).
- *  A tela é /voz/agente/personas (Agente Voz/CX; o link antigo /speech-analytics/roleplay redireciona para lá). */
+/** "Testar com personas" (o teste do AGENTE DE IA) fica em Agente Voz/CX › Agente de voz. A aba Roleplay do Speech
+ *  Analytics é outra coisa: treino de operadores HUMANOS (SQL 90), e mostra um link para cá. */
 export const ROTA_TESTAR_PERSONAS = '/voz/agente/personas';
 export function abaValida(a: string | undefined): AbaSA {
 	if (a === BUSCA_SA.id) return 'busca';
