@@ -42,6 +42,7 @@ export default [
     route('empresa/faturamento', 'routes/empresa-faturamento.tsx'),
     route('empresa/faturamento/demonstrativo', 'routes/empresa-faturamento-demonstrativo.tsx'),
     route('empresa/contratacao', 'routes/empresa-contratacao.tsx'),
+    route('empresa/contratacao/voz', 'routes/empresa-contratacao-voz.tsx'),
     route('empresa/contratacao/robos', 'routes/empresa-contratacao-robos.tsx'),
     route('empresa/contratacao/robos/historico', 'routes/empresa-contratacao-robos-historico.tsx'),
     route('conta', 'routes/conta.tsx'),

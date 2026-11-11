@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { cadenciaIa, csvLigacoesIa, csvResumoIa, exemploCadencia, milesimos, segundosTarifadosIa, totalMesIa, valorIa } from './minuto-ia';
+import { REGUA_CADENCIA, cadenciaIa, csvLigacoesIa, csvResumoIa, exemploCadencia, milesimos, segundosTarifadosIa, totalMesIa, valorIa } from './minuto-ia';
 import { ehItemFaturaVoz } from './voz';
 import { rotaPai } from './rota-pai';
 
@@ -50,4 +50,12 @@ test('linhas novas da fatura do minuto falado contam como do agente', () => {
 
 test('demonstrativo volta para o Faturamento', () => {
 	assert.deepEqual(rotaPai('/empresa/faturamento/demonstrativo'), { to: '/empresa/faturamento', rotulo: 'Faturamento' });
+});
+
+test('régua da Contratação com 0/30/6: 5→30, 12→30, 31→36, 47→48, 95→96', () => {
+	assert.deepEqual(REGUA_CADENCIA.map(s => segundosTarifadosIa(s, 0, 30, 6)), [30, 30, 36, 48, 96]);
+});
+
+test('Contratação › Agente de voz volta para a Contratação', () => {
+	assert.deepEqual(rotaPai('/empresa/contratacao/voz'), { to: '/empresa/contratacao', rotulo: 'Contratação' });
 });
