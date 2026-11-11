@@ -3107,5 +3107,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 116: Testar agora do Agente de voz (testar_testar_agora.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 123 · Agente de voz por minuto falado (PR 1): contrato da IA por empresa com vigência, cadência e tarifação em
+# milésimos com tempo grátis (mesma tabela de casos da VM)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_cobranca_ia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 123: contrato do minuto de IA (testar_cobranca_ia.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
