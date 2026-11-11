@@ -228,17 +228,33 @@ do lote, chamadas curtas da Anatel). Com o Alô fake ligado, ele toca antes e a 
 em `alo_fake_max_s`. Contadores do plantão: `sem_robo_provedor` (linha não discada por falta de sessão no provedor) e
 `abandono_sem_robo`.
 
-O áudio não vem na imagem por padrão (como o `sound:motorcx/alo` do Alô fake). Para instalar:
-1. Texto (curto, neutro, **sem** dívida, credor nem nome da pessoa: a identidade vem antes da dívida), por exemplo:
-   "Olá! No momento não conseguimos continuar esta ligação. Vamos tentar de novo mais tarde. Obrigado."
-2. Gere a fala com a mesma voz pt-BR do agente, no TTS da Montagem ou da ElevenLabs (pelo painel do fornecedor; a
-   chave nunca vai para o repositório nem para a VM por este caminho), e baixe em WAV ou MP3.
-3. Converta para o formato do Asterisk (8 kHz, mono, 16 bits):
-   `ffmpeg -i fala.mp3 -ar 8000 -ac 1 -sample_fmt s16 infra/asterisk/sons/sem-robo.wav`
-   (para o Alô fake, o mesmo com `alo.wav`).
-4. Faça o commit em `infra/asterisk/sons/`: o `Dockerfile` copia a pasta para `/var/lib/asterisk/sounds/motorcx/` e a
-   imagem nova chega às VMs às 05:35. Para testar antes numa VM:
-   `docker cp sem-robo.wav motorcx-asterisk:/var/lib/asterisk/sounds/motorcx/` (não precisa reiniciar).
+Os áudios (`sound:motorcx/sem-robo` e o `sound:motorcx/alo` do Alô fake) não vêm na imagem: o script
+`motorcx-voz-sons` da VM gera os dois com a **mesma voz do agente** (TTS da Montagem: provedor, voz e modelo de
+`/etc/motorcx/provedores.json`; chave do cofre `motorcx-voz-tts`, lida pela conta da VM e nunca mostrada, gravada ou
+logada), converte para o formato do Asterisk (WAV 8 kHz, mono, 16 bits; `voz/sons_sistema.py`, sem ffmpeg), grava em
+`/var/motorcx/sons` e instala no contêiner em `/var/lib/asterisk/sounds/motorcx/`. Depois disso o Asterisk sobe com
+`/var/motorcx/sons` montada ali (`motorcx-voz-rodar asterisk`), então os sons ficam depois de reiniciar e de a imagem
+atualizar. Textos neutros, **sem** dívida, credor, valor nem nome (a identidade vem antes da dívida; os testes conferem
+com a trava B7):
+- `sem-robo`: "Olá! No momento não conseguimos continuar esta ligação. Vamos tentar de novo mais tarde. Obrigado."
+- `alo`: "Alô?"
+
+Só com a ElevenLabs como TTS da Montagem (com o Google, o script para e avisa). Pode rodar de novo (troca os sons).
+**Comando (Cloud Shell, na pasta do repositório atualizada com `git pull`, depois do merge e da imagem `voz` publicada;
+fora da janela de discagem, porque reinicia o Asterisk e os serviços cuja imagem mudou):**
+
+```bash
+for vm in "motorcx-ast-1 southamerica-east1-a" "motorcx-ast-2 southamerica-east1-b"; do
+  set -- $vm
+  gcloud compute instances add-metadata "$1" --project=motorcob --zone="$2" \
+    --metadata-from-file=startup-script=infra/asterisk/vm/vm_inicio.sh,arquivo-motorcx-voz-rodar=infra/asterisk/vm/motorcx-voz-rodar,arquivo-motorcx-voz-sons=infra/asterisk/vm/motorcx-voz-sons
+  gcloud compute ssh "$1" --project=motorcob --zone="$2" --tunnel-through-iap -- \
+    'sudo google_metadata_script_runner startup && sudo /usr/local/bin/motorcx-voz-atualizar && sudo /usr/local/bin/motorcx-voz-sons && sudo systemctl restart motorcx-asterisk && sleep 5 && sudo docker exec motorcx-asterisk ls -l /var/lib/asterisk/sounds/motorcx/'
+done
+```
+
+O fim de cada VM lista `alo.wav` e `sem-robo.wav` no contêiner e o formato de cada um ("8000 Hz, 1 canal, 16 bits …
+ok"). Rodar o `criar_gcp.sh` de novo também atualiza os metadados (o `add-metadata` acima é só o atalho).
 
 Sem o arquivo, o Asterisk avisa que o áudio falhou e a ligação acaba na hora, com o mesmo desfecho
 `abandono_sem_robo` (é o único caso sem mensagem). Confira com `asterisk -rx "core show file formats"` e, numa
@@ -295,7 +311,9 @@ do Caddy) e o `motorcx-voz-https` (no boot e a cada 2 min) grava o Caddyfile ver
 - `/elevenlabs/pos-chamada` → receptor do webhook (127.0.0.1:8092, limite de 2 MB): sobe quando o `provedores.json` tem
   `elevenlabs.ref_webhook`;
 - `/simular` e `/roleplay` → simulador do Fluxo e roleplay (`voz/simulador_http.py`, 127.0.0.1:8091, 256 KB), com o
-  serviço `motorcx-voz-simulador`: sobe com o metadado `motorcx-simulador-fluxo=1`.
+  serviço `motorcx-voz-simulador`: sobe com o metadado `motorcx-simulador-fluxo=1`. O mesmo `/simular` atende o treino
+  de operadores por texto do Roleplay (SQL 100, `voz/treino.py`: corpo com `"treino": "turno" | "avaliar"`), chamado pela
+  Edge Function `treino` com a mesma assinatura (sem rota nova no Caddy).
 O `criar_gcp.sh` abre a 8443 para `ORIGENS_HTTPS` (padrão: a internet toda, porque nem a ElevenLabs nem as Edge
 Functions têm IP de origem fixo; quem protege é a assinatura HMAC de cada rota) e a 80 só para o desafio do Let's
 Encrypt.

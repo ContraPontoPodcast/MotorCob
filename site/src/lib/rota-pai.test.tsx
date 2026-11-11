@@ -97,3 +97,24 @@ test('o voltar desenhado nas seções do Agente Voz/CX aponta para a Visão gera
 	const demo = renderToStaticMarkup(<MemoryRouter initialEntries={['/dev/fluxo/testar']}><RotaDaTela.Provider value="/voz/agente/testar"><Voltar /></RotaDaTela.Provider></MemoryRouter>);
 	assert.match(demo, /href="\/voz\/agente"/);
 });
+
+test('Roleplay: o Painel volta para a Visão geral (como toda aba); seções, para o Painel; detalhes, para a seção', () => {
+	assert.deepEqual(rotaPai('/speech-analytics/roleplay'), { to: '/speech-analytics', rotulo: 'Visão geral do Speech Analytics' });
+	assert.deepEqual(rotaPai('/speech-analytics/roleplay/cenarios'), { to: '/speech-analytics/roleplay', rotulo: 'Painel do Roleplay' });
+	assert.deepEqual(rotaPai('/speech-analytics/roleplay/operadores'), { to: '/speech-analytics/roleplay', rotulo: 'Painel do Roleplay' });
+	assert.deepEqual(rotaPai('/speech-analytics/roleplay/cenarios/12'), { to: '/speech-analytics/roleplay/cenarios', rotulo: 'Cenários' });
+	assert.deepEqual(rotaPai('/speech-analytics/roleplay/operadores/7'), { to: '/speech-analytics/roleplay/operadores', rotulo: 'Cadastro para treino' });
+	assert.equal(rotaPai('/speech-analytics/roleplay/cenarios/12/extra'), null, 'parâmetro casa um segmento só');
+	// toda rota do Roleplay no routes.ts tem voltar para uma tela acima dela
+	const rp = [...declaradas].filter(r => r.startsWith('/speech-analytics/roleplay'));
+	assert.equal(rp.length, 12);
+	for (const r of rp) {
+		const caminho = r.replace(/:[^/]+/g, '7');
+		const pai = rotaPai(caminho);
+		// o "Atribuir treino" volta para Treinos atribuídos (irmã); as outras, para uma tela acima delas
+		assert.ok(pai && (caminho.startsWith(pai.to + '/') || (r.endsWith('/atribuir') && pai.to.endsWith('/atribuicoes'))), `${r} → ${pai?.to}`);
+	}
+	const html = renderToStaticMarkup(<MemoryRouter initialEntries={['/speech-analytics/roleplay/cenarios/12']}><Voltar /></MemoryRouter>);
+	assert.match(html, /href="\/speech-analytics\/roleplay\/cenarios"/);
+	assert.match(html, /aria-label="Voltar para Cenários"/);
+});

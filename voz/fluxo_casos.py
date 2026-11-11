@@ -166,7 +166,8 @@ CASOS: list[tuple[str, object, list[str]]] = [
     ("mais de 60 blocos", _muitos(), ["blocos_demais"]),
     ("fala acima de 500 caracteres", _mud(_set("N13", "fala", "a" * 501)), ["fala_longa:N13"]),
     ("fala de 500 caracteres passa", _mud(_set("N13", "fala", "a" * 500)), []),
-    ("variável fora de variaveis_voz()", _mud(_set("N1", "fala", "Olá, falo com {{cpf}}?")), ["variavel_invalida:N1"]),
+    ("variável fora de variaveis_voz()", _mud(_set("N1", "fala", "Olá, falo com {{cpf}}?")),
+     ["fala_pede_senha:N1", "variavel_invalida:N1"]),                     # SQL 96: também cita CPF
     ("variável de oferta inexistente", _mud(_set("N6", "fala", "Fica {{oferta.juros}}?")), ["variavel_invalida:N6"]),
     ("valor antes de Confirmar identidade", _mud(_set("N1", "fala", "Consta {{saldo}}. Falo com {{primeiro_nome}}?")),
      ["valor_antes_identidade:N1"]),
@@ -200,6 +201,20 @@ CASOS: list[tuple[str, object, list[str]]] = [
     ("final com saída", _mud(_set("N12", "saidas", [_s("x", "N13", "sim")], em=None)), ["final_com_saida:N12"]),
     ("fala que pede senha", _mud(_set("N13", "fala", "Me diga a sua SENHA, por favor.")), ["fala_pede_senha:N13"]),
     ("fala que pede número do cartão", _mud(_set("N11", "fala", "Qual o número do cartão?")), ["fala_pede_senha:N11"]),
+    # SQL 96 · trava de CPF: a fala nunca pede, cita nem diz CPF (só "os três últimos números do CPF")
+    ("fala que pede o CPF", _mud(_set("N2", "fala", "Para sua segurança, me diga o seu CPF?")), ["fala_pede_senha:N2"]),
+    ("fala que pede o C.P.F. com acento e maiúsculas", _mud(_set("N2", "fala", "Me confirma o número do CPF, por favor?")),
+     ["fala_pede_senha:N2"]),
+    ("fala que diz um número com cara de CPF", _mud(_set("N16", "fala", "Registrei para 111.444.777-35. Obrigada.")),
+     ["fala_pede_senha:N16"]),
+    ("fala que pede os três últimos números do CPF passa",
+     _mud(lambda d: _bloco(d, "N2")["params"].update(pergunta="ultimos3_documento",
+                                                     fala="Me diga os três últimos números do seu CPF?")), []),
+    ("fala com 3 últimos dígitos do CPF passa", _mud(lambda d: _bloco(d, "N2")["params"].update(
+        pergunta="ultimos3_documento", fala="Pode me dizer os 3 últimos dígitos do CPF?")), []),
+    ("três últimos e depois o CPF inteiro", _mud(_set("N2", "fala", "Os três últimos números do CPF. Ou o CPF inteiro.")),
+     ["fala_pede_senha:N2"]),
+    ("objetivo pode dizer para nunca pedir CPF", _mud(_set("N5", "objetivo", "Feche o acordo. Nunca peça o CPF da pessoa.")), []),
     ("objetivo pode dizer para nunca pedir senha", _mud(_set("N5", "objetivo", "Feche o acordo. Nunca peça senha nem cartão.")), []),
     ("esquema 2", _mud(lambda d: d.update(esquema=2)), ["esquema_invalido"]),
     ("chave a mais no topo", _mud(lambda d: d.update(cpf="00000000000")), ["esquema_invalido"]),
@@ -217,6 +232,34 @@ CASOS: list[tuple[str, object, list[str]]] = [
     ("modelo sem conector escolhido ainda é válido", negociador(None, None, None, None), []),
     ("conferência fora do CRM não existe (sem param confere)", _mud(_set("N2", "confere", "dado_carga_vm")),
      ["params_invalidos:N2"]),
+    # SQL 95: "Se não entender" e "Se não ouvir nada" (fala própria, vezes e a saída "silencio")
+    ("fala própria para não entender e silêncio passa", _mud(_varios(
+        _set("N3", "nao_entendi", {"fala": "Não peguei. Quer negociar, já pagou ou prefere que eu ligue depois?", "vezes": 2}),
+        _set("N3", "silencio", {"fala": "Está me ouvindo? Pode falar, por exemplo: quero negociar.", "vezes": 1}),
+        lambda d: _bloco(d, "N3")["saidas"].append(_s("Não respondeu", "N13", "silencio")))), []),
+    ("abertura com silêncio indo para o recado neutro passa", _mud(_varios(
+        _set("N1", "silencio", {"vezes": 2}), lambda d: _bloco(d, "N1")["saidas"].append(_s("Ninguém fala", "N14", "silencio")))), []),
+    ("saída silencio fora das etapas que ouvem", _mud(lambda d: _bloco(d, "N15")["saidas"].append(_s("x", "N13", "silencio"))),
+     ["saida_invalida:N15"]),
+    ("silêncio com vezes fora de 1 a 3", _mud(_set("N9", "silencio", {"vezes": 4})), ["params_invalidos:N9"]),
+    ("não entender com chave a mais", _mud(_set("N8", "nao_entendi", {"fala": "De novo?", "para": "N13"})), ["params_invalidos:N8"]),
+    ("silêncio com fala vazia", _mud(_set("N6", "silencio", {"fala": "  "})), ["params_invalidos:N6"]),
+    ("silêncio em etapa que não ouve", _mud(_set("N11", "silencio", {"vezes": 1})), ["params_invalidos:N11"]),
+    ("fala de não entender longa", _mud(_set("N2", "nao_entendi", {"fala": "a" * 501})), ["fala_longa:N2"]),
+    ("fala de silêncio com variável inexistente", _mud(_set("N9", "silencio", {"fala": "Alô, {{cpf}}?"})),
+     ["fala_pede_senha:N9", "variavel_invalida:N9"]),                     # SQL 96: também cita CPF
+    ("fala de não entender pede senha", _mud(_set("N8", "nao_entendi", {"fala": "Me diga a senha do cartão."})),
+     ["fala_pede_senha:N8"]),
+    ("fala de silêncio cita o credor antes da identidade", _mud(_set("N1", "silencio", {"fala": "Alô? É sobre {{credor}}."})),
+     ["valor_antes_identidade:N1"]),
+    ("fala de não entender cita o saldo antes da identidade",
+     _mud(_set("N2", "nao_entendi", {"fala": "Para falar do {{saldo}}, me diga o dia e o mês."})),
+     ["valor_antes_identidade:N2"]),
+    ("fala de não entender com o saldo depois da identidade passa",
+     _mud(_set("N3", "nao_entendi", {"fala": "São {{saldo}} em aberto. Quer negociar?"})), []),
+    ("silêncio levando para a oferta antes da identidade",
+     _mud(lambda d: _bloco(d, "N2")["saidas"].append(_s("Não respondeu", "N6", "silencio"))),
+     ["valor_antes_identidade:N11", "valor_antes_identidade:N5", "valor_antes_identidade:N6", "valor_antes_identidade:N7"]),
 ]
 
 
