@@ -340,6 +340,8 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 	const [tronco, setTronco] = useState(String(atual?.tronco_id ?? ''));
 	const [tech, setTech] = useState(String(atual?.tech_prefix ?? ''));
 	const [ativo, setAtivo] = useState(atual ? atual.ativo !== false : true);
+	// SQL 111 (Power/Preditivo V8): operadores do cliente para transferência ao mesmo tempo (padrão 5)
+	const [simultaneas, setSimultaneas] = useState(String(atual?.simultaneas ?? 5));
 	const ipsAntes = Array.isArray(atual?.ips_operadora) ? (atual!.ips_operadora as string[]) : [];
 	const [ips, setIps] = useState(ipsAntes.join('\n'));
 	const [busy, setBusy] = useState(false);
@@ -347,6 +349,8 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 	const [tentou, setTentou] = useState(false);
 
 	const e: Record<string, string> = {};
+	const nSim = Number(simultaneas);
+	if (!Number.isInteger(nSim) || nSim < 1 || nSim > 500) e.simultaneas = 'De 1 a 500.';
 	const listaIps = lerIps(ips);
 	const motivoIps = ipsMotivo(listaIps);
 	if (motivoIps) e.ips = motivoIps;
@@ -371,6 +375,10 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 			const { data: pend, error: eIps } = await supabase.rpc('definir_ips_voz', { tipo: 'transferencia', id: Number(xid), ips: listaIps });
 			if (eIps) { setBusy(false); setErro(`A transferência foi salva, mas os IPs não: ${erroDoBanco(eIps)}`); return; }
 			pendentes = Array.isArray(pend) ? pend.length : 0;
+		}
+		if (xid != null && nSim !== Number(atual?.simultaneas ?? 5)) {
+			const r = await supabase.rpc('definir_operadores_transferencia_voz', { transferencia: Number(xid), simultaneas: nSim });
+			if (r.error) { setBusy(false); setErro(`A transferência foi salva, mas os operadores ao mesmo tempo não: ${erroDoBanco(r.error)}`); return; }
 		}
 		setBusy(false);
 		onSaved('Transferência salva. Se o destino mudou, o teste roda de novo.'
@@ -410,6 +418,9 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 					<input value={tech} inputMode="numeric" maxLength={8} onChange={x => setTech(x.target.value.replace(/\D/g, ''))} className={`${campoCls} font-mono`} />
 				</Campo>
 			</div>
+			<Campo rotulo="Operadores para transferência ao mesmo tempo" erro={err('simultaneas')} ajuda="O MotorCX nunca transfere mais que isso ao mesmo tempo. Passou, o agente continua a conversa e agenda o retorno (não é abandono). Padrão 5; o cliente informa.">
+				<input value={simultaneas} inputMode="numeric" maxLength={3} onChange={x => setSimultaneas(x.target.value.replace(/\D/g, ''))} className={campoCls} />
+			</Campo>
 			<Campo rotulo="IPs do PABX/discador (sinalização e áudio)" erro={err('ips')}
 				ajuda={`Para o firewall do MotorCX deixar o áudio da ponte passar. Um por linha, até 20. IP novo entra depois que a equipe libera.${atual && ipsPendentes(atual).length ? ` Esperando liberação: ${ipsPendentes(atual).join(', ')}.` : ''}`}>
 				<textarea value={ips} onChange={x => setIps(x.target.value)} rows={2} autoComplete="off" spellCheck={false} placeholder="200.100.70.20"

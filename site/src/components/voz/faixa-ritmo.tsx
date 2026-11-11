@@ -11,6 +11,8 @@ import { supabase, friendlyError } from '@/lib/supabase';
 import { CURTAS, TETO_ABANDONO, fraseEstado, num, pct, type RitmoHoje } from '@/lib/ritmo';
 import { useRitmoHoje } from '@/components/discagem/ritmo';
 
+// V8 (SQL 111): acima disto de transferências sem operador, a VM trata a fila humana como cheia (nucleo.FILA_CHEIA_PCT)
+export const FILA_CHEIA_PCT = 10;
 const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
 
 /** Uma linha parada pelas curtas (a mesma regra da VM, voz/orquestrador/curtas.py). */
@@ -41,6 +43,9 @@ export function FaixaRitmoVista({ h, liberado, podeLiberar, onLiberar, metaPct }
 				<p className="text-[12px] leading-relaxed text-[var(--base-texto-3)]">Abandono = atendeu e não teve robô em até 2 s; a pessoa ouviu a mensagem de identificação e não recebe outra ligação hoje. Transferência sem operador = pediu um humano e a sua fila não atendeu; o robô agendou retorno.</p>
 			</div>
 			{estado && <div className="mt-3"><Aviso tom={estado.tom} titulo={estado.titulo}>{estado.texto}</Aviso></div>}
+			{t.transf_sem_operador_pct != null && t.transf_sem_operador_pct > FILA_CHEIA_PCT && (
+				<div className="mt-3"><Aviso tom="atencao" titulo="Fila humana cheia">{num(t.transf_sem_operador_pct)}% das transferências de hoje ficaram sem operador. O agente está agendando retornos e oferece o retorno antes de transferir enquanto a sua fila não atende.</Aviso></div>
+			)}
 			{(paradas.length > 0 || u?.estado === 'parado') && (
 				<div className="mt-3">
 					<Aviso tom={liberado ? 'info' : 'erro'} titulo={liberado ? 'Liberado hoje pelo Admin' : 'Linha parada pelas chamadas curtas'}

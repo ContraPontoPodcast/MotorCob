@@ -53,6 +53,8 @@ LEITURA = {
     "voz_base_respostas": "base_respostas",
     # SQL 83 · B4: faixas do próprio MotorCX (destino recusado para tronco e transferência)
     "voz_enderecos_motorcx": "enderecos_motorcx",
+    # SQL 111 · operadores para transferência ao mesmo tempo (id, simultaneas; junta com voz_vm.transferencias)
+    "voz_transferencias_operadores": "transferencias_operadores",
 }
 # SQL 113 · Telefonia T4: colunas novas em views próprias (o SQL 57 recria voz_vm.troncos/rotas sem elas). O acesso
 # próprio junta pelo id; banco sem o SQL 113: fica só a view de base (o banco.py usa o padrão de cada campo).

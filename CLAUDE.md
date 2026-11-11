@@ -1288,6 +1288,17 @@ linha (bina mascarada; "Parada hoje" pela mesma regra da VM). Linha parada: o Ad
 950/linha e 9.500/total hoje" (motivo; `liberar_curtas_voz`, SQL 109). Visão geral: "Ligações hoje" ("Preditivo ·
 abandono 0,8% · curtas 76%") e, com freio, "Com problema: …". Testes: `site/src/lib/ritmo-ao-vivo.test.tsx`.
 
+**Agente de voz · perna humana (Power e Preditivo V8, SQL 111).** A IA atende primeiro; o MotorCX não disca prevendo
+os operadores do cliente. `voz_transferencias.simultaneas` ("Operadores para transferência ao mesmo tempo", 1–500,
+padrão 5; Console › Agente virtual › transferência, `definir_operadores_transferencia_voz`, só a equipe que cuida da
+voz; no acesso próprio a VM lê `voz_vm.transferencias_operadores` (id, simultaneas) e junta em
+`configuracao.juntar_operadores`: a view do SQL 57 não muda, para ele continuar reaplicável): a VM nunca tem mais transferências tocando ou
+em ponte para o destino; passou, o agente continua e agenda o retorno (`retomar_sem_humano`). Fila humana cheia: mais de
+10 % das transferências sem operador nos últimos 30 min (20+ na amostra; `nucleo.FILA_CHEIA_PCT`) = o agente oferece o
+retorno antes de chamar a fila, com alerta, até a janela voltar (o que nem foi tentado não entra na taxa). Toda
+transferência sem operador conta à parte nas amostras do ritmo (mesmo com o agente de volta) e nunca no abandono. Ligações
+mostra "Fila humana cheia" acima de 10 % no dia.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

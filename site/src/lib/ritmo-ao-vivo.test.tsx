@@ -55,3 +55,11 @@ test('Visão geral: "Ligações hoje" com modo, abandono e curtas; com freio, "C
 	assert.match(h, /Com problema: linha parada hoje/);
 	assert.equal(renderToStaticMarkup(<MemoryRouter><LigacoesHoje h={null} /></MemoryRouter>), '');
 });
+
+test('faixa: fila humana cheia acima de 10% das transferências sem operador (a mesma da VM)', () => {
+	const nucleo = readFileSync('../voz/orquestrador/nucleo.py', 'utf8');
+	assert.ok(nucleo.includes('FILA_CHEIA_PCT, FILA_AMOSTRA_MIN = 10.0, 20'));
+	const h = H('normal');
+	h.totais.transf_sem_operador_pct = 12;
+	assert.match(renderToStaticMarkup(<MemoryRouter><FaixaRitmoVista h={h} liberado={false} podeLiberar={false} onLiberar={() => {}} /></MemoryRouter>), /Fila humana cheia/);
+});
