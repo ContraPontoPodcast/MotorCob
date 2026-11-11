@@ -1,8 +1,11 @@
 #!/bin/bash
 # Sobe um dos contêineres da voz em primeiro plano (o systemd cuida de reiniciar).
 #   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite | speech-temas |
-#                     speech-buscas | simulador-fluxo | importador | fluxo-noite | gerar-fluxo | gerar-segmentacao |
+#                     speech-buscas | simulador-fluxo | importador | fluxo-noite | gerar-fluxo | gerar-segmentacao | sons |
 #                     firewall
+# sons (PR10): gera sem-robo.wav e alo.wav com o TTS da voz do agente (voz/sons_sistema.py) em /var/motorcx/sons; quem
+# instala no Asterisk é o motorcx-voz-sons. Com /var/motorcx/sons/sem-robo.wav, o Asterisk sobe com a pasta montada em
+# /var/lib/asterisk/sounds/motorcx (só leitura): os sons ficam depois de reiniciar e de atualizar a imagem.
 # fluxo-noite (métricas do Fluxo do agente, SQL 66): só códigos e contagens, sem IA; roda sempre.
 # gerar-fluxo (pedido em texto "Descrever e o MotorCX monta", SQL 58/66: voz/gerar_fluxo.py) só roda com o metadado
 # motorcx-gerar-fluxo=1 (padrão: desligado); a chave do LLM vem do cofre (motorcx-voz-llm-fluxo).
@@ -18,9 +21,12 @@ comum_voz=(--rm --network host --user 10010:10010 --env-file "$RUN/voz.env" -e M
            -v "$RUN:$RUN:ro" -v /var/motorcx:/var/motorcx -v /etc/motorcx:/etc/motorcx:ro --read-only --tmpfs /tmp)
 case "${1:-}" in
   asterisk)
+    sons=(); [ -f /var/motorcx/sons/sem-robo.wav ] && sons=(-v /var/motorcx/sons:/var/lib/asterisk/sounds/motorcx:ro)
     exec docker run --rm --name motorcx-asterisk --network host \
       -e MOTORCX_GCP_PROJETO="$PROJETO" -e MOTORCX_IP_EXTERNO="$IP_EXTERNO" -e MOTORCX_REDE_LOCAL="$REDE_LOCAL" \
-      -v "$RUN:$RUN:ro" -v /var/motorcx/gravacoes:/var/spool/asterisk/motorcx "$IMG_ASTERISK" ;;
+      -v "$RUN:$RUN:ro" -v /var/motorcx/gravacoes:/var/spool/asterisk/motorcx "${sons[@]}" "$IMG_ASTERISK" ;;
+  sons)
+    exec docker run --name motorcx-voz-sons "${comum_voz[@]}" "$IMG_VOZ" python3 -m voz.sons_sistema --saida /var/motorcx/sons ;;
   orquestrador|simulado)
     modo=real; [ "$1" = simulado ] && modo=simulado
     exec docker run --name "motorcx-voz-$modo" "${comum_voz[@]}" "$IMG_VOZ" \

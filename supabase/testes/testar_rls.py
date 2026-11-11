@@ -633,7 +633,7 @@ checar("fatura paga não conta como vencida", True, f"select faturas_vencidas fr
 checar("chamado alta atrasado conta", True, f"update public.chamados set prioridade='alta', situacao='em_atendimento', criado_em=now()-interval '5 hours' where id={CH}; select chamados_atrasados from public.saude_empresas() where empresa_id={EA}", "authenticated", u["admin"], 1)
 # preços por produto: flat, faixa, progressivo, mensalidade; Orquestração opcional
 SVC = "service_role"
-checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 30)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59) + Speech Analytics (SQL 60) + créditos de IA e IA sem crédito (SQL 78) + treino por voz e por texto (SQL 90)
+checar("catálogo de itens cobráveis visível ao cliente", True, "select count(*) from public.cobranca_itens", "authenticated", u["admina"], 31)   # 10 do SQL 12 + Jornada (SQL 19) + 5 produtos (SQL 30) + 2 do Score (SQL 33) + 5 do agente de voz (SQL 56) + geração de fluxo (SQL 58) + roleplay (SQL 59) + Speech Analytics (SQL 60) + créditos de IA e IA sem crédito (SQL 78) + treino por voz e por texto (SQL 90) + robôs (licenças) do agente de voz (SQL 93)
 checar("cliente não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", u["admina"])
 checar("Atendimento não define preço", False, f"select public.salvar_preco({EA},'sms','flat',0.05)", "authenticated", SUP)
 checar("ninguém grava preço direto na tabela", False, f"insert into public.precos_empresa (empresa_id,item,modelo,preco) values ({EA},'sms','flat',0.01)", "authenticated", u["admin"])
@@ -2246,7 +2246,7 @@ checar("SQL 56: cliente B não lê o consumo da A", True, "select count(*) from 
 checar("SQL 56: exportação por dia e rota", True, f"select count(*) from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["gest"], 2)
 checar("SQL 56: B não exporta a telefonia da A", False, f"select * from public.telefonia_csv({EA}, '2026-11-01')", "authenticated", u["operb"])
 checar("SQL 56: usuário não grava consumo de voz", False, f"insert into public.consumo_voz (empresa_id,dia) values ({EA},'2026-11-06')", "authenticated", u["admin"])
-checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_geracao_fluxo,ia_roleplay,ia_speech_analytics")   # + SQL 58, 59 e 60
+checar("SQL 56: itens do agente na fatura, sem telefonia", True, "select string_agg(codigo, ',' order by ordem) from public.cobranca_itens where produto='agente_voz'", "authenticated", u["oper"], "voz_licenca_robo,voz_plataforma,voz_minuto_ia,voz_minuto_ia_pico,voz_transcricao,gestao_tronco_sip,ia_geracao_fluxo,ia_roleplay,ia_speech_analytics")   # + SQL 58, 59, 60 e 93 (robôs)
 checar("SQL 56: telefonia não entra na prévia da fatura", True, f"select count(*) from public.previa_fatura({EA}, '2026-11-01') where item like '%telefon%' or item like 'consumo_voz%'", "authenticated", u["gest"], 0)
 for t in ("voz_config", "voz_roteiros", "voz_troncos", "voz_rotas", "voz_transferencias", "voz_contrato", "voz_lotes", "voz_ondas",
           "voz_chamadas", "voz_gravacoes", "consumo_voz", "fornecedor_saude", "voz_insights_dia", "titular_pedidos",
@@ -2263,6 +2263,12 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261225000001_voz_fluxo.sql")],
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
+# SQL 95 (silêncio e "não entendi" por etapa) refaz o validador do SQL 58: reaplica depois dele
+r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations",
+                                 "20270131000001_voz_silencio_nao_entendi.sql")],
+                   capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
 import json as _json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from voz import fluxo_casos as _FC, fluxo_modelos as _FM   # noqa: E402
@@ -2271,6 +2277,19 @@ def _lit(d):
     return _json.dumps(d, ensure_ascii=False).replace("'", "''")
 def _j(x):
     return _json.dumps(x, ensure_ascii=False, separators=(",", ":"))
+def _sql96():
+    """SQL 96 (trava de CPF) refaz funções do SQL 58 e do 59: reaplica depois deles."""
+    r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                        os.path.join(os.path.dirname(__file__), "..", "migrations", "20270201000001_voz_trava_cpf.sql")],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+_sql96()
+# SQL 96: a mesma tabela de casos da fala com CPF (tests/dados/trava_cpf_casos.json) dá o mesmo no banco
+for _t, _esp in _json.loads(open(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "dados", "trava_cpf_casos.json"),
+                                 encoding="utf-8").read())["fala"]:
+    checar(f"SQL 96 · fala com CPF: {_t}", True, f"select public.fluxo_voz_aux_pede_senha('{_t.replace(chr(39), chr(39) * 2)}')",
+           "authenticated", u["oper"], "t" if _esp else "f")
+checar("SQL 96: trava cpf na lista e no check dos passos", True, "select ('cpf' = any (public.travas_voz()))::text || position('cpf' in pg_get_constraintdef((select oid from pg_constraint where conname = 'voz_fluxo_passos_trava_check')))::int::boolean::text", "service_role", None, "truetrue")
 # FL2: os mesmos casos do validador em Python (voz/fluxo_casos.py) dão a mesma lista de erros no banco
 for _n, _d, _e in _FC.casos():
     checar(f"SQL 58 · validador: {_n}", True, f"select array_to_json(public.fluxo_voz_erros('{_lit(_d)}'::jsonb))",
@@ -2472,7 +2491,7 @@ checar("SQL 58: cliente B não lê os casos da A", True, "select count(*) from p
 
 # passos e métricas (FL7): só a VM grava, só códigos
 checar("SQL 58: VM grava o passo do bloco", True, f"insert into public.voz_fluxo_passos (empresa_id,chamada_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,saida_quando,intencao,confianca_faixa) values ({EA},{CH1},'ch-0001',{FV1},3,'N3','cognicao','quero_negociar','quero_negociar','alta') returning ordem", "service_role", None, 3)
-checar("SQL 58: trava fora da lista é recusada", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,trava) values ({EA},'ch-0001',{FV1},4,'N3','cognicao','cpf')", "service_role")
+checar("SQL 58: trava fora da lista é recusada", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo,trava) values ({EA},'ch-0001',{FV1},4,'N3','cognicao','trava_inventada')", "service_role")
 checar("SQL 58: usuário não grava passo", False, f"insert into public.voz_fluxo_passos (empresa_id,id_chamada,fluxo_versao_id,ordem,bloco_id,modo) values ({EA},'ch-0001',{FV1},5,'N3','cognicao')", "authenticated", u["admin"])
 checar("SQL 58: VM grava a métrica do dia (saídas por código)", True, f"insert into public.voz_fluxo_metricas_dia (empresa_id,fluxo_versao_id,dia,bloco_id,chegaram,saidas) values ({EA},{FV1},'2026-11-05','N3',10,'{{\"quero_negociar\": 6, \"ja_paguei\": 4}}') returning chegaram", "service_role", None, 10)
 checar("SQL 58: métrica com texto livre é recusada", False, f"insert into public.voz_fluxo_metricas_dia (empresa_id,fluxo_versao_id,dia,bloco_id,saidas) values ({EA},{FV1},'2026-11-06','N3','{{\"Ana disse\": 1}}')", "service_role")
@@ -2561,6 +2580,7 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261226000001_voz_roleplay.sql")],
                    capture_output=True, text=True)
 assert r.returncode == 0, r.stderr
+_sql96()
 from voz import roleplay as _RP   # noqa: E402
 for _cod, _p in _RP.PERSONAS_PADRAO.items():
     checar(f"SQL 59: persona padrão {_cod} igual à do Python", True,
@@ -2607,7 +2627,7 @@ _sv(_reg(RL1, _PN["nao_me_ligue"], 2, "opt_out", "true", travas="{nao_me_ligue}"
 _sv(_reg(RL1, _PN["negocia_rapido"], 1, "promessa", "true", acordo="true", oferta="'OF-2'", parcelas="6"))
 CV_FALHA = _sv(_reg(RL1, _PN["negocia_rapido"], 2, "limite_turnos", "false", transc="'[{\"quem\": \"agente\", \"texto\": \"Olá\", \"bloco\": \"N1\"}, {\"quem\": \"pessoa\", \"texto\": \"Sou eu.\"}, {\"quem\": \"pessoa\", \"texto\": \"Hum.\"}]'::jsonb"))
 checar("SQL 59: usuário não grava conversa", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true"), "authenticated", u["admin"])
-checar("SQL 59: trava fora da lista é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", travas="{cpf}"), "service_role")
+checar("SQL 59: trava fora da lista é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", travas="{trava_inventada}"), "service_role")
 checar("SQL 59: transcrição com CPF é recusada", False, _reg(RL1, _PN["nao_me_ligue"], 3, "opt_out", "true", transc="'[{\"quem\": \"pessoa\", \"texto\": \"meu cpf 12345678901\"}]'::jsonb"), "service_role")
 checar("SQL 59: persona fora do lote é recusada", False, _reg(RL1, _PN["quer_parcelar_muito"], 1, "recusa", "true"), "service_role")
 checar("SQL 59: só a VM conclui o lote", False, f"select public.concluir_roleplay_lote({RL1}, 2500)", "authenticated", u["plan"])
@@ -2669,7 +2689,7 @@ r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_
 assert r.returncode == 0, r.stderr
 _M = u["admin"]
 checar("SQL 61: itens de IA marcados", True, "select count(*) from public.cobranca_itens where eh_ia and codigo in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','ia_geracao_fluxo','ia_roleplay')", "authenticated", u["oper"], 5)
-checar("SQL 61: nenhum item fora da IA marcado", True, "select count(*) from public.cobranca_itens where eh_ia and codigo not like 'ia\\_%' and codigo not in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao')", "authenticated", u["oper"], 0)
+checar("SQL 61: nenhum item fora da IA marcado", True, "select count(*) from public.cobranca_itens where eh_ia and codigo not like 'ia\\_%' and codigo not in ('voz_minuto_ia','voz_minuto_ia_pico','voz_transcricao','voz_licenca_robo')", "authenticated", u["oper"], 0)   # voz_licenca_robo: SQL 93
 checar("SQL 61: MC mínima da IA nasce em 70%", True, "select mc_minima_ia_pct from public.parametros_margem", "authenticated", _M, "70.00")
 checar("SQL 61: Administrativo não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", ADM, 0)
 checar("SQL 61: cliente não muda a MC mínima da IA (0 linhas)", True, "with x as (update public.parametros_margem set mc_minima_ia_pct=50 returning 1) select count(*) from x", "authenticated", u["admina"], 0)
@@ -2952,12 +2972,53 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 90: treino de operadores (testar_treino.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 99 · Roleplay, PR 4: quem treina lê o cadastro (voz_operadores) e o estado do link da página do operador
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_atribuir.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 99: editor, atribuição e link do operador (testar_treino_atribuir.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 100 · Roleplay, PR 5: sessão de treino por texto (conversa em andamento só do servidor, contexto pelo link ou por
+# quem abriu, resultado para a Qualidade, ciclo com registrar_sessao_treino)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_sessao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 100: sessão de treino por texto (testar_treino_sessao.py)", True, f"select {r.returncode}", None, None, 0)
+
 # SQL 92 · Preços editáveis: tabela, mínimo e franquia padrão; preço e franquia por empresa (permissão, vigência,
 # guarda da IA e mínimo com motivo)
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_precos_editaveis.py")],
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 92: preços editáveis (testar_precos_editaveis.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 93 · Agente de voz: robôs contratados (licenças): RLS (cliente nunca grava; Admin do cliente só lê o próprio
+# contrato), vigência, fidelidade, guarda da IA, overbooking, preço em precos_empresa e só se acrescenta
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_licencas_voz.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 93: robôs contratados (testar_licencas_voz.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 98 · Robôs contratados na fatura: linha da licença, pro rata no meio do ciclo, franquia do minuto de IA vinda da
+# licença, plataforma/transcrição incluídas, sem pico para quem tem licença, legado igual
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_licencas_fatura.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 98: robôs contratados na fatura (testar_licencas_fatura.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 101 · Robôs contratados na divisão do teto global: licenças primeiro (proporcional no overbooking), sobra para quem
+# não tem licença pelos canais, motivo, cliente sem o teto global, VM com as colunas novas, aviso do teto abaixo do vendido
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_licencas_divisao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 101: robôs contratados na divisão (testar_licencas_divisao.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 102 · Uso dos robôs (telemetria da VM): em uso agora e pico do dia por empresa, só a VM/servidor grava, cada
+# empresa lê só a sua
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_robos_uso.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 102: uso dos robôs (testar_robos_uso.py)", True, f"select {r.returncode}", None, None, 0)
 
 # SQL 103 · Telefonia T1: senha do tronco direto no cofre (só o nome do segredo da empresa, aal2, limite, registro só
 # pelo servidor depois do pedido, teste zerado e Auditoria sem valor)
