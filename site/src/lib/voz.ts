@@ -31,7 +31,38 @@ export const FORMATOS_DISCAGEM: { id: string; nome: string; exemplo: string }[] 
 	{ id: 'tech_ddd_numero', nome: 'Tech prefix + DDD + número', exemplo: '1021 11 9••••-••••' },
 	{ id: 'tech_0_csp_ddd_numero', nome: 'Tech prefix + 0 + CSP + DDD + número', exemplo: '1021 0 15 11 9••••-••••' },
 	{ id: 'tech_55_ddd_numero', nome: 'Tech prefix + 55 + DDD + número', exemplo: '1021 55 11 9••••-••••' },
+	{ id: 'tech_e164', nome: '+55 DDD número (E.164)', exemplo: '+55 11 9••••-••••' },
 ];
+
+// SQL 113 · Telefonia T4: campos da seção E do parecer (o banco confere de novo)
+export const DTMFS: { id: string; nome: string }[] = [
+	{ id: 'auto', nome: 'Automático (recomendado)' },
+	{ id: 'rfc4733', nome: 'RFC 4733' },
+	{ id: 'inband', nome: 'No áudio (inband)' },
+	{ id: 'info', nome: 'SIP INFO' },
+];
+export const CABECALHOS_BINA: { id: string; nome: string }[] = [
+	{ id: 'from_pai', nome: 'De (From) + P-Asserted-Identity (recomendado)' },
+	{ id: 'from', nome: 'Só De (From)' },
+	{ id: 'rpid', nome: 'Remote-Party-ID' },
+];
+export const AUTENTICACAO_OPERADORA: { id: 'sim' | 'nao' | 'nao_sei'; nome: string }[] = [
+	{ id: 'sim', nome: 'Sim' },
+	{ id: 'nao', nome: 'Não' },
+	{ id: 'nao_sei', nome: 'Não sei' },
+];
+export const LIGA_PARA: { id: 'fixo_movel' | 'fixo' | 'movel'; nome: string; tipos: string[] }[] = [
+	{ id: 'fixo_movel', nome: 'Fixo e móvel', tipos: ['fixo_local', 'fixo_ldn', 'movel_vc1', 'movel_vc2_vc3'] },
+	{ id: 'fixo', nome: 'Só fixo', tipos: ['fixo_local', 'fixo_ldn'] },
+	{ id: 'movel', nome: 'Só móvel', tipos: ['movel_vc1', 'movel_vc2_vc3'] },
+];
+export const TOQUE_MIN = 15, TOQUE_MAX = 45, TOQUE_PADRAO = 30;
+export const DURACAO_MIN = 5, DURACAO_MAX = 60, DURACAO_PADRAO = 20;
+export const RE_REALM = /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
+/** Prefixo da operadora é opcional (C17): vazio = a operadora não usa. */
+export const prefixoOk = (p: string) => p.trim() === '' || /^[0-9]{1,8}$/.test(p.trim());
+/** Prefixo que a tela mostra na rota: "—" quando a operadora não usa (o código interno não aparece). */
+export const prefixoRota = (r: { tech_prefix?: unknown; enviar_prefixo?: unknown }) => (r.enviar_prefixo === false ? '—' : String(r.tech_prefix ?? '—'));
 
 export const CODECS = ['alaw', 'ulaw', 'g729', 'g722', 'opus'] as const;
 
@@ -103,6 +134,36 @@ export const RE_SEGREDO_TRONCO = /^voz\/[A-Za-z0-9_\-/.]{1,116}$/;
 export function segredoTroncoOk(ref: string, atual?: string | null): boolean {
 	const r = ref.trim();
 	return RE_SEGREDO_TRONCO.test(r) || (!!atual && r === atual);
+}
+// SQL 103 · Telefonia T1: a senha do tronco vai direto para o cofre pela Edge Function segredo-tronco-voz (nunca pelo
+// banco). O site só sabe se está guardada (voz_troncos.segredo_guardado_em). A mesma regra de
+// supabase/functions/segredo-tronco-voz/regras.ts › motivoSenha.
+export const FUNCAO_SEGREDO_TRONCO = 'segredo-tronco-voz';
+export const SENHA_TRONCO_MIN = 8;
+export const SENHA_TRONCO_MAX = 128;
+export function senhaTroncoMotivo(s: string): string | null {
+	if (s.length < SENHA_TRONCO_MIN || s.length > SENHA_TRONCO_MAX) return `A senha precisa ter de ${SENHA_TRONCO_MIN} a ${SENHA_TRONCO_MAX} caracteres.`;
+	// eslint-disable-next-line no-control-regex
+	if (/[\u0000-\u001f\u007f]/.test(s)) return 'A senha não pode ter quebra de linha nem caractere de controle.';
+	if (s.trim() !== s) return 'A senha não pode começar nem terminar com espaço.';
+	return null;
+}
+// SQL 104 · Telefonia T2: IPs da operadora (troncos) e do PABX (transferência) para o firewall das VMs. A regra completa
+// (rede interna, IP do MotorCX) é do banco (voz_ips_motivo) e da VM (voz/firewall.py); aqui só a forma e o tamanho.
+export const IPS_MAX = 20;
+export const RE_IP_FAIXA = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/(2[4-9]|3[0-2]))?$/;
+export function lerIps(texto: string): string[] {
+	return [...new Set(texto.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean))];
+}
+export function ipsMotivo(lista: string[]): string | null {
+	if (lista.length > IPS_MAX) return `No máximo ${IPS_MAX} IPs ou faixas.`;
+	const ruim = lista.find(x => !RE_IP_FAIXA.test(x) || x.split('/')[0].split('.').some(o => Number(o) > 255));
+	return ruim ? `"${ruim}" não é um IPv4 (200.100.50.10) nem uma faixa até /24 (200.100.50.0/24).` : null;
+}
+/** Os IPs da lista que a equipe ainda não liberou no firewall. */
+export function ipsPendentes(linha: { ips_operadora?: unknown; ips_liberados?: unknown } | null | undefined): string[] {
+	const lib = new Set(Array.isArray(linha?.ips_liberados) ? (linha!.ips_liberados as string[]) : []);
+	return (Array.isArray(linha?.ips_operadora) ? (linha!.ips_operadora as string[]) : []).filter(x => !lib.has(x));
 }
 export const RE_USUARIO = /^[A-Za-z0-9_.\-+]{1,64}$/;
 export const RE_DDD = /^[1-9][1-9]$/;
@@ -178,6 +239,7 @@ export const PERM_VOZ = {
 	enviarMensagens: 'enviar_mensagens',
 	reenviarLote: 'reenviar_lote_voz', // SQL 65 · Reenviar agora (padrão: Admin e Operação)
 	reciclarLote: 'reciclar_lote_voz', // SQL 65 · Reciclar mailing (padrão: Admin e Operação)
+	configurarTelefonia: 'configurar_telefonia', // SQL 105 · Telefonia própria (padrão: só Admin; pede a verificação em duas etapas)
 } as const;
 
 /** Grupos com menos conversas que isto não mostram percentual (insights_voz devolve null). */
