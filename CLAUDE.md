@@ -1145,6 +1145,37 @@ da empresa, com quem mudou e nunca o valor, e aviso no sino da equipe. Site: Age
 (só leitura; a tela editável é o PR T5). Teste: `supabase/testes/testar_voz_configurar_telefonia.py`. Se o SQL 56, 81 ou
 103 rodar de novo, rode o 105 depois.
 
+**SQL 113 (Telefonia própria do cliente, PR T4; SPEC §3.4 e §6.2 item 12, seção E do parecer, G10, G12–G14, G35,
+C4, C17, D5): os campos que a operadora pede.** `voz_troncos` ganha `declaracao_em/por` (contrato e bina declarados;
+obrigatória para o cliente no tronco novo e a cada troca de bina; trocar a bina zera), `autenticacao_operadora`
+(sim/nao/nao_sei), `dtmf` (auto/rfc4733/inband/info → `dtmf_mode`), `realm`, `from_usuario` (o "De"), `cabecalho_bina`
+(from_pai/from/rpid → `send_pai`/`send_rpid`), `tech_prefix` (opcional, padrão das rotas), `toque_max_s` (30; 15–45),
+`duracao_max_min` (20; 5–60), `verificar_options` (qualify 60 s ou 0), `liga_para` e `retorno_bina`; formato
+`tech_e164` (+55). Gatilho `voz_troncos_bina_operadora`: a bina não vai para tronco de OUTRA operadora da mesma empresa.
+Rota com prefixo opcional: `voz_rotas.enviar_prefixo` (false = a operadora não usa; `tech_prefix` vira um código interno
+`0nnnnnnn` só para vigência/tarifação, reaproveitado pela vigência nova do mesmo tronco e tipo); `salvar_rota_voz` aceita
+prefixo vazio e tronco inativo da empresa. `cadastrar_tronco_voz` mantém a assinatura (Console igual) e exige a declaração
+do cliente; RPC nova `salvar_tronco_voz(empresa, tronco jsonb)` com todos os campos (chave ausente mantém, texto vazio
+limpa; mudar realm/De/cabeçalho/DTMF zera o teste e desativa o tronco do cliente). Leitura em views PRÓPRIAS (o 57 e o 105
+recriam as antigas e não podem perder colunas): `voz_troncos_campos_empresa`, `voz_rotas_prefixo_empresa` (site) e
+`voz_vm.troncos_campos`, `voz_vm.rotas_prefixo` (a VM; `voz/acesso.py › EXTRAS` junta pelo id). VM: `voz/banco.py`
+lê tudo com padrão; o gerador aplica DTMF, cabeçalho, realm, De, OPTIONS, `S(duração)` e toque no plano de reserva e
+`TIMEOUT(absolute)` por tronco no `[motorcx-atendeu]`; `voz/tarifacao.py` disca `Rota.prefixo_discagem`; o núcleo usa
+`min(toque do núcleo, toque do tronco)`. Teste: `supabase/testes/testar_voz_tronco_campos.py`. Se o SQL 56, 81, 103 ou
+105 rodar de novo, rode o 113 depois.
+
+**SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
+ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
+`nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
+contam à parte (`Sessao.tentativas` × `Sessao.silencios`). Sem nada configurado, o "não entendi" é o de antes (fala padrão
+de cada tipo, `tentativas` padrão 2, saída de "não entendi"). Silêncio: a Montagem chama `Sessao.silencio()` depois de
+`SILENCIO_S` (6 s) sem fala da pessoa contados de quando a fila de áudio do agente esvazia (`RelogioSilencio`); padrão 2
+vezes ("Desculpe, não ouvi." + a fala da etapa), depois a saída "silencio" ou, sem ela, a de "não entendi"; na Abertura sem
+saída própria encerra SEM recado e sem marcar terceiro; na IA conversa, "Você ainda está aí?" e depois atendente. As falas
+novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracteres, variáveis, senha e trava 1. Simulador e
+casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
+(`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

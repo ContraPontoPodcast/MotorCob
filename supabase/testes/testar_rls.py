@@ -3041,5 +3041,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 105: o Admin configura a telefonia (testar_voz_configurar_telefonia.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 113 · Telefonia T4: os campos que a operadora pede (declarações, DTMF, realm, cabeçalho da bina, E.164, prefixo
+# opcional, toque e duração), bina única por operadora e as views novas
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_tronco_campos.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 113: campos do tronco (testar_voz_tronco_campos.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

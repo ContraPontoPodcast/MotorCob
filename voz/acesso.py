@@ -54,6 +54,9 @@ LEITURA = {
     # SQL 83 · B4: faixas do próprio MotorCX (destino recusado para tronco e transferência)
     "voz_enderecos_motorcx": "enderecos_motorcx",
 }
+# SQL 113 · Telefonia T4: colunas novas em views próprias (o SQL 57 recria voz_vm.troncos/rotas sem elas). O acesso
+# próprio junta pelo id; banco sem o SQL 113: fica só a view de base (o banco.py usa o padrão de cada campo).
+EXTRAS = {"voz_troncos": "troncos_campos", "voz_rotas": "rotas_prefixo"}
 # tabela -> função de escrita do schema voz_vm (o upsert é dela)
 ESCRITA = {
     "voz_chamadas": "gravar_chamadas", "consumo_voz": "gravar_consumo", "voz_gravacoes": "gravar_gravacoes",
@@ -237,7 +240,17 @@ class AcessoProprio:
 
     def selecionar(self, tabela, filtros: dict | None = None, ordem: str | None = None, limite: int | None = None):
         sql, params = montar_select(tabela, filtros, ordem, limite)
-        return [r[0] for r in self._run(sql, **params) or []]
+        linhas = [r[0] for r in self._run(sql, **params) or []]
+        if tabela in EXTRAS and linhas:
+            try:
+                extras = {r[0]["id"]: r[0] for r in self._run(f"select to_jsonb(t) from voz_vm.{EXTRAS[tabela]} t") or []}
+            except (_ConexaoCaiu, OSError):
+                raise
+            except Exception:   # noqa: BLE001 — view do SQL 113 ainda não criada: os campos ficam com o padrão
+                extras = {}
+            for l in linhas:
+                l.update({k: v for k, v in extras.get(l.get("id"), {}).items() if k != "id"})
+        return linhas
 
     def inserir(self, tabela, linhas, conflito: str | None = None, retornar=False, lote=1000):
         linhas = linhas if isinstance(linhas, list) else [linhas]

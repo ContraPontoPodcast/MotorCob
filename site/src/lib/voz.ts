@@ -31,7 +31,38 @@ export const FORMATOS_DISCAGEM: { id: string; nome: string; exemplo: string }[] 
 	{ id: 'tech_ddd_numero', nome: 'Tech prefix + DDD + número', exemplo: '1021 11 9••••-••••' },
 	{ id: 'tech_0_csp_ddd_numero', nome: 'Tech prefix + 0 + CSP + DDD + número', exemplo: '1021 0 15 11 9••••-••••' },
 	{ id: 'tech_55_ddd_numero', nome: 'Tech prefix + 55 + DDD + número', exemplo: '1021 55 11 9••••-••••' },
+	{ id: 'tech_e164', nome: '+55 DDD número (E.164)', exemplo: '+55 11 9••••-••••' },
 ];
+
+// SQL 113 · Telefonia T4: campos da seção E do parecer (o banco confere de novo)
+export const DTMFS: { id: string; nome: string }[] = [
+	{ id: 'auto', nome: 'Automático (recomendado)' },
+	{ id: 'rfc4733', nome: 'RFC 4733' },
+	{ id: 'inband', nome: 'No áudio (inband)' },
+	{ id: 'info', nome: 'SIP INFO' },
+];
+export const CABECALHOS_BINA: { id: string; nome: string }[] = [
+	{ id: 'from_pai', nome: 'De (From) + P-Asserted-Identity (recomendado)' },
+	{ id: 'from', nome: 'Só De (From)' },
+	{ id: 'rpid', nome: 'Remote-Party-ID' },
+];
+export const AUTENTICACAO_OPERADORA: { id: 'sim' | 'nao' | 'nao_sei'; nome: string }[] = [
+	{ id: 'sim', nome: 'Sim' },
+	{ id: 'nao', nome: 'Não' },
+	{ id: 'nao_sei', nome: 'Não sei' },
+];
+export const LIGA_PARA: { id: 'fixo_movel' | 'fixo' | 'movel'; nome: string; tipos: string[] }[] = [
+	{ id: 'fixo_movel', nome: 'Fixo e móvel', tipos: ['fixo_local', 'fixo_ldn', 'movel_vc1', 'movel_vc2_vc3'] },
+	{ id: 'fixo', nome: 'Só fixo', tipos: ['fixo_local', 'fixo_ldn'] },
+	{ id: 'movel', nome: 'Só móvel', tipos: ['movel_vc1', 'movel_vc2_vc3'] },
+];
+export const TOQUE_MIN = 15, TOQUE_MAX = 45, TOQUE_PADRAO = 30;
+export const DURACAO_MIN = 5, DURACAO_MAX = 60, DURACAO_PADRAO = 20;
+export const RE_REALM = /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
+/** Prefixo da operadora é opcional (C17): vazio = a operadora não usa. */
+export const prefixoOk = (p: string) => p.trim() === '' || /^[0-9]{1,8}$/.test(p.trim());
+/** Prefixo que a tela mostra na rota: "—" quando a operadora não usa (o código interno não aparece). */
+export const prefixoRota = (r: { tech_prefix?: unknown; enviar_prefixo?: unknown }) => (r.enviar_prefixo === false ? '—' : String(r.tech_prefix ?? '—'));
 
 export const CODECS = ['alaw', 'ulaw', 'g729', 'g722', 'opus'] as const;
 
