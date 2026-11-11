@@ -368,6 +368,15 @@ Recomendado: ligar também a API de conversas (`agent_id` + `ref_api`) como **re
 (VM fora, certificado, rede), a VM busca a conversa pelo agente dela; quando o webhook chega primeiro, a busca daquela
 chamada para. Sem webhook por agente (só o do espaço de trabalho), a VM que não recebe o aviso depende só da API.
 
+**Transferência sem operador com a ElevenLabs (B5):** quando a fila do cliente não atende (ou recusa) na ponte, o
+orquestrador desliga a conversa antiga e liga de novo para o mesmo agente, uma vez por chamada, com
+`X-MotorCX-Retorno: sem_operador | falhou`, `X-MotorCX-Aviso: virtual` e `X-MotorCX-Id: <id>r`. A pessoa nunca é
+desligada. **Configurar no agente** (painel da ElevenLabs): declarar a variável `motorcx_retorno` e, quando ela vier
+preenchida, abrir com "Me desculpe, nenhum atendente conseguiu atender agora. Posso agendar um retorno para você? Qual o
+melhor dia e horário?", sem credor nem dívida e sem transferir de novo, e registrar `resultado = retorno_agendado` com
+`retorno_em`. Vale o resultado dessa segunda conversa; o da primeira é descartado. Com REFER, o agente já saiu: segue
+como antes (`transferencia_sem_operador`).
+
 **`motorcx_id` como variável dinâmica (avaliação, a confirmar no piloto):** a análise depende de a conversa da
 ElevenLabs trazer `conversation_initiation_client_data.dynamic_variables.motorcx_id` (é por ele que o webhook e a API
 acham a chamada). O orquestrador manda o id no INVITE (`X-MotorCX-Id`). Há dois caminhos para ele virar variável:

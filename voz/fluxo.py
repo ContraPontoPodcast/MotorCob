@@ -64,6 +64,21 @@ FALA_REPETIR = "Desculpe, pode repetir?"
 FALA_FALHA = "Tive um problema aqui. Vou passar você para um atendente, só um instante."
 FALA_NAO_OUVI = "Desculpe, não ouvi."
 FALA_SILENCIO_IA = "Você ainda está aí?"
+# B5 (SPEC §6.1; REVISAO C9): a transferência não chegou a um humano e a pessoa continua na linha: o agente volta, pede
+# desculpas e agenda um retorno. Nunca desliga na cara, nunca transfere de novo na mesma ligação. Sem credor nem dívida
+# (a identidade pode não ter sido confirmada).
+BLOCO_SEM_HUMANO = "_sem_humano"
+FALA_SEM_HUMANO = {
+    "sem_operador": "Me desculpe, nenhum atendente conseguiu atender agora. Posso agendar um retorno para você? "
+                    "Qual o melhor dia e horário?",
+    "falhou": "Me desculpe, não consegui completar a ligação para o atendente. Posso agendar um retorno para você? "
+              "Qual o melhor dia e horário?",
+}
+FALA_SEM_HUMANO_DE_NOVO = ("Agora nenhum atendente consegue atender. Posso agendar um retorno: qual o melhor dia e "
+                           "horário?")
+FALA_SEM_HUMANO_REPETIR = "Pode me dizer um dia e um horário, por exemplo, sexta às 10h?"
+FALA_SEM_HUMANO_FIM = "Tudo bem. Vamos tentar falar com você em outro momento. Obrigado e até logo."
+RE_SEM_RETORNO = re.compile(r"\bnao\b.*(precisa|quero|obrigad)|deixa pra la|nao precisa|nao quero")
 SILENCIO_S = 6.0                 # sem fala da pessoa depois que o agente terminou de falar (fixo pela MotorCX; SPEC §2.5)
 MARCA_SILENCIO = "[silêncio]"    # no simulador e nos casos de teste, a "fala" que quer dizer: a pessoa não disse nada
 VEZES_PADRAO = 2
@@ -327,6 +342,9 @@ class Sessao:
         self.avisos: list[str] = []
         self.falar_agora = None                # voz: fala de espera tocada antes da API responder
         self._ident: dict | None = None        # SQL 88: estado da etapa de identidade com configuração (só códigos)
+        self.aguardando_humano = False         # B5: pediu humano; o áudio fica de pé até o humano atender ou não
+        self.sem_humano = False                # B5: voltou ao agente depois da transferência sem humano
+        self._bloco_real: str | None = None    # B5: o último bloco do fluxo antes de voltar (bloco_final)
         self._turno = Turno()
 
     # ---------------------------------------------------------------- interface (igual à Conversa)
@@ -361,6 +379,8 @@ class Sessao:
         self._turno.intencao = {"intencao": "silencio", "confianca": "alta", "entidades": []}
         if b["tipo"] == "generativa":
             self._silencio_ia(b)
+        elif b["tipo"] == "sem_humano":
+            self._silencio_sem_humano(b)
         elif b["tipo"] in FV.OUVEM:
             self._silencio_etapa(b)
         return self._turno
@@ -368,6 +388,48 @@ class Sessao:
     def _transferir(self, motivo: str) -> None:            # chamado pela Montagem se o áudio cair
         if not self.encerrada:
             self._finalizar("transferir", motivo=motivo)
+
+    def retomar_sem_humano(self, motivo: str) -> list[str]:
+        """B5: a transferência não chegou a um humano (motivo: sem_operador | falhou) e a pessoa continua na linha. O
+        agente volta, pede desculpas e pergunta o dia e o horário do retorno (etapa interna BLOCO_SEM_HUMANO, fora do
+        grafo do fluxo). Devolve as falas; [] = não volta (não pediu humano, ou falou com terceiro: nada a agendar)."""
+        if not self.aguardando_humano or self.terceiro:
+            return []
+        self.aguardando_humano, self.encerrada, self.sem_humano = False, False, True
+        self._bloco_real = next((b for b in reversed(self.caminho) if b != BLOCO_SEM_HUMANO), self.atual)
+        self.blocos[BLOCO_SEM_HUMANO] = {"id": BLOCO_SEM_HUMANO, "tipo": "sem_humano", "modo": "arvore",
+                                         "params": {"dias_max": 7}, "saidas": []}
+        self.atual = BLOCO_SEM_HUMANO
+        self.tentativas[BLOCO_SEM_HUMANO] = self.silencios[BLOCO_SEM_HUMANO] = 0
+        self._turno = Turno()
+        self.caminho.append(BLOCO_SEM_HUMANO)
+        self._turno.caminho.append(BLOCO_SEM_HUMANO)
+        self._falar(FALA_SEM_HUMANO.get(motivo, FALA_SEM_HUMANO["sem_operador"]), BLOCO_SEM_HUMANO)
+        return [f for f, _, _ in self._turno.falas]
+
+    def _ouvir_sem_humano(self, b, texto, t):
+        d, h = extrair_data(texto, self.hoje), extrair_hora(texto)
+        if d is None and h is not None:
+            d = self.hoje + timedelta(days=1)
+        if d is not None and self.hoje <= d <= self.hoje + timedelta(days=int(b["params"]["dias_max"])):
+            hh, mm = h or (10, 0)
+            hh = min(max(hh, 8), 19)            # janela 08:00–20:00 (a UF fica com o discador/regra do motor)
+            self.retorno_em = datetime(d.year, d.month, d.day, hh, mm)
+            self._turno.intencao = {"intencao": "informou_data_hora", "confianca": "alta", "entidades": ["dia e hora"]}
+            self._falar(f"Combinado: retornamos no dia {d:%d/%m}, às {hh:02d}:{mm:02d}. Obrigado e até logo.", b["id"])
+            self._finalizar("encerrar", resultado="retorno_agendado")
+        elif RE_SEM_RETORNO.search(t) or not self._tentar_de_novo(b, FALA_SEM_HUMANO_REPETIR):
+            self._falar(FALA_SEM_HUMANO_FIM, b["id"])
+            self._finalizar("encerrar", resultado="cpc" if self.identidade_confirmada else "atendida_sem_cpc")
+
+    def _silencio_sem_humano(self, b: dict) -> None:
+        bid = b["id"]
+        self.silencios[bid] = self.silencios.get(bid, 0) + 1
+        if self.silencios[bid] < VEZES_PADRAO:
+            self._falar(f"{FALA_NAO_OUVI} {FALA_SEM_HUMANO_REPETIR}", bid)
+            return
+        self._falar(FALA_SEM_HUMANO_FIM, bid)
+        self._finalizar("encerrar", resultado="cpc" if self.identidade_confirmada else "atendida_sem_cpc")
 
     def descartar(self) -> None:
         """Fim da ligação: a resposta do CRM some da memória."""
@@ -398,6 +460,9 @@ class Sessao:
             return True
         if RE_HUMANO.search(t) or (cog and cog.intencao == "pedir_humano" and cog.confianca >= 0.85):
             self._marca_trava("pedido_humano")
+            if self.sem_humano:                 # B5: já tentou e ninguém atendeu; nunca transfere de novo na ligação
+                self._falar(FALA_SEM_HUMANO_DE_NOVO, self.atual)
+                return True
             self._falar(FALA_HUMANO, self.atual)
             self._finalizar("transferir", motivo="pedido_humano")
             return True
@@ -518,8 +583,11 @@ class Sessao:
     def _finalizar(self, acao: str, motivo: str | None = None, resultado: str | None = None) -> None:
         if self.encerrada:
             return
+        if acao == "transferir" and self.sem_humano:    # B5: nunca a segunda transferência na mesma ligação
+            acao = "encerrar"
+            resultado = resultado or ("cpc" if self.identidade_confirmada else "atendida_sem_cpc")
         self.encerrada = True
-        if self.passos and "saida_quando" not in self.passos[-1]:
+        if self.passos and "saida_quando" not in self.passos[-1] and not self.sem_humano:
             self._emitir("passo", dict(self.passos[-1]))
         if resultado is None and acao == "transferir":
             resultado = "cpc" if self.identidade_confirmada else None
@@ -536,8 +604,10 @@ class Sessao:
             dados["retorno_em"] = self.retorno_em
         if dados.get("resultado_ia"):
             self._emitir("resultado", dados)
-        self._emitir("fluxo", {"fluxo_versao_id": self.fluxo.versao_id, "bloco_final": self.atual})
+        bloco_final = self._bloco_real if self.atual == BLOCO_SEM_HUMANO else self.atual
+        self._emitir("fluxo", {"fluxo_versao_id": self.fluxo.versao_id, "bloco_final": bloco_final})
         if acao == "transferir":
+            self.aguardando_humano = True
             self._emitir("transferir", {"motivo": motivo or "pedido_humano"})
             self._turno.fim = f"transferida · {motivo or 'pedido_humano'}"
         else:

@@ -7,6 +7,11 @@
                   devolve os eventos; o orquestrador espera até `espera_resultado_s` antes de fechar a tentativa.
   transferência-> a ferramenta de transferência da ElevenLabs manda REFER para sip:transferir-<motivo>@<Asterisk>;
                   o ARI avisa (ChannelTransfer) e o orquestrador transfere para o discador do cliente.
+  sem humano   -> (B5) ninguém do cliente atendeu: a ElevenLabs não recebe texto no meio da conversa, então o
+                  orquestrador liga de novo para o agente (reconectar_sem_humano) com X-MotorCX-Retorno: sem_operador |
+                  falhou e X-MotorCX-Id = <id>r. A primeira mensagem do agente (configurada lá, lendo o cabeçalho) pede
+                  desculpas e agenda o retorno, sem credor nem dívida. O resultado que vale é o dessa segunda conversa
+                  (o da primeira é descartado; a transcrição das duas segue para o Speech Analytics).
 
   transcrição  -> (Speech Analytics, SQL 63) o transcript da conversa (role agent/user, message, time_in_call_secs)
                   vira o evento "transcricao" {turnos, tempo: provedor}: pelo webhook (ler_webhook) ou, sem webhook,
@@ -266,6 +271,7 @@ class ElevenLabs(ProvedorVoz):
         self._inicio: dict[str, float] = {}
         self._emitir: dict[str, Emitir] = {}
         self._fim: dict[str, float] = {}
+        self._retorno: dict[str, str] = {}      # B5: id da chamada -> id da conversa de retorno (<id>r)
 
     @property
     def depois_do_fim(self) -> bool:
@@ -293,17 +299,43 @@ class ElevenLabs(ProvedorVoz):
             # primeira mensagem configurada lá, que lê este cabeçalho
             "PJSIP_HEADER(add,X-MotorCX-Aviso)": "gravacao,virtual" if "gravada" in ctx.aviso_abertura else "virtual"})
 
+    def reconectar_sem_humano(self, ctx: ContextoChamada, motivo: str, emitir: Emitir) -> Conexao | None:
+        """B5: a transferência não chegou a um humano. Uma segunda conversa com o mesmo agente (uma vez por chamada),
+        que abre pedindo desculpas e agenda o retorno (X-MotorCX-Retorno). Ela não ocupa outra vaga: é a mesma sessão."""
+        base = ctx.id_chamada
+        if base not in self.sessoes or base in self._retorno or motivo not in ("sem_operador", "falhou"):
+            return None
+        rid = f"{base}r"
+        self._retorno[base] = rid
+        self._inicio[rid] = self.relogio()
+        self._emitir[rid] = lambda _i, tipo, dados: emitir(base, tipo, dados)
+        return Conexao("sip", endpoint=f"PJSIP/{self.numero_agente}@{self.endpoint}", variaveis={
+            "PJSIP_HEADER(add,X-MotorCX-Id)": rid,
+            "PJSIP_HEADER(add,X-MotorCX-Empresa)": str(ctx.empresa_id),
+            "PJSIP_HEADER(add,X-MotorCX-Acao)": ctx.id_acao or "-",
+            "PJSIP_HEADER(add,X-MotorCX-Aviso)": "virtual",           # o aviso de gravação já foi dito na abertura
+            "PJSIP_HEADER(add,X-MotorCX-Retorno)": motivo})
+
     def encerrar(self, id_chamada: str) -> None:
         self.sessoes.pop(id_chamada, None)
+        rid = self._retorno.get(id_chamada)
+        ini_r = self._inicio.pop(rid, None) if rid else None
         inicio = self._inicio.pop(id_chamada, None)
         if inicio is None:
             return
         if not self.depois_do_fim:
             self._emitir.pop(id_chamada, None)
+            if rid:
+                self._emitir.pop(rid, None)
+                self._retorno.pop(id_chamada, None)
             return
         self._fim[id_chamada] = self.relogio()
+        if rid:
+            self._fim[rid] = self._fim[id_chamada]
         if self.busca is not None:
             self.busca.acompanhar(id_chamada, inicio, self._fim[id_chamada])   # resultado e transcrição pela API
+            if rid and ini_r is not None:
+                self.busca.acompanhar(rid, ini_r, self._fim[rid])
 
     def receber(self, eventos: list[tuple]) -> int:
         """Eventos do webhook (thread do receptor HTTP): vão para a fila e saem no tick, na thread do orquestrador."""
@@ -311,10 +343,16 @@ class ElevenLabs(ProvedorVoz):
             self.recebidos.put(ev)
         return len(eventos)
 
-    def _entregar(self, i: str, tipo: str, dados: dict) -> None:
+    def _despachar(self, i: str, tipo: str, dados: dict) -> None:
+        """Entrega ao orquestrador. B5: com a conversa de retorno, o resultado (e o "encerrar") da primeira, a que pediu humano, não vale."""
+        if tipo in ("resultado", "encerrar") and i in self._retorno:
+            return
         emitir = self._emitir.get(i)
         if emitir is not None:
             emitir(i, tipo, dados)
+
+    def _entregar(self, i: str, tipo: str, dados: dict) -> None:
+        self._despachar(i, tipo, dados)
         if self.busca is not None:                     # já chegou pelo webhook: a API não precisa buscar
             with self.busca._trava:
                 self.busca.pendentes.pop(i, None)
@@ -334,13 +372,12 @@ class ElevenLabs(ProvedorVoz):
                     i, tipo, dados = self.busca.eventos.get_nowait()
                 except queue.Empty:
                     break
-                emitir = self._emitir.get(i)
-                if emitir is not None:
-                    emitir(i, tipo, dados)
+                self._despachar(i, tipo, dados)
         limite = self.relogio() - self.PRAZO_DEPOIS_S
         for i in [x for x, fim in self._fim.items() if fim < limite]:
             self._fim.pop(i, None)
             self._emitir.pop(i, None)
+            self._retorno.pop(i, None)
 
 
 # ------------------------------------------------------------------ receptor do webhook pós-chamada

@@ -1327,6 +1327,18 @@ e contagens (tocou, atendeu, agente, gravada, aviso, identidade, transferiu, seg
 "em breve". Testes: `supabase/testes/testar_testar_agora.py`, `tests/test_voz_testar_agora.py`,
 `site/src/lib/testar-agora.test.tsx`.
 
+**B5 · Transferência segura, o resto (sem SQL).** Sem operador (ninguém atendeu, fila recusou, limite de operadores ou
+fila cheia), a pessoa volta ao agente também **pelo fluxo** e **pela ElevenLabs**. Fluxo (`voz/fluxo.py`): a Sessão marca
+`aguardando_humano` ao transferir; `retomar_sem_humano(motivo)` abre a etapa interna `_sem_humano` (fora do grafo, sem
+passo próprio): pede desculpas (`FALA_SEM_HUMANO`, sem credor nem dívida), ouve dia e hora (até 7 dias, 08:00–19:59) e
+encerra com `retorno_agendado`; "não precisa" ou 2 silêncios encerram educado (cpc ou atendida_sem_cpc); pedir humano de
+novo nunca transfere (`FALA_SEM_HUMANO_DE_NOVO`); com terceiro, não volta; `bloco_final` continua o último bloco do
+fluxo. A Montagem mantém o silêncio vigiando enquanto espera o humano. ElevenLabs: não recebe texto no meio da conversa,
+então o núcleo (`_reconectar_agente`, só na ponte, com o robô ainda da chamada, uma vez por chamada) liga de novo para o
+agente na mesma ponte (`ProvedorVoz.reconectar_sem_humano`; `X-MotorCX-Retorno`, `X-MotorCX-Id = <id>r`) e vale o
+resultado da segunda conversa (o "resultado" e o "encerrar" da primeira são descartados). Configuração do agente:
+`infra/asterisk/README.md`. REFER segue como antes. Testes: `tests/test_voz_retorno_agente.py`.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

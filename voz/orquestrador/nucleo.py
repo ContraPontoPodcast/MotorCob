@@ -18,9 +18,10 @@ Fluxo de uma tentativa (id_chamada = uuid hex; canais <id>-c<n> cliente, <id>-p 
   5. o provedor pede humano -> ponte (padrão, decisão do dono 08/11/2026: o MotorCX segura a ligação e chama a fila
      do cliente; a IA só sai quando o humano atende) ou REFER (opção avançada; dialplan motorcx-transferir). Ninguém
      atendeu, a fila recusou ou não há destino: a pessoa volta para o agente, que pede desculpas e agenda um retorno
-     (ProvedorVoz.retomar_sem_humano); nunca se desliga na cara. Só se o agente não puder voltar (REFER já soltou o
-     agente, provedor sem suporte ou canal do agente caído) a chamada termina como transferencia_sem_operador
-     (sem_operador | falhou; SQL 106: não é abandono do discador).
+     (ProvedorVoz.retomar_sem_humano: a Conversa do roteiro e, desde o B5, a Sessão do fluxo). A ElevenLabs, que não
+     recebe texto no meio da conversa, é chamada de novo para a mesma ponte com o motivo (reconectar_sem_humano).
+     Nunca se desliga na cara. Só se o agente não puder voltar (REFER já soltou o agente, provedor sem suporte ou
+     sem robô) a chamada termina como transferencia_sem_operador (sem_operador | falhou; SQL 106: não é abandono).
   6. o canal do cliente acabou -> evento (CDR, Q.850, SIP, AMD, billsec, toque, rota/tech prefix, segundos
      tarifados, custo, transferência) classificado com motor/voz.py, guarda e agendador atualizados, gravação na
      fila de envio para o GCS.
@@ -115,6 +116,7 @@ class Chamada:
     conversando: bool = False                   # a linha ocupa uma conversa da empresa (o agente está nela)
     desligar_ate: datetime | None = None        # tocando a mensagem de sem robô: desliga no fim (ou neste prazo)
     sem_operador: bool = False                  # pediu humano e não houve operador (V8: conta mesmo se o agente voltou)
+    ctx: object = None                          # ContextoChamada da conversa (B5: reconectar o agente sem humano)
 
     @property
     def candidata(self):
@@ -607,6 +609,7 @@ class Orquestrador:
                               variaveis=self._variaveis_fala(c),
                               credor_id=c.lote_chave[1] if c.lote_chave else None,
                               aviso_abertura=self._aviso_abertura(c))
+        c.ctx = ctx
         no_pico = self.agendador.conversar(c.empresa_id, c.reservada)
         if no_pico is None:                     # sem reserva e sem robô livre (não acontece com a razão 1,0)
             self._sem_robo(c, agora)
@@ -800,21 +803,52 @@ class Orquestrador:
             self._resultado_transferencia(c, True)
         prov = self.provedores.get(c.provedor or "")
         vivo = not c.agente_solto and (c.conexao == "interno" or c.canal_provedor is not None)
-        if prov is None or not vivo or c.estado not in ("conversa", "transferindo"):
+        if prov is None or c.estado not in ("conversa", "transferindo"):
             self._abandonar(c, motivo)
             return
-        # a conversa segue com o agente (antes de avisá-lo: ele pode encerrar na mesma hora); o desfecho vem dele
-        # (ex.: retorno_agendado) e não vira abandono
-        c.tf, c.canal_humano, c.estado, c.destino = None, None, "conversa", "ia"
+        if vivo:
+            # a conversa segue com o agente (antes de avisá-lo: ele pode encerrar na mesma hora); o desfecho vem dele
+            # (ex.: retorno_agendado) e não vira abandono
+            c.tf, c.canal_humano, c.estado, c.destino = None, None, "conversa", "ia"
+            try:
+                voltou = bool(prov.retomar_sem_humano(c.id, motivo))
+            except Exception as ex:   # noqa: BLE001 — provedor com erro: tenta reconectar, senão encerra como antes
+                self._alerta(f"provedor {c.provedor}: não voltou ao agente ({ex.__class__.__name__})")
+                voltou = False
+            if voltou:
+                self._conta(f"transferencia_{motivo}_voltou_agente")
+                return
+        if self._reconectar_agente(c, prov, motivo):
+            self._conta(f"transferencia_{motivo}_voltou_agente")
+            self._conta("agente_reconectado")
+            return
+        self._abandonar(c, motivo)
+
+    def _reconectar_agente(self, c: Chamada, prov: ProvedorVoz, motivo: str) -> bool:
+        """B5: o provedor que não recebe texto no meio da conversa (ElevenLabs por SIP) é chamado de novo para a mesma
+        ponte, com o motivo, e o agente pede desculpas e agenda o retorno. Só com o robô ainda desta chamada (ponte;
+        no REFER o agente já saiu) e uma vez por chamada (o provedor recusa a segunda)."""
+        if not c.conversando or c.conexao != "sip" or c.ponte is None or c.ctx is None:
+            return False
         try:
-            voltou = bool(prov.retomar_sem_humano(c.id, motivo))
-        except Exception as ex:   # noqa: BLE001 — provedor com erro: cai no abandono, como antes
-            self._alerta(f"provedor {c.provedor}: não voltou ao agente ({ex.__class__.__name__})")
-            voltou = False
-        if not voltou:
-            self._abandonar(c, motivo)
-            return
-        self._conta(f"transferencia_{motivo}_voltou_agente")
+            con = prov.reconectar_sem_humano(c.ctx, motivo, self.evento_provedor)
+        except Exception as ex:   # noqa: BLE001
+            self._alerta(f"provedor {c.provedor}: não reconectou o agente ({ex.__class__.__name__})")
+            return False
+        if con is None or con.tipo != "sip" or not con.endpoint:
+            return False
+        antigo = c.canal_provedor
+        c.tf, c.canal_humano, c.estado, c.destino, c.agente_solto = None, None, "conversa", "ia", False
+        c.resultado_ia = None                   # vale o resultado da conversa de retorno
+        c.canal_provedor = f"{c.id}-q"
+        if antigo:
+            self.ari.desligar(antigo)
+        try:
+            self.ari.originar(con.endpoint, c.canal_provedor, APP, ["provedor", c.id], dict(con.variaveis), timeout=15)
+        except ErroARI:
+            c.canal_provedor = None
+            return False
+        return True
 
     def _humano_atendeu(self, c: Chamada, agora: datetime) -> None:
         self._resultado_transferencia(c, False)
