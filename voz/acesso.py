@@ -109,6 +109,8 @@ RPC = {
     # SQL 88 · identidade pelo arquivo: a VM manda o código da resposta e recebe só a palavra (nunca os códigos)
     "identidade_voz_vigente": "identidade_vigente", "abrir_identidade_voz": "abrir_identidade",
     "conferir_identidade_voz": "conferir_identidade", "limpar_identidade_voz": "limpar_identidade",
+    # SQL 102 · uso dos robôs contratados (em uso agora e pico do dia, só contagens; o Plantão grava a cada 15 s)
+    "registrar_uso_robos_voz": "registrar_uso_robos",
     # SQL 114 · Telefonia T5: teste da rota (voz/testador.py)
     "pegar_teste_tronco_voz": "pegar_teste_tronco", "ler_teste_tronco_voz": "ler_teste_tronco",
     "registrar_teste_tronco_voz": "registrar_teste_tronco",

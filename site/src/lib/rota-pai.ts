@@ -8,9 +8,10 @@
 // "/speech-analytics/:aba?"). A rota exata ganha da com parâmetro.
 
 import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_TELEFONIA, ROTA_VOZ } from './rotas-voz';
+import { ROTA_RP, ROTA_RP_ATRIBUICOES, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS } from './roleplay';
 
 export type RotaPai = { to: string; rotulo: string };
-export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean };
+export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean; /** Query da rota ("?assunto=robos"). */ busca?: string };
 
 const INICIO: RotaPai = { to: '/inicio', rotulo: 'Início' };
 const INTEGRACOES: RotaPai = { to: '/empresa/integracoes', rotulo: 'Integrações' };
@@ -22,7 +23,9 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	// Extrato do cliente: aberto pela lista de Clientes, pela busca do topo e pelos alertas do Speech Analytics.
 	'/cliente': { to: '/clientes', rotulo: 'Clientes' },
 	// Suporte
-	'/suporte/novo': { to: '/suporte', rotulo: 'Meus chamados' },
+	// "Pedir mais robôs" (Agente Voz/CX › Discagem, ?assunto=robos) volta para a Discagem.
+	'/suporte/novo': ctx => (new URLSearchParams(ctx.busca ?? '').get('assunto') === 'robos'
+		? { to: '/voz/discagem', rotulo: 'Discagem' } : { to: '/suporte', rotulo: 'Meus chamados' }),
 	// Documentação da API: aberta em Empresa › Integrações (tokens e módulos).
 	'/docs/api': INTEGRACOES,
 	'/documentacao': INTEGRACOES,
@@ -33,6 +36,9 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/implantacao': ctx => (ctx.equipe ? { to: '/console/implantacao', rotulo: 'Console › Implantação' } : INICIO),
 	// A equipe entra na empresa pelo Console › Empresas; para o cliente, Empresa é uma área do menu.
 	'/empresa': ctx => (ctx.equipe ? { to: '/console', rotulo: 'Console › Empresas' } : null),
+	// Empresa › Contratação › Agente de voz: editar os robôs contratados (licenças) e o histórico voltam à Contratação.
+	'/empresa/contratacao/robos': { to: '/empresa/contratacao', rotulo: 'Contratação' },
+	'/empresa/contratacao/robos/historico': { to: '/empresa/contratacao', rotulo: 'Contratação' },
 	// Cobrança › Configurações › Canais: a configuração de um canal volta para a visão geral.
 	'/canais/:canal': { to: '/canais', rotulo: 'Canais' },
 	// Agente Voz/CX, como o Speech Analytics: cada seção do menu da área (Agente de voz, Discagem, Ligações e Telefonia)
@@ -58,6 +64,25 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	// de gravações) volta para a Visão geral; o envio volta para a Entrada.
 	'/speech-analytics/:aba?': { to: ROTA_SPEECH, rotulo: 'Visão geral do Speech Analytics' },
 	'/speech-analytics/entrada/enviar': { to: ROTA_ENTRADA_GRAVACOES, rotulo: 'Entrada de gravações' },
+	// Roleplay (a aba /speech-analytics/roleplay é o Painel e volta para a Visão geral, como as outras abas): cada seção
+	// volta para o Painel; o cenário, para a biblioteca; a pessoa, para o Cadastro para treino.
+	'/speech-analytics/roleplay/cenarios': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
+	'/speech-analytics/roleplay/cenarios/:id': { to: ROTA_RP_CENARIOS, rotulo: 'Cenários' },
+	'/speech-analytics/roleplay/operadores': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
+	'/speech-analytics/roleplay/operadores/:op': { to: ROTA_RP_CADASTRO, rotulo: 'Cadastro para treino' },
+	// Editor (cenário novo) volta para a biblioteca; o treino atribuído e o "Atribuir treino", para Treinos atribuídos.
+	// Quando a tela foi aberta de outra (pessoa, cenário, Painel), o "← Voltar" leva de volta a ela (state.de).
+	'/speech-analytics/roleplay/cenarios/novo': { to: ROTA_RP_CENARIOS, rotulo: 'Cenários' },
+	'/speech-analytics/roleplay/atribuicoes': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
+	'/speech-analytics/roleplay/atribuicoes/:id': { to: ROTA_RP_ATRIBUICOES, rotulo: 'Treinos atribuídos' },
+	'/speech-analytics/roleplay/atribuir': { to: ROTA_RP_ATRIBUICOES, rotulo: 'Treinos atribuídos' },
+	// Sessão por texto (SQL 100): a sessão de uma pessoa e o treino lado a lado voltam para o treino; o teste e o
+	// resultado do teste, para o cenário.
+	// O destino com ":id" recebe o id do próprio endereço.
+	'/speech-analytics/roleplay/atribuicoes/:id/sessoes/:sid': { to: `${ROTA_RP_ATRIBUICOES}/:id`, rotulo: 'Treino' },
+	'/speech-analytics/roleplay/atribuicoes/:id/lado-a-lado/:op': { to: `${ROTA_RP_ATRIBUICOES}/:id`, rotulo: 'Treino' },
+	'/speech-analytics/roleplay/cenarios/:id/testar': { to: `${ROTA_RP_CENARIOS}/:id`, rotulo: 'Cenário' },
+	'/speech-analytics/roleplay/cenarios/:id/teste/:sid': { to: `${ROTA_RP_CENARIOS}/:id`, rotulo: 'Cenário' },
 };
 
 /** "/voz/ligacoes/:id" → /^\/voz\/ligacoes\/[^/]+$/ ("/x/:p?" também casa "/x"). */
@@ -70,13 +95,23 @@ function padrao(rota: string): RegExp {
 }
 const COM_PARAMETRO = Object.keys(ROTAS_PAI).filter(r => r.includes('/:')).map(r => [r, padrao(r)] as const);
 
+function preencherParametros(rota: string, caminho: string, destino: string): string {
+	const nomes = rota.split('/');
+	const valores = caminho.split('/');
+	const p: Record<string, string> = {};
+	nomes.forEach((n, i) => { if (n.startsWith(':') && valores[i] != null) p[n.replace(/[:?]/g, '')] = valores[i]; });
+	return destino.replace(/:([A-Za-z]+)/g, (m, k: string) => p[k] ?? m);
+}
+
 /** Tela-mãe da rota, ou null quando a tela já é o topo da área (abas, menu lateral). */
 export function rotaPai(pathname: string, ctx: ContextoRota = {}): RotaPai | null {
 	const caminho = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
 	const chave = Object.hasOwn(ROTAS_PAI, caminho) ? caminho : COM_PARAMETRO.find(([, re]) => re.test(caminho))?.[0];
 	const regra = chave ? ROTAS_PAI[chave] : undefined;
 	if (!regra) return null;
-	const pai = typeof regra === 'function' ? regra(ctx) : regra;
+	const bruto = typeof regra === 'function' ? regra(ctx) : regra;
+	// destino com parâmetro ("/x/:id"): o valor vem do mesmo parâmetro no endereço atual
+	const pai = bruto && bruto.to.includes('/:') && chave ? { ...bruto, to: preencherParametros(chave, caminho, bruto.to) } : bruto;
 	// "/x/:p?" também casa "/x", que é a própria tela-mãe: não volta para ela mesma.
 	return pai && pai.to.split('?')[0] !== caminho ? pai : null;
 }

@@ -274,10 +274,10 @@ for f in (f"public.gerar_link_treino({OP1})", f"public.salvar_equipe_treino({TA}
           f"public.abrir_sessao_treino({TA}, {GLOB}, 'texto', {AT}, {OP1}, 'link', null)", "public.apagar_voz_expirada()",
           f"public.uso_treino({TA})", f"public.franquia_treino({TA}, 'ia_treino_voz', '{HOJE}')"):
     checar(f"anon não chama {f.split('(')[0]}", False, f"select {f}", an)
-checar("só as 5 funções do token ficam para anon (nenhuma outra do treino)", True,
+checar("só as funções do token ficam para anon (as 5 do SQL 90 + treino_estado_link do SQL 99)", True,
        "select string_agg(proname, ',' order by proname) from pg_proc where pronamespace = 'public'::regnamespace "
        "and (proname like '%treino%' or proname like 'treino\\_%') and has_function_privilege('anon', oid, 'execute')",
-       sr, None, "treino_discordar,treino_iniciar,treino_meus,treino_resultado,treino_sair")
+       sr, None, "treino_discordar,treino_estado_link,treino_iniciar,treino_meus,treino_resultado,treino_sair")
 checar("RPCs do treino com search_path fixo", True,
        "select count(*) from pg_proc where pronamespace = 'public'::regnamespace and prosecdef and proname like '%treino%' "
        "and not coalesce(array_to_string(proconfig, ',') like '%search_path%', false)", sr, None, 0)
