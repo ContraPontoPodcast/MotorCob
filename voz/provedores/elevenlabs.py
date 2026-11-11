@@ -138,6 +138,9 @@ def _resultado(id_chamada: str, dados: dict) -> tuple:
     v = valor("valor_promessa")
     if isinstance(v, (int, float)) and 0 < v < 10_000_000:
         out["valor_promessa"] = round(float(v), 2)
+    dur = (dados.get("metadata") or {}).get("call_duration_secs")   # SQL 125: conferência da medição (não cobra)
+    if isinstance(dur, (int, float)) and dur >= 0:
+        out["duracao_ia_provedor_s"] = float(dur)
     return (id_chamada, "resultado", out)
 
 
