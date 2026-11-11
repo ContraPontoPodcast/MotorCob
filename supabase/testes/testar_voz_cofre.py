@@ -119,7 +119,7 @@ checar("tronco por IP não tem senha para guardar", False,
        f"select * from public.preparar_segredo_tronco_voz({IPT})", "authenticated", TEC, aal="aal2", erro="autentica por IP")
 checar("equipe sem gerenciar_troncos_voz não prepara (nem sabe se o tronco existe)", False, PREP, "authenticated", SUP,
        aal="aal2", erro="tronco não encontrado")
-checar("Admin do cliente ainda não prepara (abre no PR T3)", False, PREP, "authenticated", ADM, aal="aal2",
+checar("Admin do cliente sem o módulo agente_voz não prepara (SQL 105)", False, PREP, "authenticated", ADM, aal="aal2",
        erro="tronco não encontrado")
 checar("anon não chama preparar", False, PREP, "anon")
 checar("o pedido fica registrado, sem valor", True,
@@ -165,13 +165,13 @@ checar("voltar para senha usa a referência padrão de novo, ainda sem senha gua
 checar("a equipe ainda pode informar uma referência própria (voz/...)", True,
        tronco(EA, f"leg103-{T}", segredo="'voz/trunk/legado-103'") + f"; select segredo_ref from public.voz_troncos "
        f"where empresa_id={EA} and referencia='leg103-{T}'", "authenticated", TEC, "voz/trunk/legado-103")
-checar("Admin do cliente não cadastra tronco (abre no PR T3)", False, tronco(EA, f"cli103-{T}"), "authenticated", ADM,
+checar("Admin do cliente sem o módulo agente_voz não cadastra tronco (SQL 105)", False, tronco(EA, f"cli103-{T}"), "authenticated", ADM,
        aal="aal2")
 
 # ---------------------------------------------------------------- quem vê o registro
 checar("Técnico vê o registro dos pedidos", True, f"select count(*) > 0 from public.voz_troncos_cofre where empresa_id={EA}",
        "authenticated", TEC, "t")
-checar("Admin do cliente não vê o registro (ainda)", True,
+checar("Admin do cliente sem o módulo agente_voz não vê o registro", True,
        f"select count(*) from public.voz_troncos_cofre where empresa_id={EA}", "authenticated", ADM, 0)
 checar("ninguém do site grava no registro", False,
        f"insert into public.voz_troncos_cofre (empresa_id, tronco_id, evento) values ({EA}, {TID}, 'guardado')",

@@ -309,7 +309,7 @@ checar("operação não altera o calendário", True, f"update public.credores se
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
 # permissões por perfil (padrão MotorCob + ajuste do Admin da empresa) e auditoria
 checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas,reciclar_lote_voz,reenviar_lote_voz,ver_clientes,ver_painel")
-checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 31)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60) + 1 do importador (SQL 64) + 2 do SQL 65 + 2 do treino (SQL 90)
+checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 32)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60) + 1 do importador (SQL 64) + 2 do SQL 65 + 2 do treino (SQL 90) + configurar_telefonia (SQL 105)
 checar("usuário inativo não tem permissão", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["inativo"], 0)
 checar("planejamento não ajusta permissões", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["plan"])
 checar("Admin libera Reenquadrar para a operação", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["admina"])
@@ -372,7 +372,7 @@ checar("convite: acessos do perfil Operação na empresa", True, "select string_
 checar("convite: Admin sempre com gerenciar usuários", True, "select permitido from public.permissoes_do_papel(papel => 'admin') where codigo='gerenciar_usuarios'", "authenticated", u["admina"], "t")
 checar("quem não gerencia usuários não lê acessos de perfil", True, "select count(*) from public.permissoes_do_papel(papel => 'operacao')", "authenticated", u["oper"], 0)
 checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
-checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 31)   # 21 + 5 do SQL 60 + 1 do SQL 64 + 2 do SQL 65 (reenviar e reciclar) + 2 do SQL 90 (treino)
+checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 32)   # 21 + 5 do SQL 60 + 1 do SQL 64 + 2 do SQL 65 (reenviar e reciclar) + 2 do SQL 90 (treino) + 1 do SQL 105 (configurar_telefonia)
 checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
 # página comercial: mídia pública e formulário de contato (visitante só insere)
 checar("bucket site é público", True, "select public from storage.buckets where id='site'", "service_role", "t")
@@ -3033,6 +3033,13 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 104: IPs da operadora e firewall (testar_voz_firewall.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 105 · Telefonia T3: configurar_telefonia (padrão só Admin, com aal2 e o módulo agente_voz), RPCs do cliente, views
+# sem segredo e e-mail aos Admins a cada mudança de endereço, senha, bina ou IPs
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_configurar_telefonia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 105: o Admin configura a telefonia (testar_voz_configurar_telefonia.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
