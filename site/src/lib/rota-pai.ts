@@ -7,11 +7,11 @@
 // A chave é a rota como está no routes.ts: exata ("/suporte/novo") ou com parâmetros ("/voz/ligacoes/:id",
 // "/speech-analytics/:aba?"). A rota exata ganha da com parâmetro.
 
-import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_VOZ } from './rotas-voz';
+import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_TELEFONIA, ROTA_VOZ } from './rotas-voz';
 import { ROTA_RP, ROTA_RP_ATRIBUICOES, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS } from './roleplay';
 
 export type RotaPai = { to: string; rotulo: string };
-export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean };
+export type ContextoRota = { /** Usuário da equipe MotorCX (Console). */ equipe?: boolean; /** Query da rota ("?assunto=robos"). */ busca?: string };
 
 const INICIO: RotaPai = { to: '/inicio', rotulo: 'Início' };
 const INTEGRACOES: RotaPai = { to: '/empresa/integracoes', rotulo: 'Integrações' };
@@ -23,7 +23,9 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	// Extrato do cliente: aberto pela lista de Clientes, pela busca do topo e pelos alertas do Speech Analytics.
 	'/cliente': { to: '/clientes', rotulo: 'Clientes' },
 	// Suporte
-	'/suporte/novo': { to: '/suporte', rotulo: 'Meus chamados' },
+	// "Pedir mais robôs" (Agente Voz/CX › Discagem, ?assunto=robos) volta para a Discagem.
+	'/suporte/novo': ctx => (new URLSearchParams(ctx.busca ?? '').get('assunto') === 'robos'
+		? { to: '/voz/discagem', rotulo: 'Discagem' } : { to: '/suporte', rotulo: 'Meus chamados' }),
 	// Documentação da API: aberta em Empresa › Integrações (tokens e módulos).
 	'/docs/api': INTEGRACOES,
 	'/documentacao': INTEGRACOES,
@@ -34,6 +36,13 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/implantacao': ctx => (ctx.equipe ? { to: '/console/implantacao', rotulo: 'Console › Implantação' } : INICIO),
 	// A equipe entra na empresa pelo Console › Empresas; para o cliente, Empresa é uma área do menu.
 	'/empresa': ctx => (ctx.equipe ? { to: '/console', rotulo: 'Console › Empresas' } : null),
+	// Empresa › Contratação › Agente de voz: editar os robôs contratados (licenças) e o histórico voltam à Contratação.
+	'/empresa/contratacao/robos': { to: '/empresa/contratacao', rotulo: 'Contratação' },
+	'/empresa/contratacao/robos/historico': { to: '/empresa/contratacao', rotulo: 'Contratação' },
+	// Contratação › Agente de voz: modelo de cobrança (minuto falado ou licença) volta à Contratação.
+	'/empresa/contratacao/voz': { to: '/empresa/contratacao', rotulo: 'Contratação' },
+	// Empresa › Faturamento › Demonstrativo do minuto falado (SQL 127) volta ao Faturamento.
+	'/empresa/faturamento/demonstrativo': { to: '/empresa/faturamento', rotulo: 'Faturamento' },
 	// Cobrança › Configurações › Canais: a configuração de um canal volta para a visão geral.
 	'/canais/:canal': { to: '/canais', rotulo: 'Canais' },
 	// Agente Voz/CX, como o Speech Analytics: cada seção do menu da área (Agente de voz, Discagem, Ligações e Telefonia)
@@ -42,6 +51,8 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/voz/discagem': VISAO_GERAL_VOZ,
 	'/voz/ligacoes': VISAO_GERAL_VOZ,
 	'/voz/telefonia': VISAO_GERAL_VOZ,
+	// Discagem › "Robôs e o Preditivo" (aberta pelo cartão do contrato e pela aba Ritmo) volta para a Discagem.
+	'/voz/discagem/robos': { to: '/voz/discagem', rotulo: 'Discagem' },
 	// Agente Voz/CX › Agente de voz: fluxo (editor), Confirmar identidade, testes, desempenho, personas, rascunho gerado
 	// e roteiro antigo voltam à lista de fluxos.
 	'/voz/agente/editor/:versao': AGENTE_DE_VOZ,
@@ -51,6 +62,8 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/voz/agente/personas': AGENTE_DE_VOZ,
 	'/voz/agente/pedido/:id': AGENTE_DE_VOZ,
 	'/voz/agente/roteiro': AGENTE_DE_VOZ,
+	// Telefonia › tronco (assistente, senha, Testar a rota) → Telefonia (SQL 114).
+	'/voz/telefonia/tronco/:ref': { to: ROTA_TELEFONIA, rotulo: 'Telefonia' },
 	// Ligações de um lote → lotes de hoje.
 	'/voz/ligacoes/:id': { to: ROTA_LIGACOES, rotulo: 'Ligações' },
 	// Speech Analytics: toda aba (Qualidade, Operadores, Alertas, Recomendações, Curadoria, Buscar, Gravações e Entrada

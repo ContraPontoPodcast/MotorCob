@@ -1,5 +1,6 @@
 // Console › Fornecedores e rotas › Agente virtual (equipe MotorCX). Protótipo aprovado, tela 1, e SQL 56.
-// Global: conexão do provedor (só se funciona, nunca a chave) e concorrência contratada dividida entre as empresas.
+// Global: conexão do provedor (só se funciona, nunca a chave) e robôs vendidos × teto contratado (console-voz-robos.tsx,
+// SQL 101: licenças primeiro, a sobra para quem não tem licença).
 // Por empresa: provedor de voz, troncos SIP, IPs de saída, rotas com vigência (e o alerta de rota sem cadastro),
 // calculadora de tarifação sem carência, transferência para o discador, pico, Alô fake e o caminho
 // Simulado → Só números de teste → Real com o checklist. Troncos, rotas e configuração: gerenciar_troncos_voz.
@@ -13,13 +14,15 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError, dateBR, dateTimeBR, today, type Row } from '@/lib/supabase';
 import {
 	FORMATOS_DISCAGEM, IPS_SAIDA_MOTORCX, MODOS_VOZ, PROVEDORES_VOZ, TIPOS_ROTA, binaMascara, cadenciaTxt, inteiro, reais,
-	segundosTarifados, custoVoz,
+	segundosTarifados, custoVoz, ipsPendentes,
 } from '@/lib/voz';
 import { Cadeado, Cartao, Dialogo, Pilula, Ponto, Subtitulo, Trava, Vazio, btnLink, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 import { Abas, Aviso as AvisoDs, Detalhes, Gaveta, Kpis, ListaValores, Passos, SeloRegras, Tabela } from '@/components/ds';
 import { textoTemDadoPessoal } from '@/lib/speech';
 import { useConsolePerms } from './console-perms';
 import { NumerosTesteDialogo, RotaGaveta, TransferenciaGaveta, TroncoGaveta } from './console-voz-gavetas';
+import { RobosTeto } from './console-voz-robos';
+import { comLicenca, linhaDivisao, porQueEquipe } from '@/lib/robos-voz';
 
 const SEM_PERM_TRONCOS = 'Só a equipe com a permissão de troncos de voz';
 const SEM_PERM_LIGAR = 'Só quem tem a permissão de ligar o agente de voz';
@@ -96,7 +99,7 @@ export function AgenteVirtualConsole() {
 
 			{aba === 'todas' ? <>
 				<ConexaoProvedor fornecedores={fornecedores} saude={saudeGlobal} loading={loading} />
-				<Concorrencia divisao={divisao} contrato={contrato} nomeEmpresa={nomeEmpresa} podeTroncos={podeTroncos} loading={loading}
+				<RobosTeto divisao={divisao} contrato={contrato} nomeEmpresa={nomeEmpresa} podeTroncos={podeTroncos} loading={loading}
 					onSalvo={() => void recarregarGlobal()} onEscolher={id => { setEmpresaId(id); setAba('empresa'); }} />
 			</> : <div>
 				<div className="mb-4 flex flex-wrap items-center gap-3">
@@ -165,77 +168,9 @@ function ConexaoProvedor({ fornecedores, saude, loading }: { fornecedores: Row[]
 	);
 }
 
-// ============================================================== concorrência contratada
-function Concorrencia({ divisao, contrato, nomeEmpresa, podeTroncos, loading, onSalvo, onEscolher }: {
-	divisao: Row[]; contrato: Row | null; nomeEmpresa: (id: unknown) => string; podeTroncos: boolean; loading: boolean;
-	onSalvo: () => void; onEscolher: (id: string) => void;
-}) {
-	const atual = Number(contrato?.concorrencia_contratada ?? divisao[0]?.contratado ?? 0);
-	const [valor, setValor] = useState(String(atual));
-	const [busy, setBusy] = useState(false);
-	const [como, setComo] = useState(false);
-	useEffect(() => { setValor(String(atual)); }, [atual]);
-
-	const n = Number(valor);
-	const valido = Number.isInteger(n) && n >= 0 && n <= 1000000;
-	const mudou = valido && n !== atual;
-	const totCanais = divisao.reduce((t, r) => t + Number(r.canais ?? 0), 0);
-	const totLimite = divisao.reduce((t, r) => t + Number(r.limite ?? 0), 0);
-	const linhas = [...divisao].sort((a, b) => Number(b.canais) - Number(a.canais));
-
-	async function salvar() {
-		if (!supabase || !mudou) return;
-		setBusy(true);
-		const { error } = await supabase.rpc('definir_concorrencia_contratada', { n });
-		setBusy(false);
-		if (error) { toast.error(erroRpc(error)); return; }
-		toast.success('Concorrência salva. A divisão entre as empresas foi refeita.');
-		onSalvo();
-	}
-
-	return (
-		<Cartao semPad titulo="Concorrência contratada"
-			desc="Total de ligações ao mesmo tempo no contrato com o provedor de voz, dividido entre as empresas pelos canais dos troncos ativos."
-			acoes={<button type="button" onClick={() => setComo(true)} className={btnLink}>Como dividimos</button>}>
-			<div className="px-5 pb-2 sm:px-6">
-				<div className="flex flex-wrap items-end gap-3">
-					<div className="w-full max-w-[280px]">
-						<label htmlFor="voz-contr" className="mb-1 block text-[13px] font-semibold text-[var(--base-texto)]">Total contratado (ao mesmo tempo)</label>
-						<input id="voz-contr" value={valor} inputMode="numeric" disabled={!podeTroncos} onChange={e => setValor(e.target.value.replace(/\D/g, ''))} className={`${campoCls} tnum`} />
-					</div>
-					{podeTroncos ? (
-						<button onClick={() => void salvar()} disabled={!mudou || busy} className={btnPrim}>{busy ? 'Salvando...' : 'Salvar'}</button>
-					) : <Cadeado>{SEM_PERM_TRONCOS}</Cadeado>}
-				</div>
-				<p className="mt-1.5 text-[12px] text-[var(--base-texto-3)]">A divisão é refeita na hora.{contrato?.atualizado_em ? ` Última mudança: ${dateTimeBR(contrato.atualizado_em)}.` : ''}</p>
-			</div>
-			<div className="pt-2">
-				{loading ? <p className="py-4 text-center text-[13px] text-[var(--base-texto-3)]">Carregando...</p> : (
-					<Tabela rotulo="Divisão por empresa" linhas={linhas} chave={r => String(r.empresa_id)} onAbrir={r => onEscolher(String(r.empresa_id))}
-						vazio="Nenhuma empresa com tronco ativo ainda."
-						colunas={[
-							{ id: 'emp', titulo: 'Empresa', celula: r => nomeEmpresa(r.empresa_id) },
-							{ id: 'can', titulo: 'Canais', num: true, celula: r => inteiro(r.canais) },
-							{ id: 'lim', titulo: 'Limite', num: true, celula: r => <b>{inteiro(r.limite)}</b> },
-							{ id: 'pico', titulo: 'Pico', celula: r => { const pico = Number(r.pico_multiplo ?? 1); return pico <= 1 ? 'Desligado' : `Até ${pico}× · máx. ${inteiro(r.teto)}`; } },
-						]}
-						celular={r => ({ titulo: nomeEmpresa(r.empresa_id), valor: `${inteiro(r.limite)} simultâneas`, resumo: `${inteiro(r.canais)} canais` })}
-						rodape={<><span>Total</span><span className="tnum">{inteiro(totCanais)} canais · limite {inteiro(totLimite)}</span></>} />
-				)}
-			</div>
-			<Gaveta aberta={como} onFechar={() => setComo(false)} titulo="Como dividimos a concorrência">
-				<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Limite da empresa = {inteiro(atual)} × canais dela ÷ {inteiro(totCanais)} canais no total. A sobra do arredondamento vai para as empresas com a maior fração. O pico é opção de cada empresa, vem desligado e nunca passa dos canais do tronco.</p>
-				<Trava icone={<Phone size={16} />} titulo="Quem liga é sempre o agente de IA. O limite conta conversas com a IA, não linhas tocando: cada número só é discado com um robô reservado para ele.">
-					Sem robô livre, o número espera na lista do dia e não é discado. Se mesmo com a reserva a IA não abrir a conversa (falha do provedor), a pessoa ouve uma mensagem curta e neutra antes de a ligação acabar, e isso conta como &quot;abandono sem robô livre&quot;. Na transferência sem operador livre, a pessoa volta para o agente, que pede desculpas e agenda um retorno. A taxa de abandono aparece em Ligações em curso e freia o lote quando passa do limite da empresa.
-				</Trava>
-			</Gaveta>
-		</Cartao>
-	);
-}
-
 // ============================================================== por empresa
 type Pausa = { id: number; tronco_id: number; motivo: 'sem_credito' | 'bloqueio_originacao' | string; causa_sip: number | null; pausado_em: string };
-const MOTIVO_PAUSA: Record<string, string> = { sem_credito: 'sem crédito na operadora', bloqueio_originacao: 'bloqueio de originação' };
+const MOTIVO_PAUSA: Record<string, string> = { sem_credito: 'sem crédito na operadora', bloqueio_originacao: 'bloqueio de originação', disjuntor: 'disjuntor (falhas técnicas seguidas; volta sozinho com um teste que passou)', suspeita_sem_credito: 'suspeita de sem crédito ou bloqueio (mesmo erro em quase todas; volta com um teste que passou)' };
 
 type DadosEmpresa = {
 	pausas: Pausa[];
@@ -257,7 +192,7 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 		const eid = Number(empresaId);
 		const [cfg, tr, ro, tf, sa, pe, rt, lt, cf, pz] = await Promise.all([
 			supabase.from('voz_config').select('*').eq('empresa_id', eid).maybeSingle(),
-			supabase.from('voz_troncos').select('id,referencia,operadora,host,porta,transporte,autenticacao,usuario,segredo_ref,ddd_origem,bina,formato_discagem,csp,codecs,canais,cps,ativo,testado_em,teste_ok').eq('empresa_id', eid).order('referencia'),
+			supabase.from('voz_troncos').select('id,referencia,operadora,host,porta,transporte,autenticacao,usuario,segredo_ref,segredo_guardado_em,segredo_versao,ips_operadora,ips_liberados,ips_liberados_em,ddd_origem,bina,formato_discagem,csp,codecs,canais,cps,ativo,testado_em,teste_ok').eq('empresa_id', eid).order('referencia'),
 			supabase.from('voz_rotas').select('*').eq('empresa_id', eid).order('vigente_desde', { ascending: false }),
 			supabase.from('voz_transferencias').select('*').eq('empresa_id', eid).eq('ativo', true).is('credor_id', null).limit(1),
 			supabase.from('fornecedor_saude').select('item,referencia,ok,contagem,detalhe,verificado_em,tronco_id').eq('empresa_id', eid),
@@ -301,11 +236,11 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 					podeTroncos={podeTroncos} modo={modo} onNumeros={() => setGNumeros(true)} onSalvo={m => salvo(m, true)} />
 			</>}
 			{aba === 'troncos' && <>
-				<Troncos troncos={d.troncos} pausas={d.pausas} saude={d.saude} podeTroncos={podeTroncos} onRetomado={() => salvo('Rota retomada. A VM volta a discar por este tronco no próximo minuto.', true)} onNovo={() => setGTronco({ tronco: null })} onEditar={t => setGTronco({ tronco: t })} />
+				<Troncos troncos={d.troncos} pausas={d.pausas} saude={d.saude} podeTroncos={podeTroncos} onRetomado={() => salvo('Rota retomada. A VM volta a discar por este tronco no próximo minuto.', true)} onLiberado={() => void carregar()} onNovo={() => setGTronco({ tronco: null })} onEditar={t => setGTronco({ tronco: t })} />
 				<Rotas rotas={d.rotas} troncos={d.troncos} saude={d.saude} podeTroncos={podeTroncos}
 					onNova={(base, prefixo) => setGRota({ base, prefixo })} onEncerrada={() => salvo('Rota encerrada. Ela fica no histórico.')} />
 			</>}
-			{aba === 'transferencia' && <Transferencia atual={d.transferencia} troncos={d.troncos} podeTroncos={podeTroncos} onEditar={() => setGTransf(true)} />}
+			{aba === 'transferencia' && <Transferencia atual={d.transferencia} troncos={d.troncos} podeTroncos={podeTroncos} onEditar={() => setGTransf(true)} onLiberado={() => void carregar()} />}
 
 			{gTronco && <TroncoGaveta empresaId={empresaId} empresaNome={empresaNome} tronco={gTronco.tronco} onClose={() => setGTronco(null)} onSaved={m => salvo(m, true)} />}
 			{gRota && <RotaGaveta empresaId={empresaId} troncos={d.troncos} rotaBase={gRota.base} prefixoSugerido={gRota.prefixo} onClose={() => setGRota(null)} onSaved={m => salvo(m)} />}
@@ -330,6 +265,8 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 	const limite = Number(divisaoLinha?.limite ?? 0);
 	const canais = troncos.filter(t => t.ativo !== false).reduce((s, t) => s + Number(t.canais ?? 0), 0);
 	const tetoDe = (m: number) => Math.min(limite * m, canais);
+	// com licença (SQL 98/101) o pico não vale: quem precisa de mais compra robôs; o valor guardado volta se a licença sair
+	const comRobos = divisaoLinha ? comLicenca(linhaDivisao(divisaoLinha)) : false;
 
 	async function ajustar(chave: string, valor: unknown, msg: string) {
 		if (!supabase) return;
@@ -345,7 +282,7 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 
 	const linhasCfg: { id: string; nome: string; valor: ReactNode }[] = [
 		{ id: 'provedor', nome: 'Provedor de voz', valor: provInfo?.nome ?? provedor },
-		{ id: 'pico', nome: 'Pico acima do limite', valor: pico <= 1 ? 'Desligado' : `Até ${pico}× · máx. ${inteiro(tetoDe(pico))}` },
+		{ id: 'pico', nome: 'Pico acima do limite', valor: comRobos ? 'Desligado (robôs contratados)' : pico <= 1 ? 'Desligado' : `Até ${pico}× · máx. ${inteiro(tetoDe(pico))}` },
 		{ id: 'alo', nome: 'Alô fake', valor: aloLib ? (config?.alo_fake ? `Liberado · ligado, até ${inteiro(config?.alo_fake_max_s)} s` : 'Liberado · desligado pela empresa') : 'Não liberado' },
 		{ id: 'numeros', nome: 'Números de teste', valor: nTeste === 0 ? 'Nenhum cadastrado' : `${inteiro(nTeste)} cadastrado${nTeste > 1 ? 's' : ''}` },
 		{ id: 'bucket', nome: 'Bucket de gravações', valor: config?.bucket_gravacoes ? <span className="font-mono text-[12.5px]">{String(config.bucket_gravacoes)}</span> : 'Sem bucket' },
@@ -382,6 +319,7 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 						<option value="2">Até 2× · máx. {inteiro(tetoDe(2))}</option>
 						<option value="3">Até 3× · máx. {inteiro(tetoDe(3))}</option>
 					</select>
+					{comRobos && <p className="text-[12.5px] leading-relaxed text-[var(--estado-atencao-texto)]">Esta empresa tem robôs contratados: o pico não vale (limite = robôs). O valor fica guardado e volta a valer se a licença chegar a 0.</p>}
 					<p className="text-[12.5px] leading-relaxed text-[var(--base-texto-2)]">{pico <= 1 ? `Sem pico: a empresa nunca passa de ${inteiro(limite)}.` : `Até ${inteiro(tetoDe(pico))} ao mesmo tempo. O minuto de IA acima de ${inteiro(limite)} custa o dobro e aparece como item próprio na fatura do MotorCX.${tetoDe(pico) < limite * pico ? ` Travado nos ${inteiro(canais)} canais do tronco.` : ''}`}</p>
 				</>}
 				{aberta === 'alo' && <>
@@ -412,15 +350,24 @@ function situacaoTronco(t: Row): { tom: 'ok' | 'erro' | 'neutro' | 'atencao'; tx
 	if (t.teste_ok === false) return { tom: 'erro', txt: `Teste falhou${t.testado_em ? ` · ${dateTimeBR(t.testado_em)}` : ''}` };
 	return { tom: 'atencao', txt: 'Aguardando teste' };
 }
+// SQL 103: a senha guardada pela tela tem data; sem data, ou ainda falta, ou foi posta no cofre à mão pela equipe
 const autenticacaoTxt = (t: Row) => t.autenticacao === 'senha'
-	? <>Usuário e senha · <span className="font-mono">{String(t.segredo_ref)}</span> no cofre</>
+	? (t.segredo_guardado_em
+		? <>Usuário e senha · senha guardada no cofre em {dateTimeBR(String(t.segredo_guardado_em))}</>
+		: <>Usuário e senha · <span className="font-mono">{String(t.segredo_ref)}</span> · senha ainda não guardada pela tela</>)
 	: <>Por IP</>;
+const ipsTxt = (t: Row) => {
+	const lista = Array.isArray(t.ips_operadora) ? (t.ips_operadora as string[]) : [];
+	if (lista.length === 0) return 'Nenhum (o firewall só aceita a lista fixa do criar_gcp.sh)';
+	const pend = new Set(ipsPendentes(t));
+	return <span className="font-mono text-[12.5px]">{lista.map(x => `${x}${pend.has(x) ? ' (esperando)' : ''}`).join(' · ')}</span>;
+};
 const formatoTxt = (t: Row) => {
 	const f = FORMATOS_DISCAGEM.find(x => x.id === t.formato_discagem)?.nome ?? String(t.formato_discagem ?? '');
 	return t.csp ? `${f} · CSP ${String(t.csp)}` : f;
 };
 
-function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onRetomado }: { troncos: Row[]; pausas: Pausa[]; saude: Row[]; podeTroncos: boolean; onNovo: () => void; onEditar: (t: Row) => void; onRetomado: () => void }) {
+function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onRetomado, onLiberado }: { troncos: Row[]; pausas: Pausa[]; saude: Row[]; podeTroncos: boolean; onNovo: () => void; onEditar: (t: Row) => void; onRetomado: () => void; onLiberado: () => void }) {
 	const ativos = troncos.filter(t => t.ativo !== false);
 	const [sel, setSel] = useState<Row | null>(null);
 	const [retomar, setRetomar] = useState<Pausa | null>(null);
@@ -448,6 +395,18 @@ function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onReto
 	}
 	const selPausa = sel ? pausaDe(sel) : null;
 	const selErro = sel ? erroDe(sel) : null;
+	const selPend = sel ? ipsPendentes(sel) : [];
+	// SQL 104: segundo passo, da equipe (com a verificação em duas etapas): os IPs entram no firewall das VMs em até 2 min
+	async function liberarIps() {
+		if (!supabase || !sel) return;
+		setBusy(true);
+		const { error } = await supabase.rpc('liberar_ips_voz', { tipo: 'tronco', id: Number(sel.id) });
+		setBusy(false);
+		if (error) { toast.error(erroRpc(error)); return; }
+		toast.success('IPs liberados. O firewall das VMs de voz aceita a operadora em até 2 minutos.');
+		setSel(null);
+		onLiberado();
+	}
 	return (
 		<Cartao semPad titulo="Troncos SIP da empresa"
 			desc="A empresa contrata as operadoras dela; o Asterisk do MotorCX disca por esses troncos e liga o agente de IA quando a pessoa atende."
@@ -478,6 +437,7 @@ function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onReto
 				rodape={podeTroncos && sel ? <>
 					<button type="button" onClick={() => { const t = sel; setSel(null); onEditar(t); }} className={selPausa ? btnSec : btnPrim}><Pencil size={14} /> Editar</button>
 					{selPausa && <button type="button" onClick={() => { setNota(''); setRetomar(selPausa); }} className={btnPrim}>Retomar rota</button>}
+					{selPend.length > 0 && <button type="button" disabled={busy} onClick={() => void liberarIps()} className={btnSec}>{busy ? 'Liberando...' : 'Liberar IPs no firewall'}</button>}
 				</> : undefined}>
 				{selPausa && <AvisoDs tom={selPausa.motivo === 'bloqueio_originacao' ? 'erro' : 'atencao'} titulo={`Pausado por ${MOTIVO_PAUSA[selPausa.motivo] ?? selPausa.motivo}`}>
 					Desde {dateTimeBR(selPausa.pausado_em)}{selPausa.causa_sip ? ` (resposta SIP ${selPausa.causa_sip})` : ''}. A VM não disca por este tronco até alguém da equipe retomar.{!podeTroncos ? ` ${SEM_PERM_TRONCOS} retoma.` : ''}
@@ -493,7 +453,11 @@ function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onReto
 					['DDD de origem', String(sel.ddd_origem)],
 					['Discagem', formatoTxt(sel)],
 					['Canais · CPS', `${inteiro(sel.canais)} · ${inteiro(sel.cps)}`],
+					['IPs da operadora', ipsTxt(sel)],
 				]} />}
+				{sel && selPend.length > 0 && <AvisoDs tom="atencao" titulo="IPs esperando a liberação no firewall">
+					{selPend.join(', ')}. Confira com a operadora que são os IPs do SBC dela antes de liberar: o firewall das VMs passa a aceitar SIP e áudio deles.{!podeTroncos ? ` ${SEM_PERM_TRONCOS} libera.` : ''}
+				</AvisoDs>}
 			</Gaveta>
 			{retomar && (
 				<Dialogo titulo="Retomar a rota?" onClose={() => !busy && setRetomar(null)}
@@ -641,8 +605,19 @@ function Calculadora({ vigentes }: { vigentes: Row[] }) {
 }
 
 // ---------------------------------------------------------------- transferência
-function Transferencia({ atual, troncos, podeTroncos, onEditar }: { atual: Row | null; troncos: Row[]; podeTroncos: boolean; onEditar: () => void }) {
+function Transferencia({ atual, troncos, podeTroncos, onEditar, onLiberado }: { atual: Row | null; troncos: Row[]; podeTroncos: boolean; onEditar: () => void; onLiberado: () => void }) {
 	const tronco = atual?.tronco_id != null ? troncos.find(t => String(t.id) === String(atual.tronco_id)) : null;
+	const pend = ipsPendentes(atual);
+	const [busy, setBusy] = useState(false);
+	async function liberarIps() {   // SQL 104: segundo passo, da equipe (aal2)
+		if (!supabase || !atual) return;
+		setBusy(true);
+		const { error } = await supabase.rpc('liberar_ips_voz', { tipo: 'transferencia', id: Number(atual.id) });
+		setBusy(false);
+		if (error) { toast.error(erroRpc(error)); return; }
+		toast.success('IPs do PABX liberados. O firewall das VMs de voz aceita o PABX em até 2 minutos.');
+		onLiberado();
+	}
 	return (
 		<Cartao titulo="Transferência para o discador do cliente" desc="Para onde o agente manda a chamada quando precisa de um operador. A equipe MotorCX configura."
 			acoes={podeTroncos ? <button onClick={onEditar} className={btnSec}>{atual ? <><Pencil size={14} /> Editar</> : <><Plus size={15} /> Configurar</>}</button> : <Cadeado>{SEM_PERM_TRONCOS} configura</Cadeado>}>
@@ -655,11 +630,17 @@ function Transferencia({ atual, troncos, podeTroncos, onEditar }: { atual: Row |
 						['Tronco', <span key="t" className="font-mono">{tronco ? String(tronco.referencia) : '—'}</span>],
 						['Último teste', <span key="u" className="inline-flex items-center gap-2">{atual.testado_em ? <><Ponto tom={atual.teste_ok ? 'ok' : 'erro'} /> {dateTimeBR(atual.testado_em)} · {atual.teste_ok ? 'operador atendeu' : 'falhou'}</> : <><Ponto tom="atencao" /> Aguardando o teste</>}</span>],
 						['Nunca vai', 'CPF, nome, valor ou transcrição'],
+						['IPs do PABX', ipsTxt(atual)],
 					]} />
+					{pend.length > 0 && <AvisoDs tom="atencao" titulo="IPs do PABX esperando a liberação no firewall">
+						{pend.join(', ')}.{' '}
+						{podeTroncos ? <button type="button" disabled={busy} onClick={() => void liberarIps()} className={btnLink}>{busy ? 'Liberando...' : 'Liberar no firewall'}</button> : `${SEM_PERM_TRONCOS} libera.`}
+					</AvisoDs>}
 					<Detalhes resumo="Detalhes técnicos">
 						<ListaValores itens={[
 							['Como', atual.metodo === 'ponte' ? 'O MotorCX segura a ligação e chama a fila (sem ninguém: volta ao agente e agenda retorno)' : 'Passa a chamada (REFER; se falhar, nova chamada e ponte)'],
 							['Prefixo', atual.tech_prefix ? <span key="p" className="font-mono">{String(atual.tech_prefix)}</span> : '—'],
+							['Operadores ao mesmo tempo', String(atual.simultaneas ?? 5)],
 							['Cabeçalhos enviados', <span key="c" className="font-mono text-[12.5px]">{(Array.isArray(atual.cabecalhos) ? atual.cabecalhos as string[] : []).join(' · ') || '—'}</span>],
 						]} />
 					</Detalhes>
@@ -749,7 +730,7 @@ function LigarDeVerdade({ empresaId, empresaNome, d, modo, podeLigar, divisaoLin
 				{ rotulo: 'Modo agora', valor: modoInfo?.nome ?? 'Simulado', tom: modo === 'real' ? 'ok' : undefined },
 				{ rotulo: 'Lista pronta', valor: `${prontos} de ${itens.length}`, tom: prontos < itens.length ? 'atencao' : 'ok' },
 				{ rotulo: 'Troncos no ar', valor: `${inteiro(noAr)} de ${inteiro(d.troncos.length)}`, tom: d.troncos.length && !noAr ? 'alerta' : undefined },
-				{ rotulo: 'Ao mesmo tempo', valor: divisaoLinha ? inteiro(divisaoLinha.limite) : '—', detalhe: divisaoLinha ? `pelos ${inteiro(divisaoLinha.canais)} canais do tronco` : 'precisa de um tronco ativo' },
+				{ rotulo: 'Ao mesmo tempo', valor: divisaoLinha ? inteiro(divisaoLinha.limite) : '—', detalhe: divisaoLinha ? porQueEquipe(linhaDivisao(divisaoLinha)) : 'precisa de um tronco ativo' },
 			]} />
 			<Cartao titulo="Antes de ligar de verdade" desc="Os mesmos itens que o banco confere ao mudar de modo.">
 				<ul className="space-y-2">

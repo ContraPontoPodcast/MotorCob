@@ -1,0 +1,33 @@
+{
+  "_sobre": "SQL 123 · Tarifação do minuto de IA (segundos_tarifados_ia no banco e voz/tarifacao.py › segundos_tarifados_ia na VM). A mesma tabela roda nos dois (tests/test_tarifacao_ia.py e supabase/testes/testar_cobranca_ia.py). cadencia = grátis/inicial/incremento.",
+  "casos": [
+    {"nome": "47 s viram 48 s (0/30/6)", "cadencia": "0/30/6", "segundos": 47, "tarifados": 48},
+    {"nome": "12 s viram 30 s (0/30/6)", "cadencia": "0/30/6", "segundos": 12, "tarifados": 30},
+    {"nome": "zero não cobra", "cadencia": "0/30/6", "segundos": 0, "tarifados": 0},
+    {"nome": "1 milésimo já cobra os 30 s", "cadencia": "0/30/6", "segundos": 0.001, "tarifados": 30},
+    {"nome": "30 s cheios ficam 30", "cadencia": "0/30/6", "segundos": 30, "tarifados": 30},
+    {"nome": "30,001 s sobem para 36", "cadencia": "0/30/6", "segundos": 30.001, "tarifados": 36},
+    {"nome": "47,999 s ficam 48", "cadencia": "0/30/6", "segundos": 47.999, "tarifados": 48},
+    {"nome": "48,001 s sobem para 54", "cadencia": "0/30/6", "segundos": 48.001, "tarifados": 54},
+    {"nome": "milésimos: 36,0004 arredonda para 36,000 e fica 36", "cadencia": "0/30/6", "segundos": 36.0004, "tarifados": 36},
+    {"nome": "milésimos: 36,0005 arredonda para 36,001 e sobe para 42", "cadencia": "0/30/6", "segundos": 36.0005, "tarifados": 42},
+    {"nome": "95 s viram 96 s", "cadencia": "0/30/6", "segundos": 95, "tarifados": 96},
+    {"nome": "60/60: 59 s viram 60", "cadencia": "0/60/60", "segundos": 59, "tarifados": 60},
+    {"nome": "60/60: 61 s viram 120", "cadencia": "0/60/60", "segundos": 61, "tarifados": 120},
+    {"nome": "grátis 3: 2,5 s não cobram", "cadencia": "3/30/6", "segundos": 2.5, "tarifados": 0},
+    {"nome": "grátis 3: 3 s cheios não cobram", "cadencia": "3/30/6", "segundos": 3, "tarifados": 0},
+    {"nome": "grátis 3: 3,001 s cobram 30", "cadencia": "3/30/6", "segundos": 3.001, "tarifados": 30},
+    {"nome": "1/1: 47,2 s viram 48", "cadencia": "0/1/1", "segundos": 47.2, "tarifados": 48},
+    {"nome": "negativo não cobra", "cadencia": "0/30/6", "segundos": -1, "tarifados": 0}
+  ],
+  "chamadas": [
+    {"nome": "soma de trechos (volta ao agente): 20,5 + 12,25 = 32,75 s viram 36", "cadencia": "0/30/6",
+     "trechos": [[0, 20.5], [50, 62.25]], "segundos_ia": 32.75, "tarifados": 36},
+    {"nome": "transferência corta: só até o início da transferência (47 s)", "cadencia": "0/30/6",
+     "trechos": [[3, 50]], "segundos_ia": 47, "tarifados": 48},
+    {"nome": "máquina/caixa postal: nenhum trecho, zero", "cadencia": "0/30/6", "trechos": [], "segundos_ia": 0,
+     "tarifados": 0},
+    {"nome": "cadência uma vez por ligação: 10 s + 10 s = 20 s viram 30 (não 60)", "cadencia": "0/30/6",
+     "trechos": [[0, 10], [40, 50]], "segundos_ia": 20, "tarifados": 30}
+  ]
+}

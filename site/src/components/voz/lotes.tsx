@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { Pause, Play, Recycle, RotateCw } from 'lucide-react';
 import { Loading, Notice, usePermissao } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
+import { FaixaRitmo } from './faixa-ritmo';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
 import { Voltar } from '@/components/comuns/voltar';
 import { ROTA_AGENTE, rotaLoteVoz } from '@/lib/rotas-voz';
@@ -58,7 +59,7 @@ function situacaoLote(l: Lote) {
 
 // ============================================================================ lista
 export function LotesVoz() {
-	const { empresa, credores } = useMotorAuth();
+	const { empresa, credores, permissoes } = useMotorAuth();
 	const navigate = useNavigate();
 	const [lotes, setLotes] = useState<Lote[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -99,12 +100,16 @@ export function LotesVoz() {
 					</Vazio>
 				) : (
 					<div className="space-y-4">
+						{/* Power e Preditivo (V7b): o ritmo da carteira do topo (ou da empresa) agora */}
+						<FaixaRitmo />
 						<Kpis itens={[
 							{ rotulo: `Ligações ${hoje.length ? 'hoje' : 'no último dia'}`, valor: inteiro(dia.total), detalhe: `${inteiro(dia.encerradas)} encerradas` },
 							{ rotulo: 'Em andamento', valor: inteiro(dia.vivos), detalhe: dia.vivos === 1 ? 'lote ligando ou agendado' : 'lotes ligando ou agendados' },
-							{ rotulo: 'Abandono', valor: dia.encerradas ? pct((100 * dia.abandonos) / Math.max(1, dia.encerradas)) : '—', detalhe: 'atendeu e caiu sem operador livre' },
+							{ rotulo: 'Abandono', valor: dia.encerradas ? pct((100 * dia.abandonos) / Math.max(1, dia.encerradas)) : '—', detalhe: 'abandonos registrados nos lotes do dia' },
 							{ rotulo: 'Telefonia estimada', valor: reais(dia.custo), detalhe: 'paga à operadora, fora da fatura' },
 						]} />
+						{/* SQL 127: o minuto falado com a IA de cada ligação (quem vê o faturamento) */}
+						{permissoes.includes('ver_faturamento') && <p className="text-[12.5px] text-[var(--base-texto-2)]">Minuto falado com a IA: veja como cada ligação foi cobrada no <Link to="/empresa/faturamento/demonstrativo" className="font-semibold text-[var(--destaque)] hover:underline">demonstrativo do Agente de voz</Link>.</p>}
 						<Cartao semPadding>
 							<TabelaDs rotulo="Lotes do agente virtual" linhas={lotes} chave={l => l.id} onAbrir={l => navigate(rotaLoteVoz(l.id))}
 								colunas={[

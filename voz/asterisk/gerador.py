@@ -40,6 +40,7 @@ CAB = "; GERADO por voz/asterisk/gerador.py a partir do banco (voz_troncos, voz_
 # betweenWordsSilence, maximumNumberOfWords, silenceThreshold, maximumWordLength (ms). Ponto de partida comum em
 # discadores brasileiros; calibrar com gravações reais.
 AMD_PADRAO = "2500,1500,800,5000,100,50,3,256,5000"
+DURMAX_PADRAO_S = 1200     # SQL 113 · D5: 20 min quando o canal não é de um tronco conhecido
 # o que vem nos provedores ligados por SIP (ex.: ElevenLabs). Endereço oficial no README/plano, não aqui.
 CAMPOS_PROVEDOR = ("nome", "host", "porta", "transporte", "codecs")
 
@@ -70,12 +71,19 @@ def _transportes(usados: set[str], ip_externo: str, redes_locais: list[str], por
     return linhas
 
 
+# SQL 113 · Telefonia T4: envio das teclas (voz_troncos.dtmf -> dtmf_mode do PJSIP) e como a bina vai na ligação
+DTMF_PJSIP = {"auto": "auto", "rfc4733": "rfc4733", "inband": "inband", "info": "info"}
+CABECALHO_PJSIP = {"from_pai": ("send_pai=yes", "send_rpid=no"), "from": ("send_pai=no", "send_rpid=no"),
+                   "rpid": ("send_pai=no", "send_rpid=yes")}
+
+
 def _endpoint(nome: str, transporte: str, codecs, host: str, porta: int, *, auth: str | None = None,
-              from_user: str | None = None, callerid: str | None = None) -> list[str]:
+              from_user: str | None = None, callerid: str | None = None, dtmf: str = "rfc4733",
+              cabecalho_bina: str = "from_pai", qualify: bool = True) -> list[str]:
     ep = [f"[{nome}]", "type=endpoint", f"transport=transport-{transporte}", "context=motorcx-entrada",
           "disallow=all", f"allow={_codecs(codecs)}", f"aors={nome}", "direct_media=no", "rtp_symmetric=yes",
-          "force_rport=yes", "rewrite_contact=yes", "dtmf_mode=rfc4733", "send_pai=yes", "trust_id_outbound=yes",
-          "allow_subscribe=no", "allow_transfer=yes", "media_encryption=no"]
+          "force_rport=yes", "rewrite_contact=yes", f"dtmf_mode={DTMF_PJSIP[dtmf]}", *CABECALHO_PJSIP[cabecalho_bina],
+          "trust_id_outbound=yes", "allow_subscribe=no", "allow_transfer=yes", "media_encryption=no"]
     if auth:
         ep.append(f"outbound_auth={auth}")
     if from_user:
@@ -83,20 +91,22 @@ def _endpoint(nome: str, transporte: str, codecs, host: str, porta: int, *, auth
     if callerid:
         ep.append(f"callerid=<{callerid}>")
     ep.append("")
-    ep += [f"[{nome}]", "type=aor", f"contact={_contato(host, porta, transporte)}", "qualify_frequency=60",
-           "qualify_timeout=3.0", ""]
+    ep += [f"[{nome}]", "type=aor", f"contact={_contato(host, porta, transporte)}",
+           f"qualify_frequency={60 if qualify else 0}", "qualify_timeout=3.0", ""]
     ep += [f"[{nome}-id]", "type=identify", f"endpoint={nome}", f"match={host}", ""]
     return ep
 
 
 def gerar_pjsip(dados: B.DadosVoz, segredos: Resolvedor, ip_externo: str = "", redes_locais=(),
                 porta_sip: int = 5060, tls: dict | None = None, provedores_sip: list | None = None) -> str:
-    """Texto do pjsip_motorcx.conf. Troncos inativos ficam de fora. Segredo ausente: erro (não sobe sem senha)."""
+    """Texto do pjsip_motorcx.conf. SQL 114 · Telefonia T5: o tronco INATIVO também sobe como endpoint, só para o
+    "Testar a rota" (voz/testador.py liga por ele pelo ARI); ele não entra em nenhuma saída do dialplan e o orquestrador
+    só usa tronco ativo. Segredo ausente: erro (não sobe sem senha; filtrar_senhas tira o tronco antes)."""
     if ip_externo:
         ipaddress.ip_address(ip_externo)
     redes = [str(ipaddress.ip_network(r, strict=False)) for r in redes_locais]
     provedores_sip = provedores_sip or []
-    troncos = [t for t in dados.troncos if t.ativo]
+    troncos = list(dados.troncos)
     tfs = [x for x in dados.transferencias if x.ativo and x.tronco_id is None]
     usados = {t.transporte for t in troncos} | {x.transporte for x in tfs} | \
              {str(p.get("transporte", "udp")) for p in provedores_sip} | {"udp"}
@@ -104,15 +114,19 @@ def gerar_pjsip(dados: B.DadosVoz, segredos: Resolvedor, ip_externo: str = "", r
     out += _transportes(usados, ip_externo, redes, porta_sip, tls)
     out.append("; ---------------- troncos das empresas (voz_troncos)")
     for t in sorted(troncos, key=lambda t: (t.empresa_id, t.id)):
-        out.append(f"; empresa {t.empresa_id} · {t.referencia.replace(chr(10), ' ')} · {t.canais} canais · {t.cps:g} CPS")
+        out.append(f"; empresa {t.empresa_id} · {t.referencia.replace(chr(10), ' ')} · {t.canais} canais · {t.cps:g} CPS"
+                   + ("" if t.ativo else " · INATIVO: só para o teste da rota"))
         auth = f"{t.nome}-auth" if t.autenticacao == "senha" else None
         out += _endpoint(t.nome, t.transporte, t.codecs, t.host, t.porta, auth=auth,
-                         from_user=t.usuario if auth else t.bina, callerid=t.bina)
+                         from_user=t.from_usuario or (t.usuario if auth else t.bina), callerid=t.bina, dtmf=t.dtmf,
+                         cabecalho_bina=t.cabecalho_bina, qualify=t.verificar_options)
         if auth:
             senha = segredos.valor(t.segredo_ref)
-            if not senha or "\n" in senha:
+            if not senha or "\n" in senha or "\r" in senha:
                 raise B.DadosInvalidos(f"tronco {t.id}: segredo vazio ou com quebra de linha")
-            out += [f"[{auth}]", "type=auth", "auth_type=userpass", f"username={t.usuario}", f"password={senha}", ""]
+            # SQL 103: ";" abre comentário no .conf do Asterisk; "\;" é o ponto e vírgula literal
+            out += [f"[{auth}]", "type=auth", "auth_type=userpass", f"username={t.usuario}",
+                    f"password={senha.replace(';', chr(92) + ';')}", *([f"realm={t.realm}"] if t.realm else []), ""]
     out.append("; ---------------- destinos de transferência (voz_transferencias; 'ponte pelo tronco' usa o tronco)")
     for x in sorted(tfs, key=lambda x: (x.empresa_id, x.id)):
         out += _endpoint(x.nome, x.transporte, ("alaw", "ulaw"), x.host, x.porta)
@@ -135,7 +149,8 @@ def gerar_extensions(dados: B.DadosVoz, amd: str = AMD_PADRAO) -> str:
     troncos = {t.id: t for t in dados.troncos if t.ativo}
     out = [CAB, "[globals]", f"MOTORCX_APP={APP_ARI}", f"MOTORCX_AMD_PARAMS={amd}"]
     for t in sorted(troncos.values(), key=lambda t: t.id):
-        out += [f"MOTORCX_CANAIS_{_var_tronco(t)}={t.canais}", f"MOTORCX_CPS_{_var_tronco(t)}={t.cps:g}"]
+        out += [f"MOTORCX_CANAIS_{_var_tronco(t)}={t.canais}", f"MOTORCX_CPS_{_var_tronco(t)}={t.cps:g}",
+                f"MOTORCX_DURMAX_{_var_tronco(t)}={t.duracao_max_min * 60}"]
     out += ["",
             "; nada entra pelos troncos (receptivo de retorno ainda não existe): recusa com 21 (call rejected)",
             "[motorcx-entrada]",
@@ -147,8 +162,12 @@ def gerar_extensions(dados: B.DadosVoz, amd: str = AMD_PADRAO) -> str:
             "; chamada atendida: o orquestrador (ARI) manda o canal para cá; AMD (ou o resultado da Khomp, se vier),",
             "; MixMonitor só em pessoa e volta ao Stasis com o resultado. Variáveis: MOTORCX_ID, MOTORCX_AMD (1|0),",
             "; MOTORCX_GRAVAR (1|0), MOTORCX_GRAVACAO (arquivo, sem telefone no nome).",
+            "; SQL 113 · D5: duração máxima por tronco (canal PJSIP/tr-<empresa>-<tronco>-…); sem o tronco, 20 min",
             "[motorcx-atendeu]",
             "exten => s,1,NoOp(MotorCX ${MOTORCX_ID})",
+            " same => n,Set(MOTORCX_CANAL=${CHANNEL(name)})",
+            " same => n,Set(MOTORCX_DURMAX=${MOTORCX_DURMAX_TR_${CUT(MOTORCX_CANAL,-,2)}_${CUT(MOTORCX_CANAL,-,3)}})",
+            f" same => n,Set(TIMEOUT(absolute)=${{IF($[\"${{MOTORCX_DURMAX}}\" = \"\"]?{DURMAX_PADRAO_S}:${{MOTORCX_DURMAX}})}})",
             " same => n,Set(MOTORCX_KHOMP_CC=${PJSIP_RESPONSE_HEADER(read,X-Khomp-Analytics-CC)})",
             " same => n,GotoIf($[\"${MOTORCX_AMD}\" != \"1\"]?pessoa)",
             " same => n,AMD(${MOTORCX_AMD_PARAMS})",
@@ -199,7 +218,8 @@ def gerar_extensions(dados: B.DadosVoz, amd: str = AMD_PADRAO) -> str:
                         f" same => n,Set(GROUP(motorcx)={t.nome})",
                         f" same => n,Set(MOTORCX_TECH_PREFIX={r.tech_prefix})",
                         f" same => n,Set(MOTORCX_ROTA_ID={r.id})",
-                        f" same => n,Dial(PJSIP/{t.discar(r.tech_prefix, '${EXTEN}')}@{t.nome},60)",
+                        f" same => n,Dial(PJSIP/{t.discar(r.prefixo_discagem, '${EXTEN}')}@{t.nome},"
+                        f"{t.toque_max_s},S({t.duracao_max_min * 60}))",
                         f" same => n,GotoIf($[\"${{DIALSTATUS}}\" = \"CHANUNAVAIL\" | \"${{DIALSTATUS}}\" = "
                         f"\"CONGESTION\"]?r{i + 1})",
                         " same => n,Hangup()"]
@@ -248,6 +268,43 @@ def filtrar_destinos(dados: B.DadosVoz, proprios=(), resolver=None) -> tuple[B.D
     return B.DadosVoz(troncos=troncos, rotas=rotas, transferencias=tfs, configs=dados.configs), avisos
 
 
+def filtrar_senhas(dados: B.DadosVoz, segredos: Resolvedor) -> tuple[B.DadosVoz, Resolvedor, list[str]]:
+    """SQL 103 · PR T1: tira o tronco com autenticação por senha cuja senha o cofre não entrega (ainda não guardada pela
+    tela, apagada, sem permissão) ou que não cabe no arquivo, com as rotas e transferências dele, em vez de parar a
+    configuração de TODAS as empresas. Lê cada senha uma vez e devolve um resolvedor só com as que valem.
+    Os avisos não têm senha nem nome de segredo."""
+    lidas: dict[str, str] = {}
+    fora: set[int] = set()
+    avisos: list[str] = []
+    for t in dados.troncos:
+        if t.autenticacao != "senha":          # SQL 114: o inativo também sobe (para o teste), então também precisa
+            continue
+        try:
+            senha = lidas[t.segredo_ref] if t.segredo_ref in lidas else segredos.valor(t.segredo_ref)
+        except (LookupError, ValueError) as ex:
+            fora.add(t.id)
+            avisos.append(f"tronco {t.id} (empresa {t.empresa_id}) ficou de fora: senha indisponível no cofre "
+                          f"({ex.__class__.__name__}); guarde a senha pela tela Telefonia")
+            continue
+        if not senha or "\n" in senha or "\r" in senha:
+            fora.add(t.id)
+            avisos.append(f"tronco {t.id} (empresa {t.empresa_id}) ficou de fora: senha vazia ou com quebra de linha")
+            continue
+        lidas[t.segredo_ref] = senha
+    if not fora:
+        return dados, Dicionario(lidas), avisos
+    troncos = [t for t in dados.troncos if t.id not in fora]
+    tfs = []
+    for x in dados.transferencias:
+        if x.tronco_id in fora:
+            avisos.append(f"transferência {x.id} (empresa {x.empresa_id}) ficou de fora: o tronco {x.tronco_id} ficou de fora")
+        else:
+            tfs.append(x)
+    rotas = [r for r in dados.rotas if r.tronco_id not in fora]
+    return (B.DadosVoz(troncos=troncos, rotas=rotas, transferencias=tfs, configs=dados.configs), Dicionario(lidas),
+            avisos)
+
+
 def gerar(entrada: dict, saida: Path, segredos: Resolvedor, ip_externo: str = "", redes_locais=(),
           tls: dict | None = None, resolver=None) -> dict:
     """Gera os dois arquivos. Devolve só contagens (seguras para log). `resolver` (o main usa o DNS): confere os
@@ -255,6 +312,8 @@ def gerar(entrada: dict, saida: Path, segredos: Resolvedor, ip_externo: str = ""
     dados = B.carregar(entrada)
     proprios = DST.proprios_do_ambiente(ip_externo, redes_locais, entrada.get("enderecos_motorcx") or [])
     dados, avisos = filtrar_destinos(dados, proprios, resolver)
+    dados, segredos, sem_senha = filtrar_senhas(dados, segredos)
+    avisos += sem_senha
     for a in avisos:
         print(f"AVISO: {a}. Os outros seguem.", file=sys.stderr)
     pj = gerar_pjsip(dados, segredos, ip_externo, redes_locais, tls=tls,
@@ -262,9 +321,11 @@ def gerar(entrada: dict, saida: Path, segredos: Resolvedor, ip_externo: str = ""
     ex = gerar_extensions(dados)
     gravar(saida, "pjsip_motorcx.conf", pj, 0o600)
     gravar(saida, "extensions_motorcx.conf", ex, 0o640)
-    return {"troncos": sum(t.ativo for t in dados.troncos), "rotas": len(dados.rotas),
+    return {"troncos": sum(t.ativo for t in dados.troncos), "troncos_so_teste": sum(not t.ativo for t in dados.troncos),
+            "rotas": len(dados.rotas),
             "transferencias": sum(x.ativo for x in dados.transferencias),
-            "provedores_sip": len(entrada.get("provedores_sip") or []), "destinos_recusados": len(avisos)}
+            "provedores_sip": len(entrada.get("provedores_sip") or []), "destinos_recusados": len(avisos) - len(sem_senha),
+            "sem_senha": sum(1 for a in sem_senha if a.startswith("tronco "))}
 
 
 def recarregar(ari) -> None:
