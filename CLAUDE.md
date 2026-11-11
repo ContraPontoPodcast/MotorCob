@@ -1116,6 +1116,21 @@ entrega fica de fora sozinho (`filtrar_senhas`), sem parar as outras empresas; `
 (C8): só o servidor de voz lê; quem administra o GCP consegue ler o cofre. Teste: `supabase/testes/testar_voz_cofre.py`.
 Se o SQL 56 rodar de novo, rode o 103 depois.
 
+**SQL 104 (Telefonia própria do cliente, PR T2; SPEC §6.2, G6): IPs da operadora por tronco e firewall das VMs a
+partir do cadastro.** `voz_troncos` e `voz_transferencias` ganham `ips_operadora` (IPs do SBC da operadora; na
+transferência, do PABX) e `ips_liberados(_em/_por)`. Regra (`voz_ips_motivo`, igual a `voz/firewall.py › motivo_origem`):
+até 20, só IPv4, faixa até /24, nunca 0.0.0.0/0, rede interna/reservada nem IP do MotorCX; gatilho `voz_ips_seguros`.
+Dois passos: `definir_ips_voz` (quem configura a telefonia; aviso no sino da equipe) e `liberar_ips_voz` (só a equipe com
+`gerenciar_troncos_voz` e aal2; Console › tronco › "Liberar IPs no firewall"); tirar IP vale na hora (liberado =
+interseção com a lista). `origens_firewall_voz` (servidor) / `voz_vm.origens_firewall` (VM): só o liberado, de
+tronco/transferência ativo. VM: `motorcx-voz-firewall.timer` (2 min) → `python3 -m voz.firewall`: lista fixa do
+`criar_gcp.sh` (metadado `motorcx-firewall-fixos`) + o banco, confere tudo de novo e só então atualiza
+`motorcx-voz-sip`/`motorcx-voz-rtp` (sem origem: desligadas); banco/API fora = nada muda; cada mudança em
+`voz_firewall_eventos`. **Desligado por padrão**: `bash infra/asterisk/criar_gcp.sh firewall-automatico <projeto>` (papel
+`motorcxVozFirewall` na `motorcx-asterisk` e metadado `motorcx-firewall-automatico=1`; `DESLIGAR=1` volta). Com ele
+ligado, o `criar_gcp.sh` não sobrescreve as origens SIP/RTP. Testes: `tests/test_voz_firewall.py` e
+`supabase/testes/testar_voz_firewall.py`.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

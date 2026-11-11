@@ -14,7 +14,7 @@ import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError, dateBR, dateTimeBR, today, type Row } from '@/lib/supabase';
 import {
 	FORMATOS_DISCAGEM, IPS_SAIDA_MOTORCX, MODOS_VOZ, PROVEDORES_VOZ, TIPOS_ROTA, binaMascara, cadenciaTxt, inteiro, reais,
-	segundosTarifados, custoVoz,
+	segundosTarifados, custoVoz, ipsPendentes,
 } from '@/lib/voz';
 import { Cadeado, Cartao, Dialogo, Pilula, Ponto, Subtitulo, Trava, Vazio, btnLink, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 import { Abas, Aviso as AvisoDs, Detalhes, Gaveta, Kpis, ListaValores, Passos, SeloRegras, Tabela } from '@/components/ds';
@@ -192,7 +192,7 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 		const eid = Number(empresaId);
 		const [cfg, tr, ro, tf, sa, pe, rt, lt, cf, pz] = await Promise.all([
 			supabase.from('voz_config').select('*').eq('empresa_id', eid).maybeSingle(),
-			supabase.from('voz_troncos').select('id,referencia,operadora,host,porta,transporte,autenticacao,usuario,segredo_ref,segredo_guardado_em,segredo_versao,ddd_origem,bina,formato_discagem,csp,codecs,canais,cps,ativo,testado_em,teste_ok').eq('empresa_id', eid).order('referencia'),
+			supabase.from('voz_troncos').select('id,referencia,operadora,host,porta,transporte,autenticacao,usuario,segredo_ref,segredo_guardado_em,segredo_versao,ips_operadora,ips_liberados,ips_liberados_em,ddd_origem,bina,formato_discagem,csp,codecs,canais,cps,ativo,testado_em,teste_ok').eq('empresa_id', eid).order('referencia'),
 			supabase.from('voz_rotas').select('*').eq('empresa_id', eid).order('vigente_desde', { ascending: false }),
 			supabase.from('voz_transferencias').select('*').eq('empresa_id', eid).eq('ativo', true).is('credor_id', null).limit(1),
 			supabase.from('fornecedor_saude').select('item,referencia,ok,contagem,detalhe,verificado_em,tronco_id').eq('empresa_id', eid),
@@ -236,11 +236,11 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 					podeTroncos={podeTroncos} modo={modo} onNumeros={() => setGNumeros(true)} onSalvo={m => salvo(m, true)} />
 			</>}
 			{aba === 'troncos' && <>
-				<Troncos troncos={d.troncos} pausas={d.pausas} saude={d.saude} podeTroncos={podeTroncos} onRetomado={() => salvo('Rota retomada. A VM volta a discar por este tronco no próximo minuto.', true)} onNovo={() => setGTronco({ tronco: null })} onEditar={t => setGTronco({ tronco: t })} />
+				<Troncos troncos={d.troncos} pausas={d.pausas} saude={d.saude} podeTroncos={podeTroncos} onRetomado={() => salvo('Rota retomada. A VM volta a discar por este tronco no próximo minuto.', true)} onLiberado={() => void carregar()} onNovo={() => setGTronco({ tronco: null })} onEditar={t => setGTronco({ tronco: t })} />
 				<Rotas rotas={d.rotas} troncos={d.troncos} saude={d.saude} podeTroncos={podeTroncos}
 					onNova={(base, prefixo) => setGRota({ base, prefixo })} onEncerrada={() => salvo('Rota encerrada. Ela fica no histórico.')} />
 			</>}
-			{aba === 'transferencia' && <Transferencia atual={d.transferencia} troncos={d.troncos} podeTroncos={podeTroncos} onEditar={() => setGTransf(true)} />}
+			{aba === 'transferencia' && <Transferencia atual={d.transferencia} troncos={d.troncos} podeTroncos={podeTroncos} onEditar={() => setGTransf(true)} onLiberado={() => void carregar()} />}
 
 			{gTronco && <TroncoGaveta empresaId={empresaId} empresaNome={empresaNome} tronco={gTronco.tronco} onClose={() => setGTronco(null)} onSaved={m => salvo(m, true)} />}
 			{gRota && <RotaGaveta empresaId={empresaId} troncos={d.troncos} rotaBase={gRota.base} prefixoSugerido={gRota.prefixo} onClose={() => setGRota(null)} onSaved={m => salvo(m)} />}
@@ -356,12 +356,18 @@ const autenticacaoTxt = (t: Row) => t.autenticacao === 'senha'
 		? <>Usuário e senha · senha guardada no cofre em {dateTimeBR(String(t.segredo_guardado_em))}</>
 		: <>Usuário e senha · <span className="font-mono">{String(t.segredo_ref)}</span> · senha ainda não guardada pela tela</>)
 	: <>Por IP</>;
+const ipsTxt = (t: Row) => {
+	const lista = Array.isArray(t.ips_operadora) ? (t.ips_operadora as string[]) : [];
+	if (lista.length === 0) return 'Nenhum (o firewall só aceita a lista fixa do criar_gcp.sh)';
+	const pend = new Set(ipsPendentes(t));
+	return <span className="font-mono text-[12.5px]">{lista.map(x => `${x}${pend.has(x) ? ' (esperando)' : ''}`).join(' · ')}</span>;
+};
 const formatoTxt = (t: Row) => {
 	const f = FORMATOS_DISCAGEM.find(x => x.id === t.formato_discagem)?.nome ?? String(t.formato_discagem ?? '');
 	return t.csp ? `${f} · CSP ${String(t.csp)}` : f;
 };
 
-function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onRetomado }: { troncos: Row[]; pausas: Pausa[]; saude: Row[]; podeTroncos: boolean; onNovo: () => void; onEditar: (t: Row) => void; onRetomado: () => void }) {
+function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onRetomado, onLiberado }: { troncos: Row[]; pausas: Pausa[]; saude: Row[]; podeTroncos: boolean; onNovo: () => void; onEditar: (t: Row) => void; onRetomado: () => void; onLiberado: () => void }) {
 	const ativos = troncos.filter(t => t.ativo !== false);
 	const [sel, setSel] = useState<Row | null>(null);
 	const [retomar, setRetomar] = useState<Pausa | null>(null);
@@ -389,6 +395,18 @@ function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onReto
 	}
 	const selPausa = sel ? pausaDe(sel) : null;
 	const selErro = sel ? erroDe(sel) : null;
+	const selPend = sel ? ipsPendentes(sel) : [];
+	// SQL 104: segundo passo, da equipe (com a verificação em duas etapas): os IPs entram no firewall das VMs em até 2 min
+	async function liberarIps() {
+		if (!supabase || !sel) return;
+		setBusy(true);
+		const { error } = await supabase.rpc('liberar_ips_voz', { tipo: 'tronco', id: Number(sel.id) });
+		setBusy(false);
+		if (error) { toast.error(erroRpc(error)); return; }
+		toast.success('IPs liberados. O firewall das VMs de voz aceita a operadora em até 2 minutos.');
+		setSel(null);
+		onLiberado();
+	}
 	return (
 		<Cartao semPad titulo="Troncos SIP da empresa"
 			desc="A empresa contrata as operadoras dela; o Asterisk do MotorCX disca por esses troncos e liga o agente de IA quando a pessoa atende."
@@ -419,6 +437,7 @@ function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onReto
 				rodape={podeTroncos && sel ? <>
 					<button type="button" onClick={() => { const t = sel; setSel(null); onEditar(t); }} className={selPausa ? btnSec : btnPrim}><Pencil size={14} /> Editar</button>
 					{selPausa && <button type="button" onClick={() => { setNota(''); setRetomar(selPausa); }} className={btnPrim}>Retomar rota</button>}
+					{selPend.length > 0 && <button type="button" disabled={busy} onClick={() => void liberarIps()} className={btnSec}>{busy ? 'Liberando...' : 'Liberar IPs no firewall'}</button>}
 				</> : undefined}>
 				{selPausa && <AvisoDs tom={selPausa.motivo === 'bloqueio_originacao' ? 'erro' : 'atencao'} titulo={`Pausado por ${MOTIVO_PAUSA[selPausa.motivo] ?? selPausa.motivo}`}>
 					Desde {dateTimeBR(selPausa.pausado_em)}{selPausa.causa_sip ? ` (resposta SIP ${selPausa.causa_sip})` : ''}. A VM não disca por este tronco até alguém da equipe retomar.{!podeTroncos ? ` ${SEM_PERM_TRONCOS} retoma.` : ''}
@@ -434,7 +453,11 @@ function Troncos({ troncos, pausas, saude, podeTroncos, onNovo, onEditar, onReto
 					['DDD de origem', String(sel.ddd_origem)],
 					['Discagem', formatoTxt(sel)],
 					['Canais · CPS', `${inteiro(sel.canais)} · ${inteiro(sel.cps)}`],
+					['IPs da operadora', ipsTxt(sel)],
 				]} />}
+				{sel && selPend.length > 0 && <AvisoDs tom="atencao" titulo="IPs esperando a liberação no firewall">
+					{selPend.join(', ')}. Confira com a operadora que são os IPs do SBC dela antes de liberar: o firewall das VMs passa a aceitar SIP e áudio deles.{!podeTroncos ? ` ${SEM_PERM_TRONCOS} libera.` : ''}
+				</AvisoDs>}
 			</Gaveta>
 			{retomar && (
 				<Dialogo titulo="Retomar a rota?" onClose={() => !busy && setRetomar(null)}
@@ -582,8 +605,19 @@ function Calculadora({ vigentes }: { vigentes: Row[] }) {
 }
 
 // ---------------------------------------------------------------- transferência
-function Transferencia({ atual, troncos, podeTroncos, onEditar }: { atual: Row | null; troncos: Row[]; podeTroncos: boolean; onEditar: () => void }) {
+function Transferencia({ atual, troncos, podeTroncos, onEditar, onLiberado }: { atual: Row | null; troncos: Row[]; podeTroncos: boolean; onEditar: () => void; onLiberado: () => void }) {
 	const tronco = atual?.tronco_id != null ? troncos.find(t => String(t.id) === String(atual.tronco_id)) : null;
+	const pend = ipsPendentes(atual);
+	const [busy, setBusy] = useState(false);
+	async function liberarIps() {   // SQL 104: segundo passo, da equipe (aal2)
+		if (!supabase || !atual) return;
+		setBusy(true);
+		const { error } = await supabase.rpc('liberar_ips_voz', { tipo: 'transferencia', id: Number(atual.id) });
+		setBusy(false);
+		if (error) { toast.error(erroRpc(error)); return; }
+		toast.success('IPs do PABX liberados. O firewall das VMs de voz aceita o PABX em até 2 minutos.');
+		onLiberado();
+	}
 	return (
 		<Cartao titulo="Transferência para o discador do cliente" desc="Para onde o agente manda a chamada quando precisa de um operador. A equipe MotorCX configura."
 			acoes={podeTroncos ? <button onClick={onEditar} className={btnSec}>{atual ? <><Pencil size={14} /> Editar</> : <><Plus size={15} /> Configurar</>}</button> : <Cadeado>{SEM_PERM_TRONCOS} configura</Cadeado>}>
@@ -596,7 +630,12 @@ function Transferencia({ atual, troncos, podeTroncos, onEditar }: { atual: Row |
 						['Tronco', <span key="t" className="font-mono">{tronco ? String(tronco.referencia) : '—'}</span>],
 						['Último teste', <span key="u" className="inline-flex items-center gap-2">{atual.testado_em ? <><Ponto tom={atual.teste_ok ? 'ok' : 'erro'} /> {dateTimeBR(atual.testado_em)} · {atual.teste_ok ? 'operador atendeu' : 'falhou'}</> : <><Ponto tom="atencao" /> Aguardando o teste</>}</span>],
 						['Nunca vai', 'CPF, nome, valor ou transcrição'],
+						['IPs do PABX', ipsTxt(atual)],
 					]} />
+					{pend.length > 0 && <AvisoDs tom="atencao" titulo="IPs do PABX esperando a liberação no firewall">
+						{pend.join(', ')}.{' '}
+						{podeTroncos ? <button type="button" disabled={busy} onClick={() => void liberarIps()} className={btnLink}>{busy ? 'Liberando...' : 'Liberar no firewall'}</button> : `${SEM_PERM_TRONCOS} libera.`}
+					</AvisoDs>}
 					<Detalhes resumo="Detalhes técnicos">
 						<ListaValores itens={[
 							['Como', atual.metodo === 'ponte' ? 'O MotorCX segura a ligação e chama a fila (sem ninguém: volta ao agente e agenda retorno)' : 'Passa a chamada (REFER; se falhar, nova chamada e ponte)'],
