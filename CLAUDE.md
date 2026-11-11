@@ -1310,6 +1310,23 @@ Os dois botões só mudam o rascunho (`site/src/lib/discagem-recomendado.ts`; fi
 por sinalização): vale ao salvar como vN (`salvar_discagem`). O padrão MotorCX do motor e do banco **não** muda.
 Horários (faixa vermelha ao desligar) já vinham do B2. Testes: `site/src/lib/discagem-recomendado.test.tsx`.
 
+**SQL 116 (PR 9 do plano Canais/Agente Voz/CX): "Testar agora" do Agente de voz.** Na tela do canal Agente de voz
+(MotorCX), "Testar agora" (`components/canais/testar-agora.tsx`, `editar_canais`) faz uma ligação de verdade para um
+número de teste confirmado, com o fluxo em uso da carteira e a rota de hoje. **Nenhum número passa pelo banco nem pelo
+site:** o número fica no cofre (`voz_numeros_teste` do SQL 114, Telefonia, em paralelo; lido por SQL dinâmico, então o
+116 roda antes ou depois dele); `voz_testes_agora` guarda id, máscara e hash (o site não lê o hash; auditada).
+`pedir_teste_agora_voz(credor, numero_teste)` confere: fora do Simulado, número guardado + confirmado + na lista
+(`voz_config.numeros_teste_hash`), fluxo em uso, rota ativa sem pausa, empresa não parada pelas curtas, domingo nunca,
+um de cada vez e 5 por dia (o cancelado não conta); parado 10 min (ligando 15) expira. A VM (Plantão, a cada 15 s,
+empresas em teste ou real; `voz/orquestrador/testar_agora.py`) pega com a referência do segredo, lê o número no cofre,
+confere hash, plano nacional, janela da UF do número (tabela da carteira + prévia) e curtas, e põe um lote de um item
+(`Lote.teste_id`; chave própria, fora de voz_lotes/ondas/resubmits) no orquestrador: mesmo caminho do lote (robô
+reservado, CPS, tronco isolado, linha parada, aviso de gravação, identidade antes da dívida). Conta em voz_chamadas (modo
+da empresa) e nos medidores, mas não volta ao motor (`ao_teste` no núcleo). `concluir_teste_agora_voz` recebe só marcas
+e contagens (tocou, atendeu, agente, gravada, aviso, identidade, transferiu, segundos, toque, SIP). Canais de mensagem:
+"em breve". Testes: `supabase/testes/testar_testar_agora.py`, `tests/test_voz_testar_agora.py`,
+`site/src/lib/testar-agora.test.tsx`.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

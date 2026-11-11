@@ -285,11 +285,15 @@ class Lote:
     horizontal, o spin N só abre quando o spin N−1 passou pelo lote inteiro, depois do intervalo e do início."""
 
     def __init__(self, empresa_id: int, itens: list[ItemLote], guarda: Guarda | None = None,
-                 credor_id: int | None = None, canal: str = "agente_voz", regras: RegrasLote | None = None):
+                 credor_id: int | None = None, canal: str = "agente_voz", regras: RegrasLote | None = None,
+                 teste_id: int | None = None):
         if canal not in ("agente_voz", "discador"):
             raise ValueError(f"canal de voz desconhecido: {canal}")
         self.empresa_id = empresa_id
         self.credor_id = credor_id
+        # "Testar agora" (SQL 116): lote de um item só, fora do lote do dia (sem voz_lotes, ondas e resubmits) e sem
+        # retorno ao motor; a chave leva o id para não trocar o lote da carteira
+        self.teste_id = teste_id
         self.canal = canal          # canal da ação no motor (o evento volta no mesmo canal, para a atribuição)
         self.itens = itens
         self.guarda = guarda or Guarda()
@@ -313,7 +317,8 @@ class Lote:
 
     @property
     def chave(self) -> tuple:
-        return (self.empresa_id, self.credor_id, self.canal)
+        base = (self.empresa_id, self.credor_id, self.canal)
+        return base if self.teste_id is None else base + (("teste", self.teste_id),)
 
     # ------------------------------------------------------------ regras da carteira
     def aplicar_regras(self, regras: RegrasLote | None) -> None:
