@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  assinar, autorizar, conferirCaso, falaOk, minutosPrevia, pacoteOuvir, pacoteVM, PERMISSAO, respostaTela, urlOuvir, urlRoleplay,
-  validarPedido, variaveisTeste,
+  assinar, autorizar, autorizarVoz, conferirCaso, falaOk, minutosPrevia, pacoteOuvir, pacoteVM, PERMISSAO, respostaTela, urlOuvir, urlRoleplay,
+  PERMISSAO_VOZ, TEXTO_OUVIR_VOZ, validarPedido, variaveisTeste,
 } from "./regras.ts";
 
 const cliente = { id: "u1", ativo: true, equipe: false, empresa_id: 7 };
@@ -14,7 +14,7 @@ test("pedido: simular com falas e conectores para falhar; rodar_casos só com a 
   assert.deepEqual(validarPedido({ acao: "rodar_casos", versao: 31 }).pedido, { acao: "rodar_casos", versao: 31 });
   assert.equal(validarPedido({ versao: 31, falas: ["Sou eu"], falhar: [1] }).pedido?.acao, "simular");
   assert.equal(validarPedido({ versao: "31" }).erro, "versão inválida");
-  assert.equal(validarPedido({ versao: 31, acao: "apagar" }).erro, "ação inválida: simular, rodar_casos, roleplay ou ouvir");
+  assert.equal(validarPedido({ versao: 31, acao: "apagar" }).erro, "ação inválida: simular, rodar_casos, roleplay, ouvir ou ouvir_voz");
   assert.equal(validarPedido({ versao: 31, falas: [], definicao: {} }).erro, "pedido inválido");
   assert.equal(validarPedido({ acao: "rodar_casos", versao: 31, falas: [] }).erro, "pedido inválido");
   assert.equal(validarPedido({ versao: 31, falhar: [0] }).erro, "conectores para falhar inválidos");
@@ -118,4 +118,20 @@ test("SQL 66: ouvir a voz — texto curto sem dado pessoal, voz da empresa e min
   assert.equal("voz_id" in pacoteOuvir("Oi", "../x", {}), false);
   assert.equal(minutosPrevia(900), 1);
   assert.equal(minutosPrevia(45), 0.05);
+});
+
+test("ouvir_voz (Console › Agente virtual): empresa, voz no formato e texto padrão; só a equipe com cuida_voz", () => {
+  assert.deepEqual(validarPedido({ acao: "ouvir_voz", empresa: 7, voz_id: "RGymW84CSmfVugnA5tvA" }).pedido,
+    { acao: "ouvir_voz", empresa: 7, voz_id: "RGymW84CSmfVugnA5tvA", texto: TEXTO_OUVIR_VOZ });
+  assert.equal(validarPedido({ acao: "ouvir_voz", empresa: 7, voz_id: "v1", texto: "Oi" }).pedido?.acao, "ouvir_voz");
+  assert.equal(validarPedido({ acao: "ouvir_voz", empresa: 0, voz_id: "v1" }).erro, "empresa inválida");
+  assert.equal(validarPedido({ acao: "ouvir_voz", empresa: 7, voz_id: "../x" }).erro, "voz inválida");
+  assert.equal(validarPedido({ acao: "ouvir_voz", empresa: 7, voz_id: "v1", versao: 3 }).erro, "pedido inválido");
+  assert.match(validarPedido({ acao: "ouvir_voz", empresa: 7, voz_id: "v1", texto: "cpf 123456789" }).erro ?? "", /texto inválido/);
+  assert.equal(PERMISSAO_VOZ, "cuida_voz");
+  assert.equal(autorizarVoz({ ...cliente, equipe: true }, true), null);
+  assert.equal(autorizarVoz({ ...cliente, equipe: true }, false), "sem permissão");
+  assert.equal(autorizarVoz(cliente, true), "sem permissão");
+  assert.equal(autorizarVoz({ ...cliente, equipe: true, ativo: false }, true), "acesso desativado");
+  assert.equal(autorizarVoz(null, true), "acesso desativado");
 });

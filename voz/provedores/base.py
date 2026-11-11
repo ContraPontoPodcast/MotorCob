@@ -47,6 +47,7 @@ class ContextoChamada:
     final_numero: str = ""                  # últimos 2 dígitos (só para simulação/diagnóstico)
     credor_id: int | None = None            # carteira (o fluxo em uso é por carteira, SQL 58)
     aviso_abertura: str = ""                # SQL 83 · B6: dito ANTES da primeira fala (gravação e assistente virtual)
+    voz_id: str = ""                        # voz_config.voz_id da empresa (Montagem: só se liberada na VM)
 
 
 @dataclass(frozen=True)

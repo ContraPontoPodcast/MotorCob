@@ -10,6 +10,9 @@
 //     O resultado sai depois em resultado_roleplay_voz(lote).
 //   functions.invoke('simular_fluxo_voz', { versao, falas, cenarios: { "<conector>": "sucesso"|"tempo"|"401" } })   (SQL 66)
 //     → a resposta escolhida para cada conector simulado.
+//   functions.invoke('simular_fluxo_voz', { acao: 'ouvir_voz', empresa, voz_id, texto? })   (Console › Agente virtual)
+//     → { audio, mime }: prévia de uma voz escolhida para a empresa antes de salvar. Só a equipe MotorCX com a permissão
+//     de troncos de voz na empresa (cuida_voz). Mesmo /ouvir da VM; voz não liberada na VM cai na padrão.
 //   functions.invoke('simular_fluxo_voz', { acao: 'ouvir', versao, texto })   (SQL 66, "Ouvir a voz")
 //     → { audio (base64), mime }: a VM (/ouvir, assinado) sintetiza com o TTS da Montagem e a voz da empresa
 //     (voz_config.voz_id) e devolve; nada é guardado. O uso entra em registrar_uso_ia_voz (componente previa_voz,
@@ -23,8 +26,8 @@
 // motorcx-voz-simulador da VM). Os valores nunca entram no código nem em log. Publicar com "Verify JWT" LIGADO.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
-  assinar, autorizar, conferirCaso, minutosPrevia, pacoteOuvir, pacoteVM, PERMISSAO, respostaTela, urlOuvir, urlRoleplay,
-  validarPedido, variaveisTeste,
+  assinar, autorizar, autorizarVoz, conferirCaso, minutosPrevia, pacoteOuvir, pacoteVM, PERMISSAO, respostaTela, urlOuvir, urlRoleplay,
+  PERMISSAO_VOZ, validarPedido, variaveisTeste,
   type Caso, type Perfil, type ResultadoVM, type Versao,
 } from "./regras.ts";
 
@@ -83,6 +86,33 @@ Deno.serve(async (req) => {
   if (!pedido) return responder({ erro }, 400, origem);
 
   const comoUsuario = createClient(SUPABASE_URL, ANON, { ...sem, global: { headers: { Authorization: `Bearer ${token}` } } });
+
+  if (pedido.acao === "ouvir_voz") {
+    const [{ data: quem }, { data: pode }, { data: emp }] = await Promise.all([
+      admin.from("perfis").select("id, ativo, equipe, empresa_id").eq("id", sessao.user.id).maybeSingle(),
+      comoUsuario.rpc(PERMISSAO_VOZ, { eid: pedido.empresa }),
+      comoUsuario.from("empresas").select("nome").eq("id", pedido.empresa).maybeSingle(),
+    ]);
+    const negado = autorizarVoz(quem as Perfil | null, pode === true);
+    if (negado) return responder({ erro: negado }, 403, origem);
+    if (!VM_URL || !VM_CHAVE) return responder({ erro: "a prévia de voz ainda não está configurada" }, 503, origem);
+    const vars = variaveisTeste((emp as { nome?: string } | null)?.nome ?? "Assessoria de teste", null);
+    try {
+      const r = await chamarVM(pacoteOuvir(pedido.texto, pedido.voz_id, vars), urlOuvir(VM_URL));
+      if (!r.ok) return responder({ erro: (r.corpo.erro as string) ?? "a prévia de voz não respondeu" }, r.status === 400 ? 400 : r.status === 503 ? 503 : 502, origem);
+      const caracteres = Number(r.corpo.caracteres) || pedido.texto.length;
+      const dia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+      const { error: eUso } = await admin.rpc("registrar_uso_ia_voz", {
+        empresa: pedido.empresa, dia, componente: "previa_voz", chamadas: 1, minutos: minutosPrevia(caracteres),
+        minutos_cobraveis: 0, tokens_entrada: caracteres, tokens_saida: 0,
+      });
+      if (eUso) console.error("simular_fluxo_voz", "registrar_uso_ia_voz", eUso.code);
+      return responder({ audio: r.corpo.audio, mime: r.corpo.mime ?? "audio/mpeg" }, 200, origem);
+    } catch (e) {
+      console.error("simular_fluxo_voz", "ouvir_voz", (e as Error).name);
+      return responder({ erro: "não foi possível gerar a prévia agora" }, 502, origem);
+    }
+  }
   const [{ data: quem }, { data: v }] = await Promise.all([
     admin.from("perfis").select("id, ativo, equipe, empresa_id").eq("id", sessao.user.id).maybeSingle(),
     comoUsuario.from("voz_fluxo_versoes").select("id, fluxo_id, empresa_id, credor_id, definicao").eq("id", pedido.versao).maybeSingle(),

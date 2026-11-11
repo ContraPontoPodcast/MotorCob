@@ -12,6 +12,21 @@ export const PROVEDORES_VOZ: { id: string; nome: string; desc: string }[] = [
 	{ id: 'simulador', nome: 'Simulador', desc: 'Nada é falado de verdade: respostas simuladas para testar a régua.' },
 ];
 
+/** Vozes pt-BR liberadas para a Montagem MotorCX (ElevenLabs). As mesmas de `tts_voz` (a primeira, padrão) e
+ *  `tts_vozes` do /etc/motorcx/provedores.json das VMs (infra/asterisk/vm/motorcx-provedores.padrao.json): a VM só
+ *  usa a voz da empresa se ela estiver liberada lá; qualquer outra cai na padrão. Nome amigável, sem nome de pessoa. */
+export const VOZES_MONTAGEM: { id: string; nome: string }[] = [
+	{ id: '0YziWIrqiRTHCxeg1lyc', nome: 'Voz 1 (padrão)' },
+	{ id: 'RGymW84CSmfVugnA5tvA', nome: 'Voz 2' },
+	{ id: 'PznTnBc8X6pvixs9UkQm', nome: 'Voz 3' },
+	{ id: '4J31DrhygVjvFsoj7BsM', nome: 'Voz 4' },
+];
+/** Nome amigável da voz guardada em voz_config.voz_id (sem voz = a padrão; id fora da lista aparece como "outra"). */
+export function nomeVoz(id: unknown): string {
+	if (id == null || id === '') return VOZES_MONTAGEM[0].nome;
+	return VOZES_MONTAGEM.find(v => v.id === id)?.nome ?? 'Outra voz (não liberada: a VM usa a padrão)';
+}
+
 export const MODOS_VOZ: { id: 'simulado' | 'teste' | 'real'; nome: string; desc: string }[] = [
 	{ id: 'simulado', nome: 'Simulado', desc: 'Nada liga. O Simulador responde.' },
 	{ id: 'teste', nome: 'Só números de teste', desc: 'Liga de verdade, mas só para os números de teste da equipe.' },

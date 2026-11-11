@@ -8,17 +8,18 @@
 // Redesign v2: abas Empresa (padrão: caminho Simulado → Teste → Real, KPIs de prontidão, "Antes de ligar de verdade" e a
 // configuração em 5 linhas que abrem gavetas), Troncos e rotas, Transferência e Todas as empresas (o global, separado).
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ChevronRight, KeyRound, Pencil, Phone, Plus } from 'lucide-react';
+import { ChevronRight, KeyRound, Pencil, Phone, Plus, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMotorAuth } from '@/components/auth-provider';
 import { supabase, friendlyError, dateBR, dateTimeBR, today, type Row } from '@/lib/supabase';
 import {
-	FORMATOS_DISCAGEM, IPS_SAIDA_MOTORCX, MODOS_VOZ, PROVEDORES_VOZ, TIPOS_ROTA, binaMascara, cadenciaTxt, inteiro, reais,
-	segundosTarifados, custoVoz, ipsPendentes,
+	FORMATOS_DISCAGEM, IPS_SAIDA_MOTORCX, MODOS_VOZ, PROVEDORES_VOZ, TIPOS_ROTA, VOZES_MONTAGEM, binaMascara, cadenciaTxt, inteiro,
+	nomeVoz, reais, segundosTarifados, custoVoz, ipsPendentes,
 } from '@/lib/voz';
 import { Cadeado, Cartao, Dialogo, Pilula, Ponto, Subtitulo, Trava, Vazio, btnLink, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 import { Abas, Aviso as AvisoDs, Detalhes, Gaveta, Kpis, ListaValores, Passos, SeloRegras, Tabela } from '@/components/ds';
 import { textoTemDadoPessoal } from '@/lib/speech';
+import { lerErroDaFuncao } from '@/lib/funcoes';
 import { useConsolePerms } from './console-perms';
 import { NumerosTesteDialogo, RotaGaveta, TransferenciaGaveta, TroncoGaveta } from './console-voz-gavetas';
 import { RobosTeto } from './console-voz-robos';
@@ -282,6 +283,7 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 
 	const linhasCfg: { id: string; nome: string; valor: ReactNode }[] = [
 		{ id: 'provedor', nome: 'Provedor de voz', valor: provInfo?.nome ?? provedor },
+		{ id: 'voz', nome: 'Voz do agente', valor: nomeVoz(config?.voz_id) },
 		{ id: 'pico', nome: 'Pico acima do limite', valor: comRobos ? 'Desligado (robôs contratados)' : pico <= 1 ? 'Desligado' : `Até ${pico}× · máx. ${inteiro(tetoDe(pico))}` },
 		{ id: 'alo', nome: 'Alô fake', valor: aloLib ? (config?.alo_fake ? `Liberado · ligado, até ${inteiro(config?.alo_fake_max_s)} s` : 'Liberado · desligado pela empresa') : 'Não liberado' },
 		{ id: 'numeros', nome: 'Números de teste', valor: nTeste === 0 ? 'Nenhum cadastrado' : `${inteiro(nTeste)} cadastrado${nTeste > 1 ? 's' : ''}` },
@@ -310,8 +312,10 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 						{PROVEDORES_VOZ.map(p => <option key={p.id} value={p.id}>{p.nome}{p.id === 'montagem_motorcx' ? ' (padrão)' : ''}</option>)}
 					</select>
 					<p className="text-[12.5px] leading-relaxed text-[var(--base-texto-2)]">{provInfo?.desc}{provedor === 'simulador' && modo !== 'simulado' ? ' O Simulador só vale no modo Simulado.' : ''}</p>
-					<ListaValores itens={[['Agente no provedor', config?.agent_id ? String(config.agent_id) : 'Ainda não sincronizado'], ['Voz', config?.voz_id ? String(config.voz_id) : '—']]} />
+					<ListaValores itens={[['Agente no provedor', config?.agent_id ? String(config.agent_id) : 'Ainda não sincronizado'], ['Voz', nomeVoz(config?.voz_id)]]} />
 				</>}
+				{aberta === 'voz' && <VozEmpresa empresaId={empresaId} atual={config?.voz_id ? String(config.voz_id) : ''} podeTroncos={podeTroncos}
+					provedor={provedor} salvando={busy === 'voz_id'} onSalvar={v => void ajustar('voz_id', v, 'Voz do agente salva. Vale a partir das próximas ligações.')} />}
 				{aberta === 'pico' && <>
 					<select aria-label="Pico acima do limite" value={String(pico)} disabled={!podeTroncos || busy === 'pico_multiplo'}
 						onChange={e => void ajustar('pico_multiplo', Number(e.target.value), 'Pico salvo.')} className={sel}>
@@ -341,6 +345,44 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 			</Gaveta>
 		</Cartao>
 	);
+}
+
+// ---------------------------------------------------------------- voz do agente (voz_config.voz_id)
+/** Escolhe uma das vozes liberadas na VM e ouve antes de salvar (prévia da VM, /ouvir, pela Edge Function
+ *  simular_fluxo_voz › ouvir_voz; nada fica guardado). Salvar grava voz_config.voz_id (configurar_voz_equipe). */
+function VozEmpresa({ empresaId, atual, podeTroncos, provedor, salvando, onSalvar }: {
+	empresaId: string; atual: string; podeTroncos: boolean; provedor: string; salvando: boolean; onSalvar: (v: string) => void;
+}) {
+	const inicial = VOZES_MONTAGEM.some(v => v.id === atual) ? atual : VOZES_MONTAGEM[0].id;
+	const [escolhida, setEscolhida] = useState(inicial);
+	const [tocando, setTocando] = useState(false);
+	const [erro, setErro] = useState('');
+	async function ouvir() {
+		if (!supabase || tocando) return;
+		setTocando(true); setErro('');
+		try {
+			const { data, error } = await supabase.functions.invoke('simular_fluxo_voz', { body: { acao: 'ouvir_voz', empresa: Number(empresaId), voz_id: escolhida } });
+			const { mensagem } = await lerErroDaFuncao(error, data);
+			const r = data as { audio?: string; mime?: string } | null;
+			if (mensagem || error || !r?.audio) throw new Error(mensagem || 'A prévia de voz não respondeu agora.');
+			const a = new Audio(`data:${r.mime ?? 'audio/mpeg'};base64,${r.audio}`);
+			a.onended = () => setTocando(false);
+			await a.play();
+		} catch (e) { setErro(e instanceof Error ? e.message : 'A prévia de voz não respondeu agora.'); setTocando(false); }
+	}
+	const sel = 'h-9 min-w-0 flex-1 rounded-lg border border-[var(--base-field-border)] bg-[var(--base-cartao)] px-2.5 text-[13.5px] text-[var(--base-texto)] outline-none focus:border-[var(--destaque)]';
+	return <>
+		<div className="flex flex-wrap items-center gap-2">
+			<select aria-label="Voz do agente" value={escolhida} disabled={!podeTroncos || salvando} onChange={e => { setEscolhida(e.target.value); setErro(''); }} className={sel}>
+				{VOZES_MONTAGEM.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}
+			</select>
+			<button type="button" onClick={() => void ouvir()} disabled={!podeTroncos || tocando} className={btnSec}><Volume2 size={14} /> {tocando ? 'Tocando…' : 'Ouvir'}</button>
+			{podeTroncos && <button type="button" onClick={() => onSalvar(escolhida)} disabled={salvando || escolhida === atual} className={btnPrim}>Salvar</button>}
+		</div>
+		{erro && <p role="alert" className="text-[12.5px] text-[var(--estado-erro-texto)]">{erro}</p>}
+		{atual && !VOZES_MONTAGEM.some(v => v.id === atual) && <p className="text-[12.5px] leading-relaxed text-[var(--estado-atencao-texto)]">A voz guardada não está entre as liberadas: as ligações usam a padrão até você salvar uma destas.</p>}
+		<p className="text-[12.5px] leading-relaxed text-[var(--base-texto-2)]">Vale para as ligações da Montagem MotorCX desta empresa, a partir da próxima ligação.{provedor !== 'montagem_motorcx' ? ' Hoje a empresa usa outro provedor: a voz fica guardada e passa a valer quando ela usar a Montagem.' : ''} Os sons do sistema continuam com a voz padrão. A prévia não fica guardada.</p>
+	</>;
 }
 
 // ---------------------------------------------------------------- troncos
