@@ -1,0 +1,9 @@
+[Unit]
+Description=Firewall das VMs de voz a cada 2 minutos (IPs das operadoras liberados pela equipe MotorCX)
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=2min
+
+[Install]
+WantedBy=timers.target

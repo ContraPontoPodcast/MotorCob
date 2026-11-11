@@ -399,7 +399,7 @@ class Orquestrador:
         c.t_origem, c.estado = agora, "originando"
         try:
             self.ari.originar(cand.endpoint, c.canal, APP, ["saida", c.id], self._variaveis(c),
-                              callerid=cand.tronco.bina, timeout=self.toque_max_s)
+                              callerid=cand.tronco.bina, timeout=min(self.toque_max_s, cand.tronco.toque_max_s))
         except ErroARI as ex:
             log.warning("originate falhou (%s) no tronco %s", ex, cand.tronco.id)
             self._conta("erro_originate")

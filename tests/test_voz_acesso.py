@@ -53,6 +53,28 @@ def acesso(conn=None, abrir=None):
     return A.AcessoProprio(lambda: conn, "https://exemplo-ref.supabase.co", abrir=abrir), conn
 
 
+class TestCamposTronco(unittest.TestCase):
+    """SQL 113 · Telefonia T4: os campos novos vêm de voz_vm.troncos_campos / rotas_prefixo e entram pelo id."""
+
+    def test_junta_os_campos_pelo_id(self):
+        conn = ConexaoFalsa([[[{"id": 10, "host": "198.51.100.20"}], [{"id": 11, "host": "198.51.100.21"}]],
+                             [[{"id": 10, "dtmf": "inband", "toque_max_s": 25}]]])
+        sb, _ = acesso(conn)
+        linhas = sb.selecionar("voz_troncos")
+        self.assertEqual(linhas[0], {"id": 10, "host": "198.51.100.20", "dtmf": "inband", "toque_max_s": 25})
+        self.assertEqual(linhas[1], {"id": 11, "host": "198.51.100.21"})
+        self.assertIn("voz_vm.troncos_campos", conn.chamadas[1][0])
+
+    def test_banco_sem_o_sql_113_fica_com_a_base(self):
+        class SemView(ConexaoFalsa):
+            def run(self, sql, **params):
+                if "rotas_prefixo" in sql:
+                    raise RuntimeError("relation voz_vm.rotas_prefixo does not exist")
+                return super().run(sql, **params)
+        sb, _ = acesso(SemView([[[{"id": 1, "tech_prefix": "1021"}]]]))
+        self.assertEqual(sb.selecionar("voz_rotas"), [{"id": 1, "tech_prefix": "1021"}])
+
+
 class TestModo(unittest.TestCase):
     def test_padrao_e_chave_do_servidor(self):
         self.assertEqual(A.modo_do_ambiente({}), "supabase_chave")

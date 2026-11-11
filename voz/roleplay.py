@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +25,7 @@ from datetime import date
 
 from voz import conector as CN
 from voz import fluxo as FX
+from voz.persona import RE_PESSOAL, Interlocutor  # noqa: F401 (RE_PESSOAL: compatibilidade)
 
 log = logging.getLogger("motorcx.voz.roleplay")
 MAX_TURNOS = 20
@@ -84,7 +84,8 @@ PERSONAS_PADRAO = {
         ["quero_negociar", "aceitar"], 1, ["promessa"], []),
 }
 
-RE_PESSOAL = re.compile(r"\d{9,}|[\w.+-]+@[\w-]+\.[\w.]+")
+# O filtro da fala (RE_PESSOAL) e o laço da conversa (Interlocutor) ficam em voz/persona.py, os mesmos do treino de
+# operadores (voz/treino.py).
 
 
 @dataclass(frozen=True)
@@ -128,29 +129,17 @@ class Contador:
         return r
 
 
-class Devedor:
-    """O LLM no papel da persona. Fala curta, em português, sem dado real (filtro na saída)."""
+class Devedor(Interlocutor):
+    """O LLM no papel da persona. Fala curta, em português, sem dado real (filtro na saída, voz/persona.py)."""
 
     def __init__(self, modelo, persona: Persona):
-        self.modelo, self.persona = modelo, persona
-        p = persona
-        self.historico = [{"role": "system", "content": (
+        self.persona = p = persona
+        super().__init__(modelo, (
             f"Você é uma pessoa fictícia recebendo uma ligação de cobrança, num TESTE do agente. Persona: {p.nome}. "
             f"Perfil: {p.perfil}. Objetivo: {p.objetivo}\nComportamentos: {'; '.join(p.comportamentos)}\n"
             f"Frases que essa pessoa diz: {' | '.join(p.frases)}\n"
             f"Seu nome é {NOME_FICTICIO}; se pedirem a data de nascimento, diga {NASCIMENTO_FICTICIO}. "
-            "Nunca invente CPF, telefone, e-mail, endereço, cartão ou senha. Responda só a sua fala, curta.")}]
-
-    def responder(self, falas_agente: list[str]) -> str:
-        self.historico.append({"role": "user", "content": " ".join(falas_agente) or "(silêncio)"})
-        try:
-            texto = (self.modelo.responder(self.historico, []).texto or "").strip()
-        except Exception as ex:   # noqa: BLE001
-            log.warning("roleplay: LLM da persona indisponível (%s)", ex.__class__.__name__)
-            texto = ""
-        texto = RE_PESSOAL.sub("***", texto)[:300] or "Alô?"
-        self.historico.append({"role": "assistant", "content": texto})
-        return texto
+            "Nunca invente CPF, telefone, e-mail, endereço, cartão ou senha. Responda só a sua fala, curta."))
 
 
 @dataclass

@@ -10,21 +10,27 @@
 // mesmo salvar_fluxo_voz. A aba Roteiro mostra a contagem; "Corrigir N pontos" leva à primeira.
 // PR6: "Testar conversa" abre ao lado do Roteiro (?testar=1; no celular, em tela cheia), com a etapa atual acesa e as
 // travas que agiram. Mesmo simulador (api.simular); a tela cheia /voz/agente/testar continua.
+// PR7: caminho da versão em 4 fases (Rascunho → Testes → Aprovação → Em uso) com UMA ação principal no cabeçalho
+// (acaoDaFase: Corrigir N pontos · Ver os testes · Enviar para aprovação · Revisar e aprovar · Colocar em uso). Aprovar,
+// com parecer, fica na aba Versões e aprovação, ao lado do checklist "Antes de aprovar" e do "o que muda" em palavras.
+// Permissões e travas iguais: o banco segura enviar/aprovar/usar com pendência; a equipe MotorCX nunca aprova.
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Play, Plus, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Loading, Notice } from '@/components/app-shell';
 import { ConfirmaAcao } from '@/components/comuns/confirma-acao';
-import { Aviso, Botao, Passos, Pilula, Vazio } from '@/components/voz/ui';
+import { Aviso, Botao, Pilula, Vazio } from '@/components/voz/ui';
 import {
-	ORDEM_TIPOS, SITUACOES, TIPOS, TIPOS_AGENTE, comoCorrigir, correcaoDe, dataCurta, estadoEnvio, etapaDoTeste, explicar, impedem, nomesEtapas, novoBloco, numerosRoteiro, removerBloco, resumoPendencias, roteiro, trocarBloco,
+	ORDEM_TIPOS, SITUACOES, TIPOS, TIPOS_AGENTE, comoCorrigir, correcaoDe, dataCurta, etapaDoTeste, explicar, impedem, nomesEtapas, novoBloco, numerosRoteiro, removerBloco, resumoPendencias, roteiro, trocarBloco,
 	type Bloco, type Correcao, type Definicao, type Pendencia, type TipoBloco,
 } from '@/lib/fluxo';
 import { ConfirmaCorrecao, OQueCorrigir, type AcaoCorrigir } from './corrigir';
-import { BarraEnvio, LegendaModos, Quadro, type Marca } from './quadro';
+import { LegendaModos, Quadro, type Marca } from './quadro';
+import { acaoDaFase, antesDeAprovar, casosQueFalharam, faseVersao, pendenciasDoDesenho, type AcaoFase, type ItemCheck } from '@/lib/fluxo-versao';
+import { AbaVersoes, AcaoPrincipal, CaminhoVersao } from './versao';
 import { Roteiro } from './roteiro';
-import { AbaRespostas, AbaTestes, AbaVersoes, AbasEditor, abaDaUrl, type AbaEditor } from './abas-editor';
+import { AbaRespostas, AbaTestes, AbasEditor, abaDaUrl, type AbaEditor } from './abas-editor';
 import { GavetaEtapa } from './etapa';
 import { Acoes, Gaveta, Linhas, Regras } from './ds';
 import { EmQualquerMomento, FaixaTravas } from './travas';
@@ -36,11 +42,6 @@ import { useConversaTeste } from './conversa-teste';
 import { PainelTestar } from './testar-ao-lado';
 
 const SEM_CENARIO = {};
-const PASSOS = [
-	{ id: 'rascunho', nome: 'Rascunho', desc: 'Quem edita canais' },
-	{ id: 'aprovado_empresa', nome: 'Aprovado pela empresa', desc: 'Quem aprova roteiro de voz' },
-	{ id: 'em_uso', nome: 'Em uso', desc: 'Entra na próxima ligação' },
-];
 
 export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	const { api, empresa, rota } = useFluxo();
@@ -59,7 +60,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 		setBusca(q => { const n = new URLSearchParams(q); if (id) n.set('etapa', id); else n.delete('etapa'); return n; }, { replace: true });
 	}
 	function trocarAba(a: AbaEditor) {
-		setBusca(q => { const n = new URLSearchParams(q); if (a === 'roteiro') n.delete('aba'); else n.set('aba', a); n.delete('etapa'); return n; });
+		setBusca(q => { const n = new URLSearchParams(q); if (a === 'roteiro') n.delete('aba'); else n.set('aba', a); n.delete('etapa'); n.delete('comparar'); return n; });
 		setGaveta(null);
 	}
 	// PR6: "Testar conversa" abre ao lado do Roteiro (?testar=1), com a etapa atual acesa
@@ -77,19 +78,26 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	}, [testar, atualTeste, conversa.sim]);
 	const [ocupado, setOcupado] = useState(false);
 	const [confirma, setConfirma] = useState<null | 'aprovar' | 'usar'>(null);
+	const [parecer, setParecer] = useState('');
+	const comparar = Number(busca.get('comparar')) || null;
+	function trocarComparar(id: number | null) {
+		setBusca(q => { const n = new URLSearchParams(q); if (id) n.set('comparar', String(id)); else n.delete('comparar'); return n; }, { replace: true });
+	}
 	const [correcao, setCorrecao] = useState<Correcao | null>(null);
 
 	const { dados, erro, carregando, recarregar } = useCarregar(async () => {
 		if (!api || !empresa) return null;
 		const v = await api.versao(versaoId);
 		if (!v) return { v: null } as const;
-		const [f, versoes, conectores, intencoes, bloqueios, avisos, alcada, identidade] = await Promise.all([
+		const [f, versoes, conectores, intencoes, bloqueios, avisos, alcada, identidade, respostas, casos, resultados] = await Promise.all([
 			api.fluxo(v.fluxo_id), api.versoesDoFluxo(v.fluxo_id), api.conectores(empresa.id).catch(() => []), api.intencoes().catch(() => []),
 			api.bloqueios(v.id), api.avisos(v.id).catch(() => [] as string[]), api.alcada(empresa.id, v.credor_id).catch(() => null),
 			// SQL 88: quem confere a identidade na carteira (banco sem o SQL 88: undefined, e o Roteiro fica como antes)
 			api.identidade(empresa.id, v.credor_id).then(x => x?.identidade ?? null).catch(() => undefined),
+			// PR7: o caminho da versão e o "Antes de aprovar" (respostas sem revisão, casos de teste desta versão)
+			api.respostas(v.id).catch(() => []), api.casos(v.fluxo_id).catch(() => []), api.resultadosCasos(v.id).catch(() => []),
 		]);
-		return { v, f, versoes, conectores, intencoes, bloqueios, avisos, alcada, identidade };
+		return { v, f, versoes, conectores, intencoes, bloqueios, avisos, alcada, identidade, respostas, casos, resultados };
 	}, [api, empresa?.id, versaoId]);
 
 	const marcas = useMemo(() => {
@@ -105,7 +113,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	if (erro && !dados) return <>{cab()}<Notice>{erro}</Notice></>;
 	if (!dados?.v || !dados.f) return <>{cab()}<Vazio titulo="Versão não encontrada." acao={<Botao secundario onClick={() => navigate(rota('lista'))}>Voltar aos fluxos</Botao>}>Ela pode ser de outra empresa ou ter sido apagada.</Vazio></>;
 
-	const { v, f, versoes, conectores, intencoes, bloqueios, avisos, alcada, identidade } = dados;
+	const { v, f, versoes, conectores, intencoes, bloqueios, avisos, alcada, identidade, respostas, casos, resultados } = dados;
 	const def = v.definicao;
 	const emUso = versoes.find(x => x.situacao === 'em_uso') ?? null;
 	const rascunhoAberto = versoes.find(x => x.situacao === 'rascunho' && x.id !== v.id) ?? null;
@@ -117,8 +125,15 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	const porBloco = new Map<string, Pendencia[]>();
 	for (const e of todas) if (e.bloco && ids.has(e.bloco)) porBloco.set(e.bloco, [...(porBloco.get(e.bloco) ?? []), e]);
 	const doFluxo = todas.filter(e => !e.bloco || !ids.has(e.bloco));
-	const estado = estadoEnvio({ situacao: v.situacao, erros: bloqueios, sujo: false, podeEditar: perm.editar, validando: ocupado, enviadoEm: v.enviado_aprovacao_em });
-	const ixPasso = v.situacao === 'em_uso' ? 2 : v.situacao === 'aprovado_empresa' ? 1 : v.situacao === 'arquivado' ? 3 : 0;
+	// PR7 · caminho da versão
+	const casosAtivos = casos.filter(c => c.ativo);
+	const resCaso = new Map(resultados.map(r => [r.caso_id, r]));
+	const falharam = Math.max(casosQueFalharam(bloqueios), casosAtivos.filter(c => resCaso.get(c.id)?.passou === false).length);
+	const passaram = casosAtivos.filter(c => resCaso.get(c.id)?.passou).length;
+	const semRevisao = respostas.filter(r => !r.revisado_em).length;
+	const fase = faseVersao({ situacao: v.situacao, bloqueios, enviadoEm: v.enviado_aprovacao_em });
+	const acaoFase = acaoDaFase({ situacao: v.situacao, bloqueios, enviadoEm: v.enviado_aprovacao_em, podeEditar: perm.editar, podeAprovar: perm.aprovar, casos: { passaram, total: casosAtivos.length }, emUso: emUso?.versao ?? null, versao: v.versao });
+	const checklist = antesDeAprovar({ bloqueios, avisos, casos: casosAtivos.map(c => ({ id: c.id, passou: resCaso.get(c.id)?.passou ?? null })), respostas, alcada });
 
 	/** Salva a definição. Rascunho: no lugar. Aprovada ou em uso: vira rascunho novo e o editor abre nele. */
 	async function salvarDef(nova: Definicao, ok: string): Promise<boolean> {
@@ -144,8 +159,30 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 	async function avancar(qual: 'aprovar' | 'usar') {
 		if (!api) return;
 		setOcupado(true);
-		await executar(() => (qual === 'aprovar' ? api.aprovar(v!.id, null) : api.usar(v!.id)), qual === 'aprovar' ? 'Aprovado pela empresa. Falta colocar em uso.' : `v${v!.versao} em uso a partir da próxima ligação.`);
+		const ok = await executar(() => (qual === 'aprovar' ? api.aprovar(v!.id, parecer || null) : api.usar(v!.id)), qual === 'aprovar' ? 'Aprovado pela empresa. Falta colocar em uso.' : `v${v!.versao} em uso a partir da próxima ligação.`);
+		if (ok && qual === 'aprovar') setParecer('');
 		setOcupado(false); setConfirma(null); void recarregar();
+	}
+	async function voltarPara(versao: number, motivo: string): Promise<boolean> {
+		if (!api) return false;
+		setOcupado(true);
+		const ok = await executar(() => api.voltar(f!.id, versao, motivo), `A v${versao} volta a ficar em uso na próxima ligação. A versão em uso foi para o arquivo.`);
+		setOcupado(false);
+		if (ok) void recarregar();
+		return ok;
+	}
+	function naAcao(t: AcaoFase['tipo']) {
+		if (t === 'corrigir') irParaPrimeira();
+		else if (t === 'testes') trocarAba('testes');
+		else if (t === 'enviar') void enviar();
+		else if (t === 'revisar') trocarAba('versoes');
+		else if (t === 'usar') setConfirma('usar');
+	}
+	function irDoChecklist(id: ItemCheck['id']) {
+		if (id === 'desenho') irParaPrimeira();
+		else if (id === 'casos' || id === 'personas') trocarAba('testes');
+		else if (id === 'respostas') trocarAba('respostas');
+		else if (id === 'alcada') setGaveta('alcada');
 	}
 
 	/** Botão do "O que corrigir": correção de um clique (antes → depois e confirmar) ou atalho para quem resolve. */
@@ -179,15 +216,14 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 		<>
 			<CabecalhoAgente
 				titulo={`${f.nome} · ${nomeCarteira(f.credor_id)}`}
-				titleExtra={<Pilula tom={SITUACOES[v.situacao].tom}>v{v.versao} {SITUACOES[v.situacao].nome}</Pilula>}
+				titleExtra={<Pilula tom={SITUACOES[v.situacao].tom}>v{v.versao} {v.situacao === 'rascunho' && v.enviado_aprovacao_em ? 'aguardando aprovação' : SITUACOES[v.situacao].nome}</Pilula>}
 				desc={`${TIPOS_AGENTE[f.tipo_agente]}. ${emUso && emUso.id !== v.id ? `Em uso: v${emUso.versao}. A v${v.versao} só entra na próxima ligação depois de aprovada e colocada em uso.` : emUso ? `Em uso desde ${dataCurta(emUso.em_uso_em)}.` : 'Nenhuma versão em uso nesta carteira ainda.'}`}
-				acoes={<BarraEnvio situacao={v.situacao} estado={estado} podeEditar={perm.editar} podeAprovar={perm.aprovar} ocupado={ocupado}
-					onEnviar={() => void enviar()} onAprovar={() => setConfirma('aprovar')} onUsar={() => setConfirma('usar')} />}
+				acoes={<AcaoPrincipal acao={acaoFase} ocupado={ocupado} onAcao={naAcao} />}
 			/>
 			<div className="space-y-4">
 				{v.situacao === 'arquivado'
 					? <Aviso tom="neutro" titulo="Versão arquivada.">Fica só para consulta. Quem aprova pode voltar para ela na lista de fluxos.</Aviso>
-					: <Passos passos={PASSOS} atual={ixPasso} />}
+					: fase !== null && <CaminhoVersao fase={fase} r={{ versao: v.versao, desenho: pendenciasDoDesenho(bloqueios).length, casos: { passaram, total: casosAtivos.length, falharam }, avisosPersonas: avisos.filter(a => a.startsWith('roleplay_')).length, enviadoEm: v.enviado_aprovacao_em ?? null, aprovadoEm: v.aprovado_em, situacao: v.situacao, emUso: emUso ? { versao: emUso.versao, desde: emUso.em_uso_em } : null }} />}
 				{v.situacao !== 'rascunho' && rascunhoAberto && perm.editar && (
 					<Aviso tom="info" titulo={`Há um rascunho (v${rascunhoAberto.versao}) deste fluxo.`}>As mudanças são feitas nele. <button type="button" className="font-semibold underline" onClick={() => navigate(rota('editor', rascunhoAberto.id))}>Abrir o rascunho</button></Aviso>
 				)}
@@ -196,14 +232,12 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 					<Aviso tom="erro" titulo={`${pend.length} ${pend.length === 1 ? 'pendência impede' : 'pendências impedem'} o envio para aprovação.`}>
 						{resumoPendencias(pend.map(p => p.codigo))} <button type="button" className="ml-1 font-semibold underline" onClick={irParaPrimeira}>Corrigir {pend.length} {pend.length === 1 ? 'ponto' : 'pontos'}</button> <button type="button" className="ml-1 font-semibold underline" onClick={() => setGaveta('pendencias')}>Ver a lista</button>
 					</Aviso>
-				) : avisos.length > 0 ? (
-					<Aviso tom="atencao" titulo="Antes de aprovar:">{avisos.map(a => explicar(a).texto).join(' ')} <button type="button" className="ml-1 font-semibold underline" onClick={() => navigate(rota('personas', null, { versao: v.id }))}>Testar com personas</button></Aviso>
-				) : v.situacao === 'rascunho' ? <Aviso tom="ok" titulo="Nada impede o envio.">O validador, os conectores, a alçada e os casos de teste estão em dia.</Aviso> : null}
+				) : null}
 
 			</div>
 
 			<div className="mt-5">
-				<AbasEditor atual={aba} onTrocar={trocarAba} contagens={{ roteiro: pend.length }} />
+				<AbasEditor atual={aba} onTrocar={trocarAba} contagens={{ roteiro: pendenciasDoDesenho(bloqueios).length, respostas: semRevisao, testes: falharam }} />
 				{aba === 'roteiro' ? (
 					<div className={testar ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] lg:items-start lg:gap-4' : ''}>
 					<div className="min-w-0 space-y-4">
@@ -237,9 +271,12 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 						{def.blocos.length ? <Quadro definicao={def} marcas={marcas} onAbrir={abrirEtapa} pendencias={porBloco} identidade={identidade} />
 							: <Vazio titulo="Fluxo sem etapas.">Comece pelo Roteiro.</Vazio>}
 					</div>
-				) : aba === 'respostas' ? <AbaRespostas versao={v.id} definicao={def} onAbrirEtapa={abrirEtapa} />
-					: aba === 'testes' ? <AbaTestes versao={v.id} fluxo={f.id} pendencias={{ casos: bloqueios.filter(c => c.startsWith('caso_falhou')).length, avisos: avisos.map(a => explicar(a).texto) }} />
-					: <AbaVersoes v={v} versoes={versoes} onAbrir={id => navigate(rota('editor', id))} />}
+				) : aba === 'respostas' ? <AbaRespostas respostas={respostas} definicao={def} podeAprovar={perm.aprovar} onAbrirEtapa={abrirEtapa} onMudou={() => void recarregar()} />
+					: aba === 'testes' ? <AbaTestes versao={{ id: v.id, versao: v.versao }} definicao={def} casos={casos} resultados={resultados} falharam={falharam} avisos={avisos.map(a => explicar(a).texto)}
+						podeEditar={perm.editar} emUso={emUso && emUso.id !== v.id ? { id: emUso.id, versao: emUso.versao } : null} onMudou={() => void recarregar()} onAbrirEtapa={abrirEtapa} />
+					: <AbaVersoes v={v} versoes={versoes} checklist={checklist} conectores={conectores} podeEditar={perm.editar} podeAprovar={perm.aprovar} ocupado={ocupado} impede={pend.length}
+						comparar={comparar} onComparar={trocarComparar} onAprovar={t => { setParecer(t); setConfirma('aprovar'); }} onEnviar={() => void enviar()} onUsar={() => setConfirma('usar')}
+						onAbrir={id => navigate(rota('editor', id))} onVoltar={voltarPara} onIr={irDoChecklist} onAbrirEtapa={abrirEtapa} />}
 			</div>
 
 			{etapaSel && (
@@ -286,7 +323,7 @@ export function EditorFluxo({ versaoId }: { versaoId: number }) {
 			<ConfirmaAcao
 				aberto={confirma != null}
 				titulo={confirma === 'usar' ? `Colocar a v${v.versao} em uso?` : `Aprovar a v${v.versao}?`}
-				texto={confirma === 'usar' ? `Vale a partir da próxima ligação${emUso && emUso.id !== v.id ? `; a v${emUso.versao} vai para o arquivo (nada é apagado)` : ''}. Fica registrado quem colocou em uso.` : 'A aprovação fica registrada com o seu nome. Depois, quem tem a mesma permissão coloca a versão em uso.'}
+				texto={confirma === 'usar' ? `Vale a partir da próxima ligação${emUso && emUso.id !== v.id ? `; a v${emUso.versao} vai para o arquivo (nada é apagado)` : ''}. Fica registrado quem colocou em uso.` : `A aprovação fica registrada com o seu nome${parecer ? ', com o parecer' : ''}. Depois, quem tem a mesma permissão coloca a versão em uso.`}
 				botao={confirma === 'usar' ? 'Colocar em uso' : 'Aprovar'}
 				onConfirm={() => confirma && void avancar(confirma)}
 				onClose={() => setConfirma(null)}
