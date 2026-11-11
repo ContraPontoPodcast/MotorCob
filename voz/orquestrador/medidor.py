@@ -81,6 +81,8 @@ class Medidor:
             linhas.append({
                 "empresa_id": emp, "credor_id": cred, "janela": ini.replace(tzinfo=_FUSO).isoformat(),
                 "modo": r.get("modo", "power"), "razao": round(float(r.get("razao", 1.0)), 2),
+                "razao_config": round(float(r.get("razao_config", r.get("razao", 1.0))), 2),
+                "estado": r.get("estado", "normal"),
                 "discadas": b.discadas, "atendidas_pessoa": b.atendidas_pessoa, "abandonos": b.abandonos,
                 "transf_sem_operador": b.transf_sem_operador, "curtas": b.curtas,
                 "conversas": int(r.get("conversas", 0)), "reservas": int(r.get("reservas", 0)),

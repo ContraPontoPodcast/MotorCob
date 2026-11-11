@@ -1233,6 +1233,18 @@ validação e auditoria da Discagem (`salvar_discagem`, `editar_credores`): o SQ
 lote e relê a cada minuto (`Plantao.atualizar_ritmos`; banco fora = o de antes continua) em `Lote.ritmo`
 (`DG.ritmo_da_carteira`: inválido = padrão).
 
+**Agente de voz · Power e abandono digno (Power e Preditivo V4, SQL 108).** A VM aplica a razão da carteira
+(`Lote.controle`, `voz/orquestrador/ritmo.py` › `RitmoCarteira`): Power = `ritmo.razao` (1,0 a 3,0); Preditivo, até o
+V5, disca em aquecimento (1,0). Com razão > 1 nenhuma linha reserva robô ao originar: todas reservam quando atendem
+(um robô preso a uma linha que só toca não serve a quem atendeu ao lado); com 1,0, cada linha sai com o seu. Teto de abandono da carteira: acima de 3 % (`DG.TETO_ABANDONO`) nos últimos 30 min com
+50+ atendidas por pessoa, razão 1,0 até o fim do dia (estado `freado`, alerta). Quem atende sem robô ouve na hora a
+mensagem neutra `sound:motorcx/sem-robo` (o "Alô fake" saiu: `voz_config.alo_fake*` ficou sem efeito) e **não recebe
+outra ligação no dia** (`lote.ABANDONO_DISCADOR`: finaliza o cliente mesmo com a regra por sinalização e sai dos
+reabríveis do "Reenviar agora"). Ao carregar o lote, `abandonos_recentes_voz` (só VM/servidor; id_cliente e contagens):
+2 abandonos em 7 dias = 3 dias sem voz desde o último; 1 = a próxima ligação só sai com robô reservado
+(`ItemLote.reservar`; `Lote.proximo(reservavel)`). As amostras ganham `razao_config` e `estado`
+(normal|aquecendo|reduzido|freado|parado) e `ritmo_voz_hoje › ultima` os devolve.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

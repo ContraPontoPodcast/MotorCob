@@ -3075,5 +3075,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 107: ritmo da discagem por carteira (testar_ritmo_config.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 108 · Power e abandono digno (Power/Preditivo V4): estado e razão escolhida nas amostras; abandonos recentes por
+# cliente só para a VM/servidor
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ritmo_power.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 108: Power e abandono digno (testar_ritmo_power.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

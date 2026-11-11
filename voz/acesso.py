@@ -116,6 +116,8 @@ RPC = {
     "registrar_teste_tronco_voz": "registrar_teste_tronco",
     # SQL 106 · ritmo da discagem (janelas de 5 min por carteira, só contagens; o Plantão grava a cada minuto)
     "registrar_ritmo_voz": "registrar_ritmo",
+    # SQL 108 · abandonos dos últimos 7 dias por cliente (só id_cliente e contagens; ao carregar o lote)
+    "abandonos_recentes_voz": "abandonos_recentes",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual

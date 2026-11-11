@@ -42,6 +42,7 @@ from pathlib import Path
 
 from motor import discagem as DG
 from motor import voz as V
+from voz.orquestrador.ritmo import RitmoCarteira
 
 # desfechos que encerram o CLIENTE no dia (houve gente do outro lado ou pedido explícito) — o de hoje
 ENCERRA_CLIENTE = frozenset(d.chave for d in V.DESFECHOS if d.e_cpc) | {
@@ -50,8 +51,10 @@ ENCERRA_CLIENTE = frozenset(d.chave for d in V.DESFECHOS if d.e_cpc) | {
 # desfechos que encerram o NÚMERO no dia (não adianta tentar de novo hoje)
 ENCERRA_NUMERO = frozenset({"numero_inexistente", "inexistente_voz", "fax", "rejeitada", "opt_out"})
 # encerram o cliente hoje, mas a regra por sinalização (ou o "Reenviar agora") pode reabrir: ninguém falou de verdade
-REABRIVEIS = frozenset({"atendeu_desligou", "desligou_sem_conversar", "abandonada", "abandono_sem_robo",
-                        "transferencia_sem_operador",
+# abandono do discador (quem atendeu e não teve agente): não religa no mesmo dia, nem pela regra por sinalização, nem
+# pelo "Reenviar agora" (PREDITIVO.md 3.5; V4). A transferência sem operador não é abandono: segue reabrível
+ABANDONO_DISCADOR = frozenset({"abandonada", "abandono_sem_robo"})
+REABRIVEIS = frozenset({"atendeu_desligou", "desligou_sem_conversar", "transferencia_sem_operador",
                         "atendida_terceiro_desconhece",
                         "retorno_agendado", "recado"})
 # com a regra nova, só estes finalizam sempre (o resto é a linha da sinalização)
@@ -152,6 +155,7 @@ class ItemLote:
     spin: int | None = None              # horizontal: em qual spin este telefone sai
     rediscagens: int = 0                 # rediscagens da regra por sinalização já feitas neste item
     adiado: bool = False                 # vertical: "próximo cliente" mandou os outros telefones para o fim
+    reservar: bool = False               # teve abandono nos últimos 7 dias: só sai com robô reservado (V4)
 
 
 def ler_variaveis(linha: dict) -> dict:
@@ -303,6 +307,7 @@ class Lote:
         # ritmo da carteira (credores.discagem › ritmo, SQL 107): Power (razão fixa) ou Preditivo. Padrão: Power 1,0.
         # O Plantão relê a cada minuto (mudou no site = vale no minuto seguinte, sem recarregar o lote)
         self.ritmo: dict = dict(DG.PADRAO["ritmo"])
+        self.controle = RitmoCarteira()           # razão efetiva, teto de abandono da carteira (voz/orquestrador/ritmo.py)
         self.regras = None
         self.aplicar_regras(regras)
 
@@ -405,8 +410,10 @@ class Lote:
         return True
 
     def _pode(self, i: int, it: ItemLote, agora: datetime, clientes_em_voo: set, abertos,
-              com_volta: set = frozenset()) -> bool:
+              com_volta: set = frozenset(), reservavel: bool = True) -> bool:
         if i in self.em_voo or it.id_cliente in clientes_em_voo:
+            return False
+        if it.reservar and not reservavel:      # teve abandono há pouco: espera um robô livre para reservar
             return False
         # regra nova fora do horizontal: o telefone atual termina a sequência (rediscagens) antes do próximo
         if it.volta is None and it.tentativas == 0 and it.id_cliente in com_volta:
@@ -418,27 +425,29 @@ class Lote:
             m = "reserva: principais ainda em curso"
         return m is None
 
-    def proximo(self, agora: datetime) -> tuple[int, ItemLote] | None:
+    def proximo(self, agora: datetime, reservavel: bool = True) -> tuple[int, ItemLote] | None:
+        """`reservavel` = há robô livre para reservar agora (sem ele, quem teve abandono há pouco fica para depois)."""
         clientes_em_voo = {self.itens[i].id_cliente for i in self.em_voo}
         abertos = self._spins_abertos(agora)
         voltas = sorted(self._voltas.items(), key=lambda x: (RANK[x[1]], x[0])) if self._voltas else []
         com_volta = {self.itens[i].id_cliente for i, _ in voltas} \
             if self.regras and self.regras.regra_nova and not self.regras.horizontal else frozenset()
         for i, pri in voltas:
-            if pri == "topo" and self._pode(i, self.itens[i], agora, clientes_em_voo, abertos):
+            if pri == "topo" and self._pode(i, self.itens[i], agora, clientes_em_voo, abertos, reservavel=reservavel):
                 return i, self.itens[i]
         adiados = []
         for i, it in enumerate(self.itens):
             if it.volta is None:
                 if it.adiado:
                     adiados.append(i)
-                elif self._pode(i, it, agora, clientes_em_voo, abertos, com_volta):
+                elif self._pode(i, it, agora, clientes_em_voo, abertos, com_volta, reservavel):
                     return i, it
         for i, pri in voltas:
-            if pri == "normal" and self._pode(i, self.itens[i], agora, clientes_em_voo, abertos):
+            if pri == "normal" and self._pode(i, self.itens[i], agora, clientes_em_voo, abertos, reservavel=reservavel):
                 return i, self.itens[i]
         for i in [i for i, pri in voltas if pri == "fim"] + adiados:
-            if self._pode(i, self.itens[i], agora, clientes_em_voo, abertos, com_volta if i in adiados else frozenset()):
+            if self._pode(i, self.itens[i], agora, clientes_em_voo, abertos,
+                          com_volta if i in adiados else frozenset(), reservavel):
                 return i, self.itens[i]
         return None
 
@@ -494,6 +503,12 @@ class Lote:
             o["encerradas"] += 1
             o["mudou"] = True
         g, r = self.guarda, self.regras
+        if desfecho in ABANDONO_DISCADOR:               # não religa no dia (V4), com ou sem a regra nova
+            g.contar(item, desfecho, causa_sip)
+            g.encerrar_cliente(item.id_cliente, desfecho)
+            item.encerrado = True
+            self._log(item, item, item.situacao, "finaliza", None, agora, "auto", None, id_chamada)
+            return
         if r is None or not r.regra_nova:
             g.registrar(item, desfecho, agora, r, causa_sip)
             return

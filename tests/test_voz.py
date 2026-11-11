@@ -217,7 +217,8 @@ class TestAbandonoSemRobo(unittest.TestCase):
     def test_lote_trata_como_abandono(self):
         from voz.orquestrador import lote as L
         self.assertIn("abandono_sem_robo", L.ENCERRA_CLIENTE)
-        self.assertIn("abandono_sem_robo", L.REABRIVEIS)
+        self.assertNotIn("abandono_sem_robo", L.REABRIVEIS)      # V4: não religa no dia
+        self.assertIn("abandono_sem_robo", L.ABANDONO_DISCADOR)
         from voz.orquestrador.nucleo import ABANDONOS
         self.assertEqual(ABANDONOS, ("abandonada", "abandono_sem_robo"))
 
