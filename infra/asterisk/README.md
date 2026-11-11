@@ -200,6 +200,7 @@ antes da janela de discagem.
 | `motorcx-voz-speech-buscas` | Serviço contínuo da busca semântica do site (SQL 60/63): a cada 2 s pega as buscas pendentes da parte desta VM, calcula o embedding da pergunta na Vertex (São Paulo) e responde. O site consulta até a resposta chegar; a busca vira erro sozinha em 2 min. Custo do embedding na margem (componente `embeddings`). Mesmo interruptor: desligado, sai e fica parado (depois de ligar o metadado, `systemctl restart motorcx-voz-speech-buscas`). |
 | `caddy` + `motorcx-voz-https.timer` | Proxy HTTPS na 8443 (Caddy oficial 2.8.4): a cada 2 min liga só as rotas dos recursos ligados e recarrega quando muda. Certificado Let's Encrypt de `<IP>.sslip.io` (veja "Proxy HTTPS" abaixo). |
 | `motorcx-voz-simulador` | Simulador de texto do Fluxo e roleplay (`voz/simulador_http.py`, 127.0.0.1:8091), atrás do proxy. Só com o metadado `motorcx-simulador-fluxo=1`; a chave vem do segredo `motorcx-voz-simulador`. |
+| `motorcx-voz-treino` | Treino por voz do Roleplay (`voz/treino_voz.py`, WebSocket em 127.0.0.1:8093), atrás do proxy em `/treino/voz`. Só com o metadado `motorcx-treino-voz=1`; o bilhete usa a chave do segredo `motorcx-voz-simulador`. |
 | `motorcx-voz-gerar-fluxo` | Serviço contínuo da geração do fluxo por texto (pedido "Descrever e o MotorCX monta", SQL 58/66; `voz/gerar_fluxo.py`): a cada 15 s pega o próximo pedido, gera o rascunho com o LLM, valida (até 2 correções) e devolve; saída inválida nunca vira rascunho. Também apaga do Storage os anexos que o banco liberou. Funciona nos dois acessos ao banco (seção 7). Desligado por padrão: veja "Geração do fluxo por texto" abaixo. |
 | `motorcx-voz-gerar-segmentacao` | Serviço contínuo de "Descrever segmentos e régua" (SQL 79; `voz/gerar_segmentacao.py` + `motor/segmentacao_ia.py`): a cada 10 s pega o próximo pedido, gera a proposta com o LLM (sem ferramenta de escrita), compila e valida com o Python do motor (até 2 correções) e devolve; o banco confirma ou estorna os 2 créditos. Nada é aplicado por aqui. Desligado por padrão (metadado `motorcx-gerar-segmentacao=1`). |
 | `motorcx-voz-speech-temas.timer` | Segunda 03:20, temas novos da semana passada (SQL 63): agrupa os trechos do cliente que ficaram sem tema e sem intenção. Grupo com 30 conversas ou mais vai para a Curadoria com um nome sugerido pela IA; quem dá o nome é uma pessoa. Mesmo interruptor. |
@@ -336,6 +337,13 @@ do Caddy) e o `motorcx-voz-https` (no boot e a cada 2 min) grava o Caddyfile ver
   serviço `motorcx-voz-simulador`: sobe com o metadado `motorcx-simulador-fluxo=1`. O mesmo `/simular` atende o treino
   de operadores por texto do Roleplay (SQL 100, `voz/treino.py`: corpo com `"treino": "turno" | "avaliar"`), chamado pela
   Edge Function `treino` com a mesma assinatura (sem rota nova no Caddy).
+- `/treino/voz` → treino de operadores por VOZ do Roleplay (SQL 119, `voz/treino_voz.py`, WebSocket em 127.0.0.1:8093),
+  com o serviço `motorcx-voz-treino`: sobe com o metadado `motorcx-treino-voz=1`. O navegador do operador conecta em
+  `wss://<nome da VM>:8443/treino/voz` e manda o bilhete de uso único (2 min) que a Edge Function `treino` assinou com a
+  chave do simulador (`motorcx-voz-simulador`); áudio PCM 16 kHz nos dois sentidos, só em memória (nunca em disco ou
+  log). STT, TTS e LLM são os da Montagem (`provedores.json`, chaves no cofre). No fim, o serviço devolve o resultado
+  assinado para `$MOTORCOB_SUPABASE_URL/functions/v1/treino` (saída HTTPS para o Supabase, que a VM já usa). Sem porta
+  nova: é a mesma 8443. Até 20 sessões por VM (`--max-sessoes`); 15 min no máximo por sessão; 20 s de silêncio encerram.
 O `criar_gcp.sh` abre a 8443 para `ORIGENS_HTTPS` (padrão: a internet toda, porque nem a ElevenLabs nem as Edge
 Functions têm IP de origem fixo; quem protege é a assinatura HMAC de cada rota) e a 80 só para o desafio do Let's
 Encrypt.
@@ -390,6 +398,8 @@ acham a chamada). O orquestrador manda o id no INVITE (`X-MotorCX-Id`). Há dois
   identificador, o receptor ganha uma rota que responde `{"dynamic_variables": {"motorcx_id": …}}` (mesma assinatura e
   mesmo proxy); se não vier, a correlação fica só pela API (início da conversa × início da chamada).
 Simulador do Fluxo: o secret `VOZ_SIMULADOR_URL` da Edge Function passa a ser `https://<nome da VM>:8443/simular`.
+Treino por voz: o secret `VOZ_TREINO_WS_URL` da Edge Function `treino` passa a ser `wss://<nome da VM>:8443/treino/voz`, e
+o mesmo `wss://<nome da VM>:8443` precisa estar em `TREINO_VOZ_WSS` no `site/netlify.toml` (CSP do site).
 
 **Checklist do piloto (ElevenLabs, SQL 63):**
 - [ ] a variável dinâmica `motorcx_id` chega na conversa (o `X-MotorCX-Id` do INVITE vira `motorcx_id`); se não

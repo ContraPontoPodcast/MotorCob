@@ -15,7 +15,11 @@ export type TreinoOperador = {
 	atribuicao: number; prazo: string; nota_minima: number; modos: string[]; tentativas: number | null; tentativas_usadas: number;
 	melhor_nota: number | null; situacao: string; cenario: BriefingTreino; sessoes: SessaoOperador[];
 };
-export type MeusTreinos = { apelido: string; valido_ate: string; voz_disponivel: boolean; treinos: TreinoOperador[] };
+export type MeusTreinos = {
+	apelido: string; valido_ate: string; voz_disponivel: boolean; treinos: TreinoOperador[];
+	/** minutos de voz usados no mês e a franquia (SQL 119), para o aviso de 80% */
+	voz_minutos?: number; voz_franquia?: number;
+};
 
 export type EstadoLink = 'ativo' | 'expirado' | 'revogado' | 'indisponivel' | 'invalido';
 export const TELA_LINK: Record<Exclude<EstadoLink, 'ativo'>, { titulo: string; texto: (ate?: string | null) => string }> = {

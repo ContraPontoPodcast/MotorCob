@@ -1,8 +1,10 @@
 #!/bin/bash
 # Sobe um dos contêineres da voz em primeiro plano (o systemd cuida de reiniciar).
 #   motorcx-voz-rodar asterisk | orquestrador | simulado | transcricao | speech | speech-noite | speech-temas |
-#                     speech-buscas | simulador-fluxo | importador | fluxo-noite | gerar-fluxo | gerar-segmentacao | sons |
-#                     firewall | teste
+#                     speech-buscas | simulador-fluxo | treino-voz | importador | fluxo-noite | gerar-fluxo |
+#                     gerar-segmentacao | sons | firewall | teste
+# treino-voz (Roleplay por voz no navegador, SQL 119: voz/treino_voz.py) só roda com o metadado motorcx-treino-voz=1
+# (padrão: desligado); a chave do bilhete é a do simulador (motorcx-voz-simulador), STT/TTS/LLM os da Montagem.
 # sons (PR10): gera sem-robo.wav e alo.wav com o TTS da voz do agente (voz/sons_sistema.py) em /var/motorcx/sons; quem
 # instala no Asterisk é o motorcx-voz-sons. Com /var/motorcx/sons/sem-robo.wav, o Asterisk sobe com a pasta montada em
 # /var/lib/asterisk/sounds/motorcx (só leitura): os sons ficam depois de reiniciar e de atualizar a imagem.
@@ -87,6 +89,14 @@ case "${1:-}" in
     fi
     exec docker run --name motorcx-voz-simulador-fluxo "${comum_voz[@]}" "$IMG_VOZ" \
       python3 -m voz.simulador_http --porta 8091 --roleplay --provedores /etc/motorcx/provedores.json ;;
+  treino-voz)
+    # treino de operadores por voz (Roleplay, SQL 119), atrás do Caddy (:8443 /treino/voz, WebSocket); desligado por
+    # padrão: só com o metadado motorcx-treino-voz=1. Áudio só em memória (contêiner read-only, nada em disco).
+    if [ "$(meta motorcx-treino-voz)" != 1 ]; then
+      echo "treino por voz desligado nesta VM (metadado motorcx-treino-voz)"; exit 0
+    fi
+    exec docker run --name motorcx-voz-treino "${comum_voz[@]}" "$IMG_VOZ" \
+      python3 -m voz.treino_voz --porta 8093 --provedores /etc/motorcx/provedores.json ;;
   gerar-fluxo)
     # contínuo: pega o próximo pedido em texto (fila do banco, "for update skip locked": as duas VMs podem rodar),
     # gera com o LLM, valida e devolve o rascunho; apaga os anexos vencidos. Nos dois acessos da VM (voz/acesso.py).
@@ -126,5 +136,5 @@ case "${1:-}" in
     fi
     exec docker run --name motorcx-voz-gerar-segmentacao "${comum_voz[@]}" "$IMG_VOZ" \
       python3 -m voz.gerar_segmentacao --intervalo 10 "${llm[@]}" ;;
-  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|importador|fluxo-noite|gerar-fluxo|gerar-segmentacao|sons|firewall|teste" >&2; exit 2 ;;
+  *) echo "uso: motorcx-voz-rodar asterisk|orquestrador|simulado|transcricao|speech|speech-noite|speech-temas|speech-buscas|simulador-fluxo|treino-voz|importador|fluxo-noite|gerar-fluxo|gerar-segmentacao|sons|firewall|teste" >&2; exit 2 ;;
 esac

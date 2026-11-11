@@ -7,6 +7,8 @@
 //   Supabase do site (VITE_SUPABASE_URL): API REST, Auth, Storage (URL assinada), Edge Functions (inclusive a API
 //     pública em /functions/v1/api) em https, e Realtime em wss;
 //   storage.googleapis.com: gravação (áudio) e transcrição (JSON) por URL assinada V4 da Edge Function gravacoes;
+//   treino por voz do Roleplay (SQL 119): o WebSocket seguro das VMs de voz (wss://<vm>:8443), da lista
+//     TREINO_VOZ_WSS do ambiente do build (ou do [build.environment] do netlify.toml), um endereço exato por VM;
 //   data: e blob: em imagem (prévia da foto da conta), mídia ("Ouvir a voz" é data:audio) e worker (Realtime);
 //   estilos: 'unsafe-inline' porque bibliotecas (Radix/react-remove-scroll) criam <style> na hora; fontes do sistema.
 // Uso: node scripts/cabecalhos.mjs   (depois do react-router build; lê build/client/index.html)
@@ -28,8 +30,16 @@ export function hashesInline(html) {
 	return out;
 }
 
-/** A política (uma linha) para o Supabase do site e os hashes dos scripts inline. */
-export function politica(supabaseUrl, hashes) {
+/** Origens wss do treino por voz (lista separada por espaço ou vírgula): só wss://host[:porta], sem caminho nem curinga. */
+export function origensVoz(lista) {
+	return String(lista ?? '').split(/[\s,]+/).filter(Boolean).map(x => {
+		if (!/^wss:\/\/[a-z0-9.-]+(:\d{2,5})?$/.test(x)) throw new Error(`TREINO_VOZ_WSS inválido: ${x}`);
+		return x;
+	});
+}
+
+/** A política (uma linha) para o Supabase do site, os hashes dos scripts inline e o WebSocket do treino por voz. */
+export function politica(supabaseUrl, hashes, voz = []) {
 	const u = new URL(supabaseUrl);
 	if (u.protocol !== 'https:') throw new Error(`VITE_SUPABASE_URL precisa ser https: ${supabaseUrl}`);
 	const sb = `https://${u.host}`;
@@ -40,7 +50,7 @@ export function politica(supabaseUrl, hashes) {
 		"style-src 'self' 'unsafe-inline'",
 		`img-src 'self' data: blob: ${sb}`,
 		"font-src 'self' data:",
-		`connect-src 'self' ${sb} wss://${u.host} ${gcs}`,
+		`connect-src 'self' ${sb} wss://${u.host} ${gcs}${voz.length ? ` ${voz.join(' ')}` : ''}`,
 		`media-src 'self' data: blob: ${gcs}`,
 		"worker-src 'self' blob:",
 		"manifest-src 'self'",
@@ -62,10 +72,18 @@ export function supabaseDoBuild(env = process.env) {
 	return m[1];
 }
 
+/** TREINO_VOZ_WSS do ambiente do build; sem ele, o do [build.environment] do netlify.toml; sem nenhum, vazio. */
+export function vozDoBuild(env = process.env) {
+	if (env.TREINO_VOZ_WSS != null) return origensVoz(env.TREINO_VOZ_WSS);
+	const toml = readFileSync(path.join(raiz, 'netlify.toml'), 'utf8');
+	const m = toml.match(/^\s*TREINO_VOZ_WSS\s*=\s*"([^"]*)"/m);
+	return origensVoz(m ? m[1] : '');
+}
+
 export function gerar(dirBuild = path.join(raiz, 'build', 'client'), env = process.env) {
 	const html = readFileSync(path.join(dirBuild, 'index.html'), 'utf8');
 	const hashes = hashesInline(html);
-	const csp = politica(supabaseDoBuild(env), hashes);
+	const csp = politica(supabaseDoBuild(env), hashes, vozDoBuild(env));
 	const texto = `# Gerado por site/scripts/cabecalhos.mjs no build (não edite): CSP com os hashes dos scripts inline do index.html.\n`
 		+ `# Os outros cabeçalhos (HSTS, X-Frame-Options...) estão no netlify.toml.\n/*\n  Content-Security-Policy: ${csp}\n`;
 	writeFileSync(path.join(dirBuild, '_headers'), texto);
