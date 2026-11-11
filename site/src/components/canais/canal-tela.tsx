@@ -7,6 +7,8 @@
 // RCS sem aparelho aparecem aqui; continuam também em Carteiras › Configurações › Canais e em Mensageria › Configurações
 // por 1 ciclo (SPEC §8, pergunta 6). Editar = editar_canais (retorno e mapeamento: editar_credores, como na carteira);
 // sem a permissão, a tela é só leitura. Só tokens do tema: vale no claro e no escuro.
+// PR 9 (SQL 116): "Testar agora" do Agente de voz do MotorCX liga de verdade para um número de teste (testar-agora.tsx);
+// nos canais de mensagem, o botão segue "em breve".
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
@@ -15,6 +17,7 @@ import { PageHeading, usePermissao } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
 import { Aviso, Botao, Estado, Kpis, LinkTexto, Modal, Pilula, Rotulo, SOMBRA, campoCls, campoStyle } from '@/components/ds';
 import { PilulaEstado } from '@/components/canais/visao-geral';
+import { TestarAgoraVoz } from '@/components/canais/testar-agora';
 import { FrasesTab } from '@/components/canais/frases';
 import { MapeamentoColunas, RegrasCanal, TabelaCodigos, type CanalCodigo, type MapeamentoCanal } from '@/components/credores/aba-canais';
 import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
@@ -127,6 +130,7 @@ export function CanalTela({ canal }: { canal: CanalTelaId }) {
 	const [nFrases, setNFrases] = useState<number | null>(null);
 	const [aberta, setAberta] = useState<SecaoId | null>(null);
 	const [pausar, setPausar] = useState(false);
+	const [testar, setTestar] = useState(false);
 	const [mudandoPausa, setMudandoPausa] = useState(false);
 	const [retorno, setRetorno] = useState<{ regras: Record<string, RegrasRetorno> | null; mapeamento: MapeamentoCanal | null; codigos: CanalCodigo[] } | null>(null);
 
@@ -139,6 +143,8 @@ export function CanalTela({ canal }: { canal: CanalTelaId }) {
 	const est: CanalEstado | null = estado?.canais.find(c => c.canal === canal) ?? null;
 	const hoje = estado?.hoje ?? new Date().toISOString().slice(0, 10);
 	const pausado = est ? est.estado === 'pausado' : linhaEmp.ativo === false;
+	// PR 9 do plano (SQL 116): "Testar agora" liga de verdade, só no Agente de voz do MotorCX
+	const testaVoz = canal === 'agente_voz' && quem === 'voz_motorcx';
 
 	const lerEstado = useCallback(async () => {
 		if (!supabase || !empresa || !verEstado) return;
@@ -243,10 +249,14 @@ export function CanalTela({ canal }: { canal: CanalTelaId }) {
 					{atividade ? <Linha trechos={atividade[0]} /> : pausado ? <>Pausado desde <b className="font-medium text-[var(--base-texto)]">{dia(pausadoDesde?.slice(0, 10), hoje)}</b>.</> : null}
 				</span>
 				<span className="flex flex-wrap gap-2">
-					<span className="inline-flex items-center gap-1.5" title="O teste de conexão chega no próximo passo do redesenho (PR 9).">
-						<Botao tipo="secundario" disabled>Testar agora</Botao>
-						<Pilula tom="neutro">em breve</Pilula>
-					</span>
+					{testaVoz ? (
+						<Botao tipo="secundario" onClick={() => setTestar(true)} disabled={!podeCanais} title={podeCanais ? undefined : 'Testar gasta uma ligação de verdade: precisa da permissão de editar canais.'}>Testar agora</Botao>
+					) : (
+						<span className="inline-flex items-center gap-1.5" title="O teste dos canais de mensagem chega depois (precisa dos números de teste confirmados por código).">
+							<Botao tipo="secundario" disabled>Testar agora</Botao>
+							<Pilula tom="neutro">em breve</Pilula>
+						</span>
+					)}
 					{podeCanais && (pausado
 						? <Botao onClick={() => void mudarPausa(true)} disabled={mudandoPausa}><Play size={14} aria-hidden /> Retomar</Botao>
 						: <Botao tipo="secundario" onClick={() => setPausar(true)} disabled={mudandoPausa}><Pause size={14} aria-hidden /> Pausar</Botao>)}
@@ -357,6 +367,8 @@ export function CanalTela({ canal }: { canal: CanalTelaId }) {
 			</div>
 			<p className="mt-4 text-[12.5px] text-[var(--base-texto-3)]">Toda mudança fica na Auditoria da empresa (quem, quando, antes e depois).</p>
 
+			{testaVoz && <TestarAgoraVoz aberta={testar} onFechar={() => setTestar(false)} empresaId={Number(empresa.id)}
+				credorId={carteira ? Number(escopo) : (carteiras[0] ? Number(carteiras[0].id) : null)} />}
 			{pausar && (
 				<Modal titulo={`Pausar o ${nomeCanal(canal)}?`} confirmar="Pausar" ocupado={mudandoPausa} onFechar={() => setPausar(false)} onConfirmar={() => void mudarPausa(false)}
 					texto="Enquanto pausado, nenhuma estratégia usa este canal e ele sai da lista do dia (o substituto da régua entra no lugar). Retomar volta como estava." />

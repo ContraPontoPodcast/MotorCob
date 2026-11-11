@@ -89,5 +89,10 @@ class ProvedorVoz:
         agente voltou; False = este provedor não sabe voltar (o orquestrador encerra como abandono, como antes)."""
         return False
 
+    def reconectar_sem_humano(self, ctx: "ContextoChamada", motivo: str, emitir: Emitir) -> "Conexao | None":
+        """B5, para o provedor que não recebe texto no meio da conversa (ElevenLabs por SIP): uma nova conexão com o
+        agente para ele pedir desculpas e agendar o retorno. None = não sabe (o orquestrador encerra, como antes)."""
+        return None
+
     def tick(self, agora: datetime) -> None:
         """Chamado a cada ciclo do orquestrador (provedores que simulam tempo)."""

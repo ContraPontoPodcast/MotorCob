@@ -12,6 +12,8 @@ import { useConsolePerms } from '@/components/workspace/console/console-perms';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ErrorDetail } from '@/components/error-detail';
 import { PainelEdicao } from '@/components/comuns/painel-edicao';
+import { RobosContratadosSecao } from '@/components/workspace/empresa/robos-contratados';
+import { CobrancaIaVozSecao } from '@/components/workspace/empresa/cobranca-ia-voz';
 import { franquiaDigitada, franquiaEfetiva, franquiaParaSalvar, itensDosModulos, modeloInicial, modelosDoItem, numeroCampo, precoInicial, temFranquia } from '@/lib/precos-itens';
 
 // ---------- helpers ----------
@@ -881,6 +883,9 @@ export function ContratacaoEmpresa({
 
         {canais.length > 0 && <MensageriaSection numero={3} empresaId={empresaId!} canais={canais} competencia={competencia} soPrecos={soPrecos} />}
         <ScoreSection numero={4} empresaId={empresaId!} competencia={competencia} />
+        {/* Agente de voz: modelo de cobrança (minuto falado ou licença, SQL 123) e os robôs contratados (licenças, SQL 93/98) */}
+        <CobrancaIaVozSecao empresaId={empresaId!} moduloLigado={modulos.agente_voz} />
+        <RobosContratadosSecao empresaId={empresaId!} moduloLigado={modulos.agente_voz} />
 
         {historicoItem && <HistoricoModal item={historicoItem} precos={precosEmpresa.filter(p => String(p.item ?? '') === String(historicoItem.codigo))} onClose={() => setHistoricoItem(null)} />}
       </div>

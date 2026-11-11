@@ -163,7 +163,8 @@ de outra pessoa pela certificação e a rotação segue.
   `causa_q850`; DIALSTATUS/AMD/toque só decidem), o evento da IA (`resultado_ia` = coluna resultado) e a tabulação
   do operador (`resultado_operador`, depois da transferência), mais `transferencia` (atendida|sem_operador|falhou),
   `destino` (ia|ia_humano), `origem_resultado`, `identidade_confirmada`, `rota`, `id_chamada`. `voz.classificar_chamada`
-  decide o desfecho: operador > transferência sem operador/falhou (= `abandonada`) > IA > rede; "não atende"
+  decide o desfecho: operador > transferência sem operador/falhou (= `transferencia_sem_operador` desde o SQL 106;
+  antes `abandonada`) > IA > rede; "não atende"
   genérico cede para a rede; inexistente só com causa confirmável (tipo B só com `numero_canonico`; senão
   `falha_operadora` + aviso NORMALIZAÇÃO). Chaves novas (só com código/coluna novos): as 8 situações do dono
   (`voz.SITUACOES_DONO`: maquina, nao_atendida, ocupado, caixa_postal, desligou_sem_conversar, retorno_agendado
@@ -880,6 +881,16 @@ centro de custo e RCS sem aparelho, também em Mensageria (1 ciclo). `/canais?se
 `pausado_por` (gatilho `canal_pausado_desde`: grava ao pausar, apaga ao retomar, ninguém escreve à mão; o já pausado ganhou
 o `atualizado_em`), `estado_canais` usa o `pausado_em`, e `credor_canais` grava com `pode('editar_canais')` (era papel fixo).
 
+**SQL 96 (PR9 do redesenho do fluxo; SPEC B4 e Q4): trava de CPF.** O agente nunca fala, pede nem repete CPF (o CPF
+nunca é identificador e o site nunca mostra nem busca por ele). Fala do fluxo: `fluxo_voz_aux_pede_senha` =
+`voz/fluxo_validador.pede_senha`/`pede_cpf` = `site/src/lib/fluxo.ts › pedeCpf` (casos em `tests/dados/trava_cpf_casos.json`):
+citar CPF ou dizer um número com cara de CPF dá `fala_pede_senha`; só "os três últimos números/dígitos do CPF" (identidade)
+pode. Executor: `Sessao.render` troca a fala (trava `cpf`); a IA conversa e a Conversa do roteiro também cortam (`FIXA_CPF`).
+Pessoa: `redacao.cpf_dito` (formato, 11 dígitos com DV, por extenso, ou "CPF" + 9 dígitos) é a 1ª trava em `_travas`:
+responde `FALA_CPF` (na identidade pelos 3 últimos, pede só os 3), a etapa continua esperando, o texto nunca vai ao modelo;
+`ConversaComTurnos` guarda só `[CPF REDIGIDO]` e o simulador devolve a marca. `travas_voz()` e `voz_fluxo_passos.trava` + 'cpf'.
+Se o SQL 58 ou o 59 rodarem de novo, rode o 96 depois.
+
 **SQL 87 (pedido do dono, 08/11/2026): Agente de voz e Speech Analytics na Contratação.** A Contratação (cadastro novo e
 edição; `editar_contratacao`) tem as chaves "Agente de voz" e "Speech Analytics" (linhas e textos em
 `lib/contratacao-modulos.ts`), gravadas em `empresa_modulos` (`agente_voz`, `speech_analytics`). `voz_config.speech_analytics`
@@ -901,6 +912,13 @@ sem `_X.`). B6: `aviso_gravacao` ligado por padrão; a abertura diz "Esta ligaç
 `public.texto_revela_antes_identidade` (casos em `tests/dados/trava_identidade_casos.json`): recomendação e relatório
 do Speech nunca sugerem credor/dívida antes da identidade; a Montagem sem fluxo corta a fala (`Conversa._travar`) e o
 fluxo corta o credor escrito à mão (`Sessao._credor_literal`). Se o SQL 56 rodar de novo, rode o 83 depois.
+
+**PR10 do redesenho do fluxo (SPEC B6 e Q9, sem SQL): a voz da ligação diz números por extenso e os áudios do sistema
+saem da voz do agente.** Todo texto que vai ao TTS na ligação passa por `voz/falado.como_soa` (`montagem.para_tts`; o
+Pipecat recebe `ConversaFalada(s.conversa)`): valores, datas, horas, parcelas e percentuais como o "Como soa no telefone"
+(mesma tabela `tests/dados/fala_por_extenso_casos.json`); a transcrição e os eventos guardam o texto escrito. A prévia
+"Ouvir" da VM também. `sem-robo.wav` e `alo.wav`: `motorcx-voz-sons` na VM (`voz/sons_sistema.py`, chave `motorcx-voz-tts`
+do cofre, WAV 8 kHz mono 16 bits em `/var/motorcx/sons`, montada no Asterisk); comando no README do Asterisk, seção 4.
 
 **SQL 85 (decisão do dono, 08/11/2026): mensagem escrita sem a dívida antes da identidade.** SMS, WhatsApp, RCS e e-mail
 chegam inteiros a quem está com o telefone: nenhum texto PADRÃO do MotorCX cita dívida, saldo, valor, parcela, vencimento,
@@ -979,6 +997,347 @@ editáveis.** Só acrescenta funções (nenhuma recriada). Onde se edita cada co
 - **Pré-preenchido:** sem preço da empresa, o campo abre com o preço de tabela; a franquia, com a que vale.
 Item novo com franquia: entra em `itens_com_franquia()` e em `site/src/lib/precos-itens.ts` (o teste confere a paridade).
 Teste: `supabase/testes/testar_precos_editaveis.py`.
+
+**SQL 93 (Robôs contratados, PR 1; SPEC aprovada pelo dono com os padrões recomendados): licenças do Agente de voz no
+banco.** 1 robô = 1 conversa ao mesmo tempo com a IA (não é linha nem canal). Só banco: a fatura, a divisão da
+concorrência (`divisao_concorrencia_voz()`) e o motor ainda não leem. `voz_licencas`: uma linha por vigência, **só se
+acrescenta** (gatilho barra update/delete, até do servidor; a exclusão da empresa apaga em cascata); vale a última com
+`vigente_desde <= hoje_sp()` (America/Sao_Paulo; no mesmo dia, a de maior id). Escrita só por `salvar_licencas_voz`:
+robôs, fidelidade e franquia com `editar_contratacao`; preço novo também com `editar_precos`; abaixo do mínimo do catálogo
+com `preco_abaixo_minimo` (ou Master) e motivo; guarda da IA = preço por robô ≥ `preco_minimo_licenca_voz(franquia)`
+(franquia × custo do `voz_minuto_ia`, nem o Master passa). Vazio = pré-preenchido (o que vale; sem licença, a tabela e a
+franquia padrão de 4.000 min). Aumento vale hoje ou no próximo ciclo; redução (robôs, franquia, transcrição) só no
+próximo ciclo e nunca abaixo do mínimo da fidelidade antes do fim (fidelidade 0/6/12/24 meses, só mantém ou estende).
+Overbooking (Σ robôs > `voz_contrato.concorrencia_contratada` numa mudança que aumenta) exige confirmação e avisa a
+equipe (`/console/voz`). O preço vai também para `precos_empresa` (item `voz_licenca_robo`, eh_ia: flat = por robô,
+mensalidade = valor fechado, franquia = a da licença) e **só pela licença** (gatilho `guardar_preco_licenca_voz`; o
+cartão Preços da Contratação não mostra o robô, `ITENS_SO_LICENCA`). O robô entra em `itens_com_franquia()` (franquia
+padrão com o Master em Margem › IA). Leitura: `voz_licencas` (sem motivo/autor) e `voz_licencas_cliente` para equipe com
+`editar_contratacao`/`ver_faturamento` e cliente com `ve_faturamento`; `voz_licenca_vigente` (robôs, sem preço) para
+quem é da empresa e o servidor; `licencas_voz(empresa)`: histórico da equipe (quem, de → para, situação, motivo).
+Recriadas inteiras: `itens_com_franquia`, `custo_ia_referencia`, `guardar_preco_empresa_ia`, `ia_precos_abaixo_minimo`
+(se o SQL 61 ou o 92 rodarem de novo, rode o 93 depois). Teste: `supabase/testes/testar_licencas_voz.py`.
+
+**SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
+ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
+`nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
+contam à parte (`Sessao.tentativas` × `Sessao.silencios`). Sem nada configurado, o "não entendi" é o de antes (fala padrão
+de cada tipo, `tentativas` padrão 2, saída de "não entendi"). Silêncio: a Montagem chama `Sessao.silencio()` depois de
+`SILENCIO_S` (6 s) sem fala da pessoa contados de quando a fila de áudio do agente esvazia (`RelogioSilencio`); padrão 2
+vezes ("Desculpe, não ouvi." + a fala da etapa), depois a saída "silencio" ou, sem ela, a de "não entendi"; na Abertura sem
+saída própria encerra SEM recado e sem marcar terceiro; na IA conversa, "Você ainda está aí?" e depois atendente. As falas
+novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracteres, variáveis, senha e trava 1. Simulador e
+casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
+(`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
+
+**SQL 98 (Robôs contratados, PR 2): licenças na fatura.** `previa_fatura` (e por ela rascunhos, `fechar_fatura` e a
+estimativa) lê o item `voz_licenca_robo` de `voz_licencas` (dia exato), **nunca** do preço que o SQL 93 grava em
+`precos_empresa` (aquele vale o mês inteiro). Ciclo cheio = a licença do 1º dia do ciclo (`ciclo_de`; por robô: robôs ×
+preço; valor fechado: o total). Mudança no meio do ciclo (aumento "agora", troca de preço, contrato que começa no meio):
+linha `voz_licenca_robo_ajuste[_n]` = (total novo − anterior) × dias restantes ÷ dias do ciclo, contando o dia da
+mudança (preço menor "agora" = crédito); no mesmo dia vale a última gravação. Com licença no ciclo (robôs > 0): franquia
+do `voz_minuto_ia` = Σ robôs × `franquia_min_robo` pelos dias de cada vigência (linha `voz_minuto_ia_franquia`, sempre) e
+excedente = minutos de IA + de pico − franquia, pelo preço da empresa, sem o mínimo mensal; `voz_plataforma` zerada
+("incluída nos robôs"), `voz_transcricao` zerada se `transcricao_inclusa`, `voz_minuto_ia_pico` não se cobra;
+`gestao_tronco_sip`, `ia_speech_analytics` e telefonia (fora) iguais. Pico desligado para quem tem licença vigente hoje
+com robôs > 0: `divisao_concorrencia_voz()` (pico 1, teto = limite) e a view `voz_vm.config` (a VM lê o pico dali; o
+motor não muda; o `voz_config.pico_multiplo` guardado fica). Funções novas (só servidor): `licenca_voz_ciclo`,
+`segmentos_licenca_voz`, `linhas_fatura_licenca_voz`, `linhas_fatura_minuto_ia_voz`. **Recriadas inteiras:**
+`previa_fatura`, `divisao_concorrencia_voz` e `voz_vm.config` — se o SQL 56, 57, 69 ou 78 (ou as migrações antigas de
+fatura: `faturamento`, `precos_produtos`, `contratacao_ciclo`, `ciclo_pagamento`) rodarem de novo, rode o 98 depois.
+Teste: `supabase/testes/testar_licencas_fatura.py`.
+
+**Site · Contratação › Agente de voz › Robôs contratados (PR 3 do plano, sem SQL).** Seção em Empresa › Contratação
+(`robos-contratados.tsx`: resumo com KPIs, limite real, mudança agendada e a prévia real do ciclo) e as telas
+`/empresa/contratacao/robos` (editar: quantidade, por robô ou valor fechado, agora com pro rata ou próximo ciclo,
+fidelidade, franquia, transcrição, motivo, limite real, overbooking com confirmação, revisão → `salvar_licencas_voz`) e
+`/empresa/contratacao/robos/historico` (`licencas_voz`); as duas voltam para a Contratação (`rota-pai.ts`). As contas da
+prévia simulada ficam em `site/src/lib/licencas-voz.ts`, iguais às do SQL 98 (o teste usa os mesmos números). Avisos:
+mudança agendada continua valendo depois de um aumento "agora"; preço trocado "agora" é cobrado pelos dias (crédito se
+menor); sem a linha `voz_minuto_ia_franquia` na prévia, a tela avisa que o SQL 98 falta. `ITENS_FATURA_VOZ` ganha
+`voz_licenca_robo` e `ehItemFaturaVoz` cobre ajustes e franquia (`faturamento-voz.tsx`).
+
+**SQL 101 (Robôs contratados, PR 4): divisão do teto global pelas licenças.** `divisao_concorrencia_voz()` (e por ela
+`voz_divisao_concorrencia`, `voz_vm.divisao()`/`voz_vm.divisao_concorrencia`, a estimativa do lote e o motor/VM):
+demanda = min(robôs vigentes hoje, canais dos troncos ativos) para quem tem licença com robôs > 0; cabe no teto → limite =
+demanda; overbooking → floor(teto × demanda ÷ Σ demanda) com a sobra para as maiores frações (empate: mais demanda,
+menor id), nunca acima da demanda. Quem não tem licença (ou tem 0 robôs, ou só agendada) divide **só a sobra** pelos
+canais, com a regra antiga. Colunas novas no fim: `licencas` (nulo = sem licença) e `motivo` (`licencas` | `tronco` |
+`teto` | `legado`); licença sem tronco ativo aparece com 0 canais e motivo `tronco`; `teto` = limite para quem tem
+licença (pico desligado). O cliente não vê o teto global: `contratado` e `cota` vêm nulos fora da equipe/servidor/VM (o
+motivo `teto` é "limite temporário da plataforma" para ele). O retorno mudou: drop cascade e recriar a função, as duas
+views e `voz_vm.divisao()` com os grants; o motor lê só `empresa_id` e `limite` (sem mudança). Os SQL 56, 57 e 98
+conferem a assinatura antes de recriar (56/57 voltam às sete colunas; o 98 pula a divisão se já tem `motivo`): se
+rodarem de novo, rode o 101 depois. `definir_concorrencia_contratada` (mesma assinatura) avisa a equipe (sino,
+`/console/voz`) quando diminui o teto para baixo dos robôs vendidos; não bloqueia. Teste:
+`supabase/testes/testar_licencas_divisao.py` (cenários isolados numa transação desfeita).
+
+**Site · Console › Agente virtual › Todas as empresas: robôs vendidos × teto (PR 5, sem SQL).** O cartão
+"Concorrência contratada" virou "Robôs vendidos × teto contratado" (`console-voz-robos.tsx`): KPIs (teto, vendidos com
+% do teto, usáveis = Σ min(licenças, canais), sobra para quem não tem licença), barra empilhada das licenças com o marco
+do teto, alerta de overbooking (ou "quase no teto" a partir de 90%), teto editável (abaixo do vendido pede confirmação) e
+a tabela por empresa com o "por quê" (`motivo` do SQL 101). Contas e frases em `site/src/lib/robos-voz.ts`
+(`porQueCliente` nunca cita o teto global). Sem o SQL 101 no banco, o cartão avisa. A configuração da empresa mostra o
+pico como "Desligado (robôs contratados)" para quem tem licença.
+
+**SQL 102 + VM (Robôs contratados, PR 6): uso dos robôs.** `voz_robos_agora` (uma linha por empresa: `em_uso` = robôs
+ocupados = conversas + reservas, `conversas`, `linhas` no ar, `aguardando` = números do dia que esperam na lista e não
+estão discando, `limite` = teto aplicado agora pela VM, `no_limite`, `atualizado_em`; mais velho que 60 s = "sem leitura
+agora", nunca zero) e `voz_robos_dia` (pico do dia em America/Sao_Paulo, `pico_em`, `segundos_no_limite`; 400 dias). Só
+contagens. Grava só `registrar_uso_robos_voz(linhas)` (servidor ou VM; no acesso próprio, `voz_vm.registrar_uso_robos`):
+o Plantão (`voz/orquestrador/principal.py › registrar_uso_robos`) manda a cada 15 s as empresas desta VM, com o pico da
+janela vindo do agendador (`Agendador.foto_robos`: maior `ocupadas` desde a foto anterior) e os segundos no limite entre
+duas fotos (até 60). Banco sem o SQL 102: a VM avisa no máximo 1 vez por hora e segue discando. Leitura: quem é da
+empresa (`minhas_empresas()`) e a equipe com `cuida_voz`. Testes: `supabase/testes/testar_robos_uso.py` e
+`tests/test_voz_robos_uso.py`.
+
+**Site · Agente Voz/CX › Discagem: "Seu contrato" (Robôs contratados, PR 7, sem SQL).** No topo da Discagem
+(`components/discagem/robos-contrato.tsx`), da empresa: contratados (`voz_licenca_vigente`, sem preço), disponíveis agora
+(limite do SQL 101, nunca acima das licenças), em uso agora (`voz_robos_agora`; leitura mais velha que 60 s = "sem leitura
+agora", nunca zero) e pico de hoje (`voz_robos_dia`, com a hora e o tempo no limite), barra de uso, o porquê quando fica
+abaixo do contrato (`porQueCliente`: tronco ou "limite temporário da plataforma"; nunca o teto global), "O que acontece
+quando todos os robôs estão ocupados" (ninguém cai; o número espera na lista) e "Pedir mais robôs" →
+`/suporte/novo?assunto=robos&robos=N` (assunto, motivo e descrição pré-preenchidos; o Voltar dessa tela leva à Discagem:
+`rotaPai` recebe a query em `busca`). Sem licença e com voz: cartão do modelo antigo com "Pedir robôs"; sem voz: nada.
+Atualiza a cada 15 s. O Console (PR 5) ganha a coluna "Em uso · pico hoje".
+
+**SQL 103 (Telefonia própria do cliente, PR T1; SPEC Canais §6.2, G5): senha do tronco direto no cofre.** A senha
+(autenticação "usuário e senha") é digitada uma vez e vai pela Edge Function `segredo-tronco-voz` ("Verify JWT" ligado)
+direto para o Secret Manager, sempre no segredo da empresa `motorcx-voz-trunk-e<empresa>-<referência>`
+(`segredo_ref = voz/trunk/e<empresa>/<referência>`, `segredo_ref_tronco_voz`/`nome_segredo_tronco_voz`). Fluxo: login +
+aal2 → `preparar_segredo_tronco_voz(tronco)` com o login da pessoa (quem pode = `pode_configurar_telefonia`; aal2; só
+tronco por senha; 5 por hora por tronco, 30 por dia por empresa; registra o pedido em `voz_troncos_cofre` e devolve só o
+nome) → Secret Manager com a conta `motorcx-voz-cofre-escrita` (cria e escreve só em `motorcx-voz-trunk-*`; **não lê**;
+secret `GCP_COFRE_TRONCO_CHAVE`, `bash infra/asterisk/criar_gcp.sh chave-cofre <projeto>`), versões antigas destruídas →
+`registrar_segredo_tronco_voz` (só service_role e só depois do pedido da mesma pessoa nos últimos 10 min): grava
+`segredo_guardado_em/por` e `segredo_versao` (nunca o valor), zera o teste e grava na Auditoria "senha trocada (versão
+N)". O site só sabe "senha guardada" (a data). `cadastrar_tronco_voz` recriada: sem referência usa a do tronco ou a do
+cofre da empresa; referência fora do padrão só a equipe (`cuida_voz`). Gerador do Asterisk: tronco cuja senha o cofre não
+entrega fica de fora sozinho (`filtrar_senhas`), sem parar as outras empresas; `;` da senha vira `\;`. Texto honesto
+(C8): só o servidor de voz lê; quem administra o GCP consegue ler o cofre. Teste: `supabase/testes/testar_voz_cofre.py`.
+Se o SQL 56 rodar de novo, rode o 103 depois.
+
+**SQL 104 (Telefonia própria do cliente, PR T2; SPEC §6.2, G6): IPs da operadora por tronco e firewall das VMs a
+partir do cadastro.** `voz_troncos` e `voz_transferencias` ganham `ips_operadora` (IPs do SBC da operadora; na
+transferência, do PABX) e `ips_liberados(_em/_por)`. Regra (`voz_ips_motivo`, igual a `voz/firewall.py › motivo_origem`):
+até 20, só IPv4, faixa até /24, nunca 0.0.0.0/0, rede interna/reservada nem IP do MotorCX; gatilho `voz_ips_seguros`.
+Dois passos: `definir_ips_voz` (quem configura a telefonia; aviso no sino da equipe) e `liberar_ips_voz` (só a equipe com
+`gerenciar_troncos_voz` e aal2; Console › tronco › "Liberar IPs no firewall"); tirar IP vale na hora (liberado =
+interseção com a lista). `origens_firewall_voz` (servidor) / `voz_vm.origens_firewall` (VM): só o liberado, de
+tronco/transferência ativo. VM: `motorcx-voz-firewall.timer` (2 min) → `python3 -m voz.firewall`: lista fixa do
+`criar_gcp.sh` (metadado `motorcx-firewall-fixos`) + o banco, confere tudo de novo e só então atualiza
+`motorcx-voz-sip`/`motorcx-voz-rtp` (sem origem: desligadas); banco/API fora = nada muda; cada mudança em
+`voz_firewall_eventos`. **Desligado por padrão**: `bash infra/asterisk/criar_gcp.sh firewall-automatico <projeto>` (papel
+`motorcxVozFirewall` na `motorcx-asterisk` e metadado `motorcx-firewall-automatico=1`; `DESLIGAR=1` volta). Com ele
+ligado, o `criar_gcp.sh` não sobrescreve as origens SIP/RTP. Testes: `tests/test_voz_firewall.py` e
+`supabase/testes/testar_voz_firewall.py`.
+
+**SQL 105 (Telefonia própria do cliente, PR T3; SPEC §5 e §6.2, G3, G4 e D13): o Admin do cliente configura a
+telefonia dele.** Permissão nova do cliente `configurar_telefonia` (catálogo, grupo Agente virtual; padrão só Admin; fora
+do Speech: o Qualidade nunca tem). `pode_configurar_telefonia(eid)` = equipe com `gerenciar_troncos_voz` OU
+`cliente_pode(eid, 'configurar_telefonia')` + módulo `agente_voz` + **sessão aal2**. Por ela passam
+`cadastrar_tronco_voz`, `preparar_segredo_tronco_voz`, `definir_ips_voz`, `salvar_rota_voz`, `encerrar_rota_voz` e
+`salvar_transferencia_voz` (recriadas inteiras; frase "sem permissão para configurar a telefonia…"). Liberar IPs no
+firewall continua só com a equipe. **Trava de liberação** (a VM usa todo tronco ativo e não olha `teste_ok`): tronco que o cliente cadastra nasce inativo e mudar como ele conecta (endereço, autenticação, usuário, referência, bina, formato, CSP) o desativa; o cliente desativa, só a equipe ativa. Leitura do cliente sem segredo (`ve_telefonia`: quem é da empresa com o módulo, ou a
+equipe que cuida da voz): views `voz_troncos_empresa` (sem `segredo_ref`; `segredo_no_cofre`, IPs e `ips_pendentes`) e
+`voz_rotas_empresa`; as tabelas continuam só da equipe/faturamento. Gatilho `voz_troncos_avisar_mudanca`: tronco novo ou
+mudança de endereço, autenticação, senha (versão), bina ou IPs → aviso obrigatório `seguranca` (vira e-mail) a cada Admin
+da empresa, com quem mudou e nunca o valor, e aviso no sino da equipe. Site: Agente Voz/CX › Telefonia lista os troncos
+(só leitura; a tela editável é o PR T5). Teste: `supabase/testes/testar_voz_configurar_telefonia.py`. Se o SQL 56, 81 ou
+103 rodar de novo, rode o 105 depois.
+
+**SQL 113 (Telefonia própria do cliente, PR T4; SPEC §3.4 e §6.2 item 12, seção E do parecer, G10, G12–G14, G35,
+C4, C17, D5): os campos que a operadora pede.** `voz_troncos` ganha `declaracao_em/por` (contrato e bina declarados;
+obrigatória para o cliente no tronco novo e a cada troca de bina; trocar a bina zera), `autenticacao_operadora`
+(sim/nao/nao_sei), `dtmf` (auto/rfc4733/inband/info → `dtmf_mode`), `realm`, `from_usuario` (o "De"), `cabecalho_bina`
+(from_pai/from/rpid → `send_pai`/`send_rpid`), `tech_prefix` (opcional, padrão das rotas), `toque_max_s` (30; 15–45),
+`duracao_max_min` (20; 5–60), `verificar_options` (qualify 60 s ou 0), `liga_para` e `retorno_bina`; formato
+`tech_e164` (+55). Gatilho `voz_troncos_bina_operadora`: a bina não vai para tronco de OUTRA operadora da mesma empresa.
+Rota com prefixo opcional: `voz_rotas.enviar_prefixo` (false = a operadora não usa; `tech_prefix` vira um código interno
+`0nnnnnnn` só para vigência/tarifação, reaproveitado pela vigência nova do mesmo tronco e tipo); `salvar_rota_voz` aceita
+prefixo vazio e tronco inativo da empresa. `cadastrar_tronco_voz` mantém a assinatura (Console igual) e exige a declaração
+do cliente; RPC nova `salvar_tronco_voz(empresa, tronco jsonb)` com todos os campos (chave ausente mantém, texto vazio
+limpa; mudar realm/De/cabeçalho/DTMF zera o teste e desativa o tronco do cliente). Leitura em views PRÓPRIAS (o 57 e o 105
+recriam as antigas e não podem perder colunas): `voz_troncos_campos_empresa`, `voz_rotas_prefixo_empresa` (site) e
+`voz_vm.troncos_campos`, `voz_vm.rotas_prefixo` (a VM; `voz/acesso.py › EXTRAS` junta pelo id). VM: `voz/banco.py`
+lê tudo com padrão; o gerador aplica DTMF, cabeçalho, realm, De, OPTIONS, `S(duração)` e toque no plano de reserva e
+`TIMEOUT(absolute)` por tronco no `[motorcx-atendeu]`; `voz/tarifacao.py` disca `Rota.prefixo_discagem`; o núcleo usa
+`min(toque do núcleo, toque do tronco)`. Teste: `supabase/testes/testar_voz_tronco_campos.py`. Se o SQL 56, 81, 103 ou
+105 rodar de novo, rode o 113 depois.
+
+**SQL 114 (Telefonia própria do cliente, PR T5; SPEC §3.4 e §6.2 item 13, seção F do parecer, C11, C12, D12, G1,
+G18, G29): Telefonia editável e o "Testar a rota" de verdade.** Números de teste `voz_numeros_teste` (até 5 por empresa):
+o NÚMERO fica só no cofre, como a senha do tronco. A Edge Function `segredo-tronco-voz` aceita `{empresa, numero_teste}`
+(chama `preparar_numero_teste_voz` com o login da pessoa: permissão, aal2, limite; grava em
+`motorcx-voz-trunk-e<empresa>-teste-<12 do hash>`, o prefixo que a conta de escrita já pode; `registrar_numero_teste_voz`
+pelo servidor) e `{remover_numero_teste}` (`remover_numero_teste_voz` devolve o nome e a função destrói as versões).
+O banco guarda `hash` (sha-256 dos dígitos sem o 55, igual a `numeros_teste_hash`), `mascara` "(11) 9••••-••41" e
+`segredo_ref`. Confirmado quando a pessoa digita no passo 5 do teste o código de 4 dígitos que só aparece na tela (não há
+SMS avulso hoje); só os confirmados entram em `voz_config.numeros_teste_hash`. `voz_testes_tronco` (sem número):
+`pedir_teste_tronco_voz(tronco, numero_teste)` confere número guardado da empresa, IPs liberados, senha guardada, um por
+vez, 10/h por tronco e 30/dia por empresa; `pegar_teste_tronco_voz` (VM, "for update skip locked") devolve `numero_ref`
+e a VM lê o número no cofre. A VM grava cada passo (`registrar_teste_tronco_voz`, mensagens sem telefone) e no fim
+`teste_ok/testado_em` só se `assinatura_tronco_voz` não mudou; `responder_bina_teste_voz`, `cancelar_teste_tronco_voz`,
+`ler_teste_tronco_voz`; pedido parado 10 min expira. `usar_tronco_voz(tronco, ativo)`: o Admin tira de uso sempre; põe
+em uso só com teste que passou, IPs liberados, senha e sem pausa, e só se a empresa já teve Real (`pedidos_envio_real`
+ligado ou `modo = real`); na primeira vez vira aviso à equipe (`pedido_equipe`). `retomar_rota_voz(pausa)`: o Admin
+retoma só com teste que passou DEPOIS da pausa (nota automática). Views do cliente: `voz_numeros_teste_empresa`,
+`voz_testes_tronco_empresa` (código só enquanto roda), `voz_pausas_empresa`. VM: `voz/testador.py` (serviço
+`motorcx-voz-teste`, app ARI `motorcx-teste`; passos 0–9: voz.json com a última mudança, DNS público, endpoint no
+Asterisk, OPTIONS por UDP em `voz/sip_options.py`, INVITE com `tech_cause`, bipes + código por DTMF, TALK_DETECT,
+`CHANNEL(rtpqos,audio,all)`, bina na tela, BYE); o gerador sobe o tronco INATIVO como endpoint só para o teste (sem
+saída no dialplan). Site: `/voz/telefonia` editável e `/voz/telefonia/tronco/:ref` (assistente de 6 passos, senha no
+cofre, Testar a rota ao vivo, Usar este tronco, erros da operadora, ficha técnica); regras em `site/src/lib/telefonia.ts`.
+Teste: `supabase/testes/testar_voz_telefonia_editavel.py`, `tests/test_voz_testador.py` e o `regras.test.ts` da função.
+
+**SQL 115 (Telefonia própria do cliente, PR T6; SPEC §6.2 item 14, D4, G19, G34): disjuntor por tronco.**
+`voz_troncos_pausas.motivo` ganha `disjuntor` e `suspeita_sem_credito`. `falha_tecnica_voz(sip, q850)`: SIP 403, 407,
+408 e 5xx (menos 580), ou Q.850 3/34/38/41/42/44/47/102 sem SIP (pessoa que não atende, número inexistente e 402/bloqueio
+não contam). Gatilho `voz_chamadas_disjuntor` (tentativa encerrada e não atendida, modo teste/real) →
+`avaliar_disjuntor_tronco_voz`: nas últimas 6 h e depois da última retomada, pausa SÓ o tronco com 20 falhas técnicas
+seguidas ou 50% das últimas 50 (`disjuntor`), ou >90% das últimas 30 com o mesmo SIP para ≥15 destinos
+(`suspeita_sem_credito`). A VM já lê as pausas a cada 30 s (`troncos_pausados_voz`) e a reserva assume: nada mudou no
+`nucleo.py`/`agendador.py`. Aviso obrigatório `pausa` (vira e-mail) aos Admins e aviso à equipe. Volta com teste:
+`registrar_teste_tronco_voz` (recriada) retoma sozinha essas duas pausas quando o teste passa sem o tronco ter mudado;
+sem crédito e bloqueio continuam pedindo o Retomar. `saude_troncos_voz(empresa, horas)` (G34): tentativas, atendidas,
+falhas técnicas, duração média e os 5 SIP mais comuns por tronco (card "Saúde do tronco" na tela do tronco). Teste:
+`supabase/testes/testar_voz_disjuntor.py`. Se o SQL 114 rodar de novo, rode o 115 depois.
+
+**Agente de voz · ritmo da discagem: medir certo (Power e Preditivo V1, SQL 106).** `transferencia_sem_operador` é
+desfecho próprio (conversou, pediu humano, a fila do cliente não atendeu e o agente não pôde voltar): NÃO é abandono do
+discador (fora do freio e da meta; a fila humana cheia não freia a IA), não é curta por si (só pelos 6 s) e na
+Renitência continua a linha "abandonada" (`situacao_voz`/`situacao_de`). O freio de abandono do agendador usa só os
+últimos 30 min da empresa (`JanelaTaxa`; solta sozinho quando a janela anda), não o acumulado desde que a VM subiu.
+`voz/orquestrador/medidor.py` conta, por empresa × carteira × janela de 5 min (fim da tentativa, horário de Brasília):
+discadas, atendidas por pessoa, abandonos, transferências sem operador, curtas (a regra do motor, abandono sempre
+conta) e o mesmo por tronco; o Plantão manda as janelas fechadas a cada minuto (`registrar_ritmo_voz`; acesso próprio
+`voz_vm.registrar_ritmo`) com o modo, a razão e os robôs; banco fora = até 2.000 linhas esperam e 1 aviso por hora.
+`voz_ritmo_amostras` (35 dias; a mesma janela soma) e `ritmo_voz_hoje(empresa, credor)` (totais e taxas do dia, última
+amostra, janelas de 30 min, por tronco com a bina mascarada, abandono de 30 dias) para as telas; leitura de quem é da
+empresa ou da equipe que cuida da voz. Testes: `tests/test_voz_ritmo.py` e `supabase/testes/testar_ritmo_voz.py`.
+
+**Agente de voz · linhas e robôs separados com razão > 1 (Power e Preditivo V2, sem SQL).** Base do PR 212 (dois
+contadores, reserva antes de discar, `no_pico` quando a conversa começa). Com a razão > 1 (carteira em Power/Preditivo, a
+partir do V4), as linhas a mais saem SEM reserva e reservam o robô quando a pessoa ATENDE, antes do AMD
+(`Agendador.reservar`; máquina devolve na hora); sem robô livre no atendimento, o AMD ainda decide e, se for pessoa, é o
+abandono com mensagem (`abandono_sem_robo`). As sessões livres do provedor na VM limitam as linhas a mais
+(`vaga_empresa(livres_max=…)`) e a reserva na originação só acontece com sessão do provedor (`ocupar(pode_reservar)`).
+Linha tocando nunca ocupa robô. Com a razão 1,0 (padrão) nada muda.
+
+**Agente de voz · ritmo por carteira (Power e Preditivo V3, SQL 107).** `credores.discagem › ritmo` =
+`{modo: power|preditivo, razao 1–3 (Power), meta_abandono 0,5–3 % e razao_max 1–3 (Preditivo)}`; padrão **Power 1,0**
+(o de hoje; Power 1,0 = Progressivo, ninguém atende sem robô). Teto de abandono fixo em 3 % (`DG.TETO_ABANDONO`, ninguém
+sobe) e razão máxima de 2,0 na primeira semana do Preditivo (`RAZAO_MAX_1A_SEMANA`). Mesmo histórico de versões,
+validação e auditoria da Discagem (`salvar_discagem`, `editar_credores`): o SQL 107 só recria `discagem_regras()` e
+`discagem_padrao()` (gerados do motor; `tests/test_resubmit.py` confere). A VM lê por `regras_discagem_voz` ao carregar o
+lote e relê a cada minuto (`Plantao.atualizar_ritmos`; banco fora = o de antes continua) em `Lote.ritmo`
+(`DG.ritmo_da_carteira`: inválido = padrão).
+
+**Agente de voz · Power e abandono digno (Power e Preditivo V4, SQL 108).** A VM aplica a razão da carteira
+(`Lote.controle`, `voz/orquestrador/ritmo.py` › `RitmoCarteira`): Power = `ritmo.razao` (1,0 a 3,0); Preditivo, até o
+V5, disca em aquecimento (1,0). Com razão > 1 nenhuma linha reserva robô ao originar: todas reservam quando atendem
+(um robô preso a uma linha que só toca não serve a quem atendeu ao lado); com 1,0, cada linha sai com o seu. Teto de abandono da carteira: acima de 3 % (`DG.TETO_ABANDONO`) nos últimos 30 min com
+50+ atendidas por pessoa, razão 1,0 até o fim do dia (estado `freado`, alerta). Quem atende sem robô ouve na hora a
+mensagem neutra `sound:motorcx/sem-robo` (o "Alô fake" saiu: `voz_config.alo_fake*` ficou sem efeito) e **não recebe
+outra ligação no dia** (`lote.ABANDONO_DISCADOR`: finaliza o cliente mesmo com a regra por sinalização e sai dos
+reabríveis do "Reenviar agora"). Ao carregar o lote, `abandonos_recentes_voz` (só VM/servidor; id_cliente e contagens):
+2 abandonos em 7 dias = 3 dias sem voz desde o último; 1 = a próxima ligação só sai com robô reservado
+(`ItemLote.reservar`; `Lote.proximo(reservavel)`). As amostras ganham `razao_config` e `estado`
+(normal|aquecendo|reduzido|freado|parado) e `ritmo_voz_hoje › ultima` os devolve.
+
+**Agente de voz · freios de chamadas curtas no ritmo (Power e Preditivo V6, SQL 109; Despacho Anatel 100/2026).** A VM
+mede em tempo real as curtas do dia por linha (tronco/bina) e no total da empresa (`voz/orquestrador/curtas.py`; a regra
+do motor, abandono conta sempre) e freia bem antes do bloqueio da operadora (85 % com 1.000/linha ou 10.000/total): de
+70 % a 80 % a razão cai linearmente até 1,0 (com 100+ ligações no dia na linha ou no total; estado `reduzido`); 80 % com
+800 ligações = a linha para no dia (não disca nem gasta CPS; volta amanhã); 80 % com 8.000 = a empresa para no dia
+(estado `parado`). Nunca troca a bina nem desvia para contornar. A cada 5 min o Plantão junta o que o banco já tem do
+dia (`curtas_hoje_voz`, das amostras do SQL 106; VM reiniciada não começa do zero; fica o maior, nunca soma duas vezes)
+e a liberação do Admin (`liberar_curtas_voz(empresa, motivo)`: só o Admin da empresa ou da equipe, motivo de 10 a 300
+caracteres sem dado pessoal, 1 por dia, auditada em `voz_curtas_liberacoes`): os volumes de parada sobem para 950/linha e
+9.500/total só naquele dia; a redução continua. **Vai para produção junto ou antes do Preditivo (V5).**
+
+**Agente de voz · Preditivo (Power e Preditivo V5, SQL 110).** `RitmoCarteira` (`voz/orquestrador/ritmo.py`): razão =
+fator ÷ p, de 1,0 até a razão máxima da carteira (2,0 na primeira semana em Preditivo). p = atendidas por pessoa ÷
+discadas por janela de 30 min do dia com encolhimento (k = 200) para a base (a janela anterior do dia com 30+ atendidas;
+senão a carteira em 7 dias; senão a empresa; senão 0,12); sem o "× 0,8" do PREDITIVO.md, porque p menor disca mais.
+Fator começa em 0,8 (0,3–1,0), revisto a cada 5 min com 50+ atendidas nos últimos 30 min: acima do teto (3 %) × 0,5
+na hora (estado freado) e, 10 min acima, Power 1,0 até o fim do dia; acima da meta −0,10; abaixo de meta ÷ 2 +0,05.
+Aquecimento: Power 1,0 até 200 atendidas por pessoa da carteira em 7 dias (com as de hoje); razão até 1,5 nos primeiros
+15 min do lote. Robôs que vão liberar até a linha nova atender (conversa já passou de conversa média − T; T = toque
+médio + AMD) contam como livres (`Orquestrador._liberando`, `vaga_empresa(livres_extra)`). `historico_ritmo_voz` (só
+VM/servidor; das amostras do SQL 106) a cada 30 min e ao carregar lote. Simulação de discagem com o agendador e o
+controlador de verdade em `tests/sim_preditivo.py` (3 cenários do PREDITIVO.md com abandono ≤ 1,5 %; ~2× as conversas
+do Power 1,0).
+
+**Site · Agente Voz/CX › Discagem › Ritmo e "Robôs e o Preditivo" (Power e Preditivo V7a, sem SQL).** Aba **Ritmo**
+(`components/discagem/ritmo.tsx`, primeira das abas): hoje na carteira (`ritmo_voz_hoje` a cada 15 s: razão agora,
+abandono com meta e teto, atendimento por pessoa, curtas, frase de estado), "Como o MotorCX disca" (Power com números por
+robô livre 1,0–3,0, 1,0 = progressivo; Preditivo com meta 0,5–3 % e razão máxima 1,5/2,0/2,5/3,0), "Quando alguém atende
+e não há robô" (a mensagem neutra e as regras fixas), Freios (teto 3 %, curtas) e a gaveta "Qual escolher?". Edita
+`draft.ritmo`, salvo com o resto da Discagem (`lib/discagem.ts › computeDiff` grava só o que difere de Power 1,0, via
+`lib/ritmo.ts › ritmoSaida`; o "Salvar como vN" e o histórico ganham "Ritmo › …"). Página `/voz/discagem/robos`
+(`robos-preditivo.tsx`; Voltar → Discagem; links no cartão do contrato e na aba): licença = conversas, não linhas;
+exemplo ilustrativo no contrato da empresa (Power 1,0 / 2,0 / Preditivo) e o aviso "canais ≈ robôs × razão" quando o
+tronco segura. Testes: `site/src/lib/ritmo.test.tsx`.
+
+**Site · Agente Voz/CX › Ligações (faixa ao vivo) e Visão geral (Power e Preditivo V7b, sem SQL).** Em Ligações,
+`components/voz/faixa-ritmo.tsx` › "Ritmo agora" da carteira do topo (ou da empresa), `ritmo_voz_hoje` a cada 15 s: modo
+e razão, robôs (conversando, reservados, linhas no ar), abandono (meta e teto), curtas, atendimento por pessoa,
+transferência sem operador separada, abandono em 30 dias, a frase de estado e, recolhidos, o dia por meia hora e por
+linha (bina mascarada; "Parada hoje" pela mesma regra da VM). Linha parada: o Admin (perfil admin) vê "Liberar até
+950/linha e 9.500/total hoje" (motivo; `liberar_curtas_voz`, SQL 109). Visão geral: "Ligações hoje" ("Preditivo ·
+abandono 0,8% · curtas 76%") e, com freio, "Com problema: …". Testes: `site/src/lib/ritmo-ao-vivo.test.tsx`.
+
+**Agente de voz · perna humana (Power e Preditivo V8, SQL 111).** A IA atende primeiro; o MotorCX não disca prevendo
+os operadores do cliente. `voz_transferencias.simultaneas` ("Operadores para transferência ao mesmo tempo", 1–500,
+padrão 5; Console › Agente virtual › transferência, `definir_operadores_transferencia_voz`, só a equipe que cuida da
+voz; no acesso próprio a VM lê `voz_vm.transferencias_operadores` (id, simultaneas) e junta em
+`configuracao.juntar_operadores`: a view do SQL 57 não muda, para ele continuar reaplicável): a VM nunca tem mais transferências tocando ou
+em ponte para o destino; passou, o agente continua e agenda o retorno (`retomar_sem_humano`). Fila humana cheia: mais de
+10 % das transferências sem operador nos últimos 30 min (20+ na amostra; `nucleo.FILA_CHEIA_PCT`) = o agente oferece o
+retorno antes de chamar a fila, com alerta, até a janela voltar (o que nem foi tentado não entra na taxa). Toda
+transferência sem operador conta à parte nas amostras do ritmo (mesmo com o agente de volta) e nunca no abandono. Ligações
+mostra "Fila humana cheia" acima de 10 % no dia.
+
+**Site · Agente Voz/CX › Discagem com os padrões novos na tela (PR 8 do plano Canais/Agente Voz/CX, sem SQL).**
+Chamadas curtas: no topo, os medidores de hoje **por linha (bina)** e **no total da empresa** (`discagem/curtas-hoje.tsx`,
+`ritmo_voz_hoje(empresa)` sem carteira, a cada 15 s; limites da Anatel 1.000/10.000; "Linha parada hoje" e "A empresa
+parou de ligar hoje" pela mesma regra da VM, 800/8.000 ou 950/9.500 liberado); "Ligação não completada" e "Abandono"
+contam sempre (travados; `effectiveDiscagem` força `abandono_conta = true` e o próximo salvamento tira o "não" salvo).
+Renitência: cartão **Padrões recomendados** (tabela D2 da revisão) com "Nesta carteira" e "Usar os padrões recomendados".
+Ritmo: bloco **Posição do número** (D3: 2 telefones por dia, horizontal; "Usar o recomendado" e a gaveta do modo).
+Os dois botões só mudam o rascunho (`site/src/lib/discagem-recomendado.ts`; fixa 2 tentativas por número e liga a regra
+por sinalização): vale ao salvar como vN (`salvar_discagem`). O padrão MotorCX do motor e do banco **não** muda.
+Horários (faixa vermelha ao desligar) já vinham do B2. Testes: `site/src/lib/discagem-recomendado.test.tsx`.
+
+**SQL 116 (PR 9 do plano Canais/Agente Voz/CX): "Testar agora" do Agente de voz.** Na tela do canal Agente de voz
+(MotorCX), "Testar agora" (`components/canais/testar-agora.tsx`, `editar_canais`) faz uma ligação de verdade para um
+número de teste confirmado, com o fluxo em uso da carteira e a rota de hoje. **Nenhum número passa pelo banco nem pelo
+site:** o número fica no cofre (`voz_numeros_teste` do SQL 114, Telefonia, em paralelo; lido por SQL dinâmico, então o
+116 roda antes ou depois dele); `voz_testes_agora` guarda id, máscara e hash (o site não lê o hash; auditada).
+`pedir_teste_agora_voz(credor, numero_teste)` confere: fora do Simulado, número guardado + confirmado + na lista
+(`voz_config.numeros_teste_hash`), fluxo em uso, rota ativa sem pausa, empresa não parada pelas curtas, domingo nunca,
+um de cada vez e 5 por dia (o cancelado não conta); parado 10 min (ligando 15) expira. A VM (Plantão, a cada 15 s,
+empresas em teste ou real; `voz/orquestrador/testar_agora.py`) pega com a referência do segredo, lê o número no cofre,
+confere hash, plano nacional, janela da UF do número (tabela da carteira + prévia) e curtas, e põe um lote de um item
+(`Lote.teste_id`; chave própria, fora de voz_lotes/ondas/resubmits) no orquestrador: mesmo caminho do lote (robô
+reservado, CPS, tronco isolado, linha parada, aviso de gravação, identidade antes da dívida). Conta em voz_chamadas (modo
+da empresa) e nos medidores, mas não volta ao motor (`ao_teste` no núcleo). `concluir_teste_agora_voz` recebe só marcas
+e contagens (tocou, atendeu, agente, gravada, aviso, identidade, transferiu, segundos, toque, SIP). Canais de mensagem:
+"em breve". Testes: `supabase/testes/testar_testar_agora.py`, `tests/test_voz_testar_agora.py`,
+`site/src/lib/testar-agora.test.tsx`.
+
+**B5 · Transferência segura, o resto (sem SQL).** Sem operador (ninguém atendeu, fila recusou, limite de operadores ou
+fila cheia), a pessoa volta ao agente também **pelo fluxo** e **pela ElevenLabs**. Fluxo (`voz/fluxo.py`): a Sessão marca
+`aguardando_humano` ao transferir; `retomar_sem_humano(motivo)` abre a etapa interna `_sem_humano` (fora do grafo, sem
+passo próprio): pede desculpas (`FALA_SEM_HUMANO`, sem credor nem dívida), ouve dia e hora (até 7 dias, 08:00–19:59) e
+encerra com `retorno_agendado`; "não precisa" ou 2 silêncios encerram educado (cpc ou atendida_sem_cpc); pedir humano de
+novo nunca transfere (`FALA_SEM_HUMANO_DE_NOVO`); com terceiro, não volta; `bloco_final` continua o último bloco do
+fluxo. A Montagem mantém o silêncio vigiando enquanto espera o humano. ElevenLabs: não recebe texto no meio da conversa,
+então o núcleo (`_reconectar_agente`, só na ponte, com o robô ainda da chamada, uma vez por chamada) liga de novo para o
+agente na mesma ponte (`ProvedorVoz.reconectar_sem_humano`; `X-MotorCX-Retorno`, `X-MotorCX-Id = <id>r`) e vale o
+resultado da segunda conversa (o "resultado" e o "encerrar" da primeira são descartados). Configuração do agente:
+`infra/asterisk/README.md`. REFER segue como antes. Testes: `tests/test_voz_retorno_agente.py`.
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.

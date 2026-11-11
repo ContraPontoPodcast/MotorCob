@@ -8,6 +8,7 @@ sem configuração, exatamente o de hoje. Só dados fictícios; a chave dos test
 """
 import csv
 import json
+import re
 import secrets
 import tempfile
 import unittest
@@ -110,9 +111,14 @@ class TestCarga(unittest.TestCase):
     def test_identidade_csv_so_com_codigos_de_quem_esta_na_carga(self):
         base, rel = self._converter({"nascimento": "DT_NASC", "documento_validacao": "ULT3_DOC"}, CHAVE)
         texto = (base / "identidade.csv").read_text(encoding="utf-8")
-        for valor in ("1503", "1980", "725", "15/03/1980", "529"):
-            self.assertNotIn(valor, texto.replace(IM.codigo(CHAVE, "C1", "dia_mes_nascimento", "1503"), ""))
         linhas = IM.ler(base)
+        # A chave é aleatória a cada execução: os códigos (hex) podem conter "1980", "725"... por acaso. Tira
+        # todos os códigos do texto antes de procurar o dado em claro.
+        sem_codigos = texto
+        for l in linhas:
+            sem_codigos = sem_codigos.replace(l["codigo"], "")
+        for valor in ("1503", "1980", "725", "15/03/1980", "529"):
+            self.assertNotIn(valor, sem_codigos)
         self.assertEqual({(l["id_cliente"], l["pergunta"]) for l in linhas},
                          {("C1", "dia_mes_nascimento"), ("C1", "ano_nascimento"), ("C1", "ultimos3_documento")})
         self.assertEqual(next(l["codigo"] for l in linhas if l["pergunta"] == "ultimos3_documento"),
@@ -291,7 +297,12 @@ class TestExecutor(unittest.TestCase):
         for falas in (["Sou eu", "15 de março"], ["Sou eu", "15 de março", "16 de março"], ["Sou eu", "não sei", "x"]):
             a = simular_hoje(falas)
             b = simular_hoje(falas, f=fluxo_hoje(identidade=None))
-            self.assertEqual(json.dumps(a, default=str, sort_keys=True), json.dumps(b, default=str, sort_keys=True))
+            # As duas simulações rodam em instantes diferentes: os carimbos de hora podem virar de segundo entre
+            # uma e outra. Compara o caminho, sem os horários.
+            def sem_hora(x):
+                return re.sub(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:\d{2}|Z)?", "<hora>",
+                              json.dumps(x, default=str, sort_keys=True))
+            self.assertEqual(sem_hora(a), sem_hora(b))
 
     def test_arquivo_confere_as_duas_perguntas(self):
         sb = SbIdentidade(_guardados())

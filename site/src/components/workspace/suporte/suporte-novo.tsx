@@ -6,6 +6,7 @@ import { supabase, friendlyError, safeFileName, type Row } from '@/lib/supabase'
 import { MOTIVOS_CHAMADO } from '@/lib/empresa-helpers';
 import { WorkspaceHeading } from '@/components/workspace/workspace-shell';
 import { CHAMADO_ASSISTENTE_KEY, type ChamadoAssistente } from '@/lib/assistente';
+import { ASSUNTO_ROBOS, descricaoPedidoRobos } from '@/lib/robos-voz';
 
 const cardShadow = '0 0 0 1px var(--base-separator), 0 2px 12px rgba(0,0,0,.04)';
 const MAX_SIZE = 10 * 1024 * 1024;
@@ -15,10 +16,16 @@ const ACEITOS = ['.csv', '.txt', '.pdf', '.jpg', '.png', '.zip', '.xls', '.xlsx'
 function fmtTamanho(b: number) { return b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`; }
 
 /** O aviso "quer conhecer a área" (SQL 55) traz ?assunto=conhecer-<área>: vira o assunto em texto. */
-const CONHECER: Record<string, string> = { 'conhecer-cobranca': 'Quero conhecer Cobrança', 'conhecer-jornada': 'Quero conhecer Jornada do Cliente', 'conhecer-mensageria': 'Quero conhecer Mensageria' };
+const CONHECER: Record<string, string> = { 'conhecer-cobranca': 'Quero conhecer Cobrança', 'conhecer-jornada': 'Quero conhecer Jornada do Cliente', 'conhecer-mensageria': 'Quero conhecer Mensageria', robos: ASSUNTO_ROBOS };
 function assuntoDoLink(a: string | null): string {
   if (!a) return '';
   return CONHECER[a] ?? a;
+}
+/** "Pedir mais robôs" (Agente Voz/CX › Discagem, ?assunto=robos&robos=N): motivo e descrição pré-preenchidos. */
+function pedidoRobos(params: URLSearchParams): { motivoOutro: string; descricao: string } | null {
+  if (params.get('assunto') !== 'robos') return null;
+  const n = Number(params.get('robos'));
+  return { motivoOutro: 'Agente de voz · robôs', descricao: descricaoPedidoRobos(Number.isInteger(n) && n > 0 ? n : null) };
 }
 
 export function SuporteNovoPage() {
@@ -34,11 +41,12 @@ export function SuporteNovoPage() {
     } catch { return null; }
   });
   const [anexarConversa, setAnexarConversa] = useState(true);
-  const [motivo, setMotivo] = useState(assistentePayload?.motivo ?? params.get('motivo') ?? 'acesso');
-  const [motivoOutro, setMotivoOutro] = useState('');
+  const [robos] = useState(() => pedidoRobos(params));
+  const [motivo, setMotivo] = useState(assistentePayload?.motivo ?? params.get('motivo') ?? (robos ? 'outro' : 'acesso'));
+  const [motivoOutro, setMotivoOutro] = useState(robos?.motivoOutro ?? '');
   const [assunto, setAssunto] = useState(assistentePayload?.assunto ?? assuntoDoLink(params.get('assunto')));
   const [prioridade, setPrioridade] = useState<'normal' | 'alta'>('normal');
-  const [descricao, setDescricao] = useState('');
+  const [descricao, setDescricao] = useState(robos?.descricao ?? '');
   const [anexos, setAnexos] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});

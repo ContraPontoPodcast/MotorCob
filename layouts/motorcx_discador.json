@@ -53,6 +53,7 @@
     "mudo": "mudo",
     "fax": "fax",
     "abandono_sem_robo": "abandono_sem_robo",
+    "transferencia_sem_operador": "transferencia_sem_operador",
     "SEM_IA": "nao_atendida"
   }
 }

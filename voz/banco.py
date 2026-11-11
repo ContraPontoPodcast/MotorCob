@@ -27,6 +27,9 @@ COLUNAS: dict[str, dict[str, str]] = {
         "usuario": "usuario", "segredo_ref": "segredo_ref", "codecs": "codecs", "canais": "canais", "cps": "cps",
         "bina": "bina", "ddd_origem": "ddd_origem", "formato_discagem": "formato_discagem", "csp": "csp",
         "ativo": "ativo",
+        # SQL 113 · Telefonia T4 (todos com padrão: banco sem o SQL 113 lê como antes)
+        "dtmf": "dtmf", "realm": "realm", "from_usuario": "from_usuario", "cabecalho_bina": "cabecalho_bina",
+        "toque_max_s": "toque_max_s", "duracao_max_min": "duracao_max_min", "verificar_options": "verificar_options",
     },
     # V20
     "voz_rotas": {
@@ -34,12 +37,13 @@ COLUNAS: dict[str, dict[str, str]] = {
         "tech_prefix": "tech_prefix", "tipo": "tipo", "cadencia_inicial_s": "cadencia_inicial_s",
         "cadencia_incremento_s": "cadencia_incremento_s", "preco_minuto": "preco_minuto",
         "vigente_desde": "vigente_desde", "vigente_ate": "vigente_ate",
+        "enviar_prefixo": "enviar_prefixo",          # SQL 113 · G14: false = a operadora não usa prefixo
     },
     # V25
     "voz_transferencias": {
         "id": "id", "empresa_id": "empresa_id", "destino_sip": "destino_sip", "metodo": "metodo",
         "tech_prefix": "tech_prefix", "cabecalhos": "cabecalhos", "tronco_id": "tronco_id", "ativo": "ativo",
-        "credor_id": "credor_id",
+        "credor_id": "credor_id", "simultaneas": "simultaneas",
     },
     # V1, V16, V24
     "voz_config": {
@@ -71,6 +75,9 @@ COLUNAS: dict[str, dict[str, str]] = {
         # SQL 65 · Resubmit e contato por passada
         "lote_id": "lote_id", "onda_id": "onda_id", "destino_hash": "destino_hash", "passada": "passada",
         "situacao_origem": "situacao_origem", "resubmit_id": "resubmit_id",
+        # SQL 125 · minuto falado com a IA (a VM mede; cadência, preço e valor são do gatilho tarifar_ia_chamada_voz)
+        "ia_inicio_em": "ia_inicio_em", "ia_fim_em": "ia_fim_em", "ia_retomada_em": "ia_retomada_em",
+        "ia_trechos": "ia_trechos", "segundos_ia": "segundos_ia", "segundos_sessao_ia": "segundos_sessao_ia",
     },
     # SQL 65 · cada decisão do Resubmit (automático ou "Reenviar agora"): só destino_hash, nunca o telefone
     "voz_resubmits": {
@@ -119,8 +126,11 @@ def conflito(tabela: str) -> str:
     return ",".join(COLUNAS[tabela][k] for k in CONFLITO[tabela])
 
 TRANSPORTES = ("udp", "tcp", "tls")
-# o que vai no Request-URI depois do tech prefix: DDD+número · 0+CSP+DDD+número · 55+DDD+número
-FORMATOS_DISCAGEM = ("tech_ddd_numero", "tech_0_csp_ddd_numero", "tech_55_ddd_numero")
+# o que vai no Request-URI depois do tech prefix: DDD+número · 0+CSP+DDD+número · 55+DDD+número · +55 DDD número
+FORMATOS_DISCAGEM = ("tech_ddd_numero", "tech_0_csp_ddd_numero", "tech_55_ddd_numero", "tech_e164")
+# SQL 113 · Telefonia T4: envio das teclas e como a bina vai na ligação
+DTMFS = ("auto", "rfc4733", "inband", "info")
+CABECALHOS_BINA = ("from_pai", "from", "rpid")
 AUTENTICACOES = ("ip", "senha")
 TIPOS_ROTA = ("fixo_local", "fixo_ldn", "movel_vc1", "movel_vc2_vc3")
 METODOS_TRANSFERENCIA = ("refer", "ponte")
@@ -195,6 +205,14 @@ class Tronco:
     formato_discagem: str = "tech_ddd_numero"
     csp: str | None = None           # código de seleção de prestadora (2 dígitos), só no formato com CSP
     ativo: bool = True
+    # SQL 113 · Telefonia T4
+    dtmf: str = "auto"               # auto (RFC 4733 ou no áudio) | rfc4733 | inband | info
+    realm: str | None = None         # domínio de autenticação (só se a operadora pedir)
+    from_usuario: str | None = None  # número/usuário no "De" (vazio = bina, ou o usuário com senha)
+    cabecalho_bina: str = "from_pai"  # from_pai (De + P-Asserted-Identity) | from | rpid
+    toque_max_s: int = 30            # desiste da ligação que não atende nesse tempo (D5)
+    duracao_max_min: int = 20        # derruba a ligação pendurada (D5)
+    verificar_options: bool = True   # OPTIONS a cada 60 s
 
     @property
     def nome(self) -> str:
@@ -208,6 +226,8 @@ class Tronco:
             return "0" + (self.csp or "")
         if self.formato_discagem == "tech_55_ddd_numero":
             return "55"
+        if self.formato_discagem == "tech_e164":
+            return "+55"
         return ""
 
     def discar(self, tech_prefix: str, nacional: str) -> str:
@@ -228,6 +248,12 @@ class Rota:
     preco_minuto: float | None = None
     vigente_desde: date | None = None
     vigente_ate: date | None = None
+    enviar_prefixo: bool = True      # SQL 113 · G14: false = tech_prefix é só o código interno (vigência e custo)
+
+    @property
+    def prefixo_discagem(self) -> str:
+        """O que vai no Request-URI antes do número: o tech prefix, ou nada se a operadora não usa."""
+        return self.tech_prefix if self.enviar_prefixo else ""
 
     def vigente(self, dia: date) -> bool:
         return (self.vigente_desde is None or self.vigente_desde <= dia) and \
@@ -245,6 +271,7 @@ class Transferencia:
     tronco_id: int | None = None                     # "ponte pelo tronco": sai pelo tronco da empresa
     ativo: bool = True
     credor_id: int | None = None                     # nulo = a empresa toda
+    simultaneas: int = 5                             # operadores para transferência ao mesmo tempo (SQL 111)
 
     @property
     def nome(self) -> str:
@@ -349,13 +376,29 @@ def ler_tronco(linha: dict) -> Tronco:
     cps = float(_v(linha, t, "cps", 5))
     if not 0 < cps <= 500:
         raise DadosInvalidos(f"{onde}: cps fora de (0, 500]")
+    dtmf = str(_v(linha, t, "dtmf", "auto")).lower()
+    if dtmf not in DTMFS:
+        raise DadosInvalidos(f"{onde}: dtmf '{dtmf}' ({', '.join(DTMFS)})")
+    realm = _v(linha, t, "realm")
+    if realm is not None and not HOST.match(str(realm)):
+        raise DadosInvalidos(f"{onde}: realm inválido")
+    from_usuario = _v(linha, t, "from_usuario")
+    if from_usuario is not None and not re.match(r"^[A-Za-z0-9_.+\-]{1,64}$", str(from_usuario)):
+        raise DadosInvalidos(f"{onde}: from_usuario inválido")
+    cab = str(_v(linha, t, "cabecalho_bina", "from_pai")).lower()
+    if cab not in CABECALHOS_BINA:
+        raise DadosInvalidos(f"{onde}: cabecalho_bina '{cab}' ({', '.join(CABECALHOS_BINA)})")
     return Tronco(id=tid, empresa_id=_int(_v(linha, t, "empresa_id"), f"{onde}.empresa_id", 1),
                   referencia=str(_v(linha, t, "referencia", f"tronco {tid}"))[:80], host=host,
                   porta=_int(_v(linha, t, "porta", 5060), f"{onde}.porta", 1, 65535), transporte=transp,
                   autenticacao=aut, usuario=str(usuario) if usuario else None, segredo_ref=str(ref) if ref else None,
                   codecs=codecs, canais=_int(_v(linha, t, "canais", 30), f"{onde}.canais", 1, 10000), cps=cps,
                   operadora=str(_v(linha, t, "operadora", ""))[:60], bina=bina, ddd_origem=ddd,
-                  formato_discagem=fmt, csp=csp, ativo=_bool(_v(linha, t, "ativo"), True))
+                  formato_discagem=fmt, csp=csp, ativo=_bool(_v(linha, t, "ativo"), True),
+                  dtmf=dtmf, realm=str(realm) if realm else None, from_usuario=str(from_usuario) if from_usuario else None,
+                  cabecalho_bina=cab, toque_max_s=_int(_v(linha, t, "toque_max_s", 30), f"{onde}.toque_max_s", 15, 45),
+                  duracao_max_min=_int(_v(linha, t, "duracao_max_min", 20), f"{onde}.duracao_max_min", 5, 60),
+                  verificar_options=_bool(_v(linha, t, "verificar_options"), True))
 
 
 def ler_rota(linha: dict) -> Rota:
@@ -379,7 +422,8 @@ def ler_rota(linha: dict) -> Rota:
                 cadencia_incremento_s=_int(_v(linha, t, "cadencia_incremento_s", 6), f"{onde}.cadencia_incremento_s",
                                            1),
                 preco_minuto=preco, vigente_desde=_data(_v(linha, t, "vigente_desde")),
-                vigente_ate=_data(_v(linha, t, "vigente_ate")))
+                vigente_ate=_data(_v(linha, t, "vigente_ate")),
+                enviar_prefixo=_bool(_v(linha, t, "enviar_prefixo"), True))
 
 
 def ler_transferencia(linha: dict) -> Transferencia:
@@ -404,7 +448,8 @@ def ler_transferencia(linha: dict) -> Transferencia:
     return Transferencia(id=xid, empresa_id=_int(_v(linha, t, "empresa_id"), f"{onde}.empresa_id", 1),
                          destino_sip=dest, metodo=met, tech_prefix=tp, cabecalhos=cab,
                          tronco_id=int(tr) if tr else None, ativo=_bool(_v(linha, t, "ativo"), True),
-                         credor_id=int(cred) if cred else None)
+                         credor_id=int(cred) if cred else None,
+                         simultaneas=_int(_v(linha, t, "simultaneas", 5) or 5, f"{onde}.simultaneas", 1, 500))
 
 
 def ler_cabecalhos(v, onde: str) -> tuple:

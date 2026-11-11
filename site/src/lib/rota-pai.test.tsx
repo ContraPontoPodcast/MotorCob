@@ -98,6 +98,11 @@ test('o voltar desenhado nas seções do Agente Voz/CX aponta para a Visão gera
 	assert.match(demo, /href="\/voz\/agente"/);
 });
 
+test('Telefonia › tronco (SQL 114) volta para Telefonia', () => {
+	assert.deepEqual(rotaPai('/voz/telefonia/tronco/novo'), { to: '/voz/telefonia', rotulo: 'Telefonia' });
+	assert.deepEqual(rotaPai('/voz/telefonia/tronco/alfa-sp-1'), { to: '/voz/telefonia', rotulo: 'Telefonia' });
+});
+
 test('Roleplay: o Painel volta para a Visão geral (como toda aba); seções, para o Painel; detalhes, para a seção', () => {
 	assert.deepEqual(rotaPai('/speech-analytics/roleplay'), { to: '/speech-analytics', rotulo: 'Visão geral do Speech Analytics' });
 	assert.deepEqual(rotaPai('/speech-analytics/roleplay/cenarios'), { to: '/speech-analytics/roleplay', rotulo: 'Painel do Roleplay' });

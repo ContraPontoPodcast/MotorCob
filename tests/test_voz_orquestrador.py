@@ -102,7 +102,7 @@ class TestFluxo(Base):
         self.assertEqual(endpoint, "PJSIP/101011988887770@tr-1-10")           # tech prefix + DDD + número
         self.assertEqual((var["MOTORCX_AMD"], var["MOTORCX_GRAVAR"], var["MOTORCX_TECH_PREFIX"]), ("1", "1", "1010"))
         self.assertNotIn(CEL, var["MOTORCX_GRAVACAO"])
-        self.assertEqual((callerid, timeout), ("1130000000", 40))
+        self.assertEqual((callerid, timeout), ("1130000000", 30))   # SQL 113 · D5: o tronco toca no máximo 30 s
         self.rel.andar(12)
         self.ev("StasisStart", canal, args=["saida", args[1]])
         self.assertEqual(self.ari.de("continuar")[-1][1:], (canal, "motorcx-atendeu", "s", 1))
@@ -343,7 +343,7 @@ class TestTransferencia(Base):
         self.assertEqual(orq.contagem["transferencia_falhou_voltou_agente"], 1)
         self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho), (None, "retorno_agendado"))
 
-    def test_provedor_que_nao_volta_vira_abandono(self):
+    def test_provedor_que_nao_volta_vira_transferencia_sem_operador(self):
         class SemVolta(Simulador):
             def retomar_sem_humano(self, id_chamada, motivo):
                 return False
@@ -352,9 +352,12 @@ class TestTransferencia(Base):
         self.assertIn(canal, self.ari.desligados)
         self.cair(canal)
         ev = self.eventos[0]
-        self.assertEqual((ev.transferencia, ev.desfecho, ev.origem_desfecho), ("sem_operador", "abandonada",
-                                                                             "transferencia"))
-        self.assertEqual(orq.contagem["abandono"], 1)
+        self.assertEqual((ev.transferencia, ev.desfecho, ev.origem_desfecho),
+                         ("sem_operador", "transferencia_sem_operador", "transferencia"))
+        self.assertEqual(orq.contagem["transferencia_sem_operador"], 1)
+        # SQL 106: a fila humana cheia não é abandono do discador (não freia o ritmo)
+        e = orq.agendador.empresas[1]
+        self.assertEqual((e.atendidas_pessoa, e.abandonos), (1, 0))
 
     def test_refer(self):
         mud = [("voz_transferencias", 0, {"metodo": "refer", "tech_prefix": "77"})]
@@ -387,7 +390,8 @@ class TestTransferencia(Base):
         self.ev("StasisStart", canal, args=["transferencia", "FAILURE", "486"])
         self.cair(f"{cid}-h", 17)
         self.cair(canal)
-        self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho), ("sem_operador", "abandonada"))
+        self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho),
+                         ("sem_operador", "transferencia_sem_operador"))
 
     def test_sem_destino_cadastrado_volta_ao_agente(self):
         mud = [("voz_transferencias", 0, {"ativo": False})]
@@ -428,43 +432,17 @@ class TestAloFakeEAbandono(Base):
         self.assertIsNotNone(db["transferida_em"])               # check do banco: transferência exige transferida_em
         self.assertEqual(orq.contagem.get("abandono_sem_robo"), 1)
 
-    def test_alo_fake_segura_e_conecta(self):
-        sim = Simulador(max_simultaneas=1)
+    def test_alo_fake_saiu_mensagem_na_hora(self):
+        # V4 (Power/Preditivo): o "Alô?" gravado segurava a pessoa e depois derrubava; mesmo ligado, não toca mais
         mud = [("voz_config", 0, {"alo_fake_liberado": True, "alo_fake": True, "alo_fake_max_s": 4})]
+        sim = Simulador(max_simultaneas=1)
         orq = self.montar([item()], provedor=sim, mud=mud)
         orq.tick()
         canal = self.originados()[0][2]
         sim.max_simultaneas = 0
         self.atender(canal)
-        self.assertEqual(self.ari.de("tocar")[0][1:3], (canal, "sound:motorcx/alo"))
-        self.rel.andar(2)
-        sim.max_simultaneas = 1
-        orq.tick()
-        self.assertEqual(len(sim.sessoes), 1)
-        self.assertNotIn(canal, self.ari.desligados)
-
-    def test_alo_fake_sem_liberacao_da_equipe_nao_toca(self):
-        mud = [("voz_config", 0, {"alo_fake_liberado": False, "alo_fake": True})]
-        sim = Simulador(max_simultaneas=1)
-        orq = self.montar([item()], provedor=sim, mud=mud)
-        orq.tick()
-        sim.max_simultaneas = 0
-        self.atender(self.originados()[0][2])
-        self.assertNotIn("sound:motorcx/alo", [t[2] for t in self.ari.de("tocar")])
         self.assertEqual([t[2] for t in self.ari.de("tocar")], ["sound:motorcx/sem-robo"])
-
-    def test_alo_fake_estoura_tempo(self):
-        mud = [("voz_config", 0, {"alo_fake_liberado": True, "alo_fake": True, "alo_fake_max_s": 4})]
-        sim = Simulador(max_simultaneas=1)
-        orq = self.montar([item()], provedor=sim, mud=mud)
-        orq.tick()
-        canal = self.originados()[0][2]
-        sim.max_simultaneas = 0
-        self.atender(canal)
-        self.rel.andar(4)
-        orq.tick()
         self.assertNotIn(canal, self.ari.desligados)            # mensagem antes de desligar
-        self.assertEqual(self.ari.de("tocar")[-1][2], "sound:motorcx/sem-robo")
         self.rel.andar(15)                                      # sem o PlaybackFinished: desliga pelo prazo
         orq.tick()
         self.assertIn(canal, self.ari.desligados)

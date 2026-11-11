@@ -580,6 +580,15 @@ revoke insert, update, delete on public.voz_contrato from authenticated;
 -- limite = parte inteira de contratado × canais ÷ soma dos canais dos troncos ativos; a sobra vai, uma a uma, para as
 -- maiores frações (empate: mais canais, depois o menor id); nunca acima dos canais. teto = min(limite × pico, canais).
 -- Calcula sobre todas as empresas, mas só devolve as que a pessoa enxerga (a VM, com a chave do servidor, vê todas).
+-- Rodado de novo depois do SQL 101 (que acrescentou licencas e motivo ao retorno): volta à assinatura daqui (drop cascade
+-- leva as views; o 57 e o 101, rodados depois como sempre, refazem as deles).
+do $$
+begin
+    if pg_get_function_result(to_regprocedure('public.divisao_concorrencia_voz()'))
+           <> 'TABLE(empresa_id bigint, canais integer, contratado integer, cota numeric, limite integer, pico_multiplo integer, teto integer)' then
+        drop function public.divisao_concorrencia_voz() cascade;
+    end if;
+end $$;
 create or replace function public.divisao_concorrencia_voz()
 returns table (empresa_id bigint, canais int, contratado int, cota numeric, limite int, pico_multiplo int, teto int)
 language sql stable security definer set search_path = public as $$
