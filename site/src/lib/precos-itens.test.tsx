@@ -10,12 +10,15 @@ import {
 } from './precos-itens';
 
 const SQL92 = readFileSync('../supabase/migrations/20270128000001_precos_editaveis.sql', 'utf8');
+// a definição vigente de itens_com_franquia() é a do SQL 93 (recriada inteira com o robô)
+const SQL_FRANQUIA = readFileSync('../supabase/migrations/20270129000001_voz_licencas.sql', 'utf8');
 const tela = readFileSync('src/components/workspace/empresa/contratacao-empresa.tsx', 'utf8');
 const margem = readFileSync('src/components/workspace/console/console-margem-ia.tsx', 'utf8');
 const produtos = readFileSync('src/components/workspace/console/console-produtos.tsx', 'utf8');
 
 const CATALOGO = [
 	{ codigo: 'contratos', modulo: 'orquestracao', ordem: 1, unidade: 'CPF', preco_de: null },
+	{ codigo: 'voz_licenca_robo', modulo: 'agente_voz', ordem: 49, unidade: 'robô·mês', preco_de: null, eh_ia: true, franquia_padrao: 4000 },
 	{ codigo: 'voz_plataforma', modulo: 'agente_voz', ordem: 50, unidade: 'mês', preco_de: null, eh_ia: false },
 	{ codigo: 'voz_minuto_ia', modulo: 'agente_voz', ordem: 51, unidade: 'minuto', preco_de: null, eh_ia: true, preco_tabela: 1.5 },
 	{ codigo: 'ia_speech_analytics', modulo: 'speech_analytics', ordem: 55, unidade: 'minuto analisado', preco_de: null, eh_ia: true },
@@ -25,9 +28,9 @@ const CATALOGO = [
 ];
 
 test('itens com franquia: a lista do site é a do banco (itens_com_franquia)', () => {
-	const doBanco = SQL92.match(/select array\[([^\]]+)\]::text\[\]/)?.[1].match(/'([a-z_]+)'/g)?.map(x => x.replace(/'/g, ''));
+	const doBanco = SQL_FRANQUIA.match(/select array\[([^\]]+)\]::text\[\]/)?.[1].match(/'([a-z_]+)'/g)?.map(x => x.replace(/'/g, ''));
 	assert.deepEqual(doBanco, [...ITENS_COM_FRANQUIA]);
-	assert.ok(temFranquia('ia_treino_voz') && temFranquia('ia_treino_texto') && temFranquia('ia_creditos'));
+	assert.ok(temFranquia('ia_treino_voz') && temFranquia('ia_treino_texto') && temFranquia('ia_creditos') && temFranquia('voz_licenca_robo'));
 	assert.ok(!temFranquia('voz_minuto_ia') && !temFranquia('sms') && !temFranquia(null));
 });
 
@@ -35,6 +38,7 @@ test('Contratação: Agente de voz e Speech Analytics só com o módulo ligado, 
 	const nada = itensDosModulos(CATALOGO, { agente_voz: false, speech_analytics: false });
 	assert.deepEqual([nada.agente_voz.length, nada.speech_analytics.length], [0, 0]);
 	const tudo = itensDosModulos(CATALOGO, { agente_voz: true, speech_analytics: true });
+	// o robô (voz_licenca_robo) fica fora do cartão Preços: o preço dele só se grava pela licença (SQL 93)
 	assert.deepEqual(tudo.agente_voz.map(i => i.codigo), ['voz_plataforma', 'voz_minuto_ia']);
 	assert.deepEqual(tudo.speech_analytics.map(i => i.codigo), ['ia_speech_analytics', 'ia_treino_texto', 'ia_treino_voz']);
 	assert.equal(tela.match(/grupo\('(MOTOR|AGENTE DE VOZ|SPEECH ANALYTICS)'/g)?.length, 3);

@@ -195,11 +195,20 @@ create or replace view voz_vm.roteiros_em_uso with (security_barrier = true) as
 select pg_temp.trocar('public.divisao_concorrencia_voz()',
     'where public.chamada_do_servidor() or f.empresa_id',
     'where public.chamada_do_servidor() or public.chamada_da_vm_voz() or f.empresa_id');
--- função da view chamada pela VM: precisa de execução para o papel, então passa por uma função de voz_vm
+-- função da view chamada pela VM: precisa de execução para o papel, então passa por uma função de voz_vm.
+-- Colunas pelo nome: rodado de novo depois do SQL 101 (licencas e motivo a mais), volta às sete daqui (rode o 101 depois)
+do $$
+begin
+    if pg_get_function_result(to_regprocedure('voz_vm.divisao()'))
+           <> 'TABLE(empresa_id bigint, canais integer, contratado integer, cota numeric, limite integer, pico_multiplo integer, teto integer)' then
+        drop function voz_vm.divisao() cascade;
+    end if;
+end $$;
 create or replace function voz_vm.divisao()
 returns table (empresa_id bigint, canais int, contratado int, cota numeric, limite int, pico_multiplo int, teto int)
 language sql stable security definer set search_path = '' as $$
-    select * from public.divisao_concorrencia_voz()
+    select d.empresa_id, d.canais, d.contratado, d.cota, d.limite, d.pico_multiplo, d.teto
+      from public.divisao_concorrencia_voz() d
 $$;
 create or replace view voz_vm.divisao_concorrencia as select * from voz_vm.divisao();
 

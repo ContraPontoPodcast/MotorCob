@@ -8,6 +8,15 @@
 #   bash criar_gcp.sh chave-leitura [ID-DO-PROJETO]             chave JSON da conta de leitura das gravações, num
 #                                                              arquivo temporário (para o GCS_GRAVACOES_CHAVE do
 #                                                              Supabase); o script nunca mostra o conteúdo
+#   bash criar_gcp.sh firewall-automatico [ID-DO-PROJETO]       SQL 104: a VM passa a atualizar motorcx-voz-sip/rtp com
+#                                                              a lista abaixo + os IPs que a equipe liberou no banco
+#                                                              (papel motorcxVozFirewall na conta motorcx-asterisk e
+#                                                              metadado motorcx-firewall-automatico=1). DESLIGAR=1 volta
+#                                                              para só a lista abaixo
+#   bash criar_gcp.sh chave-cofre [ID-DO-PROJETO]               SQL 103: conta que só ESCREVE as senhas dos troncos no
+#                                                              cofre (motorcx-voz-trunk-*) e a chave dela num arquivo
+#                                                              temporário (GCP_COFRE_TRONCO_CHAVE da Edge Function
+#                                                              segredo-tronco-voz); nunca mostra o conteúdo
 #
 # Infraestrutura:
 #   - rede "motorcx-voz" e sub-rede em São Paulo
@@ -73,6 +82,12 @@ if [ "${1:-}" = empresa ]; then
 elif [ "${1:-}" = chave-leitura ]; then
   MODO=chave-leitura
   shift
+elif [ "${1:-}" = chave-cofre ]; then
+  MODO=chave-cofre
+  shift
+elif [ "${1:-}" = firewall-automatico ]; then
+  MODO=firewall-automatico
+  shift
 fi
 PROJETO="${1:-$(gcloud config get-value project 2>/dev/null || true)}"
 [ -n "$PROJETO" ] || { echo "Informe o ID do projeto: bash criar_gcp.sh meu-projeto-123" >&2; exit 1; }
@@ -131,6 +146,62 @@ Chave nova da $SA_LEITURA gravada em:
 4. Trocou a chave? Depois de abrir uma gravação no site, apague a antiga (a nova é a de data mais recente):
      gcloud iam service-accounts keys list --iam-account=$SA_LEITURA --managed-by=user
      gcloud iam service-accounts keys delete <ID-DA-CHAVE-ANTIGA> --iam-account=$SA_LEITURA
+FIM
+  exit 0
+fi
+
+# ======================================================================= modo chave-cofre: GCP_COFRE_TRONCO_CHAVE
+# SQL 103 · Telefonia T1. A conta motorcx-voz-cofre-escrita NÃO lê segredo nenhum (sem secretmanager.versions.access):
+#   - motorcxVozCofreCriar: só secretmanager.secrets.create (cria o segredo vazio; a criação é conferida no projeto);
+#   - motorcxVozCofreGravar: escrever versão nova, listar e destruir versões, só em motorcx-voz-trunk-* (condição).
+# Quem lê é só a conta motorcx-asterisk das VMs (motorcx-voz-*). A Edge Function escreve sempre no nome da empresa do
+# tronco (motorcx-voz-trunk-e<empresa>-<referência>), que o banco calcula.
+SA_COFRE_NOME=motorcx-voz-cofre-escrita
+if [ "$MODO" = chave-cofre ]; then
+  gcloud config set project "$PROJETO" >/dev/null
+  NUM="$(gcloud projects describe "$PROJETO" --format='value(projectNumber)')"
+  [[ "$NUM" =~ ^[0-9]+$ ]] || falha "não foi possível ler o número do projeto $PROJETO"
+  SA_COFRE="${SA_COFRE_NOME}@${PROJETO}.iam.gserviceaccount.com"
+  existe gcloud iam service-accounts describe "$SA_COFRE" || \
+    gcloud iam service-accounts create "$SA_COFRE_NOME" \
+      --display-name="Cofre: só escreve as senhas dos troncos (Edge Function segredo-tronco-voz)" >/dev/null
+  papel_proprio() {   # id, título, permissões: cria ou atualiza o papel do projeto
+    if existe gcloud iam roles describe "$1" --project="$PROJETO"; then
+      gcloud iam roles update "$1" --project="$PROJETO" --permissions="$3" --quiet >/dev/null
+    else
+      gcloud iam roles create "$1" --project="$PROJETO" --title="$2" --permissions="$3" --stage=GA >/dev/null
+    fi
+  }
+  papel_proprio motorcxVozCofreCriar "MotorCX voz: criar segredo (sem ler)" secretmanager.secrets.create
+  papel_proprio motorcxVozCofreGravar "MotorCX voz: escrever senha de tronco (sem ler)" \
+    secretmanager.versions.add,secretmanager.versions.list,secretmanager.versions.destroy
+  gcloud projects add-iam-policy-binding "$PROJETO" --member="serviceAccount:$SA_COFRE" \
+    --role="projects/$PROJETO/roles/motorcxVozCofreCriar" --condition=None >/dev/null
+  gcloud projects add-iam-policy-binding "$PROJETO" --member="serviceAccount:$SA_COFRE" \
+    --role="projects/$PROJETO/roles/motorcxVozCofreGravar" \
+    --condition="expression=resource.name.startsWith(\"projects/${NUM}/secrets/motorcx-voz-trunk-\"),title=motorcx-voz-trunk,description=So as senhas dos troncos" \
+    >/dev/null
+  umask 077
+  ARQ="$(mktemp --suffix=.json "${HOME:-/tmp}/cofre-tronco-chave.XXXXXX")"
+  if ! gcloud iam service-accounts keys create "$ARQ" --iam-account="$SA_COFRE" >/dev/null 2>&1; then
+    shred -u "$ARQ" 2>/dev/null || rm -f "$ARQ"
+    falha "não foi possível criar a chave de $SA_COFRE (a política da organização pode proibir chaves de conta de serviço: iam.disableServiceAccountKeyCreation)"
+  fi
+  cat <<FIM
+
+Conta $SA_COFRE pronta (cria segredo e escreve versão só em motorcx-voz-trunk-*; não lê nenhum segredo).
+Chave nova gravada em:
+  $ARQ
+(o conteúdo não foi mostrado; o arquivo só pode ser lido por você)
+
+1. Abra o arquivo no editor do Cloud Shell:   cloudshell edit "$ARQ"
+   e copie o conteúdo inteiro (o JSON todo, do { ao }).
+2. Supabase › Edge Functions › Secrets › Add new secret: nome GCP_COFRE_TRONCO_CHAVE, valor = o JSON copiado.
+   Não cole em nenhum outro lugar (chat, e-mail, documento).
+3. Apague o arquivo:                           shred -u "$ARQ"
+4. Trocou a chave? Depois de guardar uma senha pelo site, apague a antiga (a nova é a de data mais recente):
+     gcloud iam service-accounts keys list --iam-account=$SA_COFRE --managed-by=user
+     gcloud iam service-accounts keys delete <ID-DA-CHAVE-ANTIGA> --iam-account=$SA_COFRE
 FIM
   exit 0
 fi
@@ -209,10 +280,48 @@ for ip in "${ORIGENS[@]}"; do
   esac
 done
 LISTA_ORIGENS="$(IFS=,; echo "${ORIGENS[*]}")"
+FIXOS="${ORIGENS[*]}"            # SQL 104: metadado motorcx-firewall-fixos (separado por espaço; a VM junta com o banco)
 
 gcloud config set project "$PROJETO" >/dev/null
 NUM="$(gcloud projects describe "$PROJETO" --format='value(projectNumber)')"
 SA="${SA_NOME}@${PROJETO}.iam.gserviceaccount.com"
+
+# ======================================================================= modo firewall-automatico (SQL 104)
+# A conta das VMs ganha o papel motorcxVozFirewall: ler e atualizar SÓ as regras motorcx-voz-sip e motorcx-voz-rtp
+# (condição pelo nome; a rede entra na condição porque o PATCH de uma regra pede networks.updatePolicy nela). A VM
+# (voz/firewall.py, a cada 2 minutos) põe nas regras a lista fixa acima + os IPs que a equipe liberou no banco, depois
+# de conferir tudo de novo (só IPv4, banco até /24, nunca 0.0.0.0/0, rede interna ou o próprio MotorCX).
+# SEM_CONDICAO=1: o mesmo papel sem a condição (só se o Google recusar a condição: o job registra HTTP 403).
+if [ "$MODO" = firewall-automatico ]; then
+  VALOR=1; [ "${DESLIGAR:-0}" = 1 ] && VALOR=0
+  if [ "$VALOR" = 1 ]; then
+    PERMS=compute.firewalls.get,compute.firewalls.update,compute.networks.updatePolicy,compute.globalOperations.get
+    if existe gcloud iam roles describe motorcxVozFirewall --project="$PROJETO"; then
+      gcloud iam roles update motorcxVozFirewall --project="$PROJETO" --permissions="$PERMS" --quiet >/dev/null
+    else
+      gcloud iam roles create motorcxVozFirewall --project="$PROJETO" --stage=GA --permissions="$PERMS" \
+        --title="MotorCX voz: atualizar as regras SIP/RTP" >/dev/null
+    fi
+    if [ "${SEM_CONDICAO:-0}" = 1 ]; then
+      COND=None
+    else
+      COND="expression=resource.name == \"projects/${PROJETO}/global/firewalls/motorcx-voz-sip\" || resource.name == \"projects/${PROJETO}/global/firewalls/motorcx-voz-rtp\" || resource.name == \"projects/${PROJETO}/global/networks/${REDE}\" || resource.name.startsWith(\"projects/${PROJETO}/global/operations/\"),title=motorcx-voz-firewall,description=So as regras SIP e RTP da voz"
+    fi
+    gcloud projects add-iam-policy-binding "$PROJETO" --member="serviceAccount:$SA" \
+      --role="projects/$PROJETO/roles/motorcxVozFirewall" --condition="$COND" >/dev/null
+  fi
+  for i in 1 2; do
+    gcloud compute instances add-metadata "motorcx-ast-$i" --zone="${ZONAS[$((i - 1))]}" \
+      --metadata=motorcx-firewall-automatico="$VALOR",motorcx-firewall-fixos="$FIXOS" >/dev/null
+  done
+  if [ "$VALOR" = 1 ]; then
+    echo "Firewall automático LIGADO nas duas VMs (vale em até 2 minutos). Origens fixas: ${LISTA_ORIGENS:-(nenhuma)}"
+    echo "Conferir: gcloud compute ssh motorcx-ast-1 --zone=southamerica-east1-a --tunnel-through-iap -- sudo journalctl -u motorcx-voz-firewall -n 20 --no-pager"
+  else
+    echo "Firewall automático DESLIGADO. Rode 'bash criar_gcp.sh $PROJETO' para voltar as regras para só a lista fixa."
+  fi
+  exit 0
+fi
 
 passo "Ligando as APIs (1–2 minutos na primeira vez)"
 gcloud services enable compute.googleapis.com secretmanager.googleapis.com storage.googleapis.com \
@@ -234,9 +343,9 @@ for i in 1 2; do
 done
 
 passo "Firewall (SIP e RTP só das origens da lista; SSH só pelo IAP; HTTPS 8443 e desafio 80 do proxy)"
-regra() {   # nome, regras, origens, descrição: cria ou atualiza as origens
+regra() {   # nome, regras, origens, descrição: cria ou atualiza as origens (e religa, se o SQL 104 desligou)
   if existe gcloud compute firewall-rules describe "$1"; then
-    gcloud compute firewall-rules update "$1" --rules="$2" --source-ranges="$3" >/dev/null
+    gcloud compute firewall-rules update "$1" --rules="$2" --source-ranges="$3" --no-disabled >/dev/null
     echo "atualizada: $1"
   else
     gcloud compute firewall-rules create "$1" --network="$REDE" --direction=INGRESS --action=ALLOW \
@@ -244,11 +353,26 @@ regra() {   # nome, regras, origens, descrição: cria ou atualiza as origens
     echo "criada: $1"
   fi
 }
-if [ "${#ORIGENS[@]}" -gt 0 ]; then
+# SQL 104: com o firewall automático ligado, quem cuida das origens SIP/RTP é a VM (lista fixa + IPs liberados no
+# banco); sobrescrever aqui tiraria por até 2 minutos os IPs das operadoras dos clientes
+AUTOMATICO="$(gcloud compute instances describe motorcx-ast-1 --zone="${ZONAS[0]}" \
+  --format='value(metadata.items.motorcx-firewall-automatico)' 2>/dev/null || true)"
+if [ "$AUTOMATICO" = 1 ]; then
+  echo "Firewall automático ligado: motorcx-voz-sip/rtp ficam com a VM (lista fixa vai pelo metadado motorcx-firewall-fixos)."
+elif [ "${#ORIGENS[@]}" -gt 0 ]; then
   regra motorcx-voz-sip "udp:5060,tcp:5060,tcp:5061" "$LISTA_ORIGENS" "SIP das operadoras, provedores e discadores"
   regra motorcx-voz-rtp "udp:10000-20000" "$LISTA_ORIGENS" "RTP (mídia) das mesmas origens do SIP"
 else
   echo "Sem IPs de operadora ainda: SIP e RTP continuam FECHADOS. Preencha IPS_OPERADORAS e rode de novo."
+  # SQL 104: as duas regras passam a existir DESLIGADAS (origem de documentação, nunca roteada), para o firewall
+  # automático poder ligá-las quando a equipe liberar o primeiro IP no banco. Regra que já existe não muda.
+  for r in "motorcx-voz-sip|udp:5060,tcp:5060,tcp:5061|SIP das operadoras, provedores e discadores" \
+           "motorcx-voz-rtp|udp:10000-20000|RTP (mídia) das mesmas origens do SIP"; do
+    IFS='|' read -r nome portas desc <<< "$r"
+    existe gcloud compute firewall-rules describe "$nome" || \
+      gcloud compute firewall-rules create "$nome" --network="$REDE" --direction=INGRESS --action=ALLOW \
+        --rules="$portas" --source-ranges=192.0.2.1/32 --target-tags="$TAG" --description="$desc" --disabled >/dev/null
+  done
   LISTA_ORIGENS="(nenhuma, SIP fechado)"
 fi
 regra motorcx-voz-ssh-iap "tcp:22" "$IAP" "SSH só pelo IAP do Google"
@@ -329,6 +453,7 @@ for i in 1 2; do
   if existe gcloud compute instances describe "$VM" --zone="$ZONA"; then
     # já existe: só atualiza os scripts e serviços (valem no próximo boot ou com: sudo google_metadata_script_runner startup)
     gcloud compute instances add-metadata "$VM" --zone="$ZONA" --metadata-from-file="$ARQUIVOS" >/dev/null
+    gcloud compute instances add-metadata "$VM" --zone="$ZONA" --metadata=motorcx-firewall-fixos="$FIXOS" >/dev/null
     echo "Já existe: $VM ($ZONA) — scripts atualizados"
     continue
   fi
@@ -339,7 +464,7 @@ for i in 1 2; do
     --image-family=debian-12 --image-project=debian-cloud \
     --boot-disk-size="${DISCO_GB}GB" --boot-disk-type=pd-balanced \
     --shielded-secure-boot --shielded-vtpm --shielded-integrity-monitoring --deletion-protection \
-    --metadata=enable-oslogin=TRUE,block-project-ssh-keys=TRUE,motorcx-ip-externo="$IP",motorcx-projeto="$PROJETO",motorcx-rede-local="$FAIXA_SUBREDE",motorcx-parte="$i/2" \
+    --metadata=enable-oslogin=TRUE,block-project-ssh-keys=TRUE,motorcx-ip-externo="$IP",motorcx-projeto="$PROJETO",motorcx-rede-local="$FAIXA_SUBREDE",motorcx-parte="$i/2",motorcx-firewall-fixos="$FIXOS" \
     --metadata-from-file="$ARQUIVOS" >/dev/null
   echo "Criada: $VM ($ZONA)"
 done
@@ -353,4 +478,5 @@ echo "Origens liberadas no firewall: $LISTA_ORIGENS"
 echo "Proxy HTTPS (webhook da ElevenLabs e simulador): https://<IP com hífens>.sslip.io:8443 (ex.: 35-198-40-10.sslip.io)"
 echo "Bucket de gravações: um por empresa — bash criar_gcp.sh empresa <id> <dias> $PROJETO"
 echo "Chave do GCS_GRAVACOES_CHAVE (Supabase): bash criar_gcp.sh chave-leitura $PROJETO"
-echo "Para incluir uma operadora nova: edite IPS_OPERADORAS no topo e rode o script de novo."
+echo "Para incluir uma operadora nova: edite IPS_OPERADORAS no topo e rode o script de novo, ou (SQL 104) ligue o"
+echo "firewall automático (bash criar_gcp.sh firewall-automatico $PROJETO) e a equipe libera os IPs de cada tronco no Console."

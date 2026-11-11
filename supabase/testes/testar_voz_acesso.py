@@ -348,7 +348,7 @@ _RC = ("select voz_vm.registrar_roleplay_conversa('{{\"lote\": {l}, \"persona\":
 checar("SQL 59: grava a conversa do roleplay", True,
        _RC.format(l=RLA, p=PRA, r=1, t='[\"nao_me_ligue\"]', x='[{\"quem\": \"pessoa\", \"texto\": \"Não me ligue.\"}]'), "t")
 checar("SQL 59: conversa sem transcrição", True, _RC.format(l=RLA, p=PRA, r=2, t="[]", x="null"), "t")
-checar("SQL 59: trava fora da lista é recusada pelo banco", False, _RC.format(l=RLA, p=PRA, r=3, t='[\"cpf\"]', x="null"))
+checar("SQL 59: trava fora da lista é recusada pelo banco", False, _RC.format(l=RLA, p=PRA, r=3, t='[\"trava_inventada\"]', x="null"))
 checar("SQL 59: transcrição com CPF é recusada pelo banco", False,
        _RC.format(l=RLA, p=PRA, r=3, t="[]", x='[{\"quem\": \"pessoa\", \"texto\": \"cpf 12345678901\"}]'))
 checar("SQL 59: persona fora do lote é recusada", False, _RC.format(l=RLA, p=0, r=3, t="[]", x="null"), erro="fora do roleplay")

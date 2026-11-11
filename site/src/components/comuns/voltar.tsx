@@ -61,7 +61,7 @@ export function Voltar() {
 	const navegar = useNavigate();
 	const pathname = useContext(RotaDaTela) ?? loc.pathname;
 	const { perfil } = useMotorAuth();
-	const pai = rotaPai(pathname, { equipe: !!perfil?.equipe });
+	const pai = rotaPai(pathname, { equipe: !!perfil?.equipe, busca: loc.search });
 	const origem = pai ? origemDoEstado(loc.state) : null;
 	if (origem) return <div><VoltarBotao rotulo={origem.deRotulo} onClick={() => navegar(-1)} /></div>;
 	return pai ? <div><VoltarPara {...pai} /></div> : null;

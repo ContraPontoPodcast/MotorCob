@@ -1,11 +1,29 @@
-// Agente Voz/CX › Visão geral (SPEC Canais §3.3): como uma ligação acontece e um cartão por seção. Sem números ao vivo
-// nesta etapa: o estado do canal de voz (PR 4) e o resumo de cada seção entram depois. Só cores do tema (claro e escuro).
+// Agente Voz/CX › Visão geral (SPEC Canais §3.3): como uma ligação acontece, "Ligações hoje" (ritmo do dia: modo,
+// abandono e curtas, com a frase do freio; V7b) e um cartão por seção. Só cores do tema (claro e escuro).
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router';
 import { PageHeading } from '@/components/app-shell';
 import { Aviso, BotaoLink, Cartao } from '@/components/ds';
 import { useAreasLiberadas } from '@/hooks/use-areas-liberadas';
 import { ROTA_AGENTE, ROTA_DISCAGEM, ROTA_LIGACOES, ROTA_SPEECH, ROTA_TELEFONIA } from '@/lib/rotas-voz';
+import { useMotorAuth } from '@/components/auth-provider';
+import { useRitmoHoje } from '@/components/discagem/ritmo';
+import { fraseEstado, pct, type RitmoHoje } from '@/lib/ritmo';
+
+/** "Ligações hoje" (Power e Preditivo, V7b; PREDITIVO.md 5.3): "Preditivo · abandono 0,8% · curtas 76%" e, com freio, a
+ *  frase do estado. Nada sem ligações hoje. */
+export function LigacoesHoje({ h }: { h: RitmoHoje | null }) {
+	if (!h || !h.totais.discadas) return null;
+	const u = h.ultima, estado = fraseEstado(u?.estado, u?.razao);
+	const modo = u?.modo === 'preditivo' ? 'Preditivo' : 'Power';
+	return (
+		<Cartao titulo="Ligações hoje" linha={`${modo} · abandono ${pct(h.totais.abandono_pct)} · curtas ${pct(h.totais.curtas_pct)}`}
+			direita={<BotaoLink pequeno to={ROTA_LIGACOES}>Ver ligações</BotaoLink>}>
+			<p className="text-[13px] text-[var(--base-texto-2)]">{h.totais.discadas.toLocaleString('pt-BR')} ligações · {h.totais.atendidas_pessoa.toLocaleString('pt-BR')} atenderam por pessoa.</p>
+			{estado && <div className="mt-3"><Aviso tom={estado.tom} titulo={`Com problema: ${estado.titulo.toLowerCase()}`}>{estado.texto}</Aviso></div>}
+		</Cartao>
+	);
+}
 
 type Passo = { quem: string; titulo: string; texto: string; nosso?: boolean };
 
@@ -30,6 +48,8 @@ const SECOES = [
 
 export function VisaoGeralVoz() {
 	const { agenteVoz } = useAreasLiberadas();
+	const { empresa } = useMotorAuth();
+	const ritmo = useRitmoHoje(agenteVoz && empresa ? Number(empresa.id) : null, null);
 	const lista = passos(agenteVoz);
 	return (
 		<>
@@ -50,6 +70,7 @@ export function VisaoGeralVoz() {
 						))}
 					</ol>
 				</Cartao>
+				{agenteVoz && <LigacoesHoje h={ritmo} />}
 				{!agenteVoz && (
 					<Aviso tom="info" titulo="O agente de voz MotorCX não está contratado.">
 						As regras de <Link to={ROTA_DISCAGEM} className="font-semibold underline">Discagem</Link> valem do mesmo jeito para o discador e o AGV da sua empresa. Para conhecer o agente, fale com a equipe MotorCX.

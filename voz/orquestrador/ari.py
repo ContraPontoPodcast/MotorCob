@@ -59,6 +59,14 @@ class ClienteARI:
     def eventos(self, app: str) -> Iterator[dict]:
         raise NotImplementedError
 
+    # SQL 114 · teste da rota (voz/testador.py)
+    def endpoint(self, tecnologia: str, recurso: str) -> dict | None:
+        """Estado do endpoint ({'state': 'online'|'offline'|'unknown', ...}); None se não existe no Asterisk."""
+        raise NotImplementedError
+
+    def ler_variavel(self, canal: str, nome: str) -> str | None:
+        raise NotImplementedError
+
 
 class AriHttp(ClienteARI):
     """ARI real. REST com urllib; eventos pelo WebSocket (websocket-client, em voz/requirements.txt)."""
@@ -132,6 +140,22 @@ class AriHttp(ClienteARI):
     def recarregar_modulo(self, modulo):
         self._req("PUT", f"/asterisk/modules/{modulo}")
 
+    def endpoint(self, tecnologia, recurso):
+        try:
+            return self._req("GET", f"/endpoints/{urllib.parse.quote(tecnologia)}/{urllib.parse.quote(recurso)}")
+        except ErroARI as ex:
+            if ex.status == 404:
+                return None
+            raise
+
+    def ler_variavel(self, canal, nome):
+        try:
+            return self._req("GET", f"/channels/{urllib.parse.quote(canal)}/variable", {"variable": nome}).get("value")
+        except ErroARI as ex:
+            if ex.status == 404:
+                return None
+            raise
+
     def eventos(self, app):
         import websocket   # websocket-client (voz/requirements.txt)
         url = self.base.replace("http", "ws", 1) + "/ari/events?" + urllib.parse.urlencode({"app": app})
@@ -156,6 +180,8 @@ class AriFalso(ClienteARI):
         self.pontes: dict[str, set] = {}
         self.desligados: list[str] = []
         self.falhar_originar: set[str] = set()
+        self.endpoints: dict[str, dict] = {}       # SQL 114: "PJSIP/tr-1-2" -> {"state": "online"}
+        self.lidas: dict[tuple[str, str], str] = {}
 
     def _anota(self, *cmd):
         self.comandos.append(cmd)
@@ -208,6 +234,14 @@ class AriFalso(ClienteARI):
 
     def eventos(self, app):
         return iter(())
+
+    def endpoint(self, tecnologia, recurso):
+        self._anota("endpoint", tecnologia, recurso)
+        return self.endpoints.get(f"{tecnologia}/{recurso}")
+
+    def ler_variavel(self, canal, nome):
+        self._anota("ler_variavel", canal, nome)
+        return self.lidas.get((canal, nome))
 
 
 class AriSimulado(AriFalso):

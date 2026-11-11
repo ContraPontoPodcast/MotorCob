@@ -33,6 +33,26 @@ bucket único `<projeto>-motorcx-gravacoes` da versão do piloto não é usado: 
 Ele não pede nem mostra segredos. A senha do ARI é
 gerada dentro do Secret Manager (`motorcx-voz-ari-senha`) e não aparece na tela.
 
+**Firewall automático (SQL 104, PR T2 da Telefonia):** em vez de editar a lista a cada operadora nova, os IPs da
+operadora entram no cadastro de cada tronco (e os do PABX, na transferência), e a equipe MotorCX confere e libera no
+Console (Agente virtual › tronco › "Liberar IPs no firewall", com a verificação em duas etapas). A cada 2 minutos a
+VM (`motorcx-voz-firewall.timer` → `voz/firewall.py`) põe nas regras `motorcx-voz-sip` e `motorcx-voz-rtp` a lista
+fixa deste script (metadado `motorcx-firewall-fixos`) + os IPs liberados, depois de conferir tudo de novo (só IPv4,
+do banco até /24, nunca `0.0.0.0/0`, rede interna ou IP do MotorCX; no máximo 500). Sem nenhuma origem, as regras
+ficam desligadas (SIP fechado). Cada mudança vai para `voz_firewall_eventos`. Vem **desligado**; para ligar (uma vez):
+
+```bash
+bash criar_gcp.sh motorcob                      # scripts novos nas VMs + regras SIP/RTP criadas (desligadas se a lista estiver vazia)
+bash criar_gcp.sh firewall-automatico motorcob  # papel motorcxVozFirewall na conta motorcx-asterisk + metadado nas duas VMs
+```
+
+O papel só lê e atualiza as duas regras (condição pelo nome). Se o journal da VM mostrar HTTP 403 mesmo assim, rode
+`SEM_CONDICAO=1 bash criar_gcp.sh firewall-automatico motorcob` (o mesmo papel sem a condição: a conta passa a poder
+atualizar qualquer regra de firewall do projeto, então só se precisar). Para voltar à lista fixa:
+`DESLIGAR=1 bash criar_gcp.sh firewall-automatico motorcob` e depois `bash criar_gcp.sh motorcob`. Com o firewall
+automático ligado, rodar o script de novo não mexe nas origens SIP/RTP: só atualiza a lista fixa no metadado, e a VM
+aplica em até 2 minutos.
+
 **Depois de rodar de novo (VM que já existe):** o script só troca os metadados; a VM instala os scripts e unidades
 novos no próximo boot. Para aplicar já, em cada VM:
 
@@ -93,6 +113,25 @@ criar motorcx-voz-trunk-12-3 "Senha do tronco"
 
 Tronco autenticado por IP não tem senha.
 
+**Senha de tronco pela tela (SQL 103, PR T1 da Telefonia):** a senha é digitada uma vez (Console › Agente virtual ›
+tronco › "Guardar a senha no cofre"; no PR T5, também na tela Telefonia do cliente) e vai **direto** para o Secret
+Manager pela Edge Function `segredo-tronco-voz`, sempre no segredo da empresa do tronco:
+`motorcx-voz-trunk-e<empresa>-<referência>` (no banco, `segredo_ref = voz/trunk/e<empresa>/<referência>`). O banco
+guarda só a data (`segredo_guardado_em`) e a versão; a versão anterior é destruída. Exige a verificação em duas etapas.
+A conta que escreve (`motorcx-voz-cofre-escrita`) **não lê** nenhum segredo; quem lê é só a `motorcx-asterisk` das
+VMs, na hora de gerar o pjsip (um tronco cuja senha ainda não está no cofre fica de fora sozinho, sem parar os outros).
+Quem administra o projeto no Google Cloud continua conseguindo ler o cofre: o controle é o IAM restrito e o log de
+auditoria do Secret Manager, não uma promessa de que "ninguém vê". Uma vez, no Cloud Shell (na pasta `infra/asterisk`):
+
+```bash
+bash criar_gcp.sh chave-cofre motorcob     # conta, papéis sem leitura e a chave num arquivo 0600 (não mostra o conteúdo)
+```
+
+Siga o que ele imprimir (colar no secret `GCP_COFRE_TRONCO_CHAVE` do Supabase e apagar o arquivo com `shred`) e publique
+a função com "Verify JWT" ligado: `supabase functions deploy segredo-tronco-voz --project-ref <ref>` (ou cole no editor
+o arquivo de `python3 scripts/juntar_funcao.py segredo-tronco-voz`). Conferir sem ver valor:
+`gcloud secrets versions list motorcx-voz-trunk-e12-aurora --project=motorcob` (só versão e data).
+
 **Opcionais:**
 - `motorcx-voz-deepgram`, `motorcx-voz-llm` e `motorcx-voz-tts`: chaves da Montagem MotorCX;
 - `motorcx-voz-transcricao-api`: chave da reserva da transcrição por API;
@@ -150,6 +189,7 @@ antes da janela de discagem.
 |---|---|
 | `motorcx-asterisk` | Asterisk 22 (PJSIP, ARI, AMD, MixMonitor) na rede do host. SIP em 5060, RTP em 10000–20000, ARI só em `127.0.0.1:8088`. |
 | `motorcx-voz-orquestrador` | Plantão das empresas com `voz_config.modo = 'real'`. Só disca com o acesso próprio ao banco (seção 7). Detalhes abaixo da tabela. |
+| `motorcx-voz-teste` | "Testar a rota" da tela Telefonia (SQL 114, `voz/testador.py`): contínuo nas duas VMs; pega o pedido do banco, lê o número de teste no cofre, liga pelo tronco pedido (app ARI `motorcx-teste`, o tronco inativo também sobe como endpoint só para isso) e grava cada passo. Nada de número em log. |
 | `motorcx-voz-simulado` | O mesmo plantão para as empresas em modo `simulado`, sem ligação de verdade. |
 | `motorcx-voz-config.timer` | A cada 2 min, busca troncos, rotas, transferências e config no banco. Se algo mudou, regera o pjsip e o dialplan dentro do contêiner, com as senhas do cofre, e recarrega. Configuração inválida no banco mantém a que está no ar. |
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |
@@ -201,26 +241,43 @@ O orquestrador reserva o robô **antes de discar**: a vaga da empresa no agendad
 empresa nesta VM (Montagem `max_sessoes`, ElevenLabs/Simulador `max_simultaneas`). Sem robô para reservar, o número
 espera na lista e não é discado. A reserva vira conversa quando o AMD dá pessoa e volta na hora quando dá máquina ou
 a linha acaba sem conversa. As linhas continuam limitadas pelos canais e pelo CPS de cada tronco. A discagem segue
-1:1 (razão 1,0); o Power/Preditivo, que disca mais linhas que robôs, é outro PR.
+1:1 (razão 1,0) por padrão; a carteira em Power disca `razão` linhas por robô livre (Discagem › ritmo, SQL 107/108).
 
 Se mesmo com a reserva o provedor não abrir a sessão (corrida com a capacidade da VM ou falha do provedor), a pessoa
 **nunca** é desligada muda: ouve o áudio `sound:motorcx/sem-robo` e a ligação acaba no fim dele (ou em 15 s, se o
 Asterisk não avisar o fim). O desfecho é `abandono_sem_robo` (`transferencia = sem_robo`), contado no abandono (freio
-do lote, chamadas curtas da Anatel). Com o Alô fake ligado, ele toca antes e a mensagem só vem se a IA não ficar livre
-em `alo_fake_max_s`. Contadores do plantão: `sem_robo_provedor` (linha não discada por falta de sessão no provedor) e
-`abandono_sem_robo`.
+do lote, chamadas curtas da Anatel) e o cliente não recebe outra ligação no dia. O "Alô fake" saiu (Power/Preditivo
+V4): mesmo ligado em `voz_config`, a mensagem toca na hora. No Power/Preditivo (razão > 1) a linha a mais que atende
+com todos os robôs ocupados cai no mesmo caminho. Contadores do plantão: `sem_robo_provedor` (linha não discada por
+falta de sessão no provedor), `reserva_no_atendimento`, `atendeu_sem_reserva` e `abandono_sem_robo`.
 
-O áudio não vem na imagem por padrão (como o `sound:motorcx/alo` do Alô fake). Para instalar:
-1. Texto (curto, neutro, **sem** dívida, credor nem nome da pessoa: a identidade vem antes da dívida), por exemplo:
-   "Olá! No momento não conseguimos continuar esta ligação. Vamos tentar de novo mais tarde. Obrigado."
-2. Gere a fala com a mesma voz pt-BR do agente, no TTS da Montagem ou da ElevenLabs (pelo painel do fornecedor; a
-   chave nunca vai para o repositório nem para a VM por este caminho), e baixe em WAV ou MP3.
-3. Converta para o formato do Asterisk (8 kHz, mono, 16 bits):
-   `ffmpeg -i fala.mp3 -ar 8000 -ac 1 -sample_fmt s16 infra/asterisk/sons/sem-robo.wav`
-   (para o Alô fake, o mesmo com `alo.wav`).
-4. Faça o commit em `infra/asterisk/sons/`: o `Dockerfile` copia a pasta para `/var/lib/asterisk/sounds/motorcx/` e a
-   imagem nova chega às VMs às 05:35. Para testar antes numa VM:
-   `docker cp sem-robo.wav motorcx-asterisk:/var/lib/asterisk/sounds/motorcx/` (não precisa reiniciar).
+Os áudios (`sound:motorcx/sem-robo` e o `sound:motorcx/alo`, que o Alô fake usava antes do V4) não vêm na imagem: o script
+`motorcx-voz-sons` da VM gera os dois com a **mesma voz do agente** (TTS da Montagem: provedor, voz e modelo de
+`/etc/motorcx/provedores.json`; chave do cofre `motorcx-voz-tts`, lida pela conta da VM e nunca mostrada, gravada ou
+logada), converte para o formato do Asterisk (WAV 8 kHz, mono, 16 bits; `voz/sons_sistema.py`, sem ffmpeg), grava em
+`/var/motorcx/sons` e instala no contêiner em `/var/lib/asterisk/sounds/motorcx/`. Depois disso o Asterisk sobe com
+`/var/motorcx/sons` montada ali (`motorcx-voz-rodar asterisk`), então os sons ficam depois de reiniciar e de a imagem
+atualizar. Textos neutros, **sem** dívida, credor, valor nem nome (a identidade vem antes da dívida; os testes conferem
+com a trava B7):
+- `sem-robo`: "Olá! No momento não conseguimos continuar esta ligação. Vamos tentar de novo mais tarde. Obrigado."
+- `alo`: "Alô?"
+
+Só com a ElevenLabs como TTS da Montagem (com o Google, o script para e avisa). Pode rodar de novo (troca os sons).
+**Comando (Cloud Shell, na pasta do repositório atualizada com `git pull`, depois do merge e da imagem `voz` publicada;
+fora da janela de discagem, porque reinicia o Asterisk e os serviços cuja imagem mudou):**
+
+```bash
+for vm in "motorcx-ast-1 southamerica-east1-a" "motorcx-ast-2 southamerica-east1-b"; do
+  set -- $vm
+  gcloud compute instances add-metadata "$1" --project=motorcob --zone="$2" \
+    --metadata-from-file=startup-script=infra/asterisk/vm/vm_inicio.sh,arquivo-motorcx-voz-rodar=infra/asterisk/vm/motorcx-voz-rodar,arquivo-motorcx-voz-sons=infra/asterisk/vm/motorcx-voz-sons
+  gcloud compute ssh "$1" --project=motorcob --zone="$2" --tunnel-through-iap -- \
+    'sudo google_metadata_script_runner startup && sudo /usr/local/bin/motorcx-voz-atualizar && sudo /usr/local/bin/motorcx-voz-sons && sudo systemctl restart motorcx-asterisk && sleep 5 && sudo docker exec motorcx-asterisk ls -l /var/lib/asterisk/sounds/motorcx/'
+done
+```
+
+O fim de cada VM lista `alo.wav` e `sem-robo.wav` no contêiner e o formato de cada um ("8000 Hz, 1 canal, 16 bits …
+ok"). Rodar o `criar_gcp.sh` de novo também atualiza os metadados (o `add-metadata` acima é só o atalho).
 
 Sem o arquivo, o Asterisk avisa que o áudio falhou e a ligação acaba na hora, com o mesmo desfecho
 `abandono_sem_robo` (é o único caso sem mensagem). Confira com `asterisk -rx "core show file formats"` e, numa
@@ -318,6 +375,15 @@ O que continua manual (uma vez):
 Recomendado: ligar também a API de conversas (`agent_id` + `ref_api`) como **reserva**. Se o webhook não chegar
 (VM fora, certificado, rede), a VM busca a conversa pelo agente dela; quando o webhook chega primeiro, a busca daquela
 chamada para. Sem webhook por agente (só o do espaço de trabalho), a VM que não recebe o aviso depende só da API.
+
+**Transferência sem operador com a ElevenLabs (B5):** quando a fila do cliente não atende (ou recusa) na ponte, o
+orquestrador desliga a conversa antiga e liga de novo para o mesmo agente, uma vez por chamada, com
+`X-MotorCX-Retorno: sem_operador | falhou`, `X-MotorCX-Aviso: virtual` e `X-MotorCX-Id: <id>r`. A pessoa nunca é
+desligada. **Configurar no agente** (painel da ElevenLabs): declarar a variável `motorcx_retorno` e, quando ela vier
+preenchida, abrir com "Me desculpe, nenhum atendente conseguiu atender agora. Posso agendar um retorno para você? Qual o
+melhor dia e horário?", sem credor nem dívida e sem transferir de novo, e registrar `resultado = retorno_agendado` com
+`retorno_em`. Vale o resultado dessa segunda conversa; o da primeira é descartado. Com REFER, o agente já saiu: segue
+como antes (`transferencia_sem_operador`).
 
 **`motorcx_id` como variável dinâmica (avaliação, a confirmar no piloto):** a análise depende de a conversa da
 ElevenLabs trazer `conversation_initiation_client_data.dynamic_variables.motorcx_id` (é por ele que o webhook e a API

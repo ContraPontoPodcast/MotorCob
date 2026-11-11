@@ -94,10 +94,11 @@ class TestClassificarChamada(unittest.TestCase):
         # a IA localizou, transferiu, o operador fechou promessa: vale o operador
         self.assertEqual(V.classificar_chamada(resultado_ia="cpc", transferencia="atendida",
                                                resultado_operador="promessa")[:2], ("promessa", "operador"))
-        # sem operador livre / transferência falhou: abandono (não penaliza o número)
+        # sem operador livre / transferência falhou: transferencia_sem_operador (não penaliza o número; desde o SQL
+        # 106 não é abandono do discador)
         for tr in ("sem_operador", "falhou"):
             self.assertEqual(V.classificar_chamada(resultado_ia="cpc", transferencia=tr)[:2],
-                             ("abandonada", "transferencia"))
+                             ("transferencia_sem_operador", "transferencia"))
         # a IA resolveu sozinha
         self.assertEqual(V.classificar_chamada(resultado_ia="recusa", sip=200)[:2], ("recusa", "ia"))
         # "não atendeu" genérico cede para o que a rede detalhou
@@ -220,7 +221,8 @@ class TestIngestao(unittest.TestCase):
                   ["C4", "30/10/2026", "INEX", "11988880004", "0", "k4", "503", "", "", "", ""]]   # repetida
         with tempfile.TemporaryDirectory() as tmp:
             ev, rel, quar = ler_ocorrencia(self._csv(tmp, linhas, cab), lay, "emp", {})
-        self.assertEqual([e.resultado for e in ev], ["promessa", "abandonada", "indisponivel", "falha_operadora"])
+        self.assertEqual([e.resultado for e in ev], ["promessa", "transferencia_sem_operador", "indisponivel",
+                                                     "falha_operadora"])
         e = ev[0]
         self.assertEqual((e.contato, e.duracao_s, e.id_externo, e.id_chamada), (SP, 95, "agente_voz:k1", "k1"))
         # rede, IA e operador em campos separados
