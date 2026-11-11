@@ -269,6 +269,8 @@ export const RESULTADO_VOZ: Record<string, { label: string; tom: Tom }> = {
 	ocupado: { label: 'Ocupado', tom: 'neutro' },
 	abandonada: { label: 'Abandono', tom: 'atencao' },
 	abandono_sem_robo: { label: 'Abandono sem robô livre', tom: 'atencao' },
+	// SQL 106: conversou com o agente, pediu um humano e a fila não atendeu (não é abandono do discador)
+	transferencia_sem_operador: { label: 'Transferência sem operador', tom: 'atencao' },
 	desligou_sem_conversar: { label: 'Desligou sem conversar', tom: 'neutro' },
 	atendeu_desligou: { label: 'Atendeu e desligou', tom: 'neutro' },
 	mudo: { label: 'Mudo', tom: 'neutro' },

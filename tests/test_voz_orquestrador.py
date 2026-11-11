@@ -343,7 +343,7 @@ class TestTransferencia(Base):
         self.assertEqual(orq.contagem["transferencia_falhou_voltou_agente"], 1)
         self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho), (None, "retorno_agendado"))
 
-    def test_provedor_que_nao_volta_vira_abandono(self):
+    def test_provedor_que_nao_volta_vira_transferencia_sem_operador(self):
         class SemVolta(Simulador):
             def retomar_sem_humano(self, id_chamada, motivo):
                 return False
@@ -352,9 +352,12 @@ class TestTransferencia(Base):
         self.assertIn(canal, self.ari.desligados)
         self.cair(canal)
         ev = self.eventos[0]
-        self.assertEqual((ev.transferencia, ev.desfecho, ev.origem_desfecho), ("sem_operador", "abandonada",
-                                                                             "transferencia"))
-        self.assertEqual(orq.contagem["abandono"], 1)
+        self.assertEqual((ev.transferencia, ev.desfecho, ev.origem_desfecho),
+                         ("sem_operador", "transferencia_sem_operador", "transferencia"))
+        self.assertEqual(orq.contagem["transferencia_sem_operador"], 1)
+        # SQL 106: a fila humana cheia não é abandono do discador (não freia o ritmo)
+        e = orq.agendador.empresas[1]
+        self.assertEqual((e.atendidas_pessoa, e.abandonos), (1, 0))
 
     def test_refer(self):
         mud = [("voz_transferencias", 0, {"metodo": "refer", "tech_prefix": "77"})]
@@ -387,7 +390,8 @@ class TestTransferencia(Base):
         self.ev("StasisStart", canal, args=["transferencia", "FAILURE", "486"])
         self.cair(f"{cid}-h", 17)
         self.cair(canal)
-        self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho), ("sem_operador", "abandonada"))
+        self.assertEqual((self.eventos[0].transferencia, self.eventos[0].desfecho),
+                         ("sem_operador", "transferencia_sem_operador"))
 
     def test_sem_destino_cadastrado_volta_ao_agente(self):
         mud = [("voz_transferencias", 0, {"ativo": False})]

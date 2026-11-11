@@ -179,7 +179,9 @@ class Plantao:
         self.registro, self.publicador, self.relogio = registro, publicador, relogio
         self.carregados: dict[int, object] = {}     # empresa -> dia carregado
         self._mtime = dados_caminho.stat().st_mtime if dados_caminho and dados_caminho.exists() else None
-        self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9, "robos": -1e9}
+        self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9, "robos": -1e9,
+                     "ritmo": -1e9}
+        self._ritmo_aviso_s = -1e9                   # último aviso de falha das amostras do ritmo (1 por hora)
         self._robos_s: float | None = None           # última foto dos robôs (segundos no limite entre duas fotos)
         self._robos_aviso_s = -1e9                   # último aviso de falha da telemetria (no máximo 1 por hora)
         self.agregado: object = None                 # último dia agregado em voz_passadas_dia
@@ -201,6 +203,8 @@ class Plantao:
             self.registro.descarregar()
         if self.registro is not None and self._vence("robos", agora_s, 15):
             self.registrar_uso_robos(agora_s)
+        if self.registro is not None and self._vence("ritmo", agora_s, 60):
+            self.registrar_ritmo(agora_s)
         if self.registro is not None and self._vence("pausas", agora_s, 30):
             self.sincronizar_pausas()
         if self.registro is not None and self._vence("reenvio", agora_s, 30):
@@ -275,6 +279,19 @@ class Plantao:
                 log.warning("uso dos robôs não gravado (%s); segue discando", ex.__class__.__name__)
             return 0
         return len(linhas)
+
+    # ------------------------------------------------------------ SQL 106 · ritmo da discagem (Power/Preditivo V1)
+    def registrar_ritmo(self, agora_s: float, todos: bool = False) -> int:
+        """voz_ritmo_amostras: as janelas de 5 min fechadas (por carteira: discadas, atendidas por pessoa, abandonos,
+        transferências sem operador, curtas, por tronco) com o modo, a razão e os robôs. Banco sem o SQL 106 (ou fora):
+        as linhas esperam na memória (até 2.000), avisa no máximo 1 vez por hora e segue discando."""
+        n = self.orq.medidor.enviar(self.relogio(), self.orq.retrato,
+                                    lambda linhas: self.registro.sb.rpc("registrar_ritmo_voz", {"linhas": linhas}),
+                                    todos=todos)
+        if n < 0 and agora_s - self._ritmo_aviso_s >= 3600:
+            self._ritmo_aviso_s = agora_s
+            log.warning("amostras do ritmo não gravadas (%d na fila); segue discando", len(self.orq.medidor.pendentes))
+        return max(n, 0)
 
     def sincronizar_pausas(self) -> None:
         """Rotas pausadas (sem crédito / bloqueio): grava no banco as que esta VM pausou e depois aplica as ativas do
@@ -421,6 +438,7 @@ class Plantao:
             if not so_periodico:
                 self.registro.sincronizar(list(self.orq.lotes.values()))
                 self.registro.descarregar()
+                self.registrar_ritmo(0.0, todos=True)      # parando: a janela aberta também vai
             self.registro.atualizar_consumo()
         if self.publicador is not None:
             self.publicador.publicar()

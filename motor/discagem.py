@@ -185,7 +185,7 @@ TENTATIVAS_NUMERO_REGRA_NOVA = 3
 
 def situacao_de(desfecho: str | None, causa_sip: int | None = None) -> str | None:
     """Desfecho de voz -> situação da renitência (None = houve contato ou pedido)."""
-    if desfecho == "abandono_sem_robo":          # atendeu sem robô livre: a mesma linha do abandono
+    if desfecho in ("abandono_sem_robo", "transferencia_sem_operador"):   # a mesma linha do abandono (SQL 91/106)
         return "abandonada"
     if desfecho in ("numero_inexistente", "inexistente_voz", "atendida_terceiro_desconhece"):
         return "numero_incorreto"
@@ -198,7 +198,7 @@ def sinalizacao_de(desfecho: str | None, causa_sip: int | None = None) -> str | 
     """Desfecho de voz -> linha da regra por sinalização. None = regra fixa (finaliza ou pausa a rota)."""
     if desfecho == "inexistente_voz":
         return "numero_inexistente"
-    if desfecho == "abandono_sem_robo":
+    if desfecho in ("abandono_sem_robo", "transferencia_sem_operador"):
         return "abandonada"
     if desfecho == "atendida_terceiro_desconhece":
         return "pessoa_errada"

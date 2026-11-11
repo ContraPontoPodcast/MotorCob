@@ -163,7 +163,8 @@ de outra pessoa pela certificação e a rotação segue.
   `causa_q850`; DIALSTATUS/AMD/toque só decidem), o evento da IA (`resultado_ia` = coluna resultado) e a tabulação
   do operador (`resultado_operador`, depois da transferência), mais `transferencia` (atendida|sem_operador|falhou),
   `destino` (ia|ia_humano), `origem_resultado`, `identidade_confirmada`, `rota`, `id_chamada`. `voz.classificar_chamada`
-  decide o desfecho: operador > transferência sem operador/falhou (= `abandonada`) > IA > rede; "não atende"
+  decide o desfecho: operador > transferência sem operador/falhou (= `transferencia_sem_operador` desde o SQL 106;
+  antes `abandonada`) > IA > rede; "não atende"
   genérico cede para a rede; inexistente só com causa confirmável (tipo B só com `numero_canonico`; senão
   `falha_operadora` + aviso NORMALIZAÇÃO). Chaves novas (só com código/coluna novos): as 8 situações do dono
   (`voz.SITUACOES_DONO`: maquina, nao_atendida, ocupado, caixa_postal, desligou_sem_conversar, retorno_agendado
@@ -1201,6 +1202,19 @@ seguidas ou 50% das últimas 50 (`disjuntor`), ou >90% das últimas 30 com o mes
 sem crédito e bloqueio continuam pedindo o Retomar. `saude_troncos_voz(empresa, horas)` (G34): tentativas, atendidas,
 falhas técnicas, duração média e os 5 SIP mais comuns por tronco (card "Saúde do tronco" na tela do tronco). Teste:
 `supabase/testes/testar_voz_disjuntor.py`. Se o SQL 114 rodar de novo, rode o 115 depois.
+
+**Agente de voz · ritmo da discagem: medir certo (Power e Preditivo V1, SQL 106).** `transferencia_sem_operador` é
+desfecho próprio (conversou, pediu humano, a fila do cliente não atendeu e o agente não pôde voltar): NÃO é abandono do
+discador (fora do freio e da meta; a fila humana cheia não freia a IA), não é curta por si (só pelos 6 s) e na
+Renitência continua a linha "abandonada" (`situacao_voz`/`situacao_de`). O freio de abandono do agendador usa só os
+últimos 30 min da empresa (`JanelaTaxa`; solta sozinho quando a janela anda), não o acumulado desde que a VM subiu.
+`voz/orquestrador/medidor.py` conta, por empresa × carteira × janela de 5 min (fim da tentativa, horário de Brasília):
+discadas, atendidas por pessoa, abandonos, transferências sem operador, curtas (a regra do motor, abandono sempre
+conta) e o mesmo por tronco; o Plantão manda as janelas fechadas a cada minuto (`registrar_ritmo_voz`; acesso próprio
+`voz_vm.registrar_ritmo`) com o modo, a razão e os robôs; banco fora = até 2.000 linhas esperam e 1 aviso por hora.
+`voz_ritmo_amostras` (35 dias; a mesma janela soma) e `ritmo_voz_hoje(empresa, credor)` (totais e taxas do dia, última
+amostra, janelas de 30 min, por tronco com a bina mascarada, abandono de 30 dias) para as telas; leitura de quem é da
+empresa ou da equipe que cuida da voz. Testes: `tests/test_voz_ritmo.py` e `supabase/testes/testar_ritmo_voz.py`.
 
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
