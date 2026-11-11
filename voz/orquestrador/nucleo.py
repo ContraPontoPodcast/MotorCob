@@ -514,7 +514,8 @@ class Orquestrador:
                               id_acao=c.item.id_acao, final_numero=c.item.telefone[-2:],
                               variaveis=self._variaveis_fala(c),
                               credor_id=c.lote_chave[1] if c.lote_chave else None,
-                              aviso_abertura=self._aviso_abertura(c))
+                              aviso_abertura=self._aviso_abertura(c),
+                              voz_id=getattr(self.dados.config(c.empresa_id), "voz_id", None) or "")
         no_pico = self.agendador.conversar(c.empresa_id, c.reservada)
         if no_pico is None:                     # sem reserva e sem robô livre (não acontece com a razão 1,0)
             self._sem_robo(c, agora)

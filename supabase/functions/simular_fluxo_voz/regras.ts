@@ -4,17 +4,22 @@
 // cara de documento, telefone ou e-mail são recusadas, como no banco (falas_teste_voz_ok). Nada é gravado, a não ser o
 // resultado dos casos de teste (só caminho e código).
 
-export type Acao = "simular" | "rodar_casos" | "roleplay" | "ouvir";
+export type Acao = "simular" | "rodar_casos" | "roleplay" | "ouvir" | "ouvir_voz";
 /** SQL 66: `cenarios` = resposta escolhida para cada conector simulado ({id: "sucesso" | "tempo" | "401"}). */
 export interface PedidoSimular { acao: "simular"; versao: number; falas: string[]; falhar: number[]; cenarios: Record<string, Cenario> }
 export type Cenario = "sucesso" | "tempo" | "401";
 export const CENARIOS: readonly Cenario[] = ["sucesso", "tempo", "401"];
 /** SQL 66: "Ouvir a voz" — prévia em áudio de uma fala com a voz da empresa (TTS da Montagem na VM; nada é guardado). */
 export interface PedidoOuvir { acao: "ouvir"; versao: number; texto: string }
+/** Console › Agente virtual: prévia de uma voz escolhida para a empresa, antes de salvar (só a equipe MotorCX com a
+ *  permissão de troncos de voz na empresa, cuida_voz). A VM só usa a voz se estiver liberada nela (tts_vozes). */
+export interface PedidoOuvirVoz { acao: "ouvir_voz"; empresa: number; voz_id: string; texto: string }
+export const PERMISSAO_VOZ = "cuida_voz";
+export const TEXTO_OUVIR_VOZ = "Olá, aqui é o assistente virtual. Esta é a voz que vai falar com os seus clientes.";
 export interface PedidoCasos { acao: "rodar_casos"; versao: number }
 /** SQL 59: lote de roleplay com personas (rodar_roleplay_voz) e o aviso assinado à VM para começar já. */
 export interface PedidoRoleplay { acao: "roleplay"; versao: number; personas: number[]; n: number }
-export type Pedido = PedidoSimular | PedidoCasos | PedidoRoleplay | PedidoOuvir;
+export type Pedido = PedidoSimular | PedidoCasos | PedidoRoleplay | PedidoOuvir | PedidoOuvirVoz;
 export const MAX_TEXTO_OUVIR = 500;
 /** Fala estimada a ~15 caracteres por segundo (minutos da prévia no uso de IA; o mesmo da VM). */
 export const minutosPrevia = (caracteres: number) => Math.round((caracteres / 900) * 1000) / 1000;
@@ -39,6 +44,16 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { erro: "pedido inválido" };
   const c = corpo as Record<string, unknown>;
   const acao = c.acao ?? "simular";
+  if (acao === "ouvir_voz") {
+    if (Object.keys(c).some((k) => !["acao", "empresa", "voz_id", "texto"].includes(k))) return { erro: "pedido inválido" };
+    if (!Number.isSafeInteger(c.empresa) || (c.empresa as number) <= 0) return { erro: "empresa inválida" };
+    if (typeof c.voz_id !== "string" || !/^[A-Za-z0-9_\-]{2,80}$/.test(c.voz_id)) return { erro: "voz inválida" };
+    const t = c.texto ?? TEXTO_OUVIR_VOZ;
+    if (typeof t !== "string" || !t.trim() || t.length > MAX_TEXTO_OUVIR || /[0-9]{9,}/.test(t) || t.includes("@")) {
+      return { erro: `texto inválido: 1 a ${MAX_TEXTO_OUVIR} caracteres, sem documento, telefone ou e-mail` };
+    }
+    return { pedido: { acao, empresa: c.empresa as number, voz_id: c.voz_id, texto: t } };
+  }
   if (!Number.isSafeInteger(c.versao) || (c.versao as number) <= 0) return { erro: "versão inválida" };
   if (acao === "rodar_casos") {
     if (Object.keys(c).some((k) => k !== "acao" && k !== "versao")) return { erro: "pedido inválido" };
@@ -63,7 +78,7 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
     }
     return { pedido: { acao, versao: c.versao as number, texto: t } };
   }
-  if (acao !== "simular") return { erro: "ação inválida: simular, rodar_casos, roleplay ou ouvir" };
+  if (acao !== "simular") return { erro: "ação inválida: simular, rodar_casos, roleplay, ouvir ou ouvir_voz" };
   if (Object.keys(c).some((k) => !["acao", "versao", "falas", "falhar", "cenarios"].includes(k))) return { erro: "pedido inválido" };
   const falas = c.falas ?? [];
   if (!Array.isArray(falas) || falas.length > MAX_FALAS) return { erro: `até ${MAX_FALAS} falas` };
@@ -90,6 +105,13 @@ export function autorizar(quem: Perfil | null, pode: boolean, v: Versao | null):
   if (!v) return "versão não encontrada";
   if (!quem.equipe && (quem.empresa_id == null || Number(v.empresa_id) !== Number(quem.empresa_id))) return "versão não encontrada";
   if (!pode) return "sem permissão";
+  return null;
+}
+
+/** Prévia de voz do Console: só a equipe MotorCX ativa e com cuida_voz(empresa) (permissão de troncos de voz). */
+export function autorizarVoz(quem: Perfil | null, pode: boolean): string | null {
+  if (!quem || !quem.ativo) return "acesso desativado";
+  if (!quem.equipe || !pode) return "sem permissão";
   return null;
 }
 

@@ -50,6 +50,7 @@ COLUNAS: dict[str, dict[str, str]] = {
         "retencao_dias": "retencao_dias",
         "transcrever": "transcrever", "transcrever_min_segundos": "transcrever_min_segundos",
         "bucket_gravacoes": "bucket_gravacoes", "variaveis": "variaveis",
+        "voz_id": "voz_id",          # a voz da empresa na Montagem (só vale se liberada na VM, tts_vozes)
     },
     # V4: a divisão da concorrência contratada (view; a VM lê o limite de cada empresa)
     "voz_divisao_concorrencia": {"empresa_id": "empresa_id", "limite": "limite"},
@@ -129,6 +130,7 @@ SEGREDO_REF = re.compile(r"^[A-Za-z0-9_\-/.]{1,120}$")
 TECH_PREFIX = re.compile(r"^[0-9]{1,8}$")
 HOST = re.compile(r"^[A-Za-z0-9.\-]{1,253}$")
 SIP_URI = re.compile(r"^sips?:([A-Za-z0-9_.+\-]{1,64})@([A-Za-z0-9.\-]{1,253})(?::(\d{1,5}))?(?:;transport=(udp|tcp|tls))?$")
+VOZ_ID = re.compile(r"[A-Za-z0-9_\-]{2,80}")          # voz_config.voz_id (mesmo formato do banco)
 # cabeçalhos X-MotorCX que a transferência pode levar (voz_transferencias.cabecalhos, text[] com check no SQL 56)
 CABECALHOS_TRANSFERENCIA = ("X-MotorCX-Id-Chamada", "X-MotorCX-Id-Acao", "X-MotorCX-Acao", "X-MotorCX-Motivo")
 CODECS_OK = ("alaw", "ulaw", "g729", "g722", "opus", "gsm")
@@ -292,6 +294,7 @@ class ConfigVoz:
     transcrever_min_segundos: int = 5
     bucket_gravacoes: str | None = None       # um bucket por empresa (criar_gcp.sh empresa <id> <dias>)
     variaveis: tuple = VARIAVEIS_PADRAO       # quais variáveis_voz() a empresa manda ao provedor (só os nomes)
+    voz_id: str | None = None                 # voz da empresa na Montagem; a VM só usa se estiver liberada nela
 
     @property
     def alo_fake_ativo(self) -> bool:
@@ -440,7 +443,14 @@ def ler_config(linha: dict) -> ConfigVoz:
         transcrever_min_segundos=_int(_v(linha, t, "transcrever_min_segundos", 5), f"{onde}.transcrever_min_segundos",
                                       0, 600),
         bucket_gravacoes=_bucket(_v(linha, t, "bucket_gravacoes"), onde),
-        variaveis=ler_variaveis(_v(linha, t, "variaveis"), onde))
+        variaveis=ler_variaveis(_v(linha, t, "variaveis"), onde),
+        voz_id=ler_voz_id(_v(linha, t, "voz_id")))
+
+
+def ler_voz_id(v) -> str | None:
+    """voz_config.voz_id: id da voz no provedor (o banco já confere o formato). Fora do formato vira None (a VM usa a
+    padrão); nunca derruba a configuração."""
+    return v if isinstance(v, str) and VOZ_ID.fullmatch(v) else None
 
 
 def ler_variaveis(v, onde: str) -> tuple:

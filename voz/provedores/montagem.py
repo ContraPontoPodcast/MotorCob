@@ -67,7 +67,7 @@ class ConfigMontagem:
     tts_provedor: str = "elevenlabs"           # elevenlabs | google
     tts_voz: str = ""                          # id da voz pt-BR do provedor
     tts_modelo: str = ""
-    tts_vozes: tuple = ()                      # outras vozes pt-BR liberadas para as empresas (prévia "Ouvir a voz")
+    tts_vozes: tuple = ()                      # outras vozes pt-BR liberadas para as empresas (voz_config.voz_id)
     ref_deepgram: str = "voz/deepgram"
     ref_llm: str = "voz/llm"
     ref_tts: str = "voz/tts"
@@ -498,14 +498,41 @@ def preencher(texto: str, variaveis: dict | None) -> str:
     return VARIAVEL.sub(lambda m: v.get(m.group(1) or m.group(2), m.group(0)), texto or "")
 
 
-def montar_servicos_pipecat(cfg: ConfigMontagem, segredos) -> tuple:
-    """(stt, tts) do Pipecat com as chaves do cofre. Import tardio (voz/requirements-ia.txt)."""
+VOZ_ID = re.compile(r"[A-Za-z0-9_\-]{2,80}")
+_AVISADAS: set = set()
+
+
+def vozes_liberadas(cfg: ConfigMontagem) -> tuple:
+    """A padrão da VM (tts_voz) e as liberadas (tts_vozes), na ordem, sem repetir e só no formato de id de voz."""
+    out: list[str] = []
+    for v in (cfg.tts_voz, *(cfg.tts_vozes or ())):
+        if isinstance(v, str) and VOZ_ID.fullmatch(v) and v not in out:
+            out.append(v)
+    return tuple(out)
+
+
+def voz_da_empresa(cfg: ConfigMontagem, voz_id: str | None, empresa_id=None) -> str:
+    """Voz da ligação: a voz_config.voz_id da empresa quando é a padrão (tts_voz) ou uma das liberadas na VM
+    (tts_vozes); sem voz, a padrão; voz que a VM não liberou também cai na padrão, com aviso no log (só o número
+    da empresa, nenhum dado da pessoa)."""
+    if voz_id and voz_id in vozes_liberadas(cfg):
+        return voz_id
+    if voz_id and (empresa_id, voz_id) not in _AVISADAS:      # um aviso por empresa e voz (não a cada ligação)
+        _AVISADAS.add((empresa_id, voz_id))
+        log.warning("montagem: a voz da empresa %s não está liberada nesta VM (tts_vozes); usando a padrão", empresa_id)
+    return cfg.tts_voz
+
+
+def montar_servicos_pipecat(cfg: ConfigMontagem, segredos, voz: str | None = None) -> tuple:
+    """(stt, tts) do Pipecat com as chaves do cofre. Import tardio (voz/requirements-ia.txt). `voz`: a voz da
+    ligação (voz_da_empresa); sem ela, a padrão da VM (tts_voz)."""
+    voz = voz or cfg.tts_voz
     from pipecat.services.deepgram.stt import DeepgramSTTService
     stt = DeepgramSTTService(api_key=segredos.valor(cfg.ref_deepgram), sample_rate=TAXA,
                              settings=DeepgramSTTService.Settings(model=cfg.stt_modelo, language=cfg.idioma))
     if cfg.tts_provedor == "elevenlabs":
         from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
-        conf = {"voice": cfg.tts_voz, "language": cfg.idioma}
+        conf = {"voice": voz, "language": cfg.idioma}
         if cfg.tts_modelo:
             conf["model"] = cfg.tts_modelo
         tts = ElevenLabsTTSService(api_key=segredos.valor(cfg.ref_tts), sample_rate=TAXA,
@@ -513,7 +540,7 @@ def montar_servicos_pipecat(cfg: ConfigMontagem, segredos) -> tuple:
     elif cfg.tts_provedor == "google":
         from pipecat.services.google.tts import GoogleTTSService
         tts = GoogleTTSService(credentials=segredos.valor(cfg.ref_tts), sample_rate=TAXA,
-                               settings=GoogleTTSService.Settings(voice=cfg.tts_voz, language=cfg.idioma))
+                               settings=GoogleTTSService.Settings(voice=voz, language=cfg.idioma))
     else:
         raise ValueError(f"TTS desconhecido: {cfg.tts_provedor}")
     return stt, tts
@@ -783,7 +810,8 @@ class Montagem(ProvedorVoz):
             transporte, _ = await s.loop.create_datagram_endpoint(lambda: ponte,
                                                                   local_addr=(self.cfg.host_midia, s.porta))
             envio = asyncio.ensure_future(ponte.enviar_ritmado())
-            stt, tts = self.servicos or montar_servicos_pipecat(self.cfg, self.segredos)
+            stt, tts = self.servicos or montar_servicos_pipecat(
+                self.cfg, self.segredos, voz_da_empresa(self.cfg, s.ctx.voz_id, s.ctx.empresa_id))
             await rodar_pipecat(ponte, ConversaFalada(s.conversa), stt, tts, s.parar)   # PR10: voz por extenso
             envio.cancel()
         except Exception as ex:   # noqa: BLE001 — falha de áudio/serviço: devolve a pessoa para um humano

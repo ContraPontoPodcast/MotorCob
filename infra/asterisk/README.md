@@ -212,6 +212,27 @@ subirem para o bucket da empresa.
   (`sudo nano /etc/motorcx/provedores.json`, permissão 644, sem segredo) e reinicie o orquestrador. Na Montagem,
   preencha `tts_voz` (id da voz pt-BR) e crie os segredos `motorcx-voz-deepgram`, `motorcx-voz-llm` e
   `motorcx-voz-tts` antes de pôr uma empresa com `provedor = 'montagem_motorcx'`.
+- **Voz por empresa (Montagem):** `tts_voz` é a voz padrão (também a dos sons do sistema) e `tts_vozes` são as outras
+  vozes pt-BR liberadas. A equipe escolhe a voz de cada empresa em Console › Agente virtual › Empresa › Voz do agente
+  (grava `voz_config.voz_id`, com "Ouvir" antes de salvar). Na ligação, a Montagem usa a voz da empresa só se ela for a
+  `tts_voz` ou estiver em `tts_vozes`; sem voz, ou com voz não liberada nesta VM, usa a `tts_voz` (aviso no journal do
+  orquestrador, só com o número da empresa). A lista do Console fica em `site/src/lib/voz.ts` › `VOZES_MONTAGEM` e
+  precisa ser a mesma do padrão (`vm/motorcx-provedores.padrao.json`; um teste confere).
+  Como o `provedores.json` que já existe nunca é sobrescrito no boot, para gravar as vozes nas VMs que já estão no ar
+  (mexe só em `tts_voz` e `tts_vozes`, mantém o resto; sem segredo):
+
+  ```bash
+  for vm in "motorcx-ast-1 southamerica-east1-a" "motorcx-ast-2 southamerica-east1-b"; do
+    set -- $vm
+    gcloud compute ssh "$1" --project=motorcob --zone="$2" --tunnel-through-iap -- \
+      'sudo python3 -c "import json; p=\"/etc/motorcx/provedores.json\"; c=json.load(open(p)); k=next((k for k in (\"montagem_motorcx\", \"montagem\") if k in c), \"montagem\"); m=c.setdefault(k, {}); m[\"tts_voz\"]=\"0YziWIrqiRTHCxeg1lyc\"; m[\"tts_vozes\"]=[\"RGymW84CSmfVugnA5tvA\", \"PznTnBc8X6pvixs9UkQm\", \"4J31DrhygVjvFsoj7BsM\"]; json.dump(c, open(p, \"w\"), ensure_ascii=False, indent=2)" && sudo chmod 644 /etc/motorcx/provedores.json && for s in motorcx-voz-orquestrador motorcx-voz-simulador motorcx-voz-treino; do sudo systemctl try-restart "$s" 2>/dev/null; done; sudo python3 -c "import json; c=json.load(open(\"/etc/motorcx/provedores.json\")); m=c.get(\"montagem_motorcx\") or c.get(\"montagem\") or {}; print(m.get(\"tts_voz\"), m.get(\"tts_vozes\"))"'
+  done
+  ```
+
+  O comando usa a chave da Montagem que o arquivo já tem (`montagem_motorcx` ou `montagem`, como o orquestrador) e
+  termina mostrando as vozes gravadas em cada VM. Reinicia (`try-restart`) só os serviços que estão no ar:
+  `motorcx-voz-orquestrador`, `motorcx-voz-simulador` (prévia "Ouvir") e, se existir, `motorcx-voz-treino`. A ligação em andamento não muda de voz; as próximas já saem com a voz
+  da empresa.
 
 **Robôs (conversas) e a mensagem de quem atende sem robô (SQL 91):** o limite de cada empresa
 (`voz_divisao_concorrencia.limite`, × pico se ligado) e o teto global contam **conversas com a IA**, não linhas tocando.
