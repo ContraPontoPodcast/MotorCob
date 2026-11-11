@@ -3020,5 +3020,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 102: uso dos robôs (testar_robos_uso.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 103 · Telefonia T1: senha do tronco direto no cofre (só o nome do segredo da empresa, aal2, limite, registro só
+# pelo servidor depois do pedido, teste zerado e Auditoria sem valor)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_cofre.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 103: senha do tronco no cofre (testar_voz_cofre.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

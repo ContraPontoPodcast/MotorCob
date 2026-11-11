@@ -8,6 +8,10 @@
 #   bash criar_gcp.sh chave-leitura [ID-DO-PROJETO]             chave JSON da conta de leitura das gravações, num
 #                                                              arquivo temporário (para o GCS_GRAVACOES_CHAVE do
 #                                                              Supabase); o script nunca mostra o conteúdo
+#   bash criar_gcp.sh chave-cofre [ID-DO-PROJETO]               SQL 103: conta que só ESCREVE as senhas dos troncos no
+#                                                              cofre (motorcx-voz-trunk-*) e a chave dela num arquivo
+#                                                              temporário (GCP_COFRE_TRONCO_CHAVE da Edge Function
+#                                                              segredo-tronco-voz); nunca mostra o conteúdo
 #
 # Infraestrutura:
 #   - rede "motorcx-voz" e sub-rede em São Paulo
@@ -73,6 +77,9 @@ if [ "${1:-}" = empresa ]; then
 elif [ "${1:-}" = chave-leitura ]; then
   MODO=chave-leitura
   shift
+elif [ "${1:-}" = chave-cofre ]; then
+  MODO=chave-cofre
+  shift
 fi
 PROJETO="${1:-$(gcloud config get-value project 2>/dev/null || true)}"
 [ -n "$PROJETO" ] || { echo "Informe o ID do projeto: bash criar_gcp.sh meu-projeto-123" >&2; exit 1; }
@@ -131,6 +138,62 @@ Chave nova da $SA_LEITURA gravada em:
 4. Trocou a chave? Depois de abrir uma gravação no site, apague a antiga (a nova é a de data mais recente):
      gcloud iam service-accounts keys list --iam-account=$SA_LEITURA --managed-by=user
      gcloud iam service-accounts keys delete <ID-DA-CHAVE-ANTIGA> --iam-account=$SA_LEITURA
+FIM
+  exit 0
+fi
+
+# ======================================================================= modo chave-cofre: GCP_COFRE_TRONCO_CHAVE
+# SQL 103 · Telefonia T1. A conta motorcx-voz-cofre-escrita NÃO lê segredo nenhum (sem secretmanager.versions.access):
+#   - motorcxVozCofreCriar: só secretmanager.secrets.create (cria o segredo vazio; a criação é conferida no projeto);
+#   - motorcxVozCofreGravar: escrever versão nova, listar e destruir versões, só em motorcx-voz-trunk-* (condição).
+# Quem lê é só a conta motorcx-asterisk das VMs (motorcx-voz-*). A Edge Function escreve sempre no nome da empresa do
+# tronco (motorcx-voz-trunk-e<empresa>-<referência>), que o banco calcula.
+SA_COFRE_NOME=motorcx-voz-cofre-escrita
+if [ "$MODO" = chave-cofre ]; then
+  gcloud config set project "$PROJETO" >/dev/null
+  NUM="$(gcloud projects describe "$PROJETO" --format='value(projectNumber)')"
+  [[ "$NUM" =~ ^[0-9]+$ ]] || falha "não foi possível ler o número do projeto $PROJETO"
+  SA_COFRE="${SA_COFRE_NOME}@${PROJETO}.iam.gserviceaccount.com"
+  existe gcloud iam service-accounts describe "$SA_COFRE" || \
+    gcloud iam service-accounts create "$SA_COFRE_NOME" \
+      --display-name="Cofre: só escreve as senhas dos troncos (Edge Function segredo-tronco-voz)" >/dev/null
+  papel_proprio() {   # id, título, permissões: cria ou atualiza o papel do projeto
+    if existe gcloud iam roles describe "$1" --project="$PROJETO"; then
+      gcloud iam roles update "$1" --project="$PROJETO" --permissions="$3" --quiet >/dev/null
+    else
+      gcloud iam roles create "$1" --project="$PROJETO" --title="$2" --permissions="$3" --stage=GA >/dev/null
+    fi
+  }
+  papel_proprio motorcxVozCofreCriar "MotorCX voz: criar segredo (sem ler)" secretmanager.secrets.create
+  papel_proprio motorcxVozCofreGravar "MotorCX voz: escrever senha de tronco (sem ler)" \
+    secretmanager.versions.add,secretmanager.versions.list,secretmanager.versions.destroy
+  gcloud projects add-iam-policy-binding "$PROJETO" --member="serviceAccount:$SA_COFRE" \
+    --role="projects/$PROJETO/roles/motorcxVozCofreCriar" --condition=None >/dev/null
+  gcloud projects add-iam-policy-binding "$PROJETO" --member="serviceAccount:$SA_COFRE" \
+    --role="projects/$PROJETO/roles/motorcxVozCofreGravar" \
+    --condition="expression=resource.name.startsWith(\"projects/${NUM}/secrets/motorcx-voz-trunk-\"),title=motorcx-voz-trunk,description=So as senhas dos troncos" \
+    >/dev/null
+  umask 077
+  ARQ="$(mktemp --suffix=.json "${HOME:-/tmp}/cofre-tronco-chave.XXXXXX")"
+  if ! gcloud iam service-accounts keys create "$ARQ" --iam-account="$SA_COFRE" >/dev/null 2>&1; then
+    shred -u "$ARQ" 2>/dev/null || rm -f "$ARQ"
+    falha "não foi possível criar a chave de $SA_COFRE (a política da organização pode proibir chaves de conta de serviço: iam.disableServiceAccountKeyCreation)"
+  fi
+  cat <<FIM
+
+Conta $SA_COFRE pronta (cria segredo e escreve versão só em motorcx-voz-trunk-*; não lê nenhum segredo).
+Chave nova gravada em:
+  $ARQ
+(o conteúdo não foi mostrado; o arquivo só pode ser lido por você)
+
+1. Abra o arquivo no editor do Cloud Shell:   cloudshell edit "$ARQ"
+   e copie o conteúdo inteiro (o JSON todo, do { ao }).
+2. Supabase › Edge Functions › Secrets › Add new secret: nome GCP_COFRE_TRONCO_CHAVE, valor = o JSON copiado.
+   Não cole em nenhum outro lugar (chat, e-mail, documento).
+3. Apague o arquivo:                           shred -u "$ARQ"
+4. Trocou a chave? Depois de guardar uma senha pelo site, apague a antiga (a nova é a de data mais recente):
+     gcloud iam service-accounts keys list --iam-account=$SA_COFRE --managed-by=user
+     gcloud iam service-accounts keys delete <ID-DA-CHAVE-ANTIGA> --iam-account=$SA_COFRE
 FIM
   exit 0
 fi

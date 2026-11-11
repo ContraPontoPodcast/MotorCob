@@ -93,6 +93,25 @@ criar motorcx-voz-trunk-12-3 "Senha do tronco"
 
 Tronco autenticado por IP não tem senha.
 
+**Senha de tronco pela tela (SQL 103, PR T1 da Telefonia):** a senha é digitada uma vez (Console › Agente virtual ›
+tronco › "Guardar a senha no cofre"; no PR T5, também na tela Telefonia do cliente) e vai **direto** para o Secret
+Manager pela Edge Function `segredo-tronco-voz`, sempre no segredo da empresa do tronco:
+`motorcx-voz-trunk-e<empresa>-<referência>` (no banco, `segredo_ref = voz/trunk/e<empresa>/<referência>`). O banco
+guarda só a data (`segredo_guardado_em`) e a versão; a versão anterior é destruída. Exige a verificação em duas etapas.
+A conta que escreve (`motorcx-voz-cofre-escrita`) **não lê** nenhum segredo; quem lê é só a `motorcx-asterisk` das
+VMs, na hora de gerar o pjsip (um tronco cuja senha ainda não está no cofre fica de fora sozinho, sem parar os outros).
+Quem administra o projeto no Google Cloud continua conseguindo ler o cofre: o controle é o IAM restrito e o log de
+auditoria do Secret Manager, não uma promessa de que "ninguém vê". Uma vez, no Cloud Shell (na pasta `infra/asterisk`):
+
+```bash
+bash criar_gcp.sh chave-cofre motorcob     # conta, papéis sem leitura e a chave num arquivo 0600 (não mostra o conteúdo)
+```
+
+Siga o que ele imprimir (colar no secret `GCP_COFRE_TRONCO_CHAVE` do Supabase e apagar o arquivo com `shred`) e publique
+a função com "Verify JWT" ligado: `supabase functions deploy segredo-tronco-voz --project-ref <ref>` (ou cole no editor
+o arquivo de `python3 scripts/juntar_funcao.py segredo-tronco-voz`). Conferir sem ver valor:
+`gcloud secrets versions list motorcx-voz-trunk-e12-aurora --project=motorcob` (só versão e data).
+
 **Opcionais:**
 - `motorcx-voz-deepgram`, `motorcx-voz-llm` e `motorcx-voz-tts`: chaves da Montagem MotorCX;
 - `motorcx-voz-transcricao-api`: chave da reserva da transcrição por API;

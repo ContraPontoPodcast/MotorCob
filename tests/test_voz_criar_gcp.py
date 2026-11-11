@@ -216,6 +216,36 @@ class TestCriarGcp(unittest.TestCase):
         self.assertIn("iam.disableServiceAccountKeyCreation", r.stderr)
         self.assertEqual(list(self.tmp.glob("gcs-gravacoes-chave.*")), [])
 
+    def test_sql103_chave_do_cofre_so_escreve_e_vai_so_para_arquivo(self):
+        r, chamadas = self.rodar("chave-cofre", "proj-ficticio")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        todas = "\n".join(chamadas)
+        self.assertIn("iam service-accounts create motorcx-voz-cofre-escrita", todas)
+        criar = next(c for c in chamadas if c.startswith("iam roles create motorcxVozCofreCriar"))
+        self.assertIn("--permissions=secretmanager.secrets.create ", criar + " ")
+        gravar = next(c for c in chamadas if c.startswith("iam roles create motorcxVozCofreGravar"))
+        self.assertIn("--permissions=secretmanager.versions.add,secretmanager.versions.list,secretmanager.versions.destroy", gravar)
+        self.assertNotIn("versions.access", todas)                         # a conta nunca lê segredo
+        self.assertNotIn("secretAccessor", todas)
+        cond = next(c for c in chamadas if "roles/motorcxVozCofreGravar" in c and "add-iam-policy-binding" in c)
+        self.assertIn('resource.name.startsWith("projects/123456789/secrets/motorcx-voz-trunk-")', cond)
+        arqs = list(self.tmp.glob("cofre-tronco-chave.*.json"))
+        self.assertEqual(len(arqs), 1)
+        self.assertEqual(arqs[0].stat().st_mode & 0o777, 0o600)
+        for saida in (r.stdout, r.stderr):
+            self.assertNotIn("CHAVE-FALSA", saida)
+            self.assertNotIn("PRIVATE KEY", saida)
+        self.assertIn("GCP_COFRE_TRONCO_CHAVE", r.stdout)
+        self.assertIn(f'shred -u "{arqs[0]}"', r.stdout)
+        self.assertNotIn("firewall", todas)
+        # segunda vez: atualiza os papéis em vez de criar
+        self.estado.write_text("1")
+        self.log.unlink()
+        r, chamadas = self.rodar("chave-cofre", "proj-ficticio")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(any(c.startswith("iam roles update motorcxVozCofreGravar") for c in chamadas))
+        self.assertFalse(any(c.startswith("iam roles create") for c in chamadas))
+
     def test_bucket_novo_com_90_dias_e_recusa_menos(self):
         self.estado.write_text("1")
         r, _ = self.rodar("empresa", "12", "30", "proj-ficticio")

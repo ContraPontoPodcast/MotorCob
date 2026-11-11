@@ -1,13 +1,15 @@
 // Gavetas do Console › Fornecedores e rotas › Agente virtual: tronco SIP, rota com vigência e transferência
-// para o discador do cliente. Só a equipe com gerenciar_troncos_voz abre. A senha do tronco nunca é digitada
-// aqui: a equipe grava no cofre e o formulário guarda só a referência (segredo_ref).
+// para o discador do cliente. Só a equipe com gerenciar_troncos_voz abre. SQL 103: a senha do tronco vai direto para o
+// cofre pela Edge Function segredo-tronco-voz (com a verificação em duas etapas); o banco e esta tela nunca recebem a
+// senha de volta, só a data em que foi guardada.
 import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
-import { supabase, friendlyError, today, type Row } from '@/lib/supabase';
+import { supabase, friendlyError, today, dateTimeBR, type Row } from '@/lib/supabase';
+import { erroDaFuncao } from '@/lib/funcoes';
 import {
 	CODECS, FORMATOS_DISCAGEM, IPS_SAIDA_MOTORCX, RE_BINA, RE_CSP, RE_DDD, RE_DESTINO_SIP, RE_HOST, RE_IP, RE_REFERENCIA,
 	RE_TECH, RE_USUARIO, TIPOS_ROTA, TRANSPORTES, cadenciaTxt, lerNumero, reais, segundosTarifados, hashNumeroTeste,
-	segredoTroncoOk, CPS_MAX,
+	CPS_MAX, FUNCAO_SEGREDO_TRONCO, senhaTroncoMotivo,
 } from '@/lib/voz';
 import { Aviso, Campo, Dialogo, Gaveta, Trava, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 
@@ -31,7 +33,6 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 	const [transporte, setTransporte] = useState(String(tronco?.transporte ?? 'udp'));
 	const [autenticacao, setAutenticacao] = useState(String(tronco?.autenticacao ?? 'ip'));
 	const [usuario, setUsuario] = useState(String(tronco?.usuario ?? ''));
-	const [segredo, setSegredo] = useState(String(tronco?.segredo_ref ?? ''));
 	const [canais, setCanais] = useState(String(tronco?.canais ?? ''));
 	const [cps, setCps] = useState(String(tronco?.cps ?? 10));
 	const [bina, setBina] = useState('');
@@ -54,7 +55,6 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 	const portaN = Number(porta); if (!Number.isInteger(portaN) || portaN < 1 || portaN > 65535) e.porta = 'De 1 a 65535.';
 	if (autenticacao === 'senha') {
 		if (!RE_USUARIO.test(usuario.trim())) e.usuario = 'Usuário SIP do contrato.';
-		if (!segredoTroncoOk(segredo, tronco?.segredo_ref == null ? null : String(tronco.segredo_ref))) e.segredo = 'Nome do segredo no cofre, começando com voz/. Ex.: voz/trunk/aurora-opb';
 	}
 	const canaisN = Number(canais); if (!Number.isInteger(canaisN) || canaisN < 1 || canaisN > 10000) e.canais = 'De 1 a 10.000.';
 	const cpsN = Number(cps); if (!Number.isInteger(cpsN) || cpsN < 1 || cpsN > CPS_MAX) e.cps = 'De 1 a 500.';
@@ -70,15 +70,18 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 		setTentou(true);
 		if (!ok || !supabase) return;
 		setBusy(true); setErro('');
+		// SQL 103: sem referência (segredo_ref nulo), o banco mantém a do tronco ou usa a do cofre da empresa
 		const { error } = await supabase.rpc('cadastrar_tronco_voz', {
 			empresa: Number(empresaId), referencia: referencia.trim().toLowerCase(), operadora: operadora.trim(), host: host.trim(),
 			canais: canaisN, autenticacao, ddd_origem: ddd.trim(), bina: binaFinal,
-			segredo_ref: autenticacao === 'senha' ? segredo.trim() : null, usuario: autenticacao === 'senha' ? usuario.trim() : null,
+			segredo_ref: null, usuario: autenticacao === 'senha' ? usuario.trim() : null,
 			porta: portaN, transporte, cps: cpsN, codecs, formato_discagem: formato, ativo, csp: csp.trim() || null,
 		});
 		setBusy(false);
 		if (error) { setErro(erroDoBanco(error)); return; }
-		onSaved(novo ? 'Tronco cadastrado. O Asterisk faz a chamada de teste e a divisão da concorrência é refeita.' : 'Tronco atualizado. Se mudou a conexão, o teste roda de novo.');
+		const falta = autenticacao === 'senha' && (novo || tronco?.autenticacao !== 'senha' || !tronco?.segredo_guardado_em);
+		onSaved((novo ? 'Tronco cadastrado. O Asterisk faz a chamada de teste e a divisão da concorrência é refeita.' : 'Tronco atualizado. Se mudou a conexão, o teste roda de novo.')
+			+ (falta ? ' Falta guardar a senha: abra o tronco de novo e use "Guardar a senha no cofre".' : ''));
 	}
 
 	return (
@@ -87,7 +90,7 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 				<button onClick={onClose} className={btnSec}>Cancelar</button>
 				<button onClick={() => void salvar()} disabled={busy} className={btnPrim}>{busy ? 'Salvando...' : novo ? 'Testar e cadastrar' : 'Salvar'}</button>
 			</>}>
-			<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Os dados vêm do contrato da empresa com a operadora. A senha, quando houver, não é digitada aqui: a equipe grava no cofre (Secret Manager do MotorCX) e este formulário guarda só a referência.</p>
+			<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Os dados vêm do contrato da empresa com a operadora. A senha, quando houver, vai direto para o cofre de segredos do MotorCX e não volta a aparecer.</p>
 			<div className="grid gap-3 sm:grid-cols-2">
 				<Campo rotulo="Referência" erro={err('referencia')} ajuda={novo ? undefined : 'A referência não muda depois de criada.'}>
 					<input value={referencia} disabled={!novo} onChange={x => setReferencia(x.target.value.toLowerCase())} placeholder="trk-aurora-03" className={`${campoCls} font-mono`} />
@@ -125,11 +128,11 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 					<Campo rotulo="Usuário SIP" erro={err('usuario')}>
 						<input value={usuario} onChange={x => setUsuario(x.target.value)} autoComplete="off" className={`${campoCls} font-mono`} />
 					</Campo>
-					<Campo rotulo="Referência da senha no cofre" erro={err('segredo')} ajuda="Só o nome do segredo, começando com voz/ (no cofre vira motorcx-voz-…). A senha nunca passa por esta tela.">
-						<input value={segredo} onChange={x => setSegredo(x.target.value)} placeholder="voz/trunk/aurora-opc" autoComplete="off" className={`${campoCls} font-mono`} />
-					</Campo>
 				</div>
 			)}
+			{autenticacao === 'senha' && (tronco && tronco.autenticacao === 'senha'
+				? <SenhaNoCofre tronco={tronco} onGuardada={onSaved} />
+				: <Trava icone={<KeyRound size={16} />} titulo="Depois de salvar, guarde a senha">Abra o tronco de novo e use "Guardar a senha no cofre". Sem a senha, este tronco fica de fora e os outros continuam ligando.</Trava>)}
 
 			<div className="grid grid-cols-2 gap-3">
 				<Campo rotulo="Canais" erro={err('canais')} ajuda="Ligações simultâneas do contrato.">
@@ -179,6 +182,41 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 			<p className="text-[12px] leading-relaxed text-[var(--base-texto-3)]">Ao salvar, o Asterisk confere o segredo no cofre, recarrega a configuração e faz uma chamada de teste. O item "Gestão de tronco SIP" entra na fatura do MotorCX no mês seguinte.</p>
 			{erro && <Aviso tom="erro">{erro}</Aviso>}
 		</Gaveta>
+	);
+}
+
+// ============================================================== senha do tronco (SQL 103)
+// Digitada uma vez; vai pela Edge Function direto para o Secret Manager. Nada volta: só a data em que foi guardada.
+function SenhaNoCofre({ tronco, onGuardada }: { tronco: Row; onGuardada: (msg: string) => void }) {
+	const [senha, setSenha] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [erro, setErro] = useState('');
+	const guardada = tronco.segredo_guardado_em ? dateTimeBR(String(tronco.segredo_guardado_em)) : null;
+	const motivo = senha ? senhaTroncoMotivo(senha) : null;
+
+	async function guardar() {
+		const m = senhaTroncoMotivo(senha);
+		if (m) { setErro(m); return; }
+		if (!supabase) return;
+		setBusy(true); setErro('');
+		const { data, error } = await supabase.functions.invoke(FUNCAO_SEGREDO_TRONCO, { body: { tronco: Number(tronco.id), senha } });
+		setSenha('');           // a senha sai da memória da tela, deu certo ou não
+		const msg = await erroDaFuncao(error, data);
+		setBusy(false);
+		if (msg) { setErro(msg); return; }
+		onGuardada('Senha guardada no cofre. O Asterisk lê a senha nova em até 2 minutos e o tronco precisa ser testado de novo.');
+	}
+
+	return (
+		<div className="space-y-2 rounded-[10px] border border-[var(--base-borda)] p-3">
+			<p className="text-[13px] font-semibold text-[var(--base-texto)]">{guardada ? `Senha guardada em ${guardada}` : 'Senha ainda não guardada pela tela'}</p>
+			<p className="text-[12px] leading-relaxed text-[var(--base-texto-3)]">A senha vai direto para o cofre de segredos. Ninguém vê pela tela e ela não volta a aparecer. Só o servidor de voz do MotorCX lê a senha, na hora de ligar. Pede a verificação em duas etapas.</p>
+			<Campo rotulo={guardada ? 'Trocar a senha' : 'Senha do tronco'} erro={motivo ?? undefined}>
+				<input type="password" value={senha} onChange={x => setSenha(x.target.value)} autoComplete="new-password" spellCheck={false} maxLength={128} className={`${campoCls} font-mono`} />
+			</Campo>
+			<button type="button" onClick={() => void guardar()} disabled={busy || !senha || !!motivo} className={btnSec}>{busy ? 'Guardando...' : 'Guardar a senha no cofre'}</button>
+			{erro && <Aviso tom="erro">{erro}</Aviso>}
+		</div>
 	);
 }
 

@@ -192,7 +192,7 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 		const eid = Number(empresaId);
 		const [cfg, tr, ro, tf, sa, pe, rt, lt, cf, pz] = await Promise.all([
 			supabase.from('voz_config').select('*').eq('empresa_id', eid).maybeSingle(),
-			supabase.from('voz_troncos').select('id,referencia,operadora,host,porta,transporte,autenticacao,usuario,segredo_ref,ddd_origem,bina,formato_discagem,csp,codecs,canais,cps,ativo,testado_em,teste_ok').eq('empresa_id', eid).order('referencia'),
+			supabase.from('voz_troncos').select('id,referencia,operadora,host,porta,transporte,autenticacao,usuario,segredo_ref,segredo_guardado_em,segredo_versao,ddd_origem,bina,formato_discagem,csp,codecs,canais,cps,ativo,testado_em,teste_ok').eq('empresa_id', eid).order('referencia'),
 			supabase.from('voz_rotas').select('*').eq('empresa_id', eid).order('vigente_desde', { ascending: false }),
 			supabase.from('voz_transferencias').select('*').eq('empresa_id', eid).eq('ativo', true).is('credor_id', null).limit(1),
 			supabase.from('fornecedor_saude').select('item,referencia,ok,contagem,detalhe,verificado_em,tronco_id').eq('empresa_id', eid),
@@ -350,8 +350,11 @@ function situacaoTronco(t: Row): { tom: 'ok' | 'erro' | 'neutro' | 'atencao'; tx
 	if (t.teste_ok === false) return { tom: 'erro', txt: `Teste falhou${t.testado_em ? ` · ${dateTimeBR(t.testado_em)}` : ''}` };
 	return { tom: 'atencao', txt: 'Aguardando teste' };
 }
+// SQL 103: a senha guardada pela tela tem data; sem data, ou ainda falta, ou foi posta no cofre à mão pela equipe
 const autenticacaoTxt = (t: Row) => t.autenticacao === 'senha'
-	? <>Usuário e senha · <span className="font-mono">{String(t.segredo_ref)}</span> no cofre</>
+	? (t.segredo_guardado_em
+		? <>Usuário e senha · senha guardada no cofre em {dateTimeBR(String(t.segredo_guardado_em))}</>
+		: <>Usuário e senha · <span className="font-mono">{String(t.segredo_ref)}</span> · senha ainda não guardada pela tela</>)
 	: <>Por IP</>;
 const formatoTxt = (t: Row) => {
 	const f = FORMATOS_DISCAGEM.find(x => x.id === t.formato_discagem)?.nome ?? String(t.formato_discagem ?? '');

@@ -110,9 +110,11 @@ def gerar_pjsip(dados: B.DadosVoz, segredos: Resolvedor, ip_externo: str = "", r
                          from_user=t.usuario if auth else t.bina, callerid=t.bina)
         if auth:
             senha = segredos.valor(t.segredo_ref)
-            if not senha or "\n" in senha:
+            if not senha or "\n" in senha or "\r" in senha:
                 raise B.DadosInvalidos(f"tronco {t.id}: segredo vazio ou com quebra de linha")
-            out += [f"[{auth}]", "type=auth", "auth_type=userpass", f"username={t.usuario}", f"password={senha}", ""]
+            # SQL 103: ";" abre comentário no .conf do Asterisk; "\;" é o ponto e vírgula literal
+            out += [f"[{auth}]", "type=auth", "auth_type=userpass", f"username={t.usuario}",
+                    f"password={senha.replace(';', chr(92) + ';')}", ""]
     out.append("; ---------------- destinos de transferência (voz_transferencias; 'ponte pelo tronco' usa o tronco)")
     for x in sorted(tfs, key=lambda x: (x.empresa_id, x.id)):
         out += _endpoint(x.nome, x.transporte, ("alaw", "ulaw"), x.host, x.porta)
@@ -248,6 +250,43 @@ def filtrar_destinos(dados: B.DadosVoz, proprios=(), resolver=None) -> tuple[B.D
     return B.DadosVoz(troncos=troncos, rotas=rotas, transferencias=tfs, configs=dados.configs), avisos
 
 
+def filtrar_senhas(dados: B.DadosVoz, segredos: Resolvedor) -> tuple[B.DadosVoz, Resolvedor, list[str]]:
+    """SQL 103 · PR T1: tira o tronco com autenticação por senha cuja senha o cofre não entrega (ainda não guardada pela
+    tela, apagada, sem permissão) ou que não cabe no arquivo, com as rotas e transferências dele, em vez de parar a
+    configuração de TODAS as empresas. Lê cada senha uma vez e devolve um resolvedor só com as que valem.
+    Os avisos não têm senha nem nome de segredo."""
+    lidas: dict[str, str] = {}
+    fora: set[int] = set()
+    avisos: list[str] = []
+    for t in dados.troncos:
+        if not (t.ativo and t.autenticacao == "senha"):
+            continue
+        try:
+            senha = lidas[t.segredo_ref] if t.segredo_ref in lidas else segredos.valor(t.segredo_ref)
+        except (LookupError, ValueError) as ex:
+            fora.add(t.id)
+            avisos.append(f"tronco {t.id} (empresa {t.empresa_id}) ficou de fora: senha indisponível no cofre "
+                          f"({ex.__class__.__name__}); guarde a senha pela tela Telefonia")
+            continue
+        if not senha or "\n" in senha or "\r" in senha:
+            fora.add(t.id)
+            avisos.append(f"tronco {t.id} (empresa {t.empresa_id}) ficou de fora: senha vazia ou com quebra de linha")
+            continue
+        lidas[t.segredo_ref] = senha
+    if not fora:
+        return dados, Dicionario(lidas), avisos
+    troncos = [t for t in dados.troncos if t.id not in fora]
+    tfs = []
+    for x in dados.transferencias:
+        if x.tronco_id in fora:
+            avisos.append(f"transferência {x.id} (empresa {x.empresa_id}) ficou de fora: o tronco {x.tronco_id} ficou de fora")
+        else:
+            tfs.append(x)
+    rotas = [r for r in dados.rotas if r.tronco_id not in fora]
+    return (B.DadosVoz(troncos=troncos, rotas=rotas, transferencias=tfs, configs=dados.configs), Dicionario(lidas),
+            avisos)
+
+
 def gerar(entrada: dict, saida: Path, segredos: Resolvedor, ip_externo: str = "", redes_locais=(),
           tls: dict | None = None, resolver=None) -> dict:
     """Gera os dois arquivos. Devolve só contagens (seguras para log). `resolver` (o main usa o DNS): confere os
@@ -255,6 +294,8 @@ def gerar(entrada: dict, saida: Path, segredos: Resolvedor, ip_externo: str = ""
     dados = B.carregar(entrada)
     proprios = DST.proprios_do_ambiente(ip_externo, redes_locais, entrada.get("enderecos_motorcx") or [])
     dados, avisos = filtrar_destinos(dados, proprios, resolver)
+    dados, segredos, sem_senha = filtrar_senhas(dados, segredos)
+    avisos += sem_senha
     for a in avisos:
         print(f"AVISO: {a}. Os outros seguem.", file=sys.stderr)
     pj = gerar_pjsip(dados, segredos, ip_externo, redes_locais, tls=tls,
@@ -264,7 +305,8 @@ def gerar(entrada: dict, saida: Path, segredos: Resolvedor, ip_externo: str = ""
     gravar(saida, "extensions_motorcx.conf", ex, 0o640)
     return {"troncos": sum(t.ativo for t in dados.troncos), "rotas": len(dados.rotas),
             "transferencias": sum(x.ativo for x in dados.transferencias),
-            "provedores_sip": len(entrada.get("provedores_sip") or []), "destinos_recusados": len(avisos)}
+            "provedores_sip": len(entrada.get("provedores_sip") or []), "destinos_recusados": len(avisos) - len(sem_senha),
+            "sem_senha": sum(1 for a in sem_senha if a.startswith("tronco "))}
 
 
 def recarregar(ari) -> None:
