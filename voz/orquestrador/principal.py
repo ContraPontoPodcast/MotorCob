@@ -33,6 +33,7 @@ from voz.orquestrador.eventos import EscritorEventos
 from voz.orquestrador.gravacao import EnviadorGCS, FilaEnvio
 from voz.orquestrador.lote import Lote, RegrasLote, ler_ids, ler_mailing
 from voz.orquestrador.nucleo import APP, Orquestrador
+from voz.orquestrador.ritmo import Historico
 from voz.provedores.simulador import Simulador
 
 log = logging.getLogger("motorcx.voz")
@@ -235,7 +236,7 @@ class Plantao:
         self.carregados: dict[int, object] = {}     # empresa -> dia carregado
         self._mtime = dados_caminho.stat().st_mtime if dados_caminho and dados_caminho.exists() else None
         self._ult = {"listas": -1e9, "banco": -1e9, "consumo": -1e9, "reenvio": -1e9, "pausas": -1e9, "robos": -1e9,
-                     "ritmo": -1e9, "ritmo_cfg": -1e9, "curtas": -1e9}
+                     "ritmo": -1e9, "ritmo_cfg": -1e9, "curtas": -1e9, "historico": -1e9}
         self._curtas_aviso_s = -1e9                  # último aviso de falha da leitura das curtas (1 por hora)
         self._ritmo_aviso_s = -1e9                   # último aviso de falha das amostras do ritmo (1 por hora)
         self._robos_s: float | None = None           # última foto dos robôs (segundos no limite entre duas fotos)
@@ -265,6 +266,8 @@ class Plantao:
             self.atualizar_ritmos()
         if self.registro is not None and self._vence("curtas", agora_s, 300):
             self.semear_curtas(agora_s)
+        if self.registro is not None and self.orq.lotes and self._vence("historico", agora_s, 1800):
+            self.ler_historico()
         if self.registro is not None and self._vence("pausas", agora_s, 30):
             self.sincronizar_pausas()
         if self.registro is not None and self._vence("reenvio", agora_s, 30):
@@ -356,6 +359,31 @@ class Plantao:
                     l.ritmo = novo
                     mudou += 1
         return mudou
+
+    # ------------------------------------------------------------ SQL 110 · histórico do Preditivo (V5)
+    def ler_historico(self) -> int:
+        """Por carteira com lote carregado: atendidas e discadas dos últimos 7 dias, dias em Preditivo e o p da empresa
+        (aquecimento, base do p e razão máxima da primeira semana). Banco fora: o de antes continua (sem histórico, o
+        Preditivo fica em aquecimento: Power 1,0)."""
+        n = 0
+        for emp in sorted({l.empresa_id for l in self.orq.lotes.values()}):
+            try:
+                h = self.registro.sb.rpc("historico_ritmo_voz", {"empresa": emp}) or {}
+            except Exception as ex:   # noqa: BLE001
+                log.warning("empresa %s: histórico do ritmo não lido (%s)", emp, ex.__class__.__name__)
+                continue
+            por = {c.get("credor_id"): c for c in h.get("carteiras") or []}
+            p_emp = h.get("p_empresa")
+            for l in self.orq.lotes.values():
+                if l.empresa_id != emp:
+                    continue
+                c = por.get(l.credor_id) or {}
+                l.controle.historico = Historico(discadas_7d=int(c.get("discadas_7d") or 0),
+                                                 atendidas_7d=int(c.get("atendidas_7d") or 0),
+                                                 dias_preditivo=int(c.get("dias_preditivo") or 0),
+                                                 p_empresa=float(p_emp) if p_emp is not None else None)
+                n += 1
+        return n
 
     # ------------------------------------------------------------ SQL 109 · freios de curtas (Power/Preditivo V6)
     def semear_curtas(self, agora_s: float) -> int:
@@ -565,6 +593,7 @@ class Plantao:
             for l in lotes:
                 self.orq.adicionar_lote(l)
             self.carregados[emp] = hoje
+            self._ult["historico"] = -1e9            # lote novo: o histórico do Preditivo vem no próximo ciclo
             log.info("empresa %s: %d lote(s) do dia carregado(s)", emp, len(lotes))
 
 

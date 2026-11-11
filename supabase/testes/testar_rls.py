@@ -3088,5 +3088,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 109: freios de chamadas curtas (testar_curtas_freio.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 110 · Histórico do Preditivo (Power/Preditivo V5): por carteira, só para a VM/servidor
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ritmo_preditivo.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 110: histórico do Preditivo (testar_ritmo_preditivo.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
