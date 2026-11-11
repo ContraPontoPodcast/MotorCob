@@ -102,7 +102,7 @@ class TestFluxo(Base):
         self.assertEqual(endpoint, "PJSIP/101011988887770@tr-1-10")           # tech prefix + DDD + número
         self.assertEqual((var["MOTORCX_AMD"], var["MOTORCX_GRAVAR"], var["MOTORCX_TECH_PREFIX"]), ("1", "1", "1010"))
         self.assertNotIn(CEL, var["MOTORCX_GRAVACAO"])
-        self.assertEqual((callerid, timeout), ("1130000000", 40))
+        self.assertEqual((callerid, timeout), ("1130000000", 30))   # SQL 113 · D5: o tronco toca no máximo 30 s
         self.rel.andar(12)
         self.ev("StasisStart", canal, args=["saida", args[1]])
         self.assertEqual(self.ari.de("continuar")[-1][1:], (canal, "motorcx-atendeu", "s", 1))

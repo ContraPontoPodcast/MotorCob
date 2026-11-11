@@ -18,6 +18,11 @@ export default [
   route('privacidade', 'routes/privacidade.tsx'),
   route('email/sair', 'routes/email-sair.tsx'),
   route('relatorio-credor/:token', 'routes/relatorio-credor.tsx'),
+  // Página do operador pelo link pessoal de treino (Roleplay, SQL 90/99): sem login e sem o menu do MotorCX.
+  route('treino/:token', 'routes/treino.tsx'),
+  route('treino/:token/:atr', 'routes/treino-briefing.tsx'),
+  route('treino/:token/:atr/sessao/:sessao', 'routes/treino-sessao.tsx'),
+  route('treino/:token/:atr/resultado/:sessao', 'routes/treino-resultado.tsx'),
   // Só no dev server com VITE_FLUXO_FIXTURES=1: telas do Fluxo do agente com dados fictícios (nunca em produção).
   ...(process.env.VITE_FLUXO_FIXTURES === '1' && process.env.NODE_ENV !== 'production' ? [route('dev/fluxo/:tela?/:id?', 'routes/dev-fluxo.tsx')] : []),
   layout('routes/workspace-layout.tsx', [
@@ -141,11 +146,25 @@ export default [
     route('voz/ligacoes', 'routes/voz-ligacoes.tsx'),
     route('voz/ligacoes/:id', 'routes/voz-ligacao.tsx'),
     route('voz/telefonia', 'routes/voz-telefonia.tsx'),
+    route('voz/telefonia/tronco/:ref', 'routes/voz-telefonia-tronco.tsx'),
     route('voz/conexao', 'routes/voz-conexao.tsx'),
     // Speech Analytics (área própria do trilho; SPEC Canais §3.5): as abas de análise, Gravações e Entrada de gravações.
     route('speech-analytics/gravacoes', 'routes/speech-gravacoes.tsx'),
     route('speech-analytics/entrada', 'routes/speech-entrada.tsx'),
     route('speech-analytics/entrada/enviar', 'routes/speech-entrada-enviar.tsx'),
+    // Roleplay (treino de operadores, SQL 90): o Painel é a aba /speech-analytics/roleplay; as subtelas, aqui.
+    route('speech-analytics/roleplay/cenarios', 'routes/speech-roleplay-cenarios.tsx'),
+    route('speech-analytics/roleplay/cenarios/novo', 'routes/speech-roleplay-cenario-novo.tsx'),
+    route('speech-analytics/roleplay/atribuicoes', 'routes/speech-roleplay-atribuicoes.tsx'),
+    route('speech-analytics/roleplay/atribuicoes/:id', 'routes/speech-roleplay-atribuicao.tsx'),
+    route('speech-analytics/roleplay/atribuicoes/:id/sessoes/:sid', 'routes/speech-roleplay-sessao.tsx'),
+    route('speech-analytics/roleplay/atribuicoes/:id/lado-a-lado/:op', 'routes/speech-roleplay-lado-a-lado.tsx'),
+    route('speech-analytics/roleplay/cenarios/:id/testar', 'routes/speech-roleplay-testar.tsx'),
+    route('speech-analytics/roleplay/cenarios/:id/teste/:sid', 'routes/speech-roleplay-teste.tsx'),
+    route('speech-analytics/roleplay/atribuir', 'routes/speech-roleplay-atribuir.tsx'),
+    route('speech-analytics/roleplay/cenarios/:id', 'routes/speech-roleplay-cenario.tsx'),
+    route('speech-analytics/roleplay/operadores', 'routes/speech-roleplay-operadores.tsx'),
+    route('speech-analytics/roleplay/operadores/:op', 'routes/speech-roleplay-operador.tsx'),
     route('speech-analytics/:aba?', 'routes/speech-analytics.tsx'),
     // Endereços antigos: continuam abrindo e levam ao novo, com a mesma query (lib/rotas-voz.ts).
     route('canais/agente-virtual', 'routes/canais-agente-virtual.tsx'),

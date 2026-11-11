@@ -1,0 +1,10 @@
+[Unit]
+Description=Firewall das VMs de voz a partir do cadastro (SQL 104; só com o metadado motorcx-firewall-automatico=1)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-firewall
+ExecStart=/usr/local/bin/motorcx-voz-rodar firewall
