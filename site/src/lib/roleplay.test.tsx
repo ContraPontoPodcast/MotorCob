@@ -33,7 +33,7 @@ test('roleplay: seção marcada também nos detalhes; trilha clicável até a te
 	assert.equal(secaoRP(rotaPessoaRP(3)), 'cadastro');
 	assert.equal(secaoRP('/speech-analytics/operadores'), null);
 	assert.ok(ehSecaoRP(ROTA_RP_CENARIOS) && !ehSecaoRP(rotaCenarioRP(3)));
-	assert.deepEqual(SECOES_RP.map(s => s.nome), ['Painel', 'Cenários', 'Treinos atribuídos', 'Cadastro para treino']);
+	assert.deepEqual(SECOES_RP.map(s => s.nome), ['Painel', 'Cenários', 'Treinos atribuídos', 'Evolução', 'Cadastro para treino']);
 
 	assert.deepEqual(trilhaRP(ROTA_RP), [{ rotulo: 'Speech Analytics', to: '/speech-analytics' }, { rotulo: 'Roleplay' }]);
 	assert.deepEqual(trilhaRP(rotaCenarioRP(3), 'Já pagou'), [

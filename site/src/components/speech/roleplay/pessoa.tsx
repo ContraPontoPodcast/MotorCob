@@ -1,5 +1,5 @@
-// Roleplay › Cadastro para treino › pessoa: treinos atribuídos, sessões de treino e feedbacks 1:1 de uma pessoa,
-// direto do banco. Sem sessão ainda (o treino por texto e por voz chega nos próximos PRs), mostra o estado vazio.
+// Roleplay › Cadastro para treino › pessoa: treinos atribuídos, sessões de treino, a evolução (SQL 121: treino × ligações
+// reais, mapa por item e linha do tempo por item) e feedbacks 1:1 de uma pessoa, direto do banco.
 // A nota de treino nunca se mistura com a das ligações reais (Speech › Operadores).
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
@@ -15,6 +15,7 @@ import { LinkRP, MolduraRP } from './moldura';
 import { SeloLgpdTreino } from './comum';
 import { lerPessoa, salvarCadastro, type DadosPessoa } from './dados';
 import { FormOperador, usePainelUrl, type DadosForm } from './cadastro';
+import { EvolucaoPessoa } from './evolucao';
 import type { PodeRP } from './index';
 
 export function PaginaPessoa({ empresa, id, pode }: { empresa: number; id: string; pode: PodeRP }) {
@@ -53,6 +54,7 @@ export function PaginaPessoa({ empresa, id, pode }: { empresa: number; id: strin
 		<MolduraRP titulo={o.apelido} detalhe={o.apelido} descricao={desc}
 			acoes={<><SeloLgpdTreino /><Botao tipo="secundario" onClick={() => abrir('editar')}>Editar cadastro</Botao>{o.ativo && <LinkRP to={rotaAtribuir({ ops: [o.id] })} className={clsBotao('primario')}>Atribuir treino</LinkRP>}</>}>
 			<CorpoPessoa d={d} hoje={diaSP(0)} />
+			{d.sessoes.some(s => s.situacao === 'avaliada') || o.operador_ref ? <div className="mt-4"><EvolucaoPessoa empresa={empresa} operador={o.id} /></div> : null}
 			<Gaveta aberta={painel === 'editar'} onFechar={fechar} titulo={`Editar ${o.apelido}`} subtitulo="Primeiro nome e inicial. Sem CPF, e-mail ou telefone.">
 				{/* Na edição não se traz ninguém de Speech › Operadores (só no cadastro novo). */}
 				<FormOperador inicial={o} equipes={d.equipes} candidatos={[]} onSalvar={salvar} onCancelar={fechar} />

@@ -58,7 +58,7 @@ test('moldura: trilha, título, abas do Speech com Roleplay marcada, sub-navega�
 	assert.match(painel, /aria-current="page"[^>]*>Painel<\/a>/);
 	assert.match(painel, /aria-label="Voltar para Visão geral do Speech Analytics"/);
 	assert.match(painel, /href="\/speech-analytics\/roleplay\/atribuicoes"[^>]*>Treinos atribuídos<\/a>/);
-	assert.doesNotMatch(painel, /Evolução/, 'sem link para seção que ainda não existe');
+	assert.match(painel, /href="\/speech-analytics\/roleplay\/evolucao"[^>]*>Evolução<\/a>/, 'Evolução na sub-navegação (PR 8)');
 });
 
 test('abas do Speech: Roleplay só para quem treina ou cuida dos cenários', () => {

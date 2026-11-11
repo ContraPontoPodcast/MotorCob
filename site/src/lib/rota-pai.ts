@@ -75,6 +75,7 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/speech-analytics/roleplay/cenarios': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
 	'/speech-analytics/roleplay/cenarios/:id': { to: ROTA_RP_CENARIOS, rotulo: 'Cenários' },
 	'/speech-analytics/roleplay/operadores': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
+	'/speech-analytics/roleplay/evolucao': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
 	'/speech-analytics/roleplay/operadores/:op': { to: ROTA_RP_CADASTRO, rotulo: 'Cadastro para treino' },
 	// Editor (cenário novo) volta para a biblioteca; o treino atribuído e o "Atribuir treino", para Treinos atribuídos.
 	// Quando a tela foi aberta de outra (pessoa, cenário, Painel), o "← Voltar" leva de volta a ela (state.de).

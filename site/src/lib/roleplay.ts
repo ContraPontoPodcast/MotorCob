@@ -16,6 +16,8 @@ export const rotaPessoaRP = (id: number | string) => `${ROTA_RP_CADASTRO}/${enco
 export const ROTA_RP_NOVO_CENARIO = `${ROTA_RP_CENARIOS}/novo`;
 export const ROTA_RP_ATRIBUICOES = `${ROTA_RP}/atribuicoes`;
 export const ROTA_RP_ATRIBUIR = `${ROTA_RP}/atribuir`;
+/** Evolução (SQL 121): empresa ou equipe (?eq=), no período (?d=). */
+export const ROTA_RP_EVOLUCAO = `${ROTA_RP}/evolucao`;
 export const rotaAtribuicaoRP = (id: number | string) => `${ROTA_RP_ATRIBUICOES}/${encodeURIComponent(String(id))}`;
 /** Sessão de uma pessoa (resultado, "Revisar avaliação", feedback 1:1) e o treino lado a lado (SQL 100). */
 export const rotaSessaoRP = (atr: number | string, sessao: number | string) => `${rotaAtribuicaoRP(atr)}/sessoes/${encodeURIComponent(String(sessao))}`;
@@ -42,12 +44,13 @@ export function idsDaQuery(v: string | null | undefined): number[] {
 	return out;
 }
 
-export type SecaoRP = 'painel' | 'cenarios' | 'atribuicoes' | 'cadastro';
-/** Sub-navegação do Roleplay. Só as seções que já existem (Evolução chega num próximo PR). */
+export type SecaoRP = 'painel' | 'cenarios' | 'atribuicoes' | 'evolucao' | 'cadastro';
+/** Sub-navegação do Roleplay (SPEC §2.2): Painel, Cenários, Treinos atribuídos, Evolução e Cadastro para treino. */
 export const SECOES_RP: readonly { id: SecaoRP; nome: string; to: string }[] = [
 	{ id: 'painel', nome: 'Painel', to: ROTA_RP },
 	{ id: 'cenarios', nome: 'Cenários', to: ROTA_RP_CENARIOS },
 	{ id: 'atribuicoes', nome: 'Treinos atribuídos', to: ROTA_RP_ATRIBUICOES },
+	{ id: 'evolucao', nome: 'Evolução', to: ROTA_RP_EVOLUCAO },
 	{ id: 'cadastro', nome: 'Cadastro para treino', to: ROTA_RP_CADASTRO },
 ];
 
@@ -60,6 +63,7 @@ export function secaoRP(pathname: string): SecaoRP | null {
 	if (p === ROTA_RP_CENARIOS || p.startsWith(`${ROTA_RP_CENARIOS}/`)) return 'cenarios';
 	if (p === ROTA_RP_ATRIBUICOES || p.startsWith(`${ROTA_RP_ATRIBUICOES}/`) || p === ROTA_RP_ATRIBUIR) return 'atribuicoes';
 	if (p === ROTA_RP_CADASTRO || p.startsWith(`${ROTA_RP_CADASTRO}/`)) return 'cadastro';
+	if (p === ROTA_RP_EVOLUCAO) return 'evolucao';
 	return null;
 }
 
