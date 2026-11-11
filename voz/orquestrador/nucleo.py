@@ -8,8 +8,8 @@ Fluxo de uma tentativa (id_chamada = uuid hex; canais <id>-c<n> cliente, <id>-p 
   2. falha técnica antes de atender (pela_rede = falha_operadora/bloqueio_originacao) -> próxima rota (failover).
      Sem crédito (falha da operadora com SIP 402) ou bloqueio de originação pausam a rota (o tronco) na hora: ela não
      disca até a equipe retomar (SQL 65 › voz_troncos_pausas; a pausa vai ao banco pelo Plantão) e a equipe é avisada.
-  3. atendeu (StasisStart 'saida') -> dialplan motorcx-atendeu: AMD (ou Khomp) e MixMonitor só em pessoa ->
-     volta ao Stasis ('amd').
+  3. atendeu (StasisStart 'saida') -> linha sem reserva (razão > 1, Power/Preditivo) reserva o robô agora, antes do
+     AMD -> dialplan motorcx-atendeu: AMD (ou Khomp) e MixMonitor só em pessoa -> volta ao Stasis ('amd').
   4. pessoa -> a reserva vira conversa e vai ao provedor de voz (ponte SIP, mídia externa ou interno). Máquina ->
      a reserva volta. Se mesmo com a reserva o provedor não abrir a sessão (corrida com a capacidade da VM ou falha do
      provedor): Alô fake (se ligado) por até alo_fake_max_s e depois uma mensagem curta e neutra pré-gravada (sem
@@ -245,7 +245,7 @@ class Orquestrador:
         while progresso:                       # rodízio: uma por empresa por rodada (partilha justa)
             progresso = False
             for lote in self.lotes.values():
-                if not self.agendador.vaga_empresa(lote.empresa_id) or not self._vaga_provedor(lote.empresa_id):
+                if not self._vaga(lote):
                     continue
                 prox = lote.proximo(agora)
                 if prox is None:
@@ -301,21 +301,25 @@ class Orquestrador:
             return 1 if prov.disponivel() else 0
         return n - self.reservas_prov.get(prov.codigo, 0)
 
-    def _vaga_provedor(self, empresa_id: int) -> bool:
-        """Há sessão do provedor da empresa para reservar? (com a razão 1,0, toda linha sai com a sua)"""
-        prov = self._provedor(empresa_id)
+    def _vaga(self, lote: Lote) -> bool:
+        """Pode originar mais uma linha desta carteira? Robôs da empresa (agendador) e sessões do provedor nesta VM:
+        com a razão 1,0 toda linha sai com a sua reserva; acima, linhas sem conversa < razão × (livres + reservados)."""
+        prov = self._provedor(lote.empresa_id)
         if prov is None:
             return False
-        if self._livres_provedor(prov) > 0:
+        livres_prov = self._livres_provedor(prov)
+        if self.agendador.vaga_empresa(lote.empresa_id, livres_max=livres_prov):
             return True
-        self._conta("sem_robo_provedor")       # a lista espera: ninguém é discado sem robô para falar
+        if livres_prov <= 0 and self.agendador.vaga_empresa(lote.empresa_id):
+            self._conta("sem_robo_provedor")   # a lista espera: ninguém é discado sem robô para falar
         return False
 
     def _reservar(self, c: Chamada) -> None:
         """Antes de originar: o robô da empresa (agendador) e a sessão do provedor ficam guardados para esta linha."""
-        c.reservada = self.agendador.ocupar(c.empresa_id, c.candidata.tronco.id)
-        prov = self._provedor(c.empresa_id) if c.reservada else None
-        if prov is not None and self._livres_provedor(prov) > 0:
+        prov = self._provedor(c.empresa_id)
+        livre_prov = prov is not None and self._livres_provedor(prov) > 0
+        c.reservada = self.agendador.ocupar(c.empresa_id, c.candidata.tronco.id, pode_reservar=livre_prov)
+        if c.reservada and livre_prov:
             c.prov_reserva = prov.codigo
             self.reservas_prov[prov.codigo] = self.reservas_prov.get(prov.codigo, 0) + 1
 
@@ -440,7 +444,18 @@ class Orquestrador:
 
     def _atendeu(self, c: Chamada, agora: datetime) -> None:
         c.t_atendeu, c.estado = agora, "atendida"
+        if not c.reservada:                     # linha a mais (razão > 1): o robô é reservado no atendimento, antes
+            self._reservar_no_atendimento(c)    # do AMD (máquina devolve na hora)
         self.ari.continuar(c.canal, "motorcx-atendeu", "s", 1)
+
+    def _reservar_no_atendimento(self, c: Chamada) -> None:
+        prov = self._provedor(c.empresa_id)
+        if prov is None or self._livres_provedor(prov) <= 0 or not self.agendador.reservar(c.empresa_id):
+            self._conta("atendeu_sem_reserva")  # o AMD ainda decide; se for pessoa, tenta um robô livre de novo
+            return
+        c.reservada, c.prov_reserva = True, prov.codigo
+        self.reservas_prov[prov.codigo] = self.reservas_prov.get(prov.codigo, 0) + 1
+        self._conta("reserva_no_atendimento")
 
     def _resultado_amd(self, c: Chamada, args: list, agora: datetime) -> None:
         status, causa, khomp = (list(args) + ["", "", ""])[:3]

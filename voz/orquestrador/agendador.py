@@ -9,7 +9,8 @@ Dois recursos, dois contadores (decisão do dono: o limite conta CONVERSAS com a
                       reserva vira conversa quando a pessoa atende (AMD = pessoa) e volta quando o AMD dá máquina ou a
                       linha acaba sem conversa; a conversa volta quando o agente sai (fim, REFER, humano atendeu).
                       Razão > 1 (Power/Preditivo, PR próprio) origina mais linhas que robôs livres: as linhas a mais
-                      saem sem reserva e quem atende nelas sem robô livre é o abandono que o controlador mantém na meta.
+                      saem sem reserva e reservam o robô quando ATENDEM (antes do AMD; reservar); quem atende nelas sem
+                      robô livre é o abandono que o controlador mantém na meta.
 
   teto da empresa   = min(limite × pico_multiplo, canais dos troncos ativos); limite = a parte da empresa na
                       divisão do contratado (voz_divisao_concorrencia.limite; nulo = canais; 0 = não disca).
@@ -182,17 +183,22 @@ class Agendador:
             return 0
         return max(0, min(e.teto - e.ocupadas, self.contratado - self.ocupadas_global))
 
-    def vaga_empresa(self, empresa_id: int) -> bool:
-        """Pode originar mais uma linha? Linhas sem conversa ≤ razão × (robôs livres + reservados). Com a razão 1,0
-        isso é: só origina com um robô livre para reservar (canal e CPS do tronco são conferidos à parte)."""
+    def vaga_empresa(self, empresa_id: int, razao: float | None = None, livres_max: int | None = None) -> bool:
+        """Pode originar mais uma linha? Linhas sem conversa < razão × (robôs livres + reservados). Com a razão 1,0
+        isso é: só origina com um robô livre para reservar (canal e CPS do tronco são conferidos à parte).
+        `razao` = a da carteira (padrão: a da empresa); `livres_max` = as sessões livres do provedor nesta VM (os robôs
+        livres nunca passam delas: linha a mais só sai se, quando atender, puder haver sessão)."""
         e = self.empresas.get(empresa_id)
         if e is None:
             return False
         livres = self.livres_conversa(empresa_id)
-        if e.razao <= 1.0:
+        if livres_max is not None:
+            livres = max(0, min(livres, livres_max))
+        r = e.razao if razao is None else razao
+        if r <= 1.0:
             return livres > 0
         sem_conversa = max(0, e.linhas - e.conversas)
-        return sem_conversa < math.floor(e.razao * (livres + e.reservas))
+        return sem_conversa < math.floor(r * (livres + e.reservas))
 
     def tronco_livre(self, tronco_id: int, agora_s: float) -> bool:
         """Canal livre E ficha de CPS (consome a ficha: chame só quando for originar)."""
@@ -219,16 +225,28 @@ class Agendador:
                 self.pausados[t] = m
         return retomados
 
-    def ocupar(self, empresa_id: int, tronco_id: int) -> bool:
-        """Conta a linha (empresa e tronco) e reserva um robô se houver. Devolve se a linha saiu com reserva (com a razão
-        1,0 sempre sai: vaga_empresa só deixa originar com robô livre)."""
+    def ocupar(self, empresa_id: int, tronco_id: int, pode_reservar: bool = True) -> bool:
+        """Conta a linha (empresa e tronco) e reserva um robô se houver (e `pode_reservar`: há sessão do provedor).
+        Devolve se a linha saiu com reserva (com a razão 1,0 sempre sai: vaga_empresa só deixa originar com robô
+        livre)."""
         e = self.empresas[empresa_id]
-        reservada = self.livres_conversa(empresa_id) > 0
+        reservada = pode_reservar and self.livres_conversa(empresa_id) > 0
         e.linhas += 1
         e.reservas += int(reservada)
         e.pico_janela = max(e.pico_janela, e.ocupadas)
         self.em_voo_tronco[tronco_id] = self.em_voo_tronco.get(tronco_id, 0) + 1
         return reservada
+
+    def reservar(self, empresa_id: int) -> bool:
+        """A linha saiu sem reserva (razão > 1) e ATENDEU: reserva um robô agora, antes do AMD (PREDITIVO.md 3.1: o AMD
+        leva 1,5–3,5 s; procurar o robô só depois dele faria a pessoa esperar e o abandono disparar). Devolve se
+        conseguiu (nunca toma o robô de quem já reservou)."""
+        e = self.empresas[empresa_id]
+        if self.livres_conversa(empresa_id) <= 0:
+            return False
+        e.reservas += 1
+        e.pico_janela = max(e.pico_janela, e.ocupadas)
+        return True
 
     def devolver_reserva(self, empresa_id: int) -> None:
         """A linha não vai conversar (AMD máquina, não atendeu, sem robô no provedor): o robô reservado volta."""

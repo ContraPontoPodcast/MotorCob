@@ -1216,6 +1216,14 @@ conta) e o mesmo por tronco; o Plantão manda as janelas fechadas a cada minuto 
 amostra, janelas de 30 min, por tronco com a bina mascarada, abandono de 30 dias) para as telas; leitura de quem é da
 empresa ou da equipe que cuida da voz. Testes: `tests/test_voz_ritmo.py` e `supabase/testes/testar_ritmo_voz.py`.
 
+**Agente de voz · linhas e robôs separados com razão > 1 (Power e Preditivo V2, sem SQL).** Base do PR 212 (dois
+contadores, reserva antes de discar, `no_pico` quando a conversa começa). Com a razão > 1 (carteira em Power/Preditivo, a
+partir do V4), as linhas a mais saem SEM reserva e reservam o robô quando a pessoa ATENDE, antes do AMD
+(`Agendador.reservar`; máquina devolve na hora); sem robô livre no atendimento, o AMD ainda decide e, se for pessoa, é o
+abandono com mensagem (`abandono_sem_robo`). As sessões livres do provedor na VM limitam as linhas a mais
+(`vaga_empresa(livres_max=…)`) e a reserva na originação só acontece com sessão do provedor (`ocupar(pode_reservar)`).
+Linha tocando nunca ocupa robô. Com a razão 1,0 (padrão) nada muda.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.
