@@ -3125,5 +3125,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 124: MC mínima própria por item de IA (testar_margem_item.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 125 · minuto de IA de cada chamada (PR 3 do minuto falado): trechos medidos pela VM, cadência e preço congelados
+# pelo gatilho tarifar_ia_chamada_voz, máquina/caixa postal = 0, licença sem preço, legado sem valor
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_chamadas_ia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 125: minuto de IA por chamada (testar_chamadas_ia.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
