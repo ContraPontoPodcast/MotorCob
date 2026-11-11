@@ -1,14 +1,15 @@
-// Speech Analytics (área própria do trilho; antes Cobrança › Resultados) (substitui "Insights de voz"). Redesign v2: seis abas (Visão geral,
-// Qualidade, Operadores, Alertas, Recomendações e Curadoria) e "Buscar nas conversas" como link no fim da barra.
-// O Roleplay saiu daqui e foi para Fluxo do agente › Testar com personas (ROTA_TESTAR_PERSONAS).
+// Speech Analytics (área própria do trilho; antes Cobrança › Resultados) (substitui "Insights de voz"). Redesign v2: abas
+// Visão geral, Qualidade, Operadores, Roleplay, Alertas, Recomendações e Curadoria, e "Buscar nas conversas" como link
+// no fim da barra. Roleplay = treino de operadores humanos (SQL 90; components/speech/roleplay, com moldura própria:
+// trilha, título por tela e sub-navegação). O teste do agente de IA continua em Agente Voz/CX › Testar com personas.
 // Banco: SQL 60 (supabase/migrations/20261227000001_voz_speech_analytics.sql).
 // LGPD: nunca CPF nem nome de devedor; trecho só mascarado; grupo com menos de 30 não aparece.
 import { useState, type ReactNode } from 'react';
-import { Search } from 'lucide-react';
 import { Notice, PageHeading } from '@/components/app-shell';
 import { useMotorAuth } from '@/components/auth-provider';
-import { ABAS_SA, BUSCA_SA, periodo, rotaSA, type AbaSA } from '@/lib/speech';
-import { Abas } from '@/components/ds';
+import { periodo, type AbaSA } from '@/lib/speech';
+import { AbasSpeech } from './abas-speech';
+import { Roleplay } from './roleplay';
 import type { Filtros } from './comum';
 import { Visao } from './visao';
 import { Qualidade } from './qualidade';
@@ -22,6 +23,7 @@ const SUBTITULO: Record<AbaSA, string> = {
 	visao: 'O que as ligações dizem, da IA e do discador de vocês, e o que fazer com isso',
 	qualidade: 'Checklist de qualidade da IA e do humano, com os itens de lei travados',
 	operadores: 'Operadores do discador de vocês · só a parte da ligação depois da transferência',
+	roleplay: 'Treino de operadores com clientes simulados, com nota pelo mesmo checklist das ligações',
 	alertas: 'O alerta só avisa: nada é pausado nem bloqueado sozinho',
 	busca: 'Busca nas transcrições mascaradas · só dentro do prazo de retenção',
 	recomendacoes: 'O que as ligações ensinam vira rascunho na estratégia de vocês e relatório ao credor',
@@ -32,6 +34,11 @@ const SUBTITULO: Record<AbaSA, string> = {
 export type DefinirAcoes = (n: ReactNode) => void;
 
 export function SpeechAnalytics({ aba }: { aba: AbaSA }) {
+	if (aba === 'roleplay') return <Roleplay tela={{ tipo: 'painel' }} />;
+	return <SpeechAnalyticsAbas aba={aba} />;
+}
+
+function SpeechAnalyticsAbas({ aba }: { aba: AbaSA }) {
 	const { empresa, credor } = useMotorAuth();
 	const [dias, setDias] = useState(30);
 	const [origem, setOrigem] = useState('');
@@ -42,9 +49,7 @@ export function SpeechAnalytics({ aba }: { aba: AbaSA }) {
 	return (
 		<>
 			<PageHeading title="Speech Analytics" description={SUBTITULO[aba]} actions={acoes} />
-			<Abas rotulo="Seções do Speech Analytics" atual={aba}
-				itens={ABAS_SA.map(a => ({ id: a.id, nome: a.nome, to: rotaSA(a.id) }))}
-				fim={{ id: BUSCA_SA.id, nome: BUSCA_SA.nome, to: rotaSA('busca'), icone: <Search size={14} aria-hidden="true" /> }} />
+			<AbasSpeech atual={aba} />
 			{!f ? <Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice>
 				: aba === 'visao' ? <Visao key={aba} f={f} setDias={setDias} setOrigem={setOrigem} persona={persona} setPersona={setPersona} setAcoes={setAcoes} />
 				: aba === 'qualidade' ? <Qualidade key={aba} f={f} setDias={setDias} setAcoes={setAcoes} />
