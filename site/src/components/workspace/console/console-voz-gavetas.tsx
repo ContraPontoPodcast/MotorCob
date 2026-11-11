@@ -1,13 +1,15 @@
 // Gavetas do Console › Fornecedores e rotas › Agente virtual: tronco SIP, rota com vigência e transferência
-// para o discador do cliente. Só a equipe com gerenciar_troncos_voz abre. A senha do tronco nunca é digitada
-// aqui: a equipe grava no cofre e o formulário guarda só a referência (segredo_ref).
+// para o discador do cliente. Só a equipe com gerenciar_troncos_voz abre. SQL 103: a senha do tronco vai direto para o
+// cofre pela Edge Function segredo-tronco-voz (com a verificação em duas etapas); o banco e esta tela nunca recebem a
+// senha de volta, só a data em que foi guardada.
 import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
-import { supabase, friendlyError, today, type Row } from '@/lib/supabase';
+import { supabase, friendlyError, today, dateTimeBR, type Row } from '@/lib/supabase';
+import { erroDaFuncao } from '@/lib/funcoes';
 import {
 	CODECS, FORMATOS_DISCAGEM, IPS_SAIDA_MOTORCX, RE_BINA, RE_CSP, RE_DDD, RE_DESTINO_SIP, RE_HOST, RE_IP, RE_REFERENCIA,
 	RE_TECH, RE_USUARIO, TIPOS_ROTA, TRANSPORTES, cadenciaTxt, lerNumero, reais, segundosTarifados, hashNumeroTeste,
-	segredoTroncoOk, CPS_MAX,
+	CPS_MAX, FUNCAO_SEGREDO_TRONCO, senhaTroncoMotivo, lerIps, ipsMotivo, ipsPendentes,
 } from '@/lib/voz';
 import { Aviso, Campo, Dialogo, Gaveta, Trava, btnPrim, btnSec, campoCls } from '@/components/comuns/voz-ui';
 
@@ -31,7 +33,6 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 	const [transporte, setTransporte] = useState(String(tronco?.transporte ?? 'udp'));
 	const [autenticacao, setAutenticacao] = useState(String(tronco?.autenticacao ?? 'ip'));
 	const [usuario, setUsuario] = useState(String(tronco?.usuario ?? ''));
-	const [segredo, setSegredo] = useState(String(tronco?.segredo_ref ?? ''));
 	const [canais, setCanais] = useState(String(tronco?.canais ?? ''));
 	const [cps, setCps] = useState(String(tronco?.cps ?? 10));
 	const [bina, setBina] = useState('');
@@ -40,6 +41,8 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 	const [csp, setCsp] = useState(String(tronco?.csp ?? ''));
 	const [codecs, setCodecs] = useState<string[]>(Array.isArray(tronco?.codecs) ? (tronco!.codecs as string[]) : ['alaw', 'ulaw']);
 	const [ativo, setAtivo] = useState(tronco ? tronco.ativo !== false : true);
+	const ipsAntes = Array.isArray(tronco?.ips_operadora) ? (tronco!.ips_operadora as string[]) : [];
+	const [ips, setIps] = useState(ipsAntes.join('\n'));
 	const [busy, setBusy] = useState(false);
 	const [erro, setErro] = useState('');
 	const [tentou, setTentou] = useState(false);
@@ -54,7 +57,6 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 	const portaN = Number(porta); if (!Number.isInteger(portaN) || portaN < 1 || portaN > 65535) e.porta = 'De 1 a 65535.';
 	if (autenticacao === 'senha') {
 		if (!RE_USUARIO.test(usuario.trim())) e.usuario = 'Usuário SIP do contrato.';
-		if (!segredoTroncoOk(segredo, tronco?.segredo_ref == null ? null : String(tronco.segredo_ref))) e.segredo = 'Nome do segredo no cofre, começando com voz/. Ex.: voz/trunk/aurora-opb';
 	}
 	const canaisN = Number(canais); if (!Number.isInteger(canaisN) || canaisN < 1 || canaisN > 10000) e.canais = 'De 1 a 10.000.';
 	const cpsN = Number(cps); if (!Number.isInteger(cpsN) || cpsN < 1 || cpsN > CPS_MAX) e.cps = 'De 1 a 500.';
@@ -63,6 +65,9 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 	if (formato === 'tech_0_csp_ddd_numero' && !RE_CSP.test(csp.trim())) e.csp = 'O formato com CSP precisa do código da prestadora (2 dígitos).';
 	else if (csp.trim() && !RE_CSP.test(csp.trim())) e.csp = 'Use 2 dígitos.';
 	if (codecs.length === 0) e.codecs = 'Escolha ao menos um codec.';
+	const listaIps = lerIps(ips);
+	const motivoIps = ipsMotivo(listaIps);
+	if (motivoIps) e.ips = motivoIps;
 	const ok = Object.keys(e).length === 0;
 	const err = (k: string) => (tentou ? e[k] : undefined);
 
@@ -70,15 +75,26 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 		setTentou(true);
 		if (!ok || !supabase) return;
 		setBusy(true); setErro('');
-		const { error } = await supabase.rpc('cadastrar_tronco_voz', {
+		// SQL 103: sem referência (segredo_ref nulo), o banco mantém a do tronco ou usa a do cofre da empresa
+		const { data: tid, error } = await supabase.rpc('cadastrar_tronco_voz', {
 			empresa: Number(empresaId), referencia: referencia.trim().toLowerCase(), operadora: operadora.trim(), host: host.trim(),
 			canais: canaisN, autenticacao, ddd_origem: ddd.trim(), bina: binaFinal,
-			segredo_ref: autenticacao === 'senha' ? segredo.trim() : null, usuario: autenticacao === 'senha' ? usuario.trim() : null,
+			segredo_ref: null, usuario: autenticacao === 'senha' ? usuario.trim() : null,
 			porta: portaN, transporte, cps: cpsN, codecs, formato_discagem: formato, ativo, csp: csp.trim() || null,
 		});
+		if (error) { setBusy(false); setErro(erroDoBanco(error)); return; }
+		// SQL 104: a lista de IPs vai à parte; IP novo espera a equipe liberar no firewall
+		let pendentes = 0;
+		if (listaIps.join(',') !== ipsAntes.join(',') && tid != null) {
+			const { data: pend, error: eIps } = await supabase.rpc('definir_ips_voz', { tipo: 'tronco', id: Number(tid), ips: listaIps });
+			if (eIps) { setBusy(false); setErro(`O tronco foi salvo, mas os IPs não: ${erroDoBanco(eIps)}`); return; }
+			pendentes = Array.isArray(pend) ? pend.length : 0;
+		}
 		setBusy(false);
-		if (error) { setErro(erroDoBanco(error)); return; }
-		onSaved(novo ? 'Tronco cadastrado. O Asterisk faz a chamada de teste e a divisão da concorrência é refeita.' : 'Tronco atualizado. Se mudou a conexão, o teste roda de novo.');
+		const falta = autenticacao === 'senha' && (novo || tronco?.autenticacao !== 'senha' || !tronco?.segredo_guardado_em);
+		onSaved((novo ? 'Tronco cadastrado. O Asterisk faz a chamada de teste e a divisão da concorrência é refeita.' : 'Tronco atualizado. Se mudou a conexão, o teste roda de novo.')
+			+ (falta ? ' Falta guardar a senha: abra o tronco de novo e use "Guardar a senha no cofre".' : '')
+			+ (pendentes ? ` ${pendentes} IP(s) da operadora esperando a liberação no firewall.` : ''));
 	}
 
 	return (
@@ -87,7 +103,7 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 				<button onClick={onClose} className={btnSec}>Cancelar</button>
 				<button onClick={() => void salvar()} disabled={busy} className={btnPrim}>{busy ? 'Salvando...' : novo ? 'Testar e cadastrar' : 'Salvar'}</button>
 			</>}>
-			<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Os dados vêm do contrato da empresa com a operadora. A senha, quando houver, não é digitada aqui: a equipe grava no cofre (Secret Manager do MotorCX) e este formulário guarda só a referência.</p>
+			<p className="text-[13px] leading-relaxed text-[var(--base-texto-2)]">Os dados vêm do contrato da empresa com a operadora. A senha, quando houver, vai direto para o cofre de segredos do MotorCX e não volta a aparecer.</p>
 			<div className="grid gap-3 sm:grid-cols-2">
 				<Campo rotulo="Referência" erro={err('referencia')} ajuda={novo ? undefined : 'A referência não muda depois de criada.'}>
 					<input value={referencia} disabled={!novo} onChange={x => setReferencia(x.target.value.toLowerCase())} placeholder="trk-aurora-03" className={`${campoCls} font-mono`} />
@@ -125,11 +141,17 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 					<Campo rotulo="Usuário SIP" erro={err('usuario')}>
 						<input value={usuario} onChange={x => setUsuario(x.target.value)} autoComplete="off" className={`${campoCls} font-mono`} />
 					</Campo>
-					<Campo rotulo="Referência da senha no cofre" erro={err('segredo')} ajuda="Só o nome do segredo, começando com voz/ (no cofre vira motorcx-voz-…). A senha nunca passa por esta tela.">
-						<input value={segredo} onChange={x => setSegredo(x.target.value)} placeholder="voz/trunk/aurora-opc" autoComplete="off" className={`${campoCls} font-mono`} />
-					</Campo>
 				</div>
 			)}
+			{autenticacao === 'senha' && (tronco && tronco.autenticacao === 'senha'
+				? <SenhaNoCofre tronco={tronco} onGuardada={onSaved} />
+				: <Trava icone={<KeyRound size={16} />} titulo="Depois de salvar, guarde a senha">Abra o tronco de novo e use "Guardar a senha no cofre". Sem a senha, este tronco fica de fora e os outros continuam ligando.</Trava>)}
+
+			<Campo rotulo="IPs da operadora (sinalização e áudio)" erro={err('ips')}
+				ajuda={`Peça à operadora os IPs do equipamento SIP dela (SBC), um por linha, até 20. Sem eles, o firewall do MotorCX barra o áudio de volta. IP novo só entra no firewall depois que a equipe libera.${tronco && ipsPendentes(tronco).length ? ` Esperando liberação: ${ipsPendentes(tronco).join(', ')}.` : ''}`}>
+				<textarea value={ips} onChange={x => setIps(x.target.value)} rows={3} autoComplete="off" spellCheck={false} placeholder={'200.100.50.10\n200.100.60.0/24'}
+					className={`${campoCls} font-mono`} />
+			</Campo>
 
 			<div className="grid grid-cols-2 gap-3">
 				<Campo rotulo="Canais" erro={err('canais')} ajuda="Ligações simultâneas do contrato.">
@@ -179,6 +201,41 @@ export function TroncoGaveta({ empresaId, empresaNome, tronco, onClose, onSaved 
 			<p className="text-[12px] leading-relaxed text-[var(--base-texto-3)]">Ao salvar, o Asterisk confere o segredo no cofre, recarrega a configuração e faz uma chamada de teste. O item "Gestão de tronco SIP" entra na fatura do MotorCX no mês seguinte.</p>
 			{erro && <Aviso tom="erro">{erro}</Aviso>}
 		</Gaveta>
+	);
+}
+
+// ============================================================== senha do tronco (SQL 103)
+// Digitada uma vez; vai pela Edge Function direto para o Secret Manager. Nada volta: só a data em que foi guardada.
+function SenhaNoCofre({ tronco, onGuardada }: { tronco: Row; onGuardada: (msg: string) => void }) {
+	const [senha, setSenha] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [erro, setErro] = useState('');
+	const guardada = tronco.segredo_guardado_em ? dateTimeBR(String(tronco.segredo_guardado_em)) : null;
+	const motivo = senha ? senhaTroncoMotivo(senha) : null;
+
+	async function guardar() {
+		const m = senhaTroncoMotivo(senha);
+		if (m) { setErro(m); return; }
+		if (!supabase) return;
+		setBusy(true); setErro('');
+		const { data, error } = await supabase.functions.invoke(FUNCAO_SEGREDO_TRONCO, { body: { tronco: Number(tronco.id), senha } });
+		setSenha('');           // a senha sai da memória da tela, deu certo ou não
+		const msg = await erroDaFuncao(error, data);
+		setBusy(false);
+		if (msg) { setErro(msg); return; }
+		onGuardada('Senha guardada no cofre. O Asterisk lê a senha nova em até 2 minutos e o tronco precisa ser testado de novo.');
+	}
+
+	return (
+		<div className="space-y-2 rounded-[10px] border border-[var(--base-borda)] p-3">
+			<p className="text-[13px] font-semibold text-[var(--base-texto)]">{guardada ? `Senha guardada em ${guardada}` : 'Senha ainda não guardada pela tela'}</p>
+			<p className="text-[12px] leading-relaxed text-[var(--base-texto-3)]">A senha vai direto para o cofre de segredos. Ninguém vê pela tela e ela não volta a aparecer. Só o servidor de voz do MotorCX lê a senha, na hora de ligar. Pede a verificação em duas etapas.</p>
+			<Campo rotulo={guardada ? 'Trocar a senha' : 'Senha do tronco'} erro={motivo ?? undefined}>
+				<input type="password" value={senha} onChange={x => setSenha(x.target.value)} autoComplete="new-password" spellCheck={false} maxLength={128} className={`${campoCls} font-mono`} />
+			</Campo>
+			<button type="button" onClick={() => void guardar()} disabled={busy || !senha || !!motivo} className={btnSec}>{busy ? 'Guardando...' : 'Guardar a senha no cofre'}</button>
+			{erro && <Aviso tom="erro">{erro}</Aviso>}
+		</div>
 	);
 }
 
@@ -285,6 +342,8 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 	const [ativo, setAtivo] = useState(atual ? atual.ativo !== false : true);
 	// SQL 111 (Power/Preditivo V8): operadores do cliente para transferência ao mesmo tempo (padrão 5)
 	const [simultaneas, setSimultaneas] = useState(String(atual?.simultaneas ?? 5));
+	const ipsAntes = Array.isArray(atual?.ips_operadora) ? (atual!.ips_operadora as string[]) : [];
+	const [ips, setIps] = useState(ipsAntes.join('\n'));
 	const [busy, setBusy] = useState(false);
 	const [erro, setErro] = useState('');
 	const [tentou, setTentou] = useState(false);
@@ -292,6 +351,9 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 	const e: Record<string, string> = {};
 	const nSim = Number(simultaneas);
 	if (!Number.isInteger(nSim) || nSim < 1 || nSim > 500) e.simultaneas = 'De 1 a 500.';
+	const listaIps = lerIps(ips);
+	const motivoIps = ipsMotivo(listaIps);
+	if (motivoIps) e.ips = motivoIps;
 	if (nome.trim().length < 2 || nome.trim().length > 60) e.nome = 'De 2 a 60 letras.';
 	if (!RE_DESTINO_SIP.test(destino.trim())) e.destino = 'Ex.: sip:fila-negociacao@discador.empresa.com.br:5061';
 	if (tech.trim() && !RE_TECH.test(tech.trim())) e.tech = 'Só números (1 a 8 dígitos).';
@@ -302,18 +364,25 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 		setTentou(true);
 		if (!ok || !supabase) return;
 		setBusy(true); setErro('');
-		const { data: tid, error } = await supabase.rpc('salvar_transferencia_voz', {
+		const { data: xid, error } = await supabase.rpc('salvar_transferencia_voz', {
 			empresa: Number(empresaId), nome: nome.trim(), destino_sip: destino.trim(), metodo,
 			tronco: tronco ? Number(tronco) : null, tech_prefix: tech.trim() || null, credor: null, ativo,
 			transferencia: atual?.id != null ? Number(atual.id) : null,
 		});
-		if (!error && tid != null && nSim !== Number(atual?.simultaneas ?? 5)) {
-			const r = await supabase.rpc('definir_operadores_transferencia_voz', { transferencia: Number(tid), simultaneas: nSim });
-			if (r.error) { setBusy(false); setErro(erroDoBanco(r.error)); return; }
+		if (error) { setBusy(false); setErro(erroDoBanco(error)); return; }
+		let pendentes = 0;
+		if (listaIps.join(',') !== ipsAntes.join(',') && xid != null) {
+			const { data: pend, error: eIps } = await supabase.rpc('definir_ips_voz', { tipo: 'transferencia', id: Number(xid), ips: listaIps });
+			if (eIps) { setBusy(false); setErro(`A transferência foi salva, mas os IPs não: ${erroDoBanco(eIps)}`); return; }
+			pendentes = Array.isArray(pend) ? pend.length : 0;
+		}
+		if (xid != null && nSim !== Number(atual?.simultaneas ?? 5)) {
+			const r = await supabase.rpc('definir_operadores_transferencia_voz', { transferencia: Number(xid), simultaneas: nSim });
+			if (r.error) { setBusy(false); setErro(`A transferência foi salva, mas os operadores ao mesmo tempo não: ${erroDoBanco(r.error)}`); return; }
 		}
 		setBusy(false);
-		if (error) { setErro(erroDoBanco(error)); return; }
-		onSaved('Transferência salva. Se o destino mudou, o teste roda de novo.');
+		onSaved('Transferência salva. Se o destino mudou, o teste roda de novo.'
+			+ (pendentes ? ` ${pendentes} IP(s) do PABX esperando a liberação no firewall.` : ''));
 	}
 
 	return (
@@ -351,6 +420,11 @@ export function TransferenciaGaveta({ empresaId, troncos, atual, onClose, onSave
 			</div>
 			<Campo rotulo="Operadores para transferência ao mesmo tempo" erro={err('simultaneas')} ajuda="O MotorCX nunca transfere mais que isso ao mesmo tempo. Passou, o agente continua a conversa e agenda o retorno (não é abandono). Padrão 5; o cliente informa.">
 				<input value={simultaneas} inputMode="numeric" maxLength={3} onChange={x => setSimultaneas(x.target.value.replace(/\D/g, ''))} className={campoCls} />
+			</Campo>
+			<Campo rotulo="IPs do PABX/discador (sinalização e áudio)" erro={err('ips')}
+				ajuda={`Para o firewall do MotorCX deixar o áudio da ponte passar. Um por linha, até 20. IP novo entra depois que a equipe libera.${atual && ipsPendentes(atual).length ? ` Esperando liberação: ${ipsPendentes(atual).join(', ')}.` : ''}`}>
+				<textarea value={ips} onChange={x => setIps(x.target.value)} rows={2} autoComplete="off" spellCheck={false} placeholder="200.100.70.20"
+					className={`${campoCls} font-mono`} />
 			</Campo>
 			<Trava icone={<KeyRound size={16} />} titulo="Cabeçalhos enviados: ID da chamada, ID da ação, ação e motivo">
 				Nunca vão CPF, nome, valor ou transcrição.
