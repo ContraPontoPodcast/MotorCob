@@ -1224,6 +1224,15 @@ abandono com mensagem (`abandono_sem_robo`). As sessões livres do provedor na V
 (`vaga_empresa(livres_max=…)`) e a reserva na originação só acontece com sessão do provedor (`ocupar(pode_reservar)`).
 Linha tocando nunca ocupa robô. Com a razão 1,0 (padrão) nada muda.
 
+**Agente de voz · ritmo por carteira (Power e Preditivo V3, SQL 107).** `credores.discagem › ritmo` =
+`{modo: power|preditivo, razao 1–3 (Power), meta_abandono 0,5–3 % e razao_max 1–3 (Preditivo)}`; padrão **Power 1,0**
+(o de hoje; Power 1,0 = Progressivo, ninguém atende sem robô). Teto de abandono fixo em 3 % (`DG.TETO_ABANDONO`, ninguém
+sobe) e razão máxima de 2,0 na primeira semana do Preditivo (`RAZAO_MAX_1A_SEMANA`). Mesmo histórico de versões,
+validação e auditoria da Discagem (`salvar_discagem`, `editar_credores`): o SQL 107 só recria `discagem_regras()` e
+`discagem_padrao()` (gerados do motor; `tests/test_resubmit.py` confere). A VM lê por `regras_discagem_voz` ao carregar o
+lote e relê a cada minuto (`Plantao.atualizar_ritmos`; banco fora = o de antes continua) em `Lote.ritmo`
+(`DG.ritmo_da_carteira`: inválido = padrão).
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

@@ -1,5 +1,6 @@
 """Ritmo da discagem (Power e Preditivo, PREDITIVO.md): V1 · medir o abandono certo, sem mudar o ritmo (SQL 106);
-V2 · linhas e robôs separados também com razão > 1 (reserva no atendimento, antes do AMD).
+V2 · linhas e robôs separados também com razão > 1 (reserva no atendimento, antes do AMD); V3 · ritmo por carteira em
+credores.discagem › ritmo (SQL 107) e a leitura na VM.
 
 - a taxa do freio é a dos últimos 30 min (não o acumulado desde que a VM subiu) e solta sozinha quando a janela anda;
 - a transferência sem operador (fila humana cheia) não é abandono e não freia o discador;
@@ -227,6 +228,72 @@ class TestReservaNoAtendimento(Base):
         self.assertEqual(orq.tick(), 2)
         self.assertTrue(all(c.reservada for c in orq.chamadas.values()))
         self.assertEqual(orq.contagem.get("reserva_no_atendimento"), None)
+
+
+class TestConfiguracaoRitmo(unittest.TestCase):
+    """V3 · credores.discagem › ritmo (SQL 107): Power 1,0 por padrão; Power 1–3; Preditivo com meta 0,5–3% e razão
+    máxima 1–3; teto de abandono fixo em 3%; o banco valida o mesmo que o motor."""
+
+    def test_padrao_e_power_um(self):
+        from motor import discagem as DG
+        self.assertEqual(DG.ritmo_da_carteira(None), {"modo": "power", "razao": 1.0, "meta_abandono": 1.0,
+                                                      "razao_max": 3.0})
+        self.assertEqual(DG.ritmo_da_carteira({"tentativas_numero_dia": 3})["razao"], 1.0)
+        self.assertEqual(DG.TETO_ABANDONO, 3.0)
+        self.assertEqual(DG.padrao_site()["ritmo"]["teto_abandono"], 3.0)
+
+    def test_validacao_no_motor(self):
+        from motor import discagem as DG
+        cfg, av = DG.normalizar({"ritmo": {"modo": "preditivo", "meta_abandono": 0.8, "razao_max": 2.5}})
+        self.assertEqual(av, [])
+        self.assertEqual(cfg["ritmo"], {"modo": "preditivo", "razao": 1.0, "meta_abandono": 0.8, "razao_max": 2.5})
+        cfg, av = DG.normalizar({"ritmo": {"modo": "progressivo", "razao": 4, "meta_abandono": 5, "x": 1}})
+        self.assertEqual(cfg["ritmo"], DG.PADRAO["ritmo"])       # o inválido fica com o padrão
+        self.assertEqual(len(av), 4)
+        self.assertEqual(DG.ritmo_da_carteira({"ritmo": {"modo": "power", "razao": 1.5}})["razao"], 1.5)
+
+    def test_banco_tem_as_mesmas_regras(self):
+        import json
+        sql = (RAIZ / "supabase" / "migrations" / "20270222000001_voz_ritmo_config.sql").read_text(encoding="utf-8")
+        regras = json.loads(re.search(r"discagem_regras\(\) returns jsonb.*?select '(.*?)'::jsonb", sql, re.S).group(1))
+        self.assertEqual(regras["_blocos"]["ritmo"], {"modo": ["enum", "power", "preditivo"],
+                                                      "razao": ["real", 1.0, 3.0], "meta_abandono": ["real", 0.5, 3.0],
+                                                      "razao_max": ["real", 1.0, 3.0]})
+        self.assertIn("ritmo", regras["_chaves"])
+
+
+class FonteRitmo:
+    def __init__(self, linhas):
+        self.linhas, self.chamadas = linhas, 0
+
+    def ritmos(self, empresa_id):
+        self.chamadas += 1
+        if self.linhas is None:
+            return None
+        from voz.orquestrador.principal import FonteListas
+        return FonteListas.ritmos(self, empresa_id, self.linhas)
+
+
+class TestVmLeORitmo(Base):
+    def test_le_e_rele_a_cada_minuto_e_banco_fora_mantem(self):
+        orq = self.montar([item()])
+        self.lote.credor_id = 7
+        self.assertEqual(self.lote.ritmo["modo"], "power")
+        fonte = FonteRitmo([{"credor_id": 7, "discagem": {"ritmo": {"modo": "power", "razao": 2.0}}},
+                            {"credor_id": 8, "discagem": None}])
+        pl = P.Plantao(orq, fonte, orq.dados.config(1).modo, relogio=self.rel)
+        pl._ult = {k: float("inf") for k in pl._ult} | {"ritmo_cfg": -1e9}
+        pl.agregado = self.rel().date()
+        pl.ciclo(0.0)
+        self.assertEqual((self.lote.ritmo["modo"], self.lote.ritmo["razao"]), ("power", 2.0))
+        pl.ciclo(30.0)
+        self.assertEqual(fonte.chamadas, 1)                      # a cada minuto
+        fonte.linhas = None                                      # banco fora: o ritmo de antes continua
+        pl.ciclo(61.0)
+        self.assertEqual(self.lote.ritmo["razao"], 2.0)
+        fonte.linhas = [{"credor_id": 7, "discagem": {"ritmo": {"modo": "x"}}}]   # inválido: padrão
+        pl.ciclo(122.0)
+        self.assertEqual(self.lote.ritmo, {"modo": "power", "razao": 1.0, "meta_abandono": 1.0, "razao_max": 3.0})
 
 
 if __name__ == "__main__":

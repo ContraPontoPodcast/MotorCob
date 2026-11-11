@@ -300,6 +300,9 @@ class Lote:
         self._idx: dict[int, int] = {}
         self._fim_spin: dict[int, datetime] = {}  # horizontal: quando o spin acabou de passar pelo lote
         self.reciclagem_auto_em = None            # dia da última reciclagem automática
+        # ritmo da carteira (credores.discagem › ritmo, SQL 107): Power (razão fixa) ou Preditivo. Padrão: Power 1,0.
+        # O Plantão relê a cada minuto (mudou no site = vale no minuto seguinte, sem recarregar o lote)
+        self.ritmo: dict = dict(DG.PADRAO["ritmo"])
         self.regras = None
         self.aplicar_regras(regras)
 

@@ -83,7 +83,16 @@ PADRAO = {
     "por_sinalizacao": None,     # None = a VM de hoje; objeto = regra por sinalização (SINALIZACAO_PADRAO + mudanças)
     "modo_discagem": None,       # None = hoje; objeto = vertical/horizontal com spins (MODO_PADRAO + mudanças)
     "reciclagem_auto": None,     # None/ativo false = desligada
+    # Ritmo da discagem da VM (Power e Preditivo, PREDITIVO.md; decisão do dono, 08/11/2026: o cliente escolhe). Power =
+    # razão fixa (linhas por robô livre; 1,0 = Progressivo, ninguém atende sem robô); Preditivo = razão calculada pela
+    # chance de atender, de 1,0 até razao_max, mantendo o abandono perto de meta_abandono (%). O padrão é o de hoje:
+    # Power 1,0 (o pedido do dono para não mudar nada sem a carteira escolher). Teto de abandono fixo (TETO_ABANDONO).
+    "ritmo": {"modo": "power", "razao": 1.0, "meta_abandono": 1.0, "razao_max": 3.0},
 }
+# teto de abandono (% das atendidas por pessoa) para Power e Preditivo: fixo, ninguém sobe (PREDITIVO.md 3.3, H4)
+TETO_ABANDONO = 3.0
+# razão máxima da primeira semana da carteira no Preditivo (aquecimento; PREDITIVO.md Parte 4)
+RAZAO_MAX_1A_SEMANA = 2.0
 # campo -> (tipo, mínimo, máximo) dos blocos
 _SUB = {
     "descanso_nao_atende": {"ativo": bool, "n": (1, 50), "em_dias": (1, 60), "descansa_dias": (1, 365)},
@@ -100,6 +109,9 @@ _SUB = {
     "chamadas_curtas": {"ativo": bool, "aviso": "fracao", "corte_ativo": bool, "corte": "fracao",
                         "max_por_numero_dia": (1, 10 ** 6), "max_total_dia": (1, 10 ** 8),
                         "abandono_conta": bool, "segundos": (1, 60), "falha_conta": bool},
+    # Power: razão de 1,0 a 3,0; Preditivo: meta de 0,5% a 3% (nunca acima do teto) e razão máxima de 1,0 a 3,0
+    "ritmo": {"modo": ("power", "preditivo"), "razao": ("real", 1.0, 3.0), "meta_abandono": ("real", 0.5, 3.0),
+              "razao_max": ("real", 1.0, 3.0)},
 }
 
 # ------------------------------------------------------------------ Renitência por situação e regra por sinalização (SQL 65)
@@ -387,6 +399,7 @@ def padrao_site() -> dict:
         "modo_discagem": copy.deepcopy(MODO_PADRAO), "reciclagem_auto": copy.deepcopy(RECICLAGEM_PADRAO),
         "retorno_agendado": {"max_dias": base["retorno_agendado"]["max_dias"]},
         "chamadas_curtas": {"falha_conta": base["chamadas_curtas"]["falha_conta"]},
+        "ritmo": {**base["ritmo"], "teto_abandono": TETO_ABANDONO, "razao_max_1a_semana": RAZAO_MAX_1A_SEMANA},
     }
 
 
@@ -594,6 +607,14 @@ def normalizar(bruto, base: dict | None = None, onde: str = "discagem") -> tuple
     if tem_regra_nova(cfg) and "tentativas_numero_dia" not in bruto:
         cfg["tentativas_numero_dia"] = TENTATIVAS_NUMERO_REGRA_NOVA
     return cfg, av
+
+
+def ritmo_da_carteira(discagem) -> dict:
+    """O ritmo que a VM aplica na carteira (credores.discagem › ritmo normalizado; o resto do bloco não importa aqui).
+    Sem a chave, ou com valor inválido, o padrão (Power 1,0)."""
+    bruto = discagem.get("ritmo") if isinstance(discagem, dict) else None
+    cfg, _ = normalizar({"ritmo": bruto} if bruto is not None else None)
+    return dict(cfg["ritmo"])
 
 
 def config(dados: dict) -> dict:
