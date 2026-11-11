@@ -6,6 +6,9 @@ Pega também o que a fala vira no texto: dígitos separados por espaço, ponto, 
            conferem.
   cartão   13 a 19 dígitos (separados ou não) que passam no Luhn.
 Número de telefone (10/11 dígitos que não são CPF válido) fica; valor em reais fica.
+
+SQL 96 (trava de CPF): `cpf_dito` diz se a pessoa falou um CPF (o mesmo critério da redação, também com os números
+por extenso, "um dois três…", ou a palavra CPF com 9 dígitos ou mais). O agente nunca repete e nunca manda adiante.
 """
 from __future__ import annotations
 
@@ -115,3 +118,28 @@ def mascarar(texto: str, nomes: tuple[str, ...] | list[str] = ()) -> tuple[str, 
         return f"{m.group(1)} {MARCA_NOME}"
 
     return NOME_DITO.sub(_dito, t), cont
+
+
+# ------------------------------------------------------------------ SQL 96 · trava de CPF
+_FALADOS = {"zero": "0", "um": "1", "uma": "1", "dois": "2", "duas": "2", "tres": "3", "três": "3", "quatro": "4",
+            "cinco": "5", "seis": "6", "meia": "6", "sete": "7", "oito": "8", "nove": "9"}
+RE_FALADOS = re.compile(r"\b(" + "|".join(_FALADOS) + r")\b", re.I)
+
+
+def digitos_falados(texto: str) -> str:
+    """"um dois três" → "1 2 3" (o STT às vezes escreve os números por extenso)."""
+    return RE_FALADOS.sub(lambda m: _FALADOS[m.group(1).lower()], texto or "")
+
+
+def cpf_dito(texto: str) -> bool:
+    """A pessoa disse um CPF? Formato 000.000.000-00, 11 dígitos (separados ou não, também por extenso) com os dígitos
+    verificadores certos, ou a palavra CPF com 9 dígitos ou mais. Os 3 últimos números (identidade) não contam."""
+    t = digitos_falados(texto)
+    if redigir(t)[1]["cpf"]:
+        return True
+    return "cpf" in t.lower().replace(".", "") and len(re.findall(r"\d", t)) >= 9
+
+
+def sem_cpf(texto: str) -> str:
+    """O texto para guardar ou mostrar: com CPF dito, só a marca (nunca o número)."""
+    return MARCA_CPF if cpf_dito(texto) else texto

@@ -10,6 +10,13 @@ Esquema (esquema 1):
 
 `quando` diz em que caso o executor segue a saída (o `rotulo` é só o texto da tela). Cada tipo tem a sua lista.
 
+SQL 95 (PR8 do redesenho; SPEC B1 e B2): as etapas que ouvem a pessoa (OUVEM) podem ter, opcionais,
+    params.nao_entendi = {"fala": "...", "vezes": 1..3}   o que dizer quando não entende e quantas vezes até seguir
+    params.silencio    = {"fala": "...", "vezes": 1..3}   o mesmo quando não ouve nada (silêncio)
+e a saída opcional `quando = "silencio"` (para onde vai depois das N vezes sem ouvir). Sem eles, vale o de hoje: a
+fala padrão do executor, `tentativas` (padrão 2) e a saída de "não entendi" da etapa. As falas novas passam pelas
+mesmas regras da fala (500 caracteres, variáveis, senha e a trava 1: credor ou valor antes da identidade).
+
 Erros devolvidos como texto "codigo" ou "codigo:ID", em ordem e sem repetição (a mesma ordem do banco: sorted()).
 Erros de contexto (conector ativo, alçada da carteira, intenção do catálogo) ficam em `pendencias()`, a cópia
 de public.fluxo_voz_pendencias(), que lê o banco.
@@ -54,6 +61,10 @@ TIPOS = {
     "transferir": (("arvore",), True, (), ()),
     "encerrar":   (("arvore",), True, (), ()),
 }
+# SQL 95: as etapas que ouvem a pessoa e têm "Se não entender" e "Se não ouvir nada" (params e saída "silencio")
+OUVEM = ("abertura", "identidade", "pergunta", "intencao", "oferta", "retorno")
+REPETICOES = ("nao_entendi", "silencio")
+SAIDA_SILENCIO = "silencio"
 # blocos que, por si, tratam de valor, oferta ou credor da dívida
 TIPOS_SENSIVEIS = ("oferta", "generativa", "registrar", "link")
 
@@ -78,13 +89,13 @@ TIPOS_SAIDA = ("normal", "devolve", "falha")
 CHAVES_BLOCO = ("id", "tipo", "modo", "x", "y", "titulo", "repetir_max", "params", "saidas")
 CHAVES_SAIDA = ("rotulo", "para", "tipo", "quando")
 CHAVES_PARAMS = {
-    "abertura": ("fala",),
-    "identidade": ("fala", "pergunta", "conector_id", "tentativas"),
-    "pergunta": ("fala", "opcoes", "tentativas"),
-    "intencao": ("fala", "intencoes", "exemplos", "confianca_min", "tentativas", "entidades"),
+    "abertura": ("fala", "nao_entendi", "silencio"),
+    "identidade": ("fala", "pergunta", "conector_id", "tentativas", "nao_entendi", "silencio"),
+    "pergunta": ("fala", "opcoes", "tentativas", "nao_entendi", "silencio"),
+    "intencao": ("fala", "intencoes", "exemplos", "confianca_min", "tentativas", "entidades", "nao_entendi", "silencio"),
     "generativa": ("objetivo", "tom", "max_turnos", "ferramentas", "contrapropostas_max"),
-    "oferta": ("fala", "origem", "conector_id"),
-    "retorno": ("fala", "dias_max"),
+    "oferta": ("fala", "origem", "conector_id", "nao_entendi", "silencio"),
+    "retorno": ("fala", "dias_max", "nao_entendi", "silencio"),
     "conector": ("conector_id", "fala_espera"),
     "registrar": ("registra", "conectores"),
     "link": ("fala", "canal", "modelo_id"),
@@ -97,6 +108,11 @@ COM_FALA = ("abertura", "identidade", "pergunta", "intencao", "oferta", "retorno
 RE_ID = re.compile(r"N[0-9]{1,3}")
 RE_CODIGO = re.compile(r"[a-z][a-z0-9_]{1,40}")
 RE_SENHA = re.compile(r"senha|numero do cartao|codigo de seguranca|cvv")
+# SQL 96 · trava de CPF: a fala nunca cita CPF nem diz um número com cara de CPF. Só "os três últimos números do CPF"
+# (a pergunta de identidade) pode.
+RE_CPF_PERMITIDO = re.compile(r"(tres|3) ultimos (numeros|digitos)[^.?!]{0,20}c\.?p\.?f")
+RE_CPF_PALAVRA = re.compile(r"c\.?p\.?f")
+RE_CPF_NUMERO = re.compile(r"[0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2}")
 _BRANCOS = " \t\n\r"      # btrim do banco
 # mesma troca de acentos do banco (translate), para o filtro de senha dar igual nos dois
 _ACENTOS = str.maketrans("áàâãäéèêëíìîïóòôõöúùûüç", "aaaaaeeeeiiiiooooouuuuc")
@@ -163,8 +179,15 @@ def variaveis(texto: str) -> list[str]:
     return [m.strip(_BRANCOS) for _, _, m in trechos_variaveis(texto)]
 
 
+def pede_cpf(texto: str) -> bool:
+    """SQL 96: a fala pede, cita ou diz um CPF (fora "os três últimos números do CPF")."""
+    t = texto.lower().translate(_ACENTOS)
+    return RE_CPF_PALAVRA.search(RE_CPF_PERMITIDO.sub("", t)) is not None or RE_CPF_NUMERO.search(t) is not None
+
+
 def pede_senha(texto: str) -> bool:
-    return RE_SENHA.search(texto.lower().translate(_ACENTOS)) is not None
+    """Trava 2: senha, cartão ou (SQL 96) CPF. = public.fluxo_voz_aux_pede_senha."""
+    return RE_SENHA.search(texto.lower().translate(_ACENTOS)) is not None or pede_cpf(texto)
 
 
 def textos_do_bloco(b: dict) -> list[tuple[str, str]]:
@@ -174,6 +197,10 @@ def textos_do_bloco(b: dict) -> list[tuple[str, str]]:
     for k in ("fala", "fala_espera", "objetivo"):
         if _texto(p.get(k)):
             out.append((k, p[k]))
+    for k in REPETICOES:                      # SQL 95: "Se não entender" e "Se não ouvir nada"
+        r = p.get(k)
+        if isinstance(r, dict) and _texto(r.get("fala")):
+            out.append((f"{k}.fala", r["fala"]))
     return out
 
 
@@ -201,6 +228,21 @@ def _params(b: dict, erros: list[str]) -> None:
         ruim = True
     if "conector_id" in p and p["conector_id"] is not None and not _inteiro(p["conector_id"], 1, 2 ** 53):
         ruim = True
+    for k in REPETICOES:                      # SQL 95: {fala?, vezes?}
+        if k not in p:
+            continue
+        r = p[k]
+        if not isinstance(r, dict) or any(x not in ("fala", "vezes") for x in r):
+            ruim = True
+            continue
+        if "vezes" in r and not _inteiro(r["vezes"], 1, 3):
+            ruim = True
+        if "fala" in r:
+            f = r["fala"]
+            if not _texto(f) or len(f.strip(_BRANCOS)) == 0:
+                ruim = True
+            elif len(f) > FALA_MAX:
+                erros.append(f"fala_longa:{bid}")
 
     if tipo == "identidade":
         ruim |= p.get("pergunta") not in PERGUNTAS_IDENTIDADE
@@ -288,18 +330,19 @@ def _quandos(b: dict) -> tuple[set[str], set[str]]:
     """(válidos, obrigatórios) da saída `quando` deste bloco."""
     tipo, p = b["tipo"], b.get("params") if isinstance(b.get("params"), dict) else {}
     fixos = TIPOS[tipo][2]
+    sil = {SAIDA_SILENCIO} if tipo in OUVEM else set()     # SQL 95: "Se não ouvir nada", opcional
     if fixos is not None:
         obrig = set(TIPOS[tipo][3])
         if tipo == "identidade" and p.get("conector_id") is not None:
             obrig.add("falhou")
-        return set(fixos), obrig
+        return set(fixos) | sil, obrig
     if tipo == "pergunta":
         cods = {o.get("codigo") for o in p.get("opcoes", []) if isinstance(o, dict)} if isinstance(p.get("opcoes"), list) else set()
         cods = {c for c in cods if _texto(c)}
-        return cods | {"sem_resposta"}, cods
+        return cods | {"sem_resposta"} | sil, cods
     if tipo == "intencao":
         it = {x for x in p.get("intencoes", []) if _texto(x)} if isinstance(p.get("intencoes"), list) else set()
-        return it | {"nao_entendido"}, it | {"nao_entendido"}
+        return it | {"nao_entendido"} | sil, it | {"nao_entendido"}
     return set(), set()     # generativa: qualquer código; pelo menos uma saída (sem_saida)
 
 
