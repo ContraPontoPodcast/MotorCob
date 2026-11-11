@@ -18,6 +18,10 @@ para cada conector simulado) e POST /ouvir {texto, voz_id?, variaveis?} devolve 
 a voz"), com o TTS da Montagem (provedores.json, chave no cofre). O áudio volta na resposta e não é gravado em lugar
 nenhum; quem registra o uso (registrar_uso_ia_voz, componente previa_voz) é a Edge Function.
 
+SQL 100: o mesmo POST /simular com {"treino": "turno" | "avaliar", ...} roda o treino de operadores humanos por texto
+(voz/treino.py): a fala do cliente simulado e a avaliação pelo checklist. A rota é a mesma (o Caddy da VM já libera
+/simular) e a assinatura também; quem lê e grava o banco é a Edge Function `treino`. Nada é guardado aqui.
+
 Uso: python -m voz.simulador_http --porta 8091   (a chave vem do cofre: voz/simulador)
 """
 from __future__ import annotations
@@ -86,6 +90,8 @@ def ouvir(pedido: dict, sintetizar) -> dict:
     final = preencher(texto, pedido.get("variaveis") or {})
     if not texto_ouvir_ok(final):
         return {"erro": "texto inválido depois das variáveis"}
+    from voz.falado import como_soa
+    final = como_soa(final)                 # PR10: igual à ligação (valores, datas e horas por extenso)
     audio, mime = sintetizar(final, voz)
     return {"audio": base64.b64encode(audio).decode(), "mime": mime, "caracteres": len(final),
             "minutos": round(len(final) / CHARS_POR_MINUTO, 3)}
@@ -177,6 +183,19 @@ def criar_servidor(porta: int, chave: str, modelo_de=None, entendedor_de=None, h
                 return self._resp(503 if r.get("erro") == "prévia de voz indisponível nesta VM" else 400 if "erro" in r else 200, r)
             try:
                 pedido = json.loads(corpo.decode("utf-8"))
+            except Exception:   # noqa: BLE001
+                return self._resp(400, {"erro": "corpo inválido"})
+            if isinstance(pedido, dict) and "treino" in pedido:
+                # treino de operadores por texto (SQL 100, voz/treino.py): turno do cliente simulado ou avaliação
+                from voz import treino as TR
+                try:
+                    r = TR.rodar(pedido, modelo_de)
+                except Exception as ex:   # noqa: BLE001 — LLM fora: nada é gravado; a Edge Function avisa
+                    log.warning("simulador: treino falhou (%s)", ex.__class__.__name__)
+                    return self._resp(502, {"erro": "o cliente simulado não respondeu agora"})
+                log.info("simulador: treino %s %s", "avaliar" if pedido.get("treino") == "avaliar" else "turno", TR.resumo_log(r))
+                return self._resp(503 if r.get("erro") == "treino indisponível nesta VM" else 400 if "erro" in r else 200, r)
+            try:
                 r = rodar(pedido, modelo_de=modelo_de, entendedor=entendedor_de() if entendedor_de else None)
             except Exception as ex:   # noqa: BLE001
                 log.warning("simulador: falhou (%s)", ex.__class__.__name__)
