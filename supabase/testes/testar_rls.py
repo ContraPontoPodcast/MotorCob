@@ -3008,6 +3008,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 121: evolução do treino (testar_treino_evolucao.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 122 · Roleplay, PR 9: cenário gerado dos padrões das ligações (só grupos com 30+, rascunho, publicar é de uma pessoa)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_insights.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 122: cenário a partir dos padrões (testar_treino_insights.py)", True, f"select {r.returncode}", None, None, 0)
+
 # SQL 92 · Preços editáveis: tabela, mínimo e franquia padrão; preço e franquia por empresa (permissão, vigência,
 # guarda da IA e mínimo com motivo)
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_precos_editaveis.py")],

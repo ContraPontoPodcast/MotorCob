@@ -198,5 +198,56 @@ class TestHttp(unittest.TestCase):
             srv.shutdown()
 
 
+class TestGerarCenario(unittest.TestCase):
+    """SQL 122: cenário a partir dos padrões agregados (só códigos e porcentagens; o LLM nunca vê trecho de ligação)."""
+    INS = {"base": 412, "de": "2026-10-11", "ate": "2026-11-09", "motivo:contestacao": 0.18, "objecao:valor_alto": 0.3}
+
+    def resposta(self, **x):
+        a = {"nome": "Contesta e desconfia", "primeiro_nome": "Lia", "genero": "f", "perfil": "contesta_procon",
+             "objetivo": "Não reconhece a dívida e pede explicação antes de qualquer acordo.", "comportamentos": ["desconfia"],
+             "frases": ["Eu não reconheço isso.", "Meu CPF é 12345678909"], "objecoes": [{"codigo": "nao_reconheco", "quando": "no começo"},
+                                                                                       {"codigo": "inventada"}],
+             "dificuldade": 4, "objetivo_cenario": "Explicar a origem da dívida e combinar o próximo passo"}
+        a.update(x)
+        return Resposta("", chamadas=[("entregar_cenario", a)], tokens=90)
+
+    def test_so_codigos_e_porcentagens_vao_ao_llm_e_o_texto_volta_filtrado(self):
+        m = Falso(self.resposta())
+        r = TR.rodar({"treino": "gerar", "insights": self.INS, "item": {"id": "ck_cpc", "texto": "Confirmou a identidade"}}, lambda: m)
+        self.assertEqual(r["tokens"], 90)
+        c = r["cenario"]
+        self.assertEqual(c["persona_nome"], "Lia (fictícia)")
+        self.assertEqual(c["perfil"], "contesta_procon")
+        self.assertEqual(c["objecoes"], [{"codigo": "nao_reconheco", "quando": "no começo"}], "objeção fora da lista sai")
+        self.assertFalse(any(re.search(r"\d{6,}", f) for f in c["frases"]), "dígitos longos nunca ficam")
+        self.assertEqual(c["dificuldade"], 4)
+        prompt = m.pedidos[0][0][0]["content"]
+        self.assertIn("contesta a dívida", prompt)
+        self.assertIn("18% das ligações", prompt)
+        self.assertIn("base de 412 ligações", prompt)
+        self.assertIn("Confirmou a identidade", prompt)
+        ferr = m.pedidos[0][1][0]["function"]
+        self.assertEqual(ferr["name"], "entregar_cenario")
+        self.assertFalse(ferr["parameters"]["additionalProperties"])
+        self.assertGreaterEqual(m.timeout, 45)
+        self.assertEqual(TR.resumo_log(r), '{"tokens": 90, "cenario": true}', "o log nunca leva o cenário")
+
+    def test_padroes_fora_do_formato_nem_chamam_o_llm(self):
+        m = Falso()
+        for ins in ({**self.INS, "base": 12}, {**self.INS, "motivo:contestacao": "Lia disse que pagou"}, {"base": 40, "Nome": 1},
+                    {**self.INS, "de": "ontem"}, None):
+            self.assertIn("erro", TR.gerar_cenario({"insights": ins}, m))
+        self.assertIn("erro", TR.gerar_cenario({"insights": self.INS, "item": {"id": "CK CPC"}}, m))
+        self.assertEqual(m.pedidos, [])
+
+    def test_genero_e_campos_fora_viram_padrao_seguro(self):
+        r = TR.gerar_cenario({"insights": self.INS}, Falso(self.resposta(genero="m", primeiro_nome="João 123", perfil="hacker", dificuldade=9)))
+        self.assertEqual(r["cenario"]["persona_nome"], "João (fictício)")
+        self.assertEqual(r["cenario"]["perfil"], "outro")
+        self.assertEqual(r["cenario"]["dificuldade"], 5)
+        self.assertIn("erro", TR.gerar_cenario({"insights": self.INS}, Falso(self.resposta(objetivo="ok"))))
+        self.assertIn("erro", TR.gerar_cenario({"insights": self.INS}, Falso(Resposta("texto solto"))))
+
+
 if __name__ == "__main__":
     unittest.main()

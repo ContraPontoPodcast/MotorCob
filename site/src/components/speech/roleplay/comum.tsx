@@ -1,5 +1,6 @@
-// Peças comuns do Roleplay: selo "Privacidade e LGPD no treino", dificuldade em pontos e a origem do cenário.
-import { Pilula, SeloRegras, type Regra } from '@/components/ds';
+// Peças comuns do Roleplay: selo "Privacidade e LGPD no treino", dificuldade em pontos, a origem do cenário e o selo do
+// cenário gerado de padrões agregados.
+import { Aviso, Pilula, SeloRegras, type Regra } from '@/components/ds';
 import { DIFICULDADE, type CenarioRP } from '@/lib/roleplay';
 
 export const REGRAS_LGPD_TREINO: Regra[] = [
@@ -27,8 +28,27 @@ export function PilulasCenario({ c }: { c: Pick<CenarioRP, 'empresa_id' | 'orige
 	return (
 		<span className="inline-flex flex-wrap gap-1">
 			<Pilula tom={c.empresa_id == null ? 'neutro' : 'destaque'}>{c.empresa_id == null ? 'Padrão MotorCX' : 'Da empresa'}</Pilula>
-			{c.origem === 'insights' && <Pilula tom="info">Feito dos padrões das ligações</Pilula>}
+			{c.origem === 'insights' && <Pilula tom="info">Gerado de padrões agregados</Pilula>}
 			{c.situacao === 'rascunho' && <Pilula tom="atencao">Rascunho</Pilula>}
 		</span>
+	);
+}
+
+const MOT: Record<string, string> = { motivo: 'motivo', objecao: 'objeção', item: 'item do checklist' };
+/** "Cenário gerado de padrões agregados" (SQL 122): o selo, de onde veio (só códigos e porcentagens) e o lembrete de
+ *  revisar antes de publicar. `rotulo` traduz o código para a tela (motivo, objeção, item). */
+export function SeloInsights({ c, rotulo, recemGerado }: { c: Pick<CenarioRP, 'insights' | 'situacao'>; rotulo: (tipo: string, codigo: string) => string; recemGerado?: boolean }) {
+	const ins = c.insights ?? {};
+	const base = typeof ins.base === 'number' ? ins.base : null;
+	const partes = Object.entries(ins).filter(([k]) => k.includes(':')).map(([k, v]) => {
+		const [tipo, cod] = k.split(':');
+		return `${MOT[tipo] ?? tipo} “${rotulo(tipo, cod)}”: ${Math.round(Number(v) * 100)}%`;
+	});
+	return (
+		<Aviso tom={recemGerado ? 'ok' : 'info'} titulo={recemGerado ? 'Rascunho gerado de padrões agregados.' : 'Cenário gerado de padrões agregados.'}>
+			{base != null ? `Feito a partir de ${base.toLocaleString('pt-BR')} ligações analisadas${typeof ins.de === 'string' && typeof ins.ate === 'string' ? ` (${ins.de.split('-').reverse().join('/')} a ${ins.ate.split('-').reverse().join('/')})` : ''}` : 'Feito a partir dos padrões das ligações'}
+			{partes.length ? `: ${partes.join(' · ')}.` : '.'} Só códigos e porcentagens de grupos com 30 ou mais ligações; nenhum trecho, nome ou valor de cliente.
+			{c.situacao !== 'publicado' && ' Revise o texto, a ficha e os itens em foco antes de publicar: a geração só sugere.'}
+		</Aviso>
 	);
 }

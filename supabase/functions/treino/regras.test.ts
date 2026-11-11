@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   assinarVM, conferirAssinaturaVM, criarBilhete, dadosAbandono, dadosBilhete, dadosRegistro, erroDoBanco, limiteVoz, limparTurnos,
   MAX_FALAS_OPERADOR, minutosPrevia, pacoteAvaliar, pacoteTurno, somarTurno, temFalaDoOperador, tempoEsgotado, urlOuvir, validarPedido,
-  validarRegistroVoz, VALIDADE_BILHETE_S, type Contexto,
+  validarRegistroVoz, VALIDADE_BILHETE_S, dadosCenarioGerado, insightsDaEscolha, type Contexto, type PadroesInsights,
 } from "./regras.ts";
 
 const TOKEN = "a".repeat(64);
@@ -135,4 +135,47 @@ test("voz: prévia na rota /ouvir do simulador e minutos estimados", () => {
   assert.equal(urlOuvir("https://vm.exemplo:8443/simular"), "https://vm.exemplo:8443/ouvir");
   assert.equal(minutosPrevia(900), 1);
   assert.equal(erroDoBanco("limite de prévias da voz").status, 429);
+});
+
+const PAD: PadroesInsights = {
+  de: "2026-10-11", ate: "2026-11-09", base: 412, suficiente: true,
+  motivos: [{ codigo: "contestacao", conversas: 72, pct: 0.175 }], objecoes: [{ codigo: "valor_alto", conversas: 120, pct: 0.291 }],
+  itens: [{ item: "ck_cpc", avaliadas: 40, sim_pct: 0.5 }],
+};
+
+test("gerar cenário: pedido só com códigos, logado, com a empresa", () => {
+  assert.deepEqual(validarPedido({ acao: "gerar_cenario", empresa: 3, motivo: "contestacao", item: "ck_cpc" }).pedido,
+    { acao: "gerar_cenario", sessao: 0, token: null, texto: null, empresa: 3, escolha: { motivo: "contestacao", objecao: null, item: "ck_cpc", dias: 30 } });
+  assert.equal(validarPedido({ acao: "gerar_cenario", empresa: 3 }).erro, "escolha um motivo, uma objeção ou um item");
+  assert.equal(validarPedido({ acao: "gerar_cenario", empresa: 3, motivo: "Lia disse que pagou" }).erro, "pedido inválido", "nada de texto livre");
+  assert.equal(validarPedido({ acao: "gerar_cenario", empresa: 3, motivo: "contestacao", insights: { base: 999 } }).erro, "pedido inválido", "o navegador não manda padrão");
+  assert.equal(validarPedido({ acao: "gerar_cenario", empresa: 3, motivo: "contestacao", dias: 400 }).erro, "pedido inválido");
+});
+
+test("gerar cenário: os insights vêm só do banco (grupo com 30+), nunca do navegador", () => {
+  const e = { motivo: "contestacao", objecao: "valor_alto", item: "ck_cpc", dias: 30 };
+  assert.deepEqual(insightsDaEscolha(PAD, e).insights,
+    { base: 412, de: "2026-10-11", ate: "2026-11-09", "motivo:contestacao": 0.175, "objecao:valor_alto": 0.291, "item:ck_cpc": 0.5 });
+  assert.match(insightsDaEscolha(PAD, { ...e, motivo: "desemprego" }).erro ?? "", /30 ligações/);
+  assert.match(insightsDaEscolha({ ...PAD, base: 20, suficiente: false }, e).erro ?? "", /30 ligações/);
+});
+
+test("gerar cenário: rascunho, origem insights, ficha fictícia pelo código; texto com cara de dado real recusa", () => {
+  const e = { motivo: "contestacao", objecao: null, item: "ck_cpc", dias: 30 };
+  const ins = { base: 412, "motivo:contestacao": 0.175 };
+  const vm = { nome: "Contesta e desconfia", persona_nome: "Lia (fictícia)", perfil: "contesta_procon", objetivo: "Não reconhece a dívida e pede explicação.",
+    comportamentos: ["desconfia", "liga 11987654321"], frases: ["Eu não reconheço isso."], objecoes: [{ codigo: "nao_reconheco", quando: "no começo" }, { codigo: "Inválida" }],
+    dificuldade: 4, objetivo_cenario: "Explicar a origem da dívida" };
+  const d = dadosCenarioGerado(vm, ins, e)!;
+  assert.equal(d.situacao, "rascunho");
+  assert.equal(d.origem, "insights");
+  assert.deepEqual(d.insights, ins);
+  assert.deepEqual(d.itens_foco, ["ck_cpc"]);
+  assert.deepEqual(d.comportamentos, ["desconfia"], "texto com telefone sai");
+  assert.deepEqual(d.objecoes, [{ codigo: "nao_reconheco", quando: "no começo" }]);
+  assert.deepEqual(d.divida, { produto: "Cartão Exemplo", faixa: "1k_5k", dias_atraso: 60, alcada: { parcelas: 6, desconto_max: 20 } });
+  assert.equal(dadosCenarioGerado({ ...vm, persona_nome: "Lia Souza" }, ins, e), null, "sem (fictícia), não");
+  assert.equal(dadosCenarioGerado({ ...vm, objetivo: "lia@exemplo.com" }, ins, e), null);
+  assert.equal(dadosCenarioGerado({ ...vm, perfil: "outro" }, ins, e)!.perfil, "contesta_procon", "o tipo de cliente pelo motivo");
+  assert.equal(dadosCenarioGerado(null, ins, e), null);
 });
