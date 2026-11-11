@@ -1,0 +1,16 @@
+[Unit]
+Description=Testar a rota de verdade (voz/testador.py, SQL 114): liga para o número de teste pelo tronco pedido na tela
+After=docker.service network-online.target motorcx-asterisk.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-teste
+ExecStart=/usr/local/bin/motorcx-voz-rodar teste
+ExecStop=/usr/bin/docker stop -t 30 motorcx-voz-teste
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
