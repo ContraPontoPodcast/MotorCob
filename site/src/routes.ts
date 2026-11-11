@@ -141,6 +141,7 @@ export default [
     route('voz/agente/pedido/:id', 'routes/voz-agente-pedido.tsx'),
     route('voz/agente/personas', 'routes/voz-agente-personas.tsx'),
     route('voz/discagem', 'routes/voz-discagem.tsx'),
+    route('voz/discagem/robos', 'routes/voz-discagem-robos.tsx'),
     route('voz/ligacoes', 'routes/voz-ligacoes.tsx'),
     route('voz/ligacoes/:id', 'routes/voz-ligacao.tsx'),
     route('voz/telefonia', 'routes/voz-telefonia.tsx'),

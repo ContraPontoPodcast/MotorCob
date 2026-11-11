@@ -96,9 +96,10 @@ export function CartaoRobos({ d, agoraMs }: { d: DadosRobos; agoraMs: number }) 
 					<summary className="cursor-pointer font-semibold text-[var(--base-texto)]">O que acontece quando todos os robôs estão ocupados</summary>
 					<ul className="mt-2 list-disc space-y-1 pl-5 text-[var(--base-texto-2)]">
 						<li><b className="text-[var(--base-texto)]">Nenhuma ligação cai.</b> Quem está conversando com o robô continua até o fim.</li>
-						<li><b className="text-[var(--base-texto)]">O número espera na lista.</b> O próximo cliente só é discado quando um robô fica livre: cada número sai com um robô reservado para ele.</li>
+						<li><b className="text-[var(--base-texto)]">O número espera na lista.</b> O próximo cliente só é discado quando um robô fica livre (no Power 1,0, cada número sai com um robô reservado para ele).</li>
 						<li>O lote demora mais. Se isso acontece todo dia no mesmo horário, vale pedir mais robôs.</li>
 					</ul>
+					<p className="mt-2"><Link to="/voz/discagem/robos" className="font-semibold text-[var(--destaque)] hover:underline">Como os robôs funcionam com o Power e o Preditivo →</Link></p>
 				</details>
 			</div>
 		</Cartao>

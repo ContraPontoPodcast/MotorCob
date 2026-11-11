@@ -15,13 +15,17 @@ import { ContatoPassada } from './passadas';
 import { Horarios } from './horarios';
 import { ResultadoDia } from './resultado-dia';
 import { RobosContrato } from './robos-contrato';
+import { RitmoCarteira, useRitmoHoje } from './ritmo';
+import { resumoRitmo, ritmoDe } from '@/lib/ritmo';
 
 // Abas da Discagem (redesign aprovado, renitencia-v2): Renitência (limites, modo, spin, regra por sinalização, 8
 // situações e falhas), Resubmit (prévia de ontem e reciclagem automática) e Contato por passada: SQL 65.
 // Toda gravação passa por salvar_discagem (valida, versiona e audita; recusa se outra pessoa salvou antes).
 // No topo, o cartão "Seu contrato: N robôs" (robos-contrato.tsx; Robôs contratados, PR 7), da empresa.
-type TabId = 'curtas' | 'renitencia' | 'resubmit' | 'passadas' | 'horarios' | 'resultado';
+// Aba Ritmo (Power ou Preditivo, SQL 107–110; ritmo.tsx): credores.discagem › ritmo, salvo junto.
+type TabId = 'ritmo' | 'curtas' | 'renitencia' | 'resubmit' | 'passadas' | 'horarios' | 'resultado';
 const TABS: { id: TabId; nome: string; novo?: boolean }[] = [
+	{ id: 'ritmo', nome: 'Ritmo', novo: true },
 	{ id: 'curtas', nome: 'Chamadas curtas' },
 	{ id: 'renitencia', nome: 'Renitência por situação', novo: true },
 	{ id: 'resubmit', nome: 'Resubmit', novo: true },
@@ -107,8 +111,13 @@ export function Discagem() {
 	const atual = versoes[0]?.versao ?? 0;
 	const proxima = Math.max(atual, 1) + 1;
 	const diff = computeDiff(draft);
-	const pendentes = dirty ? mudancasCompletas(stored as DiscagemRen, diff as DiscagemRen) : [];
-	const itens = dirty ? itensCompletos(stored as DiscagemRen, diff as DiscagemRen) : [];
+	const ritmoMud = dirty ? resumoRitmo(stored, diff) : [];
+	const pendentes = dirty ? [...mudancasCompletas(stored as DiscagemRen, diff as DiscagemRen), ...ritmoMud] : [];
+	const itens = dirty ? [...itensCompletos(stored as DiscagemRen, diff as DiscagemRen), ...ritmoMud.map(x => {
+		const m = /^(.*): (.*) → (.*)$/.exec(x);
+		return m ? { onde: m[1], antes: m[2], depois: m[3] } : { onde: x, antes: '', depois: '' };
+	})] : [];
+	const hojeRitmo = useRitmoHoje(empresa ? Number(empresa.id) : null, credor ? Number(credor.id) : null);
 	const mudouOutra = dirty && pendentes.length === 0 && JSON.stringify(diff) !== JSON.stringify(stored ?? {});
 
 	function update(patch: Partial<DiscagemT>) { setDraft(prev => ({ ...prev, ...patch })); setDirty(true); }
@@ -164,6 +173,7 @@ export function Discagem() {
 						))}
 					</div>
 
+					{tab === 'ritmo' && <RitmoCarteira ritmo={ritmoDe({ ritmo: draft.ritmo })} onTrocar={r => update({ ritmo: r })} canEdit={canEdit} hoje={hojeRitmo} />}
 					{tab === 'curtas' && <ChamadasCurtas draft={draft} update={update} reverter={reverter} canEdit={canEdit} exec={exec} />}
 					{tab === 'renitencia' && <TelaRenitencia draft={draft} salvo={stored} setDraft={trocar} canEdit={canEdit} ligacoes={ligacoes} abrir={setGaveta} curtasPorPassada={curtasPassada} />}
 					{tab === 'resubmit' && <TelaResubmit draft={draft} salvo={stored} setDraft={trocar} canEdit={canEdit} irSinal={() => { setTab('renitencia'); window.setTimeout(() => document.getElementById('regra-sin')?.scrollIntoView({ behavior: 'smooth' }), 50); }} />}

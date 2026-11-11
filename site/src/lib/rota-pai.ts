@@ -47,6 +47,8 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/voz/discagem': VISAO_GERAL_VOZ,
 	'/voz/ligacoes': VISAO_GERAL_VOZ,
 	'/voz/telefonia': VISAO_GERAL_VOZ,
+	// Discagem › "Robôs e o Preditivo" (aberta pelo cartão do contrato e pela aba Ritmo) volta para a Discagem.
+	'/voz/discagem/robos': { to: '/voz/discagem', rotulo: 'Discagem' },
 	// Agente Voz/CX › Agente de voz: fluxo (editor), Confirmar identidade, testes, desempenho, personas, rascunho gerado
 	// e roteiro antigo voltam à lista de fluxos.
 	'/voz/agente/editor/:versao': AGENTE_DE_VOZ,
