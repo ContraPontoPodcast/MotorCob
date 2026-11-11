@@ -8,7 +8,7 @@ Wants=network-online.target
 ExecStartPre=/usr/local/bin/motorcx-voz-segredos
 ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-teste
 ExecStart=/usr/local/bin/motorcx-voz-rodar teste
-ExecStop=/usr/bin/docker stop -t 30 motorcx-voz-teste
+ExecStop=-/usr/bin/docker stop -t 30 motorcx-voz-teste
 Restart=always
 RestartSec=10
 
