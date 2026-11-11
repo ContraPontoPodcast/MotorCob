@@ -1017,6 +1017,89 @@ quem é da empresa e o servidor; `licencas_voz(empresa)`: histórico da equipe (
 Recriadas inteiras: `itens_com_franquia`, `custo_ia_referencia`, `guardar_preco_empresa_ia`, `ia_precos_abaixo_minimo`
 (se o SQL 61 ou o 92 rodarem de novo, rode o 93 depois). Teste: `supabase/testes/testar_licencas_voz.py`.
 
+**SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
+ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
+`nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
+contam à parte (`Sessao.tentativas` × `Sessao.silencios`). Sem nada configurado, o "não entendi" é o de antes (fala padrão
+de cada tipo, `tentativas` padrão 2, saída de "não entendi"). Silêncio: a Montagem chama `Sessao.silencio()` depois de
+`SILENCIO_S` (6 s) sem fala da pessoa contados de quando a fila de áudio do agente esvazia (`RelogioSilencio`); padrão 2
+vezes ("Desculpe, não ouvi." + a fala da etapa), depois a saída "silencio" ou, sem ela, a de "não entendi"; na Abertura sem
+saída própria encerra SEM recado e sem marcar terceiro; na IA conversa, "Você ainda está aí?" e depois atendente. As falas
+novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracteres, variáveis, senha e trava 1. Simulador e
+casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
+(`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
+
+**SQL 98 (Robôs contratados, PR 2): licenças na fatura.** `previa_fatura` (e por ela rascunhos, `fechar_fatura` e a
+estimativa) lê o item `voz_licenca_robo` de `voz_licencas` (dia exato), **nunca** do preço que o SQL 93 grava em
+`precos_empresa` (aquele vale o mês inteiro). Ciclo cheio = a licença do 1º dia do ciclo (`ciclo_de`; por robô: robôs ×
+preço; valor fechado: o total). Mudança no meio do ciclo (aumento "agora", troca de preço, contrato que começa no meio):
+linha `voz_licenca_robo_ajuste[_n]` = (total novo − anterior) × dias restantes ÷ dias do ciclo, contando o dia da
+mudança (preço menor "agora" = crédito); no mesmo dia vale a última gravação. Com licença no ciclo (robôs > 0): franquia
+do `voz_minuto_ia` = Σ robôs × `franquia_min_robo` pelos dias de cada vigência (linha `voz_minuto_ia_franquia`, sempre) e
+excedente = minutos de IA + de pico − franquia, pelo preço da empresa, sem o mínimo mensal; `voz_plataforma` zerada
+("incluída nos robôs"), `voz_transcricao` zerada se `transcricao_inclusa`, `voz_minuto_ia_pico` não se cobra;
+`gestao_tronco_sip`, `ia_speech_analytics` e telefonia (fora) iguais. Pico desligado para quem tem licença vigente hoje
+com robôs > 0: `divisao_concorrencia_voz()` (pico 1, teto = limite) e a view `voz_vm.config` (a VM lê o pico dali; o
+motor não muda; o `voz_config.pico_multiplo` guardado fica). Funções novas (só servidor): `licenca_voz_ciclo`,
+`segmentos_licenca_voz`, `linhas_fatura_licenca_voz`, `linhas_fatura_minuto_ia_voz`. **Recriadas inteiras:**
+`previa_fatura`, `divisao_concorrencia_voz` e `voz_vm.config` — se o SQL 56, 57, 69 ou 78 (ou as migrações antigas de
+fatura: `faturamento`, `precos_produtos`, `contratacao_ciclo`, `ciclo_pagamento`) rodarem de novo, rode o 98 depois.
+Teste: `supabase/testes/testar_licencas_fatura.py`.
+
+**Site · Contratação › Agente de voz › Robôs contratados (PR 3 do plano, sem SQL).** Seção em Empresa › Contratação
+(`robos-contratados.tsx`: resumo com KPIs, limite real, mudança agendada e a prévia real do ciclo) e as telas
+`/empresa/contratacao/robos` (editar: quantidade, por robô ou valor fechado, agora com pro rata ou próximo ciclo,
+fidelidade, franquia, transcrição, motivo, limite real, overbooking com confirmação, revisão → `salvar_licencas_voz`) e
+`/empresa/contratacao/robos/historico` (`licencas_voz`); as duas voltam para a Contratação (`rota-pai.ts`). As contas da
+prévia simulada ficam em `site/src/lib/licencas-voz.ts`, iguais às do SQL 98 (o teste usa os mesmos números). Avisos:
+mudança agendada continua valendo depois de um aumento "agora"; preço trocado "agora" é cobrado pelos dias (crédito se
+menor); sem a linha `voz_minuto_ia_franquia` na prévia, a tela avisa que o SQL 98 falta. `ITENS_FATURA_VOZ` ganha
+`voz_licenca_robo` e `ehItemFaturaVoz` cobre ajustes e franquia (`faturamento-voz.tsx`).
+
+**SQL 101 (Robôs contratados, PR 4): divisão do teto global pelas licenças.** `divisao_concorrencia_voz()` (e por ela
+`voz_divisao_concorrencia`, `voz_vm.divisao()`/`voz_vm.divisao_concorrencia`, a estimativa do lote e o motor/VM):
+demanda = min(robôs vigentes hoje, canais dos troncos ativos) para quem tem licença com robôs > 0; cabe no teto → limite =
+demanda; overbooking → floor(teto × demanda ÷ Σ demanda) com a sobra para as maiores frações (empate: mais demanda,
+menor id), nunca acima da demanda. Quem não tem licença (ou tem 0 robôs, ou só agendada) divide **só a sobra** pelos
+canais, com a regra antiga. Colunas novas no fim: `licencas` (nulo = sem licença) e `motivo` (`licencas` | `tronco` |
+`teto` | `legado`); licença sem tronco ativo aparece com 0 canais e motivo `tronco`; `teto` = limite para quem tem
+licença (pico desligado). O cliente não vê o teto global: `contratado` e `cota` vêm nulos fora da equipe/servidor/VM (o
+motivo `teto` é "limite temporário da plataforma" para ele). O retorno mudou: drop cascade e recriar a função, as duas
+views e `voz_vm.divisao()` com os grants; o motor lê só `empresa_id` e `limite` (sem mudança). Os SQL 56, 57 e 98
+conferem a assinatura antes de recriar (56/57 voltam às sete colunas; o 98 pula a divisão se já tem `motivo`): se
+rodarem de novo, rode o 101 depois. `definir_concorrencia_contratada` (mesma assinatura) avisa a equipe (sino,
+`/console/voz`) quando diminui o teto para baixo dos robôs vendidos; não bloqueia. Teste:
+`supabase/testes/testar_licencas_divisao.py` (cenários isolados numa transação desfeita).
+
+**Site · Console › Agente virtual › Todas as empresas: robôs vendidos × teto (PR 5, sem SQL).** O cartão
+"Concorrência contratada" virou "Robôs vendidos × teto contratado" (`console-voz-robos.tsx`): KPIs (teto, vendidos com
+% do teto, usáveis = Σ min(licenças, canais), sobra para quem não tem licença), barra empilhada das licenças com o marco
+do teto, alerta de overbooking (ou "quase no teto" a partir de 90%), teto editável (abaixo do vendido pede confirmação) e
+a tabela por empresa com o "por quê" (`motivo` do SQL 101). Contas e frases em `site/src/lib/robos-voz.ts`
+(`porQueCliente` nunca cita o teto global). Sem o SQL 101 no banco, o cartão avisa. A configuração da empresa mostra o
+pico como "Desligado (robôs contratados)" para quem tem licença.
+
+**SQL 102 + VM (Robôs contratados, PR 6): uso dos robôs.** `voz_robos_agora` (uma linha por empresa: `em_uso` = robôs
+ocupados = conversas + reservas, `conversas`, `linhas` no ar, `aguardando` = números do dia que esperam na lista e não
+estão discando, `limite` = teto aplicado agora pela VM, `no_limite`, `atualizado_em`; mais velho que 60 s = "sem leitura
+agora", nunca zero) e `voz_robos_dia` (pico do dia em America/Sao_Paulo, `pico_em`, `segundos_no_limite`; 400 dias). Só
+contagens. Grava só `registrar_uso_robos_voz(linhas)` (servidor ou VM; no acesso próprio, `voz_vm.registrar_uso_robos`):
+o Plantão (`voz/orquestrador/principal.py › registrar_uso_robos`) manda a cada 15 s as empresas desta VM, com o pico da
+janela vindo do agendador (`Agendador.foto_robos`: maior `ocupadas` desde a foto anterior) e os segundos no limite entre
+duas fotos (até 60). Banco sem o SQL 102: a VM avisa no máximo 1 vez por hora e segue discando. Leitura: quem é da
+empresa (`minhas_empresas()`) e a equipe com `cuida_voz`. Testes: `supabase/testes/testar_robos_uso.py` e
+`tests/test_voz_robos_uso.py`.
+
+**Site · Agente Voz/CX › Discagem: "Seu contrato" (Robôs contratados, PR 7, sem SQL).** No topo da Discagem
+(`components/discagem/robos-contrato.tsx`), da empresa: contratados (`voz_licenca_vigente`, sem preço), disponíveis agora
+(limite do SQL 101, nunca acima das licenças), em uso agora (`voz_robos_agora`; leitura mais velha que 60 s = "sem leitura
+agora", nunca zero) e pico de hoje (`voz_robos_dia`, com a hora e o tempo no limite), barra de uso, o porquê quando fica
+abaixo do contrato (`porQueCliente`: tronco ou "limite temporário da plataforma"; nunca o teto global), "O que acontece
+quando todos os robôs estão ocupados" (ninguém cai; o número espera na lista) e "Pedir mais robôs" →
+`/suporte/novo?assunto=robos&robos=N` (assunto, motivo e descrição pré-preenchidos; o Voltar dessa tela leva à Discagem:
+`rotaPai` recebe a query em `busca`). Sem licença e com voz: cartão do modelo antigo com "Pedir robôs"; sem voz: nada.
+Atualiza a cada 15 s. O Console (PR 5) ganha a coluna "Em uso · pico hoje".
+
 **SQL 103 (Telefonia própria do cliente, PR T1; SPEC Canais §6.2, G5): senha do tronco direto no cofre.** A senha
 (autenticação "usuário e senha") é digitada uma vez e vai pela Edge Function `segredo-tronco-voz` ("Verify JWT" ligado)
 direto para o Secret Manager, sempre no segredo da empresa `motorcx-voz-trunk-e<empresa>-<referência>`
@@ -1080,18 +1163,6 @@ lê tudo com padrão; o gerador aplica DTMF, cabeçalho, realm, De, OPTIONS, `S(
 `TIMEOUT(absolute)` por tronco no `[motorcx-atendeu]`; `voz/tarifacao.py` disca `Rota.prefixo_discagem`; o núcleo usa
 `min(toque do núcleo, toque do tronco)`. Teste: `supabase/testes/testar_voz_tronco_campos.py`. Se o SQL 56, 81, 103 ou
 105 rodar de novo, rode o 113 depois.
-
-**SQL 95 (PR8 do redesenho do fluxo; SPEC B1 e B2): "Se não entender" e "Se não ouvir nada" por etapa.** Nas etapas que
-ouvem (`voz/fluxo_validador.OUVEM`: abertura, identidade, pergunta, intencao, oferta, retorno), params opcionais
-`nao_entendi` e `silencio` = `{fala?, vezes 1..3?}` e a saída opcional `quando = "silencio"`. Silêncio e "não entendi"
-contam à parte (`Sessao.tentativas` × `Sessao.silencios`). Sem nada configurado, o "não entendi" é o de antes (fala padrão
-de cada tipo, `tentativas` padrão 2, saída de "não entendi"). Silêncio: a Montagem chama `Sessao.silencio()` depois de
-`SILENCIO_S` (6 s) sem fala da pessoa contados de quando a fila de áudio do agente esvazia (`RelogioSilencio`); padrão 2
-vezes ("Desculpe, não ouvi." + a fala da etapa), depois a saída "silencio" ou, sem ela, a de "não entendi"; na Abertura sem
-saída própria encerra SEM recado e sem marcar terceiro; na IA conversa, "Você ainda está aí?" e depois atendente. As falas
-novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracteres, variáveis, senha e trava 1. Simulador e
-casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
-(`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
 
 **SQL 114 (Telefonia própria do cliente, PR T5; SPEC §3.4 e §6.2 item 13, seção F do parecer, C11, C12, D12, G1,
 G18, G29): Telefonia editável e o "Testar a rota" de verdade.** Números de teste `voz_numeros_teste` (até 5 por empresa):

@@ -2972,6 +2972,19 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 90: treino de operadores (testar_treino.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 99 · Roleplay, PR 4: quem treina lê o cadastro (voz_operadores) e o estado do link da página do operador
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_atribuir.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 99: editor, atribuição e link do operador (testar_treino_atribuir.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 100 · Roleplay, PR 5: sessão de treino por texto (conversa em andamento só do servidor, contexto pelo link ou por
+# quem abriu, resultado para a Qualidade, ciclo com registrar_sessao_treino)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_sessao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 100: sessão de treino por texto (testar_treino_sessao.py)", True, f"select {r.returncode}", None, None, 0)
+
 # SQL 92 · Preços editáveis: tabela, mínimo e franquia padrão; preço e franquia por empresa (permissão, vigência,
 # guarda da IA e mínimo com motivo)
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_precos_editaveis.py")],
@@ -2985,6 +2998,27 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 93: robôs contratados (testar_licencas_voz.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 98 · Robôs contratados na fatura: linha da licença, pro rata no meio do ciclo, franquia do minuto de IA vinda da
+# licença, plataforma/transcrição incluídas, sem pico para quem tem licença, legado igual
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_licencas_fatura.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 98: robôs contratados na fatura (testar_licencas_fatura.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 101 · Robôs contratados na divisão do teto global: licenças primeiro (proporcional no overbooking), sobra para quem
+# não tem licença pelos canais, motivo, cliente sem o teto global, VM com as colunas novas, aviso do teto abaixo do vendido
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_licencas_divisao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 101: robôs contratados na divisão (testar_licencas_divisao.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 102 · Uso dos robôs (telemetria da VM): em uso agora e pico do dia por empresa, só a VM/servidor grava, cada
+# empresa lê só a sua
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_robos_uso.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 102: uso dos robôs (testar_robos_uso.py)", True, f"select {r.returncode}", None, None, 0)
 
 # SQL 103 · Telefonia T1: senha do tronco direto no cofre (só o nome do segredo da empresa, aal2, limite, registro só
 # pelo servidor depois do pedido, teste zerado e Auditoria sem valor)

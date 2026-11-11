@@ -41,6 +41,7 @@ test('destaque do termo e etapas do relatório', () => {
 	assert.equal(abaValida('xyz'), 'visao');
 	assert.equal(abaValida('retroalimentacao'), 'recomendacoes');
 	assert.equal(abaValida('busca'), 'busca');
+	assert.equal(abaValida('roleplay'), 'roleplay', 'Roleplay é aba do Speech (treino de operadores, SQL 90)');
 });
 
 test('oferta (SQL 63): só parcelas e faixa de desconto, como codigos_speech_ok', () => {

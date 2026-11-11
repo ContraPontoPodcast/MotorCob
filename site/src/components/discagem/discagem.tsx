@@ -14,10 +14,12 @@ import { GavetaLimites, GavetaModo } from './renitencia/gavetas';
 import { ContatoPassada } from './passadas';
 import { Horarios } from './horarios';
 import { ResultadoDia } from './resultado-dia';
+import { RobosContrato } from './robos-contrato';
 
 // Abas da Discagem (redesign aprovado, renitencia-v2): Renitência (limites, modo, spin, regra por sinalização, 8
 // situações e falhas), Resubmit (prévia de ontem e reciclagem automática) e Contato por passada: SQL 65.
 // Toda gravação passa por salvar_discagem (valida, versiona e audita; recusa se outra pessoa salvou antes).
+// No topo, o cartão "Seu contrato: N robôs" (robos-contrato.tsx; Robôs contratados, PR 7), da empresa.
 type TabId = 'curtas' | 'renitencia' | 'resubmit' | 'passadas' | 'horarios' | 'resultado';
 const TABS: { id: TabId; nome: string; novo?: boolean }[] = [
 	{ id: 'curtas', nome: 'Chamadas curtas' },
@@ -128,7 +130,7 @@ export function Discagem() {
 	}
 
 	if (!empresa) return <><PageHeading title="Regras de discagem" description="Quantas vezes ligar, quando rediscar e em que horário, por carteira." /><Notice variant="warning">Escolha a empresa no topo para ver esta página.</Notice></>;
-	if (!credor) return <><PageHeading title="Regras de discagem" description="Quantas vezes ligar, quando rediscar e em que horário, por carteira." /><Notice variant="warning">Escolha a carteira no topo.</Notice></>;
+	if (!credor) return <><PageHeading title="Regras de discagem" description="Quantas vezes ligar, quando rediscar e em que horário, por carteira." /><RobosContrato empresaId={Number(empresa.id)} /><Notice variant="warning">Escolha a carteira no topo.</Notice></>;
 
 	const edita = tab !== 'passadas' && tab !== 'resultado';
 	const nPend = pendentes.length + (mudouOutra ? 1 : 0);
@@ -141,6 +143,8 @@ export function Discagem() {
 					{canEdit && <button type="button" className={btnSec} style={{ borderColor: 'var(--base-borda)' }} onClick={() => setSobre('padrao')}><RotateCcw size={14} /> Voltar ao padrão MotorCX</button>}
 				</div>
 			} />
+
+			<RobosContrato empresaId={Number(empresa.id)} />
 
 			<div className="mb-4 flex flex-wrap items-center gap-2 text-[13px] text-[var(--base-texto-2)]">
 				<Phone size={15} className="text-[var(--base-texto-3)]" />
