@@ -243,11 +243,17 @@ export function estadoLink(links: LinkRP[], operador: number, agora = new Date()
 	return new Date(l.valido_ate).getTime() > agora.getTime() ? { estado: 'ativo', ate: l.valido_ate } : { estado: 'expirado', ate: l.valido_ate };
 }
 
-export type ItemAcao = { prioridade: 1 | 2 | 3; tipo: 'apoio' | 'critico' | 'prazo' | 'discordancia' | 'link'; texto: string; operador_id: number | null; atribuicao_id: number | null };
+export type ItemAcao = {
+	prioridade: 1 | 2 | 3; tipo: 'apoio' | 'critico' | 'prazo' | 'discordancia' | 'link' | 'sugestao'; texto: string; operador_id: number | null; atribuicao_id: number | null;
+	/** sugestão de prioridade alta (item crítico repetido nas ligações reais): "Atribuir treino" */
+	sugestao_id?: number;
+};
 export type DadosAcao = {
 	atribuicoes: AtribuicaoRP[]; pessoas: PessoaNoTreino[]; sessoes: SessaoRP[]; links: LinkRP[];
 	discordancias: { sessao_id: number }[]; operadores: OperadorRP[]; cenarios: Pick<CenarioRP, 'id' | 'nome'>[];
 	itens: Record<string, ItemChecklistRP>; hoje: string; agora?: Date;
+	/** sugestões novas (SQL 120): a de item crítico repetido entra em "Precisa de ação" */
+	sugestoes?: SugestaoRP[];
 };
 /** "Precisa de ação" do Painel (SPEC §2.3): quem esgotou as tentativas, item crítico com "não", prazo vencido,
  *  discordância do operador sem resposta e link expirado ou ausente de quem tem treino pendente. Mais urgente primeiro. */
@@ -291,6 +297,12 @@ export function precisaDeAcao(d: DadosAcao): ItemAcao[] {
 		out.push({ prioridade: 2, tipo: 'discordancia', operador_id: s.operador_id, atribuicao_id: s.atribuicao_id,
 			texto: `${nomeOp(s.operador_id)} discordou de um ponto da avaliação em “${nomeCen(s.cenario_id)}”.` });
 	}
+	for (const sg of d.sugestoes ?? []) {
+		if (sg.regra !== 'item_critico_operador' || !sg.operadores.length) continue;
+		const item = typeof sg.evidencia?.item === 'string' ? itemChecklist(sg.evidencia.item, d.itens).texto : 'do checklist';
+		out.push({ prioridade: 1, tipo: 'sugestao', operador_id: sg.operadores[0], atribuicao_id: null, sugestao_id: sg.id,
+			texto: `${nomeOp(sg.operadores[0])} ficou “não” no item crítico “${item}” em ligações reais mais de uma vez. Vale um treino.` });
+	}
 	const vistos = new Set<string>();
 	return out.filter(i => (vistos.has(i.texto) ? false : (vistos.add(i.texto), true))).sort((a, b) => a.prioridade - b.prioridade);
 }
@@ -316,7 +328,65 @@ export const REGRA_SUGESTAO: Record<string, string> = {
 	alerta_subiu: 'Alerta subiu na semana numa equipe',
 	item_critico_operador: 'Item crítico com “não” repetido nas ligações',
 	vulnerabilidade: 'Sinal de vulnerabilidade concentrado numa equipe',
+	nota_baixa: 'Nota das ligações abaixo de 70 nas últimas duas semanas',
 };
+
+/** "Dispensar" com o motivo em 1 clique (dispensar_sugestao_treino): some por 30 dias; o motivo calibra as regras. */
+export const MOTIVO_DISPENSA: Record<'tratado' | 'falso_positivo', string> = { tratado: 'Já tratei no 1:1', falso_positivo: 'Não procede' };
+
+const ALERTA_SUGESTAO: Record<string, string> = { procon: 'ameaça de Procon', juridico: 'ameaça de processo', ameaca: 'ameaça', abusiva: 'cobrança abusiva' };
+const SINAL_SUGESTAO: Record<string, string> = {
+	idade_confusao: 'pessoa idosa ou com dificuldade de entender', saude: 'problema de saúde', luto: 'luto', desemprego_recente: 'desemprego recente',
+};
+
+export type SugestaoRP = {
+	id: number; regra: string; chave?: string; cenario_id: number | null; operadores: number[]; criado_em: string;
+	evidencia?: Record<string, unknown> | null; atualizada_em?: string;
+};
+/** A sugestão em linguagem de monitoria: título, a linha de quem e quanto, as contagens que a geraram (nunca trecho de
+ *  ligação), a prioridade e onde ver no Speech. */
+export function textoSugestao(s: SugestaoRP, x: { operadores: Pick<OperadorRP, 'id' | 'apelido'>[]; equipes: { id: number; nome: string }[]; itens: Record<string, ItemChecklistRP> }) {
+	const e = (s.evidencia ?? {}) as Record<string, unknown>;
+	const n = (k: string) => (typeof e[k] === 'number' ? (e[k] as number) : null);
+	const t = (k: string) => (typeof e[k] === 'string' ? (e[k] as string) : null);
+	const item = t('item') ? itemChecklist(t('item')!, x.itens).texto : null;
+	const equipe = n('equipe') != null ? x.equipes.find(q => q.id === n('equipe'))?.nome ?? 'uma equipe' : null;
+	const nomes = s.operadores.map(id => x.operadores.find(o => o.id === id)?.apelido).filter((v): v is string => !!v);
+	const quem = nomes.length === 0 ? `${s.operadores.length} ${s.operadores.length === 1 ? 'operador' : 'operadores'}`
+		: nomes.length <= 3 ? nomes.join(', ') : `${nomes.slice(0, 3).join(', ')} e mais ${nomes.length - 3}`;
+	const periodo = t('de') && t('ate') ? `de ${dataBR(t('de')!)} a ${dataBR(t('ate')!)}` : null;
+	const ev: string[] = [];
+	let titulo = REGRA_SUGESTAO[s.regra] ?? 'Sugestão de treino';
+	let aba: 'qualidade' | 'alertas' | 'operadores' = 'qualidade';
+	switch (s.regra) {
+		case 'item_reprovado':
+			titulo = item ? `“${item}” com “não” em ${n('operadores') ?? s.operadores.length} operadores` : titulo;
+			if (n('nao') != null && n('avaliadas') != null) ev.push(`${n('nao')} “não” em ${n('avaliadas')} ligações avaliadas nesse item`);
+			break;
+		case 'nota_baixa':
+			titulo = `${nomes[0] ?? 'Um operador'}: nota média ${n('nota_media') != null ? String(n('nota_media')).replace('.', ',') : '—'} nas ligações`;
+			if (n('ligacoes') != null) ev.push(`${n('ligacoes')} ligações avaliadas`);
+			if (item) ev.push(`Item que mais pesou: “${item}”`);
+			aba = 'operadores';
+			break;
+		case 'item_critico_operador':
+			titulo = `${nomes[0] ?? 'Um operador'}: item crítico “${item ?? 'do checklist'}” com “não” ${n('vezes') ?? 2} vezes`;
+			ev.push('Item crítico reprova a ligação na monitoria');
+			break;
+		case 'alerta_subiu':
+			titulo = `Alertas de ${ALERTA_SUGESTAO[t('alerta') ?? ''] ?? 'risco'} subiram na ${equipe ?? 'equipe'}`;
+			if (n('semana') != null) ev.push(`${n('semana')} nesta semana × ${n('semana_anterior') ?? 0} na anterior`);
+			aba = 'alertas';
+			break;
+		case 'vulnerabilidade':
+			titulo = `Sinais de ${SINAL_SUGESTAO[t('sinal') ?? ''] ?? 'vulnerabilidade'} na ${equipe ?? 'equipe'}`;
+			if (n('alertas') != null) ev.push(`${n('alertas')} alertas na semana`);
+			aba = 'alertas';
+			break;
+	}
+	if (periodo) ev.push(`Período: ${periodo}`);
+	return { titulo, quem, evidencia: ev, prioridade: s.regra === 'item_critico_operador' ? ('alta' as const) : ('normal' as const), aba };
+}
 
 // ------------------------------------------------------------------ Cadastro para treino (mesmas regras do banco)
 /** Apelido (voz_operadores.apelido): 1 a 30 caracteres, sem 6+ dígitos, sem e-mail, CPF ou telefone. */

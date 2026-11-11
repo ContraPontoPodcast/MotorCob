@@ -126,6 +126,8 @@ RPC = {
     "historico_ritmo_voz": "historico_ritmo",
     # SQL 116 · "Testar agora": o pedido com a referência do segredo (nunca o número) e o resultado (marcas e contagens)
     "pegar_teste_agora_voz": "pegar_teste_agora", "concluir_teste_agora_voz": "concluir_teste_agora",
+    # SQL 120 · Roleplay: sugestões de treino do job noturno do Speech (voz/analise/rotina.py › noite)
+    "gerar_sugestoes_treino": "gerar_sugestoes_treino",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual

@@ -289,6 +289,13 @@ def noite(sb, hoje: date, parte: str = "1/1", dias: int = 2, retro: bool = True)
         except Exception as ex:   # noqa: BLE001 — uma empresa não segura as outras
             log.warning("speech: noite da empresa %s falhou (%s)", e, ex.__class__.__name__)
             out["erros"] += 1
+        try:
+            # SQL 120 · Roleplay: sugestões de treino (só contagens e ids de operador; a função confere o módulo)
+            r = sb.rpc("gerar_sugestoes_treino", {"empresa": int(e), "hoje": hoje.isoformat()}) or {}
+            out["sugestoes_treino"] += int(r.get("sugestoes") or 0) if isinstance(r, dict) else 0
+        except Exception as ex:   # noqa: BLE001 — as sugestões nunca seguram o resto da noite
+            log.warning("speech: sugestões de treino da empresa %s falharam (%s)", e, ex.__class__.__name__)
+            out["erros_treino"] += 1
     return dict(out)
 
 
