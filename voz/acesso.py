@@ -53,7 +53,12 @@ LEITURA = {
     "voz_base_respostas": "base_respostas",
     # SQL 83 · B4: faixas do próprio MotorCX (destino recusado para tronco e transferência)
     "voz_enderecos_motorcx": "enderecos_motorcx",
+    # SQL 111 · operadores para transferência ao mesmo tempo (id, simultaneas; junta com voz_vm.transferencias)
+    "voz_transferencias_operadores": "transferencias_operadores",
 }
+# SQL 113 · Telefonia T4: colunas novas em views próprias (o SQL 57 recria voz_vm.troncos/rotas sem elas). O acesso
+# próprio junta pelo id; banco sem o SQL 113: fica só a view de base (o banco.py usa o padrão de cada campo).
+EXTRAS = {"voz_troncos": "troncos_campos", "voz_rotas": "rotas_prefixo"}
 # tabela -> função de escrita do schema voz_vm (o upsert é dela)
 ESCRITA = {
     "voz_chamadas": "gravar_chamadas", "consumo_voz": "gravar_consumo", "voz_gravacoes": "gravar_gravacoes",
@@ -108,6 +113,21 @@ RPC = {
     "conferir_identidade_voz": "conferir_identidade", "limpar_identidade_voz": "limpar_identidade",
     # SQL 102 · uso dos robôs contratados (em uso agora e pico do dia, só contagens; o Plantão grava a cada 15 s)
     "registrar_uso_robos_voz": "registrar_uso_robos",
+    # SQL 114 · Telefonia T5: teste da rota (voz/testador.py)
+    "pegar_teste_tronco_voz": "pegar_teste_tronco", "ler_teste_tronco_voz": "ler_teste_tronco",
+    "registrar_teste_tronco_voz": "registrar_teste_tronco",
+    # SQL 106 · ritmo da discagem (janelas de 5 min por carteira, só contagens; o Plantão grava a cada minuto)
+    "registrar_ritmo_voz": "registrar_ritmo",
+    # SQL 108 · abandonos dos últimos 7 dias por cliente (só id_cliente e contagens; ao carregar o lote)
+    "abandonos_recentes_voz": "abandonos_recentes",
+    # SQL 109 · curtas de hoje por linha e total (do que a VM já gravou) e a liberação do Admin
+    "curtas_hoje_voz": "curtas_hoje",
+    # SQL 110 · histórico do Preditivo por carteira (atendidas e discadas em 7 dias, dias em Preditivo, p da empresa)
+    "historico_ritmo_voz": "historico_ritmo",
+    # SQL 116 · "Testar agora": o pedido com a referência do segredo (nunca o número) e o resultado (marcas e contagens)
+    "pegar_teste_agora_voz": "pegar_teste_agora", "concluir_teste_agora_voz": "concluir_teste_agora",
+    # SQL 120 · Roleplay: sugestões de treino do job noturno do Speech (voz/analise/rotina.py › noite)
+    "gerar_sugestoes_treino": "gerar_sugestoes_treino",
 }
 # a chave do upsert de gravar_chamadas e gravar_consumo é a de voz/banco.py › CONFLITO (o on_conflict do modo
 # chave): conflito diferente é erro aqui também, para os dois acessos gravarem igual
@@ -237,7 +257,17 @@ class AcessoProprio:
 
     def selecionar(self, tabela, filtros: dict | None = None, ordem: str | None = None, limite: int | None = None):
         sql, params = montar_select(tabela, filtros, ordem, limite)
-        return [r[0] for r in self._run(sql, **params) or []]
+        linhas = [r[0] for r in self._run(sql, **params) or []]
+        if tabela in EXTRAS and linhas:
+            try:
+                extras = {r[0]["id"]: r[0] for r in self._run(f"select to_jsonb(t) from voz_vm.{EXTRAS[tabela]} t") or []}
+            except (_ConexaoCaiu, OSError):
+                raise
+            except Exception:   # noqa: BLE001 — view do SQL 113 ainda não criada: os campos ficam com o padrão
+                extras = {}
+            for l in linhas:
+                l.update({k: v for k, v in extras.get(l.get("id"), {}).items() if k != "id"})
+        return linhas
 
     def inserir(self, tabela, linhas, conflito: str | None = None, retornar=False, lote=1000):
         linhas = linhas if isinstance(linhas, list) else [linhas]

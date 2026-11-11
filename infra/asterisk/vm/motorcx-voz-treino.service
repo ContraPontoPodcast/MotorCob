@@ -1,0 +1,17 @@
+[Unit]
+Description=Treino por voz do Roleplay (voz/treino_voz.py, WebSocket em 127.0.0.1:8093; só com o metadado motorcx-treino-voz=1)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+ExecStartPre=/usr/local/bin/motorcx-voz-segredos
+ExecStartPre=-/usr/bin/docker rm -f motorcx-voz-treino
+ExecStart=/usr/local/bin/motorcx-voz-rodar treino-voz
+ExecStop=/usr/bin/docker stop -t 30 motorcx-voz-treino
+# desligado (sem o metadado) sai com 0 e fica parado; erro reinicia
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

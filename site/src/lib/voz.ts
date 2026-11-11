@@ -46,7 +46,38 @@ export const FORMATOS_DISCAGEM: { id: string; nome: string; exemplo: string }[] 
 	{ id: 'tech_ddd_numero', nome: 'Tech prefix + DDD + número', exemplo: '1021 11 9••••-••••' },
 	{ id: 'tech_0_csp_ddd_numero', nome: 'Tech prefix + 0 + CSP + DDD + número', exemplo: '1021 0 15 11 9••••-••••' },
 	{ id: 'tech_55_ddd_numero', nome: 'Tech prefix + 55 + DDD + número', exemplo: '1021 55 11 9••••-••••' },
+	{ id: 'tech_e164', nome: '+55 DDD número (E.164)', exemplo: '+55 11 9••••-••••' },
 ];
+
+// SQL 113 · Telefonia T4: campos da seção E do parecer (o banco confere de novo)
+export const DTMFS: { id: string; nome: string }[] = [
+	{ id: 'auto', nome: 'Automático (recomendado)' },
+	{ id: 'rfc4733', nome: 'RFC 4733' },
+	{ id: 'inband', nome: 'No áudio (inband)' },
+	{ id: 'info', nome: 'SIP INFO' },
+];
+export const CABECALHOS_BINA: { id: string; nome: string }[] = [
+	{ id: 'from_pai', nome: 'De (From) + P-Asserted-Identity (recomendado)' },
+	{ id: 'from', nome: 'Só De (From)' },
+	{ id: 'rpid', nome: 'Remote-Party-ID' },
+];
+export const AUTENTICACAO_OPERADORA: { id: 'sim' | 'nao' | 'nao_sei'; nome: string }[] = [
+	{ id: 'sim', nome: 'Sim' },
+	{ id: 'nao', nome: 'Não' },
+	{ id: 'nao_sei', nome: 'Não sei' },
+];
+export const LIGA_PARA: { id: 'fixo_movel' | 'fixo' | 'movel'; nome: string; tipos: string[] }[] = [
+	{ id: 'fixo_movel', nome: 'Fixo e móvel', tipos: ['fixo_local', 'fixo_ldn', 'movel_vc1', 'movel_vc2_vc3'] },
+	{ id: 'fixo', nome: 'Só fixo', tipos: ['fixo_local', 'fixo_ldn'] },
+	{ id: 'movel', nome: 'Só móvel', tipos: ['movel_vc1', 'movel_vc2_vc3'] },
+];
+export const TOQUE_MIN = 15, TOQUE_MAX = 45, TOQUE_PADRAO = 30;
+export const DURACAO_MIN = 5, DURACAO_MAX = 60, DURACAO_PADRAO = 20;
+export const RE_REALM = /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
+/** Prefixo da operadora é opcional (C17): vazio = a operadora não usa. */
+export const prefixoOk = (p: string) => p.trim() === '' || /^[0-9]{1,8}$/.test(p.trim());
+/** Prefixo que a tela mostra na rota: "—" quando a operadora não usa (o código interno não aparece). */
+export const prefixoRota = (r: { tech_prefix?: unknown; enviar_prefixo?: unknown }) => (r.enviar_prefixo === false ? '—' : String(r.tech_prefix ?? '—'));
 
 export const CODECS = ['alaw', 'ulaw', 'g729', 'g722', 'opus'] as const;
 
@@ -60,6 +91,7 @@ export function ehItemFaturaVoz(item: unknown): boolean {
 	const it = String(item ?? '');
 	if (!it) return false;
 	if (it.startsWith('voz_licenca_robo_ajuste') || it === 'voz_minuto_ia_franquia') return true;
+	if (/^voz_minuto_ia_[0-9]+$/.test(it)) return true;      // SQL 126: uma linha por vigência de preço no minuto falado
 	return (ITENS_FATURA_VOZ as readonly string[]).some(c => it === c || it === `${c}_minimo`);
 }
 
@@ -223,6 +255,7 @@ export const PERM_VOZ = {
 	enviarMensagens: 'enviar_mensagens',
 	reenviarLote: 'reenviar_lote_voz', // SQL 65 · Reenviar agora (padrão: Admin e Operação)
 	reciclarLote: 'reciclar_lote_voz', // SQL 65 · Reciclar mailing (padrão: Admin e Operação)
+	configurarTelefonia: 'configurar_telefonia', // SQL 105 · Telefonia própria (padrão: só Admin; pede a verificação em duas etapas)
 } as const;
 
 /** Grupos com menos conversas que isto não mostram percentual (insights_voz devolve null). */
@@ -252,6 +285,8 @@ export const RESULTADO_VOZ: Record<string, { label: string; tom: Tom }> = {
 	ocupado: { label: 'Ocupado', tom: 'neutro' },
 	abandonada: { label: 'Abandono', tom: 'atencao' },
 	abandono_sem_robo: { label: 'Abandono sem robô livre', tom: 'atencao' },
+	// SQL 106: conversou com o agente, pediu um humano e a fila não atendeu (não é abandono do discador)
+	transferencia_sem_operador: { label: 'Transferência sem operador', tom: 'atencao' },
 	desligou_sem_conversar: { label: 'Desligou sem conversar', tom: 'neutro' },
 	atendeu_desligou: { label: 'Atendeu e desligou', tom: 'neutro' },
 	mudo: { label: 'Mudo', tom: 'neutro' },

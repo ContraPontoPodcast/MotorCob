@@ -189,6 +189,7 @@ antes da janela de discagem.
 |---|---|
 | `motorcx-asterisk` | Asterisk 22 (PJSIP, ARI, AMD, MixMonitor) na rede do host. SIP em 5060, RTP em 10000–20000, ARI só em `127.0.0.1:8088`. |
 | `motorcx-voz-orquestrador` | Plantão das empresas com `voz_config.modo = 'real'`. Só disca com o acesso próprio ao banco (seção 7). Detalhes abaixo da tabela. |
+| `motorcx-voz-teste` | "Testar a rota" da tela Telefonia (SQL 114, `voz/testador.py`): contínuo nas duas VMs; pega o pedido do banco, lê o número de teste no cofre, liga pelo tronco pedido (app ARI `motorcx-teste`, o tronco inativo também sobe como endpoint só para isso) e grava cada passo. Nada de número em log. |
 | `motorcx-voz-simulado` | O mesmo plantão para as empresas em modo `simulado`, sem ligação de verdade. |
 | `motorcx-voz-config.timer` | A cada 2 min, busca troncos, rotas, transferências e config no banco. Se algo mudou, regera o pjsip e o dialplan dentro do contêiner, com as senhas do cofre, e recarrega. Configuração inválida no banco mantém a que está no ar. |
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |
@@ -199,6 +200,7 @@ antes da janela de discagem.
 | `motorcx-voz-speech-buscas` | Serviço contínuo da busca semântica do site (SQL 60/63): a cada 2 s pega as buscas pendentes da parte desta VM, calcula o embedding da pergunta na Vertex (São Paulo) e responde. O site consulta até a resposta chegar; a busca vira erro sozinha em 2 min. Custo do embedding na margem (componente `embeddings`). Mesmo interruptor: desligado, sai e fica parado (depois de ligar o metadado, `systemctl restart motorcx-voz-speech-buscas`). |
 | `caddy` + `motorcx-voz-https.timer` | Proxy HTTPS na 8443 (Caddy oficial 2.8.4): a cada 2 min liga só as rotas dos recursos ligados e recarrega quando muda. Certificado Let's Encrypt de `<IP>.sslip.io` (veja "Proxy HTTPS" abaixo). |
 | `motorcx-voz-simulador` | Simulador de texto do Fluxo e roleplay (`voz/simulador_http.py`, 127.0.0.1:8091), atrás do proxy. Só com o metadado `motorcx-simulador-fluxo=1`; a chave vem do segredo `motorcx-voz-simulador`. |
+| `motorcx-voz-treino` | Treino por voz do Roleplay (`voz/treino_voz.py`, WebSocket em 127.0.0.1:8093), atrás do proxy em `/treino/voz`. Só com o metadado `motorcx-treino-voz=1`; o bilhete usa a chave do segredo `motorcx-voz-simulador`. |
 | `motorcx-voz-gerar-fluxo` | Serviço contínuo da geração do fluxo por texto (pedido "Descrever e o MotorCX monta", SQL 58/66; `voz/gerar_fluxo.py`): a cada 15 s pega o próximo pedido, gera o rascunho com o LLM, valida (até 2 correções) e devolve; saída inválida nunca vira rascunho. Também apaga do Storage os anexos que o banco liberou. Funciona nos dois acessos ao banco (seção 7). Desligado por padrão: veja "Geração do fluxo por texto" abaixo. |
 | `motorcx-voz-gerar-segmentacao` | Serviço contínuo de "Descrever segmentos e régua" (SQL 79; `voz/gerar_segmentacao.py` + `motor/segmentacao_ia.py`): a cada 10 s pega o próximo pedido, gera a proposta com o LLM (sem ferramenta de escrita), compila e valida com o Python do motor (até 2 correções) e devolve; o banco confirma ou estorna os 2 créditos. Nada é aplicado por aqui. Desligado por padrão (metadado `motorcx-gerar-segmentacao=1`). |
 | `motorcx-voz-speech-temas.timer` | Segunda 03:20, temas novos da semana passada (SQL 63): agrupa os trechos do cliente que ficaram sem tema e sem intenção. Grupo com 30 conversas ou mais vai para a Curadoria com um nome sugerido pela IA; quem dá o nome é uma pessoa. Mesmo interruptor. |
@@ -260,16 +262,17 @@ O orquestrador reserva o robô **antes de discar**: a vaga da empresa no agendad
 empresa nesta VM (Montagem `max_sessoes`, ElevenLabs/Simulador `max_simultaneas`). Sem robô para reservar, o número
 espera na lista e não é discado. A reserva vira conversa quando o AMD dá pessoa e volta na hora quando dá máquina ou
 a linha acaba sem conversa. As linhas continuam limitadas pelos canais e pelo CPS de cada tronco. A discagem segue
-1:1 (razão 1,0); o Power/Preditivo, que disca mais linhas que robôs, é outro PR.
+1:1 (razão 1,0) por padrão; a carteira em Power disca `razão` linhas por robô livre (Discagem › ritmo, SQL 107/108).
 
 Se mesmo com a reserva o provedor não abrir a sessão (corrida com a capacidade da VM ou falha do provedor), a pessoa
 **nunca** é desligada muda: ouve o áudio `sound:motorcx/sem-robo` e a ligação acaba no fim dele (ou em 15 s, se o
 Asterisk não avisar o fim). O desfecho é `abandono_sem_robo` (`transferencia = sem_robo`), contado no abandono (freio
-do lote, chamadas curtas da Anatel). Com o Alô fake ligado, ele toca antes e a mensagem só vem se a IA não ficar livre
-em `alo_fake_max_s`. Contadores do plantão: `sem_robo_provedor` (linha não discada por falta de sessão no provedor) e
-`abandono_sem_robo`.
+do lote, chamadas curtas da Anatel) e o cliente não recebe outra ligação no dia. O "Alô fake" saiu (Power/Preditivo
+V4): mesmo ligado em `voz_config`, a mensagem toca na hora. No Power/Preditivo (razão > 1) a linha a mais que atende
+com todos os robôs ocupados cai no mesmo caminho. Contadores do plantão: `sem_robo_provedor` (linha não discada por
+falta de sessão no provedor), `reserva_no_atendimento`, `atendeu_sem_reserva` e `abandono_sem_robo`.
 
-Os áudios (`sound:motorcx/sem-robo` e o `sound:motorcx/alo` do Alô fake) não vêm na imagem: o script
+Os áudios (`sound:motorcx/sem-robo` e o `sound:motorcx/alo`, que o Alô fake usava antes do V4) não vêm na imagem: o script
 `motorcx-voz-sons` da VM gera os dois com a **mesma voz do agente** (TTS da Montagem: provedor, voz e modelo de
 `/etc/motorcx/provedores.json`; chave do cofre `motorcx-voz-tts`, lida pela conta da VM e nunca mostrada, gravada ou
 logada), converte para o formato do Asterisk (WAV 8 kHz, mono, 16 bits; `voz/sons_sistema.py`, sem ffmpeg), grava em
@@ -355,6 +358,13 @@ do Caddy) e o `motorcx-voz-https` (no boot e a cada 2 min) grava o Caddyfile ver
   serviço `motorcx-voz-simulador`: sobe com o metadado `motorcx-simulador-fluxo=1`. O mesmo `/simular` atende o treino
   de operadores por texto do Roleplay (SQL 100, `voz/treino.py`: corpo com `"treino": "turno" | "avaliar"`), chamado pela
   Edge Function `treino` com a mesma assinatura (sem rota nova no Caddy).
+- `/treino/voz` → treino de operadores por VOZ do Roleplay (SQL 119, `voz/treino_voz.py`, WebSocket em 127.0.0.1:8093),
+  com o serviço `motorcx-voz-treino`: sobe com o metadado `motorcx-treino-voz=1`. O navegador do operador conecta em
+  `wss://<nome da VM>:8443/treino/voz` e manda o bilhete de uso único (2 min) que a Edge Function `treino` assinou com a
+  chave do simulador (`motorcx-voz-simulador`); áudio PCM 16 kHz nos dois sentidos, só em memória (nunca em disco ou
+  log). STT, TTS e LLM são os da Montagem (`provedores.json`, chaves no cofre). No fim, o serviço devolve o resultado
+  assinado para `$MOTORCOB_SUPABASE_URL/functions/v1/treino` (saída HTTPS para o Supabase, que a VM já usa). Sem porta
+  nova: é a mesma 8443. Até 20 sessões por VM (`--max-sessoes`); 15 min no máximo por sessão; 20 s de silêncio encerram.
 O `criar_gcp.sh` abre a 8443 para `ORIGENS_HTTPS` (padrão: a internet toda, porque nem a ElevenLabs nem as Edge
 Functions têm IP de origem fixo; quem protege é a assinatura HMAC de cada rota) e a 80 só para o desafio do Let's
 Encrypt.
@@ -387,6 +397,15 @@ Recomendado: ligar também a API de conversas (`agent_id` + `ref_api`) como **re
 (VM fora, certificado, rede), a VM busca a conversa pelo agente dela; quando o webhook chega primeiro, a busca daquela
 chamada para. Sem webhook por agente (só o do espaço de trabalho), a VM que não recebe o aviso depende só da API.
 
+**Transferência sem operador com a ElevenLabs (B5):** quando a fila do cliente não atende (ou recusa) na ponte, o
+orquestrador desliga a conversa antiga e liga de novo para o mesmo agente, uma vez por chamada, com
+`X-MotorCX-Retorno: sem_operador | falhou`, `X-MotorCX-Aviso: virtual` e `X-MotorCX-Id: <id>r`. A pessoa nunca é
+desligada. **Configurar no agente** (painel da ElevenLabs): declarar a variável `motorcx_retorno` e, quando ela vier
+preenchida, abrir com "Me desculpe, nenhum atendente conseguiu atender agora. Posso agendar um retorno para você? Qual o
+melhor dia e horário?", sem credor nem dívida e sem transferir de novo, e registrar `resultado = retorno_agendado` com
+`retorno_em`. Vale o resultado dessa segunda conversa; o da primeira é descartado. Com REFER, o agente já saiu: segue
+como antes (`transferencia_sem_operador`).
+
 **`motorcx_id` como variável dinâmica (avaliação, a confirmar no piloto):** a análise depende de a conversa da
 ElevenLabs trazer `conversation_initiation_client_data.dynamic_variables.motorcx_id` (é por ele que o webhook e a API
 acham a chamada). O orquestrador manda o id no INVITE (`X-MotorCX-Id`). Há dois caminhos para ele virar variável:
@@ -400,6 +419,8 @@ acham a chamada). O orquestrador manda o id no INVITE (`X-MotorCX-Id`). Há dois
   identificador, o receptor ganha uma rota que responde `{"dynamic_variables": {"motorcx_id": …}}` (mesma assinatura e
   mesmo proxy); se não vier, a correlação fica só pela API (início da conversa × início da chamada).
 Simulador do Fluxo: o secret `VOZ_SIMULADOR_URL` da Edge Function passa a ser `https://<nome da VM>:8443/simular`.
+Treino por voz: o secret `VOZ_TREINO_WS_URL` da Edge Function `treino` passa a ser `wss://<nome da VM>:8443/treino/voz`, e
+o mesmo `wss://<nome da VM>:8443` precisa estar em `TREINO_VOZ_WSS` no `site/netlify.toml` (CSP do site).
 
 **Checklist do piloto (ElevenLabs, SQL 63):**
 - [ ] a variável dinâmica `motorcx_id` chega na conversa (o `X-MotorCX-Id` do INVITE vira `motorcx_id`); se não

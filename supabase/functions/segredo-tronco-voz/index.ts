@@ -1,6 +1,9 @@
 // Edge Function segredo-tronco-voz (SQL 103, PR T1 da Telefonia): guarda a senha do tronco SIP direto no cofre.
 // O site chama com o login da pessoa: functions.invoke('segredo-tronco-voz', { body: { tronco, senha } }).
 // Resposta: { guardada_em, versao }. A senha NUNCA volta, nunca vai para o banco, para log ou para outra resposta.
+// SQL 114 (PR T5): o mesmo cofre guarda o número de teste da empresa: { empresa, numero_teste } → { numero_id } e
+// { remover_numero_teste } → { removido }. Segredo motorcx-voz-trunk-e<empresa>-teste-<12 do hash> (o prefixo que a
+// conta de escrita já pode usar); o banco fica só com o hash e a máscara; só o servidor de voz lê o número.
 // Passos:
 //  1. login válido (Supabase Auth) e a sessão confirmada pela verificação em duas etapas (aal2);
 //  2. preparar_segredo_tronco_voz(tronco) COM O LOGIN DA PESSOA: o banco confere quem pode (pode_configurar_telefonia),
@@ -16,8 +19,9 @@
 // Publicar com "Verify JWT" LIGADO.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
-  assinadorDe, jwtDaConta, lerChave, nivelDaSessao, nomeDaEmpresa, numeroVersao, pedidoCriar, pedidoVersao,
-  TOKEN_URL, urlDestruir, urlVersoes, validarPedido, versoesAntigas,
+  assinadorDe, ehPedidoNumero, hashNumeroTeste, jwtDaConta, lerChave, mascaraNumeroTeste, nivelDaSessao, nomeDaEmpresa,
+  numeroVersao, pedidoCriar, pedidoVersao, TOKEN_URL, urlDestruir, urlVersoes, validarPedido, validarPedidoNumero,
+  versoesAntigas,
 } from "./regras.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -71,10 +75,10 @@ async function google(metodo: string, url: string, token: string, corpo?: unknow
 }
 
 /** Grava a versão nova e destrói as antigas. Devolve o número da versão. Erros sem corpo (o corpo nunca vai ao log). */
-async function guardar(nome: string, empresa: number, senha: string): Promise<number> {
+async function guardar(nome: string, empresa: number, senha: string, tipo = "tronco-voz"): Promise<number> {
   const token = await tokenGoogle();
   const proj = CHAVE!.project_id;
-  const c = pedidoCriar(proj, nome, empresa);
+  const c = pedidoCriar(proj, nome, empresa, tipo);
   const criado = await google("POST", c.url, token, c.corpo);
   if (criado.status !== 200 && criado.status !== 409) throw new ErroCofre(`criar ${criado.status}`);   // 409: já existe
   const v = pedidoVersao(proj, nome, senha);
@@ -94,6 +98,55 @@ async function guardar(nome: string, empresa: number, senha: string): Promise<nu
   return n;
 }
 
+/** Destrói todas as versões do segredo (número de teste removido). Melhor esforço: erro vai ao log sem corpo. */
+async function apagar(nome: string): Promise<void> {
+  const token = await tokenGoogle();
+  const lista = await google("GET", urlVersoes(CHAVE!.project_id, nome), token);
+  for (const v of versoesAntigas(lista.json, Number.MAX_SAFE_INTEGER)) {
+    const d = await google("POST", urlDestruir(v), token, {});
+    if (d.status !== 200) console.error("segredo-tronco-voz", "destruir numero", d.status);
+  }
+}
+
+/** SQL 114: número de teste no cofre (guardar ou remover). O número nunca vai ao banco, a log ou à resposta. */
+async function numeroTeste(corpo: unknown, token: string, usuario: string, origem: string | null): Promise<Response> {
+  const { numero, remover, erro } = validarPedidoNumero(corpo);
+  if (erro) return responder({ erro }, 400, origem);
+  if (!CHAVE) return responder({ erro: "o cofre ainda não está configurado" }, 503, origem);
+  const comoUsuario = createClient(SUPABASE_URL, ANON, { ...sem, global: { headers: { Authorization: `Bearer ${token}` } } });
+  if (remover) {
+    const { data: nome, error } = await comoUsuario.rpc("remover_numero_teste_voz", { numero: remover });
+    if (error) return responder({ erro: error.code === "P0001" ? error.message : "não foi possível remover" }, 403, origem);
+    if (typeof nome === "string" && /^motorcx-voz-trunk-e[1-9][0-9]{0,18}-teste-[0-9a-f]{12}$/.test(nome)) {
+      try { await apagar(nome); } catch (e) { console.error("segredo-tronco-voz", "apagar", (e as Error).name); }
+    }
+    return responder({ removido: true }, 200, origem);
+  }
+  const hash = await hashNumeroTeste(numero!.numero);
+  const { data: prep, error: ePrep } = await comoUsuario.rpc("preparar_numero_teste_voz", {
+    empresa: numero!.empresa, hash, mascara: mascaraNumeroTeste(numero!.numero),
+  });
+  if (ePrep) return responder({ erro: ePrep.code === "P0001" ? ePrep.message : "não foi possível conferir o número" }, 403, origem);
+  const linha = (Array.isArray(prep) ? prep[0] : prep) as { numero_id?: number; empresa_id?: number; nome_segredo?: string } | null;
+  if (!linha?.numero_id || !nomeDaEmpresa(linha.nome_segredo, linha.empresa_id)) {
+    console.error("segredo-tronco-voz", "numero: nome fora do padrão");
+    return responder({ erro: "não foi possível conferir o número" }, 500, origem);
+  }
+  let versao: number;
+  try {
+    versao = await guardar(linha.nome_segredo!, Number(linha.empresa_id), numero!.numero, "numero-teste-voz");
+  } catch (e) {
+    console.error("segredo-tronco-voz", "cofre numero", e instanceof ErroCofre ? e.message : (e as Error).name);
+    return responder({ erro: "o cofre não aceitou o número agora. Tente de novo em alguns minutos." }, 502, origem);
+  }
+  const { error: eReg } = await admin.rpc("registrar_numero_teste_voz", { numero: linha.numero_id, usuario, versao });
+  if (eReg) {
+    console.error("segredo-tronco-voz", "registrar numero", eReg.code);
+    return responder({ erro: "o número foi guardado, mas o registro falhou. Cadastre de novo." }, 500, origem);
+  }
+  return responder({ numero_id: linha.numero_id }, 200, origem);
+}
+
 Deno.serve(async (req) => {
   const origem = req.headers.get("Origin");
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cabecalhos(origem) });
@@ -110,6 +163,7 @@ Deno.serve(async (req) => {
 
   let corpo: unknown;
   try { corpo = await req.json(); } catch { return responder({ erro: "pedido inválido" }, 400, origem); }
+  if (ehPedidoNumero(corpo)) return await numeroTeste(corpo, token, sessao.user.id, origem);
   const { pedido, erro } = validarPedido(corpo);
   corpo = null;
   if (!pedido) return responder({ erro }, 400, origem);

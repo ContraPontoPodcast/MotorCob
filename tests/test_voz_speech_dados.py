@@ -456,6 +456,18 @@ class TestNoite(unittest.TestCase):
                                 "n_depois": 100, "janela_dias": 28}])
         self.assertIn(("conferir_rascunhos_recomendacoes", {}), sb.chamadas)
 
+    def test_sugestoes_de_treino_por_empresa_sem_segurar_a_noite(self):
+        def gerar(args):
+            if args["empresa"] == 5:
+                raise RuntimeError("banco recusou")
+            return {"sugestoes": 3}
+        sb = SbFalso({"speech_empresas_voz": [5, 8], "gerar_sugestoes_treino": gerar})
+        out = RT.noite(sb, self.HOJE, retro=False)
+        chamadas = [x[1] for x in sb.chamadas if x[0] == "gerar_sugestoes_treino"]
+        self.assertEqual(chamadas, [{"empresa": 5, "hoje": "2026-11-20"}, {"empresa": 8, "hoje": "2026-11-20"}])
+        self.assertEqual((out["sugestoes_treino"], out["erros_treino"], out["dias"]), (3, 1, 4))
+        self.assertNotIn("erros", out, "a falha das sugestões não conta como falha da agregação")
+
     def test_erro_numa_empresa_nao_segura_as_outras(self):
         def agregar(args):
             if args["empresa"] == 5:

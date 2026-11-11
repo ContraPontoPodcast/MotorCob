@@ -32,6 +32,49 @@ export function validarPedido(corpo: unknown): { pedido?: Pedido; erro?: string 
   return { pedido: { tronco: c.tronco as number, senha: c.senha as string } };
 }
 
+// ---------------------------------------------------------------- número de teste (SQL 114, PR T5 da Telefonia)
+// O número de teste (celular da equipe do cliente) também fica só no cofre: o banco guarda o hash (sha-256 dos dígitos
+// sem o 55, igual a voz_config.numeros_teste_hash) e a máscara; o servidor de voz lê o número na hora do teste da rota.
+export interface PedidoNumero { empresa: number; numero: string }
+
+/** Dígitos do número (sem o 55 do país), ou null. Celular ou fixo com DDD. */
+export function digitosNumeroTeste(v: unknown): string | null {
+  if (typeof v !== "string" || v.length > 30) return null;
+  let d = v.replace(/\D/g, "");
+  if (/^55\d{10,11}$/.test(d)) d = d.slice(2);
+  return /^[1-9][1-9]\d{8,9}$/.test(d) ? d : null;
+}
+
+/** "(11) 9••••-••41": o DDD e os 2 últimos dígitos (a mesma regra de site/src/lib/telefonia.ts). */
+export function mascaraNumeroTeste(d: string): string {
+  return `(${d.slice(0, 2)}) ${d.length === 11 ? "9••••" : "••••"}-••${d.slice(-2)}`;
+}
+
+export async function hashNumeroTeste(d: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(d));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** { empresa, numero_teste } (guardar) ou { remover_numero_teste } (apagar do cofre). Nada mais. */
+export function validarPedidoNumero(corpo: unknown): { numero?: PedidoNumero; remover?: number; erro?: string } {
+  if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { erro: "pedido inválido" };
+  const c = corpo as Record<string, unknown>;
+  const chaves = Object.keys(c).sort().join(",");
+  if (chaves === "remover_numero_teste") {
+    return Number.isSafeInteger(c.remover_numero_teste) && (c.remover_numero_teste as number) > 0
+      ? { remover: c.remover_numero_teste as number } : { erro: "número de teste inválido" };
+  }
+  if (chaves !== "empresa,numero_teste") return { erro: "pedido inválido" };
+  if (!Number.isSafeInteger(c.empresa) || (c.empresa as number) <= 0) return { erro: "empresa inválida" };
+  const d = digitosNumeroTeste(c.numero_teste);
+  if (!d) return { erro: "digite o número com DDD (10 ou 11 dígitos)" };
+  return { numero: { empresa: c.empresa as number, numero: d } };
+}
+
+/** É um pedido de número de teste (e não de senha do tronco)? */
+export const ehPedidoNumero = (corpo: unknown) =>
+  !!corpo && typeof corpo === "object" && ("numero_teste" in (corpo as object) || "remover_numero_teste" in (corpo as object));
+
 /** O "aal" do JWT da sessão (aal1 sem o segundo fator, aal2 com). Só lê: quem confere a assinatura é o Supabase. */
 export function nivelDaSessao(token: string): string {
   try {
@@ -117,11 +160,11 @@ export async function assinadorDe(chave: Chave): Promise<(d: Uint8Array<ArrayBuf
 const SM = "https://secretmanager.googleapis.com/v1";
 
 /** As chamadas, sem rede (o index.ts faz o fetch). */
-export function pedidoCriar(projeto: string, nome: string, empresa: number) {
+export function pedidoCriar(projeto: string, nome: string, empresa: number, tipo = "tronco-voz") {
   return {
     url: `${SM}/projects/${projeto}/secrets?secretId=${encodeURIComponent(nome)}`,
     corpo: { replication: { userManaged: { replicas: [{ location: REGIAO }] } },
-             labels: { "motorcx-empresa": String(empresa), "motorcx-tipo": "tronco-voz" } },
+             labels: { "motorcx-empresa": String(empresa), "motorcx-tipo": tipo } },
   };
 }
 export function pedidoVersao(projeto: string, nome: string, senha: string) {

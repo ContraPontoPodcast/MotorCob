@@ -8,6 +8,8 @@
 // SQL 78: terceira parte "Créditos" (franquia, excedente, custo real do cliente e do sistema, teto por empresa).
 // SQL 92: nos itens com franquia (Créditos de IA e treino do Speech), a franquia padrão aparece na lista e é editada
 // junto com o preço de tabela (salvar_franquia_padrao); a franquia de cada empresa fica na Contratação.
+// SQL 124: MC mínima própria por item (cobranca_itens.mc_minima_ia_pct; vazio = a geral). Só o Master muda, na seção
+// "MC mínima" da gaveta, com a prévia do preço mínimo (preco_minimo_ia_com_mc). O minuto de IA nasce com 60%.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Aviso, Botao, Cartao, Detalhes, Estado, Gaveta, Kpis, ListaRegras, ListaValores, Pilula, Rotulo, Segmentos, Tabela, campoCls, campoStyle, type Tom } from '@/components/ds';
@@ -75,13 +77,13 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
         supabase.rpc('itens_ia'),
         supabase.rpc('margem_ia', { competencia }),
         supabase.rpc('ia_precos_abaixo_minimo'),
-        supabase.from('cobranca_itens').select('codigo,franquia_padrao').eq('eh_ia', true),
+        supabase.from('cobranca_itens').select('codigo,franquia_padrao,mc_minima_ia_pct').eq('eh_ia', true),
       ]);
       if (!ativo) return;
       const e = it.error ?? mg.error ?? ab.error;
       if (e) { setError(friendlyError(e)); setLoading(false); return; }
-      const franquias = new Map(((fr.data ?? []) as Row[]).map(r => [String(r.codigo), r.franquia_padrao]));
-      setItens(((it.data ?? []) as Row[]).map(x => ({ ...x, franquia_padrao: franquias.get(String(x.codigo)) ?? null })));
+      const cat = new Map(((fr.data ?? []) as Row[]).map(r => [String(r.codigo), r]));
+      setItens(((it.data ?? []) as Row[]).map(x => ({ ...x, franquia_padrao: cat.get(String(x.codigo))?.franquia_padrao ?? null, mc_minima_ia_pct: cat.get(String(x.codigo))?.mc_minima_ia_pct ?? null })));
       setMargem((mg.data ?? []) as Row[]);
       setAbaixo((ab.data ?? []) as Row[]);
       setLoading(false);
@@ -98,7 +100,7 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
   const empresasMes = [...new Set(margem.map(l => String(l.empresa ?? '')).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const margemVis = filtroEmp ? margem.filter(l => String(l.empresa ?? '') === filtroEmp) : margem;
   const itemDe = (codigo: unknown) => itens.find(x => x.codigo === codigo) ?? null;
-  const mcTabela = (it: Row) => { const baixa = it.mc_tabela_pct != null && Number(it.mc_tabela_pct) < mcMin; return <Pilula tom={it.mc_tabela_pct == null ? 'neutro' : baixa ? 'erro' : 'ok'}>{pct1(it.mc_tabela_pct)}</Pilula>; };
+  const mcTabela = (it: Row) => { const baixa = it.mc_tabela_pct != null && Number(it.mc_tabela_pct) < mcMinimaItem(it, mcMin); return <Pilula tom={it.mc_tabela_pct == null ? 'neutro' : baixa ? 'erro' : 'ok'}>{pct1(it.mc_tabela_pct)}</Pilula>; };
   const mcMes = (l: Row) => { const sit = SIT_IA[l.situacao as string] ?? SIT_IA.sem_receita; return <Pilula tom={sit.tom} title={sit.label}>{l.mc_pct == null ? sit.label : pct1(l.mc_pct)}</Pilula>; };
   const problema = (a: Row) => a.problema === 'mensalidade' ? 'mensalidade (use preço por unidade)' : a.problema === 'sem_custo' ? 'item sem custo cadastrado' : `${precoIA(a.preco)} → mínimo ${precoIA(a.preco_minimo_ia)}`;
 
@@ -126,7 +128,7 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
           <Tabela rotulo="Preços dos itens de IA" linhas={itens} chave={it => String(it.codigo)} onAbrir={it => setEditar({ item: it })} selecionada={editar ? String(editar.item.codigo) : null}
             vazio="Nenhum item de IA no catálogo."
             colunas={[
-              { id: 'item', titulo: 'Item', celula: it => <span><b className="font-medium">{String(it.nome)}</b><small className="block text-[11.5px] text-[var(--base-texto-3)]">por {String(it.unidade)}{temFranquia(it.codigo) && it.franquia_padrao != null && <> · franquia {numberBR(it.franquia_padrao)}</>}{Number(it.precos_abaixo ?? 0) > 0 && <span className="ml-1 font-semibold text-[var(--estado-erro-texto)]">· {String(it.precos_abaixo)} abaixo</span>}</small></span> },
+              { id: 'item', titulo: 'Item', celula: it => <span><b className="font-medium">{String(it.nome)}</b><small className="block text-[11.5px] text-[var(--base-texto-3)]">por {String(it.unidade)}{temFranquia(it.codigo) && it.franquia_padrao != null && <> · franquia {numberBR(it.franquia_padrao)}</>}{it.mc_minima_ia_pct != null && <> · MC mínima {Number(it.mc_minima_ia_pct).toLocaleString('pt-BR')}% (própria)</>}{Number(it.precos_abaixo ?? 0) > 0 && <span className="ml-1 font-semibold text-[var(--estado-erro-texto)]">· {String(it.precos_abaixo)} abaixo</span>}</small></span> },
               { id: 'custo', titulo: 'Custo', num: true, celula: it => it.custo_unitario == null ? <span className="text-[var(--estado-atencao-texto)]">sem custo</span> : precoIA(it.custo_unitario) },
               { id: 'min', titulo: 'Preço mínimo', num: true, celula: it => <b>{precoIA(it.preco_minimo_ia)}</b> },
               { id: 'tab', titulo: 'Tabela', num: true, celula: it => precoIA(it.preco_tabela) },
@@ -167,6 +169,7 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
         <p className="rounded-xl bg-[var(--base-fill)] px-3 py-2 text-[13px] text-[var(--base-texto)]">Preço mínimo = custo ÷ (1 − impostos − MC mínima), arredondado para cima.</p>
         <ListaRegras regras={[
           { titulo: `Todo item de IA precisa de margem de contribuição (MC) de pelo menos ${mcMin.toLocaleString('pt-BR')}%`, texto: 'A IA é revendida: o mínimo vale para o preço de tabela e para o preço de cada empresa.' },
+          { titulo: 'Um item pode ter MC mínima própria', texto: 'Ex.: o minuto de IA do Agente de voz com 60%. Os outros itens seguem com a geral.' },
           { titulo: 'O banco recusa preço abaixo do mínimo', texto: 'Aqui o botão já fica bloqueado com a mesma mensagem.' },
           { titulo: 'Custo novo não muda preço nenhum', texto: 'O que ficar abaixo do mínimo aparece em "Revisar preços".' },
           { titulo: 'Só o Master vê e muda', texto: 'Custo real, preços e a margem por empresa.' },
@@ -188,7 +191,12 @@ export function MargemIa({ competencia, mcMinima, recarregar }: { competencia: s
   );
 }
 
-type Secao = 'custo' | 'tabela' | 'empresa';
+type Secao = 'custo' | 'tabela' | 'empresa' | 'mc';
+
+/** MC mínima que vale para o item: a própria (SQL 124) ou a geral. */
+export function mcMinimaItem(it: Row, geral: unknown): number {
+  return it.mc_minima_ia_pct != null ? Number(it.mc_minima_ia_pct) : Number(geral ?? 70);
+}
 
 function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaInicial }: { item: Row; mcMinima: unknown; onClose: () => void; onSalvo: () => void; secaoInicial?: Secao; empresaInicial?: string }) {
   const [secao, setSecao] = useState<Secao>(secaoInicial ?? 'custo');
@@ -204,6 +212,8 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
   const [empresas, setEmpresas] = useState<Row[]>([]);
   const [empresa, setEmpresa] = useState(empresaInicial ?? '');
   const [precoEmp, setPrecoEmp] = useState('');
+  const [mcItem, setMcItem] = useState(item.mc_minima_ia_pct != null ? String(item.mc_minima_ia_pct).replace('.', ',').replace(/,00$/, '') : '');
+  const [previaMc, setPreviaMc] = useState<unknown>(null);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState<{ onde: string; erro?: string; ok?: string } | null>(null);
 
@@ -216,12 +226,36 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
     if (!supabase) return;
     const { data } = await supabase.rpc('itens_ia');
     const novo = ((data ?? []) as Row[]).find(x => x.codigo === it.codigo);
-    const { data: fr } = await supabase.from('cobranca_itens').select('franquia_padrao').eq('codigo', String(it.codigo)).maybeSingle();
-    if (novo) setIt({ ...novo, franquia_padrao: (fr as Row | null)?.franquia_padrao ?? it.franquia_padrao ?? null });
+    const { data: fr } = await supabase.from('cobranca_itens').select('franquia_padrao,mc_minima_ia_pct').eq('codigo', String(it.codigo)).maybeSingle();
+    if (novo) setIt({ ...novo, franquia_padrao: (fr as Row | null)?.franquia_padrao ?? it.franquia_padrao ?? null, mc_minima_ia_pct: (fr as Row | null)?.mc_minima_ia_pct ?? null });
     onSalvo();
   }
 
   const minimo = it.preco_minimo_ia;
+  const mcVale = mcMinimaItem(it, mcMinima);
+  const vMc = mcItem.trim() === '' ? null : num(mcItem);
+  const mcInvalida = vMc != null && (vMc < 0 || vMc > 99);
+  useEffect(() => {
+    if (!supabase || secao !== 'mc' || mcInvalida) { setPreviaMc(null); return; }
+    let ativo = true;
+    const t = setTimeout(() => {
+      void supabase!.rpc('preco_minimo_ia_com_mc', { it: it.codigo, mc: vMc }).then(({ data }) => { if (ativo) setPreviaMc(data); });
+    }, 250);
+    return () => { ativo = false; clearTimeout(t); };
+  }, [secao, vMc, mcInvalida, it.codigo]);
+  const mcMudou = (vMc ?? null) !== (it.mc_minima_ia_pct != null ? Number(it.mc_minima_ia_pct) : null);
+  async function salvarMc() {
+    if (!supabase || mcInvalida) return;
+    setBusy('mc'); setMsg(null);
+    const { data, error } = await supabase.rpc('salvar_mc_minima_ia_item', { item: it.codigo, pct: vMc });
+    setBusy('');
+    if (error) { setMsg({ onde: 'mc', erro: erroIA(error) }); return; }
+    const n = Number(data ?? 0);
+    const texto = `MC mínima salva.${n > 0 ? ` ${n} preço(s) ficaram abaixo do mínimo: nenhum foi alterado.` : ''}`;
+    setMsg({ onde: 'mc', ok: texto });
+    toast.success('MC mínima salva.');
+    await recarregarItem();
+  }
   const semCusto = minimo == null;
   const vTabela = num(tabela);
   const vEmp = num(precoEmp);
@@ -279,15 +313,16 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
   const podeTabela = busy === '' && vTabela > 0 && !tabelaAbaixo && !semCusto && (!comFranquia || vFranquia != null);
   const podeEmpresa = busy === '' && !!empresa && vEmp > 0 && !empAbaixo && !semCusto;
   const salvarAtual = secao === 'custo' ? <Botao onClick={() => void salvarCusto()} disabled={!podeCusto}>{busy === 'custo' ? 'Salvando...' : 'Salvar custo'}</Botao>
+    : secao === 'mc' ? <Botao onClick={() => void salvarMc()} disabled={busy !== '' || mcInvalida || !mcMudou}>{busy === 'mc' ? 'Salvando...' : 'Salvar MC mínima'}</Botao>
     : secao === 'tabela' ? <Botao onClick={() => void salvarTabela()} disabled={!podeTabela}>{busy === 'tabela' ? 'Salvando...' : comFranquia ? 'Salvar tabela e franquia' : 'Salvar preço de tabela'}</Botao>
     : <Botao onClick={() => void salvarEmpresa()} disabled={!podeEmpresa}>{busy === 'empresa' ? 'Salvando...' : 'Salvar preço da empresa'}</Botao>;
   const vermelho = { borderColor: 'var(--estado-erro)', color: 'var(--estado-erro-texto)' };
 
   return (
     <Gaveta aberta onFechar={onClose} rotulo={`Item de IA ${String(it.nome)}`} titulo={String(it.nome)}
-      subtitulo={<>Preço mínimo: <b className="text-[var(--base-texto)]">{semCusto ? 'cadastre o custo' : `${precoIA(minimo)} por ${String(it.unidade)}`}</b> (MC mínima de {Number(mcMinima ?? 70).toLocaleString('pt-BR')}%)</>}
+      subtitulo={<>Preço mínimo: <b className="text-[var(--base-texto)]">{semCusto ? 'cadastre o custo' : `${precoIA(minimo)} por ${String(it.unidade)}`}</b> (MC mínima de {mcVale.toLocaleString('pt-BR')}%{it.mc_minima_ia_pct != null ? ' deste item' : ''})</>}
       rodape={<><Botao tipo="secundario" onClick={onClose}>Fechar</Botao>{salvarAtual}</>}>
-      <Segmentos rotulo="Seção" itens={[{ v: 'custo', n: 'Custo' }, { v: 'tabela', n: 'Preço de tabela' }, { v: 'empresa', n: 'Preço de uma empresa' }]} valor={secao} onTrocar={v => { setSecao(v); setMsg(null); }} />
+      <Segmentos rotulo="Seção" itens={[{ v: 'custo', n: 'Custo' }, { v: 'tabela', n: 'Preço de tabela' }, { v: 'empresa', n: 'Preço de uma empresa' }, { v: 'mc', n: 'MC mínima' }]} valor={secao} onTrocar={v => { setSecao(v); setMsg(null); }} />
       {secao === 'custo' && <>
         <p className="text-[12.5px] text-[var(--base-texto-2)]">Custo real por {String(it.unidade)}, vale a partir de hoje. Custo novo não muda preço nenhum.</p>
         <div className="grid grid-cols-2 gap-2">
@@ -303,7 +338,7 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
       </>}
       {secao === 'tabela' && <>
         <Rotulo texto={`Preço de tabela por ${String(it.unidade)}`}><input inputMode="decimal" value={tabela} onChange={e => setTabela(e.target.value)} aria-invalid={tabelaAbaixo} className={campo} style={tabelaAbaixo ? vermelho : campoStyle} /></Rotulo>
-        {tabelaAbaixo && <Aviso tom="erro">{mensagemMinimoIA(minimo, it.unidade, mcMinima)}</Aviso>}
+        {tabelaAbaixo && <Aviso tom="erro">{mensagemMinimoIA(minimo, it.unidade, mcVale)}</Aviso>}
         {semCusto && <Aviso tom="atencao">Sem custo cadastrado: o preço fica bloqueado até cadastrar o custo.</Aviso>}
         {comFranquia && <>
           <Rotulo texto={`Franquia padrão por ciclo (${String(it.unidade)})`}><input inputMode="numeric" value={franquia} onChange={e => setFranquia(e.target.value)} aria-invalid={vFranquia == null} className={campo} style={vFranquia == null ? vermelho : campoStyle} /></Rotulo>
@@ -318,9 +353,19 @@ function EditarItemIa({ item, mcMinima, onClose, onSalvo, secaoInicial, empresaI
           {empresas.map(e => <option key={String(e.id)} value={String(e.id)}>{String(e.nome)}</option>)}
         </select></Rotulo>
         <Rotulo texto={`Preço por ${String(it.unidade)}`}><input inputMode="decimal" value={precoEmp} onChange={e => setPrecoEmp(e.target.value)} aria-invalid={empAbaixo} className={campo} style={empAbaixo ? vermelho : campoStyle} /></Rotulo>
-        {empAbaixo && <Aviso tom="erro">{mensagemMinimoIA(minimo, it.unidade, mcMinima)}</Aviso>}
+        {empAbaixo && <Aviso tom="erro">{mensagemMinimoIA(minimo, it.unidade, mcVale)}</Aviso>}
         {semCusto && <Aviso tom="atencao">Sem custo cadastrado: o preço da empresa fica bloqueado até cadastrar o custo.</Aviso>}
         {msgDe('empresa')}
+      </>}
+      {secao === 'mc' && <>
+        <p className="text-[12.5px] text-[var(--base-texto-2)]">MC mínima só deste item. Vazio = usa a geral da IA ({Number(mcMinima ?? 70).toLocaleString('pt-BR')}%). Mudar não altera preço nenhum: o que ficar abaixo aparece em &quot;Revisar preços&quot;.</p>
+        <Rotulo texto="MC mínima deste item (%)"><input inputMode="decimal" value={mcItem} placeholder={`geral: ${Number(mcMinima ?? 70).toLocaleString('pt-BR')}`} onChange={e => setMcItem(e.target.value)} aria-invalid={mcInvalida} className={campo} style={mcInvalida ? vermelho : campoStyle} /></Rotulo>
+        {mcInvalida ? <Aviso tom="erro">Informe de 0 a 99%.</Aviso>
+          : <ListaValores itens={[
+            ['Preço mínimo hoje', precoIA(minimo)],
+            ['Com esta MC mínima', previaMc == null ? '—' : <b key="p">{precoIA(previaMc)}</b>],
+          ]} />}
+        {msgDe('mc')}
       </>}
     </Gaveta>
   );

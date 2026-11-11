@@ -120,7 +120,7 @@ checar("o gatilho barra a lista ruim mesmo direto na tabela", False,
 
 # ---------------------------------------------------------------- gravar a lista (pode_configurar_telefonia)
 DEF = f"select public.definir_ips_voz('tronco', {TR}, array['200.161.1.0/24', '200.160.20.1'])::text"
-checar("Admin do cliente ainda não grava a lista (abre no PR T3)", False, DEF, "authenticated", ADM, aal="aal2",
+checar("Admin do cliente sem o módulo agente_voz não grava a lista (SQL 105)", False, DEF, "authenticated", ADM, aal="aal2",
        erro="não encontrado")
 checar("equipe sem gerenciar_troncos_voz não grava", False, DEF, "authenticated", SUP, aal="aal2", erro="não encontrado")
 checar("Técnico grava a lista e recebe o que falta liberar", True, DEF, "authenticated", TEC,

@@ -171,7 +171,7 @@ function ConexaoProvedor({ fornecedores, saude, loading }: { fornecedores: Row[]
 
 // ============================================================== por empresa
 type Pausa = { id: number; tronco_id: number; motivo: 'sem_credito' | 'bloqueio_originacao' | string; causa_sip: number | null; pausado_em: string };
-const MOTIVO_PAUSA: Record<string, string> = { sem_credito: 'sem crédito na operadora', bloqueio_originacao: 'bloqueio de originação' };
+const MOTIVO_PAUSA: Record<string, string> = { sem_credito: 'sem crédito na operadora', bloqueio_originacao: 'bloqueio de originação', disjuntor: 'disjuntor (falhas técnicas seguidas; volta sozinho com um teste que passou)', suspeita_sem_credito: 'suspeita de sem crédito ou bloqueio (mesmo erro em quase todas; volta com um teste que passou)' };
 
 type DadosEmpresa = {
 	pausas: Pausa[];
@@ -682,6 +682,7 @@ function Transferencia({ atual, troncos, podeTroncos, onEditar, onLiberado }: { 
 						<ListaValores itens={[
 							['Como', atual.metodo === 'ponte' ? 'O MotorCX segura a ligação e chama a fila (sem ninguém: volta ao agente e agenda retorno)' : 'Passa a chamada (REFER; se falhar, nova chamada e ponte)'],
 							['Prefixo', atual.tech_prefix ? <span key="p" className="font-mono">{String(atual.tech_prefix)}</span> : '—'],
+							['Operadores ao mesmo tempo', String(atual.simultaneas ?? 5)],
 							['Cabeçalhos enviados', <span key="c" className="font-mono text-[12.5px]">{(Array.isArray(atual.cabecalhos) ? atual.cabecalhos as string[] : []).join(' · ') || '—'}</span>],
 						]} />
 					</Detalhes>

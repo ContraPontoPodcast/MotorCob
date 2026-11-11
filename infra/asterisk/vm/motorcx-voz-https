@@ -2,6 +2,7 @@
 # Proxy HTTPS da VM (Caddy na 8443): liga só as rotas dos recursos ligados e recarrega o Caddy quando algo mudou.
 #   simulador do Fluxo  /simular e /roleplay -> 127.0.0.1:8091   (metadado motorcx-simulador-fluxo=1)
 #   ElevenLabs          /elevenlabs/pos-chamada -> 127.0.0.1:8092 (elevenlabs.ref_webhook no provedores.json)
+#   treino por voz      /treino/voz (WebSocket) -> 127.0.0.1:8093  (metadado motorcx-treino-voz=1, SQL 119)
 # Certificado: Let's Encrypt para <ip-com-hífens>.sslip.io (desafio HTTP na porta 80) ou para o domínio do metadado
 # motorcx-dominio-https; metadado motorcx-https-tls=interno usa a CA interna do Caddy (quem chama tem de aceitar).
 # Configuração inválida: mantém a que está no ar. Roda no boot (vm_inicio.sh) e a cada 2 min (motorcx-voz-https.timer).
@@ -31,6 +32,7 @@ else
   printf 'tls {\n\tissuer acme {\n\t\tdisable_tlsalpn_challenge\n\t}\n}\n' > "$novo/rotas/00-base.caddy"
 fi
 [ "$(meta motorcx-simulador-fluxo)" = 1 ] && cp "$FONTE/motorcx-caddy-simulador.caddy" "$novo/rotas/"
+[ "$(meta motorcx-treino-voz)" = 1 ] && cp "$FONTE/motorcx-caddy-treino-voz.caddy" "$novo/rotas/"
 if python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if (c.get("elevenlabs") or {}).get("ref_webhook") else 1)' "$PROVEDORES" 2>/dev/null; then
   cp "$FONTE/motorcx-caddy-elevenlabs.caddy" "$novo/rotas/"
 fi

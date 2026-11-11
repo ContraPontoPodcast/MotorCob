@@ -309,7 +309,7 @@ checar("operação não altera o calendário", True, f"update public.credores se
 checar("calendário precisa ser objeto", False, f"update public.credores set calendario='[1,2]' where id={CX}", "service_role")
 # permissões por perfil (padrão MotorCob + ajuste do Admin da empresa) e auditoria
 checar("operação tem só o padrão dela", True, "select string_agg(p, ',' order by p) from public.minhas_permissoes() p", "authenticated", u["oper"], "baixar_listas,reciclar_lote_voz,reenviar_lote_voz,ver_clientes,ver_painel")
-checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 31)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60) + 1 do importador (SQL 64) + 2 do SQL 65 + 2 do treino (SQL 90)
+checar("Admin da empresa tem todas as permissões", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["admina"], 32)   # 18 + 3 do agente de voz (SQL 56) + 5 do Speech Analytics (SQL 60) + 1 do importador (SQL 64) + 2 do SQL 65 + 2 do treino (SQL 90) + configurar_telefonia (SQL 105)
 checar("usuário inativo não tem permissão", True, "select count(*) from public.minhas_permissoes()", "authenticated", u["inativo"], 0)
 checar("planejamento não ajusta permissões", False, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["plan"])
 checar("Admin libera Reenquadrar para a operação", True, f"insert into public.permissoes_papel (empresa_id,papel,permissao,permitido) values ({EA},'operacao','reenquadrar',true)", "authenticated", u["admina"])
@@ -372,7 +372,7 @@ checar("convite: acessos do perfil Operação na empresa", True, "select string_
 checar("convite: Admin sempre com gerenciar usuários", True, "select permitido from public.permissoes_do_papel(papel => 'admin') where codigo='gerenciar_usuarios'", "authenticated", u["admina"], "t")
 checar("quem não gerencia usuários não lê acessos de perfil", True, "select count(*) from public.permissoes_do_papel(papel => 'operacao')", "authenticated", u["oper"], 0)
 checar("Admin A não lê acessos de perfil da B", True, f"select count(*) from public.permissoes_do_papel(papel => 'operacao', empresa => {EB})", "authenticated", u["admina"], 0)
-checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 31)   # 21 + 5 do SQL 60 + 1 do SQL 64 + 2 do SQL 65 (reenviar e reciclar) + 2 do SQL 90 (treino)
+checar("acessos do usuário pelo parâmetro uid", True, f"select count(*) from public.permissoes_do_usuario(uid => '{u['oper']}')", "authenticated", u["admina"], 32)   # 21 + 5 do SQL 60 + 1 do SQL 64 + 2 do SQL 65 (reenviar e reciclar) + 2 do SQL 90 (treino) + 1 do SQL 105 (configurar_telefonia)
 checar("anônimo não chama permissoes_do_papel", False, "select * from public.permissoes_do_papel('operacao')", "anon")
 # página comercial: mídia pública e formulário de contato (visitante só insere)
 checar("bucket site é público", True, "select public from storage.buckets where id='site'", "service_role", "t")
@@ -2683,6 +2683,11 @@ def checar_erro(nome, cmd, papel, uid, trecho):
     ok_total += passou; falhas += not passou
     print(("PASSOU " if passou else "FALHOU ") + nome + ("" if passou else f"  -> ok={ok} out={out!r} err={err[:200]}"))
 # os testes acima rodam de novo os SQL 30, 58 e 59, que desfazem os trechos que o SQL 61 troca: roda o 61 de novo
+# SQL 124: o 61 rodado de novo volta o guarda à mínima geral; o minuto de IA volta ao estado do 61 (sem a mínima própria,
+# tabela = mínimo) e o testar_margem_item.py, no fim, roda o 124 de novo
+_r124 = subprocess.run(BASE + ["-c", "update public.cobranca_itens set mc_minima_ia_pct = null, preco_minimo = 1.50, "
+                               "preco_tabela = 1.50 where codigo = 'voz_minuto_ia'"], capture_output=True, text=True)
+assert _r124.returncode == 0, _r124.stderr
 r = subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
                     os.path.join(os.path.dirname(__file__), "..", "migrations", "20261228000001_ia_margem.sql")],
                    capture_output=True, text=True)
@@ -2985,6 +2990,30 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 100: sessão de treino por texto (testar_treino_sessao.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 119 · Roleplay, PR 6: sessão de treino por voz (saldo de voz no contexto, minutos e franquia, "Ouvir a voz")
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_voz.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 119: sessão de treino por voz (testar_treino_voz.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 120 · Roleplay, PR 7: sugestões de atribuição do job noturno (só contagens), dispensar com motivo e Desfazer
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_sugestoes.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 120: sugestões de treino (testar_treino_sugestoes.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 121 · Roleplay, PR 8: Evolução por operador e por equipe (treino × ligações reais, sem ranking)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_evolucao.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 121: evolução do treino (testar_treino_evolucao.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 122 · Roleplay, PR 9: cenário gerado dos padrões das ligações (só grupos com 30+, rascunho, publicar é de uma pessoa)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_treino_insights.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 122: cenário a partir dos padrões (testar_treino_insights.py)", True, f"select {r.returncode}", None, None, 0)
+
 # SQL 92 · Preços editáveis: tabela, mínimo e franquia padrão; preço e franquia por empresa (permissão, vigência,
 # guarda da IA e mínimo com motivo)
 r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_precos_editaveis.py")],
@@ -3033,6 +3062,118 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 104: IPs da operadora e firewall (testar_voz_firewall.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 105 · Telefonia T3: configurar_telefonia (padrão só Admin, com aal2 e o módulo agente_voz), RPCs do cliente, views
+# sem segredo e e-mail aos Admins a cada mudança de endereço, senha, bina ou IPs
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_configurar_telefonia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 105: o Admin configura a telefonia (testar_voz_configurar_telefonia.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 113 · Telefonia T4: os campos que a operadora pede (declarações, DTMF, realm, cabeçalho da bina, E.164, prefixo
+# opcional, toque e duração), bina única por operadora e as views novas
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_tronco_campos.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 113: campos do tronco (testar_voz_tronco_campos.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 114 · Telefonia T5: números de teste, "Testar a rota" (pedido, VM, passos, teste_ok, confirmação do número),
+# usar em Real (primeira vez pela equipe) e retomar só depois de um teste que passou
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_telefonia_editavel.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 114: Telefonia editável e teste da rota (testar_voz_telefonia_editavel.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 115 · Telefonia T6: disjuntor por tronco (20 seguidas, 50% de 50), suspeita de sem crédito (90% de 30 com o
+# mesmo código), volta com teste e saúde do tronco
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_disjuntor.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 115: disjuntor por tronco (testar_voz_disjuntor.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 106 · Ritmo da discagem (Power/Preditivo V1): transferência sem operador separada do abandono e amostras de 5 min
+# por carteira (só a VM/servidor grava; cada empresa lê só a sua)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ritmo_voz.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 106: ritmo da discagem, medir certo (testar_ritmo_voz.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 107 · Ritmo por carteira (Power/Preditivo V3): credores.discagem › ritmo validado e versionado por salvar_discagem
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ritmo_config.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 107: ritmo da discagem por carteira (testar_ritmo_config.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 108 · Power e abandono digno (Power/Preditivo V4): estado e razão escolhida nas amostras; abandonos recentes por
+# cliente só para a VM/servidor
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ritmo_power.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 108: Power e abandono digno (testar_ritmo_power.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 109 · Freios de chamadas curtas (Power/Preditivo V6): curtas de hoje para a VM e a liberação só do Admin
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_curtas_freio.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 109: freios de chamadas curtas (testar_curtas_freio.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 110 · Histórico do Preditivo (Power/Preditivo V5): por carteira, só para a VM/servidor
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ritmo_preditivo.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 110: histórico do Preditivo (testar_ritmo_preditivo.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 111 · Perna humana (Power/Preditivo V8): operadores para transferência ao mesmo tempo
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_transferencia_operadores.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 111: operadores para transferência ao mesmo tempo (testar_transferencia_operadores.py)", True,
+       f"select {r.returncode}", None, None, 0)
+
+# SQL 116 · Canais › Agente de voz › "Testar agora" (PR 9 do plano): ligação de teste sem número no banco
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_testar_agora.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 116: Testar agora do Agente de voz (testar_testar_agora.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 123 · Agente de voz por minuto falado (PR 1): contrato da IA por empresa com vigência, cadência e tarifação em
+# milésimos com tempo grátis (mesma tabela de casos da VM)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_cobranca_ia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 123: contrato do minuto de IA (testar_cobranca_ia.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 124 · MC mínima própria por item de IA (PR 2 do minuto falado): 60% no minuto de IA, a geral segue em 70%
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_margem_item.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 124: MC mínima própria por item de IA (testar_margem_item.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 125 · minuto de IA de cada chamada (PR 3 do minuto falado): trechos medidos pela VM, cadência e preço congelados
+# pelo gatilho tarifar_ia_chamada_voz, máquina/caixa postal = 0, licença sem preço, legado sem valor
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_chamadas_ia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 125: minuto de IA por chamada (testar_chamadas_ia.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 126 · consumo do dia e fatura do minuto falado (PR 5): minutos tarifados × preço por vigência, franquia, sem pico,
+# licença com os minutos medidos e a fatura de quem não tem o modelo novo igual à do SQL 98
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_fatura_minuto.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 126: consumo e fatura do minuto falado (testar_fatura_minuto.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 127 · demonstrativo do minuto falado (PR 6): por ligação e por dia, congelado quando a fatura sai do rascunho
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_demonstrativo_ia.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 127: demonstrativo do minuto falado (testar_demonstrativo_ia.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 128 · divisão do teto com o limite de conversas do por minuto (PR 7): motivo por_minuto, sem pico
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_divisao_minuto.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 128: divisão do teto com o por minuto (testar_divisao_minuto.py)", True, f"select {r.returncode}", None, None, 0)
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

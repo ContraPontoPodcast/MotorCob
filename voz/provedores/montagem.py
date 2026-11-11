@@ -620,7 +620,9 @@ async def rodar_pipecat(ponte: PonteRTP, conversa: Conversa, stt, tts, parar: as
         await task.queue_frame(TTSSpeakFrame(t))
 
     async def vigiar_silencio():
-        while not conversa.encerrada:
+        # B5: esperando o humano, a conversa está "encerrada" mas o áudio fica de pé; se ninguém atender, o agente volta
+        # (retomar_sem_humano) e o silêncio volta a contar
+        while not conversa.encerrada or getattr(conversa, "aguardando_humano", False):
             await asyncio.sleep(0.25)
             if getattr(conversa, "aguardando_humano", False) or not relogio.venceu(agora(), ponte.falando()):
                 continue
@@ -751,8 +753,9 @@ class Montagem(ProvedorVoz):
                 self._emitir[i](i, t, d)
 
     def retomar_sem_humano(self, id_chamada: str, motivo: str) -> bool:
-        """A transferência não chegou a um humano: a Conversa do roteiro volta e fala o pedido de desculpas pelo
-        Pipecat (falar_agora). Sessão do fluxo (voz/fluxo.py) ainda não sabe voltar: False (abandono, como antes)."""
+        """A transferência não chegou a um humano: a conversa volta e fala o pedido de desculpas pelo Pipecat
+        (falar_agora). Vale para a Conversa do roteiro e, desde o B5, para a Sessão do fluxo (voz/fluxo.py: etapa interna
+        que agenda o retorno). Sem como falar (sessão sem áudio): False (o orquestrador encerra, como antes)."""
         s = self.sessoes.get(id_chamada)
         if s is None:
             return False

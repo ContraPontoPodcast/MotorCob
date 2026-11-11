@@ -6,13 +6,15 @@
 // Quem vê é quem tem ver_faturamento (a tela de Faturamento já confere).
 // Redesign v2: 2 KPIs que separam as duas contas; itens com 4 colunas e total; telefonia com 5 colunas e a cadência,
 // o preço do minuto e os segundos tarifados na gaveta da rota; "Exportar telefonia" é a ação principal.
+// SQL 126/127: com o minuto falado, "Demonstrativo do minuto falado" abre o demonstrativo por ligação e por dia.
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, friendlyError, moneyBR, today, type Row } from '@/lib/supabase';
 import { mesExtenso } from '@/lib/empresa-helpers';
 import { ehItemFaturaVoz, TIPOS_ROTA, baixarTexto, cadenciaTxt, competencias, inteiro, paraCsv, reais } from '@/lib/voz';
-import { Aviso, Cartao, Vazio, btnPrim } from '@/components/comuns/voz-ui';
+import { Link } from 'react-router';
+import { Aviso, Cartao, Vazio, btnPrim, btnSec } from '@/components/comuns/voz-ui';
 import { Gaveta, Kpis, ListaValores, Pilula, Tabela } from '@/components/ds';
 
 const nomeMes = (comp: string) => { const m = mesExtenso(comp.slice(0, 7)); return m ? m.charAt(0).toUpperCase() + m.slice(1) : comp; };
@@ -64,6 +66,7 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 
 	const totFat = itens.reduce((t, i) => t + Number(i.valor ?? 0), 0);
 	const temPico = itens.some(i => i.item === 'voz_minuto_ia_pico' && Number(i.quantidade ?? 0) > 0);
+	const temMinutoFalado = itens.some(i => /^voz_minuto_ia(_[0-9]+|_franquia)?$/.test(String(i.item ?? '')) && String(i.descricao ?? '').startsWith('Agente de voz — minutos tarifados'));   // SQL 126
 	const temLicenca = itens.some(i => String(i.item ?? '').startsWith('voz_licenca_robo') || i.item === 'voz_minuto_ia_franquia');
 	const totTel = linhas.reduce((t, l) => t + (l.custo ?? 0), 0);
 	const totCh = linhas.reduce((t, l) => t + Number(l.chamadas ?? 0), 0);
@@ -109,6 +112,7 @@ export function AgenteVozFaturamento({ empresaId, empresaSlug }: { empresaId: st
 							{opcoes.map((c, i) => <option key={c} value={c}>{nomeMes(c)}{i === 0 ? ' (até agora)' : ''}</option>)}
 						</select>
 					</label>
+					{temMinutoFalado && <Link to={`/empresa/faturamento/demonstrativo?c=${comp.slice(0, 7)}`} className={btnSec}>Demonstrativo do minuto falado</Link>}
 					<button onClick={() => void exportar()} disabled={exportando || linhas.length === 0} className={btnPrim}><FileDown size={15} /> {exportando ? 'Gerando...' : 'Exportar telefonia por rota e dia'}</button>
 				</div>
 			</div>

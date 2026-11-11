@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createVerify, generateKeyPairSync } from "node:crypto";
+import { createHash, createVerify, generateKeyPairSync } from "node:crypto";
 import {
-  assinadorDe, base64, jwtDaConta, lerChave, motivoSenha, nivelDaSessao, nomeDaEmpresa, numeroVersao, pedidoCriar,
-  pedidoVersao, REGIAO, SENHA_MAX, urlDestruir, urlVersoes, validarPedido, versoesAntigas,
+  assinadorDe, base64, digitosNumeroTeste, ehPedidoNumero, hashNumeroTeste, jwtDaConta, lerChave, mascaraNumeroTeste,
+  motivoSenha, nivelDaSessao, nomeDaEmpresa, numeroVersao, pedidoCriar, pedidoVersao, REGIAO, SENHA_MAX, urlDestruir,
+  urlVersoes, validarPedido, validarPedidoNumero, versoesAntigas,
 } from "./regras.ts";
 
 const SENHA = "Senha-Ficticia-123";
@@ -106,4 +107,23 @@ test("versões: o número vem do nome; destrói todas menos a nova", () => {
   assert.deepEqual(versoesAntigas(null, 9), []);
   assert.equal(urlDestruir("projects/1/secrets/x/versions/8"), "https://secretmanager.googleapis.com/v1/projects/1/secrets/x/versions/8:destroy");
   assert.match(urlVersoes("motorcob", "x"), /\/projects\/motorcob\/secrets\/x\/versions\?filter=state%3A/);
+});
+
+test("número de teste (SQL 114): só { empresa, numero_teste } ou { remover_numero_teste }", async () => {
+  assert.deepEqual(validarPedidoNumero({ empresa: 3, numero_teste: "+55 (11) 98765-0041" }).numero, { empresa: 3, numero: "11987650041" });
+  assert.equal(validarPedidoNumero({ empresa: 3, numero_teste: "98765-0041" }).erro, "digite o número com DDD (10 ou 11 dígitos)");
+  assert.equal(validarPedidoNumero({ empresa: "3", numero_teste: "11987650041" }).erro, "empresa inválida");
+  assert.equal(validarPedidoNumero({ empresa: 3, numero_teste: "11987650041", tronco: 1 }).erro, "pedido inválido");
+  assert.equal(validarPedidoNumero({ remover_numero_teste: 9 }).remover, 9);
+  assert.equal(validarPedidoNumero({ remover_numero_teste: 0 }).erro, "número de teste inválido");
+  assert.equal(ehPedidoNumero({ tronco: 1, senha: "x" }), false);
+  assert.equal(ehPedidoNumero({ remover_numero_teste: 1 }), true);
+  assert.equal(mascaraNumeroTeste("11987650041"), "(11) 9••••-••41");
+  assert.equal(digitosNumeroTeste("1130030041"), "1130030041");
+  // o mesmo hash do banco, do site e da VM: sha-256 dos dígitos sem o 55
+  assert.equal(await hashNumeroTeste("11987650041"), createHash("sha256").update("11987650041").digest("hex"));
+  // o erro nunca repete o número
+  assert.ok(!(validarPedidoNumero({ empresa: 3, numero_teste: "9876-0041" }).erro ?? "").includes("0041"));
+  assert.equal(nomeDaEmpresa("motorcx-voz-trunk-e3-teste-0123456789ab", 3), true);
+  assert.equal(pedidoCriar("p", "motorcx-voz-trunk-e3-teste-0123456789ab", 3, "numero-teste-voz").corpo.labels["motorcx-tipo"], "numero-teste-voz");
 });

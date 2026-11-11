@@ -7,7 +7,7 @@
 // A chave é a rota como está no routes.ts: exata ("/suporte/novo") ou com parâmetros ("/voz/ligacoes/:id",
 // "/speech-analytics/:aba?"). A rota exata ganha da com parâmetro.
 
-import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_VOZ } from './rotas-voz';
+import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_TELEFONIA, ROTA_VOZ } from './rotas-voz';
 import { ROTA_RP, ROTA_RP_ATRIBUICOES, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS } from './roleplay';
 
 export type RotaPai = { to: string; rotulo: string };
@@ -39,6 +39,10 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	// Empresa › Contratação › Agente de voz: editar os robôs contratados (licenças) e o histórico voltam à Contratação.
 	'/empresa/contratacao/robos': { to: '/empresa/contratacao', rotulo: 'Contratação' },
 	'/empresa/contratacao/robos/historico': { to: '/empresa/contratacao', rotulo: 'Contratação' },
+	// Contratação › Agente de voz: modelo de cobrança (minuto falado ou licença) volta à Contratação.
+	'/empresa/contratacao/voz': { to: '/empresa/contratacao', rotulo: 'Contratação' },
+	// Empresa › Faturamento › Demonstrativo do minuto falado (SQL 127) volta ao Faturamento.
+	'/empresa/faturamento/demonstrativo': { to: '/empresa/faturamento', rotulo: 'Faturamento' },
 	// Cobrança › Configurações › Canais: a configuração de um canal volta para a visão geral.
 	'/canais/:canal': { to: '/canais', rotulo: 'Canais' },
 	// Agente Voz/CX, como o Speech Analytics: cada seção do menu da área (Agente de voz, Discagem, Ligações e Telefonia)
@@ -47,6 +51,8 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/voz/discagem': VISAO_GERAL_VOZ,
 	'/voz/ligacoes': VISAO_GERAL_VOZ,
 	'/voz/telefonia': VISAO_GERAL_VOZ,
+	// Discagem › "Robôs e o Preditivo" (aberta pelo cartão do contrato e pela aba Ritmo) volta para a Discagem.
+	'/voz/discagem/robos': { to: '/voz/discagem', rotulo: 'Discagem' },
 	// Agente Voz/CX › Agente de voz: fluxo (editor), Confirmar identidade, testes, desempenho, personas, rascunho gerado
 	// e roteiro antigo voltam à lista de fluxos.
 	'/voz/agente/editor/:versao': AGENTE_DE_VOZ,
@@ -56,6 +62,8 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/voz/agente/personas': AGENTE_DE_VOZ,
 	'/voz/agente/pedido/:id': AGENTE_DE_VOZ,
 	'/voz/agente/roteiro': AGENTE_DE_VOZ,
+	// Telefonia › tronco (assistente, senha, Testar a rota) → Telefonia (SQL 114).
+	'/voz/telefonia/tronco/:ref': { to: ROTA_TELEFONIA, rotulo: 'Telefonia' },
 	// Ligações de um lote → lotes de hoje.
 	'/voz/ligacoes/:id': { to: ROTA_LIGACOES, rotulo: 'Ligações' },
 	// Speech Analytics: toda aba (Qualidade, Operadores, Alertas, Recomendações, Curadoria, Buscar, Gravações e Entrada
@@ -67,6 +75,7 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/speech-analytics/roleplay/cenarios': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
 	'/speech-analytics/roleplay/cenarios/:id': { to: ROTA_RP_CENARIOS, rotulo: 'Cenários' },
 	'/speech-analytics/roleplay/operadores': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
+	'/speech-analytics/roleplay/evolucao': { to: ROTA_RP, rotulo: 'Painel do Roleplay' },
 	'/speech-analytics/roleplay/operadores/:op': { to: ROTA_RP_CADASTRO, rotulo: 'Cadastro para treino' },
 	// Editor (cenário novo) volta para a biblioteca; o treino atribuído e o "Atribuir treino", para Treinos atribuídos.
 	// Quando a tela foi aberta de outra (pessoa, cenário, Painel), o "← Voltar" leva de volta a ela (state.de).

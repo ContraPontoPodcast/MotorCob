@@ -15,6 +15,9 @@ pedido traz a conversa inteira. O LLM é o mesmo da Montagem (ModeloOpenAICompat
   códigos de motivo, objeção, risco etc. que o analisador também devolve são DESCARTADOS (não é cliente real). Uma
   segunda chamada curta dá, para cada item "não", a dica "o que dizer" e se o objetivo do cenário foi cumprido (sem
   peso na nota). O trecho de cada ponto é a fala do operador, mascarada. Nada disto vai para voz_avaliacoes.
+- gerar (SQL 122): o cliente simulado fictício de um cenário novo a partir dos padrões AGREGADOS das ligações (só códigos
+  e porcentagens, base de 30+), com a ferramenta fechada entregar_cenario; o texto passa pelo mesmo filtro; o cenário
+  volta para a Edge Function, que grava em rascunho (uma pessoa revisa e publica).
 Só biblioteca padrão.
 """
 from __future__ import annotations
@@ -265,11 +268,135 @@ def avaliar(pedido: dict, modelo) -> dict:
             "item_reprovado": item_rep, "objetivo_ok": objetivo_ok, "feedback": feedback, "tokens": tokens + t2}
 
 
+# ------------------------------------------------------------------ cenário a partir dos padrões (SQL 122)
+FERRAMENTA_CENARIO = "entregar_cenario"
+MOTIVOS_SPEECH = {
+    "desemprego": "perdeu o emprego", "reducao_renda": "a renda caiu", "outras_dividas": "tem outras dívidas",
+    "esquecimento": "esqueceu de pagar", "aguardando_recebimento": "espera receber salário ou benefício",
+    "nao_reconhece": "não reconhece a dívida", "contestacao": "contesta a dívida", "fraude_alegada": "diz que foi fraude",
+    "insatisfacao_servico": "está insatisfeito com o serviço", "outro": "outro motivo",
+}
+OBJECOES_SPEECH = {
+    "valor_alto": "acha o valor alto", "parcela_alta": "acha a parcela alta", "juros": "reclama dos juros",
+    "sem_dinheiro_agora": "diz que não tem dinheiro agora", "quer_desconto": "quer desconto", "desconfia_golpe": "desconfia de golpe",
+    "quer_por_escrito": "quer tudo por escrito", "quer_falar_humano": "quer falar com outra pessoa", "outro": "outra objeção",
+}
+RE_CODIGO = re.compile(r"[a-z][a-z0-9_]{1,39}")
+# itens do checklist padrão MotorCX (SQL 60): o texto vai ao LLM quando o pedido traz só o código
+ITENS_PADRAO = {
+    "ck_ident": "se identificar (empresa e motivo da ligação)", "ck_cpc": "confirmar a identidade antes de falar valor",
+    "ck_ameaca": "não ameaçar nem constranger", "ck_oferta": "oferecer uma condição", "ck_canais": "informar os canais de pagamento",
+    "ck_naoligue": "respeitar o pedido de não ligar", "ck_terceiro": "não falar da dívida com terceiro",
+    "ck_resumo": "resumir o combinado antes de encerrar",
+}
+
+
+def insights_ok(j) -> bool:
+    """Só códigos e porcentagens (base >= 30): o mesmo formato de insights_treino_ok do banco."""
+    if not isinstance(j, dict) or not isinstance(j.get("base"), (int, float)) or j["base"] < 30 or len(json.dumps(j)) > 4000:
+        return False
+    for k, v in j.items():
+        if k in ("de", "ate"):
+            if not (isinstance(v, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v)):
+                return False
+        elif not re.fullmatch(r"[a-z_]{2,30}(:[a-z0-9_]{1,40})?", k) or isinstance(v, bool) or not isinstance(v, (int, float)):
+            return False
+    return True
+
+
+def ferramenta_cenario() -> list[dict]:
+    texto = lambda n: {"type": "string", "maxLength": n}   # noqa: E731
+    return [{"type": "function", "function": {
+        "name": FERRAMENTA_CENARIO, "description": "Entrega o cliente simulado fictício do cenário de treino.",
+        "parameters": {"type": "object", "additionalProperties": False,
+                       "required": ["nome", "primeiro_nome", "genero", "perfil", "objetivo", "comportamentos", "frases", "objecoes",
+                                    "dificuldade", "objetivo_cenario"],
+                       "properties": {
+                           "nome": texto(70), "primeiro_nome": texto(20), "genero": {"type": "string", "enum": ["f", "m"]},
+                           "perfil": {"type": "string", "enum": list(TIPOS)}, "objetivo": texto(480),
+                           "comportamentos": {"type": "array", "maxItems": 6, "items": texto(180)},
+                           "frases": {"type": "array", "maxItems": 8, "items": texto(180)},
+                           "objecoes": {"type": "array", "maxItems": 5, "items": {
+                               "type": "object", "additionalProperties": False, "required": ["codigo"],
+                               "properties": {"codigo": {"type": "string", "enum": list(OBJECOES)}, "quando": texto(110)}}},
+                           "dificuldade": {"type": "integer", "minimum": 1, "maximum": 5}, "objetivo_cenario": texto(190)}}}}]
+
+
+def _limpo(t, n: int) -> str:
+    """Texto do cenário: sem dado com cara de real (9+ dígitos, e-mail, CPF/telefone mascarados), curto e sem dígitos longos."""
+    v = mascarar_fala(filtrar_fala(t if isinstance(t, str) else "", ""))
+    v = re.sub(r"\d{6,}", "", v)
+    return " ".join(v.split())[:n].strip()
+
+
+def gerar_cenario(pedido: dict, modelo) -> dict:
+    """Cenário FICTÍCIO a partir dos padrões agregados das ligações. pedido = {treino: "gerar", insights: {base, de, ate,
+    "motivo:x": 0.18, "objecao:y": 0.07, "item:z": 0.52}, item: {id, texto}?}. Vai ao LLM só o JSON de códigos e
+    porcentagens (com a descrição dos códigos), nunca trecho, nome ou valor de cliente. Devolve {cenario, tokens} já
+    filtrado (o banco confere de novo e grava em rascunho) ou {erro}."""
+    ins = pedido.get("insights")
+    if not insights_ok(ins):
+        return {"erro": "padrões inválidos (só códigos e porcentagens, base de 30 ou mais ligações)"}
+    item = pedido.get("item") if isinstance(pedido.get("item"), dict) else None
+    if item and not (isinstance(item.get("id"), str) and RE_CODIGO.fullmatch(item["id"])):
+        return {"erro": "item inválido"}
+    linhas = []
+    for k, v in ins.items():
+        if ":" not in k:
+            continue
+        tipo, cod = k.split(":", 1)
+        desc = (MOTIVOS_SPEECH if tipo == "motivo" else OBJECOES_SPEECH if tipo == "objecao" else {}).get(cod, cod.replace("_", " "))
+        linhas.append(f"- {tipo} \"{desc}\": {round(float(v) * 100)}% das ligações" if tipo != "item"
+                      else f"- item do checklist com {round(float(v) * 100)}% de acerto nas ligações")
+    foco = (_limpo(item.get("texto"), 120) or ITENS_PADRAO.get(item["id"], "")) if item else ""
+    prompt = (
+        "Você cria um CLIENTE SIMULADO FICTÍCIO para treinar operadores de cobrança. A partir dos padrões AGREGADOS das "
+        f"ligações da empresa (base de {int(ins['base'])} ligações, de {ins.get('de', '?')} a {ins.get('ate', '?')}), descreva "
+        "uma pessoa inventada que represente esse padrão. Nunca use nome completo, documento, telefone, e-mail, endereço, "
+        "valor em reais ou qualquer coisa que pareça de um cliente real. Português do Brasil, frases curtas.\n"
+        "Padrões (só códigos e porcentagens):\n" + "\n".join(linhas) + "\n"
+        + (f"O treino deve exercitar este ponto do checklist: {foco}.\n" if foco else "")
+        + f"Responda só pela ferramenta {FERRAMENTA_CENARIO}: nome do cenário (curto), primeiro nome fictício, gênero, tipo de "
+          "cliente, como a pessoa age (objetivo), comportamentos, frases que ela costuma dizer, objeções na ordem, dificuldade "
+          "de 1 a 5 e o objetivo da ligação para o operador.")
+    r = modelo.responder([{"role": "user", "content": prompt}], ferramenta_cenario())
+    tokens = int(getattr(r, "tokens", 0) or 0)
+    a = next((x for nome, x in r.chamadas if nome == FERRAMENTA_CENARIO), None)
+    if not isinstance(a, dict):
+        return {"erro": "o modelo não devolveu o cenário", "tokens": tokens}
+    primeiro = re.sub(r"[^A-Za-zÀ-ÿ]", "", str(a.get("primeiro_nome") or ""))[:20] or "Ana"
+    sufixo = "(fictício)" if a.get("genero") == "m" else "(fictícia)"
+    perfil = a.get("perfil") if a.get("perfil") in TIPOS else "outro"
+    objecoes = [{"codigo": o["codigo"], **({"quando": _limpo(o.get("quando"), 110)} if _limpo(o.get("quando"), 110) else {})}
+                for o in (a.get("objecoes") or [])[:5] if isinstance(o, dict) and o.get("codigo") in OBJECOES]
+    cen = {
+        "nome": _limpo(a.get("nome"), 70) or "Cenário dos padrões das ligações",
+        "persona_nome": f"{primeiro.capitalize()} {sufixo}",
+        "perfil": perfil,
+        "objetivo": _limpo(a.get("objetivo"), 480),
+        "comportamentos": [x for x in (_limpo(c, 180) for c in (a.get("comportamentos") or [])[:6]) if x],
+        "frases": [x for x in (_limpo(c, 180) for c in (a.get("frases") or [])[:8]) if x],
+        "objecoes": objecoes,
+        "dificuldade": min(5, max(1, int(a.get("dificuldade") or 3))) if isinstance(a.get("dificuldade"), (int, float)) else 3,
+        "objetivo_cenario": _limpo(a.get("objetivo_cenario"), 190) or None,
+    }
+    if len(cen["nome"]) < 3:
+        cen["nome"] = "Cenário dos padrões das ligações"
+    if len(cen["objetivo"]) < 10:
+        return {"erro": "o modelo não descreveu a cliente", "tokens": tokens}
+    return {"cenario": cen, "tokens": tokens}
+
+
 def rodar(pedido: dict, modelo_de) -> dict:
-    """Despacho do simulador: {"treino": "turno" | "avaliar", ...}."""
+    """Despacho do simulador: {"treino": "turno" | "avaliar" | "gerar", ...}."""
     if modelo_de is None:
         return {"erro": "treino indisponível nesta VM"}
     acao = pedido.get("treino")
+    if acao == "gerar":
+        m = modelo_de()
+        if hasattr(m, "timeout"):
+            m.timeout = max(float(getattr(m, "timeout", 15) or 15), 45.0)
+        return gerar_cenario(pedido, m)
     if acao == "turno":
         return turno(pedido, modelo_de())
     if acao == "avaliar":
@@ -281,5 +408,6 @@ def rodar(pedido: dict, modelo_de) -> dict:
 
 
 def resumo_log(r: dict) -> str:
-    """Linha de log sem fala nenhuma."""
-    return json.dumps({k: r[k] for k in ("situacao", "nota", "reprovada", "desligou", "tokens") if k in r})
+    """Linha de log sem fala nenhuma (nem o cenário gerado)."""
+    return json.dumps({k: r[k] for k in ("situacao", "nota", "reprovada", "desligou", "tokens") if k in r}
+                      | ({"cenario": True} if "cenario" in r else {}))

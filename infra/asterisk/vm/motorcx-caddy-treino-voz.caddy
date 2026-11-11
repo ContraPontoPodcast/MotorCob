@@ -1,0 +1,10 @@
+# Treino por voz do Roleplay (voz/treino_voz.py, 127.0.0.1:8093, WebSocket): só com o metadado motorcx-treino-voz=1.
+# Quem protege é o bilhete de uso único assinado pela Edge Function treino (HMAC com a chave do simulador) e a origem
+# do site; aqui só o caminho. O Caddy passa o upgrade do WebSocket sozinho; stream_close_delay segura a ligação em
+# andamento quando o motorcx-voz-https recarrega o Caddy (até o limite de 15 min da sessão). Áudio nunca vai para log.
+@treinovoz path /treino/voz
+handle @treinovoz {
+	reverse_proxy 127.0.0.1:8093 {
+		stream_close_delay 16m
+	}
+}

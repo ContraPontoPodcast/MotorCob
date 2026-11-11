@@ -214,8 +214,12 @@ class TestGerador(unittest.TestCase):
         self.assertIn("contact=sip:203.0.113.30:5080;transport=tcp", pj)
         self.assertEqual(pj.count(SENHA), 1)
         self.assertIn("allow=alaw\n", pj)
-        # inativo fica de fora; transferência 'ponte pelo tronco' não ganha endpoint próprio
-        self.assertNotIn("tr-2-99", pj)
+        # SQL 114: o inativo sobe só como endpoint (para o teste da rota), sem saída no dialplan; transferência 'ponte
+        # pelo tronco' não ganha endpoint próprio
+        self.assertIn("Desligado · 30 canais · 5 CPS · INATIVO: só para o teste da rota\n[tr-2-99]", pj)
+        ex = G.gerar_extensions(B.carregar(dados_exemplo()))
+        self.assertNotIn("tr-2-99", ex)
+        self.assertNotIn("TR_2_99", ex)
         self.assertIn("[tf-1-7]", pj)
         self.assertNotIn("[tf-2-8]", pj)
         self.assertIn("[pv-elevenlabs]", pj)
@@ -278,8 +282,8 @@ class TestGerador(unittest.TestCase):
         self.assertIn("MOTORCX_CPS_TR_1_11=2", ex)
         bloco = ex.split("[motorcx-saida-1-movel_vc1]")[1].split("\n\n")[0]
         # prioridade 1 (tronco 10, prefixo 1010) antes da 2 (tronco 11, prefixo 2020); vigência antiga não duplica
-        self.assertLess(bloco.index("Dial(PJSIP/1010${EXTEN}@tr-1-10,60)"),
-                        bloco.index("Dial(PJSIP/2020${EXTEN}@tr-1-11,60)"))
+        self.assertLess(bloco.index("Dial(PJSIP/1010${EXTEN}@tr-1-10,30,S(1200))"),
+                        bloco.index("Dial(PJSIP/2020${EXTEN}@tr-1-11,30,S(1200))"))
         self.assertEqual(bloco.count("1010${EXTEN}"), len(DST.PADROES_DIALPLAN))    # uma vez por padrão nacional
         self.assertIn("GROUP_COUNT(tr-1-10@motorcx)} >= ${MOTORCX_CANAIS_TR_1_10}]?r2", bloco)
         self.assertIn('"${DIALSTATUS}" = "CHANUNAVAIL" | "${DIALSTATUS}" = "CONGESTION"]?r2', bloco)
@@ -307,10 +311,63 @@ class TestGerador(unittest.TestCase):
                 dados = B.carregar(d)
                 ex = G.gerar_extensions(dados)
                 bloco = ex.split("[motorcx-saida-1-movel_vc1]")[1].split("\n\n")[0]
-                self.assertIn(f"Dial(PJSIP/{no_dialplan}@tr-1-10,60)", bloco)
-                self.assertIn("Dial(PJSIP/2020${EXTEN}@tr-1-11,60)", bloco)     # o outro tronco não muda
+                self.assertIn(f"Dial(PJSIP/{no_dialplan}@tr-1-10,30,S(1200))", bloco)
+                self.assertIn("Dial(PJSIP/2020${EXTEN}@tr-1-11,30,S(1200))", bloco)     # o outro tronco não muda
                 c = T.rotas_para(dados, 1, "11988887777", date(2026, 11, 3))[0]
                 self.assertEqual((c.discar, c.endpoint), (discado, f"PJSIP/{discado}@tr-1-10"))
+
+    def test_campos_t4_no_pjsip_e_no_dialplan(self):
+        """SQL 113 · Telefonia T4: DTMF, cabeçalho da bina, realm, De, OPTIONS, E.164, toque e duração por tronco."""
+        d = dados_exemplo()
+        d["voz_troncos"][0].update({"dtmf": "inband", "cabecalho_bina": "rpid", "from_usuario": "4130000000",
+                                    "verificar_options": False, "formato_discagem": "tech_e164", "toque_max_s": 25,
+                                    "duracao_max_min": 10})
+        d["voz_troncos"][1].update({"realm": "sip.operadora-y.example", "cabecalho_bina": "from"})
+        dados = B.carregar(d)
+        pj = G.gerar_pjsip(dados, self.seg)
+        ep10 = pj.split("[tr-1-10]\ntype=endpoint")[1].split("\n\n")[0]
+        self.assertIn("dtmf_mode=inband", ep10)
+        self.assertIn("send_rpid=yes", ep10)
+        self.assertIn("send_pai=no", ep10)
+        self.assertIn("from_user=4130000000", ep10)
+        self.assertIn("qualify_frequency=0", pj.split("[tr-1-10]\ntype=aor")[1].split("\n\n")[0])
+        ep11 = pj.split("[tr-1-11]\ntype=endpoint")[1].split("\n\n")[0]
+        self.assertIn("dtmf_mode=auto", ep11)            # padrão do SQL 113
+        self.assertIn("send_pai=no", ep11)
+        self.assertIn("from_user=motorcx1", ep11)        # com senha e sem "De": o usuário
+        self.assertIn("realm=sip.operadora-y.example", pj.split("[tr-1-11-auth]")[1].split("\n\n")[0])
+        self.assertIn("qualify_frequency=60", pj.split("[tr-1-11]\ntype=aor")[1].split("\n\n")[0])
+        ex = G.gerar_extensions(dados)
+        self.assertIn("MOTORCX_DURMAX_TR_1_10=600", ex)
+        self.assertIn("MOTORCX_DURMAX_TR_1_11=1200", ex)
+        self.assertIn("Set(TIMEOUT(absolute)=", ex.split("[motorcx-atendeu]")[1].split("\n\n")[0])
+        bloco = ex.split("[motorcx-saida-1-movel_vc1]")[1].split("\n\n")[0]
+        self.assertIn("Dial(PJSIP/1010+55${EXTEN}@tr-1-10,25,S(600))", bloco)
+        c = T.rotas_para(dados, 1, "11988887777", date(2026, 11, 3))[0]
+        self.assertEqual(c.discar, "1010+5511988887777")
+        self.assertEqual(dados.tronco(10).toque_max_s, 25)
+
+    def test_rota_sem_prefixo_nao_manda_o_codigo(self):
+        """SQL 113 · G14: rota com enviar_prefixo=false disca sem prefixo (o código fica só na vigência e no custo)."""
+        d = dados_exemplo()
+        d["voz_rotas"][0]["enviar_prefixo"] = False
+        dados = B.carregar(d)
+        ex = G.gerar_extensions(dados)
+        bloco = ex.split("[motorcx-saida-1-movel_vc1]")[1].split("\n\n")[0]
+        self.assertIn("Dial(PJSIP/${EXTEN}@tr-1-10,30,S(1200))", bloco)
+        self.assertIn("Set(MOTORCX_TECH_PREFIX=1010)", bloco)
+        c = T.rotas_para(dados, 1, "11988887777", date(2026, 11, 3))[0]
+        self.assertEqual((c.discar, c.rota.tech_prefix), ("11988887777", "1010"))
+
+    def test_campos_t4_invalidos(self):
+        for mud, msg in (({"dtmf": "pulso"}, "dtmf"), ({"cabecalho_bina": "x"}, "cabecalho_bina"),
+                         ({"realm": "a b"}, "realm"), ({"from_usuario": "a;b"}, "from_usuario"),
+                         ({"toque_max_s": 90}, "toque_max_s"), ({"duracao_max_min": 1}, "duracao_max_min")):
+            d = dados_exemplo()
+            d["voz_troncos"][0].update(mud)
+            with self.assertRaises(B.DadosInvalidos) as cm:
+                B.carregar(d)
+            self.assertIn(msg, str(cm.exception))
 
     def test_formato_invalido_ou_sem_csp(self):
         for mud, msg in (({"formato_discagem": "outro"}, "formato_discagem"),
@@ -325,8 +382,8 @@ class TestGerador(unittest.TestCase):
     def test_gerar_grava_arquivos_com_permissao(self):
         with tempfile.TemporaryDirectory() as tmp:
             res = G.gerar(dados_exemplo(), Path(tmp), self.seg, "203.0.113.10", ["10.60.0.0/24"])
-            self.assertEqual(res, {"troncos": 3, "rotas": 6, "transferencias": 2, "provedores_sip": 1,
-                               "destinos_recusados": 0, "sem_senha": 0})
+            self.assertEqual(res, {"troncos": 3, "troncos_so_teste": 1, "rotas": 6, "transferencias": 2,
+                                   "provedores_sip": 1, "destinos_recusados": 0, "sem_senha": 0})
             pj = Path(tmp) / "pjsip_motorcx.conf"
             self.assertEqual(stat.S_IMODE(pj.stat().st_mode), 0o600)
             self.assertEqual(stat.S_IMODE((Path(tmp) / "extensions_motorcx.conf").stat().st_mode), 0o640)

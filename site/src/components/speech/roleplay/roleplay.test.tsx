@@ -40,7 +40,7 @@ const OPS: OperadorRP[] = [
 	{ id: 103, apelido: 'Hugo N.', equipe_id: null, operador_ref: 'OP-211', so_treino: false, ativo: true },
 ];
 const EQUIPES = [{ id: 1, nome: 'Equipe Manhã', ativo: true }, { id: 2, nome: 'Equipe Tarde', ativo: true }];
-const VAZIO: DadosPainel = { cenarios: [MX], operadores: [], atribuicoes: [], pessoas: [], sessoes: [], links: [], discordancias: [], sugestoes: [], uso: null, itens: {} };
+const VAZIO: DadosPainel = { cenarios: [MX], operadores: [], atribuicoes: [], pessoas: [], sessoes: [], links: [], discordancias: [], sugestoes: [], uso: null, itens: {}, equipes: EQUIPES };
 
 test('moldura: trilha, título, abas do Speech com Roleplay marcada, sub-navegação e voltar para a tela-mãe', () => {
 	const h = em('/speech-analytics/roleplay/cenarios/1', <MolduraRP titulo="Já pagou" detalhe="Já pagou"><p>corpo</p></MolduraRP>);
@@ -58,7 +58,7 @@ test('moldura: trilha, título, abas do Speech com Roleplay marcada, sub-navega�
 	assert.match(painel, /aria-current="page"[^>]*>Painel<\/a>/);
 	assert.match(painel, /aria-label="Voltar para Visão geral do Speech Analytics"/);
 	assert.match(painel, /href="\/speech-analytics\/roleplay\/atribuicoes"[^>]*>Treinos atribuídos<\/a>/);
-	assert.doesNotMatch(painel, /Evolução/, 'sem link para seção que ainda não existe');
+	assert.match(painel, /href="\/speech-analytics\/roleplay\/evolucao"[^>]*>Evolução<\/a>/, 'Evolução na sub-navegação (PR 8)');
 });
 
 test('abas do Speech: Roleplay só para quem treina ou cuida dos cenários', () => {
@@ -84,14 +84,15 @@ test('Painel com dados: precisa de ação leva à pessoa, sugestão ao cenário,
 		...VAZIO, operadores: OPS,
 		atribuicoes: [{ id: 1, cenario_id: 1, prazo: '2026-11-20', nota_minima: 75, tentativas: 2, criado_em: '2026-11-01T12:00:00Z' }],
 		pessoas: [{ atribuicao_id: 1, operador_id: 100, situacao: 'abaixo', melhor_nota: 68, tentativas_usadas: 2, tentativas_extra: 0 }],
-		sugestoes: [{ id: 1, regra: 'alerta_subiu', cenario_id: 1, operadores: [100, 101, 103], criado_em: '2026-11-10T09:00:00Z' }],
+		sugestoes: [{ id: 1, regra: 'alerta_subiu', cenario_id: 1, operadores: [100, 101, 103], criado_em: '2026-11-10T09:00:00Z',
+			evidencia: { alerta: 'procon', equipe: 1, semana: 4, semana_anterior: 1, de: '2026-11-03', ate: '2026-11-09' } }],
 		uso: { minutos_voz: 412, franquia_voz: 1000, sessoes_texto: 3, franquia_texto: 300, voz_bloqueada: false },
 	};
 	const h = em('/speech-analytics/roleplay', <PainelView d={d} hoje="2026-11-10" desde="2026-10-12" agora={new Date('2026-11-10T15:00:00Z')} />);
 	assert.match(h, /Bia R\. usou as 2 tentativas em “Já pagou”/);
 	assert.match(h, /href="\/speech-analytics\/roleplay\/operadores\/100"/);
-	assert.match(h, /Alerta subiu na semana numa equipe/);
-	assert.match(h, /3 operadores/);
+	assert.match(h, /Alertas de ameaça de Procon subiram na Equipe Manhã/);
+	assert.match(h, /Bia R\., Caio M\., Hugo N\./);
 	assert.match(h, /href="\/speech-analytics\/roleplay\/cenarios\/1"/);
 	assert.match(h, /412/);
 	assert.match(h, /de 1\.000 do plano/);

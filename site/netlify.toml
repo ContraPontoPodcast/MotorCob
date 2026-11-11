@@ -19,6 +19,10 @@
   VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d3Bwa3JrdWNrZndtcGhxanZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNTc3NTIsImV4cCI6MjEwNTkzMzc1Mn0.nLtZW67zleBlLB-wyUQYQnLtuqQ6-mMr0gzc3g6jFuU"
   # Canonical das telas do sistema. O site público usa https://motorcx.com.br (src/lib/dominios.ts).
   VITE_SITE_ORIGIN = "https://motorcob.online"
+  # Treino por voz do Roleplay (SQL 119): o WebSocket seguro das duas VMs de voz, um endereço exato por VM, que a CSP
+  # libera em connect-src (scripts/cabecalhos.mjs). Trocou o IP ou o domínio da VM: troque aqui e no secret
+  # VOZ_TREINO_WS_URL da Edge Function treino.
+  TREINO_VOZ_WSS = "wss://35-198-40-10.sslip.io:8443 wss://34-39-217-31.sslip.io:8443"
 
 # www → domínio sem www (antes era o loader da raiz, com 308)
 [[redirects]]
@@ -44,7 +48,8 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+    # microfone só na própria origem: o treino por voz do Roleplay (/treino/... e Speech › Roleplay) pede no navegador
+    Permissions-Policy = "camera=(), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()"
     Link = "<https://motorcx.com.br/sitemap.xml>; rel=\"sitemap\"; type=\"application/xml\""
 
 # Arquivos do build têm hash no nome: cache longo.

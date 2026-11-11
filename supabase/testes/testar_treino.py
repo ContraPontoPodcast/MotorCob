@@ -196,8 +196,10 @@ NOVO = {"nome": "Pagou, mas a baixa não caiu", "persona_nome": "Renata (fictíc
                                      "alcada": {"parcelas": 12, "desconto_max": 30}},
         "itens_foco": ["ck_cpc", "cl_tratou_objecao"], "modos": ["texto"], "origem": "insights",
         "insights": {"base": 4210, "motivo:contestacao": 0.18, "de": "2026-10-01", "ate": "2026-10-30"},
-        "situacao": "publicado"}
+        "situacao": "rascunho"}
+# SQL 122: o cenário de padrões agregados nasce em rascunho; uma pessoa revisa e publica
 CE = sv(f"select public.salvar_cenario_treino({TA}, {j(NOVO)})", au, Q)
+sv(f"select public.salvar_cenario_treino({TA}, '{{\"situacao\": \"publicado\"}}', {CE})", au, Q)
 checar("cenário da empresa publicado (de insights) grava publicado_em", True,
        f"select situacao || '|' || origem || '|' || (publicado_em is not null) from public.treino_cenarios where id = {CE}",
        au, Q, "publicado|insights|true")
@@ -425,8 +427,9 @@ checar("nenhuma nota de treino foi para voz_avaliacoes nem voz_qualidade_dia", T
        f"select (select count(*) from public.voz_avaliacoes where empresa_id = {TA}) + "
        f"(select count(*) from public.voz_qualidade_dia where empresa_id = {TA})", sr, None, 0)
 checar("nenhuma função do treino escreve em voz_avaliacoes/voz_qualidade_dia", True,
+       # ler pode (sugestões do SQL 120, evolução do SQL 121 e padrões do SQL 122 leem as notas reais); gravar, nunca
        "select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like '%treino%' "
-       "and (prosrc ~ 'voz_avaliacoes' or prosrc ~ 'voz_qualidade_dia')", sr, None, 0)
+       "and prosrc ~* '(insert\\s+into|update|delete\\s+from|truncate)\\s+(public\\.)?(voz_avaliacoes|voz_qualidade_dia)'", sr, None, 0)
 checar("nenhuma coluna de áudio nas tabelas do treino", True,
        "select count(*) from information_schema.columns where table_schema = 'public' and table_name like 'treino\\_%' "
        "and (column_name ~ 'audio|gravacao|caminho|arquivo' or data_type = 'bytea')", sr, None, 0)

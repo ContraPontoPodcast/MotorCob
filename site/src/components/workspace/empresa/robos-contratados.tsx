@@ -210,7 +210,7 @@ export function RobosContratadosSecao({ empresaId, moduloLigado }: { empresaId: 
 }
 
 // ================================================================ editar (tela 1b)
-function Opcao({ checked, disabled, onChange, titulo, children, name }: { checked: boolean; disabled?: boolean; onChange: () => void; titulo: ReactNode; children?: ReactNode; name: string }) {
+export function Opcao({ checked, disabled, onChange, titulo, children, name }: { checked: boolean; disabled?: boolean; onChange: () => void; titulo: ReactNode; children?: ReactNode; name: string }) {
 	return (
 		<label className={`flex min-w-0 flex-1 basis-[220px] cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-3 ${checked ? 'border-[var(--destaque)]' : 'border-[var(--base-borda)]'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
 			<input type="radio" name={name} checked={checked} disabled={disabled} onChange={onChange} className="mt-1" />

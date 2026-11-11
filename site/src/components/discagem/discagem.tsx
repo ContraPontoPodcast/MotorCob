@@ -15,13 +15,21 @@ import { ContatoPassada } from './passadas';
 import { Horarios } from './horarios';
 import { ResultadoDia } from './resultado-dia';
 import { RobosContrato } from './robos-contrato';
+import { RitmoCarteira, useRitmoHoje } from './ritmo';
+import { resumoRitmo, ritmoDe } from '@/lib/ritmo';
+import { RenitenciaRecomendada } from './renitencia/recomendados';
+import { PosicaoNumero } from './posicao-numero';
 
 // Abas da Discagem (redesign aprovado, renitencia-v2): Renitência (limites, modo, spin, regra por sinalização, 8
 // situações e falhas), Resubmit (prévia de ontem e reciclagem automática) e Contato por passada: SQL 65.
 // Toda gravação passa por salvar_discagem (valida, versiona e audita; recusa se outra pessoa salvou antes).
 // No topo, o cartão "Seu contrato: N robôs" (robos-contrato.tsx; Robôs contratados, PR 7), da empresa.
-type TabId = 'curtas' | 'renitencia' | 'resubmit' | 'passadas' | 'horarios' | 'resultado';
+// Aba Ritmo (Power ou Preditivo, SQL 107–110; ritmo.tsx): credores.discagem › ritmo, salvo junto.
+// PR 8 do plano (padrões novos na tela): Chamadas curtas com os medidores de hoje por linha e no total (curtas-hoje.tsx),
+// Renitência com a tabela dos padrões recomendados (D2) e Ritmo com a "Posição do número" (D3), os dois só no rascunho.
+type TabId = 'ritmo' | 'curtas' | 'renitencia' | 'resubmit' | 'passadas' | 'horarios' | 'resultado';
 const TABS: { id: TabId; nome: string; novo?: boolean }[] = [
+	{ id: 'ritmo', nome: 'Ritmo', novo: true },
 	{ id: 'curtas', nome: 'Chamadas curtas' },
 	{ id: 'renitencia', nome: 'Renitência por situação', novo: true },
 	{ id: 'resubmit', nome: 'Resubmit', novo: true },
@@ -107,8 +115,13 @@ export function Discagem() {
 	const atual = versoes[0]?.versao ?? 0;
 	const proxima = Math.max(atual, 1) + 1;
 	const diff = computeDiff(draft);
-	const pendentes = dirty ? mudancasCompletas(stored as DiscagemRen, diff as DiscagemRen) : [];
-	const itens = dirty ? itensCompletos(stored as DiscagemRen, diff as DiscagemRen) : [];
+	const ritmoMud = dirty ? resumoRitmo(stored, diff) : [];
+	const pendentes = dirty ? [...mudancasCompletas(stored as DiscagemRen, diff as DiscagemRen), ...ritmoMud] : [];
+	const itens = dirty ? [...itensCompletos(stored as DiscagemRen, diff as DiscagemRen), ...ritmoMud.map(x => {
+		const m = /^(.*): (.*) → (.*)$/.exec(x);
+		return m ? { onde: m[1], antes: m[2], depois: m[3] } : { onde: x, antes: '', depois: '' };
+	})] : [];
+	const hojeRitmo = useRitmoHoje(empresa ? Number(empresa.id) : null, credor ? Number(credor.id) : null);
 	const mudouOutra = dirty && pendentes.length === 0 && JSON.stringify(diff) !== JSON.stringify(stored ?? {});
 
 	function update(patch: Partial<DiscagemT>) { setDraft(prev => ({ ...prev, ...patch })); setDirty(true); }
@@ -164,7 +177,13 @@ export function Discagem() {
 						))}
 					</div>
 
-					{tab === 'curtas' && <ChamadasCurtas draft={draft} update={update} reverter={reverter} canEdit={canEdit} exec={exec} />}
+					{tab === 'ritmo' && <>
+						<RitmoCarteira ritmo={ritmoDe({ ritmo: draft.ritmo })} onTrocar={r => update({ ritmo: r })} canEdit={canEdit} hoje={hojeRitmo} />
+						<div className="mt-4"><PosicaoNumero draft={draft as DiscagemRen} setDraft={d => trocar(d as DiscagemT)} canEdit={canEdit} onEditar={() => setGaveta('modo')} /></div>
+					</>}
+					{tab === 'curtas' && <ChamadasCurtas draft={draft} update={update} reverter={reverter} canEdit={canEdit} exec={exec} empresaId={Number(empresa.id)}
+						abandonoSalvoNao={(stored?.chamadas_curtas as { abandono_conta?: boolean } | undefined)?.abandono_conta === false} />}
+					{tab === 'renitencia' && <div className="mb-4"><RenitenciaRecomendada draft={draft as DiscagemRen} setDraft={d => trocar(d as DiscagemT)} canEdit={canEdit} /></div>}
 					{tab === 'renitencia' && <TelaRenitencia draft={draft} salvo={stored} setDraft={trocar} canEdit={canEdit} ligacoes={ligacoes} abrir={setGaveta} curtasPorPassada={curtasPassada} />}
 					{tab === 'resubmit' && <TelaResubmit draft={draft} salvo={stored} setDraft={trocar} canEdit={canEdit} irSinal={() => { setTab('renitencia'); window.setTimeout(() => document.getElementById('regra-sin')?.scrollIntoView({ behavior: 'smooth' }), 50); }} />}
 					{tab === 'passadas' && <ContatoPassada irResubmit={() => { setTab('renitencia'); window.setTimeout(() => document.getElementById('regra-sin')?.scrollIntoView({ behavior: 'smooth' }), 50); }} />}
