@@ -7,7 +7,7 @@
 // A chave é a rota como está no routes.ts: exata ("/suporte/novo") ou com parâmetros ("/voz/ligacoes/:id",
 // "/speech-analytics/:aba?"). A rota exata ganha da com parâmetro.
 
-import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_VOZ } from './rotas-voz';
+import { ROTA_AGENTE, ROTA_ENTRADA_GRAVACOES, ROTA_LIGACOES, ROTA_SPEECH, ROTA_TELEFONIA, ROTA_VOZ } from './rotas-voz';
 import { ROTA_RP, ROTA_RP_ATRIBUICOES, ROTA_RP_CADASTRO, ROTA_RP_CENARIOS } from './roleplay';
 
 export type RotaPai = { to: string; rotulo: string };
@@ -56,6 +56,8 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	'/voz/agente/personas': AGENTE_DE_VOZ,
 	'/voz/agente/pedido/:id': AGENTE_DE_VOZ,
 	'/voz/agente/roteiro': AGENTE_DE_VOZ,
+	// Telefonia › tronco (assistente, senha, Testar a rota) → Telefonia (SQL 114).
+	'/voz/telefonia/tronco/:ref': { to: ROTA_TELEFONIA, rotulo: 'Telefonia' },
 	// Ligações de um lote → lotes de hoje.
 	'/voz/ligacoes/:id': { to: ROTA_LIGACOES, rotulo: 'Ligações' },
 	// Speech Analytics: toda aba (Qualidade, Operadores, Alertas, Recomendações, Curadoria, Buscar, Gravações e Entrada

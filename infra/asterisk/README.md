@@ -189,6 +189,7 @@ antes da janela de discagem.
 |---|---|
 | `motorcx-asterisk` | Asterisk 22 (PJSIP, ARI, AMD, MixMonitor) na rede do host. SIP em 5060, RTP em 10000–20000, ARI só em `127.0.0.1:8088`. |
 | `motorcx-voz-orquestrador` | Plantão das empresas com `voz_config.modo = 'real'`. Só disca com o acesso próprio ao banco (seção 7). Detalhes abaixo da tabela. |
+| `motorcx-voz-teste` | "Testar a rota" da tela Telefonia (SQL 114, `voz/testador.py`): contínuo nas duas VMs; pega o pedido do banco, lê o número de teste no cofre, liga pelo tronco pedido (app ARI `motorcx-teste`, o tronco inativo também sobe como endpoint só para isso) e grava cada passo. Nada de número em log. |
 | `motorcx-voz-simulado` | O mesmo plantão para as empresas em modo `simulado`, sem ligação de verdade. |
 | `motorcx-voz-config.timer` | A cada 2 min, busca troncos, rotas, transferências e config no banco. Se algo mudou, regera o pjsip e o dialplan dentro do contêiner, com as senhas do cofre, e recarrega. Configuração inválida no banco mantém a que está no ar. |
 | `motorcx-voz-transcricao.timer` | A cada 10 min, transcreve com Whisper as gravações importadas do discador do cliente. Só transcreve áudio com pelo menos `transcrever_min_segundos` e redige CPF e cartão. |

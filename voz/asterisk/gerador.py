@@ -99,13 +99,14 @@ def _endpoint(nome: str, transporte: str, codecs, host: str, porta: int, *, auth
 
 def gerar_pjsip(dados: B.DadosVoz, segredos: Resolvedor, ip_externo: str = "", redes_locais=(),
                 porta_sip: int = 5060, tls: dict | None = None, provedores_sip: list | None = None) -> str:
-    """Texto do pjsip_motorcx.conf. Troncos inativos ficam de fora (o PR T5 os carrega só para o teste da rota).
-    Segredo ausente: erro (não sobe sem senha)."""
+    """Texto do pjsip_motorcx.conf. SQL 114 · Telefonia T5: o tronco INATIVO também sobe como endpoint, só para o
+    "Testar a rota" (voz/testador.py liga por ele pelo ARI); ele não entra em nenhuma saída do dialplan e o orquestrador
+    só usa tronco ativo. Segredo ausente: erro (não sobe sem senha; filtrar_senhas tira o tronco antes)."""
     if ip_externo:
         ipaddress.ip_address(ip_externo)
     redes = [str(ipaddress.ip_network(r, strict=False)) for r in redes_locais]
     provedores_sip = provedores_sip or []
-    troncos = [t for t in dados.troncos if t.ativo]
+    troncos = list(dados.troncos)
     tfs = [x for x in dados.transferencias if x.ativo and x.tronco_id is None]
     usados = {t.transporte for t in troncos} | {x.transporte for x in tfs} | \
              {str(p.get("transporte", "udp")) for p in provedores_sip} | {"udp"}
@@ -113,7 +114,8 @@ def gerar_pjsip(dados: B.DadosVoz, segredos: Resolvedor, ip_externo: str = "", r
     out += _transportes(usados, ip_externo, redes, porta_sip, tls)
     out.append("; ---------------- troncos das empresas (voz_troncos)")
     for t in sorted(troncos, key=lambda t: (t.empresa_id, t.id)):
-        out.append(f"; empresa {t.empresa_id} · {t.referencia.replace(chr(10), ' ')} · {t.canais} canais · {t.cps:g} CPS")
+        out.append(f"; empresa {t.empresa_id} · {t.referencia.replace(chr(10), ' ')} · {t.canais} canais · {t.cps:g} CPS"
+                   + ("" if t.ativo else " · INATIVO: só para o teste da rota"))
         auth = f"{t.nome}-auth" if t.autenticacao == "senha" else None
         out += _endpoint(t.nome, t.transporte, t.codecs, t.host, t.porta, auth=auth,
                          from_user=t.from_usuario or (t.usuario if auth else t.bina), callerid=t.bina, dtmf=t.dtmf,
@@ -275,7 +277,7 @@ def filtrar_senhas(dados: B.DadosVoz, segredos: Resolvedor) -> tuple[B.DadosVoz,
     fora: set[int] = set()
     avisos: list[str] = []
     for t in dados.troncos:
-        if not (t.ativo and t.autenticacao == "senha"):
+        if t.autenticacao != "senha":          # SQL 114: o inativo também sobe (para o teste), então também precisa
             continue
         try:
             senha = lidas[t.segredo_ref] if t.segredo_ref in lidas else segredos.valor(t.segredo_ref)
@@ -319,7 +321,8 @@ def gerar(entrada: dict, saida: Path, segredos: Resolvedor, ip_externo: str = ""
     ex = gerar_extensions(dados)
     gravar(saida, "pjsip_motorcx.conf", pj, 0o600)
     gravar(saida, "extensions_motorcx.conf", ex, 0o640)
-    return {"troncos": sum(t.ativo for t in dados.troncos), "rotas": len(dados.rotas),
+    return {"troncos": sum(t.ativo for t in dados.troncos), "troncos_so_teste": sum(not t.ativo for t in dados.troncos),
+            "rotas": len(dados.rotas),
             "transferencias": sum(x.ativo for x in dados.transferencias),
             "provedores_sip": len(entrada.get("provedores_sip") or []), "destinos_recusados": len(avisos) - len(sem_senha),
             "sem_senha": sum(1 for a in sem_senha if a.startswith("tronco "))}

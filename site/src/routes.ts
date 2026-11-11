@@ -144,6 +144,7 @@ export default [
     route('voz/ligacoes', 'routes/voz-ligacoes.tsx'),
     route('voz/ligacoes/:id', 'routes/voz-ligacao.tsx'),
     route('voz/telefonia', 'routes/voz-telefonia.tsx'),
+    route('voz/telefonia/tronco/:ref', 'routes/voz-telefonia-tronco.tsx'),
     route('voz/conexao', 'routes/voz-conexao.tsx'),
     // Speech Analytics (área própria do trilho; SPEC Canais §3.5): as abas de análise, Gravações e Entrada de gravações.
     route('speech-analytics/gravacoes', 'routes/speech-gravacoes.tsx'),

@@ -1176,6 +1176,31 @@ novas entram em `textos_do_bloco` (= `fluxo_voz_aux_textos_bloco`): 500 caracter
 casos de teste: a fala `[silêncio]` (`MARCA_SILENCIO`). Site: dois quadros editáveis no detalhe da etapa
 (`QuadroRepeticao`), linha no Roteiro e atalho "[silêncio]" no teste. Se o SQL 58 rodar de novo, rode o 95 depois.
 
+**SQL 114 (Telefonia própria do cliente, PR T5; SPEC §3.4 e §6.2 item 13, seção F do parecer, C11, C12, D12, G1,
+G18, G29): Telefonia editável e o "Testar a rota" de verdade.** Números de teste `voz_numeros_teste` (até 5 por empresa):
+o NÚMERO fica só no cofre, como a senha do tronco. A Edge Function `segredo-tronco-voz` aceita `{empresa, numero_teste}`
+(chama `preparar_numero_teste_voz` com o login da pessoa: permissão, aal2, limite; grava em
+`motorcx-voz-trunk-e<empresa>-teste-<12 do hash>`, o prefixo que a conta de escrita já pode; `registrar_numero_teste_voz`
+pelo servidor) e `{remover_numero_teste}` (`remover_numero_teste_voz` devolve o nome e a função destrói as versões).
+O banco guarda `hash` (sha-256 dos dígitos sem o 55, igual a `numeros_teste_hash`), `mascara` "(11) 9••••-••41" e
+`segredo_ref`. Confirmado quando a pessoa digita no passo 5 do teste o código de 4 dígitos que só aparece na tela (não há
+SMS avulso hoje); só os confirmados entram em `voz_config.numeros_teste_hash`. `voz_testes_tronco` (sem número):
+`pedir_teste_tronco_voz(tronco, numero_teste)` confere número guardado da empresa, IPs liberados, senha guardada, um por
+vez, 10/h por tronco e 30/dia por empresa; `pegar_teste_tronco_voz` (VM, "for update skip locked") devolve `numero_ref`
+e a VM lê o número no cofre. A VM grava cada passo (`registrar_teste_tronco_voz`, mensagens sem telefone) e no fim
+`teste_ok/testado_em` só se `assinatura_tronco_voz` não mudou; `responder_bina_teste_voz`, `cancelar_teste_tronco_voz`,
+`ler_teste_tronco_voz`; pedido parado 10 min expira. `usar_tronco_voz(tronco, ativo)`: o Admin tira de uso sempre; põe
+em uso só com teste que passou, IPs liberados, senha e sem pausa, e só se a empresa já teve Real (`pedidos_envio_real`
+ligado ou `modo = real`); na primeira vez vira aviso à equipe (`pedido_equipe`). `retomar_rota_voz(pausa)`: o Admin
+retoma só com teste que passou DEPOIS da pausa (nota automática). Views do cliente: `voz_numeros_teste_empresa`,
+`voz_testes_tronco_empresa` (código só enquanto roda), `voz_pausas_empresa`. VM: `voz/testador.py` (serviço
+`motorcx-voz-teste`, app ARI `motorcx-teste`; passos 0–9: voz.json com a última mudança, DNS público, endpoint no
+Asterisk, OPTIONS por UDP em `voz/sip_options.py`, INVITE com `tech_cause`, bipes + código por DTMF, TALK_DETECT,
+`CHANNEL(rtpqos,audio,all)`, bina na tela, BYE); o gerador sobe o tronco INATIVO como endpoint só para o teste (sem
+saída no dialplan). Site: `/voz/telefonia` editável e `/voz/telefonia/tronco/:ref` (assistente de 6 passos, senha no
+cofre, Testar a rota ao vivo, Usar este tronco, erros da operadora, ficha técnica); regras em `site/src/lib/telefonia.ts`.
+Teste: `supabase/testes/testar_voz_telefonia_editavel.py`, `tests/test_voz_testador.py` e o `regras.test.ts` da função.
+
 ## Convenções
 Python 3.11+, sem dependências no núcleo. Nomes de domínio em português.
 Nenhum dado pessoal real no repositório: exemplos e testes usam IDs e CPFs fictícios.

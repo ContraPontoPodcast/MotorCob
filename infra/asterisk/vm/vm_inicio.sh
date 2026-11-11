@@ -82,7 +82,8 @@ for u in motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-s
          motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-https.service \
          motorcx-voz-https.timer motorcx-voz-importador.service motorcx-voz-importador.timer \
          motorcx-voz-fluxo-noite.service motorcx-voz-fluxo-noite.timer motorcx-voz-gerar-fluxo.service \
-         motorcx-voz-gerar-segmentacao.service motorcx-voz-firewall.service motorcx-voz-firewall.timer; do
+         motorcx-voz-gerar-segmentacao.service motorcx-voz-firewall.service motorcx-voz-firewall.timer \
+         motorcx-voz-teste.service; do
   baixar_arquivo "$u" > "/etc/systemd/system/$u" || true
 done
 install -d -m 755 /usr/local/share/motorcx/caddy
@@ -113,6 +114,6 @@ systemctl enable --now motorcx-voz-config.timer motorcx-voz-transcricao.timer mo
   motorcx-voz-importador.timer motorcx-voz-fluxo-noite.timer motorcx-voz-firewall.timer
 systemctl enable --now motorcx-asterisk.service motorcx-voz-orquestrador.service motorcx-voz-simulado.service \
   motorcx-voz-speech-buscas.service motorcx-voz-simulador.service motorcx-voz-gerar-fluxo.service \
-  motorcx-voz-gerar-segmentacao.service
+  motorcx-voz-gerar-segmentacao.service motorcx-voz-teste.service
 systemctl enable caddy >/dev/null 2>&1 || true
 /usr/local/bin/motorcx-voz-https || true          # rotas ligadas, certificado e reload (de novo a cada 2 min)
