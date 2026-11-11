@@ -1,10 +1,13 @@
 import { SUGESTOES, REGRA_CURTAS, FONTE_CURTAS, stableEqual, pct, filtrarAlertas, type DiscagemExecResumo } from '@/lib/discagem';
 import { SectionCard, Toggle, PercentField, NumberField, CaixaInfo } from './discagem-campos';
 import type { DiscagemProps } from '@/lib/discagem';
+import { CurtasHoje } from './curtas-hoje';
 
-type Props = DiscagemProps & { exec: { resumo: DiscagemExecResumo | null; alertas: string[] } | null };
+// PR 8 do plano (REVISAO C1): no topo, os medidores de hoje por linha (bina) e no total da empresa; "Ligação não
+// completada" e "Abandono" contam sempre (travados em Sim: regra da Anatel e decisão do dono, pergunta 15 do SPEC).
+type Props = DiscagemProps & { exec: { resumo: DiscagemExecResumo | null; alertas: string[] } | null; empresaId?: number | null; abandonoSalvoNao?: boolean };
 
-export function ChamadasCurtas({ draft, update, reverter, canEdit, exec }: Props) {
+export function ChamadasCurtas({ draft, update, reverter, canEdit, exec, empresaId, abandonoSalvoNao }: Props) {
 	const cc = draft.chamadas_curtas ?? SUGESTOES.chamadas_curtas!;
 	const resumo = exec?.resumo?.chamadas_curtas;
 	const medido = resumo?.medido ?? [];
@@ -25,8 +28,10 @@ export function ChamadasCurtas({ draft, update, reverter, canEdit, exec }: Props
 				<strong>{REGRA_CURTAS}</strong> {FONTE_CURTAS} Trocar a bina ou espalhar as ligações por mais linhas não resolve: a Anatel pode endurecer os critérios para quem tentar contornar a regra. O MotorCX mostra os números, avisa e, com o corte ligado, tira a voz pelo fim da prioridade; o acompanhamento continua sendo da sua operação.
 			</CaixaInfo>
 
-			{/* Medidor */}
-			<SectionCard title="Medidor de chamadas curtas" canEdit={canEdit}>
+			{empresaId != null && <CurtasHoje empresaId={empresaId} />}
+
+			{/* Medidor da lista do dia (por carteira) */}
+			<SectionCard title="Medidor da lista do dia (esta carteira)" canEdit={canEdit}>
 				{!ultimo && !previsao ? (
 					<p className="text-[13px] text-[var(--base-texto-3)]">Sem medição ainda. Aparece depois da próxima lista do dia.</p>
 				) : (
@@ -71,13 +76,22 @@ export function ChamadasCurtas({ draft, update, reverter, canEdit, exec }: Props
 					<NumberField label="Máx. total/dia" value={cc.max_total_dia} min={1} disabled={!canEdit} sugestao="9000" onChange={v => update({ chamadas_curtas: { ...cc, max_total_dia: v === '' ? 1 : v } })} />
 					<NumberField label="Conta como curta até" value={cc.segundos} min={1} max={60} suffix="seg" disabled={!canEdit} sugestao="6" onChange={v => update({ chamadas_curtas: { ...cc, segundos: v === '' ? 1 : v } })} />
 					<div className="flex flex-col gap-1.5">
+						<span className="text-[12px] font-semibold text-[var(--base-texto-2)]">Ligação não completada conta</span>
+						<span className="text-[13px] text-[var(--base-texto)]">Sim (regra da Anatel)</span>
+						<span className="text-[11px] text-[var(--base-texto-3)]">Travado: a regra conta as não completadas.</span>
+					</div>
+					<div className="flex flex-col gap-1.5">
 						<span className="text-[12px] font-semibold text-[var(--base-texto-2)]">Abandono conta</span>
-						<div className="flex items-center gap-2">
-							<Toggle checked={cc.abandono_conta} disabled={!canEdit} label="Abandono conta" onChange={v => update({ chamadas_curtas: { ...cc, abandono_conta: v } })} />
-							<span className="text-[13px] text-[var(--base-texto-2)]">{cc.abandono_conta ? 'Sim' : 'Não'}</span>
-						</div>
+						<span className="text-[13px] text-[var(--base-texto)]">Sim, sempre</span>
+						<span className="text-[11px] text-[var(--base-texto-3)]">Travado: todo abandono conta como curta, mesmo com a mensagem de identificação.</span>
 					</div>
 				</div>
+				{abandonoSalvoNao && (
+					<p role="alert" className="mt-3 rounded-lg px-4 py-3 text-[13px]" style={{ backgroundColor: 'var(--estado-atencao-fundo)', color: 'var(--estado-atencao-texto)' }}>
+						Esta carteira tinha salvo “abandono não conta” na lista da manhã. A VM já conta todo abandono; salve uma versão nova para a lista contar também.
+						{canEdit && <button type="button" className="ml-2 font-semibold underline" onClick={() => update({ chamadas_curtas: { ...cc, abandono_conta: true } })}>Preparar a versão</button>}
+					</p>
+				)}
 			</SectionCard>
 
 			{/* Corte (ligado por padrão em 80%) */}

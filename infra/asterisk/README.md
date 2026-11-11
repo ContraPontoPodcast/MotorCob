@@ -250,7 +250,7 @@ V4): mesmo ligado em `voz_config`, a mensagem toca na hora. No Power/Preditivo (
 com todos os robôs ocupados cai no mesmo caminho. Contadores do plantão: `sem_robo_provedor` (linha não discada por
 falta de sessão no provedor), `reserva_no_atendimento`, `atendeu_sem_reserva` e `abandono_sem_robo`.
 
-Os áudios (`sound:motorcx/sem-robo` e o `sound:motorcx/alo`, que era do Alô fake; o Alô fake saiu no Power/Preditivo V4) não vêm na imagem: o script
+Os áudios (`sound:motorcx/sem-robo` e o `sound:motorcx/alo`, que o Alô fake usava antes do V4) não vêm na imagem: o script
 `motorcx-voz-sons` da VM gera os dois com a **mesma voz do agente** (TTS da Montagem: provedor, voz e modelo de
 `/etc/motorcx/provedores.json`; chave do cofre `motorcx-voz-tts`, lida pela conta da VM e nunca mostrada, gravada ou
 logada), converte para o formato do Asterisk (WAV 8 kHz, mono, 16 bits; `voz/sons_sistema.py`, sem ffmpeg), grava em
