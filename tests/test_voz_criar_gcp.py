@@ -21,6 +21,7 @@ case "$*" in
   "projects describe"*) echo 123456789 ;;
   "compute addresses describe"*"--format"*) case "$*" in *ast-1*) echo 203.0.113.11 ;; *) echo 203.0.113.12 ;; esac ;;
   "storage service-agent"*) echo service-1@gs-project-accounts.iam.gserviceaccount.com ;;
+  *"metadata.items.motorcx-firewall-automatico"*) echo "${AUTOMATICO:-}" ;;
   *" describe "*|*" describe") [ -f "$ESTADO" ] || exit 1 ;;
   *"--lifecycle-file="*) a="$*"; f="${a##*--lifecycle-file=}"; cat "${f%% *}" >> "$LOG.ciclo" ;;
   "iam service-accounts keys create"*)
@@ -120,8 +121,12 @@ class TestCriarGcp(unittest.TestCase):
         r, chamadas = self.rodar("proj-ficticio", ips=())
         self.assertEqual(r.returncode, 0, r.stderr)
         tudo = "\n".join(chamadas)
-        self.assertNotIn("motorcx-voz-sip", tudo)
-        self.assertNotIn("motorcx-voz-rtp", tudo)
+        # SQL 104: as regras SIP/RTP passam a existir DESLIGADAS (origem de documentação), para o firewall automático
+        for nome in ("motorcx-voz-sip", "motorcx-voz-rtp"):
+            criar = next(c for c in chamadas if c.startswith(f"compute firewall-rules create {nome} "))
+            self.assertIn("--source-ranges=192.0.2.1/32", criar)
+            self.assertIn("--disabled", criar)
+        self.assertFalse([c for c in chamadas if "firewall-rules update motorcx-voz-sip" in c])
         self.assertIn("motorcx-voz-ssh-iap", tudo)
         self.assertEqual(sum("instances create" in c for c in chamadas), 2)
         self.assertIn("SIP e RTP continuam FECHADOS", r.stdout)
@@ -144,7 +149,10 @@ class TestCriarGcp(unittest.TestCase):
         self.assertIn("firewall-rules update motorcx-voz-sip --rules=udp:5060,tcp:5060,tcp:5061 "
                       "--source-ranges=100.64.10.1/32,100.64.20.0/28", tudo)
         self.assertNotIn("instances create", tudo)
-        self.assertEqual(sum("instances add-metadata" in c for c in chamadas), 2)
+        # scripts + (SQL 104) a lista fixa do firewall, em cada VM
+        self.assertEqual(sum("instances add-metadata" in c for c in chamadas), 4)
+        self.assertIn("--metadata=motorcx-firewall-fixos=100.64.10.1/32 100.64.20.0/28", tudo)
+        self.assertIn("--source-ranges=100.64.10.1/32,100.64.20.0/28 --no-disabled", tudo)
         self.assertNotIn("secrets create", tudo)
         self.assertNotIn("service-accounts create", tudo)               # as duas contas já existem
 
@@ -173,14 +181,14 @@ class TestCriarGcp(unittest.TestCase):
         r, chamadas = self.rodar("proj-ficticio")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("256 KB", r.stderr)
-        self.assertFalse([c for c in chamadas if "instances" in c])
+        self.assertFalse([c for c in chamadas if "instances" in c and "instances describe" not in c])
         (self.dir / "vm" / "motorcx-grande").unlink()
         for i in range(3):                                              # cada um cabe, a soma não
             (self.dir / "vm" / f"motorcx-medio{i}").write_bytes(b"#" * (200 * 1024))
         r, chamadas = self.rodar("proj-ficticio")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("512 KB", r.stderr)
-        self.assertFalse([c for c in chamadas if "instances" in c])
+        self.assertFalse([c for c in chamadas if "instances" in c and "instances describe" not in c])
 
     def test_bucket_cria_a_conta_de_leitura_se_faltar(self):
         self.estado.write_text("1")
@@ -216,6 +224,81 @@ class TestCriarGcp(unittest.TestCase):
         self.assertIn("iam.disableServiceAccountKeyCreation", r.stderr)
         self.assertEqual(list(self.tmp.glob("gcs-gravacoes-chave.*")), [])
 
+    def test_sql104_com_firewall_automatico_nao_sobrescreve_sip_rtp(self):
+        self.estado.write_text("1")
+        self.env_extra = {"AUTOMATICO": "1"}
+        r, chamadas = self.rodar("proj-ficticio")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse([c for c in chamadas if "firewall-rules update motorcx-voz-sip" in c or
+                          "firewall-rules update motorcx-voz-rtp" in c])
+        self.assertTrue([c for c in chamadas if "firewall-rules update motorcx-voz-https" in c])
+        self.assertIn("--metadata=motorcx-firewall-fixos=100.64.10.1/32 100.64.20.0/28", "\n".join(chamadas))
+        self.assertIn("Firewall automático ligado", r.stdout)
+
+    def test_sql104_firewall_automatico_liga_e_desliga(self):
+        r, chamadas = self.rodar("firewall-automatico", "proj-ficticio")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        todas = "\n".join(chamadas)
+        papel = next(c for c in chamadas if c.startswith("iam roles create motorcxVozFirewall"))
+        self.assertIn("--permissions=compute.firewalls.get,compute.firewalls.update,compute.networks.updatePolicy,"
+                      "compute.globalOperations.get", papel)
+        self.assertNotIn("firewalls.create", todas)
+        self.assertNotIn("firewalls.delete", todas)
+        lig = next(c for c in chamadas if "roles/motorcxVozFirewall" in c and "add-iam-policy-binding" in c)
+        self.assertIn("--member=serviceAccount:motorcx-asterisk@proj-ficticio.iam.gserviceaccount.com", lig)
+        self.assertIn('resource.name == "projects/proj-ficticio/global/firewalls/motorcx-voz-sip"', lig)
+        self.assertIn('resource.name == "projects/proj-ficticio/global/firewalls/motorcx-voz-rtp"', lig)
+        meta = [c for c in chamadas if "instances add-metadata" in c]
+        self.assertEqual(len(meta), 2)
+        self.assertIn("motorcx-firewall-automatico=1,motorcx-firewall-fixos=100.64.10.1/32 100.64.20.0/28", meta[0])
+        self.assertIn("--zone=southamerica-east1-b", meta[1])
+        self.assertNotIn("instances create", todas)
+        self.assertNotIn("firewall-rules", todas)                          # quem muda as regras é a VM
+        self.assertIn("LIGADO", r.stdout)
+        # sem a condição (só se o Google recusar) e desligar
+        self.log.unlink()
+        self.env_extra = {"SEM_CONDICAO": "1"}
+        r, chamadas = self.rodar("firewall-automatico", "proj-ficticio")
+        lig = next(c for c in chamadas if "roles/motorcxVozFirewall" in c and "add-iam-policy-binding" in c)
+        self.assertIn("--condition=None", lig)
+        self.log.unlink()
+        self.env_extra = {"DESLIGAR": "1"}
+        r, chamadas = self.rodar("firewall-automatico", "proj-ficticio")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse([c for c in chamadas if "motorcxVozFirewall" in c])
+        self.assertIn("motorcx-firewall-automatico=0", next(c for c in chamadas if "instances add-metadata" in c))
+        self.assertIn("DESLIGADO", r.stdout)
+
+    def test_sql103_chave_do_cofre_so_escreve_e_vai_so_para_arquivo(self):
+        r, chamadas = self.rodar("chave-cofre", "proj-ficticio")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        todas = "\n".join(chamadas)
+        self.assertIn("iam service-accounts create motorcx-voz-cofre-escrita", todas)
+        criar = next(c for c in chamadas if c.startswith("iam roles create motorcxVozCofreCriar"))
+        self.assertIn("--permissions=secretmanager.secrets.create ", criar + " ")
+        gravar = next(c for c in chamadas if c.startswith("iam roles create motorcxVozCofreGravar"))
+        self.assertIn("--permissions=secretmanager.versions.add,secretmanager.versions.list,secretmanager.versions.destroy", gravar)
+        self.assertNotIn("versions.access", todas)                         # a conta nunca lê segredo
+        self.assertNotIn("secretAccessor", todas)
+        cond = next(c for c in chamadas if "roles/motorcxVozCofreGravar" in c and "add-iam-policy-binding" in c)
+        self.assertIn('resource.name.startsWith("projects/123456789/secrets/motorcx-voz-trunk-")', cond)
+        arqs = list(self.tmp.glob("cofre-tronco-chave.*.json"))
+        self.assertEqual(len(arqs), 1)
+        self.assertEqual(arqs[0].stat().st_mode & 0o777, 0o600)
+        for saida in (r.stdout, r.stderr):
+            self.assertNotIn("CHAVE-FALSA", saida)
+            self.assertNotIn("PRIVATE KEY", saida)
+        self.assertIn("GCP_COFRE_TRONCO_CHAVE", r.stdout)
+        self.assertIn(f'shred -u "{arqs[0]}"', r.stdout)
+        self.assertNotIn("firewall", todas)
+        # segunda vez: atualiza os papéis em vez de criar
+        self.estado.write_text("1")
+        self.log.unlink()
+        r, chamadas = self.rodar("chave-cofre", "proj-ficticio")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(any(c.startswith("iam roles update motorcxVozCofreGravar") for c in chamadas))
+        self.assertFalse(any(c.startswith("iam roles create") for c in chamadas))
+
     def test_bucket_novo_com_90_dias_e_recusa_menos(self):
         self.estado.write_text("1")
         r, _ = self.rodar("empresa", "12", "30", "proj-ficticio")
@@ -241,7 +324,7 @@ class TestScriptsDaVm(unittest.TestCase):
             r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, f"{f.name}: {r.stderr}")
         servicos = sorted(vm.glob("*.service"))
-        self.assertEqual(len(servicos), 17)
+        self.assertEqual(len(servicos), 19)        # + motorcx-voz-teste (SQL 114) e motorcx-voz-treino (SQL 119)
         for s in servicos:
             txt = s.read_text()
             self.assertIn("ExecStart=", txt, s.name)
@@ -259,6 +342,7 @@ class TestScriptsDaVm(unittest.TestCase):
                      "motorcx-voz-importador.timer", "motorcx-voz-fluxo-noite.service",
                      "motorcx-voz-fluxo-noite.timer", "motorcx-voz-gerar-fluxo.service",
                      "motorcx-voz-gerar-segmentacao.service", "motorcx-provedores.padrao.json",
+                     "motorcx-voz-firewall.service", "motorcx-voz-firewall.timer", "motorcx-voz-teste.service",
                      "motorcx-voz-treino.service", "motorcx-caddy-treino-voz.caddy"):
             self.assertIn(nome, inicio)
             self.assertTrue((vm / nome).exists(), nome)

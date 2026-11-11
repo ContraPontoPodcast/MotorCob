@@ -149,6 +149,12 @@ DESFECHOS: tuple[Desfecho, ...] = (
     # transferência sem operador. Só a VM gera (transferencia = sem_robo); na renitência é a linha "abandonada".
     D("abandono_sem_robo", "SEM_RETORNO", "Abandono sem robô livre", marca="clique", curta="abandono",
       prova_existencia=True),
+    # a pessoa conversou com o agente, pediu um humano e a fila do cliente não atendeu (ou a transferência falhou) e o
+    # agente não pôde voltar (SQL 106, Power/Preditivo V1). NÃO é abandono: não entra no freio nem na meta do
+    # discador (a fila humana cheia não é culpa do ritmo) e não é curta por si (houve conversa; só pelos segundos).
+    # Antes era a "abandonada" (transferencia sem_operador/falhou); na renitência continua a linha "abandonada".
+    D("transferencia_sem_operador", "SEM_RETORNO", "Transferência sem operador", marca="clique",
+      prova_existencia=True),
 )
 POR_CHAVE = {d.chave: d for d in DESFECHOS}
 assert len(POR_CHAVE) == len(DESFECHOS), "desfecho de voz repetido"
@@ -346,8 +352,8 @@ def classificar_chamada(resultado_ia=None, resultado_operador=None, transferenci
     """Desfecho final de uma tentativa: (chave, origem, avisos); origem = operador|transferencia|ia|rede|nenhum.
 
     1. a tabulação do OPERADOR (depois da transferência) manda, se diz algo além de "não atendeu";
-    2. transferência sem operador ou que falhou = abandono (não penaliza o número); sem robô livre quando a pessoa
-       atendeu (transferencia = sem_robo) = abandono_sem_robo;
+    2. transferência sem operador ou que falhou = transferencia_sem_operador (não penaliza o número e não é abandono
+       do discador, SQL 106); sem robô livre quando a pessoa atendeu (transferencia = sem_robo) = abandono_sem_robo;
     3. o evento da IA;
     4. a rede (pela_rede). "Não atendeu" genérico da IA/operador cede para o que a rede detalhou.
     Número inexistente vindo da IA/operador com causa de rede que NÃO confirma vira o que a rede disse (ou falha
@@ -357,7 +363,7 @@ def classificar_chamada(resultado_ia=None, resultado_operador=None, transferenci
     if resultado_operador and resultado_operador not in FRACOS:
         ch, origem = resultado_operador, "operador"
     elif transferencia in ("sem_operador", "falhou"):
-        ch, origem = "abandonada", "transferencia"
+        ch, origem = "transferencia_sem_operador", "transferencia"
     elif transferencia == "sem_robo":
         ch, origem = "abandono_sem_robo", "transferencia"
     elif resultado_ia and resultado_ia not in FRACOS:

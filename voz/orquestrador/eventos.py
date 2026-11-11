@@ -25,9 +25,12 @@ from dataclasses import asdict, dataclass, fields
 from datetime import date, datetime, time
 from pathlib import Path
 
+from zoneinfo import ZoneInfo
+
 from motor import voz as V
 
 SEM_IA = "SEM_IA"
+_FUSO_BR = ZoneInfo("America/Sao_Paulo")
 CANAL = "agente_voz"
 PREFIXO_ARQUIVO = {"agente_voz": "motorcx_voz", "discador": "motorcx_discador"}
 
@@ -84,10 +87,17 @@ class EventoChamada:
     situacao_origem: str | None = None      # situação da tentativa anterior (da 2ª passada em diante)
     resubmit_ref: str | None = None         # volta que gerou esta tentativa (o registro troca pelo id do banco)
     onda_chave: tuple | None = None         # onda do lote (o registro troca pelo id do banco)
+    # SQL 125 · minuto falado com a IA (horário de Brasília sem fuso; o banco aplica a cadência e o preço)
+    ia_inicio_em: datetime | None = None      # início do 1º trecho
+    ia_fim_em: datetime | None = None         # fim do 1º trecho (início da transferência ou fim da fala)
+    ia_retomada_em: datetime | None = None    # início do 2º trecho (o agente voltou sem humano)
+    ia_trechos: list | None = None            # até 5 [início, fim, motivo]
+    segundos_ia: float | None = None          # soma dos trechos, 3 casas (cobrável)
+    segundos_sessao_ia: float | None = None   # sessão do provedor (custo nosso; inclui o toque da ponte)
 
 
 # fora do CSV de retorno: referências internas da VM, trocadas por ids do banco no registro
-INTERNOS = ("resubmit_ref", "onda_chave")
+INTERNOS = ("resubmit_ref", "onda_chave", "ia_trechos")
 CAMPOS = tuple(f.name for f in fields(EventoChamada) if f.name not in INTERNOS)
 
 
@@ -192,4 +202,15 @@ def para_voz_chamadas(ev: EventoChamada) -> dict:
             "tem_gravacao": bool(ev.gravacao),
             "fluxo_versao_id": ev.fluxo_versao_id, "bloco_final": ev.bloco_final,
             "lote_id": ev.lote_id, "destino_hash": ev.destino_hash, "passada": ev.passada,
-            "situacao_origem": ev.situacao_origem}
+            "situacao_origem": ev.situacao_origem,
+            # SQL 125: a medição do minuto de IA (o JSON dos trechos já vai com o fuso de Brasília)
+            "ia_inicio_em": ev.ia_inicio_em, "ia_fim_em": ev.ia_fim_em, "ia_retomada_em": ev.ia_retomada_em,
+            "ia_trechos": _trechos_iso(ev.ia_trechos), "segundos_ia": ev.segundos_ia,
+            "segundos_sessao_ia": ev.segundos_sessao_ia}
+
+
+def _trechos_iso(trechos: list | None) -> list | None:
+    if not trechos:
+        return None
+    iso = lambda d: (d if d.tzinfo else d.replace(tzinfo=_FUSO_BR)).isoformat(timespec="milliseconds")   # noqa: E731
+    return [[iso(i), iso(f), m] for i, f, m in trechos]

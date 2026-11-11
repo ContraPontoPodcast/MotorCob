@@ -90,6 +90,8 @@ def ouvir(pedido: dict, sintetizar) -> dict:
     final = preencher(texto, pedido.get("variaveis") or {})
     if not texto_ouvir_ok(final):
         return {"erro": "texto inválido depois das variáveis"}
+    from voz.falado import como_soa
+    final = como_soa(final)                 # PR10: igual à ligação (valores, datas e horas por extenso)
     audio, mime = sintetizar(final, voz)
     return {"audio": base64.b64encode(audio).decode(), "mime": mime, "caracteres": len(final),
             "minutos": round(len(final) / CHARS_POR_MINUTO, 3)}

@@ -42,6 +42,21 @@ def enderecos_motorcx(sb) -> list[str]:
     return [str(x.get("faixa")) for x in linhas if x.get("faixa")]
 
 
+def juntar_operadores(sb, transferencias: list[dict]) -> None:
+    """SQL 111: "operadores para transferência ao mesmo tempo". No modo chave a coluna já vem na linha; no acesso
+    próprio vem de voz_vm.transferencias_operadores (a view do SQL 57 não muda). Banco sem o SQL 111: fica o padrão (5)."""
+    col = B.COLUNAS["voz_transferencias"]["simultaneas"]
+    if not transferencias or all(col in t for t in transferencias):
+        return
+    try:
+        por_id = {int(x["id"]): x.get("simultaneas") for x in sb.selecionar("voz_transferencias_operadores") or []}
+    except Exception:   # noqa: BLE001 — sem a view do SQL 111
+        return
+    for t in transferencias:
+        if col not in t and por_id.get(int(t.get("id") or 0)) is not None:
+            t[col] = por_id[int(t["id"])]
+
+
 def buscar(sb, provedores_sip: list | None = None, ignoradas: list | None = None, resolver=None,
            proprios=()) -> dict:
     """Configuração de voz do banco, validada. Linhas inválidas de troncos, rotas e transferências ficam de fora e vão
@@ -51,6 +66,7 @@ def buscar(sb, provedores_sip: list | None = None, ignoradas: list | None = None
     não passa fica de fora sozinho, com aviso. As faixas vão no JSON (enderecos_motorcx) para o gerador conferir de
     novo dentro do contêiner do Asterisk."""
     dados = {t: sb.selecionar(t, ordem="empresa_id.asc") or [] for t in TABELAS}
+    juntar_operadores(sb, dados["voz_transferencias"])
     try:
         contrato = sb.selecionar("voz_contrato", limite=1) or []
     except Exception:   # noqa: BLE001 — tabela de V4 ainda não criada

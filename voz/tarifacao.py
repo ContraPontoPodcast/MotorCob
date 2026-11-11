@@ -6,12 +6,16 @@
                      inicial + ceil((billsec − inicial) ÷ incremento) × incremento
   custo_operadora    segundos tarifados × preço do minuto da vigência do dia; rota sem preço = None (nunca
                      preço inventado)
+  segundos_tarifados_ia  o minuto de IA (SQL 123): em milésimos e com tempo grátis; ≤ grátis → 0; ≤ inicial → inicial;
+                     senão inicial + ceil((s − inicial) ÷ incremento) × incremento. Quem aplica no faturamento é o banco
+                     (gatilho da chamada); aqui é a mesma regra para a VM e os testes (tests/dados/tarifacao_ia_casos.json)
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 
 from voz.banco import DadosVoz, Rota, Tronco
 
@@ -52,7 +56,7 @@ class Candidata:
     rota: Rota
     tronco: Tronco
     tipo: str
-    discar: str          # tech prefix + (0+CSP | 55 | nada, pelo formato do tronco) + DDD + número
+    discar: str          # tech prefix (se a rota manda) + (0+CSP | 55 | +55 | nada, pelo formato) + DDD + número
 
     @property
     def endpoint(self) -> str:
@@ -72,14 +76,14 @@ def rotas_para(dados: DadosVoz, empresa_id: int, numero: str, dia: date) -> list
         t = troncos[r.tronco_id]
         tipo = tipo_numero(n, t.ddd_origem)
         if r.tipo == tipo:
-            saida.append(Candidata(r, t, tipo, t.discar(r.tech_prefix, n)))
+            saida.append(Candidata(r, t, tipo, t.discar(r.prefixo_discagem, n)))
     if saida:
         return saida
     for r in sorted(vig, key=lambda r: (r.prioridade, r.id)):
         t = troncos[r.tronco_id]
         tipo = tipo_numero(n, t.ddd_origem)
         if r.tipo == VIZINHA.get(tipo):
-            saida.append(Candidata(r, t, tipo, t.discar(r.tech_prefix, n)))
+            saida.append(Candidata(r, t, tipo, t.discar(r.prefixo_discagem, n)))
     return saida
 
 
@@ -96,6 +100,24 @@ def segundos_tarifados(billsec: int | None, inicial: int, incremento: int) -> in
     if b <= inicial:
         return inicial
     return inicial + math.ceil((b - inicial) / incremento) * incremento
+
+
+def segundos_tarifados_ia(segundos, gratis: int, inicial: int, incremento: int) -> int:
+    """Igual a segundos_tarifados_ia do banco (SQL 123): s em milésimos (3 casas, arredondamento comercial)."""
+    if inicial < 1 or incremento < 1 or gratis < 0:
+        raise ValueError("cadência inválida: inicial e incremento precisam ser >= 1 e o grátis >= 0")
+    s = Decimal(str(segundos or 0)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+    if s <= 0 or s <= gratis:
+        return 0
+    if s <= inicial:
+        return inicial
+    return inicial + math.ceil((s - inicial) / incremento) * incremento
+
+
+def cadencia_ia(texto: str) -> tuple[int, int, int]:
+    """'0/30/6' -> (0, 30, 6)."""
+    g, i, n = (int(x) for x in str(texto).split("/"))
+    return g, i, n
 
 
 def tarifar(dados: DadosVoz, empresa_id: int, tech_prefix: str | None, billsec: int | None, dia: date) -> dict:
