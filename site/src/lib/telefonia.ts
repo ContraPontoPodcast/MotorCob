@@ -184,12 +184,14 @@ export const ERROS_OPERADORA: { codigo: string; diz: string; acao: string }[] = 
 	{ codigo: '603 / 608 / 433–438', diz: 'A operadora bloqueou a originação.', acao: 'A rota pausa: fale com a operadora, teste e retome.' },
 ];
 
-/** Por que a rota foi pausada, em linguagem da tela (SQL 65). */
+/** Por que a rota foi pausada, em linguagem da tela (SQL 65 e o disjuntor do SQL 115). */
 export function motivoPausa(motivo: unknown, causa: unknown): string {
 	const sip = causa ? ` (SIP ${String(causa)})` : '';
 	switch (motivo) {
 		case 'sem_credito': return `A operadora disse que acabou o crédito${sip}.`;
 		case 'bloqueio_originacao': return `A operadora bloqueou a originação${sip}. Fale com ela antes de testar de novo.`;
+		case 'disjuntor': return `Muitas falhas seguidas da operadora${sip}: o tronco saiu sozinho e os outros continuam ligando. Quando o Testar a rota passar, ele volta sozinho.`;
+		case 'suspeita_sem_credito': return `Suspeita de sem crédito ou bloqueio: quase todas as últimas ligações deram o mesmo erro${sip}. Fale com a operadora; quando o Testar a rota passar, ele volta sozinho.`;
 		default: return `Rota pausada${sip}.`;
 	}
 }
@@ -223,3 +225,17 @@ export function checklistReal(d: { troncos: Record<string, unknown>[]; numeros: 
 		{ txt: 'Aviso de gravação ligado', ok: d.avisoGravacao === true },
 	];
 }
+
+// ---------------------------------------------------------------- saúde do tronco (SQL 115, G34)
+export type SaudeTronco = { tentativas: number; atendidas: number; pct_atendidas: number | null; falhas_tecnicas: number; pct_falhas: number | null; duracao_media_s: number | null; codigos: { codigo: number; qtd: number }[] };
+
+/** Tom da saúde: falhas técnicas acima de 30% é problema; acima de 10%, atenção (o disjuntor abre em 50%). */
+export function tomSaude(s: SaudeTronco | null): 'ok' | 'atencao' | 'erro' | 'neutro' {
+	if (!s || !s.tentativas) return 'neutro';
+	const f = Number(s.pct_falhas ?? 0);
+	return f >= 30 ? 'erro' : f >= 10 ? 'atencao' : 'ok';
+}
+
+/** "503 ×12 · 403 ×3": os códigos SIP mais comuns das tentativas que não atenderam. */
+export const codigosTxt = (cs: SaudeTronco['codigos'] | null | undefined) =>
+	(cs ?? []).slice(0, 5).map(c => `${c.codigo} ×${c.qtd}`).join(' · ') || '—';

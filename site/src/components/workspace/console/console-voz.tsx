@@ -170,7 +170,7 @@ function ConexaoProvedor({ fornecedores, saude, loading }: { fornecedores: Row[]
 
 // ============================================================== por empresa
 type Pausa = { id: number; tronco_id: number; motivo: 'sem_credito' | 'bloqueio_originacao' | string; causa_sip: number | null; pausado_em: string };
-const MOTIVO_PAUSA: Record<string, string> = { sem_credito: 'sem crédito na operadora', bloqueio_originacao: 'bloqueio de originação' };
+const MOTIVO_PAUSA: Record<string, string> = { sem_credito: 'sem crédito na operadora', bloqueio_originacao: 'bloqueio de originação', disjuntor: 'disjuntor (falhas técnicas seguidas; volta sozinho com um teste que passou)', suspeita_sem_credito: 'suspeita de sem crédito ou bloqueio (mesmo erro em quase todas; volta com um teste que passou)' };
 
 type DadosEmpresa = {
 	pausas: Pausa[];

@@ -3055,5 +3055,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 114: Telefonia editável e teste da rota (testar_voz_telefonia_editavel.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 115 · Telefonia T6: disjuntor por tronco (20 seguidas, 50% de 50), suspeita de sem crédito (90% de 30 com o
+# mesmo código), volta com teste e saúde do tronco
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_voz_disjuntor.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 115: disjuntor por tronco (testar_voz_disjuntor.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

@@ -3,7 +3,7 @@
 // npm test (site/scripts/testar-componentes.mjs)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checklistReal, digitosNumeroTeste, fichaTecnica, formDoTronco, instrucaoTeste, linhasTeste, mascaraNumeroTeste, payloadTronco, sugerirReferencia, validarTronco } from '@/lib/telefonia';
+import { codigosTxt, motivoPausa, tomSaude, checklistReal, digitosNumeroTeste, fichaTecnica, formDoTronco, instrucaoTeste, linhasTeste, mascaraNumeroTeste, payloadTronco, sugerirReferencia, validarTronco } from '@/lib/telefonia';
 
 const base = () => ({ ...formDoTronco(null), operadora: 'Operadora Alfa', referencia: 'alfa-sp-1', ips: '200.190.1.10', host: 'sip.alfa.example', bina: '(11) 3003-0000', canais: '15', declaro: true });
 
@@ -57,4 +57,14 @@ test('ficha técnica e checklist até Real', () => {
 	assert.match(f, /STIR-SHAKEN\) na bina 1130030000/);
 	const c = checklistReal({ troncos: [{ teste_ok: true, declaracao_em: 'x' }], numeros: [{ confirmado_em: null }], transferenciaTestada: false, avisoGravacao: true });
 	assert.deepEqual(c.map(x => x.ok), [true, false, false, true, true]);
+});
+
+test('disjuntor e saúde do tronco (SQL 115)', () => {
+	assert.match(motivoPausa('disjuntor', 503), /saiu sozinho.*SIP 503|SIP 503.*saiu sozinho/);
+	assert.match(motivoPausa('suspeita_sem_credito', 480), /sem crédito/);
+	assert.equal(tomSaude(null), 'neutro');
+	assert.equal(tomSaude({ tentativas: 100, atendidas: 40, pct_atendidas: 40, falhas_tecnicas: 35, pct_falhas: 35, duracao_media_s: 60, codigos: [] }), 'erro');
+	assert.equal(tomSaude({ tentativas: 100, atendidas: 80, pct_atendidas: 80, falhas_tecnicas: 2, pct_falhas: 2, duracao_media_s: 60, codigos: [] }), 'ok');
+	assert.equal(codigosTxt([{ codigo: 503, qtd: 12 }, { codigo: 403, qtd: 3 }]), '503 ×12 · 403 ×3');
+	assert.equal(codigosTxt([]), '—');
 });
