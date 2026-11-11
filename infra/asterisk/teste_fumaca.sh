@@ -43,7 +43,9 @@ done
 tem "pjsip show endpoints" "tr-1-10" || falha "endpoint do tronco"
 tem "pjsip show endpoints" "tr-1-11" || falha "endpoint do tronco com senha"
 tem "pjsip show endpoints" "pv-elevenlabs" || falha "endpoint do provedor de voz"
-tem "pjsip show endpoint tr-2-99" "unable to find" || falha "tronco inativo apareceu"
+# SQL 114 (PR 241): o tronco inativo sobe só como endpoint, para o "Testar a rota", e nunca tem saída no dialplan
+tem "pjsip show endpoint tr-2-99" "tr-2-99" || falha "tronco inativo sem endpoint (Testar a rota)"
+tem "dialplan show" "@tr-2-99" && falha "tronco inativo com saída no dialplan"
 tem "pjsip show transports" "transport-tcp" || falha "transporte TCP"
 tem "dialplan show motorcx-saida-1-movel_vc1" "1010\${EXTEN}@tr-1-10" || falha "rota com tech prefix"
 tem "dialplan show motorcx-atendeu" "AMD(" || falha "contexto do AMD"

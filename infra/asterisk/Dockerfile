@@ -53,7 +53,7 @@ RUN apt-get update \
 COPY --from=build /opt/ast/ /
 
 # só o que o gerador precisa (biblioteca padrão; nada do motor)
-COPY voz/__init__.py voz/banco.py voz/segredos.py voz/gcp.py voz/tarifacao.py /opt/motorcx/voz/
+COPY voz/__init__.py voz/banco.py voz/destinos.py voz/segredos.py voz/gcp.py voz/tarifacao.py /opt/motorcx/voz/
 COPY voz/asterisk/ /opt/motorcx/voz/asterisk/
 COPY infra/asterisk/conf/ /etc/asterisk/
 COPY infra/asterisk/entrypoint.sh /usr/local/bin/motorcx-asterisk
