@@ -11,9 +11,18 @@ aqui e não no prompt:
      FALA_CPF (na identidade pelos 3 últimos números, o pedido de só os 3) e a etapa continua esperando;
   3. "não me ligue" em qualquer etapa: opt-out e encerra (nenhum ramo segura);
   4. terceiro ouve só o recado neutro fixo;
-  5. nunca passa da alçada (ofertas do CRM acima dela são descartadas, código oferta_acima_alcada);
+  5. o agente lê, não calcula (SQL 130; SPEC_OFERTAS_v2): as ofertas vêm SÓ da API do credor (conector "Buscar
+     ofertas") ou do arquivo do dia, uma fonte por ligação, na ordem configurada da carteira (voz_mailing_config.ofertas;
+     sem ela, API → arquivo, ou só o arquivo sem API); a alçada só DESCARTA (incompleta, vencida, acima dela, conta que não
+     fecha) e nunca ajusta; até 3, apresentadas uma por vez na ordem da fonte; pedir o que não está na lista transfere;
   6. "quero falar com uma pessoa" transfere a qualquer momento;
   7. o Generativo só usa as ofertas recebidas (enum por chamada; número fora delas troca a frase).
+Ofertas (SQL 130): a API é chamada depois da identidade, com teto de 4 s somando as tentativas; falha (tempo, 5xx, 4xx,
+resposta ilegível) → a reserva da ordem; API que responde "sem oferta" (lista vazia) NÃO aciona o arquivo (Q2); todas
+descartadas → a próxima fonte; 3 falhas seguidas em 5 min → a carteira pula a API por 5 min (conector.Disjuntor, por
+VM). "Só a API" com a API fora: FALA_FALHA e transfere (Q5). Nenhuma oferta: transfere (ofertas_sem_acordo). A promessa
+guarda o id e a fonte; o valor é a entrada (senão a parcela) e a data, o vencimento (senão a validade) (Q17). O evento
+`ofertas` leva só a fonte, o motivo e contagens.
 A identidade é conferida pelo CRM (conector Validar cadastro) ou, com a configuração da carteira (SQL 88,
 voz_mailing_config), pelo arquivo (fonte interna: o banco compara o código da resposta), nunca pela IA. Sem
 configuração, o executor faz exatamente o de hoje. Com ela: as fontes na ordem configurada (fonte que não existe,
@@ -109,7 +118,7 @@ SINONIMOS = {
     "pedir_fora_alcada": r"mais parcelas|parcela menor|mais desconto|desconto maior|metade|\b(1[0-9]|[2-9][0-9])\s*(x|vezes)",
     "escolher_oferta": r"\b\d{1,2}\s*(x|vezes|parcelas)\b|a vista|primeira|segunda",
     "aceitar": r"^(sim|pode|fechado|aceito|ok|isso|combinado|pode registrar|pode fechar)\b|aceito|pode fechar|fechado|fechar",
-    "recusar": r"nao quero|nao aceito|recuso|agora nao",
+    "recusar": r"nao quero|nao aceito|recuso|agora nao|nao consigo|nao da pra|nao posso|tambem nao",
     "quer_outra_condicao": r"outra|mais parcelas|parcela menor|menos|mais desconto",
     "informou_data": r"\d{1,2}\s*(/|de)\s*(\d{1,2}|[a-z]{3})|amanha|segunda|terca|quarta|quinta|sexta|sabado|dia \d{1,2}",
     "nao_lembra": r"nao lembro|nao sei|esqueci",
@@ -245,6 +254,10 @@ class FluxoCarregado:
     fonte_interna: object | None = None                     # conector.FonteArquivo (a VM; None no simulador)
     empresa_id: int | None = None
     credor_id: int | None = None
+    # SQL 130: de onde vêm as ofertas (voz_mailing_config.ofertas vigente; None = o padrão) e a fonte do arquivo
+    ofertas_cfg: dict | None = None
+    fonte_ofertas: object | None = None                     # conector.FonteOfertasArquivo (VM) ou OfertasDeExemplo
+    disjuntor: object | None = None                         # conector.Disjuntor da VM (API instável, Q18)
 
 
 @dataclass
@@ -287,6 +300,38 @@ def config_identidade(c) -> dict | None:
     return dict(c) if ok else None
 
 
+def config_ofertas(c) -> dict | None:
+    """A parte "ofertas" de voz_mailing_config, conferida como no banco (public.ofertas_mailing_valida). Fora do formato:
+    None (= o padrão)."""
+    if not isinstance(c, dict) or set(c) != {"modo", "conector_id"} or c.get("modo") not in CN.MODOS_OFERTAS:
+        return None
+    k = c.get("conector_id")
+    if c["modo"] == "so_arquivo":
+        return dict(c) if k is None else None
+    return dict(c) if isinstance(k, int) and not isinstance(k, bool) and k > 0 else None
+
+
+FALA_ESPERA_OFERTAS = "Só um instante, vou ver as condições para você."
+FALA_FORA_OFERTAS = "Essa condição eu não tenho aqui. Vou passar você para um atendente, só um instante."
+FALA_OUTRA_OFERTA = "Entendo. Também tenho: "
+
+
+def condicao_oferta(o: dict) -> str:
+    """A frase fixa da oferta, só com os campos que vieram (SPEC §7). Nunca faz conta para falar."""
+    parc = int(CN._num(o.get("parcelas")) or 1)
+    vp, ent, desc = o.get("valor_parcela"), o.get("entrada"), CN._num(o.get("desconto_pct"))
+    if parc == 1:
+        s = f"à vista por {_reais(vp)}"
+    elif ent not in (None, "") and (CN._num(ent) or 0) > 0:
+        s = f"entrada de {_reais(ent)} e mais {parc} parcelas de {_reais(vp)}"
+    else:
+        s = f"{parc} parcelas de {_reais(vp)}"
+    if desc:
+        s += f", com {desc:g}% de desconto".replace(".", ",")
+    val = CN._data(o.get("validade"))
+    return s + (f". Vale até {val:%d/%m}." if val else ".")
+
+
 def informado_de(pergunta: str, texto: str, hoje: date) -> str | None:
     """O que a pessoa disse → o valor normalizado (DDMM, AAAA, ddd), igual ao da carga (motor/identidade_mailing).
     Só em memória: nunca vai para log, evento, banco (fora o código) ou modelo."""
@@ -325,6 +370,9 @@ class Sessao:
         self.memoria: dict = {}               # resposta do CRM (só na ligação)
         self.ofertas: list = []
         self.oferta_atual: dict | None = None
+        self.ofertas_fonte: str | None = None  # SQL 130: 'api' | 'arquivo' (uma fonte por ligação)
+        self._ofertas_resolvidas = False
+        self._ident_fonte: str | None = None   # quem confirmou a identidade: 'crm' | 'arquivo'
         self.identidade_confirmada = False
         self.terceiro = False
         self.atual: str | None = None
@@ -437,6 +485,7 @@ class Sessao:
         self.memoria.clear()
         self.ofertas = []
         self.oferta_atual = None
+        self.ofertas_fonte = None
         self.conversa = None
 
     # ---------------------------------------------------------------- travas em toda fala
@@ -481,12 +530,14 @@ class Sessao:
     def _valor(self, nome: str) -> str | None:
         if nome.startswith("oferta."):
             o = self.oferta_atual or {}
+            if nome == "oferta.condicao":
+                return condicao_oferta(o) if o else None
             v = o.get(nome.split(".", 1)[1])
             if v is None:
                 return None
             if nome in ("oferta.valor_parcela", "oferta.valor_total", "oferta.entrada"):
                 return _reais(v)
-            if nome == "oferta.vencimento":
+            if nome in ("oferta.vencimento", "oferta.validade"):
                 try:
                     return date.fromisoformat(str(v)[:10]).strftime("%d/%m")
                 except ValueError:
@@ -743,6 +794,7 @@ class Sessao:
             self._seguir(b, "falhou") if any(s["quando"] == "falhou" for s in b["saidas"]) else self._seguir(b, "nao_confirmou")
         elif ok:
             self.identidade_confirmada = True
+            self._ident_fonte = "crm"
             self._seguir(b, "confirmou")
         elif not self._tentar_de_novo(b, "Não conferiu. Pode me dizer de novo?"):
             self._seguir(b, "nao_confirmou")
@@ -868,6 +920,7 @@ class Sessao:
     def _identidade_ok(self, b, fonte: str) -> None:
         self._ident = None
         self.identidade_confirmada = True
+        self._ident_fonte = fonte
         log.info("identidade: fonte=%s confirmou=sim", fonte)
         self._seguir(b, "confirmou")
 
@@ -932,7 +985,7 @@ class Sessao:
             self._seguir(b, "nao_entendido", intencao="nao_entendido", confianca_faixa=faixa(e.confianca))
 
     # ---------------------------------------------------------------- conector (sem fala; fala de espera)
-    def _chamar(self, b: dict, cid, extra: dict | None = None) -> CN.Resultado | None:
+    def _chamar(self, b: dict, cid, extra: dict | None = None, teto_s: float | None = None) -> CN.Resultado | None:
         con = self.fluxo.conectores.get(cid) if cid is not None else None
         if con is None:
             self._emitir("conector", {"conector_id": cid, "bloco_id": b["id"], "classe": "recusado", "tentativa": 1,
@@ -946,12 +999,17 @@ class Sessao:
             entrada["data_promessa"] = self.promessa["data_promessa"].isoformat()
             entrada["valor_promessa"] = self.promessa.get("valor_promessa")
         entrada.update(extra or {})
-        r = self.cliente.chamar(con, entrada, f"{self.id_chamada}:{b['id']}")
+        # Q14 (SQL 130): nenhum conector recebe CPF (a API de ofertas só o código do cliente e o contrato)
+        entrada = {k: v for k, v in entrada.items() if not _parece_cpf(v)}
+        r = (self.cliente.chamar(con, entrada, f"{self.id_chamada}:{b['id']}", teto_s=teto_s) if teto_s is not None
+             else self.cliente.chamar(con, entrada, f"{self.id_chamada}:{b['id']}"))
         codigo = r.codigo
         descartadas = 0
         if r.ok and con.finalidade == "buscar_ofertas":
-            boas, descartadas = CN.filtrar_ofertas(r.ofertas, self.fluxo.alcada)
-            self.ofertas = boas
+            r.recebidas = len(r.ofertas)
+            boas, r.descartes = CN.filtrar_ofertas(r.ofertas, self.fluxo.alcada, self.hoje)
+            r.ofertas = boas
+            descartadas = sum(r.descartes.values())
             codigo = CN.codigo_ofertas(len(boas), descartadas)
             if descartadas:
                 self._marca_trava("alcada")
@@ -976,6 +1034,9 @@ class Sessao:
                 self.falar_agora(fala)
             self._falar(fala, b["id"])
         con = self.fluxo.conectores.get(p.get("conector_id"))
+        if con is not None and con.finalidade == "buscar_ofertas":
+            self._entrar_buscar_ofertas(b, con)
+            return
         r = self._chamar(b, p.get("conector_id"))
         if r is not None and r.ok:
             self._seguir(b, "respondeu")
@@ -984,9 +1045,122 @@ class Sessao:
             self._falar(FALA_FALHA, b["id"])
             self._finalizar("transferir", motivo="pedido_humano")
             return
-        if con is not None and con.em_falha == "alternativa_carteira":
-            self.ofertas = CN.ofertas_da_carteira(self.fluxo.alcada, self.vars.get("saldo"), self.hoje)
         self._seguir(b, "falhou")
+
+    # ---------------------------------------------------------------- ofertas: só da API ou do arquivo (SQL 130)
+    def _modo_ofertas(self, con) -> str:
+        cfg = self.fluxo.ofertas_cfg
+        if cfg is not None:
+            return cfg["modo"]
+        return "api_arquivo" if con is not None else "so_arquivo"     # o padrão (Q1)
+
+    def _conector_api(self, b: dict | None):
+        """O conector da API: o da configuração da carteira; sem ele, o da etapa (origem conector)."""
+        cfg = self.fluxo.ofertas_cfg
+        cid = cfg.get("conector_id") if cfg else None
+        if cid is None and b is not None and b["params"].get("origem") == "conector":
+            cid = b["params"].get("conector_id")
+        con = self.fluxo.conectores.get(cid) if cid is not None else None
+        return con if con is not None and con.finalidade == "buscar_ofertas" else None
+
+    def _resolver_ofertas(self, b: dict, con) -> dict:
+        """Uma fonte por ligação: a 1ª da ordem com ao menos 1 oferta válida (as fontes nunca se misturam; Q3)."""
+        modo = self._modo_ofertas(con)
+        est = {"modo": modo, "fonte": None, "motivo": "sem_oferta", "api_falhou": False, "pulou_api": False,
+               "api_classe": None, "api_ms": None, "descartes": {}}
+        motivo_reserva = None
+        self._ofertas_resolvidas = True
+        self.ofertas, self.ofertas_fonte = [], None
+        for fonte in CN.MODOS_OFERTAS[modo]:
+            if fonte == "api":
+                if con is None:
+                    motivo_reserva = motivo_reserva or "api_ausente"
+                    continue
+                dj = self.fluxo.disjuntor
+                if dj is not None and dj.aberto(con.id):
+                    est.update(api_falhou=True, pulou_api=True)
+                    motivo_reserva = "api_instavel"
+                    log.info("ofertas: fonte=api pulada (instável)")
+                    continue
+                r = self._chamar(b, con.id, teto_s=CN.TETO_OFERTAS_S)
+                est.update(api_classe=r.classe, api_ms=r.latencia_ms)
+                if dj is not None:
+                    dj.registrar(con.id, r.ok)
+                if not r.ok:
+                    est["api_falhou"] = True
+                    motivo_reserva = "api_falhou"
+                    continue
+                for k, v in getattr(r, "descartes", {}).items():
+                    est["descartes"][k] = est["descartes"].get(k, 0) + v
+                if getattr(r, "recebidas", len(r.ofertas)) == 0:
+                    est["motivo"] = "api_sem_oferta"           # decisão do credor: o arquivo não entra (Q2)
+                    break
+                if r.ofertas:
+                    self.ofertas, self.ofertas_fonte = list(r.ofertas), "api"
+                    break
+                motivo_reserva = "api_descartadas"
+                continue
+            fi = self.fluxo.fonte_ofertas
+            if fi is None or self.fluxo.empresa_id is None or self.fluxo.credor_id is None:
+                motivo_reserva = motivo_reserva or "arquivo_ausente"
+                continue
+            if not self.identidade_confirmada:         # trava 1: o arquivo só depois da identidade (o banco também)
+                motivo_reserva = motivo_reserva or "arquivo_ausente"
+                continue
+            if self._ident_fonte != "arquivo" and not fi.confirmar_crm(self.fluxo.empresa_id, self.fluxo.credor_id,
+                                                                     self.id_cliente, self.id_chamada):
+                motivo_reserva = motivo_reserva or "arquivo_falhou"
+                continue
+            ra = fi.ofertas(self.fluxo.empresa_id, self.fluxo.credor_id, self.id_cliente, self.id_chamada,
+                            self.vars.get("contrato_ref"))
+            self._turno.conectores.append({"conector": "arquivo", "nome": fi.nome, "classe": ra.classe, "status": None,
+                                           "ms": ra.latencia_ms, "codigo": None})
+            if not ra.ok:
+                motivo_reserva = motivo_reserva or "arquivo_falhou"
+                continue
+            boas, desc = CN.filtrar_ofertas(ra.ofertas, self.fluxo.alcada, self.hoje)
+            for k, v in desc.items():
+                est["descartes"][k] = est["descartes"].get(k, 0) + v
+            if desc:
+                self._marca_trava("alcada")
+            self._turno.conectores[-1]["codigo"] = CN.codigo_ofertas(len(boas), sum(desc.values()))
+            if boas:
+                self.ofertas, self.ofertas_fonte = boas, "arquivo"
+                break
+            motivo_reserva = motivo_reserva or ("arquivo_descartadas" if desc else "arquivo_vazio")
+        if self.ofertas_fonte:
+            est["fonte"] = self.ofertas_fonte
+            est["motivo"] = motivo_reserva or "primeira"
+        elif est["motivo"] != "api_sem_oferta":
+            est["motivo"] = "api_falhou" if est["api_falhou"] and modo == "so_api" else "sem_oferta"
+        log.info("ofertas: modo=%s fonte=%s motivo=%s n=%d", modo, est["fonte"] or "nenhuma", est["motivo"],
+                 len(self.ofertas))
+        self._emitir("ofertas", {"modo": modo, "fonte": est["fonte"], "motivo": est["motivo"],
+                                 "pulou_api": est["pulou_api"], "api_classe": est["api_classe"],
+                                 "api_ms": est["api_ms"], "descartes": dict(est["descartes"]),
+                                 "ofertas": len(self.ofertas), "bloco_id": b["id"],
+                                 "fluxo_versao_id": self.fluxo.versao_id, "credor_id": self.fluxo.credor_id})
+        return est
+
+    def _entrar_buscar_ofertas(self, b, con):
+        est = self._resolver_ofertas(b, con)
+        if self.ofertas or not est["api_falhou"]:
+            self._seguir(b, "respondeu")          # sem oferta e a API não falhou: a etapa seguinte decide/transfere
+            return
+        if con.em_falha == "transferir" or est["modo"] == "so_api":
+            self._falar(FALA_FALHA, b["id"])      # Q5: "só a API" com a API fora → atendente
+            self._finalizar("transferir", motivo="pedido_humano")
+            return
+        self._seguir(b, "falhou")
+
+    def _garantir_ofertas(self, b) -> None:
+        """Etapa que oferece sem um "Buscar ofertas" antes: resolve as fontes agora (uma vez por ligação)."""
+        if self._ofertas_resolvidas:
+            return
+        if self.falar_agora:
+            self.falar_agora(FALA_ESPERA_OFERTAS)
+        self._falar(FALA_ESPERA_OFERTAS, b["id"])
+        self._resolver_ofertas(b, self._conector_api(b))
 
     # ---------------------------------------------------------------- condição (sem fala)
     def _entrar_condicao(self, b):
@@ -1002,48 +1176,66 @@ class Sessao:
         self._seguir(b, "sim" if ok else "nao")
 
     # ---------------------------------------------------------------- oferta (árvore ou cognição)
-    def _ofertas_do_bloco(self, b) -> list:
-        if b["params"]["origem"] == "carteira" or not self.ofertas:
-            if not self.ofertas:
-                self.ofertas = CN.ofertas_da_carteira(self.fluxo.alcada, self.vars.get("saldo"), self.hoje)
-        return self.ofertas
-
     def _entrar_oferta(self, b):
-        ofs = self._ofertas_do_bloco(b)
+        self._garantir_ofertas(b)
+        ofs = self.ofertas
         if not ofs:
             self._falar(FALA_HUMANO, b["id"])
             self._finalizar("transferir", motivo="ofertas_sem_acordo")
             return
-        self.oferta_atual = self.oferta_atual if self.oferta_atual in ofs else min(ofs, key=lambda o: float(o.get("valor_parcela") or o.get("valor_total") or 0))
+        self.oferta_atual = self.oferta_atual if self.oferta_atual in ofs else ofs[0]    # na ordem da fonte (Q8)
         self._falar_bloco(b)
+
+    def _promessa(self, o: dict) -> None:
+        """Q17: valor = a entrada (senão a parcela); data = o vencimento (senão a validade)."""
+        valor = o.get("entrada") if o.get("entrada") not in (None, "") else o.get("valor_parcela")
+        d = CN._data(o.get("vencimento")) or CN._data(o.get("validade")) or self.hoje
+        self.promessa = {"oferta": o, "data_promessa": d, "valor_promessa": valor, "fonte": self.ofertas_fonte}
+
+    def _fora_das_ofertas(self, b, intencao: str) -> None:
+        """Q7: o que não está na lista → atendente. A saída "quer_outra" só vale se ela já for uma transferência."""
+        s = next((x for x in b["saidas"] if x["quando"] == "quer_outra"), None)
+        if s is not None and self.blocos.get(s["para"], {}).get("tipo") == "transferir":
+            self._seguir(b, "quer_outra", intencao=intencao)
+            return
+        self.passos[-1].update(saida_quando="quer_outra", intencao=intencao)
+        self._falar(FALA_FORA_OFERTAS, b["id"])
+        self._finalizar("transferir", motivo="fora_das_ofertas")
 
     def _ouvir_oferta(self, b, texto, t):
         ofs = self.ofertas
         n = extrair_parcelas(texto)
-        if n is not None and n > (self.fluxo.alcada.parcelas_max if self.fluxo.alcada else 0):
-            self._marca_trava("alcada")
-            self._seguir(b, "quer_outra", intencao="pedir_fora_alcada") if any(
-                s["quando"] == "quer_outra" for s in b["saidas"]) else self._seguir(b, "recusou")
-            return
+        if n is None:                             # "faço em 6": escolhe pelo número de parcelas
+            m = re.search(r"\b(?:em|de) (\d{1,2})\b(?! ?(?:de|/) )", t)
+            n = int(m.group(1)) if m else None
         if n is not None:
-            esc = next((o for o in ofs if int(o.get("parcelas") or 0) == n), None)
-            if esc:
-                self.oferta_atual = esc
+            esc = next((o for o in ofs if int(CN._num(o.get("parcelas")) or 0) == n), None)
+            if esc is None:                       # "só consigo em 18 vezes": não está na lista
+                self._turno.intencao = {"intencao": "pedir_fora_das_ofertas", "confianca": "alta",
+                                        "entidades": [f"parcelas: {n}"]}
+                self._fora_das_ofertas(b, "pedir_fora_alcada")
+                return
+            self.oferta_atual = esc
+            self._promessa(esc)
+            self._turno.intencao = {"intencao": "escolher_oferta", "confianca": "alta", "entidades": [f"parcelas: {n}"]}
+            self._seguir(b, "aceitou", intencao="aceitar", confianca_faixa="alta")
+            return
         e = self.entendedor.entender(texto, ["aceitar", "quer_outra_condicao", "recusar"])
         self._turno.intencao = {"intencao": e.intencao or "nao_entendido", "confianca": faixa(e.confianca), "entidades": []}
-        if e.intencao == "aceitar" or (n is not None and self.oferta_atual and int(self.oferta_atual["parcelas"]) == n):
-            o = self.oferta_atual
-            valor = o.get("valor_parcela") if int(o.get("parcelas") or 1) > 1 else o.get("valor_total")
-            venc = o.get("vencimento")
-            try:
-                d = date.fromisoformat(str(venc)[:10]) if venc else self.hoje + timedelta(days=self.fluxo.alcada.validade_dias)
-            except (ValueError, AttributeError):
-                d = self.hoje
-            self.promessa = {"oferta": o, "data_promessa": d, "valor_promessa": valor}
+        if e.intencao == "aceitar" and self.oferta_atual:
+            self._promessa(self.oferta_atual)
             self._seguir(b, "aceitou", intencao="aceitar", confianca_faixa=faixa(e.confianca))
-        elif e.intencao == "quer_outra_condicao" and any(s["quando"] == "quer_outra" for s in b["saidas"]):
-            self._seguir(b, "quer_outra", intencao=e.intencao)
-        elif e.intencao == "recusar" or not self._tentar_de_novo(b):
+        elif e.intencao == "quer_outra_condicao" or re.search(r"faz por|por \d|desconto maior|mais desconto", t):
+            self._fora_das_ofertas(b, e.intencao or "quer_outra_condicao")
+        elif e.intencao == "recusar":
+            i = ofs.index(self.oferta_atual) if self.oferta_atual in ofs else len(ofs)
+            if i + 1 < len(ofs):                  # uma por vez, na ordem da fonte, até o fim da lista
+                self.oferta_atual = ofs[i + 1]
+                self.tentativas[b["id"]] = 0
+                self._falar(FALA_OUTRA_OFERTA + condicao_oferta(self.oferta_atual), b["id"])
+                return
+            self._seguir(b, "recusou", intencao="recusar")
+        elif not self._tentar_de_novo(b):
             self._seguir(b, "recusou", intencao="recusar")
 
     # ---------------------------------------------------------------- agendar retorno
@@ -1106,8 +1298,8 @@ class Sessao:
             self._falar(FALA_HUMANO, b["id"])
             self._finalizar("transferir", motivo="pedido_humano")
             return
-        if not self.ofertas and "apresentar_oferta" in b["params"]["ferramentas"]:
-            self.ofertas = CN.ofertas_da_carteira(self.fluxo.alcada, self.vars.get("saldo"), self.hoje)
+        if "apresentar_oferta" in b["params"]["ferramentas"]:
+            self._garantir_ofertas(b)
         self.conversa = self.gerador(self, b)
         self._aplicar_turno_gen(b, self.conversa.comecar())
 
@@ -1166,6 +1358,11 @@ def _entidades(texto: str, quais: list) -> list:
     return out
 
 
+def _parece_cpf(v) -> bool:
+    from motor.pseudonimo import parece_cpf
+    return isinstance(v, str) and parece_cpf(v)
+
+
 def _reais(v) -> str:
     try:
         return "R$ " + f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -1186,8 +1383,31 @@ class CarregadorFluxos:
         self._em_uso: dict = {}
         self._versoes: dict = {}
         self._identidade: dict = {}
+        self._ofertas: dict = {}
+        self._montados: dict = {}
         # SQL 88: a fonte interna da identidade (arquivo) só existe com o cofre (a chave de identidade da empresa)
         self.fonte_interna = CN.FonteArquivo(sb, segredos) if segredos is not None else None
+        # SQL 130: as ofertas do arquivo (pelo banco, só dentro da ligação com a identidade confirmada) e a API instável
+        self.fonte_ofertas = CN.FonteOfertasArquivo(sb)
+        self.disjuntor = CN.Disjuntor()
+
+    def ofertas(self, ctx, agora: float) -> dict | None:
+        """De onde vêm as ofertas da carteira (cache curto). Erro, banco sem o SQL 130 ou fora do formato: None (= o
+        padrão: API → arquivo; só o arquivo sem API)."""
+        chave = (ctx.empresa_id, ctx.credor_id)
+        hit = self._ofertas.get(chave)
+        if hit is not None and agora - hit[0] <= self.ttl:
+            return hit[1]
+        cfg = None
+        try:
+            r = self.sb.rpc("ofertas_voz_vigente", {"empresa": ctx.empresa_id, "credor": ctx.credor_id})
+            r = r[0] if isinstance(r, list) and r else r
+            cfg = config_ofertas(r.get("ofertas")) if isinstance(r, dict) else None
+        except Exception as ex:   # noqa: BLE001
+            log.warning("ofertas da empresa %s: configuração indisponível (%s); usando o padrão", ctx.empresa_id,
+                        ex.__class__.__name__)
+        self._ofertas[chave] = (agora, cfg)
+        return cfg
 
     def identidade(self, ctx, agora: float) -> dict | None:
         """A configuração de identidade da carteira (cache curto, como a versão em uso). Erro, banco sem o SQL 88 ou
@@ -1222,12 +1442,20 @@ class CarregadorFluxos:
             ch = (v["versao_id"], v["hash"])
             if ch not in self._versoes:
                 self._versoes[ch] = self._montar(ctx, v)
-            fl = self._versoes[ch]
             cfg = self.identidade(ctx, agora)
-            if cfg is None:
-                return fl                      # sem configuração: exatamente o de hoje
-            return dataclasses.replace(fl, identidade=cfg, fonte_interna=self.fonte_interna,
-                                       empresa_id=ctx.empresa_id, credor_id=ctx.credor_id)
+            ofs = self.ofertas(ctx, agora)
+            chave_m = (ch, ctx.empresa_id, ctx.credor_id, repr(sorted((ofs or {}).items())),
+                       repr(sorted((cfg or {}).items())))
+            fl = self._montados.get(chave_m)
+            if fl is None:
+                if len(self._montados) > 500:
+                    self._montados.clear()
+                fl = dataclasses.replace(self._versoes[ch], empresa_id=ctx.empresa_id, credor_id=ctx.credor_id,
+                                         ofertas_cfg=ofs, fonte_ofertas=self.fonte_ofertas, disjuntor=self.disjuntor)
+                if cfg is not None:            # sem configuração de identidade: só o CRM confere (o de hoje)
+                    fl = dataclasses.replace(fl, identidade=cfg, fonte_interna=self.fonte_interna)
+                self._montados[chave_m] = fl
+            return fl
         except Exception as ex:   # noqa: BLE001
             log.warning("fluxo da empresa %s indisponível (%s): usando o roteiro", ctx.empresa_id, ex.__class__.__name__)
             return None
@@ -1255,7 +1483,6 @@ def gerador_montagem(modelo_de):
     from voz.provedores.montagem import ConversaBloco
 
     def fazer(sessao: Sessao, b: dict):
-        alc = sessao.fluxo.alcada
         base = sessao.fluxo.base.get(b["id"], [])
         livres = {round(float(x), 2) for _, r in base for x in re.findall(r"\d+", r)}
         saldo = CN._num(sessao.vars.get("saldo"))
@@ -1263,21 +1490,23 @@ def gerador_montagem(modelo_de):
             livres.add(round(saldo, 2))
         contexto = (f"Você fala com {sessao.vars.get('primeiro_nome') or 'o titular'}, identidade já confirmada. "
                     f"Credor: {sessao.vars.get('credor') or '-'}. Saldo: {sessao.vars.get('saldo') or '-'}. "
-                    + (f"Limites da carteira: até {alc.parcelas_max} parcelas, desconto até {alc.desconto_max_pct:g}%."
-                       if alc else "Sem alçada: não ofereça condições."))
+                    "Você não calcula nem negocia: apresente só as ofertas da lista, uma por vez, na ordem. Se a pessoa "
+                    "pedir outra condição, transfira (transferir_humano, motivo fora_das_ofertas).")
         return ConversaBloco(modelo_de(), b["params"], [s["quando"] for s in b["saidas"]], sessao.ofertas, contexto,
-                             base=base, hoje=sessao.hoje, validade_dias=alc.validade_dias if alc else 5,
-                             numeros_livres=tuple(livres))
+                             base=base, hoje=sessao.hoje, numeros_livres=tuple(livres))
     return fazer
 
 
 # ------------------------------------------------------------------ modo texto (simulador)
 def simular(fluxo: FluxoCarregado, falas: list[str], variaveis: dict, entendedor=None, modelo_de=None,
             falhar: set | None = None, hoje: date | None = None, id_cliente: str = "CLI-TESTE",
-            cenarios: dict | None = None) -> dict:
+            cenarios: dict | None = None, ofertas_arquivo: list | None = None, arquivo_fora: bool = False) -> dict:
     """Roda o fluxo em modo texto, com os conectores trocados pelo exemplo_resposta (ou falhando os de `falhar`).
     Devolve, por turno, fala, bloco, caminho, intenção, travas e chamadas a conectores, e os eventos de passo."""
     eventos: list = []
+    if ofertas_arquivo is not None or arquivo_fora:       # SQL 130: as ofertas do arquivo de um cliente fictício
+        fluxo = dataclasses.replace(fluxo, fonte_ofertas=CN.OfertasDeExemplo(ofertas_arquivo, falhar=arquivo_fora),
+                                    empresa_id=fluxo.empresa_id or 0, credor_id=fluxo.credor_id or 0)
     s = Sessao(fluxo, "sim-texto", id_cliente, variaveis, lambda i, t, d: eventos.append((t, d)),
                CN.ConectoresDeExemplo(falhar, cenarios), entendedor=entendedor,
                gerador=gerador_montagem(modelo_de) if modelo_de else None, hoje=hoje)
@@ -1293,6 +1522,7 @@ def simular(fluxo: FluxoCarregado, falas: list[str], variaveis: dict, entendedor
     return {"turnos": turnos, "caminho": list(s.caminho), "encerrada": s.encerrada,
             "resultado": s.resultado_final, "passos": [d for t, d in eventos if t == "passo"],
             "conectores": [d for t, d in eventos if t == "conector"],
+            "ofertas": next((d for t, d in eventos if t == "ofertas"), None),
             "eventos": [t for t, _ in eventos]}
 
 

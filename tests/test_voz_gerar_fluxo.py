@@ -415,7 +415,7 @@ class TestPedidoEmTextoLivre(unittest.TestCase):
         sistema = llm.chamadas[0][0]["content"]
         for trecho in ("titulo até 60 caracteres", "repetir_max inteiro de 1 a 5", "tipo \"falha\" se e só se",
                        "tipo \"devolve\" se e só se o bloco é generativa", "todo bloco alcançável a partir da abertura",
-                       "NÃO faça um bloco por tópico", "UMA generativa", "Cadastrar estes valores na alçada da carteira?",
+                       "NÃO faça um bloco por tópico", "UMA generativa", "Mandar estas ofertas pelo arquivo ou pela API?",
                        "{{primeiro_nome}}", "simulador", "contestacao"):
             self.assertIn(trecho, sistema)
         self.assertIn(TEXTO_PERSONA, llm.chamadas[0][1]["content"])

@@ -3182,5 +3182,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 130: ofertas da API ou do arquivo (testar_ofertas_voz.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 131 · executor das ofertas: campos de oferta (validade e a frase fixa) e o uso das fontes (só códigos)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ofertas_executor.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 131: executor das ofertas (testar_ofertas_executor.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

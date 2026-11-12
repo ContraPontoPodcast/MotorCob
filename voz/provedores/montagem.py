@@ -25,7 +25,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from motor import voz as V
 from voz.provedores.base import MOTIVOS_TRANSFERENCIA, Conexao, ContextoChamada, Emitir, ProvedorVoz
@@ -286,6 +286,13 @@ def _numero_br(t: str) -> float | None:
         return None
 
 
+def _data_iso(v) -> date | None:
+    try:
+        return date.fromisoformat(str(v)[:10]) if v not in (None, "") else None
+    except ValueError:
+        return None
+
+
 def ferramentas_do_bloco(ferramentas: list, ofertas: list, devolucoes: list) -> list[dict]:
     """Ferramentas do Generativo montadas por bloco, com enum gerado na hora: só os IDs das ofertas recebidas
     (conector ou carteira) e só os motivos de devolução que o bloco tem como saída."""
@@ -340,10 +347,9 @@ class ConversaBloco:
     argumento fora do enum é ignorado; passar de max_turnos transfere."""
 
     def __init__(self, modelo, params: dict, devolucoes: list, ofertas: list, contexto: str, base: list | None = None,
-                 hoje: date | None = None, validade_dias: int = 5, numeros_livres: tuple = ()):
+                 hoje: date | None = None, numeros_livres: tuple = ()):
         self.modelo, self.params, self.devolucoes, self.ofertas = modelo, params, list(devolucoes), list(ofertas)
         self.hoje = hoje or date.today()
-        self.validade_dias = validade_dias
         self.max_turnos = int(params.get("max_turnos") or 8)
         self.max_apresentar = int(params.get("contrapropostas_max", 2)) + 1
         self.turnos = self.apresentadas = 0
@@ -451,18 +457,19 @@ class ConversaBloco:
                 self.oferta_atual = o
         elif nome == "registrar_promessa" and "registrar_promessa" in (self.params.get("ferramentas") or []):
             o = self._oferta(a.get("oferta_id"))
-            try:
-                d = date.fromisoformat(str(a.get("data"))[:10])
-            except ValueError:
-                d = None
             if o is None:
                 turno.trava = "oferta_inventada"
-            elif d is None or not self.hoje <= d <= self.hoje + timedelta(days=self.validade_dias):
-                self.avisos.append("data da promessa fora da validade (ignorada)")
             else:
-                self.oferta_atual = o
-                valor = o.get("valor_parcela") if int(o.get("parcelas") or 1) > 1 else o.get("valor_total")
-                self.promessa = {"oferta": o, "data_promessa": d, "valor_promessa": valor}
+                # SQL 130 (Q17): a data é a da oferta (vencimento; sem ele, a validade) e o valor, a entrada (senão a
+                # parcela). A data que o modelo mandar não muda nada: o agente não negocia prazo.
+                val = _data_iso(o.get("validade"))
+                d = _data_iso(o.get("vencimento")) or val or _data_iso(a.get("data"))
+                if d is None or d < self.hoje or (val is not None and d > val):
+                    self.avisos.append("data da promessa fora da validade (ignorada)")
+                else:
+                    self.oferta_atual = o
+                    valor = o.get("entrada") if o.get("entrada") not in (None, "") else o.get("valor_parcela")
+                    self.promessa = {"oferta": o, "data_promessa": d, "valor_promessa": valor}
         elif nome == "agendar_retorno" and "agendar_retorno" in (self.params.get("ferramentas") or []):
             try:
                 q = datetime.fromisoformat(str(a.get("quando"))[:16])

@@ -718,7 +718,7 @@ class Orquestrador:
         elif tipo == "fluxo":
             c.extras["fluxo_versao_id"] = dados.get("fluxo_versao_id")
             c.extras["bloco_final"] = dados.get("bloco_final")
-        elif tipo in ("passo", "conector", "link"):
+        elif tipo in ("passo", "conector", "link", "ofertas"):
             if self.ao_fluxo is not None:
                 try:
                     self.ao_fluxo(c.empresa_id, c.id, tipo, dados)

@@ -1,7 +1,7 @@
 """Executor do fluxo (voz/fluxo.py), conectores (voz/conector.py) e o bloco generativo da Montagem.
 
-Todos os caminhos do protótipo (Negociador): identidade, intenções, falha do CRM levando à alternativa da carteira,
-oferta acima da alçada, devolução do generativo, "não me ligue", pedido de humano e senha. As travas são do executor:
+Todos os caminhos do protótipo (Negociador): identidade, intenções, falha do CRM levando às ofertas do arquivo (SQL
+130: a alternativa calculada da carteira saiu), oferta acima da alçada, devolução do generativo, "não me ligue", pedido de humano e senha. As travas são do executor:
 os testes usam um LLM falso que tenta furar cada uma. Sem rede; só dados fictícios.
 """
 import io
@@ -10,6 +10,7 @@ import logging
 import unittest
 import urllib.error
 from datetime import date, datetime
+from pathlib import Path
 
 from voz import conector as CN
 from voz import fluxo as FX
@@ -25,11 +26,15 @@ SEGREDO_CORPO = "CORPO-SECRETO-DO-CRM-9f8c"      # aparece na resposta do CRM; n
 MS_OFERTAS = [{"origem": "$.offers[*].id", "destino": "oferta.id", "grava": "nao"},
               {"origem": "$.offers[*].installments", "destino": "oferta.parcelas", "grava": "nao"},
               {"origem": "$.offers[*].installmentAmount", "destino": "oferta.valor_parcela", "grava": "nao"},
-              {"origem": "$.offers[*].discountPct", "destino": "oferta.desconto_pct", "grava": "nao"}]
-OFERTAS = {"offers": [{"id": "OF-1", "installments": 1, "installmentAmount": 1104, "discountPct": 20},
-                      {"id": "OF-2", "installments": 6, "installmentAmount": 230, "discountPct": 0},
-                      {"id": "OF-3", "installments": 12, "installmentAmount": 115, "discountPct": 0}],
+              {"origem": "$.offers[*].discountPct", "destino": "oferta.desconto_pct", "grava": "nao"},
+              {"origem": "$.offers[*].validUntil", "destino": "oferta.validade", "grava": "nao"}]
+OFERTAS = {"offers": [{"id": "OF-1", "installments": 1, "installmentAmount": 1104, "discountPct": 20, "validUntil": "2026-11-06"},
+                      {"id": "OF-2", "installments": 6, "installmentAmount": 230, "discountPct": 0, "validUntil": "2026-11-06"},
+                      {"id": "OF-3", "installments": 12, "installmentAmount": 115, "discountPct": 0, "validUntil": "2026-11-06"}],
            "nota": SEGREDO_CORPO}
+# as ofertas do arquivo do dia do cliente fictício (SQL 130), usadas quando a API falha
+ARQUIVO = [{"id": "arq-1", "parcelas": 1, "valor_parcela": 1200.0, "desconto_pct": 13, "validade": "2026-11-05"},
+           {"id": "arq-2", "parcelas": 6, "valor_parcela": 230.0, "validade": "2026-11-05", "vencimento": "2026-11-03"}]
 
 
 def con(i, fin, mapa, exemplo, metodo="GET", em_falha="ramo", **k):
@@ -41,7 +46,7 @@ def con(i, fin, mapa, exemplo, metodo="GET", em_falha="ramo", **k):
 
 def conectores(ofertas=OFERTAS, match=True):
     return {
-        1: con(1, "buscar_ofertas", MS_OFERTAS, ofertas, em_falha="alternativa_carteira"),
+        1: con(1, "buscar_ofertas", MS_OFERTAS, ofertas, em_falha="reserva_arquivo"),
         2: con(2, "validar_cadastro", [{"origem": "$.match", "destino": "codigo", "grava": "codigo",
                                         "valores": {"true": "identidade_ok", "false": "identidade_nao_confere"}}],
                {"match": match}, "POST"),
@@ -55,7 +60,7 @@ def conectores(ofertas=OFERTAS, match=True):
     }
 
 
-ALCADA = CN.Alcada(20, 6, 50, 0, 5, ({"id": "AV", "parcelas": 1, "desconto_pct": 20}, {"id": "P6", "parcelas": 6, "desconto_pct": 0}))
+ALCADA = CN.Alcada(20, 6, 50, 0)
 
 
 def fluxo(definicao=None, cons=None, alcada=ALCADA, **k):
@@ -138,15 +143,19 @@ class TestCaminhos(unittest.TestCase):
         r = simular(ATE_N3 + ["hmm", "batata"])
         self.assertEqual(r["caminho"][-1], "N13")
 
-    def test_falha_do_crm_leva_a_oferta_da_carteira(self):
-        r = simular(ATE_N3 + ["Quero parcelar", "Aceito"], falhar={1})
-        self.assertEqual(r["caminho"], ["N1", "N2", "N3", "N4", "N6", "N7", "N11", "N12"])
-        self.assertEqual(r["resultado"], "promessa")
+    def test_falha_do_crm_leva_as_ofertas_do_arquivo(self):
+        r = simular(ATE_N3 + ["Quero parcelar"], falhar={1}, ofertas_arquivo=ARQUIVO)
+        self.assertEqual(r["caminho"][:6], ["N1", "N2", "N3", "N4", "N15", "N5"])   # a reserva entra sem avisar
         c1 = next(c for c in r["conectores"] if c["conector_id"] == 1)
         self.assertEqual((c1["classe"], c1["resultado_codigo"]), ("tempo", "falhou"))
-        oferta = r["turnos"][3]["falas"][-1]["texto"]
-        self.assertIn("R$ 230,00", oferta)                    # 1380 em 6x, da alçada da carteira
-        self.assertEqual(r["eventos"].count("fluxo"), 1)
+        self.assertEqual((r["ofertas"]["fonte"], r["ofertas"]["motivo"], r["ofertas"]["ofertas"]),
+                         ("arquivo", "api_falhou", 2))
+
+    def test_falha_do_crm_sem_arquivo_transfere(self):
+        r = simular(ATE_N3 + ["Quero parcelar"], falhar={1})
+        self.assertEqual(r["caminho"], ["N1", "N2", "N3", "N4", "N6"])
+        self.assertEqual(r["turnos"][-1]["fim"], "transferida · ofertas_sem_acordo")
+        self.assertNotIn("R$", r["turnos"][-1]["falas"][-1]["texto"])     # nada calculado do saldo (a alternativa saiu)
 
     def test_oferta_do_crm_acima_da_alcada_e_descartada(self):
         modelo = ModeloFalso([R("Tenho duas condições.", ("apresentar_oferta", {"oferta_id": "OF-2"}))])
@@ -400,13 +409,264 @@ class TestConector(unittest.TestCase):
         self.assertNotIn("1104", texto)
 
     def test_filtro_da_alcada(self):
-        boas, fora = CN.filtrar_ofertas([{"id": "a", "parcelas": 6, "valor_parcela": 230, "desconto_pct": 0},
-                                         {"id": "b", "parcelas": 1, "desconto_pct": 30},
-                                         {"id": "c", "parcelas": 3, "valor_parcela": 20},
-                                         {"parcelas": 2}], ALCADA)
-        self.assertEqual(([o["id"] for o in boas], fora), (["a"], 3))
-        self.assertEqual(CN.filtrar_ofertas([{"id": "a", "parcelas": 1}], None), ([], 1))   # sem alçada nada passa
+        v = "2026-11-06"
+        boas, fora = CN.filtrar_ofertas([{"id": "a", "parcelas": 6, "valor_parcela": 230, "desconto_pct": 0, "validade": v},
+                                         {"id": "b", "parcelas": 1, "valor_parcela": 900, "desconto_pct": 30, "validade": v},
+                                         {"id": "c", "parcelas": 3, "valor_parcela": 20, "validade": v},
+                                         {"parcelas": 2, "valor_parcela": 100, "validade": v}], ALCADA, HOJE)
+        self.assertEqual(([o["id"] for o in boas], fora), (["a"], {"acima_alcada": 2, "incompleta": 1}))
+        self.assertEqual(CN.filtrar_ofertas([{"id": "a", "parcelas": 1, "valor_parcela": 9, "validade": v}], None, HOJE),
+                         ([], {"acima_alcada": 1}))                                # sem alçada nada passa
         self.assertEqual(CN.codigo_ofertas(0, 2), "oferta_acima_alcada")
+
+
+# ------------------------------------------------------------------ SQL 130: ofertas só da API ou do arquivo
+CASOS_OFERTAS = json.loads((Path(__file__).resolve().parent / "dados" / "ofertas_casos.json").read_text(encoding="utf-8"))
+API3 = {"offers": [{"id": "A-1", "installments": 1, "installmentAmount": 1100, "discountPct": 20, "validUntil": "2026-11-06"},
+                   {"id": "A-2", "installments": 6, "installmentAmount": 230, "discountPct": 0, "validUntil": "2026-11-06"},
+                   {"id": "A-3", "installments": 4, "installmentAmount": 345, "validUntil": "2026-11-06"}]}
+
+
+def fluxo_oferta(origem="arquivo", cfg=None, cons=None, quer_outra="N5", **k):
+    """Negociador com "quero negociar" indo direto à etapa Oferta (sem o "Buscar ofertas" antes)."""
+    d = C.negociador()
+    for b in d["blocos"]:
+        if b["id"] == "N3":
+            for x in b["saidas"]:
+                if x["quando"] == "quero_negociar":
+                    x["para"] = "N6"
+                elif x["quando"] == "sem_dinheiro":      # o "Buscar ofertas" continua alcançável (validador)
+                    x["para"] = "N4"
+        if b["id"] == "N6":
+            b["params"] = {"origem": origem, "fala": "Tenho uma condição para você: {{oferta.condicao}}",
+                           **({"conector_id": 1} if origem == "conector" else {})}
+            for x in b["saidas"]:
+                if x["quando"] == "quer_outra":
+                    x["para"] = quer_outra
+    return fluxo(d, cons=cons, ofertas_cfg=cfg, **k)
+
+
+ATE_OFERTA = ATE_N3 + ["Quero parcelar"]
+
+
+class TestOfertas(unittest.TestCase):
+    def test_casos_compartilhados_de_descarte(self):
+        a = CN.Alcada(**CASOS_OFERTAS["alcada"])
+        hoje = date.fromisoformat(CASOS_OFERTAS["hoje"])
+        for c in CASOS_OFERTAS["descarte"]:
+            with self.subTest(c["nome"]):
+                self.assertEqual(CN.motivo_descarte(c["oferta"], a, hoje), c["motivo"])
+
+    def test_no_maximo_3_na_ordem_da_fonte(self):
+        v = "2026-11-06"
+        ofs = [{"id": f"o{i}", "parcelas": i, "valor_parcela": 100, "validade": v} for i in (5, 1, 3, 2)]
+        boas, _ = CN.filtrar_ofertas(ofs, ALCADA, HOJE)
+        self.assertEqual([o["id"] for o in boas], ["o5", "o1", "o3"])
+
+    def test_arquivo_apresenta_uma_por_vez_e_aceita_a_segunda(self):
+        r = simular(ATE_OFERTA + ["Não consigo esse valor", "Pode ser"], f=fluxo_oferta(), ofertas_arquivo=ARQUIVO)
+        falas = [f["texto"] for t in r["turnos"] for f in t["falas"]]
+        self.assertIn("Tenho uma condição para você: à vista por R$ 1.200,00, com 13% de desconto. Vale até 05/11.", falas)
+        self.assertIn("Entendo. Também tenho: 6 parcelas de R$ 230,00. Vale até 05/11.", falas)
+        self.assertEqual(r["caminho"][-3:], ["N7", "N11", "N12"])
+        self.assertEqual(r["resultado"], "promessa")
+
+    def test_promessa_usa_vencimento_e_parcela(self):
+        eventos = []
+        s = FX.Sessao(_com_arquivo(fluxo_oferta()), "ch-1", "C1", VARS,
+                      lambda i, t, d: eventos.append((t, d)), CN.ConectoresDeExemplo(), hoje=HOJE)
+        s.comecar()
+        for f in ATE_OFERTA + ["faço em 6"]:
+            s.ouvir(f)
+        res = next(d for t, d in eventos if t == "resultado")
+        self.assertEqual((res["data_promessa"], res["valor_promessa"]), (date(2026, 11, 3), 230.0))
+
+    def test_promessa_com_entrada_e_sem_vencimento(self):
+        arq = [{"id": "e", "parcelas": 4, "valor_parcela": 250.0, "entrada": 200.0, "validade": "2026-11-05"}]
+        eventos = []
+        s = FX.Sessao(_com_arquivo(fluxo_oferta(), arq), "ch-1", "C1", VARS, lambda i, t, d: eventos.append((t, d)),
+                      CN.ConectoresDeExemplo(), hoje=HOJE)
+        s.comecar()
+        for f in ATE_OFERTA + ["Aceito"]:
+            s.ouvir(f)
+        res = next(d for t, d in eventos if t == "resultado")
+        self.assertEqual((res["data_promessa"], res["valor_promessa"]), (date(2026, 11, 5), 200.0))
+
+    def test_pede_condicao_fora_da_lista_transfere(self):
+        for fala in ("Só consigo em 18 vezes", "Faz por 900?"):
+            with self.subTest(fala):
+                r = simular(ATE_OFERTA + [fala], f=fluxo_oferta(), ofertas_arquivo=ARQUIVO)
+                self.assertEqual(r["turnos"][-1]["falas"][-1]["texto"], FX.FALA_FORA_OFERTAS)
+                self.assertEqual(r["turnos"][-1]["fim"], "transferida · fora_das_ofertas")
+
+    def test_quer_outra_para_transferir_segue_o_roteiro(self):
+        r = simular(ATE_OFERTA + ["Só consigo em 18 vezes"], f=fluxo_oferta(quer_outra="N13"), ofertas_arquivo=ARQUIVO)
+        self.assertEqual(r["caminho"][-1], "N13")
+
+    def test_recusa_todas_segue_recusou(self):
+        r = simular(ATE_OFERTA + ["Não quero", "Não quero"], f=fluxo_oferta(), ofertas_arquivo=ARQUIVO)
+        self.assertEqual(r["caminho"][-1], "N9")
+
+    def test_api_primeiro_e_o_arquivo_fica_de_reserva(self):
+        cfg = {"modo": "api_arquivo", "conector_id": 1}
+        r = simular(ATE_OFERTA, f=fluxo_oferta(cfg=cfg, cons=conectores(ofertas=API3)), ofertas_arquivo=ARQUIVO)
+        self.assertEqual((r["ofertas"]["fonte"], r["ofertas"]["motivo"], r["ofertas"]["ofertas"]), ("api", "primeira", 3))
+        self.assertIn("à vista por R$ 1.100,00", r["turnos"][-1]["falas"][-1]["texto"])
+
+    def test_api_sem_oferta_nao_usa_o_arquivo(self):
+        cfg = {"modo": "api_arquivo", "conector_id": 1}
+        r = simular(ATE_OFERTA, f=fluxo_oferta(cfg=cfg, cons=conectores(ofertas={"offers": []})), ofertas_arquivo=ARQUIVO)
+        self.assertEqual((r["ofertas"]["fonte"], r["ofertas"]["motivo"]), (None, "api_sem_oferta"))
+        self.assertEqual(r["turnos"][-1]["fim"], "transferida · ofertas_sem_acordo")
+
+    def test_api_toda_acima_da_alcada_vai_ao_arquivo(self):
+        acima = {"offers": [{"id": "X", "installments": 24, "installmentAmount": 60, "validUntil": "2026-11-06"}]}
+        cfg = {"modo": "api_arquivo", "conector_id": 1}
+        r = simular(ATE_OFERTA, f=fluxo_oferta(cfg=cfg, cons=conectores(ofertas=acima)), ofertas_arquivo=ARQUIVO)
+        self.assertEqual((r["ofertas"]["fonte"], r["ofertas"]["motivo"]), ("arquivo", "api_descartadas"))
+        self.assertEqual(r["ofertas"]["descartes"], {"acima_alcada": 1})
+
+    def test_api_vencida_e_descartada(self):
+        venc = {"offers": [dict(API3["offers"][0], validUntil="2026-10-30"), API3["offers"][1]]}
+        cfg = {"modo": "so_api", "conector_id": 1}
+        r = simular(ATE_OFERTA, f=fluxo_oferta(cfg=cfg, cons=conectores(ofertas=venc)))
+        self.assertEqual((r["ofertas"]["ofertas"], r["ofertas"]["descartes"]), (1, {"vencida": 1}))
+
+    def test_arquivo_primeiro_e_a_api_de_reserva(self):
+        cfg = {"modo": "arquivo_api", "conector_id": 1}
+        r = simular(ATE_OFERTA, f=fluxo_oferta(cfg=cfg, cons=conectores(ofertas=API3)), ofertas_arquivo=[])
+        self.assertEqual((r["ofertas"]["fonte"], r["ofertas"]["motivo"]), ("api", "arquivo_vazio"))
+
+    def test_so_api_com_a_api_fora_transfere(self):
+        d = C.negociador()
+        f = fluxo(d, ofertas_cfg={"modo": "so_api", "conector_id": 1})
+        r = simular(ATE_OFERTA, f=f, falhar={1}, ofertas_arquivo=ARQUIVO)
+        self.assertEqual(r["turnos"][-1]["falas"][-1]["texto"], FX.FALA_FALHA)
+        self.assertTrue(r["turnos"][-1]["fim"].startswith("transferida"))
+        self.assertEqual((r["ofertas"]["fonte"], r["ofertas"]["motivo"]), (None, "api_falhou"))
+
+    def test_so_arquivo_nao_chama_a_api(self):
+        cfg = {"modo": "so_arquivo", "conector_id": None}
+        r = simular(ATE_OFERTA, f=fluxo_oferta(cfg=cfg), ofertas_arquivo=ARQUIVO)
+        self.assertEqual([c for c in r["conectores"] if c["conector_id"] == 1], [])
+        self.assertEqual(r["ofertas"]["fonte"], "arquivo")
+
+    def test_api_instavel_e_pulada(self):
+        dj = CN.Disjuntor(relogio=lambda: 100.0)
+        for _ in range(3):
+            dj.registrar(1, False)
+        self.assertTrue(dj.aberto(1))
+        cfg = {"modo": "api_arquivo", "conector_id": 1}
+        f = fluxo_oferta(cfg=cfg, cons=conectores(ofertas=API3), disjuntor=dj)
+        r = simular(ATE_OFERTA, f=f, ofertas_arquivo=ARQUIVO)
+        self.assertEqual((r["ofertas"]["fonte"], r["ofertas"]["motivo"], r["ofertas"]["pulou_api"]),
+                         ("arquivo", "api_instavel", True))
+        self.assertEqual([c for c in r["conectores"] if c["conector_id"] == 1], [])
+
+    def test_disjuntor_sucesso_zera_e_janela(self):
+        t = [0.0]
+        dj = CN.Disjuntor(relogio=lambda: t[0])
+        dj.registrar(1, False)
+        dj.registrar(1, False)
+        dj.registrar(1, True)
+        dj.registrar(1, False)
+        self.assertFalse(dj.aberto(1))
+        dj.registrar(1, False)
+        t[0] = 400.0                                       # fora da janela de 5 min: começa de novo
+        dj.registrar(1, False)
+        self.assertFalse(dj.aberto(1))
+        dj.registrar(1, False)
+        dj.registrar(1, False)
+        self.assertTrue(dj.aberto(1))
+        t[0] = 701.0
+        self.assertFalse(dj.aberto(1))                     # depois de 5 min, tenta a API de novo
+
+    def test_teto_de_4s_corta_a_nova_tentativa(self):
+        t = [0.0]
+        tempos = []
+
+        def abrir(req, timeout, ctx):
+            tempos.append(timeout)
+            t[0] += timeout
+            raise TimeoutError()
+        cli = CN.ClienteConectores(Dicionario({"crm/1/x": "tok"}), {1: {"api.crm.exemplo.com.br"}}, abrir=abrir,
+                                   relogio=lambda: t[0], dormir=lambda s: t.__setitem__(0, t[0] + s))
+        c = con(1, "buscar_ofertas", MS_OFERTAS, None, tentativas=2)
+        r = cli.chamar(c, {"id_cliente": "C1"}, "ch:N4", teto_s=4.0)
+        self.assertEqual(r.classe, "tempo")
+        self.assertLessEqual(sum(tempos) + 0.2, 4.0 + 1e-9)
+        self.assertEqual(tempos[0], 2.5)
+
+    def test_api_nunca_recebe_cpf(self):
+        vistos = []
+
+        class Cli(CN.ConectoresDeExemplo):
+            def chamar(self, c, entrada, chave, teto_s=None):
+                vistos.append(dict(entrada))
+                return super().chamar(c, entrada, chave, teto_s)
+        f = fluxo_oferta(cfg={"modo": "so_api", "conector_id": 1}, cons=conectores(ofertas=API3))
+        s = FX.Sessao(f, "ch-1", "C1", dict(VARS, contrato_ref="529.982.247-25"), lambda *a: None, Cli(), hoje=HOJE)
+        s.comecar()
+        for x in ATE_OFERTA:
+            s.ouvir(x)
+        entrada = next(v for v in vistos if "contrato_ref" in v or "id_cliente" in v and len(vistos) > 1)
+        self.assertNotIn("529.982.247-25", json.dumps(vistos))
+        self.assertEqual(entrada.get("id_cliente"), "C1")
+
+    def test_carteira_antiga_vale_como_arquivo(self):
+        r = simular(ATE_OFERTA, f=fluxo_oferta(origem="carteira"), ofertas_arquivo=ARQUIVO)
+        self.assertEqual(r["ofertas"]["fonte"], "arquivo")
+
+    def test_arquivo_so_depois_da_identidade(self):
+        arq = CN.OfertasDeExemplo(ARQUIVO)
+        s = FX.Sessao(_com_arquivo(fluxo_oferta(), fonte=arq), "ch-1", "C1", VARS, lambda *a: None,
+                      CN.ConectoresDeExemplo(), hoje=HOJE)
+        s.comecar()
+        s.ouvir("Sou eu")
+        self.assertEqual(arq.pedidos, [])
+        for x in ["15 de março", "Quero parcelar"]:
+            s.ouvir(x)
+        self.assertEqual(arq.pedidos, ["C1"])
+
+    def test_evento_ofertas_so_com_codigos(self):
+        r = simular(ATE_OFERTA, f=fluxo_oferta(), ofertas_arquivo=ARQUIVO)
+        txt = json.dumps(r["ofertas"])
+        for proibido in ("1200", "230", "arq-1", "CLI"):
+            self.assertNotIn(proibido, txt)
+
+    def test_config_ofertas(self):
+        self.assertEqual(FX.config_ofertas({"modo": "so_arquivo", "conector_id": None}),
+                         {"modo": "so_arquivo", "conector_id": None})
+        for ruim in ({"modo": "regras", "conector_id": 1}, {"modo": "so_api", "conector_id": None},
+                     {"modo": "so_api", "conector_id": True}, {"modo": "so_api", "conector_id": 1, "x": 1}, None):
+            self.assertIsNone(FX.config_ofertas(ruim))
+
+    def test_registro_manda_so_codigos(self):
+        from voz.registro import RegistroBanco
+
+        class SB:
+            def __init__(self):
+                self.rpcs = []
+
+            def inserir(self, *a, **k):
+                pass
+
+            def rpc(self, nome, args):
+                self.rpcs.append((nome, args))
+        sb = SB()
+        reg = RegistroBanco(sb)
+        r = simular(ATE_OFERTA, f=fluxo_oferta(), ofertas_arquivo=ARQUIVO)
+        reg.registrar_fluxo(1, "ch-0001", "ofertas", r["ofertas"])
+        reg.descarregar()
+        nome, args = next(x for x in sb.rpcs if x[0] == "registrar_ofertas_voz")
+        self.assertEqual(set(args["linhas"][0]), set(__import__("voz.registro", fromlist=["x"]).CAMPOS_OFERTAS_USO))
+        self.assertEqual(args["linhas"][0]["fonte"], "arquivo")
+
+
+def _com_arquivo(f, ofertas=None, fonte=None):
+    import dataclasses
+    return dataclasses.replace(f, fonte_ofertas=fonte or CN.OfertasDeExemplo(ARQUIVO if ofertas is None else ofertas),
+                               empresa_id=1, credor_id=5)
 
 
 # ------------------------------------------------------------------ Montagem com fluxo
@@ -460,7 +720,7 @@ class TestMontagemFluxo(unittest.TestCase):
         f1, f2 = car(ctx), car(ctx)
         self.assertIs(f1, f2)
         self.assertEqual((f1.versao_id, f1.alcada.parcelas_max, f1.hosts), (10, 6, ("api.crm.exemplo.com.br",)))
-        self.assertEqual(SB.n, 3)                               # em uso + alçada + identidade (SQL 88), uma vez só
+        self.assertEqual(SB.n, 4)                       # em uso + alçada + identidade (SQL 88) + ofertas (SQL 130), uma vez só
 
 
 class TestRegistroFluxo(unittest.TestCase):

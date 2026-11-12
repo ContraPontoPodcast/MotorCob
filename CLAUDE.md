@@ -971,6 +971,25 @@ limites por cliente no arquivo. Casos compartilhados: `tests/dados/ofertas_casos
 `tests/test_ofertas_mailing.py`, `supabase/testes/testar_ofertas_voz.py`. Se o SQL 58, 88 ou 95 rodar de novo, rode o
 130 depois.
 
+**SQL 131 · o executor das ofertas (VM, `voz/fluxo.py` e `voz/conector.py`).** Uma fonte por ligação: a 1ª da ordem
+(`voz_mailing_config.ofertas`; sem ela, API → arquivo, ou só o arquivo sem API) com ao menos 1 oferta válida; as fontes
+nunca se misturam. API: conector "Buscar ofertas" (o da configuração; sem ele, o da etapa), chamada depois da identidade,
+2,5 s por tentativa e teto de 4 s somando (`ClienteConectores.chamar(teto_s=)`); falha (tempo, 4xx, 5xx, ilegível) ou
+todas descartadas → a próxima fonte; lista vazia ("sem oferta") NÃO aciona o arquivo; 3 falhas seguidas em 5 min → pula a
+API por 5 min (`conector.Disjuntor`, por VM); "só a API" fora → `FALA_FALHA` e transfere. Arquivo: `FonteOfertasArquivo`
+(`ofertas_mailing_voz`; com a identidade pelo CRM, antes `confirmar_identidade_crm_voz`). Trava: `filtrar_ofertas(ofertas,
+alçada, hoje)` descarta incompleta/vencida/acima da alçada/conta e devolve os descartes por motivo; no máximo 3, na
+ordem da fonte. Etapa Oferta: uma por vez na ordem (recusou → "Entendo. Também tenho: …", fim da lista → "recusou");
+escolher pelo número de parcelas ("faço em 6") aceita; número fora da lista ou outra condição → `FALA_FORA_OFERTAS` e
+transfere `fora_das_ofertas` (a saída "quer_outra" só vale se for para um Transferir); sem atendente, o B5 agenda o
+retorno. `{{oferta.condicao}}` = a frase fixa só com os campos que vieram; `{{oferta.validade}}`. Promessa: valor =
+entrada (senão parcela), data = vencimento (senão validade); o Generativo idem, sem `validade_dias` nem limites da
+alçada no contexto. Nenhum conector recebe CPF. Evento `ofertas` (só códigos e contagens) → `voz_ofertas_uso`
+(`registrar_ofertas_voz`); limpeza noturna `limpar_ofertas_voz` (uso com 90 dias). `campos_oferta_voz` ganhou
+`oferta.validade` e `oferta.condicao`. Saíram `ofertas_da_carteira`, `Alcada.ofertas_padrao`/`validade_dias` e a
+"alternativa da carteira". Simulador HTTP aceita `ofertas` e `ofertas_arquivo` (cliente fictício). Testes:
+`tests/test_voz_fluxo.py` (TestOfertas) e `supabase/testes/testar_ofertas_executor.py`.
+
 **SQL 89 (Roleplay de treinamento, PR 1; SPEC aprovada pelo dono): perfil "Qualidade", só a área Speech Analytics.**
 Pessoa da empresa cliente (papel `qualidade`). **Vale no banco, não só no menu:** `minhas_empresas()` não devolve a
 empresa para a Qualidade, então toda policy/RPC de fora do Speech já nega; `minhas_empresas_speech()` (= minhas_empresas

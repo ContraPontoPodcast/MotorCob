@@ -37,8 +37,9 @@ MAX_TURNOS_GLOBAL = 40          # voz/provedores/montagem.py › ConfigMontagem.
 VARIAVEIS_VOZ = ("primeiro_nome", "credor", "saldo", "dias_atraso", "vencimento", "link_pagamento",
                  "valor_minimo", "parcelas_max", "desconto_max", "assessoria")
 # campos de oferta que o mapa de saída de um conector pode preencher e que a fala pode citar
+# (SQL 131: + oferta.validade, obrigatória no contrato da API, e oferta.condicao, a frase fixa da oferta)
 CAMPOS_OFERTA = ("oferta.id", "oferta.parcelas", "oferta.valor_parcela", "oferta.desconto_pct", "oferta.vencimento",
-                 "oferta.valor_total", "oferta.entrada")
+                 "oferta.valor_total", "oferta.entrada", "oferta.validade", "oferta.condicao")
 VARIAVEIS_FALA = VARIAVEIS_VOZ + CAMPOS_OFERTA
 # o que não pode aparecer antes de Confirmar identidade (valor, oferta ou credor da dívida)
 VARIAVEIS_LIVRES = ("primeiro_nome", "assessoria")
@@ -75,7 +76,10 @@ ENTIDADES = ("data", "valor", "parcelas", "hora")
 PERGUNTAS_IDENTIDADE = ("dia_mes_nascimento", "ano_nascimento", "ultimos3_documento")
 # a identidade é conferida pelo CRM (conector de finalidade validar_cadastro) ou, com a configuração da carteira
 # (SQL 88), pelo arquivo; nunca pela IA (decisão do dono)
-ORIGENS_OFERTA = ("conector", "carteira")
+# SQL 130: a etapa Oferta usa a ordem da carteira (API e/ou arquivo); "conector" = a API da própria etapa. "carteira"
+# (as antigas ofertas padrão da alçada, que saíram) fica aceita só como nome antigo e vale como "arquivo".
+ORIGENS_OFERTA = ("conector", "arquivo")
+ORIGENS_LEGADAS = ("carteira",)
 REGISTROS = ("acordo_crm", "promessa_motorcx")
 CANAIS_LINK = ("whatsapp_sms", "sms", "whatsapp")
 CAMPOS_CONDICAO = ("ofertas_quantidade", "identidade_confirmada", "dias_atraso", "saldo", "tentativa_do_dia")
@@ -294,7 +298,7 @@ def _params(b: dict, erros: list[str]) -> None:
         if "contrapropostas_max" in p and not _inteiro(p["contrapropostas_max"], 0, 5):
             ruim = True
     elif tipo == "oferta":
-        ruim |= p.get("origem") not in ORIGENS_OFERTA
+        ruim |= p.get("origem") not in ORIGENS_OFERTA + ORIGENS_LEGADAS
     elif tipo == "retorno":
         if "dias_max" in p and not _inteiro(p["dias_max"], 1, 7):
             ruim = True

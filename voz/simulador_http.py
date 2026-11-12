@@ -134,9 +134,17 @@ def rodar(pedido: dict, modelo_de=None, entendedor=None, hoje: date | None = Non
         c = CN.Conector.da_linha(linha)
         cons[c.id] = c
     base = {k: [tuple(x) for x in v] for k, v in (pedido.get("base") or {}).items()}
-    fluxo = FX.FluxoCarregado(pedido.get("versao_id"), d, cons, CN.Alcada.da_linha(pedido.get("alcada")), base)
+    # SQL 130: de onde vêm as ofertas (a ordem da carteira) e as ofertas do arquivo de um cliente FICTÍCIO (até 3)
+    cfg_of = FX.config_ofertas(pedido.get("ofertas")) if pedido.get("ofertas") is not None else None
+    arq = pedido.get("ofertas_arquivo")
+    if arq is not None and not (isinstance(arq, list) and len(arq) <= 3 and all(isinstance(o, dict) for o in arq)):
+        return {"erro": "ofertas do arquivo inválidas (até 3)"}
+    fluxo = FX.FluxoCarregado(pedido.get("versao_id"), d, cons, CN.Alcada.da_linha(pedido.get("alcada")), base,
+                              ofertas_cfg=cfg_of)
     r = FX.simular(fluxo, falas, pedido.get("variaveis") or {}, entendedor=entendedor, modelo_de=modelo_de,
-                   falhar=set(pedido.get("falhar") or ()), hoje=hoje, cenarios=cenarios)
+                   falhar=set(pedido.get("falhar") or ()), hoje=hoje, cenarios=cenarios,
+                   ofertas_arquivo=[{k: v for k, v in o.items() if k in CN.CAMPOS_OFERTA} for o in arq] if arq else arq,
+                   arquivo_fora=bool(pedido.get("arquivo_fora")))
     del r["eventos"]
     return r
 
