@@ -948,6 +948,29 @@ do arquivo (ainda não construídas): `identidade_mailing_confirmada`. Limpeza n
 Chave: `docs/NUVEM_GCP.md` › "Chave de identidade do agente de voz". Testes: `tests/test_identidade_mailing.py` e
 `supabase/testes/testar_identidade_mailing.py`. Se o SQL 58 for rodado de novo, rode o 88 depois.
 
+**SQL 130 (SPEC_OFERTAS_v2, respostas Q1–Q18 aprovadas pelo dono): as ofertas do agente vêm SÓ da API do credor ou do
+arquivo; o MotorCX não calcula, não negocia e não monta oferta.** Fontes: API = o conector "Buscar ofertas" (inclusive
+o CRM); arquivo = as colunas `oferta1..3_{id, parcelas, valor_parcela, desconto, entrada, validade, valor_total,
+vencimento}` do mapeamento da carga (desconto só em %; sem id vira `arq-<n>`). Ordem por carteira em
+`voz_mailing_config.ofertas = {modo, conector_id}` (`api_arquivo` · `arquivo_api` · `so_api` · `so_arquivo`; sem
+configuração = API → arquivo, só o arquivo sem API), versões e auditoria como a identidade; identidade e ofertas são
+resolvidas cada uma por si (`identidade_voz_vigente`/`ofertas_voz_vigente`). **Ativa só o Admin do cliente**
+(`ativar_ofertas_voz`, `cliente_pode(…, 'editar_orquestracao')`); a equipe MotorCX só grava rascunho
+(`voz_ofertas_rascunho`, `salvar_rascunho_ofertas_voz`, `pode_editar_fluxo_voz`). Motor (`motor/ofertas_mailing.py`): lê
+como veio (número pt-BR, data) e DESCARTA, nunca corrige: incompleta (sem parcelas, valor da parcela ou validade; desconto
+com R$ ou > 100), vencida (validade antes do dia; a do dia vale), conta que não fecha (entrada + parcelas × parcela ≠
+total em mais de 1% e R$ 0,05); as colunas nunca viram atributo; vários contratos = o da ligação, senão o de maior saldo
+(`principal`); `base/ofertas.csv`; relatório só com contagens (`envios.relatorio.ofertas_voz`). A rotina publica só a
+lista de hoje do agente (`nuvem/ofertas_voz.py` → `publicar_ofertas_voz`; "só a API" não guarda). `voz_ofertas_dia`
+ninguém lê: a VM pede as de UM cliente (`ofertas_mailing_voz`) só dentro da ligação com a identidade confirmada (pelo
+arquivo, no banco, ou pelo CRM registrado pela VM em `confirmar_identidade_crm_voz`); limpeza `limpar_ofertas_voz`.
+`crm_conectores.em_falha`: `alternativa_carteira` virou `reserva_arquivo` (gatilho traduz o nome antigo). A etapa Oferta
+aceita a origem `arquivo` (`carteira` só como nome antigo). Saem (o código para de usar; colunas ficam):
+`voz_alcada_carteira.ofertas_padrao`/`validade_dias` (a alçada vira só trava), fonte "regras", escada de negociação e
+limites por cliente no arquivo. Casos compartilhados: `tests/dados/ofertas_casos.json`. Testes:
+`tests/test_ofertas_mailing.py`, `supabase/testes/testar_ofertas_voz.py`. Se o SQL 58, 88 ou 95 rodar de novo, rode o
+130 depois.
+
 **SQL 89 (Roleplay de treinamento, PR 1; SPEC aprovada pelo dono): perfil "Qualidade", só a área Speech Analytics.**
 Pessoa da empresa cliente (papel `qualidade`). **Vale no banco, não só no menu:** `minhas_empresas()` não devolve a
 empresa para a Qualidade, então toda policy/RPC de fora do Speech já nega; `minhas_empresas_speech()` (= minhas_empresas

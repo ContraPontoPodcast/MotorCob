@@ -317,6 +317,8 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     Colunas do agente de voz (SQL 88, opcionais no layout): `nascimento` e `documento_validacao` (pode ser a do CPF).
     São dado pessoal: nunca viram atributo, prévia nem saída (risco R1). Com `identidade` (motor/identidade_mailing.Chave
     da empresa) viram código em base/identidade.csv, só de quem está na carga; sem chave, o relatório só conta.
+    Ofertas prontas do agente de voz (SQL 130, opcionais): `oferta1..3_*` → base/ofertas.csv como vieram (o motor não
+    calcula; descarta incompleta, vencida e conta que não fecha) e o relatório só com contagens (motor/ofertas_mailing).
     """
     eventos = [(data_do_arquivo(a), 0, a.name, "geral", a) for a in arquivos]
     eventos += [(data_do_arquivo(a), 1, a.name, "incremental", a) for a in incrementais]
@@ -338,6 +340,8 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     from motor import identidade_mailing as IM
     ident = IM.Leitura(identidade)
     voz_mapeadas = {"nascimento": False, "documento_validacao": False}
+    from motor import ofertas_mailing as OM
+    ofertas = OM.Leitura()
     for dia, _, _, tipo, item in eventos:
         if tipo == "retirada":
             idc, ct = item["id_cliente"], item.get("id_contrato") or ""
@@ -403,7 +407,12 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
             pessoais |= {col_nasc_voz, col_doc_voz}
             voz_mapeadas["nascimento"] |= bool(col_nasc_voz)
             voz_mapeadas["documento_validacao"] |= bool(col_doc_voz)
-            colunas_atrib = [c for c in nomes if c and c not in pessoais]
+            # SQL 130: as colunas de ofertas prontas (oferta1..3_*) só são lidas como vieram; nunca viram atributo
+            cols_oferta = {k: v for k, v in col.items() if k in OM.CHAVES}
+            ofertas.mapeadas |= bool(cols_oferta)
+            if tipo == "geral" and cols_oferta:
+                ofertas.reiniciar()
+            colunas_atrib = [c for c in nomes if c and c not in pessoais and c not in cols_oferta.values()]
             n = 0
             for linha in leitor:
                 n += 1
@@ -436,6 +445,9 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
                 if col_nasc_voz or col_doc_voz:      # vira código na hora; o valor não sai daqui
                     ident.ler_linha(idc, linha.get(col_nasc_voz) if col_nasc_voz else None,
                                     linha.get(col_doc_voz) if col_doc_voz else None, dia, lay.formato_data)
+                if cols_oferta:                      # números como vieram; descarta, nunca corrige (SPEC §6)
+                    ofertas.ler_linha(idc, (linha[col["id_contrato"]] or "").strip() if "id_contrato" in col else "",
+                                      saldo, linha, cols_oferta, dia, lay.formato_data)
                 linhas_arq[idc].append({
                     "id_contrato": (linha[col["id_contrato"]] or "").strip() if "id_contrato" in col else "",
                     "saldo": saldo, "atraso": atraso, "entrada": entrada, "dia": dia,
@@ -506,6 +518,11 @@ def converter_base(arquivos: list[Path], layout: LayoutBase, pasta_saida: str | 
     else:   # sem chave: nenhum código guardado (um arquivo de antes, de outra chave, sai)
         IM.apagar(pasta)
     rel["identidade"] = ident.relatorio(set(estoque), voz_mapeadas)
+    if ofertas.mapeadas:                     # SQL 130: ofertas prontas do arquivo (só de quem está na carga)
+        OM.gravar(pasta, ofertas.linhas(set(estoque)))
+    else:
+        OM.apagar(pasta)
+    rel["ofertas"] = ofertas.relatorio(set(estoque))
     with open(pasta / "fora_do_estoque.csv", "w", newline="", encoding="utf-8") as f:
         f.write("id_cliente;data;motivo\n" + "".join(f"{i};{d.isoformat()};{m}\n" for i, (d, m) in sorted(saiu.items())))
     # atributos do contrato de maior saldo de cada cliente
