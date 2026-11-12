@@ -272,8 +272,8 @@ V4): mesmo ligado em `voz_config`, a mensagem toca na hora. No Power/Preditivo (
 com todos os robôs ocupados cai no mesmo caminho. Contadores do plantão: `sem_robo_provedor` (linha não discada por
 falta de sessão no provedor), `reserva_no_atendimento`, `atendeu_sem_reserva` e `abandono_sem_robo`.
 
-Os áudios (`sound:motorcx/sem-robo` e o `sound:motorcx/alo`, que o Alô fake usava antes do V4) não vêm na imagem: o script
-`motorcx-voz-sons` da VM gera os dois com a **mesma voz do agente** (TTS da Montagem: provedor, voz e modelo de
+O áudio `sound:motorcx/sem-robo` não vem na imagem (o `alo.wav` do Alô fake saiu no V4 e não é mais gerado; se sobrou
+de uma rodada antiga, o script apaga): o script `motorcx-voz-sons` da VM gera com a **mesma voz do agente** (TTS da Montagem: provedor, voz e modelo de
 `/etc/motorcx/provedores.json`; chave do cofre `motorcx-voz-tts`, lida pela conta da VM e nunca mostrada, gravada ou
 logada), converte para o formato do Asterisk (WAV 8 kHz, mono, 16 bits; `voz/sons_sistema.py`, sem ffmpeg), grava em
 `/var/motorcx/sons` e instala no contêiner em `/var/lib/asterisk/sounds/motorcx/`. Depois disso o Asterisk sobe com
@@ -281,9 +281,8 @@ logada), converte para o formato do Asterisk (WAV 8 kHz, mono, 16 bits; `voz/son
 atualizar. Textos neutros, **sem** dívida, credor, valor nem nome (a identidade vem antes da dívida; os testes conferem
 com a trava B7):
 - `sem-robo`: "Olá! No momento não conseguimos continuar esta ligação. Vamos tentar de novo mais tarde. Obrigado."
-- `alo`: "Alô?"
 
-Só com a ElevenLabs como TTS da Montagem (com o Google, o script para e avisa). Pode rodar de novo (troca os sons).
+Só com a ElevenLabs como TTS da Montagem (com o Google, o script para e avisa). Pode rodar de novo (troca o som).
 **Comando (Cloud Shell, na pasta do repositório atualizada com `git pull`, depois do merge e da imagem `voz` publicada;
 fora da janela de discagem, porque reinicia o Asterisk e os serviços cuja imagem mudou):**
 
@@ -297,8 +296,7 @@ for vm in "motorcx-ast-1 southamerica-east1-a" "motorcx-ast-2 southamerica-east1
 done
 ```
 
-O fim de cada VM lista `alo.wav` e `sem-robo.wav` no contêiner e o formato de cada um ("8000 Hz, 1 canal, 16 bits …
-ok"). Rodar o `criar_gcp.sh` de novo também atualiza os metadados (o `add-metadata` acima é só o atalho).
+O fim de cada VM lista só o `sem-robo.wav` no contêiner e o formato dele ("8000 Hz, 1 canal, 16 bits … ok"). Rodar o `criar_gcp.sh` de novo também atualiza os metadados (o `add-metadata` acima é só o atalho).
 
 Sem o arquivo, o Asterisk avisa que o áudio falhou e a ligação acaba na hora, com o mesmo desfecho
 `abandono_sem_robo` (é o único caso sem mensagem). Confira com `asterisk -rx "core show file formats"` e, numa

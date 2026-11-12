@@ -310,7 +310,7 @@ class ConfigVoz:
     pico_multiplo: int = 1                    # 1 = desligado, até 3
     abandono_max_pct: float = 3.0
     freio_ritmo_pct: float = 60.0
-    alo_fake_liberado: bool = False
+    alo_fake_liberado: bool = False           # alo_fake*: colunas sem uso desde o V4 (o Alô fake saiu)
     alo_fake: bool = False
     alo_fake_max_s: int = 4
     alo_fake_audio_ref: str | None = None
@@ -322,10 +322,6 @@ class ConfigVoz:
     bucket_gravacoes: str | None = None       # um bucket por empresa (criar_gcp.sh empresa <id> <dias>)
     variaveis: tuple = VARIAVEIS_PADRAO       # quais variáveis_voz() a empresa manda ao provedor (só os nomes)
     voz_id: str | None = None                 # voz da empresa na Montagem; a VM só usa se estiver liberada nela
-
-    @property
-    def alo_fake_ativo(self) -> bool:
-        return self.alo_fake_liberado and self.alo_fake
 
 
 # ------------------------------------------------------------------ leitura

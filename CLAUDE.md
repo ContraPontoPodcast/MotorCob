@@ -917,7 +917,7 @@ fluxo corta o credor escrito à mão (`Sessao._credor_literal`). Se o SQL 56 rod
 saem da voz do agente.** Todo texto que vai ao TTS na ligação passa por `voz/falado.como_soa` (`montagem.para_tts`; o
 Pipecat recebe `ConversaFalada(s.conversa)`): valores, datas, horas, parcelas e percentuais como o "Como soa no telefone"
 (mesma tabela `tests/dados/fala_por_extenso_casos.json`); a transcrição e os eventos guardam o texto escrito. A prévia
-"Ouvir" da VM também. `sem-robo.wav` e `alo.wav`: `motorcx-voz-sons` na VM (`voz/sons_sistema.py`, chave `motorcx-voz-tts`
+"Ouvir" da VM também. `sem-robo.wav` (o `alo.wav` do Alô fake saiu): `motorcx-voz-sons` na VM (`voz/sons_sistema.py`, chave `motorcx-voz-tts`
 do cofre, WAV 8 kHz mono 16 bits em `/var/motorcx/sons`, montada no Asterisk); comando no README do Asterisk, seção 4.
 
 **SQL 85 (decisão do dono, 08/11/2026): mensagem escrita sem a dívida antes da identidade.** SMS, WhatsApp, RCS e e-mail

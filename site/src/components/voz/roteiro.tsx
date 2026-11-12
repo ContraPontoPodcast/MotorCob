@@ -2,7 +2,7 @@
 // Rascunho → Aprovado pela empresa → Em uso (sem jurídico). Lê voz_roteiros e voz_config;
 // escreve só por RPC: salvar_roteiro_voz, aprovar_roteiro_voz e configurar_voz_empresa.
 // Redesign v2: no corpo só o que se decide no roteiro (tipo de agente, quando transferir, primeira fala); as 6 regras
-// fixas no selo "Regras que não mudam"; exemplo, Alô fake e variáveis recolhidos. A ação principal é a da etapa atual.
+// fixas no selo "Regras que não mudam"; exemplo e variáveis recolhidos. A ação principal é a da etapa atual.
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
@@ -37,7 +37,7 @@ type Rascunho = {
 };
 
 type VozConfig = {
-	alo_fake_liberado: boolean; alo_fake: boolean; alo_fake_max_s: number; aviso_gravacao: boolean; variaveis: string[];
+	aviso_gravacao: boolean; variaveis: string[];
 };
 
 
@@ -68,7 +68,6 @@ export function RoteiroAgente() {
 	const [error, setError] = useState('');
 	const [ocupado, setOcupado] = useState(false);
 	const [confirma, setConfirma] = useState<null | 'aprovado_empresa' | 'em_uso'>(null);
-	const [aloMax, setAloMax] = useState('4');
 	const [verVariaveis, setVerVariaveis] = useState(false);
 
 	const credorId = credor?.id ?? null;
@@ -82,14 +81,13 @@ export function RoteiroAgente() {
 		q = credorId ? q.eq('credor_id', credorId) : q.is('credor_id', null);
 		const [r, c] = await Promise.all([
 			q,
-			supabase.from('voz_config').select('alo_fake_liberado,alo_fake,alo_fake_max_s,aviso_gravacao,variaveis').eq('empresa_id', empresa.id).maybeSingle(),
+			supabase.from('voz_config').select('aviso_gravacao,variaveis').eq('empresa_id', empresa.id).maybeSingle(),
 		]);
 		if (r.error) { setError(friendlyError(r.error)); setLoading(false); return; }
 		const lista = (r.data ?? []) as Roteiro[];
 		setRoteiros(lista);
 		const cfg = (c.data as Row | null) as VozConfig | null;
 		setConfig(cfg);
-		setAloMax(String(cfg?.alo_fake_max_s ?? 4));
 		const alvo = (manterSel != null ? lista.find(x => x.id === manterSel) : null)
 			?? lista.find(x => x.situacao === 'rascunho') ?? lista.find(x => x.situacao === 'aprovado_empresa')
 			?? lista.find(x => x.situacao === 'em_uso') ?? lista[0] ?? null;
@@ -152,7 +150,7 @@ export function RoteiroAgente() {
 		const { error } = await supabase.rpc('configurar_voz_empresa', { empresa: empresa.id, ajustes });
 		if (error) { toast.error(friendlyError(error)); return; }
 		toast.success(ok);
-		const { data } = await supabase.from('voz_config').select('alo_fake_liberado,alo_fake,alo_fake_max_s,aviso_gravacao,variaveis').eq('empresa_id', empresa.id).maybeSingle();
+		const { data } = await supabase.from('voz_config').select('aviso_gravacao,variaveis').eq('empresa_id', empresa.id).maybeSingle();
 		setConfig((data as Row | null) as VozConfig | null);
 	}
 
@@ -271,26 +269,7 @@ export function RoteiroAgente() {
 					</Detalhes>
 
 					<Detalhes solto resumo="Ao atender e o que vai ao provedor" qtd="vale para a empresa toda">
-						{config?.alo_fake_liberado ? (
-							<>
-								<label className="flex items-start gap-2 text-[13px] text-[var(--base-texto)]">
-									<input type="checkbox" checked={!!config.alo_fake} disabled={!podeEditar} onChange={e => void salvarConfig({ alo_fake: e.target.checked }, e.target.checked ? 'Alô fake ligado.' : 'Alô fake desligado.')} className="mt-0.5 accent-[var(--destaque)]" />
-									<span>"Alô fake" enquanto transfere <span className="text-[var(--base-texto-3)]">(padrão: desligado)</span><small className="block text-[12px] text-[var(--base-texto-2)]">Quando o operador ainda não atendeu, toca um "Alô?" gravado na voz do agente para segurar a pessoa.</small></span>
-								</label>
-								{config.alo_fake ? (
-									<div className="mt-3 flex flex-wrap items-end gap-2">
-										<div>
-											<label htmlFor="alo-max" className="block text-[12px] font-semibold text-[var(--base-texto-2)]">Tempo máximo de espera (segundos)</label>
-											<input id="alo-max" type="number" min={1} max={15} value={aloMax} disabled={!podeEditar} onChange={e => setAloMax(e.target.value)} className={`${campoCls} mt-1 w-24`} style={campoStyle} />
-										</div>
-										{podeEditar && Number(aloMax) !== config.alo_fake_max_s && <Botao secundario disabled={!(Number(aloMax) >= 1 && Number(aloMax) <= 15)} onClick={() => void salvarConfig({ alo_fake_max_s: Number(aloMax) }, 'Tempo do Alô fake salvo.')}>Salvar tempo</Botao>}
-										<p className="w-full text-[12px] text-[var(--base-texto-2)]">Se a IA não ficar livre em {config.alo_fake_max_s} s, a pessoa ouve uma mensagem curta e neutra, a ligação acaba e conta como abandono.</p>
-									</div>
-								) : <p className="mt-2 text-[12px] text-[var(--base-texto-2)]">Desligado: se a IA não puder atender quem atendeu (raro: cada número só é discado com um robô reservado), a pessoa ouve na hora uma mensagem curta e neutra, a ligação acaba e conta como abandono.</p>}
-							</>
-						) : (
-							<Trava titulo="Alô fake não liberado para a sua empresa." texto="É um recurso que a equipe MotorCX libera. Peça pelo Suporte." />
-						)}
+						<p className="text-[12px] text-[var(--base-texto-2)]">Se a IA não puder atender quem atendeu (raro: cada número só é discado com um robô reservado), a pessoa ouve na hora uma mensagem curta e neutra, a ligação acaba e conta como abandono.</p>
 						<div className="mt-3 flex flex-wrap items-center gap-3 text-[12.5px] text-[var(--base-texto-2)]">
 							<BotaoDs tipo="secundario" pequeno onClick={() => setVerVariaveis(true)}>Ver as variáveis</BotaoDs>
 							<span>O limite de abandono que freia o lote fica em <Link to="/voz/ligacoes" className="underline">Agente Voz/CX › Ligações</Link>.</span>

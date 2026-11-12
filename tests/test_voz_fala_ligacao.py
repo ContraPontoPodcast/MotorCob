@@ -3,7 +3,7 @@
 1. Todo texto que vai ao TTS na ligação passa por voz/falado.como_soa (montagem.para_tts / ConversaFalada), com a
    MESMA tabela de casos do "Como soa no telefone" do site (tests/dados/fala_por_extenso_casos.json). A transcrição
    continua com o texto como foi escrito.
-2. voz/sons_sistema.py gera sem-robo.wav e alo.wav (8 kHz, mono, 16 bits) com textos neutros; a chave nunca aparece.
+2. voz/sons_sistema.py gera só o sem-robo.wav (8 kHz, mono, 16 bits) com textos neutros; a chave nunca aparece.
 Sem rede; TTS falso.
 """
 import io
@@ -93,7 +93,7 @@ def _tom(segundos=1.0, hz=440.0, taxa=16000):
 
 class TestSonsDoSistema(unittest.TestCase):
     def test_textos_neutros(self):
-        self.assertEqual(set(S.SONS), {"sem-robo", "alo"})
+        self.assertEqual(set(S.SONS), {"sem-robo"})   # o alo.wav do Alô fake saiu (V4)
         for nome, t in S.SONS.items():
             self.assertTrue(S.neutro(t), nome)
         self.assertFalse(S.neutro("Sobre a sua dívida com a Loja Exemplo."))
@@ -114,15 +114,15 @@ class TestSonsDoSistema(unittest.TestCase):
         pedidos = []
         with tempfile.TemporaryDirectory() as d:
             feitos = S.gerar(Path(d), lambda t: (pedidos.append(t), _tom(1.2))[1])
-            self.assertEqual(sorted(p.name for p in feitos), ["alo.wav", "sem-robo.wav"])
-            self.assertEqual(sorted(x.name for x in Path(d).iterdir()), ["alo.wav", "sem-robo.wav"])   # sem temporário
+            self.assertEqual(sorted(p.name for p in feitos), ["sem-robo.wav"])
+            self.assertEqual(sorted(x.name for x in Path(d).iterdir()), ["sem-robo.wav"])   # sem temporário
             with wave.open(str(Path(d) / "sem-robo.wav")) as w:
                 self.assertEqual((w.getframerate(), w.getnchannels(), w.getsampwidth()), (8000, 1, 2))
             self.assertEqual(sorted(pedidos), sorted(S.SONS.values()))
             with self.assertRaises(ValueError):
                 S.gerar(Path(d), lambda t: _tom(1), {"x": "Consta R$ 1.380,00 da sua dívida."})
             with self.assertRaises(RuntimeError):
-                S.gerar(Path(d), lambda t: b"", {"alo": "Alô?"})
+                S.gerar(Path(d), lambda t: b"", {"teste": "Olá?"})
 
     def test_elevenlabs_pede_pcm_16k_e_a_chave_so_no_cabecalho(self):
         visto = {}
@@ -156,6 +156,7 @@ class TestSonsDoSistema(unittest.TestCase):
         self.assertIn("python3 -m voz.sons_sistema --saida /var/motorcx/sons", rodar)
         self.assertIn("-v /var/motorcx/sons:/var/lib/asterisk/sounds/motorcx:ro", rodar)
         self.assertIn("/var/lib/asterisk/sounds/motorcx", sons)
+        self.assertNotIn('docker cp "$DIR/alo.wav"', sons)    # o Alô fake saiu: só o sem-robo.wav é instalado
         self.assertNotRegex(sons + rodar, r"(?i)xi-api-key|api_key=|echo .*CHAVE")
 
 
