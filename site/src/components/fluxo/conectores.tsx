@@ -109,7 +109,7 @@ export function ConectoresCrm() {
 			<Gaveta aberta={gaveta === 'chamadas'} onFechar={() => setGaveta(null)} titulo="Últimas chamadas" sub="Sem dado pessoal: só ID, conector, status, tempo e código.">
 				<Linhas itens={dados.chamadas.map(h => ({
 					e: <><b className="font-semibold">{new Date(h.ocorrido_em).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</b> · C{h.conector_id ?? '—'} <Pilula tom={h.classe === 'ok' ? 'ok' : 'erro'}>{h.http_status ?? (h.classe === 'tempo' ? 'tempo esgotado' : h.classe)}</Pilula></>,
-					s: `${h.id_chamada ?? 'teste'} · ${h.id_cliente ?? '—'} · ${ms(h.latencia_ms)} · tentativa ${h.tentativa}${h.usou_alternativa ? ' · usou alternativa da carteira' : ''}`,
+					s: `${h.id_chamada ?? 'teste'} · ${h.id_cliente ?? '—'} · ${ms(h.latencia_ms)} · tentativa ${h.tentativa}${h.usou_alternativa ? ' · usou a alternativa antiga da carteira' : ''}`,
 					d: <span className="text-[12px] font-normal">{h.resultado_codigo ?? '—'}</span>,
 				}))} />
 				{!dados.chamadas.length && <p className="text-[13px] text-[var(--base-texto-2)]">Nenhuma chamada registrada (guardadas por 90 dias).</p>}

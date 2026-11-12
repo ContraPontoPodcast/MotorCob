@@ -1,5 +1,5 @@
-"""Os 4 modelos para começar um fluxo (voz_fluxo_modelos, SQL 58). Fonte única: a migração grava exatamente estes
-JSONs (tests/test_voz_fluxo_validador.py confere que o texto do SQL bate com este módulo e que todos passam no
+"""Os 4 modelos para começar um fluxo (voz_fluxo_modelos, SQL 58; refeitos no SQL 133: ofertas só da API ou do
+arquivo). Fonte única: a migração mais nova grava exatamente estes JSONs (tests/test_voz_fluxo_validador.py confere que o texto do SQL bate com este módulo e que todos passam no
 validador). Conectores ficam sem escolha (null): a empresa escolhe os dela antes de mandar para aprovação.
 """
 from __future__ import annotations
@@ -100,13 +100,29 @@ def branco() -> dict:
     ]}
 
 
+def _negociador_modelo() -> dict:
+    """O Negociador do protótipo (fluxo_casos) com as ofertas do SQL 130/133: a etapa Oferta na ordem da carteira
+    (origem 'arquivo', não mais as ofertas padrão calculadas da alçada), a frase fixa da oferta e a IA conversa sem
+    calcular nem oferecer outra condição."""
+    d = negociador(None, None, None, None)
+    for b in d["blocos"]:
+        if b["id"] == "N6":
+            b["titulo"] = "Oferta do arquivo (reserva)"
+            b["params"] = {"origem": "arquivo", "fala": "Tenho uma condição para você: {{oferta.condicao}} Fica bom?"}
+        elif b["id"] == "N5":
+            b["params"]["objetivo"] = ("Fechar um acordo com uma das ofertas recebidas, apresentadas uma por vez, na ordem "
+                                       "em que vieram. Não calcule nem ofereça outra condição: se a pessoa pedir algo fora "
+                                       "das ofertas, devolva por fora_alcada.")
+    return d
+
+
 # codigo → (nome, tipo_agente, descrição, definição)
 MODELOS = {
     "localizador": ("Localizador", "localizador",
                     "Confirma o titular e transfere para o discador de vocês. Quase tudo árvore.", localizador),
     "negociador": ("Negociador", "negociador",
-                   "Confirma o titular, entende a intenção, busca ofertas no CRM e negocia.",
-                   lambda: negociador(None, None, None, None)),
+                   "Confirma o titular, entende a intenção e apresenta as ofertas da API do credor ou do arquivo.",
+                   lambda: _negociador_modelo()),
     "ambos": ("Localizador + Negociador", "ambos", "Negocia quando há oferta; sem oferta, transfere com CPC.", ambos),
     "branco": ("Em branco", "negociador", "Só Abertura, Confirmar identidade, Encerrar e Transferir. As travas já vêm valendo.", branco),
 }
