@@ -1,0 +1,42 @@
+{
+  "_sobre": "SQL 130 · SPEC_OFERTAS_v2 §4 e §6. Casos compartilhados: 'arquivo' (leitura das colunas oferta{n}_* no motor, motor/ofertas_mailing.py) e 'descarte' (a trava antes de falar, na VM voz/conector.py › motivo_descarte e no site src/lib/ofertas-voz.ts). Descarta, nunca corrige. Só dados fictícios.",
+  "hoje": "2026-11-12",
+  "alcada": {"desconto_max_pct": 40, "parcelas_max": 12, "parcela_min": 50, "entrada_min": 0},
+  "arquivo": [
+    {"nome": "à vista em pt-BR", "n": 1, "valores": {"parcelas": "1", "valor_parcela": "1.200,00", "desconto": "40", "validade": "20/11/2026", "valor_total": "1.200,00"},
+     "oferta": {"id": "arq-1", "parcelas": 1, "valor_parcela": 1200.0, "desconto_pct": 40.0, "validade": "2026-11-20", "valor_total": 1200.0}, "motivo": null},
+    {"nome": "parcelado com id, % e R$", "n": 2, "valores": {"id": "OF-22", "parcelas": "6", "valor_parcela": "R$ 260,00", "desconto": "22%", "validade": "2026-11-20", "vencimento": "14/11/2026"},
+     "oferta": {"id": "OF-22", "parcelas": 6, "valor_parcela": 260.0, "desconto_pct": 22.0, "validade": "2026-11-20", "vencimento": "2026-11-14"}, "motivo": null},
+    {"nome": "com entrada e ponto decimal", "n": 3, "valores": {"parcelas": "8", "valor_parcela": "212.50", "entrada": "200", "validade": "18/11/2026", "valor_total": "1900"},
+     "oferta": {"id": "arq-3", "parcelas": 8, "valor_parcela": 212.5, "entrada": 200.0, "validade": "2026-11-18", "valor_total": 1900.0}, "motivo": null},
+    {"nome": "validade igual a hoje vale", "n": 1, "valores": {"parcelas": "2", "valor_parcela": "500", "validade": "12/11/2026"},
+     "oferta": {"id": "arq-1", "parcelas": 2, "valor_parcela": 500.0, "validade": "2026-11-12"}, "motivo": null},
+    {"nome": "sem validade é descartada", "n": 1, "valores": {"parcelas": "1", "valor_parcela": "900"}, "oferta": null, "motivo": "incompleta"},
+    {"nome": "sem valor da parcela", "n": 1, "valores": {"parcelas": "3", "validade": "20/11/2026"}, "oferta": null, "motivo": "incompleta"},
+    {"nome": "vencida ontem", "n": 1, "valores": {"parcelas": "1", "valor_parcela": "1240", "validade": "11/11/2026"}, "oferta": null, "motivo": "vencida"},
+    {"nome": "desconto em R$ não é lido", "n": 1, "valores": {"parcelas": "1", "valor_parcela": "900", "desconto": "R$ 800,00", "validade": "20/11/2026"}, "oferta": null, "motivo": "incompleta"},
+    {"nome": "desconto acima de 100", "n": 1, "valores": {"parcelas": "1", "valor_parcela": "900", "desconto": "800", "validade": "20/11/2026"}, "oferta": null, "motivo": "incompleta"},
+    {"nome": "parcelas fracionadas", "n": 1, "valores": {"parcelas": "2,5", "valor_parcela": "100", "validade": "20/11/2026"}, "oferta": null, "motivo": "incompleta"},
+    {"nome": "data inválida", "n": 1, "valores": {"parcelas": "1", "valor_parcela": "100", "validade": "31/02/2026"}, "oferta": null, "motivo": "incompleta"},
+    {"nome": "conta não fecha (1.600 ≠ 1.560)", "n": 2, "valores": {"parcelas": "6", "valor_parcela": "260", "validade": "20/11/2026", "valor_total": "1.600,00"}, "oferta": null, "motivo": "conta"},
+    {"nome": "conta fecha dentro de R$ 0,05", "n": 2, "valores": {"parcelas": "3", "valor_parcela": "33,33", "validade": "20/11/2026", "valor_total": "100,00"},
+     "oferta": {"id": "arq-2", "parcelas": 3, "valor_parcela": 33.33, "validade": "2026-11-20", "valor_total": 100.0}, "motivo": null},
+    {"nome": "linha sem nada desta oferta", "n": 3, "valores": {}, "oferta": null, "motivo": null}
+  ],
+  "descarte": [
+    {"nome": "dentro de tudo", "oferta": {"id": "A-7781", "parcelas": 1, "valor_parcela": 1200, "desconto_pct": 40, "validade": "2026-11-20", "valor_total": 1200}, "motivo": null},
+    {"nome": "sem id", "oferta": {"parcelas": 1, "valor_parcela": 1200, "validade": "2026-11-20"}, "motivo": "incompleta"},
+    {"nome": "sem validade", "oferta": {"id": "A-1", "parcelas": 1, "valor_parcela": 1200}, "motivo": "incompleta"},
+    {"nome": "sem valor da parcela", "oferta": {"id": "A-1", "parcelas": 1, "validade": "2026-11-20"}, "motivo": "incompleta"},
+    {"nome": "parcelas zero", "oferta": {"id": "A-1", "parcelas": 0, "valor_parcela": 10, "validade": "2026-11-20"}, "motivo": "incompleta"},
+    {"nome": "vencida ontem", "oferta": {"id": "A-7790", "parcelas": 1, "valor_parcela": 1240, "desconto_pct": 38, "validade": "2026-11-11", "valor_total": 1240}, "motivo": "vencida"},
+    {"nome": "validade hoje vale", "oferta": {"id": "A-2", "parcelas": 1, "valor_parcela": 1240, "validade": "2026-11-12"}, "motivo": null},
+    {"nome": "desconto acima do teto (55% > 40%)", "oferta": {"id": "A-7795", "parcelas": 1, "valor_parcela": 900, "desconto_pct": 55, "validade": "2026-11-20", "valor_total": 900}, "motivo": "acima_alcada"},
+    {"nome": "parcelas acima do teto (24 > 12)", "oferta": {"id": "A-7796", "parcelas": 24, "valor_parcela": 75, "desconto_pct": 10, "validade": "2026-11-20", "valor_total": 1800}, "motivo": "acima_alcada"},
+    {"nome": "parcela abaixo da mínima", "oferta": {"id": "A-3", "parcelas": 10, "valor_parcela": 40, "validade": "2026-11-20"}, "motivo": "acima_alcada"},
+    {"nome": "à vista abaixo da parcela mínima vale", "oferta": {"id": "A-4", "parcelas": 1, "valor_parcela": 40, "validade": "2026-11-20"}, "motivo": null},
+    {"nome": "conta não fecha", "oferta": {"id": "A-5", "parcelas": 6, "valor_parcela": 260, "validade": "2026-11-20", "valor_total": 1600}, "motivo": "conta"},
+    {"nome": "conta com entrada fecha", "oferta": {"id": "arq-3", "parcelas": 8, "valor_parcela": 212.5, "desconto_pct": 5, "entrada": 200, "validade": "2026-11-18", "valor_total": 1900}, "motivo": null},
+    {"nome": "vencida vem antes da alçada", "oferta": {"id": "A-6", "parcelas": 24, "valor_parcela": 75, "validade": "2026-11-01"}, "motivo": "vencida"}
+  ]
+}

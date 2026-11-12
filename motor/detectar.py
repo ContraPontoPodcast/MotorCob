@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .entrada import Entrada, validar_entrada
 from .ingestao import LayoutInvalido
+from .ofertas_mailing import CHAVES as CAMPOS_OFERTAS
 from .voz import GENERICOS_SITE
 
 AMOSTRA = 300
@@ -147,6 +148,9 @@ NAO_FONE = ("TIPO", "OPERADORA", "RANKING", "SCORE", "DDD", "POSSUI", "PERTURBE"
 # Colunas do agente de voz (SQL 88): só vêm do que o cliente apontou (nunca da detecção) e só viram código de
 # validação; documento_validacao pode ser a mesma coluna do CPF ("usar o CPF/CNPJ já apontado").
 CAMPOS_VOZ = ("nascimento", "documento_validacao")
+# SQL 130: as colunas de ofertas prontas do arquivo (oferta1..3_*), também só do que o cliente apontou. Nunca viram
+# atributo: o motor só as lê como vieram (motor/ofertas_mailing.py), sem calcular nada.
+# (CAMPOS_OFERTAS vem de .ofertas_mailing)
 
 # Mapeamento da carga geral feito no site (SQL 74, mapeamento_arquivos tipo 'base'): campo do motor → coluna.
 CAMPO_FIXO = {"CPF": "cpf", "ID do cliente": "id_cliente", "contrato": "id_contrato", "saldo": "saldo",
@@ -161,7 +165,7 @@ def _fixas_validas(fixas: dict | None, nomes: list[str]) -> dict:
             cols = [c for c in (v or []) if isinstance(c, str) and c in nomes]
             if cols:
                 saida[k] = cols
-        elif (k in CAMPO_FIXO.values() or k in CAMPOS_VOZ) and isinstance(v, str) and v in nomes:
+        elif (k in CAMPO_FIXO.values() or k in CAMPOS_VOZ or k in CAMPOS_OFERTAS) and isinstance(v, str) and v in nomes:
             saida[k] = v
     if saida.get("id_cliente") and saida.get("id_cliente") == saida.get("cpf"):
         saida.pop("id_cliente")          # o código do cliente nunca é a coluna do CPF: o motor decide o ID
@@ -251,7 +255,7 @@ def layout_base(arq: Path, explicar: dict, fixas: dict | None = None) -> dict:
                  ("data_entrada", entrada)):
         if v:
             colunas[k] = v
-    for k in CAMPOS_VOZ:
+    for k in CAMPOS_VOZ + CAMPOS_OFERTAS:
         if fix.get(k):
             colunas[k] = fix[k]
     return {"arquivo": "*", "delimitador": delim, "encoding": enc,

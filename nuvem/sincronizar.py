@@ -433,11 +433,14 @@ def _relatorio_envio(e, destino, r, rel_base=None, rel_enriq=None):
                                   "acordos_abertos": rel_base.get("acordos_abertos", 0),
                                   "avisos": rel_base.get("avisos") or {}, "na_carga": rel_base["na_carga"]}
         from nuvem import identidade_voz   # SQL 88: só contagens da validação do agente de voz
+        from nuvem import ofertas_voz      # SQL 130: só contagens das ofertas prontas do arquivo
         ident = identidade_voz.resumo(rel_base)
+        ofs = ofertas_voz.resumo(rel_base)
         return "processado", {**arq, "clientes_na_base": rel_base["clientes"], "contatos": rel_base["contatos"],
                               "rejeitadas": rel_base["rejeitadas"], "na_carga": rel_base["na_carga"],
                               "fora_da_carga": rel_base["fora_da_carga"],
-                              **({"identidade_voz": ident} if ident else {})}
+                              **({"identidade_voz": ident} if ident else {}),
+                              **({"ofertas_voz": ofs} if ofs else {})}
     if e["tipo"] == "ocorrencia":
         if nome in r["sem_layout"] or any(s.startswith(nome + " ") for s in r["sem_layout"]):
             return "erro", {"erro": "arquivo não reconhecido como ocorrência: confira o nome do arquivo"}
@@ -1116,8 +1119,10 @@ def _rodar_credor(sb: Supabase, emp: dict, u: dict, data: date, baixados, entrad
         if aviso_previa:
             r["alertas"].append(aviso_previa)
         from nuvem import identidade_voz   # SQL 88: códigos de validação da lista de hoje do agente (nunca no Storage)
+        from nuvem import ofertas_voz      # SQL 130: ofertas prontas do arquivo da lista de hoje (nunca no Storage)
         for aviso in (identidade_voz.publicar(sb, eid, cid, pasta, data, r.get("saida"), out),
-                      identidade_voz.alerta_da_carga(rel_base, eid)):
+                      identidade_voz.alerta_da_carga(rel_base, eid),
+                      ofertas_voz.publicar(sb, eid, cid, pasta, data, r.get("saida"), out)):
             if aviso:
                 r["alertas"].append(aviso)
         n_trilha = publicar_trilha(sb, pasta / "estado", eid, cid)

@@ -3175,5 +3175,12 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 128: divisão do teto com o por minuto (testar_divisao_minuto.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 130 · Agente de voz: ofertas só da API do credor ou do arquivo (fonte e ordem por carteira, Admin do cliente ativa e a
+# equipe só rascunho, em_falha reserva_arquivo, ofertas do arquivo só dentro da ligação com a identidade confirmada)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ofertas_voz.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 130: ofertas da API ou do arquivo (testar_ofertas_voz.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
