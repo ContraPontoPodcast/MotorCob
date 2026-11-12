@@ -256,8 +256,9 @@ class FluxoCarregado:
     credor_id: int | None = None
     # SQL 130: de onde vêm as ofertas (voz_mailing_config.ofertas vigente; None = o padrão) e a fonte do arquivo
     ofertas_cfg: dict | None = None
-    fonte_ofertas: object | None = None                     # conector.FonteOfertasArquivo (VM) ou OfertasDeExemplo
-    disjuntor: object | None = None                         # conector.Disjuntor da VM (API instável, Q18)
+    # (objetos do processo: ficam fora da comparação, que é a do fluxo carregado)
+    fonte_ofertas: object | None = field(default=None, compare=False)   # conector.FonteOfertasArquivo ou OfertasDeExemplo
+    disjuntor: object | None = field(default=None, compare=False)       # conector.Disjuntor da VM (API instável, Q18)
 
 
 @dataclass
