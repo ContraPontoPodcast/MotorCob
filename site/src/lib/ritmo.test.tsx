@@ -61,8 +61,9 @@ test('aba Ritmo: os dois modos, a mensagem neutra e os freios', () => {
 	const hoje = { totais: { discadas: 1000, atendidas_pessoa: 120, abandonos: 1, transf_sem_operador: 2, curtas: 760, atendimento_pct: 12, abandono_pct: 0.8, transf_sem_operador_pct: 1.7, curtas_pct: 76 },
 		ultima: { janela: '2026-11-10T10:00:00-03:00', modo: 'preditivo' as const, razao: 1.6, estado: 'reduzido' as const, conversas: 20, reservas: 2, linhas: 50 }, janelas: [], por_tronco: [], abandono_30d: null };
 	const h = renderToStaticMarkup(<MemoryRouter><RitmoCarteira ritmo={{ ...PADRAO_RITMO, modo: 'preditivo' }} onTrocar={() => {}} canEdit hoje={hoje} /></MemoryRouter>);
-	for (const t of ['Como o MotorCX disca', 'Power', 'Preditivo', 'Meta de abandono', 'Razão máxima', 'Ritmo reduzido', 'Não ligamos de novo no mesmo dia', 'Teto de abandono: 3%', 'Robôs e o Preditivo'.slice(0, 0) || 'Como os robôs funcionam'])
+	for (const t of ['Como o MotorCX disca', 'Power', 'Preditivo', 'Meta de abandono', 'Razão máxima', 'Ritmo reduzido', 'A próxima tentativa segue a Renitência da carteira', 'Teto de abandono: 3%', 'Robôs e o Preditivo'.slice(0, 0) || 'Como os robôs funcionam'])
 		assert.ok(h.includes(t), t);
+	for (const t of ['mesmo dia', 'abandonos em 7 dias', 'da voz por 3 dias']) assert.ok(!h.includes(t), `abandono sem regra própria: ${t}`);
 	assert.ok(!/d[íi]vida/i.test(h.split('Quando alguém atende')[1].split('Freios')[0].replace('sem falar de dívida', '')), 'a mensagem não fala de dívida');
 	const so = renderToStaticMarkup(<MemoryRouter><RitmoCarteira ritmo={PADRAO_RITMO} onTrocar={() => {}} canEdit={false} hoje={null} /></MemoryRouter>);
 	assert.match(so, /Números por robô livre/);
