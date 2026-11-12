@@ -93,7 +93,7 @@ export function RobosPreditivo() {
 							</ul>
 						</Cartao>
 						<Cartao titulo="E se alguém atender e não houver robô?">
-							<p className="text-[13px] text-[var(--base-texto-2)]">Com 1 linha por robô (Power 1,0), isso não acontece: cada linha sai com o seu robô. Acima disso, o robô é reservado na hora em que a pessoa atende. Se não houver nenhum livre, ela ouve uma mensagem curta, sem falar de dívida, e não recebe outra ligação no dia. O Preditivo mantém isso perto da meta (1%) e o teto de 3% vale para os dois modos.</p>
+							<p className="text-[13px] text-[var(--base-texto-2)]">Com 1 linha por robô (Power 1,0), isso não acontece: cada linha sai com o seu robô. Acima disso, o robô é reservado na hora em que a pessoa atende. Se não houver nenhum livre, ela ouve uma mensagem curta, sem falar de dívida; a próxima tentativa segue a Renitência da carteira (situação “Abandonada”), com robô reservado. O Preditivo mantém isso perto da meta (1%) e o teto de 3% vale para os dois modos.</p>
 						</Cartao>
 					</div>
 					<p className="text-[13px]"><Link to="/voz/discagem" className="font-semibold text-[var(--destaque)] hover:underline">Escolher o ritmo de cada carteira na aba Ritmo da Discagem →</Link></p>

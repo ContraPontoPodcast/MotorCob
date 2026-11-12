@@ -95,9 +95,8 @@ export function RitmoCarteira({ ritmo, onTrocar, canEdit, hoje }: { ritmo: Ritmo
 				<blockquote className="rounded-xl bg-[var(--base-fill)] px-3.5 py-2.5 text-[13.5px] italic text-[var(--base-texto)]">“{MENSAGEM_ABANDONO}”</blockquote>
 				<ul className="mt-3 list-disc space-y-1 pl-5 text-[13px] text-[var(--base-texto-2)]">
 					<li>A pessoa nunca fica no silêncio: ouve a mensagem na hora, sem falar de dívida nem de credor.</li>
-					<li><b className="text-[var(--base-texto)]">Não ligamos de novo no mesmo dia.</b> Na próxima vez, ela vai com robô reservado.</li>
-					<li>2 abandonos em 7 dias tiram o cliente da voz por 3 dias.</li>
-					<li>Todo abandono conta como chamada curta.</li>
+					<li><b className="text-[var(--base-texto)]">A próxima tentativa segue a Renitência da carteira</b> (situação “Abandonada”), como qualquer outro resultado. Ela sai com robô reservado.</li>
+					<li>Todo abandono conta como chamada curta (aba Chamadas curtas).</li>
 				</ul>
 			</Cartao>
 

@@ -142,7 +142,7 @@ class FonteListas:
 
     def abandonos(self, empresa_id: int) -> dict:
         """id_cliente -> (abandonos nos últimos 7 dias, último dia) (RPC abandonos_recentes_voz, SQL 108). Banco fora ou
-        sem o SQL: vazio (ninguém é tirado do dia; o "não religa no dia" vale do mesmo jeito)."""
+        sem o SQL: vazio (ninguém sai com reserva por abandono de dias anteriores; o de hoje marca no próprio lote)."""
         try:
             linhas = self.sb.rpc("abandonos_recentes_voz", {"empresa": int(empresa_id)}) or []
         except Exception as ex:   # noqa: BLE001
@@ -203,27 +203,22 @@ class FonteListas:
             if l.credor_id in ritmos:
                 l.ritmo = ritmos[l.credor_id]
         if saida:
-            aplicar_abandonos(saida, self.abandonos(empresa_id), dia)
+            aplicar_abandonos(saida, self.abandonos(empresa_id))
         return saida if achou else None
 
 
-# abandono do discador nos últimos dias (PREDITIVO.md 3.5, V4): 2 em 7 dias = 3 dias sem voz (o dia do último e os
-# 2 seguintes); 1 = a próxima ligação só sai com robô reservado
-ABANDONOS_PAUSA, DIAS_PAUSA = 2, 3
-
-
-def aplicar_abandonos(lotes: list[Lote], abandonos: dict, dia) -> int:
-    """Marca os itens dos clientes com abandono recente. Devolve quantos itens ficaram fora do dia."""
-    fora = 0
+# abandono do discador nos últimos 7 dias (PREDITIVO.md 3.5, V4): a próxima ligação do cliente só sai com robô
+# reservado. O abandono não tira ninguém da voz: a próxima tentativa segue a renitência da carteira ("abandonada")
+def aplicar_abandonos(lotes: list[Lote], abandonos: dict) -> int:
+    """Marca os itens dos clientes com abandono recente para sair com robô reservado. Devolve quantos marcou."""
+    marcados = 0
     for l in lotes:
         for it in l.itens:
-            n, ultimo = abandonos.get(it.id_cliente, (0, None))
-            if n >= ABANDONOS_PAUSA and ultimo is not None and (dia - ultimo).days < DIAS_PAUSA:
-                it.encerrado = True
-                fora += 1
-            elif n >= 1:
+            n, _ultimo = abandonos.get(it.id_cliente, (0, None))
+            if n >= 1:
                 it.reservar = True
-    return fora
+                marcados += 1
+    return marcados
 
 
 class Plantao:

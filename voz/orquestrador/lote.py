@@ -50,11 +50,12 @@ ENCERRA_CLIENTE = frozenset(d.chave for d in V.DESFECHOS if d.e_cpc) | {
     "desligou_sem_conversar", "abandonada", "abandono_sem_robo", "transferencia_sem_operador"}
 # desfechos que encerram o NÚMERO no dia (não adianta tentar de novo hoje)
 ENCERRA_NUMERO = frozenset({"numero_inexistente", "inexistente_voz", "fax", "rejeitada", "opt_out"})
-# encerram o cliente hoje, mas a regra por sinalização (ou o "Reenviar agora") pode reabrir: ninguém falou de verdade
-# abandono do discador (quem atendeu e não teve agente): não religa no mesmo dia, nem pela regra por sinalização, nem
-# pelo "Reenviar agora" (PREDITIVO.md 3.5; V4). A transferência sem operador não é abandono: segue reabrível
+# encerram o cliente hoje, mas a regra por sinalização (ou o "Reenviar agora") pode reabrir: ninguém falou de verdade.
+# O abandono (quem atendeu e não teve agente/robô) não tem regra própria: segue a linha "abandonada" da sinalização da
+# carteira, como qualquer outro desfecho (decisão do dono)
 ABANDONO_DISCADOR = frozenset({"abandonada", "abandono_sem_robo"})
-REABRIVEIS = frozenset({"atendeu_desligou", "desligou_sem_conversar", "transferencia_sem_operador",
+REABRIVEIS = frozenset({"atendeu_desligou", "desligou_sem_conversar", "abandonada", "abandono_sem_robo",
+                        "transferencia_sem_operador",
                         "atendida_terceiro_desconhece",
                         "retorno_agendado", "recado"})
 # com a regra nova, só estes finalizam sempre (o resto é a linha da sinalização)
@@ -155,7 +156,7 @@ class ItemLote:
     spin: int | None = None              # horizontal: em qual spin este telefone sai
     rediscagens: int = 0                 # rediscagens da regra por sinalização já feitas neste item
     adiado: bool = False                 # vertical: "próximo cliente" mandou os outros telefones para o fim
-    reservar: bool = False               # teve abandono nos últimos 7 dias: só sai com robô reservado (V4)
+    reservar: bool = False               # teve abandono (hoje ou nos últimos 7 dias): só sai com robô reservado (V4)
 
 
 def ler_variaveis(linha: dict) -> dict:
@@ -508,12 +509,10 @@ class Lote:
             o["encerradas"] += 1
             o["mudou"] = True
         g, r = self.guarda, self.regras
-        if desfecho in ABANDONO_DISCADOR:               # não religa no dia (V4), com ou sem a regra nova
-            g.contar(item, desfecho, causa_sip)
-            g.encerrar_cliente(item.id_cliente, desfecho)
-            item.encerrado = True
-            self._log(item, item, item.situacao, "finaliza", None, agora, "auto", None, id_chamada)
-            return
+        if desfecho in ABANDONO_DISCADOR:               # a próxima ligação do cliente só sai com robô reservado
+            for it in self.itens:
+                if it.id_cliente == item.id_cliente:
+                    it.reservar = True
         if r is None or not r.regra_nova:
             g.registrar(item, desfecho, agora, r, causa_sip)
             return

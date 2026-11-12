@@ -1,7 +1,7 @@
 """Ritmo da discagem (Power e Preditivo, PREDITIVO.md): V1 · medir o abandono certo, sem mudar o ritmo (SQL 106);
 V2 · linhas e robôs separados também com razão > 1 (reserva no atendimento, antes do AMD); V3 · ritmo por carteira em
 credores.discagem › ritmo (SQL 107) e a leitura na VM; V4 · Power (razão fixa, teto de abandono) e abandono digno
-(mensagem, não religa no dia, abandono recente; SQL 108); V6 · freios de chamadas curtas no ritmo (SQL 109); V5 ·
+(mensagem neutra, reserva de robô na próxima, abandono segue a sinalização; SQL 108); V6 · freios de chamadas curtas no ritmo (SQL 109); V5 ·
 o Preditivo (controlador, aquecimento, previsão de robôs liberando, simulação de discagem; SQL 110); V8 · perna humana
 (operadores ao mesmo tempo, fila cheia; SQL 111).
 
@@ -342,34 +342,50 @@ class TestPower(Base):
 
 
 class TestAbandonoDigno(Base):
-    """V4 · quem atende sem agente ouve a mensagem e não recebe outra ligação no dia (nem pela regra por sinalização);
-    abandono recente: 2 em 7 dias = 3 dias sem voz; 1 = a próxima só com robô reservado."""
+    """V4 · quem atende sem agente ouve a mensagem neutra; o abandono não tem regra própria (decisão do dono): a próxima
+    tentativa segue a linha "abandonada" da sinalização da carteira e só sai com robô reservado; abandono recente
+    (7 dias) também só reserva, sem tirar o cliente da voz."""
 
-    def test_nao_religa_no_dia_mesmo_com_a_regra_por_sinalizacao(self):
+    def test_segue_a_sinalizacao_abandonada_da_carteira(self):
         from voz.orquestrador.lote import Lote, RegrasLote
         regras = RegrasLote.da_carteira({"por_sinalizacao": {}})
-        self.assertTrue(regras.sinal("abandonada")["rediscar"]["ativo"])   # a linha padrão redisca no topo
+        linha = regras.sinal("abandonada")
+        self.assertTrue(linha["rediscar"]["ativo"])                     # a linha padrão redisca no topo
         it, outro = item("C1"), item("C1", "11988887771", ordem=2)
         lote = Lote(1, [it, outro], regras=regras)
         lote.registrar(it, "abandono_sem_robo", D0, id_chamada="x1")
-        self.assertIn("C1", lote.guarda.clientes_encerrados)
-        self.assertNotIn("C1", lote.guarda.reabriveis)
-        self.assertIsNone(it.volta)
-        self.assertIsNone(lote.proximo(D0 + timedelta(hours=1)))
+        self.assertIsNotNone(it.volta)                                   # religa no mesmo dia, pela linha da carteira
+        self.assertEqual(it.volta.prioridade, linha["rediscar"]["prioridade"])
+        self.assertTrue(it.reservar and outro.reservar)                  # a próxima do cliente só com robô reservado
+        self.assertIsNone(lote.proximo(D0, reservavel=False))
+        self.assertIs(lote.proximo(D0)[1], it)
         lote2 = Lote(1, [item("C2")], regras=regras)
         lote2.registrar(lote2.itens[0], "transferencia_sem_operador", D0, id_chamada="x2")   # não é abandono
         self.assertIsNotNone(lote2.itens[0].volta)
+        self.assertFalse(lote2.itens[0].reservar)
+
+    def test_carteira_que_finaliza_o_abandono(self):
+        from voz.orquestrador.lote import Lote, RegrasLote
+        regras = RegrasLote.da_carteira({"por_sinalizacao": {"abandonada": {"finaliza": True}}})
+        self.assertTrue(regras.sinal("abandonada")["finaliza"])
+        it = item("C1")
+        lote = Lote(1, [it], regras=regras)
+        lote.registrar(it, "abandono_sem_robo", D0, id_chamada="x1")
+        self.assertIn("C1", lote.guarda.clientes_encerrados)
+        self.assertIn("C1", lote.guarda.reabriveis)                     # o "Reenviar agora" pode reabrir
+        self.assertIsNone(it.volta)
 
     def test_abandonos_recentes(self):
         from voz.orquestrador.lote import Lote
         from voz.orquestrador.principal import aplicar_abandonos
         lote = Lote(1, [item("A"), item("B", "11988887771"), item("C", "11988887772"), item("D", "11988887773")])
         hoje = D0.date()
-        fora = aplicar_abandonos([lote], {"A": (2, hoje - timedelta(days=1)), "B": (1, hoje - timedelta(days=2)),
-                                          "C": (2, hoje - timedelta(days=3))}, hoje)
+        n = aplicar_abandonos([lote], {"A": (2, hoje - timedelta(days=1)), "B": (1, hoje - timedelta(days=2)),
+                                       "C": (3, hoje)})
         a, b, c, d = lote.itens
-        self.assertEqual((fora, a.encerrado, b.reservar, c.encerrado, c.reservar, d.reservar),
-                         (1, True, True, False, True, False))
+        self.assertEqual(n, 3)
+        self.assertEqual([x.encerrado for x in lote.itens], [False] * 4)  # ninguém sai da voz por abandono
+        self.assertEqual((a.reservar, b.reservar, c.reservar, d.reservar), (True, True, True, False))
 
     def test_quem_teve_abandono_so_sai_com_robo_reservado(self):
         itens = [item("R", "11988887771", reservar=True), item("N", "11988887772"), item("M", "11988887773")]

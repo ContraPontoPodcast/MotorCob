@@ -1238,11 +1238,12 @@ lote e relê a cada minuto (`Plantao.atualizar_ritmos`; banco fora = o de antes 
 V5, disca em aquecimento (1,0). Com razão > 1 nenhuma linha reserva robô ao originar: todas reservam quando atendem
 (um robô preso a uma linha que só toca não serve a quem atendeu ao lado); com 1,0, cada linha sai com o seu. Teto de abandono da carteira: acima de 3 % (`DG.TETO_ABANDONO`) nos últimos 30 min com
 50+ atendidas por pessoa, razão 1,0 até o fim do dia (estado `freado`, alerta). Quem atende sem robô ouve na hora a
-mensagem neutra `sound:motorcx/sem-robo` (o "Alô fake" saiu: `voz_config.alo_fake*` ficou sem efeito) e **não recebe
-outra ligação no dia** (`lote.ABANDONO_DISCADOR`: finaliza o cliente mesmo com a regra por sinalização e sai dos
-reabríveis do "Reenviar agora"). Ao carregar o lote, `abandonos_recentes_voz` (só VM/servidor; id_cliente e contagens):
-2 abandonos em 7 dias = 3 dias sem voz desde o último; 1 = a próxima ligação só sai com robô reservado
-(`ItemLote.reservar`; `Lote.proximo(reservavel)`). As amostras ganham `razao_config` e `estado`
+mensagem neutra `sound:motorcx/sem-robo` (o "Alô fake" saiu: `voz_config.alo_fake*` ficou sem efeito). **O abandono não
+tem regra própria** (decisão do dono): a próxima tentativa segue a linha "abandonada" da sinalização/renitência da
+carteira (`SINALIZACAO_PADRAO["abandonada"]`, editável), como qualquer desfecho, e é reabrível no "Reenviar agora"; só
+sai com robô reservado (`lote.ABANDONO_DISCADOR` marca `ItemLote.reservar` nos itens do cliente; `Lote.proximo(reservavel)`).
+Ao carregar o lote, `abandonos_recentes_voz` (só VM/servidor; id_cliente e contagens): abandono nos últimos 7 dias =
+a próxima ligação só sai com robô reservado (`principal.aplicar_abandonos`; ninguém sai da voz por abandono). As amostras ganham `razao_config` e `estado`
 (normal|aquecendo|reduzido|freado|parado) e `ritmo_voz_hoje › ultima` os devolve.
 
 **Agente de voz · freios de chamadas curtas no ritmo (Power e Preditivo V6, SQL 109; Despacho Anatel 100/2026).** A VM
