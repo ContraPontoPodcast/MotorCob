@@ -169,7 +169,7 @@ export function LoteVozCurso() {
 			primeira.current = false;
 			const [d, c, p] = await Promise.all([
 				sb.from('voz_divisao_concorrencia').select('limite,teto,pico_multiplo,canais').eq('empresa_id', empresa.id).maybeSingle(),
-				sb.from('voz_config').select('abandono_max_pct,freio_ritmo_pct,alo_fake,alo_fake_max_s,pico_multiplo').eq('empresa_id', empresa.id).maybeSingle(),
+				sb.from('voz_config').select('abandono_max_pct,freio_ritmo_pct,pico_multiplo').eq('empresa_id', empresa.id).maybeSingle(),
 				sb.from('precos_empresa').select('preco,modelo,vigente_desde').eq('empresa_id', empresa.id).eq('item', 'voz_minuto_ia').lte('vigente_desde', diaISO()).order('vigente_desde', { ascending: false }).limit(1),
 			]);
 			setDiv((d.data as Row | null) ?? null);
@@ -343,7 +343,6 @@ export function LoteVozCurso() {
 						['Minuto de IA (fatura do MotorCX)', precoIa != null ? `${inteiro(minutosIa)} min a ${reais(precoIa, 2)} = ${reais(minutosIa * precoIa)}` : `${inteiro(minutosIa)} min`],
 						['Telefonia estimada (paga à operadora)', reais(custoTel)],
 						['Tentativas sem rota cadastrada', semCusto ? <span key="s" className="text-[var(--estado-atencao-texto)]">{inteiro(semCusto)} sem custo</span> : 'nenhuma'],
-						['Alô fake', cfg?.alo_fake ? `ligado, espera até ${cfg.alo_fake_max_s} s` : 'desligado'],
 					]} />
 					<div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-[var(--base-texto)]">
 						<span>Freia o lote quando o abandono passa de</span>

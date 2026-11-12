@@ -2,7 +2,7 @@
 // Global: conexão do provedor (só se funciona, nunca a chave) e robôs vendidos × teto contratado (console-voz-robos.tsx,
 // SQL 101: licenças primeiro, a sobra para quem não tem licença).
 // Por empresa: provedor de voz, troncos SIP, IPs de saída, rotas com vigência (e o alerta de rota sem cadastro),
-// calculadora de tarifação sem carência, transferência para o discador, pico, Alô fake e o caminho
+// calculadora de tarifação sem carência, transferência para o discador, pico e o caminho
 // Simulado → Só números de teste → Real com o checklist. Troncos, rotas e configuração: gerenciar_troncos_voz.
 // Ligar de verdade: ligar_voz_real. Quem não tem a permissão vê o cadeado.
 // Redesign v2: abas Empresa (padrão: caminho Simulado → Teste → Real, KPIs de prontidão, "Antes de ligar de verdade" e a
@@ -251,7 +251,7 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 	);
 }
 
-// ---------------------------------------------------------------- configuração do agente (provedor, pico, Alô fake)
+// ---------------------------------------------------------------- configuração do agente (provedor, pico)
 function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, podeTroncos, modo, onNumeros, onSalvo }: {
 	empresaId: string; empresaNome: string; config: Row | null; divisaoLinha: Row | null; troncos: Row[]; podeTroncos: boolean; modo: string;
 	onNumeros: () => void; onSalvo: (msg: string) => void;
@@ -261,7 +261,6 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 	const [aberta, setAberta] = useState<string | null>(null);
 	const provedor = String(config?.provedor ?? 'simulador');
 	const pico = Number(config?.pico_multiplo ?? 1);
-	const aloLib = config?.alo_fake_liberado === true;
 	const nTeste = Array.isArray(config?.numeros_teste_hash) ? (config!.numeros_teste_hash as unknown[]).length : 0;
 	const limite = Number(divisaoLinha?.limite ?? 0);
 	const canais = troncos.filter(t => t.ativo !== false).reduce((s, t) => s + Number(t.canais ?? 0), 0);
@@ -285,7 +284,6 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 		{ id: 'provedor', nome: 'Provedor de voz', valor: provInfo?.nome ?? provedor },
 		{ id: 'voz', nome: 'Voz do agente', valor: nomeVoz(config?.voz_id) },
 		{ id: 'pico', nome: 'Pico acima do limite', valor: comRobos ? 'Desligado (robôs contratados)' : pico <= 1 ? 'Desligado' : `Até ${pico}× · máx. ${inteiro(tetoDe(pico))}` },
-		{ id: 'alo', nome: 'Alô fake', valor: aloLib ? (config?.alo_fake ? `Liberado · ligado, até ${inteiro(config?.alo_fake_max_s)} s` : 'Liberado · desligado pela empresa') : 'Não liberado' },
 		{ id: 'numeros', nome: 'Números de teste', valor: nTeste === 0 ? 'Nenhum cadastrado' : `${inteiro(nTeste)} cadastrado${nTeste > 1 ? 's' : ''}` },
 		{ id: 'bucket', nome: 'Bucket de gravações', valor: config?.bucket_gravacoes ? <span className="font-mono text-[12.5px]">{String(config.bucket_gravacoes)}</span> : 'Sem bucket' },
 	];
@@ -325,14 +323,6 @@ function ConfigEmpresa({ empresaId, empresaNome, config, divisaoLinha, troncos, 
 					</select>
 					{comRobos && <p className="text-[12.5px] leading-relaxed text-[var(--estado-atencao-texto)]">Esta empresa tem robôs contratados: o pico não vale (limite = robôs). O valor fica guardado e volta a valer se a licença chegar a 0.</p>}
 					<p className="text-[12.5px] leading-relaxed text-[var(--base-texto-2)]">{pico <= 1 ? `Sem pico: a empresa nunca passa de ${inteiro(limite)}.` : `Até ${inteiro(tetoDe(pico))} ao mesmo tempo. O minuto de IA acima de ${inteiro(limite)} custa o dobro e aparece como item próprio na fatura do MotorCX.${tetoDe(pico) < limite * pico ? ` Travado nos ${inteiro(canais)} canais do tronco.` : ''}`}</p>
-				</>}
-				{aberta === 'alo' && <>
-					<select aria-label="Alô fake" value={aloLib ? '1' : '0'} disabled={!podeTroncos || busy === 'alo_fake_liberado'}
-						onChange={e => void ajustar('alo_fake_liberado', e.target.value === '1', e.target.value === '1' ? 'Alô fake liberado para a empresa.' : 'Alô fake não liberado. Se estava ligado na empresa, foi desligado.')} className={sel}>
-						<option value="0">Não liberado (padrão)</option>
-						<option value="1">Liberado para a empresa</option>
-					</select>
-					<p className="text-[12.5px] leading-relaxed text-[var(--base-texto-2)]">A equipe libera; quem liga, desliga e define o tempo máximo é a empresa, em Canais › Agente virtual.</p>
 				</>}
 				{aberta === 'numeros' && <p className="text-[13px] text-[var(--base-texto-2)]">{nTeste === 0 ? 'Nenhum número de teste cadastrado.' : `${inteiro(nTeste)} cadastrado(s).`} Guardamos só o hash. Trocar exige a permissão de troncos de voz.</p>}
 				{aberta === 'bucket' && <>

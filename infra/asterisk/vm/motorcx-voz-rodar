@@ -5,7 +5,7 @@
 #                     gerar-segmentacao | sons | firewall | teste
 # treino-voz (Roleplay por voz no navegador, SQL 119: voz/treino_voz.py) só roda com o metadado motorcx-treino-voz=1
 # (padrão: desligado); a chave do bilhete é a do simulador (motorcx-voz-simulador), STT/TTS/LLM os da Montagem.
-# sons (PR10): gera sem-robo.wav e alo.wav com o TTS da voz do agente (voz/sons_sistema.py) em /var/motorcx/sons; quem
+# sons (PR10): gera sem-robo.wav com o TTS da voz do agente (voz/sons_sistema.py) em /var/motorcx/sons; quem
 # instala no Asterisk é o motorcx-voz-sons. Com /var/motorcx/sons/sem-robo.wav, o Asterisk sobe com a pasta montada em
 # /var/lib/asterisk/sounds/motorcx (só leitura): os sons ficam depois de reiniciar e de atualizar a imagem.
 # teste (SQL 114, "Testar a rota" da tela Telefonia): contínuo nas duas VMs; pega o pedido do banco ("for update skip

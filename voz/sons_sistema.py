@@ -1,7 +1,8 @@
 """Áudios do sistema do Asterisk gerados com a voz do agente (PR10 do redesenho; README do Asterisk, seção 4).
 
   sem-robo.wav  a pessoa atendeu e não havia robô livre (SQL 91, `sound:motorcx/sem-robo`)
-  alo.wav       o "Alô" curto enquanto a IA fica livre (Alô fake, `sound:motorcx/alo`)
+
+O alo.wav do antigo "Alô fake" saiu no V4 do Power/Preditivo: só o sem-robo.wav é gerado.
 
 Gera com o TTS da Montagem (o mesmo provedor, voz e modelo de `/etc/motorcx/provedores.json`) e a chave do cofre
 (`ref_tts`, padrão `voz/tts` = segredo `motorcx-voz-tts`), lida pela conta de serviço da VM. A chave nunca é
@@ -30,7 +31,6 @@ log = logging.getLogger("motorcx.voz.sons")
 
 SONS = {
     "sem-robo": "Olá! No momento não conseguimos continuar esta ligação. Vamos tentar de novo mais tarde. Obrigado.",
-    "alo": "Alô?",
 }
 TAXA_TTS = 16000           # pcm_16000 da ElevenLabs: PCM 16 bits, mono, little-endian
 TAXA_ASTERISK = 8000
