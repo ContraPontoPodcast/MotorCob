@@ -57,6 +57,8 @@ export const ROTAS_PAI: Record<string, RotaPai | ((ctx: ContextoRota) => RotaPai
 	// e roteiro antigo voltam à lista de fluxos.
 	'/voz/agente/editor/:versao': AGENTE_DE_VOZ,
 	'/voz/agente/identidade': AGENTE_DE_VOZ,
+	'/voz/agente/ofertas': AGENTE_DE_VOZ,
+	'/voz/agente/ofertas/testar': { to: '/voz/agente/ofertas', rotulo: 'Ofertas da carteira' },
 	'/voz/agente/testar': AGENTE_DE_VOZ,
 	'/voz/agente/desempenho': AGENTE_DE_VOZ,
 	'/voz/agente/personas': AGENTE_DE_VOZ,

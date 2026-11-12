@@ -990,6 +990,20 @@ alçada no contexto. Nenhum conector recebe CPF. Evento `ofertas` (só códigos 
 "alternativa da carteira". Simulador HTTP aceita `ofertas` e `ofertas_arquivo` (cliente fictício). Testes:
 `tests/test_voz_fluxo.py` (TestOfertas) e `supabase/testes/testar_ofertas_executor.py`.
 
+**SQL 132 · Site › Agente de voz › Ofertas (protótipo aprovado, telas #/ofertas e #/testar).** `/voz/agente/ofertas`
+(`components/fluxo/ofertas.tsx › OfertasAgente`, sub-aba "Ofertas"): os 4 modos (recomendado: com API, API → arquivo;
+sem API só o arquivo), o conector da API, a ordem, avisos (API fora/instável, conector sem `oferta.validade`, carga sem
+colunas, sem alçada), cartões "API do credor" (24 h: % que respondeu, médio, p95, falhas, reserva usada, descartes),
+"Colunas do arquivo" (última carga, só contagens), "Trava da alçada" (só leitura) e o Histórico. Tudo de
+`painel_ofertas_voz(empresa, credor)` (só contagens e códigos). **Ativar** só com `pode.ativar` (Admin do cliente);
+a equipe MotorCX vê "Salvar rascunho". `/voz/agente/ofertas/testar` (`TestarOfertas`): as 7 situações do protótipo com
+a regra do executor em `lib/ofertas-voz.ts` (`avaliar`, `motivoDescarte`, `condicao`; os casos de
+`tests/dados/ofertas_casos.json`), a origem de cada oferta, a conversa e o passo a passo; cliente fictício. Colunas da
+carga: grupo "Ofertas prontas (até 3 por cliente)" (`CAMPOS_OFERTA`, `oferta{n}_*`). Conector: "Se a API falhar" →
+"Usar as ofertas do arquivo do dia (reserva)". Etapa Oferta: "Da ordem da carteira" (`arquivo`; `carteira` aparece
+como ela) ou "Da API desta etapa". Testes: `site/src/components/fluxo/ofertas.test.tsx`,
+`supabase/testes/testar_ofertas_painel.py`.
+
 **SQL 89 (Roleplay de treinamento, PR 1; SPEC aprovada pelo dono): perfil "Qualidade", só a área Speech Analytics.**
 Pessoa da empresa cliente (papel `qualidade`). **Vale no banco, não só no menu:** `minhas_empresas()` não devolve a
 empresa para a Qualidade, então toda policy/RPC de fora do Speech já nega; `minhas_empresas_speech()` (= minhas_empresas

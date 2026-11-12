@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { apiSupabase, type FluxoApi } from './api';
 
 export const BASE_FLUXO = '/voz/agente'; // Agente Voz/CX › Agente de voz (antes /canais/agente-virtual, que redireciona)
-export type Tela = 'lista' | 'editor' | 'testar' | 'desempenho' | 'pedido' | 'personas' | 'conectores' | 'roteiro' | 'identidade';
+export type Tela = 'lista' | 'editor' | 'testar' | 'desempenho' | 'pedido' | 'personas' | 'conectores' | 'roteiro' | 'identidade' | 'ofertas';
 
 export interface CtxFluxo {
 	empresa: { id: number; slug: string; nome: string } | null;

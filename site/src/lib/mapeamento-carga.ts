@@ -7,7 +7,22 @@ import { unzipSync, strFromU8 } from 'fflate';
 export type CampoCarga = 'id_cliente' | 'cpf' | 'id_contrato' | 'saldo' | 'dias_atraso' | 'vencimento' | 'telefones' | 'emails';
 /** SQL 88 · "Para o agente de voz" (opcionais): só viram código de validação; nunca atributo, segmento ou prévia. */
 export type CampoVoz = 'nascimento' | 'documento_validacao';
-export type ColunasCarga = Partial<Record<Exclude<CampoCarga, 'telefones' | 'emails'> | CampoVoz, string>> & { telefones?: string[]; emails?: string[] };
+/** SQL 130 · ofertas prontas do arquivo (até 3 por cliente): lidas como vieram, nunca calculadas nem viram atributo. */
+export type CampoOfertaArq = 'id' | 'parcelas' | 'valor_parcela' | 'desconto' | 'entrada' | 'validade' | 'valor_total' | 'vencimento';
+export type CampoOferta = `oferta${1 | 2 | 3}_${CampoOfertaArq}`;
+export const chaveOferta = (n: 1 | 2 | 3, campo: CampoOfertaArq) => `oferta${n}_${campo}` as CampoOferta;
+export const CAMPOS_OFERTA: { campo: CampoOfertaArq; nome: string; obrig?: boolean; formato: string }[] = [
+	{ campo: 'parcelas', nome: 'Parcelas', obrig: true, formato: 'número inteiro; 1 = à vista' },
+	{ campo: 'valor_parcela', nome: 'Valor da parcela', obrig: true, formato: 'R$, como 1.200,00' },
+	{ campo: 'validade', nome: 'Validade', obrig: true, formato: 'DD/MM/AAAA; sem validade a oferta é descartada' },
+	{ campo: 'desconto', nome: 'Desconto (%)', formato: 'só em %; R$ não é lido' },
+	{ campo: 'entrada', nome: 'Entrada', formato: 'R$' },
+	{ campo: 'valor_total', nome: 'Valor total', formato: 'R$; quando vem, a conta é conferida' },
+	{ campo: 'vencimento', nome: '1º vencimento', formato: 'DD/MM/AAAA; sem ele, a promessa usa a validade' },
+	{ campo: 'id', nome: 'Código da oferta', formato: 'opcional; sem ele vira arq-1, arq-2, arq-3' },
+];
+export const CHAVES_OFERTA: CampoOferta[] = ([1, 2, 3] as const).flatMap(n => CAMPOS_OFERTA.map(c => chaveOferta(n, c.campo)));
+export type ColunasCarga = Partial<Record<Exclude<CampoCarga, 'telefones' | 'emails'> | CampoVoz | CampoOferta, string>> & { telefones?: string[]; emails?: string[] };
 
 export const CAMPOS_VOZ: { key: CampoVoz; nome: string; ajuda: string; formato: string }[] = [
 	{ key: 'nascimento', nome: 'Data de nascimento', ajuda: 'dá "dia e mês" e "ano". Reconhece DT_NASC, DATA_NASCIMENTO e parecidos.', formato: 'Formato: DD/MM/AAAA (ou AAAA-MM-DD). Inválida = data que não existe (31/02), futura ou idade fora de 14–110.' },

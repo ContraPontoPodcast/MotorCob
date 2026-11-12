@@ -16,7 +16,8 @@ import { executar, useCarregar } from './comum';
 import { nomeFinalidade } from './etapa';
 
 const AUT: Record<string, string> = { oauth2_cc: 'OAuth2 (client credentials)', api_key_header: 'Chave de API no cabeçalho', bearer: 'Token Bearer', basic: 'Usuário e senha (Basic)', mtls: 'Certificado (mTLS)' };
-const FALHA: Record<string, string> = { alternativa_carteira: 'Usar ofertas e alçada da carteira (alternativa)', ramo: 'Seguir pelo ramo "Falhou" da etapa', transferir: 'Transferir para humano' };
+// SQL 130: a "alternativa da carteira" (ofertas calculadas da alçada) saiu; a reserva é o arquivo do dia
+const FALHA: Record<string, string> = { reserva_arquivo: 'Usar as ofertas do arquivo do dia (reserva)', ramo: 'Seguir pelo ramo "Falhou" da etapa', transferir: 'Transferir para humano' };
 const sit = (c: ConectorRow): { t: string; tom: 'ok' | 'atencao' | 'neutro' | 'erro' } =>
 	c.situacao === 'ativo' ? { t: `ativo${c.testado_em ? ` · testado em ${dataCurta(c.testado_em)}` : ''}`, tom: 'ok' }
 		: c.situacao === 'pausado' ? { t: 'pausado', tom: 'atencao' }
@@ -168,7 +169,7 @@ function GavetaConector({ c, cuida, hosts, saude, usos, onFechar, aoMudar }: { c
 		host && !hosts.includes(host) && `O host ${host} não está liberado (Rede e IPs).`,
 		(json(r.mapa_entrada) === undefined || json(r.mapa_saida) === undefined || json(r.cabecalhos_fixos) === undefined) && 'Mapas e cabeçalhos precisam ser JSON válido.',
 		r.metodo !== 'GET' && Number(r.tentativas) > 0 && !r.idempotencia && 'POST/PUT só repete com chave de idempotência.',
-		r.em_falha === 'alternativa_carteira' && r.finalidade !== 'buscar_ofertas' && 'A alternativa da carteira só vale para Buscar ofertas.',
+		r.em_falha === 'reserva_arquivo' && r.finalidade !== 'buscar_ofertas' && 'A reserva do arquivo só vale para Buscar ofertas.',
 	].filter(Boolean) as string[];
 	async function salvar() {
 		if (!api || !empresa) return;

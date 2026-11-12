@@ -9,6 +9,7 @@ import type {
 	ResultadoLoteRow, RespostaRow, Simulacao, VersaoRow,
 } from './api';
 import type { IdentidadeVigente, VersaoIdentidade } from '@/lib/identidade-mailing';
+import type { ConfigOfertas, PainelOfertas } from '@/lib/ofertas-voz';
 
 const b = (id: string, tipo: Bloco['tipo'], modo: Bloco['modo'], titulo: string | undefined, params: Record<string, unknown>, saidas: [string, string, string][] = []): Bloco => ({
 	id, tipo, modo, ...(titulo ? { titulo } : {}), params,
@@ -130,6 +131,16 @@ export function criarApiFixturas(): FluxoApi {
 	let alcada: AlcadaRow | null = null;
 	let identidade: IdentidadeVigente | null = null;
 	const historico: VersaoIdentidade[] = [];
+	// SQL 132 · o painel das ofertas da carteira de exemplo (só contagens; nenhum cliente)
+	const painel: PainelOfertas = {
+		config: null, rascunho: null,
+		api: { conector_id: 1, nome: 'Buscar ofertas', situacao: 'ativo', host: 'api.crm-aurora.example.com', timeout_ms: 2500, tentativas: 1, em_falha: 'reserva_arquivo', mapeia_validade: true, estado: 'no_ar', chamadas: 1912, ok_pct: 98.7, media_ms: 640, p95_ms: 1480, falhas_tempo: 19, falhas_erro: 6 },
+		uso: { ligacoes: 1904, api: 1868, arquivo: 25, nenhuma: 11, reserva: 25, api_pulada: 0, descartes: { incompleta: 0, vencida: 9, acima_alcada: 3, conta: 0 } },
+		carga: { em: agora, relatorio: { clientes_na_carga: 2010, clientes_com_oferta: 1284, ofertas: 3510, varios_contratos: 14, descartadas: { incompleta: 4, vencida: 37, conta: 2 } } },
+		alcada: { desconto_max_pct: 40, parcelas_max: 12, parcela_min: 50, entrada_min: 0, credor_id: null },
+		pode: { ativar: true, rascunho: true },
+	};
+	const histOfertas: { id: number; ofertas: ConfigOfertas; mudancas: string | null; vigente_desde: string; vigente_ate: string | null }[] = [];
 	const espera = <T,>(x: T) => new Promise<T>(r => setTimeout(() => r(x), 120));
 	const pend = (d: Definicao, credor: number | null) => {
 		const e = validarLocal(d);
@@ -169,6 +180,15 @@ export function criarApiFixturas(): FluxoApi {
 			if (cfg) historico.unshift({ id: historico.length + 1, credor_id: credor, identidade: cfg, mudancas: historico.length ? 'Quem confere mudou' : 'Configuração inicial', vigente_desde: agora, vigente_ate: null });
 			await espera(0);
 		},
+		painelOfertas: async () => espera(painel),
+		historicoOfertas: async () => espera([...histOfertas]),
+		ativarOfertas: async (_e, _c, cfg) => {
+			painel.config = cfg ? { id: histOfertas.length + 1, credor_id: 11, ofertas: cfg, vigente_desde: agora } : null;
+			painel.rascunho = null;
+			if (cfg) histOfertas.unshift({ id: histOfertas.length + 1, ofertas: cfg, mudancas: 'Ofertas: ' + cfg.modo, vigente_desde: agora, vigente_ate: null });
+			await espera(0);
+		},
+		rascunhoOfertas: async (_e, _c, cfg) => { painel.rascunho = cfg ? { ofertas: cfg, salvo_em: agora } : null; await espera(0); },
 		pendencias: async (_e, c, d) => espera(pend(d, c)),
 		bloqueios: async id => { const x = versoes.find(y => y.id === id); return espera(x ? pend(x.definicao, x.credor_id) : []); },
 		avisos: async id => espera(id === 105 ? ['roleplay_reprovadas:3'] : id === 401 ? ['roleplay_ausente'] : []),

@@ -16,6 +16,7 @@ export function CabecalhoAgente({ titulo, desc, atual, acoes, titleExtra, roteir
 				<SubAbas atual={atual} itens={[
 					{ id: 'lista', nome: 'Fluxos', to: rota('lista') },
 					{ id: 'identidade', nome: 'Confirmar identidade', to: rota('identidade') },
+					{ id: 'ofertas', nome: 'Ofertas', to: rota('ofertas') },
 					{ id: 'testar', nome: 'Testar conversa', to: rota('testar') },
 					{ id: 'desempenho', nome: 'Desempenho', to: rota('desempenho') },
 					...(roteiroAntigo ? [{ id: 'roteiro', nome: 'Roteiro (antigo)', to: rota('roteiro') }] : []),
