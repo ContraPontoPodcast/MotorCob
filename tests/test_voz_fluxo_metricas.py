@@ -27,10 +27,10 @@ class TestFluxoMetricas(unittest.TestCase):
         sb = SbFalso([7, 9])
         out = FM.noite(sb, date(2026, 11, 2), "1/2")
         self.assertEqual(sb.chamadas[0], ("fluxo_empresas_voz", {"parte": "1/2"}))
-        self.assertEqual([a for n, a in sb.chamadas[1:-1]], [
+        self.assertEqual([a for n, a in sb.chamadas[1:-2]], [
             {"empresa": 7, "dia": "2026-10-31"}, {"empresa": 7, "dia": "2026-11-01"},
             {"empresa": 9, "dia": "2026-10-31"}, {"empresa": 9, "dia": "2026-11-01"}])
-        self.assertEqual(sb.chamadas[-1], ("limpar_identidade_voz", {}))     # SQL 88: só a parte 1 limpa
+        self.assertEqual(sb.chamadas[-2:], [("limpar_identidade_voz", {}), ("limpar_ofertas_voz", {})])  # só a parte 1
         self.assertEqual(out, {"empresas": 2, "dias": 4, "blocos": 12, "intencoes": 8})   # a limpeza falha no falso: segue
 
     def test_so_a_parte_1_limpa_a_identidade(self):
@@ -45,7 +45,7 @@ class TestFluxoMetricas(unittest.TestCase):
     def test_janela_limitada_ao_banco(self):
         sb = SbFalso([7])
         FM.noite(sb, date(2026, 11, 2), dias=99)
-        self.assertEqual(len(sb.chamadas) - 2, FM.JANELA_DIAS)          # - empresas - limpeza (SQL 88)
+        self.assertEqual(len(sb.chamadas) - 3, FM.JANELA_DIAS)          # - empresas - limpezas (SQL 88 e 130)
 
     def test_main_imprime_o_resumo(self):
         buf = io.StringIO()

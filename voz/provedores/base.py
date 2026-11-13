@@ -7,7 +7,8 @@ permitidas do roteiro) e recebe uma Conexao dizendo como ligar o áudio:
   interno        sem áudio (Simulador).
 O provedor devolve o que aconteceu por `emitir(id_chamada, tipo, dados)`:
   resultado   {resultado_ia, identidade_confirmada?, data_promessa?, valor_promessa?, retorno_em?}
-  transferir  {motivo}  (cpc, pedido_humano, ofertas_sem_acordo, fora_alcada, contestacao)
+  transferir  {motivo}  (cpc, pedido_humano, ofertas_sem_acordo, fora_alcada, contestacao, fora_das_ofertas: o cliente
+              pediu uma condição que não está nas ofertas da API ou do arquivo, SQL 130)
   encerrar    {}
 Com o fluxo (SQL 58, voz/fluxo.py) também:
   passo       {ordem, bloco_id, modo, saida_quando, intencao, confianca_faixa, motivo_devolucao, trava, turnos,
@@ -23,8 +24,8 @@ from datetime import datetime
 from typing import Callable
 
 TIPOS_CONEXAO = ("sip", "midia_externa", "interno")
-TIPOS_EVENTO = ("resultado", "transferir", "encerrar", "passo", "conector", "fluxo", "link")
-MOTIVOS_TRANSFERENCIA = ("cpc", "pedido_humano", "ofertas_sem_acordo", "fora_alcada", "contestacao")
+TIPOS_EVENTO = ("resultado", "transferir", "encerrar", "passo", "conector", "fluxo", "link", "ofertas")
+MOTIVOS_TRANSFERENCIA = ("cpc", "pedido_humano", "ofertas_sem_acordo", "fora_alcada", "contestacao", "fora_das_ofertas")
 
 
 def aviso_abertura(gravada: bool, empresa: str | None = None) -> str:

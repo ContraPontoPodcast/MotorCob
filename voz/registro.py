@@ -24,6 +24,9 @@ from voz import banco as B
 from voz.orquestrador.eventos import EventoChamada, para_voz_chamadas
 
 FUSO = ZoneInfo("America/Sao_Paulo")
+# SQL 131 · voz_ofertas_uso (registrar_ofertas_voz): só códigos e contagens, nunca o cliente nem valores
+CAMPOS_OFERTAS_USO = ("empresa_id", "id_chamada", "credor_id", "fluxo_versao_id", "bloco_id", "modo", "fonte", "motivo",
+                      "pulou_api", "api_classe", "api_ms", "descartes", "ofertas")
 PAGINA = 1000
 log = logging.getLogger("motorcx.voz")
 
@@ -50,6 +53,7 @@ class RegistroBanco:
         self.erros = 0
         self.fila_passos: list[dict] = []
         self.fila_conectores: list[dict] = []
+        self.fila_ofertas: list[dict] = []          # SQL 131: de onde vieram as ofertas (só códigos e contagens)
         self.fila_resubmits: list[dict] = []
         self.ids_resubmit: dict[str, int] = {}          # ref da volta -> voz_resubmits.id
         self.ids_onda: dict[tuple, int] = {}            # (lote_id, chave da onda) -> voz_ondas.id
@@ -68,16 +72,32 @@ class RegistroBanco:
             self.fila = self.fila[-self.max_fila:]
 
     def registrar_fluxo(self, empresa_id: int, id_chamada: str, tipo: str, dados: dict) -> None:
-        """Eventos do executor do fluxo (SQL 58): passo → voz_fluxo_passos, conector → crm_chamadas. Só códigos."""
+        """Eventos do executor do fluxo (SQL 58): passo → voz_fluxo_passos, conector → crm_chamadas, ofertas (SQL 131)
+        → voz_ofertas_uso. Só códigos."""
         linha = dict(dados, empresa_id=empresa_id, id_chamada=id_chamada)
         if tipo == "passo":
             self.fila_passos.append(B.para_colunas("voz_fluxo_passos", linha))
         elif tipo == "conector" and dados.get("conector_id") is not None:
             self.fila_conectores.append(B.para_colunas("crm_chamadas", linha))
-        for f in (self.fila_passos, self.fila_conectores):
+        elif tipo == "ofertas":
+            self.fila_ofertas.append({k: linha.get(k) for k in CAMPOS_OFERTAS_USO})
+        for f in (self.fila_passos, self.fila_conectores, self.fila_ofertas):
             del f[:-self.max_fila]
 
+    def _descarregar_ofertas(self) -> None:
+        if not self.fila_ofertas:
+            return
+        lote, self.fila_ofertas = self.fila_ofertas, []
+        try:
+            self.sb.rpc("registrar_ofertas_voz", {"linhas": lote})
+        except Exception as ex:   # noqa: BLE001 — banco fora (ou sem o SQL 131): fica na fila
+            self.erros += 1
+            log.warning("voz_ofertas_uso: falha ao gravar (%s); %d linha(s) ficam na fila", ex.__class__.__name__,
+                        len(lote))
+            self.fila_ofertas = (lote + self.fila_ofertas)[-self.max_fila:]
+
     def _descarregar_fluxo(self) -> None:
+        self._descarregar_ofertas()
         for tabela, attr, conf in (("voz_fluxo_passos", "fila_passos", B.conflito("voz_fluxo_passos")),
                                    ("crm_chamadas", "fila_conectores", None)):
             lote = getattr(self, attr)

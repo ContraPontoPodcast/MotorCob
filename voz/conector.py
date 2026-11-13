@@ -10,8 +10,11 @@ Cliente HTTP de cada conector (crm_conectores):
 A resposta do CRM nunca vai para log, banco ou exceção: fica no dicionário da sessão da ligação (voz/fluxo.py), que
 é descartado no fim. Log só com conector, classe, status, tempo e tentativa (tests/test_voz_fluxo.py prova).
 
-A alçada da carteira (voz_alcada_carteira) é o teto de toda oferta, inclusive das que vêm do CRM (decisão 2):
-`filtrar_ofertas` descarta o que passa dela e o executor grava o código oferta_acima_alcada.
+As ofertas vêm SÓ da API do credor (o conector "Buscar ofertas", inclusive o CRM) ou do arquivo do dia (SQL 130;
+SPEC_OFERTAS_v2): o agente lê, não calcula. A alçada da carteira (voz_alcada_carteira) é só TRAVA: `filtrar_ofertas`
+DESCARTA, nunca corta nem recalcula, a oferta incompleta, vencida (validade antes de hoje, Brasília), acima da alçada ou
+com a conta que não fecha, e devolve os descartes por motivo; sem alçada nada passa. No máximo 3 ofertas, na ordem da
+fonte (a ordem é a recomendação do credor).
 
 Só biblioteca padrão.
 """
@@ -29,12 +32,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date
 
 log = logging.getLogger("motorcx.voz.conector")
 
 MAX_RESPOSTA = 256 * 1024
-CAMPOS_OFERTA = ("id", "parcelas", "valor_parcela", "desconto_pct", "vencimento", "valor_total", "entrada")
+CAMPOS_OFERTA = ("id", "parcelas", "valor_parcela", "desconto_pct", "vencimento", "valor_total", "entrada", "validade")
+MAX_OFERTAS = 3                     # o agente apresenta no máximo as 3 primeiras válidas (Q16)
+MOTIVOS_DESCARTE = ("incompleta", "vencida", "acima_alcada", "conta")
+TETO_OFERTAS_S = 4.0                # silêncio máximo buscando ofertas na API, somando as tentativas (Q4)
 RE_HOST = re.compile(r"^https://([^/:?#]+)")
 RE_PLACEHOLDER = re.compile(r"\{([A-Za-z][A-Za-z0-9_.\-]*)\}")
 
@@ -94,20 +100,18 @@ class Resultado:
 
 @dataclass(frozen=True)
 class Alcada:
+    """Só a trava (SQL 130): o teto que DESCARTA. ofertas_padrao e validade_dias do banco não são mais lidos."""
     desconto_max_pct: float
     parcelas_max: int
     parcela_min: float
     entrada_min: float = 0.0
-    validade_dias: int = 5
-    ofertas_padrao: tuple = ()
 
     @staticmethod
     def da_linha(l: dict | None) -> "Alcada | None":
         if not l:
             return None
         return Alcada(float(l["desconto_max_pct"]), int(l["parcelas_max"]), float(l["parcela_min"]),
-                      float(l.get("entrada_min") or 0), int(l.get("validade_dias") or 5),
-                      tuple(l.get("ofertas_padrao") or ()))
+                      float(l.get("entrada_min") or 0))
 
 
 # ------------------------------------------------------------------ JSONPath simples ($.a.b, [*], [n])
@@ -180,6 +184,7 @@ def _num(v) -> float | None:
 
 
 def oferta_dentro(o: dict, a: Alcada | None) -> bool:
+    """A oferta cabe na alçada (só confere; nunca ajusta). Sem alçada nada passa."""
     if a is None or not o.get("id"):
         return False
     parc = _num(o.get("parcelas"))
@@ -197,10 +202,49 @@ def oferta_dentro(o: dict, a: Alcada | None) -> bool:
     return True
 
 
-def filtrar_ofertas(ofertas: list, alcada: Alcada | None) -> tuple[list, int]:
-    """(ofertas dentro da alçada, quantas foram descartadas). Sem alçada nada passa."""
-    boas = [dict(o, id=str(o["id"])) for o in ofertas if oferta_dentro(o, alcada)]
-    return boas, len(ofertas) - len(boas)
+def _data(v) -> date | None:
+    try:
+        return date.fromisoformat(str(v)[:10]) if v not in (None, "") else None
+    except ValueError:
+        return None
+
+
+def conta_fecha(o: dict) -> bool:
+    """Sem total: nada a conferir. Com ele: entrada + parcelas × parcela ≈ total (1% e R$ 0,05; Q10)."""
+    tot = _num(o.get("valor_total"))
+    if tot is None:
+        return True
+    calc = (_num(o.get("entrada")) or 0.0) + int(_num(o["parcelas"])) * _num(o["valor_parcela"])
+    dif = abs(calc - tot)
+    return not (dif > 0.05 and dif > abs(tot) * 0.01)
+
+
+def motivo_descarte(o: dict, a: Alcada | None, hoje: date) -> str | None:
+    """Por que a oferta não pode ser falada (na ordem da SPEC §6), ou None. Os casos de tests/dados/ofertas_casos.json."""
+    if not isinstance(o, dict) or not o.get("id") or len(str(o["id"])) > 40:
+        return "incompleta"
+    parc, vp, val = _num(o.get("parcelas")), _num(o.get("valor_parcela")), _data(o.get("validade"))
+    if parc is None or parc != int(parc) or parc < 1 or vp is None or vp <= 0 or val is None:
+        return "incompleta"
+    if val < hoje:
+        return "vencida"
+    if not oferta_dentro(o, a):
+        return "acima_alcada"
+    if not conta_fecha(o):
+        return "conta"
+    return None
+
+
+def filtrar_ofertas(ofertas: list, alcada: Alcada | None, hoje: date) -> tuple[list, dict]:
+    """(até 3 ofertas válidas na ordem da fonte, {motivo: quantas descartadas}). Descarta, nunca corrige."""
+    boas, descartes = [], {}
+    for o in ofertas or []:
+        m = motivo_descarte(o, alcada, hoje)
+        if m:
+            descartes[m] = descartes.get(m, 0) + 1
+        elif len(boas) < MAX_OFERTAS and str(o["id"]) not in {b["id"] for b in boas}:
+            boas.append({k: (str(v) if k == "id" else v) for k, v in o.items() if k in CAMPOS_OFERTA})
+    return boas, descartes
 
 
 def codigo_ofertas(n_validas: int, n_descartadas: int) -> str:
@@ -209,22 +253,30 @@ def codigo_ofertas(n_validas: int, n_descartadas: int) -> str:
     return "ofertas_0" if n_validas == 0 else "ofertas_1_3" if n_validas <= 3 else "ofertas_4_mais"
 
 
-def ofertas_da_carteira(a: Alcada | None, saldo, hoje: date) -> list:
-    """A alternativa: as ofertas padrão da alçada, com valores calculados do saldo da ligação."""
-    s = _num(saldo)
-    if a is None or s is None or s <= 0:
-        return []
-    out = []
-    for o in a.ofertas_padrao:
-        parc, desc = int(o["parcelas"]), float(o.get("desconto_pct") or 0)
-        total = round(s * (1 - desc / 100), 2)
-        oferta = {"id": str(o["id"]), "parcelas": parc, "desconto_pct": desc, "valor_total": total,
-                  "valor_parcela": round(total / parc, 2), "vencimento": (hoje + timedelta(days=a.validade_dias)).isoformat()}
-        if o.get("entrada") is not None:
-            oferta["entrada"] = float(o["entrada"])
-        if oferta_dentro(oferta, a):
-            out.append(oferta)
-    return out
+class Disjuntor:
+    """API instável (Q18): depois de 3 falhas SEGUIDAS em 5 min, a carteira pula a API por 5 min e vai direto à reserva.
+    Um por VM (memória do processo), por conector. Só conta; nada da resposta."""
+
+    def __init__(self, falhas: int = 3, janela_s: float = 300, pausa_s: float = 300, relogio=time.monotonic):
+        self.falhas, self.janela, self.pausa, self.relogio = falhas, janela_s, pausa_s, relogio
+        self._seguidas: dict = {}
+        self._ate: dict = {}
+
+    def aberto(self, chave) -> bool:
+        return self.relogio() < self._ate.get(chave, 0.0)
+
+    def registrar(self, chave, ok: bool) -> None:
+        agora = self.relogio()
+        if ok:
+            self._seguidas.pop(chave, None)
+            return
+        ts = [t for t in self._seguidas.get(chave, []) if agora - t <= self.janela] + [agora]
+        if len(ts) >= self.falhas:
+            self._ate[chave] = agora + self.pausa
+            ts = []
+            log.warning("ofertas: conector %s instável (%d falhas seguidas): pulando a API por %ds", chave,
+                        self.falhas, int(self.pausa))
+        self._seguidas[chave] = ts
 
 
 # ------------------------------------------------------------------ cliente HTTP
@@ -353,7 +405,8 @@ class ClienteConectores:
         cab["Accept"] = "application/json"
         return url, cab, dados
 
-    def chamar(self, con: Conector, entrada: dict, chave_idempotencia: str) -> Resultado:
+    def chamar(self, con: Conector, entrada: dict, chave_idempotencia: str, teto_s: float | None = None) -> Resultado:
+        """teto_s: silêncio máximo somando as tentativas (Q4: 4 s nas ofertas). Passou, conta como falha (tempo)."""
         t0 = self.relogio()
         try:
             if con.situacao != "ativo":
@@ -372,7 +425,12 @@ class ClienteConectores:
         r = Resultado("tempo")
         for tentativa in range(1, repete + 2):
             ini = self.relogio()
-            r = self._uma(con, url, cab, corpo, ctx)
+            limite = con.timeout_ms / 1000
+            if teto_s is not None:
+                limite = min(limite, teto_s - (ini - t0))
+                if limite < 0.2:                       # sem tempo para outra tentativa dentro do teto
+                    break
+            r = self._uma(con, url, cab, corpo, ctx, limite)
             r.tentativa, r.latencia_ms = tentativa, int((self.relogio() - ini) * 1000)
             log.info("conector %s: classe=%s status=%s ms=%s tentativa=%s", con.id, r.classe, r.http_status,
                      r.latencia_ms, tentativa)
@@ -381,10 +439,10 @@ class ClienteConectores:
             self.dormir(min(0.2 * tentativa, 0.5))
         return r
 
-    def _uma(self, con, url, cab, corpo, ctx) -> Resultado:
+    def _uma(self, con, url, cab, corpo, ctx, limite: float | None = None) -> Resultado:
         req = urllib.request.Request(url, data=corpo, method=con.metodo, headers=cab)
         try:
-            with self._abrir(req, con.timeout_ms / 1000, ctx) as resp:
+            with self._abrir(req, limite if limite is not None else con.timeout_ms / 1000, ctx) as resp:
                 status = int(getattr(resp, "status", None) or resp.getcode())
                 bruto = resp.read(MAX_RESPOSTA + 1)
         except urllib.error.HTTPError as ex:
@@ -419,7 +477,7 @@ class ConectoresDeExemplo:
         self.falhar = set(falhar or ())
         self.cenarios = {int(k): v for k, v in (cenarios or {}).items() if v in CENARIOS_SIMULADOR}
 
-    def chamar(self, con: Conector, entrada: dict, chave_idempotencia: str) -> Resultado:
+    def chamar(self, con: Conector, entrada: dict, chave_idempotencia: str, teto_s: float | None = None) -> Resultado:
         cen = self.cenarios.get(con.id)
         if cen == "401":
             return Resultado("http_4xx", http_status=401, latencia_ms=0)
@@ -503,3 +561,66 @@ class FonteArquivo:
         if r not in RESPOSTAS_ARQUIVO:
             return Resultado("mapa_invalido", latencia_ms=ms)
         return Resultado("ok", latencia_ms=ms, codigo=r)
+
+
+# ------------------------------------------------------------------ fonte interna: ofertas do arquivo (SQL 130)
+MODOS_OFERTAS = {"api_arquivo": ("api", "arquivo"), "arquivo_api": ("arquivo", "api"), "so_api": ("api",),
+                 "so_arquivo": ("arquivo",)}
+
+
+class FonteOfertasArquivo:
+    """As ofertas prontas do arquivo do dia (colunas oferta1..3_*), de UM cliente, pelo banco (ofertas_mailing_voz).
+
+    O banco só responde dentro de uma ligação com a identidade confirmada: pelo arquivo (o próprio banco conferiu) ou
+    pelo CRM, que a VM registra antes (`confirmar_crm`, confirmar_identidade_crm_voz). Mesmo `Resultado` do conector:
+    classe ok com a lista (vazia = o arquivo não traz oferta para o cliente) ou tempo (banco fora) → a próxima fonte.
+    Log só com a classe e a contagem; nunca as ofertas."""
+    nome = "Arquivo do dia (MotorCX)"
+
+    def __init__(self, sb, relogio=time.monotonic):
+        self.sb, self.relogio = sb, relogio
+
+    def confirmar_crm(self, empresa_id, credor_id, id_cliente: str, id_chamada: str) -> bool:
+        try:
+            self.sb.rpc("confirmar_identidade_crm_voz", {"empresa": int(empresa_id), "credor": int(credor_id),
+                                                         "id_cliente": id_cliente, "id_chamada": id_chamada})
+            return True
+        except Exception as ex:   # noqa: BLE001 — sem o registro, o banco não entrega as ofertas: fonte falhou
+            log.warning("ofertas: fonte=arquivo confirmar=falhou (%s)", ex.__class__.__name__)
+            return False
+
+    def ofertas(self, empresa_id, credor_id, id_cliente: str, id_chamada: str, contrato: str | None = None) -> Resultado:
+        t0 = self.relogio()
+        try:
+            r = self.sb.rpc("ofertas_mailing_voz", {"empresa": int(empresa_id), "credor": int(credor_id),
+                                                    "id_cliente": id_cliente, "id_chamada": id_chamada,
+                                                    "contrato": contrato or None})
+        except Exception as ex:   # noqa: BLE001 — banco fora, sem identidade registrada: a fonte falhou
+            log.warning("ofertas: fonte=arquivo classe=tempo (%s)", ex.__class__.__name__)
+            return Resultado("tempo", latencia_ms=int((self.relogio() - t0) * 1000))
+        ms = int((self.relogio() - t0) * 1000)
+        if r is None:
+            r = []
+        if not isinstance(r, list) or not all(isinstance(o, dict) for o in r):
+            return Resultado("mapa_invalido", latencia_ms=ms)
+        ofs = [{k: v for k, v in o.items() if k in CAMPOS_OFERTA} for o in r]
+        log.info("ofertas: fonte=arquivo classe=ok n=%d ms=%d", len(ofs), ms)
+        return Resultado("ok", latencia_ms=ms, ofertas=ofs)
+
+
+class OfertasDeExemplo:
+    """Para o simulador e os testes: as ofertas do arquivo de um cliente fictício (ou a fonte fora, `falhar`)."""
+    nome = FonteOfertasArquivo.nome
+
+    def __init__(self, ofertas: list | None = None, falhar: bool = False):
+        self.lista, self.falhar = list(ofertas or []), falhar
+        self.pedidos: list = []
+
+    def confirmar_crm(self, *_a) -> bool:
+        return not self.falhar
+
+    def ofertas(self, empresa_id, credor_id, id_cliente, id_chamada, contrato=None) -> Resultado:
+        self.pedidos.append(id_cliente)
+        if self.falhar:
+            return Resultado("tempo")
+        return Resultado("ok", ofertas=[dict(o) for o in self.lista])

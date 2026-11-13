@@ -111,6 +111,11 @@ RPC = {
     # SQL 88 · identidade pelo arquivo: a VM manda o código da resposta e recebe só a palavra (nunca os códigos)
     "identidade_voz_vigente": "identidade_vigente", "abrir_identidade_voz": "abrir_identidade",
     "conferir_identidade_voz": "conferir_identidade", "limpar_identidade_voz": "limpar_identidade",
+    # SQL 130/131 · ofertas só da API ou do arquivo: a ordem vigente, o registro da identidade pelo CRM, as ofertas do
+    # arquivo de UM cliente (só com a identidade confirmada), a limpeza e o uso das fontes (só códigos e contagens)
+    "ofertas_voz_vigente": "ofertas_vigente", "confirmar_identidade_crm_voz": "confirmar_identidade_crm",
+    "ofertas_mailing_voz": "ofertas_mailing", "limpar_ofertas_voz": "limpar_ofertas",
+    "registrar_ofertas_voz": "registrar_ofertas",
     # SQL 102 · uso dos robôs contratados (em uso agora e pico do dia, só contagens; o Plantão grava a cada 15 s)
     "registrar_uso_robos_voz": "registrar_uso_robos",
     # SQL 114 · Telefonia T5: teste da rota (voz/testador.py)

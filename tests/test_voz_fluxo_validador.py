@@ -25,6 +25,15 @@ def _lista(sql: str, inicio: str) -> list[str]:
     return re.findall(r"'([a-z0-9_.]+)'", sql[i:sql.index("]", i)])
 
 
+def _ultima(trecho: str) -> str:
+    """O texto da migração mais nova que (re)define o trecho (SQL 131 refaz campos_oferta_voz)."""
+    for arq in sorted((RAIZ / "supabase" / "migrations").glob("*.sql"), reverse=True):
+        t = arq.read_text(encoding="utf-8")
+        if trecho in t:
+            return t
+    raise AssertionError(trecho)
+
+
 class TestValidadorFluxo(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -45,7 +54,8 @@ class TestValidadorFluxo(unittest.TestCase):
 
     def test_listas_iguais_ao_banco(self):
         self.assertEqual(tuple(_lista(self.sql, "create or replace function public.variaveis_voz()")), V.VARIAVEIS_VOZ)
-        self.assertEqual(tuple(_lista(self.sql, "create or replace function public.campos_oferta_voz()")), V.CAMPOS_OFERTA)
+        self.assertEqual(tuple(_lista(_ultima("create or replace function public.campos_oferta_voz()"),
+                                      "create or replace function public.campos_oferta_voz()")), V.CAMPOS_OFERTA)
         self.assertEqual(tuple(_lista(self.sql, "ferramentas constant text[]")), V.FERRAMENTAS)
         self.assertEqual(tuple(_lista(self.sql, "tipos constant text[]")), tuple(V.TIPOS))
         self.assertIn(f"public.fluxo_voz_aux_inteiro(p -> 'max_turnos', 1, {V.MAX_TURNOS_GLOBAL})", self.sql)

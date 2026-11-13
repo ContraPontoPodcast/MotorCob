@@ -65,7 +65,7 @@ Tipos, modos, params e `quando` das saídas:
 - generativa (generativo) {objetivo (20+ caracteres), tom: [cordial|frases_curtas|sem_giria|nao_pressiona|formal],
   max_turnos 1..40, ferramentas: [apresentar_oferta|registrar_promessa|agendar_retorno|consultar_base|transferir_humano|
   encerrar_chamada] (transferir_humano sempre), contrapropostas_max 0..5}; saídas todas tipo devolve, quando = motivo
-- oferta (arvore|cognicao) {fala, origem: conector|carteira, conector_id}; saídas aceitou, quer_outra, recusou
+- oferta (arvore|cognicao) {fala, origem: conector|arquivo, conector_id}; saídas aceitou, quer_outra, recusou
 - retorno (arvore|cognicao) {fala, dias_max 1..7}; saídas agendou, nao_agendou
 - conector (sistema) {conector_id, fala_espera}; saídas respondeu, falhou (tipo falha)
 - registrar (sistema) {registra: acordo_crm|promessa_motorcx, conectores: [ids]}; saídas registrado, falhou (tipo falha)
@@ -95,9 +95,9 @@ Monte um fluxo compacto, em geral de 4 a 10 blocos:
   do texto (padrão 2); saídas devolve como fechou_acordo, sem_acordo, retorno, contestou;
 - finais: encerrar (promessa, retorno_agendado, recusa) e transferir; contestação da dívida → transferir motivo
   contestacao; pedido de humano ou falha → um Transferir · atendente (motivo pedido_humano) comum.
-Valores fixos do pedido (R$, parcelas, entrada, %) NUNCA vão na fala nem no objetivo: as ofertas vêm do CRM
-(conector buscar_ofertas) ou da alçada da carteira, por {{oferta.*}} e apresentar_oferta. Liste-os numa pergunta
-("Cadastrar estes valores na alçada da carteira? R$ ...") e registre a troca em suposicoes.
+Valores fixos do pedido (R$, parcelas, entrada, %) NUNCA vão na fala nem no objetivo: as ofertas vêm só da API do
+credor (conector buscar_ofertas) ou do arquivo do dia, por {{oferta.*}} e apresentar_oferta; o agente não calcula nem
+negocia. Liste-os numa pergunta ("Mandar estas ofertas pelo arquivo ou pela API? R$ ...") e registre em suposicoes.
 "Pedir o primeiro nome": o sistema já tem {{primeiro_nome}} e a identidade é confirmada pelo bloco identidade;
 diga isso em suposicoes. "Simulação"/"valor fictício": em ligação real as ofertas são as reais; testes vão no
 simulador do fluxo; diga isso em suposicoes."""

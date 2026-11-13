@@ -5,7 +5,8 @@ o funil por versão, dia e bloco (voz_fluxo_metricas_dia) e as intenções (voz_
 com agregar_fluxo_dia, a partir de voz_fluxo_passos e voz_chamadas. Idempotente: rodar de novo refaz os mesmos números.
 Só códigos e contagens; nenhum dado por cliente sai daqui. Sem IA, sem custo: não tem interruptor.
 SQL 88: na parte 1, também a limpeza da identidade pelo arquivo (limpar_identidade_voz: códigos com mais de 1 dia ou de
-carteira que não confere mais pelo arquivo, tentativas e ligações com mais de 2 dias).
+carteira que não confere mais pelo arquivo, tentativas e ligações com mais de 2 dias) e a das ofertas do arquivo
+(SQL 130/131: limpar_ofertas_voz).
 
 Os dois acessos da VM (voz/acesso.py): as mesmas RPCs pela chave do servidor ou pelas funções de voz_vm
 (voz_vm.fluxo_empresas e voz_vm.agregar_fluxo_dia, papel motorcx_voz).
@@ -49,6 +50,11 @@ def noite(sb, hoje: date, parte: str = "1/1", dias: int = 2) -> dict:
                 + int(r.get("chamadas") or 0)
         except Exception as ex:   # noqa: BLE001 — banco sem o SQL 88: segue
             log.warning("identidade: limpeza não rodou (%s)", ex.__class__.__name__)
+        try:                           # SQL 130/131: ofertas do arquivo com mais de 1 dia e o uso com mais de 90 dias
+            r = sb.rpc("limpar_ofertas_voz", {}) or {}
+            out["ofertas_apagadas"] = int(r.get("ofertas") or 0) + int(r.get("uso") or 0)
+        except Exception as ex:   # noqa: BLE001 — banco sem o SQL 130: segue
+            log.warning("ofertas: limpeza não rodou (%s)", ex.__class__.__name__)
     return dict(out)
 
 

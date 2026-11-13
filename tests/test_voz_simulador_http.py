@@ -23,7 +23,7 @@ def pedido(falas, falhar=()):
     a = ALCADA
     return {"versao_id": 31, "definicao": C.negociador(), "conectores": cons, "falas": falas, "falhar": list(falhar),
             "alcada": {"id": 1, "desconto_max_pct": a.desconto_max_pct, "parcelas_max": a.parcelas_max,
-                       "parcela_min": a.parcela_min, "ofertas_padrao": list(a.ofertas_padrao)},
+                       "parcela_min": a.parcela_min},
             "variaveis": {"primeiro_nome": "Ana", "assessoria": "Aurora", "saldo": "1.380,00"}}
 
 
@@ -40,11 +40,19 @@ class TestSimuladorHttp(unittest.TestCase):
         self.assertFalse(SH.conferir(VETOR["chave"], VETOR["carimbo"], VETOR["assinatura"], c + b" ", agora))
         self.assertFalse(SH.conferir(VETOR["chave"], None, VETOR["assinatura"], c, agora))
 
-    def test_rodar_falha_do_crm_cai_na_carteira(self):
+    def test_rodar_falha_do_crm_sem_arquivo_transfere(self):
         r = SH.rodar(pedido(["Sou eu", "15 de março", "Quero parcelar", "Aceito"], falhar=[1]), hoje=date(2026, 10, 31))
-        self.assertEqual(r["caminho"], ["N1", "N2", "N3", "N4", "N6", "N7", "N11", "N12"])
-        self.assertEqual(r["resultado"], "promessa")
+        self.assertEqual(r["caminho"], ["N1", "N2", "N3", "N4", "N6"])          # SQL 130: nada calculado da alçada
+        self.assertEqual(r["turnos"][-1]["fim"], "transferida · ofertas_sem_acordo")
         self.assertNotIn("eventos", r)
+
+    def test_rodar_falha_do_crm_usa_o_arquivo_ficticio(self):
+        p = pedido(["Sou eu", "15 de março", "Quero parcelar"], falhar=[1])
+        p["ofertas_arquivo"] = [{"id": "arq-1", "parcelas": 6, "valor_parcela": 230.0, "validade": "2026-11-05"}]
+        r = SH.rodar(p, hoje=date(2026, 10, 31))
+        self.assertEqual((r["ofertas"]["fonte"], r["ofertas"]["motivo"]), ("arquivo", "api_falhou"))
+        p["ofertas_arquivo"] = [{}] * 4
+        self.assertIn("erro", SH.rodar(p))
 
     def test_rodar_recusa_fluxo_invalido_e_fala_com_documento(self):
         p = pedido(["Sou eu"])
@@ -92,11 +100,11 @@ class TestSimuladorHttp(unittest.TestCase):
             srv.server_close()
 
     # SQL 66 · resposta escolhida para o conector simulado e a prévia em áudio ("Ouvir a voz")
-    def test_cenario_tempo_cai_na_carteira_como_falhar(self):
+    def test_cenario_tempo_cai_na_falha_como_falhar(self):
         p = pedido(["Sou eu", "15 de março", "Quero parcelar", "Aceito"])
         p["cenarios"] = {"1": "tempo"}
         r = SH.rodar(p, hoje=date(2026, 10, 31))
-        self.assertEqual(r["caminho"], ["N1", "N2", "N3", "N4", "N6", "N7", "N11", "N12"])
+        self.assertEqual(r["caminho"], ["N1", "N2", "N3", "N4", "N6"])
         self.assertEqual([c["classe"] for c in r["conectores"] if c["conector_id"] == 1], ["tempo"])
 
     def test_cenario_401_e_sucesso_acima_de_falhar(self):
