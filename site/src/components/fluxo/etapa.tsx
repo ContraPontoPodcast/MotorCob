@@ -174,7 +174,7 @@ export function GavetaEtapa({ bloco, definicao, conectores, intencoes, erros, ed
 			</Campo>
 		</>); break;
 		case 'oferta': campos = (<>
-			<Campo rotulo="De onde vem a oferta"><Opcoes lista={OPCOES.origem_oferta} valor={p.origem} disabled={dis} onChange={v => setP('origem', v)} /></Campo>
+			<Campo rotulo="De onde vem a oferta"><Opcoes lista={OPCOES.origem_oferta} valor={p.origem === 'carteira' ? 'arquivo' : p.origem} disabled={dis} onChange={v => setP('origem', v)} /></Campo>
 			{p.origem === 'conector' && <Campo rotulo="Conector (Buscar ofertas)"><SelConector conectores={conectores} finalidades={['buscar_ofertas']} valor={p.conector_id} disabled={dis} onChange={v => setP('conector_id', v)} /></Campo>}
 		</>); break;
 		case 'retorno': campos = <Campo rotulo="Até quantos dias (1 a 7)"><input type="number" min={1} max={7} value={Number(p.dias_max ?? 7)} disabled={dis} onChange={e => setP('dias_max', Number(e.target.value))} className={sel} style={campoStyle} /></Campo>; break;

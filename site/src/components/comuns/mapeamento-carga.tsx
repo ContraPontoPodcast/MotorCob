@@ -2,7 +2,7 @@
 // o estado. Usada no Assistente de implantação (passo 3), em Configurações da carteira › Arquivos e na carga que voltou
 // esperando as colunas. Exemplos de dado pessoal sempre mascarados.
 import { Lock } from 'lucide-react';
-import { CAMPOS_CARGA, CAMPOS_VOZ, exemplo, type CampoCarga, type CampoVoz, type ColunasCarga } from '@/lib/mapeamento-carga';
+import { CAMPOS_CARGA, CAMPOS_OFERTA, CAMPOS_VOZ, CHAVES_OFERTA, chaveOferta, exemplo, type CampoCarga, type CampoOferta, type CampoVoz, type ColunasCarga } from '@/lib/mapeamento-carga';
 import { Pilula, campoCls, campoStyle } from '@/components/ds';
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
 	somenteLeitura?: boolean;
 };
 
-function valorDe(c: ColunasCarga, k: CampoCarga | CampoVoz): string[] {
+function valorDe(c: ColunasCarga, k: CampoCarga | CampoVoz | CampoOferta): string[] {
 	const v = (c as Record<string, unknown>)[k];
 	return Array.isArray(v) ? (v as string[]) : typeof v === 'string' && v ? [v] : [];
 }
@@ -25,7 +25,7 @@ export function MapeamentoCarga({ cabecalho, colunas, reconhecido, onTrocar, lin
 		const l = (linhas ?? []).find(r => cols.some(c => (r[idx(c)] ?? '').trim()));
 		return l ? cols.map(c => exemplo(k, l[idx(c)])).filter(Boolean)[0] ?? '' : '';
 	};
-	function trocar(k: CampoCarga | CampoVoz, v: string | string[]) {
+	function trocar(k: CampoCarga | CampoVoz | CampoOferta, v: string | string[]) {
 		const novo: ColunasCarga = { ...colunas };
 		const rec = novo as Record<string, unknown>;
 		if (Array.isArray(v)) { if (v.length) rec[k] = v; else delete rec[k]; }
@@ -33,9 +33,10 @@ export function MapeamentoCarga({ cabecalho, colunas, reconhecido, onTrocar, lin
 		onTrocar(novo);
 	}
 	// colunas já usadas por outro campo (o documento de validação pode repetir o CPF: "usar o CPF/CNPJ já apontado")
-	const ocupadas = (exceto: CampoCarga | CampoVoz) => new Set([
+	const ocupadas = (exceto: CampoCarga | CampoVoz | CampoOferta) => new Set([
 		...CAMPOS_CARGA.filter(c => c.key !== exceto).flatMap(c => valorDe(colunas, c.key)),
 		...CAMPOS_VOZ.filter(c => c.key !== exceto && !(c.key === 'documento_validacao' && colunas.documento_validacao === colunas.cpf)).flatMap(c => valorDe(colunas, c.key)),
+		...CHAVES_OFERTA.filter(k => k !== exceto).flatMap(k => valorDe(colunas, k)),
 	]);
 
 	return (
@@ -107,9 +108,9 @@ export function MapeamentoCarga({ cabecalho, colunas, reconhecido, onTrocar, lin
 
 /** Grupo "Para o agente de voz" (SQL 88): opcional; os valores nunca aparecem (nem de exemplo) e só viram código. */
 function ParaAgenteVoz({ cabecalho, colunas, trocar, livres, somenteLeitura }: {
-	cabecalho: string[]; colunas: ColunasCarga; trocar: (k: CampoVoz, v: string) => void; livres: (k: CampoVoz) => string[]; somenteLeitura?: boolean;
+	cabecalho: string[]; colunas: ColunasCarga; trocar: (k: CampoVoz | CampoOferta, v: string) => void; livres: (k: CampoVoz | CampoOferta) => string[]; somenteLeitura?: boolean;
 }) {
-	if (!cabecalho.length && !colunas.nascimento && !colunas.documento_validacao) return null;
+	if (!cabecalho.length && !colunas.nascimento && !colunas.documento_validacao && !CHAVES_OFERTA.some(k => colunas[k])) return null;
 	return (
 		<section aria-labelledby="t-voz" className="rounded-xl px-3 py-3" style={{ boxShadow: '0 0 0 1px var(--base-borda)' }}>
 			<h3 id="t-voz" className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-[var(--base-texto)]">Para o agente de voz <Pilula tom="neutro">opcional</Pilula></h3>
@@ -141,6 +142,54 @@ function ParaAgenteVoz({ cabecalho, colunas, trocar, livres, somenteLeitura }: {
 					);
 				})}
 			</ul>
+			<OfertasDoArquivo colunas={colunas} trocar={trocar} livres={livres} somenteLeitura={somenteLeitura} />
 		</section>
+	);
+}
+
+/** SQL 130 · "Ofertas prontas" (até 3 por cliente): o agente fala os números como vieram; o MotorCX não calcula nada. */
+function OfertasDoArquivo({ colunas, trocar, livres, somenteLeitura }: {
+	colunas: ColunasCarga; trocar: (k: CampoOferta, v: string) => void; livres: (k: CampoOferta) => string[]; somenteLeitura?: boolean;
+}) {
+	return (
+		<>
+			<h4 className="mt-4 text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--base-texto-3)]">Ofertas prontas (até 3 por cliente)</h4>
+			<p className="mt-1 text-[12.5px] text-[var(--base-texto-2)]">O agente apresenta exatamente o que vier, na ordem 1, 2, 3. Não calcula desconto nem parcela. Oferta sem parcelas, valor ou validade, vencida ou com a conta que não fecha é descartada. Essas colunas nunca viram atributo.</p>
+			<div className="mt-2 overflow-x-auto">
+				<table className="w-full min-w-0 text-[13px]" data-grupo="ofertas">
+					<thead>
+						<tr className="text-left text-[12px] text-[var(--base-texto-3)]">
+							<th className="pb-1.5 pr-2 font-medium">Campo</th>
+							{([1, 2, 3] as const).map(n => <th key={n} className="pb-1.5 pr-2 font-medium">Oferta {n}</th>)}
+						</tr>
+					</thead>
+					<tbody>
+						{CAMPOS_OFERTA.map(c => (
+							<tr key={c.campo} className="align-top">
+								<td className="py-1.5 pr-2">
+									<b className="block font-medium text-[var(--base-texto)]">{c.nome}{c.obrig && <span className="ml-1 text-[11px] font-normal text-[var(--base-texto-3)]">(obrigatório)</span>}</b>
+									<small className="block text-[11.5px] text-[var(--base-texto-3)]">{c.formato}</small>
+								</td>
+								{([1, 2, 3] as const).map(n => {
+									const k = chaveOferta(n, c.campo);
+									const atual = colunas[k] ?? '';
+									return (
+										<td key={n} className="py-1.5 pr-2">
+											{somenteLeitura ? <span className="font-mono text-[12.5px]">{atual || '—'}</span> : (
+												<select aria-label={`Oferta ${n}: ${c.nome}`} value={atual} onChange={e => trocar(k, e.target.value)} className={`${campoCls} h-9 w-full min-w-[120px]`} style={campoStyle}>
+													<option value="">—</option>
+													{atual && <option value={atual}>{atual}</option>}
+													{livres(k).filter(h => h !== atual).map(h => <option key={h} value={h}>{h}</option>)}
+												</select>
+											)}
+										</td>
+									);
+								})}
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</>
 	);
 }

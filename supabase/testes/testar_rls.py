@@ -3188,5 +3188,11 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 131: executor das ofertas (testar_ofertas_executor.py)", True, f"select {r.returncode}", None, None, 0)
 
+# SQL 132 · tela "Ofertas da carteira": painel só com contagens (API 24 h, instável/fora, uso, carga, alçada, quem pode)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_ofertas_painel.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 132: painel das ofertas (testar_ofertas_painel.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

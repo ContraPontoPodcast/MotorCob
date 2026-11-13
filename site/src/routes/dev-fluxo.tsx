@@ -14,6 +14,7 @@ import { PedidoGerado } from '@/components/fluxo/pedido';
 import { TestarPersonas } from '@/components/fluxo/personas';
 import { ConectoresCrm } from '@/components/fluxo/conectores';
 import { IdentidadeAgente } from '@/components/fluxo/identidade';
+import { OfertasAgente, TestarOfertas } from '@/components/fluxo/ofertas';
 import { MapeamentoCarga } from '@/components/comuns/mapeamento-carga';
 import { reconhecer, type ColunasCarga } from '@/lib/mapeamento-carga';
 import { recomendada } from '@/lib/identidade-mailing';
@@ -59,6 +60,7 @@ export default function DevFluxo() {
 		: tela === 'personas' ? <TestarPersonas />
 		: tela === 'conectores' ? <ConectoresCrm />
 		: tela === 'identidade' ? <IdentidadeAgente />
+		: tela === 'ofertas' ? (id === 'testar' ? <TestarOfertas /> : <OfertasAgente />)
 		: tela === 'carga' ? <CargaDemo />
 		: <ListaFluxos />;
 	return (

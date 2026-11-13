@@ -52,7 +52,7 @@ export const TIPOS: Record<TipoBloco, InfoTipo> = {
 	pergunta: { nome: 'Pergunta', grupo: 'Conversa', modos: ['arvore'], saidas: [{ quando: 'sem_resposta', rotulo: 'Sem resposta' }], params: () => ({ fala: 'Posso continuar?', tentativas: 1, opcoes: [{ codigo: 'sim', rotulo: 'Sim' }, { codigo: 'nao', rotulo: 'Não' }] }) },
 	intencao: { nome: 'Entender intenção', grupo: 'Conversa', modos: ['cognicao'], saidas: [{ quando: 'nao_entendido', rotulo: 'Não entendi', obrig: true }], params: () => ({ fala: 'Como fica melhor para você resolver?', intencoes: ['quero_negociar', 'sem_dinheiro'], confianca_min: 0.7, tentativas: 2 }) },
 	generativa: { nome: 'IA conversa', grupo: 'Conversa', modos: ['generativo'], saidas: [{ quando: 'fechou_acordo', rotulo: 'Fechou acordo' }, { quando: 'sem_acordo', rotulo: 'Sem acordo' }, { quando: 'contestou', rotulo: 'Contestou' }, { quando: 'fora_alcada', rotulo: 'Fora da alçada' }], params: () => ({ objetivo: '', tom: ['cordial', 'frases_curtas', 'sem_giria', 'nao_pressiona'], max_turnos: 8, ferramentas: ['apresentar_oferta', 'consultar_base', 'transferir_humano', 'encerrar_chamada'], contrapropostas_max: 2 }) },
-	oferta: { nome: 'Oferta', grupo: 'Conversa', modos: ['arvore', 'cognicao'], saidas: [{ quando: 'aceitou', rotulo: 'Aceitou', obrig: true }, { quando: 'quer_outra', rotulo: 'Quer outra condição' }, { quando: 'recusou', rotulo: 'Recusou', obrig: true }], params: () => ({ origem: 'carteira', fala: 'Consigo para você {{oferta.parcelas}} parcelas de {{oferta.valor_parcela}}. Fica bom?' }) },
+	oferta: { nome: 'Oferta', grupo: 'Conversa', modos: ['arvore', 'cognicao'], saidas: [{ quando: 'aceitou', rotulo: 'Aceitou', obrig: true }, { quando: 'quer_outra', rotulo: 'Quer outra condição' }, { quando: 'recusou', rotulo: 'Recusou', obrig: true }], params: () => ({ origem: 'arquivo', fala: 'Tenho uma condição para você: {{oferta.condicao}} Fica bom?' }) },
 	retorno: { nome: 'Agendar retorno', grupo: 'Conversa', modos: ['arvore', 'cognicao'], saidas: [{ quando: 'agendou', rotulo: 'Agendou', obrig: true }, { quando: 'nao_agendou', rotulo: 'Não agendou' }], params: () => ({ fala: 'Quando fica melhor eu ligar de novo?', dias_max: 7 }) },
 	conector: { nome: 'Chamar conector', grupo: 'Integração', modos: ['sistema'], saidas: [{ quando: 'respondeu', rotulo: 'Respondeu', obrig: true }, { quando: 'falhou', rotulo: 'Falhou', obrig: true }], params: () => ({ conector_id: null, fala_espera: 'Um instante, por favor.' }) },
 	registrar: { nome: 'Registrar promessa/acordo', grupo: 'Integração', modos: ['sistema'], saidas: [{ quando: 'registrado', rotulo: 'Registrado', obrig: true }, { quando: 'falhou', rotulo: 'Falhou', obrig: true }], params: () => ({ registra: 'promessa_motorcx', conectores: [] }) },
@@ -69,7 +69,8 @@ export const OPCOES = {
 	pergunta_identidade: [['dia_mes_nascimento', 'Dia e mês de nascimento'], ['ano_nascimento', 'Ano de nascimento'], ['ultimos3_documento', '3 últimos dígitos do documento']],
 	ferramentas: [['apresentar_oferta', 'Apresentar oferta'], ['registrar_promessa', 'Registrar promessa'], ['agendar_retorno', 'Agendar retorno'], ['consultar_base', 'Consultar a base de respostas'], ['transferir_humano', 'Transferir para humano (trava: sempre)'], ['encerrar_chamada', 'Encerrar a chamada']],
 	tom: [['cordial', 'Cordial'], ['frases_curtas', 'Frases curtas'], ['sem_giria', 'Sem gíria'], ['nao_pressiona', 'Não pressiona'], ['formal', 'Formal']],
-	origem_oferta: [['conector', 'Do CRM (conector Buscar ofertas)'], ['carteira', 'Da alçada da carteira']],
+	// SQL 130: as ofertas vêm só da API do credor ou do arquivo, na ordem da carteira (Ofertas). 'carteira' é o nome antigo de 'arquivo'.
+	origem_oferta: [['arquivo', 'Da ordem da carteira (API e/ou arquivo do dia)'], ['conector', 'Da API desta etapa (conector Buscar ofertas)']],
 	registra: [['promessa_motorcx', 'Promessa no MotorCX'], ['acordo_crm', 'Acordo no CRM (conector)']],
 	canal_link: [['whatsapp_sms', 'WhatsApp; se não entregar, SMS'], ['whatsapp', 'Só WhatsApp'], ['sms', 'Só SMS']],
 	campo_condicao: [['ofertas_quantidade', 'Ofertas recebidas'], ['identidade_confirmada', 'Identidade confirmada'], ['dias_atraso', 'Dias de atraso'], ['saldo', 'Saldo'], ['tentativa_do_dia', 'Tentativa do dia']],
@@ -81,7 +82,7 @@ export const OPCOES = {
 
 export const VARIAVEIS = ['primeiro_nome', 'credor', 'saldo', 'dias_atraso', 'vencimento', 'link_pagamento', 'valor_minimo',
 	'parcelas_max', 'desconto_max', 'assessoria', 'oferta.id', 'oferta.parcelas', 'oferta.valor_parcela', 'oferta.desconto_pct',
-	'oferta.vencimento', 'oferta.valor_total', 'oferta.entrada'] as const;
+	'oferta.vencimento', 'oferta.valor_total', 'oferta.entrada', 'oferta.validade', 'oferta.condicao'] as const;
 
 /**
  * As 7 travas (regras fixas): ficam no executor (voz/fluxo.py, docstring) e no validador (voz/fluxo_validador.py), não
