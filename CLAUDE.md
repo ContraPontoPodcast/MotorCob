@@ -1004,6 +1004,14 @@ carga: grupo "Ofertas prontas (até 3 por cliente)" (`CAMPOS_OFERTA`, `oferta{n}
 como ela) ou "Da API desta etapa". Testes: `site/src/components/fluxo/ofertas.test.tsx`,
 `supabase/testes/testar_ofertas_painel.py`.
 
+**SQL 133 · limpeza do legado das ofertas calculadas.** Os modelos de fluxo (`voz/fluxo_modelos.py`, gravados pelo SQL
+133) não têm mais a origem `carteira`: o Negociador usa a ordem da carteira (`arquivo`), a frase fixa
+`{{oferta.condicao}}` e a IA conversa apresenta na ordem recebida, sem calcular. Fluxos já salvos com `carteira` seguem
+valendo como `arquivo` (`FV.ORIGENS_LEGADAS`). Site: a alçada (`GavetaAlcada`) não pede mais "validade da proposta" nem
+manda `ofertas_padrao`/`validade_dias` (as colunas ficam no banco, sem uso); textos de conector, desempenho e "Testar
+conversa" falam da reserva do arquivo. Se o SQL 58 rodar de novo, rode os 130, 131 e 133 depois (o `testar_rls.py`
+faz isso).
+
 **SQL 89 (Roleplay de treinamento, PR 1; SPEC aprovada pelo dono): perfil "Qualidade", só a área Speech Analytics.**
 Pessoa da empresa cliente (papel `qualidade`). **Vale no banco, não só no menu:** `minhas_empresas()` não devolve a
 empresa para a Qualidade, então toda policy/RPC de fora do Speech já nega; `minhas_empresas_speech()` (= minhas_empresas

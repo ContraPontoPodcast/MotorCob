@@ -103,31 +103,30 @@ export function GavetaAlcada({ aberta, onFechar, credor, alcada, aoSalvar }: { a
 	const { api, empresa } = useFluxo();
 	const pode = usePermissoesFluxo().alcada;
 	const nome = useNomeCarteira();
-	const [f, setF] = useState({ desconto: '', parcelas: '', parcelaMin: '', entradaMin: '0', validade: '5', desde: '' });
+	const [f, setF] = useState({ desconto: '', parcelas: '', parcelaMin: '', entradaMin: '0', desde: '' });
 	useEffect(() => {
 		if (!aberta) return;
-		setF({ desconto: String(alcada?.desconto_max_pct ?? ''), parcelas: String(alcada?.parcelas_max ?? ''), parcelaMin: String(alcada?.parcela_min ?? ''), entradaMin: String(alcada?.entrada_min ?? 0), validade: String(alcada?.validade_dias ?? 5), desde: '' });
+		setF({ desconto: String(alcada?.desconto_max_pct ?? ''), parcelas: String(alcada?.parcelas_max ?? ''), parcelaMin: String(alcada?.parcela_min ?? ''), entradaMin: String(alcada?.entrada_min ?? 0), desde: '' });
 	}, [aberta, alcada]);
 	const n = (s: string) => Number(String(s).replace(',', '.'));
-	const valido = n(f.desconto) >= 0 && n(f.desconto) <= 100 && Number.isInteger(n(f.parcelas)) && n(f.parcelas) >= 1 && n(f.parcelas) <= 60 && n(f.parcelaMin) >= 0 && n(f.validade) >= 1 && n(f.validade) <= 30 && f.parcelaMin !== '';
+	const valido = n(f.desconto) >= 0 && n(f.desconto) <= 100 && Number.isInteger(n(f.parcelas)) && n(f.parcelas) >= 1 && n(f.parcelas) <= 60 && n(f.parcelaMin) >= 0 && f.parcelaMin !== '';
 	async function salvar() {
 		if (!api || !empresa || !valido) return;
-		const ok = await executar(() => api.salvarAlcada({ empresa: empresa.id, credor, desconto: n(f.desconto), parcelas: n(f.parcelas), parcelaMin: n(f.parcelaMin), entradaMin: n(f.entradaMin) || 0, validade: n(f.validade), desde: f.desde || null }), 'Alçada salva. Vale a partir da data de início.');
+		const ok = await executar(() => api.salvarAlcada({ empresa: empresa.id, credor, desconto: n(f.desconto), parcelas: n(f.parcelas), parcelaMin: n(f.parcelaMin), entradaMin: n(f.entradaMin) || 0, desde: f.desde || null }), 'Alçada salva. Vale a partir da data de início.');
 		if (ok) { aoSalvar(); onFechar(); }
 	}
 	const campo = (k: keyof typeof f, tipo = 'text') => <input type={tipo} inputMode={tipo === 'text' ? 'decimal' : undefined} value={f[k]} disabled={!pode} onChange={e => setF(x => ({ ...x, [k]: e.target.value }))} className={`${campoCls} w-full`} style={campoStyle} />;
 	return (
-		<Gaveta aberta={aberta} onFechar={onFechar} titulo={`Alçada · ${nome(credor)}`} sub="Teto do agente nesta carteira: vale para a oferta da carteira, para a conversa livre e também para as ofertas do CRM."
+		<Gaveta aberta={aberta} onFechar={onFechar} titulo={`Alçada · ${nome(credor)}`} sub="Só uma trava: a oferta da API ou do arquivo que passar de qualquer limite é descartada inteira. Nada é cortado nem recalculado."
 			pe={pode ? <Botao onClick={() => void salvar()} disabled={!valido}>{alcada ? 'Salvar nova vigência' : 'Cadastrar alçada'}</Botao> : undefined}>
 			{alcada ? <Kv itens={[['Desconto máximo', `${alcada.desconto_max_pct}%`], ['Parcelas', `até ${alcada.parcelas_max}×`], ['Parcela mínima', `R$ ${Number(alcada.parcela_min).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`], ['Vigente desde', alcada.vigente_desde.split('-').reverse().join('/')]]} />
-				: <p className="text-[13px] text-[var(--base-texto-2)]">Sem alçada cadastrada. Sem ela, o fluxo não pode oferecer nada (nem as ofertas do CRM).</p>}
+				: <p className="text-[13px] text-[var(--base-texto-2)]">Sem alçada cadastrada. Sem ela, nenhuma oferta passa (nem da API, nem do arquivo).</p>}
 			{pode ? (
 				<div className="grid gap-3 sm:grid-cols-2">
 					<Campo rotulo="Desconto máximo (%)">{campo('desconto')}</Campo>
 					<Campo rotulo="Parcelas (máximo)">{campo('parcelas')}</Campo>
 					<Campo rotulo="Parcela mínima (R$)">{campo('parcelaMin')}</Campo>
 					<Campo rotulo="Entrada mínima (R$)">{campo('entradaMin')}</Campo>
-					<Campo rotulo="Validade da proposta (dias)">{campo('validade')}</Campo>
 					<Campo rotulo="Vale a partir de" ajuda="Vazio = hoje. Mudar é criar uma vigência nova; a anterior fecha no dia de antes.">{campo('desde', 'date')}</Campo>
 				</div>
 			) : <p className="text-[12.5px] text-[var(--base-texto-3)]">Quem tem a permissão Editar carteiras cadastra a alçada.</p>}

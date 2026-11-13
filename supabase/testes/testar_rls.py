@@ -2294,6 +2294,11 @@ checar("SQL 96: trava cpf na lista e no check dos passos", True, "select ('cpf' 
 for _n, _d, _e in _FC.casos():
     checar(f"SQL 58 · validador: {_n}", True, f"select array_to_json(public.fluxo_voz_erros('{_lit(_d)}'::jsonb))",
            "authenticated", u["oper"], _j(_e))
+# SQL 133 refaz os modelos (ofertas só da API ou do arquivo); este arquivo roda o SQL 58 de novo antes, então os SQL 130,
+# 131 e 133 rodam de novo aqui (a ordem de produção)
+for _m in ("20270327000001_voz_ofertas_fonte.sql", "20270328000001_voz_ofertas_executor.sql", "20270330000001_voz_modelos_ofertas.sql"):
+    subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f",
+                    os.path.join(os.path.dirname(__file__), "..", "migrations", _m)], capture_output=True, text=True)
 checar("SQL 58: os 4 modelos são os de voz/fluxo_modelos.py e passam no validador", True,
        "select count(*) from public.voz_fluxo_modelos where public.fluxo_voz_valido(definicao)", "authenticated", u["oper"], 4)
 for _cod, (_nome, _tipo, _desc, _f) in _FM.MODELOS.items():
@@ -3193,6 +3198,18 @@ r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "tes
                    capture_output=True, text=True)
 print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
 checar("SQL 132: painel das ofertas (testar_ofertas_painel.py)", True, f"select {r.returncode}", None, None, 0)
+
+# SQL 133 · modelos de fluxo sem as ofertas calculadas: nenhum modelo com a origem antiga 'carteira'; o Negociador usa
+# a ordem da carteira (arquivo) e a frase fixa {{oferta.condicao}}; todos continuam válidos
+# (o testar_rls roda o SQL 58 de novo no meio: os SQL 130, 131 e 133 rodam de novo antes da conferência)
+for _m in ("20270327000001_voz_ofertas_fonte.sql", "20270328000001_voz_ofertas_executor.sql", "20270330000001_voz_modelos_ofertas.sql"):
+    subprocess.run(["psql", "-d", os.environ.get("PGDATABASE", "sb"), "-v", "ON_ERROR_STOP=1", "-q", "-f", os.path.join(os.path.dirname(__file__), "..", "migrations", _m)],
+                   capture_output=True, text=True)
+checar("SQL 133: nenhum modelo com origem 'carteira' e o Negociador na ordem da carteira", True,
+       "select (select count(*) from public.voz_fluxo_modelos where definicao::text like '%\"origem\": \"carteira\"%') || '|' || "
+       "(select (definicao::text like '%\"origem\": \"arquivo\"%' and definicao::text like '%oferta.condicao%')::text "
+       "from public.voz_fluxo_modelos where codigo = 'negociador') || '|' || "
+       "(select bool_and(public.fluxo_voz_valido(definicao))::text from public.voz_fluxo_modelos)", "service_role", None, "0|true|true")
 
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

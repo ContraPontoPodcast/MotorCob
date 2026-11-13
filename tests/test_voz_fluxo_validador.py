@@ -63,7 +63,9 @@ class TestValidadorFluxo(unittest.TestCase):
         self.assertIn(f"char_length(p ->> 'fala') > {V.FALA_MAX}", self.sql)
 
     def test_modelos_da_migracao(self):
-        achados = dict(re.findall(r"\('([a-z]+)', '[^']+', '[a-z]+', '[^']+',\n\s+\$m\$(.*?)\$m\$::jsonb\)", self.sql, re.S))
+        # a migração mais nova que regrava os modelos (SQL 133: ofertas só da API ou do arquivo)
+        texto = _ultima("insert into public.voz_fluxo_modelos")
+        achados = dict(re.findall(r"\('([a-z]+)', '[^']+', '[a-z]+', '[^']+',\n\s+\$m\$(.*?)\$m\$::jsonb\)", texto, re.S))
         self.assertEqual(set(achados), set(M.MODELOS))
         for cod, (_n, _t, _d, f) in M.MODELOS.items():
             with self.subTest(cod):

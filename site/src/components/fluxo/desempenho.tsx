@@ -119,7 +119,7 @@ export function DesempenhoFluxo() {
 							: <p className="text-[13px] text-[var(--base-texto-2)]">Este fluxo não tem etapa "IA conversa".</p>
 					) : aba === 'conectores' ? (
 						porCon.length ? <Tabela cabecalho={['Conector', 'Chamadas', 'Erro', 'O que o fluxo fez']} numericas={[1, 2]}
-							linhas={porCon.map(([id, a]) => [`C${id}`, nTxt(a.n), `${pctTxt(a.erro / a.n)} · ${nTxt(a.tempo)} esgotados`, a.alt ? `${nTxt(a.alt)} usaram as ofertas da carteira` : `${nTxt(a.erro)} seguiram pelo ramo de falha`])} />
+							linhas={porCon.map(([id, a]) => [`C${id}`, nTxt(a.n), `${pctTxt(a.erro / a.n)} · ${nTxt(a.tempo)} esgotados`, a.alt ? `${nTxt(a.alt)} usaram a alternativa antiga da carteira` : `${nTxt(a.erro)} falharam (reserva ou ramo de falha)`])} />
 							: <p className="text-[13px] text-[var(--base-texto-2)]">Nenhuma chamada a conector no período.</p>
 					) : anterior && kAnt ? (<>
 						<Aviso tom="info" titulo="Períodos diferentes, não é teste A/B:">carteira e mês mudam junto. Compare com cuidado.</Aviso>

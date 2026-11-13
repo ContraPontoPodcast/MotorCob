@@ -27,7 +27,7 @@ export interface ConectorRow {
 	id: number; empresa_id: number; nome: string; finalidade: string; metodo: string; url: string; autenticacao: string; segredo_ref: string | null;
 	cabecalhos_fixos: Record<string, string>; mapa_entrada: { origem: string; destino: string; onde: string }[];
 	mapa_saida: { origem: string; destino: string; grava: string; valores?: Record<string, string> }[]; timeout_ms: number; tentativas: number;
-	idempotencia: boolean; em_falha: 'ramo' | 'alternativa_carteira' | 'transferir'; situacao: 'rascunho' | 'ativo' | 'pausado'; versao: number;
+	idempotencia: boolean; em_falha: 'ramo' | 'reserva_arquivo' | 'transferir'; situacao: 'rascunho' | 'ativo' | 'pausado'; versao: number;
 	teste_pedido_em: string | null; testado_em: string | null; teste_ok: boolean | null; credencial_trocada_em: string | null; atualizado_em: string;
 }
 export interface SaudeRow { conector_id: number; volume_24h: number; p50_ms: number | null; p95_ms: number | null; erro_pct: number | null; ultima: string | null }
@@ -36,7 +36,8 @@ export interface ChamadaCrmRow {
 	ocorrido_em: string; tentativa: number; http_status: number | null; classe: string; latencia_ms: number | null; resultado_codigo: string | null;
 	ofertas_acima_alcada: number; usou_alternativa: boolean;
 }
-export interface AlcadaRow { id: number; credor_id: number | null; desconto_max_pct: number; parcelas_max: number; parcela_min: number; entrada_min: number; validade_dias: number; ofertas_padrao: { id: string; parcelas: number; desconto_pct: number; entrada?: number }[]; vigente_desde: string; vigente_ate: string | null }
+/** A alçada é só a trava das ofertas (SQL 130): descarta, nunca calcula. validade_dias e ofertas_padrao ficam no banco sem uso. */
+export interface AlcadaRow { id: number; credor_id: number | null; desconto_max_pct: number; parcelas_max: number; parcela_min: number; entrada_min: number; vigente_desde: string; vigente_ate: string | null }
 export interface RespostaRow { id: number; fluxo_versao_id: number; bloco_id: string; pergunta: string; resposta: string; revisado_em: string | null }
 export interface CasoRow { id: number; fluxo_id: number; nome: string; falas: string[]; caminho_esperado: string[]; resultado_esperado: string | null; conectores_falham: number[]; ativo: boolean }
 export interface CasoResultadoRow { caso_id: number; fluxo_versao_id: number; passou: boolean; caminho_obtido: string[]; resultado_obtido: string | null; executado_em: string }
@@ -106,7 +107,7 @@ export interface FluxoApi {
 	pedirFluxo(a: { tipo: 'ia' | 'equipe'; empresa: number; credor: number | null; texto: string; anexos: string[]; versaoOrigem: number | null }): Promise<number>;
 	responderPedido(pedido: number, respostas: Record<string, string>): Promise<void>;
 	anexar(slug: string, arquivo: File): Promise<string>;
-	salvarAlcada(a: { empresa: number; credor: number | null; desconto: number; parcelas: number; parcelaMin: number; entradaMin: number; validade: number; desde: string | null }): Promise<void>;
+	salvarAlcada(a: { empresa: number; credor: number | null; desconto: number; parcelas: number; parcelaMin: number; entradaMin: number; desde: string | null }): Promise<void>;
 	/** SQL 88 · Confirmar identidade: a configuração vigente da carteira (sem ela, null = o de hoje). */
 	identidade(empresa: number, credor: number | null): Promise<IdentidadeVigente | null>;
 	/** Versões da configuração da carteira (Histórico, com "o que mudou" em palavras). */
@@ -255,7 +256,7 @@ export function apiSupabase(sb: SupabaseClient, funcao = 'simular_fluxo_voz'): F
 			if (error) throw new Error(error.message);
 			return `entradas/${caminho}`;
 		},
-		async salvarAlcada(a) { await rpc('salvar_alcada_voz', { empresa: a.empresa, credor: a.credor, desconto_max_pct: a.desconto, parcelas_max: a.parcelas, parcela_min: a.parcelaMin, entrada_min: a.entradaMin, validade_dias: a.validade, ofertas_padrao: [], vigente_desde: a.desde }); },
+		async salvarAlcada(a) { await rpc('salvar_alcada_voz', { empresa: a.empresa, credor: a.credor, desconto_max_pct: a.desconto, parcelas_max: a.parcelas, parcela_min: a.parcelaMin, entrada_min: a.entradaMin, vigente_desde: a.desde }); },
 		async salvarConector(empresa, ajustes, id) { return Number(await rpc('salvar_conector_crm', { empresa, ajustes, conector: id })); },
 		async testarConector(id) { await rpc('testar_conector_crm', { conector: id }); },
 		async situacaoConector(id, situacao) { await rpc('mudar_situacao_conector_crm', { conector: id, situacao }); },

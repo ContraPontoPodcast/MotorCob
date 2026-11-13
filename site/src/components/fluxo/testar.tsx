@@ -110,7 +110,7 @@ export function TestarConversa() {
 				<Campo rotulo="Cliente de teste"><input value="CLI-00001" readOnly className={`${campoCls} w-full`} style={campoStyle} /></Campo>
 				<div>
 					<b className="text-[12.5px] font-semibold">Resposta dos conectores</b>
-					<p className="mb-1.5 text-[12px] text-[var(--base-texto-2)]">Escolha como cada conector simulado responde: com o exemplo do último teste, tempo esgotado ou 401 (credencial recusada). O fluxo segue pelo ramo de falha ou pela alternativa da carteira. Nada vai ao CRM.</p>
+					<p className="mb-1.5 text-[12px] text-[var(--base-texto-2)]">Escolha como cada conector simulado responde: com o exemplo do último teste, tempo esgotado ou 401 (credencial recusada). O fluxo segue pelo ramo de falha ou pela reserva do arquivo. Nada vai ao CRM.</p>
 					{(conectores ?? []).length ? (conectores ?? []).map(c => (
 						<label key={c.id} className="flex items-center justify-between gap-2 py-1 text-[13px]">
 							<span className="min-w-0 truncate">C{c.id} · {c.nome}</span>
