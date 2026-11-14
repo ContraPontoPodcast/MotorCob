@@ -3211,5 +3211,12 @@ checar("SQL 133: nenhum modelo com origem 'carteira' e o Negociador na ordem da 
        "from public.voz_fluxo_modelos where codigo = 'negociador') || '|' || "
        "(select bool_and(public.fluxo_voz_valido(definicao))::text from public.voz_fluxo_modelos)", "service_role", None, "0|true|true")
 
+# SQL 134 · trava do modo Real: fluxo em uso (não o roteiro), teto contratado, robôs, limite na divisão e transferência
+# (o testar_rls roda o SQL 56 de novo no meio: o próprio teste aplica o SQL 134 por cima antes de conferir)
+r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "testar_trava_real.py")],
+                   capture_output=True, text=True)
+print(r.stdout.rstrip() + ("\n" + r.stderr[-400:] if r.returncode else ""))
+checar("SQL 134: trava do modo Real (testar_trava_real.py)", True, f"select {r.returncode}", None, None, 0)
+
 print(f"\n{ok_total} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)
