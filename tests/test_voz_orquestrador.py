@@ -788,6 +788,114 @@ class TestPrincipal(unittest.TestCase):
         self.assertEqual((contagem["originadas"], contagem["desfecho_nao_atendida"]), (1, 1))
 
 
+class TestParteDoContratado(Base):
+    """Teto contratado (voz_contrato) entre as VMs: resto para as primeiras; teto 0 ou menor que n deixa a VM ociosa,
+    sem sair com erro (o systemd reiniciaria a cada 5 s), e a recarga do voz.json aplica o teto novo."""
+
+    def test_divisao_com_resto_em_duas_vms(self):
+        from voz.orquestrador.principal import parte_do_contratado as parte
+        self.assertEqual([(parte(t, 1, 2), parte(t, 2, 2)) for t in (0, 1, 2, 3)], [(0, 0), (1, 0), (1, 1), (2, 1)])
+        for t in range(0, 12):     # a soma das partes é sempre o teto
+            self.assertEqual(sum(parte(t, i, 3) for i in (1, 2, 3)), t)
+        self.assertEqual((parte(-1, 1, 2), parte(5, 1, 1)), (0, 5))
+
+    def test_teto_do_bruto_ausente_ou_invalido_vale_zero(self):
+        from voz.orquestrador.principal import contratado_do_bruto as teto
+        self.assertEqual([teto({}), teto({"voz_contrato": None}), teto({"voz_contrato": {"concorrencia_contratada": "x"}}),
+                          teto({"voz_contrato": {"concorrencia_contratada": 3}})], [0, 0, 0, 3])
+
+    def test_ocioso_com_zero_e_volta_na_recarga(self):
+        import json
+        from voz.orquestrador import principal as P
+        self.montar([item("C1")], contratado=0)
+        arq = self.pasta / "voz.json"
+        d = dados_exemplo()
+        d["voz_contrato"] = {"concorrencia_contratada": 1}
+        arq.write_text(json.dumps(d), encoding="utf-8")
+        pl = P.Plantao(self.orq, None, "real", dados_caminho=arq, relogio=self.rel, parte=(2, 2), contratado_fixo=False)
+        self.assertEqual(self.orq.tick(), 0)                       # teto 0: nada sai
+        with self.assertLogs("motorcx.voz", level="WARNING") as lg:
+            self.assertEqual(pl.aplicar_contratado(1), 0)          # teto 1 em 2 VMs: a 2ª fica com 0
+            pl.aplicar_contratado(0)                               # continua 0: não loga de novo
+            logging.getLogger("motorcx.voz").warning("fim")
+        self.assertEqual(sum(P.OCIOSO in x for x in lg.output), 0)  # já estava em 0: nenhuma linha repetida
+        self.assertEqual(pl.aplicar_contratado(2), 1)
+        with self.assertLogs("motorcx.voz", level="WARNING") as lg:
+            pl.aplicar_contratado(1)                               # caiu para 0: uma linha clara
+            pl.aplicar_contratado(1)
+        self.assertEqual(sum(P.OCIOSO in x for x in lg.output), 1)
+        # a recarga do voz.json aplica o teto (aqui 3: a 2ª VM fica com 1) e a VM volta a discar
+        d["voz_contrato"] = {"concorrencia_contratada": 3}
+        arq.write_text(json.dumps(d), encoding="utf-8")
+        pl._mtime = None
+        pl._recarregar_config()
+        self.assertEqual(self.orq.agendador.contratado, 1)
+        self.assertEqual(self.orq.tick(), 1)
+
+    def test_contratado_fixo_nao_muda_na_recarga(self):
+        import json
+        from voz.orquestrador import principal as P
+        self.montar([item("C1")], contratado=7)
+        arq = self.pasta / "voz.json"
+        d = dados_exemplo()
+        d["voz_contrato"] = {"concorrencia_contratada": 0}
+        arq.write_text(json.dumps(d), encoding="utf-8")
+        pl = P.Plantao(self.orq, None, "real", dados_caminho=arq, relogio=self.rel)
+        pl._mtime = None
+        pl._recarregar_config()
+        self.assertEqual(self.orq.agendador.contratado, 7)
+
+    def test_manual_sem_teto_continua_erro(self):
+        import contextlib
+        import io
+        import json
+        from voz.orquestrador import principal as P
+        import shutil
+        arq = Path(tempfile.mkdtemp()) / "voz.json"
+        self.addCleanup(shutil.rmtree, arq.parent, True)
+        d = dados_exemplo()
+        d["voz_contrato"] = {"concorrencia_contratada": 1}
+        arq.write_text(json.dumps(d), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            rc = P.main(["--dados", str(arq), "--eventos", str(arq.parent / "ev"), "--modo", "simulado", "--parte", "2/2"])
+        self.assertEqual(rc, 2)
+        self.assertIn("concorrência contratada não definida", out.getvalue())
+
+    def test_plantao_com_teto_zero_nao_sai_com_erro(self):
+        """--auto (o serviço do systemd) com teto 1 na VM 2/2: sobe ocioso (contratado 0), loga a linha uma vez e roda
+        o plantão até parar, com código 0 (antes: return 2 e reinício a cada 5 s)."""
+        import json
+        from unittest import mock
+        from voz.orquestrador import principal as P
+        import shutil
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        d = dados_exemplo()
+        d["voz_contrato"] = {"concorrencia_contratada": 1}
+        (tmp / "voz.json").write_text(json.dumps(d), encoding="utf-8")
+        visto = {}
+
+        def plantao(pl, fila, parar, passo_s=0.2):
+            visto["contratado"], visto["fixo"] = pl.orq.agendador.contratado, pl.contratado_fixo
+
+        with mock.patch("voz.configuracao.supabase_do_ambiente", return_value=object()), \
+                mock.patch.object(P, "_rodar_plantao", plantao), mock.patch.object(P, "_ouvir", lambda *a: None), \
+                mock.patch.dict("os.environ", {"MOTORCX_VOZ_ENVIADO_POR": ""}), \
+                self.assertLogs("motorcx.voz", level="WARNING") as lg:
+            rc = P.main(["--auto", "--modo", "simulado", "--parte", "2/2", "--dados", str(tmp / "voz.json"),
+                         "--eventos", str(tmp / "ev"), "--provedores", str(tmp / "nao-existe.json")])
+        self.assertEqual(rc, 0)
+        self.assertEqual(visto, {"contratado": 0, "fixo": False})
+        self.assertEqual(sum(P.OCIOSO in x for x in lg.output), 1)
+
+    def test_servicos_systemd_e_atualizacao(self):
+        vm = RAIZ / "infra" / "asterisk" / "vm"
+        atualizar = (vm / "motorcx-voz-atualizar").read_text(encoding="utf-8").replace("\\\n", "")
+        linha = next(x for x in atualizar.splitlines() if x.startswith('atualizar "$IMG_VOZ"'))
+        for s in ("motorcx-voz-orquestrador", "motorcx-voz-simulado", "motorcx-voz-treino"):
+            self.assertIn(s, linha.split())
+
+
 class TestDetector(unittest.TestCase):
     def test_asterisk(self):
         d = A.AmdAsterisk()

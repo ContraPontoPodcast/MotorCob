@@ -50,7 +50,7 @@ export function RobosTeto({ divisao, contrato, nomeEmpresa, podeTroncos, loading
 			<div className="space-y-4 px-5 pb-5 sm:px-6">
 				{semSql101 && <Aviso tom="atencao" titulo="Falta o SQL 101 no banco.">A divisão ainda é a antiga (pelos canais, sem as licenças). Rode o APLICAR_SQL101.sql.</Aviso>}
 				<Kpis itens={[
-					{ rotulo: 'Teto contratado com o provedor', valor: inteiro(r.teto), detalhe: 'conversas ao mesmo tempo' },
+					{ rotulo: 'Teto contratado com o provedor', valor: inteiro(r.teto), detalhe: r.teto > 0 ? 'conversas ao mesmo tempo' : 'teto 0: o agente não liga', tom: r.teto > 0 ? undefined : 'alerta' },
 					{ rotulo: 'Robôs vendidos', valor: inteiro(r.vendidos), detalhe: r.teto > 0 ? `${inteiro(r.pct)}% do teto` : 'sem teto definido', tom: r.estado === 'over' ? 'alerta' : r.estado === 'quase' ? 'atencao' : undefined },
 					{ rotulo: 'Usáveis', valor: inteiro(r.usaveis), detalhe: 'licenças cortadas pelos canais: o que disputa o teto', tom: r.usaveis > r.teto ? 'alerta' : undefined },
 					{ rotulo: 'Sobra para quem não tem licença', valor: inteiro(r.sobra), detalhe: `${inteiro(r.semLicenca)} ${r.semLicenca === 1 ? 'empresa' : 'empresas'} no modelo antigo` },
@@ -205,7 +205,7 @@ function EditarTeto({ atual, vendidos, podeTroncos, atualizadoEm, onSalvo }: {
 				) : <Cadeado>Só a equipe com a permissão de troncos de voz</Cadeado>}
 			</div>
 			<p id="voz-teto-ajuda" className="mt-1.5 text-[12px] text-[var(--base-texto-3)]">
-				A divisão é refeita na hora e a VM aplica na próxima leitura. Baixar abaixo dos robôs vendidos pede confirmação.{atualizadoEm ? ` Última mudança: ${dateTimeBR(atualizadoEm)}.` : ''}
+				{valido && n === 0 ? 'Teto 0: o agente não liga (as VMs ficam no ar sem discar até o teto subir). ' : ''}A divisão é refeita na hora e a VM aplica na próxima leitura. Com duas VMs, cada uma fica com metade; no número ímpar, a VM 1 leva a sobra (teto 1: só a VM 1 disca). Baixar abaixo dos robôs vendidos pede confirmação.{atualizadoEm ? ` Última mudança: ${dateTimeBR(atualizadoEm)}.` : ''}
 			</p>
 			{confirmar && (
 				<Dialogo titulo="Teto abaixo dos robôs vendidos" onClose={() => setConfirmar(false)}
