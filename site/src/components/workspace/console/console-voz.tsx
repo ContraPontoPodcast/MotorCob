@@ -176,7 +176,7 @@ const MOTIVO_PAUSA: Record<string, string> = { sem_credito: 'sem crédito na ope
 type DadosEmpresa = {
 	pausas: Pausa[];
 	config: Row | null; troncos: Row[]; rotas: Row[]; transferencia: Row | null; saude: Row[]; pedido: Row | null;
-	roteiro: Row | null; ligacoesTeste: number; recebeFaturas: number;
+	fluxo: Row | null; transferencias: number; ligacoesTeste: number; recebeFaturas: number;
 };
 
 function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, podeLigar, onMudouTroncos }: {
@@ -189,20 +189,23 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 	const [gNumeros, setGNumeros] = useState(false);
 
 	const carregar = useCallback(async () => {
-		if (!supabase) { setD({ pausas: [], config: null, troncos: [], rotas: [], transferencia: null, saude: [], pedido: null, roteiro: null, ligacoesTeste: 0, recebeFaturas: 0 }); return; }
+		if (!supabase) { setD({ pausas: [], config: null, troncos: [], rotas: [], transferencia: null, saude: [], pedido: null, fluxo: null, transferencias: 0, ligacoesTeste: 0, recebeFaturas: 0 }); return; }
 		const eid = Number(empresaId);
-		const [cfg, tr, ro, tf, sa, pe, rt, lt, cf, pz] = await Promise.all([
+		const [cfg, tr, ro, tf, sa, pe, fl, lt, cf, pz, ta] = await Promise.all([
 			supabase.from('voz_config').select('*').eq('empresa_id', eid).maybeSingle(),
 			supabase.from('voz_troncos').select('id,referencia,operadora,host,porta,transporte,autenticacao,usuario,segredo_ref,segredo_guardado_em,segredo_versao,ips_operadora,ips_liberados,ips_liberados_em,ddd_origem,bina,formato_discagem,csp,codecs,canais,cps,ativo,testado_em,teste_ok').eq('empresa_id', eid).order('referencia'),
 			supabase.from('voz_rotas').select('*').eq('empresa_id', eid).order('vigente_desde', { ascending: false }),
 			supabase.from('voz_transferencias').select('*').eq('empresa_id', eid).eq('ativo', true).is('credor_id', null).limit(1),
 			supabase.from('fornecedor_saude').select('item,referencia,ok,contagem,detalhe,verificado_em,tronco_id').eq('empresa_id', eid),
 			supabase.from('pedidos_envio_real').select('id,pedido_em,chamado_id,situacao').eq('empresa_id', eid).eq('canal', 'agente_voz').eq('situacao', 'aberto').limit(1),
-			supabase.from('voz_roteiros').select('id,versao,em_uso_em,credor_id').eq('empresa_id', eid).eq('situacao', 'em_uso').limit(1),
+			// O que a VM executa é o fluxo do agente (o roteiro antigo não vale mais para ligar: SQL 134)
+			supabase.from('voz_fluxo_versoes').select('id,versao,em_uso_em,credor_id').eq('empresa_id', eid).eq('situacao', 'em_uso').order('em_uso_em', { ascending: false }).limit(1),
 			supabase.from('voz_chamadas').select('id', { count: 'exact', head: true }).eq('empresa_id', eid).eq('modo', 'teste'),
 			supabase.from('empresa_contatos').select('id', { count: 'exact', head: true }).eq('empresa_id', eid).eq('recebe_faturas', true),
 			// Pausas ativas da rota (SQL 65, PR #162): sem a tabela ainda, a leitura falha e a lista fica vazia.
 			supabase.from('voz_troncos_pausas').select('id,tronco_id,motivo,causa_sip,pausado_em').eq('empresa_id', eid).is('retomado_em', null),
+			// Transferência para humano ativa (da empresa toda ou de uma carteira), como no banco
+			supabase.from('voz_transferencias').select('id', { count: 'exact', head: true }).eq('empresa_id', eid).eq('ativo', true),
 		]);
 		setD({
 			pausas: pz.error ? [] : ((pz.data ?? []) as Pausa[]),
@@ -212,7 +215,8 @@ function EmpresaVoz({ aba, empresaId, empresaNome, divisaoLinha, podeTroncos, po
 			transferencia: ((tf.data ?? []) as Row[])[0] ?? null,
 			saude: (sa.data ?? []) as Row[],
 			pedido: ((pe.data ?? []) as Row[])[0] ?? null,
-			roteiro: ((rt.data ?? []) as Row[])[0] ?? null,
+			fluxo: ((fl.data ?? []) as Row[])[0] ?? null,
+			transferencias: ta.count ?? 0,
 			ligacoesTeste: lt.count ?? 0,
 			recebeFaturas: cf.count ?? 0,
 		});
@@ -696,11 +700,14 @@ function LigarDeVerdade({ empresaId, empresaNome, d, modo, podeLigar, divisaoLin
 	const troncoOk = d.troncos.find(t => t.ativo !== false && t.teste_ok === true);
 	const rotaOk = d.rotas.some(r => !r.vigente_ate || r.vigente_ate >= hoje);
 	const grava = c ? c.gravar !== false : true;
+	const contratado = Number(divisaoLinha?.contratado ?? 0);
+	const robos = Number(divisaoLinha?.licencas ?? 0);
+	const limiteDiv = Number(divisaoLinha?.limite ?? 0);
 
 	// Mesmos itens de falta_para_voz no banco (o banco confere de novo ao ligar).
 	const itens: { id: string; txt: string; sub: string; ok: boolean; para: 'teste' | 'real' }[] = [
 		{ id: 'prov', txt: 'Provedor de voz escolhido', sub: c && c.provedor !== 'simulador' ? PROVEDORES_VOZ.find(p => p.id === c.provedor)?.nome ?? String(c.provedor) : 'Ainda no Simulador', ok: !!c && c.provedor !== 'simulador', para: 'teste' },
-		{ id: 'rot', txt: `Roteiro aprovado pela ${empresaNome} e em uso`, sub: d.roteiro ? `v${String(d.roteiro.versao)} · em uso desde ${dateBR(d.roteiro.em_uso_em)}` : 'Nenhuma versão em uso', ok: !!d.roteiro, para: 'teste' },
+		{ id: 'flu', txt: `Fluxo do agente aprovado pela ${empresaNome} e em uso`, sub: d.fluxo ? `v${String(d.fluxo.versao)} · em uso desde ${dateBR(d.fluxo.em_uso_em)}` : 'Nenhum fluxo em uso (o roteiro antigo não conta)', ok: !!d.fluxo, para: 'teste' },
 		{ id: 'tro', txt: 'Tronco ativo e testado', sub: troncoOk ? `${String(troncoOk.referencia)} · teste ${dateTimeBR(troncoOk.testado_em)}` : 'Nenhum tronco com teste ok', ok: !!troncoOk, para: 'teste' },
 		{ id: 'rota', txt: 'Rota cadastrada', sub: rotaOk ? `${d.rotas.filter(r => !r.vigente_ate || r.vigente_ate >= hoje).length} em vigor ou programada(s)` : 'Nenhuma rota em vigor', ok: rotaOk, para: 'teste' },
 		{ id: 'buc', txt: 'Bucket de gravações da empresa', sub: !grava ? 'A empresa não grava' : c?.bucket_gravacoes ? String(c.bucket_gravacoes) : 'Sem bucket', ok: !grava || !!c?.bucket_gravacoes, para: 'teste' },
@@ -708,6 +715,10 @@ function LigarDeVerdade({ empresaId, empresaNome, d, modo, podeLigar, divisaoLin
 		{ id: 'pas', txt: 'Passou por Só números de teste', sub: modo === 'simulado' ? 'Ainda em Simulado' : 'Feito', ok: modo !== 'simulado', para: 'real' },
 		{ id: 'lig', txt: 'Ligação de teste feita', sub: d.ligacoesTeste ? `${inteiro(d.ligacoesTeste)} ligação(ões) de teste` : 'Nenhuma ligação de teste ainda', ok: d.ligacoesTeste > 0, para: 'real' },
 		{ id: 'fat', txt: 'Quem recebe as faturas cadastrado', sub: d.recebeFaturas ? 'Empresa › Contatos' : 'Ninguém marcado em Empresa › Contatos', ok: d.recebeFaturas > 0, para: 'real' },
+		{ id: 'tet', txt: 'Teto contratado maior que zero', sub: contratado > 0 ? `${inteiro(contratado)} chamada(s) ao mesmo tempo (todas as empresas)` : 'Teto 0: o agente não liga (aba Todas as empresas)', ok: contratado > 0, para: 'real' },
+		{ id: 'rob', txt: 'Robôs contratados pela empresa', sub: robos > 0 ? `${inteiro(robos)} (licença ou limite do por minuto)` : 'Nenhum robô nem limite por minuto vigente (Contratação)', ok: robos > 0, para: 'real' },
+		{ id: 'div', txt: 'Limite da empresa na divisão maior que zero', sub: limiteDiv > 0 ? `${inteiro(limiteDiv)} ao mesmo tempo` : 'Limite 0 na divisão: o agente não liga', ok: limiteDiv > 0, para: 'real' },
+		{ id: 'tra', txt: 'Transferência para humano configurada', sub: d.transferencias ? `${inteiro(d.transferencias)} ativa(s) (aba Transferência)` : 'Nenhuma ativa (aba Transferência)', ok: d.transferencias > 0, para: 'real' },
 	];
 	const okTeste = itens.filter(i => i.para === 'teste').every(i => i.ok);
 	const okReal = itens.every(i => i.ok);
