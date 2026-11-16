@@ -39,6 +39,24 @@ from voz.provedores.simulador import Simulador
 
 log = logging.getLogger("motorcx.voz")
 
+OCIOSO = "teto contratado 0: nada a discar; aguardando"
+
+
+def parte_do_contratado(contratado: int, i: int, n: int) -> int:
+    """Parte do teto contratado (voz_contrato) da VM i de n: a divisão inteira e, do resto, 1 para cada uma das
+    primeiras VMs (teto 3 em 2 VMs: 2 e 1; teto 1: 1 e 0). Teto 0 ou negativo: 0 (a VM fica ociosa, sem erro)."""
+    if contratado <= 0 or n <= 0:
+        return 0
+    return contratado // n + (1 if i <= contratado % n else 0)
+
+
+def contratado_do_bruto(bruto: dict) -> int:
+    """Teto global do voz.json (voz_contrato.concorrencia_contratada); ausente ou inválido = 0."""
+    try:
+        return int((bruto.get("voz_contrato") or {}).get("concorrencia_contratada") or 0)
+    except (TypeError, ValueError):
+        return 0
+
 FUSO = ZoneInfo("America/Sao_Paulo")
 
 
@@ -226,8 +244,10 @@ class Plantao:
 
     def __init__(self, orq: Orquestrador, fonte: FonteListas, modo: str, dados_caminho: Path | None = None,
                  registro=None, publicador=None, relogio=relogio_brasilia, parte: tuple[int, int] = (1, 1),
-                 segredos=None):
+                 segredos=None, contratado_fixo: bool = True):
         self.orq, self.fonte, self.modo, self.dados_caminho = orq, fonte, modo, dados_caminho
+        # sem --contratado, a parte desta VM no teto vem do voz.json e é refeita a cada recarga (teto 0 = ociosa)
+        self.contratado_fixo = contratado_fixo
         self.parte = parte          # (i, n): esta VM disca as empresas com id % n == i - 1
         self.registro, self.publicador, self.relogio = registro, publicador, relogio
         self.carregados: dict[int, object] = {}     # empresa -> dia carregado
@@ -689,11 +709,29 @@ class Plantao:
         if p is None or not p.exists() or p.stat().st_mtime == self._mtime:
             return
         try:
-            self.orq.atualizar_dados(B.carregar(json.loads(p.read_text(encoding="utf-8"))))
+            bruto = json.loads(p.read_text(encoding="utf-8"))
+            self.orq.atualizar_dados(B.carregar(bruto))
             self._mtime = p.stat().st_mtime
             log.info("configuração de voz recarregada")
+            if not self.contratado_fixo:
+                self.aplicar_contratado(contratado_do_bruto(bruto))
         except (B.DadosInvalidos, ValueError) as ex:
             log.warning("voz.json inválido, mantida a configuração anterior (%s)", ex)
+
+    def aplicar_contratado(self, contratado: int) -> int:
+        """Teto global novo (voz_contrato): a parte desta VM vale no próximo tick; quem está em voo continua. Loga só
+        quando muda (a linha de ociosa sai uma vez, não a cada recarga)."""
+        ag = self.orq.agendador
+        novo = parte_do_contratado(contratado, *self.parte)
+        if novo != ag.contratado:
+            if novo <= 0:
+                log.warning("%s (teto %d dividido entre %d VM(s); esta é a %d)", OCIOSO, contratado, self.parte[1],
+                            self.parte[0])
+            else:
+                log.info("teto contratado %d: esta VM (%d/%d) disca até %d ao mesmo tempo", contratado, self.parte[0],
+                         self.parte[1], novo)
+            ag.contratado = novo
+        return novo
 
     def _carregar_listas(self, hoje) -> None:
         # dia novo: sai o lote de ontem (o que não foi discado fica para a lista de hoje do motor)
@@ -762,15 +800,20 @@ def main(argv=None) -> int:
         return 0
     bruto = json.loads(Path(a.dados).read_text(encoding="utf-8"))
     dados = B.carregar(bruto)
-    contratado = a.contratado or int((bruto.get("voz_contrato") or {}).get("concorrencia_contratada") or 0)
     i, n = (int(x) for x in a.parte.split("/", 1))
     if not 1 <= i <= n:
         print("ERRO: --parte i/n com 1 <= i <= n")
         return 2
-    contratado = contratado // n if not a.contratado else contratado     # o contratado é dividido entre as VMs
-    if contratado <= 0:
+    # o contratado é dividido entre as VMs, com o resto para as primeiras (teto 1 em 2 VMs: 1 e 0); --contratado vale
+    # inteiro para esta VM
+    contratado = a.contratado if a.contratado else parte_do_contratado(contratado_do_bruto(bruto), i, n)
+    if contratado <= 0 and not a.auto:
         print("ERRO: concorrência contratada não definida (voz_contrato ou --contratado)")
         return 2
+    if contratado <= 0:
+        # plantão (systemd): não sai com erro (Restart=always viraria um laço de reinício a cada 5 s). Fica no ar sem
+        # discar e a recarga do voz.json (a cada minuto) aplica o teto novo quando ele subir.
+        log.warning("%s (teto %d dividido entre %d VM(s); esta é a %d)", OCIOSO, contratado_do_bruto(bruto), n, i)
     if a.modo == "simulado":
         ari = AriSimulado()
     else:
@@ -811,7 +854,7 @@ def main(argv=None) -> int:
         if pub is None:
             log.warning("MOTORCX_VOZ_ENVIADO_POR não definido: os eventos ficam só na VM (sem envio ao motor)")
         plantao = Plantao(orq, FonteListas(sb, Path(a.eventos) / ".listas"), a.modo, Path(a.dados), registro, pub,
-                          parte=(i, n), segredos=segredos)
+                          parte=(i, n), segredos=segredos, contratado_fixo=bool(a.contratado))
         threading.Thread(target=_ouvir, args=(ari, fila, parar), daemon=True).start()
         import signal
         signal.signal(signal.SIGTERM, lambda *_: parar.set())
