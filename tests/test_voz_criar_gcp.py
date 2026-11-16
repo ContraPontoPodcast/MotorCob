@@ -665,7 +665,8 @@ class TestSegredosEmParalelo(unittest.TestCase):
                                      f"meta() {{ true; }}\nPROJETO=p\nRUN={d}/run\n")
             script = (VM / "motorcx-voz-segredos").read_text()
             script = script.replace("/usr/local/bin/motorcx-voz-comum", str(d / "comum"))
-            script = script.replace("install -m 400 -o 10010 -g 10010", "install -m 400")
+            script = script.replace('chown 10010:10010 "$NOVO"', "true")   # o teste não roda como root
+            self.assertNotIn("/dev/stdin", script)   # o install do uutils (Ubuntu novo) não lê de pipe
             (d / "s.sh").write_text(script)
             procs = [subprocess.Popen(["bash", str(d / "s.sh")], stderr=subprocess.PIPE) for _ in range(30)]
             erros = [p.communicate()[1].decode() for p in procs if p.wait() != 0]
