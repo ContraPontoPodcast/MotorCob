@@ -16,9 +16,13 @@ install -d -m 755 "$RUN"
 exec 9>"$RUN/.segredos.lock"
 flock -w 120 9 || { echo "motorcx-voz-segredos: outra execução segurou a trava por mais de 120 s" >&2; exit 1; }
 TMP="$(mktemp "$RUN/voz.env.XXXXXX")"
-trap 'rm -f "$TMP"' EXIT
-gcloud secrets versions access latest --secret=motorcx-voz-ari-senha | \
-  install -m 400 -o 10010 -g 10010 /dev/stdin "$RUN/ari_senha"
+# Arquivos gravados por temporário + mv (sem install lendo da entrada padrão: o install do uutils, padrão no Ubuntu novo, não lê
+# de pipe). O mv é atômico: quem lê nunca vê o arquivo pela metade.
+NOVO="$(mktemp "$RUN/ari_senha.XXXXXX")"
+trap 'rm -f "$TMP" "$NOVO"' EXIT
+gcloud secrets versions access latest --secret=motorcx-voz-ari-senha > "$NOVO"
+chmod 400 "$NOVO"; chown 10010:10010 "$NOVO"
+mv -f "$NOVO" "$RUN/ari_senha"
 URL="$(gcloud secrets versions access latest --secret=motorcx-voz-supabase-url)"
 ENVIADO_POR="$(meta motorcx-enviado-por)"
 ACESSO="$(meta motorcx-voz-acesso)"; ACESSO="${ACESSO:-supabase_chave}"
@@ -32,7 +36,8 @@ case "$ACESSO" in supabase_chave|acesso_proprio) ;; *) echo "motorcx-voz-acesso 
       "$(meta motorcx-voz-db-host)" "${PORTA:-5432}" "$(meta motorcx-voz-db-usuario)"
     CA="$(meta motorcx-voz-db-ca)"           # certificado PÚBLICO da CA do Supabase (não é segredo)
     if [ -n "$CA" ]; then
-      printf '%s\n' "$CA" | install -m 444 /dev/stdin "$RUN/supabase-ca.crt"
+      printf '%s\n' "$CA" > "$RUN/supabase-ca.crt.novo"; chmod 444 "$RUN/supabase-ca.crt.novo"
+      mv -f "$RUN/supabase-ca.crt.novo" "$RUN/supabase-ca.crt"
       printf 'MOTORCX_VOZ_DB_CA=%s\n' "$RUN/supabase-ca.crt"
     fi
   else
